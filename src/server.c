@@ -285,9 +285,7 @@ static void server_free(server *srv) {
 	free(srv->joblist.ptr);
 	free(srv->fdwaitqueue.ptr);
 
-	if (srv->stat_cache) {
-		stat_cache_free(srv->stat_cache);
-	}
+	stat_cache_free();
 
 	li_rand_cleanup();
 	chunkqueue_chunk_pool_free();
@@ -1541,7 +1539,7 @@ static int server_main (server * const srv, int argc, char **argv) {
 	}
 
 	/* might fail if user is using fam (not gamin) and famd isn't running */
-	if (NULL == (srv->stat_cache = stat_cache_init(srv))) {
+	if (!stat_cache_init(srv)) {
 		log_error(srv->errh, __FILE__, __LINE__,
 		  "stat-cache could not be setup, dieing.");
 		return -1;
@@ -1646,7 +1644,7 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 				/* free excess chunkqueue buffers every 64 seconds */
 				if (0 == (min_ts & 0x3f)) chunkqueue_chunk_pool_clear();
 				/* cleanup stat-cache */
-				stat_cache_trigger_cleanup(srv);
+				stat_cache_trigger_cleanup();
 				/* reset global/aggregate rate limit counters */
 				config_reset_config_bytes_sec(srv->config_data_base);
 				/* if graceful_shutdown, accelerate cleanup of recently completed request/responses */

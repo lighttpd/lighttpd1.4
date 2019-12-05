@@ -334,10 +334,8 @@ URIHANDLER_FUNC(mod_rewrite_physical) {
     if (!p->conf.rewrite_NF || !p->conf.rewrite_NF->used) return HANDLER_GO_ON;
 
     /* skip if physical.path is a regular file */
-    stat_cache_entry *sce;
-    if (HANDLER_ERROR != stat_cache_get_entry(con, con->physical.path, &sce)) {
-        if (S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
-    }
+    stat_cache_entry *sce = stat_cache_get_entry(con->physical.path);
+    if (sce && S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
 
     return process_rewrite_rules(con, p, p->conf.rewrite_NF);
 }

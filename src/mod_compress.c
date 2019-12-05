@@ -533,9 +533,11 @@ static int deflate_file_to_file(connection *con, plugin_data *p, int ifd, buffer
 		return -1;
 	}
 
-	buffer_append_string_buffer(p->ofn, sce->etag);
+	const buffer *etag = stat_cache_etag_get(sce, con->conf.etag_flags);
+	buffer_append_string_buffer(p->ofn, etag);
 
-	if (HANDLER_ERROR != stat_cache_get_entry(con, p->ofn, &sce_ofn)) {
+	sce_ofn = stat_cache_get_entry(p->ofn);
+	if (sce_ofn) {
 		if (0 == sce->st.st_size) return -1; /* cache file being created */
 		/* cache-entry exists */
 #if 0
@@ -791,7 +793,8 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	uint32_t m;
 	stat_cache_entry *sce = NULL;
 	const buffer *mtime = NULL;
-	buffer *content_type;
+	buffer *content_type_trunc;
+	const buffer *content_type;
 
 	if (con->mode != DIRECT || con->http_status) return HANDLER_GO_ON;
 
@@ -816,7 +819,8 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 		  "-- handling file as static file");
 	}
 
-	if (HANDLER_ERROR == stat_cache_get_entry(con, con->physical.path, &sce)) {
+	sce = stat_cache_get_entry(con->physical.path);
+	if (NULL == sce) {
 		con->http_status = 403;
 		log_error(con->conf.errh, __FILE__, __LINE__,
 		  "not a regular file: %s -> %s",
@@ -840,28 +844,29 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	 */
 	if (sce->st.st_size < 128) return HANDLER_GO_ON;
 
-	stat_cache_etag_get(sce, con->conf.etag_flags);
+	const buffer *etag = stat_cache_etag_get(sce, con->conf.etag_flags);
+	if (buffer_string_is_empty(etag)) etag = NULL;
 
 	/* check if mimetype is in compress-config */
-	content_type = NULL;
-	stat_cache_content_type_get(con, con->physical.path, sce);
-	if (!buffer_is_empty(sce->content_type)) {
+	content_type_trunc = NULL;
+	content_type = stat_cache_content_type_get(con, sce);
+	if (!buffer_is_empty(content_type)) {
 		char *c;
-		if ( (c = strchr(sce->content_type->ptr, ';')) != NULL) {
-			content_type = con->srv->tmp_buf;
-			buffer_copy_string_len(content_type, sce->content_type->ptr, c - sce->content_type->ptr);
+		if ( (c = strchr(content_type->ptr, ';')) != NULL) {
+			content_type_trunc = con->srv->tmp_buf;
+			buffer_copy_string_len(content_type_trunc, content_type->ptr, c - content_type->ptr);
 		}
 	}
 	else {
-		content_type = con->srv->tmp_buf;
-		buffer_copy_string_len(content_type, CONST_STR_LEN(""));
+		content_type = content_type_trunc = con->srv->tmp_buf;
+		buffer_copy_string_len(content_type_trunc, CONST_STR_LEN(""));
 	}
 
 	for (m = 0; m < p->conf.compress->used; m++) {
 		data_string *compress_ds = (data_string *)p->conf.compress->data[m];
 
-		if (buffer_is_equal(&compress_ds->value, sce->content_type)
-		    || (content_type && buffer_is_equal(&compress_ds->value, content_type))) {
+		if (buffer_is_equal(&compress_ds->value, content_type)
+		    || (content_type_trunc && buffer_is_equal(&compress_ds->value, content_type_trunc))) {
 			break;
 		}
 	}
@@ -884,7 +889,6 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 				int accept_encoding = 0;
 				char *value = vb->ptr;
 				int matched_encodings = 0;
-				int use_etag = sce->etag != NULL && sce->etag->ptr != NULL;
 
 				/* get client side support encodings */
 #ifdef USE_ZLIB
@@ -913,7 +917,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					int compression_type = 0;
 
 					if (!con->conf.follow_symlink
-					    && 0 != stat_cache_path_contains_symlink(con, con->physical.path)) {
+					    && 0 != stat_cache_path_contains_symlink(con->physical.path, con->conf.errh)) {
 						return HANDLER_GO_ON;
 					}
 
@@ -927,10 +931,10 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					mtime = strftime_cache_get(con->srv, sce->st.st_mtime);
 
 					/* try matching original etag of uncompressed version */
-					if (use_etag) {
-						etag_mutate(con->physical.etag, sce->etag);
+					if (etag) {
+						etag_mutate(con->physical.etag, etag);
 						if (HANDLER_FINISHED == http_response_handle_cachable(con, mtime)) {
-							http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+							http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(content_type));
 							http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
 							http_header_response_set(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
 							close(fd);
@@ -957,10 +961,10 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 						compression_name = dflt_deflate;
 					}
 
-					if (use_etag) {
+					if (etag) {
 						/* try matching etag of compressed version */
 						buffer * const tb = con->srv->tmp_buf;
-						buffer_copy_buffer(tb, sce->etag);
+						buffer_copy_buffer(tb, etag);
 						buffer_append_string_len(tb, CONST_STR_LEN("-"));
 						buffer_append_string(tb, compression_name);
 						etag_mutate(con->physical.etag, tb);
@@ -968,9 +972,9 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 
 					if (HANDLER_FINISHED == http_response_handle_cachable(con, mtime)) {
 						http_header_response_set(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
-						http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+						http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(content_type));
 						http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
-						if (use_etag) {
+						if (etag) {
 							http_header_response_set(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
 						}
 						close(fd);
@@ -978,7 +982,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					}
 
 					/* deflate it */
-					if (use_etag && !buffer_string_is_empty(p->conf.compress_cache_dir)) {
+					if (etag && !buffer_string_is_empty(p->conf.compress_cache_dir)) {
 						if (0 != deflate_file_to_file(con, p, fd, con->physical.path, sce, compression_type)) {
 							close(fd);
 							return HANDLER_GO_ON;
@@ -992,12 +996,12 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 					close(fd);
 					http_header_response_set(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"), compression_name, strlen(compression_name));
 					http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
-					if (use_etag) {
+					if (etag) {
 						http_header_response_set(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
 					}
-					http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+					http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(content_type));
 					/* let mod_staticfile handle the cached compressed files, physical path was modified */
-					return (use_etag && !buffer_string_is_empty(p->conf.compress_cache_dir)) ? HANDLER_GO_ON : HANDLER_FINISHED;
+					return (etag && !buffer_string_is_empty(p->conf.compress_cache_dir)) ? HANDLER_GO_ON : HANDLER_FINISHED;
 				}
 			}
 	}

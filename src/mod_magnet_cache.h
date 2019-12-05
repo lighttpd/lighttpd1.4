@@ -18,14 +18,13 @@ typedef struct {
 
 typedef struct {
 	script **ptr;
-
-	size_t used;
-	size_t size;
+	uint32_t used;
+	uint32_t size;
 } script_cache;
 
 script_cache *script_cache_init(void);
 void script_cache_free_data(script_cache *cache);
 
-lua_State *script_cache_get_script(connection *con, script_cache *cache, buffer *name);
+lua_State *script_cache_get_script(script_cache *cache, buffer *name, int etag_flags);
 
 #endif

@@ -284,14 +284,14 @@ static void connection_handle_errdoc(connection *con) {
         buffer_append_int(con->physical.path, con->http_status);
         buffer_append_string_len(con->physical.path, CONST_STR_LEN(".html"));
         if (0 == http_chunk_append_file(con, con->physical.path)) {
-            stat_cache_entry *sce = NULL;
-            if (stat_cache_get_entry(con, con->physical.path, &sce)
-                != HANDLER_ERROR) {
-                stat_cache_content_type_get(con, con->physical.path, sce);
+            stat_cache_entry *sce = stat_cache_get_entry(con->physical.path);
+            const buffer *content_type = (NULL != sce)
+              ? stat_cache_content_type_get(con, sce)
+              : NULL;
+            if (content_type)
                 http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE,
                                          CONST_STR_LEN("Content-Type"),
-                                         CONST_BUF_LEN(sce->content_type));
-            }
+                                         CONST_BUF_LEN(content_type));
             return;
         }
     }

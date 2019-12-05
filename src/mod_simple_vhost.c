@@ -158,7 +158,8 @@ static int build_doc_root(connection *con, plugin_data *p, buffer *out, const bu
 	/* one-element cache (postive cache, not negative cache) */
 	if (buffer_is_equal(out, &p->last_root)) return 1;
 
-	if (HANDLER_ERROR == stat_cache_get_entry(con, out, &sce)) {
+	sce = stat_cache_get_entry(out);
+	if (NULL == sce) {
 		if (p->conf.debug) {
 			log_perror(con->conf.errh, __FILE__, __LINE__, "%s", out->ptr);
 		}

@@ -288,23 +288,13 @@ static int magnet_print(lua_State *L) {
 }
 
 static int magnet_stat(lua_State *L) {
-	connection *con = magnet_get_connection(L);
-	stat_cache_entry *sce = NULL;
-    {
-	buffer *sb = magnet_checkbuffer(L, 1);
-	handler_t res;
-
-	res = stat_cache_get_entry(con, sb, &sce);
-
-	if (HANDLER_GO_ON != res) {
-		buffer_free(sb);
+	buffer * const sb = magnet_checkbuffer(L, 1);
+	stat_cache_entry * const sce = stat_cache_get_entry(sb);
+	buffer_free(sb);
+	if (NULL == sce) {
 		lua_pushnil(L);
 		return 1;
 	}
-
-	stat_cache_content_type_get(con, sb, sce);
-	buffer_free(sb);
-    }
 
 	lua_newtable(L); // return value
 
@@ -350,18 +340,21 @@ static int magnet_stat(lua_State *L) {
 	lua_pushinteger(L, sce->st.st_ino);
 	lua_setfield(L, -2, "st_ino");
 
-	if (!buffer_string_is_empty(stat_cache_etag_get(sce, con->conf.etag_flags))) {
+	connection * const con = magnet_get_connection(L);
+	const buffer *etag = stat_cache_etag_get(sce, con->conf.etag_flags);
+	if (!buffer_string_is_empty(etag)) {
 		/* we have to mutate the etag */
 		buffer * const tb = con->srv->tmp_buf;
-		etag_mutate(tb, sce->etag);
+		etag_mutate(tb, etag);
 		lua_pushlstring(L, CONST_BUF_LEN(tb));
 	} else {
 		lua_pushnil(L);
 	}
 	lua_setfield(L, -2, "etag");
 
-	if (!buffer_string_is_empty(sce->content_type)) {
-		lua_pushlstring(L, CONST_BUF_LEN(sce->content_type));
+	const buffer *content_type = stat_cache_content_type_get(con, sce);
+	if (!buffer_string_is_empty(content_type)) {
+		lua_pushlstring(L, CONST_BUF_LEN(content_type));
 	} else {
 		lua_pushnil(L);
 	}
@@ -774,7 +767,7 @@ static handler_t magnet_attract(connection *con, plugin_data *p, buffer *name) {
 	const int lighty_table_ndx = 2;
 
 	/* get the script-context */
-	L = script_cache_get_script(con, &p->cache, name);
+	L = script_cache_get_script(&p->cache, name, con->conf.etag_flags);
 
 	if (lua_isstring(L, -1)) {
 		log_error(con->conf.errh, __FILE__, __LINE__,

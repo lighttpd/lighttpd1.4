@@ -430,12 +430,12 @@ static int http_response_parse_range(connection *con, buffer *path, stat_cache_e
 
 
 void http_response_send_file (connection *con, buffer *path) {
-	stat_cache_entry *sce = NULL;
+	stat_cache_entry * const sce = stat_cache_get_entry(path);
 	const buffer *mtime = NULL;
 	const buffer *vb;
 	int allow_caching = (0 == con->http_status || 200 == con->http_status);
 
-	if (HANDLER_ERROR == stat_cache_get_entry(con, path, &sce)) {
+	if (NULL == sce) {
 		con->http_status = (errno == ENOENT) ? 404 : 403;
 		log_error(con->conf.errh, __FILE__, __LINE__,
 		  "not a regular file: %s -> %s", con->uri.path->ptr, path->ptr);
@@ -443,7 +443,7 @@ void http_response_send_file (connection *con, buffer *path) {
 	}
 
 	if (!con->conf.follow_symlink
-	    && 0 != stat_cache_path_contains_symlink(con, path)) {
+	    && 0 != stat_cache_path_contains_symlink(path, con->conf.errh)) {
 		con->http_status = 403;
 		if (con->conf.log_request_handling) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
@@ -460,7 +460,7 @@ void http_response_send_file (connection *con, buffer *path) {
 		if (con->conf.log_file_not_found) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
 			  "not a regular file: %s -> %s",
-			  con->uri.path->ptr, sce->name->ptr);
+			  con->uri.path->ptr, path->ptr);
 		}
 		return;
 	}
@@ -484,8 +484,8 @@ void http_response_send_file (connection *con, buffer *path) {
 	/* set response content-type, if not set already */
 
 	if (NULL == http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"))) {
-		stat_cache_content_type_get(con, path, sce);
-		if (buffer_string_is_empty(sce->content_type)) {
+		const buffer *content_type = stat_cache_content_type_get(con, sce);
+		if (buffer_string_is_empty(content_type)) {
 			/* we are setting application/octet-stream, but also announce that
 			 * this header field might change in the seconds few requests
 			 *
@@ -496,7 +496,7 @@ void http_response_send_file (connection *con, buffer *path) {
 
 			allow_caching = 0;
 		} else {
-			http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(sce->content_type));
+			http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(content_type));
 		}
 	}
 
@@ -505,10 +505,13 @@ void http_response_send_file (connection *con, buffer *path) {
 	}
 
 	if (allow_caching) {
-		if (con->conf.etag_flags != 0 && !buffer_string_is_empty(stat_cache_etag_get(sce, con->conf.etag_flags))) {
+		const buffer *etag = (0 != con->conf.etag_flags)
+		  ? stat_cache_etag_get(sce, con->conf.etag_flags)
+		  : NULL;
+		if (!buffer_string_is_empty(etag)) {
 			if (NULL == http_header_response_get(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"))) {
 				/* generate e-tag */
-				etag_mutate(con->physical.etag, sce->etag);
+				etag_mutate(con->physical.etag, etag);
 
 				http_header_response_set(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
 			}
@@ -722,7 +725,8 @@ static void http_response_xsendfile2(connection *con, const buffer *value, const
             }
         }
 
-        if (HANDLER_ERROR == stat_cache_get_entry(con, b, &sce)) {
+        sce = stat_cache_get_entry(b);
+        if (NULL == sce) {
             log_error(con->conf.errh, __FILE__, __LINE__,
               "send-file error: couldn't get stat_cache entry for "
               "X-Sendfile2: %s", b->ptr);

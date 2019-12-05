@@ -75,9 +75,7 @@ int main (void) {
  * stub functions
  */
 
-handler_t stat_cache_get_entry(connection *con, buffer *name, stat_cache_entry **sce) {
-    UNUSED(con);
+stat_cache_entry * stat_cache_get_entry(const buffer *name) {
     UNUSED(name);
-    UNUSED(sce);
-    return HANDLER_GO_ON;
+    return NULL;
 }

@@ -133,9 +133,9 @@ int http_response_write_header(connection *con) {
 }
 
 static handler_t http_response_physical_path_check(connection *con) {
-	stat_cache_entry *sce = NULL;
+	stat_cache_entry *sce = stat_cache_get_entry(con->physical.path);
 
-	if (HANDLER_ERROR != stat_cache_get_entry(con, con->physical.path, &sce)) {
+	if (sce) {
 		/* file exists */
 	} else {
 		char *pathinfo = NULL;
@@ -204,9 +204,9 @@ static handler_t http_response_physical_path_check(connection *con) {
 
 		buffer * const tb = con->srv->tmp_buf;
 		for (char *pprev = pathinfo; pathinfo; pprev = pathinfo, pathinfo = strchr(pathinfo+1, '/')) {
-			stat_cache_entry *nsce = NULL;
 			buffer_copy_string_len(tb, con->physical.path->ptr, pathinfo - con->physical.path->ptr);
-			if (HANDLER_ERROR == stat_cache_get_entry(con, tb, &nsce)) {
+			stat_cache_entry *nsce = stat_cache_get_entry(tb);
+			if (NULL == nsce) {
 				pathinfo = pathinfo != pprev ? pprev : NULL;
 				break;
 			}
@@ -254,7 +254,7 @@ static handler_t http_response_physical_path_check(connection *con) {
 	}
 
 	if (!con->conf.follow_symlink
-	    && 0 != stat_cache_path_contains_symlink(con, con->physical.path)) {
+	    && 0 != stat_cache_path_contains_symlink(con->physical.path, con->conf.errh)) {
 		con->http_status = 403;
 
 		if (con->conf.log_request_handling) {

@@ -605,7 +605,7 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 		}
 
 		if (!con->conf.follow_symlink
-		    && 0 != stat_cache_path_contains_symlink(con, p->stat_fn)) {
+		    && 0 != stat_cache_path_contains_symlink(p->stat_fn, con->conf.errh)) {
 			break;
 		}
 

@@ -25,14 +25,6 @@
  * this is a dirlisting for a lighttpd plugin
  */
 
-#ifdef HAVE_ATTR_ATTRIBUTES_H
-#include <attr/attributes.h>
-#endif
-
-#ifdef HAVE_SYS_EXTATTR_H
-#include <sys/extattr.h>
-#endif
-
 typedef struct {
 	char dir_listing;
 	char hide_dot_files;
@@ -835,13 +827,9 @@ static int http_list_directory(connection *con, plugin_data *p, buffer *dir) {
 	dirls_entry_t *tmp;
 	char sizebuf[sizeof("999.9K")];
 	char datebuf[sizeof("2005-Jan-01 22:23:24")];
-	const char *content_type;
+	const buffer *content_type;
 	long name_max;
 	log_error_st * const errh = con->conf.errh;
-#if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
-	char attrval[128];
-	int attrlen;
-#endif
 #ifdef HAVE_LOCALTIME_R
 	struct tm tm;
 #endif
@@ -974,32 +962,24 @@ static int http_list_directory(connection *con, plugin_data *p, buffer *dir) {
 	}
 
 	/* files */
+	const array * const mimetypes = con->conf.mimetypes;
 	for (i = 0; i < files.used; i++) {
 		tmp = files.ent[i];
 
+	  #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) /*(pass full path)*/
 		content_type = NULL;
-#if defined(HAVE_XATTR)
 		if (con->conf.use_xattr) {
 			memcpy(path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
-			attrlen = sizeof(attrval) - 1;
-			if (attr_get(path, con->srv->srvconf.xattr_name, attrval, &attrlen, 0) == 0) {
-				attrval[attrlen] = '\0';
-				content_type = attrval;
-			}
+			content_type = stat_cache_mimetype_by_xattr(path);
 		}
-#elif defined(HAVE_EXTATTR)
-		if (con->conf.use_xattr) {
-			memcpy(path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
-			if(-1 != (attrlen = extattr_get_file(path, EXTATTR_NAMESPACE_USER, con->srv->srvconf.xattr_name, attrval, sizeof(attrval)-1))) {
-				attrval[attrlen] = '\0';
-				content_type = attrval;
-			}
-		}
-#endif
-
-		if (content_type == NULL) {
-			const buffer *type = stat_cache_mimetype_by_ext(con, DIRLIST_ENT_NAME(tmp), tmp->namelen);
-			content_type = NULL != type ? type->ptr : "application/octet-stream";
+		if (NULL == content_type)
+	  #endif
+			content_type = stat_cache_mimetype_by_ext(mimetypes, DIRLIST_ENT_NAME(tmp), tmp->namelen);
+		if (NULL == content_type) {
+			static const buffer octet_stream =
+			  { "application/octet-stream",
+			    sizeof("application/octet-stream"), 0 };
+			content_type = &octet_stream;
 		}
 
 #ifdef HAVE_LOCALTIME_R
@@ -1019,7 +999,7 @@ static int http_list_directory(connection *con, plugin_data *p, buffer *dir) {
 		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">"));
 		buffer_append_string(out, sizebuf);
 		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"t\">"));
-		buffer_append_string(out, content_type);
+		buffer_append_string_buffer(out, content_type);
 		buffer_append_string_len(out, CONST_STR_LEN("</td></tr>\n"));
 
 		free(tmp);
@@ -1078,7 +1058,8 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 		  "URI          : %s", con->uri.path->ptr);
 	}
 
-	if (HANDLER_ERROR == stat_cache_get_entry(con, con->physical.path, &sce)) {
+	sce = stat_cache_get_entry(con->physical.path);
+	if (NULL == sce) {
 		log_error(con->conf.errh, __FILE__, __LINE__,
 		  "stat_cache_get_entry failed: %s", con->physical.path->ptr);
 		con->http_status = 500;

@@ -338,7 +338,8 @@ static handler_t mod_evhost_uri_handler(connection *con, void *p_d) {
 	buffer * const b = &p->tmp_buf;
 	mod_evhost_build_doc_root_path(b, &p->split_vals, con->uri.authority, p->conf.path_pieces);
 
-	if (HANDLER_ERROR == stat_cache_get_entry(con, b, &sce)) {
+	sce = stat_cache_get_entry(b);
+	if (NULL == sce) {
 		log_perror(con->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
 	} else if(!S_ISDIR(sce->st.st_mode)) {
 		log_error(con->conf.errh, __FILE__, __LINE__, "not a directory: %s", b->ptr);

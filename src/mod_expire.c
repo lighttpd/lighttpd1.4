@@ -318,8 +318,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 			case 1:
 				/* modification */
 
-				/* if stat fails => sce == NULL, ignore return value */
-				(void) stat_cache_get_entry(con, con->physical.path, &sce);
+				sce = stat_cache_get_entry(con->physical.path);
 
 				/* can't set modification based expire header if
 				 * mtime is not available

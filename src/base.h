@@ -255,8 +255,6 @@ typedef struct {
 
 typedef struct {
 	unsigned int max_request_field_size;
-	int stat_cache_engine;
-	const char *xattr_name;
 	unsigned int log_state_handling;
 	unsigned char log_request_header_on_error;
 
@@ -321,7 +319,6 @@ typedef struct {
 
 struct server {
 	void *plugin_slots;
-	struct stat_cache *stat_cache;
 
 	struct fdevents *ev;
 	int (* network_backend_write)(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh);

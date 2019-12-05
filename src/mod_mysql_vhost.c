@@ -324,7 +324,8 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	buffer_copy_string(b, row[0]);
 	buffer_append_slash(b);
 
-	if (HANDLER_ERROR == stat_cache_get_entry(con, b, &sce)) {
+	sce = stat_cache_get_entry(b);
+	if (NULL == sce) {
 		log_perror(con->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
 		goto ERR500;
 	}

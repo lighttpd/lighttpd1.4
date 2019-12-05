@@ -172,7 +172,7 @@ int etag_create(buffer *etag, const struct stat *st, int flags) {
 	return 0;
 }
 
-int etag_mutate(buffer *mut, buffer *etag) {
+int etag_mutate(buffer *mut, const buffer *etag) {
 	size_t i, len;
 	uint32_t h;
 

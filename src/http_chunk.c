@@ -56,7 +56,8 @@ static int http_chunk_len_append_tempfile(chunkqueue * const cq, uintmax_t len, 
 
 static int http_chunk_append_file_open_fstat(connection * const con, const buffer * const fn, struct stat * const st) {
     return
-      (con->conf.follow_symlink || !stat_cache_path_contains_symlink(con, fn))
+      (con->conf.follow_symlink
+       || !stat_cache_path_contains_symlink(fn, con->conf.errh))
         ? stat_cache_open_rdonly_fstat(fn, st, con->conf.follow_symlink)
         : -1;
 }

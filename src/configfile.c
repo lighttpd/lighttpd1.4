@@ -588,9 +588,6 @@ static int config_insert_srvconf(server *srv) {
         T_CONFIG_SCOPE_UNSET }
     };
 
-    if (0 != stat_cache_choose_engine(srv, NULL)) /*(set initial default)*/
-        return HANDLER_ERROR;
-
     int rc = 0;
     plugin_data_base srvplug;
     memset(&srvplug, 0, sizeof(srvplug));
@@ -709,7 +706,7 @@ static int config_insert_srvconf(server *srv) {
                     rc = HANDLER_ERROR;
                 break;
               case 29:/* mimetype.xattr-name */
-                srv->srvconf.xattr_name = cpv->v.b->ptr;
+                stat_cache_xattrname(cpv->v.b->ptr);
                 break;
               case 30:/* ssl.engine */
                 ssl_enabled = (0 != cpv->v.u);
@@ -1065,7 +1062,6 @@ void config_init(server *srv) {
     srv->srvconf.high_precision_timestamps = 0;
     srv->srvconf.max_request_field_size = 8192;
 
-    srv->srvconf.xattr_name = "Content-Type";
     srv->srvconf.http_header_strict  = 1;
     srv->srvconf.http_host_strict    = 1; /*(implies http_host_normalize)*/
     srv->srvconf.http_host_normalize = 0;

@@ -751,12 +751,10 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 	return 0;
 }
 
-static struct stat * cgi_stat(connection *con, buffer *path) {
+static const struct stat * cgi_stat(buffer *path) {
     /* CGI might be executable even if it is not readable */
-    stat_cache_entry *sce;
-    return (HANDLER_ERROR != stat_cache_get_entry(con, path, &sce))
-      ? &sce->st
-      : NULL;
+    const stat_cache_entry * const sce = stat_cache_get_entry(path);
+    return sce ? &sce->st : NULL;
 }
 
 static int cgi_create_env(connection *con, plugin_data *p, handler_ctx *hctx, buffer *cgi_handler) {
@@ -767,7 +765,7 @@ static int cgi_create_env(connection *con, plugin_data *p, handler_ctx *hctx, bu
 	UNUSED(p);
 
 	if (!buffer_string_is_empty(cgi_handler)) {
-		if (NULL == cgi_stat(con, cgi_handler)) {
+		if (NULL == cgi_stat(cgi_handler)) {
 			log_perror(con->conf.errh, __FILE__, __LINE__,
 			  "stat for cgi-handler %s", cgi_handler->ptr);
 			return -1;
@@ -894,7 +892,7 @@ static int cgi_create_env(connection *con, plugin_data *p, handler_ctx *hctx, bu
 
 URIHANDLER_FUNC(cgi_is_handled) {
 	plugin_data *p = p_d;
-	struct stat *st;
+	const struct stat *st;
 	data_string *ds;
 
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
@@ -906,7 +904,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	ds = (data_string *)array_match_key_suffix(p->conf.cgi, con->physical.path);
 	if (NULL == ds) return HANDLER_GO_ON;
 
-	st = cgi_stat(con, con->physical.path);
+	st = cgi_stat(con->physical.path);
 	if (NULL == st) return HANDLER_GO_ON;
 
 	if (!S_ISREG(st->st_mode)) return HANDLER_GO_ON;
