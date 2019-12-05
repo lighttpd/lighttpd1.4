@@ -64,7 +64,7 @@ static handler_t network_server_handle_fdevent(server *srv, void *context, int r
 	if (loops > 100) loops = 101;
 
 	while (--loops && NULL != (con = connection_accept(srv, srv_socket)))
-		connection_state_machine(srv, con);
+		connection_state_machine(con);
 
 	return HANDLER_GO_ON;
 }

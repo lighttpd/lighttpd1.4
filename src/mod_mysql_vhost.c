@@ -64,12 +64,10 @@ FREE_FUNC(mod_mysql_vhost_cleanup) {
     }
 }
 
-static void* mod_mysql_vhost_connection_data(server *srv, connection *con, void *p_d)
+static void* mod_mysql_vhost_connection_data(connection *con, void *p_d)
 {
 	plugin_data *p = p_d;
 	plugin_connection_data *c = con->plugin_ctx[p->id];
-
-	UNUSED(srv);
 
 	if (c) return c;
 	c = calloc(1, sizeof(*c));
@@ -281,7 +279,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	if (buffer_string_is_empty(p->conf.mysql_query)) return HANDLER_GO_ON;
 
 	/* sets up connection data if not done yet */
-	c = mod_mysql_vhost_connection_data(con->srv, con, p_d);
+	c = mod_mysql_vhost_connection_data(con, p_d);
 
 	/* check if cached this connection */
 	if (buffer_is_equal(c->server_name, con->uri.authority)) goto GO_ON;

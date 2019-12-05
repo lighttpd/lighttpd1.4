@@ -169,7 +169,7 @@ static int mod_auth_algorithms_parse(int *algorithm, buffer *algos) {
     return 1;
 }
 
-static int mod_auth_require_parse (server *srv, http_auth_require_t * const require, const buffer *b)
+static int mod_auth_require_parse (http_auth_require_t * const require, const buffer *b, log_error_st *errh)
 {
     /* user=name1|user=name2|group=name3|host=name4 */
 
@@ -188,14 +188,14 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
         len = NULL != p ? (size_t)(p - str) : strlen(str);
         eq = memchr(str, '=', len);
         if (NULL == eq) {
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_error(errh, __FILE__, __LINE__,
               "error parsing auth.require 'require' field: missing '=' "
               "(expecting \"valid-user\" or \"user=a|user=b|group=g|host=h\"). "
               "error value: %s error near: %s", b->ptr, str);
             return 0;
         }
         if (eq[1] == '|' || eq[1] == '\0') {
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_error(errh, __FILE__, __LINE__,
               "error parsing auth.require 'require' field: "
               "missing token after '=' "
               "(expecting \"valid-user\" or \"user=a|user=b|group=g|host=h\"). "
@@ -213,7 +213,7 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
             else if (0 == memcmp(str, CONST_STR_LEN("host"))) {
                 /*("host=" is 5)*/
                 array_set_key_value(&require->host, str+5, len-5, CONST_STR_LEN(""));
-                log_error(srv->errh, __FILE__, __LINE__,
+                log_error(errh, __FILE__, __LINE__,
                   "warning parsing auth.require 'require' field: "
                   "'host' not implemented; field value: %s", b->ptr);
                 continue;
@@ -224,7 +224,7 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
                 /*("group=" is 6)*/
                 array_set_key_value(&require->group, str+6, len-6, CONST_STR_LEN(""));
               #if 0/*(supported by mod_authn_ldap, but not all other backends)*/
-                log_error(srv->errh, __FILE__, __LINE__,
+                log_error(errh, __FILE__, __LINE__,
                   "warning parsing auth.require 'require' field: "
                   "'group' not implemented; field value: %s", b->ptr);
               #endif
@@ -233,7 +233,7 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
             break; /* to error */
           case 10:
             if (0 == memcmp(str, CONST_STR_LEN("valid-user"))) {
-                log_error(srv->errh, __FILE__, __LINE__,
+                log_error(errh, __FILE__, __LINE__,
                   "error parsing auth.require 'require' field: "
                   "valid user can not be combined with other require rules "
                   "(expecting \"valid-user\" or "
@@ -245,7 +245,7 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
             break; /* to error */
         }
 
-        log_error(srv->errh, __FILE__, __LINE__,
+        log_error(errh, __FILE__, __LINE__,
           "error parsing auth.require 'require' field: "
           "invalid/unsupported token "
           "(expecting \"valid-user\" or \"user=a|user=b|group=g|host=h\"). "
@@ -257,7 +257,7 @@ static int mod_auth_require_parse (server *srv, http_auth_require_t * const requ
     return 1; /* success */
 }
 
-static handler_t mod_auth_require_parse_array(server *srv, const array *value, array * const auth_require)
+static handler_t mod_auth_require_parse_array(const array *value, array * const auth_require, log_error_st *errh)
 {
 		for (uint32_t n = 0; n < value->used; ++n) {
 			size_t m;
@@ -268,7 +268,7 @@ static handler_t mod_auth_require_parse_array(server *srv, const array *value, a
 			int algorithm = HTTP_AUTH_DIGEST_SESS;
 
 			if (!array_is_kvstring(&da_file->value)) {
-				log_error(srv->errh, __FILE__, __LINE__,
+				log_error(errh, __FILE__, __LINE__,
 				  "unexpected value for auth.require; expected "
 				  "auth.require = ( \"urlpath\" => ( \"option\" => \"value\" ) )");
 
@@ -287,7 +287,7 @@ static handler_t mod_auth_require_parse_array(server *srv, const array *value, a
 					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("algorithm"))) {
 						algos = &ds->value;
 					} else {
-						log_error(srv->errh, __FILE__, __LINE__,
+						log_error(errh, __FILE__, __LINE__,
 						  "the field is unknown in: "
 						  "auth.require = ( \"...\" => ( ..., -> \"%s\" <- => \"...\" ) )",
 						  da_file->value.data[m]->key.ptr);
@@ -295,7 +295,7 @@ static handler_t mod_auth_require_parse_array(server *srv, const array *value, a
 						return HANDLER_ERROR;
 					}
 				} else {
-					log_error(srv->errh, __FILE__, __LINE__,
+					log_error(errh, __FILE__, __LINE__,
 					  "a string was expected for: "
 					  "auth.require = ( \"...\" => ( ..., -> \"%s\" <- => \"...\" ) )",
 					  da_file->value.data[m]->key.ptr);
@@ -305,14 +305,14 @@ static handler_t mod_auth_require_parse_array(server *srv, const array *value, a
 			}
 
 			if (buffer_string_is_empty(method)) {
-				log_error(srv->errh, __FILE__, __LINE__,
+				log_error(errh, __FILE__, __LINE__,
 				  "the method field is missing or blank in: "
 				  "auth.require = ( \"...\" => ( ..., \"method\" => \"...\" ) )");
 				return HANDLER_ERROR;
 			} else {
 				auth_scheme = http_auth_scheme_get(method);
 				if (NULL == auth_scheme) {
-					log_error(srv->errh, __FILE__, __LINE__,
+					log_error(errh, __FILE__, __LINE__,
 					  "unknown method %s (e.g. \"basic\", \"digest\" or \"extern\") in "
 					  "auth.require = ( \"...\" => ( ..., \"method\" => \"...\") )", method->ptr);
 					return HANDLER_ERROR;
@@ -320,14 +320,14 @@ static handler_t mod_auth_require_parse_array(server *srv, const array *value, a
 			}
 
 			if (buffer_is_empty(realm)) {
-				log_error(srv->errh, __FILE__, __LINE__,
+				log_error(errh, __FILE__, __LINE__,
 				  "the realm field is missing in: "
 				  "auth.require = ( \"...\" => ( ..., \"realm\" => \"...\" ) )");
 				return HANDLER_ERROR;
 			}
 
 			if (buffer_string_is_empty(require)) {
-				log_error(srv->errh, __FILE__, __LINE__,
+				log_error(errh, __FILE__, __LINE__,
 				  "the require field is missing or blank in: "
 				  "auth.require = ( \"...\" => ( ..., \"require\" => \"...\" ) )");
 				return HANDLER_ERROR;
@@ -336,7 +336,7 @@ static handler_t mod_auth_require_parse_array(server *srv, const array *value, a
 			if (buffer_string_is_empty(algos)) {
 				algorithm |= HTTP_AUTH_DIGEST_MD5;
 			} else if (!mod_auth_algorithms_parse(&algorithm, algos)) {
-				log_error(srv->errh, __FILE__, __LINE__,
+				log_error(errh, __FILE__, __LINE__,
 				  "invalid algorithm in: "
 				  "auth.require = ( \"...\" => ( ..., \"algorithm\" => \"...\" ) )");
 				return HANDLER_ERROR;
@@ -348,7 +348,7 @@ static handler_t mod_auth_require_parse_array(server *srv, const array *value, a
 				dauth->require->scheme = auth_scheme;
 				dauth->require->algorithm = algorithm;
 				dauth->require->realm = realm;
-				if (!mod_auth_require_parse(srv, dauth->require, require)) {
+				if (!mod_auth_require_parse(dauth->require, require, errh)) {
 					dauth->fn->free((data_unset *)dauth);
 					return HANDLER_ERROR;
 				}
@@ -433,7 +433,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
                 if (array_is_kvarray(cpv->v.a)) {
                     array * const a = array_init(4);
                     if (HANDLER_GO_ON !=
-                        mod_auth_require_parse_array(srv, cpv->v.a, a)) {
+                        mod_auth_require_parse_array(cpv->v.a, a, srv->errh)) {
                         array_free(a);
                         return HANDLER_ERROR;
                     }
@@ -1196,9 +1196,9 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 }
 
 static handler_t mod_auth_send_401_unauthorized_digest(connection *con, const struct http_auth_require_t *require, int nonce_stale) {
-	server *srv = con->srv;
-	mod_auth_digest_www_authenticate(srv->tmp_buf, log_epoch_secs, require, nonce_stale);
-	http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(srv->tmp_buf));
+	buffer * const tb = con->srv->tmp_buf;
+	mod_auth_digest_www_authenticate(tb, log_epoch_secs, require, nonce_stale);
+	http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(tb));
 
 	con->http_status = 401;
 	con->mode = DIRECT;

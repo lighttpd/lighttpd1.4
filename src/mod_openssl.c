@@ -2213,8 +2213,9 @@ CONNECTION_FUNC(mod_openssl_handle_con_close)
 
 
 static void
-https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
+https_add_ssl_client_entries (connection *con, handler_ctx *hctx)
 {
+    server *srv = con->srv;
     X509 *xs;
     X509_NAME *xn;
     int i, nentries;
@@ -2324,11 +2325,10 @@ https_add_ssl_client_entries (server *srv, connection *con, handler_ctx *hctx)
 
 
 static void
-http_cgi_ssl_env (server *srv, connection *con, handler_ctx *hctx)
+http_cgi_ssl_env (connection *con, handler_ctx *hctx)
 {
     const char *s;
     const SSL_CIPHER *cipher;
-    UNUSED(srv);
 
     s = SSL_get_version(hctx->ssl);
     http_header_env_set(con, CONST_STR_LEN("SSL_PROTOCOL"), s, strlen(s));
@@ -2355,9 +2355,9 @@ CONNECTION_FUNC(mod_openssl_handle_request_env)
     if (hctx->request_env_patched) return HANDLER_GO_ON;
     hctx->request_env_patched = 1;
 
-    http_cgi_ssl_env(con->srv, con, hctx);
+    http_cgi_ssl_env(con, hctx);
     if (hctx->conf.ssl_verifyclient) {
-        https_add_ssl_client_entries(con->srv, con, hctx);
+        https_add_ssl_client_entries(con, hctx);
     }
 
     return HANDLER_GO_ON;

@@ -407,7 +407,7 @@ static int server_oneshot_init(server *srv, int fd) {
 	con = connection_accepted(srv, srv_socket, &cnt_addr, fd);
 	if (NULL == con) return 0;
 
-	connection_state_machine(srv, con);
+	connection_state_machine(con);
 	return 1;
 }
 
@@ -875,7 +875,7 @@ static void server_process_fdwaitqueue (server *srv) {
     uint32_t i = 0;
     for (int n = srv->max_fds - srv->cur_fds - 16; n > 0; --n) {
         if (i == fdwaitqueue->used) break;
-        connection_state_machine(srv, fdwaitqueue->ptr[i++]);
+        connection_state_machine(fdwaitqueue->ptr[i++]);
     }
     if (i > 0 && 0 != (fdwaitqueue->used -= i)) {
 	memmove(fdwaitqueue->ptr, fdwaitqueue->ptr+i, fdwaitqueue->used * sizeof(*(fdwaitqueue->ptr)));
@@ -1729,7 +1729,7 @@ static int server_main_loop (server * const srv) {
 
 		for (uint32_t ndx = 0; ndx < joblist->used; ++ndx) {
 			connection *con = joblist->ptr[ndx];
-			connection_state_machine(srv, con);
+			connection_state_machine(con);
 		}
 		joblist->used = 0;
 	}

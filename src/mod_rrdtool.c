@@ -316,10 +316,9 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, rrd_config *s, ch
 }
 
 __attribute_cold__
-static int mod_rrd_fatal_error(server *srv, plugin_data *p) {
+static int mod_rrd_fatal_error(plugin_data *p) {
     /* future: might send kill() signal to p->rrdtool_pid to trigger restart */
     p->rrdtool_running = 0;
-    UNUSED(srv);
     return 0;
 }
 
@@ -343,12 +342,12 @@ static int mod_rrd_write_data(server *srv, plugin_data *p, rrd_config *s) {
 
     if (-1 == safe_write(p->write_fd, CONST_BUF_LEN(cmd))) {
         log_error(srv->errh, __FILE__, __LINE__, "rrdtool-write: failed");
-        return mod_rrd_fatal_error(srv, p);
+        return mod_rrd_fatal_error(p);
     }
 
     if (-1 == safe_read(p->read_fd, resp, sizeof(resp))) {
         log_error(srv->errh, __FILE__, __LINE__, "rrdtool-read: failed");
-        return mod_rrd_fatal_error(srv, p);
+        return mod_rrd_fatal_error(p);
     }
 
     if (resp[0] == 'O' && resp[1] == 'K') {
@@ -362,7 +361,7 @@ static int mod_rrd_write_data(server *srv, plugin_data *p, rrd_config *s) {
          * (graceful restart, the old one might have just updated too) */
         log_error(srv->errh, __FILE__, __LINE__,
           "rrdtool-response: %s %s", cmd->ptr, resp);
-        return mod_rrd_fatal_error(srv, p);
+        return mod_rrd_fatal_error(p);
     }
 
     return 1;

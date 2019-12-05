@@ -229,17 +229,17 @@ INIT_FUNC(mod_secdownload_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-static int mod_secdownload_parse_algorithm(server * const srv, config_plugin_value_t * const cpv) {
+static int mod_secdownload_parse_algorithm(config_plugin_value_t * const cpv, log_error_st * const errh) {
     secdl_algorithm algorithm = algorithm_from_string(cpv->v.b);
     switch (algorithm) {
       case SECDL_INVALID:
-        log_error(srv->errh, __FILE__, __LINE__,
+        log_error(errh, __FILE__, __LINE__,
           "invalid secdownload.algorithm: %s", cpv->v.b->ptr);
         return 0;
      #ifndef USE_OPENSSL_CRYPTO
       case SECDL_HMAC_SHA1:
       case SECDL_HMAC_SHA256:
-        log_error(srv->errh, __FILE__, __LINE__,
+        log_error(errh, __FILE__, __LINE__,
           "unsupported secdownload.algorithm: %s", cpv->v.b->ptr);
         /*return 0;*/
         /* proceed to allow config to load for other tests */
@@ -341,7 +341,7 @@ SETDEFAULTS_FUNC(mod_secdownload_set_defaults) {
               case 3: /* secdownload.timeout */
                 break;
               case 4: /* secdownload.algorithm */
-                if (!mod_secdownload_parse_algorithm(srv, cpv))
+                if (!mod_secdownload_parse_algorithm(cpv, srv->errh))
                     return HANDLER_ERROR;
                 break;
               case 5: /* secdownload.path-segments */

@@ -248,13 +248,13 @@ static void accesslog_append_escaped(buffer *dest, const buffer *str) {
 }
 
 __attribute_cold__
-static format_fields * accesslog_parse_format_err(server *srv, const char *file, unsigned int line, format_field *f, const char *msg) {
-    log_error(srv->errh, file, line, "%s", msg);
+static format_fields * accesslog_parse_format_err(log_error_st *errh, const char *file, unsigned int line, format_field *f, const char *msg) {
+    log_error(errh, file, line, "%s", msg);
     for (; f->type != FIELD_UNSET; ++f) free(f->string.ptr);
     return NULL;
 }
 
-static format_fields * accesslog_parse_format(server *srv, const char *format, const size_t flen) {
+static format_fields * accesslog_parse_format(const char * const format, const size_t flen, log_error_st * const errh) {
 	/* common log format (the default) results in 18 elements,
 	 * so 127 should be enough except for obscene custom usage */
 	size_t i, j, k = 0, start = 0;
@@ -273,7 +273,7 @@ static format_fields * accesslog_parse_format(server *srv, const char *format, c
 			if (i > 0 && start != i) {
 				/* copy the string before this % */
 				if (used == sz)
-					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
 					         "too many fields (>= 127) in accesslog.format");
 
 				f = fptr+used;
@@ -286,7 +286,7 @@ static format_fields * accesslog_parse_format(server *srv, const char *format, c
 
 			/* we need a new field */
 			if (used == sz)
-				return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+				return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
 				         "too many fields (>= 127) in accesslog.format");
 
 			/* search for the terminating command */
@@ -295,7 +295,7 @@ static format_fields * accesslog_parse_format(server *srv, const char *format, c
 			case '<':
 				/* after the } has to be a character */
 				if (format[i+2] == '\0') {
-					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
 					         "%< and %> have to be followed by a format-specifier");
 				}
 
@@ -317,7 +317,7 @@ static format_fields * accesslog_parse_format(server *srv, const char *format, c
 				}
 
 				if (fmap[j].key == '\0') {
-					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
 					         "%< and %> have to be followed by a valid format-specifier");
 				}
 
@@ -333,18 +333,18 @@ static format_fields * accesslog_parse_format(server *srv, const char *format, c
 				}
 
 				if (k == flen) {
-					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
 					         "%{ has to be terminated by a }");
 				}
 
 				/* after the } has to be a character */
 				if (format[k+1] == '\0') {
-					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
 					         "%{...} has to be followed by a format-specifier");
 				}
 
 				if (k == i + 2) {
-					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
 					         "%{...} has to contain a string");
 				}
 
@@ -366,7 +366,7 @@ static format_fields * accesslog_parse_format(server *srv, const char *format, c
 				}
 
 				if (fmap[j].key == '\0') {
-					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
 					         "%{...} has to be followed by a valid format-specifier");
 				}
 
@@ -377,7 +377,7 @@ static format_fields * accesslog_parse_format(server *srv, const char *format, c
 			default:
 				/* after the % has to be a character */
 				if (format[i+1] == '\0') {
-					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
 					         "% has to be followed by a format-specifier");
 				}
 
@@ -398,7 +398,7 @@ static format_fields * accesslog_parse_format(server *srv, const char *format, c
 				}
 
 				if (fmap[j].key == '\0') {
-					return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
 					         "% has to be followed by a valid format-specifier");
 				}
 
@@ -412,7 +412,7 @@ static format_fields * accesslog_parse_format(server *srv, const char *format, c
 	if (start < i) {
 		/* copy the string */
 		if (used == sz)
-			return accesslog_parse_format_err(srv, __FILE__, __LINE__, fptr,
+			return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
 			         "too many fields (>= 127) in accesslog.format");
 
 		f = fptr+used;
@@ -518,7 +518,7 @@ static void mod_accesslog_patch_config(connection * const con, plugin_data * con
     }
 }
 
-static format_fields * mod_accesslog_process_format(server * const srv, const char * const format, const size_t flen);
+static format_fields * mod_accesslog_process_format(const char * const format, const size_t flen, server * const srv);
 
 SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
@@ -563,7 +563,7 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
                 break;
               case 1: /* accesslog.format */
                 cpv->v.v =
-                  mod_accesslog_process_format(srv, CONST_BUF_LEN(cpv->v.b));
+                  mod_accesslog_process_format(CONST_BUF_LEN(cpv->v.b), srv);
                 if (NULL == cpv->v.v) return HANDLER_ERROR;
                 cpv->vtype = T_CONFIG_LOCAL;
                 break;
@@ -606,16 +606,16 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
         static const char fmt[] =
           "%h %V %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"";
         p->defaults.parsed_format = p->default_format =
-          mod_accesslog_process_format(srv, CONST_STR_LEN(fmt));
+          mod_accesslog_process_format(CONST_STR_LEN(fmt), srv);
         if (NULL == p->default_format) return HANDLER_ERROR;
     }
 
     return HANDLER_GO_ON;
 }
 
-static format_fields * mod_accesslog_process_format(server * const srv, const char * const format, const size_t flen) {
+static format_fields * mod_accesslog_process_format(const char * const format, const size_t flen, server * const srv) {
 			format_fields * const parsed_format =
-			  accesslog_parse_format(srv, format, flen);
+			  accesslog_parse_format(format, flen, srv->errh);
 			if (NULL == parsed_format) {
 				log_error(srv->errh, __FILE__, __LINE__,
 					"parsing accesslog-definition failed: %s", format);

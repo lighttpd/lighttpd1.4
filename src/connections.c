@@ -75,16 +75,14 @@ static int connection_del(server *srv, connection *con) {
 
 	/* not last element */
 
-	if (i != conns->used - 1) {
+	if (i != --conns->used) {
 		connection * const temp = conns->ptr[i];
-		conns->ptr[i] = conns->ptr[conns->used - 1];
-		conns->ptr[conns->used - 1] = temp;
+		conns->ptr[i] = conns->ptr[conns->used];
+		conns->ptr[conns->used] = temp;
 
 		conns->ptr[i]->ndx = i;
-		conns->ptr[conns->used - 1]->ndx = -1;
+		conns->ptr[conns->used]->ndx = -1;
 	}
-
-	conns->used--;
 
 	con->ndx = -1;
 #if 0
@@ -110,7 +108,7 @@ static void connection_plugin_ctx_check(server *srv, connection *con) {
 	}
 }
 
-static int connection_close(server *srv, connection *con) {
+static int connection_close(connection *con) {
 	if (con->fd < 0) con->fd = -con->fd;
 
 	plugins_call_handle_connection_close(con);
@@ -118,6 +116,7 @@ static int connection_close(server *srv, connection *con) {
 	con->request_count = 0;
 	chunkqueue_reset(con->read_queue);
 
+	server * const srv = con->srv;
 	fdevent_fdnode_event_del(srv->ev, con->fdn);
 	fdevent_unregister(srv->ev, con->fd);
 	con->fdn = NULL;
@@ -187,11 +186,11 @@ static void connection_read_for_eos(connection * const con) {
 	  : connection_read_for_eos_ssl(con);
 }
 
-static void connection_handle_close_state(server *srv, connection *con) {
+static void connection_handle_close_state(connection *con) {
 	connection_read_for_eos(con);
 
 	if (log_epoch_secs - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
-		connection_close(srv, con);
+		connection_close(con);
 	}
 }
 
@@ -199,8 +198,7 @@ static void connection_handle_shutdown(connection *con) {
 	plugins_call_handle_connection_shut_wr(con);
 
 	connection_reset(con);
-	server * const srv = con->srv;
-	++srv->con_closed;
+	++con->srv->con_closed;
 
 	/* close the connection */
 	if (con->fd >= 0
@@ -208,12 +206,12 @@ static void connection_handle_shutdown(connection *con) {
 		con->close_timeout_ts = log_epoch_secs;
 		connection_set_state(con, CON_STATE_CLOSE);
 
-		if (srv->srvconf.log_state_handling) {
+		if (con->srv->srvconf.log_state_handling) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
 			  "shutdown for fd %d", con->fd);
 		}
 	} else {
-		connection_close(srv, con);
+		connection_close(con);
 	}
 }
 
@@ -757,7 +755,7 @@ static uint32_t connection_read_header_hoff(const char *n, const uint32_t clen, 
  *
  * we get called by the state-engine and by the fdevent-handler
  */
-static int connection_handle_read_state(server * const srv, connection * const con)  {
+static int connection_handle_read_state(connection * const con)  {
     int keepalive_request_start = 0;
     int pipelined_request_start = 0;
 
@@ -797,7 +795,7 @@ static int connection_handle_read_state(server * const srv, connection * const c
          * addition might overflow, but max_request_field_size is USHRT_MAX,
          * so failure will be detected below */
         const unsigned int max_request_field_size =
-          srv->srvconf.max_request_field_size;
+          con->srv->srvconf.max_request_field_size;
         if ((con->header_len ? con->header_len : clen) > max_request_field_size
             || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1) {
             log_error(con->conf.errh, __FILE__, __LINE__, "%s",
@@ -855,7 +853,7 @@ static int connection_handle_read_state(server * const srv, connection * const c
         con->keep_alive = 0;
         con->request.content_length = 0;
 
-        if (srv->srvconf.log_request_header_on_error) {
+        if (con->srv->srvconf.log_request_header_on_error) {
             /*(http_request_parse() modifies hdrs only to
              * undo line-wrapping in-place using spaces)*/
             log_error(con->conf.errh, __FILE__, __LINE__, "request-header:\n%.*s",
@@ -891,7 +889,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 
 
 	if (con->state == CON_STATE_READ) {
-		connection_handle_read_state(srv, con);
+		connection_handle_read_state(con);
 	}
 
 	if (con->state == CON_STATE_WRITE &&
@@ -1091,8 +1089,7 @@ static int connection_read_cq(connection *con, chunkqueue *cq, off_t max_bytes) 
 
 
 static int connection_write_cq(connection *con, chunkqueue *cq, off_t max_bytes) {
-	server * const srv = con->srv;
-	return srv->network_backend_write(con->fd, cq, max_bytes, con->conf.errh);
+    return con->srv->network_backend_write(con->fd,cq,max_bytes,con->conf.errh);
 }
 
 
@@ -1129,7 +1126,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		buffer_copy_string_len(con->proto, CONST_STR_LEN("http"));
 		if (HANDLER_GO_ON != plugins_call_handle_connection_accept(con)) {
 			connection_reset(con);
-			connection_close(srv, con);
+			connection_close(con);
 			return NULL;
 		}
 		if (con->http_status < 0) connection_set_state(con, CON_STATE_WRITE);
@@ -1245,10 +1242,10 @@ static int connection_handle_request(connection *con) {
 }
 
 
-int connection_state_machine(server *srv, connection *con) {
+int connection_state_machine(connection *con) {
 	connection_state_t ostate;
 	int r;
-	const int log_state_handling = srv->srvconf.log_state_handling;
+	const int log_state_handling = con->srv->srvconf.log_state_handling;
 
 	if (log_state_handling) {
 		log_error(con->conf.errh, __FILE__, __LINE__,
@@ -1273,7 +1270,7 @@ int connection_state_machine(server *srv, connection *con) {
 			connection_set_state(con, CON_STATE_READ);
 			/* fall through */
 		case CON_STATE_READ:
-			if (!connection_handle_read_state(srv, con)) break;
+			if (!connection_handle_read_state(con)) break;
 			/*if (con->state != CON_STATE_REQUEST_END) break;*/
 			/* fall through */
 		case CON_STATE_REQUEST_END: /* transient */
@@ -1313,7 +1310,7 @@ int connection_state_machine(server *srv, connection *con) {
 			connection_handle_response_end_state(con);
 			break;
 		case CON_STATE_CLOSE:
-			connection_handle_close_state(srv, con);
+			connection_handle_close_state(con);
 			break;
 		case CON_STATE_CONNECT:
 			break;
@@ -1377,14 +1374,14 @@ int connection_state_machine(server *srv, connection *con) {
 			if ((r & FDEVENT_OUT) && !(events & FDEVENT_OUT)) {
 				con->write_request_ts = log_epoch_secs;
 			}
-			fdevent_fdnode_event_set(srv->ev, con->fdn, r);
+			fdevent_fdnode_event_set(con->srv->ev, con->fdn, r);
 		}
 	}
 
 	return 0;
 }
 
-static void connection_check_timeout (server * const srv, const time_t cur_ts, connection * const con) {
+static void connection_check_timeout (connection * const con, const time_t cur_ts) {
     const int waitevents = fdevent_fdnode_interest(con->fdn);
     int changed = 0;
     int t_diff;
@@ -1466,7 +1463,7 @@ static void connection_check_timeout (server * const srv, const time_t cur_ts, c
     con->bytes_written_cur_second = 0;
 
     if (changed) {
-        connection_state_machine(srv, con);
+        connection_state_machine(con);
     }
 }
 
@@ -1474,7 +1471,7 @@ void connection_periodic_maint (server * const srv, const time_t cur_ts) {
     /* check all connections for timeouts */
     connections * const conns = &srv->conns;
     for (size_t ndx = 0; ndx < conns->used; ++ndx) {
-        connection_check_timeout(srv, cur_ts, conns->ptr[ndx]);
+        connection_check_timeout(conns->ptr[ndx], cur_ts);
     }
 }
 
@@ -1509,7 +1506,7 @@ void connection_graceful_shutdown_maint (server *srv) {
         }
 
         if (changed) {
-            connection_state_machine(srv, con);
+            connection_state_machine(con);
         }
     }
 }
