@@ -283,6 +283,16 @@ static handler_t http_response_physical_path_check(connection *con) {
 	return HANDLER_GO_ON;
 }
 
+__attribute_cold__
+__attribute_noinline__
+static handler_t http_status_set_error_close (connection *con, int status) {
+    con->keep_alive = 0;
+    con->file_finished = 1;
+    con->mode = DIRECT;
+    con->http_status = status;
+    return HANDLER_FINISHED;
+}
+
 handler_t http_response_prepare(connection *con) {
 	handler_t rc;
 
@@ -366,10 +376,8 @@ handler_t http_response_prepare(connection *con) {
 					log_error(con->conf.errh, __FILE__, __LINE__,
 					  "invalid character in URI -> 400 %s",
 					  con->request.uri->ptr);
-					con->keep_alive = 0;
-					con->http_status = 400; /* Bad Request */
-					con->file_finished = 1;
-					return HANDLER_FINISHED;
+					return /* 400 Bad Request */
+					  http_status_set_error_close(con, 400);
 				}
 				qstr = (-1 == qs) ? NULL : con->request.uri->ptr+qs;
 			      #if 0  /* future: might enable here, or below for all requests */
@@ -381,18 +389,14 @@ handler_t http_response_prepare(connection *con) {
 				len = buffer_string_length(con->request.uri);
 				con->header_len += len;
 				if (len > MAX_HTTP_REQUEST_URI) {
-					con->keep_alive = 0;
-					con->http_status = 414; /* Request-URI Too Long */
-					con->file_finished = 1;
-					return HANDLER_FINISHED;
+					return /* 414 Request-URI Too Long */
+					  http_status_set_error_close(con, 414);
 				}
 				if (con->header_len > MAX_HTTP_REQUEST_HEADER) {
 					log_error(con->conf.errh, __FILE__, __LINE__,
 					  "request header fields too large: %u -> 431", con->header_len);
-					con->keep_alive = 0;
-					con->http_status = 431; /* Request Header Fields Too Large */
-					con->file_finished = 1;
-					return HANDLER_FINISHED;
+					return /* 431 Request Header Fields Too Large */
+					  http_status_set_error_close(con, 431);
 				}
 			      #endif
 			} else {
@@ -429,10 +433,8 @@ handler_t http_response_prepare(connection *con) {
 			if (buffer_string_is_empty(con->uri.path) || con->uri.path->ptr[0] != '/') {
 				log_error(con->conf.errh, __FILE__, __LINE__,
 				  "uri-path does not begin with '/': %s -> 400", con->uri.path->ptr);
-				con->keep_alive = 0;
-				con->http_status = 400;
-				con->file_finished = 1;
-				return HANDLER_FINISHED;
+				return /* 400 Bad Request */
+				  http_status_set_error_close(con, 400);
 			}
 		}
 
@@ -474,11 +476,8 @@ handler_t http_response_prepare(connection *con) {
 		    (off_t)con->request.content_length > ((off_t)con->conf.max_request_size << 10)) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
 			  "request-size too long: %lld -> 413", (long long) con->request.content_length);
-			con->keep_alive = 0;
-			con->http_status = 413;
-			con->file_finished = 1;
-
-			return HANDLER_FINISHED;
+			return /* 413 Payload Too Large */
+			  http_status_set_error_close(con, 413);
 		}
 
 
@@ -521,10 +520,8 @@ handler_t http_response_prepare(connection *con) {
 		}
 
 		if (con->request.http_method == HTTP_METHOD_CONNECT && con->mode == DIRECT) {
-			con->keep_alive = 0;
-			con->http_status = 405; /* Method Not Allowed */
-			con->file_finished = 1;
-			return HANDLER_FINISHED;
+			return /* 405 Method Not Allowed */
+			  http_status_set_error_close(con, 405);
 		}
 
 		/***
