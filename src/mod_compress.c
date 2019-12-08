@@ -481,7 +481,6 @@ static int deflate_file_to_file(connection *con, plugin_data *p, int ifd, buffer
 #endif
 	void *start;
 	stat_cache_entry *sce_ofn;
-	ssize_t r;
 
 	/* overflow */
 	if ((off_t)(sce->st.st_size * 1.1) < sce->st.st_size) return -1;
@@ -622,12 +621,12 @@ static int deflate_file_to_file(connection *con, plugin_data *p, int ifd, buffer
 	}
 
 	if (ret == 0) {
-		r = write(ofd, CONST_BUF_LEN(p->b));
-		if (-1 == r) {
+		ssize_t wr = write(ofd, CONST_BUF_LEN(p->b));
+		if (-1 == wr) {
 			log_perror(con->conf.errh, __FILE__, __LINE__,
 			  "writing cachefile %s failed", p->ofn->ptr);
 			ret = -1;
-		} else if ((size_t)r != buffer_string_length(p->b)) {
+		} else if ((size_t)wr != buffer_string_length(p->b)) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
 			  "writing cachefile %s failed: not enough bytes written",
 			  p->ofn->ptr);

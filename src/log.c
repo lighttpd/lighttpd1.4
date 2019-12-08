@@ -44,33 +44,19 @@ int log_clock_gettime_realtime (struct timespec *ts) {
 }
 
 /* retry write on EINTR or when not all data was written */
-ssize_t write_all(int fd, const void* buf, size_t count) {
-	ssize_t written = 0;
+ssize_t write_all(int fd, const void * const buf, size_t count) {
+    ssize_t written = 0;
 
-	while (count > 0) {
-		ssize_t r = write(fd, buf, count);
-		if (r < 0) {
-			switch (errno) {
-			case EINTR:
-				/* try again */
-				break;
-			default:
-				/* fail - repeating probably won't help */
-				return -1;
-			}
-		} else if (0 == r) {
-			/* really shouldn't happen... */
-			errno = EIO;
-			return -1;
-		} else {
-			force_assert(r <= (ssize_t) count);
-			written += r;
-			buf = r + (char const*) buf;
-			count -= r;
-		}
-	}
+    for (ssize_t wr; count > 0; count -= wr, written += wr) {
+        wr = write(fd, (const char *)buf + written, count);
+        if (wr > 0) continue;
 
-	return written;
+        if (wr < 0 && errno == EINTR) { wr = 0; continue; } /* try again */
+        if (0 == wr) errno = EIO; /* really shouldn't happen... */
+        return -1; /* fail - repeating probably won't help */
+    }
+
+    return written;
 }
 
 static int log_buffer_prepare(const log_error_st *errh, const char *filename, unsigned int line, buffer *b) {

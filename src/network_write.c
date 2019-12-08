@@ -217,7 +217,7 @@ static void sigbus_handler(int sig) {
 static int network_write_file_chunk_mmap(int fd, chunkqueue *cq, off_t *p_max_bytes, log_error_st *errh) {
     chunk* const c = cq->first;
     off_t offset, toSend, file_end;
-    ssize_t r;
+    ssize_t wr;
     size_t mmap_offset, mmap_avail;
     const char *data;
 
@@ -309,7 +309,7 @@ static int network_write_file_chunk_mmap(int fd, chunkqueue *cq, off_t *p_max_by
         signal(SIGBUS, sigbus_handler);
 
         sigbus_jmp_valid = 1;
-        r = network_write_data_len(fd, data, toSend);
+        wr = network_write_data_len(fd, data, toSend);
         sigbus_jmp_valid = 0;
     } else {
         sigbus_jmp_valid = 0;
@@ -322,10 +322,10 @@ static int network_write_file_chunk_mmap(int fd, chunkqueue *cq, off_t *p_max_by
         return -1;
     }
 
-    if (r >= 0) {
-        *p_max_bytes -= r;
-        chunkqueue_mark_written(cq, r);
-        return (r > 0 && r == toSend) ? 0 : -3;
+    if (wr >= 0) {
+        *p_max_bytes -= wr;
+        chunkqueue_mark_written(cq, wr);
+        return (wr > 0 && wr == toSend) ? 0 : -3;
     } else {
         return network_write_error(fd, errh);
     }
@@ -371,7 +371,7 @@ static int network_writev_mem_chunks(int fd, chunkqueue *cq, off_t *p_max_bytes,
     size_t num_chunks = 0;
     off_t max_bytes = *p_max_bytes;
     off_t toSend = 0;
-    ssize_t r;
+    ssize_t wr;
 
     for (const chunk *c = cq->first;
          NULL != c && MEM_CHUNK == c->type
@@ -395,9 +395,9 @@ static int network_writev_mem_chunks(int fd, chunkqueue *cq, off_t *p_max_bytes,
         return 0;
     }
 
-    r = writev(fd, chunks, num_chunks);
+    wr = writev(fd, chunks, num_chunks);
 
-    if (r < 0) switch (errno) {
+    if (wr < 0) switch (errno) {
       case EAGAIN:
       case EINTR:
         break;
@@ -409,12 +409,12 @@ static int network_writev_mem_chunks(int fd, chunkqueue *cq, off_t *p_max_bytes,
         return -1;
     }
 
-    if (r >= 0) {
-        *p_max_bytes -= r;
-        chunkqueue_mark_written(cq, r);
+    if (wr >= 0) {
+        *p_max_bytes -= wr;
+        chunkqueue_mark_written(cq, wr);
     }
 
-    return (r > 0 && r == toSend) ? 0 : -3;
+    return (wr > 0 && wr == toSend) ? 0 : -3;
 }
 
 #endif /* NETWORK_WRITE_USE_WRITEV */
@@ -436,7 +436,7 @@ static int network_writev_mem_chunks(int fd, chunkqueue *cq, off_t *p_max_bytes,
 
 static int network_write_file_chunk_sendfile(int fd, chunkqueue *cq, off_t *p_max_bytes, log_error_st *errh) {
     chunk * const c = cq->first;
-    ssize_t r;
+    ssize_t wr;
     off_t offset;
     off_t toSend;
     off_t written = 0;
@@ -459,18 +459,18 @@ static int network_write_file_chunk_sendfile(int fd, chunkqueue *cq, off_t *p_ma
 
   #if defined(NETWORK_WRITE_USE_LINUX_SENDFILE)
 
-    r = sendfile(fd, c->file.fd, &offset, toSend);
-    if (r > 0) written = (off_t)r;
+    wr = sendfile(fd, c->file.fd, &offset, toSend);
+    if (wr > 0) written = (off_t)wr;
 
   #elif defined(NETWORK_WRITE_USE_DARWIN_SENDFILE)
 
     written = toSend;
-    r = sendfile(c->file.fd, fd, offset, &written, NULL, 0);
+    wr = sendfile(c->file.fd, fd, offset, &written, NULL, 0);
     /* (for EAGAIN/EINTR written still contains the sent bytes) */
 
   #elif defined(NETWORK_WRITE_USE_FREEBSD_SENDFILE)
 
-    r = sendfile(c->file.fd, fd, offset, toSend, NULL, &written, 0);
+    wr = sendfile(c->file.fd, fd, offset, toSend, NULL, &written, 0);
     /* (for EAGAIN/EINTR written still contains the sent bytes) */
 
   #elif defined(NETWORK_WRITE_USE_SOLARIS_SENDFILEV)
@@ -482,17 +482,17 @@ static int network_write_file_chunk_sendfile(int fd, chunkqueue *cq, off_t *p_ma
         fvec.sfv_len = toSend;
 
         /* Solaris sendfilev() */
-        r = sendfilev(fd, &fvec, 1, (size_t *)&written);
+        wr = sendfilev(fd, &fvec, 1, (size_t *)&written);
         /* (for EAGAIN/EINTR written still contains the sent bytes) */
     }
   #else
 
-    r = -1;
+    wr = -1;
     errno = ENOSYS;
 
   #endif
 
-    if (-1 == r) {
+    if (-1 == wr) {
         switch(errno) {
           case EAGAIN:
           case EINTR:
@@ -531,7 +531,7 @@ static int network_write_file_chunk_sendfile(int fd, chunkqueue *cq, off_t *p_ma
         *p_max_bytes -= written;
     }
 
-    return (r >= 0 && written == toSend) ? 0 : -3;
+    return (wr >= 0 && written == toSend) ? 0 : -3;
 }
 
 #endif
@@ -547,23 +547,23 @@ static int network_write_file_chunk_sendfile(int fd, chunkqueue *cq, off_t *p_ma
 
 static int network_write_chunkqueue_write(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh) {
     while (max_bytes > 0 && NULL != cq->first) {
-        int r = -1;
+        int rc = -1;
 
         switch (cq->first->type) {
         case MEM_CHUNK:
-            r = network_write_mem_chunk(fd, cq, &max_bytes, errh);
+            rc = network_write_mem_chunk(fd, cq, &max_bytes, errh);
             break;
         case FILE_CHUNK:
           #ifdef NETWORK_WRITE_USE_MMAP
-            r = network_write_file_chunk_mmap(fd, cq, &max_bytes, errh);
+            rc = network_write_file_chunk_mmap(fd, cq, &max_bytes, errh);
           #else
-            r = network_write_file_chunk_no_mmap(fd, cq, &max_bytes, errh);
+            rc = network_write_file_chunk_no_mmap(fd, cq, &max_bytes, errh);
           #endif
             break;
         }
 
-        if (-3 == r) return 0;
-        if (0 != r) return r;
+        if (-3 == rc) return 0;
+        if (0 != rc) return rc;
     }
 
     return 0;
@@ -572,27 +572,27 @@ static int network_write_chunkqueue_write(int fd, chunkqueue *cq, off_t max_byte
 #if defined(NETWORK_WRITE_USE_WRITEV)
 static int network_write_chunkqueue_writev(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh) {
     while (max_bytes > 0 && NULL != cq->first) {
-        int r = -1;
+        int rc = -1;
 
         switch (cq->first->type) {
         case MEM_CHUNK:
           #if defined(NETWORK_WRITE_USE_WRITEV)
-            r = network_writev_mem_chunks(fd, cq, &max_bytes, errh);
+            rc = network_writev_mem_chunks(fd, cq, &max_bytes, errh);
           #else
-            r = network_write_mem_chunk(fd, cq, &max_bytes, errh);
+            rc = network_write_mem_chunk(fd, cq, &max_bytes, errh);
           #endif
             break;
         case FILE_CHUNK:
           #ifdef NETWORK_WRITE_USE_MMAP
-            r = network_write_file_chunk_mmap(fd, cq, &max_bytes, errh);
+            rc = network_write_file_chunk_mmap(fd, cq, &max_bytes, errh);
           #else
-            r = network_write_file_chunk_no_mmap(fd, cq, &max_bytes, errh);
+            rc = network_write_file_chunk_no_mmap(fd, cq, &max_bytes, errh);
           #endif
             break;
         }
 
-        if (-3 == r) return 0;
-        if (0 != r) return r;
+        if (-3 == rc) return 0;
+        if (0 != rc) return rc;
     }
 
     return 0;
@@ -602,29 +602,29 @@ static int network_write_chunkqueue_writev(int fd, chunkqueue *cq, off_t max_byt
 #if defined(NETWORK_WRITE_USE_SENDFILE)
 static int network_write_chunkqueue_sendfile(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh) {
     while (max_bytes > 0 && NULL != cq->first) {
-        int r = -1;
+        int rc = -1;
 
         switch (cq->first->type) {
         case MEM_CHUNK:
           #if defined(NETWORK_WRITE_USE_WRITEV)
-            r = network_writev_mem_chunks(fd, cq, &max_bytes, errh);
+            rc = network_writev_mem_chunks(fd, cq, &max_bytes, errh);
           #else
-            r = network_write_mem_chunk(fd, cq, &max_bytes, errh);
+            rc = network_write_mem_chunk(fd, cq, &max_bytes, errh);
           #endif
             break;
         case FILE_CHUNK:
           #if defined(NETWORK_WRITE_USE_SENDFILE)
-            r = network_write_file_chunk_sendfile(fd, cq, &max_bytes, errh);
+            rc = network_write_file_chunk_sendfile(fd, cq, &max_bytes, errh);
           #elif defined(NETWORK_WRITE_USE_MMAP)
-            r = network_write_file_chunk_mmap(fd, cq, &max_bytes, errh);
+            rc = network_write_file_chunk_mmap(fd, cq, &max_bytes, errh);
           #else
-            r = network_write_file_chunk_no_mmap(fd, cq, &max_bytes, errh);
+            rc = network_write_file_chunk_no_mmap(fd, cq, &max_bytes, errh);
           #endif
             break;
         }
 
-        if (-3 == r) return 0;
-        if (0 != r) return r;
+        if (-3 == rc) return 0;
+        if (0 != rc) return rc;
     }
 
     return 0;

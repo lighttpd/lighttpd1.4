@@ -281,28 +281,28 @@ void buffer_copy_int(buffer *b, intmax_t val) {
 }
 
 void buffer_append_strftime(buffer *b, const char *format, const struct tm *tm) {
-	size_t r;
+	size_t rv;
 	char* buf;
 	force_assert(NULL != b);
 	force_assert(NULL != format);
 	force_assert(NULL != tm);
 
 	buf = buffer_string_prepare_append(b, 255);
-	r = strftime(buf, buffer_string_space(b), format, tm);
+	rv = strftime(buf, buffer_string_space(b), format, tm);
 
 	/* 0 (in some apis buffer_string_space(b)) signals the string may have
 	 * been too small; but the format could also just have lead to an empty
 	 * string
 	 */
-	if (0 == r || r >= buffer_string_space(b)) {
+	if (0 == rv || rv >= buffer_string_space(b)) {
 		/* give it a second try with a larger string */
 		buf = buffer_string_prepare_append(b, 4095);
-		r = strftime(buf, buffer_string_space(b), format, tm);
+		rv = strftime(buf, buffer_string_space(b), format, tm);
 	}
 
-	if (r >= buffer_string_space(b)) r = 0;
+	if (rv >= buffer_string_space(b)) rv = 0;
 
-	buffer_commit(b, r);
+	buffer_commit(b, rv);
 }
 
 

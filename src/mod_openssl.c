@@ -1789,7 +1789,7 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
     while (max_bytes > 0 && NULL != cq->first) {
         const char *data;
         size_t data_len;
-        int r;
+        int wr;
 
         if (0 != load_next_chunk(con,cq,max_bytes,&data,&data_len)) return -1;
 
@@ -1803,7 +1803,7 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
          */
 
         ERR_clear_error();
-        r = SSL_write(ssl, data, data_len);
+        wr = SSL_write(ssl, data, data_len);
 
         if (hctx->renegotiations > 1
             && hctx->conf.ssl_disable_client_renegotiation) {
@@ -1812,11 +1812,11 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
             return -1;
         }
 
-        if (r <= 0) {
+        if (wr <= 0) {
             int ssl_r;
             unsigned long err;
 
-            switch ((ssl_r = SSL_get_error(ssl, r))) {
+            switch ((ssl_r = SSL_get_error(ssl, wr))) {
             case SSL_ERROR_WANT_READ:
                 con->is_readable = -1;
                 return 0; /* try again later */
@@ -1828,9 +1828,9 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
                 if (0 != (err = ERR_get_error())) {
                     do {
                         log_error(con->conf.errh, __FILE__, __LINE__,
-                          "SSL: %d %d %s",ssl_r,r,ERR_error_string(err,NULL));
+                          "SSL: %d %d %s",ssl_r,wr,ERR_error_string(err,NULL));
                     } while((err = ERR_get_error()));
-                } else if (r == -1) {
+                } else if (wr == -1) {
                     /* no, but we have errno */
                     switch(errno) {
                     case EPIPE:
@@ -1838,36 +1838,36 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
                         return -2;
                     default:
                         log_perror(con->conf.errh, __FILE__, __LINE__,
-                          "SSL: %d %d", ssl_r, r);
+                          "SSL: %d %d", ssl_r, wr);
                         break;
                     }
                 } else {
                     /* neither error-queue nor errno ? */
                     log_perror(con->conf.errh, __FILE__, __LINE__,
-                      "SSL (error): %d %d", ssl_r, r);
+                      "SSL (error): %d %d", ssl_r, wr);
                 }
                 break;
 
             case SSL_ERROR_ZERO_RETURN:
                 /* clean shutdown on the remote side */
 
-                if (r == 0) return -2;
+                if (wr == 0) return -2;
 
                 /* fall through */
             default:
                 while((err = ERR_get_error())) {
                     log_error(con->conf.errh, __FILE__, __LINE__,
-                      "SSL: %d %d %s", ssl_r, r, ERR_error_string(err, NULL));
+                      "SSL: %d %d %s", ssl_r, wr, ERR_error_string(err, NULL));
                 }
                 break;
             }
             return -1;
         }
 
-        chunkqueue_mark_written(cq, r);
-        max_bytes -= r;
+        chunkqueue_mark_written(cq, wr);
+        max_bytes -= wr;
 
-        if ((size_t) r < data_len) break; /* try again later */
+        if ((size_t) wr < data_len) break; /* try again later */
     }
 
     return 0;
@@ -1878,7 +1878,7 @@ static int
 connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 {
     handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
-    int r, ssl_err, len;
+    int len;
     char *mem = NULL;
     size_t mem_len = 0;
 
@@ -1929,7 +1929,8 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 
     if (len < 0) {
         int oerrno = errno;
-        switch ((r = SSL_get_error(hctx->ssl, len))) {
+        int rc, ssl_err;
+        switch ((rc = SSL_get_error(hctx->ssl, len))) {
         case SSL_ERROR_WANT_WRITE:
             con->is_writable = -1;
             /* fall through */
@@ -1959,7 +1960,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
             while((ssl_err = ERR_get_error())) {
                 /* get all errors from the error-queue */
                 log_error(con->conf.errh, __FILE__, __LINE__,
-                  "SSL: %d %s", r, ERR_error_string(ssl_err, NULL));
+                  "SSL: %d %s", rc, ERR_error_string(ssl_err, NULL));
             }
 
             switch(oerrno) {
@@ -1973,7 +1974,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
                     break;
 
                 log_error(con->conf.errh, __FILE__, __LINE__,
-                  "SSL: %d %d %d %s", len, r, oerrno, strerror(oerrno));
+                  "SSL: %d %d %d %s", len, rc, oerrno, strerror(oerrno));
                 break;
             }
 
@@ -1981,7 +1982,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         case SSL_ERROR_ZERO_RETURN:
             /* clean shutdown on the remote side */
 
-            if (r == 0) {
+            if (rc == 0) {
                 /* FIXME: later */
             }
 
@@ -2006,7 +2007,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
                 }
                 /* get all errors from the error-queue */
                 log_error(con->conf.errh, __FILE__, __LINE__,
-                  "SSL: %d %s", r, ERR_error_string(ssl_err, NULL));
+                  "SSL: %d %s", rc, ERR_error_string(ssl_err, NULL));
             }
             break;
         }

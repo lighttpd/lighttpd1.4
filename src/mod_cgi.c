@@ -135,8 +135,8 @@ INIT_FUNC(mod_cgi_init) {
 
 FREE_FUNC(mod_cgi_free) {
 	plugin_data *p = p_d;
-	buffer_pid_t *r = &(p->cgi_pid);
-	if (r->ptr) free(r->ptr);
+	buffer_pid_t *bp = &(p->cgi_pid);
+	if (bp->ptr) free(bp->ptr);
 	free(p->env.ptr);
 	free(p->env.offsets);
 	free(p->env.eptr);
@@ -259,24 +259,24 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
 
 
 static void cgi_pid_add(plugin_data *p, pid_t pid, void *ctx) {
-	buffer_pid_t *r = &(p->cgi_pid);
+    buffer_pid_t *bp = &(p->cgi_pid);
 
-	if (r->used == r->size) {
-		r->size += 16;
-		r->ptr = realloc(r->ptr, sizeof(*r->ptr) * r->size);
-		force_assert(r->ptr);
-	}
+    if (bp->used == bp->size) {
+        bp->size += 16;
+        bp->ptr = realloc(bp->ptr, sizeof(*bp->ptr) * bp->size);
+        force_assert(bp->ptr);
+    }
 
-	r->ptr[r->used].pid = pid;
-	r->ptr[r->used].ctx = ctx;
-	++r->used;
+    bp->ptr[bp->used].pid = pid;
+    bp->ptr[bp->used].ctx = ctx;
+    ++bp->used;
 }
 
 static void cgi_pid_kill(plugin_data *p, pid_t pid) {
-    buffer_pid_t *r = &(p->cgi_pid);
-    for (size_t i = 0; i < r->used; ++i) {
-        if (r->ptr[i].pid == pid) {
-            r->ptr[i].ctx = NULL;
+    buffer_pid_t *bp = &(p->cgi_pid);
+    for (size_t i = 0; i < bp->used; ++i) {
+        if (bp->ptr[i].pid == pid) {
+            bp->ptr[i].ctx = NULL;
             kill(pid, SIGTERM);
             return;
         }
@@ -284,12 +284,12 @@ static void cgi_pid_kill(plugin_data *p, pid_t pid) {
 }
 
 static void cgi_pid_del(plugin_data *p, size_t i) {
-	buffer_pid_t *r = &(p->cgi_pid);
+    buffer_pid_t *bp = &(p->cgi_pid);
 
-		if (i != r->used - 1) {
-			r->ptr[i] = r->ptr[r->used - 1];
-		}
-		r->used--;
+    if (i != bp->used - 1)
+        bp->ptr[i] = bp->ptr[bp->used - 1];
+
+    --bp->used;
 }
 
 
@@ -544,7 +544,7 @@ static off_t mmap_align_offset(off_t start) {
 static ssize_t cgi_write_file_chunk_mmap(connection *con, int fd, chunkqueue *cq) {
 	chunk* const c = cq->first;
 	off_t offset, toSend, file_end;
-	ssize_t r;
+	ssize_t wr;
 	size_t mmap_offset, mmap_avail;
 	char *data = NULL;
 
@@ -614,11 +614,11 @@ static ssize_t cgi_write_file_chunk_mmap(connection *con, int fd, chunkqueue *cq
 		data = c->file.mmap.start + mmap_offset;
 	}
 
-	r = write(fd, data, toSend);
+	wr = write(fd, data, toSend);
 
 	if (MAP_FAILED == c->file.mmap.start) free(data);
 
-	if (r < 0) {
+	if (wr < 0) {
 		switch (errno) {
 		case EAGAIN:
 		case EINTR:
@@ -633,8 +633,8 @@ static ssize_t cgi_write_file_chunk_mmap(connection *con, int fd, chunkqueue *cq
 		}
 	}
 
-	chunkqueue_mark_written(cq, r);
-	return r;
+	chunkqueue_mark_written(cq, wr);
+	return wr;
 }
 
 static int cgi_write_request(handler_ctx *hctx, int fd) {
@@ -648,41 +648,41 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 	 */
 
 	for (c = cq->first; c; c = cq->first) {
-		ssize_t r = -1;
+		ssize_t wr = -1;
 
 		switch(c->type) {
 		case FILE_CHUNK:
-			r = cgi_write_file_chunk_mmap(con, fd, cq);
+			wr = cgi_write_file_chunk_mmap(con, fd, cq);
 			break;
 
 		case MEM_CHUNK:
-			if ((r = write(fd, c->mem->ptr + c->offset, buffer_string_length(c->mem) - c->offset)) < 0) {
+			if ((wr = write(fd, c->mem->ptr + c->offset, buffer_string_length(c->mem) - c->offset)) < 0) {
 				switch(errno) {
 				case EAGAIN:
 				case EINTR:
 					/* ignore and try again */
-					r = 0;
+					wr = 0;
 					break;
 				case EPIPE:
 				case ECONNRESET:
 					/* connection closed */
-					r = -2;
+					wr = -2;
 					break;
 				default:
 					/* fatal error */
 					log_perror(con->conf.errh, __FILE__, __LINE__, "write() failed");
-					r = -1;
+					wr = -1;
 					break;
 				}
-			} else if (r > 0) {
-				chunkqueue_mark_written(cq, r);
+			} else if (wr > 0) {
+				chunkqueue_mark_written(cq, wr);
 			}
 			break;
 		}
 
-		if (0 == r) break; /*(might block)*/
+		if (0 == wr) break; /*(might block)*/
 
-		switch (r) {
+		switch (wr) {
 		case -1:
 			/* fatal error */
 			return -1;
@@ -954,13 +954,13 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
 			if (-1 != hctx->fd) return HANDLER_WAIT_FOR_EVENT;
 		} else {
-			handler_t r = connection_handle_read_post_state(con);
+			handler_t rc = connection_handle_read_post_state(con);
 			if (!chunkqueue_is_empty(cq)) {
 				if (fdevent_fdnode_interest(hctx->fdntocgi) & FDEVENT_OUT) {
-					return (r == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : r;
+					return (rc == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : rc;
 				}
 			}
-			if (r != HANDLER_GO_ON) return r;
+			if (rc != HANDLER_GO_ON) return rc;
 
 			/* CGI environment requires that Content-Length be set.
 			 * Send 411 Length Required if Content-Length missing.

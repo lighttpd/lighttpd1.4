@@ -436,9 +436,9 @@ static int http_request_parse_single_header(connection * const con, const enum h
         if (!(con->request.htags & HTTP_HEADER_CONTENT_LENGTH)) {
             /*(trailing whitespace was removed from vlen)*/
             char *err;
-            off_t r = strtoll(v, &err, 10);
-            if (r >= 0 && err == v+vlen) {
-                con->request.content_length = r;
+            off_t clen = strtoll(v, &err, 10);
+            if (clen >= 0 && err == v+vlen) {
+                con->request.content_length = clen;
             }
             else {
                 return http_request_header_line_invalid(con, 400, "invalid Content-Length header -> 400");

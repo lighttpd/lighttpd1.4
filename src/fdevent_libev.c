@@ -13,15 +13,15 @@
 static void io_watcher_cb(struct ev_loop *loop, ev_io *w, int revents) {
 	fdevents *ev = w->data;
 	fdnode *fdn = ev->fdarray[w->fd];
-	int r = 0;
+	int rv = 0;
 	UNUSED(loop);
 
-	if (revents & EV_READ) r |= FDEVENT_IN;
-	if (revents & EV_WRITE) r |= FDEVENT_OUT;
-	if (revents & EV_ERROR) r |= FDEVENT_ERR;
+	if (revents & EV_READ) rv |= FDEVENT_IN;
+	if (revents & EV_WRITE) rv |= FDEVENT_OUT;
+	if (revents & EV_ERROR) rv |= FDEVENT_ERR;
 
 	if (0 == ((uintptr_t)fdn & 0x3)) {
-		(*fdn->handler)(ev->srv, fdn->ctx, r);
+		(*fdn->handler)(ev->srv, fdn->ctx, rv);
 	}
 }
 

@@ -498,8 +498,8 @@ static void connection_handle_write_state(connection *con) {
         }
 
         if (con->mode != DIRECT && !con->file_finished) {
-            int r = plugins_call_handle_subrequest(con);
-            switch(r) {
+            int rc = plugins_call_handle_subrequest(con);
+            switch(rc) {
             case HANDLER_WAIT_FOR_EVENT:
             case HANDLER_FINISHED:
             case HANDLER_GO_ON:
@@ -511,7 +511,7 @@ static void connection_handle_write_state(connection *con) {
             default:
                 log_error(con->conf.errh, __FILE__, __LINE__,
                   "unexpected subrequest handler ret-value: %d %d",
-                  con->fd, r);
+                  con->fd, rc);
                 /* fall through */
             case HANDLER_ERROR:
                 connection_set_state(con, CON_STATE_ERROR);
@@ -1135,8 +1135,8 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 
 
 static int connection_handle_request(connection *con) {
-			int r = http_response_prepare(con);
-			switch (r) {
+			int rc = http_response_prepare(con);
+			switch (rc) {
 			case HANDLER_WAIT_FOR_EVENT:
 				if (!con->file_finished && (!con->file_started || 0 == con->conf.stream_response_body)) {
 					break; /* come back here */
@@ -1234,7 +1234,7 @@ static int connection_handle_request(connection *con) {
 				connection_set_state(con, CON_STATE_ERROR);
 				break;
 			default:
-				log_error(con->conf.errh, __FILE__, __LINE__, "unknown ret-value: %d %d", con->fd, r);
+				log_error(con->conf.errh, __FILE__, __LINE__, "unknown ret-value: %d %d", con->fd, rc);
 				break;
 			}
 
@@ -1244,7 +1244,7 @@ static int connection_handle_request(connection *con) {
 
 int connection_state_machine(connection *con) {
 	connection_state_t ostate;
-	int r;
+	int rc;
 	const int log_state_handling = con->srv->srvconf.log_state_handling;
 
 	if (log_state_handling) {
@@ -1326,10 +1326,10 @@ int connection_state_machine(connection *con) {
 		  "state at exit: %d %s", con->fd, connection_get_state(con->state));
 	}
 
-	r = 0;
+	rc = 0;
 	switch(con->state) {
 	case CON_STATE_READ:
-		r = FDEVENT_IN | FDEVENT_RDHUP;
+		rc = FDEVENT_IN | FDEVENT_RDHUP;
 		break;
 	case CON_STATE_WRITE:
 		/* request write-fdevent only if we really need it
@@ -1339,16 +1339,16 @@ int connection_state_machine(connection *con) {
 		if (!chunkqueue_is_empty(con->write_queue) &&
 		    (con->is_writable == 0) &&
 		    (con->traffic_limit_reached == 0)) {
-			r |= FDEVENT_OUT;
+			rc |= FDEVENT_OUT;
 		}
 		/* fall through */
 	case CON_STATE_READ_POST:
 		if (con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN) {
-			r |= FDEVENT_IN | FDEVENT_RDHUP;
+			rc |= FDEVENT_IN | FDEVENT_RDHUP;
 		}
 		break;
 	case CON_STATE_CLOSE:
-		r = FDEVENT_IN;
+		rc = FDEVENT_IN;
 		break;
 	default:
 		break;
@@ -1357,24 +1357,24 @@ int connection_state_machine(connection *con) {
 		const int events = fdevent_fdnode_interest(con->fdn);
 		if (con->is_readable < 0) {
 			con->is_readable = 0;
-			r |= FDEVENT_IN;
+			rc |= FDEVENT_IN;
 		}
 		if (con->is_writable < 0) {
 			con->is_writable = 0;
-			r |= FDEVENT_OUT;
+			rc |= FDEVENT_OUT;
 		}
 		if (events & FDEVENT_RDHUP) {
-			r |= FDEVENT_RDHUP;
+			rc |= FDEVENT_RDHUP;
 		}
-		if (r != events) {
+		if (rc != events) {
 			/* update timestamps when enabling interest in events */
-			if ((r & FDEVENT_IN) && !(events & FDEVENT_IN)) {
+			if ((rc & FDEVENT_IN) && !(events & FDEVENT_IN)) {
 				con->read_idle_ts = log_epoch_secs;
 			}
-			if ((r & FDEVENT_OUT) && !(events & FDEVENT_OUT)) {
+			if ((rc & FDEVENT_OUT) && !(events & FDEVENT_OUT)) {
 				con->write_request_ts = log_epoch_secs;
 			}
-			fdevent_fdnode_event_set(con->srv->ev, con->fdn, r);
+			fdevent_fdnode_event_set(con->srv->ev, con->fdn, rc);
 		}
 	}
 

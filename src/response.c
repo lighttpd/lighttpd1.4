@@ -284,7 +284,7 @@ static handler_t http_response_physical_path_check(connection *con) {
 }
 
 handler_t http_response_prepare(connection *con) {
-	handler_t r;
+	handler_t rc;
 
 	/* looks like someone has already done a decision */
 	if (con->mode == DIRECT &&
@@ -494,8 +494,8 @@ handler_t http_response_prepare(connection *con) {
 		 *
 		 */
 
-		r = plugins_call_handle_uri_raw(con);
-		if (HANDLER_GO_ON != r) return r;
+		rc = plugins_call_handle_uri_raw(con);
+		if (HANDLER_GO_ON != rc) return rc;
 
 		/**
 		 *
@@ -505,8 +505,8 @@ handler_t http_response_prepare(connection *con) {
 		 *
 		 */
 
-		r = plugins_call_handle_uri_clean(con);
-		if (HANDLER_GO_ON != r) return r;
+		rc = plugins_call_handle_uri_clean(con);
+		if (HANDLER_GO_ON != rc) return rc;
 
 		if (con->request.http_method == HTTP_METHOD_OPTIONS &&
 		    con->uri.path->ptr[0] == '*' && con->uri.path->ptr[1] == '\0') {
@@ -603,8 +603,8 @@ handler_t http_response_prepare(connection *con) {
 		/* the docroot plugin should set the doc_root and might also set the physical.path
 		 * for us (all vhost-plugins are supposed to set the doc_root)
 		 * */
-		r = plugins_call_handle_docroot(con);
-		if (HANDLER_GO_ON != r) return r;
+		rc = plugins_call_handle_docroot(con);
+		if (HANDLER_GO_ON != rc) return rc;
 
 		/* MacOS X and Windows can't distiguish between upper and lower-case
 		 *
@@ -647,8 +647,8 @@ handler_t http_response_prepare(connection *con) {
 			 *  is filled in above to avoid repeating work next time
 			 *  http_response_prepare() is called while processing request) */
 		} else {
-			r = plugins_call_handle_physical(con);
-			if (HANDLER_GO_ON != r) return r;
+			rc = plugins_call_handle_physical(con);
+			if (HANDLER_GO_ON != rc) return rc;
 
 			if (con->conf.log_request_handling) {
 				log_error(con->conf.errh, __FILE__, __LINE__,
@@ -679,8 +679,8 @@ handler_t http_response_prepare(connection *con) {
 			  "Path         : %s", con->physical.path->ptr);
 		}
 
-		r = http_response_physical_path_check(con);
-		if (HANDLER_GO_ON != r) return r;
+		rc = http_response_physical_path_check(con);
+		if (HANDLER_GO_ON != rc) return rc;
 
 		if (con->conf.log_request_handling) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
@@ -694,13 +694,13 @@ handler_t http_response_prepare(connection *con) {
 		}
 
 		/* call the handlers */
-		r = plugins_call_handle_subrequest_start(con);
-		if (HANDLER_GO_ON != r) {
+		rc = plugins_call_handle_subrequest_start(con);
+		if (HANDLER_GO_ON != rc) {
 			if (con->conf.log_request_handling) {
 				log_error(con->conf.errh, __FILE__, __LINE__,
 				  "-- subrequest finished");
 			}
-			return r;
+			return rc;
 		}
 
 		/* if we are still here, no one wanted the file, status 403 is ok I think */
@@ -711,7 +711,7 @@ handler_t http_response_prepare(connection *con) {
 
 	}
 
-	r = plugins_call_handle_subrequest(con);
-	if (HANDLER_GO_ON == r) r = HANDLER_FINISHED; /* request was not handled, looks like we are done */
-	return r;
+	rc = plugins_call_handle_subrequest(con);
+	if (HANDLER_GO_ON == rc) rc = HANDLER_FINISHED; /* request was not handled, looks like we are done */
+	return rc;
 }

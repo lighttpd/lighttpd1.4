@@ -2043,31 +2043,31 @@ handler_t gw_handle_subrequest(connection *con, void *p_d) {
             if (0 != hctx->wb->bytes_in) return HANDLER_WAIT_FOR_EVENT;
         }
         else {
-            handler_t r = connection_handle_read_post_state(con);
+            handler_t rc = connection_handle_read_post_state(con);
             chunkqueue *req_cq = con->request_content_queue;
           #if 0 /*(not reached since we send 411 Length Required below)*/
             if (hctx->wb_reqlen < -1 && con->request.content_length >= 0) {
                 /* (completed receiving Transfer-Encoding: chunked) */
                 hctx->wb_reqlen= -hctx->wb_reqlen + con->request.content_length;
                 if (hctx->stdin_append) {
-                    handler_t rc = hctx->stdin_append(hctx);
-                    if (HANDLER_GO_ON != rc) return rc;
+                    handler_t rca = hctx->stdin_append(hctx);
+                    if (HANDLER_GO_ON != rca) return rca;
                 }
             }
           #endif
             if ((0 != hctx->wb->bytes_in || -1 == hctx->wb_reqlen)
                 && !chunkqueue_is_empty(req_cq)) {
                 if (hctx->stdin_append) {
-                    handler_t rc = hctx->stdin_append(hctx);
-                    if (HANDLER_GO_ON != rc) return rc;
+                    handler_t rca = hctx->stdin_append(hctx);
+                    if (HANDLER_GO_ON != rca) return rca;
                 }
                 else
                     chunkqueue_append_chunkqueue(hctx->wb, req_cq);
                 if (fdevent_fdnode_interest(hctx->fdn) & FDEVENT_OUT) {
-                    return (r == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : r;
+                    return (rc == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : rc;
                 }
             }
-            if (r != HANDLER_GO_ON) return r;
+            if (rc != HANDLER_GO_ON) return rc;
 
 
             /* XXX: create configurable flag */

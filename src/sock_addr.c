@@ -395,15 +395,15 @@ int sock_addr_from_str_hints(sock_addr *saddr, socklen_t *len, const char *str, 
        #ifdef HAVE_IPV6
         else {
             struct addrinfo hints, *res;
-            int r;
+            int rc;
             memset(&hints, 0, sizeof(hints));
             hints.ai_family   = AF_UNSPEC;
             hints.ai_socktype = SOCK_STREAM;
             hints.ai_protocol = IPPROTO_TCP;
 
-            if (0 != (r = getaddrinfo(str, NULL, &hints, &res))) {
+            if (0 != (rc = getaddrinfo(str, NULL, &hints, &res))) {
                 log_error(errh, __FILE__, __LINE__,
-                  "getaddrinfo failed: %s '%s'", gai_strerror(r), str);
+                  "getaddrinfo failed: %s '%s'", gai_strerror(rc), str);
                 return 0;
             }
 
@@ -434,7 +434,7 @@ int sock_addr_from_str_hints(sock_addr *saddr, socklen_t *len, const char *str, 
         }
         else {
             struct addrinfo hints, *res;
-            int r;
+            int rc;
 
             memset(&hints, 0, sizeof(hints));
 
@@ -442,11 +442,11 @@ int sock_addr_from_str_hints(sock_addr *saddr, socklen_t *len, const char *str, 
             hints.ai_socktype = SOCK_STREAM;
             hints.ai_protocol = IPPROTO_TCP;
 
-            if (0 != (r = getaddrinfo(str, NULL, &hints, &res))) {
+            if (0 != (rc = getaddrinfo(str, NULL, &hints, &res))) {
                 hints.ai_family = AF_INET;
                 if (
                   #ifdef EAI_ADDRFAMILY
-                    EAI_ADDRFAMILY == r &&
+                    EAI_ADDRFAMILY == rc &&
                   #endif
                     0 == getaddrinfo(str, NULL, &hints, &res)) {
                     memcpy(saddr, res->ai_addr, res->ai_addrlen);
@@ -459,7 +459,7 @@ int sock_addr_from_str_hints(sock_addr *saddr, socklen_t *len, const char *str, 
                 }
 
                 log_error(errh, __FILE__, __LINE__,
-                  "getaddrinfo failed: %s '%s'", gai_strerror(r), str);
+                  "getaddrinfo failed: %s '%s'", gai_strerror(rc), str);
 
                 return 0;
             }
@@ -484,15 +484,15 @@ int sock_addr_from_str_hints(sock_addr *saddr, socklen_t *len, const char *str, 
           #ifdef HAVE_INET_PTON
             /*(reuse HAVE_INET_PTON for presence of getaddrinfo())*/
             struct addrinfo hints, *res;
-            int r;
+            int rc;
             memset(&hints, 0, sizeof(hints));
             hints.ai_family   = AF_INET;
             hints.ai_socktype = SOCK_STREAM;
             hints.ai_protocol = IPPROTO_TCP;
 
-            if (0 != (r = getaddrinfo(str, NULL, &hints, &res))) {
+            if (0 != (rc = getaddrinfo(str, NULL, &hints, &res))) {
                 log_error(errh, __FILE__, __LINE__,
-                  "getaddrinfo failed: %s '%s'", gai_strerror(r), str);
+                  "getaddrinfo failed: %s '%s'", gai_strerror(rc), str);
                 return 0;
             }
 
