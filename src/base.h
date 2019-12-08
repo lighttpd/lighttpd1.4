@@ -224,8 +224,8 @@ struct connection {
 	void *config_data_base;
 
 	const buffer *server_name;
-	buffer *proto;
 	buffer *server_name_buf;
+	uint16_t proto_default_port;
 
 	/* error-handler */
 	int error_handler_saved_status;

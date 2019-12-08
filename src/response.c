@@ -355,7 +355,10 @@ handler_t http_response_prepare(connection *con) {
 		/* take initial scheme value from connection-level state
 		 * (request con->uri.scheme can be overwritten for later,
 		 *  for example by mod_extforward or mod_magnet) */
-		buffer_copy_buffer(con->uri.scheme, con->proto);
+		if (con->proto_default_port == 443)
+			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("https"));
+		else
+			buffer_copy_string_len(con->uri.scheme, CONST_STR_LEN("http"));
 		buffer_copy_buffer(con->uri.authority, con->request.http_host);
 		buffer_to_lower(con->uri.authority);
 

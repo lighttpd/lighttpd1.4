@@ -561,7 +561,6 @@ static connection *connection_init(server *srv) {
 	CLEAN(physical.etag);
 
 	CLEAN(server_name_buf);
-	CLEAN(proto);
 	CLEAN(dst_addr_buf);
 
 #undef CLEAN
@@ -627,7 +626,6 @@ void connections_free(server *srv) {
 		CLEAN(physical.rel_path);
 
 		CLEAN(server_name_buf);
-		CLEAN(proto);
 		CLEAN(dst_addr_buf);
 #undef CLEAN
 		free(con->plugin_ctx);
@@ -671,9 +669,9 @@ static int connection_reset(connection *con) {
 #undef CLEAN
 
 	buffer_clear(con->uri.scheme);
-	/*buffer_clear(con->proto);*//* set to default in connection_accepted() */
 	/*buffer_clear(con->uri.authority);*/
 	/*buffer_clear(con->server_name_buf);*//* reset when used */
+	/*con->proto_default_port = 80;*//*set to default in connection_accepted()*/
 
 	con->request.http_host = NULL;
 	con->request.content_length = 0;
@@ -1118,12 +1116,12 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		buffer_copy_string(con->dst_addr_buf, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
 		con->srv_socket = srv_socket;
 		con->is_ssl_sock = srv_socket->is_ssl;
+		con->proto_default_port = 80; /* "http" */
 
 		config_cond_cache_reset(con);
 		con->conditional_is_valid |= (1 << COMP_SERVER_SOCKET)
 					  |  (1 << COMP_HTTP_REMOTE_IP);
 
-		buffer_copy_string_len(con->proto, CONST_STR_LEN("http"));
 		if (HANDLER_GO_ON != plugins_call_handle_connection_accept(con)) {
 			connection_reset(con);
 			connection_close(con);

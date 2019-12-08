@@ -930,9 +930,11 @@ static handler_t mod_extforward_Forwarded (connection *con, plugin_data *p, cons
                 buffer_copy_string_len(con->request.http_host, s+v, vlen-v);
             }
 
+            int scheme_port =
+              buffer_eq_slen(con->uri.scheme,CONST_STR_LEN("https")) ? 443 : 80;
             if (0 != http_request_host_policy(con->request.http_host,
-                                              con->uri.scheme,
-                                              con->conf.http_parseopts)) {
+                                              con->conf.http_parseopts,
+                                              scheme_port)) {
                 /*(reject invalid chars in Host)*/
                 log_error(con->conf.errh, __FILE__, __LINE__,
                   "invalid host= value in Forwarded header");
@@ -1581,7 +1583,7 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
               (struct pp2_tlv_ssl *)(void *)((char *)tlv+3);
             struct pp2_tlv *subtlv = tlv;
             if (tlv_ssl->client & PP2_CLIENT_SSL) {
-                buffer_copy_string_len(con->proto, CONST_STR_LEN("https"));
+                con->proto_default_port = 443; /* "https" */
             }
             if ((tlv_ssl->client & (PP2_CLIENT_CERT_CONN|PP2_CLIENT_CERT_SESS))
                 && 0 == memcmp(&tlv_ssl->verify, &zero, 4)) { /* misaligned */

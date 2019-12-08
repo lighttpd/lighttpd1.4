@@ -521,8 +521,8 @@ mod_openssl_SNI (SSL *ssl, handler_ctx *hctx, const char *servername, size_t len
   #if 0
     /*(con->uri.authority used below for configuration before request read;
      * revisit for h2)*/
-    if (0 != http_request_host_policy(con->uri.authority, con->uri.scheme,
-                                      con->conf.http_parseopts))
+    if (0 != http_request_host_policy(con->uri.authority,
+                                      con->conf.http_parseopts, 443))
         return SSL_TLSEXT_ERR_ALERT_FATAL;
   #endif
 
@@ -773,8 +773,7 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     if (NULL != strchr(name->ptr, '/')) return rc;
     if (name->ptr[0] == '.')            return rc;
   #if 0
-    if (0 != http_request_host_policy(name, hctx->con->uri.scheme,
-                                      hctx->con->conf.http_parseopts))
+    if (0 != http_request_host_policy(name,hctx->con->conf.http_parseopts,443))
         return rc;
   #endif
     buffer_append_string_buffer(b, name);
@@ -2045,7 +2044,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
         SSL_set_accept_state(hctx->ssl);
         con->network_read = connection_read_cq_ssl;
         con->network_write = connection_write_cq_ssl;
-        buffer_copy_string_len(con->proto, CONST_STR_LEN("https"));
+        con->proto_default_port = 443; /* "https" */
         mod_openssl_patch_config(con, &hctx->conf);
         return HANDLER_GO_ON;
     }
