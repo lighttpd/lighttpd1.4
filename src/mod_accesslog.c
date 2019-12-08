@@ -259,9 +259,9 @@ static format_fields * accesslog_parse_format(const char * const format, const s
 	 * so 127 should be enough except for obscene custom usage */
 	size_t i, j, k = 0, start = 0;
 	uint32_t used = 0;
-	const uint32_t sz = 127;
+	const uint32_t sz = 127;/* (sz+1 must match fptr[] num elts below) */
 	format_field *f;
-	format_field fptr[sz+1]; /* (128 elements takes 4k on stack in 64-bit) */
+	format_field fptr[128]; /* (128 elements takes 4k on stack in 64-bit) */
 	memset(fptr, 0, sizeof(fptr));
 	if (0 != FIELD_UNSET) return NULL;
 

@@ -114,10 +114,10 @@ static int network_host_parse_addr(server *srv, sock_addr *addr, socklen_t *addr
     }
     if (colon) {
         *colon++ = '\0';
-        port = strtol(colon, NULL, 10);
+        port = (unsigned int)strtol(colon, NULL, 10);
         if (port == 0 || port > 65535) {
             log_error(srv->errh, __FILE__, __LINE__,
-              "port not set or out of range: %hd", port);
+              "port not set or out of range: %u", port);
             return -1;
         }
     }

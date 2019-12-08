@@ -78,9 +78,9 @@ static buffer * mod_evhost_parse_pattern_err(buffer *bptr) {
 
 static buffer * mod_evhost_parse_pattern(const char *ptr) {
 	uint32_t used = 0;
-	const uint32_t sz = 127;
+	const uint32_t sz = 127;/* (sz+1 must match bptr[] num elts below) */
 	const char *pos;
-	buffer bptr[sz+1]; /* (128 elements takes 2k on stack in 64-bit) */
+	buffer bptr[128]; /* (128 elements takes 2k on stack in 64-bit) */
 	memset(bptr, 0, sizeof(bptr));
 
 	for(pos=ptr;*ptr;ptr++) {

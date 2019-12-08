@@ -317,7 +317,7 @@ static void config_cond_result_trace(connection *con, const data_config *dc, int
       default:                msg = "invalid cond_result_t"; break;
     }
     log_error(con->conf.errh, __FILE__, __LINE__, "%d (%s) result: %s",
-              dc->context_ndx, "uncached"+(cached ? 2 : 0), msg);
+              dc->context_ndx, &"uncached"[cached ? 2 : 0], msg);
 }
 
 static cond_result_t config_check_cond_nocache(connection *con, const data_config *dc, int debug_cond, cond_cache_t *cache);
