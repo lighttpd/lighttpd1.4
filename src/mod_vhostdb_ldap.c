@@ -55,7 +55,8 @@ static void mod_vhostdb_dbconf_add_scheme (server *srv, buffer *host)
           "ldap://", "ldaps://", "ldapi://", "cldap://"
         };
         char *b, *e = host->ptr;
-        buffer_clear(srv->tmp_buf);
+        buffer * const tb = srv->tmp_buf;
+        buffer_clear(tb);
         while (*(b = e)) {
             unsigned int j;
             while (*b==' '||*b=='\t'||*b=='\r'||*b=='\n'||*b==',') ++b;
@@ -63,19 +64,18 @@ static void mod_vhostdb_dbconf_add_scheme (server *srv, buffer *host)
             e = b;
             while (*e!=' '&&*e!='\t'&&*e!='\r'&&*e!='\n'&&*e!=','&&*e!='\0')
                 ++e;
-            if (!buffer_string_is_empty(srv->tmp_buf))
-                buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN(","));
+            if (!buffer_string_is_empty(tb))
+                buffer_append_string_len(tb, CONST_STR_LEN(","));
             for (j = 0; j < sizeof(schemes)/sizeof(char *); ++j) {
                 if (buffer_eq_icase_ssn(b, schemes[j], strlen(schemes[j]))) {
                     break;
                 }
             }
             if (j == sizeof(schemes)/sizeof(char *))
-                buffer_append_string_len(srv->tmp_buf,
-                                         CONST_STR_LEN("ldap://"));
-            buffer_append_string_len(srv->tmp_buf, b, (size_t)(e - b));
+                buffer_append_string_len(tb, CONST_STR_LEN("ldap://"));
+            buffer_append_string_len(tb, b, (size_t)(e - b));
         }
-        buffer_copy_buffer(host, srv->tmp_buf);
+        buffer_copy_buffer(host, tb);
     }
 }
 

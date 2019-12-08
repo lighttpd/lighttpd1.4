@@ -98,15 +98,16 @@ static int network_host_parse_addr(server *srv, sock_addr *addr, socklen_t *addr
         return -1;
       #endif
     }
-    buffer_copy_buffer(srv->tmp_buf, host);
-    h = srv->tmp_buf->ptr;
+    buffer * const tb = srv->tmp_buf;
+    buffer_copy_buffer(tb, host);
+    h = tb->ptr;
     if (h[0] == '[') {
         family = AF_INET6;
         if ((h = strchr(h, ']'))) {
             *h++ = '\0';
             if (*h == ':') colon = h;
         } /*(else should not happen; validated in configparser.y)*/
-        h = srv->tmp_buf->ptr+1;
+        h = tb->ptr+1;
     }
     else {
         colon = strrchr(h, ':');

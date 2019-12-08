@@ -78,11 +78,12 @@ static pcre_keyvalue_buffer * mod_redirect_parse_list(server *srv, const array *
     pcre_keyvalue_buffer * const redirect = pcre_keyvalue_buffer_init();
     redirect->x0 = (unsigned short)condidx;
     log_error_st * const errh = srv->errh;
+    buffer * const tb = srv->tmp_buf;
     for (uint32_t j = 0; j < a->used; ++j) {
         data_string *ds = (data_string *)a->data[j];
         if (srv->srvconf.http_url_normalize) {
-            pcre_keyvalue_burl_normalize_key(&ds->key, srv->tmp_buf);
-            pcre_keyvalue_burl_normalize_value(&ds->value, srv->tmp_buf);
+            pcre_keyvalue_burl_normalize_key(&ds->key, tb);
+            pcre_keyvalue_burl_normalize_value(&ds->value, tb);
         }
         if (!pcre_keyvalue_buffer_append(errh, redirect, &ds->key, &ds->value)){
             log_error(errh, __FILE__, __LINE__,

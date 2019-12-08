@@ -100,11 +100,12 @@ static pcre_keyvalue_buffer * mod_rewrite_parse_list(server *srv, const array *a
         kvb->x0 = (unsigned short)condidx;
     }
 
+    buffer * const tb = srv->tmp_buf;
     for (uint32_t j = 0; j < a->used; ++j) {
         data_string *ds = (data_string *)a->data[j];
         if (srv->srvconf.http_url_normalize) {
-            pcre_keyvalue_burl_normalize_key(&ds->key, srv->tmp_buf);
-            pcre_keyvalue_burl_normalize_value(&ds->value, srv->tmp_buf);
+            pcre_keyvalue_burl_normalize_key(&ds->key, tb);
+            pcre_keyvalue_burl_normalize_value(&ds->value, tb);
         }
         if (!pcre_keyvalue_buffer_append(srv->errh, kvb, &ds->key, &ds->value)){
             log_error(srv->errh, __FILE__, __LINE__,

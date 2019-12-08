@@ -2210,7 +2210,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_close)
 static void
 https_add_ssl_client_entries (connection *con, handler_ctx *hctx)
 {
-    server *srv = con->srv;
+    buffer * const tb = con->srv->tmp_buf;
     X509 *xs;
     X509_NAME *xn;
     int i, nentries;
@@ -2219,11 +2219,11 @@ https_add_ssl_client_entries (connection *con, handler_ctx *hctx)
     if (vr != X509_V_OK) {
         char errstr[256];
         ERR_error_string_n(vr, errstr, sizeof(errstr));
-        buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("FAILED:"));
-        buffer_append_string(srv->tmp_buf, errstr);
+        buffer_copy_string_len(tb, CONST_STR_LEN("FAILED:"));
+        buffer_append_string(tb, errstr);
         http_header_env_set(con,
                             CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_BUF_LEN(srv->tmp_buf));
+                            CONST_BUF_LEN(tb));
         return;
     } else if (!(xs = SSL_get_peer_certificate(hctx->ssl))) {
         http_header_env_set(con,
@@ -2247,7 +2247,7 @@ https_add_ssl_client_entries (connection *con, handler_ctx *hctx)
                                 buf, (size_t)len);
         }
     }
-    buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
+    buffer_copy_string_len(tb, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
     for (i = 0, nentries = X509_NAME_entry_count(xn); i < nentries; ++i) {
         int xobjnid;
         const char * xobjsn;
@@ -2259,10 +2259,10 @@ https_add_ssl_client_entries (connection *con, handler_ctx *hctx)
         xobjnid = OBJ_obj2nid((ASN1_OBJECT*)X509_NAME_ENTRY_get_object(xe));
         xobjsn = OBJ_nid2sn(xobjnid);
         if (xobjsn) {
-            buffer_string_set_length(srv->tmp_buf,sizeof("SSL_CLIENT_S_DN_")-1);
-            buffer_append_string(srv->tmp_buf, xobjsn);
+            buffer_string_set_length(tb, sizeof("SSL_CLIENT_S_DN_")-1);
+            buffer_append_string(tb, xobjsn);
             http_header_env_set(con,
-                                CONST_BUF_LEN(srv->tmp_buf),
+                                CONST_BUF_LEN(tb),
                                 (const char*)X509_NAME_ENTRY_get_data(xe)->data,
                                 X509_NAME_ENTRY_get_data(xe)->length);
         }
@@ -2300,19 +2300,16 @@ https_add_ssl_client_entries (connection *con, handler_ctx *hctx)
     if (hctx->conf.ssl_verifyclient_export_cert) {
         BIO *bio;
         if (NULL != (bio = BIO_new(BIO_s_mem()))) {
-            buffer *cert = srv->tmp_buf;
-            int n;
-
             PEM_write_bio_X509(bio, xs);
-            n = BIO_pending(bio);
+            const int n = BIO_pending(bio);
 
-            buffer_string_prepare_copy(cert, n);
-            BIO_read(bio, cert->ptr, n);
+            buffer_string_prepare_copy(tb, n);
+            BIO_read(bio, tb->ptr, n);
             BIO_free(bio);
-            buffer_commit(cert, n);
+            buffer_commit(tb, n);
             http_header_env_set(con,
                                 CONST_STR_LEN("SSL_CLIENT_CERT"),
-                                CONST_BUF_LEN(cert));
+                                CONST_BUF_LEN(tb));
         }
     }
     X509_free(xs);

@@ -206,6 +206,7 @@ void config_reset_config(connection * const con) {
 }
 
 static int config_burl_normalize_cond (server *srv) {
+    buffer * const tb = srv->tmp_buf;
     for (uint32_t i = 0; i < srv->config_context->used; ++i) {
         data_config * const config =(data_config *)srv->config_context->data[i];
         if (COMP_HTTP_QUERY_STRING != config->comp) continue;
@@ -214,11 +215,11 @@ static int config_burl_normalize_cond (server *srv) {
         case CONFIG_COND_EQ:
             /* (can use this routine as long as it does not perform
              *  any regex-specific normalization of first arg) */
-            pcre_keyvalue_burl_normalize_key(&config->string, srv->tmp_buf);
+            pcre_keyvalue_burl_normalize_key(&config->string, tb);
             break;
         case CONFIG_COND_NOMATCH:
         case CONFIG_COND_MATCH:
-            pcre_keyvalue_burl_normalize_key(&config->string, srv->tmp_buf);
+            pcre_keyvalue_burl_normalize_key(&config->string, tb);
             if (!data_config_pcre_compile(config)) return 0;
             break;
         default:
@@ -237,9 +238,10 @@ static void config_warn_authn_module (server *srv, const char *module, size_t le
 		if (NULL != du && du->type == TYPE_STRING) {
 			data_string *ds = (data_string *)du;
 			if (buffer_is_equal_string(&ds->value, module, len)) {
-				buffer_copy_string_len(srv->tmp_buf, CONST_STR_LEN("mod_authn_"));
-				buffer_append_string_len(srv->tmp_buf, module, len);
-				array_insert_value(srv->srvconf.modules, CONST_BUF_LEN(srv->tmp_buf));
+				buffer * const tb = srv->tmp_buf;
+				buffer_copy_string_len(tb, CONST_STR_LEN("mod_authn_"));
+				buffer_append_string_len(tb, module, len);
+				array_insert_value(srv->srvconf.modules, CONST_BUF_LEN(tb));
 				log_error(srv->errh, __FILE__, __LINE__,
 				  "Warning: please add \"mod_authn_%s\" to server.modules list "
 				  "in lighttpd.conf.  A future release of lighttpd 1.4.x will "
@@ -1786,33 +1788,34 @@ int config_set_defaults(server *srv) {
 		return -1;
 	}
 
-	buffer_copy_buffer(srv->tmp_buf, s->document_root);
+	buffer * const tb = srv->tmp_buf;
+	buffer_copy_buffer(tb, s->document_root);
 
-	buffer_to_lower(srv->tmp_buf);
+	buffer_to_lower(tb);
 
 	if (2 == s->force_lowercase_filenames) { /* user didn't configure it in global section? */
 		s->force_lowercase_filenames = 0; /* default to 0 */
 
-		if (0 == stat(srv->tmp_buf->ptr, &st1)) {
+		if (0 == stat(tb->ptr, &st1)) {
 			int is_lower = 0;
 
-			is_lower = buffer_is_equal(srv->tmp_buf, s->document_root);
+			is_lower = buffer_is_equal(tb, s->document_root);
 
 			/* lower-case existed, check upper-case */
-			buffer_copy_buffer(srv->tmp_buf, s->document_root);
+			buffer_copy_buffer(tb, s->document_root);
 
-			buffer_to_upper(srv->tmp_buf);
+			buffer_to_upper(tb);
 
 			/* we have to handle the special case that upper and lower-casing results in the same filename
 			 * as in server.document-root = "/" or "/12345/" */
 
-			if (is_lower && buffer_is_equal(srv->tmp_buf, s->document_root)) {
+			if (is_lower && buffer_is_equal(tb, s->document_root)) {
 				/* lower-casing and upper-casing didn't result in
 				 * an other filename, no need to stat(),
 				 * just assume it is case-sensitive. */
 
 				s->force_lowercase_filenames = 0;
-			} else if (0 == stat(srv->tmp_buf->ptr, &st2)) {
+			} else if (0 == stat(tb->ptr, &st2)) {
 
 				/* upper case exists too, doesn't the FS handle this ? */
 

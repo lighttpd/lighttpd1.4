@@ -1330,9 +1330,10 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 	/* write pid file */
 	if (pid_fd > 2) {
-		buffer_copy_int(srv->tmp_buf, srv->pid);
-		buffer_append_string_len(srv->tmp_buf, CONST_STR_LEN("\n"));
-		if (-1 == write_all(pid_fd, CONST_BUF_LEN(srv->tmp_buf))) {
+		buffer * const tb = srv->tmp_buf;
+		buffer_copy_int(tb, srv->pid);
+		buffer_append_string_len(tb, CONST_STR_LEN("\n"));
+		if (-1 == write_all(pid_fd, CONST_BUF_LEN(tb))) {
 			log_perror(srv->errh, __FILE__, __LINE__, "Couldn't write pid file");
 			close(pid_fd);
 			pid_fd = -1;
