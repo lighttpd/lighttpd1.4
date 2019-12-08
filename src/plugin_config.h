@@ -115,10 +115,10 @@ typedef struct config_plugin_value {
 
 typedef struct {
     const char *k;
-    uint32_t klen;
-    /*uint32_t k_id;*//*(array index is used for k_id)*/
-    config_values_type_t ktype;
-    config_scope_type_t scope;
+    uint8_t klen;    /* directives must be <= 255 chars */
+    /*uint8_t k_id;*//*(array index is used for k_id)*/
+    uint8_t ktype;   /* config_values_type_t */
+    uint8_t scope;   /* config_scope_type_t */
 } config_plugin_keys_t;
 
 __attribute_cold__
