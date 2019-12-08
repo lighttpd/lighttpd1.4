@@ -206,7 +206,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("dir-listing.exclude"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("dir-listing.hide-dot-files"),
         T_CONFIG_BOOL,
@@ -263,12 +263,6 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
               case 1: /* server.dir-listing *//*(historical)*/
                 break;
               case 2: /* dir-listing.exclude */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"regex\"", cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                #ifndef HAVE_PCRE_H
                 if (cpv->v.a->used > 0) {
                     log_error(srv->errh, __FILE__, __LINE__,

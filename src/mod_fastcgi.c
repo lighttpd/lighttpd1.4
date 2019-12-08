@@ -78,7 +78,7 @@ static void mod_fastcgi_patch_config(connection * const con, plugin_data * const
 SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("fastcgi.server"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVARRAY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("fastcgi.balance"),
         T_CONFIG_STRING,
@@ -87,7 +87,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
         T_CONFIG_INT,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("fastcgi.map-extensions"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -120,15 +120,7 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
                 cpv->v.u = (unsigned int)gw_get_defaults_balance(srv, cpv->v.b);
                 break;
               case 2: /* fastcgi.debug */
-                break;
               case 3: /* fastcgi.map-extensions */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"suffix\" => \"subst\"",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 break;
               default:/* should not happen */
                 break;

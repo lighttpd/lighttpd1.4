@@ -59,7 +59,7 @@ static void mod_sockproxy_patch_config(connection * const con, plugin_data * con
 SETDEFAULTS_FUNC(mod_sockproxy_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("sockproxy.server"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVARRAY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("sockproxy.balance"),
         T_CONFIG_STRING,

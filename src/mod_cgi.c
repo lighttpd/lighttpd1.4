@@ -189,7 +189,7 @@ static void mod_cgi_patch_config(connection * const con, plugin_data * const p) 
 SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("cgi.assign"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("cgi.execute-x-only"),
         T_CONFIG_BOOL,
@@ -198,7 +198,7 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("cgi.x-sendfile-docroot"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("cgi.local-redir"),
         T_CONFIG_BOOL,
@@ -222,25 +222,10 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* cgi.assign */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"ext\" -> \"exepath\"",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
-                break;
               case 1: /* cgi.execute-x-only */
               case 2: /* cgi.x-sendfile */
                 break;
               case 3: /* cgi.x-sendfile-docroot */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected: %s = ( \"/allowed/path\", ... )",
-                      cpk[cpv->k_id].k, cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 for (uint32_t j = 0; j < cpv->v.a->used; ++j) {
                     data_string *ds = (data_string *)cpv->v.a->data[j];
                     if (ds->value.ptr[0] != '/') {

@@ -55,10 +55,10 @@ static void mod_access_patch_config(connection * const con, plugin_data * const 
 SETDEFAULTS_FUNC(mod_access_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("url.access-deny"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("url.access-allow"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -68,27 +68,6 @@ SETDEFAULTS_FUNC(mod_access_set_defaults) {
     plugin_data * const p = p_d;
     if (!config_plugin_values_init(srv, p, cpk, "mod_access"))
         return HANDLER_ERROR;
-
-    /* process and validate config directives
-     * (init i to 0 if global context; to 1 to skip empty global context) */
-    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
-        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
-        for (; -1 != cpv->k_id; ++cpv) {
-            switch (cpv->k_id) {
-              case 0: /* url.access-deny */
-              case 1: /* url.access-allow */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"suffix\"", cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
-                break;
-              default:/* should not happen */
-                break;
-            }
-        }
-    }
 
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {

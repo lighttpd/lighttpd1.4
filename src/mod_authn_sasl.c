@@ -158,7 +158,7 @@ static plugin_config * mod_authn_sasl_parse_opts(server *srv, const array * cons
 SETDEFAULTS_FUNC(mod_authn_sasl_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("auth.backend.sasl.opts"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,

@@ -278,7 +278,7 @@ SETDEFAULTS_FUNC(mod_maxminddb_set_defaults)
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("maxminddb.env"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,

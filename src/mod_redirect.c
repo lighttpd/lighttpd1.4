@@ -97,7 +97,7 @@ static pcre_keyvalue_buffer * mod_redirect_parse_list(server *srv, const array *
 SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("url.redirect"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("url.redirect-code"),
         T_CONFIG_SHORT,
@@ -118,13 +118,6 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* url.redirect */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"regex\" => \"redirect\"",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 cpv->v.v =
                   mod_redirect_parse_list(srv, cpv->v.a, p->cvlist[i].k_id);
                 if (NULL == cpv->v.v) return HANDLER_ERROR;

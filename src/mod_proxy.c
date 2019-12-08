@@ -282,7 +282,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults)
 {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("proxy.server"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVARRAY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("proxy.balance"),
         T_CONFIG_STRING,
@@ -291,13 +291,13 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults)
         T_CONFIG_INT,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("proxy.map-extensions"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("proxy.forwarded"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVANY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("proxy.header"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVANY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("proxy.replace-http-host"),
         T_CONFIG_BOOL,
@@ -343,36 +343,14 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults)
                 cpv->v.u = (unsigned int)gw_get_defaults_balance(srv, cpv->v.b);
                 break;
               case 2: /* proxy.debug */
-                break;
               case 3: /* proxy.map-extensions */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"suffix\" => \"subst\"",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 break;
               case 4: /* proxy.forwarded */
-                if (!array_is_kvany(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected ( \"param\" => \"value\" )",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 cpv->v.u = mod_proxy_parse_forwarded(srv, cpv->v.a);
                 if (UINT_MAX == cpv->v.u) return HANDLER_ERROR;
                 cpv->vtype = T_CONFIG_LOCAL;
                 break;
               case 5: /* proxy.header */
-                if (!array_is_kvany(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected ( \"param\" => ( \"key\" => \"value\" ) )",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 cpv->v.v = mod_proxy_parse_header_opts(srv, cpv->v.a);
                 if (NULL == cpv->v.v) return HANDLER_ERROR;
                 cpv->vtype = T_CONFIG_LOCAL;

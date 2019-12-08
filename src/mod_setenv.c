@@ -87,22 +87,22 @@ static void mod_setenv_patch_config(connection * const con, plugin_data * const 
 SETDEFAULTS_FUNC(mod_setenv_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("setenv.add-request-header"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("setenv.add-response-header"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("setenv.add-environment"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("setenv.set-request-header"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("setenv.set-response-header"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("setenv.set-environment"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -130,12 +130,6 @@ SETDEFAULTS_FUNC(mod_setenv_set_defaults) {
               case 3: /* setenv.set-request-header */
               case 4: /* setenv.set-response-header */
               case 5: /* setenv.set-environment */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"key\" => \"value\"",cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 break;
               default:/* should not happen */
                 break;

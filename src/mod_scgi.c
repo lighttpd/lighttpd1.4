@@ -65,7 +65,7 @@ static void mod_scgi_patch_config(connection * const con, plugin_data * const p)
 SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("scgi.server"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVARRAY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("scgi.balance"),
         T_CONFIG_STRING,
@@ -74,7 +74,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
         T_CONFIG_INT,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("scgi.map-extensions"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("scgi.protocol"),
         T_CONFIG_STRING,
@@ -110,15 +110,7 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
                 cpv->v.u = (unsigned int)gw_get_defaults_balance(srv, cpv->v.b);
                 break;
               case 2: /* scgi.debug */
-                break;
               case 3: /* scgi.map-extensions */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"suffix\" => \"subst\"",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 break;
               case 4: /* scgi.protocol */
                 if (buffer_eq_slen(cpv->v.b, CONST_STR_LEN("scgi")))

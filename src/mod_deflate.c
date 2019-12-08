@@ -329,10 +329,10 @@ static short mod_deflate_encodings_to_flags(const array *encodings) {
 SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("deflate.mimetypes"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("deflate.allow-encodings"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("deflate.max-compress-size"),
         T_CONFIG_INT,
@@ -368,12 +368,6 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* deflate.mimetypes */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"mimetype\"", cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 /* mod_deflate matches mimetype as prefix of Content-Type
                  * so ignore '*' at end of mimetype for end-user flexibility
                  * in specifying trailing wildcard to grouping of mimetypes */
@@ -386,12 +380,6 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                 if (0 == cpv->v.a->used) cpv->v.a = NULL;
                 break;
               case 1: /* deflate.allowed-encodings */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"encoding\"", cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 cpv->v.shrt = (unsigned short)
                   mod_deflate_encodings_to_flags(cpv->v.a);
                 cpv->vtype = T_CONFIG_SHORT;

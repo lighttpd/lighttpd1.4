@@ -74,7 +74,7 @@ static void mod_authn_pam_patch_config(connection * const con, plugin_data * con
 SETDEFAULTS_FUNC(mod_authn_pam_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("auth.backend.pam.opts"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,

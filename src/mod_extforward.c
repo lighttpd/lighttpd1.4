@@ -327,13 +327,13 @@ static unsigned int mod_extforward_parse_opts(server *srv, const array *opts_par
 SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("extforward.forwarder"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("extforward.headers"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("extforward.params"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVANY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("extforward.hap-PROXY"),
         T_CONFIG_BOOL,
@@ -359,13 +359,6 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* extforward.forwarder */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"IPaddr\" => \"trust\"",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 cpv->v.v = mod_extforward_parse_forwarder(srv, cpv->v.a);
                 if (NULL == cpv->v.v) {
                     log_error(srv->errh, __FILE__, __LINE__,
@@ -375,21 +368,8 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
                 cpv->vtype = T_CONFIG_LOCAL;
                 break;
               case 1: /* extforward.headers */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"headername\"", cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 break;
               case 2: /* extforward.params */
-                if (!array_is_kvany(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"param\" => \"value\"",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 cpv->v.u = mod_extforward_parse_opts(srv, cpv->v.a);
                 if (UINT_MAX == cpv->v.u)
                     return HANDLER_ERROR;

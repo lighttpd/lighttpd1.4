@@ -79,7 +79,7 @@ static int mod_alias_check_order(server * const srv, const array * const a) {
 SETDEFAULTS_FUNC(mod_alias_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("alias.url"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -97,13 +97,6 @@ SETDEFAULTS_FUNC(mod_alias_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* alias.url */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"urlpath\" => \"filepath\"",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 if (cpv->v.a->used >= 2 && !mod_alias_check_order(srv,cpv->v.a))
                     return HANDLER_ERROR;
                 break;

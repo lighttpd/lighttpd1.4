@@ -81,10 +81,10 @@ static void mod_magnet_patch_config(connection * const con, plugin_data * const 
 SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("magnet.attract-raw-url-to"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("magnet.attract-physical-path-to"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -103,12 +103,6 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
             switch (cpv->k_id) {
               case 0: /* magnet.attract-raw-url-to */
               case 1: /* magnet.attract-physical-path-to */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"scriptpath\"", cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 for (uint32_t j = 0; j < cpv->v.a->used; ++j) {
                     data_string *ds = (data_string *)cpv->v.a->data[j];
                     if (buffer_string_is_empty(&ds->value)) {

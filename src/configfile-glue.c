@@ -50,18 +50,64 @@ int config_plugin_values_init_block(server * const srv, const array * const ca, 
 
         switch (cpk[i].ktype) {
           case T_CONFIG_ARRAY:
+          case T_CONFIG_ARRAY_KVANY:
+          case T_CONFIG_ARRAY_KVARRAY:
+          case T_CONFIG_ARRAY_KVSTRING:
+          case T_CONFIG_ARRAY_VLIST:
             if (du->type == TYPE_ARRAY) {
                 cpv->v.a = &((const data_array *)du)->value;
-                /* future: might provide modifiers to perform one of
-                 * array_is_{vlist,kvany,kvarray,kvstring}() tests
-                 * and provide generic error message if mismatch */
             }
             else {
                 log_error(srv->errh, __FILE__, __LINE__,
-                  "%s should have been an array of strings like "
-                  "... = ( \"...\" )", cpk[i].k);
+                  "%s should have been a list like "
+                  "%s = ( \"...\" )", cpk[i].k, cpk[i].k);
                 rc = 0;
                 continue;
+            }
+            switch (cpk[i].ktype) {
+              case T_CONFIG_ARRAY_KVANY:
+                if (!array_is_kvany(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "%s should have been a list of key => values like "
+                      "%s = ( \"...\" => \"...\", \"...\" => \"...\" )",
+                    cpk[i].k, cpk[i].k);
+                    rc = 0;
+                    continue;
+                }
+                break;
+              case T_CONFIG_ARRAY_KVARRAY:
+                if (!array_is_kvarray(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "%s should have been a list of key => list like "
+                      "%s = ( \"...\" => ( \"...\" => \"...\" ) )",
+                    cpk[i].k, cpk[i].k);
+                    rc = 0;
+                    continue;
+                }
+                break;
+              case T_CONFIG_ARRAY_KVSTRING:
+                if (!array_is_kvstring(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "%s should have been a list of key => string values like "
+                      "%s = ( \"...\" => \"...\", \"...\" => \"...\" )",
+                    cpk[i].k, cpk[i].k);
+                    rc = 0;
+                    continue;
+                }
+                break;
+              case T_CONFIG_ARRAY_VLIST:
+                if (!array_is_vlist(cpv->v.a)) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "%s should have been a list of string values like "
+                      "%s = ( \"...\", \"...\" )",
+                    cpk[i].k, cpk[i].k);
+                    rc = 0;
+                    continue;
+                }
+                break;
+              /*case T_CONFIG_ARRAY:*/
+              default:
+                break;
             }
             break;
           case T_CONFIG_STRING:

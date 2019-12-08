@@ -67,7 +67,7 @@ static void mod_staticfile_patch_config(connection * const con, plugin_data * co
 SETDEFAULTS_FUNC(mod_staticfile_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("static-file.exclude-extensions"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("static-file.etags"),
         T_CONFIG_BOOL,
@@ -83,26 +83,6 @@ SETDEFAULTS_FUNC(mod_staticfile_set_defaults) {
     plugin_data * const p = p_d;
     if (!config_plugin_values_init(srv, p, cpk, "mod_staticfile"))
         return HANDLER_ERROR;
-
-    /* process and validate config directives
-     * (init i to 0 if global context; to 1 to skip empty global context) */
-    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
-        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
-        for (; -1 != cpv->k_id; ++cpv) {
-            switch (cpv->k_id) {
-              case 0: /* static-file.exclude-extensions */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"ext\"", cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
-                break;
-              default:/* should not happen */
-                break;
-            }
-        }
-    }
 
     /* initialize p->defaults from global config context */
     p->defaults.etags_used = 1; /* etags enabled */

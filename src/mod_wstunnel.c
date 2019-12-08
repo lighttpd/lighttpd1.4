@@ -242,7 +242,7 @@ static void mod_wstunnel_patch_config(connection * const con, plugin_data * cons
 SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("wstunnel.server"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVARRAY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("wstunnel.balance"),
         T_CONFIG_STRING,
@@ -251,13 +251,13 @@ SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
         T_CONFIG_INT,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("wstunnel.map-extensions"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("wstunnel.frame-type"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("wstunnel.origins"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("wstunnel.ping-interval"),
         T_CONFIG_SHORT,
@@ -303,15 +303,7 @@ SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
                 cpv->v.u = (unsigned int)gw_get_defaults_balance(srv, cpv->v.b);
                 break;
               case 2: /* wstunnel.debug */
-                break;
               case 3: /* wstunnel.map-extensions */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"suffix\" => \"subst\"",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 break;
               case 4: /* wstunnel.frame-type */
                 /*(default frame-type to "text" unless "binary" is specified)*/
@@ -319,13 +311,6 @@ SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
                   buffer_eq_icase_slen(cpv->v.b, CONST_STR_LEN("binary"));
                 break;
               case 5: /* wstunnel.origins */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected %s = ( \"...\", \"...\" )",
-                      cpk[cpv->k_id].k, cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 for (uint32_t j = 0; j < cpv->v.a->used; ++j) {
                     buffer *origin = &((data_string *)cpv->v.a->data[j])->value;
                     if (buffer_string_is_empty(origin)) {

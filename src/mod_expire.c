@@ -195,10 +195,10 @@ static void mod_expire_patch_config(connection * const con, plugin_data * const 
 SETDEFAULTS_FUNC(mod_expire_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("expire.url"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("expire.mimetypes"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -217,23 +217,9 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
             const array *a = NULL;
             switch (cpv->k_id) {
               case 0: /* expire.url */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"urlpath\" => \"expiration\"",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 a = cpv->v.a;
                 break;
               case 1: /* expire.mimetypes */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"mimetype\" => \"expiration\"",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 for (uint32_t k = 0; k < cpv->v.a->used; ++k) {
                     data_string *ds = (data_string *)cpv->v.a->data[k];
                     /*(omit trailing '*', if present, from prefix match)*/

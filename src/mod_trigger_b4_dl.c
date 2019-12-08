@@ -258,7 +258,7 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
         T_CONFIG_SHORT,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("trigger-before-download.memcache-hosts"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("trigger-before-download.memcache-namespace"),
         T_CONFIG_STRING,
@@ -297,12 +297,6 @@ SETDEFAULTS_FUNC(mod_trigger_b4_dl_set_defaults) {
               case 4: /* trigger-before-download.trigger-timeout */
                 break;
               case 5: /* trigger-before-download.memcache-hosts */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"host\"", cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 if (!mod_trigger_b4_dl_init_memcached(srv, cpv))
                     return HANDLER_ERROR;
                 break;

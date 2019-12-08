@@ -279,7 +279,7 @@ static void mod_vhostdb_patch_config(connection * const con, plugin_data * const
 SETDEFAULTS_FUNC(mod_vhostdb_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("vhostdb.dbi"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -298,13 +298,6 @@ SETDEFAULTS_FUNC(mod_vhostdb_set_defaults) {
             switch (cpv->k_id) {
               case 0: /* vhostdb.<db> */
                 if (cpv->v.a->used) {
-                    if (!array_is_kvstring(cpv->v.a)) {
-                        log_error(srv->errh, __FILE__, __LINE__,
-                          "unexpected value for %s; "
-                          "expected list of \"option\" => \"value\"",
-                          cpk[cpv->k_id].k);
-                        return HANDLER_ERROR;
-                    }
                     if (0 != mod_vhostdb_dbconf_setup(srv, cpv->v.a, &cpv->v.v))
                         return HANDLER_ERROR;
                     if (NULL != cpv->v.v)

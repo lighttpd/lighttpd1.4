@@ -1234,10 +1234,10 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
         T_CONFIG_SHORT,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("bin-environment"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("bin-copy-environment"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("broken-scriptfilename"),
         T_CONFIG_BOOL,
@@ -1255,7 +1255,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("x-sendfile-docroot"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("tcp-fin-propagate"),
         T_CONFIG_BOOL,
@@ -1266,14 +1266,6 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
     };
 
     gw_host *host = NULL;
-
-    if (!array_is_kvarray(a)) {
-        log_error(srv->errh, __FILE__, __LINE__,
-          "unexpected value for %s; expected "
-          "( \"ext\" => ( \"backend-label\" => ( \"key\" => \"value\" )))",
-          cpkkey);
-        return 0;
-    }
 
     p->srv_pid = srv->pid;
 

@@ -1302,7 +1302,7 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.openssl.ssl-conf-cmd"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.pemfile"), /* included to process global scope */
         T_CONFIG_STRING,
@@ -1382,12 +1382,6 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                 break;
               case 5: /* ssl.openssl.ssl-conf-cmd */
                 *(const array **)&conf.ssl_conf_cmd = cpv->v.a;
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "%s must be array of \"key\" => \"value\" strings",
-                      cpk[cpv->k_id].k);
-                    rc = HANDLER_ERROR;
-                }
                 break;
               case 6: /* ssl.pemfile */
                 /* ignore here; included to process global scope when

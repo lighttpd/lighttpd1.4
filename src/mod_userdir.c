@@ -82,10 +82,10 @@ SETDEFAULTS_FUNC(mod_userdir_set_defaults) {
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("userdir.exclude-user"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("userdir.include-user"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("userdir.basepath"),
         T_CONFIG_STRING,
@@ -104,33 +104,6 @@ SETDEFAULTS_FUNC(mod_userdir_set_defaults) {
     plugin_data * const p = p_d;
     if (!config_plugin_values_init(srv, p, cpk, "mod_userdir"))
         return HANDLER_ERROR;
-
-    /* process and validate config directives
-     * (init i to 0 if global context; to 1 to skip empty global context) */
-    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
-        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
-        for (; -1 != cpv->k_id; ++cpv) {
-            switch (cpv->k_id) {
-              case 0: /* userdir.path */
-                break;
-              case 1: /* userdir.exclude-user */
-              case 2: /* userdir.include-user */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"suffix\"", cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
-                break;
-              case 3: /* userdir.basepath */
-              case 4: /* userdir.letterhomes */
-              case 5: /* userdir.active */
-                break;
-              default:/* should not happen */
-                break;
-            }
-        }
-    }
 
     /* enabled by default for backward compatibility;
      * if userdir.path isn't set userdir is disabled too,

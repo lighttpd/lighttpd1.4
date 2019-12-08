@@ -396,7 +396,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("auth.require"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVARRAY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("auth.extern-authn"),
         T_CONFIG_BOOL,
@@ -430,7 +430,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
                 }
                 break;
               case 1: /* auth.require */
-                if (array_is_kvarray(cpv->v.a)) {
+                {
                     array * const a = array_init(4);
                     if (HANDLER_GO_ON !=
                         mod_auth_require_parse_array(cpv->v.a, a, srv->errh)) {
@@ -439,13 +439,6 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
                     }
                     cpv->v.a = a;
                     cpv->vtype = T_CONFIG_LOCAL;
-                }
-                else {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; expected "
-                      "%s = ( \"urlpath\" => ( \"option\" => \"value\" ) )",
-                      cpk[cpv->k_id].k, cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
                 }
                 break;
               case 2: /* auth.extern-authn */

@@ -92,15 +92,7 @@ static void mod_rewrite_patch_config(connection * const con, plugin_data * const
     }
 }
 
-static pcre_keyvalue_buffer * mod_rewrite_parse_list(server *srv, const array *a, pcre_keyvalue_buffer *kvb, const int condidx, const char *option) {
-    if (!array_is_kvstring(a)) {
-        log_error(srv->errh, __FILE__, __LINE__,
-          "unexpected value for %s; "
-          "expected list of \"regex\" => \"subst\"",
-          option);
-        return NULL;
-    }
-
+static pcre_keyvalue_buffer * mod_rewrite_parse_list(server *srv, const array *a, pcre_keyvalue_buffer *kvb, const int condidx) {
     int allocated = 0;
     if (NULL == kvb) {
         allocated = 1;
@@ -128,22 +120,22 @@ static pcre_keyvalue_buffer * mod_rewrite_parse_list(server *srv, const array *a
 SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("url.rewrite-once"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("url.rewrite-final"),  /* old name => url.rewrite-once */
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("url.rewrite"),        /* old name => url.rewrite-once */
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("url.rewrite-repeat"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("url.rewrite-if-not-file"), /* rewrite-once if ENOENT */
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("url.rewrite-repeat-if-not-file"), /* repeat if ENOENT */
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -191,24 +183,21 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
         pcre_keyvalue_buffer *kvb = NULL, *kvb_NF = NULL;
 
         if ((cpv = rewrite_once)) {
-            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx,
-                                              cpk[cpv->k_id].k); /* directive */
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx);
             if (NULL == cpv->v.v) return HANDLER_ERROR;
             cpv->vtype = T_CONFIG_LOCAL;
             kvb = cpv->v.v;
         }
 
         if ((cpv = rewrite_final)) {
-            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx,
-                                              cpk[cpv->k_id].k); /* directive */
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx);
             if (NULL == cpv->v.v) return HANDLER_ERROR;
             cpv->vtype = T_CONFIG_LOCAL;
             kvb = cpv->v.v;
         }
 
         if ((cpv = rewrite)) {
-            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx,
-                                              cpk[cpv->k_id].k); /* directive */
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx);
             if (NULL == cpv->v.v) return HANDLER_ERROR;
             cpv->vtype = T_CONFIG_LOCAL;
             kvb = cpv->v.v;
@@ -217,16 +206,14 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
         if (kvb) kvb->x1 = (unsigned short)kvb->used; /* repeat_idx */
 
         if ((cpv = rewrite_repeat)) {
-            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx,
-                                              cpk[cpv->k_id].k); /* directive */
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx);
             if (NULL == cpv->v.v) return HANDLER_ERROR;
             cpv->vtype = T_CONFIG_LOCAL;
             /*kvb = cpv->v.v;*/
         }
 
         if ((cpv = rewrite_NF)) {
-            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb_NF, condidx,
-                                              cpk[cpv->k_id].k); /* directive */
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb_NF, condidx);
             if (NULL == cpv->v.v) return HANDLER_ERROR;
             cpv->vtype = T_CONFIG_LOCAL;
             kvb_NF = cpv->v.v;
@@ -235,8 +222,7 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
         if (kvb_NF) kvb_NF->x1 = (unsigned short)kvb_NF->used; /* repeat_idx */
 
         if ((cpv = rewrite_repeat_NF)) {
-            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb_NF, condidx,
-                                              cpk[cpv->k_id].k); /* directive */
+            cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb_NF, condidx);
             if (NULL == cpv->v.v) return HANDLER_ERROR;
             cpv->vtype = T_CONFIG_LOCAL;
             /*kvb_NF = cpv->v.v;*/

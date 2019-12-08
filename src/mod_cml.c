@@ -122,7 +122,7 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("cml.memcache-hosts"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("cml.memcache-namespace"), /*(unused)*/
         T_CONFIG_STRING,
@@ -148,12 +148,6 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
               case 0: /* cml.extension */
                 break;
               case 1: /* cml.memcache-hosts */ /* config converted to memc handles */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"host\"", cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
                 if (!mod_cml_init_memcached(srv, cpv)) {
                     return HANDLER_ERROR;
                 }

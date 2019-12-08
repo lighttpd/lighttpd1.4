@@ -373,12 +373,6 @@ static int config_http_parseopts (server *srv, const array *a) {
     unsigned short int opts = srv->srvconf.http_url_normalize;
     unsigned short int decode_2f = 1;
     int rc = 1;
-    if (!array_is_kvstring(a)) {
-        log_error(srv->errh, __FILE__, __LINE__,
-          "unexpected value for server.http-parseopts; "
-          "expected list of \"key\" => \"[enable|disable]\"");
-        return 0;
-    }
     for (size_t i = 0; i < a->used; ++i) {
         const data_string * const ds = (const data_string *)a->data[i];
         const buffer *k = &ds->key;
@@ -485,7 +479,7 @@ static int config_http_parseopts (server *srv, const array *a) {
 static int config_insert_srvconf(server *srv) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("server.modules"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_SERVER }
      ,{ CONST_STR_LEN("server.compat-module-load"),
         T_CONFIG_BOOL,
@@ -551,10 +545,10 @@ static int config_insert_srvconf(server *srv) {
         T_CONFIG_INT,
         T_CONFIG_SCOPE_SERVER }
      ,{ CONST_STR_LEN("server.upload-dirs"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_SERVER }
      ,{ CONST_STR_LEN("server.http-parseopts"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_SERVER }
      ,{ CONST_STR_LEN("server.http-parseopt-header-strict"),
         T_CONFIG_BOOL,
@@ -603,14 +597,6 @@ static int config_insert_srvconf(server *srv) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* server.modules */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"mod_xxxxxx\" strings",
-                      cpk[cpv->k_id].k);
-                    rc = HANDLER_ERROR;
-                    break;
-                }
                 array_copy_array(srv->srvconf.modules, cpv->v.a);
                 break;
               case 1: /* server.compat-module-load */
@@ -677,13 +663,6 @@ static int config_insert_srvconf(server *srv) {
                 srv->srvconf.upload_temp_file_size = cpv->v.u;
                 break;
               case 22:/* server.upload-dirs */
-                if (!array_is_vlist(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"path\" strings", cpk[cpv->k_id].k);
-                    rc = HANDLER_ERROR;
-                    break;
-                }
                 array_copy_array(srv->srvconf.upload_tempdirs, cpv->v.a);
                 break;
               case 23:/* server.http-parseopts */
@@ -808,7 +787,7 @@ static int config_insert(server *srv) {
         T_CONFIG_SHORT,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("mimetype.assign"),
-        T_CONFIG_ARRAY,
+        T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("mimetype.use-xattr"),
         T_CONFIG_BOOL,
@@ -922,16 +901,7 @@ static int config_insert(server *srv) {
                 break;
               }
               case 19:/* connection.kbytes-per-second */
-                break;
               case 20:/* mimetype.assign */
-                if (!array_is_kvstring(cpv->v.a)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s; "
-                      "expected list of \"ext\" => \"mimetype\"",
-                      cpk[cpv->k_id].k);
-                    rc = HANDLER_ERROR;
-                }
-                break;
               case 21:/* mimetype.use-xattr */
               case 22:/* etag.use-inode */
               case 23:/* etag.use-mtime */
