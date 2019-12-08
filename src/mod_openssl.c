@@ -521,7 +521,8 @@ mod_openssl_SNI (SSL *ssl, handler_ctx *hctx, const char *servername, size_t len
   #if 0
     /*(con->uri.authority used below for configuration before request read;
      * revisit for h2)*/
-    if (0 != http_request_host_policy(con, con->uri.authority, con->uri.scheme))
+    if (0 != http_request_host_policy(con->uri.authority, con->uri.scheme,
+                                      con->conf.http_parseopts))
         return SSL_TLSEXT_ERR_ALERT_FATAL;
   #endif
 
@@ -772,7 +773,8 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     if (NULL != strchr(name->ptr, '/')) return rc;
     if (name->ptr[0] == '.')            return rc;
   #if 0
-    if (0 != http_request_host_policy(hctx->con, name, hctx->con->uri.scheme))
+    if (0 != http_request_host_policy(name, hctx->con->uri.scheme,
+                                      hctx->con->conf.http_parseopts))
         return rc;
   #endif
     buffer_append_string_buffer(b, name);

@@ -930,8 +930,9 @@ static handler_t mod_extforward_Forwarded (connection *con, plugin_data *p, cons
                 buffer_copy_string_len(con->request.http_host, s+v, vlen-v);
             }
 
-            if (0 != http_request_host_policy(con, con->request.http_host,
-                                              con->uri.scheme)) {
+            if (0 != http_request_host_policy(con->request.http_host,
+                                              con->uri.scheme,
+                                              con->conf.http_parseopts)) {
                 /*(reject invalid chars in Host)*/
                 log_error(con->conf.errh, __FILE__, __LINE__,
                   "invalid host= value in Forwarded header");

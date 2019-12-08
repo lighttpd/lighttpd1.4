@@ -339,10 +339,10 @@ static int scheme_port (const buffer * const scheme)
     return buffer_is_equal_string(scheme, CONST_STR_LEN("https")) ? 443 : 80;
 }
 
-int http_request_host_policy (connection * const con, buffer * const b, const buffer * const scheme) {
-    return (((con->conf.http_parseopts & HTTP_PARSEOPT_HOST_STRICT)
+int http_request_host_policy (buffer * const b, const buffer * const scheme, const unsigned int http_parseopts) {
+    return (((http_parseopts & HTTP_PARSEOPT_HOST_STRICT)
              && 0 != request_check_hostname(b))
-            || ((con->conf.http_parseopts & HTTP_PARSEOPT_HOST_NORMALIZE)
+            || ((http_parseopts & HTTP_PARSEOPT_HOST_NORMALIZE)
                 && 0 != http_request_host_normalize(b, scheme_port(scheme))));
 }
 
@@ -818,7 +818,8 @@ int http_request_parse(connection * const con, char * const hdrs, const unsigned
 
     /* check hostname field if it is set */
     if (con->request.http_host) {
-        if (0 != http_request_host_policy(con, con->request.http_host, con->proto))
+        if (0 != http_request_host_policy(con->request.http_host, con->proto,
+                                          con->conf.http_parseopts))
             return http_request_header_line_invalid(con, 400, "Invalid Hostname -> 400");
     }
     else {
