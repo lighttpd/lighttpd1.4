@@ -159,14 +159,14 @@ log_buffer_vprintf (buffer * const b,
 
 
 static void
-log_error_va_list_impl (const log_error_st * const errh,
+log_error_va_list_impl (log_error_st * const errh,
                         const char * const filename,
                         const unsigned int line,
                         const char * const fmt, va_list ap,
                         const int perr)
 {
     const int errnum = errno;
-    buffer * const b = errh->b;
+    buffer * const b = &errh->b;
     if (-1 == log_buffer_prepare(errh, filename, line, b)) return;
     log_buffer_vprintf(b, fmt, ap);
     if (perr) {
@@ -179,7 +179,7 @@ log_error_va_list_impl (const log_error_st * const errh,
 
 
 void
-log_error(const log_error_st * const errh,
+log_error(log_error_st * const errh,
           const char * const filename, const unsigned int line,
           const char *fmt, ...)
 {
@@ -191,7 +191,7 @@ log_error(const log_error_st * const errh,
 
 
 void
-log_perror (const log_error_st * const errh,
+log_perror (log_error_st * const errh,
             const char * const filename, const unsigned int line,
             const char * const fmt, ...)
 {
@@ -203,7 +203,7 @@ log_perror (const log_error_st * const errh,
 
 
 void
-log_error_multiline_buffer (const log_error_st * const restrict errh,
+log_error_multiline_buffer (log_error_st * const restrict errh,
                             const char * const restrict filename,
                             const unsigned int line,
                             const buffer * const restrict multiline,
@@ -212,7 +212,7 @@ log_error_multiline_buffer (const log_error_st * const restrict errh,
     if (multiline->used < 2) return;
 
     const int errnum = errno;
-    buffer * const b = errh->b;
+    buffer * const b = &errh->b;
     if (-1 == log_buffer_prepare(errh, filename, line, b)) return;
 
     va_list ap;
@@ -243,7 +243,6 @@ log_error_st_init (void)
     force_assert(errh);
     errh->errorlog_fd = STDERR_FILENO;
     errh->errorlog_mode = ERRORLOG_FD;
-    errh->b = buffer_init();
     return errh;
 }
 
@@ -252,6 +251,6 @@ void
 log_error_st_free (log_error_st *errh)
 {
     if (NULL == errh) return;
-    buffer_free(errh->b);
+    free(errh->b.ptr);
     free(errh);
 }
