@@ -16,6 +16,7 @@ struct log_error_st {
     enum { ERRORLOG_FILE, ERRORLOG_FD, ERRORLOG_SYSLOG, ERRORLOG_PIPE } errorlog_mode;
     int errorlog_fd;
     buffer b;
+    const char *fn;
 };
 
 __attribute_cold__

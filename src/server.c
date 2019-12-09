@@ -641,6 +641,7 @@ static int log_error_open(server *srv) {
         }
         errh->errorlog_fd = fd;
         errh->errorlog_mode = logfile[0] == '|' ? ERRORLOG_PIPE : ERRORLOG_FILE;
+        errh->fn = logfile;
     }
 
     if (errh->errorlog_mode == ERRORLOG_FD && !srv->srvconf.dont_daemonize) {
@@ -698,20 +699,17 @@ static int log_error_open(server *srv) {
  *
  */
 
-static int log_error_cycle(server *srv) {
+static void log_error_cycle(server *srv) {
     /* cycle only if the error log is a file */
 
-    log_error_st *errh = srv->errh;
+    log_error_st * const errh = srv->errh;
     if (errh->errorlog_mode == ERRORLOG_FILE) {
-        const char *logfile = srv->srvconf.errorlog_file->ptr;
-        if (-1 == fdevent_cycle_logger(logfile, &errh->errorlog_fd)) {
+        if (-1 == fdevent_cycle_logger(errh->fn, &errh->errorlog_fd)) {
             /* write to old log */
             log_perror(srv->errh, __FILE__, __LINE__,
-              "cycling errorlog '%s' failed", logfile);
+              "cycling errorlog '%s' failed", errh->fn);
         }
     }
-
-    return 0;
 }
 
 __attribute_cold__
@@ -868,6 +866,7 @@ static void server_load_check (server *srv) {
 }
 
 __attribute_cold__
+__attribute_noinline__
 static void server_process_fdwaitqueue (server *srv) {
     connections * const fdwaitqueue = &srv->fdwaitqueue;
     uint32_t i = 0;
@@ -881,7 +880,7 @@ static void server_process_fdwaitqueue (server *srv) {
 }
 
 __attribute_cold__
-static int server_main (server * const srv, int argc, char **argv) {
+static int server_main_setup (server * const srv, int argc, char **argv) {
 	int print_config = 0;
 	int test_config = 0;
 	int i_am_root = 0;
@@ -1587,18 +1586,13 @@ static int server_main (server * const srv, int argc, char **argv) {
 
 __attribute_cold__
 __attribute_noinline__
-static int server_handle_sighup (server * const srv) {
+static void server_handle_sighup (server * const srv) {
 
 			/* cycle logfiles */
 
 			plugins_call_handle_sighup(srv);
 
-			if (-1 == log_error_cycle(srv)) {
-				log_error(srv->errh, __FILE__, __LINE__,
-				  "cycling errorlog failed, dying");
-
-				return -1;
-			} else {
+			log_error_cycle(srv);
 #ifdef HAVE_SIGACTION
 				log_error(srv->errh, __FILE__, __LINE__,
 				  "logfiles cycled UID = %d PID = %d",
@@ -1608,9 +1602,6 @@ static int server_handle_sighup (server * const srv) {
 				log_error(srv->errh, __FILE__, __LINE__,
 				  "logfiles cycled");
 #endif
-			}
-
-			return 0;
 }
 
 __attribute_noinline__
@@ -1675,7 +1666,7 @@ static void server_handle_sigchld (server * const srv) {
 
 __attribute_hot__
 __attribute_noinline__
-static int server_main_loop (server * const srv) {
+static void server_main_loop (server * const srv) {
 	connections * const joblist = &srv->joblist;
 	time_t last_active_ts = time(NULL);
 
@@ -1683,7 +1674,7 @@ static int server_main_loop (server * const srv) {
 
 		if (handle_sig_hup) {
 			handle_sig_hup = 0;
-			if (server_handle_sighup(srv)) return -1;
+			server_handle_sighup(srv);
 		}
 
 		/*(USE_ALARM not used; fdevent_poll() is effective periodic timer)*/
@@ -1732,8 +1723,6 @@ static int server_main_loop (server * const srv) {
 		}
 		joblist->used = 0;
 	}
-
-	return 0;
 }
 
 __attribute_cold__
@@ -1762,8 +1751,11 @@ int main (int argc, char **argv) {
             optind = 1;
         }
 
-        rc = server_main(srv, argc, argv);
-        if (rc > 0 && 0 == (rc = server_main_loop(srv))) {
+        rc = server_main_setup(srv, argc, argv);
+        if (rc > 0) {
+
+            server_main_loop(srv);
+
             if (graceful_shutdown || graceful_restart) {
                 server_graceful_state(srv);
             }
@@ -1796,7 +1788,7 @@ int main (int argc, char **argv) {
         plugins_free(srv);
         server_free(srv);
 
-        if (0 != rc || !graceful_restart) break;
+        if (rc < 0 || !graceful_restart) break;
 
         /* wait for all children to exit before graceful restart */
         while (waitpid(-1, NULL, 0) > 0) ;
