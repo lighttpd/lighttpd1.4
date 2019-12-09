@@ -555,13 +555,12 @@ static void show_help (void) {
  *
  */
 
-static int log_error_open(server *srv) {
-    log_error_st *errh = srv->errh;
-    int errfd;
+static void log_error_open_syslog(server *srv, log_error_st *errh, const buffer *syslog_facility) {
   #ifdef HAVE_SYSLOG_H
+    errh->errorlog_mode = ERRORLOG_SYSLOG;
     /* perhaps someone wants to use syslog() */
     int facility = -1;
-    if (!buffer_string_is_empty(srv->srvconf.syslog_facility)) {
+    if (!buffer_string_is_empty(syslog_facility)) {
         static const struct facility_name_st {
           const char *name;
           int val;
@@ -610,7 +609,7 @@ static int log_error_open(server *srv) {
         };
         for (unsigned int i = 0; i < sizeof(facility_names)/sizeof(facility_names[0]); ++i) {
             const struct facility_name_st *f = facility_names+i;
-            if (0 == strcmp(srv->srvconf.syslog_facility->ptr, f->name)) {
+            if (0 == strcmp(syslog_facility->ptr, f->name)) {
                 facility = f->val;
                 break;
             }
@@ -619,39 +618,30 @@ static int log_error_open(server *srv) {
             log_error(srv->errh, __FILE__, __LINE__,
               "unrecognized server.syslog-facility: \"%s\"; "
               "defaulting to \"daemon\" facility",
-              srv->srvconf.syslog_facility->ptr);
+              syslog_facility->ptr);
         }
     }
     openlog("lighttpd", LOG_CONS|LOG_PID, -1==facility ? LOG_DAEMON : facility);
   #endif
+}
 
-    errh->errorlog_mode = ERRORLOG_FD;
-    errh->errorlog_fd = STDERR_FILENO;
-
-    if (srv->srvconf.errorlog_use_syslog) {
-        errh->errorlog_mode = ERRORLOG_SYSLOG;
+static int log_error_open_fn(server *srv, log_error_st *errh, const char *fn) {
+    int fd = fdevent_open_logger(fn);
+    if (-1 == fd) {
+        log_perror(srv->errh, __FILE__, __LINE__,
+          "opening errorlog '%s' failed", fn);
+        return -1;
     }
-    else if (!buffer_string_is_empty(srv->srvconf.errorlog_file)) {
-        const char *logfile = srv->srvconf.errorlog_file->ptr;
-        int fd = fdevent_open_logger(logfile);
-        if (-1 == fd) {
-            log_perror(srv->errh, __FILE__, __LINE__,
-              "opening errorlog '%s' failed", logfile);
-            return -1;
-        }
-        errh->errorlog_fd = fd;
-        errh->errorlog_mode = logfile[0] == '|' ? ERRORLOG_PIPE : ERRORLOG_FILE;
-        errh->fn = logfile;
-    }
+    errh->errorlog_fd = fd;
+    errh->errorlog_mode = fn[0] == '|' ? ERRORLOG_PIPE : ERRORLOG_FILE;
+    errh->fn = fn;
 
-    if (errh->errorlog_mode == ERRORLOG_FD && !srv->srvconf.dont_daemonize) {
-        /* We can only log to stderr in dont-daemonize mode;
-         * if we do daemonize and no errorlog file is specified,
-         * we log into /dev/null
-         */
-        errh->errorlog_fd = -1;
-    }
+    return 0;
+}
 
+static int log_error_open_breakagelog(server *srv) {
+    log_error_st * const errh = srv->errh;
+    int errfd;
     if (!buffer_string_is_empty(srv->srvconf.breakagelog_file)) {
         const char *logfile = srv->srvconf.breakagelog_file->ptr;
 
@@ -692,6 +682,27 @@ static int log_error_open(server *srv) {
   #endif
 
     return 0;
+}
+
+static int log_error_open(server *srv) {
+    if (srv->srvconf.errorlog_use_syslog) {
+        log_error_open_syslog(srv, srv->errh, srv->srvconf.syslog_facility);
+    }
+    else if (!buffer_string_is_empty(srv->srvconf.errorlog_file)) {
+        if (-1 == log_error_open_fn(srv, srv->errh,
+                                    srv->srvconf.errorlog_file->ptr))
+            return -1;
+    }
+    else if (srv->errh->errorlog_mode == ERRORLOG_FD
+             && !srv->srvconf.dont_daemonize) {
+        /* We can only log to stderr in dont-daemonize mode;
+         * if we do daemonize and no errorlog file is specified,
+         * we log into /dev/null
+         */
+        srv->errh->errorlog_fd = -1;
+    }
+
+    return log_error_open_breakagelog(srv);
 }
 
 /**
