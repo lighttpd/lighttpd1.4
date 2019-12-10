@@ -77,7 +77,7 @@ int fdevent_config(server *srv) {
 		 * User override
 		 */
 
-		for (size_t i = 0; event_handlers[i].name; i++) {
+		for (uint32_t i = 0; event_handlers[i].name; ++i) {
 			if (0 == strcmp(event_handlers[i].name, srv->srvconf.event_handler)) {
 				srv->event_handler = event_handlers[i].et;
 				break;
@@ -153,7 +153,7 @@ const char * fdevent_show_event_handlers(void) {
 fdevents *fdevent_init(server *srv) {
 	fdevents *ev;
 	int type = srv->event_handler;
-	size_t maxfds;
+	uint32_t maxfds;
 
       #ifdef SOCK_CLOEXEC
 	/* Test if SOCK_CLOEXEC is supported by kernel.
@@ -194,7 +194,7 @@ fdevents *fdevent_init(server *srv) {
 	ev->fdarray = calloc(maxfds, sizeof(*ev->fdarray));
 	if (NULL == ev->fdarray) {
 		log_error(srv->errh, __FILE__, __LINE__,
-		  "server.max-fds too large? (%zu)", maxfds-1);
+		  "server.max-fds too large? (%u)", maxfds-1);
 		free(ev);
 		return NULL;
 	}
@@ -252,12 +252,11 @@ fdevents *fdevent_init(server *srv) {
 }
 
 void fdevent_free(fdevents *ev) {
-	size_t i;
 	if (!ev) return;
 
 	if (ev->free) ev->free(ev);
 
-	for (i = 0; i < ev->maxfds; i++) {
+	for (uint32_t i = 0; i < ev->maxfds; ++i) {
 		/* (fdevent_sched_run() should already have been run,
 		 *  but take reasonable precautions anyway) */
 		if (ev->fdarray[i])
@@ -802,8 +801,8 @@ typedef struct fdevent_cmd_pipe {
 
 typedef struct fdevent_cmd_pipes {
     fdevent_cmd_pipe *ptr;
-    size_t used;
-    size_t size;
+    uint32_t used;
+    uint32_t size;
 } fdevent_cmd_pipes;
 
 static fdevent_cmd_pipes cmd_pipes;
@@ -848,7 +847,7 @@ static void fdevent_restart_logger_pipe(fdevent_cmd_pipe *fcp, time_t ts) {
 
 
 void fdevent_restart_logger_pipes(time_t ts) {
-    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+    for (uint32_t i = 0; i < cmd_pipes.used; ++i) {
         fdevent_cmd_pipe * const fcp = cmd_pipes.ptr+i;
         if (fcp->pid > 0) continue;
         fdevent_restart_logger_pipe(fcp, ts);
@@ -857,7 +856,7 @@ void fdevent_restart_logger_pipes(time_t ts) {
 
 
 int fdevent_waitpid_logger_pipe_pid(pid_t pid, time_t ts) {
-    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+    for (uint32_t i = 0; i < cmd_pipes.used; ++i) {
         fdevent_cmd_pipe * const fcp = cmd_pipes.ptr+i;
         if (pid != fcp->pid) continue;
         fcp->pid = -1;
@@ -869,7 +868,7 @@ int fdevent_waitpid_logger_pipe_pid(pid_t pid, time_t ts) {
 
 
 void fdevent_clr_logger_pipe_pids(void) {
-    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+    for (uint32_t i = 0; i < cmd_pipes.used; ++i) {
         fdevent_cmd_pipe *fcp = cmd_pipes.ptr+i;
         fcp->pid = -1;
     }
@@ -877,7 +876,7 @@ void fdevent_clr_logger_pipe_pids(void) {
 
 
 int fdevent_reaped_logger_pipe(pid_t pid) {
-    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+    for (uint32_t i = 0; i < cmd_pipes.used; ++i) {
         fdevent_cmd_pipe *fcp = cmd_pipes.ptr+i;
         if (fcp->pid == pid) {
             time_t ts = time(NULL);
@@ -897,7 +896,7 @@ int fdevent_reaped_logger_pipe(pid_t pid) {
 
 
 void fdevent_close_logger_pipes(void) {
-    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+    for (uint32_t i = 0; i < cmd_pipes.used; ++i) {
         fdevent_cmd_pipe *fcp = cmd_pipes.ptr+i;
         close(fcp->fds[0]);
         if (fcp->fds[1] != STDERR_FILENO) close(fcp->fds[1]);
@@ -910,7 +909,7 @@ void fdevent_close_logger_pipes(void) {
 
 
 void fdevent_breakagelog_logger_pipe(int fd) {
-    for (size_t i = 0; i < cmd_pipes.used; ++i) {
+    for (uint32_t i = 0; i < cmd_pipes.used; ++i) {
         fdevent_cmd_pipe *fcp = cmd_pipes.ptr+i;
         if (fcp->fds[1] != fd) continue;
         fcp->fds[1] = STDERR_FILENO;

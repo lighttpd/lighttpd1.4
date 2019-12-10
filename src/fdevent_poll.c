@@ -26,7 +26,7 @@ static void fdevent_poll_free(fdevents *ev) {
 static int fdevent_poll_event_del(fdevents *ev, fdnode *fdn) {
 	int fd = fdn->fd;
 	int k = fdn->fde_ndx;
-	if ((size_t)k >= ev->used || ev->pollfds[k].fd != fd) return (errno = EINVAL, -1);
+	if ((uint32_t)k >= ev->used || ev->pollfds[k].fd != fd) return (errno = EINVAL, -1);
 
 		ev->pollfds[k].fd = -1;
 		/* ev->pollfds[k].events = 0; */
@@ -52,7 +52,7 @@ static int fdevent_poll_event_set(fdevents *ev, fdnode *fdn, int events) {
       #endif
 
 	if (k >= 0) {
-		if ((size_t)k >= ev->used || ev->pollfds[k].fd != fd) return (errno = EINVAL, -1);
+		if ((uint32_t)k >= ev->used || ev->pollfds[k].fd != fd) return (errno = EINVAL, -1);
 		ev->pollfds[k].events = events;
 		return 0;
 	}
@@ -78,7 +78,7 @@ static int fdevent_poll_event_set(fdevents *ev, fdnode *fdn, int events) {
 }
 
 static int fdevent_poll_next_ndx(const fdevents *ev, int ndx) {
-	for (size_t i = (size_t)(ndx+1); i < ev->used; ++i) {
+	for (uint32_t i = (uint32_t)(ndx+1); i < ev->used; ++i) {
 		if (ev->pollfds[i].revents) return i;
 	}
 	return -1;

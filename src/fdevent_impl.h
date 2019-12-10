@@ -69,8 +69,8 @@ typedef enum {
 typedef struct {
     int *ptr;
 
-    size_t used;
-    size_t size;
+    uint32_t used;
+    uint32_t size;
 } buffer_int;
 #endif
 
@@ -83,7 +83,7 @@ struct fdevents {
     int (*poll)(struct fdevents *ev, int timeout_ms);
 
     struct server *srv;
-    size_t maxfds;
+    uint32_t maxfds;
   #ifdef FDEVENT_USE_LINUX_EPOLL
     int epoll_fd;
     struct epoll_event *epoll_events;
@@ -106,8 +106,8 @@ struct fdevents {
   #ifdef FDEVENT_USE_POLL
     struct pollfd *pollfds;
 
-    size_t size;
-    size_t used;
+    uint32_t size;
+    uint32_t used;
 
     buffer_int unused;
   #endif

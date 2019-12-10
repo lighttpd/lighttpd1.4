@@ -52,7 +52,7 @@ static int fdevent_select_event_set(fdevents *ev, fdnode *fdn, int events) {
 	return 0;
 }
 
-static int fdevent_select_event_get_revent(const fdevents *ev, size_t ndx) {
+static int fdevent_select_event_get_revent(const fdevents *ev, int ndx) {
 	int revents = 0;
 	if (FD_ISSET(ndx, &ev->select_read))  revents |= FDEVENT_IN;
 	if (FD_ISSET(ndx, &ev->select_write)) revents |= FDEVENT_OUT;
