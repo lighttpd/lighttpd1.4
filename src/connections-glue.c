@@ -7,6 +7,7 @@
 #include "http_header.h"
 #include "log.h"
 #include "response.h"
+#include "settings.h"   /* MAX_READ_LIMIT */
 
 #include <stdlib.h>
 #include <string.h>

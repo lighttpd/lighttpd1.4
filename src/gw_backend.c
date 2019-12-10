@@ -27,6 +27,7 @@
 #include "fdevent.h"
 #include "log.h"
 #include "sock_addr.h"
+#include "settings.h"   /* MAX_WRITE_LIMIT */
 
 
 

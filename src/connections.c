@@ -3,7 +3,7 @@
 #include "base.h"
 #include "buffer.h"
 #include "burl.h"       /* HTTP_PARSEOPT_HEADER_STRICT */
-#include "settings.h"   /* BUFFER_MAX_REUSE_SIZE */
+#include "settings.h"   /* BUFFER_MAX_REUSE_SIZE MAX_READ_LIMIT MAX_WRITE_LIMIT */
 #include "log.h"
 #include "connections.h"
 #include "fdevent.h"

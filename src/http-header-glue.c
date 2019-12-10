@@ -11,6 +11,7 @@
 #include "response.h"
 #include "sock_addr.h"
 #include "stat_cache.h"
+#include "settings.h"   /* MAX_HTTP_REQUEST_HEADER MAX_READ_LIMIT */
 
 #include <stdlib.h>
 #include <string.h>
