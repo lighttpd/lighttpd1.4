@@ -1144,7 +1144,7 @@ REQUESTDONE_FUNC(log_access_write) {
 	else {
 		buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
-		if (flush || buffer_string_length(b) >= BUFFER_MAX_REUSE_SIZE) {
+		if (flush || buffer_string_length(b) >= 8192) {
 			if (!accesslog_write_all(p->conf.log_access_fd, b)) {
 				log_perror(con->conf.errh, __FILE__, __LINE__,
 				  "writing access log entry failed: %s",
