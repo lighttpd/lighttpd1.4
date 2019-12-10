@@ -1026,20 +1026,11 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 	plugin_data *p = p_d;
 	stat_cache_entry *sce = NULL;
 
-	/* we only handle GET and HEAD */
-	switch(con->request.http_method) {
-	case HTTP_METHOD_GET:
-	case HTTP_METHOD_HEAD:
-		break;
-	default:
-		return HANDLER_GO_ON;
-	}
-
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
-
-	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 	if (con->uri.path->ptr[buffer_string_length(con->uri.path) - 1] != '/') return HANDLER_GO_ON;
+	if (!http_method_get_or_head(con->request.http_method)) return HANDLER_GO_ON;
+	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	mod_dirlisting_patch_config(con, p);
 

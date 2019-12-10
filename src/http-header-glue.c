@@ -156,9 +156,6 @@ const buffer * strftime_cache_get(const time_t last_mod) {
 
 int http_response_handle_cachable(connection *con, const buffer *mtime) {
 	const buffer *vb;
-	int head_or_get =
-		(  HTTP_METHOD_GET  == con->request.http_method
-		|| HTTP_METHOD_HEAD == con->request.http_method);
 
 	/*
 	 * 14.26 If-None-Match
@@ -177,7 +174,7 @@ int http_response_handle_cachable(connection *con, const buffer *mtime) {
 		   && (200 == con->http_status || 0 == con->http_status)
 		   && NULL != http_header_request_get(con, HTTP_HEADER_RANGE, CONST_STR_LEN("Range")));
 		if (etag_is_equal(con->physical.etag, vb->ptr, !range_request)) {
-			if (head_or_get) {
+			if (http_method_get_or_head(con->request.http_method)) {
 				con->http_status = 304;
 				return HANDLER_FINISHED;
 			} else {
@@ -186,7 +183,7 @@ int http_response_handle_cachable(connection *con, const buffer *mtime) {
 				return HANDLER_FINISHED;
 			}
 		}
-	} else if (head_or_get
+	} else if (http_method_get_or_head(con->request.http_method)
 		   && (vb = http_header_request_get(con, HTTP_HEADER_IF_MODIFIED_SINCE, CONST_STR_LEN("If-Modified-Since")))) {
 		/* last-modified handling */
 		size_t used_len;

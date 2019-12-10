@@ -275,8 +275,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 	/* Add caching headers only to http_status 200 OK or 206 Partial Content */
 	if (con->http_status != 200 && con->http_status != 206) return HANDLER_GO_ON;
 	/* Add caching headers only to GET or HEAD requests */
-	if (   con->request.http_method != HTTP_METHOD_GET
-	    && con->request.http_method != HTTP_METHOD_HEAD) return HANDLER_GO_ON;
+	if (!http_method_get_or_head(con->request.http_method)) return HANDLER_GO_ON;
 	/* Add caching headers only if not already present */
 	vb = http_header_response_get(con, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"));
 	if (NULL != vb) return HANDLER_GO_ON;

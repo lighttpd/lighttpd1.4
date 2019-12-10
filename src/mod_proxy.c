@@ -859,8 +859,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 
 	if (con->request.content_length > 0
 	    || (0 == con->request.content_length
-		&& HTTP_METHOD_GET != con->request.http_method
-		&& HTTP_METHOD_HEAD != con->request.http_method)) {
+		&& !http_method_get_or_head(con->request.http_method))) {
 		/* set Content-Length if client sent Transfer-Encoding: chunked
 		 * and not streaming to backend (request body has been fully received) */
 		const buffer *vb = http_header_request_get(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));

@@ -1147,8 +1147,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 		    && if_none_match->ptr[etaglen-1] == '-'
 		    && 0 == strncmp(if_none_match->ptr+etaglen, label, strlen(label))) {
 
-			if (   HTTP_METHOD_GET  == con->request.http_method
-			    || HTTP_METHOD_HEAD == con->request.http_method) {
+			if (http_method_get_or_head(con->request.http_method)) {
 				/* modify ETag response header in-place to remove '"' and append '-label"' */
 				vb->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
 				buffer_append_string(vb, label);

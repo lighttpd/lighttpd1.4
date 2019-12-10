@@ -65,5 +65,7 @@ int get_http_version_key(const char *s, size_t slen);
 http_method_t get_http_method_key(const char *s, size_t slen);
 void http_status_append(buffer *b, int status);
 void http_method_append(buffer *b, http_method_t method);
+#define http_method_get_or_head(method)   ((method) <= HTTP_METHOD_HEAD)
+#define http_method_get_head_post(method) ((method) <= HTTP_METHOD_POST)
 
 #endif

@@ -855,8 +855,7 @@ int http_request_parse(connection * const con, char * const hdrs, const unsigned
                 http_header_request_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
             }
         }
-        if ((HTTP_METHOD_GET == con->request.http_method
-             || HTTP_METHOD_HEAD == con->request.http_method)
+        if (http_method_get_or_head(con->request.http_method)
             && !(con->conf.http_parseopts & HTTP_PARSEOPT_METHOD_GET_BODY)) {
             return http_request_header_line_invalid(con, 400, "GET/HEAD with content-length -> 400");
         }

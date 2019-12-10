@@ -106,14 +106,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	if (con->mode != DIRECT) return HANDLER_GO_ON;
 
 	/* we only handle GET, POST and HEAD */
-	switch(con->request.http_method) {
-	case HTTP_METHOD_GET:
-	case HTTP_METHOD_POST:
-	case HTTP_METHOD_HEAD:
-		break;
-	default:
-		return HANDLER_GO_ON;
-	}
+	if (!http_method_get_head_post(con->request.http_method)) return HANDLER_GO_ON;
 
 	mod_staticfile_patch_config(con, p);
 
