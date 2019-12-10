@@ -1223,7 +1223,7 @@ static int mod_ssi_handle_request(connection *con, handler_ctx *p) {
 		etag_mutate(con->physical.etag, con->physical.etag);
 		http_header_response_set(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
 
-		mtime = strftime_cache_get(con->srv, st.st_mtime);
+		mtime = strftime_cache_get(st.st_mtime);
 		http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
 
 		if (HANDLER_FINISHED == http_response_handle_cachable(con, mtime)) {

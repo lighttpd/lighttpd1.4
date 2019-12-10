@@ -915,7 +915,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 						return HANDLER_GO_ON;
 					}
 
-					mtime = strftime_cache_get(con->srv, sce->st.st_mtime);
+					mtime = strftime_cache_get(sce->st.st_mtime);
 
 					/* try matching original etag of uncompressed version */
 					if (etag) {

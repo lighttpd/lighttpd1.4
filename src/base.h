@@ -2,8 +2,6 @@
 #define _BASE_H_
 #include "first.h"
 
-#include "settings.h"
-
 #include <sys/types.h>
 #include <sys/time.h>
 
@@ -243,11 +241,6 @@ typedef struct {
 } connections;
 
 typedef struct {
-	time_t  mtime;  /* the key */
-	buffer str;     /* buffer for the string represenation */
-} mtime_cache_type;
-
-typedef struct {
 	void *ptr;
 	uint32_t used;
 	uint32_t size;
@@ -348,9 +341,6 @@ struct server {
 	log_error_st *errh;
 
 	server_config  srvconf;
-
-	/* caches */
-	mtime_cache_type mtime_cache[FILE_CACHE_MAX];
 
 	time_t loadts;
 	double loadavg[3];

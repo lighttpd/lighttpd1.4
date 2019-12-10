@@ -52,5 +52,8 @@ void http_response_backend_done (connection *con);
 void http_response_backend_error (connection *con);
 void http_response_upgrade_read_body_unknown(connection *con);
 
-const buffer * strftime_cache_get(server *srv, time_t last_mod);
+__attribute_cold__
+void strftime_cache_reset(void);
+
+const buffer * strftime_cache_get(time_t last_mod);
 #endif

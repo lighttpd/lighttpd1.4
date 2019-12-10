@@ -2,8 +2,6 @@
 #define _LIGHTTPD_SETTINGS_H_
 #include "first.h"
 
-#define FILE_CACHE_MAX      16
-
 /**
  * max size of a buffer which will just be reset
  * to ->used = 0 instead of really freeing the buffer

@@ -2,19 +2,19 @@
 
 #include "base.h"
 #include "buffer.h"
-#include "burl.h"
 #include "network.h"
 #include "log.h"
 #include "rand.h"
 #include "chunk.h"
-#include "http_auth.h"
-#include "http_vhostdb.h"
+#include "http_auth.h"      /* http_auth_dumbdata_reset() */
+#include "http_vhostdb.h"   /* http_vhostdb_dumbdata_reset() */
 #include "fdevent.h"
 #include "connections.h"
 #include "sock_addr.h"
 #include "stat_cache.h"
 #include "plugin.h"
-#include "network_write.h"
+#include "network_write.h"  /* network_write_show_handlers() */
+#include "response.h"       /* strftime_cache_reset() */
 
 #ifdef HAVE_VERSIONSTAMP_H
 # include "versionstamp.h"
@@ -240,9 +240,7 @@ static server *server_init(void) {
 	CLEAN(tmp_buf);
 #undef CLEAN
 
-	for (int i = 0; i < FILE_CACHE_MAX; ++i) {
-		srv->mtime_cache[i].mtime = (time_t)-1;
-	}
+	strftime_cache_reset();
 
 	li_rand_reseed();
 
@@ -263,10 +261,6 @@ static server *server_init(void) {
 
 __attribute_cold__
 static void server_free(server *srv) {
-	for (int i = 0; i < FILE_CACHE_MAX; ++i) {
-		free(srv->mtime_cache[i].str.ptr);
-	}
-
 	if (oneshot_fd > 0) {
 		close(oneshot_fd);
 	}

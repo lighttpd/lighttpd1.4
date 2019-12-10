@@ -117,26 +117,40 @@ int http_response_redirect_to_directory(connection *con, int status) {
 	return 0;
 }
 
-const buffer * strftime_cache_get(server *srv, time_t last_mod) {
-	static int i;
+#define MTIME_CACHE_MAX 16
+struct mtime_cache_type {
+    time_t mtime;  /* key */
+    buffer str;    /* buffer for string representation */
+};
+static struct mtime_cache_type mtime_cache[MTIME_CACHE_MAX];
+static char mtime_cache_str[MTIME_CACHE_MAX][30];
+/* 30-chars for "%a, %d %b %Y %H:%M:%S GMT" */
 
-	mtime_cache_type * const mtime_cache = srv->mtime_cache;
-	for (int j = 0; j < FILE_CACHE_MAX; ++j) {
-		if (mtime_cache[j].mtime == last_mod)
-			return &mtime_cache[j].str; /* found cache-entry */
-	}
+void strftime_cache_reset(void) {
+    for (int i = 0; i < MTIME_CACHE_MAX; ++i) {
+        mtime_cache[i].mtime = (time_t)-1;
+        mtime_cache[i].str.ptr = mtime_cache_str[i];
+        mtime_cache[i].str.used = sizeof(mtime_cache_str[0]);
+        mtime_cache[i].str.size = sizeof(mtime_cache_str[0]);
+    }
+}
 
-	if (++i == FILE_CACHE_MAX) {
-		i = 0;
-	}
+const buffer * strftime_cache_get(const time_t last_mod) {
+    static int mtime_cache_idx;
 
-	mtime_cache[i].mtime = last_mod;
-	buffer * const b = &mtime_cache[i].str;
-	buffer_clear(b);
-	buffer_append_strftime(b, "%a, %d %b %Y %H:%M:%S GMT",
-	                       gmtime(&(mtime_cache[i].mtime)));
+    for (int j = 0; j < MTIME_CACHE_MAX; ++j) {
+        if (mtime_cache[j].mtime == last_mod)
+            return &mtime_cache[j].str; /* found cache-entry */
+    }
 
-	return b;
+    if (++mtime_cache_idx == MTIME_CACHE_MAX) mtime_cache_idx = 0;
+
+    const int i = mtime_cache_idx;
+    mtime_cache[i].mtime = last_mod;
+    strftime(mtime_cache[i].str.ptr, sizeof(mtime_cache_str[0]),
+             "%a, %d %b %Y %H:%M:%S GMT", gmtime(&mtime_cache[i].mtime));
+
+    return &mtime_cache[i].str;
 }
 
 
@@ -520,7 +534,7 @@ void http_response_send_file (connection *con, buffer *path) {
 
 		/* prepare header */
 		if (NULL == (mtime = http_header_response_get(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified")))) {
-			mtime = strftime_cache_get(con->srv, sce->st.st_mtime);
+			mtime = strftime_cache_get(sce->st.st_mtime);
 			http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
 		}
 
