@@ -81,9 +81,6 @@ typedef struct {
 	const buffer *document_root;
 	const buffer *server_name;
 	const buffer *server_tag;
-	const buffer *error_handler;
-	const buffer *error_handler_404;
-	const buffer *errorfile_prefix;
 	log_error_st *errh;
 
 	unsigned short max_keep_alive_requests;
@@ -130,6 +127,11 @@ typedef struct {
 	 *
 	 */
 	off_t *global_bytes_per_second_cnt_ptr; /*  */
+
+	const buffer *error_handler;
+	const buffer *error_handler_404;
+	const buffer *errorfile_prefix;
+	log_error_st *serrh; /* script errh */
 } specific_config;
 
 /* the order of the items should be the same as they are processed
@@ -276,8 +278,6 @@ typedef struct {
 	unsigned char config_unsupported;
 	unsigned char systemd_socket_activation;
 	unsigned char errorlog_use_syslog;
-	const buffer *errorlog_file;
-	const buffer *breakagelog_file;
 	const buffer *syslog_facility;
 	const buffer *bindhost;
 	const buffer *changeroot;

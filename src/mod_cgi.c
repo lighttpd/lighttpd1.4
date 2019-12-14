@@ -820,7 +820,8 @@ static int cgi_create_env(connection *con, plugin_data *p, handler_ctx *hctx, bu
 		log_perror(con->conf.errh, __FILE__, __LINE__, "open dirname %s failed", con->physical.path->ptr);
 	}
 
-	hctx->pid = (dfd >= 0) ? fdevent_fork_execve(args[0], args, p->env.eptr, to_cgi_fds[0], from_cgi_fds[1], -1, dfd) : -1;
+	int serrh_fd = con->conf.serrh ? con->conf.serrh->errorlog_fd : -1;
+	hctx->pid = (dfd >= 0) ? fdevent_fork_execve(args[0], args, p->env.eptr, to_cgi_fds[0], from_cgi_fds[1], serrh_fd, dfd) : -1;
 
 	if (-1 == hctx->pid) {
 		/* log error with errno prior to calling close() (might change errno) */

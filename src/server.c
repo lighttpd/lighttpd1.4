@@ -58,10 +58,6 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC), 0 };
 # include <pwd.h>
 #endif
 
-#ifdef HAVE_SYSLOG_H
-# include <syslog.h>
-#endif
-
 #ifdef HAVE_SYS_LOADAVG_H
 # include <sys/loadavg.h>
 #endif
@@ -86,11 +82,6 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC), 0 };
 /* IRIX doesn't like the alarm based time() optimization */
 /* #define USE_ALARM */
 #endif
-
-typedef struct {
-    PLUGIN_DATA;
-    specific_config defaults;
-} config_data_base;
 
 static int oneshot_fd = 0;
 static volatile int pid_fd = -2;
@@ -536,212 +527,6 @@ static void show_help (void) {
 "\n"
 ;
 	write_all(STDOUT_FILENO, b, strlen(b));
-}
-
-/**
- * open the errorlog
- *
- * we have 4 possibilities:
- * - stderr (default)
- * - syslog
- * - logfile
- * - pipe
- *
- */
-
-static void log_error_open_syslog(server *srv, log_error_st *errh, const buffer *syslog_facility) {
-  #ifdef HAVE_SYSLOG_H
-    errh->errorlog_mode = ERRORLOG_SYSLOG;
-    /* perhaps someone wants to use syslog() */
-    int facility = -1;
-    if (!buffer_string_is_empty(syslog_facility)) {
-        static const struct facility_name_st {
-          const char *name;
-          int val;
-        } facility_names[] = {
-            { "auth",     LOG_AUTH }
-          #ifdef LOG_AUTHPRIV
-           ,{ "authpriv", LOG_AUTHPRIV }
-          #endif
-          #ifdef LOG_CRON
-           ,{ "cron",     LOG_CRON }
-          #endif
-           ,{ "daemon",   LOG_DAEMON }
-          #ifdef LOG_FTP
-           ,{ "ftp",      LOG_FTP }
-          #endif
-          #ifdef LOG_KERN
-           ,{ "kern",     LOG_KERN }
-          #endif
-          #ifdef LOG_LPR
-           ,{ "lpr",      LOG_LPR }
-          #endif
-          #ifdef LOG_MAIL
-           ,{ "mail",     LOG_MAIL }
-          #endif
-          #ifdef LOG_NEWS
-           ,{ "news",     LOG_NEWS }
-          #endif
-           ,{ "security", LOG_AUTH }           /* DEPRECATED */
-          #ifdef LOG_SYSLOG
-           ,{ "syslog",   LOG_SYSLOG }
-          #endif
-          #ifdef LOG_USER
-           ,{ "user",     LOG_USER }
-          #endif
-          #ifdef LOG_UUCP
-           ,{ "uucp",     LOG_UUCP }
-          #endif
-           ,{ "local0",   LOG_LOCAL0 }
-           ,{ "local1",   LOG_LOCAL1 }
-           ,{ "local2",   LOG_LOCAL2 }
-           ,{ "local3",   LOG_LOCAL3 }
-           ,{ "local4",   LOG_LOCAL4 }
-           ,{ "local5",   LOG_LOCAL5 }
-           ,{ "local6",   LOG_LOCAL6 }
-           ,{ "local7",   LOG_LOCAL7 }
-        };
-        for (unsigned int i = 0; i < sizeof(facility_names)/sizeof(facility_names[0]); ++i) {
-            const struct facility_name_st *f = facility_names+i;
-            if (0 == strcmp(syslog_facility->ptr, f->name)) {
-                facility = f->val;
-                break;
-            }
-        }
-        if (-1 == facility) {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "unrecognized server.syslog-facility: \"%s\"; "
-              "defaulting to \"daemon\" facility",
-              syslog_facility->ptr);
-        }
-    }
-    openlog("lighttpd", LOG_CONS|LOG_PID, -1==facility ? LOG_DAEMON : facility);
-  #endif
-}
-
-static int log_error_open_fn(server *srv, log_error_st *errh, const char *fn) {
-    int fd = fdevent_open_logger(fn);
-    if (-1 == fd) {
-        log_perror(srv->errh, __FILE__, __LINE__,
-          "opening errorlog '%s' failed", fn);
-        return -1;
-    }
-    errh->errorlog_fd = fd;
-    errh->errorlog_mode = fn[0] == '|' ? ERRORLOG_PIPE : ERRORLOG_FILE;
-    errh->fn = fn;
-
-    return 0;
-}
-
-static int log_error_open_breakagelog(server *srv) {
-    log_error_st * const errh = srv->errh;
-    int errfd;
-    if (!buffer_string_is_empty(srv->srvconf.breakagelog_file)) {
-        const char *logfile = srv->srvconf.breakagelog_file->ptr;
-
-        if (errh->errorlog_mode == ERRORLOG_FD) {
-            errh->errorlog_fd = dup(STDERR_FILENO);
-            fdevent_setfd_cloexec(errh->errorlog_fd);
-        }
-
-        if (-1 == (errfd = fdevent_open_logger(logfile))) {
-            log_perror(srv->errh, __FILE__, __LINE__,
-              "opening errorlog '%s' failed", logfile);
-            return -1;
-        }
-
-        if (*logfile == '|') fdevent_breakagelog_logger_pipe(errfd);
-    }
-    else if (!srv->srvconf.dont_daemonize) {
-        /* move STDERR_FILENO to /dev/null */
-        if (-1 == (errfd = fdevent_open_devnull())) {
-            log_perror(srv->errh,__FILE__,__LINE__,"opening /dev/null failed");
-            return -1;
-        }
-    }
-    else {
-        /*(leave STDERR_FILENO as-is)*/
-        errfd = -1;
-    }
-
-    if (0 != fdevent_set_stdin_stdout_stderr(-1, -1, errfd)) {
-        log_perror(srv->errh, __FILE__, __LINE__, "setting stderr failed");
-      #ifdef FD_CLOEXEC
-        if (-1 != errfd) close(errfd);
-      #endif
-        return -1;
-    }
-  #ifdef FD_CLOEXEC
-    if (-1 != errfd) close(errfd);
-  #endif
-
-    return 0;
-}
-
-static int log_error_open(server *srv) {
-    if (srv->srvconf.errorlog_use_syslog) {
-        log_error_open_syslog(srv, srv->errh, srv->srvconf.syslog_facility);
-    }
-    else if (!buffer_string_is_empty(srv->srvconf.errorlog_file)) {
-        if (-1 == log_error_open_fn(srv, srv->errh,
-                                    srv->srvconf.errorlog_file->ptr))
-            return -1;
-    }
-    else if (srv->errh->errorlog_mode == ERRORLOG_FD
-             && !srv->srvconf.dont_daemonize) {
-        /* We can only log to stderr in dont-daemonize mode;
-         * if we do daemonize and no errorlog file is specified,
-         * we log into /dev/null
-         */
-        srv->errh->errorlog_fd = -1;
-    }
-
-    return log_error_open_breakagelog(srv);
-}
-
-/**
- * cycle the errorlog
- *
- */
-
-static void log_error_cycle(server *srv) {
-    /* cycle only if the error log is a file */
-
-    log_error_st * const errh = srv->errh;
-    if (errh->errorlog_mode == ERRORLOG_FILE) {
-        if (-1 == fdevent_cycle_logger(errh->fn, &errh->errorlog_fd)) {
-            /* write to old log */
-            log_perror(srv->errh, __FILE__, __LINE__,
-              "cycling errorlog '%s' failed", errh->fn);
-        }
-    }
-}
-
-__attribute_cold__
-static int log_error_close(server *srv) {
-    log_error_st *errh = srv->errh;
-    switch(errh->errorlog_mode) {
-    case ERRORLOG_PIPE:
-    case ERRORLOG_FILE:
-    case ERRORLOG_FD:
-        if (-1 != errh->errorlog_fd) {
-            /* don't close STDERR */
-            /* fdevent_close_logger_pipes() closes ERRORLOG_PIPE */
-            if (STDERR_FILENO != errh->errorlog_fd
-                && ERRORLOG_PIPE != errh->errorlog_mode) {
-                close(errh->errorlog_fd);
-            }
-            errh->errorlog_fd = -1;
-        }
-        break;
-    case ERRORLOG_SYSLOG:
-      #ifdef HAVE_SYSLOG_H
-        closelog();
-      #endif
-        break;
-    }
-
-    return 0;
 }
 
 __attribute_cold__
@@ -1350,7 +1135,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	/* Close stderr ASAP in the child process to make sure that nothing
 	 * is being written to that fd which may not be valid anymore. */
 	if (!srv->srvconf.preflight_check) {
-		if (-1 == log_error_open(srv)) {
+		if (-1 == config_log_error_open(srv)) {
 			log_error(srv->errh, __FILE__, __LINE__, "Opening errorlog failed. Going down.");
 			return -1;
 		}
@@ -1452,7 +1237,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 						if (handle_sig_hup) {
 							handle_sig_hup = 0;
 
-							log_error_cycle(srv);
+							config_log_error_cycle(srv);
 
 							/* forward SIGHUP to workers */
 							for (int n = 0; n < npids; ++n) {
@@ -1597,7 +1382,7 @@ static void server_handle_sighup (server * const srv) {
 
 			plugins_call_handle_sighup(srv);
 
-			log_error_cycle(srv);
+			config_log_error_cycle(srv);
 #ifdef HAVE_SIGACTION
 				log_error(srv->errh, __FILE__, __LINE__,
 				  "logfiles cycled UID = %d PID = %d",
@@ -1783,8 +1568,7 @@ int main (int argc, char **argv) {
 
         /* clean-up */
         remove_pid_file(srv);
-        log_error_close(srv);
-        fdevent_close_logger_pipes();
+        config_log_error_close(srv);
         if (graceful_restart)
             server_sockets_save(srv);
         else

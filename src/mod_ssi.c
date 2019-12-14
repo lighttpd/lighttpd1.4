@@ -786,7 +786,8 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 		args[3] = NULL;
 
 		/*(expects STDIN_FILENO open to /dev/null)*/
-		pid = fdevent_fork_execve(args[0], args, NULL, -1, c->file.fd, -1, -1);
+		int serrh_fd = con->conf.serrh ? con->conf.serrh->errorlog_fd : -1;
+		pid = fdevent_fork_execve(args[0], args, NULL, -1, c->file.fd, serrh_fd, -1);
 		if (-1 == pid) {
 			log_perror(errh, __FILE__, __LINE__, "spawning exec failed: %s", cmd);
 		} else {
