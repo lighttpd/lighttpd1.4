@@ -7,7 +7,7 @@
 struct fdevents;        /* declaration */
 typedef struct fdevents fdevents;
 
-typedef handler_t (*fdevent_handler)(struct server *srv, void *ctx, int revents);
+typedef handler_t (*fdevent_handler)(void *ctx, int revents);
 
 struct fdnode_st {
     fdevent_handler handler;

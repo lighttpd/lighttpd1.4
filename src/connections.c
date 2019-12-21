@@ -864,10 +864,10 @@ static int connection_handle_read_state(connection * const con)  {
     return 1;
 }
 
-static handler_t connection_handle_fdevent(server *srv, void *context, int revents) {
+static handler_t connection_handle_fdevent(void *context, int revents) {
 	connection *con = context;
 
-	joblist_append(srv, con);
+	joblist_append(con);
 
 	if (con->is_ssl_sock) {
 		/* ssl may read and write for both reads and writes */
@@ -922,7 +922,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 			}
 			if (sock_addr_get_family(&con->dst_addr) == AF_UNIX) {
 				/* future: will getpeername() on AF_UNIX properly check if still connected? */
-				fdevent_fdnode_event_set(srv->ev, con->fdn, events);
+				fdevent_fdnode_event_set(con->srv->ev, con->fdn, events);
 			} else if (fdevent_is_tcp_half_closed(con->fd)) {
 				/* Success of fdevent_is_tcp_half_closed() after FDEVENT_RDHUP indicates TCP FIN received,
 				 * but does not distinguish between client shutdown(fd, SHUT_WR) and client close(fd).
@@ -932,7 +932,7 @@ static handler_t connection_handle_fdevent(server *srv, void *context, int reven
 				 * (without FDEVENT_RDHUP interest) when checking for write timeouts
 				 * once a second in server.c, though getpeername() on Windows might not indicate this */
 				con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_TCP_FIN;
-				fdevent_fdnode_event_set(srv->ev, con->fdn, events);
+				fdevent_fdnode_event_set(con->srv->ev, con->fdn, events);
 			} else {
 				/* Failure of fdevent_is_tcp_half_closed() indicates TCP RST
 				 * (or unable to tell (unsupported OS), though should not

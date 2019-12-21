@@ -43,12 +43,11 @@ network_accept_tcp_nagle_disable (const int fd)
     (void)setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
 }
 
-static handler_t network_server_handle_fdevent(server *srv, void *context, int revents) {
-	server_socket *srv_socket = (server_socket *)context;
+static handler_t network_server_handle_fdevent(void *context, int revents) {
+	server_socket * const srv_socket = (server_socket *)context;
+	server * const srv = srv_socket->srv;
 	connection *con;
 	int loops;
-
-	UNUSED(context);
 
 	if (0 == (revents & FDEVENT_IN)) {
 		log_error(srv->errh, __FILE__, __LINE__,
@@ -266,6 +265,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	srv_socket->fd = -1;
 	srv_socket->sidx = sidx;
 	srv_socket->is_ssl = s->ssl_enabled;
+	srv_socket->srv = srv;
 	srv_socket->srv_token = buffer_init_buffer(host_token);
 
 	network_srv_sockets_append(srv, srv_socket);

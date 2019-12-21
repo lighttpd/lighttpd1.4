@@ -334,16 +334,16 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
     }
 }
 
-static handler_t stat_cache_handle_fdevent(server *srv, void *_fce, int revent)
+static handler_t stat_cache_handle_fdevent(void *ctx, int revent)
 {
 	stat_cache_fam * const scf = sc.scf;
-	UNUSED(_fce);
 
 	if (revent & FDEVENT_IN) {
 		stat_cache_handle_fdevent_in(scf);
 	}
 
 	if (revent & (FDEVENT_HUP|FDEVENT_RDHUP)) {
+		server *srv = ctx;
 		/* fam closed the connection */
 		log_error(srv->errh, __FILE__, __LINE__,
 		  "FAM connection closed; disabling stat_cache.");
@@ -378,7 +378,7 @@ static stat_cache_fam * stat_cache_init_fam(server *srv) {
 
 	scf->fd = FAMCONNECTION_GETFD(&scf->fam);
 	fdevent_setfd_cloexec(scf->fd);
-	scf->fdn = fdevent_register(srv->ev, scf->fd, stat_cache_handle_fdevent, NULL);
+	scf->fdn = fdevent_register(srv->ev, scf->fd, stat_cache_handle_fdevent, srv);
 	fdevent_fdnode_event_set(srv->ev, scf->fdn, FDEVENT_IN | FDEVENT_RDHUP);
 
 	return scf;

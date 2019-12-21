@@ -86,12 +86,11 @@ static int fdevent_poll_next_ndx(const fdevents *ev, int ndx) {
 
 static int fdevent_poll_poll(fdevents *ev, int timeout_ms) {
     const int n = poll(ev->pollfds, ev->used, timeout_ms);
-    server * const srv = ev->srv;
     for (int ndx=-1,i=0; i<n && -1!=(ndx=fdevent_poll_next_ndx(ev,ndx)); ++i){
         fdnode *fdn = ev->fdarray[ev->pollfds[ndx].fd];
         int revents = ev->pollfds[ndx].revents;
         if (0 == ((uintptr_t)fdn & 0x3)) {
-            (*fdn->handler)(srv, fdn->ctx, revents);
+            (*fdn->handler)(fdn->ctx, revents);
         }
     }
     return n;

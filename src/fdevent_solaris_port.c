@@ -67,7 +67,7 @@ static int fdevent_solaris_port_poll(fdevents *ev, int timeout_ms) {
                 log_error(ev->srv->errh, __FILE__, __LINE__,
                   "port_associate failed");
             }
-            (*fdn->handler)(ev->srv, fdn->ctx, revents);
+            (*fdn->handler)(fdn->ctx, revents);
         }
         else {
             fdn->fde_ndx = -1;

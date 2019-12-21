@@ -90,7 +90,7 @@ static int fdevent_select_poll(fdevents *ev, int timeout_ms) {
         fdn = ev->fdarray[ndx];
         if (0 == ((uintptr_t)fdn & 0x3)) {
             int revents = fdevent_select_event_get_revent(ev, ndx);
-            (*fdn->handler)(ev->srv, fdn->ctx, revents);
+            (*fdn->handler)(fdn->ctx, revents);
         }
     }
     return n;

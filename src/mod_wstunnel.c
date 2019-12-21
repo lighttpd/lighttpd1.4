@@ -606,7 +606,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
             DEBUG_LOG_INFO("timeout client (fd=%d)", con->fd);
             mod_wstunnel_frame_send(hctx,MOD_WEBSOCKET_FRAME_TYPE_CLOSE,NULL,0);
             gw_connection_reset(con, p_d);
-            joblist_append(srv, con);
+            joblist_append(con);
             /* avoid server.c closing connection with error due to max_read_idle
              * (might instead run joblist after plugins_call_handle_trigger())*/
             con->read_idle_ts = cur_ts;
@@ -618,7 +618,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
             && (time_t)hctx->conf.ping_interval + hctx->ping_ts < cur_ts) {
             hctx->ping_ts = cur_ts;
             mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_PING, CONST_STR_LEN("ping"));
-            joblist_append(srv, con);
+            joblist_append(con);
             continue;
         }
     }

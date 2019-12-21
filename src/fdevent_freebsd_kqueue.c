@@ -71,7 +71,6 @@ static int fdevent_freebsd_kqueue_event_set(fdevents *ev, fdnode *fdn, int event
 }
 
 static int fdevent_freebsd_kqueue_poll(fdevents * const ev, int timeout_ms) {
-    server * const srv = ev->srv;
     struct timespec ts;
     int n;
 
@@ -90,7 +89,7 @@ static int fdevent_freebsd_kqueue_poll(fdevents * const ev, int timeout_ms) {
                 revents |= (filt == EVFILT_READ ? FDEVENT_RDHUP : FDEVENT_HUP);
             if (e & EV_ERROR)
                 revents |= FDEVENT_ERR;
-            (*fdn->handler)(srv, fdn->ctx, revents);
+            (*fdn->handler)(fdn->ctx, revents);
         }
     }
     return n;

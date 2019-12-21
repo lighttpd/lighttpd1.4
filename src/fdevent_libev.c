@@ -21,7 +21,7 @@ static void io_watcher_cb(struct ev_loop *loop, ev_io *w, int revents) {
 	if (revents & EV_ERROR) rv |= FDEVENT_ERR;
 
 	if (0 == ((uintptr_t)fdn & 0x3)) {
-		(*fdn->handler)(ev->srv, fdn->ctx, rv);
+		(*fdn->handler)(fdn->ctx, rv);
 	}
 }
 

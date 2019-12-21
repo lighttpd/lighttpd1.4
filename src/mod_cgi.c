@@ -351,12 +351,12 @@ static handler_t cgi_connection_close_callback(connection *con, void *p_d) {
 static int cgi_write_request(handler_ctx *hctx, int fd);
 
 
-static handler_t cgi_handle_fdevent_send (server *srv, void *ctx, int revents) {
+static handler_t cgi_handle_fdevent_send (void *ctx, int revents) {
 	handler_ctx *hctx = ctx;
 	connection  *con  = hctx->remote_conn;
 
 	/*(joblist only actually necessary here in mod_cgi fdevent send if returning HANDLER_ERROR)*/
-	joblist_append(srv, con);
+	joblist_append(con);
 
 	if (revents & FDEVENT_OUT) {
 		if (0 != cgi_write_request(hctx, hctx->fdtocgi)) {
@@ -445,11 +445,11 @@ static int cgi_recv_response(connection *con, handler_ctx *hctx) {
 }
 
 
-static handler_t cgi_handle_fdevent(server *srv, void *ctx, int revents) {
+static handler_t cgi_handle_fdevent(void *ctx, int revents) {
 	handler_ctx *hctx = ctx;
 	connection  *con  = hctx->remote_conn;
 
-	joblist_append(srv, con);
+	joblist_append(con);
 
 	if (revents & FDEVENT_IN) {
 		handler_t rc = cgi_recv_response(con, hctx);/*(might invalidate hctx)*/

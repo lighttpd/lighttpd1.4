@@ -43,7 +43,6 @@ static int fdevent_solaris_devpoll_event_set(fdevents *ev, fdnode *fdn, int even
 
 static int fdevent_solaris_devpoll_poll(fdevents *ev, int timeout_ms) {
     int n;
-    server * const srv = ev->srv;
     struct dvpoll dopoll;
 
     dopoll.dp_timeout = timeout_ms;
@@ -56,7 +55,7 @@ static int fdevent_solaris_devpoll_poll(fdevents *ev, int timeout_ms) {
         fdnode * const fdn = ev->fdarray[ev->devpollfds[i].fd];
         int revents = ev->devpollfds[i].revents;
         if (0 == ((uintptr_t)fdn & 0x3)) {
-            (*fdn->handler)(srv, fdn->ctx, revents);
+            (*fdn->handler)(fdn->ctx, revents);
         }
     }
     return n;

@@ -300,6 +300,7 @@ typedef struct server_socket {
 	unsigned short sidx;
 
 	fdnode *fdn;
+	server *srv;
 	buffer *srv_token;
 } server_socket;
 

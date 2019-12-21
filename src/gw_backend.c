@@ -1047,7 +1047,7 @@ static void gw_restart_dead_procs(gw_host * const host, log_error_st * const err
 
 
 /* ok, we need a prototype */
-static handler_t gw_handle_fdevent(server *srv, void *ctx, int revents);
+static handler_t gw_handle_fdevent(void *ctx, int revents);
 
 
 static gw_handler_ctx * handler_ctx_init(size_t sz) {
@@ -2227,11 +2227,11 @@ static handler_t gw_recv_response(gw_handler_ctx *hctx, connection *con) {
 }
 
 
-static handler_t gw_handle_fdevent(server *srv, void *ctx, int revents) {
+static handler_t gw_handle_fdevent(void *ctx, int revents) {
     gw_handler_ctx *hctx = ctx;
     connection *con = hctx->remote_conn;
 
-    joblist_append(srv, con);
+    joblist_append(con);
 
     if (revents & FDEVENT_IN) {
         handler_t rc = gw_recv_response(hctx, con); /*(might invalidate hctx)*/
