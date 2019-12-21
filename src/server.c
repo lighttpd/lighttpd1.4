@@ -378,7 +378,7 @@ static int server_oneshot_init(server *srv, int fd) {
 	}
 
 	/*(must set flags; fd did not pass through fdevent accept() logic)*/
-	if (-1 == fdevent_fcntl_set_nb_cloexec(srv->ev, fd)) {
+	if (-1 == fdevent_fcntl_set_nb_cloexec(fd)) {
 		log_perror(srv->errh, __FILE__, __LINE__, "fcntl()");
 		return 0;
 	}
@@ -550,7 +550,7 @@ static int server_sockets_set_nb_cloexec (server *srv) {
     if (srv->sockets_disabled) return 0; /* lighttpd -1 (one-shot mode) */
     for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
         server_socket *srv_socket = srv->srv_sockets.ptr[i];
-        if (-1 == fdevent_fcntl_set_nb_cloexec_sock(srv->ev, srv_socket->fd)) {
+        if (-1 == fdevent_fcntl_set_nb_cloexec_sock(srv_socket->fd)) {
             log_perror(srv->errh, __FILE__, __LINE__, "fcntl()");
             return -1;
         }

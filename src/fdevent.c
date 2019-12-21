@@ -466,8 +466,7 @@ void fdevent_clrfd_cloexec(int fd) {
 #endif
 }
 
-int fdevent_fcntl_set_nb(fdevents *ev, int fd) {
-	UNUSED(ev);
+int fdevent_fcntl_set_nb(int fd) {
 #ifdef O_NONBLOCK
 	return fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
 #else
@@ -476,17 +475,17 @@ int fdevent_fcntl_set_nb(fdevents *ev, int fd) {
 #endif
 }
 
-int fdevent_fcntl_set_nb_cloexec(fdevents *ev, int fd) {
+int fdevent_fcntl_set_nb_cloexec(int fd) {
 	fdevent_setfd_cloexec(fd);
-	return fdevent_fcntl_set_nb(ev, fd);
+	return fdevent_fcntl_set_nb(fd);
 }
 
-int fdevent_fcntl_set_nb_cloexec_sock(fdevents *ev, int fd) {
+int fdevent_fcntl_set_nb_cloexec_sock(int fd) {
 #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
 	if (use_sock_cloexec && use_sock_nonblock)
 		return 0;
 #endif
-	return fdevent_fcntl_set_nb_cloexec(ev, fd);
+	return fdevent_fcntl_set_nb_cloexec(fd);
 }
 
 int fdevent_socket_cloexec(int domain, int type, int protocol) {
@@ -632,7 +631,7 @@ int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen
 		fd = accept4(listenfd, addr, &len, SOCK_CLOEXEC | SOCK_NONBLOCK);
 		if (fd >= 0) {
 			if (!use_sock_nonblock) {
-				if (0 != fdevent_fcntl_set_nb(NULL, fd)) {
+				if (0 != fdevent_fcntl_set_nb(fd)) {
 					close(fd);
 					fd = -1;
 				}
@@ -662,7 +661,7 @@ int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen
 
 	if (fd >= 0) {
 		*addrlen = (size_t)len;
-		if (!sock_cloexec && 0 != fdevent_fcntl_set_nb_cloexec(NULL, fd)) {
+		if (!sock_cloexec && 0 != fdevent_fcntl_set_nb_cloexec(fd)) {
 			close(fd);
 			fd = -1;
 		}
@@ -944,7 +943,7 @@ static int fdevent_open_logger_pipe(const char *logger) {
     fdevent_setfd_cloexec(fds[0]);
     fdevent_setfd_cloexec(fds[1]);
     /*(nonblocking write() from lighttpd)*/
-    if (0 != fdevent_fcntl_set_nb(NULL, fds[1])) { /*(ignore)*/ }
+    if (0 != fdevent_fcntl_set_nb(fds[1])) { /*(ignore)*/ }
 
     pid = fdevent_open_logger_pipe_spawn(logger, fds[0]);
 

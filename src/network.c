@@ -287,7 +287,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 
 	if (-1 != stdin_fd) {
 		srv_socket->fd = stdin_fd;
-		if (-1 == fdevent_fcntl_set_nb_cloexec(srv->ev, stdin_fd)) {
+		if (-1 == fdevent_fcntl_set_nb_cloexec(stdin_fd)) {
 			log_perror(srv->errh, __FILE__, __LINE__, "fcntl");
 			return -1;
 		}
@@ -319,7 +319,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 			return -1;
 		}
 
-		if (-1 == fdevent_fcntl_set_nb(srv->ev, srv_socket->fd)) {
+		if (-1 == fdevent_fcntl_set_nb(srv_socket->fd)) {
 			log_perror(srv->errh, __FILE__, __LINE__, "fcntl");
 			return -1;
 		}

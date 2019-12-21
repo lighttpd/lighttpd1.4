@@ -842,13 +842,12 @@ static int cgi_create_env(connection *con, plugin_data *p, handler_ctx *hctx, bu
 		cgi_pid_add(p, hctx->pid, hctx);
 
 		++con->srv->cur_fds;
-		struct fdevents * const ev = con->srv->ev;
 
 		if (0 == con->request.content_length) {
 			close(to_cgi_fds[1]);
 		} else {
 			/* there is content to send */
-			if (-1 == fdevent_fcntl_set_nb(ev, to_cgi_fds[1])) {
+			if (-1 == fdevent_fcntl_set_nb(to_cgi_fds[1])) {
 				log_perror(con->conf.errh, __FILE__, __LINE__, "fcntl failed");
 				close(to_cgi_fds[1]);
 				cgi_connection_close(con, hctx);
@@ -864,8 +863,9 @@ static int cgi_create_env(connection *con, plugin_data *p, handler_ctx *hctx, bu
 			++con->srv->cur_fds;
 		}
 
+		struct fdevents * const ev = con->srv->ev;
 		hctx->fdn = fdevent_register(ev, hctx->fd, cgi_handle_fdevent, hctx);
-		if (-1 == fdevent_fcntl_set_nb(ev, hctx->fd)) {
+		if (-1 == fdevent_fcntl_set_nb(hctx->fd)) {
 			log_perror(con->conf.errh, __FILE__, __LINE__, "fcntl failed");
 			cgi_connection_close(con, hctx);
 			return -1;
