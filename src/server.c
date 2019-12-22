@@ -640,7 +640,7 @@ static void server_sockets_disable (server *srv) {
 __attribute_cold__
 static void server_overload_check (server *srv) {
     if (srv->cur_fds + (int)srv->fdwaitqueue.used < srv->max_fds_lowat
-        && srv->conns.used <= srv->max_conns * 9 / 10) {
+        && srv->conns.used < srv->max_conns) {
 
         server_sockets_enable(srv);
     }
@@ -648,11 +648,8 @@ static void server_overload_check (server *srv) {
 
 static void server_load_check (server *srv) {
     /* check if hit limits for num fds used or num connections */
-    if (srv->cur_fds + (int)srv->fdwaitqueue.used > srv->max_fds_hiwat
-        || srv->conns.used >= srv->max_conns) {
-
+    if (srv->cur_fds > srv->max_fds_hiwat || srv->conns.used >= srv->max_conns)
         server_sockets_disable(srv);
-    }
 }
 
 __attribute_cold__
