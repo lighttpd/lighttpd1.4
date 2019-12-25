@@ -2,7 +2,6 @@
 
 #include "fdevent_impl.h"
 #include "fdevent.h"
-#include "base.h"
 #include "buffer.h"
 #include "log.h"
 
@@ -24,7 +23,7 @@ static int use_sock_cloexec;
 static int use_sock_nonblock;
 #endif
 
-int fdevent_config(server *srv) {
+int fdevent_config(const char **event_handler_name, log_error_st *errh) {
 	static const struct ev_map { fdevent_handler_t et; const char *name; } event_handlers[] =
 	{
 		/* - epoll is most reliable
@@ -56,57 +55,45 @@ int fdevent_config(server *srv) {
 		{ FDEVENT_HANDLER_UNSET,          NULL }
 	};
 
-	if (NULL == srv->srvconf.event_handler) {
+	const char * event_handler = *event_handler_name;
+	fdevent_handler_t et = FDEVENT_HANDLER_UNSET;
+
+	if (NULL == event_handler) {
 		/* choose a good default
 		 *
 		 * the event_handler list is sorted by 'goodness'
 		 * taking the first available should be the best solution
 		 */
-		srv->event_handler = event_handlers[0].et;
+		et = event_handlers[0].et;
+		*event_handler_name = event_handlers[0].name;
 
-		if (FDEVENT_HANDLER_UNSET == srv->event_handler) {
-			log_error(srv->errh, __FILE__, __LINE__,
+		if (FDEVENT_HANDLER_UNSET == et) {
+			log_error(errh, __FILE__, __LINE__,
 			  "sorry, there is no event handler for this system");
 
 			return -1;
 		}
-
-		srv->srvconf.event_handler = event_handlers[0].name;
 	} else {
 		/*
 		 * User override
 		 */
 
 		for (uint32_t i = 0; event_handlers[i].name; ++i) {
-			if (0 == strcmp(event_handlers[i].name, srv->srvconf.event_handler)) {
-				srv->event_handler = event_handlers[i].et;
+			if (0 == strcmp(event_handlers[i].name, event_handler)) {
+				et = event_handlers[i].et;
 				break;
 			}
 		}
 
-		if (FDEVENT_HANDLER_UNSET == srv->event_handler) {
-			log_error(srv->errh, __FILE__, __LINE__,
+		if (FDEVENT_HANDLER_UNSET == et) {
+			log_error(errh, __FILE__, __LINE__,
 			  "the selected event-handler in unknown or not supported: %s",
-			  srv->srvconf.event_handler);
+			  event_handler);
 			return -1;
 		}
 	}
 
-      #ifdef FDEVENT_USE_SELECT
-	if (srv->event_handler == FDEVENT_HANDLER_SELECT) {
-		/* select limits itself
-		 *
-		 * as it is a hard limit and will lead to a segfault we add some safety
-		 * */
-		srv->max_fds = FD_SETSIZE - 200;
-	}
-	else
-      #endif
-	{
-		srv->max_fds = 4096;
-	}
-
-	return 0;
+	return et;
 }
 
 const char * fdevent_show_event_handlers(void) {
@@ -150,10 +137,13 @@ const char * fdevent_show_event_handlers(void) {
       ;
 }
 
-fdevents *fdevent_init(server *srv) {
+fdevents * fdevent_init(const char *event_handler, int *max_fds, int *cur_fds, log_error_st *errh) {
 	fdevents *ev;
-	int type = srv->event_handler;
-	uint32_t maxfds;
+	uint32_t maxfds = (0 != *max_fds)
+	  ? (uint32_t)*max_fds
+	  : 4096;
+	int type = fdevent_config(&event_handler, errh);
+	if (type <= 0) return NULL;
 
       #ifdef SOCK_CLOEXEC
 	/* Test if SOCK_CLOEXEC is supported by kernel.
@@ -180,20 +170,25 @@ fdevents *fdevent_init(server *srv) {
       #endif
 
       #ifdef FDEVENT_USE_SELECT
+	/* select limits itself
+	 * as it is a hard limit and will lead to a segfault we add some safety
+	 * */
 	if (type == FDEVENT_HANDLER_SELECT) {
-		if (srv->max_fds > (int)FD_SETSIZE - 200) {
-			srv->max_fds = (int)FD_SETSIZE - 200;
-		}
+		if (maxfds > (uint32_t)FD_SETSIZE - 200)
+		    maxfds = (uint32_t)FD_SETSIZE - 200;
 	}
       #endif
-	maxfds = srv->max_fds + 1; /*(+1 for event-handler fd)*/
+	*max_fds = (int)maxfds;
+	++maxfds; /*(+1 for event-handler fd)*/
 
 	ev = calloc(1, sizeof(*ev));
 	force_assert(NULL != ev);
-	ev->srv = srv;
+	ev->errh = errh;
+	ev->cur_fds = cur_fds;
+	ev->event_handler = event_handler;
 	ev->fdarray = calloc(maxfds, sizeof(*ev->fdarray));
 	if (NULL == ev->fdarray) {
-		log_error(srv->errh, __FILE__, __LINE__,
+		log_error(ev->errh, __FILE__, __LINE__,
 		  "server.max-fds too large? (%u)", maxfds-1);
 		free(ev);
 		return NULL;
@@ -244,10 +239,10 @@ fdevents *fdevent_init(server *srv) {
 	free(ev->fdarray);
 	free(ev);
 
-	log_error(srv->errh, __FILE__, __LINE__,
+	log_error(errh, __FILE__, __LINE__,
 	  "event-handler failed: %s; "
 	  "try to set server.event-handler = \"poll\" or \"select\"",
-	  srv->srvconf.event_handler);
+	  event_handler);
 	return NULL;
 }
 
@@ -270,11 +265,10 @@ void fdevent_free(fdevents *ev) {
 int fdevent_reset(fdevents *ev) {
 	int rc = (NULL != ev->reset) ? ev->reset(ev) : 0;
 	if (-1 == rc) {
-		const char *event_handler = ev->srv->srvconf.event_handler;
-		log_error(ev->srv->errh, __FILE__, __LINE__,
+		log_error(ev->errh, __FILE__, __LINE__,
 		  "event-handler failed: %s; "
 		  "try to set server.event-handler = \"poll\" or \"select\"",
-		  event_handler ? event_handler : "");
+		  ev->event_handler ? ev->event_handler : "");
 	}
 	return rc;
 }
@@ -318,7 +312,6 @@ void fdevent_sched_close(fdevents *ev, int fd, int issock) {
 }
 
 static void fdevent_sched_run(fdevents *ev) {
-	server *srv = ev->srv;
 	for (fdnode *fdn = ev->pendclose; fdn; ) {
 		int fd, rc;
 		fdnode *fdn_tmp;
@@ -339,10 +332,10 @@ static void fdevent_sched_run(fdevents *ev) {
 	      #endif
 
 		if (0 != rc) {
-			log_perror(srv->errh, __FILE__, __LINE__, "close failed %d", fd);
+			log_perror(ev->errh, __FILE__, __LINE__, "close failed %d", fd);
 		}
 		else {
-			--srv->cur_fds;
+			--(*ev->cur_fds);
 		}
 
 		fdn_tmp = fdn;
@@ -371,7 +364,7 @@ static int fdevent_fdnode_event_unsetter_retry(fdevents *ev, fdnode *fdn) {
           /*case ENOMEM:*/
           default:
             /* unrecoverable error; might leak fd */
-            log_perror(ev->srv->errh, __FILE__, __LINE__,
+            log_perror(ev->errh, __FILE__, __LINE__,
               "fdevent event_del failed on fd %d", fdn->fd);
             return 0;
         }
@@ -404,7 +397,7 @@ static int fdevent_fdnode_event_setter_retry(fdevents *ev, fdnode *fdn, int even
           /*case ENOMEM:*/
           default:
             /* unrecoverable error */
-            log_perror(ev->srv->errh, __FILE__, __LINE__,
+            log_perror(ev->errh, __FILE__, __LINE__,
               "fdevent event_set failed on fd %d", fdn->fd);
             return 0;
         }
@@ -445,7 +438,7 @@ int fdevent_poll(fdevents *ev, int timeout_ms) {
     if (n >= 0)
         fdevent_sched_run(ev);
     else if (errno != EINTR)
-        log_perror(ev->srv->errh, __FILE__, __LINE__, "fdevent_poll failed");
+        log_perror(ev->errh, __FILE__, __LINE__, "fdevent_poll failed");
     return n;
 }
 

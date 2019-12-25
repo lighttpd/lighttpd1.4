@@ -935,10 +935,11 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			}
 		}
 
-			srv->max_fds = rlim.rlim_cur;
-			/*(default upper limit of 4k if server.max-fds not specified)*/
-			if (i_am_root && 0 == srv->srvconf.max_fds && rlim.rlim_cur > 4096)
-				srv->max_fds = 4096;
+		/*(default upper limit of 4k if server.max-fds not specified)*/
+		if (0 == srv->srvconf.max_fds)
+			srv->srvconf.max_fds = (rlim.rlim_cur <= 4096)
+			  ? (unsigned short)rlim.rlim_cur
+			  : 4096;
 
 		/* set core file rlimit, if enable_cores is set */
 		if (use_rlimit && srv->srvconf.enable_cores && getrlimit(RLIMIT_CORE, &rlim) == 0) {
@@ -1044,21 +1045,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
 		}
 #endif
-	}
-
-	/* set max-conns */
-	if (srv->srvconf.max_conns > srv->max_fds/2) {
-		/* we can't have more connections than max-fds/2 */
-		log_error(srv->errh, __FILE__, __LINE__,
-		  "can't have more connections than fds/2: %hu %d",
-		  srv->srvconf.max_conns, srv->max_fds);
-		srv->max_conns = srv->max_fds/2;
-	} else if (srv->srvconf.max_conns) {
-		/* otherwise respect the wishes of the user */
-		srv->max_conns = srv->srvconf.max_conns;
-	} else {
-		/* or use the default: we really don't want to hit max-fds */
-		srv->max_conns = srv->max_fds/3;
 	}
 
 #ifdef HAVE_FORK
@@ -1301,13 +1287,30 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 #endif
 
-	if (NULL == (srv->ev = fdevent_init(srv))) {
+	srv->max_fds = (int)srv->srvconf.max_fds;
+	srv->ev = fdevent_init(srv->srvconf.event_handler, &srv->max_fds, &srv->cur_fds, srv->errh);
+	if (NULL == srv->ev) {
 		log_error(srv->errh, __FILE__, __LINE__, "fdevent_init failed");
 		return -1;
 	}
 
 	srv->max_fds_lowat = srv->max_fds * 8 / 10;
 	srv->max_fds_hiwat = srv->max_fds * 9 / 10;
+
+	/* set max-conns */
+	if (srv->srvconf.max_conns > srv->max_fds/2) {
+		/* we can't have more connections than max-fds/2 */
+		log_error(srv->errh, __FILE__, __LINE__,
+		  "can't have more connections than fds/2: %hu %d",
+		  srv->srvconf.max_conns, srv->max_fds);
+		srv->max_conns = srv->max_fds/2;
+	} else if (srv->srvconf.max_conns) {
+		/* otherwise respect the wishes of the user */
+		srv->max_conns = srv->srvconf.max_conns;
+	} else {
+		/* or use the default: we really don't want to hit max-fds */
+		srv->max_conns = srv->max_fds/3;
+	}
 
 	/* libev backend overwrites our SIGCHLD handler and calls waitpid on SIGCHLD; we want our own SIGCHLD handling. */
 #ifdef HAVE_SIGACTION

@@ -2064,7 +2064,8 @@ int config_set_defaults(server *srv) {
 	specific_config *s = &((config_data_base *)srv->config_data_base)->defaults;
 	struct stat st1, st2;
 
-	if (0 != fdevent_config(srv)) return -1;
+	if (fdevent_config(&srv->srvconf.event_handler, srv->errh) <= 0)
+		return -1;
 
 	if (!buffer_string_is_empty(srv->srvconf.changeroot)) {
 		if (-1 == stat(srv->srvconf.changeroot->ptr, &st1)) {

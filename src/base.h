@@ -355,7 +355,6 @@ struct server {
 	server_socket_array srv_sockets_inherited;
 	buffer_plugin plugins;
 
-	int event_handler;
 	time_t startup_ts;
 
 	uid_t uid;

@@ -82,7 +82,8 @@ struct fdevents {
     int (*event_del)(struct fdevents *ev, fdnode *fdn);
     int (*poll)(struct fdevents *ev, int timeout_ms);
 
-    struct server *srv;
+    log_error_st *errh;
+    int *cur_fds;
     uint32_t maxfds;
   #ifdef FDEVENT_USE_LINUX_EPOLL
     int epoll_fd;
@@ -125,6 +126,7 @@ struct fdevents {
 
     int (*reset)(struct fdevents *ev);
     void (*free)(struct fdevents *ev);
+    const char *event_handler;
     fdevent_handler_t type;
 };
 

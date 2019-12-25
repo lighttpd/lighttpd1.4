@@ -2,8 +2,9 @@
 #define _FDEVENT_H_
 #include "first.h"
 
-#include "base_decls.h"
+#include "base_decls.h" /* handler_t */
 
+struct log_error_st;    /* declaration */
 struct fdevents;        /* declaration */
 typedef struct fdevents fdevents;
 
@@ -46,13 +47,13 @@ struct fdnode_st {
 #define FDEVENT_STREAM_RESPONSE_POLLRDHUP BV(15)
 
 __attribute_cold__
-int fdevent_config(server *srv);
+int fdevent_config(const char **event_handler_name, struct log_error_st *errh);
 
 __attribute_cold__
 const char * fdevent_show_event_handlers(void);
 
 __attribute_cold__
-fdevents *fdevent_init(struct server *srv);
+fdevents * fdevent_init(const char *event_handler, int *max_fds, int *cur_fds, struct log_error_st *errh);
 
 __attribute_cold__
 int fdevent_reset(fdevents *ev); /* "init" after fork() */
