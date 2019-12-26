@@ -1,7 +1,6 @@
 #include "first.h"
 
 #include "rand.h"
-#include "base.h"
 #include "fdevent.h"
 #include "safe_memclear.h"
 

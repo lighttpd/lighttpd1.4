@@ -5,7 +5,6 @@
 
 #include "first.h"
 
-#include "base.h"
 #include "log.h"
 
 #include <sys/types.h>

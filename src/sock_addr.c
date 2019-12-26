@@ -11,7 +11,6 @@
 #include <arpa/inet.h>
 #endif
 
-#include "base.h"
 #include "log.h"
 
 
