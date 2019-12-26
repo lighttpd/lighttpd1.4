@@ -693,7 +693,7 @@ static int config_insert_srvconf(server *srv) {
               case 27:/* server.reject-expect-100-with-417 *//*(ignored)*/
                 break;
               case 28:/* server.stat-cache-engine */
-                if (0 != stat_cache_choose_engine(srv, cpv->v.b))
+                if (0 != stat_cache_choose_engine(cpv->v.b, srv->errh))
                     rc = HANDLER_ERROR;
                 break;
               case 29:/* mimetype.xattr-name */

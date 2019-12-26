@@ -23,10 +23,12 @@ typedef struct {
 } stat_cache_entry;
 
 __attribute_cold__
-int stat_cache_choose_engine (server *srv, const buffer *stat_cache_string);
+int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *errh);
+
+struct fdevents;        /* declaration */
 
 __attribute_cold__
-int stat_cache_init(server *srv);
+int stat_cache_init(struct fdevents *ev, log_error_st *errh);
 
 __attribute_cold__
 void stat_cache_free(void);

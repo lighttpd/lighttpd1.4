@@ -1,7 +1,6 @@
 #include "first.h"
 
 #include "stat_cache.h"
-#include "base.h"
 #include "log.h"
 #include "fdevent.h"
 #include "etag.h"
@@ -49,7 +48,6 @@ typedef struct stat_cache {
 	int stat_cache_engine;
 	splay_tree *files; /* nodes of tree are (stat_cache_entry *) */
 	struct stat_cache_fam *scf;
-	log_error_st *errh;
 } stat_cache;
 
 static stat_cache sc;
@@ -157,6 +155,8 @@ typedef struct fam_dir_entry {
 typedef struct stat_cache_fam {
 	splay_tree *dirs; /* the nodes of the tree are fam_dir_entry */
 	FAMConnection fam;
+	log_error_st *errh;
+	fdevents *ev;
 	fdnode *fdn;
 	int fd;
 } stat_cache_fam;
@@ -336,22 +336,21 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
 
 static handler_t stat_cache_handle_fdevent(void *ctx, int revent)
 {
-	stat_cache_fam * const scf = sc.scf;
+	stat_cache_fam * const scf = ctx; /* sc.scf */
 
 	if (revent & FDEVENT_IN) {
 		stat_cache_handle_fdevent_in(scf);
 	}
 
 	if (revent & (FDEVENT_HUP|FDEVENT_RDHUP)) {
-		server *srv = ctx;
 		/* fam closed the connection */
-		log_error(srv->errh, __FILE__, __LINE__,
+		log_error(scf->errh, __FILE__, __LINE__,
 		  "FAM connection closed; disabling stat_cache.");
 		/* (although effectively STAT_CACHE_ENGINE_NONE,
 		 *  do not change here so that periodic jobs clean up memory)*/
 		/*sc.stat_cache_engine = STAT_CACHE_ENGINE_NONE; */
-		fdevent_fdnode_event_del(srv->ev, scf->fdn);
-		fdevent_unregister(srv->ev, scf->fd);
+		fdevent_fdnode_event_del(scf->ev, scf->fdn);
+		fdevent_unregister(scf->ev, scf->fd);
 		scf->fdn = NULL;
 
 		FAMClose(&scf->fam);
@@ -361,14 +360,16 @@ static handler_t stat_cache_handle_fdevent(void *ctx, int revent)
 	return HANDLER_GO_ON;
 }
 
-static stat_cache_fam * stat_cache_init_fam(server *srv) {
+static stat_cache_fam * stat_cache_init_fam(fdevents *ev, log_error_st *errh) {
 	stat_cache_fam *scf = calloc(1, sizeof(*scf));
 	force_assert(scf);
 	scf->fd = -1;
+	scf->ev = ev;
+	scf->errh = errh;
 
 	/* setup FAM */
 	if (0 != FAMOpen2(&scf->fam, "lighttpd")) {
-		log_error(srv->errh, __FILE__, __LINE__,
+		log_error(errh, __FILE__, __LINE__,
 		  "could not open a fam connection, dieing.");
 		return NULL;
 	}
@@ -378,8 +379,8 @@ static stat_cache_fam * stat_cache_init_fam(server *srv) {
 
 	scf->fd = FAMCONNECTION_GETFD(&scf->fam);
 	fdevent_setfd_cloexec(scf->fd);
-	scf->fdn = fdevent_register(srv->ev, scf->fd, stat_cache_handle_fdevent, srv);
-	fdevent_fdnode_event_set(srv->ev, scf->fdn, FDEVENT_IN | FDEVENT_RDHUP);
+	scf->fdn = fdevent_register(scf->ev, scf->fd, stat_cache_handle_fdevent, scf);
+	fdevent_fdnode_event_set(scf->ev, scf->fdn, FDEVENT_IN | FDEVENT_RDHUP);
 
 	return scf;
 }
@@ -485,7 +486,7 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, size_t dir
 
         if (0 != FAMMonitorDirectory(&scf->fam,fam_dir->name->ptr,&fam_dir->req,
                                      (void *)(intptr_t)dir_ndx)) {
-            log_error(sc.errh, __FILE__, __LINE__,
+            log_error(scf->errh, __FILE__, __LINE__,
               "monitoring dir failed: %s file: %s %s",
               fam_dir->name->ptr, fn, FamErrlist[FAMErrno]);
             fam_dir_entry_free(fam_dir);
@@ -573,13 +574,15 @@ static int stat_cache_attr_get(char *name) {
 
 #endif
 
-int stat_cache_init(server *srv) {
+int stat_cache_init(fdevents *ev, log_error_st *errh) {
   #ifdef HAVE_FAM_H
     if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
-        sc.errh = srv->errh;
-        sc.scf = stat_cache_init_fam(srv);
+        sc.scf = stat_cache_init_fam(ev, errh);
         if (NULL == sc.scf) return 0;
     }
+  #else
+    UNUSED(ev);
+    UNUSED(errh);
   #endif
 
     return 1;
@@ -596,7 +599,6 @@ void stat_cache_free(void) {
   #ifdef HAVE_FAM_H
     stat_cache_free_fam(sc.scf);
     sc.scf = NULL;
-    sc.errh = NULL;
   #endif
 
   #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
@@ -614,7 +616,7 @@ void stat_cache_xattrname (const char *name) {
   #endif
 }
 
-int stat_cache_choose_engine (server *srv, const buffer *stat_cache_string) {
+int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *errh) {
     if (buffer_string_is_empty(stat_cache_string))
         sc.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("simple")))
@@ -626,7 +628,7 @@ int stat_cache_choose_engine (server *srv, const buffer *stat_cache_string) {
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("disable")))
         sc.stat_cache_engine = STAT_CACHE_ENGINE_NONE;
     else {
-        log_error(srv->errh, __FILE__, __LINE__,
+        log_error(errh, __FILE__, __LINE__,
           "server.stat-cache-engine can be one of \"disable\", \"simple\","
 #ifdef HAVE_FAM_H
           " \"fam\","

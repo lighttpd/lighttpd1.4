@@ -1329,7 +1329,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 
 	/* might fail if user is using fam (not gamin) and famd isn't running */
-	if (!stat_cache_init(srv)) {
+	if (!stat_cache_init(srv->ev, srv->errh)) {
 		log_error(srv->errh, __FILE__, __LINE__,
 		  "stat-cache could not be setup, dieing.");
 		return -1;
