@@ -4369,11 +4369,11 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (connection * const con,
     const char *num = h->ptr;
     off_t offset;
     char *err;
-    if (0 != strncmp(num, "bytes", sizeof("bytes")-1)) {
+    if (0 != strncmp(num, "bytes ", sizeof("bytes ")-1)) {
         http_status_set_error(con, 501); /* Not Implemented */
         return HANDLER_FINISHED;
     }
-    num += 5; /* +5 for "bytes" */
+    num += sizeof("bytes ")-1; /* +6 for "bytes " */
     offset = strtoll(num, &err, 10); /*(strtoll() ignores leading whitespace)*/
     if (num == err || *err != '-' || offset < 0) {
         http_status_set_error(con, 501); /* Not Implemented */
@@ -4387,6 +4387,27 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (connection * const con,
         return HANDLER_FINISHED;
     }
 
+  #ifdef HAVE_COPY_FILE_RANGE
+    /* use Linux copy_file_range() if available
+     * (Linux 4.5, but glibc 2.27 provides a user-space emulation)
+     * fd_in and fd_out must be on same mount (handled in mod_webdav_put_prep())
+     * check that reqbody is contained in single tempfile and open fd (expected)
+     * (Note: copying might take some time, temporarily pausing server)
+     */
+    chunkqueue * const cq = con->request_content_queue;
+    chunk *c = cq->first;
+    off_t cqlen = chunkqueue_length(cq);
+    if (c->type == FILE_CHUNK && NULL == c->next && c->file.fd >= 0) {
+        loff_t zoff = 0;
+        loff_t ooff = offset;
+        ssize_t wr;
+        do {
+            wr = copy_file_range(c->file.fd,&zoff,fd,&ooff,(size_t)cqlen, 0);
+        } while (wr >= 0 && (cqlen -= wr));
+    }
+    if (0 != cqlen) /* fallback, retry if copy_file_range() did not finish */
+  #endif
+  {
     if (-1 == lseek(fd, offset, SEEK_SET)) {
         close(fd);
         http_status_set_error(con, 500); /* Internal Server Error */
@@ -4398,6 +4419,7 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (connection * const con,
      * (Note: copying might take some time, temporarily pausing server)
      * (error status is set if error occurs) */
     mod_webdav_write_cq(con, con->request_content_queue, fd);
+  }
 
     struct stat st;
     if (0 != con->conf.etag_flags && !http_status_is_set(con)) {

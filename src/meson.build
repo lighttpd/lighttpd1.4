@@ -113,6 +113,7 @@ conf_data.set('SIZEOF_OFF_T', compiler.sizeof('off_t', args: defs))
 
 conf_data.set('HAVE_ARC4RANDOM_BUF', compiler.has_function('arc4random_buf', args: defs))
 conf_data.set('HAVE_CHROOT', compiler.has_function('chroot', args: defs))
+conf_data.set('HAVE_COPY_FILE_RANGE', compiler.has_function('copy_file_range', args: defs))
 conf_data.set('HAVE_EPOLL_CTL', compiler.has_function('epoll_ctl', args: defs))
 conf_data.set('HAVE_FORK', compiler.has_function('fork', args: defs))
 conf_data.set('HAVE_GETLOADAVG', compiler.has_function('getloadavg', args: defs))

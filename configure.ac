@@ -1216,6 +1216,7 @@ AC_CHECK_FUNCS([\
   arc4random_buf \
   chroot \
   clock_gettime \
+  copy_file_range \
   epoll_ctl \
   explicit_bzero \
   explicit_memset \

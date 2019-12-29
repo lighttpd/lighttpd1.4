@@ -386,6 +386,7 @@ if 1:
 		'arc4random_buf',
 		'chroot',
 		'clock_gettime',
+		'copy_file_range',
 		'dup2',
 		'epoll_ctl',
 		'explicit_bzero',
