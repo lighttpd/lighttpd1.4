@@ -1423,8 +1423,13 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 				}
 			      #endif
 
-				/* free excess chunkqueue buffers every 64 seconds */
-				if (0 == (min_ts & 0x3f)) chunkqueue_chunk_pool_clear();
+				if (0 == (min_ts & 0x3f)) { /*(once every 64 secs)*/
+					/* free excess chunkqueue buffers every 64 secs */
+					chunkqueue_chunk_pool_clear();
+					/* attempt to restart dead piped loggers every 64 secs */
+					if (0 == srv->srvconf.max_worker)
+						fdevent_restart_logger_pipes(min_ts);
+				}
 				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup();
 				/* reset global/aggregate rate limit counters */

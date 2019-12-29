@@ -875,7 +875,7 @@ int fdevent_reaped_logger_pipe(pid_t pid) {
             if (fcp->start + 5 < ts) { /* limit restart to once every 5 sec */
                 fcp->start = ts;
                 fcp->pid = fdevent_open_logger_pipe_spawn(fcp->cmd,fcp->fds[0]);
-                return 1;
+                return (fcp->pid > 0) ? 1 : -1;
             }
             else {
                 fcp->pid = -1;
