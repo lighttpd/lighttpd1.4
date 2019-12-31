@@ -73,7 +73,7 @@ void buffer_move(buffer *b, buffer *src) {
 
 /* make sure buffer is at least "size" big + 1 for '\0'. keep old data */
 __attribute_cold__
-static void buffer_realloc(buffer *b, size_t len) {
+static void buffer_realloc(buffer * const b, const size_t len) {
     #define BUFFER_PIECE_SIZE 64uL  /*(must be power-of-2)*/
     const size_t sz = (len + 1 + BUFFER_PIECE_SIZE-1) & ~(BUFFER_PIECE_SIZE-1);
     force_assert(sz > len);
@@ -86,7 +86,7 @@ static void buffer_realloc(buffer *b, size_t len) {
 
 __attribute_cold__
 __attribute_noinline__
-static void buffer_alloc_replace(buffer *b, size_t size) {
+static void buffer_alloc_replace(buffer * const b, const size_t size) {
     force_assert(NULL != b);
     /*(discard old data so realloc() does not copy)*/
     if (NULL != b->ptr) {
@@ -96,7 +96,7 @@ static void buffer_alloc_replace(buffer *b, size_t size) {
     buffer_realloc(b, size);
 }
 
-char* buffer_string_prepare_copy(buffer *b, size_t size) {
+char* buffer_string_prepare_copy(buffer * const b, const size_t size) {
 	if (NULL == b || size >= b->size) buffer_alloc_replace(b, size);
 
 	b->used = 0;
@@ -106,7 +106,7 @@ char* buffer_string_prepare_copy(buffer *b, size_t size) {
 __attribute_cold__
 __attribute_noinline__
 __attribute_returns_nonnull__
-static char* buffer_string_prepare_append_resize(buffer *b, size_t size) {
+static char* buffer_string_prepare_append_resize(buffer * const b, const size_t size) {
 	force_assert(NULL !=  b);
 	if (buffer_string_is_empty(b)) {
 		return buffer_string_prepare_copy(b, size);
@@ -123,7 +123,7 @@ static char* buffer_string_prepare_append_resize(buffer *b, size_t size) {
 	}
 }
 
-char* buffer_string_prepare_append(buffer *b, size_t size) {
+char* buffer_string_prepare_append(buffer * const b, const size_t size) {
     return (NULL != b && size < b->size - b->used)
       ? b->ptr + b->used - (0 != b->used)
       : buffer_string_prepare_append_resize(b, size);
@@ -160,15 +160,12 @@ void buffer_copy_string(buffer *b, const char *s) {
 	buffer_copy_string_len(b, s, NULL != s ? strlen(s) : 0);
 }
 
-void buffer_copy_string_len(buffer *b, const char *s, size_t s_len) {
-	force_assert(NULL != b);
-	force_assert(NULL != s || s_len == 0);
+void buffer_copy_string_len(buffer * const b, const char * const s, const size_t s_len) {
+	if (NULL == b || s_len >= b->size) buffer_alloc_replace(b, s_len);
 
-	if (s_len >= b->size) buffer_string_prepare_copy(b, s_len);
-
-	if (0 != s_len) memcpy(b->ptr, s, s_len); /*(s might be NULL)*/
-	b->ptr[s_len] = '\0';
 	b->used = s_len + 1;
+	b->ptr[s_len] = '\0';
+	if (0 != s_len) memcpy(b->ptr, s, s_len); /*(s might be NULL)*/
 }
 
 void buffer_append_string(buffer *b, const char *s) {
@@ -186,19 +183,13 @@ void buffer_append_string(buffer *b, const char *s) {
  * @param s_len size of the string (without the terminating \0)
  */
 
-void buffer_append_string_len(buffer *b, const char *s, size_t s_len) {
-	char *target_buf;
-
-	force_assert(NULL != b);
-	force_assert(NULL != s || s_len == 0);
-
-	target_buf = buffer_string_prepare_append(b, s_len);
-	if (0 == b->used) ++b->used; /*(must include '\0' for append below)*/
+void buffer_append_string_len(buffer * const b, const char * const s, const size_t s_len) {
+	char * const target_buf = buffer_string_prepare_append(b, s_len);
+	b->used += s_len + (0 == b->used); /*(must include '\0' for append)*/
+	target_buf[s_len] = '\0';
 
 	/*(s might be NULL if 0 == s_len)*/
 	if (s_len) memcpy(target_buf, s, s_len);
-	target_buf[s_len] = '\0';
-	b->used += s_len;
 }
 
 void buffer_append_path_len(buffer *b, const char *a, size_t alen) {
@@ -237,6 +228,7 @@ void buffer_append_uint_hex_lc(buffer *b, uintmax_t value) {
 	}
 }
 
+__attribute_returns_nonnull__
 static char* utostr(char * const buf_end, uintmax_t val) {
 	char *cur = buf_end;
 	do {
@@ -248,6 +240,7 @@ static char* utostr(char * const buf_end, uintmax_t val) {
 	return cur;
 }
 
+__attribute_returns_nonnull__
 static char* itostr(char * const buf_end, intmax_t val) {
 	/* absolute value not defined for INTMAX_MIN, but can take absolute
 	 * value of any negative number via twos complement cast to unsigned.
@@ -283,7 +276,6 @@ void buffer_copy_int(buffer *b, intmax_t val) {
 void buffer_append_strftime(buffer *b, const char *format, const struct tm *tm) {
 	size_t rv;
 	char* buf;
-	force_assert(NULL != b);
 	force_assert(NULL != format);
 	force_assert(NULL != tm);
 
@@ -579,10 +571,9 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 	size_t d_len, ndx;
 	const char *map = NULL;
 
-	force_assert(NULL != b);
-	force_assert(NULL != s || 0 == s_len);
-
 	if (0 == s_len) return;
+
+	force_assert(NULL != s);
 
 	switch(encoding) {
 	case ENCODING_REL_URI:
@@ -651,10 +642,9 @@ void buffer_append_string_c_escaped(buffer *b, const char *s, size_t s_len) {
 	unsigned char *ds, *d;
 	size_t d_len, ndx;
 
-	force_assert(NULL != b);
-	force_assert(NULL != s || 0 == s_len);
-
 	if (0 == s_len) return;
+
+	force_assert(NULL != s);
 
 	/* count to-be-encoded-characters */
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
