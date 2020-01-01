@@ -139,7 +139,9 @@ static int burl_normalize_basic_required_fix (buffer *b, buffer *t, int i, int q
         else if (s[i]=='%' && li_cton(s[i+1], n1) && li_cton(s[i+2], n2)) {
             const unsigned int x = (n1 << 4) | n2;
             if (!encoded_chars_http_uri_reqd[x]
-                && (qs < 0 ? (x!='/'&&x!='?') : (x!='&'&&x!='='&&x!=';'))) {
+                && (qs < 0
+                    ? (x != '/' && x != '?')
+                    : (x != '&' && x != '=' && x != ';' && x != '+'))) {
                 p[j] = x;
             }
             else {
@@ -177,7 +179,9 @@ static int burl_normalize_basic_required (buffer *b, buffer *t)
         }
         else if (s[i]=='%' && li_cton(s[i+1], n1) && li_cton(s[i+2], n2)
                  && (encoded_chars_http_uri_reqd[(x = (n1 << 4) | n2)]
-                     ||(qs < 0 ? (x=='/'||x=='?') : (x=='&'||x=='='||x==';')))){
+                     || (qs < 0
+                         ? (x == '/' || x == '?')
+                         : (x == '&' || x == '=' || x == ';' || x == '+')))) {
             if (li_utf8_invalid_byte(x)) qs = -2;
             if (s[i+1] >= 'a') b->ptr[i+1] &= 0xdf; /* uppercase hex */
             if (s[i+2] >= 'a') b->ptr[i+2] &= 0xdf; /* uppercase hex */
