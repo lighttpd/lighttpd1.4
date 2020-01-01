@@ -637,9 +637,18 @@ int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen
 					fd = -1;
 				}
 			}
-		} else if (errno == ENOSYS || errno == ENOTSUP) {
-			fd = accept(listenfd, addr, &len);
-			sock_cloexec = 0;
+		}
+		else {
+			switch (errno) {
+			case ENOSYS:
+			case ENOTSUP:
+			case EPERM:
+				fd = accept(listenfd, addr, &len);
+				sock_cloexec = 0;
+				break;
+			default:
+				break;
+			}
 		}
 	}
 	else {
