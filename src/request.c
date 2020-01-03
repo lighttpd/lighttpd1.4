@@ -348,7 +348,7 @@ static int request_uri_is_valid_char(const unsigned char c) {
 __attribute_cold__
 __attribute_noinline__
 static int http_request_header_line_invalid(connection * const con, const int status, const char * const msg) {
-    if (con->srv->srvconf.log_request_header_on_error) {
+    if (con->conf.log_request_header_on_error) {
         if (msg) log_error(con->conf.errh, __FILE__, __LINE__, "%s", msg);
     }
     return status;
@@ -357,7 +357,7 @@ static int http_request_header_line_invalid(connection * const con, const int st
 __attribute_cold__
 __attribute_noinline__
 static int http_request_header_char_invalid(connection * const con, const char ch, const char * const msg) {
-    if (con->srv->srvconf.log_request_header_on_error) {
+    if (con->conf.log_request_header_on_error) {
         if ((unsigned char)ch > 32 && ch != 127) {
             log_error(con->conf.errh, __FILE__, __LINE__, "%s ('%c')", msg, ch);
         }

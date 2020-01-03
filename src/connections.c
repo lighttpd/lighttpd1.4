@@ -130,7 +130,7 @@ static int connection_close(connection *con) {
 		log_perror(con->conf.errh, __FILE__, __LINE__,
 		  "(warning) close: %d", con->fd);
 
-	if (srv->srvconf.log_state_handling) {
+	if (con->conf.log_state_handling) {
 		log_error(con->conf.errh, __FILE__, __LINE__,
 		  "connection closed for fd %d", con->fd);
 	}
@@ -206,7 +206,7 @@ static void connection_handle_shutdown(connection *con) {
 		con->close_timeout_ts = log_epoch_secs;
 		connection_set_state(con, CON_STATE_CLOSE);
 
-		if (con->srv->srvconf.log_state_handling) {
+		if (con->conf.log_state_handling) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
 			  "shutdown for fd %d", con->fd);
 		}
@@ -792,8 +792,7 @@ static int connection_handle_read_state(connection * const con)  {
         /* casting to (unsigned short) might truncate, and the hoff[]
          * addition might overflow, but max_request_field_size is USHRT_MAX,
          * so failure will be detected below */
-        const unsigned int max_request_field_size =
-          con->srv->srvconf.max_request_field_size;
+        const uint32_t max_request_field_size=con->conf.max_request_field_size;
         if ((con->header_len ? con->header_len : clen) > max_request_field_size
             || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1) {
             log_error(con->conf.errh, __FILE__, __LINE__, "%s",
@@ -851,7 +850,7 @@ static int connection_handle_read_state(connection * const con)  {
         con->keep_alive = 0;
         con->request.content_length = 0;
 
-        if (con->srv->srvconf.log_request_header_on_error) {
+        if (con->conf.log_request_header_on_error) {
             /*(http_request_parse() modifies hdrs only to
              * undo line-wrapping in-place using spaces)*/
             log_error(con->conf.errh, __FILE__, __LINE__, "request-header:\n%.*s",
@@ -1243,7 +1242,7 @@ static int connection_handle_request(connection *con) {
 int connection_state_machine(connection *con) {
 	connection_state_t ostate;
 	int rc;
-	const int log_state_handling = con->srv->srvconf.log_state_handling;
+	const int log_state_handling = con->conf.log_state_handling;
 
 	if (log_state_handling) {
 		log_error(con->conf.errh, __FILE__, __LINE__,

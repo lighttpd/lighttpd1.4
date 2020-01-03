@@ -83,6 +83,7 @@ typedef struct {
 	const buffer *server_tag;
 	log_error_st *errh;
 
+	uint32_t max_request_field_size;
 	unsigned short max_keep_alive_requests;
 	unsigned short max_keep_alive_idle;
 	unsigned short max_read_idle;
@@ -106,6 +107,8 @@ typedef struct {
 	unsigned char log_response_header;
 	unsigned char log_condition_handling;
 	unsigned char log_timeouts;
+	unsigned char log_state_handling;
+	unsigned char log_request_header_on_error;
 
 	unsigned int http_parseopts;
 	unsigned int max_request_size;
@@ -249,12 +252,11 @@ typedef struct {
 } buffer_plugin;
 
 typedef struct {
-	unsigned int max_request_field_size;
-	unsigned int log_state_handling;
-	unsigned char log_request_header_on_error;
-
 	/*(used sparsely, if at all, after config at startup)*/
 
+	uint32_t max_request_field_size;
+	unsigned char log_state_handling;
+	unsigned char log_request_header_on_error;
 	unsigned char http_header_strict;
 	unsigned char http_host_strict;
 	unsigned char http_host_normalize;
@@ -313,6 +315,7 @@ typedef struct {
 
 struct server {
 	void *plugin_slots;
+	array *config_context;
 
 	struct fdevents *ev;
 	int (* network_backend_write)(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh);
@@ -341,16 +344,14 @@ struct server {
 
 	log_error_st *errh;
 
-	server_config  srvconf;
-
 	time_t loadts;
 	double loadavg[3];
 
-	/* config-file */
-	void *config_data_base;
-	array *config_context;
-
 	/* members used at start-up or rarely used */
+
+	server_config srvconf;
+	void *config_data_base;
+
 	server_socket_array srv_sockets;
 	server_socket_array srv_sockets_inherited;
 	buffer_plugin plugins;

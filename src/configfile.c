@@ -969,8 +969,12 @@ static int config_insert(server *srv) {
     }
 
     /* (after processing config defaults) */
+    p->defaults.max_request_field_size = srv->srvconf.max_request_field_size;
+    p->defaults.log_state_handling = srv->srvconf.log_state_handling;
+    p->defaults.log_request_header_on_error =
+      srv->srvconf.log_request_header_on_error;
     if (p->defaults.log_request_handling || p->defaults.log_request_header)
-        srv->srvconf.log_request_header_on_error = 1;
+        p->defaults.log_request_header_on_error = 1;
 
     return rc;
 }

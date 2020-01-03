@@ -186,7 +186,7 @@ static handler_t connection_handle_read_post_chunked(connection *con, chunkqueue
                              * potentially received by backend, if in the future
                              * these trailers are added to request headers)*/
                             if ((off_t)buffer_string_length(c->mem) - c->offset
-                                < con->srv->srvconf.max_request_field_size) {
+                                < (off_t)con->conf.max_request_field_size) {
                                 break;
                             }
                             else {
