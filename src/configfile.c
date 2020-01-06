@@ -35,7 +35,7 @@
 
 typedef struct {
     PLUGIN_DATA;
-    specific_config defaults;
+    request_config defaults;
 } config_data_base;
 
 static void config_free_config(void * const p_d) {
@@ -77,7 +77,7 @@ void config_reset_config_bytes_sec(void * const p_d) {
     }
 }
 
-static void config_merge_config_cpv(specific_config * const pconf, const config_plugin_value_t * const cpv) {
+static void config_merge_config_cpv(request_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* server.document-root */
         pconf->document_root = cpv->v.b;
@@ -190,7 +190,7 @@ static void config_merge_config_cpv(specific_config * const pconf, const config_
     }
 }
 
-static void config_merge_config(specific_config * const pconf, const config_plugin_value_t *cpv) {
+static void config_merge_config(request_config * const pconf, const config_plugin_value_t *cpv) {
     do {
         config_merge_config_cpv(pconf, cpv);
     } while ((++cpv)->k_id != -1);
@@ -200,7 +200,7 @@ void config_patch_config(connection * const con) {
     config_data_base * const p = con->config_data_base;
 
     /* performed by config_reset_config() */
-    /*memcpy(&con->conf, &p->defaults, sizeof(specific_config));*/
+    /*memcpy(&con->conf, &p->defaults, sizeof(request_config));*/
 
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
@@ -209,10 +209,10 @@ void config_patch_config(connection * const con) {
 }
 
 void config_reset_config(connection * const con) {
-    /* initialize specific_config (con->conf) from top-level specific_config */
+    /* initialize request_config (con->conf) from top-level request_config */
     config_data_base * const p = con->config_data_base;
     con->server_name = p->defaults.server_name;
-    memcpy(&con->conf, &p->defaults, sizeof(specific_config));
+    memcpy(&con->conf, &p->defaults, sizeof(request_config));
 }
 
 static int config_burl_normalize_cond (server *srv) {
@@ -2065,7 +2065,7 @@ int config_read(server *srv, const char *fn) {
 
 int config_set_defaults(server *srv) {
 	size_t i;
-	specific_config *s = &((config_data_base *)srv->config_data_base)->defaults;
+	request_config *s = &((config_data_base *)srv->config_data_base)->defaults;
 	struct stat st1, st2;
 
 	if (fdevent_config(&srv->srvconf.event_handler, srv->errh) <= 0)

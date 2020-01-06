@@ -137,7 +137,7 @@ typedef struct {
 	const buffer *error_handler_404;
 	const buffer *errorfile_prefix;
 	log_error_st *serrh; /* script errh */
-} specific_config;
+} request_config;
 
 /* the order of the items should be the same as they are processed
  * read before write as we use this later */
@@ -221,7 +221,7 @@ struct connection {
 	void *plugin_slots;
 	void **plugin_ctx;           /* plugin connection specific config */
 
-	specific_config conf;        /* global connection specific config */
+	request_config conf;
 	uint32_t conditional_is_valid;
 	struct cond_cache_t *cond_cache;
 	struct cond_match_t *cond_match;
