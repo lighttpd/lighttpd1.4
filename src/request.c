@@ -486,7 +486,7 @@ static int http_request_parse_single_header(connection * const con, const enum h
 }
 
 __attribute_cold__
-static int http_request_parse_proto_loose(connection * const con, const char * const ptr, const size_t len) {
+static int http_request_parse_proto_loose(connection * const con, const char * const ptr, const size_t len, const unsigned int http_parseopts) {
     const char * proto = memchr(ptr, ' ', len);
     if (NULL == proto)
         return http_request_header_line_invalid(con, 400, "incomplete request line -> 400");
@@ -499,7 +499,7 @@ static int http_request_parse_proto_loose(connection * const con, const char * c
         if (proto[5] == '1' && proto[6] == '.' && (proto[7] == '1' || proto[7] == '0')) {
             /* length already checked before calling this routine */
             /* (len != (size_t)(proto - ptr + 8)) */
-            if (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) /*(http_header_strict)*/
+            if (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) /*(http_header_strict)*/
                 return http_request_header_line_invalid(con, 400, "incomplete request line -> 400");
             con->request.http_version = (proto[7] == '1') ? HTTP_VERSION_1_1 : HTTP_VERSION_1_0;
         }
@@ -516,7 +516,7 @@ static int http_request_parse_proto_loose(connection * const con, const char * c
 }
 
 __attribute_cold__
-static const char * http_request_parse_uri_alt(connection * const con, const char * const uri, const size_t len) {
+static const char * http_request_parse_uri_alt(connection * const con, const char * const uri, const size_t len, const unsigned int http_parseopts) {
     const char *nuri;
     if ((len > 7 && buffer_eq_icase_ssn(uri, "http://", 7)
         && NULL != (nuri = memchr(uri + 7, '/', len-7)))
@@ -533,7 +533,7 @@ static const char * http_request_parse_uri_alt(connection * const con, const cha
         http_header_request_set(con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"), host, hostlen);
         con->request.http_host = http_header_request_get(con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"));
         return nuri;
-    } else if (!(con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) /*(!http_header_strict)*/
+    } else if (!(http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) /*(!http_header_strict)*/
            || (HTTP_METHOD_CONNECT == con->request.http_method && (uri[0] == ':' || light_isdigit(uri[0])))
            || (HTTP_METHOD_OPTIONS == con->request.http_method && uri[0] == '*' && 1 == len)) {
         /* (permitted) */
@@ -544,9 +544,7 @@ static const char * http_request_parse_uri_alt(connection * const con, const cha
     }
 }
 
-static int http_request_parse_reqline(connection * const con, const char * const ptr, const unsigned short * const hoff) {
-    const unsigned int http_header_strict =
-      (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+static int http_request_parse_reqline(connection * const con, const char * const ptr, const unsigned short * const hoff, const unsigned int http_parseopts) {
     size_t len = hoff[2];
 
     /* parse the first line of the request
@@ -556,7 +554,7 @@ static int http_request_parse_reqline(connection * const con, const char * const
         return http_request_header_line_invalid(con, 400, "invalid request line (too short) -> 400");
     if (ptr[len-2] == '\r')
         len-=2;
-    else if (!http_header_strict)
+    else if (!(http_parseopts & HTTP_PARSEOPT_HEADER_STRICT)) /*(!http_header_strict)*/
         len-=1;
     else
         return http_request_header_line_invalid(con, 400, "missing CR before LF in header -> 400");
@@ -587,7 +585,7 @@ static int http_request_parse_reqline(connection * const con, const char * const
         con->request.keep_alive = 0; /* keep-alive default: HTTP/1.0 -> false */
     }
     else {
-        int status = http_request_parse_proto_loose(con, ptr, len);
+        int status = http_request_parse_proto_loose(con,ptr,len,http_parseopts);
         if (0 != status) return status;
         /*(space char must exist if http_request_parse_proto_loose() succeeds)*/
         for (p = ptr + len - 9; p[-1] != ' '; --p) ;
@@ -613,7 +611,7 @@ static int http_request_parse_reqline(connection * const con, const char * const
     len = (size_t)(p - uri - 1);
 
     if (*uri != '/') { /* (common case: (*uri == '/')) */
-        uri = http_request_parse_uri_alt(con, uri, len);
+        uri = http_request_parse_uri_alt(con, uri, len, http_parseopts);
         if (NULL == uri) return 400;
         len = (size_t)(p - uri - 1);
     }
@@ -622,8 +620,8 @@ static int http_request_parse_reqline(connection * const con, const char * const
         return http_request_header_line_invalid(con, 400, "no uri specified -> 400");
 
     /* check uri for invalid characters */
-    if (http_header_strict) {
-        if ((con->conf.http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)) {
+    if (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) { /* http_header_strict */
+        if ((http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)) {
             /* URI will be checked in http_response_prepare() */
         }
         else {
@@ -684,9 +682,8 @@ static int http_request_parse_header_other(connection * const con, const char * 
     return 0;
 }
 
-static int http_request_parse_headers(connection * const con, char * const ptr, const unsigned short * const hoff) {
-    const unsigned int http_header_strict =
-      (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+static int http_request_parse_headers(connection * const con, char * const ptr, const unsigned short * const hoff, const unsigned int http_parseopts) {
+    const unsigned int http_header_strict = (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
   #if 0 /*(not checked here; will later result in invalid label for HTTP header)*/
     int i = hoff[2];
@@ -801,11 +798,12 @@ int http_request_parse(connection * const con, char * const hdrs, const unsigned
      */
 
     int status;
+    const unsigned int http_parseopts = con->conf.http_parseopts;
 
-    status = http_request_parse_reqline(con, hdrs, hoff);
+    status = http_request_parse_reqline(con, hdrs, hoff, http_parseopts);
     if (0 != status) return status;
 
-    status = http_request_parse_headers(con, hdrs, hoff);
+    status = http_request_parse_headers(con, hdrs, hoff, http_parseopts);
     if (0 != status) return status;
 
     /* post-processing */
@@ -813,8 +811,7 @@ int http_request_parse(connection * const con, char * const hdrs, const unsigned
     /* check hostname field if it is set */
     if (con->request.http_host) {
         if (0 != http_request_host_policy(con->request.http_host,
-                                          con->conf.http_parseopts,
-                                          scheme_port))
+                                          http_parseopts, scheme_port))
             return http_request_header_line_invalid(con, 400, "Invalid Hostname -> 400");
     }
     else {
@@ -846,7 +843,7 @@ int http_request_parse(connection * const con, char * const hdrs, const unsigned
              * a message downstream.
              */
             const unsigned int http_header_strict =
-              (con->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+              (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
             if (http_header_strict) {
                 return http_request_header_line_invalid(con, 400, "invalid Transfer-Encoding + Content-Length -> 400");
             }
@@ -856,7 +853,7 @@ int http_request_parse(connection * const con, char * const hdrs, const unsigned
             }
         }
         if (http_method_get_or_head(con->request.http_method)
-            && !(con->conf.http_parseopts & HTTP_PARSEOPT_METHOD_GET_BODY)) {
+            && !(http_parseopts & HTTP_PARSEOPT_METHOD_GET_BODY)) {
             return http_request_header_line_invalid(con, 400, "GET/HEAD with content-length -> 400");
         }
     }
