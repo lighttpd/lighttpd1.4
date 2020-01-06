@@ -40,7 +40,8 @@ static void run_http_request_parse(connection *con, int line, int status, const 
         hloffsets[hloffsets[0]] = n - req + 1;
     }
     --hloffsets[0]; /*(ignore final blank line "\r\n" ending headers)*/
-    int http_status = http_request_parse(con, hdrs->ptr, hloffsets);
+    int http_status =
+      http_request_parse(con, hdrs->ptr, hloffsets, con->proto_default_port);
     if (http_status != status) {
         fprintf(stderr,
                 "%s.%d: %s() failed: expected '%d', got '%d' for test %s\n",

@@ -793,7 +793,7 @@ static int http_request_parse_headers(connection * const con, char * const ptr, 
     return 0;
 }
 
-int http_request_parse(connection * const con, char * const hdrs, const unsigned short * const hoff) {
+int http_request_parse(connection * const con, char * const hdrs, const unsigned short * const hoff, const int scheme_port) {
     /*
      * Request: "^(GET|POST|HEAD|...) ([^ ]+(\\?[^ ]+|)) (HTTP/1\\.[01])$"
      * Header : "^([-a-zA-Z]+): (.+)$"
@@ -814,7 +814,7 @@ int http_request_parse(connection * const con, char * const hdrs, const unsigned
     if (con->request.http_host) {
         if (0 != http_request_host_policy(con->request.http_host,
                                           con->conf.http_parseopts,
-                                          con->proto_default_port))
+                                          scheme_port))
             return http_request_header_line_invalid(con, 400, "Invalid Hostname -> 400");
     }
     else {

@@ -845,7 +845,8 @@ static int connection_handle_read_state(connection * const con)  {
                   (int)con->header_len, hdrs);
     }
 
-    con->http_status = http_request_parse(con, hdrs, hoff);
+    con->http_status =
+      http_request_parse(con, hdrs, hoff, con->proto_default_port);
     if (0 != con->http_status) {
         con->request.keep_alive = 0;
         con->request.content_length = 0;
