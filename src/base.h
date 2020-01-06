@@ -20,7 +20,7 @@ struct cond_match_t;    /* declaration */
 #define DIRECT 0        /* con->mode */
 
 
-typedef struct {
+typedef struct request_st {
 	/** HEADER */
 	/* the request-line */
 	buffer *request;
@@ -40,6 +40,8 @@ typedef struct {
 	/* CONTENT */
 	off_t content_length; /* returned by strtoll() */
 	off_t te_chunked;
+
+	int keep_alive; /* only request.c can enable it, all other just disable */
 
 	/* internal */
 	buffer *pathinfo;
@@ -181,7 +183,6 @@ struct connection {
 	int is_writable;
 	int is_ssl_sock;
 
-	int keep_alive;              /* only request.c can enable it, all other just disable */
 	int keep_alive_idle;         /* remember max_keep_alive_idle from config */
 
 	int file_started;

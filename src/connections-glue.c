@@ -110,7 +110,7 @@ static int connection_handle_read_post_chunked_crlf(chunkqueue *cq) {
 }
 
 handler_t connection_handle_read_post_error(connection *con, int http_status) {
-    con->keep_alive = 0;
+    con->request.keep_alive = 0;
 
     /*(do not change status if response headers already set and possibly sent)*/
     if (0 != con->bytes_header) return HANDLER_ERROR;
@@ -192,7 +192,7 @@ static handler_t connection_handle_read_post_chunked(connection *con, chunkqueue
                             else {
                                 /* ignore excessively long trailers;
                                  * disable keep-alive on connection */
-                                con->keep_alive = 0;
+                                con->request.keep_alive = 0;
                                 p = c->mem->ptr + buffer_string_length(c->mem) - 4;
                             }
                         }

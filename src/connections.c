@@ -153,8 +153,8 @@ static int connection_close(connection *con) {
 
 static void connection_read_for_eos_plain(connection * const con) {
 	/* we have to do the linger_on_close stuff regardless
-	 * of con->keep_alive; even non-keepalive sockets may
-	 * still have unread data, and closing before reading
+	 * of con->request.keep_alive; even non-keepalive sockets
+	 * may still have unread data, and closing before reading
 	 * it will make the client not see all our output.
 	 */
 	ssize_t len;
@@ -232,10 +232,10 @@ static void connection_handle_response_end_state(connection *con) {
 	if (con->request.content_length != con->request_content_queue->bytes_in
 	    || con->state == CON_STATE_ERROR) {
 		/* request body is present and has not been read completely */
-		con->keep_alive = 0;
+		con->request.keep_alive = 0;
 	}
 
-        if (con->keep_alive) {
+        if (con->request.keep_alive) {
 		connection_reset(con);
 #if 0
 		con->request_start = con->read_idle_ts = log_epoch_secs;
@@ -441,7 +441,7 @@ static int connection_handle_write_prepare(connection *con) {
 				}
 				http_header_response_append(con, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"), CONST_STR_LEN("chunked"));
 			} else {
-				con->keep_alive = 0;
+				con->request.keep_alive = 0;
 			}
 		}
 	}
@@ -798,7 +798,7 @@ static int connection_handle_read_state(connection * const con)  {
             log_error(con->conf.errh, __FILE__, __LINE__, "%s",
                       "oversized request-header -> sending Status 431");
             con->http_status = 431; /* Request Header Fields Too Large */
-            con->keep_alive = 0;
+            con->request.keep_alive = 0;
             return 1;
         }
 
@@ -847,7 +847,7 @@ static int connection_handle_read_state(connection * const con)  {
 
     con->http_status = http_request_parse(con, hdrs, hoff);
     if (0 != con->http_status) {
-        con->keep_alive = 0;
+        con->request.keep_alive = 0;
         con->request.content_length = 0;
 
         if (con->conf.log_request_header_on_error) {
@@ -915,7 +915,7 @@ static handler_t connection_handle_fdevent(void *context, int revents) {
 			con->conf.stream_request_body &= ~(FDEVENT_STREAM_REQUEST_BUFMIN|FDEVENT_STREAM_REQUEST_POLLIN);
 			con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLRDHUP;
 			con->is_readable = 1; /*(can read 0 for end-of-stream)*/
-			if (chunkqueue_is_empty(con->read_queue)) con->keep_alive = 0;
+			if (chunkqueue_is_empty(con->read_queue)) con->request.keep_alive = 0;
 			if (con->request.content_length < -1) { /*(transparent proxy mode; no more data to read)*/
 				con->request.content_length = con->request_content_queue->bytes_in;
 			}
@@ -1186,7 +1186,7 @@ static int connection_handle_request(connection *con) {
 
 								if (con->request.content_length) {
 									if (con->request.content_length != con->request_content_queue->bytes_in) {
-										con->keep_alive = 0;
+										con->request.keep_alive = 0;
 									}
 									con->request.content_length = 0;
 									chunkqueue_reset(con->request_content_queue);
@@ -1493,7 +1493,7 @@ void connection_graceful_shutdown_maint (server *srv) {
             changed = 1;
         }
 
-        con->keep_alive = 0;                    /* disable keep-alive */
+        con->request.keep_alive = 0;            /* disable keep-alive */
 
         con->conf.bytes_per_second = 0;         /* disable rate limit */
         con->conf.global_bytes_per_second = 0;  /* disable rate limit */

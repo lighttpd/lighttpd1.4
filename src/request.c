@@ -407,11 +407,11 @@ static int http_request_parse_single_header(connection * const con, const enum h
         /* "Connection: close" is common case if header is present */
         if ((vlen == 5 && buffer_eq_icase_ssn(v, CONST_STR_LEN("close")))
             || http_header_str_contains_token(v,vlen,CONST_STR_LEN("close"))) {
-            con->keep_alive = 0;
+            con->request.keep_alive = 0;
             break;
         }
         if (http_header_str_contains_token(v,vlen,CONST_STR_LEN("keep-alive"))){
-            con->keep_alive = 1;
+            con->request.keep_alive = 1;
             break;
         }
         break;
@@ -510,7 +510,7 @@ static int http_request_parse_proto_loose(connection * const con, const char * c
         return http_request_header_line_invalid(con, 400, "unknown protocol -> 400");
 
     /* keep-alive default: HTTP/1.1 -> true; HTTP/1.0 -> false */
-    con->keep_alive = (HTTP_VERSION_1_0 != con->request.http_version);
+    con->request.keep_alive = (HTTP_VERSION_1_0 != con->request.http_version);
 
     return 0;
 }
@@ -580,11 +580,11 @@ static int http_request_parse_reqline(connection * const con, const char * const
     proto8.c[4]=p[4]; proto8.c[5]=p[5]; proto8.c[6]=p[6]; proto8.c[7]=p[7];
     if (p[-1] == ' ' && http_1_1.u == proto8.u) {
         con->request.http_version = HTTP_VERSION_1_1;
-        con->keep_alive = 1; /* keep-alive default: HTTP/1.1 -> true */
+        con->request.keep_alive = 1; /* keep-alive default: HTTP/1.1 -> true */
     }
     else if (p[-1] == ' ' && http_1_0.u == proto8.u) {
         con->request.http_version = HTTP_VERSION_1_0;
-        con->keep_alive = 0; /* keep-alive default: HTTP/1.0 -> false */
+        con->request.keep_alive = 0; /* keep-alive default: HTTP/1.0 -> false */
     }
     else {
         int status = http_request_parse_proto_loose(con, ptr, len);

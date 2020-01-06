@@ -817,7 +817,7 @@ void http_response_backend_error (connection *con) {
 		/*(response might have been already started, kill the connection)*/
 		/*(mode == DIRECT to avoid later call to http_response_backend_done())*/
 		con->mode = DIRECT;  /*(avoid sending final chunked block)*/
-		con->keep_alive = 0; /*(no keep-alive; final chunked block not sent)*/
+		con->request.keep_alive = 0;
 		con->file_finished = 1;
 	} /*(else error status set later by http_response_backend_done())*/
 }
@@ -856,7 +856,7 @@ void http_response_upgrade_read_body_unknown(connection *con) {
           (FDEVENT_STREAM_RESPONSE_BUFMIN | FDEVENT_STREAM_RESPONSE);
     con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
     con->request.content_length = -2;
-    con->keep_alive = 0;
+    con->request.keep_alive = 0;
 }
 
 
@@ -910,7 +910,7 @@ static handler_t http_response_process_local_redir(connection *con, size_t blen)
         if (con->request.content_length) {
             if (con->request.content_length
                 != con->request_content_queue->bytes_in) {
-                con->keep_alive = 0;
+                con->request.keep_alive = 0;
             }
             con->request.content_length = 0;
             chunkqueue_reset(con->request_content_queue);
@@ -1032,7 +1032,7 @@ static int http_response_process_headers(connection *con, http_response_opts *op
             /*(should parse for tokens and do case-insensitive match for "close"
              * but this is an imperfect though simplistic attempt to honor
              * backend request to close)*/
-            if (NULL != strstr(value, "lose")) con->keep_alive = 0;
+            if (NULL != strstr(value, "lose")) con->request.keep_alive = 0;
             break;
           case HTTP_HEADER_CONTENT_LENGTH:
             con->response.content_length = strtoul(value, NULL, 10);

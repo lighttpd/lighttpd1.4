@@ -58,20 +58,20 @@ int http_response_write_header(connection *con) {
 	/* disable keep-alive if requested */
 
 	if (con->request_count > con->conf.max_keep_alive_requests || 0 == con->conf.max_keep_alive_idle) {
-		con->keep_alive = 0;
+		con->request.keep_alive = 0;
 	} else if (0 != con->request.content_length
 		   && con->request.content_length != con->request_content_queue->bytes_in
 		   && (con->mode == DIRECT || 0 == con->conf.stream_request_body)) {
-		con->keep_alive = 0;
+		con->request.keep_alive = 0;
 	} else {
 		con->keep_alive_idle = con->conf.max_keep_alive_idle;
 	}
 
 	if ((con->response.htags & HTTP_HEADER_UPGRADE) && con->request.http_version == HTTP_VERSION_1_1) {
 		http_header_response_set(con, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("upgrade"));
-	} else if (0 == con->keep_alive) {
+	} else if (0 == con->request.keep_alive) {
 		http_header_response_set(con, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("close"));
-	} else if (con->request.http_version == HTTP_VERSION_1_0) {/*(&& con->keep_alive != 0)*/
+	} else if (con->request.http_version == HTTP_VERSION_1_0) {/*(&& con->request.keep_alive != 0)*/
 		http_header_response_set(con, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("keep-alive"));
 	}
 
@@ -286,7 +286,7 @@ static handler_t http_response_physical_path_check(connection *con) {
 __attribute_cold__
 __attribute_noinline__
 static handler_t http_status_set_error_close (connection *con, int status) {
-    con->keep_alive = 0;
+    con->request.keep_alive = 0;
     con->file_finished = 1;
     con->mode = DIRECT;
     con->http_status = status;

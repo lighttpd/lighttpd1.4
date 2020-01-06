@@ -1087,7 +1087,7 @@ REQUESTDONE_FUNC(log_access_write) {
 				break;
 			case FORMAT_CONNECTION_STATUS:
 				if (con->state == CON_STATE_RESPONSE_END) {
-					if (0 == con->keep_alive) {
+					if (0 == con->request.keep_alive) {
 						buffer_append_string_len(b, CONST_STR_LEN("-"));
 					} else {
 						buffer_append_string_len(b, CONST_STR_LEN("+"));

@@ -372,7 +372,7 @@ static handler_t cgi_handle_fdevent_send (void *ctx, int revents) {
 			chunkqueue *cq = con->request_content_queue;
 			chunkqueue_mark_written(cq, chunkqueue_length(cq));
 			if (cq->bytes_in != (off_t)con->request.content_length) {
-				con->keep_alive = 0;
+				con->request.keep_alive = 0;
 			}
 		}
 
