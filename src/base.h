@@ -117,7 +117,7 @@ struct connection {
 	int http_status;
 	uint32_t header_len;
 
-	request  request;
+	request_st request;
 	request_uri uri;
 	physical physical;
 	response response;

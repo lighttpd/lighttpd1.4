@@ -9,6 +9,9 @@ typedef struct server server;
 struct connection;
 typedef struct connection connection;
 
+struct request_st;
+typedef struct request_st request_st;
+
 union sock_addr;
 typedef union sock_addr sock_addr;
 

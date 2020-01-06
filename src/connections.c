@@ -538,6 +538,8 @@ static connection *connection_init(server *srv) {
 	con->bytes_read = 0;
 	con->bytes_header = 0;
 	con->loops_per_request = 0;
+	con->request.conf = &con->conf;
+	con->request.con = con;
 
 #define CLEAN(x) \
 	con->x = buffer_init();
@@ -846,7 +848,7 @@ static int connection_handle_read_state(connection * const con)  {
     }
 
     con->http_status =
-      http_request_parse(con, hdrs, hoff, con->proto_default_port);
+      http_request_parse(&con->request, hdrs, hoff, con->proto_default_port);
     if (0 != con->http_status) {
         con->request.keep_alive = 0;
         con->request.content_length = 0;

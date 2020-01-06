@@ -1,7 +1,6 @@
 #include "first.h"
 
 #include "request.h"
-#include "base.h"
 #include "burl.h"
 #include "http_header.h"
 #include "http_kv.h"
@@ -347,22 +346,22 @@ static int request_uri_is_valid_char(const unsigned char c) {
 
 __attribute_cold__
 __attribute_noinline__
-static int http_request_header_line_invalid(connection * const con, const int status, const char * const msg) {
-    if (con->conf.log_request_header_on_error) {
-        if (msg) log_error(con->conf.errh, __FILE__, __LINE__, "%s", msg);
+static int http_request_header_line_invalid(request_st * const r, const int status, const char * const msg) {
+    if (r->conf->log_request_header_on_error) {
+        if (msg) log_error(r->conf->errh, __FILE__, __LINE__, "%s", msg);
     }
     return status;
 }
 
 __attribute_cold__
 __attribute_noinline__
-static int http_request_header_char_invalid(connection * const con, const char ch, const char * const msg) {
-    if (con->conf.log_request_header_on_error) {
+static int http_request_header_char_invalid(request_st * const r, const char ch, const char * const msg) {
+    if (r->conf->log_request_header_on_error) {
         if ((unsigned char)ch > 32 && ch != 127) {
-            log_error(con->conf.errh, __FILE__, __LINE__, "%s ('%c')", msg, ch);
+            log_error(r->conf->errh, __FILE__, __LINE__, "%s ('%c')", msg, ch);
         }
         else {
-            log_error(con->conf.errh, __FILE__, __LINE__, "%s (0x%x)", msg, ch);
+            log_error(r->conf->errh, __FILE__, __LINE__, "%s (0x%x)", msg, ch);
         }
     }
     return 400;
@@ -374,7 +373,7 @@ static int http_request_header_char_invalid(connection * const con, const char c
  *
  * returns 0 on success, HTTP status on error
  */
-static int http_request_parse_single_header(connection * const con, const enum http_header_e id, const char * const k, const size_t klen, const char * const v, const size_t vlen) {
+static int http_request_parse_single_header(request_st * const r, const enum http_header_e id, const char * const k, const size_t klen, const char * const v, const size_t vlen) {
     buffer **saveb = NULL;
 
     /*
@@ -388,111 +387,112 @@ static int http_request_parse_single_header(connection * const con, const enum h
       default:
         break;
       case HTTP_HEADER_HOST:
-        if (!(con->request.htags & HTTP_HEADER_HOST)) {
-            saveb = &con->request.http_host;
+        if (!(r->htags & HTTP_HEADER_HOST)) {
+            saveb = &r->http_host;
             if (vlen >= 1024) { /*(expecting < 256)*/
-                return http_request_header_line_invalid(con, 400, "uri-authority too long -> 400");
+                return http_request_header_line_invalid(r, 400, "uri-authority too long -> 400");
             }
         }
-        else if (NULL != con->request.http_host
-                 && buffer_is_equal_string(con->request.http_host, v, vlen)) {
+        else if (NULL != r->http_host
+                 && buffer_is_equal_string(r->http_host, v, vlen)) {
             /* ignore all Host: headers if match authority in request line */
             return 0; /* ignore header */
         }
         else {
-            return http_request_header_line_invalid(con, 400, "duplicate Host header -> 400");
+            return http_request_header_line_invalid(r, 400, "duplicate Host header -> 400");
         }
         break;
       case HTTP_HEADER_CONNECTION:
         /* "Connection: close" is common case if header is present */
         if ((vlen == 5 && buffer_eq_icase_ssn(v, CONST_STR_LEN("close")))
             || http_header_str_contains_token(v,vlen,CONST_STR_LEN("close"))) {
-            con->request.keep_alive = 0;
+            r->keep_alive = 0;
             break;
         }
         if (http_header_str_contains_token(v,vlen,CONST_STR_LEN("keep-alive"))){
-            con->request.keep_alive = 1;
+            r->keep_alive = 1;
             break;
         }
         break;
       case HTTP_HEADER_CONTENT_TYPE:
-        if (con->request.htags & HTTP_HEADER_CONTENT_TYPE) {
-            return http_request_header_line_invalid(con, 400, "duplicate Content-Type header -> 400");
+        if (r->htags & HTTP_HEADER_CONTENT_TYPE) {
+            return http_request_header_line_invalid(r, 400, "duplicate Content-Type header -> 400");
         }
         break;
       case HTTP_HEADER_IF_NONE_MATCH:
         /* if dup, only the first one will survive */
-        if (con->request.htags & HTTP_HEADER_IF_NONE_MATCH) {
+        if (r->htags & HTTP_HEADER_IF_NONE_MATCH) {
             return 0; /* ignore header */
         }
         break;
       case HTTP_HEADER_CONTENT_LENGTH:
-        if (!(con->request.htags & HTTP_HEADER_CONTENT_LENGTH)) {
+        if (!(r->htags & HTTP_HEADER_CONTENT_LENGTH)) {
             /*(trailing whitespace was removed from vlen)*/
             char *err;
             off_t clen = strtoll(v, &err, 10);
             if (clen >= 0 && err == v+vlen) {
-                con->request.content_length = clen;
+                /* (set only if not set to -1 by Transfer-Encoding: chunked) */
+                if (0 == r->content_length) r->content_length = clen;
             }
             else {
-                return http_request_header_line_invalid(con, 400, "invalid Content-Length header -> 400");
+                return http_request_header_line_invalid(r, 400, "invalid Content-Length header -> 400");
             }
         }
         else {
-            return http_request_header_line_invalid(con, 400, "duplicate Content-Length header -> 400");
+            return http_request_header_line_invalid(r, 400, "duplicate Content-Length header -> 400");
         }
         break;
       case HTTP_HEADER_IF_MODIFIED_SINCE:
-        if (con->request.htags & HTTP_HEADER_IF_MODIFIED_SINCE) {
+        if (r->htags & HTTP_HEADER_IF_MODIFIED_SINCE) {
             /* Proxies sometimes send dup headers
              * if they are the same we ignore the second
              * if not, we raise an error */
             const buffer *vb =
-              http_header_request_get(con, HTTP_HEADER_IF_MODIFIED_SINCE,
+              http_header_request_get(r->con, HTTP_HEADER_IF_MODIFIED_SINCE,
                                       CONST_STR_LEN("If-Modified-Since"));
             if (vb && buffer_is_equal_caseless_string(vb, v, vlen)) {
                 /* ignore it if they are the same */
                 return 0; /* ignore header */
             }
             else {
-                return http_request_header_line_invalid(con, 400, "duplicate If-Modified-Since header -> 400");
+                return http_request_header_line_invalid(r, 400, "duplicate If-Modified-Since header -> 400");
             }
         }
         break;
       case HTTP_HEADER_TRANSFER_ENCODING:
-        if (HTTP_VERSION_1_0 == con->request.http_version) {
-            return http_request_header_line_invalid(con, 400, "HTTP/1.0 with Transfer-Encoding (bad HTTP/1.0 proxy?) -> 400");
+        if (HTTP_VERSION_1_0 == r->http_version) {
+            return http_request_header_line_invalid(r, 400, "HTTP/1.0 with Transfer-Encoding (bad HTTP/1.0 proxy?) -> 400");
         }
 
         if (!buffer_eq_icase_ss(v, vlen, CONST_STR_LEN("chunked"))) {
             /* Transfer-Encoding might contain additional encodings,
              * which are not currently supported by lighttpd */
-            return http_request_header_line_invalid(con, 501, NULL); /* Not Implemented */
+            return http_request_header_line_invalid(r, 501, NULL); /* Not Implemented */
         }
-        con->request.content_length = -1;
+        r->content_length = -1;
 
         /* Transfer-Encoding is a hop-by-hop header,
          * which must not be blindly forwarded to backends */
         return 0; /* skip header */
     }
 
-    http_header_request_append(con, id, k, klen, v, vlen);
+    http_header_request_append(r->con, id, k, klen, v, vlen);
 
     if (saveb) {
-        *saveb = http_header_request_get(con, id, k, klen);
+        *saveb = http_header_request_get(r->con, id, k, klen);
     }
 
     return 0;
 }
 
 __attribute_cold__
-static int http_request_parse_proto_loose(connection * const con, const char * const ptr, const size_t len, const unsigned int http_parseopts) {
+static int http_request_parse_proto_loose(request_st * const r, const char * const ptr, const size_t len, const unsigned int http_parseopts) {
     const char * proto = memchr(ptr, ' ', len);
     if (NULL == proto)
-        return http_request_header_line_invalid(con, 400, "incomplete request line -> 400");
+        return http_request_header_line_invalid(r, 400, "incomplete request line -> 400");
     proto = memchr(proto+1, ' ', len - (proto+1 - ptr));
     if (NULL == proto)
-        return http_request_header_line_invalid(con, 400, "incomplete request line -> 400");
+        return http_request_header_line_invalid(r, 400, "incomplete request line -> 400");
     ++proto;
 
     if (proto[0]=='H' && proto[1]=='T' && proto[2]=='T' && proto[3]=='P' && proto[4] == '/') {
@@ -500,23 +500,23 @@ static int http_request_parse_proto_loose(connection * const con, const char * c
             /* length already checked before calling this routine */
             /* (len != (size_t)(proto - ptr + 8)) */
             if (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) /*(http_header_strict)*/
-                return http_request_header_line_invalid(con, 400, "incomplete request line -> 400");
-            con->request.http_version = (proto[7] == '1') ? HTTP_VERSION_1_1 : HTTP_VERSION_1_0;
+                return http_request_header_line_invalid(r, 400, "incomplete request line -> 400");
+            r->http_version = (proto[7] == '1') ? HTTP_VERSION_1_1 : HTTP_VERSION_1_0;
         }
         else
-            return http_request_header_line_invalid(con, 505, "unknown HTTP version -> 505");
+            return http_request_header_line_invalid(r, 505, "unknown HTTP version -> 505");
     }
     else
-        return http_request_header_line_invalid(con, 400, "unknown protocol -> 400");
+        return http_request_header_line_invalid(r, 400, "unknown protocol -> 400");
 
     /* keep-alive default: HTTP/1.1 -> true; HTTP/1.0 -> false */
-    con->request.keep_alive = (HTTP_VERSION_1_0 != con->request.http_version);
+    r->keep_alive = (HTTP_VERSION_1_0 != r->http_version);
 
     return 0;
 }
 
 __attribute_cold__
-static const char * http_request_parse_uri_alt(connection * const con, const char * const uri, const size_t len, const unsigned int http_parseopts) {
+static const char * http_request_parse_uri_alt(request_st * const r, const char * const uri, const size_t len, const unsigned int http_parseopts) {
     const char *nuri;
     if ((len > 7 && buffer_eq_icase_ssn(uri, "http://", 7)
         && NULL != (nuri = memchr(uri + 7, '/', len-7)))
@@ -526,38 +526,38 @@ static const char * http_request_parse_uri_alt(connection * const con, const cha
         const char * const host = uri + (uri[4] == ':' ? 7 : 8);
         const size_t hostlen = nuri - host;
         if (0 == hostlen || hostlen >= 1024) { /*(expecting < 256)*/
-            http_request_header_line_invalid(con, 400, "uri-authority empty or too long -> 400");
+            http_request_header_line_invalid(r, 400, "uri-authority empty or too long -> 400");
             return NULL;
         }
         /* Insert as host header */
-        http_header_request_set(con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"), host, hostlen);
-        con->request.http_host = http_header_request_get(con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"));
+        http_header_request_set(r->con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"), host, hostlen);
+        r->http_host = http_header_request_get(r->con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"));
         return nuri;
     } else if (!(http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) /*(!http_header_strict)*/
-           || (HTTP_METHOD_CONNECT == con->request.http_method && (uri[0] == ':' || light_isdigit(uri[0])))
-           || (HTTP_METHOD_OPTIONS == con->request.http_method && uri[0] == '*' && 1 == len)) {
+           || (HTTP_METHOD_CONNECT == r->http_method && (uri[0] == ':' || light_isdigit(uri[0])))
+           || (HTTP_METHOD_OPTIONS == r->http_method && uri[0] == '*' && 1 == len)) {
         /* (permitted) */
         return uri;
     } else {
-        http_request_header_line_invalid(con, 400, "request-URI parse error -> 400");
+        http_request_header_line_invalid(r, 400, "request-URI parse error -> 400");
         return NULL;
     }
 }
 
-static int http_request_parse_reqline(connection * const con, const char * const ptr, const unsigned short * const hoff, const unsigned int http_parseopts) {
+static int http_request_parse_reqline(request_st * const r, const char * const ptr, const unsigned short * const hoff, const unsigned int http_parseopts) {
     size_t len = hoff[2];
 
     /* parse the first line of the request
      * <method> <uri> <protocol>\r\n
      * */
     if (len < 13) /* minimum len with (!http_header_strict): "x x HTTP/1.0\n" */
-        return http_request_header_line_invalid(con, 400, "invalid request line (too short) -> 400");
+        return http_request_header_line_invalid(r, 400, "invalid request line (too short) -> 400");
     if (ptr[len-2] == '\r')
         len-=2;
     else if (!(http_parseopts & HTTP_PARSEOPT_HEADER_STRICT)) /*(!http_header_strict)*/
         len-=1;
     else
-        return http_request_header_line_invalid(con, 400, "missing CR before LF in header -> 400");
+        return http_request_header_line_invalid(r, 400, "missing CR before LF in header -> 400");
 
     /*
      * RFC7230:
@@ -577,15 +577,15 @@ static int http_request_parse_reqline(connection * const con, const char * const
     proto8.c[0]=p[0]; proto8.c[1]=p[1]; proto8.c[2]=p[2]; proto8.c[3]=p[3];
     proto8.c[4]=p[4]; proto8.c[5]=p[5]; proto8.c[6]=p[6]; proto8.c[7]=p[7];
     if (p[-1] == ' ' && http_1_1.u == proto8.u) {
-        con->request.http_version = HTTP_VERSION_1_1;
-        con->request.keep_alive = 1; /* keep-alive default: HTTP/1.1 -> true */
+        r->http_version = HTTP_VERSION_1_1;
+        r->keep_alive = 1; /* keep-alive default: HTTP/1.1 -> true */
     }
     else if (p[-1] == ' ' && http_1_0.u == proto8.u) {
-        con->request.http_version = HTTP_VERSION_1_0;
-        con->request.keep_alive = 0; /* keep-alive default: HTTP/1.0 -> false */
+        r->http_version = HTTP_VERSION_1_0;
+        r->keep_alive = 0; /* keep-alive default: HTTP/1.0 -> false */
     }
     else {
-        int status = http_request_parse_proto_loose(con,ptr,len,http_parseopts);
+        int status = http_request_parse_proto_loose(r,ptr,len,http_parseopts);
         if (0 != status) return status;
         /*(space char must exist if http_request_parse_proto_loose() succeeds)*/
         for (p = ptr + len - 9; p[-1] != ' '; --p) ;
@@ -597,27 +597,27 @@ static int http_request_parse_reqline(connection * const con, const char * const
   #if 0 /*(space must exist if protocol was parsed successfully)*/
     while (i < len && ptr[i] != ' ') ++i;
     if (ptr[i] != ' ')
-        return http_request_header_line_invalid(con, 400, "incomplete request line -> 400");
+        return http_request_header_line_invalid(r, 400, "incomplete request line -> 400");
   #endif
 
-    con->request.http_method = get_http_method_key(ptr, i);
-    if (HTTP_METHOD_UNSET == con->request.http_method)
-        return http_request_header_line_invalid(con, 501, "unknown http-method -> 501");
+    r->http_method = get_http_method_key(ptr, i);
+    if (HTTP_METHOD_UNSET == r->http_method)
+        return http_request_header_line_invalid(r, 501, "unknown http-method -> 501");
 
     const char *uri = ptr + i + 1;
 
     if (uri == p)
-        return http_request_header_line_invalid(con, 400, "no uri specified -> 400");
+        return http_request_header_line_invalid(r, 400, "no uri specified -> 400");
     len = (size_t)(p - uri - 1);
 
     if (*uri != '/') { /* (common case: (*uri == '/')) */
-        uri = http_request_parse_uri_alt(con, uri, len, http_parseopts);
+        uri = http_request_parse_uri_alt(r, uri, len, http_parseopts);
         if (NULL == uri) return 400;
         len = (size_t)(p - uri - 1);
     }
 
     if (0 == len)
-        return http_request_header_line_invalid(con, 400, "no uri specified -> 400");
+        return http_request_header_line_invalid(r, 400, "no uri specified -> 400");
 
     /* check uri for invalid characters */
     if (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) { /* http_header_strict */
@@ -627,24 +627,24 @@ static int http_request_parse_reqline(connection * const con, const char * const
         else {
             for (i = 0; i < len; ++i) {
                 if (!request_uri_is_valid_char(uri[i]))
-                    return http_request_header_char_invalid(con, uri[i], "invalid character in URI -> 400");
+                    return http_request_header_char_invalid(r, uri[i], "invalid character in URI -> 400");
             }
         }
     }
     else {
         /* check entire set of request headers for '\0' */
         if (NULL != memchr(ptr, '\0', hoff[hoff[0]]))
-            return http_request_header_char_invalid(con, '\0', "invalid character in header -> 400");
+            return http_request_header_char_invalid(r, '\0', "invalid character in header -> 400");
     }
 
-    buffer_copy_string_len(con->request.uri, uri, len);
-    buffer_copy_string_len(con->request.orig_uri, uri, len);
+    buffer_copy_string_len(r->uri, uri, len);
+    buffer_copy_string_len(r->orig_uri, uri, len);
     return 0;
 }
 
 __attribute_cold__
 __attribute_noinline__
-static int http_request_parse_header_other(connection * const con, const char * const k, const int klen, const unsigned int http_header_strict) {
+static int http_request_parse_header_other(request_st * const r, const char * const k, const int klen, const unsigned int http_header_strict) {
     for (int i = 0; i < klen; ++i) {
         if (light_isalpha(k[i]) || k[i] == '-') continue; /*(common cases)*/
         /**
@@ -655,7 +655,7 @@ static int http_request_parse_header_other(connection * const con, const char * 
         switch(k[i]) {
         case ' ':
         case '\t':
-            return http_request_header_line_invalid(con, 400, "WS character in key -> 400");
+            return http_request_header_line_invalid(r, 400, "WS character in key -> 400");
         case '(':
         case ')':
         case '<':
@@ -672,24 +672,24 @@ static int http_request_parse_header_other(connection * const con, const char * 
         case '=':
         case '{':
         case '}':
-            return http_request_header_char_invalid(con, k[i], "invalid character in header key -> 400");
+            return http_request_header_char_invalid(r, k[i], "invalid character in header key -> 400");
         default:
             if (http_header_strict ? (k[i] < 32 || ((unsigned char *)k)[i] >= 127) : k[i] == '\0')
-                return http_request_header_char_invalid(con, k[i], "invalid character in header key -> 400");
+                return http_request_header_char_invalid(r, k[i], "invalid character in header key -> 400");
             break; /* ok */
         }
     }
     return 0;
 }
 
-static int http_request_parse_headers(connection * const con, char * const ptr, const unsigned short * const hoff, const unsigned int http_parseopts) {
+static int http_request_parse_headers(request_st * const r, char * const ptr, const unsigned short * const hoff, const unsigned int http_parseopts) {
     const unsigned int http_header_strict = (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
   #if 0 /*(not checked here; will later result in invalid label for HTTP header)*/
     int i = hoff[2];
 
     if (ptr[i] == ' ' || ptr[i] == '\t') {
-        return http_request_header_line_invalid(con, 400, "WS at the start of first line -> 400");
+        return http_request_header_line_invalid(r, 400, "WS at the start of first line -> 400");
     }
   #endif
 
@@ -708,7 +708,7 @@ static int http_request_parse_headers(connection * const con, char * const ptr, 
             if (end[-2] == '\r')
                 end[-2] = ' ';
             else if (http_header_strict)
-                return http_request_header_line_invalid(con, 400, "missing CR before LF in header -> 400");
+                return http_request_header_line_invalid(r, 400, "missing CR before LF in header -> 400");
             end[-1] = ' ';
         }
       #ifdef __COVERITY__
@@ -718,7 +718,7 @@ static int http_request_parse_headers(connection * const con, char * const ptr, 
         if (end[-2] == '\r')
             --end;
         else if (http_header_strict)
-            return http_request_header_line_invalid(con, 400, "missing CR before LF in header -> 400");
+            return http_request_header_line_invalid(r, 400, "missing CR before LF in header -> 400");
         /* remove trailing whitespace from value (+ remove '\r\n') */
         /* (line k[-1] is always preceded by a '\n',
          *  including first header after request-line,
@@ -727,7 +727,7 @@ static int http_request_parse_headers(connection * const con, char * const ptr, 
 
         const char *colon = memchr(k, ':', end - k);
         if (NULL == colon)
-            return http_request_header_line_invalid(con, 400, "invalid header missing ':' -> 400");
+            return http_request_header_line_invalid(r, 400, "invalid header missing ':' -> 400");
 
         const char *v = colon + 1;
 
@@ -747,7 +747,7 @@ static int http_request_parse_headers(connection * const con, char * const ptr, 
          *  so no need to check colon != k) */
         if (colon[-1] == ' ' || colon[-1] == '\t') {
             if (http_header_strict) {
-                return http_request_header_line_invalid(con, 400, "invalid whitespace between field-name and colon -> 400");
+                return http_request_header_line_invalid(r, 400, "invalid whitespace between field-name and colon -> 400");
             }
             else {
                 /* remove trailing whitespace from key(if !http_header_strict)*/
@@ -757,13 +757,13 @@ static int http_request_parse_headers(connection * const con, char * const ptr, 
 
         const int klen = (int)(colon - k);
         if (0 == klen)
-            return http_request_header_line_invalid(con, 400, "invalid header key -> 400");
+            return http_request_header_line_invalid(r, 400, "invalid header key -> 400");
         const enum http_header_e id = http_header_hkey_get(k, klen);
 
         if (id == HTTP_HEADER_OTHER) {
             for (int j = 0; j < klen; ++j) {
                 if (light_isalpha(k[j]) || k[j] == '-') continue; /*(common cases)*/
-                if (0 != http_request_parse_header_other(con, k+j, klen-j, http_header_strict))
+                if (0 != http_request_parse_header_other(r, k+j, klen-j, http_header_strict))
                     return 400;
                 break;
             }
@@ -779,18 +779,18 @@ static int http_request_parse_headers(connection * const con, char * const ptr, 
         if (http_header_strict) {
             for (int j = 0; j < vlen; ++j) {
                 if ((((unsigned char *)v)[j] < 32 && v[j] != '\t') || v[j]==127)
-                    return http_request_header_char_invalid(con, v[j], "invalid character in header -> 400");
+                    return http_request_header_char_invalid(r, v[j], "invalid character in header -> 400");
             }
         } /* else URI already checked in http_request_parse_reqline() for any '\0' */
 
-        int status = http_request_parse_single_header(con, id, k, (size_t)klen, v, (size_t)vlen);
+        int status = http_request_parse_single_header(r, id, k, (size_t)klen, v, (size_t)vlen);
         if (0 != status) return status;
     }
 
     return 0;
 }
 
-int http_request_parse(connection * const con, char * const hdrs, const unsigned short * const hoff, const int scheme_port) {
+int http_request_parse(request_st * const r, char * const hdrs, const unsigned short * const hoff, const int scheme_port) {
     /*
      * Request: "^(GET|POST|HEAD|...) ([^ ]+(\\?[^ ]+|)) (HTTP/1\\.[01])$"
      * Header : "^([-a-zA-Z]+): (.+)$"
@@ -798,39 +798,39 @@ int http_request_parse(connection * const con, char * const hdrs, const unsigned
      */
 
     int status;
-    const unsigned int http_parseopts = con->conf.http_parseopts;
+    const unsigned int http_parseopts = r->conf->http_parseopts;
 
-    status = http_request_parse_reqline(con, hdrs, hoff, http_parseopts);
+    status = http_request_parse_reqline(r, hdrs, hoff, http_parseopts);
     if (0 != status) return status;
 
-    status = http_request_parse_headers(con, hdrs, hoff, http_parseopts);
+    status = http_request_parse_headers(r, hdrs, hoff, http_parseopts);
     if (0 != status) return status;
 
     /* post-processing */
 
     /* check hostname field if it is set */
-    if (con->request.http_host) {
-        if (0 != http_request_host_policy(con->request.http_host,
+    if (r->http_host) {
+        if (0 != http_request_host_policy(r->http_host,
                                           http_parseopts, scheme_port))
-            return http_request_header_line_invalid(con, 400, "Invalid Hostname -> 400");
+            return http_request_header_line_invalid(r, 400, "Invalid Hostname -> 400");
     }
     else {
-        if (con->request.http_version == HTTP_VERSION_1_1)
-            return http_request_header_line_invalid(con, 400, "HTTP/1.1 but Host missing -> 400");
+        if (r->http_version == HTTP_VERSION_1_1)
+            return http_request_header_line_invalid(r, 400, "HTTP/1.1 but Host missing -> 400");
     }
 
-    if (0 == con->request.content_length) {
+    if (0 == r->content_length) {
         /* POST requires Content-Length (or Transfer-Encoding)
-         * (-1 == con->request.content_length when Transfer-Encoding: chunked)*/
-        if (HTTP_METHOD_POST == con->request.http_method
-            && !(con->request.htags & HTTP_HEADER_CONTENT_LENGTH)) {
-            return http_request_header_line_invalid(con, 411, "POST-request, but content-length missing -> 411");
+         * (-1 == r->content_length when Transfer-Encoding: chunked)*/
+        if (HTTP_METHOD_POST == r->http_method
+            && !(r->htags & HTTP_HEADER_CONTENT_LENGTH)) {
+            return http_request_header_line_invalid(r, 411, "POST-request, but content-length missing -> 411");
         }
     }
     else {
-        /* (-1 == con->request.content_length when Transfer-Encoding: chunked)*/
-        if (-1 == con->request.content_length
-            && (con->request.htags & HTTP_HEADER_CONTENT_LENGTH)) {
+        /* (-1 == r->content_length when Transfer-Encoding: chunked)*/
+        if (-1 == r->content_length
+            && (r->htags & HTTP_HEADER_CONTENT_LENGTH)) {
             /* RFC7230 Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
              * 3.3.3.  Message Body Length
              * [...]
@@ -845,16 +845,16 @@ int http_request_parse(connection * const con, char * const hdrs, const unsigned
             const unsigned int http_header_strict =
               (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
             if (http_header_strict) {
-                return http_request_header_line_invalid(con, 400, "invalid Transfer-Encoding + Content-Length -> 400");
+                return http_request_header_line_invalid(r, 400, "invalid Transfer-Encoding + Content-Length -> 400");
             }
             else {
                 /* ignore Content-Length */
-                http_header_request_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+                http_header_request_unset(r->con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
             }
         }
-        if (http_method_get_or_head(con->request.http_method)
+        if (http_method_get_or_head(r->http_method)
             && !(http_parseopts & HTTP_PARSEOPT_METHOD_GET_BODY)) {
-            return http_request_header_line_invalid(con, 400, "GET/HEAD with content-length -> 400");
+            return http_request_header_line_invalid(r, 400, "GET/HEAD with content-length -> 400");
         }
     }
 

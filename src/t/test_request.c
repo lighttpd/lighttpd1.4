@@ -40,8 +40,8 @@ static void run_http_request_parse(connection *con, int line, int status, const 
         hloffsets[hloffsets[0]] = n - req + 1;
     }
     --hloffsets[0]; /*(ignore final blank line "\r\n" ending headers)*/
-    int http_status =
-      http_request_parse(con, hdrs->ptr, hloffsets, con->proto_default_port);
+    int http_status = http_request_parse(&con->request, hdrs->ptr, hloffsets,
+                                         con->proto_default_port);
     if (http_status != status) {
         fprintf(stderr,
                 "%s.%d: %s() failed: expected '%d', got '%d' for test %s\n",
@@ -588,6 +588,8 @@ int main (void)
     memset(&con, 0, sizeof(connection));
     con.srv                 = &srv;
     con.proto_default_port  = 80;
+    con.request.conf        = &con.conf;
+    con.request.con         = &con;
     con.request.request     = buffer_init();
     con.request.orig_uri    = buffer_init();
     con.request.uri         = buffer_init();
