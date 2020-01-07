@@ -3737,7 +3737,7 @@ webdav_has_lock (connection * const con,
 static handler_t
 mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
 {
-    if (con->request.content_length) {
+    if (con->request.reqbody_length) {
       #ifdef USE_PROPPATCH
         if (con->state == CON_STATE_READ_POST) {
             handler_t rc = connection_handle_read_post_state(con);
@@ -3819,7 +3819,7 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
   #ifdef USE_PROPPATCH
     xmlDocPtr xml = NULL;
     const xmlNode *rootnode = NULL;
-    if (con->request.content_length) {
+    if (con->request.reqbody_length) {
         if (NULL == (xml = webdav_parse_chunkqueue(con, pconf))) {
             http_status_set_error(con, 400); /* Bad Request */
             return HANDLER_FINISHED;
@@ -4244,7 +4244,7 @@ mod_webdav_put_prep (connection * const con, const plugin_config * const pconf)
     }
 
     /* special-case PUT 0-length file */
-    if (0 == con->request.content_length)
+    if (0 == con->request.reqbody_length)
         return mod_webdav_put_0(con, pconf);
 
     /* Create temporary file in target directory (to store reqbody as received)
@@ -4973,7 +4973,7 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
         return HANDLER_FINISHED;
     }
 
-    if (0 == con->request.content_length) {
+    if (0 == con->request.reqbody_length) {
         http_status_set_error(con, 400); /* Bad Request */
         return HANDLER_FINISHED;
     }
@@ -5193,7 +5193,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
      * </D:lockinfo>\n
      */
 
-    if (con->request.content_length) {
+    if (con->request.reqbody_length) {
         if (con->state == CON_STATE_READ_POST) {
             handler_t rc = connection_handle_read_post_state(con);
             if (rc != HANDLER_GO_ON) return rc;
@@ -5259,7 +5259,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
         } while (*p != '\0');
     }
 
-    if (con->request.content_length) {
+    if (con->request.reqbody_length) {
         lockdata.depth = webdav_parse_Depth(con);
         if (1 == lockdata.depth) {
             /* [RFC4918] 9.10.3 Depth and Locking
@@ -5615,7 +5615,7 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
         return HANDLER_FINISHED;
     }
 
-    if (reject_reqbody && con->request.content_length) {
+    if (reject_reqbody && con->request.reqbody_length) {
         /* [RFC4918] 8.4 Required Bodies in Requests
          *   Servers MUST examine all requests for a body, even when a
          *   body was not expected. In cases where a request body is

@@ -203,7 +203,7 @@ static handler_t connection_handle_read_post_chunked(connection *con, chunkqueue
                          * making trailers available to CGI and other backends*/
                     }
                     chunkqueue_mark_written(cq, (size_t)hsz);
-                    con->request.content_length = dst_cq->bytes_in;
+                    con->request.reqbody_length = dst_cq->bytes_in;
                     break; /* done reading HTTP chunked request body */
                 }
 
@@ -449,25 +449,25 @@ handler_t connection_handle_read_post_state(connection *con) {
 		}
 	}
 
-	if (con->request.content_length < 0) {
+	if (con->request.reqbody_length < 0) {
 		/*(-1: Transfer-Encoding: chunked, -2: unspecified length)*/
-		handler_t rc = (-1 == con->request.content_length)
+		handler_t rc = (-1 == con->request.reqbody_length)
                   ? connection_handle_read_post_chunked(con, cq, dst_cq)
                   : connection_handle_read_body_unknown(con, cq, dst_cq);
 		if (HANDLER_GO_ON != rc) return rc;
 	}
-	else if (con->request.content_length <= 64*1024) {
+	else if (con->request.reqbody_length <= 64*1024) {
 		/* don't buffer request bodies <= 64k on disk */
-		chunkqueue_steal(dst_cq, cq, (off_t)con->request.content_length - dst_cq->bytes_in);
+		chunkqueue_steal(dst_cq, cq, (off_t)con->request.reqbody_length - dst_cq->bytes_in);
 	}
-	else if (0 != chunkqueue_steal_with_tempfiles(dst_cq, cq, (off_t)con->request.content_length - dst_cq->bytes_in, con->conf.errh)) {
+	else if (0 != chunkqueue_steal_with_tempfiles(dst_cq, cq, (off_t)con->request.reqbody_length - dst_cq->bytes_in, con->conf.errh)) {
 		/* writing to temp file failed */
 		return connection_handle_read_post_error(con, 500); /* Internal Server Error */
 	}
 
 	chunkqueue_remove_finished_chunks(cq);
 
-	if (dst_cq->bytes_in == (off_t)con->request.content_length) {
+	if (dst_cq->bytes_in == (off_t)con->request.reqbody_length) {
 		/* Content is ready */
 		con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
 		if (con->state == CON_STATE_READ_POST) {

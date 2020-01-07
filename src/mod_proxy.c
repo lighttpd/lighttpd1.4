@@ -857,8 +857,8 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	/* "Forwarded" and legacy X- headers */
 	proxy_set_Forwarded(con, hctx->conf.forwarded);
 
-	if (con->request.content_length > 0
-	    || (0 == con->request.content_length
+	if (con->request.reqbody_length > 0
+	    || (0 == con->request.reqbody_length
 		&& !http_method_get_or_head(con->request.http_method))) {
 		/* set Content-Length if client sent Transfer-Encoding: chunked
 		 * and not streaming to backend (request body has been fully received) */
@@ -866,7 +866,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		if (NULL == vb) {
 			char buf[LI_ITOSTRING_LENGTH];
 			http_header_request_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"),
-			                        buf, li_itostrn(buf, sizeof(buf), con->request.content_length));
+			                        buf, li_itostrn(buf, sizeof(buf), con->request.reqbody_length));
 		}
 	}
 
@@ -948,10 +948,10 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	hctx->gw.wb_reqlen = buffer_string_length(b);
 	chunkqueue_prepend_buffer_commit(hctx->gw.wb);
 
-	if (con->request.content_length) {
+	if (con->request.reqbody_length) {
 		chunkqueue_append_chunkqueue(hctx->gw.wb, con->request_content_queue);
-		if (con->request.content_length > 0)
-			hctx->gw.wb_reqlen += con->request.content_length; /* total req size */
+		if (con->request.reqbody_length > 0)
+			hctx->gw.wb_reqlen += con->request.reqbody_length; /* total req size */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
 			hctx->gw.wb_reqlen = -hctx->gw.wb_reqlen;
 	}

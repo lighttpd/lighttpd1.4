@@ -288,7 +288,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 			"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>"
 			"<upload>"
 			"<size>"));
-		buffer_append_int(b, post_con->request.content_length);
+		buffer_append_int(b, post_con->request.reqbody_length);
 		buffer_append_string_len(b, CONST_STR_LEN(
 			"</size>"
 			"<received>"));

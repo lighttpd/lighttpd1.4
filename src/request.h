@@ -89,7 +89,7 @@ struct request_st {
     array headers;
 
     /* CONTENT */
-    off_t content_length; /* returned by strtoll() */
+    off_t reqbody_length; /* request Content-Length */
     off_t te_chunked;
 
     int keep_alive; /* only request.c can enable it, all other just disable */

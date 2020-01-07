@@ -855,7 +855,7 @@ void http_response_upgrade_read_body_unknown(connection *con) {
         con->conf.stream_response_body |=
           (FDEVENT_STREAM_RESPONSE_BUFMIN | FDEVENT_STREAM_RESPONSE);
     con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
-    con->request.content_length = -2;
+    con->request.reqbody_length = -2;
     con->request.keep_alive = 0;
 }
 
@@ -907,12 +907,12 @@ static handler_t http_response_process_local_redir(connection *con, size_t blen)
 
         buffer_copy_buffer(con->request.uri, vb);
 
-        if (con->request.content_length) {
-            if (con->request.content_length
+        if (con->request.reqbody_length) {
+            if (con->request.reqbody_length
                 != con->request_content_queue->bytes_in) {
                 con->request.keep_alive = 0;
             }
-            con->request.content_length = 0;
+            con->request.reqbody_length = 0;
             chunkqueue_reset(con->request_content_queue);
         }
 
@@ -1361,7 +1361,7 @@ int http_cgi_headers (connection *con, http_cgi_opts *opts, http_cgi_header_appe
     /* (CONTENT_LENGTH must be first for SCGI) */
     if (!opts->authorizer) {
         rc |= cb(vdata, CONST_STR_LEN("CONTENT_LENGTH"),
-                 buf, li_itostrn(buf,sizeof(buf),con->request.content_length));
+                 buf, li_itostrn(buf,sizeof(buf),con->request.reqbody_length));
     }
 
     if (!buffer_string_is_empty(con->uri.query)) {

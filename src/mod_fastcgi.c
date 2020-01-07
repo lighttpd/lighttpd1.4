@@ -242,7 +242,7 @@ static handler_t fcgi_stdin_append(handler_ctx *hctx) {
 		  ? chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header))
 		  : chunkqueue_append_mem_min(hctx->wb, (const char *)&header, sizeof(header));
 		chunkqueue_steal(hctx->wb, req_cq, weWant);
-		/*(hctx->wb_reqlen already includes content_length)*/
+		/*(hctx->wb_reqlen already includes reqbody_length)*/
 	}
 
 	if (hctx->wb->bytes_in == hctx->wb_reqlen) {
@@ -316,10 +316,10 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 		chunkqueue_prepend_buffer_commit(hctx->wb);
 	}
 
-	if (con->request.content_length) {
+	if (con->request.reqbody_length) {
 		/*chunkqueue_append_chunkqueue(hctx->wb, con->request_content_queue);*/
-		if (con->request.content_length > 0)
-			hctx->wb_reqlen += con->request.content_length;/* (eventual) (minimal) total request size, not necessarily including all fcgi_headers around content length yet */
+		if (con->request.reqbody_length > 0)
+			hctx->wb_reqlen += con->request.reqbody_length;/* (eventual) (minimal) total request size, not necessarily including all fcgi_headers around content length yet */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
 			hctx->wb_reqlen = -hctx->wb_reqlen;
 	}

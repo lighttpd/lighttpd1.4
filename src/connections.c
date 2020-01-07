@@ -229,7 +229,7 @@ static void connection_handle_response_end_state(connection *con) {
 
 	if (con->state != CON_STATE_ERROR) ++con->srv->con_written;
 
-	if (con->request.content_length != con->request_content_queue->bytes_in
+	if (con->request.reqbody_length != con->request_content_queue->bytes_in
 	    || con->state == CON_STATE_ERROR) {
 		/* request body is present and has not been read completely */
 		con->request.keep_alive = 0;
@@ -674,7 +674,7 @@ static int connection_reset(connection *con) {
 	/*con->proto_default_port = 80;*//*set to default in connection_accepted()*/
 
 	con->request.http_host = NULL;
-	con->request.content_length = 0;
+	con->request.reqbody_length = 0;
 	con->request.te_chunked = 0;
 	con->request.htags = 0;
 
@@ -849,7 +849,7 @@ static int connection_handle_read_state(connection * const con)  {
       http_request_parse(&con->request, hdrs, hoff, con->proto_default_port);
     if (0 != con->http_status) {
         con->request.keep_alive = 0;
-        con->request.content_length = 0;
+        con->request.reqbody_length = 0;
 
         if (con->conf.log_request_header_on_error) {
             /*(http_request_parse() modifies hdrs only to
@@ -917,8 +917,8 @@ static handler_t connection_handle_fdevent(void *context, int revents) {
 			con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLRDHUP;
 			con->is_readable = 1; /*(can read 0 for end-of-stream)*/
 			if (chunkqueue_is_empty(con->read_queue)) con->request.keep_alive = 0;
-			if (con->request.content_length < -1) { /*(transparent proxy mode; no more data to read)*/
-				con->request.content_length = con->request_content_queue->bytes_in;
+			if (con->request.reqbody_length < -1) { /*(transparent proxy mode; no more data to read)*/
+				con->request.reqbody_length = con->request_content_queue->bytes_in;
 			}
 			if (sock_addr_get_family(&con->dst_addr) == AF_UNIX) {
 				/* future: will getpeername() on AF_UNIX properly check if still connected? */
@@ -1185,11 +1185,11 @@ static int connection_handle_request(connection *con) {
 							if (error_handler == con->conf.error_handler) {
 								plugins_call_connection_reset(con);
 
-								if (con->request.content_length) {
-									if (con->request.content_length != con->request_content_queue->bytes_in) {
+								if (con->request.reqbody_length) {
+									if (con->request.reqbody_length != con->request_content_queue->bytes_in) {
 										con->request.keep_alive = 0;
 									}
-									con->request.content_length = 0;
+									con->request.reqbody_length = 0;
 									chunkqueue_reset(con->request_content_queue);
 								}
 
@@ -1272,7 +1272,7 @@ int connection_state_machine(connection *con) {
 			/*if (con->state != CON_STATE_REQUEST_END) break;*/
 			/* fall through */
 		case CON_STATE_REQUEST_END: /* transient */
-			ostate = (0 == con->request.content_length)
+			ostate = (0 == con->request.reqbody_length)
 			  ? CON_STATE_HANDLE_REQUEST
 			  : CON_STATE_READ_POST;
 			connection_set_state(con, ostate);

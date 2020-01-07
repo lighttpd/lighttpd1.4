@@ -17,7 +17,7 @@ static void test_request_connection_reset(connection *con)
     con->request.http_version = HTTP_VERSION_UNSET;
     con->request.http_host = NULL;
     con->request.htags = 0;
-    con->request.content_length = 0;
+    con->request.reqbody_length = 0;
     con->header_len = 0;
     con->http_status = 0;
     con->proto_default_port = 80;

@@ -351,7 +351,7 @@ static handler_t wstunnel_create_env(gw_handler_ctx *gwhctx) {
     handler_ctx *hctx = (handler_ctx *)gwhctx;
     connection *con = hctx->gw.remote_conn;
     handler_t rc;
-    if (0 == con->request.content_length) {
+    if (0 == con->request.reqbody_length) {
         http_response_upgrade_read_body_unknown(con);
         chunkqueue_append_chunkqueue(con->request_content_queue,
                                      con->read_queue);

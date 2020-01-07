@@ -59,8 +59,8 @@ int http_response_write_header(connection *con) {
 
 	if (con->request_count > con->conf.max_keep_alive_requests || 0 == con->conf.max_keep_alive_idle) {
 		con->request.keep_alive = 0;
-	} else if (0 != con->request.content_length
-		   && con->request.content_length != con->request_content_queue->bytes_in
+	} else if (0 != con->request.reqbody_length
+		   && con->request.reqbody_length != con->request_content_queue->bytes_in
 		   && (con->mode == DIRECT || 0 == con->conf.stream_request_body)) {
 		con->request.keep_alive = 0;
 	} else {
@@ -476,9 +476,9 @@ handler_t http_response_prepare(connection *con) {
 
 		/* con->conf.max_request_size is in kBytes */
 		if (0 != con->conf.max_request_size &&
-		    (off_t)con->request.content_length > ((off_t)con->conf.max_request_size << 10)) {
+		    (off_t)con->request.reqbody_length > ((off_t)con->conf.max_request_size << 10)) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
-			  "request-size too long: %lld -> 413", (long long) con->request.content_length);
+			  "request-size too long: %lld -> 413", (long long) con->request.reqbody_length);
 			return /* 413 Payload Too Large */
 			  http_status_set_error_close(con, 413);
 		}

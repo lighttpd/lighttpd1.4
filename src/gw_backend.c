@@ -1893,7 +1893,7 @@ static handler_t gw_write_request(gw_handler_ctx *hctx, connection *con) {
 
         /*(disable Nagle algorithm if streaming and content-length unknown)*/
         if (AF_UNIX != hctx->host->family) {
-            if (con->request.content_length < 0) {
+            if (con->request.reqbody_length < 0) {
                 if (-1 == fdevent_set_tcp_nodelay(hctx->fd, 1)) {
                     /*(error, but not critical)*/
                 }
@@ -2047,9 +2047,9 @@ handler_t gw_handle_subrequest(connection *con, void *p_d) {
             handler_t rc = connection_handle_read_post_state(con);
             chunkqueue *req_cq = con->request_content_queue;
           #if 0 /*(not reached since we send 411 Length Required below)*/
-            if (hctx->wb_reqlen < -1 && con->request.content_length >= 0) {
+            if (hctx->wb_reqlen < -1 && con->request.reqbody_length >= 0) {
                 /* (completed receiving Transfer-Encoding: chunked) */
-                hctx->wb_reqlen= -hctx->wb_reqlen + con->request.content_length;
+                hctx->wb_reqlen= -hctx->wb_reqlen + con->request.reqbody_length;
                 if (hctx->stdin_append) {
                     handler_t rca = hctx->stdin_append(hctx);
                     if (HANDLER_GO_ON != rca) return rca;
@@ -2079,7 +2079,7 @@ handler_t gw_handle_subrequest(connection *con, void *p_d) {
             /* proxy currently sends HTTP/1.0 request and ideally should send
              * Content-Length with request if request body is present, so
              * send 411 Length Required if Content-Length missing. */
-            if (-1 == con->request.content_length) {
+            if (-1 == con->request.reqbody_length) {
                 return connection_handle_read_post_error(con, 411);
             }
         }

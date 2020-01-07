@@ -432,7 +432,7 @@ static int http_request_parse_single_header(request_st * const r, const enum htt
             off_t clen = strtoll(v, &err, 10);
             if (clen >= 0 && err == v+vlen) {
                 /* (set only if not set to -1 by Transfer-Encoding: chunked) */
-                if (0 == r->content_length) r->content_length = clen;
+                if (0 == r->reqbody_length) r->reqbody_length = clen;
             }
             else {
                 return http_request_header_line_invalid(r, 400, "invalid Content-Length header -> 400");
@@ -469,7 +469,7 @@ static int http_request_parse_single_header(request_st * const r, const enum htt
              * which are not currently supported by lighttpd */
             return http_request_header_line_invalid(r, 501, NULL); /* Not Implemented */
         }
-        r->content_length = -1;
+        r->reqbody_length = -1;
 
         /* Transfer-Encoding is a hop-by-hop header,
          * which must not be blindly forwarded to backends */
@@ -819,17 +819,17 @@ int http_request_parse(request_st * const r, char * const hdrs, const unsigned s
             return http_request_header_line_invalid(r, 400, "HTTP/1.1 but Host missing -> 400");
     }
 
-    if (0 == r->content_length) {
+    if (0 == r->reqbody_length) {
         /* POST requires Content-Length (or Transfer-Encoding)
-         * (-1 == r->content_length when Transfer-Encoding: chunked)*/
+         * (-1 == r->reqbody_length when Transfer-Encoding: chunked)*/
         if (HTTP_METHOD_POST == r->http_method
             && !(r->htags & HTTP_HEADER_CONTENT_LENGTH)) {
             return http_request_header_line_invalid(r, 411, "POST-request, but content-length missing -> 411");
         }
     }
     else {
-        /* (-1 == r->content_length when Transfer-Encoding: chunked)*/
-        if (-1 == r->content_length
+        /* (-1 == r->reqbody_length when Transfer-Encoding: chunked)*/
+        if (-1 == r->reqbody_length
             && (r->htags & HTTP_HEADER_CONTENT_LENGTH)) {
             /* RFC7230 Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
              * 3.3.3.  Message Body Length

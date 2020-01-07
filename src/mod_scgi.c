@@ -266,10 +266,10 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 	chunkqueue_mark_written(hctx->wb, offset);
       #endif
 
-	if (con->request.content_length) {
+	if (con->request.reqbody_length) {
 		chunkqueue_append_chunkqueue(hctx->wb, con->request_content_queue);
-		if (con->request.content_length > 0)
-			hctx->wb_reqlen += con->request.content_length; /* total req size */
+		if (con->request.reqbody_length > 0)
+			hctx->wb_reqlen += con->request.reqbody_length; /* total req size */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
 			hctx->wb_reqlen = -hctx->wb_reqlen;
 	}

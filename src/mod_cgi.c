@@ -368,10 +368,10 @@ static handler_t cgi_handle_fdevent_send (void *ctx, int revents) {
 
 	if (revents & FDEVENT_HUP) {
 		/* skip sending remaining data to CGI */
-		if (con->request.content_length) {
+		if (con->request.reqbody_length) {
 			chunkqueue *cq = con->request_content_queue;
 			chunkqueue_mark_written(cq, chunkqueue_length(cq));
-			if (cq->bytes_in != (off_t)con->request.content_length) {
+			if (cq->bytes_in != (off_t)con->request.reqbody_length) {
 				con->request.keep_alive = 0;
 			}
 		}
@@ -414,7 +414,7 @@ static handler_t cgi_response_headers(connection *con, struct http_response_opts
     if (hctx->conf.upgrade && !(con->response.htags & HTTP_HEADER_UPGRADE)) {
         chunkqueue *cq = con->request_content_queue;
         hctx->conf.upgrade = 0;
-        if (cq->bytes_out == (off_t)con->request.content_length) {
+        if (cq->bytes_out == (off_t)con->request.reqbody_length) {
             cgi_connection_close_fdtocgi(con, hctx); /*(closes hctx->fdtocgi)*/
         }
     }
@@ -698,7 +698,7 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 		}
 	}
 
-	if (cq->bytes_out == (off_t)con->request.content_length && !hctx->conf.upgrade) {
+	if (cq->bytes_out == (off_t)con->request.reqbody_length && !hctx->conf.upgrade) {
 		/* sent all request body input */
 		/* close connection to the cgi-script */
 		if (-1 == hctx->fdtocgi) { /*(received request body sent in initial send to pipe buffer)*/
@@ -711,7 +711,7 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 		}
 	} else {
 		off_t cqlen = cq->bytes_in - cq->bytes_out;
-		if (cq->bytes_in != con->request.content_length && cqlen < 65536 - 16384) {
+		if (cq->bytes_in != con->request.reqbody_length && cqlen < 65536 - 16384) {
 			/*(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
 			if (!(con->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)) {
 				con->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
@@ -843,7 +843,7 @@ static int cgi_create_env(connection *con, plugin_data *p, handler_ctx *hctx, bu
 
 		++con->srv->cur_fds;
 
-		if (0 == con->request.content_length) {
+		if (0 == con->request.reqbody_length) {
 			close(to_cgi_fds[1]);
 		} else {
 			/* there is content to send */
@@ -947,7 +947,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 
 	chunkqueue * const cq = con->request_content_queue;
 
-	if (cq->bytes_in != (off_t)con->request.content_length) {
+	if (cq->bytes_in != (off_t)con->request.reqbody_length) {
 		/*(64k - 4k to attempt to avoid temporary files
 		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
 		if (cq->bytes_in - cq->bytes_out > 65536 - 4096
@@ -967,7 +967,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			 * Send 411 Length Required if Content-Length missing.
 			 * (occurs here if client sends Transfer-Encoding: chunked
 			 *  and module is flagged to stream request body to backend) */
-			if (-1 == con->request.content_length) {
+			if (-1 == con->request.reqbody_length) {
 				return connection_handle_read_post_error(con, 411);
 			}
 		}
