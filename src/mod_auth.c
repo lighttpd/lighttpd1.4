@@ -601,6 +601,7 @@ static handler_t mod_auth_check_basic(server *srv, connection *con, void *p_d, c
 	case HANDLER_ERROR:
 	default:
 		log_error_write(srv, __FILE__, __LINE__, "sbsBsB", "password doesn't match for", con->uri.path, "username:", username, ", IP:", con->dst_addr_buf);
+		con->keep_alive = 0; /*(disable keep-alive if bad password)*/
 		rc = HANDLER_UNSET;
 		break;
 	}
@@ -1122,6 +1123,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		return HANDLER_FINISHED;
 	case HANDLER_ERROR:
 	default:
+		con->keep_alive = 0; /*(disable keep-alive if unknown user)*/
 		buffer_free(b);
 		return mod_auth_send_401_unauthorized_digest(srv, con, require, 0);
 	}
@@ -1132,6 +1134,7 @@ static handler_t mod_auth_check_digest(server *srv, connection *con, void *p_d, 
 		/* digest not ok */
 		log_error_write(srv, __FILE__, __LINE__, "sssB",
 				"digest: auth failed for ", username, ": wrong password, IP:", con->dst_addr_buf);
+		con->keep_alive = 0; /*(disable keep-alive if bad password)*/
 
 		buffer_free(b);
 		return mod_auth_send_401_unauthorized_digest(srv, con, require, 0);
