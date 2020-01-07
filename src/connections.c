@@ -545,7 +545,6 @@ static connection *connection_init(server *srv) {
 	con->x = buffer_init();
 
 	CLEAN(request.uri);
-	CLEAN(request.request);
 	CLEAN(request.pathinfo);
 
 	CLEAN(request.orig_uri);
@@ -610,7 +609,6 @@ void connections_free(server *srv) {
 	buffer_free(con->x);
 
 		CLEAN(request.uri);
-		CLEAN(request.request);
 		CLEAN(request.pathinfo);
 
 		CLEAN(request.orig_uri);

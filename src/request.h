@@ -76,10 +76,7 @@ struct request_st {
     connection *con;
 
     /** HEADER */
-    /* the request-line */
-    buffer *request;
     buffer *uri;
-
     buffer *orig_uri;
 
     http_method_t  http_method;

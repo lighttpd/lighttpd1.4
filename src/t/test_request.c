@@ -21,7 +21,6 @@ static void test_request_connection_reset(connection *con)
     con->header_len = 0;
     con->http_status = 0;
     con->proto_default_port = 80;
-    buffer_reset(con->request.request);
     buffer_reset(con->request.orig_uri);
     buffer_reset(con->request.uri);
     array_reset_data_strings(&con->request.headers);
@@ -30,9 +29,10 @@ static void test_request_connection_reset(connection *con)
 static void run_http_request_parse(connection *con, int line, int status, const char *desc, const char *req, size_t reqlen)
 {
     unsigned short hloffsets[32];
+    char hdrs[1024];
     test_request_connection_reset(con);
-    buffer * const hdrs = con->request.request;
-    buffer_copy_string_len(hdrs, req, reqlen);
+    assert(reqlen < sizeof(hdrs));
+    memcpy(hdrs, req, reqlen);
     hloffsets[0] = 1;
     hloffsets[1] = 0;
     for (const char *n=req, *end=req+reqlen; (n=memchr(n,'\n',end-n)); ++n) {
@@ -40,7 +40,7 @@ static void run_http_request_parse(connection *con, int line, int status, const 
         hloffsets[hloffsets[0]] = n - req + 1;
     }
     --hloffsets[0]; /*(ignore final blank line "\r\n" ending headers)*/
-    int http_status = http_request_parse(&con->request, hdrs->ptr, hloffsets,
+    int http_status = http_request_parse(&con->request, hdrs, hloffsets,
                                          con->proto_default_port);
     if (http_status != status) {
         fprintf(stderr,
@@ -590,7 +590,6 @@ int main (void)
     con.proto_default_port  = 80;
     con.request.conf        = &con.conf;
     con.request.con         = &con;
-    con.request.request     = buffer_init();
     con.request.orig_uri    = buffer_init();
     con.request.uri         = buffer_init();
     con.conf.errh           = srv.errh;
@@ -601,7 +600,6 @@ int main (void)
 
     test_request_http_request_parse(&con);
 
-    buffer_free(con.request.request);
     buffer_free(con.request.orig_uri);
     buffer_free(con.request.uri);
     array_free_data(&con.request.headers);
