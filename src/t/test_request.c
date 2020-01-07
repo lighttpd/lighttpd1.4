@@ -7,30 +7,24 @@
 #include <string.h>
 
 #include "request.h"
-#include "base.h"
-#include "burl.h"
-#include "log.h"
 
-static void test_request_connection_reset(connection *con)
+static void test_request_reset(request_st * const r)
 {
-    con->request.http_method = HTTP_METHOD_UNSET;
-    con->request.http_version = HTTP_VERSION_UNSET;
-    con->request.http_host = NULL;
-    con->request.htags = 0;
-    con->request.reqbody_length = 0;
-    con->header_len = 0;
-    con->http_status = 0;
-    con->proto_default_port = 80;
-    buffer_reset(con->request.orig_uri);
-    buffer_reset(con->request.uri);
-    array_reset_data_strings(&con->request.headers);
+    r->http_method = HTTP_METHOD_UNSET;
+    r->http_version = HTTP_VERSION_UNSET;
+    r->http_host = NULL;
+    r->htags = 0;
+    r->reqbody_length = 0;
+    buffer_reset(r->orig_uri);
+    buffer_reset(r->uri);
+    array_reset_data_strings(&r->headers);
 }
 
-static void run_http_request_parse(connection *con, int line, int status, const char *desc, const char *req, size_t reqlen)
+static void run_http_request_parse(request_st * const r, int line, int status, const char *desc, const char *req, size_t reqlen)
 {
     unsigned short hloffsets[32];
     char hdrs[1024];
-    test_request_connection_reset(con);
+    test_request_reset(r);
     assert(reqlen < sizeof(hdrs));
     memcpy(hdrs, req, reqlen);
     hloffsets[0] = 1;
@@ -40,8 +34,8 @@ static void run_http_request_parse(connection *con, int line, int status, const 
         hloffsets[hloffsets[0]] = n - req + 1;
     }
     --hloffsets[0]; /*(ignore final blank line "\r\n" ending headers)*/
-    int http_status = http_request_parse(&con->request, hdrs, hloffsets,
-                                         con->proto_default_port);
+    const int proto_default_port = 80;
+    int http_status = http_request_parse(r,hdrs,hloffsets,proto_default_port);
     if (http_status != status) {
         fprintf(stderr,
                 "%s.%d: %s() failed: expected '%d', got '%d' for test %s\n",
@@ -52,278 +46,278 @@ static void run_http_request_parse(connection *con, int line, int status, const 
     }
 }
 
-static void test_request_http_request_parse(connection *con)
+static void test_request_http_request_parse(request_st * const r)
 {
     data_string *ds;
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: space",
       CONST_STR_LEN(" \r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: space, char",
       CONST_STR_LEN(" a\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: dot",
       CONST_STR_LEN(".\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: single char",
       CONST_STR_LEN("a\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: char, space",
       CONST_STR_LEN("a \r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: method only",
       CONST_STR_LEN("GET\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: method space",
       CONST_STR_LEN("GET \r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: method space space",
       CONST_STR_LEN("GET  \r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: method space proto",
       CONST_STR_LEN("GET HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: method space space proto",
       CONST_STR_LEN("GET  HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: method space space space proto",
       CONST_STR_LEN("GET   HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: method slash proto, no spaces",
       CONST_STR_LEN("GET/HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: method space slash proto",
       CONST_STR_LEN("GET /HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: method space space slash proto",
       CONST_STR_LEN("GET  /HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 501,
+    run_http_request_parse(r, __LINE__, 501,
       "invalid request-line: method slash space proto",
       CONST_STR_LEN("GET/ HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 501,
+    run_http_request_parse(r, __LINE__, 501,
       "invalid request-line: method slash space space proto",
       CONST_STR_LEN("GET/  HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "hostname",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(con->request.http_host,
+    assert(buffer_is_equal_string(r->http_host,
                                   CONST_STR_LEN("www.example.org")));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "IPv4 address",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: 127.0.0.1\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(con->request.http_host,
+    assert(buffer_is_equal_string(r->http_host,
                                   CONST_STR_LEN("127.0.0.1")));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "IPv6 address",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: [::1]\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(con->request.http_host,
+    assert(buffer_is_equal_string(r->http_host,
                                   CONST_STR_LEN("[::1]")));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "hostname + port",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: www.example.org:80\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(con->request.http_host,
+    assert(buffer_is_equal_string(r->http_host,
                                   CONST_STR_LEN("www.example.org")));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "IPv4 address + port",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: 127.0.0.1:80\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(con->request.http_host,
+    assert(buffer_is_equal_string(r->http_host,
                                   CONST_STR_LEN("127.0.0.1")));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "IPv6 address + port",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: [::1]:80\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(con->request.http_host,
+    assert(buffer_is_equal_string(r->http_host,
                                   CONST_STR_LEN("[::1]")));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "directory traversal",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: ../123.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "leading and trailing dot",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: .jsdh.sfdg.sdfg.\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "trailing dot is ok",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: jsdh.sfdg.sdfg.\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(con->request.http_host,
+    assert(buffer_is_equal_string(r->http_host,
                                   CONST_STR_LEN("jsdh.sfdg.sdfg")));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "leading dot",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: .jsdh.sfdg.sdfg\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "two dots",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: jsdh..sfdg.sdfg\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "broken port-number",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: jsdh.sfdg.sdfg:asd\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "negative port-number",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: jsdh.sfdg.sdfg:-1\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "port given but host missing",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: :80\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "port and host are broken",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: .jsdh.sfdg.:sdfg.\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "allowed characters in host-name",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: a.b-c.d123\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(con->request.http_host,
+    assert(buffer_is_equal_string(r->http_host,
                                   CONST_STR_LEN("a.b-c.d123")));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "leading dash",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: -a.c\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "dot only",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: .\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "broken IPv4 address - non-digit",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: a192.168.2.10:1234\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "broken IPv4 address - too short",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: 192.168.2:1234\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "IPv6 address + SQL injection",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: [::1]' UNION SELECT '/\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "IPv6 address + path traversal",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: [::1]/../../../\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "negative Content-Length",
       CONST_STR_LEN("POST /12345.txt HTTP/1.0\r\n"
                     "Content-Length: -2\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 411,
+    run_http_request_parse(r, __LINE__, 411,
       "Content-Length is empty",
       CONST_STR_LEN("POST /12345.txt HTTP/1.0\r\n"
                     "Host: 123.example.org\r\n"
                     "Content-Length:\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "Host missing",
       CONST_STR_LEN("GET / HTTP/1.1\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "empty request-URI",
       CONST_STR_LEN("GET  HTTP/1.0\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "#1232 - duplicate headers with line-wrapping",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Location: foo\r\n"
@@ -331,12 +325,12 @@ static void test_request_http_request_parse(connection *con)
                     "  baz\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&con->request.headers, CONST_STR_LEN("Location"));
+      array_get_element_klen(&r->headers, CONST_STR_LEN("Location"));
     assert(ds
            && buffer_is_equal_string(&ds->value,
                                      CONST_STR_LEN("foo, foobar    baz")));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "#1232 - duplicate headers with line-wrapping - test 2",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Location: \r\n"
@@ -344,11 +338,11 @@ static void test_request_http_request_parse(connection *con)
                     "  baz\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&con->request.headers, CONST_STR_LEN("Location"));
+      array_get_element_klen(&r->headers, CONST_STR_LEN("Location"));
     assert(ds
            && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foobar    baz")));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "#1232 - duplicate headers with line-wrapping - test 3",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "A: \r\n"
@@ -356,116 +350,116 @@ static void test_request_http_request_parse(connection *con)
                     "  baz\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&con->request.headers, CONST_STR_LEN("Location"));
+      array_get_element_klen(&r->headers, CONST_STR_LEN("Location"));
     assert(ds
            && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foobar    baz")));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "missing protocol",
       CONST_STR_LEN("GET /\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 505,
+    run_http_request_parse(r, __LINE__, 505,
       "zeros in protocol version",
       CONST_STR_LEN("GET / HTTP/01.01\r\n"
                     "Host: foo\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 505,
+    run_http_request_parse(r, __LINE__, 505,
       "missing major version",
       CONST_STR_LEN("GET / HTTP/.01\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 505,
+    run_http_request_parse(r, __LINE__, 505,
       "missing minor version",
       CONST_STR_LEN("GET / HTTP/01.\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 505,
+    run_http_request_parse(r, __LINE__, 505,
       "strings as version",
       CONST_STR_LEN("GET / HTTP/a.b\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "missing protocol + unknown method",
       CONST_STR_LEN("BC /\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "missing protocol + unknown method + missing URI",
       CONST_STR_LEN("ABC\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 501,
+    run_http_request_parse(r, __LINE__, 501,
       "unknown method",
       CONST_STR_LEN("ABC / HTTP/1.0\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 505,
+    run_http_request_parse(r, __LINE__, 505,
       "unknown protocol",
       CONST_STR_LEN("GET / HTTP/1.3\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "absolute URI",
       CONST_STR_LEN("GET http://www.example.org/ HTTP/1.0\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(con->request.http_host,
+    assert(buffer_is_equal_string(r->http_host,
                                   CONST_STR_LEN("www.example.org")));
-    assert(buffer_is_equal_string(con->request.uri,
+    assert(buffer_is_equal_string(r->uri,
                                   CONST_STR_LEN("/")));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "whitespace after key",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "ABC : foo\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "whitespace within key",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "ABC a: foo\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "no whitespace",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "ABC:foo\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&con->request.headers, CONST_STR_LEN("ABC"));
+      array_get_element_klen(&r->headers, CONST_STR_LEN("ABC"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foo")));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "line-folding",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "ABC:foo\r\n"
                     "  bc\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&con->request.headers, CONST_STR_LEN("ABC"));
+      array_get_element_klen(&r->headers, CONST_STR_LEN("ABC"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foo    bc")));
 
-    run_http_request_parse(con, __LINE__, 411,
+    run_http_request_parse(r, __LINE__, 411,
       "POST request, no Content-Length",
       CONST_STR_LEN("POST / HTTP/1.0\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "Duplicate Host headers, Bug #25",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "Host: 123.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "Duplicate Content-Length headers",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Content-Length: 5\r\n"
                     "Content-Length: 4\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "Duplicate Content-Type headers",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Content-Type: 5\r\n"
@@ -474,92 +468,92 @@ static void test_request_http_request_parse(connection *con)
 
     /* (not actually testing Range here anymore; parsing deferred until use) */
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "Duplicate Range headers (get appended)",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Range: bytes=5-6\r\n"
                     "Range: bytes=5-9\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "Duplicate Range headers with invalid range (a)",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Range: bytes=0\r\n"
                     "Range: bytes=5-9\r\n"
                     "\r\n"));
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "Duplicate Range headers with invalid range (b)",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Range: bytes=5-9\r\n"
                     "Range: bytes=0\r\n"
                     "\r\n"));
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "Duplicate Range headers with invalid range (c)",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Range: 0\r\n"
                     "Range: bytes=5-9\r\n"
                     "\r\n"));
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "Duplicate Range headers with invalid range (d)",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Range: bytes=5-9\r\n"
                     "Range: 0\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "Duplicate If-None-Match headers",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "If-None-Match: 5\r\n"
                     "If-None-Match: 4\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "Duplicate If-Modified-Since headers",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "If-Modified-Since: 5\r\n"
                     "If-Modified-Since: 4\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "GET with Content-Length",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Content-Length: 4\r\n"
                     "\r\n"
                     "1234"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "HEAD with Content-Length",
       CONST_STR_LEN("HEAD / HTTP/1.0\r\n"
                     "Content-Length: 4\r\n"
                     "\r\n"
                     "1234"));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid chars in Header values (bug #1286)",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "If-Modified-Since: \0\r\n"
                     "\r\n"));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "absolute-uri in request-line (without Host)",
       CONST_STR_LEN("GET http://zzz.example.org/ HTTP/1.1\r\n"
                     "Connection: close\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&con->request.headers, CONST_STR_LEN("Host"));
+      array_get_element_klen(&r->headers, CONST_STR_LEN("Host"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("zzz.example.org")));
 
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "absolute-uri in request-line (with Host match)",
       CONST_STR_LEN("GET http://zzz.example.org/ HTTP/1.1\r\n"
                     "Host: zzz.example.org\r\n"
                     "Connection: close\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&con->request.headers, CONST_STR_LEN("Host"));
+      array_get_element_klen(&r->headers, CONST_STR_LEN("Host"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("zzz.example.org")));
 
-    run_http_request_parse(con, __LINE__, 400,
+    run_http_request_parse(r, __LINE__, 400,
       "absolute-uri in request-line (with Host mismatch)",
       CONST_STR_LEN("GET http://zzz.example.org/ HTTP/1.1\r\n"
                     "Host: aaa.example.org\r\n"
@@ -569,42 +563,42 @@ static void test_request_http_request_parse(connection *con)
     /* (quick check that none of above tests were left in a state
      *  which resulted in subsequent tests returning 400 for other
      *  reasons) */
-    run_http_request_parse(con, __LINE__, 0,
+    run_http_request_parse(r, __LINE__, 0,
       "valid",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
 }
 
+#include "base.h"
+#include "burl.h"
+#include "log.h"
+
 int main (void)
 {
-    server srv;
     connection con;
 
-    memset(&srv, 0, sizeof(server));
-    srv.errh = log_error_st_init();
-    srv.errh->errorlog_fd = -1; /* (disable) */
-
     memset(&con, 0, sizeof(connection));
-    con.srv                 = &srv;
-    con.proto_default_port  = 80;
-    con.request.conf        = &con.conf;
-    con.request.con         = &con;
-    con.request.orig_uri    = buffer_init();
-    con.request.uri         = buffer_init();
-    con.conf.errh           = srv.errh;
+    con.conf.errh           = log_error_st_init();
+    con.conf.errh->errorlog_fd = -1; /* (disable) */
     con.conf.allow_http11   = 1;
     con.conf.http_parseopts = HTTP_PARSEOPT_HEADER_STRICT
                             | HTTP_PARSEOPT_HOST_STRICT
                             | HTTP_PARSEOPT_HOST_NORMALIZE;
 
-    test_request_http_request_parse(&con);
+    request_st * const r = &con.request;
+    r->conf        = &con.conf;
+    r->con         = &con;
+    r->orig_uri    = buffer_init();
+    r->uri         = buffer_init();
 
-    buffer_free(con.request.orig_uri);
-    buffer_free(con.request.uri);
-    array_free_data(&con.request.headers);
+    test_request_http_request_parse(r);
 
-    log_error_st_free(srv.errh);
+    buffer_free(r->orig_uri);
+    buffer_free(r->uri);
+    array_free_data(&r->headers);
+
+    log_error_st_free(con.conf.errh);
 
     return 0;
 }
