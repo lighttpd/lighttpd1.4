@@ -940,7 +940,7 @@ static handler_t magnet_attract(connection *con, plugin_data *p, buffer *name) {
 
 		if (lua_return_value > 99) {
 			con->http_status = lua_return_value;
-			con->file_finished = 1;
+			con->response.resp_body_finished = 1;
 
 			/* try { ...*/
 			if (0 == setjmp(exceptionjmp)) {

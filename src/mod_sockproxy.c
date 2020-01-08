@@ -126,7 +126,7 @@ SETDEFAULTS_FUNC(mod_sockproxy_set_defaults) {
 
 static handler_t sockproxy_create_env_connect(handler_ctx *hctx) {
 	connection *con = hctx->remote_conn;
-	con->file_started = 1;
+	con->response.resp_body_started = 1;
 	gw_set_transparent(hctx);
 	http_response_upgrade_read_body_unknown(con);
 

@@ -2012,7 +2012,7 @@ handler_t gw_handle_subrequest(connection *con, void *p_d) {
     if (con->mode != p->id) return HANDLER_GO_ON; /* not my job */
 
     if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
-        && con->file_started) {
+        && con->response.resp_body_started) {
         if (chunkqueue_length(con->write_queue) > 65536 - 4096) {
             fdevent_fdnode_event_clr(hctx->ev, hctx->fdn, FDEVENT_IN);
         }
@@ -2033,7 +2033,7 @@ handler_t gw_handle_subrequest(connection *con, void *p_d) {
         && (0 == hctx->wb->bytes_in
             ? (con->state == CON_STATE_READ_POST || -1 == hctx->wb_reqlen)
             : (hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0))) {
-        /* leave excess data in con->request_content_queue, which is
+        /* leave excess data in con->request.reqbody_queue, which is
          * buffered to disk if too large and backend can not keep up */
         /*(64k - 4k to attempt to avoid temporary files
          * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
@@ -2045,7 +2045,7 @@ handler_t gw_handle_subrequest(connection *con, void *p_d) {
         }
         else {
             handler_t rc = connection_handle_read_post_state(con);
-            chunkqueue *req_cq = con->request_content_queue;
+            chunkqueue *req_cq = con->request.reqbody_queue;
           #if 0 /*(not reached since we send 411 Length Required below)*/
             if (hctx->wb_reqlen < -1 && con->request.reqbody_length >= 0) {
                 /* (completed receiving Transfer-Encoding: chunked) */
@@ -2140,7 +2140,7 @@ static handler_t gw_recv_response(gw_handler_ctx *hctx, connection *con) {
             handler_ctx_clear(hctx);
 
             /* don't do more than 6 loops here; normally shouldn't happen */
-            if (++con->loops_per_request > 5) {
+            if (++con->request.loops_per_request > 5) {
                 log_error(con->conf.errh, __FILE__, __LINE__,
                   "too many loops while processing request: %s",
                   con->request.orig_uri->ptr);
@@ -2191,7 +2191,7 @@ static handler_t gw_recv_response(gw_handler_ctx *hctx, connection *con) {
             }
         }
 
-        if (con->file_started == 0) {
+        if (con->response.resp_body_started == 0) {
             /* nothing has been sent out yet, try to use another child */
 
             if (hctx->wb->bytes_out == 0 &&
@@ -2255,7 +2255,7 @@ static handler_t gw_handle_fdevent(void *ctx, int revents) {
              *
              */
             gw_send_request(hctx, con);
-        } else if (con->file_started) {
+        } else if (con->response.resp_body_started) {
             /* drain any remaining data from kernel pipe buffers
              * even if (con->conf.stream_response_body
              *          & FDEVENT_STREAM_RESPONSE_BUFMIN)

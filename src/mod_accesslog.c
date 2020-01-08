@@ -958,8 +958,8 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 
 			case FORMAT_BYTES_OUT_NO_HEADER:
 				if (con->bytes_written > 0) {
-					buffer_append_int(b,
-							    con->bytes_written - con->bytes_header <= 0 ? 0 : con->bytes_written - con->bytes_header);
+					off_t bytes = con->bytes_written - (off_t)con->response.resp_header_len;
+					buffer_append_int(b, bytes > 0 ? bytes : 0);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}

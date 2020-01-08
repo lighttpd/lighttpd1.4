@@ -1015,7 +1015,7 @@ static int http_list_directory(connection *con, plugin_data *p, buffer *dir) {
 	}
 
 	chunkqueue_append_buffer_commit(con->write_queue);
-	con->file_finished = 1;
+	con->response.resp_body_finished = 1;
 
 	return 0;
 }

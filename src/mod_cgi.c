@@ -333,7 +333,7 @@ static void cgi_connection_close(connection *con, handler_ctx *hctx) {
 
 	cgi_handler_ctx_free(hctx);
 
-	/* finish response (if not already con->file_started, con->file_finished) */
+	/* finish response (if not already con->response.resp_body_started, con->response.resp_body_finished) */
 	if (con->mode == p->id) {
 		http_response_backend_done(con);
 	}
@@ -369,7 +369,7 @@ static handler_t cgi_handle_fdevent_send (void *ctx, int revents) {
 	if (revents & FDEVENT_HUP) {
 		/* skip sending remaining data to CGI */
 		if (con->request.reqbody_length) {
-			chunkqueue *cq = con->request_content_queue;
+			chunkqueue *cq = con->request.reqbody_queue;
 			chunkqueue_mark_written(cq, chunkqueue_length(cq));
 			if (cq->bytes_in != (off_t)con->request.reqbody_length) {
 				con->request.keep_alive = 0;
@@ -412,7 +412,7 @@ static handler_t cgi_response_headers(connection *con, struct http_response_opts
     }
 
     if (hctx->conf.upgrade && !(con->response.htags & HTTP_HEADER_UPGRADE)) {
-        chunkqueue *cq = con->request_content_queue;
+        chunkqueue *cq = con->request.reqbody_queue;
         hctx->conf.upgrade = 0;
         if (cq->bytes_out == (off_t)con->request.reqbody_length) {
             cgi_connection_close_fdtocgi(con, hctx); /*(closes hctx->fdtocgi)*/
@@ -458,7 +458,7 @@ static handler_t cgi_handle_fdevent(void *ctx, int revents) {
 
 	/* perhaps this issue is already handled */
 	if (revents & (FDEVENT_HUP|FDEVENT_RDHUP)) {
-		if (con->file_started) {
+		if (con->response.resp_body_started) {
 			/* drain any remaining data from kernel pipe buffers
 			 * even if (con->conf.stream_response_body
 			 *          & FDEVENT_STREAM_RESPONSE_BUFMIN)
@@ -475,7 +475,7 @@ static handler_t cgi_handle_fdevent(void *ctx, int revents) {
 			return rc; /* HANDLER_FINISHED or HANDLER_COMEBACK or HANDLER_ERROR */
 		} else if (!buffer_string_is_empty(hctx->response)) {
 			/* unfinished header package which is a body in reality */
-			con->file_started = 1;
+			con->response.resp_body_started = 1;
 			if (0 != http_chunk_append_buffer(con, hctx->response)) {
 				cgi_connection_close(con, hctx);
 				return HANDLER_ERROR;
@@ -639,7 +639,7 @@ static ssize_t cgi_write_file_chunk_mmap(connection *con, int fd, chunkqueue *cq
 
 static int cgi_write_request(handler_ctx *hctx, int fd) {
 	connection *con = hctx->remote_conn;
-	chunkqueue *cq = con->request_content_queue;
+	chunkqueue *cq = con->request.reqbody_queue;
 	chunk *c;
 
 	/* old comment: windows doesn't support select() on pipes - wouldn't be easy to fix for all platforms.
@@ -934,7 +934,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	if (NULL == hctx) return HANDLER_GO_ON;
 
 	if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
-	    && con->file_started) {
+	    && con->response.resp_body_started) {
 		if (chunkqueue_length(con->write_queue) > 65536 - 4096) {
 			fdevent_fdnode_event_clr(con->srv->ev,hctx->fdn,FDEVENT_IN);
 		} else if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_IN)) {
@@ -945,7 +945,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 		}
 	}
 
-	chunkqueue * const cq = con->request_content_queue;
+	chunkqueue * const cq = con->request.reqbody_queue;
 
 	if (cq->bytes_in != (off_t)con->request.reqbody_length) {
 		/*(64k - 4k to attempt to avoid temporary files
@@ -980,7 +980,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 
 			return HANDLER_FINISHED;
 		}
-	} else if (!chunkqueue_is_empty(con->request_content_queue)) {
+	} else if (!chunkqueue_is_empty(cq)) {
 		if (0 != cgi_write_request(hctx, hctx->fdtocgi)) {
 			cgi_connection_close(con, hctx);
 			return HANDLER_ERROR;

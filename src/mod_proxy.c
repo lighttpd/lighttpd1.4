@@ -821,7 +821,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	const int upgrade = hctx->conf.header.upgrade
 	    && (NULL != http_header_request_get(con, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade")));
 	size_t rsz = (size_t)(con->read_queue->bytes_out - hctx->gw.wb->bytes_in);
-	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->gw.wb, rsz < 65536 ? rsz : con->header_len);
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->gw.wb, rsz < 65536 ? rsz : con->request.rqst_header_len);
 
 	/* build header */
 
@@ -949,7 +949,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	chunkqueue_prepend_buffer_commit(hctx->gw.wb);
 
 	if (con->request.reqbody_length) {
-		chunkqueue_append_chunkqueue(hctx->gw.wb, con->request_content_queue);
+		chunkqueue_append_chunkqueue(hctx->gw.wb, con->request.reqbody_queue);
 		if (con->request.reqbody_length > 0)
 			hctx->gw.wb_reqlen += con->request.reqbody_length; /* total req size */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
@@ -965,7 +965,7 @@ static handler_t proxy_create_env_connect(gw_handler_ctx *gwhctx) {
 	handler_ctx *hctx = (handler_ctx *)gwhctx;
 	connection *con = hctx->gw.remote_conn;
 	con->http_status = 200; /* OK */
-	con->file_started = 1;
+	con->response.resp_body_started = 1;
 	gw_set_transparent(&hctx->gw);
 	http_response_upgrade_read_body_unknown(con);
 

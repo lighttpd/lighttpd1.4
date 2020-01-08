@@ -216,7 +216,7 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 	  : scgi_env_add_uwsgi;
 	size_t offset;
 	size_t rsz = (size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in);
-	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, rsz < 65536 ? rsz : con->header_len);
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, rsz < 65536 ? rsz : con->request.rqst_header_len);
 
         /* save space for 9 digits (plus ':'), though incoming HTTP request
 	 * currently limited to 64k (65535, so 5 chars) */
@@ -267,7 +267,7 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
       #endif
 
 	if (con->request.reqbody_length) {
-		chunkqueue_append_chunkqueue(hctx->wb, con->request_content_queue);
+		chunkqueue_append_chunkqueue(hctx->wb, con->request.reqbody_queue);
 		if (con->request.reqbody_length > 0)
 			hctx->wb_reqlen += con->request.reqbody_length; /* total req size */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/

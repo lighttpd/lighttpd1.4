@@ -60,7 +60,7 @@ int http_response_write_header(connection *con) {
 	if (con->request_count > con->conf.max_keep_alive_requests || 0 == con->conf.max_keep_alive_idle) {
 		con->request.keep_alive = 0;
 	} else if (0 != con->request.reqbody_length
-		   && con->request.reqbody_length != con->request_content_queue->bytes_in
+		   && con->request.reqbody_length != con->request.reqbody_queue->bytes_in
 		   && (con->mode == DIRECT || 0 == con->conf.stream_request_body)) {
 		con->request.keep_alive = 0;
 	} else {
@@ -122,7 +122,7 @@ int http_response_write_header(connection *con) {
 
 	buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
-	con->bytes_header = buffer_string_length(b);
+	con->response.resp_header_len = buffer_string_length(b);
 
 	if (con->conf.log_response_header) {
 		log_error(con->conf.errh,__FILE__,__LINE__,"Response-Header:\n%s",b->ptr);
@@ -287,7 +287,7 @@ __attribute_cold__
 __attribute_noinline__
 static handler_t http_status_set_error_close (connection *con, int status) {
     con->request.keep_alive = 0;
-    con->file_finished = 1;
+    con->response.resp_body_finished = 1;
     con->mode = DIRECT;
     con->http_status = status;
     return HANDLER_FINISHED;
@@ -300,7 +300,7 @@ handler_t http_response_prepare(connection *con) {
 	if (con->mode == DIRECT &&
 	    (con->http_status != 0 && con->http_status != 200)) {
 		/* remove a packets in the queue */
-		if (con->file_finished == 0) {
+		if (con->response.resp_body_finished == 0) {
 			http_response_body_clear(con, 0);
 		}
 
@@ -322,7 +322,7 @@ handler_t http_response_prepare(connection *con) {
 		 *
 		 *  */
 
-	    if (!con->async_callback) {
+	    if (!con->request.async_callback) {
 
 		config_cond_cache_reset(con);
 
@@ -386,18 +386,18 @@ handler_t http_response_prepare(connection *con) {
 			      #if 0  /* future: might enable here, or below for all requests */
 				/* (Note: total header size not recalculated on HANDLER_COMEBACK
 				 *  even if other request headers changed during processing)
-				 * (If (0 != con->loops_per_request), then the generated request
-				 *  is too large.  Should a different error be returned?) */
-				con->header_len -= len;
+				 * (If (0 != con->request.loops_per_request), then the generated
+				 *  request is too large.  Should a different error be returned?) */
+				con->request.rqst_header_len -= len;
 				len = buffer_string_length(con->request.uri);
-				con->header_len += len;
+				con->request.rqst_header_len += len;
 				if (len > MAX_HTTP_REQUEST_URI) {
 					return /* 414 Request-URI Too Long */
 					  http_status_set_error_close(con, 414);
 				}
-				if (con->header_len > MAX_HTTP_REQUEST_HEADER) {
+				if (con->request.rqst_header_len > MAX_HTTP_REQUEST_HEADER) {
 					log_error(con->conf.errh, __FILE__, __LINE__,
-					  "request header fields too large: %u -> 431", con->header_len);
+					  "request header fields too large: %u -> 431", con->request.rqst_header_len);
 					return /* 431 Request Header Fields Too Large */
 					  http_status_set_error_close(con, 431);
 				}
@@ -485,7 +485,7 @@ handler_t http_response_prepare(connection *con) {
 
 
 	    }
-	    con->async_callback = 0; /* reset */
+	    con->request.async_callback = 0; /* reset */
 
 
 		/**
@@ -517,7 +517,7 @@ handler_t http_response_prepare(connection *con) {
 			http_header_response_append(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
 
 			con->http_status = 200;
-			con->file_finished = 1;
+			con->response.resp_body_finished = 1;
 
 			return HANDLER_FINISHED;
 		}

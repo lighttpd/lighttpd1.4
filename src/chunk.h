@@ -38,7 +38,7 @@ typedef struct chunk {
 	} file;
 } chunk;
 
-typedef struct {
+typedef struct chunkqueue {
 	chunk *first;
 	chunk *last;
 

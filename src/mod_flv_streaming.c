@@ -127,7 +127,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			}
 
 			http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("video/x-flv"));
-			con->file_finished = 1;
+			con->response.resp_body_finished = 1;
 			return HANDLER_FINISHED;
 }
 

@@ -10,6 +10,7 @@
 #include "http_kv.h"
 
 struct log_error_st;    /* declaration */
+struct chunkqueue;      /* declaration */
 
 typedef struct {
     const array *mimetypes;
@@ -93,10 +94,15 @@ struct request_st {
     /* CONTENT */
     off_t reqbody_length; /* request Content-Length */
     off_t te_chunked;
+    struct chunkqueue *reqbody_queue; /*(might use tempfiles)*/
 
-    int keep_alive; /* only request.c can enable it, all other just disable */
     time_t start_ts;
     struct timespec start_hp;
+
+    uint32_t rqst_header_len;
+    char keep_alive; /* only request.c can enable it, all other just disable */
+    char loops_per_request;  /* catch endless loops in a single request */
+    char async_callback;
 
     /* internal */
     buffer *pathinfo;

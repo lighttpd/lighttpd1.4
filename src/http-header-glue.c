@@ -108,7 +108,7 @@ int http_response_redirect_to_directory(connection *con, int status) {
 	if (status >= 300) {
 		http_header_response_set(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"), CONST_BUF_LEN(o));
 		con->http_status = status;
-		con->file_finished = 1;
+		con->response.resp_body_finished = 1;
 	}
 	else {
 		http_header_response_set(con, HTTP_HEADER_CONTENT_LOCATION, CONST_STR_LEN("Content-Location"), CONST_BUF_LEN(o));
@@ -543,7 +543,7 @@ void http_response_send_file (connection *con, buffer *path) {
 
 	if (fd < 0) { /* 0-length file */
 		con->http_status = 200;
-		con->file_finished = 1;
+		con->response.resp_body_finished = 1;
 		return;
 	}
 
@@ -585,7 +585,7 @@ void http_response_send_file (connection *con, buffer *path) {
 		    && 0 == strncmp(range->ptr, "bytes=", 6)) {
 			/* support only "bytes" byte-unit */
 			/* content prepared, I'm done */
-			con->file_finished = 1;
+			con->response.resp_body_finished = 1;
 
 			if (0 == http_response_parse_range(con, path, sce, range->ptr+6)) {
 				con->http_status = 206;
@@ -603,7 +603,7 @@ void http_response_send_file (connection *con, buffer *path) {
 
 	if (0 == http_chunk_append_file_fd(con, path, fd, sce->st.st_size)) {
 		con->http_status = 200;
-		con->file_finished = 1;
+		con->response.resp_body_finished = 1;
 	}
 	else {
 		con->http_status = 500;
@@ -813,12 +813,12 @@ range_success: ;
 
 
 void http_response_backend_error (connection *con) {
-	if (con->file_started) {
+	if (con->response.resp_body_started) {
 		/*(response might have been already started, kill the connection)*/
 		/*(mode == DIRECT to avoid later call to http_response_backend_done())*/
 		con->mode = DIRECT;  /*(avoid sending final chunked block)*/
 		con->request.keep_alive = 0;
-		con->file_finished = 1;
+		con->response.resp_body_finished = 1;
 	} /*(else error status set later by http_response_backend_done())*/
 }
 
@@ -829,16 +829,16 @@ void http_response_backend_done (connection *con) {
 	switch (con->state) {
 	case CON_STATE_HANDLE_REQUEST:
 	case CON_STATE_READ_POST:
-		if (!con->file_started) {
+		if (!con->response.resp_body_started) {
 			/* Send an error if we haven't sent any data yet */
 			con->http_status = 500;
 			con->mode = DIRECT;
 			break;
 		} /* else fall through */
 	case CON_STATE_WRITE:
-		if (!con->file_finished) {
+		if (!con->response.resp_body_finished) {
 			http_chunk_close(con);
-			con->file_finished = 1;
+			con->response.resp_body_finished = 1;
 		}
 	default:
 		break;
@@ -896,7 +896,7 @@ static handler_t http_response_process_local_redir(connection *con, size_t blen)
         && 0 == blen
         && !(con->response.htags & HTTP_HEADER_STATUS) /*no "Status" or NPH response*/
         && 1 == con->response.headers.used) {
-        if (++con->loops_per_request > 5) {
+        if (++con->request.loops_per_request > 5) {
             log_error(con->conf.errh, __FILE__, __LINE__,
               "too many internal loops while processing request: %s",
               con->request.orig_uri->ptr);
@@ -909,11 +909,11 @@ static handler_t http_response_process_local_redir(connection *con, size_t blen)
 
         if (con->request.reqbody_length) {
             if (con->request.reqbody_length
-                != con->request_content_queue->bytes_in) {
+                != con->request.reqbody_queue->bytes_in) {
                 con->request.keep_alive = 0;
             }
             con->request.reqbody_length = 0;
-            chunkqueue_reset(con->request_content_queue);
+            chunkqueue_reset(con->request.reqbody_queue);
         }
 
         if (con->http_status != 307 && con->http_status != 308) {
@@ -1122,7 +1122,7 @@ handler_t http_response_parse_headers(connection *con, http_response_opts *opts,
             return HANDLER_ERROR;
         }
         con->http_status = 200; /* OK */
-        con->file_started = 1;
+        con->response.resp_body_started = 1;
         return HANDLER_GO_ON;
     } else {
         /* invalid response headers */
@@ -1166,7 +1166,7 @@ handler_t http_response_parse_headers(connection *con, http_response_opts *opts,
         return HANDLER_ERROR;
     }
 
-    con->file_started = 1;
+    con->response.resp_body_started = 1;
 
     if (opts->authorizer
         && (con->http_status == 0 || con->http_status == 200)) {
@@ -1180,7 +1180,7 @@ handler_t http_response_parse_headers(connection *con, http_response_opts *opts,
     if (opts->local_redir && con->http_status >= 300 && con->http_status < 400){
         /*(con->response.htags & HTTP_HEADER_LOCATION)*/
         handler_t rc = http_response_process_local_redir(con, blen);
-        if (con->mode == DIRECT) con->file_started = 0;
+        if (con->mode == DIRECT) con->response.resp_body_started = 0;
         if (rc != HANDLER_GO_ON) return rc;
     }
 
@@ -1192,7 +1192,7 @@ handler_t http_response_parse_headers(connection *con, http_response_opts *opts,
             http_response_xsendfile2(con, vb, opts->xsendfile_docroot);
             /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
             buffer_clear(vb); /*(do not send to client)*/
-            if (con->mode == DIRECT) con->file_started = 0;
+            if (con->mode == DIRECT) con->response.resp_body_started = 0;
             return HANDLER_FINISHED;
         } else if (NULL != (vb = http_header_response_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Sendfile")))
                    || (opts->backend == BACKEND_FASTCGI /* X-LIGHTTPD-send-file is deprecated; historical for fastcgi */
@@ -1200,7 +1200,7 @@ handler_t http_response_parse_headers(connection *con, http_response_opts *opts,
             http_response_xsendfile(con, vb, opts->xsendfile_docroot);
             /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
             buffer_clear(vb); /*(do not send to client)*/
-            if (con->mode == DIRECT) con->file_started = 0;
+            if (con->mode == DIRECT) con->response.resp_body_started = 0;
             return HANDLER_FINISHED;
         }
     }
@@ -1308,12 +1308,12 @@ handler_t http_response_read(connection *con, http_response_opts *opts, buffer *
              * (backend should read all data desired prior to closing socket,
              *  though might send app-level close data frame, if applicable) */
             return HANDLER_FINISHED; /* read finished */
-        } else if (0 == con->file_started) {
+        } else if (0 == con->response.resp_body_started) {
             /* split header from body */
             handler_t rc = http_response_parse_headers(con, opts, b);
             if (rc != HANDLER_GO_ON) return rc;
             /* accumulate response in b until headers completed (or error) */
-            if (con->file_started) buffer_clear(b);
+            if (con->response.resp_body_started) buffer_clear(b);
         } else {
             if (0 != http_chunk_append_buffer(con, b)) {
                 /* error writing to tempfile;

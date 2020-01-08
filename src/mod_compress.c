@@ -750,8 +750,8 @@ static int deflate_file_to_buffer(connection *con, plugin_data *p, int ifd, buff
 
 	buffer_reset(con->physical.path);
 
-	con->file_finished = 1;
-	con->file_started  = 1;
+	con->response.resp_body_finished = 1;
+	con->response.resp_body_started  = 1;
 
 	return 0;
 }

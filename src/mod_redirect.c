@@ -180,7 +180,7 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
                                  CONST_BUF_LEN(tb));
         con->http_status = p->conf.redirect_code;
         con->mode = DIRECT;
-        con->file_finished = 1;
+        con->response.resp_body_finished = 1;
     }
     else if (HANDLER_ERROR == rc) {
         log_error(con->conf.errh, __FILE__, __LINE__,

@@ -286,7 +286,7 @@ int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 				force_assert(NULL != vb);
 			}
 
-			con->file_finished = 1;
+			con->response.resp_body_finished = 1;
 
 			if (HANDLER_FINISHED == http_response_handle_cachable(con, vb)) {
 				/* ok, the client already has our content,

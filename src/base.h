@@ -25,7 +25,10 @@ typedef struct {
 	off_t   content_length;
 	unsigned int htags; /* bitfield of flagged headers present in response */
 	array headers;
-	int send_chunked;
+	char send_chunked;
+	char resp_body_started;
+	char resp_body_finished;
+	uint32_t resp_header_len;
 } response;
 
 typedef struct {
@@ -75,13 +78,8 @@ struct connection {
 	time_t write_request_ts;
 
 	time_t connection_start;
-
 	uint32_t request_count;      /* number of requests handled in this connection */
-	uint32_t loops_per_request;  /* to catch endless loops in a single request
-				      *
-				      * used by mod_rewrite, mod_fastcgi, ... and others
-				      * this is self-protection
-				      */
+	int keep_alive_idle;         /* remember max_keep_alive_idle from config */
 
 	fdnode *fdn;                 /* fdevent (fdnode *) object */
 	int fd;                      /* the FD for this connection */
@@ -92,28 +90,20 @@ struct connection {
 	int is_writable;
 	int is_ssl_sock;
 
-	int keep_alive_idle;         /* remember max_keep_alive_idle from config */
-
-	int file_started;
-	int file_finished;
-
 	chunkqueue *write_queue;      /* a large queue for low-level write ( HTTP response ) [ file, mem ] */
 	chunkqueue *read_queue;       /* a small queue for low-level read ( HTTP request ) [ mem ] */
-	chunkqueue *request_content_queue; /* takes request-content into tempfile if necessary [ tempfile, mem ]*/
 
 	int traffic_limit_reached;
 
 	off_t bytes_written;          /* used by mod_accesslog, mod_rrd */
 	off_t bytes_written_cur_second; /* used by mod_accesslog, mod_rrd */
 	off_t bytes_read;             /* used by mod_accesslog, mod_rrd */
-	off_t bytes_header;
 
 	sock_addr dst_addr;
 	buffer *dst_addr_buf;
 
 	/* request */
 	int http_status;
-	uint32_t header_len;
 
 	request_st request;
 	request_uri uri;
@@ -123,7 +113,6 @@ struct connection {
 	array environment; /* used to pass lighttpd internal stuff to the FastCGI/CGI apps, setenv does that */
 
 	int mode;                    /* DIRECT (0) or plugin id */
-	int async_callback;
 
 	server *srv;
 

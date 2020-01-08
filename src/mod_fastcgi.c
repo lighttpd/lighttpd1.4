@@ -220,7 +220,7 @@ static void fcgi_header(FCGI_Header * header, unsigned char type, int request_id
 static handler_t fcgi_stdin_append(handler_ctx *hctx) {
 	FCGI_Header header;
 	connection *con = hctx->remote_conn;
-	chunkqueue *req_cq = con->request_content_queue;
+	chunkqueue *req_cq = con->request.reqbody_queue;
 	off_t offset, weWant;
 	const off_t req_cqlen = req_cq->bytes_in - req_cq->bytes_out;
 	int request_id = hctx->request_id;
@@ -274,7 +274,7 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 	};
 
 	size_t rsz = (size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in);
-	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, rsz < 65536 ? rsz : con->header_len);
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, rsz < 65536 ? rsz : con->request.rqst_header_len);
 
 	/* send FCGI_BEGIN_REQUEST */
 
@@ -317,7 +317,7 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 	}
 
 	if (con->request.reqbody_length) {
-		/*chunkqueue_append_chunkqueue(hctx->wb, con->request_content_queue);*/
+		/*chunkqueue_append_chunkqueue(hctx->wb, con->request.reqbody_queue);*/
 		if (con->request.reqbody_length > 0)
 			hctx->wb_reqlen += con->request.reqbody_length;/* (eventual) (minimal) total request size, not necessarily including all fcgi_headers around content length yet */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
@@ -432,7 +432,7 @@ static handler_t fcgi_recv_parse(connection *con, struct http_response_opts_t *o
 			if (packet.len == 0) break;
 
 			/* is the header already finished */
-			if (0 == con->file_started) {
+			if (0 == con->response.resp_body_started) {
 				/* split header from body */
 				buffer *hdrs = hctx->response;
 				if (NULL == hdrs) {
@@ -445,7 +445,7 @@ static handler_t fcgi_recv_parse(connection *con, struct http_response_opts_t *o
 					fin = 1;
 					break;
 				}
-				if (0 == con->file_started) {
+				if (0 == con->response.resp_body_started) {
 					if (!hctx->response) {
 						hctx->response = chunk_buffer_acquire();
 						buffer_copy_buffer(hctx->response, hdrs);

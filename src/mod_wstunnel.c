@@ -353,14 +353,14 @@ static handler_t wstunnel_create_env(gw_handler_ctx *gwhctx) {
     handler_t rc;
     if (0 == con->request.reqbody_length) {
         http_response_upgrade_read_body_unknown(con);
-        chunkqueue_append_chunkqueue(con->request_content_queue,
+        chunkqueue_append_chunkqueue(con->request.reqbody_queue,
                                      con->read_queue);
     }
     rc = mod_wstunnel_handshake_create_response(hctx);
     if (rc != HANDLER_GO_ON) return rc;
 
     con->http_status = 101; /* Switching Protocols */
-    con->file_started = 1;
+    con->response.resp_body_started = 1;
 
     hctx->ping_ts = log_epoch_secs;
     gw_set_transparent(&hctx->gw);
@@ -370,8 +370,8 @@ static handler_t wstunnel_create_env(gw_handler_ctx *gwhctx) {
 
 static handler_t wstunnel_stdin_append(gw_handler_ctx *gwhctx) {
     /* prepare websocket frames to backend */
-    /* (caller should verify con->request_content_queue) */
-    /*assert(!chunkqueue_is_empty(con->request_content_queue));*/
+    /* (caller should verify con->request.reqbody_queue) */
+    /*assert(!chunkqueue_is_empty(con->request.reqbody_queue));*/
     handler_ctx *hctx = (handler_ctx *)gwhctx;
     if (0 == mod_wstunnel_frame_recv(hctx))
         return HANDLER_GO_ON;
@@ -656,7 +656,7 @@ int mod_wstunnel_plugin_init(plugin *p) {
 static int get_key3(connection *con, char *buf) {
     /* 8 bytes should have been sent with request
      * for draft-ietf-hybi-thewebsocketprotocol-00 */
-    chunkqueue *cq = con->request_content_queue;
+    chunkqueue *cq = con->request.reqbody_queue;
     size_t bytes = 8;
     /*(caller should ensure bytes available prior to calling this routine)*/
     /*assert(chunkqueue_length(cq) >= 8);*/
@@ -858,7 +858,7 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
       #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
         /* 8 bytes should have been sent with request
          * for draft-ietf-hybi-thewebsocketprotocol-00 */
-        chunkqueue *cq = con->request_content_queue;
+        chunkqueue *cq = con->request.reqbody_queue;
         if (chunkqueue_length(cq) < 8)
             return HANDLER_WAIT_FOR_EVENT;
       #endif /* _MOD_WEBSOCKET_SPEC_IETF_00_ */
@@ -935,7 +935,7 @@ static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const
 
 static int recv_ietf_00(handler_ctx *hctx) {
     connection *con = hctx->gw.remote_conn;
-    chunkqueue *cq = con->request_content_queue;
+    chunkqueue *cq = con->request.reqbody_queue;
     buffer *payload = hctx->frame.payload;
     char *mem;
     DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%zx",
@@ -1121,7 +1121,7 @@ static void unmask_payload(handler_ctx *hctx) {
 
 static int recv_rfc_6455(handler_ctx *hctx) {
     connection *con = hctx->gw.remote_conn;
-    chunkqueue *cq = con->request_content_queue;
+    chunkqueue *cq = con->request.reqbody_queue;
     buffer *payload = hctx->frame.payload;
     DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%zx",
                     con->fd, chunkqueue_length(cq));

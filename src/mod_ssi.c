@@ -1203,8 +1203,8 @@ static int mod_ssi_handle_request(connection *con, handler_ctx *p) {
 
 	if (mod_ssi_process_file(con, p, &st)) return -1;
 
-	con->file_started  = 1;
-	con->file_finished = 1;
+	con->response.resp_body_started  = 1;
+	con->response.resp_body_finished = 1;
 
 	if (buffer_string_is_empty(p->conf.content_type)) {
 		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));

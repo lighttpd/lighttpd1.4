@@ -260,8 +260,8 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	case HTTP_METHOD_GET:
 		buffer_reset(con->physical.path);
 
-		con->file_started = 1;
-		con->file_finished = 1;
+		con->response.resp_body_started = 1;
+		con->response.resp_body_finished = 1;
 
 		con->http_status = 200;
 		con->mode = DIRECT;
@@ -292,7 +292,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		buffer_append_string_len(b, CONST_STR_LEN(
 			"</size>"
 			"<received>"));
-		buffer_append_int(b, post_con->request_content_queue->bytes_in);
+		buffer_append_int(b, post_con->request.reqbody_queue->bytes_in);
 		buffer_append_string_len(b, CONST_STR_LEN(
 			"</received>"
 			"</upload>"));

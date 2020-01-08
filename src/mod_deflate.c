@@ -15,7 +15,8 @@
  *
  * Patch further modified in this incarnation.
  *
- * Note: this patch only handles completed responses (con->file_finished);
+ * Note: this patch only handles completed responses
+ *         (con->response.resp_body_finished)
  *       this patch does not currently handle streaming dynamic responses,
  *       and therefore also does not worry about Transfer-Encoding: chunked
  *       (or having separate con->output_queue for chunked-encoded output)
@@ -59,7 +60,8 @@
  *   block, e.g. $HTTP["url"] =~ "....." { deflate.mimetypes = ( ) }
  * - deflate.sync-flush removed; controlled by con->conf.stream_response_body
  *     (though streaming compression not currently implemented in mod_deflate)
- * - inactive directives in this patch (since con->file_finished required)
+ * - inactive directives in this patch
+ *       (since con->response.resp_body_finished required)
  *     deflate.work-block-size
  *     deflate.output-buffer-size
  * - remove weak file size check; SIGBUS is trapped, file that shrink will error
@@ -958,7 +960,8 @@ static handler_t deflate_compress_response(connection *con, handler_ctx *hctx) {
 
 	/*(currently should always be true)*/
 	/*(current implementation requires response be complete)*/
-	close_stream = (con->file_finished && chunkqueue_is_empty(hctx->in_queue));
+	close_stream = (con->response.resp_body_finished
+                        && chunkqueue_is_empty(hctx->in_queue));
 	if (mod_deflate_stream_flush(con, hctx, close_stream) < 0) {
 		log_error(con->conf.errh, __FILE__, __LINE__, "flush error");
 		return HANDLER_ERROR;
@@ -1071,7 +1074,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	handler_t rc;
 
 	/*(current implementation requires response be complete)*/
-	if (!con->file_finished) return HANDLER_GO_ON;
+	if (!con->response.resp_body_finished) return HANDLER_GO_ON;
 	if (con->request.http_method == HTTP_METHOD_HEAD) return HANDLER_GO_ON;
 	if (con->response.htags & HTTP_HEADER_TRANSFER_ENCODING) return HANDLER_GO_ON;
 
@@ -1094,7 +1097,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	if (NULL == p->conf.mimetypes) return HANDLER_GO_ON;
 
 	/* check if size of response is below min-compress-size or exceeds max*/
-	/* (con->file_finished checked at top of routine) */
+	/* (con->response.resp_body_finished checked at top of routine) */
 	len = chunkqueue_length(con->write_queue);
 	if (len <= (off_t)p->conf.min_compress_size) return HANDLER_GO_ON;
 	if (p->conf.max_compress_size /*(max_compress_size in KB)*/
@@ -1166,7 +1169,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 			/* clear content length even if 304 since compressed length unknown */
 			http_response_body_clear(con, 0);
 
-			con->file_finished = 1;
+			con->response.resp_body_finished = 1;
 			con->mode = DIRECT;
 			return HANDLER_GO_ON;
 		}

@@ -113,7 +113,7 @@ handler_t connection_handle_read_post_error(connection *con, int http_status) {
     con->request.keep_alive = 0;
 
     /*(do not change status if response headers already set and possibly sent)*/
-    if (0 != con->bytes_header) return HANDLER_ERROR;
+    if (0 != con->response.resp_header_len) return HANDLER_ERROR;
 
     http_response_body_clear(con, 0);
     con->http_status = http_status;
@@ -414,7 +414,7 @@ static int connection_write_100_continue(connection *con) {
 
 handler_t connection_handle_read_post_state(connection *con) {
 	chunkqueue *cq = con->read_queue;
-	chunkqueue *dst_cq = con->request_content_queue;
+	chunkqueue *dst_cq = con->request.reqbody_queue;
 
 	int is_closed = 0;
 
@@ -491,8 +491,8 @@ void connection_response_reset(connection *con) {
 	con->mode = DIRECT;
 	con->http_status = 0;
 	con->is_writable = 1;
-	con->file_finished = 0;
-	con->file_started = 0;
+	con->response.resp_body_finished = 0;
+	con->response.resp_body_started = 0;
 	if (con->physical.path) { /*(skip for mod_fastcgi authorizer)*/
 		buffer_clear(con->physical.doc_root);
 		buffer_reset(con->physical.path);

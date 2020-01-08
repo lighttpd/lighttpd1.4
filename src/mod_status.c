@@ -494,7 +494,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 
 		if (c->request.reqbody_length) {
-			buffer_append_int(b, c->request_content_queue->bytes_in);
+			buffer_append_int(b, c->request.reqbody_queue->bytes_in);
 			buffer_append_string_len(b, CONST_STR_LEN("/"));
 			buffer_append_int(b, c->request.reqbody_length);
 		} else {
@@ -715,7 +715,7 @@ static handler_t mod_status_handle_server_statistics(connection *con) {
 	if (0 == st->used) {
 		/* we have nothing to send */
 		con->http_status = 204;
-		con->file_finished = 1;
+		con->response.resp_body_finished = 1;
 
 		return HANDLER_FINISHED;
 	}
@@ -732,7 +732,7 @@ static handler_t mod_status_handle_server_statistics(connection *con) {
 	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
 
 	con->http_status = 200;
-	con->file_finished = 1;
+	con->response.resp_body_finished = 1;
 
 	return HANDLER_FINISHED;
 }
@@ -750,7 +750,7 @@ static handler_t mod_status_handle_server_status(connection *con, plugin_data *p
 	}
 
 	con->http_status = 200;
-	con->file_finished = 1;
+	con->response.resp_body_finished = 1;
 
 	return HANDLER_FINISHED;
 }
@@ -810,7 +810,7 @@ static handler_t mod_status_handle_server_config(connection *con) {
 	http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 
 	con->http_status = 200;
-	con->file_finished = 1;
+	con->response.resp_body_finished = 1;
 
 	return HANDLER_FINISHED;
 }

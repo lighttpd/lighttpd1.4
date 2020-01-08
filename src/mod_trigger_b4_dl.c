@@ -345,7 +345,7 @@ static handler_t mod_trigger_b4_dl_deny(connection * const con, const plugin_dat
                   "trigger-before-download.deny-url not configured");
         con->http_status = 500;
     }
-    con->file_finished = 1;
+    con->response.resp_body_finished = 1;
     return HANDLER_FINISHED;
 }
 
