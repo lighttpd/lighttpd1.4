@@ -238,7 +238,7 @@ static void connection_handle_response_end_state(connection *con) {
         if (con->request.keep_alive) {
 		connection_reset(con);
 #if 0
-		con->request_start = con->read_idle_ts = log_epoch_secs;
+		con->request.start_ts = con->read_idle_ts = log_epoch_secs;
 #endif
 		connection_set_state(con, CON_STATE_REQUEST_START);
 	} else {
@@ -807,11 +807,11 @@ static int connection_handle_read_state(connection * const con)  {
 
     if (keepalive_request_start) {
         if (0 != con->bytes_read) {
-            /* update request_start timestamp when first byte of
+            /* update con->request.start_ts timestamp when first byte of
              * next request is received on a keep-alive connection */
-            con->request_start = log_epoch_secs;
+            con->request.start_ts = log_epoch_secs;
             if (con->conf.high_precision_timestamps)
-                log_clock_gettime_realtime(&con->request_start_hp);
+                log_clock_gettime_realtime(&con->request.start_hp);
         }
         if (pipelined_request_start && c) con->read_idle_ts = log_epoch_secs;
     }
@@ -1258,9 +1258,9 @@ int connection_state_machine(connection *con) {
 
 		switch ((ostate = con->state)) {
 		case CON_STATE_REQUEST_START: /* transient */
-			con->request_start = con->read_idle_ts = log_epoch_secs;
+			con->request.start_ts = con->read_idle_ts = log_epoch_secs;
 			if (con->conf.high_precision_timestamps)
-				log_clock_gettime_realtime(&con->request_start_hp);
+				log_clock_gettime_realtime(&con->request.start_hp);
 
 			con->request_count++;
 			con->loops_per_request = 0;

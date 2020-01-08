@@ -75,8 +75,6 @@ struct connection {
 	time_t write_request_ts;
 
 	time_t connection_start;
-	time_t request_start;
-	struct timespec request_start_hp;
 
 	uint32_t request_count;      /* number of requests handled in this connection */
 	uint32_t loops_per_request;  /* to catch endless loops in a single request

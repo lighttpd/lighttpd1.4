@@ -2,6 +2,8 @@
 #define _REQUEST_H_
 #include "first.h"
 
+#include <time.h>       /* (struct timespec) */
+
 #include "base_decls.h"
 #include "buffer.h"
 #include "array.h"
@@ -93,6 +95,8 @@ struct request_st {
     off_t te_chunked;
 
     int keep_alive; /* only request.c can enable it, all other just disable */
+    time_t start_ts;
+    struct timespec start_hp;
 
     /* internal */
     buffer *pathinfo;

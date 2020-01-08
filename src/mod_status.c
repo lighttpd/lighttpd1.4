@@ -517,7 +517,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 
-		buffer_append_int(b, cur_ts - c->request_start);
+		buffer_append_int(b, cur_ts - c->request.start_ts);
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 

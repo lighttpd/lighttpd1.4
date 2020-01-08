@@ -788,7 +788,7 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 
 				if (f->opt & ~(FORMAT_FLAG_TIME_BEGIN|FORMAT_FLAG_TIME_END)) {
 					if (f->opt & FORMAT_FLAG_TIME_SEC) {
-						time_t t = (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) ? log_epoch_secs : con->request_start;
+						time_t t = (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) ? log_epoch_secs : con->request.start_ts;
 						buffer_append_int(b, (intmax_t)t);
 					} else if (f->opt & (FORMAT_FLAG_TIME_MSEC|FORMAT_FLAG_TIME_USEC|FORMAT_FLAG_TIME_NSEC)) {
 						off_t t; /*(expected to be 64-bit since large file support enabled)*/
@@ -798,8 +798,8 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 							t = (off_t)ts.tv_sec;
 							ns = ts.tv_nsec;
 						} else {
-							t = (off_t)con->request_start_hp.tv_sec;
-							ns = con->request_start_hp.tv_nsec;
+							t = (off_t)con->request.start_hp.tv_sec;
+							ns = con->request.start_hp.tv_nsec;
 						}
 						if (f->opt & FORMAT_FLAG_TIME_MSEC) {
 							t *= 1000;
@@ -819,7 +819,7 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 							if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
 							ns = ts.tv_nsec;
 						} else {
-							ns = con->request_start_hp.tv_nsec;
+							ns = con->request.start_hp.tv_nsec;
 						}
 						/*assert(t < 1000000000);*/
 						if (f->opt & FORMAT_FLAG_TIME_MSEC_FRAC) {
@@ -860,7 +860,7 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 						t = parsed_format->last_generated_accesslog_ts = cur_ts;
 						flush = 1;
 					} else {
-						t = con->request_start;
+						t = con->request.start_ts;
 					}
 
 				      #if defined(HAVE_STRUCT_TM_GMTOFF)
@@ -909,9 +909,9 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 			case FORMAT_TIME_USED:
 			case FORMAT_TIME_USED_US:
 				if (f->opt & FORMAT_FLAG_TIME_SEC) {
-					buffer_append_int(b, log_epoch_secs - con->request_start);
+					buffer_append_int(b, log_epoch_secs - con->request.start_ts);
 				} else {
-					const struct timespec * const bs = &con->request_start_hp;
+					const struct timespec * const bs = &con->request.start_hp;
 					off_t tdiff; /*(expected to be 64-bit since large file support enabled)*/
 					if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
 					tdiff = (off_t)(ts.tv_sec - bs->tv_sec)*1000000000 + (ts.tv_nsec - bs->tv_nsec);
