@@ -183,8 +183,8 @@ static int accesslog_write_all(const int fd, buffer * const b) {
     return (-1 != wr);
 }
 
-static void accesslog_append_escaped_str(buffer *dest, char *str, size_t len) {
-	char *ptr, *start, *end;
+static void accesslog_append_escaped_str(buffer * const dest, const char * const str, const size_t len) {
+	const char *ptr, *start, *end;
 
 	/* replaces non-printable chars with \xHH where HH is the hex representation of the byte */
 	/* exceptions: " => \", \ => \\, whitespace chars => \n \t etc. */
@@ -192,7 +192,7 @@ static void accesslog_append_escaped_str(buffer *dest, char *str, size_t len) {
 	buffer_string_prepare_append(dest, len);
 
 	for (ptr = start = str, end = str+len; ptr < end; ++ptr) {
-		unsigned char const c = (unsigned char) *ptr;
+		unsigned char const c = *(const unsigned char *)ptr;
 		if (c >= ' ' && c <= '~' && c != '"' && c != '\\') {
 			/* nothing to change, add later as one block */
 		} else {
@@ -772,23 +772,12 @@ SIGHUP_FUNC(log_access_cycle) {
     return HANDLER_GO_ON;
 }
 
-REQUESTDONE_FUNC(log_access_write) {
-	plugin_data *p = p_d;
-	mod_accesslog_patch_config(con, p);
-
-	/* No output device, nothing to do */
-	if (!p->conf.use_syslog && p->conf.log_access_fd == -1) return HANDLER_GO_ON;
-
-	buffer * const b = (p->conf.use_syslog)
-	  ? &p->syslog_logbuffer
-	  : p->conf.access_logbuffer;
-
+static int log_access_record (const connection * const con, buffer * const b, format_fields * const parsed_format) {
 	const buffer *vb;
 	struct timespec ts = { 0, 0 };
+	int flush = 0;
 
-	int flush = p->conf.piped_logger;
-
-	for (const format_field *f = p->conf.parsed_format->ptr; f->type != FIELD_UNSET; ++f) {
+	for (const format_field *f = parsed_format->ptr; f->type != FIELD_UNSET; ++f) {
 		switch(f->type) {
 		case FIELD_STRING:
 			buffer_append_string_buffer(b, &f->string);
@@ -848,7 +837,6 @@ REQUESTDONE_FUNC(log_access_write) {
 							*--ptr = (ns % 10) + '0';
 					}
 				} else {
-					format_fields * const parsed_format = p->conf.parsed_format;
 					buffer * const ts_accesslog_str = &parsed_format->ts_accesslog_str;
 					/* cache the generated timestamp (only if ! FORMAT_FLAG_TIME_BEGIN) */
 					struct tm *tmptr;
@@ -1131,6 +1119,23 @@ REQUESTDONE_FUNC(log_access_write) {
 			break;
 		}
 	}
+
+	return flush;
+}
+
+REQUESTDONE_FUNC(log_access_write) {
+	plugin_data * const p = p_d;
+	mod_accesslog_patch_config(con, p);
+
+	/* No output device, nothing to do */
+	if (!p->conf.use_syslog && p->conf.log_access_fd == -1) return HANDLER_GO_ON;
+
+	buffer * const b = (p->conf.use_syslog)
+	  ? &p->syslog_logbuffer
+	  : p->conf.access_logbuffer;
+
+	const int flush = p->conf.piped_logger
+	                | log_access_record(con, b, p->conf.parsed_format);
 
 	if (p->conf.use_syslog) { /* syslog doesn't cache */
 #ifdef HAVE_SYSLOG_H
