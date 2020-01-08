@@ -97,7 +97,7 @@ static inline buffer * http_header_generic_get_ifnotempty(const array * const a,
 }
 
 
-buffer * http_header_response_get(connection *con, enum http_header_e id, const char *k, size_t klen) {
+buffer * http_header_response_get(const connection *con, enum http_header_e id, const char *k, size_t klen) {
     return (id <= HTTP_HEADER_OTHER || (con->response.htags & id))
       ? http_header_generic_get_ifnotempty(&con->response.headers, k, klen)
       : NULL;
@@ -140,7 +140,7 @@ void http_header_response_insert(connection *con, enum http_header_e id, const c
 }
 
 
-buffer * http_header_request_get(connection *con, enum http_header_e id, const char *k, size_t klen) {
+buffer * http_header_request_get(const connection *con, enum http_header_e id, const char *k, size_t klen) {
     return (id <= HTTP_HEADER_OTHER || (con->request.htags & id))
       ? http_header_generic_get_ifnotempty(&con->request.headers, k, klen)
       : NULL;
@@ -171,7 +171,7 @@ void http_header_request_append(connection *con, enum http_header_e id, const ch
 }
 
 
-buffer * http_header_env_get(connection *con, const char *k, size_t klen) {
+buffer * http_header_env_get(const connection *con, const char *k, size_t klen) {
     return http_header_generic_get_ifnotempty(&con->environment, k, klen);
 }
 
