@@ -115,7 +115,6 @@ struct connection {
 	server *srv;
 
 	void *plugin_slots;
-	void **plugin_ctx;           /* plugin connection specific config */
 
 	request_config conf;
 	void *config_data_base;

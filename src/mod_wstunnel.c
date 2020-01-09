@@ -479,7 +479,7 @@ static void wstunnel_handler_ctx_free(void *gwhctx) {
 }
 
 static handler_t wstunnel_handler_setup (connection *con, plugin_data *p) {
-    handler_ctx *hctx = con->plugin_ctx[p->id];
+    handler_ctx *hctx = con->request.plugin_ctx[p->id];
     int hybivers;
     hctx->srv = con->srv;
     hctx->errh = con->conf.errh;/*(for mod_wstunnel-specific DEBUG_* macros)*/
@@ -595,7 +595,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
 
     for (uint32_t i = 0; i < srv->conns.used; ++i) {
         connection *con = srv->conns.ptr[i];
-        handler_ctx *hctx = con->plugin_ctx[p->id];
+        handler_ctx *hctx = con->request.plugin_ctx[p->id];
         if (NULL == hctx || con->mode != p->id)
             continue;
 

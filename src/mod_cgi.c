@@ -329,7 +329,7 @@ static void cgi_connection_close(connection *con, handler_ctx *hctx) {
 		cgi_pid_kill(p, hctx->pid);
 	}
 
-	con->plugin_ctx[p->id] = NULL;
+	con->request.plugin_ctx[p->id] = NULL;
 
 	cgi_handler_ctx_free(hctx);
 
@@ -341,7 +341,7 @@ static void cgi_connection_close(connection *con, handler_ctx *hctx) {
 
 static handler_t cgi_connection_close_callback(connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	handler_ctx *hctx = con->plugin_ctx[p->id];
+	handler_ctx *hctx = con->request.plugin_ctx[p->id];
 	if (hctx) cgi_connection_close(con, hctx);
 
 	return HANDLER_GO_ON;
@@ -914,7 +914,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		hctx->opts.xsendfile_docroot = hctx->conf.xsendfile_docroot;
 		hctx->opts.pdata = hctx;
 		hctx->opts.headers = cgi_response_headers;
-		con->plugin_ctx[p->id] = hctx;
+		con->request.plugin_ctx[p->id] = hctx;
 		con->mode = p->id;
 	}
 
@@ -928,7 +928,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
  */
 SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	plugin_data * const p = p_d;
-	handler_ctx * const hctx = con->plugin_ctx[p->id];
+	handler_ctx * const hctx = con->request.plugin_ctx[p->id];
 
 	if (con->mode != p->id) return HANDLER_GO_ON;
 	if (NULL == hctx) return HANDLER_GO_ON;

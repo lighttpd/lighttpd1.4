@@ -5536,7 +5536,7 @@ mod_webdav_unlock (connection * const con, const plugin_config * const pconf)
 SUBREQUEST_FUNC(mod_webdav_subrequest_handler)
 {
     const plugin_config * const pconf =
-      (plugin_config *)con->plugin_ctx[((plugin_data *)p_d)->id];
+      (plugin_config *)con->request.plugin_ctx[((plugin_data *)p_d)->id];
     if (NULL == pconf) return HANDLER_GO_ON; /*(should not happen)*/
 
     switch (con->request.http_method) {
@@ -5641,17 +5641,17 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
 
     con->mode = ((plugin_data *)p_d)->id;
     con->conf.stream_request_body = 0;
-    con->plugin_ctx[((plugin_data *)p_d)->id] = &pconf;
+    con->request.plugin_ctx[((plugin_data *)p_d)->id] = &pconf;
     const handler_t rc =
       mod_webdav_subrequest_handler(con, p_d); /*p->handle_subrequest()*/
     if (rc == HANDLER_FINISHED || rc == HANDLER_ERROR)
-        con->plugin_ctx[((plugin_data *)p_d)->id] = NULL;
+        con->request.plugin_ctx[((plugin_data *)p_d)->id] = NULL;
     else {  /* e.g. HANDLER_WAIT_FOR_RD */
         plugin_config * const save_pconf =
           (plugin_config *)malloc(sizeof(pconf));
         force_assert(save_pconf);
         memcpy(save_pconf, &pconf, sizeof(pconf));
-        con->plugin_ctx[((plugin_data *)p_d)->id] = save_pconf;
+        con->request.plugin_ctx[((plugin_data *)p_d)->id] = save_pconf;
     }
     return rc;
 }
@@ -5659,7 +5659,8 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
 
 CONNECTION_FUNC(mod_webdav_handle_reset) {
     /* free plugin_config if allocated and saved to per-request storage */
-    void ** const restrict dptr = &con->plugin_ctx[((plugin_data *)p_d)->id];
+    void ** const restrict dptr =
+      &con->request.plugin_ctx[((plugin_data *)p_d)->id];
     if (*dptr) {
         free(*dptr);
         *dptr = NULL;

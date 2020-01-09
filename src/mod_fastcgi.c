@@ -504,7 +504,7 @@ static handler_t fcgi_check_extension(connection *con, void *p_d, int uri_path_h
 	if (HANDLER_GO_ON != rc) return rc;
 
 	if (con->mode == p->id) {
-		handler_ctx *hctx = con->plugin_ctx[p->id];
+		handler_ctx *hctx = con->request.plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_FASTCGI;
 		hctx->opts.parse = fcgi_recv_parse;
 		hctx->opts.pdata = hctx;

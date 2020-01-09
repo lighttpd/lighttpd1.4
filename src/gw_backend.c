@@ -1756,7 +1756,7 @@ static void gw_connection_close(gw_handler_ctx *hctx, connection *con) {
 
     gw_backend_close(hctx, con);
     handler_ctx_free(hctx);
-    con->plugin_ctx[p->id] = NULL;
+    con->request.plugin_ctx[p->id] = NULL;
 
     if (con->mode == p->id) {
         http_response_backend_done(con);
@@ -1780,7 +1780,7 @@ static handler_t gw_reconnect(gw_handler_ctx *hctx, connection *con) {
 
 handler_t gw_connection_reset(connection *con, void *p_d) {
     gw_plugin_data *p = p_d;
-    gw_handler_ctx *hctx = con->plugin_ctx[p->id];
+    gw_handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (hctx) gw_connection_close(hctx, con);
 
     return HANDLER_GO_ON;
@@ -2007,7 +2007,7 @@ static handler_t gw_recv_response(gw_handler_ctx *hctx, connection *con);
 
 handler_t gw_handle_subrequest(connection *con, void *p_d) {
     gw_plugin_data *p = p_d;
-    gw_handler_ctx *hctx = con->plugin_ctx[p->id];
+    gw_handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
     if (con->mode != p->id) return HANDLER_GO_ON; /* not my job */
 
@@ -2311,7 +2311,7 @@ handler_t gw_check_extension(connection *con, gw_plugin_data *p, int uri_path_ha
     /* check p->conf.exts_auth list and then p->conf.ext_resp list
      * (skip p->conf.exts_auth if array is empty
      *  or if GW_AUTHORIZER already ran in this request) */
-    hctx = con->plugin_ctx[p->id];
+    hctx = con->request.plugin_ctx[p->id];
     /*(hctx not NULL if GW_AUTHORIZER ran; hctx->ext_auth check is redundant)*/
     gw_mode = (NULL == hctx || NULL == hctx->ext_auth)
       ? 0              /*GW_AUTHORIZER p->conf.exts_auth will be searched next*/
@@ -2495,7 +2495,7 @@ handler_t gw_check_extension(connection *con, gw_plugin_data *p, int uri_path_ha
     hctx->opts.xsendfile_allow = host->xsendfile_allow;
     hctx->opts.xsendfile_docroot = host->xsendfile_docroot;
 
-    con->plugin_ctx[p->id] = hctx;
+    con->request.plugin_ctx[p->id] = hctx;
 
     con->mode = p->id;
 

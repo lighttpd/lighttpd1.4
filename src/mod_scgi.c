@@ -292,7 +292,7 @@ static handler_t scgi_check_extension(connection *con, void *p_d, int uri_path_h
 	if (HANDLER_GO_ON != rc) return rc;
 
 	if (con->mode == p->id) {
-		handler_ctx *hctx = con->plugin_ctx[p->id];
+		handler_ctx *hctx = con->request.plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_SCGI;
 		hctx->create_env = scgi_create_env;
 		hctx->response = chunk_buffer_acquire();

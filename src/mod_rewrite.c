@@ -241,7 +241,7 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 }
 
 URIHANDLER_FUNC(mod_rewrite_con_reset) {
-    con->plugin_ctx[((plugin_data *)p_d)->id] = NULL;
+    con->request.plugin_ctx[((plugin_data *)p_d)->id] = NULL;
     return HANDLER_GO_ON;
 }
 
@@ -250,8 +250,8 @@ static handler_t process_rewrite_rules(connection *con, plugin_data *p, const pc
 	pcre_keyvalue_ctx ctx;
 	handler_t rc;
 
-	if (con->plugin_ctx[p->id]) {
-		uintptr_t * const hctx = (uintptr_t *)(con->plugin_ctx + p->id);
+	if (con->request.plugin_ctx[p->id]) {
+		uintptr_t * const hctx = (uintptr_t *)(con->request.plugin_ctx + p->id);
 
 		if (((++*hctx) & 0x1FF) > 100) {
 			if (0 != kvb->x0) {
@@ -292,7 +292,7 @@ static handler_t process_rewrite_rules(connection *con, plugin_data *p, const pc
 	rc = pcre_keyvalue_buffer_process(kvb, &ctx, con->request.target, tb);
 	if (HANDLER_FINISHED == rc && !buffer_is_empty(tb) && tb->ptr[0] == '/') {
 		buffer_copy_buffer(con->request.target, tb);
-		uintptr_t * const hctx = (uintptr_t *)(con->plugin_ctx + p->id);
+		uintptr_t * const hctx = (uintptr_t *)(con->request.plugin_ctx + p->id);
 		*hctx |= REWRITE_STATE_REWRITTEN;
 		/*(kvb->x1 is repeat_idx)*/
 		if (ctx.m < kvb->x1) *hctx |= REWRITE_STATE_FINISHED;

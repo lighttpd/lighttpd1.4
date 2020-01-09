@@ -532,7 +532,7 @@ static const char *last_not_in_array(array *a, plugin_data *p)
 
 static int mod_extforward_set_addr(connection *con, plugin_data *p, const char *addr) {
 	sock_addr sock;
-	handler_ctx *hctx = con->plugin_ctx[p->id];
+	handler_ctx *hctx = con->request.plugin_ctx[p->id];
 
 	if (con->conf.log_request_handling) {
 		log_error(con->conf.errh, __FILE__, __LINE__, "using address: %s", addr);
@@ -555,7 +555,7 @@ static int mod_extforward_set_addr(connection *con, plugin_data *p, const char *
 			hctx->saved_remote_addr_buf = NULL;
 		}
 	} else {
-		con->plugin_ctx[p->id] = hctx = handler_ctx_init();
+		con->request.plugin_ctx[p->id] = hctx = handler_ctx_init();
 	}
 	/* save old address */
 	if (extforward_check_proxy) {
@@ -1032,7 +1032,7 @@ static handler_t mod_extforward_Forwarded (connection *con, plugin_data *p, cons
 URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	plugin_data *p = p_d;
 	const buffer *forwarded = NULL;
-	handler_ctx *hctx = con->plugin_ctx[p->id];
+	handler_ctx *hctx = con->request.plugin_ctx[p->id];
 	int is_forwarded_header = 0;
 
 	mod_extforward_patch_config(con, p);
@@ -1102,7 +1102,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 
 CONNECTION_FUNC(mod_extforward_handle_request_env) {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->plugin_ctx[p->id];
+    handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (NULL == hctx || NULL == hctx->env) return HANDLER_GO_ON;
     for (uint32_t i=0; i < hctx->env->used; ++i) {
         /* note: replaces values which may have been set by mod_openssl
@@ -1117,7 +1117,7 @@ CONNECTION_FUNC(mod_extforward_handle_request_env) {
 
 CONNECTION_FUNC(mod_extforward_restore) {
 	plugin_data *p = p_d;
-	handler_ctx *hctx = con->plugin_ctx[p->id];
+	handler_ctx *hctx = con->request.plugin_ctx[p->id];
 
 	if (!hctx) return HANDLER_GO_ON;
 
@@ -1137,7 +1137,7 @@ CONNECTION_FUNC(mod_extforward_restore) {
 
 	if (NULL == hctx->env) {
 		handler_ctx_free(hctx);
-		con->plugin_ctx[p->id] = NULL;
+		con->request.plugin_ctx[p->id] = NULL;
 	}
 
 	return HANDLER_GO_ON;
@@ -1147,7 +1147,7 @@ CONNECTION_FUNC(mod_extforward_restore) {
 CONNECTION_FUNC(mod_extforward_handle_con_close)
 {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->plugin_ctx[p->id];
+    handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (NULL != hctx) {
         if (NULL != hctx->saved_network_read) {
             con->network_read = hctx->saved_network_read;
@@ -1161,7 +1161,7 @@ CONNECTION_FUNC(mod_extforward_handle_con_close)
             array_free(hctx->env);
         }
         handler_ctx_free(hctx);
-        con->plugin_ctx[p->id] = NULL;
+        con->request.plugin_ctx[p->id] = NULL;
     }
 
     return HANDLER_GO_ON;
@@ -1178,7 +1178,7 @@ CONNECTION_FUNC(mod_extforward_handle_con_accept)
     if (NULL == p->conf.forwarder) return HANDLER_GO_ON;
     if (is_connection_trusted(con, p)) {
         handler_ctx *hctx = handler_ctx_init();
-        con->plugin_ctx[p->id] = hctx;
+        con->request.plugin_ctx[p->id] = hctx;
         hctx->saved_network_read = con->network_read;
         con->network_read = mod_extforward_network_read;
     }
@@ -1578,7 +1578,7 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
           case PP2_TYPE_SSL: {
             static const uint32_t zero = 0;
             handler_ctx *hctx =
-              con->plugin_ctx[mod_extforward_plugin_data_singleton->id];
+              con->request.plugin_ctx[mod_extforward_plugin_data_singleton->id];
             struct pp2_tlv_ssl *tlv_ssl =
               (struct pp2_tlv_ssl *)(void *)((char *)tlv+3);
             struct pp2_tlv *subtlv = tlv;

@@ -1254,7 +1254,7 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 	if (NULL == p->conf.ssi_extension) return HANDLER_GO_ON;
 
 	if (array_match_value_suffix(p->conf.ssi_extension, con->physical.path)) {
-		con->plugin_ctx[p->id] = handler_ctx_init(p, con->conf.errh);
+		con->request.plugin_ctx[p->id] = handler_ctx_init(p, con->conf.errh);
 		con->mode = p->id;
 	}
 
@@ -1263,7 +1263,7 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 
 SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 	plugin_data *p = p_d;
-	handler_ctx *hctx = con->plugin_ctx[p->id];
+	handler_ctx *hctx = con->request.plugin_ctx[p->id];
 	if (NULL == hctx) return HANDLER_GO_ON;
 	if (con->mode != p->id) return HANDLER_GO_ON; /* not my job */
 	/*
@@ -1285,10 +1285,10 @@ SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 
 static handler_t mod_ssi_connection_reset(connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	handler_ctx *hctx = con->plugin_ctx[p->id];
+	handler_ctx *hctx = con->request.plugin_ctx[p->id];
 	if (hctx) {
 		handler_ctx_free(hctx);
-		con->plugin_ctx[p->id] = NULL;
+		con->request.plugin_ctx[p->id] = NULL;
 	}
 
 	return HANDLER_GO_ON;

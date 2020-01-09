@@ -217,7 +217,7 @@ static int mod_authn_gssapi_create_krb5_ccache(connection *con, plugin_data *p, 
             break;
         }
 
-        con->plugin_ctx[p->id] = kccname;
+        con->request.plugin_ctx[p->id] = kccname;
 
         http_header_env_set(con, CONST_STR_LEN("KRB5CCNAME"), ccname, ccnamelen);
         http_header_request_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Forwarded-Keytab"), ccname, ccnamelen);
@@ -767,9 +767,9 @@ static handler_t mod_authn_gssapi_basic(connection *con, void *p_d, const http_a
 
 CONNECTION_FUNC(mod_authn_gssapi_handle_reset) {
     plugin_data *p = (plugin_data *)p_d;
-    buffer *kccname = (buffer *)con->plugin_ctx[p->id];
+    buffer *kccname = (buffer *)con->request.plugin_ctx[p->id];
     if (NULL != kccname) {
-        con->plugin_ctx[p->id] = NULL;
+        con->request.plugin_ctx[p->id] = NULL;
         unlink(kccname->ptr+sizeof("FILE:")-1);
         buffer_free(kccname);
     }

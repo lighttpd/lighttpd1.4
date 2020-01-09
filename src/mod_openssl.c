@@ -110,7 +110,7 @@ typedef struct {
 
 static int ssl_is_init;
 /* need assigned p->id for deep access of module handler_ctx for connection
- *   i.e. handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id]; */
+ *   i.e. handler_ctx *hctx = con->request.plugin_ctx[plugin_data_singleton->id]; */
 static plugin_data *plugin_data_singleton;
 #define LOCAL_SEND_BUFSIZE (16 * 1024)
 static char *local_send_buffer;
@@ -1780,7 +1780,7 @@ mod_openssl_close_notify(handler_ctx *hctx);
 static int
 connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 {
-    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx *hctx = con->request.plugin_ctx[plugin_data_singleton->id];
     SSL *ssl = hctx->ssl;
 
     if (0 != hctx->close_notify) return mod_openssl_close_notify(hctx);
@@ -1878,7 +1878,7 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 static int
 connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 {
-    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx *hctx = con->request.plugin_ctx[plugin_data_singleton->id];
     int len;
     char *mem = NULL;
     size_t mem_len = 0;
@@ -2033,7 +2033,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
     handler_ctx * const hctx = handler_ctx_init();
     hctx->con = con;
     hctx->srv = con->srv;
-    con->plugin_ctx[p->id] = hctx;
+    con->request.plugin_ctx[p->id] = hctx;
 
     plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
     hctx->conf.ssl_pemfile_pkey = s->ssl_pemfile_pkey;
@@ -2072,7 +2072,7 @@ mod_openssl_detach(handler_ctx *hctx)
 CONNECTION_FUNC(mod_openssl_handle_con_shut_wr)
 {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->plugin_ctx[p->id];
+    handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
     hctx->close_notify = -2;
@@ -2198,10 +2198,10 @@ mod_openssl_close_notify(handler_ctx *hctx)
 CONNECTION_FUNC(mod_openssl_handle_con_close)
 {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->plugin_ctx[p->id];
+    handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (NULL != hctx) {
         handler_ctx_free(hctx);
-        con->plugin_ctx[p->id] = NULL;
+        con->request.plugin_ctx[p->id] = NULL;
     }
 
     return HANDLER_GO_ON;
@@ -2343,7 +2343,7 @@ http_cgi_ssl_env (connection *con, handler_ctx *hctx)
 CONNECTION_FUNC(mod_openssl_handle_request_env)
 {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->plugin_ctx[p->id];
+    handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
     if (hctx->request_env_patched) return HANDLER_GO_ON;
     hctx->request_env_patched = 1;
@@ -2367,7 +2367,7 @@ CONNECTION_FUNC(mod_openssl_handle_uri_raw)
      * is enabled with extforward.hap-PROXY = "enable", in which case the
      * reverse is true: mod_extforward must be loaded after mod_openssl */
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->plugin_ctx[p->id];
+    handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
     mod_openssl_patch_config(con, &hctx->conf);
@@ -2382,7 +2382,7 @@ CONNECTION_FUNC(mod_openssl_handle_uri_raw)
 CONNECTION_FUNC(mod_openssl_handle_request_reset)
 {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->plugin_ctx[p->id];
+    handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
     hctx->request_env_patched = 0;

@@ -86,6 +86,7 @@ struct request_st {
 
     http_method_t  http_method;
     http_version_t http_version;
+    void **plugin_ctx;           /* plugin connection specific config */
 
     /* strings to the header */
     buffer *http_host; /* not alloced */

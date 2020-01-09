@@ -67,7 +67,7 @@ FREE_FUNC(mod_mysql_vhost_cleanup) {
 static void* mod_mysql_vhost_connection_data(connection *con, void *p_d)
 {
 	plugin_data *p = p_d;
-	plugin_connection_data *c = con->plugin_ctx[p->id];
+	plugin_connection_data *c = con->request.plugin_ctx[p->id];
 
 	if (c) return c;
 	c = calloc(1, sizeof(*c));
@@ -75,12 +75,12 @@ static void* mod_mysql_vhost_connection_data(connection *con, void *p_d)
 	c->server_name = buffer_init();
 	c->document_root = buffer_init();
 
-	return con->plugin_ctx[p->id] = c;
+	return con->request.plugin_ctx[p->id] = c;
 }
 
 CONNECTION_FUNC(mod_mysql_vhost_handle_connection_reset) {
 	plugin_data *p = p_d;
-	plugin_connection_data *c = con->plugin_ctx[p->id];
+	plugin_connection_data *c = con->request.plugin_ctx[p->id];
 
 	if (!c) return HANDLER_GO_ON;
 
@@ -89,7 +89,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_connection_reset) {
 
 	free(c);
 
-	con->plugin_ctx[p->id] = NULL;
+	con->request.plugin_ctx[p->id] = NULL;
 	return HANDLER_GO_ON;
 }
 

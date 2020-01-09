@@ -423,9 +423,9 @@ CONNECTION_FUNC(mod_maxminddb_request_env_handler)
     /* check that mod_maxmind is activated and env fields were requested */
     if (!pconf.activate || NULL == pconf.env) return HANDLER_GO_ON;
 
-    array *env = con->plugin_ctx[p->id];
+    array *env = con->request.plugin_ctx[p->id];
     if (NULL == env) {
-        env = con->plugin_ctx[p->id] = array_init(pconf.env->used);
+        env = con->request.plugin_ctx[p->id] = array_init(pconf.env->used);
         if (pconf.mmdb)
             mod_maxmind_geoip2(env, &con->dst_addr, &pconf);
     }
@@ -445,10 +445,10 @@ CONNECTION_FUNC(mod_maxminddb_request_env_handler)
 CONNECTION_FUNC(mod_maxminddb_handle_con_close)
 {
     plugin_data *p = p_d;
-    array *env = con->plugin_ctx[p->id];
+    array *env = con->request.plugin_ctx[p->id];
     if (NULL != env) {
         array_free(env);
-        con->plugin_ctx[p->id] = NULL;
+        con->request.plugin_ctx[p->id] = NULL;
     }
 
     return HANDLER_GO_ON;

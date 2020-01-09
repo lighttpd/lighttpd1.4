@@ -101,10 +101,10 @@ static void connection_plugin_ctx_check(server *srv, connection *con) {
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
 		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
 		plugin_data_base *pd = p->data;
-		if (!pd || NULL == con->plugin_ctx[pd->id]) continue;
+		if (!pd || NULL == con->request.plugin_ctx[pd->id]) continue;
 		log_error(con->conf.errh, __FILE__, __LINE__,
 		  "missing cleanup in %s", p->name);
-		con->plugin_ctx[pd->id] = NULL;
+		con->request.plugin_ctx[pd->id] = NULL;
 	}
 }
 
@@ -139,7 +139,7 @@ static int connection_close(connection *con) {
 
 	/* plugins should have cleaned themselves up */
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
-		if (NULL != con->plugin_ctx[i]) {
+		if (NULL != con->request.plugin_ctx[i]) {
 			connection_plugin_ctx_check(srv, con);
 			break;
 		}
@@ -574,8 +574,8 @@ static connection *connection_init(server *srv) {
 
 	/* init plugin specific connection structures */
 
-	con->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
-	force_assert(NULL != con->plugin_ctx);
+	con->request.plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
+	force_assert(NULL != con->request.plugin_ctx);
 
 	con->request.cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
 	force_assert(NULL != con->request.cond_cache);
@@ -628,7 +628,7 @@ void connections_free(server *srv) {
 		CLEAN(request.server_name_buf);
 		CLEAN(dst_addr_buf);
 #undef CLEAN
-		free(con->plugin_ctx);
+		free(con->request.plugin_ctx);
 		free(con->request.cond_cache);
 		free(con->request.cond_match);
 

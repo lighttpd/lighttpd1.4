@@ -131,8 +131,8 @@ CONNECTION_FUNC(mod_vhostdb_handle_connection_close) {
     plugin_data *p = p_d;
     vhostdb_entry *ve;
 
-    if ((ve = con->plugin_ctx[p->id])) {
-        con->plugin_ctx[p->id] = NULL;
+    if ((ve = con->request.plugin_ctx[p->id])) {
+        con->request.plugin_ctx[p->id] = NULL;
         vhostdb_entry_free(ve);
     }
 
@@ -169,7 +169,7 @@ CONNECTION_FUNC(mod_vhostdb_handle_docroot) {
      * of database responses (positive and negative) */
 
     /* check if cached this connection */
-    ve = con->plugin_ctx[p->id];
+    ve = con->request.plugin_ctx[p->id];
     if (ve && buffer_is_equal(ve->server_name, con->uri.authority)) {
         return mod_vhostdb_found(con, ve); /* HANDLER_GO_ON */
     }
@@ -202,7 +202,7 @@ CONNECTION_FUNC(mod_vhostdb_handle_docroot) {
     }
 
     /* cache the data */
-    if (!ve) con->plugin_ctx[p->id] = ve = vhostdb_entry_init();
+    if (!ve) con->request.plugin_ctx[p->id] = ve = vhostdb_entry_init();
     buffer_copy_buffer(ve->server_name, con->uri.authority);
     buffer_copy_buffer(ve->document_root, b);
 

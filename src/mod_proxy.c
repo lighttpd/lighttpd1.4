@@ -1031,7 +1031,7 @@ static handler_t mod_proxy_check_extension(connection *con, void *p_d) {
 	if (HANDLER_GO_ON != rc) return rc;
 
 	if (con->mode == p->id) {
-		handler_ctx *hctx = con->plugin_ctx[p->id];
+		handler_ctx *hctx = con->request.plugin_ctx[p->id];
 		hctx->gw.create_env = proxy_create_env;
 		hctx->gw.response = chunk_buffer_acquire();
 		hctx->gw.opts.backend = BACKEND_PROXY;

@@ -737,7 +737,7 @@ static int mod_deflate_stream_end(handler_ctx *hctx) {
 
 static void deflate_compress_cleanup(connection *con, handler_ctx *hctx) {
 	const plugin_data *p = hctx->plugin_data;
-	con->plugin_ctx[p->id] = NULL;
+	con->request.plugin_ctx[p->id] = NULL;
 
 	if (0 != mod_deflate_stream_end(hctx)) {
 		log_error(con->conf.errh, __FILE__, __LINE__, "error closing stream");
@@ -1230,7 +1230,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
 		http_header_response_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 	}
-	con->plugin_ctx[p->id] = hctx;
+	con->request.plugin_ctx[p->id] = hctx;
 
 	rc = deflate_compress_response(con, hctx);
 	if (HANDLER_GO_ON != rc) {
@@ -1246,7 +1246,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 
 static handler_t mod_deflate_cleanup(connection *con, void *p_d) {
 	plugin_data *p = p_d;
-	handler_ctx *hctx = con->plugin_ctx[p->id];
+	handler_ctx *hctx = con->request.plugin_ctx[p->id];
 
 	if (NULL != hctx) deflate_compress_cleanup(con, hctx);
 

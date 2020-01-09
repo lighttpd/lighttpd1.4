@@ -149,9 +149,9 @@ SETDEFAULTS_FUNC(mod_setenv_set_defaults) {
 
 URIHANDLER_FUNC(mod_setenv_uri_handler) {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->plugin_ctx[p->id];
+    handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (!hctx)
-        con->plugin_ctx[p->id] = hctx = handler_ctx_init();
+        con->request.plugin_ctx[p->id] = hctx = handler_ctx_init();
     else if (hctx->handled)
         return HANDLER_GO_ON;
     hctx->handled = 1;
@@ -188,7 +188,7 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
 
 CONNECTION_FUNC(mod_setenv_handle_request_env) {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->plugin_ctx[p->id];
+    handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
     if (hctx->handled > 1) return HANDLER_GO_ON;
     hctx->handled = 2;
@@ -217,7 +217,7 @@ CONNECTION_FUNC(mod_setenv_handle_request_env) {
 
 CONNECTION_FUNC(mod_setenv_handle_response_start) {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->plugin_ctx[p->id];
+    handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
     const array * const aa = hctx->conf.response_header;
@@ -249,7 +249,7 @@ CONNECTION_FUNC(mod_setenv_handle_response_start) {
 }
 
 CONNECTION_FUNC(mod_setenv_reset) {
-    void ** const hctx = con->plugin_ctx + ((plugin_data_base *)p_d)->id;
+    void ** const hctx = con->request.plugin_ctx+((plugin_data_base *)p_d)->id;
     if (*hctx) { handler_ctx_free(*hctx); *hctx = NULL; }
     return HANDLER_GO_ON;
 }
