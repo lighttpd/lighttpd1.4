@@ -339,8 +339,8 @@ static handler_t mod_authn_gssapi_check_spnego(connection *con, plugin_data *p, 
     sprinc = buffer_init_buffer(p->conf.auth_gssapi_principal);
     if (strchr(sprinc->ptr, '/') == NULL) {
         /*(copy HTTP Host, omitting port if port is present)*/
-        /* ??? Should con->server_name be used if http_host not present?
-         * ??? What if con->server_name is not set?
+        /* ??? Should con->request.server_name be used if http_host not present?
+         * ??? What if con->request.server_name is not set?
          * ??? Will this work below if IPv6 provided in Host?  probably not */
         if (!buffer_is_empty(con->request.http_host)) {
             buffer_append_string_len(sprinc, CONST_STR_LEN("/"));
@@ -647,8 +647,8 @@ static handler_t mod_authn_gssapi_basic(connection *con, void *p_d, const http_a
     sprinc = buffer_init_buffer(p->conf.auth_gssapi_principal);
     if (strchr(sprinc->ptr, '/') == NULL) {
         /*(copy HTTP Host, omitting port if port is present)*/
-        /* ??? Should con->server_name be used if http_host not present?
-         * ??? What if con->server_name is not set?
+        /* ??? Should con->request.server_name be used if http_host not present?
+         * ??? What if con->request.server_name is not set?
          * ??? Will this work below if IPv6 provided in Host?  probably not */
         if (!buffer_is_empty(con->request.http_host)) {
             buffer_append_string_len(sprinc, CONST_STR_LEN("/"));

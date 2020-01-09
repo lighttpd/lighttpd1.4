@@ -1101,14 +1101,14 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 	 * the same digest as that calculated by the client.)
 	 * Internal redirects such as with mod_rewrite will modify request uri.
 	 * Reauthentication is done to detect crossing auth realms, but this
-	 * uri validation step is bypassed.  con->request.orig_uri is original
-	 * uri sent in client request. */
+	 * uri validation step is bypassed.  con->request.target_orig is
+	 * original request-target sent in client request. */
 	{
 		const size_t ulen = strlen(uri);
-		if (!buffer_is_equal_string(con->request.orig_uri, uri, ulen)) {
+		if (!buffer_is_equal_string(con->request.target_orig, uri, ulen)) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
 			  "digest: auth failed: uri mismatch (%s != %s), IP: %s",
-			  con->request.orig_uri->ptr, uri, con->dst_addr_buf->ptr);
+			  con->request.target_orig->ptr, uri, con->dst_addr_buf->ptr);
 			buffer_free(b);
 			return mod_auth_send_400_bad_request(con);
 		}

@@ -11,6 +11,8 @@
 
 struct log_error_st;    /* declaration */
 struct chunkqueue;      /* declaration */
+struct cond_cache_t;    /* declaration */
+struct cond_match_t;    /* declaration */
 
 typedef struct {
     const array *mimetypes;
@@ -79,8 +81,8 @@ struct request_st {
     connection *con;
 
     /** HEADER */
-    buffer *uri;
-    buffer *orig_uri;
+    buffer *target;
+    buffer *target_orig;
 
     http_method_t  http_method;
     http_version_t http_version;
@@ -104,8 +106,14 @@ struct request_st {
     char loops_per_request;  /* catch endless loops in a single request */
     char async_callback;
 
+    const buffer *server_name;
+
     /* internal */
+    uint32_t conditional_is_valid;
+    struct cond_cache_t *cond_cache;
+    struct cond_match_t *cond_match;
     buffer *pathinfo;
+    buffer *server_name_buf;
 };
 
 

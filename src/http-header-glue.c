@@ -66,8 +66,8 @@ static int http_response_buffer_append_authority(connection *con, buffer *o) {
 					buffer_append_string_len(o, lhost, lhost_len);
 				}
 			}
-		} else if (!buffer_string_is_empty(con->server_name)) {
-			buffer_append_string_buffer(o, con->server_name);
+		} else if (!buffer_string_is_empty(con->request.server_name)) {
+			buffer_append_string_buffer(o, con->request.server_name);
 		} else
 		/* Lookup name: secondly try to get hostname for bind address */
 		if (0 != sock_addr_nameinfo_append_buffer(o, &our_addr, con->conf.errh)) {
@@ -899,13 +899,13 @@ static handler_t http_response_process_local_redir(connection *con, size_t blen)
         if (++con->request.loops_per_request > 5) {
             log_error(con->conf.errh, __FILE__, __LINE__,
               "too many internal loops while processing request: %s",
-              con->request.orig_uri->ptr);
+              con->request.target_orig->ptr);
             con->http_status = 500; /* Internal Server Error */
             con->mode = DIRECT;
             return HANDLER_FINISHED;
         }
 
-        buffer_copy_buffer(con->request.uri, vb);
+        buffer_copy_buffer(con->request.target, vb);
 
         if (con->request.reqbody_length) {
             if (con->request.reqbody_length
@@ -1385,24 +1385,24 @@ int http_cgi_headers (connection *con, http_cgi_opts *opts, http_cgi_header_appe
             --len;
         }
 
-        if (buffer_string_length(con->request.orig_uri) >= len
-            && 0 == memcmp(con->request.orig_uri->ptr,
+        if (buffer_string_length(con->request.target_orig) >= len
+            && 0 == memcmp(con->request.target_orig->ptr,
                            opts->strip_request_uri->ptr, len)
-            && con->request.orig_uri->ptr[len] == '/') {
+            && con->request.target_orig->ptr[len] == '/') {
             rc |= cb(vdata, CONST_STR_LEN("REQUEST_URI"),
-                            con->request.orig_uri->ptr+len,
-                            buffer_string_length(con->request.orig_uri) - len);
+                            con->request.target_orig->ptr+len,
+                            buffer_string_length(con->request.target_orig)-len);
         } else {
             rc |= cb(vdata, CONST_STR_LEN("REQUEST_URI"),
-                            CONST_BUF_LEN(con->request.orig_uri));
+                            CONST_BUF_LEN(con->request.target_orig));
         }
     } else {
         rc |= cb(vdata, CONST_STR_LEN("REQUEST_URI"),
-                        CONST_BUF_LEN(con->request.orig_uri));
+                        CONST_BUF_LEN(con->request.target_orig));
     }
-    if (!buffer_is_equal(con->request.uri, con->request.orig_uri)) {
+    if (!buffer_is_equal(con->request.target, con->request.target_orig)) {
         rc |= cb(vdata, CONST_STR_LEN("REDIRECT_URI"),
-                        CONST_BUF_LEN(con->request.uri));
+                        CONST_BUF_LEN(con->request.target));
     }
     /* set REDIRECT_STATUS for php compiled with --force-redirect
      * (if REDIRECT_STATUS has not already been set by error handler) */
@@ -1515,19 +1515,19 @@ int http_cgi_headers (connection *con, http_cgi_opts *opts, http_cgi_header_appe
     force_assert(s);
     rc |= cb(vdata, CONST_STR_LEN("SERVER_ADDR"), s, strlen(s));
 
-    if (!buffer_string_is_empty(con->server_name)) {
-        size_t len = buffer_string_length(con->server_name);
+    if (!buffer_string_is_empty(con->request.server_name)) {
+        size_t len = buffer_string_length(con->request.server_name);
 
-        if (con->server_name->ptr[0] == '[') {
-            const char *colon = strstr(con->server_name->ptr, "]:");
-            if (colon) len = (colon + 1) - con->server_name->ptr;
+        if (con->request.server_name->ptr[0] == '[') {
+            const char *colon = strstr(con->request.server_name->ptr, "]:");
+            if (colon) len = (colon + 1) - con->request.server_name->ptr;
         } else {
-            const char *colon = strchr(con->server_name->ptr, ':');
-            if (colon) len = colon - con->server_name->ptr;
+            const char *colon = strchr(con->request.server_name->ptr, ':');
+            if (colon) len = colon - con->request.server_name->ptr;
         }
 
         rc |= cb(vdata, CONST_STR_LEN("SERVER_NAME"),
-                        con->server_name->ptr, len);
+                        con->request.server_name->ptr, len);
     } else {
         /* set to be same as SERVER_ADDR (above) */
         rc |= cb(vdata, CONST_STR_LEN("SERVER_NAME"), s, strlen(s));

@@ -211,7 +211,7 @@ void config_patch_config(connection * const con) {
 void config_reset_config(connection * const con) {
     /* initialize request_config (con->conf) from top-level request_config */
     config_data_base * const p = con->config_data_base;
-    con->server_name = p->defaults.server_name;
+    con->request.server_name = p->defaults.server_name;
     memcpy(&con->conf, &p->defaults, sizeof(request_config));
 }
 

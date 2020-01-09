@@ -275,8 +275,9 @@ static handler_t process_rewrite_rules(connection *con, plugin_data *p, const pc
 
 	ctx.cache = NULL;
 	if (kvb->x0) { /*(kvb->x0 is context_idx)*/
-		ctx.cond_match_count = con->cond_cache[kvb->x0].patterncount;
-		ctx.cache = con->cond_match + kvb->x0;
+		ctx.cond_match_count =
+		  con->request.cond_cache[kvb->x0].patterncount;
+		ctx.cache = con->request.cond_match + kvb->x0;
         }
 	ctx.burl = &burl;
 	burl.scheme    = con->uri.scheme;
@@ -285,12 +286,12 @@ static handler_t process_rewrite_rules(connection *con, plugin_data *p, const pc
 	burl.path      = con->uri.path_raw;
 	burl.query     = con->uri.query;
 	if (buffer_string_is_empty(burl.authority))
-		burl.authority = con->server_name;
+		burl.authority = con->request.server_name;
 
 	buffer * const tb = con->srv->tmp_buf;
-	rc = pcre_keyvalue_buffer_process(kvb, &ctx, con->request.uri, tb);
+	rc = pcre_keyvalue_buffer_process(kvb, &ctx, con->request.target, tb);
 	if (HANDLER_FINISHED == rc && !buffer_is_empty(tb) && tb->ptr[0] == '/') {
-		buffer_copy_buffer(con->request.uri, tb);
+		buffer_copy_buffer(con->request.target, tb);
 		uintptr_t * const hctx = (uintptr_t *)(con->plugin_ctx + p->id);
 		*hctx |= REWRITE_STATE_REWRITTEN;
 		/*(kvb->x1 is repeat_idx)*/
@@ -302,12 +303,12 @@ static handler_t process_rewrite_rules(connection *con, plugin_data *p, const pc
 		rc = HANDLER_ERROR;
 		log_error(con->conf.errh, __FILE__, __LINE__,
 		  "mod_rewrite invalid result (not beginning with '/') "
-		  "while processing uri: %s", con->request.uri->ptr);
+		  "while processing uri: %s", con->request.target->ptr);
 	}
 	else if (HANDLER_ERROR == rc) {
 		log_error(con->conf.errh, __FILE__, __LINE__,
 		  "pcre_exec() error "
-		  "while processing uri: %s", con->request.uri->ptr);
+		  "while processing uri: %s", con->request.target->ptr);
 	}
 	return rc;
 }

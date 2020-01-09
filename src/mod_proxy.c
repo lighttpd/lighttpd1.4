@@ -828,9 +828,9 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	/* request line */
 	http_method_append(b, con->request.http_method);
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
-	buffer_append_string_buffer(b, con->request.uri);
+	buffer_append_string_buffer(b, con->request.target);
 	if (remap_headers)
-		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(con->request.uri), &hctx->conf.header, 1);
+		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(con->request.target), &hctx->conf.header, 1);
 	if (!upgrade)
 		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
 	else

@@ -299,7 +299,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><td>Hostname</td><td class=\"string\">"));
 	buffer_append_string_buffer(b, con->uri.authority);
 	buffer_append_string_len(b, CONST_STR_LEN(" ("));
-	buffer_append_string_buffer(b, con->server_name);
+	buffer_append_string_buffer(b, con->request.server_name);
 	buffer_append_string_len(b, CONST_STR_LEN(")</td></tr>\n"));
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><td>Uptime</td><td class=\"string\">"));
 
@@ -439,7 +439,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		connection *c = srv->conns.ptr[j];
 		const char *state;
 
-		if (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.orig_uri)) {
+		if (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.target_orig)) {
 			state = "k";
 			++cstates[CON_STATE_CLOSE+2];
 		} else {
@@ -509,7 +509,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
-		if (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.orig_uri)) {
+		if (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.target_orig)) {
 			buffer_append_string_len(b, CONST_STR_LEN("keep-alive"));
 		} else {
 			buffer_append_string(b, connection_get_state(c->state));
@@ -521,11 +521,11 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
-		if (buffer_string_is_empty(c->server_name)) {
+		if (buffer_string_is_empty(c->request.server_name)) {
 			buffer_append_string_buffer(b, c->uri.authority);
 		}
 		else {
-			buffer_append_string_buffer(b, c->server_name);
+			buffer_append_string_buffer(b, c->request.server_name);
 		}
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
@@ -539,9 +539,9 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 			buffer_append_string_encoded(b, CONST_BUF_LEN(c->uri.query), ENCODING_HTML);
 		}
 
-		if (!buffer_string_is_empty(c->request.orig_uri)) {
+		if (!buffer_string_is_empty(c->request.target_orig)) {
 			buffer_append_string_len(b, CONST_STR_LEN(" ("));
-			buffer_append_string_encoded(b, CONST_BUF_LEN(c->request.orig_uri), ENCODING_HTML);
+			buffer_append_string_encoded(b, CONST_BUF_LEN(c->request.target_orig), ENCODING_HTML);
 			buffer_append_string_len(b, CONST_STR_LEN(")"));
 		}
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
@@ -607,7 +607,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	for (uint32_t i = 0; i < srv->conns.used; ++i) {
 		connection *c = srv->conns.ptr[i];
 		const char *state =
-		  (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.orig_uri))
+		  (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.target_orig))
 		    ? "k"
 		    : connection_get_short_state(c->state);
 		buffer_append_string_len(b, state, 1);

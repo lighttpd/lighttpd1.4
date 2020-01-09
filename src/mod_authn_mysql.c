@@ -400,7 +400,7 @@ static handler_t mod_authn_mysql_query(connection *con, void *p_d, http_auth_inf
         /*(auth.backend.mysql.host, auth.backend.mysql.db might be NULL; do not log)*/
         log_error(con->conf.errh, __FILE__, __LINE__,
           "auth config missing auth.backend.mysql.users_table for uri: %s",
-          con->request.uri->ptr);
+          con->request.target->ptr);
         return HANDLER_ERROR;
     }
 

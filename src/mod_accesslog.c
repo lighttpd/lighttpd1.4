@@ -948,7 +948,7 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 				/*(attempt to reconstruct request line)*/
 				buffer_append_string(b, get_http_method_name(con->request.http_method));
 				buffer_append_string_len(b, CONST_STR_LEN(" "));
-				accesslog_append_escaped(b, con->request.orig_uri);
+				accesslog_append_escaped(b, con->request.target_orig);
 				buffer_append_string_len(b, CONST_STR_LEN(" "));
 				buffer_append_string(b, get_http_version_name(con->request.http_version));
 				break;
@@ -1008,8 +1008,8 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 				}
 				break;
 			case FORMAT_SERVER_NAME:
-				if (!buffer_string_is_empty(con->server_name)) {
-					buffer_append_string_buffer(b, con->server_name);
+				if (!buffer_string_is_empty(con->request.server_name)) {
+					buffer_append_string_buffer(b, con->request.server_name);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}

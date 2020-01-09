@@ -2143,7 +2143,7 @@ static handler_t gw_recv_response(gw_handler_ctx *hctx, connection *con) {
             if (++con->request.loops_per_request > 5) {
                 log_error(con->conf.errh, __FILE__, __LINE__,
                   "too many loops while processing request: %s",
-                  con->request.orig_uri->ptr);
+                  con->request.target_orig->ptr);
                 con->http_status = 500; /* Internal Server Error */
                 con->mode = DIRECT;
                 return HANDLER_FINISHED;

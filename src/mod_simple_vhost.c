@@ -187,8 +187,8 @@ static handler_t mod_simple_vhost_docroot(connection *con, void *p_data) {
     const buffer *host = con->uri.authority;
     if ((!buffer_string_is_empty(host) && build_doc_root(con, p, b, host))
         || build_doc_root(con, p, b, (host = p->conf.default_host))) {
-        con->server_name = con->server_name_buf;
-        buffer_copy_buffer(con->server_name_buf, host);
+        con->request.server_name = con->request.server_name_buf;
+        buffer_copy_buffer(con->request.server_name_buf, host);
         buffer_copy_buffer(con->physical.doc_root, b);
     }
 

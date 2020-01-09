@@ -3976,7 +3976,7 @@ static handler_t
 mod_webdav_delete (connection * const con, const plugin_config * const pconf)
 {
     /* reject DELETE if original URI sent with fragment ('litmus' warning) */
-    if (NULL != strchr(con->request.orig_uri->ptr, '#')) {
+    if (NULL != strchr(con->request.target_orig->ptr, '#')) {
         http_status_set_error(con, 403);
         return HANDLER_FINISHED;
     }
@@ -4004,12 +4004,12 @@ mod_webdav_delete (connection * const con, const plugin_config * const pconf)
             buffer_append_string_len(con->physical.path,    CONST_STR_LEN("/"));
             buffer_append_string_len(con->physical.rel_path,CONST_STR_LEN("/"));
            #if 0 /*(Content-Location not very useful to client after DELETE)*/
-            /*(? should it be request.uri or orig_uri ?)*/
+            /*(? should it be request.target or target_orig ?)*/
             /*(should be url-encoded path)*/
-            buffer_append_string_len(con->request.uri, CONST_STR_LEN("/"));
+            buffer_append_string_len(con->request.target, CONST_STR_LEN("/"));
             http_header_response_set(con, HTTP_HEADER_CONTENT_LOCATION,
                                      CONST_STR_LEN("Content-Location"),
-                                     CONST_BUF_LEN(con->request.uri));
+                                     CONST_BUF_LEN(con->request.target));
            #endif
           #endif
         }

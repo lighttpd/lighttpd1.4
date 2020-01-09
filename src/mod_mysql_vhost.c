@@ -345,8 +345,8 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 
 	/* fix virtual server and docroot */
 GO_ON:
-	con->server_name = con->server_name_buf;
-	buffer_copy_buffer(con->server_name_buf, c->server_name);
+	con->request.server_name = con->request.server_name_buf;
+	buffer_copy_buffer(con->request.server_name_buf, c->server_name);
 	buffer_copy_buffer(con->physical.doc_root, c->document_root);
 
 	return HANDLER_GO_ON;

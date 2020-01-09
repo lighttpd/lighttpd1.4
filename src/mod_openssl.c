@@ -528,8 +528,8 @@ mod_openssl_SNI (SSL *ssl, handler_ctx *hctx, const char *servername, size_t len
 
     const buffer * const ssl_pemfile = hctx->conf.ssl_pemfile;
 
-    con->conditional_is_valid |= (1 << COMP_HTTP_SCHEME)
-                              |  (1 << COMP_HTTP_HOST);
+    con->request.conditional_is_valid |= (1 << COMP_HTTP_SCHEME)
+                                      |  (1 << COMP_HTTP_HOST);
     mod_openssl_patch_config(con, &hctx->conf);
     /* reset COMP_HTTP_HOST so that conditions re-run after request hdrs read */
     /*(done in response.c:config_cond_cache_reset() after request hdrs read)*/

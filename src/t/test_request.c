@@ -15,8 +15,8 @@ static void test_request_reset(request_st * const r)
     r->http_host = NULL;
     r->htags = 0;
     r->reqbody_length = 0;
-    buffer_reset(r->orig_uri);
-    buffer_reset(r->uri);
+    buffer_reset(r->target_orig);
+    buffer_reset(r->target);
     array_reset_data_strings(&r->headers);
 }
 
@@ -406,7 +406,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "\r\n"));
     assert(buffer_is_equal_string(r->http_host,
                                   CONST_STR_LEN("www.example.org")));
-    assert(buffer_is_equal_string(r->uri,
+    assert(buffer_is_equal_string(r->target,
                                   CONST_STR_LEN("/")));
 
     run_http_request_parse(r, __LINE__, 400,
@@ -589,13 +589,13 @@ int main (void)
     request_st * const r = &con.request;
     r->conf        = &con.conf;
     r->con         = &con;
-    r->orig_uri    = buffer_init();
-    r->uri         = buffer_init();
+    r->target_orig = buffer_init();
+    r->target      = buffer_init();
 
     test_request_http_request_parse(r);
 
-    buffer_free(r->orig_uri);
-    buffer_free(r->uri);
+    buffer_free(r->target_orig);
+    buffer_free(r->target);
     array_free_data(&r->headers);
 
     log_error_st_free(con.conf.errh);

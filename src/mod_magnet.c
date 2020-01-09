@@ -479,8 +479,8 @@ static buffer *magnet_env_get_buffer_by_id(connection *con, int id) {
 		buffer_clear(dest);
 		http_method_append(dest, con->request.http_method);
 		break;
-	case MAGNET_ENV_REQUEST_URI:      dest = con->request.uri; break;
-	case MAGNET_ENV_REQUEST_ORIG_URI: dest = con->request.orig_uri; break;
+	case MAGNET_ENV_REQUEST_URI:      dest = con->request.target; break;
+	case MAGNET_ENV_REQUEST_ORIG_URI: dest = con->request.target_orig; break;
 	case MAGNET_ENV_REQUEST_PATH_INFO: dest = con->request.pathinfo; break;
 	case MAGNET_ENV_REQUEST_REMOTE_IP: dest = con->dst_addr_buf; break;
 	case MAGNET_ENV_REQUEST_SERVER_ADDR:

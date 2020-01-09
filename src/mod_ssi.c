@@ -429,7 +429,7 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.scheme));
 				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("://"));
 				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.authority));
-				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->request.uri));
+				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->request.target));
 				if (!buffer_string_is_empty(con->uri.query)) {
 					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("?"));
 					chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.query));
@@ -438,7 +438,7 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 			break;
 		}
 		case SSI_ECHO_SCRIPT_URL: {
-			chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->request.uri));
+			chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->request.target));
 			if (!buffer_string_is_empty(con->uri.query)) {
 				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("?"));
 				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.query));

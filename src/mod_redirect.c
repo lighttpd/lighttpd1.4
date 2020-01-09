@@ -156,8 +156,9 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
 
     ctx.cache = NULL;
     if (p->conf.redirect->x0) { /*(p->conf.redirect->x0 is context_idx)*/
-        ctx.cond_match_count=con->cond_cache[p->conf.redirect->x0].patterncount;
-        ctx.cache = con->cond_match + p->conf.redirect->x0;
+        ctx.cond_match_count =
+          con->request.cond_cache[p->conf.redirect->x0].patterncount;
+        ctx.cache = con->request.cond_match + p->conf.redirect->x0;
     }
     ctx.burl = &burl;
     burl.scheme    = con->uri.scheme;
@@ -166,14 +167,14 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     burl.path      = con->uri.path_raw;
     burl.query     = con->uri.query;
     if (buffer_string_is_empty(burl.authority))
-        burl.authority = con->server_name;
+        burl.authority = con->request.server_name;
 
     /* redirect URL on match
      * e.g. redirect /base/ to /index.php?section=base
      */
     buffer * const tb = con->srv->tmp_buf;
     rc = pcre_keyvalue_buffer_process(p->conf.redirect, &ctx,
-                                      con->request.uri, tb);
+                                      con->request.target, tb);
     if (HANDLER_FINISHED == rc) {
         http_header_response_set(con, HTTP_HEADER_LOCATION,
                                  CONST_STR_LEN("Location"),
@@ -185,7 +186,7 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     else if (HANDLER_ERROR == rc) {
         log_error(con->conf.errh, __FILE__, __LINE__,
           "pcre_exec() error while processing uri: %s",
-          con->request.uri->ptr);
+          con->request.target->ptr);
     }
     return rc;
 }

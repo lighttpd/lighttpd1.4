@@ -67,7 +67,7 @@ static int connection_del(server *srv, connection *con) {
 	buffer_clear(con->uri.authority);
 	buffer_reset(con->uri.path);
 	buffer_reset(con->uri.query);
-	buffer_reset(con->request.orig_uri);
+	buffer_reset(con->request.target_orig);
 
 	connections * const conns = &srv->conns;
 
@@ -544,10 +544,9 @@ static connection *connection_init(server *srv) {
 #define CLEAN(x) \
 	con->x = buffer_init();
 
-	CLEAN(request.uri);
+	CLEAN(request.target);
+	CLEAN(request.target_orig);
 	CLEAN(request.pathinfo);
-
-	CLEAN(request.orig_uri);
 
 	CLEAN(uri.scheme);
 	CLEAN(uri.authority);
@@ -561,8 +560,8 @@ static connection *connection_init(server *srv) {
 	CLEAN(physical.rel_path);
 	CLEAN(physical.etag);
 
-	CLEAN(server_name_buf);
 	CLEAN(dst_addr_buf);
+	CLEAN(request.server_name_buf);
 
 #undef CLEAN
 	con->write_queue = chunkqueue_init();
@@ -578,12 +577,13 @@ static connection *connection_init(server *srv) {
 	con->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
 	force_assert(NULL != con->plugin_ctx);
 
-	con->cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
-	force_assert(NULL != con->cond_cache);
+	con->request.cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
+	force_assert(NULL != con->request.cond_cache);
       #ifdef HAVE_PCRE_H
 	if (srv->config_context->used > 1) {/*save 128b per con if no conditions)*/
-		con->cond_match=calloc(srv->config_context->used, sizeof(cond_match_t));
-		force_assert(NULL != con->cond_match);
+		con->request.cond_match =
+		  calloc(srv->config_context->used, sizeof(cond_match_t));
+		force_assert(NULL != con->request.cond_match);
 	}
       #endif
 	config_reset_config(con);
@@ -608,10 +608,10 @@ void connections_free(server *srv) {
 #define CLEAN(x) \
 	buffer_free(con->x);
 
-		CLEAN(request.uri);
+		CLEAN(request.target);
 		CLEAN(request.pathinfo);
 
-		CLEAN(request.orig_uri);
+		CLEAN(request.target_orig);
 
 		CLEAN(uri.scheme);
 		CLEAN(uri.authority);
@@ -625,12 +625,12 @@ void connections_free(server *srv) {
 		CLEAN(physical.etag);
 		CLEAN(physical.rel_path);
 
-		CLEAN(server_name_buf);
+		CLEAN(request.server_name_buf);
 		CLEAN(dst_addr_buf);
 #undef CLEAN
 		free(con->plugin_ctx);
-		free(con->cond_cache);
-		free(con->cond_match);
+		free(con->request.cond_cache);
+		free(con->request.cond_match);
 
 		free(con);
 	}
@@ -658,10 +658,10 @@ static int connection_reset(connection *con) {
 #define CLEAN(x) \
 	buffer_reset(con->x);
 
-	CLEAN(request.uri);
+	CLEAN(request.target);
 	CLEAN(request.pathinfo);
 
-	/* CLEAN(request.orig_uri); */
+	/* CLEAN(request.target_orig); */
 
 	/* CLEAN(uri.path); */
 	CLEAN(uri.path_raw);
@@ -670,7 +670,7 @@ static int connection_reset(connection *con) {
 
 	buffer_clear(con->uri.scheme);
 	/*buffer_clear(con->uri.authority);*/
-	/*buffer_clear(con->server_name_buf);*//* reset when used */
+	/*buffer_clear(con->request.server_name_buf);*//* reset when used */
 	/*con->proto_default_port = 80;*//*set to default in connection_accepted()*/
 
 	con->request.http_host = NULL;
@@ -837,7 +837,7 @@ static int connection_handle_read_state(connection * const con)  {
         buffer_clear(con->uri.authority);
         buffer_reset(con->uri.path);
         buffer_reset(con->uri.query);
-        buffer_reset(con->request.orig_uri);
+        buffer_reset(con->request.target_orig);
     }
 
     if (con->conf.log_request_header) {
@@ -1121,8 +1121,8 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con->proto_default_port = 80; /* "http" */
 
 		config_cond_cache_reset(con);
-		con->conditional_is_valid |= (1 << COMP_SERVER_SOCKET)
-					  |  (1 << COMP_HTTP_REMOTE_IP);
+		con->request.conditional_is_valid |= (1 << COMP_SERVER_SOCKET)
+		                                  |  (1 << COMP_HTTP_REMOTE_IP);
 
 		if (HANDLER_GO_ON != plugins_call_handle_connection_accept(con)) {
 			connection_reset(con);
@@ -1209,7 +1209,7 @@ static int connection_handle_request(connection *con) {
 
 							if (con->request.http_version == HTTP_VERSION_UNSET) con->request.http_version = HTTP_VERSION_1_0;
 
-							buffer_copy_buffer(con->request.uri, error_handler);
+							buffer_copy_buffer(con->request.target, error_handler);
 							connection_handle_errdoc_init(con);
 							con->http_status = 0; /*(after connection_handle_errdoc_init())*/
 
@@ -1441,7 +1441,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
                   "%zd bytes. We waited %d seconds.  If this is a problem, "
                   "increase server.max-write-idle",
                   BUFFER_INTLEN_PTR(con->dst_addr_buf),
-                  BUFFER_INTLEN_PTR(con->request.uri),
+                  BUFFER_INTLEN_PTR(con->request.target),
                   con->bytes_written, (int)con->conf.max_write_idle);
             }
             connection_set_state(con, CON_STATE_ERROR);

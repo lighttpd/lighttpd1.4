@@ -637,8 +637,8 @@ static int http_request_parse_reqline(request_st * const r, const char * const p
             return http_request_header_char_invalid(r, '\0', "invalid character in header -> 400");
     }
 
-    buffer_copy_string_len(r->uri, uri, len);
-    buffer_copy_string_len(r->orig_uri, uri, len);
+    buffer_copy_string_len(r->target, uri, len);
+    buffer_copy_string_len(r->target_orig, uri, len);
     return 0;
 }
 

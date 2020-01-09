@@ -307,7 +307,7 @@ int config_plugin_values_init(server * const srv, void *p_d, const config_plugin
 __attribute_cold__
 __attribute_noinline__
 static void config_cond_result_trace(connection *con, const data_config *dc, int cached) {
-    cond_cache_t * const cache = &con->cond_cache[dc->context_ndx];
+    cond_cache_t * const cache = &con->request.cond_cache[dc->context_ndx];
     const char *msg;
     switch (cache->result) {
       case COND_RESULT_UNSET: msg = "unset"; break;
@@ -338,7 +338,7 @@ static cond_result_t config_check_cond_nocache_calc(connection *con, const data_
 }
 
 static cond_result_t config_check_cond_cached(connection *con, const data_config *dc, const int debug_cond) {
-    cond_cache_t * const cache = &con->cond_cache[dc->context_ndx];
+    cond_cache_t * const cache = &con->request.cond_cache[dc->context_ndx];
     if (COND_RESULT_UNSET != cache->result) {
         if (debug_cond) config_cond_result_trace(con, dc, 1);
         return cache->result;
@@ -455,7 +455,7 @@ static cond_result_t config_check_cond_nocache(connection *con, const data_confi
 		}
 	}
 
-	if (!(con->conditional_is_valid & (1 << dc->comp))) {
+	if (!(con->request.conditional_is_valid & (1 << dc->comp))) {
 		if (debug_cond) {
 			log_error(con->conf.errh, __FILE__, __LINE__, "%d %s not available yet",
 				dc->comp,
@@ -591,7 +591,7 @@ static cond_result_t config_check_cond_nocache(connection *con, const data_confi
 		}
 	case CONFIG_COND_NOMATCH:
 	case CONFIG_COND_MATCH: {
-		cond_match_t *cond_match = con->cond_match + dc->context_ndx;
+		cond_match_t *cond_match = con->request.cond_match + dc->context_ndx;
 		if (data_config_pcre_exec(dc, cache, l, cond_match) > 0) {
 			return (dc->cond == CONFIG_COND_MATCH) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
 		} else {
@@ -621,7 +621,7 @@ static cond_result_t config_check_cond_calc(connection *con, const int context_n
 
 /* future: might make static inline in header for plugins */
 int config_check_cond(connection * const con, const int context_ndx) {
-    cond_cache_t * const cache = &con->cond_cache[context_ndx];
+    cond_cache_t * const cache = &con->request.cond_cache[context_ndx];
     return COND_RESULT_TRUE
         == (COND_RESULT_UNSET != cache->result
               ? (cond_result_t)cache->result
@@ -652,7 +652,7 @@ static void config_cond_clear_node(cond_cache_t * const cond_cache, const data_c
  * if the item is COND_LAST_ELEMENT we reset all items
  */
 void config_cond_cache_reset_item(connection *con, comp_key_t item) {
-	cond_cache_t * const cond_cache = con->cond_cache;
+	cond_cache_t * const cond_cache = con->request.cond_cache;
 	const array * const config_context = con->srv->config_context;
 	for (uint32_t i = 0; i < config_context->used; ++i) {
 		const data_config *dc = (data_config *)config_context->data[i];
@@ -670,12 +670,12 @@ void config_cond_cache_reset_item(connection *con, comp_key_t item) {
  * reset the config cache to its initial state at connection start
  */
 void config_cond_cache_reset(connection *con) {
-	con->conditional_is_valid = 0;
+	con->request.conditional_is_valid = 0;
 	/* resetting all entries; no need to follow children as in config_cond_cache_reset_item */
 	/* static_assert(0 == COND_RESULT_UNSET); */
 	const uint32_t used = con->srv->config_context->used;
 	if (used > 1)
-		memset(con->cond_cache, 0, used*sizeof(cond_cache_t));
+		memset(con->request.cond_cache, 0, used*sizeof(cond_cache_t));
 }
 
 #ifdef HAVE_PCRE_H

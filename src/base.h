@@ -15,8 +15,6 @@
 
 struct fdevents;        /* declaration */
 struct stat_cache;      /* declaration */
-struct cond_cache_t;    /* declaration */
-struct cond_match_t;    /* declaration */
 
 #define DIRECT 0        /* con->mode */
 
@@ -120,13 +118,8 @@ struct connection {
 	void **plugin_ctx;           /* plugin connection specific config */
 
 	request_config conf;
-	uint32_t conditional_is_valid;
-	struct cond_cache_t *cond_cache;
-	struct cond_match_t *cond_match;
 	void *config_data_base;
 
-	const buffer *server_name;
-	buffer *server_name_buf;
 	uint16_t proto_default_port;
 
 	/* error-handler */

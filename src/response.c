@@ -233,13 +233,13 @@ static handler_t http_response_physical_path_check(connection *con) {
 		if (pathinfo) {
 			size_t len = strlen(pathinfo), reqlen;
 			if (con->conf.force_lowercase_filenames
-			    && len <= (reqlen = buffer_string_length(con->request.uri))
-			    && buffer_eq_icase_ssn(con->request.uri->ptr + reqlen - len, pathinfo, len)) {
+			    && len <= (reqlen = buffer_string_length(con->request.target))
+			    && buffer_eq_icase_ssn(con->request.target->ptr + reqlen - len, pathinfo, len)) {
 				/* attempt to preserve case-insensitive PATH_INFO
 				 * (works in common case where mod_alias, mod_magnet, and other modules
 				 *  have not modified the PATH_INFO portion of request URI, or did so
 				 *  with exactly the PATH_INFO desired) */
-				buffer_copy_string_len(con->request.pathinfo, con->request.uri->ptr + reqlen - len, len);
+				buffer_copy_string_len(con->request.pathinfo, con->request.target->ptr + reqlen - len, len);
 			} else {
 				buffer_copy_string_len(con->request.pathinfo, pathinfo, len);
 			}
@@ -364,32 +364,32 @@ handler_t http_response_prepare(connection *con) {
 
 		if (con->request.http_method == HTTP_METHOD_CONNECT
 		    || (con->request.http_method == HTTP_METHOD_OPTIONS
-			&& con->request.uri->ptr[0] == '*'
-			&& con->request.uri->ptr[1] == '\0')) {
+			&& con->request.target->ptr[0] == '*'
+			&& con->request.target->ptr[1] == '\0')) {
 			/* CONNECT ... (or) OPTIONS * ... */
-			buffer_copy_buffer(con->uri.path_raw, con->request.uri);
+			buffer_copy_buffer(con->uri.path_raw, con->request.target);
 			buffer_copy_buffer(con->uri.path, con->uri.path_raw);
 			buffer_reset(con->uri.query);
 		} else {
 			char *qstr;
 			if (con->conf.http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE) {
-				/*uint32_t len = (uint32_t)buffer_string_length(con->request.uri);*/
-				int qs = burl_normalize(con->request.uri, con->srv->tmp_buf, con->conf.http_parseopts);
+				/*uint32_t len = (uint32_t)buffer_string_length(con->request.target);*/
+				int qs = burl_normalize(con->request.target, con->srv->tmp_buf, con->conf.http_parseopts);
 				if (-2 == qs) {
 					log_error(con->conf.errh, __FILE__, __LINE__,
 					  "invalid character in URI -> 400 %s",
-					  con->request.uri->ptr);
+					  con->request.target->ptr);
 					return /* 400 Bad Request */
 					  http_status_set_error_close(con, 400);
 				}
-				qstr = (-1 == qs) ? NULL : con->request.uri->ptr+qs;
+				qstr = (-1 == qs) ? NULL : con->request.target->ptr+qs;
 			      #if 0  /* future: might enable here, or below for all requests */
 				/* (Note: total header size not recalculated on HANDLER_COMEBACK
 				 *  even if other request headers changed during processing)
 				 * (If (0 != con->request.loops_per_request), then the generated
 				 *  request is too large.  Should a different error be returned?) */
 				con->request.rqst_header_len -= len;
-				len = buffer_string_length(con->request.uri);
+				len = buffer_string_length(con->request.target);
 				con->request.rqst_header_len += len;
 				if (len > MAX_HTTP_REQUEST_URI) {
 					return /* 414 Request-URI Too Long */
@@ -403,25 +403,25 @@ handler_t http_response_prepare(connection *con) {
 				}
 			      #endif
 			} else {
-				size_t rlen = buffer_string_length(con->request.uri);
-				qstr = memchr(con->request.uri->ptr, '#', rlen);/* discard fragment */
+				size_t rlen = buffer_string_length(con->request.target);
+				qstr = memchr(con->request.target->ptr, '#', rlen);/* discard fragment */
 				if (qstr) {
-					rlen = (size_t)(qstr - con->request.uri->ptr);
-					buffer_string_set_length(con->request.uri, rlen);
+					rlen = (size_t)(qstr - con->request.target->ptr);
+					buffer_string_set_length(con->request.target, rlen);
 				}
-				qstr = memchr(con->request.uri->ptr, '?', rlen);
+				qstr = memchr(con->request.target->ptr, '?', rlen);
 			}
 
-			/** extract query string from request.uri */
+			/** extract query string from request.target */
 			if (NULL != qstr) {
-				const char * const pstr = con->request.uri->ptr;
+				const char * const pstr = con->request.target->ptr;
 				const size_t plen = (size_t)(qstr - pstr);
-				const size_t rlen = buffer_string_length(con->request.uri);
+				const size_t rlen = buffer_string_length(con->request.target);
 				buffer_copy_string_len(con->uri.query, qstr + 1, rlen - plen - 1);
 				buffer_copy_string_len(con->uri.path_raw, pstr, plen);
 			} else {
 				buffer_reset(con->uri.query);
-				buffer_copy_buffer(con->uri.path_raw, con->request.uri);
+				buffer_copy_buffer(con->uri.path_raw, con->request.target);
 			}
 
 			/* decode url to path
@@ -441,14 +441,14 @@ handler_t http_response_prepare(connection *con) {
 			}
 		}
 
-		con->conditional_is_valid |= (1 << COMP_SERVER_SOCKET)
-					  |  (1 << COMP_HTTP_SCHEME)
-					  |  (1 << COMP_HTTP_HOST)
-					  |  (1 << COMP_HTTP_REMOTE_IP)
-					  |  (1 << COMP_HTTP_REQUEST_METHOD)
-					  |  (1 << COMP_HTTP_URL)
-					  |  (1 << COMP_HTTP_QUERY_STRING)
-					  |  (1 << COMP_HTTP_REQUEST_HEADER);
+		con->request.conditional_is_valid |= (1 << COMP_SERVER_SOCKET)
+		                                  |  (1 << COMP_HTTP_SCHEME)
+		                                  |  (1 << COMP_HTTP_HOST)
+		                                  |  (1 << COMP_HTTP_REMOTE_IP)
+		                                  |  (1 << COMP_HTTP_REQUEST_METHOD)
+		                                  |  (1 << COMP_HTTP_URL)
+		                                  |  (1 << COMP_HTTP_QUERY_STRING)
+		                                  |  (1 << COMP_HTTP_REQUEST_HEADER);
 		config_patch_config(con);
 
 		/* do we have to downgrade to 1.0 ? */
@@ -460,7 +460,7 @@ handler_t http_response_prepare(connection *con) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
 			  "-- splitting Request-URI");
 			log_error(con->conf.errh, __FILE__, __LINE__,
-			  "Request-URI     : %s", con->request.uri->ptr);
+			  "Request-URI     : %s", con->request.target->ptr);
 			log_error(con->conf.errh, __FILE__, __LINE__,
 			  "URI-scheme      : %s", con->uri.scheme->ptr);
 			log_error(con->conf.errh, __FILE__, __LINE__,
@@ -615,8 +615,8 @@ handler_t http_response_prepare(connection *con) {
 		}
 
 		/* the docroot plugins might set the servername, if they don't we take http-host */
-		if (buffer_string_is_empty(con->server_name)) {
-			con->server_name = con->uri.authority;
+		if (buffer_string_is_empty(con->request.server_name)) {
+			con->request.server_name = con->uri.authority;
 		}
 
 		/**
