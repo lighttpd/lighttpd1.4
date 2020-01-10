@@ -117,7 +117,7 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 		/* check if other connections are already actively serving data for the same IP
 		 * we can only ban connections which are already behind the 'read request' state
 		 * */
-		if (c->state <= CON_STATE_REQUEST_END) continue;
+		if (c->request.state <= CON_STATE_REQUEST_END) continue;
 
 		if (!sock_addr_is_addr_eq(&c->dst_addr, &con->dst_addr)) continue;
 		conns_by_ip++;

@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-const char *connection_get_state(connection_state_t state) {
+const char *connection_get_state(request_state_t state) {
 	switch (state) {
 	case CON_STATE_CONNECT: return "connect";
 	case CON_STATE_READ: return "read";
@@ -29,7 +29,7 @@ const char *connection_get_state(connection_state_t state) {
 	}
 }
 
-const char *connection_get_short_state(connection_state_t state) {
+const char *connection_get_short_state(request_state_t state) {
 	switch (state) {
 	case CON_STATE_CONNECT: return ".";
 	case CON_STATE_READ: return "r";
@@ -394,7 +394,7 @@ static int connection_write_100_continue(connection *con) {
 		*(con->conf.global_bytes_per_second_cnt_ptr) += written;
 
 	if (rc < 0) {
-		con->state = CON_STATE_ERROR;
+		con->request.state = CON_STATE_ERROR;
 		return 0; /* error */
 	}
 
@@ -423,7 +423,7 @@ handler_t connection_handle_read_post_state(connection *con) {
 
 		switch(con->network_read(con, con->read_queue, MAX_READ_LIMIT)) {
 		case -1:
-			con->state = CON_STATE_ERROR;
+			con->request.state = CON_STATE_ERROR;
 			return HANDLER_ERROR;
 		case -2:
 			is_closed = 1;
@@ -470,8 +470,8 @@ handler_t connection_handle_read_post_state(connection *con) {
 	if (dst_cq->bytes_in == (off_t)con->request.reqbody_length) {
 		/* Content is ready */
 		con->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
-		if (con->state == CON_STATE_READ_POST) {
-			con->state = CON_STATE_HANDLE_REQUEST;
+		if (con->request.state == CON_STATE_READ_POST) {
+			con->request.state = CON_STATE_HANDLE_REQUEST;
 		}
 		return HANDLER_GO_ON;
 	} else if (is_closed) {

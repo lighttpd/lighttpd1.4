@@ -15,8 +15,8 @@ void connection_periodic_maint (server *srv, time_t cur_ts);
 connection * connection_accept(server *srv, server_socket *srv_sock);
 connection * connection_accepted(server *srv, server_socket *srv_socket, sock_addr *cnt_addr, int cnt);
 
-const char * connection_get_state(connection_state_t state);
-const char * connection_get_short_state(connection_state_t state);
+const char * connection_get_state(request_state_t state);
+const char * connection_get_short_state(request_state_t state);
 int connection_state_machine(connection *con);
 handler_t connection_handle_read_post_state(connection *con);
 handler_t connection_handle_read_post_error(connection *con, int http_status);

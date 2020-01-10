@@ -34,7 +34,7 @@
 
 #define HTTP_LINGER_TIMEOUT 5
 
-#define connection_set_state(con, n) ((con)->state = (n))
+#define connection_set_state(con, n) ((con)->request.state = (n))
 
 __attribute_cold__
 static connection *connection_init(server *srv);
@@ -227,10 +227,10 @@ static void connection_handle_response_end_state(connection *con) {
 		plugins_call_handle_request_done(con);
 	}
 
-	if (con->state != CON_STATE_ERROR) ++con->srv->con_written;
+	if (con->request.state != CON_STATE_ERROR) ++con->srv->con_written;
 
 	if (con->request.reqbody_length != con->request.reqbody_queue->bytes_in
-	    || con->state == CON_STATE_ERROR) {
+	    || con->request.state == CON_STATE_ERROR) {
 		/* request body is present and has not been read completely */
 		con->request.keep_alive = 0;
 	}
@@ -490,7 +490,7 @@ static void connection_handle_write_state(connection *con) {
         if (!chunkqueue_is_empty(con->write_queue)) {
             if (con->is_writable) {
                 connection_handle_write(con);
-                if (con->state != CON_STATE_WRITE) break;
+                if (con->request.state != CON_STATE_WRITE) break;
             }
         } else if (con->response.resp_body_finished) {
             connection_set_state(con, CON_STATE_RESPONSE_END);
@@ -518,7 +518,7 @@ static void connection_handle_write_state(connection *con) {
                 break;
             }
         }
-    } while (con->state == CON_STATE_WRITE
+    } while (con->request.state == CON_STATE_WRITE
              && (!chunkqueue_is_empty(con->write_queue)
                  ? con->is_writable
                  : con->response.resp_body_finished));
@@ -888,17 +888,17 @@ static handler_t connection_handle_fdevent(void *context, int revents) {
 	}
 
 
-	if (con->state == CON_STATE_READ) {
+	if (con->request.state == CON_STATE_READ) {
 		connection_handle_read_state(con);
 	}
 
-	if (con->state == CON_STATE_WRITE &&
+	if (con->request.state == CON_STATE_WRITE &&
 	    !chunkqueue_is_empty(con->write_queue) &&
 	    con->is_writable) {
 		connection_handle_write(con);
 	}
 
-	if (con->state == CON_STATE_CLOSE) {
+	if (con->request.state == CON_STATE_CLOSE) {
 		/* flush the read buffers */
 		connection_read_for_eos(con);
 	}
@@ -907,8 +907,8 @@ static handler_t connection_handle_fdevent(void *context, int revents) {
 	/* attempt (above) to read data in kernel socket buffers
 	 * prior to handling FDEVENT_HUP and FDEVENT_ERR */
 
-	if ((revents & ~(FDEVENT_IN | FDEVENT_OUT)) && con->state != CON_STATE_ERROR) {
-		if (con->state == CON_STATE_CLOSE) {
+	if ((revents & ~(FDEVENT_IN | FDEVENT_OUT)) && con->request.state != CON_STATE_ERROR) {
+		if (con->request.state == CON_STATE_CLOSE) {
 			con->close_timeout_ts = log_epoch_secs - (HTTP_LINGER_TIMEOUT+1);
 		} else if (revents & FDEVENT_HUP) {
 			connection_set_state(con, CON_STATE_ERROR);
@@ -1243,22 +1243,22 @@ static int connection_handle_request(connection *con) {
 
 
 int connection_state_machine(connection *con) {
-	connection_state_t ostate;
+	request_state_t ostate;
 	int rc;
 	const int log_state_handling = con->conf.log_state_handling;
 
 	if (log_state_handling) {
 		log_error(con->conf.errh, __FILE__, __LINE__,
-		  "state at enter %d %s", con->fd, connection_get_state(con->state));
+		  "state at enter %d %s", con->fd, connection_get_state(con->request.state));
 	}
 
 	do {
 		if (log_state_handling) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
-			  "state for fd %d %s", con->fd, connection_get_state(con->state));
+			  "state for fd %d %s", con->fd, connection_get_state(con->request.state));
 		}
 
-		switch ((ostate = con->state)) {
+		switch ((ostate = con->request.state)) {
 		case CON_STATE_REQUEST_START: /* transient */
 			con->request.start_ts = con->read_idle_ts = log_epoch_secs;
 			if (con->conf.high_precision_timestamps)
@@ -1271,7 +1271,7 @@ int connection_state_machine(connection *con) {
 			/* fall through */
 		case CON_STATE_READ:
 			if (!connection_handle_read_state(con)) break;
-			/*if (con->state != CON_STATE_REQUEST_END) break;*/
+			/*if (con->request.state != CON_STATE_REQUEST_END) break;*/
 			/* fall through */
 		case CON_STATE_REQUEST_END: /* transient */
 			ostate = (0 == con->request.reqbody_length)
@@ -1282,17 +1282,17 @@ int connection_state_machine(connection *con) {
 		case CON_STATE_READ_POST:
 		case CON_STATE_HANDLE_REQUEST:
 			if (connection_handle_request(con)) {
-				/* redo loop; will not match con->state */
+				/* redo loop; will not match con->request.state */
 				ostate = CON_STATE_CONNECT;
 				break;
 			}
 
-			if (con->state == CON_STATE_HANDLE_REQUEST
+			if (con->request.state == CON_STATE_HANDLE_REQUEST
 			    && ostate == CON_STATE_READ_POST) {
 				ostate = CON_STATE_HANDLE_REQUEST;
 			}
 
-			if (con->state != CON_STATE_RESPONSE_START) break;
+			if (con->request.state != CON_STATE_RESPONSE_START) break;
 			/* fall through */
 		case CON_STATE_RESPONSE_START: /* transient */
 			if (-1 == connection_handle_write_prepare(con)) {
@@ -1303,7 +1303,7 @@ int connection_state_machine(connection *con) {
 			/* fall through */
 		case CON_STATE_WRITE:
 			connection_handle_write_state(con);
-			if (con->state != CON_STATE_RESPONSE_END) break;
+			if (con->request.state != CON_STATE_RESPONSE_END) break;
 			/* fall through */
 		case CON_STATE_RESPONSE_END: /* transient */
 		case CON_STATE_ERROR:        /* transient */
@@ -1316,18 +1316,18 @@ int connection_state_machine(connection *con) {
 			break;
 		default:
 			log_error(con->conf.errh, __FILE__, __LINE__,
-			  "unknown state: %d %d", con->fd, con->state);
+			  "unknown state: %d %d", con->fd, con->request.state);
 			break;
 		}
-	} while (ostate != con->state);
+	} while (ostate != (request_state_t)con->request.state);
 
 	if (log_state_handling) {
 		log_error(con->conf.errh, __FILE__, __LINE__,
-		  "state at exit: %d %s", con->fd, connection_get_state(con->state));
+		  "state at exit: %d %s", con->fd, connection_get_state(con->request.state));
 	}
 
 	rc = 0;
-	switch(con->state) {
+	switch(con->request.state) {
 	case CON_STATE_READ:
 		rc = FDEVENT_IN | FDEVENT_RDHUP;
 		break;
@@ -1386,12 +1386,12 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
     int changed = 0;
     int t_diff;
 
-    if (con->state == CON_STATE_CLOSE) {
+    if (con->request.state == CON_STATE_CLOSE) {
         if (cur_ts - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
             changed = 1;
         }
     } else if (waitevents & FDEVENT_IN) {
-        if (con->request_count == 1 || con->state != CON_STATE_READ) {
+        if (con->request_count == 1 || con->request.state != CON_STATE_READ) {
             /* e.g. CON_STATE_READ_POST || CON_STATE_WRITE */
             if (cur_ts - con->read_idle_ts > con->conf.max_read_idle) {
                 /* time - out */
@@ -1423,7 +1423,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
      * future: have separate backend timeout, and then change this
      * to check for write interest before checking for timeout */
     /*if (waitevents & FDEVENT_OUT)*/
-    if ((con->state == CON_STATE_WRITE) &&
+    if ((con->request.state == CON_STATE_WRITE) &&
         (con->write_request_ts != 0)) {
       #if 0
         if (cur_ts - con->write_request_ts > 60) {
@@ -1481,7 +1481,7 @@ void connection_graceful_shutdown_maint (server *srv) {
         connection * const con = conns->ptr[ndx];
         int changed = 0;
 
-        if (con->state == CON_STATE_CLOSE) {
+        if (con->request.state == CON_STATE_CLOSE) {
             /* reduce remaining linger timeout to be
              * (from zero) *up to* one more second, but no more */
             if (HTTP_LINGER_TIMEOUT > 1)
@@ -1489,7 +1489,7 @@ void connection_graceful_shutdown_maint (server *srv) {
             if (log_epoch_secs - con->close_timeout_ts > HTTP_LINGER_TIMEOUT)
                 changed = 1;
         }
-        else if (con->state == CON_STATE_READ && con->request_count > 1
+        else if (con->request.state == CON_STATE_READ && con->request_count > 1
                  && chunkqueue_is_empty(con->read_queue)) {
             /* close connections in keep-alive waiting for next request */
             connection_set_state(con, CON_STATE_ERROR);

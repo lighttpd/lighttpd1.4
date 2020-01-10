@@ -826,7 +826,7 @@ void http_response_backend_done (connection *con) {
 	/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
 	 *  i.e. not called from handle_connection_close or connection_reset
 	 *  hooks, except maybe from errdoc handler, which later resets state)*/
-	switch (con->state) {
+	switch (con->request.state) {
 	case CON_STATE_HANDLE_REQUEST:
 	case CON_STATE_READ_POST:
 		if (!con->response.resp_body_started) {

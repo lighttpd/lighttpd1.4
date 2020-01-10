@@ -76,8 +76,25 @@ typedef struct {
     struct log_error_st *serrh; /* script errh */
 } request_config;
 
+/* the order of the items should be the same as they are processed
+ * read before write as we use this later e.g. <= CON_STATE_REQUEST_END */
+typedef enum {
+	CON_STATE_CONNECT,
+	CON_STATE_REQUEST_START,
+	CON_STATE_READ,
+	CON_STATE_REQUEST_END,
+	CON_STATE_READ_POST,
+	CON_STATE_HANDLE_REQUEST,
+	CON_STATE_RESPONSE_START,
+	CON_STATE_WRITE,
+	CON_STATE_RESPONSE_END,
+	CON_STATE_ERROR,
+	CON_STATE_CLOSE
+} request_state_t;
+
 struct request_st {
     request_config *conf;
+    request_state_t state; /*(modules should not modify request state)*/
     connection *con;
 
     /** HEADER */

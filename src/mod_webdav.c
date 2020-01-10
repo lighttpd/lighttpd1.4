@@ -3739,7 +3739,7 @@ mod_webdav_propfind (connection * const con, const plugin_config * const pconf)
 {
     if (con->request.reqbody_length) {
       #ifdef USE_PROPPATCH
-        if (con->state == CON_STATE_READ_POST) {
+        if (con->request.state == CON_STATE_READ_POST) {
             handler_t rc = connection_handle_read_post_state(con);
             if (rc != HANDLER_GO_ON) return rc;
         }
@@ -4443,7 +4443,7 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (connection * const con,
 static handler_t
 mod_webdav_put (connection * const con, const plugin_config * const pconf)
 {
-    if (con->state == CON_STATE_READ_POST) {
+    if (con->request.state == CON_STATE_READ_POST) {
         int first_read = chunkqueue_is_empty(con->request.reqbody_queue);
         handler_t rc = connection_handle_read_post_state(con);
         if (rc != HANDLER_GO_ON) {
@@ -4978,7 +4978,7 @@ mod_webdav_proppatch (connection * const con, const plugin_config * const pconf)
         return HANDLER_FINISHED;
     }
 
-    if (con->state == CON_STATE_READ_POST) {
+    if (con->request.state == CON_STATE_READ_POST) {
         handler_t rc = connection_handle_read_post_state(con);
         if (rc != HANDLER_GO_ON) return rc;
     }
@@ -5194,7 +5194,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
      */
 
     if (con->request.reqbody_length) {
-        if (con->state == CON_STATE_READ_POST) {
+        if (con->request.state == CON_STATE_READ_POST) {
             handler_t rc = connection_handle_read_post_state(con);
             if (rc != HANDLER_GO_ON) return rc;
         }

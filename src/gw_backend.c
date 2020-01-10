@@ -2031,7 +2031,7 @@ handler_t gw_handle_subrequest(connection *con, void *p_d) {
 
     if (hctx->gw_mode != GW_AUTHORIZER
         && (0 == hctx->wb->bytes_in
-            ? (con->state == CON_STATE_READ_POST || -1 == hctx->wb_reqlen)
+            ? (con->request.state==CON_STATE_READ_POST || -1 == hctx->wb_reqlen)
             : (hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0))) {
         /* leave excess data in con->request.reqbody_queue, which is
          * buffered to disk if too large and backend can not keep up */

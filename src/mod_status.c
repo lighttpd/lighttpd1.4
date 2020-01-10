@@ -439,12 +439,12 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 		connection *c = srv->conns.ptr[j];
 		const char *state;
 
-		if (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.target_orig)) {
+		if (CON_STATE_READ == c->request.state && !buffer_string_is_empty(c->request.target_orig)) {
 			state = "k";
 			++cstates[CON_STATE_CLOSE+2];
 		} else {
-			state = connection_get_short_state(c->state);
-			++cstates[(c->state <= CON_STATE_CLOSE ? c->state : CON_STATE_CLOSE+1)];
+			state = connection_get_short_state(c->request.state);
+			++cstates[(c->request.state <= CON_STATE_CLOSE ? c->request.state : CON_STATE_CLOSE+1)];
 		}
 
 		buffer_append_string_len(b, state, 1);
@@ -509,10 +509,10 @@ static handler_t mod_status_handle_server_status_html(server *srv, connection *c
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
-		if (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.target_orig)) {
+		if (CON_STATE_READ == c->request.state && !buffer_string_is_empty(c->request.target_orig)) {
 			buffer_append_string_len(b, CONST_STR_LEN("keep-alive"));
 		} else {
-			buffer_append_string(b, connection_get_state(c->state));
+			buffer_append_string(b, connection_get_state(c->request.state));
 		}
 
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
@@ -607,9 +607,9 @@ static handler_t mod_status_handle_server_status_text(server *srv, connection *c
 	for (uint32_t i = 0; i < srv->conns.used; ++i) {
 		connection *c = srv->conns.ptr[i];
 		const char *state =
-		  (CON_STATE_READ == c->state && !buffer_string_is_empty(c->request.target_orig))
+		  (CON_STATE_READ == c->request.state && !buffer_string_is_empty(c->request.target_orig))
 		    ? "k"
-		    : connection_get_short_state(c->state);
+		    : connection_get_short_state(c->request.state);
 		buffer_append_string_len(b, state, 1);
 	}
 	for (uint32_t i = 0; i < srv->conns.size - srv->conns.used; ++i) {

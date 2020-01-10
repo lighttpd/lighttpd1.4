@@ -1074,7 +1074,7 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 				accesslog_append_escaped(b, con->uri.path_raw);
 				break;
 			case FORMAT_CONNECTION_STATUS:
-				if (con->state == CON_STATE_RESPONSE_END) {
+				if (con->request.state == CON_STATE_RESPONSE_END) {
 					if (0 == con->request.keep_alive) {
 						buffer_append_string_len(b, CONST_STR_LEN("-"));
 					} else {
