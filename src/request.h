@@ -113,6 +113,13 @@ struct request_st {
     uint32_t conditional_is_valid;
     struct cond_cache_t *cond_cache;
     struct cond_match_t *cond_match;
+
+    array env; /* used to pass lighttpd internal stuff */
+
+    /* error-handler */
+    int error_handler_saved_status;
+    http_method_t error_handler_saved_method;
+
     buffer *pathinfo;
     buffer *server_name_buf;
 };

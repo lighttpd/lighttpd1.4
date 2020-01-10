@@ -172,16 +172,16 @@ void http_header_request_append(connection *con, enum http_header_e id, const ch
 
 
 buffer * http_header_env_get(const connection *con, const char *k, size_t klen) {
-    return http_header_generic_get_ifnotempty(&con->environment, k, klen);
+    return http_header_generic_get_ifnotempty(&con->request.env, k, klen);
 }
 
 void http_header_env_set(connection *con, const char *k, size_t klen, const char *v, size_t vlen) {
-    array_set_key_value(&con->environment, k, klen, v, vlen);
+    array_set_key_value(&con->request.env, k, klen, v, vlen);
 }
 
 void http_header_env_append(connection *con, const char *k, size_t klen, const char *v, size_t vlen) {
     /*if (0 == vlen) return;*//* skip check; permit env var w/ blank value */
-    buffer * const vb = array_get_buf_ptr(&con->environment, k, klen);
+    buffer * const vb = array_get_buf_ptr(&con->request.env, k, klen);
     if (0 == vlen) return;
     http_header_token_append(vb, v, vlen);
 }

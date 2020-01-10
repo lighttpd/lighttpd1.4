@@ -3576,7 +3576,7 @@ webdav_has_lock (connection * const con,
     /* XXX: maybe add config switch to require that authentication occurred? */
     buffer owner = { NULL, 0, 0 };/*owner (not authenticated)(auth_user unset)*/
     const data_string * const authn_user = (const data_string *)
-      array_get_element_klen(&con->environment, CONST_STR_LEN("REMOTE_USER"));
+      array_get_element_klen(&con->request.env, CONST_STR_LEN("REMOTE_USER"));
     cbdata.authn_user = authn_user ? &authn_user->value : &owner;
 
     const buffer * const h =
@@ -5203,7 +5203,7 @@ mod_webdav_lock (connection * const con, const plugin_config * const pconf)
     /* XXX: maybe add config switch to require that authentication occurred? */
     buffer owner = { NULL, 0, 0 };/*owner (not authenticated)(auth_user unset)*/
     const data_string * const authn_user = (const data_string *)
-      array_get_element_klen(&con->environment, CONST_STR_LEN("REMOTE_USER"));
+      array_get_element_klen(&con->request.env, CONST_STR_LEN("REMOTE_USER"));
 
     /* future: make max timeout configurable (e.g. pconf->lock_timeout_max)
      *
@@ -5498,7 +5498,7 @@ mod_webdav_unlock (connection * const con, const plugin_config * const pconf)
 
     buffer owner = { NULL, 0, 0 };/*owner (not authenticated)(auth_user unset)*/
     const data_string * const authn_user = (const data_string *)
-      array_get_element_klen(&con->environment, CONST_STR_LEN("REMOTE_USER"));
+      array_get_element_klen(&con->request.env, CONST_STR_LEN("REMOTE_USER"));
 
     webdav_lockdata lockdata = {
       { h->ptr+1, h->used-2, 0 }, /* locktoken (remove < > around token) */

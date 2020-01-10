@@ -326,7 +326,7 @@ static handler_t mod_authn_gssapi_check_spnego(connection *con, plugin_data *p, 
     {
         /* ??? Should code = krb5_kt_resolve(kcontext, p->conf.auth_gssapi_keytab->ptr, &keytab);
          *     be used, instead of putenv() of KRB5_KTNAME=...?  See mod_authn_gssapi_basic() */
-        /* ??? Should KRB5_KTNAME go into con->environment instead ??? */
+        /* ??? Should KRB5_KTNAME go into con->request.env instead ??? */
         /* ??? Should KRB5_KTNAME be added to mod_authn_gssapi_basic(), too? */
         buffer ktname;
         memset(&ktname, 0, sizeof(ktname));

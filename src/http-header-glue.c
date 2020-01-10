@@ -1406,7 +1406,7 @@ int http_cgi_headers (connection *con, http_cgi_opts *opts, http_cgi_header_appe
     }
     /* set REDIRECT_STATUS for php compiled with --force-redirect
      * (if REDIRECT_STATUS has not already been set by error handler) */
-    if (0 == con->error_handler_saved_status) {
+    if (0 == con->request.error_handler_saved_status) {
         rc |= cb(vdata, CONST_STR_LEN("REDIRECT_STATUS"),
                         CONST_STR_LEN("200"));
     }
@@ -1558,8 +1558,8 @@ int http_cgi_headers (connection *con, http_cgi_opts *opts, http_cgi_header_appe
 
     con->srv->request_env(con);
 
-    for (n = 0; n < con->environment.used; n++) {
-        data_string *ds = (data_string *)con->environment.data[n];
+    for (n = 0; n < con->request.env.used; n++) {
+        data_string *ds = (data_string *)con->request.env.data[n];
         if (!buffer_is_empty(&ds->value) && !buffer_is_empty(&ds->key)) {
             buffer_copy_string_encoded_cgi_varnames(tb,
                                                     CONST_BUF_LEN(&ds->key), 0);

@@ -617,7 +617,7 @@ static int magnet_cgi_set(lua_State *L) {
 static int magnet_cgi_pairs(lua_State *L) {
 	connection *con = magnet_get_connection(L);
 
-	return magnet_array_pairs(L, &con->environment);
+	return magnet_array_pairs(L, &con->request.env);
 }
 
 
@@ -988,14 +988,14 @@ static handler_t magnet_attract_array(connection *con, plugin_data *p, int is_ur
 		ret = magnet_attract(con, p, &ds->value);
 	}
 
-	if (con->error_handler_saved_status) {
+	if (con->request.error_handler_saved_status) {
 		/* retrieve (possibly modified) REDIRECT_STATUS and store as number */
 		unsigned long x;
 		const buffer * const vb = http_header_env_get(con, CONST_STR_LEN("REDIRECT_STATUS"));
 		if (vb && (x = strtoul(vb->ptr, NULL, 10)) < 1000)
 			/*(simplified validity check x < 1000)*/
-			con->error_handler_saved_status =
-			  con->error_handler_saved_status > 0 ? (int)x : -(int)x;
+			con->request.error_handler_saved_status =
+			  con->request.error_handler_saved_status > 0 ? (int)x : -(int)x;
 	}
 
 	return ret;

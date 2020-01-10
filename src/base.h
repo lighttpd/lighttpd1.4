@@ -14,7 +14,6 @@
 #include "sock_addr.h"
 
 struct fdevents;        /* declaration */
-struct stat_cache;      /* declaration */
 
 #define DIRECT 0        /* con->mode */
 
@@ -108,8 +107,6 @@ struct connection {
 	physical physical;
 	response response;
 
-	array environment; /* used to pass lighttpd internal stuff to the FastCGI/CGI apps, setenv does that */
-
 	int mode;                    /* DIRECT (0) or plugin id */
 
 	server *srv;
@@ -120,10 +117,6 @@ struct connection {
 	void *config_data_base;
 
 	uint16_t proto_default_port;
-
-	/* error-handler */
-	int error_handler_saved_status;
-	http_method_t error_handler_saved_method;
 
 	struct server_socket *srv_socket;   /* reference to the server-socket */
 	int (* network_write)(struct connection *con, chunkqueue *cq, off_t max_bytes);

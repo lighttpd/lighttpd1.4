@@ -271,8 +271,8 @@ static void connection_handle_errdoc_init(connection *con) {
 __attribute_cold__
 static void connection_handle_errdoc(connection *con) {
     if (con->mode == DIRECT
-        ? con->error_handler_saved_status >= 65535
-        : (!con->conf.error_intercept || con->error_handler_saved_status))
+        ? con->request.error_handler_saved_status >= 65535
+        : (!con->conf.error_intercept||con->request.error_handler_saved_status))
         return;
 
     connection_handle_errdoc_init(con);
@@ -603,7 +603,7 @@ void connections_free(server *srv) {
 		chunkqueue_free(con->request.reqbody_queue);
 		array_free_data(&con->request.headers);
 		array_free_data(&con->response.headers);
-		array_free_data(&con->environment);
+		array_free_data(&con->request.env);
 
 #define CLEAN(x) \
 	buffer_free(con->x);
@@ -683,8 +683,8 @@ static int connection_reset(connection *con) {
 	else
 		array_reset_data_strings(&con->request.headers);
 	con->request.rqst_header_len = 0;
-	if (0 != con->environment.used)
-		array_reset_data_strings(&con->environment);
+	if (0 != con->request.env.used)
+		array_reset_data_strings(&con->request.env);
 
 	chunkqueue_reset(con->request.reqbody_queue);
 
@@ -692,8 +692,8 @@ static int connection_reset(connection *con) {
 	/* config_cond_cache_reset(con); */
 
 	con->request.async_callback = 0;
-	con->error_handler_saved_status = 0;
-	/*con->error_handler_saved_method = HTTP_METHOD_UNSET;*/
+	con->request.error_handler_saved_status = 0;
+	/*con->request.error_handler_saved_method = HTTP_METHOD_UNSET;*/
 	/*(error_handler_saved_method value is not valid unless error_handler_saved_status is set)*/
 
 	config_reset_config(con);
@@ -1145,17 +1145,17 @@ static int connection_handle_request(connection *con) {
 				/* fall through */
 			case HANDLER_FINISHED:
 				if (con->http_status == 0) con->http_status = 200;
-				if (con->error_handler_saved_status > 0) {
-					con->request.http_method = con->error_handler_saved_method;
+				if (con->request.error_handler_saved_status > 0) {
+					con->request.http_method = con->request.error_handler_saved_method;
 				}
 				if (con->mode == DIRECT || con->conf.error_intercept) {
-					if (con->error_handler_saved_status) {
+					if (con->request.error_handler_saved_status) {
 						const int subreq_status = con->http_status;
-						if (con->error_handler_saved_status > 0) {
-							con->http_status = con->error_handler_saved_status;
+						if (con->request.error_handler_saved_status > 0) {
+							con->http_status = con->request.error_handler_saved_status;
 						} else if (con->http_status == 404 || con->http_status == 403) {
 							/* error-handler-404 is a 404 */
-							con->http_status = -con->error_handler_saved_status;
+							con->http_status = -con->request.error_handler_saved_status;
 						} else {
 							/* error-handler-404 is back and has generated content */
 							/* if Status: was set, take it otherwise use 200 */
@@ -1163,7 +1163,7 @@ static int connection_handle_request(connection *con) {
 						if (200 <= subreq_status && subreq_status <= 299) {
 							/*(flag value to indicate that error handler succeeded)
 							 *(for (con->mode == DIRECT))*/
-							con->error_handler_saved_status = 65535; /* >= 1000 */
+							con->request.error_handler_saved_status = 65535; /* >= 1000 */
 						}
 					} else if (con->http_status >= 400) {
 						const buffer *error_handler = NULL;
@@ -1199,12 +1199,12 @@ static int connection_handle_request(connection *con) {
 								con->response.resp_body_finished = 0;
 								con->response.resp_body_started = 0;
 
-								con->error_handler_saved_status = con->http_status;
-								con->error_handler_saved_method = con->request.http_method;
+								con->request.error_handler_saved_status = con->http_status;
+								con->request.error_handler_saved_method = con->request.http_method;
 
 								con->request.http_method = HTTP_METHOD_GET;
 							} else { /*(preserve behavior for server.error-handler-404)*/
-								con->error_handler_saved_status = -con->http_status; /*(negative to flag old behavior)*/
+								con->request.error_handler_saved_status = -con->http_status; /*(negative to flag old behavior)*/
 							}
 
 							if (con->request.http_version == HTTP_VERSION_UNSET) con->request.http_version = HTTP_VERSION_1_0;
