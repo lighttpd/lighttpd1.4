@@ -43,7 +43,8 @@ static void mod_flv_streaming_merge_config(plugin_config * const pconf, const co
 }
 
 static void mod_flv_streaming_patch_config(connection * const con, plugin_data * const p) {
-    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    p->conf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
             mod_flv_streaming_merge_config(&p->conf,

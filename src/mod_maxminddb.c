@@ -260,7 +260,8 @@ mod_maxmind_patch_config (connection * const con,
                           const plugin_data * const p,
                           plugin_config * const pconf)
 {
-    memcpy(pconf, &p->defaults, sizeof(plugin_config));
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
             mod_maxminddb_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
