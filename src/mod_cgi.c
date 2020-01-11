@@ -334,7 +334,7 @@ static void cgi_connection_close(connection *con, handler_ctx *hctx) {
 	cgi_handler_ctx_free(hctx);
 
 	/* finish response (if not already con->response.resp_body_started, con->response.resp_body_finished) */
-	if (con->mode == p->id) {
+	if (con->response.handler_module == p->self) {
 		http_response_backend_done(con);
 	}
 }
@@ -881,7 +881,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	const struct stat *st;
 	data_string *ds;
 
-	if (con->mode != DIRECT) return HANDLER_GO_ON;
+	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
 	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	mod_cgi_patch_config(con, p);
@@ -915,7 +915,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		hctx->opts.pdata = hctx;
 		hctx->opts.headers = cgi_response_headers;
 		con->request.plugin_ctx[p->id] = hctx;
-		con->mode = p->id;
+		con->response.handler_module = p->self;
 	}
 
 	return HANDLER_GO_ON;
@@ -929,8 +929,6 @@ URIHANDLER_FUNC(cgi_is_handled) {
 SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	plugin_data * const p = p_d;
 	handler_ctx * const hctx = con->request.plugin_ctx[p->id];
-
-	if (con->mode != p->id) return HANDLER_GO_ON;
 	if (NULL == hctx) return HANDLER_GO_ON;
 
 	if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
@@ -976,7 +974,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	if (-1 == hctx->fd) {
 		if (cgi_create_env(con, p, hctx, hctx->cgi_handler)) {
 			con->http_status = 500;
-			con->mode = DIRECT;
+			con->response.handler_module = NULL;
 
 			return HANDLER_FINISHED;
 		}

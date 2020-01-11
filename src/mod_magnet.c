@@ -772,7 +772,7 @@ static handler_t magnet_attract(connection *con, plugin_data *p, buffer *name) {
 		force_assert(lua_gettop(L) == 0); /* only the error should have been on the stack */
 
 		con->http_status = 500;
-		con->mode = DIRECT;
+		con->response.handler_module = NULL;
 
 		return HANDLER_FINISHED;
 	}
@@ -910,7 +910,7 @@ static handler_t magnet_attract(connection *con, plugin_data *p, buffer *name) {
 			force_assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 
 			con->http_status = 500;
-			con->mode = DIRECT;
+			con->response.handler_module = NULL;
 
 			return HANDLER_FINISHED;
 		}
@@ -946,13 +946,13 @@ static handler_t magnet_attract(connection *con, plugin_data *p, buffer *name) {
 			if (0 == setjmp(exceptionjmp)) {
 				magnet_attach_content(con, L, lighty_table_ndx);
 				if (!chunkqueue_is_empty(con->write_queue)) {
-					con->mode = p->id;
+					con->response.handler_module = p->self;
 				}
 			} else {
 				lua_settop(L, 2); /* remove all but function and lighty table */
 				/* } catch () { */
 				con->http_status = 500;
-				con->mode = DIRECT;
+				con->response.handler_module = NULL;
 			}
 
 			result = HANDLER_FINISHED;

@@ -135,7 +135,7 @@ __attribute_cold__
 static handler_t mod_authn_gssapi_send_400_bad_request (connection *con)
 {
     con->http_status = 400;
-    con->mode = DIRECT;
+    con->response.handler_module = NULL;
     return HANDLER_FINISHED;
 }
 
@@ -243,14 +243,14 @@ static int mod_authn_gssapi_create_krb5_ccache(connection *con, plugin_data *p, 
 static handler_t mod_authn_gssapi_send_500_server_error (connection *con)
 {
     con->http_status = 500;
-    con->mode = DIRECT;
+    con->response.handler_module = NULL;
     return HANDLER_FINISHED;
 }
 
 static handler_t mod_authn_gssapi_send_401_unauthorized_negotiate (connection *con)
 {
     con->http_status = 401;
-    con->mode = DIRECT;
+    con->response.handler_module = NULL;
     http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_STR_LEN("Negotiate"));
     return HANDLER_FINISHED;
 }
@@ -600,7 +600,7 @@ static int mod_authn_gssapi_store_krb5_creds(connection *con, plugin_data *p,
 static handler_t mod_authn_gssapi_send_401_unauthorized_basic (connection *con)
 {
     con->http_status = 401;
-    con->mode = DIRECT;
+    con->response.handler_module = NULL;
     http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_STR_LEN("Basic realm=\"Kerberos\""));
     return HANDLER_FINISHED;
 }

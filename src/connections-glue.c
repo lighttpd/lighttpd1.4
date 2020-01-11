@@ -117,7 +117,7 @@ handler_t connection_handle_read_post_error(connection *con, int http_status) {
 
     http_response_body_clear(con, 0);
     con->http_status = http_status;
-    con->mode = DIRECT;
+    con->response.handler_module = NULL;
     return HANDLER_FINISHED;
 }
 
@@ -488,11 +488,11 @@ handler_t connection_handle_read_post_state(connection *con) {
 }
 
 void connection_response_reset(connection *con) {
-	con->mode = DIRECT;
 	con->http_status = 0;
 	con->is_writable = 1;
 	con->response.resp_body_finished = 0;
 	con->response.resp_body_started = 0;
+	con->response.handler_module = NULL;
 	if (con->physical.path) { /*(skip for mod_fastcgi authorizer)*/
 		buffer_clear(con->physical.doc_root);
 		buffer_reset(con->physical.path);

@@ -61,7 +61,7 @@ int http_response_write_header(connection *con) {
 		con->request.keep_alive = 0;
 	} else if (0 != con->request.reqbody_length
 		   && con->request.reqbody_length != con->request.reqbody_queue->bytes_in
-		   && (con->mode == DIRECT || 0 == con->conf.stream_request_body)) {
+		   && (NULL == con->response.handler_module || 0 == con->conf.stream_request_body)) {
 		con->request.keep_alive = 0;
 	} else {
 		con->keep_alive_idle = con->conf.max_keep_alive_idle;
@@ -288,7 +288,7 @@ __attribute_noinline__
 static handler_t http_status_set_error_close (connection *con, int status) {
     con->request.keep_alive = 0;
     con->response.resp_body_finished = 1;
-    con->mode = DIRECT;
+    con->response.handler_module = NULL;
     con->http_status = status;
     return HANDLER_FINISHED;
 }
@@ -297,7 +297,7 @@ handler_t http_response_prepare(connection *con) {
 	handler_t rc;
 
 	/* looks like someone has already done a decision */
-	if (con->mode == DIRECT &&
+	if (NULL == con->response.handler_module &&
 	    (con->http_status != 0 && con->http_status != 200)) {
 		/* remove a packets in the queue */
 		if (con->response.resp_body_finished == 0) {
@@ -308,7 +308,7 @@ handler_t http_response_prepare(connection *con) {
 	}
 
 	/* no decision yet, build conf->filename */
-	if (con->mode == DIRECT && buffer_is_empty(con->physical.path)) {
+	if (NULL == con->response.handler_module && buffer_is_empty(con->physical.path)) {
 
 		/* we only come here when we have the parse the full request again
 		 *
@@ -522,7 +522,7 @@ handler_t http_response_prepare(connection *con) {
 			return HANDLER_FINISHED;
 		}
 
-		if (con->request.http_method == HTTP_METHOD_CONNECT && con->mode == DIRECT) {
+		if (con->request.http_method == HTTP_METHOD_CONNECT && NULL == con->response.handler_module) {
 			return /* 405 Method Not Allowed */
 			  http_status_set_error_close(con, 405);
 		}
@@ -671,7 +671,7 @@ handler_t http_response_prepare(connection *con) {
 	 * Go on and check of the file exists at all
 	 */
 
-	if (con->mode == DIRECT) {
+	if (NULL == con->response.handler_module) {
 		if (con->conf.log_request_handling) {
 			log_error(con->conf.errh, __FILE__, __LINE__,
 			  "-- handling physical path");
@@ -704,14 +704,15 @@ handler_t http_response_prepare(connection *con) {
 		}
 
 		/* if we are still here, no one wanted the file, status 403 is ok I think */
-		if (con->mode == DIRECT && con->http_status == 0) {
+		if (NULL == con->response.handler_module && 0 == con->http_status) {
 			con->http_status = (con->request.http_method != HTTP_METHOD_OPTIONS) ? 403 : 200;
 			return HANDLER_FINISHED;
 		}
 
 	}
 
-	rc = plugins_call_handle_subrequest(con);
+	plugin * const p = con->response.handler_module;
+	rc = (NULL != p) ? p->handle_subrequest(con,p->data) : HANDLER_FINISHED;
 	if (HANDLER_GO_ON == rc) rc = HANDLER_FINISHED; /* request was not handled, looks like we are done */
 	return rc;
 }

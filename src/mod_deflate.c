@@ -1165,12 +1165,12 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 			 * For now, send back empty response body.
 			 * In the future, might extract the error doc code so that it
 			 * might be run again if response_start hooks return with
-			 * changed http_status and con->mode = DIRECT */
+			 * changed http_status and con->response.handler_module = NULL */
 			/* clear content length even if 304 since compressed length unknown */
 			http_response_body_clear(con, 0);
 
 			con->response.resp_body_finished = 1;
-			con->mode = DIRECT;
+			con->response.handler_module = NULL;
 			return HANDLER_GO_ON;
 		}
 	}

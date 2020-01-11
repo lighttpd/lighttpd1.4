@@ -136,7 +136,7 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 			} else {
 				con->http_status = 403;
 			}
-			con->mode = DIRECT;
+			con->response.handler_module = NULL;
 			return HANDLER_FINISHED;
 		}
 	}

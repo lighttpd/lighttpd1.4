@@ -422,7 +422,7 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	time_t ts = 0;
 	size_t i, mac_len;
 
-	if (con->mode != DIRECT) return HANDLER_GO_ON;
+	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
 
 	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
 

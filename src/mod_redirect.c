@@ -180,7 +180,7 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
                                  CONST_STR_LEN("Location"),
                                  CONST_BUF_LEN(tb));
         con->http_status = p->conf.redirect_code;
-        con->mode = DIRECT;
+        con->response.handler_module = NULL;
         con->response.resp_body_finished = 1;
     }
     else if (HANDLER_ERROR == rc) {

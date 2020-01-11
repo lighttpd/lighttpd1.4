@@ -1247,7 +1247,7 @@ static int mod_ssi_handle_request(connection *con, handler_ctx *p) {
 URIHANDLER_FUNC(mod_ssi_physical_path) {
 	plugin_data *p = p_d;
 
-	if (con->mode != DIRECT) return HANDLER_GO_ON;
+	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
 	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	mod_ssi_patch_config(con, p);
@@ -1255,7 +1255,7 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 
 	if (array_match_value_suffix(p->conf.ssi_extension, con->physical.path)) {
 		con->request.plugin_ctx[p->id] = handler_ctx_init(p, con->conf.errh);
-		con->mode = p->id;
+		con->response.handler_module = p->self;
 	}
 
 	return HANDLER_GO_ON;
@@ -1265,7 +1265,6 @@ SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = con->request.plugin_ctx[p->id];
 	if (NULL == hctx) return HANDLER_GO_ON;
-	if (con->mode != p->id) return HANDLER_GO_ON; /* not my job */
 	/*
 	 * NOTE: if mod_ssi modified to use fdevents, HANDLER_WAIT_FOR_EVENT,
 	 * instead of blocking to completion, then hctx->timefmt, hctx->ssi_vars,
@@ -1277,7 +1276,7 @@ SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 			if (mod_ssi_handle_request(con, hctx)) {
 				/* on error */
 				con->http_status = 500;
-				con->mode = DIRECT;
+				con->response.handler_module = NULL;
 			}
 
 			return HANDLER_FINISHED;

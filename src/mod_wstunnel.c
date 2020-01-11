@@ -558,7 +558,7 @@ static handler_t mod_wstunnel_check_extension(connection *con, void *p_d) {
     const buffer *vb;
     handler_t rc;
 
-    if (con->mode != DIRECT)
+    if (NULL != con->response.handler_module)
         return HANDLER_GO_ON;
     if (con->request.http_method != HTTP_METHOD_GET)
         return HANDLER_GO_ON;
@@ -582,7 +582,7 @@ static handler_t mod_wstunnel_check_extension(connection *con, void *p_d) {
     if (NULL == p->conf.gw.exts) return HANDLER_GO_ON;
 
     rc = gw_check_extension(con, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
-    return (HANDLER_GO_ON == rc && con->mode == p->id)
+    return (HANDLER_GO_ON == rc && con->response.handler_module == p->self)
       ? wstunnel_handler_setup(con, p)
       : rc;
 }
@@ -596,7 +596,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
     for (uint32_t i = 0; i < srv->conns.used; ++i) {
         connection *con = srv->conns.ptr[i];
         handler_ctx *hctx = con->request.plugin_ctx[p->id];
-        if (NULL == hctx || con->mode != p->id)
+        if (NULL == hctx || con->response.handler_module != p->self)
             continue;
 
         if (hctx->gw.state != GW_STATE_WRITE && hctx->gw.state != GW_STATE_READ)

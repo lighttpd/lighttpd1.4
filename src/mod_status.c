@@ -818,7 +818,7 @@ static handler_t mod_status_handle_server_config(connection *con) {
 static handler_t mod_status_handler(connection *con, void *p_d) {
 	plugin_data *p = p_d;
 
-	if (con->mode != DIRECT) return HANDLER_GO_ON;
+	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
 
 	mod_status_patch_config(con, p);
 

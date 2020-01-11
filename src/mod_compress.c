@@ -783,7 +783,7 @@ PHYSICALPATH_FUNC(mod_compress_physical) {
 	buffer *content_type_trunc;
 	const buffer *content_type;
 
-	if (con->mode != DIRECT || con->http_status) return HANDLER_GO_ON;
+	if (NULL != con->response.handler_module || con->http_status) return HANDLER_GO_ON;
 
 	/* only GET and POST can get compressed */
 	if (con->request.http_method != HTTP_METHOD_GET &&

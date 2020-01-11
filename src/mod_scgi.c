@@ -224,7 +224,7 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 
 	if (0 != http_cgi_headers(con, &opts, scgi_env_add, b)) {
 		con->http_status = 400;
-		con->mode = DIRECT;
+		con->response.handler_module = NULL;
 		buffer_clear(b);
 		chunkqueue_remove_finished_chunks(hctx->wb);
 		return HANDLER_FINISHED;
@@ -247,7 +247,7 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 		uint32_t uwsgi_header;
 		if (len > USHRT_MAX) {
 			con->http_status = 431; /* Request Header Fields Too Large */
-			con->mode = DIRECT;
+			con->response.handler_module = NULL;
 			buffer_clear(b);
 			chunkqueue_remove_finished_chunks(hctx->wb);
 			return HANDLER_FINISHED;
@@ -283,7 +283,7 @@ static handler_t scgi_check_extension(connection *con, void *p_d, int uri_path_h
 	plugin_data *p = p_d;
 	handler_t rc;
 
-	if (con->mode != DIRECT) return HANDLER_GO_ON;
+	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
 
 	mod_scgi_patch_config(con, p);
 	if (NULL == p->conf.exts) return HANDLER_GO_ON;
@@ -291,7 +291,7 @@ static handler_t scgi_check_extension(connection *con, void *p_d, int uri_path_h
 	rc = gw_check_extension(con, p, uri_path_handler, 0);
 	if (HANDLER_GO_ON != rc) return rc;
 
-	if (con->mode == p->id) {
+	if (con->response.handler_module == p->self) {
 		handler_ctx *hctx = con->request.plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_SCGI;
 		hctx->create_env = scgi_create_env;

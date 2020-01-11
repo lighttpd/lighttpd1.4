@@ -264,7 +264,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		con->response.resp_body_finished = 1;
 
 		con->http_status = 200;
-		con->mode = DIRECT;
+		con->response.handler_module = NULL;
 
 		/* get the connection */
 		if (NULL == (post_con = connection_map_get_connection(&p->con_map, id, len))) {

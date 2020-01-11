@@ -103,7 +103,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
 
 	/* someone else has handled this request */
-	if (con->mode != DIRECT) return HANDLER_GO_ON;
+	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
 
 	/* we only handle GET, POST and HEAD */
 	if (!http_method_get_head_post(con->request.http_method)) return HANDLER_GO_ON;

@@ -357,7 +357,7 @@ ERR500:
 	while (mysql_next_result(p->conf.mysql) == 0);
 #endif
 	con->http_status = 500; /* Internal Error */
-	con->mode = DIRECT;
+	con->response.handler_module = NULL;
 	return HANDLER_FINISHED;
 }
 

@@ -711,7 +711,7 @@ static handler_t mod_extforward_Forwarded (connection *con, plugin_data *p, cons
             log_error(con->conf.errh, __FILE__, __LINE__,
               "invalid quoted-string in Forwarded header");
             con->http_status = 400; /* Bad Request */
-            con->mode = DIRECT;
+            con->response.handler_module = NULL;
             return HANDLER_FINISHED;
         }
         if (s[i] != '=') continue;
@@ -723,7 +723,7 @@ static handler_t mod_extforward_Forwarded (connection *con, plugin_data *p, cons
             log_error(con->conf.errh, __FILE__, __LINE__,
               "invalid quoted-string in Forwarded header");
             con->http_status = 400; /* Bad Request */
-            con->mode = DIRECT;
+            con->response.handler_module = NULL;
             return HANDLER_FINISHED;
         }
         vlen = i - v;              /* might be 0 */
@@ -746,7 +746,7 @@ static handler_t mod_extforward_Forwarded (connection *con, plugin_data *p, cons
         log_error(con->conf.errh, __FILE__, __LINE__,
           "Too many params in Forwarded header");
         con->http_status = 400; /* Bad Request */
-        con->mode = DIRECT;
+        con->response.handler_module = NULL;
         return HANDLER_FINISHED;
     }
 
@@ -781,7 +781,7 @@ static handler_t mod_extforward_Forwarded (connection *con, plugin_data *p, cons
                     log_error(con->conf.errh, __FILE__, __LINE__,
                       "Invalid IPv6 addr in Forwarded header");
                     con->http_status = 400; /* Bad Request */
-                    con->mode = DIRECT;
+                    con->response.handler_module = NULL;
                     return HANDLER_FINISHED;
                 }
             }
@@ -922,7 +922,7 @@ static handler_t mod_extforward_Forwarded (connection *con, plugin_data *p, cons
                     log_error(con->conf.errh, __FILE__, __LINE__,
                       "invalid host= value in Forwarded header");
                     con->http_status = 400; /* Bad Request */
-                    con->mode = DIRECT;
+                    con->response.handler_module = NULL;
                     return HANDLER_FINISHED;
                 }
             }
@@ -939,7 +939,7 @@ static handler_t mod_extforward_Forwarded (connection *con, plugin_data *p, cons
                 log_error(con->conf.errh, __FILE__, __LINE__,
                   "invalid host= value in Forwarded header");
                 con->http_status = 400; /* Bad Request */
-                con->mode = DIRECT;
+                con->response.handler_module = NULL;
                 return HANDLER_FINISHED;
             }
 
@@ -974,7 +974,7 @@ static handler_t mod_extforward_Forwarded (connection *con, plugin_data *p, cons
                     log_error(con->conf.errh, __FILE__, __LINE__,
                       "invalid remote_user= value in Forwarded header");
                     con->http_status = 400; /* Bad Request */
-                    con->mode = DIRECT;
+                    con->response.handler_module = NULL;
                     return HANDLER_FINISHED;
                 }
             }

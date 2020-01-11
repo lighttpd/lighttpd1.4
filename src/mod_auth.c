@@ -517,14 +517,14 @@ static handler_t mod_auth_send_400_bad_request(connection *con) {
 
 	/* a field was missing or invalid */
 	con->http_status = 400; /* Bad Request */
-	con->mode = DIRECT;
+	con->response.handler_module = NULL;
 
 	return HANDLER_FINISHED;
 }
 
 static handler_t mod_auth_send_401_unauthorized_basic(connection *con, const buffer *realm) {
 	con->http_status = 401;
-	con->mode = DIRECT;
+	con->response.handler_module = NULL;
 
 	buffer * const tb = con->srv->tmp_buf;
 	buffer_copy_string_len(tb, CONST_STR_LEN("Basic realm=\""));
@@ -547,7 +547,7 @@ static handler_t mod_auth_check_basic(connection *con, void *p_d, const struct h
 	if (NULL == backend) {
 		log_error(con->conf.errh, __FILE__, __LINE__, "auth.backend not configured for %s", con->uri.path->ptr);
 		con->http_status = 500;
-		con->mode = DIRECT;
+		con->response.handler_module = NULL;
 		return HANDLER_FINISHED;
 	}
 
@@ -972,7 +972,7 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 		log_error(con->conf.errh, __FILE__, __LINE__,
 		  "auth.backend not configured for %s", con->uri.path->ptr);
 		con->http_status = 500;
-		con->mode = DIRECT;
+		con->response.handler_module = NULL;
 		return HANDLER_FINISHED;
 	}
 
@@ -1194,7 +1194,7 @@ static handler_t mod_auth_send_401_unauthorized_digest(connection *con, const st
 	http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(tb));
 
 	con->http_status = 401;
-	con->mode = DIRECT;
+	con->response.handler_module = NULL;
 	return HANDLER_FINISHED;
 }
 
@@ -1207,7 +1207,7 @@ static handler_t mod_auth_check_extern(connection *con, void *p_d, const struct 
 		return HANDLER_GO_ON;
 	} else {
 		con->http_status = 401;
-		con->mode = DIRECT;
+		con->response.handler_module = NULL;
 		return HANDLER_FINISHED;
 	}
 }

@@ -142,7 +142,7 @@ CONNECTION_FUNC(mod_vhostdb_handle_connection_close) {
 static handler_t mod_vhostdb_error_500 (connection *con)
 {
     con->http_status = 500; /* Internal Server Error */
-    con->mode = DIRECT;
+    con->response.handler_module = NULL;
     return HANDLER_FINISHED;
 }
 

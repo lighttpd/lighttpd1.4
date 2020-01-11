@@ -1022,7 +1022,7 @@ static handler_t mod_proxy_check_extension(connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	handler_t rc;
 
-	if (con->mode != DIRECT) return HANDLER_GO_ON;
+	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
 
 	mod_proxy_patch_config(con, p);
 	if (NULL == p->conf.gw.exts) return HANDLER_GO_ON;
@@ -1030,7 +1030,7 @@ static handler_t mod_proxy_check_extension(connection *con, void *p_d) {
 	rc = gw_check_extension(con, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
 	if (HANDLER_GO_ON != rc) return rc;
 
-	if (con->mode == p->id) {
+	if (con->response.handler_module == p->self) {
 		handler_ctx *hctx = con->request.plugin_ctx[p->id];
 		hctx->gw.create_env = proxy_create_env;
 		hctx->gw.response = chunk_buffer_acquire();
@@ -1058,7 +1058,7 @@ static handler_t mod_proxy_check_extension(connection *con, void *p_d) {
 			}
 			else {
 				con->http_status = 405; /* Method Not Allowed */
-				con->mode = DIRECT;
+				con->response.handler_module = NULL;
 				return HANDLER_FINISHED;
 			}
 		}

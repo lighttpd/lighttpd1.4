@@ -38,7 +38,7 @@ typedef enum {
 	PLUGIN_FUNC_HANDLE_TRIGGER,
 	PLUGIN_FUNC_HANDLE_SIGHUP,
 	PLUGIN_FUNC_HANDLE_WAITPID,
-	PLUGIN_FUNC_HANDLE_SUBREQUEST,
+	/* PLUGIN_FUNC_HANDLE_SUBREQUEST, *//* max one handler_module per req */
 	PLUGIN_FUNC_HANDLE_SUBREQUEST_START,
 	PLUGIN_FUNC_HANDLE_RESPONSE_START,
 	PLUGIN_FUNC_HANDLE_DOCROOT,
@@ -339,7 +339,6 @@ PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_REQUEST_DONE, handle_request_done)
 PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_CONNECTION_ACCEPT, handle_connection_accept)
 PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_CONNECTION_SHUT_WR, handle_connection_shut_wr)
 PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE, handle_connection_close)
-PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_SUBREQUEST, handle_subrequest)
 PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_SUBREQUEST_START, handle_subrequest_start)
 PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_RESPONSE_START, handle_response_start)
 PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_DOCROOT, handle_docroot)
@@ -469,8 +468,6 @@ handler_t plugins_call_init(server *srv) {
 			++offsets[PLUGIN_FUNC_HANDLE_SIGHUP];
 		if (p->handle_waitpid)
 			++offsets[PLUGIN_FUNC_HANDLE_WAITPID];
-		if (p->handle_subrequest)
-			++offsets[PLUGIN_FUNC_HANDLE_SUBREQUEST];
 		if (p->handle_subrequest_start)
 			++offsets[PLUGIN_FUNC_HANDLE_SUBREQUEST_START];
 		if (p->handle_response_start)
@@ -526,8 +523,6 @@ handler_t plugins_call_init(server *srv) {
 					offsets[PLUGIN_FUNC_HANDLE_SIGHUP]);
 		plugins_call_init_slot(srv, p->handle_waitpid, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_WAITPID]);
-		plugins_call_init_slot(srv, p->handle_subrequest, p->data,
-					offsets[PLUGIN_FUNC_HANDLE_SUBREQUEST]);
 		plugins_call_init_slot(srv, p->handle_subrequest_start, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_SUBREQUEST_START]);
 		plugins_call_init_slot(srv, p->handle_response_start, p->data,

@@ -69,7 +69,7 @@ struct plugin {
 	handler_t (* handle_connection_shut_wr)(connection *con, void *p_d);  /* done writing to socket */
 	handler_t (* handle_connection_close)  (connection *con, void *p_d);  /* before close() of socket */
 	handler_t (* handle_subrequest_start)  (connection *con, void *p_d);  /* when handler for request not found yet */
-	handler_t (* handle_subrequest)        (connection *con, void *p_d);  /* */
+	handler_t (* handle_subrequest)        (connection *con, void *p_d);  /* handler for request (max one per request) */
 	handler_t (* handle_response_start)    (connection *con, void *p_d);  /* before response headers are written */
 	handler_t (* connection_reset)         (connection *con, void *p_d);  /* after request done or request abort */
 
@@ -97,7 +97,6 @@ void plugins_free(server *srv);
 handler_t plugins_call_handle_uri_raw(connection *con);
 handler_t plugins_call_handle_uri_clean(connection *con);
 handler_t plugins_call_handle_subrequest_start(connection *con);
-handler_t plugins_call_handle_subrequest(connection *con);
 handler_t plugins_call_handle_response_start(connection *con);
 handler_t plugins_call_handle_request_env(connection *con);
 handler_t plugins_call_handle_request_done(connection *con);

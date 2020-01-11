@@ -931,7 +931,7 @@ static gw_host * gw_host_get(connection *con, gw_extension *extension, int balan
     /* all hosts are down */
     /* sorry, we don't have a server alive for this ext */
     con->http_status = 503; /* Service Unavailable */
-    con->mode = DIRECT;
+    con->response.handler_module = NULL;
 
     /* only send the 'no handler' once */
     if (!extension->note_is_sent) {
@@ -1758,7 +1758,7 @@ static void gw_connection_close(gw_handler_ctx *hctx, connection *con) {
     handler_ctx_free(hctx);
     con->request.plugin_ctx[p->id] = NULL;
 
-    if (con->mode == p->id) {
+    if (con->response.handler_module == p->self) {
         http_response_backend_done(con);
     }
 }
@@ -2009,7 +2009,6 @@ handler_t gw_handle_subrequest(connection *con, void *p_d) {
     gw_plugin_data *p = p_d;
     gw_handler_ctx *hctx = con->request.plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
-    if (con->mode != p->id) return HANDLER_GO_ON; /* not my job */
 
     if ((con->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
         && con->response.resp_body_started) {
@@ -2145,7 +2144,7 @@ static handler_t gw_recv_response(gw_handler_ctx *hctx, connection *con) {
                   "too many loops while processing request: %s",
                   con->request.target_orig->ptr);
                 con->http_status = 500; /* Internal Server Error */
-                con->mode = DIRECT;
+                con->response.handler_module = NULL;
                 return HANDLER_FINISHED;
             }
 
@@ -2159,7 +2158,7 @@ static handler_t gw_recv_response(gw_handler_ctx *hctx, connection *con) {
             /*(FYI: if multiple FastCGI authorizers were to be supported,
              * next one could be started here instead of restarting request)*/
 
-            con->mode = DIRECT;
+            con->response.handler_module = NULL;
             return HANDLER_COMEBACK;
         } else {
             /* we are done */
@@ -2294,7 +2293,7 @@ static handler_t gw_handle_fdevent(void *ctx, int revents) {
 
 handler_t gw_check_extension(connection *con, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz) {
   #if 0 /*(caller must handle)*/
-    if (con->mode != DIRECT) return HANDLER_GO_ON;
+    if (NULL != con->response.handler_module) return HANDLER_GO_ON;
     gw_patch_connection(con, p);
     if (NULL == p->conf.exts) return HANDLER_GO_ON;
   #endif
@@ -2497,7 +2496,7 @@ handler_t gw_check_extension(connection *con, gw_plugin_data *p, int uri_path_ha
 
     con->request.plugin_ctx[p->id] = hctx;
 
-    con->mode = p->id;
+    con->response.handler_module = p->self;
 
     if (con->conf.log_request_handling) {
         log_error(con->conf.errh, __FILE__, __LINE__, "handling it in mod_gw");

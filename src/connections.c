@@ -270,7 +270,7 @@ static void connection_handle_errdoc_init(connection *con) {
 
 __attribute_cold__
 static void connection_handle_errdoc(connection *con) {
-    if (con->mode == DIRECT
+    if (NULL == con->response.handler_module
         ? con->request.error_handler_saved_status >= 65535
         : (!con->conf.error_intercept||con->request.error_handler_saved_status))
         return;
@@ -325,7 +325,7 @@ static void connection_handle_errdoc(connection *con) {
 }
 
 static int connection_handle_write_prepare(connection *con) {
-	if (con->mode == DIRECT) {
+	if (NULL == con->response.handler_module) {
 		/* static files */
 		switch(con->request.http_method) {
 		case HTTP_METHOD_GET:
@@ -497,8 +497,9 @@ static void connection_handle_write_state(connection *con) {
             break;
         }
 
-        if (con->mode != DIRECT && !con->response.resp_body_finished) {
-            int rc = plugins_call_handle_subrequest(con);
+        if (con->response.handler_module && !con->response.resp_body_finished) {
+            plugin * const p = con->response.handler_module;
+            int rc = p->handle_subrequest(con, p->data);
             switch(rc) {
             case HANDLER_WAIT_FOR_EVENT:
             case HANDLER_FINISHED:
@@ -1148,7 +1149,7 @@ static int connection_handle_request(connection *con) {
 				if (con->request.error_handler_saved_status > 0) {
 					con->request.http_method = con->request.error_handler_saved_method;
 				}
-				if (con->mode == DIRECT || con->conf.error_intercept) {
+				if (NULL == con->response.handler_module || con->conf.error_intercept) {
 					if (con->request.error_handler_saved_status) {
 						const int subreq_status = con->http_status;
 						if (con->request.error_handler_saved_status > 0) {
@@ -1162,7 +1163,7 @@ static int connection_handle_request(connection *con) {
 						}
 						if (200 <= subreq_status && subreq_status <= 299) {
 							/*(flag value to indicate that error handler succeeded)
-							 *(for (con->mode == DIRECT))*/
+							 *(for (NULL == con->response.handler_module))*/
 							con->request.error_handler_saved_status = 65535; /* >= 1000 */
 						}
 					} else if (con->http_status >= 400) {
@@ -1225,7 +1226,7 @@ static int connection_handle_request(connection *con) {
 				connection_fdwaitqueue_append(con);
 				break;
 			case HANDLER_COMEBACK:
-				if (con->mode == DIRECT && buffer_is_empty(con->physical.path)) {
+				if (NULL == con->response.handler_module && buffer_is_empty(con->physical.path)) {
 					config_reset_config(con);
 				}
 				return 1;
@@ -1234,6 +1235,7 @@ static int connection_handle_request(connection *con) {
 				connection_set_state(con, CON_STATE_ERROR);
 				break;
 			default:
+				connection_set_state(con, CON_STATE_ERROR);
 				log_error(con->conf.errh, __FILE__, __LINE__, "unknown ret-value: %d %d", con->fd, rc);
 				break;
 			}

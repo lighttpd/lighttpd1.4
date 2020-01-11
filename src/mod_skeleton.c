@@ -114,7 +114,7 @@ URIHANDLER_FUNC(mod_skeleton_uri_handler) {
 
 	/* determine whether or not module participates in request */
 
-	if (con->mode != DIRECT) return HANDLER_GO_ON;
+	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
 	if (buffer_string_is_empty(con->uri.path)) return HANDLER_GO_ON;
 
 	/* get module config for request */

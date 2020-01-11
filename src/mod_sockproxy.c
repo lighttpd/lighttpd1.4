@@ -139,7 +139,7 @@ static handler_t mod_sockproxy_connection_accept(connection *con, void *p_d) {
 	plugin_data *p = p_d;
 	handler_t rc;
 
-	if (con->mode != DIRECT) return HANDLER_GO_ON;
+	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
 
 	mod_sockproxy_patch_config(con, p);
 	if (NULL == p->conf.exts) return HANDLER_GO_ON;
@@ -150,7 +150,7 @@ static handler_t mod_sockproxy_connection_accept(connection *con, void *p_d) {
 	rc = gw_check_extension(con, p, 1, 0);
 	if (HANDLER_GO_ON != rc) return rc;
 
-	if (con->mode == p->id) {
+	if (con->response.handler_module == p->self) {
 		handler_ctx *hctx = con->request.plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_PROXY;
 		hctx->create_env = sockproxy_create_env_connect;

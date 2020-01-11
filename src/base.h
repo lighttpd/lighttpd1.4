@@ -15,8 +15,6 @@
 
 struct fdevents;        /* declaration */
 
-#define DIRECT 0        /* con->mode */
-
 
 typedef struct {
 	off_t   content_length;
@@ -26,6 +24,7 @@ typedef struct {
 	char resp_body_started;
 	char resp_body_finished;
 	uint32_t resp_header_len;
+	plugin *handler_module;
 } response;
 
 typedef struct {
@@ -88,8 +87,6 @@ struct connection {
 	request_uri uri;
 	physical physical;
 	response response;
-
-	int mode;                    /* DIRECT (0) or plugin id */
 
 	server *srv;
 

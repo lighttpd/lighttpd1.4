@@ -179,7 +179,7 @@ int http_response_handle_cachable(connection *con, const buffer *mtime) {
 				return HANDLER_FINISHED;
 			} else {
 				con->http_status = 412;
-				con->mode = DIRECT;
+				con->response.handler_module = NULL;
 				return HANDLER_FINISHED;
 			}
 		}
@@ -630,7 +630,7 @@ static void http_response_xsendfile (connection *con, buffer *path, const array 
 		  "X-Sendfile invalid UTF-8 after url-decode: %s", path->ptr);
 		if (con->http_status < 400) {
 			con->http_status = 502;
-			con->mode = DIRECT;
+			con->response.handler_module = NULL;
 		}
 		return;
 	}
@@ -666,7 +666,7 @@ static void http_response_xsendfile (connection *con, buffer *path, const array 
 	if (valid) http_response_send_file(con, path);
 
 	if (con->http_status >= 400 && status < 300) {
-		con->mode = DIRECT;
+		con->response.handler_module = NULL;
 	} else if (0 != status && 200 != status) {
 		con->http_status = status;
 	}
@@ -805,7 +805,7 @@ range_success: ;
     }
 
     if (con->http_status >= 400 && status < 300) {
-        con->mode = DIRECT;
+	con->response.handler_module = NULL;
     } else if (0 != status && 200 != status) {
         con->http_status = status;
     }
@@ -816,7 +816,7 @@ void http_response_backend_error (connection *con) {
 	if (con->response.resp_body_started) {
 		/*(response might have been already started, kill the connection)*/
 		/*(mode == DIRECT to avoid later call to http_response_backend_done())*/
-		con->mode = DIRECT;  /*(avoid sending final chunked block)*/
+		con->response.handler_module = NULL;  /*(avoid sending final chunked block)*/
 		con->request.keep_alive = 0;
 		con->response.resp_body_finished = 1;
 	} /*(else error status set later by http_response_backend_done())*/
@@ -832,7 +832,7 @@ void http_response_backend_done (connection *con) {
 		if (!con->response.resp_body_started) {
 			/* Send an error if we haven't sent any data yet */
 			con->http_status = 500;
-			con->mode = DIRECT;
+			con->response.handler_module = NULL;
 			break;
 		} /* else fall through */
 	case CON_STATE_WRITE:
@@ -901,7 +901,7 @@ static handler_t http_response_process_local_redir(connection *con, size_t blen)
               "too many internal loops while processing request: %s",
               con->request.target_orig->ptr);
             con->http_status = 500; /* Internal Server Error */
-            con->mode = DIRECT;
+            con->response.handler_module = NULL;
             return HANDLER_FINISHED;
         }
 
@@ -964,7 +964,7 @@ static int http_response_process_headers(connection *con, http_response_opts *op
                 log_error(con->conf.errh, __FILE__, __LINE__,
                   "invalid HTTP status line: %s", s);
                 con->http_status = 502; /* Bad Gateway */
-                con->mode = DIRECT;
+                con->response.handler_module = NULL;
                 return -1;
             }
 
@@ -1014,7 +1014,7 @@ static int http_response_process_headers(connection *con, http_response_opts *op
                     status_is_set = 1;
                 } else {
                     con->http_status = 502;
-                    con->mode = DIRECT;
+                    con->response.handler_module = NULL;
                 }
                 continue; /* do not send Status to client */
             }
@@ -1043,7 +1043,7 @@ static int http_response_process_headers(connection *con, http_response_opts *op
                   "proxy backend sent invalid response header "
                   "(Transfer-Encoding) to HTTP/1.0 request");
                 con->http_status = 502; /* Bad Gateway */
-                con->mode = DIRECT;
+                con->response.handler_module = NULL;
                 return -1;
             }
             break;
@@ -1127,7 +1127,7 @@ handler_t http_response_parse_headers(connection *con, http_response_opts *opts,
     } else {
         /* invalid response headers */
         con->http_status = 502; /* Bad Gateway */
-        con->mode = DIRECT;
+        con->response.handler_module = NULL;
         return HANDLER_FINISHED;
     }
 
@@ -1138,7 +1138,7 @@ handler_t http_response_parse_headers(connection *con, http_response_opts *opts,
             log_error(con->conf.errh, __FILE__, __LINE__,
               "response headers too large for %s", con->uri.path->ptr);
             con->http_status = 502; /* Bad Gateway */
-            con->mode = DIRECT;
+            con->response.handler_module = NULL;
             return HANDLER_FINISHED;
         }
         return HANDLER_GO_ON;
@@ -1158,7 +1158,7 @@ handler_t http_response_parse_headers(connection *con, http_response_opts *opts,
     if (opts->backend == BACKEND_PROXY && !is_nph) {
         /* invalid response Status-Line from HTTP proxy */
         con->http_status = 502; /* Bad Gateway */
-        con->mode = DIRECT;
+        con->response.handler_module = NULL;
         return HANDLER_FINISHED;
     }
 
@@ -1173,14 +1173,15 @@ handler_t http_response_parse_headers(connection *con, http_response_opts *opts,
         return HANDLER_GO_ON;
     }
 
-    if (con->mode == DIRECT) {
+    if (NULL == con->response.handler_module) {
         return HANDLER_FINISHED;
     }
 
     if (opts->local_redir && con->http_status >= 300 && con->http_status < 400){
         /*(con->response.htags & HTTP_HEADER_LOCATION)*/
         handler_t rc = http_response_process_local_redir(con, blen);
-        if (con->mode == DIRECT) con->response.resp_body_started = 0;
+        if (NULL == con->response.handler_module)
+            con->response.resp_body_started = 0;
         if (rc != HANDLER_GO_ON) return rc;
     }
 
@@ -1192,7 +1193,8 @@ handler_t http_response_parse_headers(connection *con, http_response_opts *opts,
             http_response_xsendfile2(con, vb, opts->xsendfile_docroot);
             /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
             buffer_clear(vb); /*(do not send to client)*/
-            if (con->mode == DIRECT) con->response.resp_body_started = 0;
+            if (NULL == con->response.handler_module)
+                con->response.resp_body_started = 0;
             return HANDLER_FINISHED;
         } else if (NULL != (vb = http_header_response_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Sendfile")))
                    || (opts->backend == BACKEND_FASTCGI /* X-LIGHTTPD-send-file is deprecated; historical for fastcgi */
@@ -1200,7 +1202,8 @@ handler_t http_response_parse_headers(connection *con, http_response_opts *opts,
             http_response_xsendfile(con, vb, opts->xsendfile_docroot);
             /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
             buffer_clear(vb); /*(do not send to client)*/
-            if (con->mode == DIRECT) con->response.resp_body_started = 0;
+            if (NULL == con->response.handler_module)
+                con->response.resp_body_started = 0;
             return HANDLER_FINISHED;
         }
     }

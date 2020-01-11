@@ -93,7 +93,7 @@ static handler_t mod_access_reject (connection * const con, plugin_data * const 
     }
 
     con->http_status = 403;
-    con->mode = DIRECT;
+    con->response.handler_module = NULL;
     return HANDLER_FINISHED;
 }
 

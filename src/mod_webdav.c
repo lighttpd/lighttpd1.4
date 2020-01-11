@@ -212,7 +212,7 @@
 
 #define http_status_get(con)           ((con)->http_status)
 #define http_status_set_fin(con, code) ((con)->response.resp_body_finished = 1,\
-                                        (con)->mode = DIRECT,                  \
+                                        (con)->response.handler_module = NULL, \
                                         (con)->http_status = (code))
 #define http_status_set(con, code)     ((con)->http_status = (code))
 #define http_status_unset(con)         ((con)->http_status = 0)
@@ -5639,7 +5639,7 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
         break;
     }
 
-    con->mode = ((plugin_data *)p_d)->id;
+    con->response.handler_module = ((plugin_data *)p_d)->self;
     con->conf.stream_request_body = 0;
     con->request.plugin_ctx[((plugin_data *)p_d)->id] = &pconf;
     const handler_t rc =

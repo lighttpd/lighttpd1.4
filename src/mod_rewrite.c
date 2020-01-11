@@ -316,7 +316,7 @@ static handler_t process_rewrite_rules(connection *con, plugin_data *p, const pc
 URIHANDLER_FUNC(mod_rewrite_physical) {
     plugin_data * const p = p_d;
 
-    if (con->mode != DIRECT) return HANDLER_GO_ON;
+    if (NULL != con->response.handler_module) return HANDLER_GO_ON;
 
     mod_rewrite_patch_config(con, p);
     if (!p->conf.rewrite_NF || !p->conf.rewrite_NF->used) return HANDLER_GO_ON;
