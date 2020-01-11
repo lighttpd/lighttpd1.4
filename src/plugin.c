@@ -435,7 +435,7 @@ handler_t plugins_call_init(server *srv) {
 				return HANDLER_ERROR;
 			}
 
-			/* used for con->mode, DIRECT == 0, plugins above that */
+			((plugin_data_base *)(p->data))->self = p;
 			((plugin_data_base *)(p->data))->id = i + 1;
 
 			if (p->version != LIGHTTPD_VERSION_ID) {

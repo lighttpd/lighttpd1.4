@@ -49,13 +49,14 @@ extern array plugin_stats;
 
 #define PLUGIN_DATA        int id; \
                            int nconfig; \
-                           config_plugin_value_t *cvlist
+                           config_plugin_value_t *cvlist; \
+                           struct plugin *self
 
 typedef struct {
 	PLUGIN_DATA;
 } plugin_data_base;
 
-typedef struct {
+struct plugin {
 	void *data;
 	                                                                      /* is called ... */
 	handler_t (* handle_uri_raw)           (connection *con, void *p_d);  /* after uri_raw is set */
@@ -85,7 +86,7 @@ typedef struct {
 	const char *name;/* name of the plugin */
 	size_t version;
 	void *lib;       /* dlopen handle */
-} plugin;
+};
 
 __attribute_cold__
 int plugins_load(server *srv);
