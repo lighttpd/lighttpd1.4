@@ -158,9 +158,9 @@ int http_auth_match_rules (const http_auth_require_t * const require, const char
     return 0; /* no match */
 }
 
-void http_auth_setenv(connection *con, const char *username, size_t ulen, const char *auth_type, size_t alen) {
-    http_header_env_set(con, CONST_STR_LEN("REMOTE_USER"), username, ulen);
-    http_header_env_set(con, CONST_STR_LEN("AUTH_TYPE"), auth_type, alen);
+void http_auth_setenv(request_st * const r, const char *username, size_t ulen, const char *auth_type, size_t alen) {
+    http_header_env_set(r, CONST_STR_LEN("REMOTE_USER"), username, ulen);
+    http_header_env_set(r, CONST_STR_LEN("AUTH_TYPE"), auth_type, alen);
 }
 
 unsigned int http_auth_digest_len (int algo)

@@ -231,10 +231,10 @@ static void mod_trigger_b4_dl_merge_config(plugin_config * const pconf, const co
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_trigger_b4_dl_patch_config(connection * const con, plugin_data * const p) {
+static void mod_trigger_b4_dl_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_trigger_b4_dl_merge_config(&p->conf,
                                            p->cvlist + p->cvlist[i].v.u2[0]);
     }
@@ -333,19 +333,19 @@ static void mod_trigger_b4_dl_memcached_key(buffer * const b, const plugin_data 
 }
 #endif
 
-static handler_t mod_trigger_b4_dl_deny(connection * const con, const plugin_data * const p) {
+static handler_t mod_trigger_b4_dl_deny(request_st * const r, const plugin_data * const p) {
     if (p->conf.deny_url) {
-        http_header_response_set(con, HTTP_HEADER_LOCATION,
+        http_header_response_set(r, HTTP_HEADER_LOCATION,
                                  CONST_STR_LEN("Location"),
                                  CONST_BUF_LEN(p->conf.deny_url));
-        con->http_status = 307;
+        r->http_status = 307;
     }
     else {
-        log_error(con->conf.errh, __FILE__, __LINE__,
+        log_error(r->conf.errh, __FILE__, __LINE__,
                   "trigger-before-download.deny-url not configured");
-        con->http_status = 500;
+        r->http_status = 500;
     }
-    con->response.resp_body_finished = 1;
+    r->resp_body_finished = 1;
     return HANDLER_FINISHED;
 }
 
@@ -356,11 +356,11 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # define N 10
 	int ovec[N * 3];
 
-	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
+	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
+	if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
 
-	mod_trigger_b4_dl_patch_config(con, p);
+	mod_trigger_b4_dl_patch_config(r, p);
 
 	if (!p->conf.trigger_regex || !p->conf.download_regex) return HANDLER_GO_ON;
 
@@ -381,22 +381,22 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 
 	/* X-Forwarded-For contains the ip behind the proxy */
 	const buffer *remote_ip =
-	  http_header_request_get(con, HTTP_HEADER_X_FORWARDED_FOR,
+	  http_header_request_get(r, HTTP_HEADER_X_FORWARDED_FOR,
 	                          CONST_STR_LEN("X-Forwarded-For"));
 	if (NULL == remote_ip) {
-		remote_ip = con->dst_addr_buf;
+		remote_ip = r->con->dst_addr_buf;
 	}
 
 	if (p->conf.debug) {
-		log_error(con->conf.errh, __FILE__, __LINE__, "(debug) remote-ip: %s", remote_ip->ptr);
+		log_error(r->conf.errh, __FILE__, __LINE__, "(debug) remote-ip: %s", remote_ip->ptr);
 	}
 
 	const time_t cur_ts = log_epoch_secs;
 
 	/* check if URL is a trigger -> insert IP into DB */
-	if ((n = pcre_exec(p->conf.trigger_regex, NULL, CONST_BUF_LEN(con->uri.path), 0, 0, ovec, 3 * N)) < 0) {
+	if ((n = pcre_exec(p->conf.trigger_regex, NULL, CONST_BUF_LEN(&r->uri.path), 0, 0, ovec, 3 * N)) < 0) {
 		if (n != PCRE_ERROR_NOMATCH) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "execution error while matching: %d", n);
 
 			return HANDLER_ERROR;
@@ -414,33 +414,33 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			val.dsize = sizeof(cur_ts);
 
 			if (0 != gdbm_store(p->conf.db, key, val, GDBM_REPLACE)) {
-				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
+				log_error(r->conf.errh, __FILE__, __LINE__, "insert failed");
 			}
 		}
 # endif
 # if defined(USE_MEMCACHED)
 		if (p->conf.memc) {
-			buffer * const b = con->srv->tmp_buf;
+			buffer * const b = r->tmp_buf;
 			mod_trigger_b4_dl_memcached_key(b, p, remote_ip);
 
 			if (p->conf.debug) {
-				log_error(con->conf.errh, __FILE__, __LINE__, "(debug) triggered IP: %s", b->ptr);
+				log_error(r->conf.errh, __FILE__, __LINE__, "(debug) triggered IP: %s", b->ptr);
 			}
 
 			if (MEMCACHED_SUCCESS != memcached_set(p->conf.memc,
 					CONST_BUF_LEN(b),
 					(const char *)&cur_ts, sizeof(cur_ts),
 					p->conf.trigger_timeout, 0)) {
-				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
+				log_error(r->conf.errh, __FILE__, __LINE__, "insert failed");
 			}
 		}
 # endif
 	}
 
 	/* check if URL is a download -> check IP in DB, update timestamp */
-	if ((n = pcre_exec(p->conf.download_regex, NULL, CONST_BUF_LEN(con->uri.path), 0, 0, ovec, 3 * N)) < 0) {
+	if ((n = pcre_exec(p->conf.download_regex, NULL, CONST_BUF_LEN(&r->uri.path), 0, 0, ovec, 3 * N)) < 0) {
 		if (n != PCRE_ERROR_NOMATCH) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "execution error while matching: %d", n);
 			return HANDLER_ERROR;
 		}
@@ -458,7 +458,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 
 			if (val.dptr == NULL) {
 				/* not found, redirect */
-				return mod_trigger_b4_dl_deny(con, p);
+				return mod_trigger_b4_dl_deny(r, p);
 			}
 
 			memcpy(&last_hit, val.dptr, sizeof(time_t));
@@ -470,28 +470,28 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 
 				if (p->conf.db) {
 					if (0 != gdbm_delete(p->conf.db, key)) {
-						log_error(con->conf.errh, __FILE__, __LINE__, "delete failed");
+						log_error(r->conf.errh, __FILE__, __LINE__, "delete failed");
 					}
 				}
 
-				return mod_trigger_b4_dl_deny(con, p);
+				return mod_trigger_b4_dl_deny(r, p);
 			}
 
 			val.dptr = (char *)&cur_ts;
 			val.dsize = sizeof(cur_ts);
 
 			if (0 != gdbm_store(p->conf.db, key, val, GDBM_REPLACE)) {
-				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
+				log_error(r->conf.errh, __FILE__, __LINE__, "insert failed");
 			}
 		}
 # endif
 # if defined(USE_MEMCACHED)
 		if (p->conf.memc) {
-			buffer * const b = con->srv->tmp_buf;
+			buffer * const b = r->tmp_buf;
 			mod_trigger_b4_dl_memcached_key(b, p, remote_ip);
 
 			if (p->conf.debug) {
-				log_error(con->conf.errh, __FILE__, __LINE__, "(debug) checking IP: %s", b->ptr);
+				log_error(r->conf.errh, __FILE__, __LINE__, "(debug) checking IP: %s", b->ptr);
 			}
 
 			/**
@@ -501,7 +501,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			 *
 			 */
 			if (MEMCACHED_SUCCESS != memcached_exist(p->conf.memc, CONST_BUF_LEN(b))) {
-				return mod_trigger_b4_dl_deny(con, p);
+				return mod_trigger_b4_dl_deny(r, p);
 			}
 
 			/* set a new timeout */
@@ -509,7 +509,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 					CONST_BUF_LEN(b),
 					(const char *)&cur_ts, sizeof(cur_ts),
 					p->conf.trigger_timeout, 0)) {
-				log_error(con->conf.errh, __FILE__, __LINE__, "insert failed");
+				log_error(r->conf.errh, __FILE__, __LINE__, "insert failed");
 			}
 		}
 # endif

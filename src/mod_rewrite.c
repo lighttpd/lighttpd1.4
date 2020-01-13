@@ -84,11 +84,11 @@ static void mod_rewrite_merge_config(plugin_config * const pconf, const config_p
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_rewrite_patch_config(connection * const con, plugin_data * const p) {
+static void mod_rewrite_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_rewrite_merge_config(&p->conf, p->cvlist+p->cvlist[i].v.u2[0]);
     }
 }
@@ -242,23 +242,23 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
 }
 
 URIHANDLER_FUNC(mod_rewrite_con_reset) {
-    con->request.plugin_ctx[((plugin_data *)p_d)->id] = NULL;
+    r->plugin_ctx[((plugin_data *)p_d)->id] = NULL;
     return HANDLER_GO_ON;
 }
 
-static handler_t process_rewrite_rules(connection *con, plugin_data *p, const pcre_keyvalue_buffer *kvb) {
+static handler_t process_rewrite_rules(request_st * const r, plugin_data *p, const pcre_keyvalue_buffer *kvb) {
 	struct burl_parts_t burl;
 	pcre_keyvalue_ctx ctx;
 	handler_t rc;
 
-	if (con->request.plugin_ctx[p->id]) {
-		uintptr_t * const hctx = (uintptr_t *)(con->request.plugin_ctx + p->id);
+	if (r->plugin_ctx[p->id]) {
+		uintptr_t * const hctx = (uintptr_t *)(r->plugin_ctx + p->id);
 
 		if (((++*hctx) & 0x1FF) > 100) {
 			if (0 != kvb->x0) {
 				config_cond_info cfginfo;
-				config_get_config_cond_info(con->srv, kvb->x0, &cfginfo);
-				log_error(con->conf.errh, __FILE__, __LINE__,
+				config_get_config_cond_info(&cfginfo, kvb->x0);
+				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, "
 				  "perhaps you want to use url.rewrite-once instead of "
 				  "url.rewrite-repeat ($%s %s \"%s\")", cfginfo.comp_key->ptr,
@@ -266,7 +266,7 @@ static handler_t process_rewrite_rules(connection *con, plugin_data *p, const pc
 				return HANDLER_ERROR;
 			}
 
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request");
 			return HANDLER_ERROR;
 		}
@@ -277,39 +277,39 @@ static handler_t process_rewrite_rules(connection *con, plugin_data *p, const pc
 	ctx.cache = NULL;
 	if (kvb->x0) { /*(kvb->x0 is context_idx)*/
 		ctx.cond_match_count =
-		  con->request.cond_cache[kvb->x0].patterncount;
-		ctx.cache = con->request.cond_match + kvb->x0;
+		  r->cond_cache[kvb->x0].patterncount;
+		ctx.cache = r->cond_match + kvb->x0;
         }
 	ctx.burl = &burl;
-	burl.scheme    = con->uri.scheme;
-	burl.authority = con->uri.authority;
-	burl.port      = sock_addr_get_port(&con->srv_socket->addr);
-	burl.path      = con->uri.path_raw;
-	burl.query     = con->uri.query;
+	burl.scheme    = &r->uri.scheme;
+	burl.authority = &r->uri.authority;
+	burl.port      = sock_addr_get_port(&r->con->srv_socket->addr);
+	burl.path      = &r->uri.path_raw;
+	burl.query     = &r->uri.query;
 	if (buffer_string_is_empty(burl.authority))
-		burl.authority = con->request.server_name;
+		burl.authority = r->server_name;
 
-	buffer * const tb = con->srv->tmp_buf;
-	rc = pcre_keyvalue_buffer_process(kvb, &ctx, con->request.target, tb);
+	buffer * const tb = r->tmp_buf;
+	rc = pcre_keyvalue_buffer_process(kvb, &ctx, &r->target, tb);
 	if (HANDLER_FINISHED == rc && !buffer_is_empty(tb) && tb->ptr[0] == '/') {
-		buffer_copy_buffer(con->request.target, tb);
-		uintptr_t * const hctx = (uintptr_t *)(con->request.plugin_ctx + p->id);
+		buffer_copy_buffer(&r->target, tb);
+		uintptr_t * const hctx = (uintptr_t *)(r->plugin_ctx + p->id);
 		*hctx |= REWRITE_STATE_REWRITTEN;
 		/*(kvb->x1 is repeat_idx)*/
 		if (ctx.m < kvb->x1) *hctx |= REWRITE_STATE_FINISHED;
-		buffer_reset(con->physical.path);
+		buffer_reset(&r->physical.path);
 		rc = HANDLER_COMEBACK;
 	}
 	else if (HANDLER_FINISHED == rc) {
 		rc = HANDLER_ERROR;
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "mod_rewrite invalid result (not beginning with '/') "
-		  "while processing uri: %s", con->request.target->ptr);
+		  "while processing uri: %s", r->target.ptr);
 	}
 	else if (HANDLER_ERROR == rc) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "pcre_exec() error "
-		  "while processing uri: %s", con->request.target->ptr);
+		  "while processing uri: %s", r->target.ptr);
 	}
 	return rc;
 }
@@ -317,25 +317,25 @@ static handler_t process_rewrite_rules(connection *con, plugin_data *p, const pc
 URIHANDLER_FUNC(mod_rewrite_physical) {
     plugin_data * const p = p_d;
 
-    if (NULL != con->response.handler_module) return HANDLER_GO_ON;
+    if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-    mod_rewrite_patch_config(con, p);
+    mod_rewrite_patch_config(r, p);
     if (!p->conf.rewrite_NF || !p->conf.rewrite_NF->used) return HANDLER_GO_ON;
 
     /* skip if physical.path is a regular file */
-    stat_cache_entry *sce = stat_cache_get_entry(con->physical.path);
+    stat_cache_entry *sce = stat_cache_get_entry(&r->physical.path);
     if (sce && S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
 
-    return process_rewrite_rules(con, p, p->conf.rewrite_NF);
+    return process_rewrite_rules(r, p, p->conf.rewrite_NF);
 }
 
 URIHANDLER_FUNC(mod_rewrite_uri_handler) {
     plugin_data *p = p_d;
 
-    mod_rewrite_patch_config(con, p);
+    mod_rewrite_patch_config(r, p);
     if (!p->conf.rewrite || !p->conf.rewrite->used) return HANDLER_GO_ON;
 
-    return process_rewrite_rules(con, p, p->conf.rewrite);
+    return process_rewrite_rules(r, p, p->conf.rewrite);
 }
 
 int mod_rewrite_plugin_init(plugin *p);

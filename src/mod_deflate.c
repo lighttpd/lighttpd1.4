@@ -16,7 +16,7 @@
  * Patch further modified in this incarnation.
  *
  * Note: this patch only handles completed responses
- *         (con->response.resp_body_finished)
+ *         (r->resp_body_finished)
  *       this patch does not currently handle streaming dynamic responses,
  *       and therefore also does not worry about Transfer-Encoding: chunked
  *       (or having separate con->output_queue for chunked-encoded output)
@@ -58,10 +58,10 @@
  *   can now easily be done by setting to a blank list either directive
  *   deflate.accept_encodings = () or deflate.mimetypes = () in a conditional
  *   block, e.g. $HTTP["url"] =~ "....." { deflate.mimetypes = ( ) }
- * - deflate.sync-flush removed; controlled by con->conf.stream_response_body
+ * - deflate.sync-flush removed; controlled by r->conf.stream_response_body
  *     (though streaming compression not currently implemented in mod_deflate)
  * - inactive directives in this patch
- *       (since con->response.resp_body_finished required)
+ *       (since r->resp_body_finished required)
  *     deflate.work-block-size
  *     deflate.output-buffer-size
  * - remove weak file size check; SIGBUS is trapped, file that shrink will error
@@ -276,10 +276,10 @@ static void mod_deflate_merge_config(plugin_config * const pconf, const config_p
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_deflate_patch_config(connection * const con, plugin_data * const p) {
+static void mod_deflate_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_deflate_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -433,9 +433,9 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
 
 
 #if defined(USE_ZLIB) || defined(USE_BZ2LIB)
-static int stream_http_chunk_append_mem(connection *con, handler_ctx *hctx, size_t len) {
+static int stream_http_chunk_append_mem(request_st * const r, const handler_ctx * const hctx, size_t len) {
 	/* future: might also write stream to hctx temporary file in compressed file cache */
-	return http_chunk_append_mem(con, hctx->output->ptr, len);
+	return http_chunk_append_mem(r, hctx->output->ptr, len);
 }
 #endif
 
@@ -469,7 +469,7 @@ static int stream_deflate_init(handler_ctx *hctx) {
 	return 0;
 }
 
-static int stream_deflate_compress(connection *con, handler_ctx *hctx, unsigned char *start, off_t st_size) {
+static int stream_deflate_compress(request_st * const r, handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
 	z_stream * const z = &(hctx->u.z);
 	size_t len;
 
@@ -484,7 +484,7 @@ static int stream_deflate_compress(connection *con, handler_ctx *hctx, unsigned 
 		if (z->avail_out == 0 || z->avail_in > 0) {
 			len = hctx->output->size - z->avail_out;
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(con, hctx, len);
+			stream_http_chunk_append_mem(r, hctx, len);
 			z->next_out = (unsigned char *)hctx->output->ptr;
 			z->avail_out = hctx->output->size;
 		}
@@ -493,7 +493,7 @@ static int stream_deflate_compress(connection *con, handler_ctx *hctx, unsigned 
 	return 0;
 }
 
-static int stream_deflate_flush(connection *con, handler_ctx *hctx, int end) {
+static int stream_deflate_flush(request_st * const r, handler_ctx * const hctx, int end) {
 	z_stream * const z = &(hctx->u.z);
 	const plugin_data *p = hctx->plugin_data;
 	size_t len;
@@ -523,7 +523,7 @@ static int stream_deflate_flush(connection *con, handler_ctx *hctx, int end) {
 		len = hctx->output->size - z->avail_out;
 		if (z->avail_out == 0 || (len > 0 && (end || p->conf.sync_flush))) {
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(con, hctx, len);
+			stream_http_chunk_append_mem(r, hctx, len);
 			z->next_out = (unsigned char *)hctx->output->ptr;
 			z->avail_out = hctx->output->size;
 		}
@@ -577,7 +577,7 @@ static int stream_bzip2_init(handler_ctx *hctx) {
 	return 0;
 }
 
-static int stream_bzip2_compress(connection *con, handler_ctx *hctx, unsigned char *start, off_t st_size) {
+static int stream_bzip2_compress(request_st * const r, handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
 	bz_stream * const bz = &(hctx->u.bz);
 	size_t len;
 
@@ -592,7 +592,7 @@ static int stream_bzip2_compress(connection *con, handler_ctx *hctx, unsigned ch
 		if (bz->avail_out == 0 || bz->avail_in > 0) {
 			len = hctx->output->size - bz->avail_out;
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(con, hctx, len);
+			stream_http_chunk_append_mem(r, hctx, len);
 			bz->next_out = hctx->output->ptr;
 			bz->avail_out = hctx->output->size;
 		}
@@ -601,7 +601,7 @@ static int stream_bzip2_compress(connection *con, handler_ctx *hctx, unsigned ch
 	return 0;
 }
 
-static int stream_bzip2_flush(connection *con, handler_ctx *hctx, int end) {
+static int stream_bzip2_flush(request_st * const r, handler_ctx * const hctx, int end) {
 	bz_stream * const bz = &(hctx->u.bz);
 	const plugin_data *p = hctx->plugin_data;
 	size_t len;
@@ -631,7 +631,7 @@ static int stream_bzip2_flush(connection *con, handler_ctx *hctx, int end) {
 		len = hctx->output->size - bz->avail_out;
 		if (bz->avail_out == 0 || (len > 0 && (end || p->conf.sync_flush))) {
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(con, hctx, len);
+			stream_http_chunk_append_mem(r, hctx, len);
 			bz->next_out = hctx->output->ptr;
 			bz->avail_out = hctx->output->size;
 		}
@@ -669,45 +669,45 @@ static int mod_deflate_stream_init(handler_ctx *hctx) {
 	}
 }
 
-static int mod_deflate_compress(connection *con, handler_ctx *hctx, unsigned char *start, off_t st_size) {
+static int mod_deflate_compress(request_st * const r, handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
 	if (0 == st_size) return 0;
 	switch(hctx->compression_type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
-		return stream_deflate_compress(con, hctx, start, st_size);
+		return stream_deflate_compress(r, hctx, start, st_size);
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
-		return stream_bzip2_compress(con, hctx, start, st_size);
+		return stream_bzip2_compress(r, hctx, start, st_size);
 #endif
 	default:
-		UNUSED(con);
+		UNUSED(r);
 		UNUSED(start);
 		return -1;
 	}
 }
 
-static int mod_deflate_stream_flush(connection *con, handler_ctx *hctx, int end) {
+static int mod_deflate_stream_flush(request_st * const r, handler_ctx * const hctx, int end) {
 	if (0 == hctx->bytes_in) return 0;
 	switch(hctx->compression_type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
-		return stream_deflate_flush(con, hctx, end);
+		return stream_deflate_flush(r, hctx, end);
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
-		return stream_bzip2_flush(con, hctx, end);
+		return stream_bzip2_flush(r, hctx, end);
 #endif
 	default:
-		UNUSED(con);
+		UNUSED(r);
 		UNUSED(end);
 		return -1;
 	}
 }
 
-static void mod_deflate_note_ratio(connection *con, handler_ctx *hctx) {
+static void mod_deflate_note_ratio(request_st * const r, handler_ctx * const hctx) {
     /* store compression ratio in environment
      * for possible logging by mod_accesslog
      * (late in response handling, so not seen by most other modules) */
@@ -716,7 +716,7 @@ static void mod_deflate_note_ratio(connection *con, handler_ctx *hctx) {
     if (0 == hctx->bytes_in) return;
     size_t len =
       li_itostrn(ratio, sizeof(ratio), hctx->bytes_out * 100 / hctx->bytes_in);
-    http_header_env_set(con, CONST_STR_LEN("ratio"), ratio, len);
+    http_header_env_set(r, CONST_STR_LEN("ratio"), ratio, len);
 }
 
 static int mod_deflate_stream_end(handler_ctx *hctx) {
@@ -735,18 +735,18 @@ static int mod_deflate_stream_end(handler_ctx *hctx) {
 	}
 }
 
-static void deflate_compress_cleanup(connection *con, handler_ctx *hctx) {
+static void deflate_compress_cleanup(request_st * const r, handler_ctx * const hctx) {
 	const plugin_data *p = hctx->plugin_data;
-	con->request.plugin_ctx[p->id] = NULL;
+	r->plugin_ctx[p->id] = NULL;
 
 	if (0 != mod_deflate_stream_end(hctx)) {
-		log_error(con->conf.errh, __FILE__, __LINE__, "error closing stream");
+		log_error(r->conf.errh, __FILE__, __LINE__, "error closing stream");
 	}
 
       #if 1 /* unnecessary if deflate.min-compress-size is set to a reasonable value */
 	if (hctx->bytes_in < hctx->bytes_out) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
-		  "uri %s in=%lld smaller than out=%lld", con->uri.path_raw->ptr,
+		log_error(r->conf.errh, __FILE__, __LINE__,
+		  "uri %s in=%lld smaller than out=%lld", r->uri.path_raw.ptr,
 		  (long long)hctx->bytes_in, (long long)hctx->bytes_out);
 	}
       #endif
@@ -755,7 +755,7 @@ static void deflate_compress_cleanup(connection *con, handler_ctx *hctx) {
 }
 
 
-static int mod_deflate_file_chunk(connection *con, handler_ctx *hctx, chunk *c, off_t st_size) {
+static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx, chunk * const c, off_t st_size) {
 	off_t abs_offset;
 	off_t toSend = -1;
 	char *start;
@@ -768,8 +768,8 @@ static int mod_deflate_file_chunk(connection *con, handler_ctx *hctx, chunk *c, 
 #endif
 
 	if (-1 == c->file.fd) {  /* open the file if not already open */
-		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, con->conf.follow_symlink, O_RDONLY, 0))) {
-			log_perror(con->conf.errh, __FILE__, __LINE__, "open failed %s", c->mem->ptr);
+		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, r->conf.follow_symlink, O_RDONLY, 0))) {
+			log_perror(r->conf.errh, __FILE__, __LINE__, "open failed %s", c->mem->ptr);
 			return -1;
 		}
 	}
@@ -828,7 +828,7 @@ static int mod_deflate_file_chunk(connection *con, handler_ctx *hctx, chunk *c, 
 
 		if (MAP_FAILED == (c->file.mmap.start = mmap(0, (size_t)to_mmap, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))
 		    && (errno != EINVAL || MAP_FAILED == (c->file.mmap.start = mmap(0, (size_t)to_mmap, PROT_READ, MAP_PRIVATE, c->file.fd, c->file.mmap.offset)))) {
-			log_perror(con->conf.errh, __FILE__, __LINE__,
+			log_perror(r->conf.errh, __FILE__, __LINE__,
 			  "mmap failed %s %d", c->mem->ptr, c->file.fd);
 
 			return -1;
@@ -839,7 +839,7 @@ static int mod_deflate_file_chunk(connection *con, handler_ctx *hctx, chunk *c, 
 		/* don't advise files < 64Kb */
 		if (c->file.mmap.length > (64 KByte) &&
 		    0 != madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED)) {
-			log_perror(con->conf.errh, __FILE__, __LINE__,
+			log_perror(r->conf.errh, __FILE__, __LINE__,
 			  "madvise failed %s %d", c->mem->ptr, c->file.fd);
 		}
 #endif
@@ -852,7 +852,7 @@ static int mod_deflate_file_chunk(connection *con, handler_ctx *hctx, chunk *c, 
 	if (toSend > we_want_to_send) toSend = we_want_to_send;
 
 	if (toSend < 0) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "toSend is negative: %lld %lld %lld %lld",
 		  (long long)toSend,
 		  (long long)c->file.mmap.length,
@@ -869,7 +869,7 @@ static int mod_deflate_file_chunk(connection *con, handler_ctx *hctx, chunk *c, 
 		toSend = st_size;
 		if (toSend > 2 MByte) toSend = 2 MByte;
 		if (NULL == (start = malloc((size_t)toSend)) || -1 == lseek(c->file.fd, abs_offset, SEEK_SET) || toSend != read(c->file.fd, start, (size_t)toSend)) {
-			log_perror(con->conf.errh, __FILE__, __LINE__, "reading %s failed", c->mem->ptr);
+			log_perror(r->conf.errh, __FILE__, __LINE__, "reading %s failed", c->mem->ptr);
 
 			free(start);
 			return -1;
@@ -884,16 +884,16 @@ static int mod_deflate_file_chunk(connection *con, handler_ctx *hctx, chunk *c, 
 		if (0 != sigsetjmp(sigbus_jmp, 1)) {
 			sigbus_jmp_valid = 0;
 
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "SIGBUS in mmap: %s %d", c->mem->ptr, c->file.fd);
 			return -1;
 		}
 	}
 #endif
 
-	if (mod_deflate_compress(con, hctx,
+	if (mod_deflate_compress(r, hctx,
 				(unsigned char *)start + (abs_offset - c->file.mmap.offset), toSend) < 0) {
-		log_error(con->conf.errh, __FILE__, __LINE__, "compress failed.");
+		log_error(r->conf.errh, __FILE__, __LINE__, "compress failed.");
 		toSend = -1;
 	}
 
@@ -908,17 +908,18 @@ static int mod_deflate_file_chunk(connection *con, handler_ctx *hctx, chunk *c, 
 }
 
 
-static handler_t deflate_compress_response(connection *con, handler_ctx *hctx) {
+static handler_t deflate_compress_response(request_st * const r, handler_ctx * const hctx) {
 	off_t len, max;
 	int close_stream;
 
 	/* move all chunk from write_queue into our in_queue, then adjust
-	 * counters since con->write_queue is reused for compressed output */
-	len = chunkqueue_length(con->write_queue);
-	chunkqueue_remove_finished_chunks(con->write_queue);
-	chunkqueue_append_chunkqueue(hctx->in_queue, con->write_queue);
-	con->write_queue->bytes_in  -= len;
-	con->write_queue->bytes_out -= len;
+	 * counters since r->write_queue is reused for compressed output */
+	chunkqueue * const cq = r->write_queue;
+	len = chunkqueue_length(cq);
+	chunkqueue_remove_finished_chunks(cq);
+	chunkqueue_append_chunkqueue(hctx->in_queue, cq);
+	cq->bytes_in  -= len;
+	cq->bytes_out -= len;
 
 	max = chunkqueue_length(hctx->in_queue);
       #if 0
@@ -936,21 +937,21 @@ static handler_t deflate_compress_response(connection *con, handler_ctx *hctx) {
 		case MEM_CHUNK:
 			len = buffer_string_length(c->mem) - c->offset;
 			if (len > max) len = max;
-			if (mod_deflate_compress(con, hctx, (unsigned char *)c->mem->ptr+c->offset, len) < 0) {
-				log_error(con->conf.errh, __FILE__, __LINE__, "compress failed.");
+			if (mod_deflate_compress(r, hctx, (unsigned char *)c->mem->ptr+c->offset, len) < 0) {
+				log_error(r->conf.errh, __FILE__, __LINE__, "compress failed.");
 				return HANDLER_ERROR;
 			}
 			break;
 		case FILE_CHUNK:
 			len = c->file.length - c->offset;
 			if (len > max) len = max;
-			if ((len = mod_deflate_file_chunk(con, hctx, c, len)) < 0) {
-				log_error(con->conf.errh, __FILE__, __LINE__, "compress file chunk failed.");
+			if ((len = mod_deflate_file_chunk(r, hctx, c, len)) < 0) {
+				log_error(r->conf.errh, __FILE__, __LINE__, "compress file chunk failed.");
 				return HANDLER_ERROR;
 			}
 			break;
 		default:
-			log_error(con->conf.errh, __FILE__, __LINE__, "%d type not known", c->type);
+			log_error(r->conf.errh, __FILE__, __LINE__, "%d type not known", c->type);
 			return HANDLER_ERROR;
 		}
 
@@ -960,10 +961,10 @@ static handler_t deflate_compress_response(connection *con, handler_ctx *hctx) {
 
 	/*(currently should always be true)*/
 	/*(current implementation requires response be complete)*/
-	close_stream = (con->response.resp_body_finished
+	close_stream = (r->resp_body_finished
                         && chunkqueue_is_empty(hctx->in_queue));
-	if (mod_deflate_stream_flush(con, hctx, close_stream) < 0) {
-		log_error(con->conf.errh, __FILE__, __LINE__, "flush error");
+	if (mod_deflate_stream_flush(r, hctx, close_stream) < 0) {
+		log_error(r->conf.errh, __FILE__, __LINE__, "flush error");
 		return HANDLER_ERROR;
 	}
 
@@ -1062,7 +1063,7 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
 	}
 }
 
-CONNECTION_FUNC(mod_deflate_handle_response_start) {
+REQUEST_FUNC(mod_deflate_handle_response_start) {
 	plugin_data *p = p_d;
 	const buffer *vbro;
 	buffer *vb;
@@ -1074,12 +1075,12 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	handler_t rc;
 
 	/*(current implementation requires response be complete)*/
-	if (!con->response.resp_body_finished) return HANDLER_GO_ON;
-	if (con->request.http_method == HTTP_METHOD_HEAD) return HANDLER_GO_ON;
-	if (con->response.htags & HTTP_HEADER_TRANSFER_ENCODING) return HANDLER_GO_ON;
+	if (!r->resp_body_finished) return HANDLER_GO_ON;
+	if (r->http_method == HTTP_METHOD_HEAD) return HANDLER_GO_ON;
+	if (r->resp_htags & HTTP_HEADER_TRANSFER_ENCODING) return HANDLER_GO_ON;
 
 	/* disable compression for some http status types. */
-	switch(con->http_status) {
+	switch(r->http_status) {
 	case 100:
 	case 101:
 	case 204:
@@ -1091,14 +1092,14 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 		break;
 	}
 
-	mod_deflate_patch_config(con, p);
+	mod_deflate_patch_config(r, p);
 
 	/* check if deflate configured for any mimetypes */
 	if (NULL == p->conf.mimetypes) return HANDLER_GO_ON;
 
 	/* check if size of response is below min-compress-size or exceeds max*/
-	/* (con->response.resp_body_finished checked at top of routine) */
-	len = chunkqueue_length(con->write_queue);
+	/* (r->resp_body_finished checked at top of routine) */
+	len = chunkqueue_length(r->write_queue);
 	if (len <= (off_t)p->conf.min_compress_size) return HANDLER_GO_ON;
 	if (p->conf.max_compress_size /*(max_compress_size in KB)*/
 	    && len > ((off_t)p->conf.max_compress_size << 10)) {
@@ -1106,11 +1107,11 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	}
 
 	/* Check if response has a Content-Encoding. */
-	vbro = http_header_response_get(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
+	vbro = http_header_response_get(r, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
 	if (NULL != vbro) return HANDLER_GO_ON;
 
 	/* Check Accept-Encoding for supported encoding. */
-	vbro = http_header_request_get(con, HTTP_HEADER_ACCEPT_ENCODING, CONST_STR_LEN("Accept-Encoding"));
+	vbro = http_header_request_get(r, HTTP_HEADER_ACCEPT_ENCODING, CONST_STR_LEN("Accept-Encoding"));
 	if (NULL == vbro) return HANDLER_GO_ON;
 
 	/* find matching encodings */
@@ -1118,7 +1119,7 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	if (!compression_type) return HANDLER_GO_ON;
 
 	/* Check mimetype in response header "Content-Type" */
-	if (NULL != (vbro = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type")))) {
+	if (NULL != (vbro = http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type")))) {
 		if (NULL == array_match_value_prefix(p->conf.mimetypes, vbro)) return HANDLER_GO_ON;
 	} else {
 		/* If no Content-Type set, compress only if first p->conf.mimetypes value is "" */
@@ -1127,55 +1128,55 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 	}
 
 	/* Vary: Accept-Encoding (response might change according to request Accept-Encoding) */
-	if (NULL != (vb = http_header_response_get(con, HTTP_HEADER_VARY, CONST_STR_LEN("Vary")))) {
+	if (NULL != (vb = http_header_response_get(r, HTTP_HEADER_VARY, CONST_STR_LEN("Vary")))) {
 		if (NULL == strstr(vb->ptr, "Accept-Encoding")) {
 			buffer_append_string_len(vb, CONST_STR_LEN(",Accept-Encoding"));
 		}
 	} else {
-		http_header_response_append(con, HTTP_HEADER_VARY,
+		http_header_response_append(r, HTTP_HEADER_VARY,
 					    CONST_STR_LEN("Vary"),
 					    CONST_STR_LEN("Accept-Encoding"));
 	}
 
 	/* check ETag as is done in http_response_handle_cachable()
 	 * (slightly imperfect (close enough?) match of ETag "000000" to "000000-gzip") */
-	vb = http_header_response_get(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"));
-	if (NULL != vb && (con->request.htags & HTTP_HEADER_IF_NONE_MATCH)) {
-		const buffer *if_none_match = http_header_response_get(con, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
+	vb = http_header_response_get(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"));
+	if (NULL != vb && (r->rqst_htags & HTTP_HEADER_IF_NONE_MATCH)) {
+		const buffer *if_none_match = http_header_response_get(r, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
 		etaglen = buffer_string_length(vb);
 		if (etaglen
-		    && con->http_status < 300 /*(want 2xx only)*/
+		    && r->http_status < 300 /*(want 2xx only)*/
 		    && NULL != if_none_match
 		    && 0 == strncmp(if_none_match->ptr, vb->ptr, etaglen-1)
 		    && if_none_match->ptr[etaglen-1] == '-'
 		    && 0 == strncmp(if_none_match->ptr+etaglen, label, strlen(label))) {
 
-			if (http_method_get_or_head(con->request.http_method)) {
+			if (http_method_get_or_head(r->http_method)) {
 				/* modify ETag response header in-place to remove '"' and append '-label"' */
 				vb->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
 				buffer_append_string(vb, label);
 				buffer_append_string_len(vb, CONST_STR_LEN("\""));
-				/*buffer_copy_buffer(con->physical.etag, vb);*//*(keep in sync?)*/
-				con->http_status = 304;
+				/*buffer_copy_buffer(&r->physical.etag, vb);*//*(keep in sync?)*/
+				r->http_status = 304;
 			} else {
-				con->http_status = 412;
+				r->http_status = 412;
 			}
 
 			/* response_start hook occurs after error docs have been handled.
 			 * For now, send back empty response body.
 			 * In the future, might extract the error doc code so that it
 			 * might be run again if response_start hooks return with
-			 * changed http_status and con->response.handler_module = NULL */
+			 * changed http_status and r->handler_module = NULL */
 			/* clear content length even if 304 since compressed length unknown */
-			http_response_body_clear(con, 0);
+			http_response_body_clear(r, 0);
 
-			con->response.resp_body_finished = 1;
-			con->response.handler_module = NULL;
+			r->resp_body_finished = 1;
+			r->handler_module = NULL;
 			return HANDLER_GO_ON;
 		}
 	}
 
-	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < con->srv->loadavg[0]) {
+	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < r->con->srv->loadavg[0]) {
 		return HANDLER_GO_ON;
 	}
 
@@ -1185,70 +1186,70 @@ CONNECTION_FUNC(mod_deflate_handle_response_start) {
 		vb->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
 		buffer_append_string(vb, label);
 		buffer_append_string_len(vb, CONST_STR_LEN("\""));
-		/*buffer_copy_buffer(con->physical.etag, vb);*//*(keep in sync?)*/
+		/*buffer_copy_buffer(&r->physical.etag, vb);*//*(keep in sync?)*/
 	}
 
 	/* set Content-Encoding to show selected compression type */
-	http_header_response_set(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"), label, strlen(label));
+	http_header_response_set(r, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"), label, strlen(label));
 
-	/* clear Content-Length and con->write_queue if HTTP HEAD request
+	/* clear Content-Length and r->write_queue if HTTP HEAD request
 	 * (alternatively, could return original Content-Length with HEAD
 	 *  request if ETag not modified and Content-Encoding not added) */
-	if (HTTP_METHOD_HEAD == con->request.http_method) {
+	if (HTTP_METHOD_HEAD == r->http_method) {
 		/* ensure that uncompressed Content-Length is not sent in HEAD response */
-		http_response_body_clear(con, 0);
+		http_response_body_clear(r, 0);
 		return HANDLER_GO_ON;
 	}
 
 	/* future: might use ETag to check if compressed content is in compressed file cache */
-	/*if (etaglen) { ... } *//* return if in file cache after updating con->write_queue */
+	/*if (etaglen) { ... } *//* return if in file cache after updating r->write_queue */
 
 	/* enable compression */
 	p->conf.sync_flush =
-	  (con->conf.stream_response_body && 0 == p->conf.output_buffer_size);
+	  (r->conf.stream_response_body && 0 == p->conf.output_buffer_size);
 	hctx = handler_ctx_init();
 	hctx->plugin_data = p;
 	hctx->compression_type = compression_type;
-	hctx->errh = con->conf.errh;
+	hctx->errh = r->conf.errh;
 	/* setup output buffer */
 	buffer_clear(&p->tmp_buf);
 	hctx->output = &p->tmp_buf;
 	if (0 != mod_deflate_stream_init(hctx)) {
 		/*(should not happen unless ENOMEM)*/
 		handler_ctx_free(hctx);
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "Failed to initialize compression %s", label);
 		/* restore prior Etag and unset Content-Encoding */
 		if (etaglen) {
 			vb->ptr[etaglen-1] = '"'; /*(overwrite '-')*/
 			buffer_string_set_length(vb, etaglen);
 		}
-		http_header_response_unset(con, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
+		http_header_response_unset(r, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
 		return HANDLER_GO_ON;
 	}
 
-	if (con->response.htags & HTTP_HEADER_CONTENT_LENGTH) {
-		http_header_response_unset(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+	if (r->resp_htags & HTTP_HEADER_CONTENT_LENGTH) {
+		http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 	}
-	con->request.plugin_ctx[p->id] = hctx;
+	r->plugin_ctx[p->id] = hctx;
 
-	rc = deflate_compress_response(con, hctx);
+	rc = deflate_compress_response(r, hctx);
 	if (HANDLER_GO_ON != rc) {
 		if (HANDLER_FINISHED == rc) {
-			mod_deflate_note_ratio(con, hctx);
+			mod_deflate_note_ratio(r, hctx);
 		}
-		deflate_compress_cleanup(con, hctx);
+		deflate_compress_cleanup(r, hctx);
 		if (HANDLER_ERROR == rc) return HANDLER_ERROR;
 	}
 
 	return HANDLER_GO_ON;
 }
 
-static handler_t mod_deflate_cleanup(connection *con, void *p_d) {
+static handler_t mod_deflate_cleanup(request_st * const r, void *p_d) {
 	plugin_data *p = p_d;
-	handler_ctx *hctx = con->request.plugin_ctx[p->id];
+	handler_ctx *hctx = r->plugin_ctx[p->id];
 
-	if (NULL != hctx) deflate_compress_cleanup(con, hctx);
+	if (NULL != hctx) deflate_compress_cleanup(r, hctx);
 
 	return HANDLER_GO_ON;
 }

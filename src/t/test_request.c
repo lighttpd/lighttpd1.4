@@ -13,11 +13,11 @@ static void test_request_reset(request_st * const r)
     r->http_method = HTTP_METHOD_UNSET;
     r->http_version = HTTP_VERSION_UNSET;
     r->http_host = NULL;
-    r->htags = 0;
+    r->rqst_htags = 0;
     r->reqbody_length = 0;
-    buffer_reset(r->target_orig);
-    buffer_reset(r->target);
-    array_reset_data_strings(&r->headers);
+    buffer_clear(&r->target_orig);
+    buffer_clear(&r->target);
+    array_reset_data_strings(&r->rqst_headers);
 }
 
 static void run_http_request_parse(request_st * const r, int line, int status, const char *desc, const char *req, size_t reqlen)
@@ -325,7 +325,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "  baz\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&r->headers, CONST_STR_LEN("Location"));
+      array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("Location"));
     assert(ds
            && buffer_is_equal_string(&ds->value,
                                      CONST_STR_LEN("foo, foobar    baz")));
@@ -338,7 +338,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "  baz\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&r->headers, CONST_STR_LEN("Location"));
+      array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("Location"));
     assert(ds
            && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foobar    baz")));
 
@@ -350,7 +350,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "  baz\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&r->headers, CONST_STR_LEN("Location"));
+      array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("Location"));
     assert(ds
            && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foobar    baz")));
 
@@ -406,7 +406,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "\r\n"));
     assert(buffer_is_equal_string(r->http_host,
                                   CONST_STR_LEN("www.example.org")));
-    assert(buffer_is_equal_string(r->target,
+    assert(buffer_is_equal_string(&r->target,
                                   CONST_STR_LEN("/")));
 
     run_http_request_parse(r, __LINE__, 400,
@@ -427,7 +427,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "ABC:foo\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&r->headers, CONST_STR_LEN("ABC"));
+      array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("ABC"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foo")));
 
     run_http_request_parse(r, __LINE__, 0,
@@ -437,7 +437,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "  bc\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&r->headers, CONST_STR_LEN("ABC"));
+      array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("ABC"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foo    bc")));
 
     run_http_request_parse(r, __LINE__, 411,
@@ -540,7 +540,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "Connection: close\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&r->headers, CONST_STR_LEN("Host"));
+      array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("Host"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("zzz.example.org")));
 
     run_http_request_parse(r, __LINE__, 0,
@@ -550,7 +550,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "Connection: close\r\n"
                     "\r\n"));
     ds = (data_string *)
-      array_get_element_klen(&r->headers, CONST_STR_LEN("Host"));
+      array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("Host"));
     assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("zzz.example.org")));
 
     run_http_request_parse(r, __LINE__, 400,
@@ -576,29 +576,23 @@ static void test_request_http_request_parse(request_st * const r)
 
 int main (void)
 {
-    connection con;
+    request_st r;
 
-    memset(&con, 0, sizeof(connection));
-    con.conf.errh           = log_error_st_init();
-    con.conf.errh->errorlog_fd = -1; /* (disable) */
-    con.conf.allow_http11   = 1;
-    con.conf.http_parseopts = HTTP_PARSEOPT_HEADER_STRICT
-                            | HTTP_PARSEOPT_HOST_STRICT
-                            | HTTP_PARSEOPT_HOST_NORMALIZE;
+    memset(&r, 0, sizeof(request_st));
+    r.conf.errh              = log_error_st_init();
+    r.conf.errh->errorlog_fd = -1; /* (disable) */
+    r.conf.allow_http11      = 1;
+    r.conf.http_parseopts    = HTTP_PARSEOPT_HEADER_STRICT
+                             | HTTP_PARSEOPT_HOST_STRICT
+                             | HTTP_PARSEOPT_HOST_NORMALIZE;
 
-    request_st * const r = &con.request;
-    r->conf        = &con.conf;
-    r->con         = &con;
-    r->target_orig = buffer_init();
-    r->target      = buffer_init();
+    test_request_http_request_parse(&r);
 
-    test_request_http_request_parse(r);
+    free(r.target_orig.ptr);
+    free(r.target.ptr);
+    array_free_data(&r.rqst_headers);
 
-    buffer_free(r->target_orig);
-    buffer_free(r->target);
-    array_free_data(&r->headers);
-
-    log_error_st_free(con.conf.errh);
+    log_error_st_free(r.conf.errh);
 
     return 0;
 }

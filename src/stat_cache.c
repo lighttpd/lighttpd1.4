@@ -697,7 +697,7 @@ const buffer * stat_cache_mimetype_by_xattr(const char * const name)
 const buffer * stat_cache_content_type_get_by_xattr(stat_cache_entry *sce, const array *mimetypes, int use_xattr)
 {
     /*(invalid caching if user config has multiple, different
-     * con->conf.mimetypes for same extension (not expected))*/
+     * r->conf.mimetypes for same extension (not expected))*/
     if (!buffer_string_is_empty(&sce->content_type)) return &sce->content_type;
 
     if (!S_ISREG(sce->st.st_mode)) return NULL;
@@ -733,7 +733,7 @@ const buffer * stat_cache_content_type_get_by_xattr(stat_cache_entry *sce, const
 const buffer * stat_cache_content_type_get_by_ext(stat_cache_entry *sce, const array *mimetypes)
 {
     /*(invalid caching if user config has multiple, different
-     * con->conf.mimetypes for same extension (not expected))*/
+     * r->conf.mimetypes for same extension (not expected))*/
     if (!buffer_string_is_empty(&sce->content_type)) return &sce->content_type;
 
     if (!S_ISREG(sce->st.st_mode)) return NULL;
@@ -756,7 +756,7 @@ const buffer * stat_cache_content_type_get_by_ext(stat_cache_entry *sce, const a
 #endif
 
 const buffer * stat_cache_etag_get(stat_cache_entry *sce, int flags) {
-    /*(invalid caching if user cfg has multiple, different con->conf.etag_flags
+    /*(invalid caching if user cfg has multiple, different r->conf.etag_flags
      * for same path (not expected, since etag flags should be by filesystem))*/
     if (!buffer_string_is_empty(&sce->etag)) return &sce->etag;
 

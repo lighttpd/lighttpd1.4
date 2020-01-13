@@ -42,11 +42,11 @@ static void mod_flv_streaming_merge_config(plugin_config * const pconf, const co
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_flv_streaming_patch_config(connection * const con, plugin_data * const p) {
+static void mod_flv_streaming_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_flv_streaming_merge_config(&p->conf,
                                            p->cvlist + p->cvlist[i].v.u2[0]);
     }
@@ -95,19 +95,19 @@ static off_t get_param_value(buffer *qb, const char *m, size_t mlen) {
 URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 	plugin_data *p = p_d;
 
-	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
-	if (buffer_string_is_empty(con->physical.path)) return HANDLER_GO_ON;
+	if (NULL != r->handler_module) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;
 
-	mod_flv_streaming_patch_config(con, p);
+	mod_flv_streaming_patch_config(r, p);
 	if (NULL == p->conf.extensions) return HANDLER_GO_ON;
 
-	if (!array_match_value_suffix(p->conf.extensions, con->physical.path)) {
+	if (!array_match_value_suffix(p->conf.extensions, &r->physical.path)) {
 		/* not found */
 		return HANDLER_GO_ON;
 	}
 
-	off_t start = get_param_value(con->uri.query, CONST_STR_LEN("start"));
-	off_t end = get_param_value(con->uri.query, CONST_STR_LEN("end"));
+	off_t start = get_param_value(&r->uri.query, CONST_STR_LEN("start"));
+	off_t end = get_param_value(&r->uri.query, CONST_STR_LEN("end"));
 	off_t len = -1;
 	if (start < 0) start = 0;
 	if (start < end)
@@ -121,14 +121,14 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			 * otherwise send rest of file, starting from start */
 
 			/* let's build a flv header */
-			http_chunk_append_mem(con, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
-			if (0 != http_chunk_append_file_range(con, con->physical.path, start, len)) {
-				chunkqueue_reset(con->write_queue);
+			http_chunk_append_mem(r, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
+			if (0 != http_chunk_append_file_range(r, &r->physical.path, start, len)) {
+				chunkqueue_reset(r->write_queue);
 				return HANDLER_GO_ON;
 			}
 
-			http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("video/x-flv"));
-			con->response.resp_body_finished = 1;
+			http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("video/x-flv"));
+			r->resp_body_finished = 1;
 			return HANDLER_FINISHED;
 }
 

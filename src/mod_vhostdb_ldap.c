@@ -368,9 +368,9 @@ static LDAPMessage * mod_authn_ldap_search(log_error_st *errh, vhostdb_config *s
     return lm;
 }
 
-static void mod_vhostdb_patch_config (connection * const con, plugin_data * const p);
+static void mod_vhostdb_patch_config (request_st * const r, plugin_data * const p);
 
-static int mod_vhostdb_ldap_query(connection *con, void *p_d, buffer *docroot)
+static int mod_vhostdb_ldap_query(request_st * const r, void *p_d, buffer *docroot)
 {
     plugin_data *p = (plugin_data *)p_d;
     vhostdb_config *dbconf;
@@ -385,17 +385,17 @@ static int mod_vhostdb_ldap_query(connection *con, void *p_d, buffer *docroot)
     buffer *filter = docroot;
     buffer_clear(filter); /*(also resets docroot (alias))*/
 
-    mod_vhostdb_patch_config(con, p);
+    mod_vhostdb_patch_config(r, p);
     if (NULL == p->conf.vdata) return 0; /*(after resetting docroot)*/
     dbconf = (vhostdb_config *)p->conf.vdata;
-    log_error_st * const errh = con->conf.errh;
+    log_error_st * const errh = r->conf.errh;
     dbconf->errh = errh;
 
     template = dbconf->filter;
     for (char *b = template->ptr, *d; *b; b = d+1) {
         if (NULL != (d = strchr(b, '?'))) {
             buffer_append_string_len(filter, b, (size_t)(d - b));
-            mod_authn_append_ldap_filter_escape(filter, con->uri.authority);
+            mod_authn_append_ldap_filter_escape(filter, &r->uri.authority);
         } else {
             d = template->ptr + buffer_string_length(template);
             buffer_append_string_len(filter, b, (size_t)(d - b));
@@ -495,11 +495,11 @@ static void mod_vhostdb_merge_config(plugin_config * const pconf, const config_p
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_vhostdb_patch_config(connection * const con, plugin_data * const p) {
+static void mod_vhostdb_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_vhostdb_merge_config(&p->conf,p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }

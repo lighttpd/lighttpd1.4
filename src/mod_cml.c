@@ -108,10 +108,10 @@ static void mod_cml_merge_config(plugin_config * const pconf, const config_plugi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_cml_patch_config(connection * const con, plugin_data * const p) {
+static void mod_cml_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_cml_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -171,13 +171,13 @@ SETDEFAULTS_FUNC(mod_cml_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-static int cache_call_lua(connection *con, plugin_data *p, const buffer *cml_file) {
+static int cache_call_lua(request_st * const r, plugin_data * const p, const buffer * const cml_file) {
 	buffer *b;
 	char *c;
 
 	/* cleanup basedir */
 	b = &p->baseurl;
-	buffer_copy_buffer(b, con->uri.path);
+	buffer_copy_buffer(b, &r->uri.path);
 	for (c = b->ptr + buffer_string_length(b); c > b->ptr && *c != '/'; c--);
 
 	if (*c == '/') {
@@ -185,7 +185,7 @@ static int cache_call_lua(connection *con, plugin_data *p, const buffer *cml_fil
 	}
 
 	b = &p->basedir;
-	buffer_copy_buffer(b, con->physical.path);
+	buffer_copy_buffer(b, &r->physical.path);
 	for (c = b->ptr + buffer_string_length(b); c > b->ptr && *c != '/'; c--);
 
 	if (*c == '/') {
@@ -197,13 +197,13 @@ static int cache_call_lua(connection *con, plugin_data *p, const buffer *cml_fil
 	 *   - cookie-based
 	 *   - get-param-based
 	 */
-	return cache_parse_lua(con, p, cml_file);
+	return cache_parse_lua(r, p, cml_file);
 }
 
 URIHANDLER_FUNC(mod_cml_power_magnet) {
 	plugin_data *p = p_d;
 
-	mod_cml_patch_config(con, p);
+	mod_cml_patch_config(r, p);
 
 	if (buffer_string_is_empty(p->conf.power_magnet)) return HANDLER_GO_ON;
 
@@ -228,26 +228,26 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 	 *
 	 * */
 
-	switch(cache_call_lua(con, p, p->conf.power_magnet)) {
+	switch(cache_call_lua(r, p, p->conf.power_magnet)) {
 	case -1:
 		/* error */
-		if (con->conf.log_request_handling) {
-			log_error(con->conf.errh, __FILE__, __LINE__, "cache-error");
+		if (r->conf.log_request_handling) {
+			log_error(r->conf.errh, __FILE__, __LINE__, "cache-error");
 		}
-		con->http_status = 500;
+		r->http_status = 500;
 		return HANDLER_COMEBACK;
 	case 0:
-		if (con->conf.log_request_handling) {
-			log_error(con->conf.errh, __FILE__, __LINE__, "cache-hit");
+		if (r->conf.log_request_handling) {
+			log_error(r->conf.errh, __FILE__, __LINE__, "cache-hit");
 		}
 		/* cache-hit */
-		buffer_reset(con->physical.path);
+		buffer_reset(&r->physical.path);
 		return HANDLER_FINISHED;
 	case 1:
 		/* cache miss */
 		return HANDLER_GO_ON;
 	default:
-		con->http_status = 500;
+		r->http_status = 500;
 		return HANDLER_COMEBACK;
 	}
 }
@@ -255,13 +255,13 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 URIHANDLER_FUNC(mod_cml_is_handled) {
 	plugin_data *p = p_d;
 
-	if (buffer_string_is_empty(con->physical.path)) return HANDLER_ERROR;
+	if (buffer_string_is_empty(&r->physical.path)) return HANDLER_ERROR;
 
-	mod_cml_patch_config(con, p);
+	mod_cml_patch_config(r, p);
 
 	if (buffer_string_is_empty(p->conf.ext)) return HANDLER_GO_ON;
 
-	if (!buffer_is_equal_right_len(con->physical.path, p->conf.ext, buffer_string_length(p->conf.ext))) {
+	if (!buffer_is_equal_right_len(&r->physical.path, p->conf.ext, buffer_string_length(p->conf.ext))) {
 		return HANDLER_GO_ON;
 	}
 
@@ -269,29 +269,29 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 	buffer_clear(&p->baseurl);
 	buffer_clear(&p->trigger_handler);
 
-	switch(cache_call_lua(con, p, con->physical.path)) {
+	switch(cache_call_lua(r, p, &r->physical.path)) {
 	case -1:
 		/* error */
-		if (con->conf.log_request_handling) {
-			log_error(con->conf.errh, __FILE__, __LINE__, "cache-error");
+		if (r->conf.log_request_handling) {
+			log_error(r->conf.errh, __FILE__, __LINE__, "cache-error");
 		}
-		con->http_status = 500;
+		r->http_status = 500;
 		return HANDLER_COMEBACK;
 	case 0:
-		if (con->conf.log_request_handling) {
-			log_error(con->conf.errh, __FILE__, __LINE__, "cache-hit");
+		if (r->conf.log_request_handling) {
+			log_error(r->conf.errh, __FILE__, __LINE__, "cache-hit");
 		}
 		/* cache-hit */
-		buffer_reset(con->physical.path);
+		buffer_reset(&r->physical.path);
 		return HANDLER_FINISHED;
 	case 1:
-		if (con->conf.log_request_handling) {
-			log_error(con->conf.errh, __FILE__, __LINE__, "cache-miss");
+		if (r->conf.log_request_handling) {
+			log_error(r->conf.errh, __FILE__, __LINE__, "cache-miss");
 		}
 		/* cache miss */
 		return HANDLER_COMEBACK;
 	default:
-		con->http_status = 500;
+		r->http_status = 500;
 		return HANDLER_COMEBACK;
 	}
 }

@@ -119,9 +119,9 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
     return 0;
 }
 
-static void mod_vhostdb_patch_config (connection * const con, plugin_data * const p);
+static void mod_vhostdb_patch_config (request_st * const r, plugin_data * const p);
 
-static int mod_vhostdb_mysql_query(connection *con, void *p_d, buffer *docroot)
+static int mod_vhostdb_mysql_query(request_st * const r, void *p_d, buffer *docroot)
 {
     plugin_data *p = (plugin_data *)p_d;
     vhostdb_config *dbconf;
@@ -133,7 +133,7 @@ static int mod_vhostdb_mysql_query(connection *con, void *p_d, buffer *docroot)
     buffer *sqlquery = docroot;
     buffer_clear(sqlquery); /*(also resets docroot (alias))*/
 
-    mod_vhostdb_patch_config(con, p);
+    mod_vhostdb_patch_config(r, p);
     if (NULL == p->conf.vdata) return 0; /*(after resetting docroot)*/
     dbconf = (vhostdb_config *)p->conf.vdata;
 
@@ -142,10 +142,10 @@ static int mod_vhostdb_mysql_query(connection *con, void *p_d, buffer *docroot)
             /* escape the uri.authority */
             unsigned long len;
             buffer_append_string_len(sqlquery, b, (size_t)(d - b));
-            buffer_string_prepare_append(sqlquery, buffer_string_length(con->uri.authority) * 2);
+            buffer_string_prepare_append(sqlquery, buffer_string_length(&r->uri.authority) * 2);
             len = mysql_real_escape_string(dbconf->dbconn,
                     sqlquery->ptr + buffer_string_length(sqlquery),
-                    CONST_BUF_LEN(con->uri.authority));
+                    CONST_BUF_LEN(&r->uri.authority));
             if ((unsigned long)~0 == len) return -1;
             buffer_commit(sqlquery, len);
         } else {
@@ -156,7 +156,7 @@ static int mod_vhostdb_mysql_query(connection *con, void *p_d, buffer *docroot)
     }
 
     if (mysql_real_query(dbconf->dbconn, CONST_BUF_LEN(sqlquery))) {
-        log_error(con->conf.errh, __FILE__, __LINE__, "%s",
+        log_error(r->conf.errh, __FILE__, __LINE__, "%s",
           mysql_error(dbconf->dbconn));
         buffer_clear(docroot); /*(reset buffer; no result)*/
         return -1;
@@ -229,11 +229,11 @@ static void mod_vhostdb_merge_config(plugin_config * const pconf, const config_p
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_vhostdb_patch_config(connection * const con, plugin_data * const p) {
+static void mod_vhostdb_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_vhostdb_merge_config(&p->conf,p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }

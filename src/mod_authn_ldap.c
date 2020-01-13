@@ -41,7 +41,7 @@ typedef struct {
     buffer ldap_filter;
 } plugin_data;
 
-static handler_t mod_authn_ldap_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+static handler_t mod_authn_ldap_basic(request_st * const r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
 INIT_FUNC(mod_authn_ldap_init) {
     static http_auth_backend_t http_auth_backend_ldap =
@@ -121,10 +121,10 @@ static void mod_authn_ldap_merge_config(plugin_config * const pconf, const confi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_authn_ldap_patch_config(connection * const con, plugin_data * const p) {
+static void mod_authn_ldap_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_authn_ldap_merge_config(&p->conf,
                                         p->cvlist + p->cvlist[i].v.u2[0]);
     }
@@ -661,12 +661,12 @@ static handler_t mod_authn_ldap_memberOf(log_error_st *errh, plugin_config *s, c
     return rc;
 }
 
-static handler_t mod_authn_ldap_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
+static handler_t mod_authn_ldap_basic(request_st * const r, void *p_d, const http_auth_require_t * const require, const buffer * const username, const char * const pw) {
     plugin_data *p = (plugin_data *)p_d;
     LDAP *ld;
     char *dn;
 
-    mod_authn_ldap_patch_config(con, p);
+    mod_authn_ldap_patch_config(r, p);
 
     if (pw[0] == '\0' && !p->conf.auth_ldap_allow_empty_pw)
         return HANDLER_ERROR;
@@ -675,7 +675,7 @@ static handler_t mod_authn_ldap_basic(connection *con, void *p_d, const http_aut
     if (NULL == template)
         return HANDLER_ERROR;
 
-    log_error_st * const errh = con->conf.errh;
+    log_error_st * const errh = r->conf.errh;
 
     /* build filter to get DN for uid = username */
     buffer * const ldap_filter = &p->ldap_filter;

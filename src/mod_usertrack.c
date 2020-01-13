@@ -55,11 +55,11 @@ static void mod_usertrack_merge_config(plugin_config * const pconf, const config
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_usertrack_patch_config(connection * const con, plugin_data * const p) {
+static void mod_usertrack_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_usertrack_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -149,7 +149,7 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
 }
 
 __attribute_noinline__
-static handler_t mod_usertrack_set_cookie(connection *con, plugin_data *p) {
+static handler_t mod_usertrack_set_cookie(request_st * const r, plugin_data * const p) {
 	buffer *cookie;
 	size_t len;
 	unsigned char h[16];
@@ -157,7 +157,7 @@ static handler_t mod_usertrack_set_cookie(connection *con, plugin_data *p) {
 	char hh[LI_ITOSTRING_LENGTH];
 
 	/* set a cookie */
-	cookie = con->srv->tmp_buf;
+	cookie = r->tmp_buf;
 	buffer_copy_buffer(cookie, p->conf.cookie_name);
 	buffer_append_string_len(cookie, CONST_STR_LEN("="));
 
@@ -166,7 +166,7 @@ static handler_t mod_usertrack_set_cookie(connection *con, plugin_data *p) {
 
 	/* generate shared-secret */
 	li_MD5_Init(&Md5Ctx);
-	li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(con->uri.path));
+	li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(&r->uri.path));
 	li_MD5_Update(&Md5Ctx, CONST_STR_LEN("+"));
 
 	len = li_itostrn(hh, sizeof(hh), log_epoch_secs);
@@ -181,7 +181,7 @@ static handler_t mod_usertrack_set_cookie(connection *con, plugin_data *p) {
 	/* usertrack.cookie-attrs, if set, replaces all other attrs */
 	if (!buffer_string_is_empty(p->conf.cookie_attrs)) {
 		buffer_append_string_buffer(cookie, p->conf.cookie_attrs);
-		http_header_response_insert(con, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"), CONST_BUF_LEN(cookie));
+		http_header_response_insert(r, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"), CONST_BUF_LEN(cookie));
 		return HANDLER_GO_ON;
 	}
 
@@ -198,7 +198,7 @@ static handler_t mod_usertrack_set_cookie(connection *con, plugin_data *p) {
 		buffer_append_int(cookie, p->conf.cookie_max_age);
 	}
 
-	http_header_response_insert(con, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"), CONST_BUF_LEN(cookie));
+	http_header_response_insert(r, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"), CONST_BUF_LEN(cookie));
 
 	return HANDLER_GO_ON;
 }
@@ -206,12 +206,12 @@ static handler_t mod_usertrack_set_cookie(connection *con, plugin_data *p) {
 URIHANDLER_FUNC(mod_usertrack_uri_handler) {
     plugin_data * const p = p_d;
 
-    if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
+    if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
 
-    mod_usertrack_patch_config(con, p);
+    mod_usertrack_patch_config(r, p);
 
     const buffer * const b =
-      http_header_request_get(con, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie"));
+      http_header_request_get(r, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie"));
     if (NULL != b) {
         /* parse the cookie (fuzzy; not precise using strstr() below)
          * check for cookiename + (WS | '=')
@@ -229,7 +229,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
         }
     }
 
-    return mod_usertrack_set_cookie(con, p);
+    return mod_usertrack_set_cookie(r, p);
 }
 
 

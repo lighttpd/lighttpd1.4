@@ -5,7 +5,6 @@
 #include "base_decls.h"
 #include "buffer.h"
 #include "array.h"
-#include "etag.h"
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -40,10 +39,10 @@ const buffer * stat_cache_mimetype_by_ext(const array *mimetypes, const char *na
 #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
 const buffer * stat_cache_mimetype_by_xattr(const char *name);
 const buffer * stat_cache_content_type_get_by_xattr(stat_cache_entry *sce, const array *mimetypes, int use_xattr);
-#define stat_cache_content_type_get(con, sce) stat_cache_content_type_get_by_xattr((sce), (con)->conf.mimetypes, (con)->conf.use_xattr)
+#define stat_cache_content_type_get(con, r) stat_cache_content_type_get_by_xattr((sce), (r)->conf.mimetypes, (r)->conf.use_xattr)
 #else
 const buffer * stat_cache_content_type_get_by_ext(stat_cache_entry *sce, const array *mimetypes);
-#define stat_cache_content_type_get(con, sce) stat_cache_content_type_get_by_ext((sce), (con)->conf.mimetypes)
+#define stat_cache_content_type_get(con, r) stat_cache_content_type_get_by_ext((sce), (r)->conf.mimetypes)
 #endif
 const buffer * stat_cache_etag_get(stat_cache_entry *sce, int flags);
 void stat_cache_update_entry(const char *name, size_t len, struct stat *st, buffer *etagb);

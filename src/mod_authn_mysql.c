@@ -138,8 +138,8 @@ static void mod_authn_mysql_sock_error(plugin_data *p) {
     mod_authn_mysql_sock_close(p);
 }
 
-static handler_t mod_authn_mysql_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
-static handler_t mod_authn_mysql_digest(connection *con, void *p_d, http_auth_info_t *dig);
+static handler_t mod_authn_mysql_basic(request_st *r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+static handler_t mod_authn_mysql_digest(request_st *r, void *p_d, http_auth_info_t *dig);
 
 INIT_FUNC(mod_authn_mysql_init) {
     static http_auth_backend_t http_auth_backend_mysql =
@@ -196,10 +196,10 @@ static void mod_authn_mysql_merge_config(plugin_config * const pconf, const conf
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_authn_mysql_patch_config(connection * const con, plugin_data * const p) {
+static void mod_authn_mysql_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_authn_mysql_merge_config(&p->conf,
                                         p->cvlist + p->cvlist[i].v.u2[0]);
     }
@@ -389,18 +389,18 @@ static int mod_authn_mysql_result(plugin_data *p, http_auth_info_t *ai, const ch
     return rc;
 }
 
-static handler_t mod_authn_mysql_query(connection *con, void *p_d, http_auth_info_t *ai, const char *pw) {
+static handler_t mod_authn_mysql_query(request_st * const r, void *p_d, http_auth_info_t * const ai, const char * const pw) {
     plugin_data *p = (plugin_data *)p_d;
     int rc = -1;
 
-    mod_authn_mysql_patch_config(con, p);
-    p->conf.errh = con->conf.errh;
+    mod_authn_mysql_patch_config(r, p);
+    p->conf.errh = r->conf.errh;
 
     if (NULL == p->conf.auth_mysql_users_table) {
         /*(auth.backend.mysql.host, auth.backend.mysql.db might be NULL; do not log)*/
-        log_error(con->conf.errh, __FILE__, __LINE__,
+        log_error(r->conf.errh, __FILE__, __LINE__,
           "auth config missing auth.backend.mysql.users_table for uri: %s",
-          con->request.target->ptr);
+          r->target.ptr);
         return HANDLER_ERROR;
     }
 
@@ -459,7 +459,7 @@ static handler_t mod_authn_mysql_query(connection *con, void *p_d, http_auth_inf
             }
             if (0 != mysql_query(p->mysql_conn, q)) {
                 /*(note: any of these params might be bufs w/ b->ptr == NULL)*/
-                log_error(con->conf.errh, __FILE__, __LINE__,
+                log_error(r->conf.errh, __FILE__, __LINE__,
                   "mysql_query host: %s user: %s db: %s query: %s failed: %s",
                   p->conf.auth_mysql_host ? p->conf.auth_mysql_host : "",
                   p->conf.auth_mysql_user ? p->conf.auth_mysql_user : "",
@@ -481,7 +481,7 @@ static handler_t mod_authn_mysql_query(connection *con, void *p_d, http_auth_inf
     return (0 == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_mysql_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
+static handler_t mod_authn_mysql_basic(request_st * const r, void *p_d, const http_auth_require_t * const require, const buffer * const username, const char * const pw) {
     handler_t rc;
     http_auth_info_t ai;
     ai.dalgo    = HTTP_AUTH_DIGEST_NONE;
@@ -490,15 +490,15 @@ static handler_t mod_authn_mysql_basic(connection *con, void *p_d, const http_au
     ai.ulen     = buffer_string_length(username);
     ai.realm    = require->realm->ptr;
     ai.rlen     = buffer_string_length(require->realm);
-    rc = mod_authn_mysql_query(con, p_d, &ai, pw);
+    rc = mod_authn_mysql_query(r, p_d, &ai, pw);
     if (HANDLER_GO_ON != rc) return rc;
     return http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON  /* access granted */
       : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_mysql_digest(connection *con, void *p_d, http_auth_info_t *ai) {
-    return mod_authn_mysql_query(con, p_d, ai, NULL);
+static handler_t mod_authn_mysql_digest(request_st * const r, void *p_d, http_auth_info_t * const ai) {
+    return mod_authn_mysql_query(r, p_d, ai, NULL);
 }
 
 int mod_authn_mysql_plugin_init(plugin *p);

@@ -585,7 +585,7 @@ int network_init(server *srv, int stdin_fd) {
         /* check for $SERVER["socket"] */
         for (uint32_t i = 1; i < srv->config_context->used; ++i) {
             config_cond_info cfginfo;
-            config_get_config_cond_info(srv, i, &cfginfo);
+            config_get_config_cond_info(&cfginfo, i);
             if (COMP_SERVER_SOCKET != cfginfo.comp) continue;/* not our stage */
 
             buffer *host_token;

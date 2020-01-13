@@ -68,10 +68,10 @@ static void mod_userdir_merge_config(plugin_config * const pconf, const config_p
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_userdir_patch_config(connection * const con, plugin_data * const p) {
+static void mod_userdir_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_userdir_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -137,7 +137,7 @@ static int mod_userdir_in_vlist(const array * const a, const char * const k, con
 }
 
 __attribute_noinline__
-static handler_t mod_userdir_docroot_construct(connection * const con, plugin_data * const p, const char * const uptr, const size_t ulen) {
+static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data * const p, const char * const uptr, const size_t ulen) {
     char u[256];
     if (ulen >= sizeof(u)) return HANDLER_GO_ON;
 
@@ -145,7 +145,7 @@ static handler_t mod_userdir_docroot_construct(connection * const con, plugin_da
     u[ulen] = '\0';
 
     /* we build the physical path */
-    buffer * const b = con->srv->tmp_buf;
+    buffer * const b = r->tmp_buf;
 
     if (buffer_string_is_empty(p->conf.basepath)) {
       #ifdef HAVE_PWD_H
@@ -177,7 +177,7 @@ static handler_t mod_userdir_docroot_construct(connection * const con, plugin_da
             }
         }
 
-        if (con->conf.force_lowercase_filenames) {
+        if (r->conf.force_lowercase_filenames) {
             for (size_t i = 0; i < ulen; ++i) {
                 if (u[i] >= 'A' && u[i] <= 'Z') u[i] |= 0x20;
             }
@@ -192,8 +192,8 @@ static handler_t mod_userdir_docroot_construct(connection * const con, plugin_da
         buffer_append_path_len(b, CONST_BUF_LEN(p->conf.path));
     }
 
-    buffer_copy_buffer(con->physical.basedir, b);
-    buffer_copy_buffer(con->physical.path, b);
+    buffer_copy_buffer(&r->physical.basedir, b);
+    buffer_copy_buffer(&r->physical.path, b);
 
     /* the physical rel_path is basically the same as uri.path;
      * but it is converted to lowercase in case of force_lowercase_filenames
@@ -203,7 +203,7 @@ static handler_t mod_userdir_docroot_construct(connection * const con, plugin_da
      *  change the physical.path;
      *  the exception mod_secdownload doesn't work with userdir anyway)
      */
-    buffer_append_slash(con->physical.path);
+    buffer_append_slash(&r->physical.path);
     /* if no second '/' is found, we assume that it was stripped from the
      * uri.path for the special handling on windows.  we do not care about the
      * trailing slash here on windows, as we already ensured it is a directory
@@ -212,8 +212,8 @@ static handler_t mod_userdir_docroot_construct(connection * const con, plugin_da
      * they may result in the same directory as a username without them.
      */
     char *rel_url;
-    if (NULL != (rel_url = strchr(con->physical.rel_path->ptr + 2, '/'))) {
-        buffer_append_string(con->physical.path, rel_url + 1); /* skip the / */
+    if (NULL != (rel_url = strchr(r->physical.rel_path.ptr + 2, '/'))) {
+        buffer_append_string(&r->physical.path, rel_url + 1); /* skip the / */
     }
 
     return HANDLER_GO_ON;
@@ -222,24 +222,24 @@ static handler_t mod_userdir_docroot_construct(connection * const con, plugin_da
 URIHANDLER_FUNC(mod_userdir_docroot_handler) {
     /* /~user/foo.html -> /home/user/public_html/foo.html */
 
-    if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
+    if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
 
-    if (con->uri.path->ptr[0] != '/' ||
-        con->uri.path->ptr[1] != '~') return HANDLER_GO_ON;
+    if (r->uri.path.ptr[0] != '/' ||
+        r->uri.path.ptr[1] != '~') return HANDLER_GO_ON;
 
     plugin_data * const p = p_d;
-    mod_userdir_patch_config(con, p);
+    mod_userdir_patch_config(r, p);
 
     /* enforce the userdir.path to be set in the config, ugly fix for #1587;
      * should be replaced with a clean .enabled option in 1.5
      */
     if (!p->conf.active || buffer_is_empty(p->conf.path)) return HANDLER_GO_ON;
 
-    const char * const uptr = con->uri.path->ptr + 2;
+    const char * const uptr = r->uri.path.ptr + 2;
     const char * const rel_url = strchr(uptr, '/');
     if (NULL == rel_url) {
         /* / is missing -> redirect to .../ as we are a user - DIRECTORY ! :) */
-        http_response_redirect_to_directory(con, 301);
+        http_response_redirect_to_directory(r, 301);
         return HANDLER_FINISHED;
     }
 
@@ -253,8 +253,8 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 
     if (p->conf.exclude_user) {
         /* use case-insensitive comparison for exclude list
-         * if con->conf.force_lowercase_filenames */
-        if (!con->conf.force_lowercase_filenames
+         * if r->conf.force_lowercase_filenames */
+        if (!r->conf.force_lowercase_filenames
             ? mod_userdir_in_vlist(p->conf.exclude_user, uptr, ulen)
             : mod_userdir_in_vlist_nc(p->conf.exclude_user, uptr, ulen))
             return HANDLER_GO_ON; /* user in exclude list */
@@ -265,7 +265,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
             return HANDLER_GO_ON; /* user not in include list */
     }
 
-    return mod_userdir_docroot_construct(con, p, uptr, ulen);
+    return mod_userdir_docroot_construct(r, p, uptr, ulen);
 }
 
 

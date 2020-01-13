@@ -90,7 +90,6 @@ static inline void buffer_append_string_buffer(buffer *b, const buffer *src);
 #define buffer_append_uint_hex(b,len) buffer_append_uint_hex_lc((b),(len))
 void buffer_append_uint_hex_lc(buffer *b, uintmax_t len);
 void buffer_append_int(buffer *b, intmax_t val);
-void buffer_copy_int(buffer *b, intmax_t val);
 
 void buffer_append_strftime(buffer *b, const char *format, const struct tm *tm);
 

@@ -49,7 +49,7 @@ typedef struct {
 } config_cond_info;
 
 __attribute_cold__
-void config_get_config_cond_info(server *srv, uint32_t idx, config_cond_info *cfginfo);
+void config_get_config_cond_info(config_cond_info *cfginfo, uint32_t idx);
 
 __attribute_cold__
 void config_init(server *srv);
@@ -80,11 +80,11 @@ void config_log_error_close(server *srv);
 
 void config_reset_config_bytes_sec(void *p);
 
-void config_reset_config(connection *con);
-void config_patch_config(connection *con);
+void config_reset_config(request_st *r);
+void config_patch_config(request_st *r);
 
-void config_cond_cache_reset(connection *con);
-void config_cond_cache_reset_item(connection *con, comp_key_t item);
+void config_cond_cache_reset(request_st *r);
+void config_cond_cache_reset_item(request_st *r, comp_key_t item);
 
 typedef enum { T_CONFIG_UNSET,
 		T_CONFIG_STRING,
@@ -168,6 +168,6 @@ typedef struct cond_match_t {
     int matches[3 * 10];
 } cond_match_t; /* 128 bytes (2^7) */
 
-int config_check_cond(connection *con, int context_ndx);
+int config_check_cond(request_st *r, int context_ndx);
 
 #endif

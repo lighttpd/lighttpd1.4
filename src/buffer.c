@@ -266,13 +266,6 @@ void buffer_append_int(buffer *b, intmax_t val) {
 	buffer_append_string_len(b, str, buf_end - str);
 }
 
-void buffer_copy_int(buffer *b, intmax_t val) {
-	force_assert(NULL != b);
-
-	b->used = 0;
-	buffer_append_int(b, val);
-}
-
 void buffer_append_strftime(buffer *b, const char *format, const struct tm *tm) {
 	size_t rv;
 	char* buf;

@@ -347,8 +347,8 @@ static int request_uri_is_valid_char(const unsigned char c) {
 __attribute_cold__
 __attribute_noinline__
 static int http_request_header_line_invalid(request_st * const r, const int status, const char * const msg) {
-    if (r->conf->log_request_header_on_error) {
-        if (msg) log_error(r->conf->errh, __FILE__, __LINE__, "%s", msg);
+    if (r->conf.log_request_header_on_error) {
+        if (msg) log_error(r->conf.errh, __FILE__, __LINE__, "%s", msg);
     }
     return status;
 }
@@ -356,12 +356,12 @@ static int http_request_header_line_invalid(request_st * const r, const int stat
 __attribute_cold__
 __attribute_noinline__
 static int http_request_header_char_invalid(request_st * const r, const char ch, const char * const msg) {
-    if (r->conf->log_request_header_on_error) {
+    if (r->conf.log_request_header_on_error) {
         if ((unsigned char)ch > 32 && ch != 127) {
-            log_error(r->conf->errh, __FILE__, __LINE__, "%s ('%c')", msg, ch);
+            log_error(r->conf.errh, __FILE__, __LINE__, "%s ('%c')", msg, ch);
         }
         else {
-            log_error(r->conf->errh, __FILE__, __LINE__, "%s (0x%x)", msg, ch);
+            log_error(r->conf.errh, __FILE__, __LINE__, "%s (0x%x)", msg, ch);
         }
     }
     return 400;
@@ -387,7 +387,7 @@ static int http_request_parse_single_header(request_st * const r, const enum htt
       default:
         break;
       case HTTP_HEADER_HOST:
-        if (!(r->htags & HTTP_HEADER_HOST)) {
+        if (!(r->rqst_htags & HTTP_HEADER_HOST)) {
             saveb = &r->http_host;
             if (vlen >= 1024) { /*(expecting < 256)*/
                 return http_request_header_line_invalid(r, 400, "uri-authority too long -> 400");
@@ -415,18 +415,18 @@ static int http_request_parse_single_header(request_st * const r, const enum htt
         }
         break;
       case HTTP_HEADER_CONTENT_TYPE:
-        if (r->htags & HTTP_HEADER_CONTENT_TYPE) {
+        if (r->rqst_htags & HTTP_HEADER_CONTENT_TYPE) {
             return http_request_header_line_invalid(r, 400, "duplicate Content-Type header -> 400");
         }
         break;
       case HTTP_HEADER_IF_NONE_MATCH:
         /* if dup, only the first one will survive */
-        if (r->htags & HTTP_HEADER_IF_NONE_MATCH) {
+        if (r->rqst_htags & HTTP_HEADER_IF_NONE_MATCH) {
             return 0; /* ignore header */
         }
         break;
       case HTTP_HEADER_CONTENT_LENGTH:
-        if (!(r->htags & HTTP_HEADER_CONTENT_LENGTH)) {
+        if (!(r->rqst_htags & HTTP_HEADER_CONTENT_LENGTH)) {
             /*(trailing whitespace was removed from vlen)*/
             char *err;
             off_t clen = strtoll(v, &err, 10);
@@ -443,12 +443,12 @@ static int http_request_parse_single_header(request_st * const r, const enum htt
         }
         break;
       case HTTP_HEADER_IF_MODIFIED_SINCE:
-        if (r->htags & HTTP_HEADER_IF_MODIFIED_SINCE) {
+        if (r->rqst_htags & HTTP_HEADER_IF_MODIFIED_SINCE) {
             /* Proxies sometimes send dup headers
              * if they are the same we ignore the second
              * if not, we raise an error */
             const buffer *vb =
-              http_header_request_get(r->con, HTTP_HEADER_IF_MODIFIED_SINCE,
+              http_header_request_get(r, HTTP_HEADER_IF_MODIFIED_SINCE,
                                       CONST_STR_LEN("If-Modified-Since"));
             if (vb && buffer_is_equal_caseless_string(vb, v, vlen)) {
                 /* ignore it if they are the same */
@@ -476,10 +476,10 @@ static int http_request_parse_single_header(request_st * const r, const enum htt
         return 0; /* skip header */
     }
 
-    http_header_request_append(r->con, id, k, klen, v, vlen);
+    http_header_request_append(r, id, k, klen, v, vlen);
 
     if (saveb) {
-        *saveb = http_header_request_get(r->con, id, k, klen);
+        *saveb = http_header_request_get(r, id, k, klen);
     }
 
     return 0;
@@ -530,8 +530,8 @@ static const char * http_request_parse_uri_alt(request_st * const r, const char 
             return NULL;
         }
         /* Insert as host header */
-        http_header_request_set(r->con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"), host, hostlen);
-        r->http_host = http_header_request_get(r->con, HTTP_HEADER_HOST, CONST_STR_LEN("Host"));
+        http_header_request_set(r, HTTP_HEADER_HOST, CONST_STR_LEN("Host"), host, hostlen);
+        r->http_host = http_header_request_get(r, HTTP_HEADER_HOST, CONST_STR_LEN("Host"));
         return nuri;
     } else if (!(http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) /*(!http_header_strict)*/
            || (HTTP_METHOD_CONNECT == r->http_method && (uri[0] == ':' || light_isdigit(uri[0])))
@@ -637,8 +637,8 @@ static int http_request_parse_reqline(request_st * const r, const char * const p
             return http_request_header_char_invalid(r, '\0', "invalid character in header -> 400");
     }
 
-    buffer_copy_string_len(r->target, uri, len);
-    buffer_copy_string_len(r->target_orig, uri, len);
+    buffer_copy_string_len(&r->target, uri, len);
+    buffer_copy_string_len(&r->target_orig, uri, len);
     return 0;
 }
 
@@ -798,7 +798,7 @@ int http_request_parse(request_st * const r, char * const hdrs, const unsigned s
      */
 
     int status;
-    const unsigned int http_parseopts = r->conf->http_parseopts;
+    const unsigned int http_parseopts = r->conf.http_parseopts;
 
     status = http_request_parse_reqline(r, hdrs, hoff, http_parseopts);
     if (0 != status) return status;
@@ -823,14 +823,14 @@ int http_request_parse(request_st * const r, char * const hdrs, const unsigned s
         /* POST requires Content-Length (or Transfer-Encoding)
          * (-1 == r->reqbody_length when Transfer-Encoding: chunked)*/
         if (HTTP_METHOD_POST == r->http_method
-            && !(r->htags & HTTP_HEADER_CONTENT_LENGTH)) {
+            && !(r->rqst_htags & HTTP_HEADER_CONTENT_LENGTH)) {
             return http_request_header_line_invalid(r, 411, "POST-request, but content-length missing -> 411");
         }
     }
     else {
         /* (-1 == r->reqbody_length when Transfer-Encoding: chunked)*/
         if (-1 == r->reqbody_length
-            && (r->htags & HTTP_HEADER_CONTENT_LENGTH)) {
+            && (r->rqst_htags & HTTP_HEADER_CONTENT_LENGTH)) {
             /* RFC7230 Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
              * 3.3.3.  Message Body Length
              * [...]
@@ -849,7 +849,7 @@ int http_request_parse(request_st * const r, char * const hdrs, const unsigned s
             }
             else {
                 /* ignore Content-Length */
-                http_header_request_unset(r->con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+                http_header_request_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
             }
         }
         if (http_method_get_or_head(r->http_method)

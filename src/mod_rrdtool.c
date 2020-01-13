@@ -151,11 +151,11 @@ static void mod_rrd_merge_config(plugin_config * const pconf, const config_plugi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_rrd_patch_config(connection * const con, plugin_data * const p) {
+static void mod_rrd_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_rrd_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -420,12 +420,12 @@ REQUESTDONE_FUNC(mod_rrd_account) {
     /*(0 == p->rrdtool_pid if never activated; not used)*/
     if (0 == p->rrdtool_pid) return HANDLER_GO_ON;
 
-    mod_rrd_patch_config(con, p);
+    mod_rrd_patch_config(r, p);
     rrd_config * const rrd = p->conf.rrd;
     if (NULL == rrd) return HANDLER_GO_ON;
     ++rrd->requests;
-    rrd->bytes_written += con->bytes_written;
-    rrd->bytes_read    += con->bytes_read;
+    rrd->bytes_written += r->con->bytes_written;
+    rrd->bytes_read    += r->con->bytes_read;
 
     return HANDLER_GO_ON;
 }

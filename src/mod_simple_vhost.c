@@ -61,11 +61,11 @@ static void mod_simple_vhost_merge_config(plugin_config * const pconf, const con
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_simple_vhost_patch_config(connection * const con, plugin_data * const p) {
+static void mod_simple_vhost_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_simple_vhost_merge_config(&p->conf,
                                           p->cvlist + p->cvlist[i].v.u2[0]);
     }
@@ -151,7 +151,7 @@ static void build_doc_root_path(buffer *out, const buffer *sroot, const buffer *
 	}
 }
 
-static int build_doc_root(connection *con, plugin_data *p, buffer *out, const buffer *host) {
+static int build_doc_root(request_st * const r, plugin_data *p, buffer *out, const buffer *host) {
 	stat_cache_entry *sce = NULL;
 
 	build_doc_root_path(out, p->conf.server_root, host, p->conf.document_root);
@@ -162,7 +162,7 @@ static int build_doc_root(connection *con, plugin_data *p, buffer *out, const bu
 	sce = stat_cache_get_entry(out);
 	if (NULL == sce) {
 		if (p->conf.debug) {
-			log_perror(con->conf.errh, __FILE__, __LINE__, "%s", out->ptr);
+			log_perror(r->conf.errh, __FILE__, __LINE__, "%s", out->ptr);
 		}
 		return 0;
 	} else if (!S_ISDIR(sce->st.st_mode)) {
@@ -173,9 +173,9 @@ static int build_doc_root(connection *con, plugin_data *p, buffer *out, const bu
 	return 1;
 }
 
-static handler_t mod_simple_vhost_docroot(connection *con, void *p_data) {
+static handler_t mod_simple_vhost_docroot(request_st * const r, void *p_data) {
     plugin_data * const p = p_data;
-    mod_simple_vhost_patch_config(con, p);
+    mod_simple_vhost_patch_config(r, p);
     if (buffer_string_is_empty(p->conf.server_root)) return HANDLER_GO_ON;
     /* build_doc_root() requires p->conf.server_root;
      * skip module if simple-vhost.server-root not set or set to empty string */
@@ -185,12 +185,12 @@ static handler_t mod_simple_vhost_docroot(connection *con, void *p_data) {
 
     /* build document-root */
     buffer * const b = &p->tmp_buf;
-    const buffer *host = con->uri.authority;
-    if ((!buffer_string_is_empty(host) && build_doc_root(con, p, b, host))
-        || build_doc_root(con, p, b, (host = p->conf.default_host))) {
-        con->request.server_name = con->request.server_name_buf;
-        buffer_copy_buffer(con->request.server_name_buf, host);
-        buffer_copy_buffer(con->physical.doc_root, b);
+    const buffer *host = &r->uri.authority;
+    if ((!buffer_string_is_empty(host) && build_doc_root(r, p, b, host))
+        || build_doc_root(r, p, b, (host = p->conf.default_host))) {
+        r->server_name = &r->server_name_buf;
+        buffer_copy_buffer(&r->server_name_buf, host);
+        buffer_copy_buffer(&r->physical.doc_root, b);
     }
 
     return HANDLER_GO_ON;

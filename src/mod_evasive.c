@@ -64,11 +64,11 @@ static void mod_evasive_merge_config(plugin_config * const pconf, const config_p
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_evasive_patch_config(connection * const con, plugin_data * const p) {
+static void mod_evasive_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_evasive_merge_config(&p->conf,p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -106,12 +106,13 @@ SETDEFAULTS_FUNC(mod_evasive_set_defaults) {
 URIHANDLER_FUNC(mod_evasive_uri_handler) {
 	plugin_data *p = p_d;
 
-	mod_evasive_patch_config(con, p);
+	mod_evasive_patch_config(r, p);
 
 	/* no limit set, nothing to block */
 	if (p->conf.max_conns == 0) return HANDLER_GO_ON;
 
-	const connections * const conns = &con->srv->conns;
+	sock_addr * const dst_addr = &r->con->dst_addr;
+	const connections * const conns = &r->con->srv->conns;
 	for (uint32_t i = 0, conns_by_ip = 0; i < conns->used; ++i) {
 		connection *c = conns->ptr[i];
 
@@ -120,24 +121,24 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 		 * */
 		if (c->request.state <= CON_STATE_REQUEST_END) continue;
 
-		if (!sock_addr_is_addr_eq(&c->dst_addr, &con->dst_addr)) continue;
+		if (!sock_addr_is_addr_eq(&c->dst_addr, dst_addr)) continue;
 		conns_by_ip++;
 
 		if (conns_by_ip > p->conf.max_conns) {
 			if (!p->conf.silent) {
-				log_error(con->conf.errh, __FILE__, __LINE__,
+				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "%s turned away. Too many connections.",
-				  con->dst_addr_buf->ptr);
+				  r->con->dst_addr_buf->ptr);
 			}
 
 			if (!buffer_is_empty(p->conf.location)) {
-				http_header_response_set(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.location));
-				con->http_status = 302;
-				con->response.resp_body_finished = 1;
+				http_header_response_set(r, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.location));
+				r->http_status = 302;
+				r->resp_body_finished = 1;
 			} else {
-				con->http_status = 403;
+				r->http_status = 403;
 			}
-			con->response.handler_module = NULL;
+			r->handler_module = NULL;
 			return HANDLER_FINISHED;
 		}
 	}

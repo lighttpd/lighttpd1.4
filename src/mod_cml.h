@@ -32,6 +32,6 @@ typedef struct {
     buffer trigger_handler;
 } plugin_data;
 
-int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn);
+int cache_parse_lua(request_st *r, plugin_data *p, const buffer *fn);
 
 #endif

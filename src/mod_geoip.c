@@ -141,11 +141,11 @@ static void mod_geoip_merge_config(plugin_config * const pconf, const config_plu
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_geoip_patch_config(connection * const con, plugin_data * const p) {
+static void mod_geoip_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_geoip_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -201,11 +201,11 @@ SETDEFAULTS_FUNC(mod_geoip_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-static handler_t mod_geoip_query (connection *con, plugin_data *p) {
+static handler_t mod_geoip_query (request_st * const r, plugin_data * const p) {
     GeoIPRecord *gir;
-    const char *remote_ip = con->dst_addr_buf->ptr;
+    const char *remote_ip = r->con->dst_addr_buf->ptr;
 
-    if (NULL != http_header_env_get(con, CONST_STR_LEN("GEOIP_COUNTRY_CODE"))) {
+    if (NULL != http_header_env_get(r, CONST_STR_LEN("GEOIP_COUNTRY_CODE"))) {
         return HANDLER_GO_ON;
     }
 
@@ -213,15 +213,15 @@ static handler_t mod_geoip_query (connection *con, plugin_data *p) {
         const char *returnedCountry;
 
         if (NULL != (returnedCountry = GeoIP_country_code_by_addr(p->conf.gi, remote_ip))) {
-            http_header_env_set(con, CONST_STR_LEN("GEOIP_COUNTRY_CODE"), returnedCountry, strlen(returnedCountry));
+            http_header_env_set(r, CONST_STR_LEN("GEOIP_COUNTRY_CODE"), returnedCountry, strlen(returnedCountry));
         }
 
         if (NULL != (returnedCountry = GeoIP_country_code3_by_addr(p->conf.gi, remote_ip))) {
-            http_header_env_set(con, CONST_STR_LEN("GEOIP_COUNTRY_CODE3"), returnedCountry, strlen(returnedCountry));
+            http_header_env_set(r, CONST_STR_LEN("GEOIP_COUNTRY_CODE3"), returnedCountry, strlen(returnedCountry));
         }
 
         if (NULL != (returnedCountry = GeoIP_country_name_by_addr(p->conf.gi, remote_ip))) {
-            http_header_env_set(con, CONST_STR_LEN("GEOIP_COUNTRY_NAME"), returnedCountry, strlen(returnedCountry));
+            http_header_env_set(r, CONST_STR_LEN("GEOIP_COUNTRY_NAME"), returnedCountry, strlen(returnedCountry));
         }
 
         return HANDLER_GO_ON;
@@ -231,34 +231,34 @@ static handler_t mod_geoip_query (connection *con, plugin_data *p) {
 
     if (NULL != (gir = GeoIP_record_by_addr(p->conf.gi, remote_ip))) {
 
-        http_header_env_set(con, CONST_STR_LEN("GEOIP_COUNTRY_CODE"), gir->country_code, strlen(gir->country_code));
-        http_header_env_set(con, CONST_STR_LEN("GEOIP_COUNTRY_CODE3"), gir->country_code3, strlen(gir->country_code3));
-        http_header_env_set(con, CONST_STR_LEN("GEOIP_COUNTRY_NAME"), gir->country_name, strlen(gir->country_name));
-        http_header_env_set(con, CONST_STR_LEN("GEOIP_CITY_REGION"), gir->region, strlen(gir->region));
-        http_header_env_set(con, CONST_STR_LEN("GEOIP_CITY_NAME"), gir->city, strlen(gir->city));
-        http_header_env_set(con, CONST_STR_LEN("GEOIP_CITY_POSTAL_CODE"), gir->postal_code, strlen(gir->postal_code));
+        http_header_env_set(r, CONST_STR_LEN("GEOIP_COUNTRY_CODE"), gir->country_code, strlen(gir->country_code));
+        http_header_env_set(r, CONST_STR_LEN("GEOIP_COUNTRY_CODE3"), gir->country_code3, strlen(gir->country_code3));
+        http_header_env_set(r, CONST_STR_LEN("GEOIP_COUNTRY_NAME"), gir->country_name, strlen(gir->country_name));
+        http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_REGION"), gir->region, strlen(gir->region));
+        http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_NAME"), gir->city, strlen(gir->city));
+        http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_POSTAL_CODE"), gir->postal_code, strlen(gir->postal_code));
 
         {
             char latitude[32];
             snprintf(latitude, sizeof(latitude), "%f", gir->latitude);
-            http_header_env_set(con, CONST_STR_LEN("GEOIP_CITY_LATITUDE"), latitude, strlen(latitude));
+            http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_LATITUDE"), latitude, strlen(latitude));
         }
 
         {
             char long_latitude[32];
             snprintf(long_latitude, sizeof(long_latitude), "%f", gir->longitude);
-            http_header_env_set(con, CONST_STR_LEN("GEOIP_CITY_LONG_LATITUDE"), long_latitude, strlen(long_latitude));
+            http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_LONG_LATITUDE"), long_latitude, strlen(long_latitude));
         }
 
         {
             char dc[LI_ITOSTRING_LENGTH];
-            http_header_env_set(con, CONST_STR_LEN("GEOIP_CITY_DMA_CODE"),
+            http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_DMA_CODE"),
                                 dc, li_utostrn(dc, sizeof(dc), gir->dma_code));
         }
 
         {
             char ac[LI_ITOSTRING_LENGTH];
-            http_header_env_set(con, CONST_STR_LEN("GEOIP_CITY_AREA_CODE"),
+            http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_AREA_CODE"),
                                 ac, li_utostrn(ac, sizeof(ac), gir->area_code));
         }
 
@@ -268,10 +268,10 @@ static handler_t mod_geoip_query (connection *con, plugin_data *p) {
     return HANDLER_GO_ON;
 }
 
-CONNECTION_FUNC(mod_geoip_handle_request_env) {
+REQUEST_FUNC(mod_geoip_handle_request_env) {
     plugin_data *p = p_d;
-    mod_geoip_patch_config(con, p);
-    return (p->conf.gi) ? mod_geoip_query(con, p) : HANDLER_GO_ON;
+    mod_geoip_patch_config(r, p);
+    return (p->conf.gi) ? mod_geoip_query(r, p) : HANDLER_GO_ON;
 }
 
 

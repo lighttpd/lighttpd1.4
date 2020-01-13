@@ -31,7 +31,7 @@ typedef struct {
     plugin_config conf;
 } plugin_data;
 
-static handler_t mod_authn_pam_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+static handler_t mod_authn_pam_basic(request_st *r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
 INIT_FUNC(mod_authn_pam_init) {
     static http_auth_backend_t http_auth_backend_pam =
@@ -62,11 +62,11 @@ static void mod_authn_pam_merge_config(plugin_config * const pconf, const config
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_authn_pam_patch_config(connection * const con, plugin_data * const p) {
+static void mod_authn_pam_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_authn_pam_merge_config(&p->conf,
                                         p->cvlist + p->cvlist[i].v.u2[0]);
     }
@@ -132,7 +132,7 @@ static int mod_authn_pam_fn_conv(int num_msg, const struct pam_message **msg, st
     return PAM_SUCCESS;
 }
 
-static handler_t mod_authn_pam_query(connection *con, void *p_d, const buffer *username, const char *realm, const char *pw) {
+static handler_t mod_authn_pam_query(request_st * const r, void *p_d, const buffer * const username, const char * const realm, const char * const pw) {
     plugin_data *p = (plugin_data *)p_d;
     pam_handle_t *pamh = NULL;
     struct pam_conv conv = { mod_authn_pam_fn_conv, NULL };
@@ -141,22 +141,23 @@ static handler_t mod_authn_pam_query(connection *con, void *p_d, const buffer *u
     UNUSED(realm);
     *(const char **)&conv.appdata_ptr = pw; /*(cast away const)*/
 
-    mod_authn_pam_patch_config(con, p);
+    mod_authn_pam_patch_config(r, p);
 
+    const char * const addrstr = r->con->dst_addr_buf->ptr;
     rc = pam_start(p->conf.service, username->ptr, &conv, &pamh);
     if (PAM_SUCCESS != rc
-     || PAM_SUCCESS !=(rc = pam_set_item(pamh,PAM_RHOST,con->dst_addr_buf->ptr))
+     || PAM_SUCCESS !=(rc = pam_set_item(pamh, PAM_RHOST, addrstr))
      || PAM_SUCCESS !=(rc = pam_authenticate(pamh, flags))
      || PAM_SUCCESS !=(rc = pam_acct_mgmt(pamh, flags)))
-        log_error(con->conf.errh, __FILE__, __LINE__,
+        log_error(r->conf.errh, __FILE__, __LINE__,
           "pam: %s", pam_strerror(pamh, rc));
     pam_end(pamh, rc);
     return (PAM_SUCCESS == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_pam_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
+static handler_t mod_authn_pam_basic(request_st * const r, void *p_d, const http_auth_require_t * const require, const buffer * const username, const char * const pw) {
     char *realm = require->realm->ptr;
-    handler_t rc = mod_authn_pam_query(con, p_d, username, realm, pw);
+    handler_t rc = mod_authn_pam_query(r, p_d, username, realm, pw);
     if (HANDLER_GO_ON != rc) return rc;
     return http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON  /* access granted */

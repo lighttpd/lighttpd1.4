@@ -287,6 +287,19 @@ typedef struct {
 } plugin_fn_data;
 
 __attribute_hot__
+static handler_t plugins_call_fn_req_data(request_st * const r, const int e) {
+    const void * const plugin_slots = r->con->plugin_slots;
+    const uint32_t offset = ((const uint16_t *)plugin_slots)[e];
+    if (0 == offset) return HANDLER_GO_ON;
+    const plugin_fn_data *plfd = (const plugin_fn_data *)
+      (((uintptr_t)plugin_slots) + offset);
+    handler_t rc = HANDLER_GO_ON;
+    while (plfd->fn && (rc = plfd->fn(r, plfd->data)) == HANDLER_GO_ON)
+        ++plfd;
+    return rc;
+}
+
+__attribute_hot__
 static handler_t plugins_call_fn_con_data(connection * const con, const int e) {
     const void * const plugin_slots = con->plugin_slots;
     const uint32_t offset = ((const uint16_t *)plugin_slots)[e];
@@ -322,7 +335,28 @@ static void plugins_call_fn_srv_data_all(server * const srv, const int e) {
 /**
  * plugins that use
  *
- * - server *srv
+ * - request_st *r
+ * - void *p_d (plugin_data *)
+ */
+
+#define PLUGIN_CALL_FN_REQ_DATA(x, y) \
+    handler_t plugins_call_##y(request_st * const r) {\
+        return plugins_call_fn_req_data(r, x); \
+    }
+
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_URI_CLEAN, handle_uri_clean)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_URI_RAW, handle_uri_raw)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_REQUEST_ENV, handle_request_env)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_REQUEST_DONE, handle_request_done)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_SUBREQUEST_START, handle_subrequest_start)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_RESPONSE_START, handle_response_start)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_DOCROOT, handle_docroot)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_PHYSICAL, handle_physical)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_CONNECTION_RESET, connection_reset)
+
+/**
+ * plugins that use
+ *
  * - connection *con
  * - void *p_d (plugin_data *)
  */
@@ -332,18 +366,9 @@ static void plugins_call_fn_srv_data_all(server * const srv, const int e) {
         return plugins_call_fn_con_data(con, x); \
     }
 
-PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_URI_CLEAN, handle_uri_clean)
-PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_URI_RAW, handle_uri_raw)
-PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_REQUEST_ENV, handle_request_env)
-PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_REQUEST_DONE, handle_request_done)
 PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_CONNECTION_ACCEPT, handle_connection_accept)
 PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_CONNECTION_SHUT_WR, handle_connection_shut_wr)
 PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE, handle_connection_close)
-PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_SUBREQUEST_START, handle_subrequest_start)
-PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_RESPONSE_START, handle_response_start)
-PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_DOCROOT, handle_docroot)
-PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_HANDLE_PHYSICAL, handle_physical)
-PLUGIN_CALL_FN_CON_DATA(PLUGIN_FUNC_CONNECTION_RESET, connection_reset)
 
 #undef PLUGIN_CALL_FN_SRV_CON_DATA
 

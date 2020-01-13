@@ -2,6 +2,7 @@
 
 #include "base.h"
 #include "burl.h"
+#include "etag.h"
 #include "fdevent.h"
 #include "keyvalue.h"
 #include "log.h"
@@ -196,23 +197,23 @@ static void config_merge_config(request_config * const pconf, const config_plugi
     } while ((++cpv)->k_id != -1);
 }
 
-void config_patch_config(connection * const con) {
-    config_data_base * const p = con->config_data_base;
+void config_patch_config(request_st * const r) {
+    config_data_base * const p = r->con->config_data_base;
 
     /* performed by config_reset_config() */
-    /*memcpy(&con->conf, &p->defaults, sizeof(request_config));*/
+    /*memcpy(&r->conf, &p->defaults, sizeof(request_config));*/
 
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
-            config_merge_config(&con->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
+            config_merge_config(&r->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
-void config_reset_config(connection * const con) {
-    /* initialize request_config (con->conf) from top-level request_config */
-    config_data_base * const p = con->config_data_base;
-    con->request.server_name = p->defaults.server_name;
-    memcpy(&con->conf, &p->defaults, sizeof(request_config));
+void config_reset_config(request_st * const r) {
+    /* initialize request_config (r->conf) from top-level request_config */
+    config_data_base * const p = r->con->config_data_base;
+    r->server_name = p->defaults.server_name;
+    memcpy(&r->conf, &p->defaults, sizeof(request_config));
 }
 
 static int config_burl_normalize_cond (server *srv) {
@@ -951,7 +952,7 @@ static int config_insert(server *srv) {
     /* use 2 to detect later if value is set by user config in global section */
     p->defaults.force_lowercase_filenames = 2;
 
-    /*(global, but store in con->conf.http_parseopts)*/
+    /*(global, but store in r->conf.http_parseopts)*/
     p->defaults.http_parseopts =
         (srv->srvconf.http_header_strict   ?  HTTP_PARSEOPT_HEADER_STRICT   :0)
       | (srv->srvconf.http_host_strict     ? (HTTP_PARSEOPT_HOST_STRICT
@@ -2125,13 +2126,13 @@ int config_set_defaults(server *srv) {
 		return -1;
 	}
 
-	buffer * const tb = srv->tmp_buf;
-	buffer_copy_buffer(tb, s->document_root);
-
-	buffer_to_lower(tb);
-
 	if (2 == s->force_lowercase_filenames) { /* user didn't configure it in global section? */
 		s->force_lowercase_filenames = 0; /* default to 0 */
+
+		buffer * const tb = srv->tmp_buf;
+		buffer_copy_buffer(tb, s->document_root);
+
+		buffer_to_lower(tb);
 
 		if (0 == stat(tb->ptr, &st1)) {
 			int is_lower = 0;

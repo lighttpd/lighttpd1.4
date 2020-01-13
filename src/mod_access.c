@@ -44,11 +44,11 @@ static void mod_access_merge_config(plugin_config * const pconf, const config_pl
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_access_patch_config(connection * const con, plugin_data * const p) {
+static void mod_access_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_access_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -81,20 +81,20 @@ SETDEFAULTS_FUNC(mod_access_set_defaults) {
 }
 
 __attribute_cold__
-static handler_t mod_access_reject (connection * const con, plugin_data * const p) {
-    if (con->conf.log_request_handling) {
+static handler_t mod_access_reject (request_st * const r, plugin_data * const p) {
+    if (r->conf.log_request_handling) {
         if (p->conf.access_allow && p->conf.access_allow->used)
-            log_error(con->conf.errh, __FILE__, __LINE__,
+            log_error(r->conf.errh, __FILE__, __LINE__,
               "url denied as failed to match any from access_allow %s",
-              con->uri.path->ptr);
+              r->uri.path.ptr);
         else
-            log_error(con->conf.errh, __FILE__, __LINE__,
+            log_error(r->conf.errh, __FILE__, __LINE__,
               "url denied as we match access_deny %s",
-              con->uri.path->ptr);
+              r->uri.path.ptr);
     }
 
-    con->http_status = 403;
-    con->response.handler_module = NULL;
+    r->http_status = 403;
+    r->handler_module = NULL;
     return HANDLER_FINISHED;
 }
 
@@ -128,23 +128,23 @@ static int mod_access_check (const array *allow, const array *deny, const buffer
  */
 URIHANDLER_FUNC(mod_access_uri_handler) {
     plugin_data *p = p_d;
-    if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
+    if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
 
-    mod_access_patch_config(con, p);
+    mod_access_patch_config(r, p);
 
     if (NULL == p->conf.access_allow && NULL == p->conf.access_deny) {
         return HANDLER_GO_ON; /* access allowed; nothing to match */
     }
 
-    if (con->conf.log_request_handling) {
-        log_error(con->conf.errh, __FILE__, __LINE__,
+    if (r->conf.log_request_handling) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
           "-- mod_access_uri_handler called");
     }
 
     return mod_access_check(p->conf.access_allow, p->conf.access_deny,
-                            con->uri.path, con->conf.force_lowercase_filenames)
+                            &r->uri.path, r->conf.force_lowercase_filenames)
       ? HANDLER_GO_ON              /* access allowed */
-      : mod_access_reject(con, p); /* access denied */
+      : mod_access_reject(r, p);   /* access denied */
 }
 
 

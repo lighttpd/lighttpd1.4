@@ -66,11 +66,11 @@ static void mod_redirect_merge_config(plugin_config * const pconf, const config_
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_redirect_patch_config(connection * const con, plugin_data * const p) {
+static void mod_redirect_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_redirect_merge_config(&p->conf, p->cvlist+p->cvlist[i].v.u2[0]);
     }
 }
@@ -152,42 +152,42 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     pcre_keyvalue_ctx ctx;
     handler_t rc;
 
-    mod_redirect_patch_config(con, p);
+    mod_redirect_patch_config(r, p);
     if (!p->conf.redirect || !p->conf.redirect->used) return HANDLER_GO_ON;
 
     ctx.cache = NULL;
     if (p->conf.redirect->x0) { /*(p->conf.redirect->x0 is context_idx)*/
         ctx.cond_match_count =
-          con->request.cond_cache[p->conf.redirect->x0].patterncount;
-        ctx.cache = con->request.cond_match + p->conf.redirect->x0;
+          r->cond_cache[p->conf.redirect->x0].patterncount;
+        ctx.cache = r->cond_match + p->conf.redirect->x0;
     }
     ctx.burl = &burl;
-    burl.scheme    = con->uri.scheme;
-    burl.authority = con->uri.authority;
-    burl.port      = sock_addr_get_port(&con->srv_socket->addr);
-    burl.path      = con->uri.path_raw;
-    burl.query     = con->uri.query;
+    burl.scheme    = &r->uri.scheme;
+    burl.authority = &r->uri.authority;
+    burl.port      = sock_addr_get_port(&r->con->srv_socket->addr);
+    burl.path      = &r->uri.path_raw;
+    burl.query     = &r->uri.query;
     if (buffer_string_is_empty(burl.authority))
-        burl.authority = con->request.server_name;
+        burl.authority = r->server_name;
 
     /* redirect URL on match
      * e.g. redirect /base/ to /index.php?section=base
      */
-    buffer * const tb = con->srv->tmp_buf;
+    buffer * const tb = r->tmp_buf;
     rc = pcre_keyvalue_buffer_process(p->conf.redirect, &ctx,
-                                      con->request.target, tb);
+                                      &r->target, tb);
     if (HANDLER_FINISHED == rc) {
-        http_header_response_set(con, HTTP_HEADER_LOCATION,
+        http_header_response_set(r, HTTP_HEADER_LOCATION,
                                  CONST_STR_LEN("Location"),
                                  CONST_BUF_LEN(tb));
-        con->http_status = p->conf.redirect_code;
-        con->response.handler_module = NULL;
-        con->response.resp_body_finished = 1;
+        r->http_status = p->conf.redirect_code;
+        r->handler_module = NULL;
+        r->resp_body_finished = 1;
     }
     else if (HANDLER_ERROR == rc) {
-        log_error(con->conf.errh, __FILE__, __LINE__,
+        log_error(r->conf.errh, __FILE__, __LINE__,
           "pcre_exec() error while processing uri: %s",
-          con->request.target->ptr);
+          r->target.ptr);
     }
     return rc;
 }

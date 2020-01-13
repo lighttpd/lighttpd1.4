@@ -51,10 +51,10 @@ static void mod_vhostdb_merge_config(plugin_config * const pconf, const config_p
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_vhostdb_patch_config(connection * const con, plugin_data * const p) {
+static void mod_vhostdb_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_vhostdb_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -127,35 +127,36 @@ static void vhostdb_entry_free (vhostdb_entry *ve)
     free(ve);
 }
 
-CONNECTION_FUNC(mod_vhostdb_handle_connection_close) {
+REQUEST_FUNC(mod_vhostdb_handle_connection_reset) {
     plugin_data *p = p_d;
     vhostdb_entry *ve;
 
-    if ((ve = con->request.plugin_ctx[p->id])) {
-        con->request.plugin_ctx[p->id] = NULL;
+    if ((ve = r->plugin_ctx[p->id])) {
+        r->plugin_ctx[p->id] = NULL;
         vhostdb_entry_free(ve);
     }
 
     return HANDLER_GO_ON;
 }
 
-static handler_t mod_vhostdb_error_500 (connection *con)
+__attribute_cold__
+static handler_t mod_vhostdb_error_500 (request_st * const r)
 {
-    con->http_status = 500; /* Internal Server Error */
-    con->response.handler_module = NULL;
+    r->http_status = 500; /* Internal Server Error */
+    r->handler_module = NULL;
     return HANDLER_FINISHED;
 }
 
-static handler_t mod_vhostdb_found (connection *con, vhostdb_entry *ve)
+static handler_t mod_vhostdb_found (request_st * const r, vhostdb_entry * const ve)
 {
     /* fix virtual server and docroot */
-    con->request.server_name = con->request.server_name_buf;
-    buffer_copy_buffer(con->request.server_name_buf, ve->server_name);
-    buffer_copy_buffer(con->physical.doc_root, ve->document_root);
+    r->server_name = &r->server_name_buf;
+    buffer_copy_buffer(&r->server_name_buf, ve->server_name);
+    buffer_copy_buffer(&r->physical.doc_root, ve->document_root);
     return HANDLER_GO_ON;
 }
 
-CONNECTION_FUNC(mod_vhostdb_handle_docroot) {
+REQUEST_FUNC(mod_vhostdb_handle_docroot) {
     plugin_data *p = p_d;
     vhostdb_entry *ve;
     const http_vhostdb_backend_t *backend;
@@ -163,24 +164,24 @@ CONNECTION_FUNC(mod_vhostdb_handle_docroot) {
     stat_cache_entry *sce;
 
     /* no host specified? */
-    if (buffer_string_is_empty(con->uri.authority)) return HANDLER_GO_ON;
+    if (buffer_string_is_empty(&r->uri.authority)) return HANDLER_GO_ON;
 
     /* XXX: future: implement larger, managed cache
      * of database responses (positive and negative) */
 
     /* check if cached this connection */
-    ve = con->request.plugin_ctx[p->id];
-    if (ve && buffer_is_equal(ve->server_name, con->uri.authority)) {
-        return mod_vhostdb_found(con, ve); /* HANDLER_GO_ON */
+    ve = r->plugin_ctx[p->id];
+    if (ve && buffer_is_equal(ve->server_name, &r->uri.authority)) {
+        return mod_vhostdb_found(r, ve); /* HANDLER_GO_ON */
     }
 
-    mod_vhostdb_patch_config(con, p);
+    mod_vhostdb_patch_config(r, p);
     if (!p->conf.vhostdb_backend) return HANDLER_GO_ON;
 
     b = &p->tmp_buf;
     backend = p->conf.vhostdb_backend;
-    if (0 != backend->query(con, backend->p_d, b)) {
-        return mod_vhostdb_error_500(con); /* HANDLER_FINISHED */
+    if (0 != backend->query(r, backend->p_d, b)) {
+        return mod_vhostdb_error_500(r); /* HANDLER_FINISHED */
     }
 
     if (buffer_string_is_empty(b)) {
@@ -192,21 +193,21 @@ CONNECTION_FUNC(mod_vhostdb_handle_docroot) {
     buffer_append_slash(b);
     sce = stat_cache_get_entry(b);
     if (NULL == sce) {
-        log_perror(con->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
-        return mod_vhostdb_error_500(con); /* HANDLER_FINISHED */
+        log_perror(r->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
+        return mod_vhostdb_error_500(r); /* HANDLER_FINISHED */
     }
     if (!S_ISDIR(sce->st.st_mode)) {
-        log_error(con->conf.errh, __FILE__, __LINE__,
+        log_error(r->conf.errh, __FILE__, __LINE__,
           "Not a directory: %s", b->ptr);
-        return mod_vhostdb_error_500(con); /* HANDLER_FINISHED */
+        return mod_vhostdb_error_500(r); /* HANDLER_FINISHED */
     }
 
     /* cache the data */
-    if (!ve) con->request.plugin_ctx[p->id] = ve = vhostdb_entry_init();
-    buffer_copy_buffer(ve->server_name, con->uri.authority);
+    if (!ve) r->plugin_ctx[p->id] = ve = vhostdb_entry_init();
+    buffer_copy_buffer(ve->server_name, &r->uri.authority);
     buffer_copy_buffer(ve->document_root, b);
 
-    return mod_vhostdb_found(con, ve); /* HANDLER_GO_ON */
+    return mod_vhostdb_found(r, ve); /* HANDLER_GO_ON */
 }
 
 int mod_vhostdb_plugin_init(plugin *p);
@@ -217,7 +218,7 @@ int mod_vhostdb_plugin_init(plugin *p) {
     p->cleanup          = mod_vhostdb_free;
     p->set_defaults     = mod_vhostdb_set_defaults;
     p->handle_docroot   = mod_vhostdb_handle_docroot;
-    p->connection_reset = mod_vhostdb_handle_connection_close;
+    p->connection_reset = mod_vhostdb_handle_connection_reset;
 
     return 0;
 }

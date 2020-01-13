@@ -176,7 +176,6 @@ typedef struct {
     int subproto;
 
     log_error_st *errh; /*(for mod_wstunnel module-specific DEBUG_*() macros)*/
-    server *srv;
     plugin_config conf;
 } handler_ctx;
 
@@ -231,10 +230,10 @@ static void mod_wstunnel_merge_config(plugin_config * const pconf, const config_
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_wstunnel_patch_config(connection * const con, plugin_data * const p) {
+static void mod_wstunnel_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_wstunnel_merge_config(&p->conf, p->cvlist+p->cvlist[i].v.u2[0]);
     }
 }
@@ -349,18 +348,17 @@ SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
 
 static handler_t wstunnel_create_env(gw_handler_ctx *gwhctx) {
     handler_ctx *hctx = (handler_ctx *)gwhctx;
-    connection *con = hctx->gw.remote_conn;
+    request_st * const r = hctx->gw.r;
     handler_t rc;
-    if (0 == con->request.reqbody_length) {
-        http_response_upgrade_read_body_unknown(con);
-        chunkqueue_append_chunkqueue(con->request.reqbody_queue,
-                                     con->read_queue);
+    if (0 == r->reqbody_length) {
+        http_response_upgrade_read_body_unknown(r);
+        chunkqueue_append_chunkqueue(r->reqbody_queue, r->read_queue);
     }
     rc = mod_wstunnel_handshake_create_response(hctx);
     if (rc != HANDLER_GO_ON) return rc;
 
-    con->http_status = 101; /* Switching Protocols */
-    con->response.resp_body_started = 1;
+    r->http_status = 101; /* Switching Protocols */
+    r->resp_body_started = 1;
 
     hctx->ping_ts = log_epoch_secs;
     gw_set_transparent(&hctx->gw);
@@ -370,8 +368,8 @@ static handler_t wstunnel_create_env(gw_handler_ctx *gwhctx) {
 
 static handler_t wstunnel_stdin_append(gw_handler_ctx *gwhctx) {
     /* prepare websocket frames to backend */
-    /* (caller should verify con->request.reqbody_queue) */
-    /*assert(!chunkqueue_is_empty(con->request.reqbody_queue));*/
+    /* (caller should verify r->reqbody_queue) */
+    /*assert(!chunkqueue_is_empty(r->reqbody_queue));*/
     handler_ctx *hctx = (handler_ctx *)gwhctx;
     if (0 == mod_wstunnel_frame_recv(hctx))
         return HANDLER_GO_ON;
@@ -379,16 +377,16 @@ static handler_t wstunnel_stdin_append(gw_handler_ctx *gwhctx) {
         /*(error)*/
         /* future: might differentiate client close request from client error,
          *         and then send 1000 or 1001 */
-        connection *con = hctx->gw.remote_conn;
-        DEBUG_LOG_INFO("disconnected from client (fd=%d)", con->fd);
-        DEBUG_LOG_DEBUG("send close response to client (fd=%d)", con->fd);
+        request_st * const r = hctx->gw.r;
+        DEBUG_LOG_INFO("disconnected from client (fd=%d)", r->con->fd);
+        DEBUG_LOG_DEBUG("send close response to client (fd=%d)", r->con->fd);
         mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, CONST_STR_LEN("1000")); /* 1000 Normal Closure */
-        gw_connection_reset(con, hctx->gw.plugin_data);
+        gw_connection_reset(r, hctx->gw.plugin_data);
         return HANDLER_FINISHED;
     }
 }
 
-static handler_t wstunnel_recv_parse(connection *con, http_response_opts *opts, buffer *b, size_t n) {
+static handler_t wstunnel_recv_parse(request_st * const r, http_response_opts * const opts, buffer * const b, size_t n) {
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
     DEBUG_LOG_DEBUG("recv data from backend (fd=%d), size=%zx", hctx->gw.fd, n);
     if (0 == n) return HANDLER_FINISHED;
@@ -397,11 +395,11 @@ static handler_t wstunnel_recv_parse(connection *con, http_response_opts *opts, 
         return HANDLER_ERROR;
     }
     buffer_clear(b);
-    UNUSED(con);
+    UNUSED(r);
     return HANDLER_GO_ON;
 }
 
-static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
+static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const hctx) {
     /* If allowed origins is set (and not empty list), fail closed if no match.
      * Note that origin provided in request header has not been normalized, so
      * change in case or other non-normal forms might not match allowed list */
@@ -416,15 +414,15 @@ static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
 
     /* "Origin" header is preferred
      * ("Sec-WebSocket-Origin" is from older drafts of websocket spec) */
-    origin = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Origin"));
+    origin = http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Origin"));
     if (NULL == origin) {
         origin =
-          http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Origin"));
+          http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Origin"));
     }
     olen = buffer_string_length(origin);
     if (0 == olen) {
         DEBUG_LOG_ERR("%s", "Origin header is invalid");
-        con->http_status = 400; /* Bad Request */
+        r->http_status = 400; /* Bad Request */
         return 0;
     }
 
@@ -438,28 +436,28 @@ static int wstunnel_is_allowed_origin(connection *con, handler_ctx *hctx) {
         }
     }
     DEBUG_LOG_INFO("%s does not match any allowed origins", origin->ptr);
-    con->http_status = 403; /* Forbidden */
+    r->http_status = 403; /* Forbidden */
     return 0;
 }
 
-static int wstunnel_check_request(connection *con, handler_ctx *hctx) {
+static int wstunnel_check_request(request_st * const r, handler_ctx * const hctx) {
     const buffer * const vers =
-      http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Version"));
+      http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Version"));
     const long hybivers = (NULL != vers) ? strtol(vers->ptr, NULL, 10) : 0;
     if (hybivers < 0 || hybivers > INT_MAX) {
         DEBUG_LOG_ERR("%s", "invalid Sec-WebSocket-Version");
-        con->http_status = 400; /* Bad Request */
+        r->http_status = 400; /* Bad Request */
         return -1;
     }
 
     /*(redundant since HTTP/1.1 required in mod_wstunnel_check_extension())*/
-    if (buffer_is_empty(con->request.http_host)) {
+    if (buffer_is_empty(r->http_host)) {
         DEBUG_LOG_ERR("%s", "Host header does not exist");
-        con->http_status = 400; /* Bad Request */
+        r->http_status = 400; /* Bad Request */
         return -1;
     }
 
-    if (!wstunnel_is_allowed_origin(con, hctx)) {
+    if (!wstunnel_is_allowed_origin(r, hctx)) {
         return -1;
     }
 
@@ -478,13 +476,12 @@ static void wstunnel_handler_ctx_free(void *gwhctx) {
     chunk_buffer_release(hctx->frame.payload);
 }
 
-static handler_t wstunnel_handler_setup (connection *con, plugin_data *p) {
-    handler_ctx *hctx = con->request.plugin_ctx[p->id];
+static handler_t wstunnel_handler_setup (request_st * const r, plugin_data * const p) {
+    handler_ctx *hctx = r->plugin_ctx[p->id];
     int hybivers;
-    hctx->srv = con->srv;
-    hctx->errh = con->conf.errh;/*(for mod_wstunnel-specific DEBUG_* macros)*/
+    hctx->errh = r->conf.errh;/*(for mod_wstunnel-specific DEBUG_* macros)*/
     hctx->conf = p->conf; /*(copies struct)*/
-    hybivers = wstunnel_check_request(con, hctx);
+    hybivers = wstunnel_check_request(r, hctx);
     if (hybivers < 0) return HANDLER_FINISHED;
     hctx->hybivers = hybivers;
     if (0 == hybivers) {
@@ -510,7 +507,7 @@ static handler_t wstunnel_handler_setup (connection *con, plugin_data *p) {
     unsigned int binary = hctx->conf.frame_type; /*(0 = "text"; 1 = "binary")*/
     if (!binary) {
         const buffer *vb =
-          http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Protocol"));
+          http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Protocol"));
         if (NULL != vb) {
             for (const char *s = vb->ptr; *s; ++s) {
                 while (*s==' '||*s=='\t'||*s=='\r'||*s=='\n') ++s;
@@ -553,37 +550,37 @@ static handler_t wstunnel_handler_setup (connection *con, plugin_data *p) {
     return HANDLER_GO_ON;
 }
 
-static handler_t mod_wstunnel_check_extension(connection *con, void *p_d) {
+static handler_t mod_wstunnel_check_extension(request_st * const r, void *p_d) {
     plugin_data *p = p_d;
     const buffer *vb;
     handler_t rc;
 
-    if (NULL != con->response.handler_module)
+    if (NULL != r->handler_module)
         return HANDLER_GO_ON;
-    if (con->request.http_method != HTTP_METHOD_GET)
+    if (r->http_method != HTTP_METHOD_GET)
         return HANDLER_GO_ON;
-    if (con->request.http_version != HTTP_VERSION_1_1)
+    if (r->http_version != HTTP_VERSION_1_1)
         return HANDLER_GO_ON;
 
     /*
      * Connection: upgrade, keep-alive, ...
      * Upgrade: WebSocket, ...
      */
-    vb = http_header_request_get(con, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade"));
+    vb = http_header_request_get(r, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade"));
     if (NULL == vb
         || !http_header_str_contains_token(CONST_BUF_LEN(vb), CONST_STR_LEN("websocket")))
         return HANDLER_GO_ON;
-    vb = http_header_request_get(con, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"));
+    vb = http_header_request_get(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"));
     if (NULL == vb
         || !http_header_str_contains_token(CONST_BUF_LEN(vb), CONST_STR_LEN("upgrade")))
         return HANDLER_GO_ON;
 
-    mod_wstunnel_patch_config(con, p);
+    mod_wstunnel_patch_config(r, p);
     if (NULL == p->conf.gw.exts) return HANDLER_GO_ON;
 
-    rc = gw_check_extension(con, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
-    return (HANDLER_GO_ON == rc && con->response.handler_module == p->self)
-      ? wstunnel_handler_setup(con, p)
+    rc = gw_check_extension(r, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
+    return (HANDLER_GO_ON == rc && r->handler_module == p->self)
+      ? wstunnel_handler_setup(r, p)
       : rc;
 }
 
@@ -595,17 +592,18 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
 
     for (uint32_t i = 0; i < srv->conns.used; ++i) {
         connection *con = srv->conns.ptr[i];
-        handler_ctx *hctx = con->request.plugin_ctx[p->id];
-        if (NULL == hctx || con->response.handler_module != p->self)
+        request_st * const r = &con->request;
+        handler_ctx *hctx = r->plugin_ctx[p->id];
+        if (NULL == hctx || r->handler_module != p->self)
             continue;
 
         if (hctx->gw.state != GW_STATE_WRITE && hctx->gw.state != GW_STATE_READ)
             continue;
 
-        if (cur_ts - con->read_idle_ts > con->conf.max_read_idle) {
+        if (cur_ts - con->read_idle_ts > r->conf.max_read_idle) {
             DEBUG_LOG_INFO("timeout client (fd=%d)", con->fd);
             mod_wstunnel_frame_send(hctx,MOD_WEBSOCKET_FRAME_TYPE_CLOSE,NULL,0);
-            gw_connection_reset(con, p_d);
+            gw_connection_reset(r, p_d);
             joblist_append(con);
             /* avoid server.c closing connection with error due to max_read_idle
              * (might instead run joblist after plugins_call_handle_trigger())*/
@@ -653,10 +651,10 @@ int mod_wstunnel_plugin_init(plugin *p) {
 #include "sys-endian.h" /* lighttpd */
 #include "md5.h"        /* lighttpd */
 
-static int get_key3(connection *con, char *buf) {
+static int get_key3(request_st * const r, char *buf) {
     /* 8 bytes should have been sent with request
      * for draft-ietf-hybi-thewebsocketprotocol-00 */
-    chunkqueue *cq = con->request.reqbody_queue;
+    chunkqueue *cq = r->reqbody_queue;
     size_t bytes = 8;
     /*(caller should ensure bytes available prior to calling this routine)*/
     /*assert(chunkqueue_length(cq) >= 8);*/
@@ -696,18 +694,18 @@ static int get_key_number(uint32_t *ret, const buffer *b) {
     return 0;
 }
 
-static int create_MD5_sum(connection *con) {
+static int create_MD5_sum(request_st * const r) {
     uint32_t buf[4]; /* MD5 binary hash len */
     li_MD5_CTX ctx;
 
     const buffer *key1 =
-      http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Key1"));
+      http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Key1"));
     const buffer *key2 =
-      http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Key2"));
+      http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Key2"));
 
     if (NULL == key1 || get_key_number(buf+0, key1) < 0 ||
         NULL == key2 || get_key_number(buf+1, key2) < 0 ||
-        get_key3(con, (char *)(buf+2)) < 0) {
+        get_key3(r, (char *)(buf+2)) < 0) {
         return -1;
     }
   #ifdef __BIG_ENDIAN__
@@ -722,41 +720,41 @@ static int create_MD5_sum(connection *con) {
     li_MD5_Init(&ctx);
     li_MD5_Update(&ctx, buf, sizeof(buf));
     li_MD5_Final((unsigned char *)buf, &ctx); /*(overwrite buf[] with result)*/
-    chunkqueue_append_mem(con->write_queue, (char *)buf, sizeof(buf));
+    chunkqueue_append_mem(r->write_queue, (char *)buf, sizeof(buf));
     return 0;
 }
 
 static int create_response_ietf_00(handler_ctx *hctx) {
-    connection *con = hctx->gw.remote_conn;
-    buffer *value = hctx->srv->tmp_buf;
+    request_st * const r = hctx->gw.r;
+    buffer *value = r->tmp_buf;
 
     /* "Origin" header is preferred
      * ("Sec-WebSocket-Origin" is from older drafts of websocket spec) */
-    const buffer *origin = http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Origin"));
+    const buffer *origin = http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Origin"));
     if (NULL == origin) {
         origin =
-          http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Origin"));
+          http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Origin"));
     }
     if (NULL == origin) {
         DEBUG_LOG_ERR("%s", "Origin header is invalid");
         return -1;
     }
-    if (buffer_is_empty(con->request.http_host)) {
+    if (buffer_is_empty(r->http_host)) {
         DEBUG_LOG_ERR("%s", "Host header does not exist");
         return -1;
     }
 
     /* calc MD5 sum from keys */
-    if (create_MD5_sum(con) < 0) {
+    if (create_MD5_sum(r) < 0) {
         DEBUG_LOG_ERR("%s", "Sec-WebSocket-Key is invalid");
         return -1;
     }
 
-    http_header_response_set(con, HTTP_HEADER_UPGRADE,
+    http_header_response_set(r, HTTP_HEADER_UPGRADE,
                              CONST_STR_LEN("Upgrade"),
                              CONST_STR_LEN("websocket"));
   #if 0 /*(added later in http_response_write_header())*/
-    http_header_response_append(con, HTTP_HEADER_CONNECTION,
+    http_header_response_append(r, HTTP_HEADER_CONNECTION,
                                 CONST_STR_LEN("Connection"),
                                 CONST_STR_LEN("upgrade"));
   #endif
@@ -764,18 +762,18 @@ static int create_response_ietf_00(handler_ctx *hctx) {
     /* Note: it is insecure to simply reflect back origin provided by client
      * (if admin did not configure restricted list of valid origins)
      * (see wstunnel_check_request()) */
-    http_header_response_set(con, HTTP_HEADER_OTHER,
+    http_header_response_set(r, HTTP_HEADER_OTHER,
                              CONST_STR_LEN("Sec-WebSocket-Origin"),
                              CONST_BUF_LEN(origin));
   #endif
 
-    if (buffer_is_equal_string(con->uri.scheme, CONST_STR_LEN("https")))
+    if (buffer_is_equal_string(&r->uri.scheme, CONST_STR_LEN("https")))
         buffer_copy_string_len(value, CONST_STR_LEN("wss://"));
     else
         buffer_copy_string_len(value, CONST_STR_LEN("ws://"));
-    buffer_append_string_buffer(value, con->request.http_host);
-    buffer_append_string_buffer(value, con->uri.path);
-    http_header_response_set(con, HTTP_HEADER_OTHER,
+    buffer_append_string_buffer(value, r->http_host);
+    buffer_append_string_buffer(value, &r->uri.path);
+    http_header_response_set(r, HTTP_HEADER_OTHER,
                              CONST_STR_LEN("Sec-WebSocket-Location"),
                              CONST_BUF_LEN(value));
 
@@ -791,12 +789,12 @@ static int create_response_ietf_00(handler_ctx *hctx) {
 #include "base64.h"     /* lighttpd */
 
 static int create_response_rfc_6455(handler_ctx *hctx) {
-    connection *con = hctx->gw.remote_conn;
+    request_st * const r = hctx->gw.r;
     SHA_CTX sha;
     unsigned char sha_digest[SHA_DIGEST_LENGTH];
 
     const buffer *value_wskey =
-      http_header_request_get(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Key"));
+      http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Key"));
     if (NULL == value_wskey) {
         DEBUG_LOG_ERR("%s", "Sec-WebSocket-Key is invalid");
         return -1;
@@ -809,28 +807,28 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
     SHA1_Update(&sha, (const unsigned char *)CONST_STR_LEN("258EAFA5-E914-47DA-95CA-C5AB0DC85B11"));
     SHA1_Final(sha_digest, &sha);
 
-    http_header_response_set(con, HTTP_HEADER_UPGRADE,
+    http_header_response_set(r, HTTP_HEADER_UPGRADE,
                              CONST_STR_LEN("Upgrade"),
                              CONST_STR_LEN("websocket"));
   #if 0 /*(added later in http_response_write_header())*/
-    http_header_response_append(con, HTTP_HEADER_CONNECTION,
+    http_header_response_append(r, HTTP_HEADER_CONNECTION,
                                 CONST_STR_LEN("Connection"),
                                 CONST_STR_LEN("upgrade"));
   #endif
 
-    buffer *value = hctx->srv->tmp_buf;
+    buffer *value = r->tmp_buf;
     buffer_clear(value);
     buffer_append_base64_encode(value, sha_digest, SHA_DIGEST_LENGTH, BASE64_STANDARD);
-    http_header_response_set(con, HTTP_HEADER_OTHER,
+    http_header_response_set(r, HTTP_HEADER_OTHER,
                              CONST_STR_LEN("Sec-WebSocket-Accept"),
                              CONST_BUF_LEN(value));
 
     if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_BIN)
-        http_header_response_set(con, HTTP_HEADER_OTHER,
+        http_header_response_set(r, HTTP_HEADER_OTHER,
                                  CONST_STR_LEN("Sec-WebSocket-Protocol"),
                                  CONST_STR_LEN("binary"));
     else if (-1 == hctx->subproto)
-        http_header_response_set(con, HTTP_HEADER_OTHER,
+        http_header_response_set(r, HTTP_HEADER_OTHER,
                                  CONST_STR_LEN("Sec-WebSocket-Protocol"),
                                  CONST_STR_LEN("base64"));
 
@@ -841,12 +839,12 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
 
 
 handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
-    connection *con = hctx->gw.remote_conn;
+    request_st * const r = hctx->gw.r;
   #ifdef _MOD_WEBSOCKET_SPEC_RFC_6455_
     if (hctx->hybivers >= 8) {
         DEBUG_LOG_DEBUG("%s", "send handshake response");
         if (0 != create_response_rfc_6455(hctx)) {
-            con->http_status = 400; /* Bad Request */
+            r->http_status = 400; /* Bad Request */
             return HANDLER_ERROR;
         }
         return HANDLER_GO_ON;
@@ -858,14 +856,14 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
       #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
         /* 8 bytes should have been sent with request
          * for draft-ietf-hybi-thewebsocketprotocol-00 */
-        chunkqueue *cq = con->request.reqbody_queue;
+        chunkqueue *cq = r->reqbody_queue;
         if (chunkqueue_length(cq) < 8)
             return HANDLER_WAIT_FOR_EVENT;
       #endif /* _MOD_WEBSOCKET_SPEC_IETF_00_ */
 
         DEBUG_LOG_DEBUG("%s", "send handshake response");
         if (0 != create_response_ietf_00(hctx)) {
-            con->http_status = 400; /* Bad Request */
+            r->http_status = 400; /* Bad Request */
             return HANDLER_ERROR;
         }
         return HANDLER_GO_ON;
@@ -873,7 +871,7 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
   #endif /* _MOD_WEBSOCKET_SPEC_IETF_00_ */
 
     DEBUG_LOG_ERR("%s", "not supported WebSocket Version");
-    con->http_status = 503; /* Service Unavailable */
+    r->http_status = 503; /* Service Unavailable */
     return HANDLER_ERROR;
 }
 
@@ -895,51 +893,52 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
 static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const char *payload, size_t siz) {
     static const char head =  0; /* 0x00 */
     static const char tail = ~0; /* 0xff */
-    connection *con = hctx->gw.remote_conn;
+    request_st * const r = hctx->gw.r;
     char *mem;
     size_t len;
 
     switch (type) {
     case MOD_WEBSOCKET_FRAME_TYPE_TEXT:
         if (0 == siz) return 0;
-        http_chunk_append_mem(con, &head, 1);
-        http_chunk_append_mem(con, payload, siz);
-        http_chunk_append_mem(con, &tail, 1);
+        http_chunk_append_mem(r, &head, 1);
+        http_chunk_append_mem(r, payload, siz);
+        http_chunk_append_mem(r, &tail, 1);
         len = siz+2;
         break;
     case MOD_WEBSOCKET_FRAME_TYPE_BIN:
         if (0 == siz) return 0;
-        http_chunk_append_mem(con, &head, 1);
+        http_chunk_append_mem(r, &head, 1);
         len = 4*(siz/3)+4+1;
         /* avoid accumulating too much data in memory; send to tmpfile */
         mem = malloc(len);
         force_assert(mem);
         len=li_to_base64(mem,len,(unsigned char *)payload,siz,BASE64_STANDARD);
-        http_chunk_append_mem(con, mem, len);
+        http_chunk_append_mem(r, mem, len);
         free(mem);
-        http_chunk_append_mem(con, &tail, 1);
+        http_chunk_append_mem(r, &tail, 1);
         len += 2;
         break;
     case MOD_WEBSOCKET_FRAME_TYPE_CLOSE:
-        http_chunk_append_mem(con, &tail, 1);
-        http_chunk_append_mem(con, &head, 1);
+        http_chunk_append_mem(r, &tail, 1);
+        http_chunk_append_mem(r, &head, 1);
         len = 2;
         break;
     default:
         DEBUG_LOG_ERR("%s", "invalid frame type");
         return -1;
     }
-    DEBUG_LOG_DEBUG("send data to client (fd=%d), frame size=%zx",con->fd,len);
+    DEBUG_LOG_DEBUG("send data to client (fd=%d), frame size=%zx",
+                    r->con->fd, len);
     return 0;
 }
 
 static int recv_ietf_00(handler_ctx *hctx) {
-    connection *con = hctx->gw.remote_conn;
-    chunkqueue *cq = con->request.reqbody_queue;
+    request_st * const r = hctx->gw.r;
+    chunkqueue *cq = r->reqbody_queue;
     buffer *payload = hctx->frame.payload;
     char *mem;
     DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%zx",
-                    con->fd, chunkqueue_length(cq));
+                    r->con->fd, chunkqueue_length(cq));
     for (chunk *c = cq->first; c; c = c->next) {
         char *frame = c->mem->ptr+c->offset;
         /*(chunk_remaining_length() on MEM_CHUNK)*/
@@ -1047,7 +1046,6 @@ static int recv_ietf_00(handler_ctx *hctx) {
 #define MOD_WEBSOCKET_FRAME_LEN63_CNT  8
 
 static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const char *payload, size_t siz) {
-    connection *con = hctx->gw.remote_conn;
     char mem[10];
     size_t len;
 
@@ -1104,10 +1102,11 @@ static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, cons
         mem[9] = siz & 0xff;
         len = 1+MOD_WEBSOCKET_FRAME_LEN63_CNT+1;
     }
-    http_chunk_append_mem(con, mem, len);
-    if (siz) http_chunk_append_mem(con, payload, siz);
+    request_st * const r = hctx->gw.r;
+    http_chunk_append_mem(r, mem, len);
+    if (siz) http_chunk_append_mem(r, payload, siz);
     DEBUG_LOG_DEBUG("send data to client (fd=%d), frame size=%zx",
-                    con->fd, len+siz);
+                    r->con->fd, len+siz);
     return 0;
 }
 
@@ -1120,11 +1119,11 @@ static void unmask_payload(handler_ctx *hctx) {
 }
 
 static int recv_rfc_6455(handler_ctx *hctx) {
-    connection *con = hctx->gw.remote_conn;
-    chunkqueue *cq = con->request.reqbody_queue;
+    request_st * const r = hctx->gw.r;
+    chunkqueue *cq = r->reqbody_queue;
     buffer *payload = hctx->frame.payload;
     DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%zx",
-                    con->fd, chunkqueue_length(cq));
+                    r->con->fd, chunkqueue_length(cq));
     for (chunk *c = cq->first; c; c = c->next) {
         char *frame = c->mem->ptr+c->offset;
         /*(chunk_remaining_length() on MEM_CHUNK)*/

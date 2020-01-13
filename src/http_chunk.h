@@ -6,12 +6,12 @@
 #include "buffer.h"
 #include "chunk.h"
 
-int http_chunk_append_mem(connection *con, const char * mem, size_t len); /* copies memory */
-int http_chunk_append_buffer(connection *con, buffer *mem); /* may reset "mem" */
-int http_chunk_transfer_cqlen(connection *con, chunkqueue *src, size_t len);
-int http_chunk_append_file(connection *con, const buffer *fn); /* copies "fn" */
-int http_chunk_append_file_fd(connection *con, const buffer *fn, int fd, off_t sz);
-int http_chunk_append_file_range(connection *con, const buffer *fn, off_t offset, off_t len); /* copies "fn" */
-void http_chunk_close(connection *con);
+int http_chunk_append_mem(request_st *r, const char * mem, size_t len); /* copies memory */
+int http_chunk_append_buffer(request_st *r, buffer *mem); /* may reset "mem" */
+int http_chunk_transfer_cqlen(request_st *r, chunkqueue *src, size_t len);
+int http_chunk_append_file(request_st *r, const buffer *fn); /* copies "fn" */
+int http_chunk_append_file_fd(request_st *r, const buffer *fn, int fd, off_t sz);
+int http_chunk_append_file_range(request_st *r, const buffer *fn, off_t offset, off_t len); /* copies "fn" */
+void http_chunk_close(request_st *r);
 
 #endif

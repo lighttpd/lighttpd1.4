@@ -37,7 +37,7 @@ typedef struct {
     int initonce;
 } plugin_data;
 
-static handler_t mod_authn_sasl_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
+static handler_t mod_authn_sasl_basic(request_st *r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
 INIT_FUNC(mod_authn_sasl_init) {
     static http_auth_backend_t http_auth_backend_sasl =
@@ -87,11 +87,11 @@ static void mod_authn_sasl_merge_config(plugin_config * const pconf, const confi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_authn_sasl_patch_config(connection * const con, plugin_data * const p) {
+static void mod_authn_sasl_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_authn_sasl_merge_config(&p->conf,
                                         p->cvlist + p->cvlist[i].v.u2[0]);
     }
@@ -231,7 +231,7 @@ static int mod_authn_sasl_cb_getopt(void *p_d, const char *plugin_name, const ch
     return SASL_OK;
 }
 
-static int mod_authn_sasl_cb_log(void *vcon, int level, const char *message) {
+static int mod_authn_sasl_cb_log(void *vreq, int level, const char *message) {
     switch (level) {
      #if 0
       case SASL_LOG_NONE:
@@ -245,24 +245,24 @@ static int mod_authn_sasl_cb_log(void *vcon, int level, const char *message) {
       case SASL_LOG_ERR:
       case SASL_LOG_FAIL:
       case SASL_LOG_WARN: /* (might omit SASL_LOG_WARN if too noisy in logs) */
-        log_error(((connection *)vcon)->conf.errh, __FILE__, __LINE__,
+        log_error(((request_st *)vreq)->conf.errh, __FILE__, __LINE__,
                   "%s", message);
         break;
     }
     return SASL_OK;
 }
 
-static handler_t mod_authn_sasl_query(connection *con, void *p_d, const buffer *username, const char *realm, const char *pw) {
+static handler_t mod_authn_sasl_query(request_st * const r, void *p_d, const buffer * const username, const char * const realm, const char * const pw) {
     plugin_data *p = (plugin_data *)p_d;
     sasl_conn_t *sc;
     sasl_callback_t const cb[] = {
       { SASL_CB_GETOPT,   (int(*)())mod_authn_sasl_cb_getopt, (void *) p },
-      { SASL_CB_LOG,      (int(*)())mod_authn_sasl_cb_log, (void *) con },
+      { SASL_CB_LOG,      (int(*)())mod_authn_sasl_cb_log, (void *) r },
       { SASL_CB_LIST_END, NULL, NULL }
     };
     int rc;
 
-    mod_authn_sasl_patch_config(con, p);
+    mod_authn_sasl_patch_config(r, p);
 
     if (!p->initonce) {
         /* must be done once, but after fork() if multiple lighttpd workers */
@@ -281,9 +281,9 @@ static handler_t mod_authn_sasl_query(connection *con, void *p_d, const buffer *
     return (SASL_OK == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }
 
-static handler_t mod_authn_sasl_basic(connection *con, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw) {
+static handler_t mod_authn_sasl_basic(request_st * const r, void *p_d, const http_auth_require_t * const require, const buffer * const username, const char * const pw) {
     char *realm = require->realm->ptr;
-    handler_t rc = mod_authn_sasl_query(con, p_d, username, realm, pw);
+    handler_t rc = mod_authn_sasl_query(r, p_d, username, realm, pw);
     if (HANDLER_GO_ON != rc) return rc;
     return http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON  /* access granted */

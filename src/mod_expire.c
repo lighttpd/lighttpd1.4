@@ -184,11 +184,11 @@ static void mod_expire_merge_config(plugin_config * const pconf, const config_pl
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_expire_patch_config(connection * const con, plugin_data * const p) {
+static void mod_expire_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_expire_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -268,31 +268,31 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-CONNECTION_FUNC(mod_expire_handler) {
+REQUEST_FUNC(mod_expire_handler) {
 	plugin_data *p = p_d;
 	const buffer *vb;
 	const data_string *ds;
 
 	/* Add caching headers only to http_status 200 OK or 206 Partial Content */
-	if (con->http_status != 200 && con->http_status != 206) return HANDLER_GO_ON;
+	if (r->http_status != 200 && r->http_status != 206) return HANDLER_GO_ON;
 	/* Add caching headers only to GET or HEAD requests */
-	if (!http_method_get_or_head(con->request.http_method)) return HANDLER_GO_ON;
+	if (!http_method_get_or_head(r->http_method)) return HANDLER_GO_ON;
 	/* Add caching headers only if not already present */
-	vb = http_header_response_get(con, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"));
+	vb = http_header_response_get(r, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"));
 	if (NULL != vb) return HANDLER_GO_ON;
 
-	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
+	if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
 
-	mod_expire_patch_config(con, p);
+	mod_expire_patch_config(r, p);
 
 	/* check expire.url */
 	ds = p->conf.expire_url
-	  ? (const data_string *)array_match_key_prefix(p->conf.expire_url, con->uri.path)
+	  ? (const data_string *)array_match_key_prefix(p->conf.expire_url, &r->uri.path)
 	  : NULL;
 	/* check expire.mimetypes (if no match with expire.url) */
 	if (NULL == ds) {
 		if (NULL == p->conf.expire_mimetypes) return HANDLER_GO_ON;
-		vb = http_header_response_get(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"));
+		vb = http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"));
 		ds = (NULL != vb)
 		   ? (const data_string *)array_match_key_prefix(p->conf.expire_mimetypes, vb)
 		   : (const data_string *)array_get_element_klen(p->conf.expire_mimetypes, CONST_STR_LEN(""));
@@ -306,7 +306,7 @@ CONNECTION_FUNC(mod_expire_handler) {
 		expires += cur_ts;
 	}
 	else {             /* modification */
-		stat_cache_entry *sce = stat_cache_get_entry(con->physical.path);
+		stat_cache_entry *sce = stat_cache_get_entry(&r->physical.path);
 		/* can't set modification-based expire if mtime is not available */
 		if (NULL == sce) return HANDLER_GO_ON;
 		expires += sce->st.st_mtime;
@@ -315,17 +315,17 @@ CONNECTION_FUNC(mod_expire_handler) {
 			/* expires should be at least cur_ts */
 			if (expires < cur_ts) expires = cur_ts;
 
-			buffer * const tb = con->srv->tmp_buf;
+			buffer * const tb = r->tmp_buf;
 
 			/* HTTP/1.0 */
 			buffer_clear(tb);
 			buffer_append_strftime(tb, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(expires)));
-			http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("Expires"), CONST_BUF_LEN(tb));
+			http_header_response_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Expires"), CONST_BUF_LEN(tb));
 
 			/* HTTP/1.1 */
 			buffer_copy_string_len(tb, CONST_STR_LEN("max-age="));
 			buffer_append_int(tb, expires - cur_ts); /* as expires >= cur_ts the difference is >= 0 */
-			http_header_response_set(con, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"), CONST_BUF_LEN(tb));
+			http_header_response_set(r, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"), CONST_BUF_LEN(tb));
 
 	return HANDLER_GO_ON;
 }

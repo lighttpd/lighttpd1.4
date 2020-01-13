@@ -107,10 +107,10 @@ static void mod_ssi_merge_config(plugin_config * const pconf, const config_plugi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_ssi_patch_config(connection * const con, plugin_data * const p) {
+static void mod_ssi_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_ssi_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -159,11 +159,11 @@ static int ssi_env_add(void *venv, const char *key, size_t klen, const char *val
 	return 0;
 }
 
-static int build_ssi_cgi_vars(connection *con, handler_ctx *p) {
+static int build_ssi_cgi_vars(request_st * const r, handler_ctx * const p) {
 	http_cgi_opts opts = { 0, 0, NULL, NULL };
 	/* temporarily remove Authorization from request headers
 	 * so that Authorization does not end up in SSI environment */
-	buffer *vb_auth = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
+	buffer *vb_auth = http_header_request_get(r, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
 	buffer b_auth;
 	if (vb_auth) {
 		memcpy(&b_auth, vb_auth, sizeof(buffer));
@@ -172,8 +172,8 @@ static int build_ssi_cgi_vars(connection *con, handler_ctx *p) {
 
 	array_reset_data_strings(p->ssi_cgi_env);
 
-	if (0 != http_cgi_headers(con, &opts, ssi_env_add, p->ssi_cgi_env)) {
-		con->http_status = 400;
+	if (0 != http_cgi_headers(r, &opts, ssi_env_add, p->ssi_cgi_env)) {
+		r->http_status = 400;
 		return -1;
 	}
 
@@ -184,9 +184,9 @@ static int build_ssi_cgi_vars(connection *con, handler_ctx *p) {
 	return 0;
 }
 
-static int mod_ssi_process_file(connection *con, handler_ctx *p, struct stat *st);
+static int mod_ssi_process_file(request_st *r, handler_ctx *p, struct stat *st);
 
-static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, size_t n, struct stat *st) {
+static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const char ** const l, size_t n, struct stat * const st) {
 
 	/**
 	 * <!--#element attribute=value attribute=value ... -->
@@ -281,6 +281,8 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 		}
 	}
 
+	chunkqueue * const cq = r->write_queue;
+
 	switch(ssicmd) {
 	case SSI_ECHO: {
 		/* echo */
@@ -351,7 +353,7 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 				}
 */
 			} else {
-				log_error(con->conf.errh, __FILE__, __LINE__,
+				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
@@ -359,34 +361,35 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 		if (p->if_is_false) break;
 
 		if (!var_val) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "ssi: %s var is missing", l[1]);
 			break;
 		}
 
 		switch(var) {
 		case SSI_ECHO_USER_NAME: {
-			tb = con->srv->tmp_buf;
+			tb = r->tmp_buf;
+			buffer_clear(tb);
 #ifdef HAVE_PWD_H
 			struct passwd *pw;
 			if (NULL == (pw = getpwuid(st->st_uid))) {
-				buffer_copy_int(tb, st->st_uid);
+				buffer_append_int(tb, st->st_uid);
 			} else {
 				buffer_copy_string(tb, pw->pw_name);
 			}
 #else
-			buffer_copy_int(tb, st->st_uid);
+			buffer_append_int(tb, st->st_uid);
 #endif
-			chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(tb));
+			chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
 			break;
 		}
 		case SSI_ECHO_LAST_MODIFIED: {
 			time_t t = st->st_mtime;
 
 			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
-				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
+				chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
 			} else {
-				chunkqueue_append_mem(con->write_queue, buf, strlen(buf));
+				chunkqueue_append_mem(cq, buf, strlen(buf));
 			}
 			break;
 		}
@@ -394,9 +397,9 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 			time_t t = time(NULL);
 
 			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
-				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
+				chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
 			} else {
-				chunkqueue_append_mem(con->write_queue, buf, strlen(buf));
+				chunkqueue_append_mem(cq, buf, strlen(buf));
 			}
 			break;
 		}
@@ -404,44 +407,44 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 			time_t t = time(NULL);
 
 			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, gmtime(&t))) {
-				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
+				chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
 			} else {
-				chunkqueue_append_mem(con->write_queue, buf, strlen(buf));
+				chunkqueue_append_mem(cq, buf, strlen(buf));
 			}
 			break;
 		}
 		case SSI_ECHO_DOCUMENT_NAME: {
 			char *sl;
 
-			if (NULL == (sl = strrchr(con->physical.path->ptr, '/'))) {
-				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->physical.path));
+			if (NULL == (sl = strrchr(r->physical.path.ptr, '/'))) {
+				chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->physical.path));
 			} else {
-				chunkqueue_append_mem(con->write_queue, sl + 1, strlen(sl + 1));
+				chunkqueue_append_mem(cq, sl + 1, strlen(sl + 1));
 			}
 			break;
 		}
 		case SSI_ECHO_DOCUMENT_URI: {
-			chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.path));
+			chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->uri.path));
 			break;
 		}
 		case SSI_ECHO_SCRIPT_URI: {
-			if (!buffer_string_is_empty(con->uri.scheme) && !buffer_string_is_empty(con->uri.authority)) {
-				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.scheme));
-				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("://"));
-				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.authority));
-				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->request.target));
-				if (!buffer_string_is_empty(con->uri.query)) {
-					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("?"));
-					chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.query));
+			if (!buffer_string_is_empty(&r->uri.scheme) && !buffer_string_is_empty(&r->uri.authority)) {
+				chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->uri.scheme));
+				chunkqueue_append_mem(cq, CONST_STR_LEN("://"));
+				chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->uri.authority));
+				chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->target));
+				if (!buffer_string_is_empty(&r->uri.query)) {
+					chunkqueue_append_mem(cq, CONST_STR_LEN("?"));
+					chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->uri.query));
 				}
 			}
 			break;
 		}
 		case SSI_ECHO_SCRIPT_URL: {
-			chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->request.target));
-			if (!buffer_string_is_empty(con->uri.query)) {
-				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("?"));
-				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(con->uri.query));
+			chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->target));
+			if (!buffer_string_is_empty(&r->uri.query)) {
+				chunkqueue_append_mem(cq, CONST_STR_LEN("?"));
+				chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->uri.query));
 			}
 			break;
 		}
@@ -451,9 +454,9 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 
 			if (NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_cgi_env, var_val, strlen(var_val))) ||
 			    NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_vars, var_val, strlen(var_val)))) {
-				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(&ds->value));
+				chunkqueue_append_mem(cq, CONST_BUF_LEN(&ds->value));
 			} else {
-				chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
+				chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
 			}
 
 			break;
@@ -474,19 +477,19 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 			} else if (0 == strcmp(l[i], "virtual")) {
 				virt_path = l[i+1];
 			} else {
-				log_error(con->conf.errh, __FILE__, __LINE__,
+				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
 
 		if (!file_path && !virt_path) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "ssi: %s file or virtual is missing", l[1]);
 			break;
 		}
 
 		if (file_path && virt_path) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "ssi: %s only one of file and virtual is allowed here", l[1]);
 			break;
 		}
@@ -494,20 +497,20 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 
 		if (p->if_is_false) break;
 
-		tb = con->srv->tmp_buf;
+		tb = r->tmp_buf;
 
 		if (file_path) {
 			/* current doc-root */
-			if (NULL == (sl = strrchr(con->physical.path->ptr, '/'))) {
+			if (NULL == (sl = strrchr(r->physical.path.ptr, '/'))) {
 				buffer_copy_string_len(p->stat_fn, CONST_STR_LEN("/"));
 			} else {
-				buffer_copy_string_len(p->stat_fn, con->physical.path->ptr, sl - con->physical.path->ptr + 1);
+				buffer_copy_string_len(p->stat_fn, r->physical.path.ptr, sl - r->physical.path.ptr + 1);
 			}
 
 			buffer_copy_string(tb, file_path);
 			buffer_urldecode_path(tb);
 			if (!buffer_is_valid_UTF8(tb)) {
-				log_error(con->conf.errh, __FILE__, __LINE__,
+				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "SSI invalid UTF-8 after url-decode: %s", tb->ptr);
 				break;
 			}
@@ -521,15 +524,15 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 				buffer_copy_string(tb, virt_path);
 			} else {
 				/* there is always a / */
-				sl = strrchr(con->uri.path->ptr, '/');
+				sl = strrchr(r->uri.path.ptr, '/');
 
-				buffer_copy_string_len(tb, con->uri.path->ptr, sl - con->uri.path->ptr + 1);
+				buffer_copy_string_len(tb, r->uri.path.ptr, sl - r->uri.path.ptr + 1);
 				buffer_append_string(tb, virt_path);
 			}
 
 			buffer_urldecode_path(tb);
 			if (!buffer_is_valid_UTF8(tb)) {
-				log_error(con->conf.errh, __FILE__, __LINE__,
+				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "SSI invalid UTF-8 after url-decode: %s", tb->ptr);
 				break;
 			}
@@ -538,10 +541,10 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 			/* we have an uri */
 
 			/* Destination physical path (similar to code in mod_webdav.c)
-			 * src con->physical.path might have been remapped with mod_alias, mod_userdir.
-			 *   (but neither modifies con->physical.rel_path)
+			 * src r->physical.path might have been remapped with mod_alias, mod_userdir.
+			 *   (but neither modifies r->physical.rel_path)
 			 * Find matching prefix to support relative paths to current physical path.
-			 * Aliasing of paths underneath current con->physical.basedir might not work.
+			 * Aliasing of paths underneath current r->physical.basedir might not work.
 			 * Likewise, mod_rewrite URL rewriting might thwart this comparison.
 			 * Use mod_redirect instead of mod_alias to remap paths *under* this basedir.
 			 * Use mod_redirect instead of mod_rewrite on *any* parts of path to basedir.
@@ -551,45 +554,46 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 			 */
 
 			/* find matching URI prefix
-			 * check if remaining con->physical.rel_path matches suffix
-			 *   of con->physical.basedir so that we can use it to
+			 * check if remaining r->physical.rel_path matches suffix
+			 *   of r->physical.basedir so that we can use it to
 			 *   remap Destination physical path */
 			{
 				const char *sep, *sep2;
-				sep = con->uri.path->ptr;
+				sep = r->uri.path.ptr;
 				sep2 = tb->ptr;
 				for (i = 0; sep[i] && sep[i] == sep2[i]; ++i) ;
 				while (i != 0 && sep[--i] != '/') ; /* find matching directory path */
 			}
-			if (con->conf.force_lowercase_filenames) {
+			if (r->conf.force_lowercase_filenames) {
 				buffer_to_lower(tb);
 			}
-			remain = buffer_string_length(con->uri.path) - i;
-			if (!con->conf.force_lowercase_filenames
-			    ? buffer_is_equal_right_len(con->physical.path, con->physical.rel_path, remain)
-			    :(buffer_string_length(con->physical.path) >= remain
-			      && buffer_eq_icase_ssn(con->physical.path->ptr+buffer_string_length(con->physical.path)-remain, con->physical.rel_path->ptr+i, remain))) {
-				buffer_copy_string_len(p->stat_fn, con->physical.path->ptr, buffer_string_length(con->physical.path)-remain);
+			remain = buffer_string_length(&r->uri.path) - i;
+			if (!r->conf.force_lowercase_filenames
+			    ? buffer_is_equal_right_len(&r->physical.path, &r->physical.rel_path, remain)
+			    :(buffer_string_length(&r->physical.path) >= remain
+			      && buffer_eq_icase_ssn(r->physical.path.ptr+buffer_string_length(&r->physical.path)-remain, r->physical.rel_path.ptr+i, remain))) {
+				buffer_copy_string_len(p->stat_fn, r->physical.path.ptr, buffer_string_length(&r->physical.path)-remain);
 				buffer_append_string_len(p->stat_fn, tb->ptr+i, buffer_string_length(tb)-i);
 			} else {
 				/* unable to perform physical path remap here;
 				 * assume doc_root/rel_path and no remapping */
-				buffer_copy_buffer(p->stat_fn, con->physical.doc_root);
+				buffer_copy_buffer(p->stat_fn, &r->physical.doc_root);
 				buffer_append_string_buffer(p->stat_fn, tb);
 			}
 		}
 
-		if (!con->conf.follow_symlink
-		    && 0 != stat_cache_path_contains_symlink(p->stat_fn, con->conf.errh)) {
+		if (!r->conf.follow_symlink
+		    && 0 != stat_cache_path_contains_symlink(p->stat_fn, r->conf.errh)) {
 			break;
 		}
 
-		int fd = stat_cache_open_rdonly_fstat(p->stat_fn, &stb, con->conf.follow_symlink);
+		int fd = stat_cache_open_rdonly_fstat(p->stat_fn, &stb, r->conf.follow_symlink);
 		if (fd >= 0) {
 			time_t t = stb.st_mtime;
 
 			switch (ssicmd) {
 			case SSI_FSIZE:
+				buffer_clear(tb);
 				if (p->sizefmt) {
 					int j = 0;
 					const char *abr[] = { " B", " kB", " MB", " GB", " TB", NULL };
@@ -598,18 +602,18 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 
 					for (j = 0; s > 1024 && abr[j+1]; s /= 1024, j++);
 
-					buffer_copy_int(tb, s);
+					buffer_append_int(tb, s);
 					buffer_append_string(tb, abr[j]);
 				} else {
-					buffer_copy_int(tb, stb.st_size);
+					buffer_append_int(tb, stb.st_size);
 				}
-				chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(tb));
+				chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
 				break;
 			case SSI_FLASTMOD:
 				if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
-					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(none)"));
+					chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
 				} else {
-					chunkqueue_append_mem(con->write_queue, buf, strlen(buf));
+					chunkqueue_append_mem(cq, buf, strlen(buf));
 				}
 				break;
 			case SSI_INCLUDE:
@@ -619,52 +623,54 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 
 				if (file_path || 0 == p->conf.ssi_recursion_max) {
 					/* don't process if #include file="..." is used */
-					chunkqueue_append_file_fd(con->write_queue, p->stat_fn, fd, 0, stb.st_size);
+					chunkqueue_append_file_fd(cq, p->stat_fn, fd, 0, stb.st_size);
 					fd = -1;
 				} else {
-					buffer *upsave, *ppsave, *prpsave;
+					buffer upsave, ppsave, prpsave;
 
 					/* only allow predefined recursion depth */
 					if (p->ssi_recursion_depth >= p->conf.ssi_recursion_max) {
-						chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(error: include directives recurse deeper than pre-defined ssi.recursion-max)"));
+						chunkqueue_append_mem(cq, CONST_STR_LEN("(error: include directives recurse deeper than pre-defined ssi.recursion-max)"));
 						break;
 					}
 
 					/* prevents simple infinite loop */
-					if (buffer_is_equal(con->physical.path, p->stat_fn)) {
-						chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("(error: include directives create an infinite loop)"));
+					if (buffer_is_equal(&r->physical.path, p->stat_fn)) {
+						chunkqueue_append_mem(cq, CONST_STR_LEN("(error: include directives create an infinite loop)"));
 						break;
 					}
 
-					/* save and restore con->physical.path, con->physical.rel_path, and con->uri.path around include
+					/* save and restore r->physical.path, r->physical.rel_path, and r->uri.path around include
 					 *
-					 * tb contains url-decoded, path-simplified, and lowercased (if con->conf.force_lowercase) uri path of target.
-					 * con->uri.path and con->physical.rel_path are set to the same since we only operate on filenames here,
+					 * tb contains url-decoded, path-simplified, and lowercased (if r->conf.force_lowercase) uri path of target.
+					 * r->uri.path and r->physical.rel_path are set to the same since we only operate on filenames here,
 					 * not full re-run of all modules for subrequest */
-					upsave = con->uri.path;
-					ppsave = con->physical.path;
-					prpsave = con->physical.rel_path;
+					upsave = r->uri.path;
+					ppsave = r->physical.path;
+					prpsave = r->physical.rel_path;
 
-					con->physical.path = p->stat_fn;
-					p->stat_fn = buffer_init();
+					r->physical.path = *p->stat_fn;
+					memset(p->stat_fn, 0, sizeof(buffer));
 
-					con->uri.path = con->physical.rel_path = buffer_init_buffer(tb);
+					memset(&r->uri.path, 0, sizeof(buffer));
+					buffer_copy_buffer(&r->uri.path, tb);
+					r->physical.rel_path = r->uri.path;
 
 					close(fd);
 					fd = -1;
 
 					/*(ignore return value; muddle along as best we can if error occurs)*/
 					++p->ssi_recursion_depth;
-					mod_ssi_process_file(con, p, &stb);
+					mod_ssi_process_file(r, p, &stb);
 					--p->ssi_recursion_depth;
 
-					buffer_free(con->uri.path);
-					con->uri.path = upsave;
-					con->physical.rel_path = prpsave;
+					free(r->uri.path.ptr);
+					r->uri.path = upsave;
+					r->physical.rel_path = prpsave;
 
-					buffer_free(p->stat_fn);
-					p->stat_fn = con->physical.path;
-					con->physical.path = ppsave;
+					free(p->stat_fn->ptr);
+					*p->stat_fn = r->physical.path;
+					r->physical.path = ppsave;
 				}
 
 				break;
@@ -672,7 +678,7 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 
 			if (fd >= 0) close(fd);
 		} else {
-			log_perror(con->conf.errh, __FILE__, __LINE__,
+			log_perror(r->conf.errh, __FILE__, __LINE__,
 			  "ssi: stating %s failed", p->stat_fn->ptr);
 		}
 		break;
@@ -685,7 +691,7 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 			} else if (0 == strcmp(l[i], "value")) {
 				val = l[i+1];
 			} else {
-				log_error(con->conf.errh, __FILE__, __LINE__,
+				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
@@ -695,10 +701,10 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 		if (key && val) {
 			array_set_key_value(p->ssi_vars, key, strlen(key), val, strlen(val));
 		} else if (key || val) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "ssi: var and value have to be set in <!--#set %s=%s -->", l[1], l[2]);
 		} else {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "ssi: var and value have to be set in <!--#set var=... value=... -->");
 		}
 		break;
@@ -715,12 +721,12 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 				} else if (0 == strcmp(l[i+1], "bytes")) {
 					p->sizefmt = 0;
 				} else {
-					log_error(con->conf.errh, __FILE__, __LINE__,
+					log_error(r->conf.errh, __FILE__, __LINE__,
 					  "ssi: unknown value for attribute '%s' for %s %s",
 					  l[i], l[1], l[i+1]);
 				}
 			} else {
-				log_error(con->conf.errh, __FILE__, __LINE__,
+				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
@@ -728,7 +734,7 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 	case SSI_PRINTENV:
 		if (p->if_is_false) break;
 
-		tb = con->srv->tmp_buf;
+		tb = r->tmp_buf;
 		buffer_clear(tb);
 		for (i = 0; i < p->ssi_vars->used; i++) {
 			data_string *ds = (data_string *)p->ssi_vars->sorted[i];
@@ -746,7 +752,7 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 			buffer_append_string_encoded(tb, CONST_BUF_LEN(&ds->value), ENCODING_MINIMAL_XML);
 			buffer_append_string_len(tb, CONST_STR_LEN("\n"));
 		}
-		chunkqueue_append_mem(con->write_queue, CONST_BUF_LEN(tb));
+		chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
 		break;
 	case SSI_EXEC: {
 		const char *cmd = NULL;
@@ -777,8 +783,8 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 		if (!cmd) break;
 
 		/* send cmd output to a temporary file */
-		if (0 != chunkqueue_append_mem_to_tempfile(con->write_queue, "", 0, errh)) break;
-		c = con->write_queue->last;
+		if (0 != chunkqueue_append_mem_to_tempfile(cq, "", 0, errh)) break;
+		c = cq->last;
 
 		*(const char **)&args[0] = "/bin/sh";
 		*(const char **)&args[1] = "-c";
@@ -786,7 +792,7 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 		args[3] = NULL;
 
 		/*(expects STDIN_FILENO open to /dev/null)*/
-		int serrh_fd = con->conf.serrh ? con->conf.serrh->errorlog_fd : -1;
+		int serrh_fd = r->conf.serrh ? r->conf.serrh->errorlog_fd : -1;
 		pid = fdevent_fork_execve(args[0], args, NULL, -1, c->file.fd, serrh_fd, -1);
 		if (-1 == pid) {
 			log_perror(errh, __FILE__, __LINE__, "spawning exec failed: %s", cmd);
@@ -823,13 +829,13 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 			if (0 == strcmp(l[i], "expr")) {
 				expr = l[i+1];
 			} else {
-				log_error(con->conf.errh, __FILE__, __LINE__,
+				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
 
 		if (!expr) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "ssi: %s expr missing", l[1]);
 			break;
 		}
@@ -875,13 +881,13 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 			if (0 == strcmp(l[i], "expr")) {
 				expr = l[i+1];
 			} else {
-				log_error(con->conf.errh, __FILE__, __LINE__,
+				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "ssi: unknown attribute for %s %s", l[1], l[i]);
 			}
 		}
 
 		if (!expr) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "ssi: %s expr missing", l[1]);
 			break;
 		}
@@ -924,7 +930,7 @@ static int process_ssi_stmt(connection *con, handler_ctx *p, const char **l, siz
 	case SSI_COMMENT:
 		break;
 	default:
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "ssi: unknown ssi-command: %s", l[1]);
 		break;
 	}
@@ -1007,7 +1013,7 @@ static int mod_ssi_parse_ssi_stmt_offlen(int o[10], const char * const s, const 
 	return -1;
 }
 
-static void mod_ssi_parse_ssi_stmt(connection *con, handler_ctx *p, char *s, int len, struct stat *st) {
+static void mod_ssi_parse_ssi_stmt(request_st * const r, handler_ctx * const p, char * const s, int len, struct stat * const st) {
 
 	/**
 	 * <!--#element attribute=value attribute=value ... -->
@@ -1024,7 +1030,7 @@ static void mod_ssi_parse_ssi_stmt(connection *con, handler_ctx *p, char *s, int
 		    && (s[12] == ' ' || s[12] == '\t'))
 			return;
 		/* XXX: perhaps emit error comment instead of invalid <!--#...--> code to client */
-		chunkqueue_append_mem(con->write_queue, s, len); /* append stmt as-is */
+		chunkqueue_append_mem(r->write_queue, s, len); /* append stmt as-is */
 		return;
 	}
 
@@ -1052,7 +1058,7 @@ static void mod_ssi_parse_ssi_stmt(connection *con, handler_ctx *p, char *s, int
 		}
 	}
 
-	process_ssi_stmt(con, p, (const char **)l, 1+(n>>1), st);
+	process_ssi_stmt(r, p, (const char **)l, 1+(n>>1), st);
 
       #if 0
 	free(l[0]);
@@ -1083,11 +1089,12 @@ static int mod_ssi_stmt_len(const char *s, const int len) {
 	return 0; /* incomplete directive "<!--#...-->" */
 }
 
-static void mod_ssi_read_fd(connection *con, handler_ctx *p, struct stat *st, int fd) {
+static void mod_ssi_read_fd(request_st * const r, handler_ctx * const p, struct stat * const st, int fd) {
 	ssize_t rd;
 	size_t offset, pretag;
-	size_t bufsz = 8192;
-	char *buf = malloc(bufsz); /* allocate to reduce chance of stack exhaustion upon deep recursion */
+	const size_t bufsz = 8192;
+	char * const buf = malloc(bufsz); /* allocate to reduce chance of stack exhaustion upon deep recursion */
+	chunkqueue * const cq = r->write_queue;
 	force_assert(buf);
 
 	offset = 0;
@@ -1102,12 +1109,12 @@ static void mod_ssi_read_fd(connection *con, handler_ctx *p, struct stat *st, in
 				if (0 != memcmp(s+1, CONST_STR_LEN("!--#"))) continue; /* loop to loop for next '<' */
 
 				if (prelen - pretag && !p->if_is_false) {
-					chunkqueue_append_mem(con->write_queue, buf+pretag, prelen-pretag);
+					chunkqueue_append_mem(cq, buf+pretag, prelen-pretag);
 				}
 
 				len = mod_ssi_stmt_len(buf+prelen, offset-prelen);
 				if (len) { /* num of chars to be consumed */
-					mod_ssi_parse_ssi_stmt(con, p, buf+prelen, len, st);
+					mod_ssi_parse_ssi_stmt(r, p, buf+prelen, len, st);
 					prelen += (len - 1); /* offset to '>' at end of SSI directive; incremented at top of loop */
 					pretag = prelen + 1;
 					if (pretag == offset) {
@@ -1117,13 +1124,13 @@ static void mod_ssi_read_fd(connection *con, handler_ctx *p, struct stat *st, in
 				} else if (0 == prelen && offset == bufsz) { /*(full buf)*/
 					/* SSI statement is way too long
 					 * NOTE: skipping this buf will expose *the rest* of this SSI statement */
-					chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("<!-- [an error occurred: directive too long] "));
+					chunkqueue_append_mem(cq, CONST_STR_LEN("<!-- [an error occurred: directive too long] "));
 					/* check if buf ends with "-" or "--" which might be part of "-->"
 					 * (buf contains at least 5 chars for "<!--#") */
 					if (buf[offset-2] == '-' && buf[offset-1] == '-') {
-						chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("--"));
+						chunkqueue_append_mem(cq, CONST_STR_LEN("--"));
 					} else if (buf[offset-1] == '-') {
-						chunkqueue_append_mem(con->write_queue, CONST_STR_LEN("-"));
+						chunkqueue_append_mem(cq, CONST_STR_LEN("-"));
 					}
 					offset = pretag = 0;
 					break;
@@ -1134,7 +1141,7 @@ static void mod_ssi_read_fd(connection *con, handler_ctx *p, struct stat *st, in
 				}
 			} else if (prelen + 1 == offset || 0 == memcmp(s+1, "!--", offset - prelen - 1)) {
 				if (prelen - pretag && !p->if_is_false) {
-					chunkqueue_append_mem(con->write_queue, buf+pretag, prelen-pretag);
+					chunkqueue_append_mem(cq, buf+pretag, prelen-pretag);
 				}
 				memcpy(buf, buf+prelen, (offset -= prelen));
 				pretag = 0;
@@ -1144,21 +1151,21 @@ static void mod_ssi_read_fd(connection *con, handler_ctx *p, struct stat *st, in
 		}
 		if (offset == bufsz) {
 			if (!p->if_is_false) {
-				chunkqueue_append_mem(con->write_queue, buf+pretag, offset-pretag);
+				chunkqueue_append_mem(cq, buf+pretag, offset-pretag);
 			}
 			offset = pretag = 0;
 		}
 	}
 
 	if (0 != rd) {
-		log_perror(con->conf.errh, __FILE__, __LINE__,
-		  "read(): %s", con->physical.path->ptr);
+		log_perror(r->conf.errh, __FILE__, __LINE__,
+		  "read(): %s", r->physical.path.ptr);
 	}
 
 	if (offset - pretag) {
 		/* copy remaining data in buf */
 		if (!p->if_is_false) {
-			chunkqueue_append_mem(con->write_queue, buf+pretag, offset-pretag);
+			chunkqueue_append_mem(cq, buf+pretag, offset-pretag);
 		}
 	}
 
@@ -1166,29 +1173,29 @@ static void mod_ssi_read_fd(connection *con, handler_ctx *p, struct stat *st, in
 }
 
 
-static int mod_ssi_process_file(connection *con, handler_ctx *p, struct stat *st) {
-	int fd = fdevent_open_cloexec(con->physical.path->ptr, con->conf.follow_symlink, O_RDONLY, 0);
+static int mod_ssi_process_file(request_st * const r, handler_ctx * const p, struct stat * const st) {
+	int fd = fdevent_open_cloexec(r->physical.path.ptr, r->conf.follow_symlink, O_RDONLY, 0);
 	if (-1 == fd) {
-		log_perror(con->conf.errh, __FILE__, __LINE__,
-		  "open(): %s", con->physical.path->ptr);
+		log_perror(r->conf.errh, __FILE__, __LINE__,
+		  "open(): %s", r->physical.path.ptr);
 		return -1;
 	}
 
 	if (0 != fstat(fd, st)) {
-		log_perror(con->conf.errh, __FILE__, __LINE__,
-		  "fstat(): %s", con->physical.path->ptr);
+		log_perror(r->conf.errh, __FILE__, __LINE__,
+		  "fstat(): %s", r->physical.path.ptr);
 		close(fd);
 		return -1;
 	}
 
-	mod_ssi_read_fd(con, p, st, fd);
+	mod_ssi_read_fd(r, p, st, fd);
 
 	close(fd);
 	return 0;
 }
 
 
-static int mod_ssi_handle_request(connection *con, handler_ctx *p) {
+static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 	struct stat st;
 
 	/* get a stream to the file */
@@ -1196,20 +1203,20 @@ static int mod_ssi_handle_request(connection *con, handler_ctx *p) {
 	array_reset_data_strings(p->ssi_vars);
 	array_reset_data_strings(p->ssi_cgi_env);
 	buffer_copy_string_len(p->timefmt, CONST_STR_LEN("%a, %d %b %Y %H:%M:%S %Z"));
-	build_ssi_cgi_vars(con, p);
+	build_ssi_cgi_vars(r, p);
 
 	/* Reset the modified time of included files */
 	include_file_last_mtime = 0;
 
-	if (mod_ssi_process_file(con, p, &st)) return -1;
+	if (mod_ssi_process_file(r, p, &st)) return -1;
 
-	con->response.resp_body_started  = 1;
-	con->response.resp_body_finished = 1;
+	r->resp_body_started  = 1;
+	r->resp_body_finished = 1;
 
 	if (buffer_string_is_empty(p->conf.content_type)) {
-		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
+		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 	} else {
-		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->conf.content_type));
+		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->conf.content_type));
 	}
 
 	if (p->conf.conditional_requests) {
@@ -1220,18 +1227,18 @@ static int mod_ssi_handle_request(connection *con, handler_ctx *p) {
 		if (st.st_mtime < include_file_last_mtime)
 			st.st_mtime = include_file_last_mtime;
 
-		etag_create(con->physical.etag, &st, con->conf.etag_flags);
-		etag_mutate(con->physical.etag, con->physical.etag);
-		http_header_response_set(con, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(con->physical.etag));
+		etag_create(&r->physical.etag, &st, r->conf.etag_flags);
+		etag_mutate(&r->physical.etag, &r->physical.etag);
+		http_header_response_set(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(&r->physical.etag));
 
 		mtime = strftime_cache_get(st.st_mtime);
-		http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+		http_header_response_set(r, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
 
-		if (HANDLER_FINISHED == http_response_handle_cachable(con, mtime)) {
+		if (HANDLER_FINISHED == http_response_handle_cachable(r, mtime)) {
 			/* ok, the client already has our content,
 			 * no need to send it again */
 
-			chunkqueue_reset(con->write_queue);
+			chunkqueue_reset(r->write_queue);
 		}
 	}
 
@@ -1239,7 +1246,7 @@ static int mod_ssi_handle_request(connection *con, handler_ctx *p) {
 	include_file_last_mtime = 0;
 
 	/* reset physical.path */
-	buffer_reset(con->physical.path);
+	buffer_reset(&r->physical.path);
 
 	return 0;
 }
@@ -1247,15 +1254,15 @@ static int mod_ssi_handle_request(connection *con, handler_ctx *p) {
 URIHANDLER_FUNC(mod_ssi_physical_path) {
 	plugin_data *p = p_d;
 
-	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
-	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
+	if (NULL != r->handler_module) return HANDLER_GO_ON;
+	if (buffer_is_empty(&r->physical.path)) return HANDLER_GO_ON;
 
-	mod_ssi_patch_config(con, p);
+	mod_ssi_patch_config(r, p);
 	if (NULL == p->conf.ssi_extension) return HANDLER_GO_ON;
 
-	if (array_match_value_suffix(p->conf.ssi_extension, con->physical.path)) {
-		con->request.plugin_ctx[p->id] = handler_ctx_init(p, con->conf.errh);
-		con->response.handler_module = p->self;
+	if (array_match_value_suffix(p->conf.ssi_extension, &r->physical.path)) {
+		r->plugin_ctx[p->id] = handler_ctx_init(p, r->conf.errh);
+		r->handler_module = p->self;
 	}
 
 	return HANDLER_GO_ON;
@@ -1263,7 +1270,7 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 
 SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 	plugin_data *p = p_d;
-	handler_ctx *hctx = con->request.plugin_ctx[p->id];
+	handler_ctx *hctx = r->plugin_ctx[p->id];
 	if (NULL == hctx) return HANDLER_GO_ON;
 	/*
 	 * NOTE: if mod_ssi modified to use fdevents, HANDLER_WAIT_FOR_EVENT,
@@ -1273,21 +1280,21 @@ SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 
 			/* handle ssi-request */
 
-			if (mod_ssi_handle_request(con, hctx)) {
+			if (mod_ssi_handle_request(r, hctx)) {
 				/* on error */
-				con->http_status = 500;
-				con->response.handler_module = NULL;
+				r->http_status = 500;
+				r->handler_module = NULL;
 			}
 
 			return HANDLER_FINISHED;
 }
 
-static handler_t mod_ssi_connection_reset(connection *con, void *p_d) {
+static handler_t mod_ssi_connection_reset(request_st * const r, void *p_d) {
 	plugin_data *p = p_d;
-	handler_ctx *hctx = con->request.plugin_ctx[p->id];
+	handler_ctx *hctx = r->plugin_ctx[p->id];
 	if (hctx) {
 		handler_ctx_free(hctx);
-		con->request.plugin_ctx[p->id] = NULL;
+		r->plugin_ctx[p->id] = NULL;
 	}
 
 	return HANDLER_GO_ON;

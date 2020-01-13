@@ -30,9 +30,9 @@ typedef struct {
     plugin_config conf;
 } plugin_data;
 
-static handler_t mod_auth_check_basic(connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
-static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
-static handler_t mod_auth_check_extern(connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
+static handler_t mod_auth_check_basic(request_st *r, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
+static handler_t mod_auth_check_digest(request_st *r, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
+static handler_t mod_auth_check_extern(request_st *r, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
 
 INIT_FUNC(mod_auth_init) {
 	static const http_auth_scheme_t http_auth_scheme_basic  = { "basic",  mod_auth_check_basic,  NULL };
@@ -382,11 +382,11 @@ static void mod_auth_merge_config(plugin_config * const pconf, const config_plug
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_auth_patch_config(connection * const con, plugin_data * const p) {
+static void mod_auth_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_auth_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -460,30 +460,30 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-static handler_t mod_auth_uri_handler(connection *con, void *p_d) {
+static handler_t mod_auth_uri_handler(request_st * const r, void *p_d) {
 	plugin_data *p = p_d;
 	data_auth *dauth;
 
-	mod_auth_patch_config(con, p);
+	mod_auth_patch_config(r, p);
 
 	if (p->conf.auth_require == NULL) return HANDLER_GO_ON;
 
 	/* search auth directives for first prefix match against URL path */
 	/* if we have a case-insensitive FS we have to lower-case the URI here too */
-	dauth = (!con->conf.force_lowercase_filenames)
-	   ? (data_auth *)array_match_key_prefix(p->conf.auth_require, con->uri.path)
-	   : (data_auth *)array_match_key_prefix_nc(p->conf.auth_require, con->uri.path);
+	dauth = (!r->conf.force_lowercase_filenames)
+	   ? (data_auth *)array_match_key_prefix(p->conf.auth_require, &r->uri.path)
+	   : (data_auth *)array_match_key_prefix_nc(p->conf.auth_require, &r->uri.path);
 	if (NULL == dauth) return HANDLER_GO_ON;
 
 	{
 			const http_auth_scheme_t * const scheme = dauth->require->scheme;
 			if (p->conf.auth_extern_authn) {
-				const buffer *vb = http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
+				const buffer *vb = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
 				if (NULL != vb && http_auth_match_rules(dauth->require, vb->ptr, NULL, NULL)) {
 					return HANDLER_GO_ON;
 				}
 			}
-			return scheme->checkfn(con, scheme->p_d, dauth->require, p->conf.auth_backend);
+			return scheme->checkfn(r, scheme->p_d, dauth->require, p->conf.auth_backend);
 	}
 }
 
@@ -514,31 +514,31 @@ int mod_auth_plugin_init(plugin *p) {
 #include "http_header.h"
 
 __attribute_cold__
-static handler_t mod_auth_send_400_bad_request(connection *con) {
+static handler_t mod_auth_send_400_bad_request(request_st * const r) {
 
 	/* a field was missing or invalid */
-	con->http_status = 400; /* Bad Request */
-	con->response.handler_module = NULL;
+	r->http_status = 400; /* Bad Request */
+	r->handler_module = NULL;
 
 	return HANDLER_FINISHED;
 }
 
-static handler_t mod_auth_send_401_unauthorized_basic(connection *con, const buffer *realm) {
-	con->http_status = 401;
-	con->response.handler_module = NULL;
+static handler_t mod_auth_send_401_unauthorized_basic(request_st * const r, const buffer * const realm) {
+	r->http_status = 401;
+	r->handler_module = NULL;
 
-	buffer * const tb = con->srv->tmp_buf;
+	buffer * const tb = r->tmp_buf;
 	buffer_copy_string_len(tb, CONST_STR_LEN("Basic realm=\""));
 	buffer_append_string_buffer(tb, realm);
 	buffer_append_string_len(tb, CONST_STR_LEN("\", charset=\"UTF-8\""));
 
-	http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(tb));
+	http_header_response_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(tb));
 
 	return HANDLER_FINISHED;
 }
 
-static handler_t mod_auth_check_basic(connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
-	const buffer *b = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
+static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend) {
+	const buffer *b = http_header_request_get(r, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
 	buffer *username;
 	char *pw;
 	handler_t rc = HANDLER_UNSET;
@@ -546,22 +546,22 @@ static handler_t mod_auth_check_basic(connection *con, void *p_d, const struct h
 	UNUSED(p_d);
 
 	if (NULL == backend) {
-		log_error(con->conf.errh, __FILE__, __LINE__, "auth.backend not configured for %s", con->uri.path->ptr);
-		con->http_status = 500;
-		con->response.handler_module = NULL;
+		log_error(r->conf.errh, __FILE__, __LINE__, "auth.backend not configured for %s", r->uri.path.ptr);
+		r->http_status = 500;
+		r->handler_module = NULL;
 		return HANDLER_FINISHED;
 	}
 
 	if (NULL == b) {
-		return mod_auth_send_401_unauthorized_basic(con, require->realm);
+		return mod_auth_send_401_unauthorized_basic(r, require->realm);
 	}
 
 	if (!buffer_eq_icase_ssn(b->ptr, CONST_STR_LEN("Basic "))) {
-		return mod_auth_send_401_unauthorized_basic(con, require->realm);
+		return mod_auth_send_401_unauthorized_basic(r, require->realm);
 	}
       #ifdef __COVERITY__
 	if (buffer_string_length(b) < sizeof("Basic ")-1) {
-		return mod_auth_send_400_bad_request(con);
+		return mod_auth_send_400_bad_request(r);
 	}
       #endif
 
@@ -569,43 +569,43 @@ static handler_t mod_auth_check_basic(connection *con, void *p_d, const struct h
 
 	/* coverity[overflow_sink : FALSE] */
 	if (!buffer_append_base64_decode(username, b->ptr+sizeof("Basic ")-1, buffer_string_length(b)-(sizeof("Basic ")-1), BASE64_STANDARD)) {
-		log_error(con->conf.errh, __FILE__, __LINE__, "decoding base64-string failed %s", b->ptr+sizeof("Basic ")-1);
+		log_error(r->conf.errh, __FILE__, __LINE__, "decoding base64-string failed %s", b->ptr+sizeof("Basic ")-1);
 
 		buffer_free(username);
-		return mod_auth_send_400_bad_request(con);
+		return mod_auth_send_400_bad_request(r);
 	}
 
 	/* r2 == user:password */
 	if (NULL == (pw = strchr(username->ptr, ':'))) {
-		log_error(con->conf.errh, __FILE__, __LINE__, "missing ':' in %s", username->ptr);
+		log_error(r->conf.errh, __FILE__, __LINE__, "missing ':' in %s", username->ptr);
 
 		buffer_free(username);
-		return mod_auth_send_400_bad_request(con);
+		return mod_auth_send_400_bad_request(r);
 	}
 
 	buffer_string_set_length(username, pw - username->ptr);
 	pw++;
 
-	rc = backend->basic(con, backend->p_d, require, username, pw);
+	rc = backend->basic(r, backend->p_d, require, username, pw);
 	switch (rc) {
 	case HANDLER_GO_ON:
-		http_auth_setenv(con, CONST_BUF_LEN(username), CONST_STR_LEN("Basic"));
+		http_auth_setenv(r, CONST_BUF_LEN(username), CONST_STR_LEN("Basic"));
 		break;
 	case HANDLER_WAIT_FOR_EVENT:
 	case HANDLER_FINISHED:
 		break;
 	case HANDLER_ERROR:
 	default:
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "password doesn't match for %s username: %s IP: %s",
-		  con->uri.path->ptr, username->ptr, con->dst_addr_buf->ptr);
-		con->request.keep_alive = 0; /*(disable keep-alive if bad password)*/
+		  r->uri.path.ptr, username->ptr, r->con->dst_addr_buf->ptr);
+		r->keep_alive = 0; /*(disable keep-alive if bad password)*/
 		rc = HANDLER_UNSET;
 		break;
 	}
 
 	buffer_free(username);
-	return (HANDLER_UNSET != rc) ? rc : mod_auth_send_401_unauthorized_basic(con, require->realm);
+	return (HANDLER_UNSET != rc) ? rc : mod_auth_send_401_unauthorized_basic(r, require->realm);
 }
 
 
@@ -916,10 +916,10 @@ typedef struct {
 	char **ptr;
 } digest_kv;
 
-static handler_t mod_auth_send_401_unauthorized_digest(connection *con, const struct http_auth_require_t *require, int nonce_stale);
+static handler_t mod_auth_send_401_unauthorized_digest(request_st *r, const struct http_auth_require_t *require, int nonce_stale);
 
-static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
-	const buffer *vb = http_header_request_get(con, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
+static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend) {
+	const buffer *vb = http_header_request_get(r, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
 
 	char *username = NULL;
 	char *realm = NULL;
@@ -970,24 +970,24 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 	UNUSED(p_d);
 
 	if (NULL == backend) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
-		  "auth.backend not configured for %s", con->uri.path->ptr);
-		con->http_status = 500;
-		con->response.handler_module = NULL;
+		log_error(r->conf.errh, __FILE__, __LINE__,
+		  "auth.backend not configured for %s", r->uri.path.ptr);
+		r->http_status = 500;
+		r->handler_module = NULL;
 		return HANDLER_FINISHED;
 	}
 
 	if (NULL == vb) {
-		return mod_auth_send_401_unauthorized_digest(con, require, 0);
+		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
 
 	if (!buffer_eq_icase_ssn(vb->ptr, CONST_STR_LEN("Digest "))) {
-		return mod_auth_send_401_unauthorized_digest(con, require, 0);
+		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	} else {
 		size_t n = buffer_string_length(vb);
 	      #ifdef __COVERITY__
 		if (n < sizeof("Digest ")-1) {
-			return mod_auth_send_400_bad_request(con);
+			return mod_auth_send_400_bad_request(r);
 		}
 	      #endif
 		n -= (sizeof("Digest ")-1);
@@ -1035,11 +1035,11 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 	    !respons ) {
 		/* missing field */
 
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "digest: missing field");
 
 		buffer_free(b);
-		return mod_auth_send_400_bad_request(con);
+		return mod_auth_send_400_bad_request(r);
 	}
 
 	ai.username = username;
@@ -1048,29 +1048,29 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 	ai.rlen     = strlen(realm);
 
 	if (!buffer_is_equal_string(require->realm, ai.realm, ai.rlen)) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "digest: realm mismatch");
 		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(con, require, 0);
+		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
 
 	if (!mod_auth_algorithm_parse(&ai, algorithm)
 	    || !(require->algorithm & ai.dalgo & ~HTTP_AUTH_DIGEST_SESS)) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "digest: (%s): invalid", algorithm);
 		buffer_free(b);
-		return mod_auth_send_400_bad_request(con);
+		return mod_auth_send_400_bad_request(r);
 	}
 
 	/**
 	 * protect the md5-sess against missing cnonce and nonce
 	 */
 	if ((ai.dalgo & HTTP_AUTH_DIGEST_SESS) && (!nonce || !cnonce)) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "digest: (%s): missing field", algorithm);
 
 		buffer_free(b);
-		return mod_auth_send_400_bad_request(con);
+		return mod_auth_send_400_bad_request(r);
 	}
 
 	{
@@ -1078,22 +1078,22 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 		if (0 != http_auth_digest_hex2bin(respons, resplen,
 						  rdigest, sizeof(rdigest))
 		    || resplen != (ai.dlen << 1)) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "digest: (%s): invalid format", respons);
 			buffer_free(b);
-			return mod_auth_send_400_bad_request(con);
+			return mod_auth_send_400_bad_request(r);
 		}
 	}
 
 	if (qop && buffer_eq_icase_ss(qop, strlen(qop), CONST_STR_LEN("auth-int"))){
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "digest: qop=auth-int not supported");
 
 		buffer_free(b);
-		return mod_auth_send_400_bad_request(con);
+		return mod_auth_send_400_bad_request(r);
 	}
 
-	m = get_http_method_name(con->request.http_method);
+	m = get_http_method_name(r->http_method);
 	force_assert(m);
 
 	/* detect if attacker is attempting to reuse valid digest for one uri
@@ -1102,20 +1102,20 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 	 * the same digest as that calculated by the client.)
 	 * Internal redirects such as with mod_rewrite will modify request uri.
 	 * Reauthentication is done to detect crossing auth realms, but this
-	 * uri validation step is bypassed.  con->request.target_orig is
+	 * uri validation step is bypassed.  r->target_orig is
 	 * original request-target sent in client request. */
 	{
 		const size_t ulen = strlen(uri);
-		if (!buffer_is_equal_string(con->request.target_orig, uri, ulen)) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+		if (!buffer_is_equal_string(&r->target_orig, uri, ulen)) {
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "digest: auth failed: uri mismatch (%s != %s), IP: %s",
-			  con->request.target_orig->ptr, uri, con->dst_addr_buf->ptr);
+			  r->target_orig.ptr, uri, r->con->dst_addr_buf->ptr);
 			buffer_free(b);
-			return mod_auth_send_400_bad_request(con);
+			return mod_auth_send_400_bad_request(r);
 		}
 	}
 
-	switch (backend->digest(con, backend->p_d, &ai)) {
+	switch (backend->digest(r, backend->p_d, &ai)) {
 	case HANDLER_GO_ON:
 		break;
 	case HANDLER_WAIT_FOR_EVENT:
@@ -1126,28 +1126,28 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 		return HANDLER_FINISHED;
 	case HANDLER_ERROR:
 	default:
-		con->request.keep_alive = 0; /*(disable keep-alive if unknown user)*/
+		r->keep_alive = 0; /*(disable keep-alive if unknown user)*/
 		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(con, require, 0);
+		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
 
 	mod_auth_digest_mutate(&ai,m,uri,nonce,cnonce,nc,qop);
 
 	if (!http_auth_const_time_memeq(rdigest, ai.digest, ai.dlen)) {
 		/* digest not ok */
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "digest: auth failed for %s: wrong password, IP: %s",
-		  username, con->dst_addr_buf->ptr);
-		con->request.keep_alive = 0; /*(disable keep-alive if bad password)*/
+		  username, r->con->dst_addr_buf->ptr);
+		r->keep_alive = 0; /*(disable keep-alive if bad password)*/
 
 		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(con, require, 0);
+		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
 
 	/* value is our allow-rules */
 	if (!http_auth_match_rules(require, username, NULL, NULL)) {
 		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(con, require, 0);
+		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
 
 	/* check age of nonce.  Note, random data is used in nonce generation
@@ -1170,45 +1170,45 @@ static handler_t mod_auth_check_digest(connection *con, void *p_d, const struct 
 		    || ts > cur_ts || cur_ts - ts > 600) { /*(10 mins)*/
 			/* nonce is stale; have client regenerate digest */
 			buffer_free(b);
-			return mod_auth_send_401_unauthorized_digest(con, require, ai.dalgo);
+			return mod_auth_send_401_unauthorized_digest(r, require, ai.dalgo);
 		}
 		else if (cur_ts - ts > 540) { /*(9 mins)*/
 			/*(send nextnonce when expiration is approaching)*/
-			buffer * const tb = con->srv->tmp_buf;
+			buffer * const tb = r->tmp_buf;
 			mod_auth_digest_authentication_info(tb, cur_ts, ai.dalgo);
-			http_header_response_set(con, HTTP_HEADER_OTHER,
+			http_header_response_set(r, HTTP_HEADER_OTHER,
 			                         CONST_STR_LEN("Authentication-Info"),
 			                         CONST_BUF_LEN(tb));
 		}
 	}
 
-	http_auth_setenv(con, ai.username, ai.ulen, CONST_STR_LEN("Digest"));
+	http_auth_setenv(r, ai.username, ai.ulen, CONST_STR_LEN("Digest"));
 
 	buffer_free(b);
 
 	return HANDLER_GO_ON;
 }
 
-static handler_t mod_auth_send_401_unauthorized_digest(connection *con, const struct http_auth_require_t *require, int nonce_stale) {
-	buffer * const tb = con->srv->tmp_buf;
+static handler_t mod_auth_send_401_unauthorized_digest(request_st * const r, const struct http_auth_require_t * const require, int nonce_stale) {
+	buffer * const tb = r->tmp_buf;
 	mod_auth_digest_www_authenticate(tb, log_epoch_secs, require, nonce_stale);
-	http_header_response_set(con, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(tb));
+	http_header_response_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(tb));
 
-	con->http_status = 401;
-	con->response.handler_module = NULL;
+	r->http_status = 401;
+	r->handler_module = NULL;
 	return HANDLER_FINISHED;
 }
 
-static handler_t mod_auth_check_extern(connection *con, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend) {
+static handler_t mod_auth_check_extern(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend) {
 	/* require REMOTE_USER already set */
-	const buffer *vb = http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
+	const buffer *vb = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
 	UNUSED(p_d);
 	UNUSED(backend);
 	if (NULL != vb && http_auth_match_rules(require, vb->ptr, NULL, NULL)) {
 		return HANDLER_GO_ON;
 	} else {
-		con->http_status = 401;
-		con->response.handler_module = NULL;
+		r->http_status = 401;
+		r->handler_module = NULL;
 		return HANDLER_FINISHED;
 	}
 }

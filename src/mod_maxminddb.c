@@ -67,7 +67,7 @@
 SETDEFAULTS_FUNC(mod_maxminddb_set_defaults);
 INIT_FUNC(mod_maxminddb_init);
 FREE_FUNC(mod_maxminddb_free);
-CONNECTION_FUNC(mod_maxminddb_request_env_handler);
+REQUEST_FUNC(mod_maxminddb_request_env_handler);
 CONNECTION_FUNC(mod_maxminddb_handle_con_close);
 
 int mod_maxminddb_plugin_init(plugin *p);
@@ -256,14 +256,14 @@ mod_maxminddb_merge_config (plugin_config * const pconf,
 
 
 static void
-mod_maxmind_patch_config (connection * const con,
+mod_maxmind_patch_config (request_st * const r,
                           const plugin_data * const p,
                           plugin_config * const pconf)
 {
     *pconf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_maxminddb_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -391,14 +391,14 @@ geoip2_env_set (array * const env, const char * const k,
 
 
 static void
-mod_maxmind_geoip2 (array * const env, sock_addr * const dst_addr,
+mod_maxmind_geoip2 (array * const env, const struct sockaddr * const dst_addr,
                     plugin_config * const pconf)
 {
     MMDB_lookup_result_s res;
     MMDB_entry_data_s data;
     int rc;
 
-    res = MMDB_lookup_sockaddr(pconf->mmdb, (struct sockaddr *)dst_addr, &rc);
+    res = MMDB_lookup_sockaddr(pconf->mmdb, dst_addr, &rc);
     if (MMDB_SUCCESS != rc || !res.found_entry) return;
     MMDB_entry_s * const entry = &res.entry;
 
@@ -413,29 +413,30 @@ mod_maxmind_geoip2 (array * const env, sock_addr * const dst_addr,
 }
 
 
-CONNECTION_FUNC(mod_maxminddb_request_env_handler)
+REQUEST_FUNC(mod_maxminddb_request_env_handler)
 {
-    const int sa_family = con->dst_addr.plain.sa_family;
+    const sock_addr * const dst_addr = &r->con->dst_addr;
+    const int sa_family = dst_addr->plain.sa_family;
     if (sa_family != AF_INET && sa_family != AF_INET6) return HANDLER_GO_ON;
 
     plugin_config pconf;
     plugin_data *p = p_d;
-    mod_maxmind_patch_config(con, p, &pconf);
+    mod_maxmind_patch_config(r, p, &pconf);
     /* check that mod_maxmind is activated and env fields were requested */
     if (!pconf.activate || NULL == pconf.env) return HANDLER_GO_ON;
 
-    array *env = con->request.plugin_ctx[p->id];
+    array *env = r->plugin_ctx[p->id];
     if (NULL == env) {
-        env = con->request.plugin_ctx[p->id] = array_init(pconf.env->used);
+        env = r->plugin_ctx[p->id] = array_init(pconf.env->used);
         if (pconf.mmdb)
-            mod_maxmind_geoip2(env, &con->dst_addr, &pconf);
+            mod_maxmind_geoip2(env, (const struct sockaddr *)dst_addr, &pconf);
     }
 
     for (size_t i = 0; i < env->used; ++i) {
         /* note: replaces values which may have been set by mod_openssl
          * (when mod_extforward is listed after mod_openssl in server.modules)*/
         data_string *ds = (data_string *)env->data[i];
-        http_header_env_set(con,
+        http_header_env_set(r,
                             CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(&ds->value));
     }
 
@@ -445,11 +446,12 @@ CONNECTION_FUNC(mod_maxminddb_request_env_handler)
 
 CONNECTION_FUNC(mod_maxminddb_handle_con_close)
 {
+    request_st * const r = &con->request;
     plugin_data *p = p_d;
-    array *env = con->request.plugin_ctx[p->id];
+    array *env = r->plugin_ctx[p->id];
     if (NULL != env) {
         array_free(env);
-        con->request.plugin_ctx[p->id] = NULL;
+        r->plugin_ctx[p->id] = NULL;
     }
 
     return HANDLER_GO_ON;

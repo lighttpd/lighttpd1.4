@@ -48,10 +48,10 @@ static void mod_sockproxy_merge_config(plugin_config * const pconf, const config
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_sockproxy_patch_config(connection * const con, plugin_data * const p) {
+static void mod_sockproxy_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_sockproxy_merge_config(&p->conf,p->cvlist+p->cvlist[i].v.u2[0]);
     }
 }
@@ -125,10 +125,10 @@ SETDEFAULTS_FUNC(mod_sockproxy_set_defaults) {
 
 
 static handler_t sockproxy_create_env_connect(handler_ctx *hctx) {
-	connection *con = hctx->remote_conn;
-	con->response.resp_body_started = 1;
+	request_st * const r = hctx->r;
+	r->resp_body_started = 1;
 	gw_set_transparent(hctx);
-	http_response_upgrade_read_body_unknown(con);
+	http_response_upgrade_read_body_unknown(r);
 
 	status_counter_inc(CONST_STR_LEN("sockproxy.requests"));
 	return HANDLER_GO_ON;
@@ -136,26 +136,27 @@ static handler_t sockproxy_create_env_connect(handler_ctx *hctx) {
 
 
 static handler_t mod_sockproxy_connection_accept(connection *con, void *p_d) {
+	request_st * const r = &con->request;
 	plugin_data *p = p_d;
 	handler_t rc;
 
-	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
+	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-	mod_sockproxy_patch_config(con, p);
+	mod_sockproxy_patch_config(r, p);
 	if (NULL == p->conf.exts) return HANDLER_GO_ON;
 
-	/*(fake con->uri.path for matching purposes in gw_check_extension())*/
-	buffer_copy_string_len(con->uri.path, CONST_STR_LEN("/"));
+	/*(fake r->uri.path for matching purposes in gw_check_extension())*/
+	buffer_copy_string_len(&r->uri.path, CONST_STR_LEN("/"));
 
-	rc = gw_check_extension(con, p, 1, 0);
+	rc = gw_check_extension(r, p, 1, 0);
 	if (HANDLER_GO_ON != rc) return rc;
 
-	if (con->response.handler_module == p->self) {
-		handler_ctx *hctx = con->request.plugin_ctx[p->id];
+	if (r->handler_module == p->self) {
+		handler_ctx *hctx = r->plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_PROXY;
 		hctx->create_env = sockproxy_create_env_connect;
 		hctx->response = chunk_buffer_acquire();
-		con->http_status = -1; /*(skip HTTP processing)*/
+		r->http_status = -1; /*(skip HTTP processing)*/
 	}
 
 	return HANDLER_GO_ON;

@@ -40,11 +40,11 @@ static void mod_alias_merge_config(plugin_config * const pconf, const config_plu
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_alias_patch_config(connection * const con, plugin_data * const p) {
+static void mod_alias_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_alias_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -120,22 +120,22 @@ SETDEFAULTS_FUNC(mod_alias_set_defaults) {
 PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 	plugin_data *p = p_d;
 	char *uri_ptr;
-	size_t uri_len = buffer_string_length(con->physical.path);
+	size_t uri_len = buffer_string_length(&r->physical.path);
 	size_t basedir_len, alias_len;
 	data_string *ds;
 
 	if (0 == uri_len) return HANDLER_GO_ON;
 
-	mod_alias_patch_config(con, p);
+	mod_alias_patch_config(r, p);
 	if (NULL == p->conf.alias) return HANDLER_GO_ON;
 
 	/* do not include trailing slash on basedir */
-	basedir_len = buffer_string_length(con->physical.basedir);
-	if ('/' == con->physical.basedir->ptr[basedir_len-1]) --basedir_len;
+	basedir_len = buffer_string_length(&r->physical.basedir);
+	if ('/' == r->physical.basedir.ptr[basedir_len-1]) --basedir_len;
 	uri_len -= basedir_len;
-	uri_ptr = con->physical.path->ptr + basedir_len;
+	uri_ptr = r->physical.path.ptr + basedir_len;
 
-	ds = (!con->conf.force_lowercase_filenames)
+	ds = (!r->conf.force_lowercase_filenames)
 	   ? (data_string *)array_match_key_prefix_klen(p->conf.alias, uri_ptr, uri_len)
 	   : (data_string *)array_match_key_prefix_nc_klen(p->conf.alias, uri_ptr, uri_len);
 	if (NULL == ds) { return HANDLER_GO_ON; }
@@ -152,17 +152,17 @@ PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 					size_t vlen = buffer_string_length(&ds->value);
 					if (0 != alias_len && ds->key.ptr[alias_len-1] != '/'
 					    && 0 != vlen && ds->value.ptr[vlen-1] == '/') {
-						con->http_status = 403;
+						r->http_status = 403;
 						return HANDLER_FINISHED;
 					}
 				}
 			}
 
-			buffer * const tb = con->srv->tmp_buf;
-			buffer_copy_buffer(con->physical.basedir, &ds->value);
+			buffer * const tb = r->tmp_buf;
+			buffer_copy_buffer(&r->physical.basedir, &ds->value);
 			buffer_copy_buffer(tb, &ds->value);
 			buffer_append_string(tb, uri_ptr + alias_len);
-			buffer_copy_buffer(con->physical.path, tb);
+			buffer_copy_buffer(&r->physical.path, tb);
 
 			return HANDLER_GO_ON;
 }

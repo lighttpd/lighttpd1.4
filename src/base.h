@@ -16,40 +16,38 @@
 struct fdevents;        /* declaration */
 
 
-typedef struct {
-	off_t   content_length;
-	unsigned int htags; /* bitfield of flagged headers present in response */
-	array headers;
-	char send_chunked;
-	char resp_body_started;
-	char resp_body_finished;
-	uint32_t resp_header_len;
-	plugin *handler_module;
-} response;
-
-typedef struct {
-	buffer *scheme; /* scheme without colon or slashes ( "http" or "https" ) */
-
-	/* authority with optional portnumber ("site.name" or "site.name:8080" ) NOTE: without "username:password@" */
-	buffer *authority;
-
-	/* path including leading slash ("/" or "/index.html") - urldecoded, and sanitized  ( buffer_path_simplify() && buffer_urldecode_path() ) */
-	buffer *path;
-	buffer *path_raw; /* raw path, as sent from client. no urldecoding or path simplifying */
-	buffer *query; /* querystring ( everything after "?", ie: in "/index.php?foo=1", query is "foo=1" ) */
-} request_uri;
-
-typedef struct {
-	buffer *path;
-	buffer *basedir; /* path = "(basedir)(.*)" */
-
-	buffer *doc_root; /* path = doc_root + rel_path */
-	buffer *rel_path;
-
-	buffer *etag;
-} physical;
-
 struct connection {
+
+	request_st request;
+
+	int fd;                      /* the FD for this connection */
+	int ndx;                     /* reverse mapping to server->connection[ndx] */
+	fdnode *fdn;                 /* fdevent (fdnode *) object */
+
+	/* fd states */
+	signed char is_readable;
+	signed char is_writable;
+	char is_ssl_sock;
+	char traffic_limit_reached;
+
+	chunkqueue *write_queue;      /* a large queue for low-level write ( HTTP response ) [ file, mem ] */
+	chunkqueue *read_queue;       /* a small queue for low-level read ( HTTP request ) [ mem ] */
+
+	off_t bytes_written;          /* used by mod_accesslog, mod_rrd */
+	off_t bytes_written_cur_second; /* used by mod_accesslog, mod_rrd */
+	off_t bytes_read;             /* used by mod_accesslog, mod_rrd */
+
+	int (* network_write)(struct connection *con, chunkqueue *cq, off_t max_bytes);
+	int (* network_read)(struct connection *con, chunkqueue *cq, off_t max_bytes);
+
+	server *srv;
+	void *plugin_slots;
+	void *config_data_base;
+
+	sock_addr dst_addr;
+	buffer *dst_addr_buf;
+	struct server_socket *srv_socket;   /* reference to the server-socket */
+
 	/* timestamps */
 	time_t read_idle_ts;
 	time_t close_timeout_ts;
@@ -59,47 +57,7 @@ struct connection {
 	uint32_t request_count;      /* number of requests handled in this connection */
 	int keep_alive_idle;         /* remember max_keep_alive_idle from config */
 
-	fdnode *fdn;                 /* fdevent (fdnode *) object */
-	int fd;                      /* the FD for this connection */
-	int ndx;                     /* reverse mapping to server->connection[ndx] */
-
-	/* fd states */
-	int is_readable;
-	int is_writable;
-	int is_ssl_sock;
-
-	chunkqueue *write_queue;      /* a large queue for low-level write ( HTTP response ) [ file, mem ] */
-	chunkqueue *read_queue;       /* a small queue for low-level read ( HTTP request ) [ mem ] */
-
-	int traffic_limit_reached;
-
-	off_t bytes_written;          /* used by mod_accesslog, mod_rrd */
-	off_t bytes_written_cur_second; /* used by mod_accesslog, mod_rrd */
-	off_t bytes_read;             /* used by mod_accesslog, mod_rrd */
-
-	sock_addr dst_addr;
-	buffer *dst_addr_buf;
-
-	/* request */
-	int http_status;
-
-	request_st request;
-	request_uri uri;
-	physical physical;
-	response response;
-
-	server *srv;
-
-	void *plugin_slots;
-
-	request_config conf;
-	void *config_data_base;
-
 	uint16_t proto_default_port;
-
-	struct server_socket *srv_socket;   /* reference to the server-socket */
-	int (* network_write)(struct connection *con, chunkqueue *cq, off_t max_bytes);
-	int (* network_read)(struct connection *con, chunkqueue *cq, off_t max_bytes);
 };
 
 typedef struct {
@@ -182,7 +140,7 @@ struct server {
 
 	struct fdevents *ev;
 	int (* network_backend_write)(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh);
-	handler_t (* request_env)(connection *con);
+	handler_t (* request_env)(request_st *r);
 
 	/* buffers */
 	buffer *tmp_buf;

@@ -510,10 +510,10 @@ static void mod_accesslog_merge_config(plugin_config * const pconf, const config
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_accesslog_patch_config(connection * const con, plugin_data * const p) {
+static void mod_accesslog_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_accesslog_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -772,7 +772,8 @@ SIGHUP_FUNC(log_access_cycle) {
     return HANDLER_GO_ON;
 }
 
-static int log_access_record (const connection * const con, buffer * const b, format_fields * const parsed_format) {
+static int log_access_record (const request_st * const r, buffer * const b, format_fields * const parsed_format) {
+	const connection * const con = r->con;
 	const buffer *vb;
 	struct timespec ts = { 0, 0 };
 	int flush = 0;
@@ -788,7 +789,7 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 
 				if (f->opt & ~(FORMAT_FLAG_TIME_BEGIN|FORMAT_FLAG_TIME_END)) {
 					if (f->opt & FORMAT_FLAG_TIME_SEC) {
-						time_t t = (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) ? log_epoch_secs : con->request.start_ts;
+						time_t t = (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) ? log_epoch_secs : r->start_ts;
 						buffer_append_int(b, (intmax_t)t);
 					} else if (f->opt & (FORMAT_FLAG_TIME_MSEC|FORMAT_FLAG_TIME_USEC|FORMAT_FLAG_TIME_NSEC)) {
 						off_t t; /*(expected to be 64-bit since large file support enabled)*/
@@ -798,8 +799,8 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 							t = (off_t)ts.tv_sec;
 							ns = ts.tv_nsec;
 						} else {
-							t = (off_t)con->request.start_hp.tv_sec;
-							ns = con->request.start_hp.tv_nsec;
+							t = (off_t)r->start_hp.tv_sec;
+							ns = r->start_hp.tv_nsec;
 						}
 						if (f->opt & FORMAT_FLAG_TIME_MSEC) {
 							t *= 1000;
@@ -819,7 +820,7 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 							if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
 							ns = ts.tv_nsec;
 						} else {
-							ns = con->request.start_hp.tv_nsec;
+							ns = r->start_hp.tv_nsec;
 						}
 						/*assert(t < 1000000000);*/
 						if (f->opt & FORMAT_FLAG_TIME_MSEC_FRAC) {
@@ -860,7 +861,7 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 						t = parsed_format->last_generated_accesslog_ts = cur_ts;
 						flush = 1;
 					} else {
-						t = con->request.start_ts;
+						t = r->start_ts;
 					}
 
 				      #if defined(HAVE_STRUCT_TM_GMTOFF)
@@ -909,9 +910,9 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 			case FORMAT_TIME_USED:
 			case FORMAT_TIME_USED_US:
 				if (f->opt & FORMAT_FLAG_TIME_SEC) {
-					buffer_append_int(b, log_epoch_secs - con->request.start_ts);
+					buffer_append_int(b, log_epoch_secs - r->start_ts);
 				} else {
-					const struct timespec * const bs = &con->request.start_hp;
+					const struct timespec * const bs = &r->start_hp;
 					off_t tdiff; /*(expected to be 64-bit since large file support enabled)*/
 					if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
 					tdiff = (off_t)(ts.tv_sec - bs->tv_sec)*1000000000 + (ts.tv_nsec - bs->tv_nsec);
@@ -938,7 +939,7 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 				buffer_append_string_len(b, CONST_STR_LEN("-"));
 				break;
 			case FORMAT_REMOTE_USER:
-				if (NULL != (vb = http_header_env_get(con, CONST_STR_LEN("REMOTE_USER")))) {
+				if (NULL != (vb = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER")))) {
 					accesslog_append_escaped(b, vb);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
@@ -946,33 +947,33 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 				break;
 			case FORMAT_REQUEST_LINE:
 				/*(attempt to reconstruct request line)*/
-				buffer_append_string(b, get_http_method_name(con->request.http_method));
+				buffer_append_string(b, get_http_method_name(r->http_method));
 				buffer_append_string_len(b, CONST_STR_LEN(" "));
-				accesslog_append_escaped(b, con->request.target_orig);
+				accesslog_append_escaped(b, &r->target_orig);
 				buffer_append_string_len(b, CONST_STR_LEN(" "));
-				buffer_append_string(b, get_http_version_name(con->request.http_version));
+				buffer_append_string(b, get_http_version_name(r->http_version));
 				break;
 			case FORMAT_STATUS:
-				buffer_append_int(b, con->http_status);
+				buffer_append_int(b, r->http_status);
 				break;
 
 			case FORMAT_BYTES_OUT_NO_HEADER:
 				if (con->bytes_written > 0) {
-					off_t bytes = con->bytes_written - (off_t)con->response.resp_header_len;
+					off_t bytes = con->bytes_written - (off_t)r->resp_header_len;
 					buffer_append_int(b, bytes > 0 ? bytes : 0);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_HEADER:
-				if (NULL != (vb = http_header_request_get(con, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(&f->string)))) {
+				if (NULL != (vb = http_header_request_get(r, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(&f->string)))) {
 					accesslog_append_escaped(b, vb);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_RESPONSE_HEADER:
-				if (NULL != (vb = http_header_response_get(con, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(&f->string)))) {
+				if (NULL != (vb = http_header_response_get(r, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(&f->string)))) {
 					accesslog_append_escaped(b, vb);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
@@ -980,15 +981,15 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 				break;
 			case FORMAT_ENV:
 			case FORMAT_NOTE:
-				if (NULL != (vb = http_header_env_get(con, CONST_BUF_LEN(&f->string)))) {
+				if (NULL != (vb = http_header_env_get(r, CONST_BUF_LEN(&f->string)))) {
 					accesslog_append_escaped(b, vb);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_FILENAME:
-				if (!buffer_string_is_empty(con->physical.path)) {
-					buffer_append_string_buffer(b, con->physical.path);
+				if (!buffer_string_is_empty(&r->physical.path)) {
+					buffer_append_string_buffer(b, &r->physical.path);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
@@ -1008,25 +1009,25 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 				}
 				break;
 			case FORMAT_SERVER_NAME:
-				if (!buffer_string_is_empty(con->request.server_name)) {
-					buffer_append_string_buffer(b, con->request.server_name);
+				if (!buffer_string_is_empty(r->server_name)) {
+					buffer_append_string_buffer(b, r->server_name);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_HTTP_HOST:
-				if (!buffer_string_is_empty(con->uri.authority)) {
-					accesslog_append_escaped(b, con->uri.authority);
+				if (!buffer_string_is_empty(&r->uri.authority)) {
+					accesslog_append_escaped(b, &r->uri.authority);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_REQUEST_PROTOCOL:
 				buffer_append_string_len(b,
-					con->request.http_version == HTTP_VERSION_1_1 ? "HTTP/1.1" : "HTTP/1.0", 8);
+					r->http_version == HTTP_VERSION_1_1 ? "HTTP/1.1" : "HTTP/1.0", 8);
 				break;
 			case FORMAT_REQUEST_METHOD:
-				http_method_append(b, con->request.http_method);
+				http_method_append(b, r->http_method);
 				break;
 			case FORMAT_PERCENT:
 				buffer_append_string_len(b, CONST_STR_LEN("%"));
@@ -1068,14 +1069,14 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 				}
 				break;
 			case FORMAT_QUERY_STRING:
-				accesslog_append_escaped(b, con->uri.query);
+				accesslog_append_escaped(b, &r->uri.query);
 				break;
 			case FORMAT_URL:
-				accesslog_append_escaped(b, con->uri.path_raw);
+				accesslog_append_escaped(b, &r->uri.path_raw);
 				break;
 			case FORMAT_CONNECTION_STATUS:
-				if (con->request.state == CON_STATE_RESPONSE_END) {
-					if (0 == con->request.keep_alive) {
+				if (r->state == CON_STATE_RESPONSE_END) {
+					if (0 == r->keep_alive) {
 						buffer_append_string_len(b, CONST_STR_LEN("-"));
 					} else {
 						buffer_append_string_len(b, CONST_STR_LEN("+"));
@@ -1092,7 +1093,7 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 				}
 				break;
 			case FORMAT_COOKIE:
-				if (NULL != (vb = http_header_request_get(con, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie")))) {
+				if (NULL != (vb = http_header_request_get(r, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie")))) {
 					char *str = vb->ptr;
 					size_t len = buffer_string_length(&f->string);
 					do {
@@ -1125,7 +1126,7 @@ static int log_access_record (const connection * const con, buffer * const b, fo
 
 REQUESTDONE_FUNC(log_access_write) {
 	plugin_data * const p = p_d;
-	mod_accesslog_patch_config(con, p);
+	mod_accesslog_patch_config(r, p);
 
 	/* No output device, nothing to do */
 	if (!p->conf.use_syslog && p->conf.log_access_fd == -1) return HANDLER_GO_ON;
@@ -1135,7 +1136,7 @@ REQUESTDONE_FUNC(log_access_write) {
 	  : p->conf.access_logbuffer;
 
 	const int flush = p->conf.piped_logger
-	                | log_access_record(con, b, p->conf.parsed_format);
+	                | log_access_record(r, b, p->conf.parsed_format);
 
 	if (p->conf.use_syslog) { /* syslog doesn't cache */
 #ifdef HAVE_SYSLOG_H
@@ -1151,7 +1152,7 @@ REQUESTDONE_FUNC(log_access_write) {
 
 		if (flush || buffer_string_length(b) >= 8192) {
 			if (!accesslog_write_all(p->conf.log_access_fd, b)) {
-				log_perror(con->conf.errh, __FILE__, __LINE__,
+				log_perror(r->conf.errh, __FILE__, __LINE__,
 				  "writing access log entry failed: %s",
 				  p->conf.access_logfile->ptr);
 			}

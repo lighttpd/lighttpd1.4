@@ -64,10 +64,10 @@ FREE_FUNC(mod_mysql_vhost_cleanup) {
     }
 }
 
-static void* mod_mysql_vhost_connection_data(connection *con, void *p_d)
+static void* mod_mysql_vhost_connection_data(request_st * const r, void *p_d)
 {
 	plugin_data *p = p_d;
-	plugin_connection_data *c = con->request.plugin_ctx[p->id];
+	plugin_connection_data *c = r->plugin_ctx[p->id];
 
 	if (c) return c;
 	c = calloc(1, sizeof(*c));
@@ -75,12 +75,12 @@ static void* mod_mysql_vhost_connection_data(connection *con, void *p_d)
 	c->server_name = buffer_init();
 	c->document_root = buffer_init();
 
-	return con->request.plugin_ctx[p->id] = c;
+	return r->plugin_ctx[p->id] = c;
 }
 
-CONNECTION_FUNC(mod_mysql_vhost_handle_connection_reset) {
+REQUEST_FUNC(mod_mysql_vhost_handle_connection_reset) {
 	plugin_data *p = p_d;
-	plugin_connection_data *c = con->request.plugin_ctx[p->id];
+	plugin_connection_data *c = r->plugin_ctx[p->id];
 
 	if (!c) return HANDLER_GO_ON;
 
@@ -89,7 +89,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_connection_reset) {
 
 	free(c);
 
-	con->request.plugin_ctx[p->id] = NULL;
+	r->plugin_ctx[p->id] = NULL;
 	return HANDLER_GO_ON;
 }
 
@@ -119,11 +119,11 @@ static void mod_mysql_vhost_merge_config(plugin_config * const pconf, const conf
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_mysql_vhost_patch_config(connection * const con, plugin_data * const p) {
+static void mod_mysql_vhost_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_mysql_vhost_merge_config(&p->conf,
                                          p->cvlist + p->cvlist[i].v.u2[0]);
     }
@@ -262,7 +262,7 @@ SETDEFAULTS_FUNC(mod_mysql_vhost_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
+REQUEST_FUNC(mod_mysql_vhost_handle_docroot) {
 	plugin_data *p = p_d;
 	plugin_connection_data *c;
 	stat_cache_entry *sce;
@@ -272,18 +272,18 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 	MYSQL_RES *result = NULL;
 
 	/* no host specified? */
-	if (buffer_string_is_empty(con->uri.authority)) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(&r->uri.authority)) return HANDLER_GO_ON;
 
-	mod_mysql_vhost_patch_config(con, p);
+	mod_mysql_vhost_patch_config(r, p);
 
 	if (!p->conf.mysql) return HANDLER_GO_ON;
 	if (buffer_string_is_empty(p->conf.mysql_query)) return HANDLER_GO_ON;
 
 	/* sets up connection data if not done yet */
-	c = mod_mysql_vhost_connection_data(con, p_d);
+	c = mod_mysql_vhost_connection_data(r, p_d);
 
 	/* check if cached this connection */
-	if (buffer_is_equal(c->server_name, con->uri.authority)) goto GO_ON;
+	if (buffer_is_equal(c->server_name, &r->uri.authority)) goto GO_ON;
 
 	/* build and run SQL query */
 	buffer * const b = &p->tmp_buf;
@@ -293,10 +293,10 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 			/* escape the uri.authority */
 			unsigned long to_len;
 			buffer_append_string_len(b, ptr, (size_t)(d - ptr));
-			buffer_string_prepare_append(b, buffer_string_length(con->uri.authority) * 2);
+			buffer_string_prepare_append(b, buffer_string_length(&r->uri.authority) * 2);
 			to_len = mysql_real_escape_string(p->conf.mysql,
 					b->ptr + buffer_string_length(b),
-					CONST_BUF_LEN(con->uri.authority));
+					CONST_BUF_LEN(&r->uri.authority));
 			if ((unsigned long)~0 == to_len) goto ERR500;
 			buffer_commit(b, to_len);
 		} else {
@@ -306,7 +306,7 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 		}
 	}
 	if (mysql_real_query(p->conf.mysql, CONST_BUF_LEN(b))) {
-		log_error(con->conf.errh, __FILE__, __LINE__, "%s", mysql_error(p->conf.mysql));
+		log_error(r->conf.errh, __FILE__, __LINE__, "%s", mysql_error(p->conf.mysql));
 		goto ERR500;
 	}
 	result = mysql_store_result(p->conf.mysql);
@@ -327,16 +327,16 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 
 	sce = stat_cache_get_entry(b);
 	if (NULL == sce) {
-		log_perror(con->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
+		log_perror(r->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
 		goto ERR500;
 	}
 	if (!S_ISDIR(sce->st.st_mode)) {
-		log_error(con->conf.errh, __FILE__, __LINE__, "Not a directory %s", b->ptr);
+		log_error(r->conf.errh, __FILE__, __LINE__, "Not a directory %s", b->ptr);
 		goto ERR500;
 	}
 
 	/* cache the data */
-	buffer_copy_buffer(c->server_name, con->uri.authority);
+	buffer_copy_buffer(c->server_name, &r->uri.authority);
 	buffer_copy_buffer(c->document_root, b);
 
 	mysql_free_result(result);
@@ -346,9 +346,9 @@ CONNECTION_FUNC(mod_mysql_vhost_handle_docroot) {
 
 	/* fix virtual server and docroot */
 GO_ON:
-	con->request.server_name = con->request.server_name_buf;
-	buffer_copy_buffer(con->request.server_name_buf, c->server_name);
-	buffer_copy_buffer(con->physical.doc_root, c->document_root);
+	r->server_name = &r->server_name_buf;
+	buffer_copy_buffer(&r->server_name_buf, c->server_name);
+	buffer_copy_buffer(&r->physical.doc_root, c->document_root);
 
 	return HANDLER_GO_ON;
 
@@ -357,8 +357,8 @@ ERR500:
 #if MYSQL_VERSION_ID >= 40100
 	while (mysql_next_result(p->conf.mysql) == 0);
 #endif
-	con->http_status = 500; /* Internal Error */
-	con->response.handler_module = NULL;
+	r->http_status = 500; /* Internal Error */
+	r->handler_module = NULL;
 	return HANDLER_FINISHED;
 }
 

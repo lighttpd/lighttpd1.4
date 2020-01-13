@@ -143,11 +143,11 @@ static void mod_proxy_merge_config(plugin_config * const pconf, const config_plu
 }
 
 
-static void mod_proxy_patch_config(connection * const con, plugin_data * const p)
+static void mod_proxy_patch_config(request_st * const r, plugin_data * const p)
 {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_proxy_merge_config(&p->conf, p->cvlist+p->cvlist[i].v.u2[0]);
     }
 }
@@ -547,7 +547,7 @@ static void http_header_remap_setcookie (buffer *b, size_t off, http_header_rema
      * characters allowed, for best results, the Set-Cookie value should be the
      * entire string in b from offset to end of string.  In response headers,
      * lighttpd may concatenate multiple Set-Cookie headers into single entry
-     * in con->response.headers, separated by "\r\nSet-Cookie: " */
+     * in r->resp_headers, separated by "\r\nSet-Cookie: " */
     for (char *s = b->ptr+off, *e; *s; s = e) {
         size_t len;
         {
@@ -616,34 +616,34 @@ static void buffer_append_string_backslash_escaped(buffer *b, const char *s, siz
     buffer_commit(b, j);
 }
 
-static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
+static void proxy_set_Forwarded(connection * const con, request_st * const r, const unsigned int flags) {
     buffer *b = NULL, *efor = NULL, *eproto = NULL, *ehost = NULL;
     int semicolon = 0;
 
     if (proxy_check_extforward) {
         efor   =
-          http_header_env_get(con, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"));
+          http_header_env_get(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"));
         eproto =
-          http_header_env_get(con, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_PROTO"));
+          http_header_env_get(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_PROTO"));
         ehost  =
-          http_header_env_get(con, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_HOST"));
+          http_header_env_get(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_HOST"));
     }
 
     /* note: set "Forwarded" prior to updating X-Forwarded-For (below) */
 
     if (flags)
-        b = http_header_request_get(con, HTTP_HEADER_FORWARDED, CONST_STR_LEN("Forwarded"));
+        b = http_header_request_get(r, HTTP_HEADER_FORWARDED, CONST_STR_LEN("Forwarded"));
 
     if (flags && NULL == b) {
         const buffer *xff =
-          http_header_request_get(con, HTTP_HEADER_X_FORWARDED_FOR, CONST_STR_LEN("X-Forwarded-For"));
-        http_header_request_set(con, HTTP_HEADER_FORWARDED,
+          http_header_request_get(r, HTTP_HEADER_X_FORWARDED_FOR, CONST_STR_LEN("X-Forwarded-For"));
+        http_header_request_set(r, HTTP_HEADER_FORWARDED,
                                 CONST_STR_LEN("Forwarded"),
                                 CONST_STR_LEN("x")); /*(must not be blank for _get below)*/
       #ifdef __COVERITY__
         force_assert(NULL != b); /*(not NULL because created directly above)*/
       #endif
-        b = http_header_request_get(con, HTTP_HEADER_FORWARDED, CONST_STR_LEN("Forwarded"));
+        b = http_header_request_get(r, HTTP_HEADER_FORWARDED, CONST_STR_LEN("Forwarded"));
         buffer_clear(b);
         if (NULL != xff) {
             /* use X-Forwarded-For contents to seed Forwarded */
@@ -764,12 +764,12 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
               b, CONST_BUF_LEN(ehost));
             buffer_append_string_len(b, CONST_STR_LEN("\""));
             semicolon = 1;
-        } else if (!buffer_string_is_empty(con->request.http_host)) {
+        } else if (!buffer_string_is_empty(r->http_host)) {
             if (semicolon)
                 buffer_append_string_len(b, CONST_STR_LEN(";"));
             buffer_append_string_len(b, CONST_STR_LEN("host=\""));
             buffer_append_string_backslash_escaped(
-              b, CONST_BUF_LEN(con->request.http_host));
+              b, CONST_BUF_LEN(r->http_host));
             buffer_append_string_len(b, CONST_STR_LEN("\""));
             semicolon = 1;
         }
@@ -777,7 +777,7 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
 
     if (flags & PROXY_FORWARDED_REMOTE_USER) {
         const buffer *remote_user =
-          http_header_env_get(con, CONST_STR_LEN("REMOTE_USER"));
+          http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
         if (NULL != remote_user) {
             if (semicolon)
                 buffer_append_string_len(b, CONST_STR_LEN(";"));
@@ -792,22 +792,22 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
     /* legacy X-* headers, including X-Forwarded-For */
 
     b = (NULL != efor) ? efor : con->dst_addr_buf;
-    http_header_request_set(con, HTTP_HEADER_X_FORWARDED_FOR,
+    http_header_request_set(r, HTTP_HEADER_X_FORWARDED_FOR,
                             CONST_STR_LEN("X-Forwarded-For"),
                             CONST_BUF_LEN(b));
 
-    b = (NULL != ehost) ? ehost : con->request.http_host;
+    b = (NULL != ehost) ? ehost : r->http_host;
     if (!buffer_string_is_empty(b)) {
-        http_header_request_set(con, HTTP_HEADER_OTHER,
+        http_header_request_set(r, HTTP_HEADER_OTHER,
                                 CONST_STR_LEN("X-Host"),
                                 CONST_BUF_LEN(b));
-        http_header_request_set(con, HTTP_HEADER_OTHER,
+        http_header_request_set(r, HTTP_HEADER_OTHER,
                                 CONST_STR_LEN("X-Forwarded-Host"),
                                 CONST_BUF_LEN(b));
     }
 
-    b = (NULL != eproto) ? eproto : con->uri.scheme;
-    http_header_request_set(con, HTTP_HEADER_X_FORWARDED_PROTO,
+    b = (NULL != eproto) ? eproto : &r->uri.scheme;
+    http_header_request_set(r, HTTP_HEADER_X_FORWARDED_PROTO,
                             CONST_STR_LEN("X-Forwarded-Proto"),
                             CONST_BUF_LEN(b));
 }
@@ -815,22 +815,22 @@ static void proxy_set_Forwarded(connection *con, const unsigned int flags) {
 
 static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	handler_ctx *hctx = (handler_ctx *)gwhctx;
-	connection *con = hctx->gw.remote_conn;
+	request_st * const r = hctx->gw.r;
 	const int remap_headers = (NULL != hctx->conf.header.urlpaths
 				   || NULL != hctx->conf.header.hosts_request);
 	const int upgrade = hctx->conf.header.upgrade
-	    && (NULL != http_header_request_get(con, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade")));
-	size_t rsz = (size_t)(con->read_queue->bytes_out - hctx->gw.wb->bytes_in);
-	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->gw.wb, rsz < 65536 ? rsz : con->request.rqst_header_len);
+	    && (NULL != http_header_request_get(r, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade")));
+	size_t rsz = (size_t)(r->read_queue->bytes_out - hctx->gw.wb->bytes_in);
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->gw.wb, rsz < 65536 ? rsz : r->rqst_header_len);
 
 	/* build header */
 
 	/* request line */
-	http_method_append(b, con->request.http_method);
+	http_method_append(b, r->http_method);
 	buffer_append_string_len(b, CONST_STR_LEN(" "));
-	buffer_append_string_buffer(b, con->request.target);
+	buffer_append_string_buffer(b, &r->target);
 	if (remap_headers)
-		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(con->request.target), &hctx->conf.header, 1);
+		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(&r->target), &hctx->conf.header, 1);
 	if (!upgrade)
 		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
 	else
@@ -838,41 +838,41 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 
 	if (hctx->conf.replace_http_host && !buffer_string_is_empty(hctx->gw.host->id)) {
 		if (hctx->gw.conf.debug > 1) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "proxy - using \"%s\" as HTTP Host", hctx->gw.host->id->ptr);
 		}
 		buffer_append_string_len(b, CONST_STR_LEN("Host: "));
 		buffer_append_string_buffer(b, hctx->gw.host->id);
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-	} else if (!buffer_string_is_empty(con->request.http_host)) {
+	} else if (!buffer_string_is_empty(r->http_host)) {
 		buffer_append_string_len(b, CONST_STR_LEN("Host: "));
-		buffer_append_string_buffer(b, con->request.http_host);
+		buffer_append_string_buffer(b, r->http_host);
 		if (remap_headers) {
-			size_t alen = buffer_string_length(con->request.http_host);
+			size_t alen = buffer_string_length(r->http_host);
 			http_header_remap_host(b, buffer_string_length(b) - alen, &hctx->conf.header, 1, alen);
 		}
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 	}
 
 	/* "Forwarded" and legacy X- headers */
-	proxy_set_Forwarded(con, hctx->conf.forwarded);
+	proxy_set_Forwarded(r->con, r, hctx->conf.forwarded);
 
-	if (con->request.reqbody_length > 0
-	    || (0 == con->request.reqbody_length
-		&& !http_method_get_or_head(con->request.http_method))) {
+	if (r->reqbody_length > 0
+	    || (0 == r->reqbody_length
+		&& !http_method_get_or_head(r->http_method))) {
 		/* set Content-Length if client sent Transfer-Encoding: chunked
 		 * and not streaming to backend (request body has been fully received) */
-		const buffer *vb = http_header_request_get(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+		const buffer *vb = http_header_request_get(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 		if (NULL == vb) {
 			char buf[LI_ITOSTRING_LENGTH];
-			http_header_request_set(con, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"),
-			                        buf, li_itostrn(buf, sizeof(buf), con->request.reqbody_length));
+			http_header_request_set(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"),
+			                        buf, li_itostrn(buf, sizeof(buf), r->reqbody_length));
 		}
 	}
 
 	/* request header */
-	for (size_t i = 0, used = con->request.headers.used; i < used; ++i) {
-		data_string *ds = (data_string *)con->request.headers.data[i];
+	for (size_t i = 0, used = r->rqst_headers.used; i < used; ++i) {
+		data_string *ds = (data_string *)r->rqst_headers.data[i];
 		const size_t klen = buffer_string_length(&ds->key);
 		size_t vlen;
 		switch (klen) {
@@ -948,10 +948,10 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	hctx->gw.wb_reqlen = buffer_string_length(b);
 	chunkqueue_prepend_buffer_commit(hctx->gw.wb);
 
-	if (con->request.reqbody_length) {
-		chunkqueue_append_chunkqueue(hctx->gw.wb, con->request.reqbody_queue);
-		if (con->request.reqbody_length > 0)
-			hctx->gw.wb_reqlen += con->request.reqbody_length; /* total req size */
+	if (r->reqbody_length) {
+		chunkqueue_append_chunkqueue(hctx->gw.wb, r->reqbody_queue);
+		if (r->reqbody_length > 0)
+			hctx->gw.wb_reqlen += r->reqbody_length; /* total req size */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
 			hctx->gw.wb_reqlen = -hctx->gw.wb_reqlen;
 	}
@@ -963,34 +963,34 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 
 static handler_t proxy_create_env_connect(gw_handler_ctx *gwhctx) {
 	handler_ctx *hctx = (handler_ctx *)gwhctx;
-	connection *con = hctx->gw.remote_conn;
-	con->http_status = 200; /* OK */
-	con->response.resp_body_started = 1;
+	request_st * const r = hctx->gw.r;
+	r->http_status = 200; /* OK */
+	r->resp_body_started = 1;
 	gw_set_transparent(&hctx->gw);
-	http_response_upgrade_read_body_unknown(con);
+	http_response_upgrade_read_body_unknown(r);
 
 	status_counter_inc(CONST_STR_LEN("proxy.requests"));
 	return HANDLER_GO_ON;
 }
 
 
-static handler_t proxy_response_headers(connection *con, struct http_response_opts_t *opts) {
+static handler_t proxy_response_headers(request_st * const r, struct http_response_opts_t *opts) {
     /* response headers just completed */
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
 
-    if (con->response.htags & HTTP_HEADER_UPGRADE) {
-        if (hctx->conf.header.upgrade && con->http_status == 101) {
+    if (r->resp_htags & HTTP_HEADER_UPGRADE) {
+        if (hctx->conf.header.upgrade && r->http_status == 101) {
             /* 101 Switching Protocols; transition to transparent proxy */
             gw_set_transparent(&hctx->gw);
-            http_response_upgrade_read_body_unknown(con);
+            http_response_upgrade_read_body_unknown(r);
         }
         else {
-            con->response.htags &= ~HTTP_HEADER_UPGRADE;
+            r->resp_htags &= ~HTTP_HEADER_UPGRADE;
           #if 0
             /* preserve prior questionable behavior; likely broken behavior
              * anyway if backend thinks connection is being upgraded but client
              * does not receive Connection: upgrade */
-            http_header_response_unset(con, HTTP_HEADER_UPGRADE,
+            http_header_response_unset(r, HTTP_HEADER_UPGRADE,
                                        CONST_STR_LEN("Upgrade"))
           #endif
         }
@@ -1002,36 +1002,36 @@ static handler_t proxy_response_headers(connection *con, struct http_response_op
         && NULL == hctx->conf.header.hosts_response)
         return HANDLER_GO_ON;
 
-    if (con->response.htags & HTTP_HEADER_LOCATION) {
-        buffer *vb = http_header_response_get(con, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"));
+    if (r->resp_htags & HTTP_HEADER_LOCATION) {
+        buffer *vb = http_header_response_get(r, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"));
         if (vb) http_header_remap_uri(vb, 0, &hctx->conf.header, 0);
     }
-    if (con->response.htags & HTTP_HEADER_CONTENT_LOCATION) {
-        buffer *vb = http_header_response_get(con, HTTP_HEADER_CONTENT_LOCATION, CONST_STR_LEN("Content-Location"));
+    if (r->resp_htags & HTTP_HEADER_CONTENT_LOCATION) {
+        buffer *vb = http_header_response_get(r, HTTP_HEADER_CONTENT_LOCATION, CONST_STR_LEN("Content-Location"));
         if (vb) http_header_remap_uri(vb, 0, &hctx->conf.header, 0);
     }
-    if (con->response.htags & HTTP_HEADER_SET_COOKIE) {
-        buffer *vb = http_header_response_get(con, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"));
+    if (r->resp_htags & HTTP_HEADER_SET_COOKIE) {
+        buffer *vb = http_header_response_get(r, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"));
         if (vb) http_header_remap_setcookie(vb, 0, &hctx->conf.header);
     }
 
     return HANDLER_GO_ON;
 }
 
-static handler_t mod_proxy_check_extension(connection *con, void *p_d) {
+static handler_t mod_proxy_check_extension(request_st * const r, void *p_d) {
 	plugin_data *p = p_d;
 	handler_t rc;
 
-	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
+	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-	mod_proxy_patch_config(con, p);
+	mod_proxy_patch_config(r, p);
 	if (NULL == p->conf.gw.exts) return HANDLER_GO_ON;
 
-	rc = gw_check_extension(con, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
+	rc = gw_check_extension(r, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
 	if (HANDLER_GO_ON != rc) return rc;
 
-	if (con->response.handler_module == p->self) {
-		handler_ctx *hctx = con->request.plugin_ctx[p->id];
+	if (r->handler_module == p->self) {
+		handler_ctx *hctx = r->plugin_ctx[p->id];
 		hctx->gw.create_env = proxy_create_env;
 		hctx->gw.response = chunk_buffer_acquire();
 		hctx->gw.opts.backend = BACKEND_PROXY;
@@ -1039,26 +1039,26 @@ static handler_t mod_proxy_check_extension(connection *con, void *p_d) {
 		hctx->gw.opts.headers = proxy_response_headers;
 
 		hctx->conf = p->conf; /*(copies struct)*/
-		hctx->conf.header.http_host = con->request.http_host;
-		hctx->conf.header.upgrade  &= (con->request.http_version == HTTP_VERSION_1_1);
+		hctx->conf.header.http_host = r->http_host;
+		hctx->conf.header.upgrade  &= (r->http_version == HTTP_VERSION_1_1);
 		/* mod_proxy currently sends all backend requests as http.
 		 * https-remap is a flag since it might not be needed if backend
 		 * honors Forwarded or X-Forwarded-Proto headers, e.g. by using
 		 * lighttpd mod_extforward or similar functionality in backend*/
 		if (hctx->conf.header.https_remap) {
 			hctx->conf.header.https_remap =
-			  buffer_is_equal_string(con->uri.scheme, CONST_STR_LEN("https"));
+			  buffer_is_equal_string(&r->uri.scheme, CONST_STR_LEN("https"));
 		}
 
-		if (con->request.http_method == HTTP_METHOD_CONNECT) {
+		if (r->http_method == HTTP_METHOD_CONNECT) {
 			/*(note: not requiring HTTP/1.1 due to too many non-compliant
 			 * clients such as 'openssl s_client')*/
 			if (hctx->conf.header.connect_method) {
 				hctx->gw.create_env = proxy_create_env_connect;
 			}
 			else {
-				con->http_status = 405; /* Method Not Allowed */
-				con->response.handler_module = NULL;
+				r->http_status = 405; /* Method Not Allowed */
+				r->handler_module = NULL;
 				return HANDLER_FINISHED;
 			}
 		}

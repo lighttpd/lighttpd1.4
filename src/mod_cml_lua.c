@@ -101,7 +101,7 @@ static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 	return 0;
 }
 
-int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
+int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * const fn) {
 	lua_State *L;
 	int ret = -1;
 	buffer *b;
@@ -137,12 +137,12 @@ int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 	{
 		int header_tbl = lua_gettop(L);
 
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(con->request.target_orig));
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(con->uri.path));
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(con->physical.path));
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(con->physical.basedir));
-		if (!buffer_string_is_empty(con->request.pathinfo)) {
-			c_to_lua_push(L, header_tbl, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(con->request.pathinfo));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(&r->target_orig));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(&r->uri.path));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(&r->physical.path));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(&r->physical.basedir));
+		if (!buffer_string_is_empty(&r->pathinfo)) {
+			c_to_lua_push(L, header_tbl, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(&r->pathinfo));
 		}
 
 		c_to_lua_push(L, header_tbl, CONST_STR_LEN("CWD"), CONST_BUF_LEN(&p->basedir));
@@ -152,7 +152,7 @@ int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 
 	/* register GET parameter */
 	lua_newtable(L);
-	cache_export_get_params(L, lua_gettop(L), con->uri.query);
+	cache_export_get_params(L, lua_gettop(L), &r->uri.query);
 	lua_setglobal(L, "get");
 
 	/* 2 default constants */
@@ -165,14 +165,14 @@ int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 	/* load lua program */
 	ret = luaL_loadfile(L, fn->ptr);
 	if (0 != ret) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "failed loading cml_lua script %s: %s",
 		  fn->ptr, lua_tostring(L, -1));
 		goto error;
 	}
 
 	if (lua_pcall(L, 0, 1, 0)) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "failed running cml_lua script %s: %s",
 		  fn->ptr, lua_tostring(L, -1));
 		goto error;
@@ -186,7 +186,7 @@ int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 	lua_to_c_get_string(L, "trigger_handler", &p->trigger_handler);
 
 	if (0 == lua_to_c_get_string(L, "output_contenttype", b)) {
-		http_header_response_set(con, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(b));
+		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(b));
 	}
 
 	if (ret == 0) {
@@ -196,7 +196,7 @@ int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 		time_t mtime = 0;
 
 		if (!lua_to_c_is_table(L, "output_include")) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
+			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "output_include is missing or not a table");
 			ret = -1;
 
@@ -232,7 +232,7 @@ int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 					buffer_copy_string(b, lua_tostring(L, -1));
 				}
 
-				fd = stat_cache_open_rdonly_fstat(b, &st, con->conf.follow_symlink);
+				fd = stat_cache_open_rdonly_fstat(b, &st, r->conf.follow_symlink);
 				if (fd < 0) {
 					/* stat failed */
 
@@ -242,7 +242,7 @@ int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 						if (!buffer_string_is_empty(&p->trigger_handler)) {
 							ret = 1; /* cache-miss */
 
-							log_error(con->conf.errh, __FILE__, __LINE__,
+							log_error(r->conf.errh, __FILE__, __LINE__,
 							  "a file is missing, calling handler");
 
 							break;
@@ -250,7 +250,7 @@ int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 							/* handler not set -> 500 */
 							ret = -1;
 
-							log_error(con->conf.errh, __FILE__, __LINE__,
+							log_error(r->conf.errh, __FILE__, __LINE__,
 							  "a file missing and no handler set");
 
 							break;
@@ -260,13 +260,13 @@ int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 						break;
 					}
 				} else {
-					chunkqueue_append_file_fd(con->write_queue, b, fd, 0, st.st_size);
+					chunkqueue_append_file_fd(r->write_queue, b, fd, 0, st.st_size);
 					if (st.st_mtime > mtime) mtime = st.st_mtime;
 				}
 			} else {
 				/* not a string */
 				ret = -1;
-				log_error(con->conf.errh, __FILE__, __LINE__, "not a string");
+				log_error(r->conf.errh, __FILE__, __LINE__, "not a string");
 				break;
 			}
 
@@ -276,39 +276,39 @@ int cache_parse_lua(connection *con, plugin_data *p, const buffer *fn) {
 		lua_settop(L, curelem - 1);
 
 		if (ret == 0) {
-			const buffer *vb = http_header_response_get(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"));
+			const buffer *vb = http_header_response_get(r, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"));
 			if (NULL == vb) { /* no Last-Modified specified */
 				char timebuf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
 				if (0 == mtime) mtime = time(NULL); /* default last-modified to now */
 				strftime(timebuf, sizeof(timebuf), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&mtime));
-				http_header_response_set(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), timebuf, sizeof(timebuf) - 1);
-				vb = http_header_response_get(con, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"));
+				http_header_response_set(r, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), timebuf, sizeof(timebuf) - 1);
+				vb = http_header_response_get(r, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"));
 				force_assert(NULL != vb);
 			}
 
-			con->response.resp_body_finished = 1;
+			r->resp_body_finished = 1;
 
-			if (HANDLER_FINISHED == http_response_handle_cachable(con, vb)) {
+			if (HANDLER_FINISHED == http_response_handle_cachable(r, vb)) {
 				/* ok, the client already has our content,
 				 * no need to send it again */
 
-				chunkqueue_reset(con->write_queue);
+				chunkqueue_reset(r->write_queue);
 				ret = 0; /* cache-hit */
 			}
 		} else {
-			chunkqueue_reset(con->write_queue);
+			chunkqueue_reset(r->write_queue);
 		}
 	}
 
 	if (ret == 1 && !buffer_string_is_empty(&p->trigger_handler)) {
 		/* cache-miss */
-		buffer_copy_buffer(con->uri.path, &p->baseurl);
-		buffer_append_string_buffer(con->uri.path, &p->trigger_handler);
+		buffer_copy_buffer(&r->uri.path, &p->baseurl);
+		buffer_append_string_buffer(&r->uri.path, &p->trigger_handler);
 
-		buffer_copy_buffer(con->physical.path, &p->basedir);
-		buffer_append_string_buffer(con->physical.path, &p->trigger_handler);
+		buffer_copy_buffer(&r->physical.path, &p->basedir);
+		buffer_append_string_buffer(&r->physical.path, &p->trigger_handler);
 
-		chunkqueue_reset(con->write_queue);
+		chunkqueue_reset(r->write_queue);
 	}
 
 error:

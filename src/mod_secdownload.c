@@ -289,10 +289,10 @@ static void mod_secdownload_merge_config(plugin_config * const pconf, const conf
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_secdownload_patch_config(connection * const con, plugin_data * const p) {
+static void mod_secdownload_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_secdownload_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -422,40 +422,40 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	time_t ts = 0;
 	size_t i, mac_len;
 
-	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
+	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-	if (buffer_is_empty(con->uri.path)) return HANDLER_GO_ON;
+	if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
 
-	mod_secdownload_patch_config(con, p);
+	mod_secdownload_patch_config(r, p);
 
 	if (buffer_string_is_empty(p->conf.uri_prefix)) return HANDLER_GO_ON;
 
 	if (buffer_string_is_empty(p->conf.secret)) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "secdownload.secret has to be set");
-		con->http_status = 500;
+		r->http_status = 500;
 		return HANDLER_FINISHED;
 	}
 
 	if (buffer_string_is_empty(p->conf.doc_root)) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "secdownload.document-root has to be set");
-		con->http_status = 500;
+		r->http_status = 500;
 		return HANDLER_FINISHED;
 	}
 
 	if (SECDL_INVALID == p->conf.algorithm) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
+		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "secdownload.algorithm has to be set");
-		con->http_status = 500;
+		r->http_status = 500;
 		return HANDLER_FINISHED;
 	}
 
 	mac_len = secdl_algorithm_mac_length(p->conf.algorithm);
 
-	if (0 != strncmp(con->uri.path->ptr, p->conf.uri_prefix->ptr, buffer_string_length(p->conf.uri_prefix))) return HANDLER_GO_ON;
+	if (0 != strncmp(r->uri.path.ptr, p->conf.uri_prefix->ptr, buffer_string_length(p->conf.uri_prefix))) return HANDLER_GO_ON;
 
-	mac_str = con->uri.path->ptr + buffer_string_length(p->conf.uri_prefix);
+	mac_str = r->uri.path.ptr + buffer_string_length(p->conf.uri_prefix);
 
 	if (!is_base64_len(mac_str, mac_len)) return HANDLER_GO_ON;
 
@@ -476,14 +476,14 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	if ( (cur_ts > ts && (unsigned int) (cur_ts - ts) > p->conf.timeout) ||
 	     (cur_ts < ts && (unsigned int) (ts - cur_ts) > p->conf.timeout) ) {
 		/* "Gone" as the url will never be valid again instead of "408 - Timeout" where the request may be repeated */
-		con->http_status = 410;
+		r->http_status = 410;
 
 		return HANDLER_FINISHED;
 	}
 
 	rel_uri = ts_str + 8;
 
-	buffer * const tb = con->srv->tmp_buf;
+	buffer * const tb = r->tmp_buf;
 
 	if (p->conf.path_segments) {
 		const char *rel_uri_end = rel_uri;
@@ -498,23 +498,23 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 		}
 	}
 
-	if (p->conf.hash_querystr && !buffer_is_empty(con->uri.query)) {
+	if (p->conf.hash_querystr && !buffer_is_empty(&r->uri.query)) {
 		if (protected_path != tb->ptr) {
 			buffer_copy_string(tb, protected_path);
 		}
 		buffer_append_string_len(tb, CONST_STR_LEN("?"));
-		buffer_append_string_buffer(tb, con->uri.query);
+		buffer_append_string_buffer(tb, &r->uri.query);
 		/* assign last in case tb->ptr is reallocated */
 		protected_path = tb->ptr;
 	}
 
 	if (!secdl_verify_mac(&p->conf, protected_path, mac_str, mac_len,
-	                      con->conf.errh)) {
-		con->http_status = 403;
+	                      r->conf.errh)) {
+		r->http_status = 403;
 
-		if (con->conf.log_request_handling) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
-			  "mac invalid: %s", con->uri.path->ptr);
+		if (r->conf.log_request_handling) {
+			log_error(r->conf.errh, __FILE__, __LINE__,
+			  "mac invalid: %s", r->uri.path.ptr);
 		}
 
 		return HANDLER_FINISHED;
@@ -523,11 +523,11 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	/* starting with the last / we should have relative-path to the docroot
 	 */
 
-	buffer_copy_buffer(con->physical.doc_root, p->conf.doc_root);
-	buffer_copy_buffer(con->physical.basedir, p->conf.doc_root);
-	buffer_copy_string(con->physical.rel_path, rel_uri);
-	buffer_copy_buffer(con->physical.path, con->physical.doc_root);
-	buffer_append_string_buffer(con->physical.path, con->physical.rel_path);
+	buffer_copy_buffer(&r->physical.doc_root, p->conf.doc_root);
+	buffer_copy_buffer(&r->physical.basedir, p->conf.doc_root);
+	buffer_copy_string(&r->physical.rel_path, rel_uri);
+	buffer_copy_buffer(&r->physical.path, &r->physical.doc_root);
+	buffer_append_string_buffer(&r->physical.path, &r->physical.rel_path);
 
 	return HANDLER_GO_ON;
 }

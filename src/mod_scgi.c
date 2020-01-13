@@ -54,10 +54,10 @@ static void mod_scgi_merge_config(plugin_config * const pconf, const config_plug
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_scgi_patch_config(connection * const con, plugin_data * const p) {
+static void mod_scgi_patch_config(request_st * const r, plugin_data * const p) {
     memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_scgi_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -209,29 +209,29 @@ static int scgi_env_add_uwsgi(void *venv, const char *key, size_t key_len, const
 
 static handler_t scgi_create_env(handler_ctx *hctx) {
 	gw_host *host = hctx->host;
-	connection *con = hctx->remote_conn;
+	request_st * const r = hctx->r;
 	http_cgi_opts opts = { 0, 0, host->docroot, NULL };
 	http_cgi_header_append_cb scgi_env_add = hctx->conf.proto == LI_PROTOCOL_SCGI
 	  ? scgi_env_add_scgi
 	  : scgi_env_add_uwsgi;
 	size_t offset;
-	size_t rsz = (size_t)(con->read_queue->bytes_out - hctx->wb->bytes_in);
-	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, rsz < 65536 ? rsz : con->request.rqst_header_len);
+	size_t rsz = (size_t)(r->read_queue->bytes_out - hctx->wb->bytes_in);
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, rsz < 65536 ? rsz : r->rqst_header_len);
 
         /* save space for 9 digits (plus ':'), though incoming HTTP request
 	 * currently limited to 64k (65535, so 5 chars) */
 	buffer_copy_string_len(b, CONST_STR_LEN("          "));
 
-	if (0 != http_cgi_headers(con, &opts, scgi_env_add, b)) {
-		con->http_status = 400;
-		con->response.handler_module = NULL;
+	if (0 != http_cgi_headers(r, &opts, scgi_env_add, b)) {
+		r->http_status = 400;
+		r->handler_module = NULL;
 		buffer_clear(b);
 		chunkqueue_remove_finished_chunks(hctx->wb);
 		return HANDLER_FINISHED;
 	}
 
 	if (hctx->conf.proto == LI_PROTOCOL_SCGI) {
-		buffer * const tb = con->srv->tmp_buf;
+		buffer * const tb = r->tmp_buf;
 		size_t len;
 		scgi_env_add(b, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
 		buffer_clear(tb);
@@ -246,8 +246,8 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 		size_t len = buffer_string_length(b)-10;
 		uint32_t uwsgi_header;
 		if (len > USHRT_MAX) {
-			con->http_status = 431; /* Request Header Fields Too Large */
-			con->response.handler_module = NULL;
+			r->http_status = 431; /* Request Header Fields Too Large */
+			r->handler_module = NULL;
 			buffer_clear(b);
 			chunkqueue_remove_finished_chunks(hctx->wb);
 			return HANDLER_FINISHED;
@@ -266,10 +266,10 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 	chunkqueue_mark_written(hctx->wb, offset);
       #endif
 
-	if (con->request.reqbody_length) {
-		chunkqueue_append_chunkqueue(hctx->wb, con->request.reqbody_queue);
-		if (con->request.reqbody_length > 0)
-			hctx->wb_reqlen += con->request.reqbody_length; /* total req size */
+	if (r->reqbody_length) {
+		chunkqueue_append_chunkqueue(hctx->wb, r->reqbody_queue);
+		if (r->reqbody_length > 0)
+			hctx->wb_reqlen += r->reqbody_length; /* total req size */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
 			hctx->wb_reqlen = -hctx->wb_reqlen;
 	}
@@ -279,20 +279,20 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 }
 
 
-static handler_t scgi_check_extension(connection *con, void *p_d, int uri_path_handler) {
+static handler_t scgi_check_extension(request_st * const r, void *p_d, int uri_path_handler) {
 	plugin_data *p = p_d;
 	handler_t rc;
 
-	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
+	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-	mod_scgi_patch_config(con, p);
+	mod_scgi_patch_config(r, p);
 	if (NULL == p->conf.exts) return HANDLER_GO_ON;
 
-	rc = gw_check_extension(con, p, uri_path_handler, 0);
+	rc = gw_check_extension(r, p, uri_path_handler, 0);
 	if (HANDLER_GO_ON != rc) return rc;
 
-	if (con->response.handler_module == p->self) {
-		handler_ctx *hctx = con->request.plugin_ctx[p->id];
+	if (r->handler_module == p->self) {
+		handler_ctx *hctx = r->plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_SCGI;
 		hctx->create_env = scgi_create_env;
 		hctx->response = chunk_buffer_acquire();
@@ -302,13 +302,13 @@ static handler_t scgi_check_extension(connection *con, void *p_d, int uri_path_h
 }
 
 /* uri-path handler */
-static handler_t scgi_check_extension_1(connection *con, void *p_d) {
-	return scgi_check_extension(con, p_d, 1);
+static handler_t scgi_check_extension_1(request_st * const r, void *p_d) {
+	return scgi_check_extension(r, p_d, 1);
 }
 
 /* start request handler */
-static handler_t scgi_check_extension_2(connection *con, void *p_d) {
-	return scgi_check_extension(con, p_d, 0);
+static handler_t scgi_check_extension_2(request_st * const r, void *p_d) {
+	return scgi_check_extension(r, p_d, 0);
 }
 
 

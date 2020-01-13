@@ -150,11 +150,11 @@ static void mod_evhost_merge_config(plugin_config * const pconf, const config_pl
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_evhost_patch_config(connection * const con, plugin_data * const p) {
+static void mod_evhost_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_evhost_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -324,28 +324,28 @@ static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, buffer
 	buffer_append_slash(b);
 }
 
-static handler_t mod_evhost_uri_handler(connection *con, void *p_d) {
+static handler_t mod_evhost_uri_handler(request_st * const r, void *p_d) {
 	plugin_data *p = p_d;
 	stat_cache_entry *sce = NULL;
 
 	/* not authority set */
-	if (buffer_string_is_empty(con->uri.authority)) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(&r->uri.authority)) return HANDLER_GO_ON;
 
-	mod_evhost_patch_config(con, p);
+	mod_evhost_patch_config(r, p);
 
 	/* missing even default(global) conf */
 	if (NULL == p->conf.path_pieces) return HANDLER_GO_ON;
 
 	buffer * const b = &p->tmp_buf;
-	mod_evhost_build_doc_root_path(b, &p->split_vals, con->uri.authority, p->conf.path_pieces);
+	mod_evhost_build_doc_root_path(b, &p->split_vals, &r->uri.authority, p->conf.path_pieces);
 
 	sce = stat_cache_get_entry(b);
 	if (NULL == sce) {
-		log_perror(con->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
+		log_perror(r->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
 	} else if(!S_ISDIR(sce->st.st_mode)) {
-		log_error(con->conf.errh, __FILE__, __LINE__, "not a directory: %s", b->ptr);
+		log_error(r->conf.errh, __FILE__, __LINE__, "not a directory: %s", b->ptr);
 	} else {
-		buffer_copy_buffer(con->physical.doc_root, b);
+		buffer_copy_buffer(&r->physical.doc_root, b);
 	}
 
 	return HANDLER_GO_ON;

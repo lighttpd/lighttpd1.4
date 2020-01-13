@@ -76,10 +76,10 @@ static void mod_setenv_merge_config(plugin_config * const pconf, const config_pl
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_setenv_patch_config(connection * const con, plugin_data * const p, plugin_config * const pconf) {
+static void mod_setenv_patch_config(request_st * const r, plugin_data * const p, plugin_config * const pconf) {
     memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_setenv_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -149,14 +149,14 @@ SETDEFAULTS_FUNC(mod_setenv_set_defaults) {
 
 URIHANDLER_FUNC(mod_setenv_uri_handler) {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->request.plugin_ctx[p->id];
+    handler_ctx *hctx = r->plugin_ctx[p->id];
     if (!hctx)
-        con->request.plugin_ctx[p->id] = hctx = handler_ctx_init();
+        r->plugin_ctx[p->id] = hctx = handler_ctx_init();
     else if (hctx->handled)
         return HANDLER_GO_ON;
     hctx->handled = 1;
 
-    mod_setenv_patch_config(con, p, &hctx->conf);
+    mod_setenv_patch_config(r, p, &hctx->conf);
 
     const array * const aa = hctx->conf.request_header;
     const array * const as = hctx->conf.set_request_header;
@@ -166,7 +166,7 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
             const data_string * const ds = (const data_string *)aa->data[k];
             const enum http_header_e id =
               http_header_hkey_get(CONST_BUF_LEN(&ds->key));
-            http_header_request_append(con, id, CONST_BUF_LEN(&ds->key),
+            http_header_request_append(r, id, CONST_BUF_LEN(&ds->key),
                                                 CONST_BUF_LEN(&ds->value));
         }
     }
@@ -177,18 +177,18 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
             const enum http_header_e id =
               http_header_hkey_get(CONST_BUF_LEN(&ds->key));
             !buffer_string_is_empty(&ds->value)
-              ? http_header_request_set(con, id, CONST_BUF_LEN(&ds->key),
-                                                 CONST_BUF_LEN(&ds->value))
-              : http_header_request_unset(con, id, CONST_BUF_LEN(&ds->key));
+              ? http_header_request_set(r, id, CONST_BUF_LEN(&ds->key),
+                                               CONST_BUF_LEN(&ds->value))
+              : http_header_request_unset(r, id, CONST_BUF_LEN(&ds->key));
         }
     }
 
     return HANDLER_GO_ON;
 }
 
-CONNECTION_FUNC(mod_setenv_handle_request_env) {
+REQUEST_FUNC(mod_setenv_handle_request_env) {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->request.plugin_ctx[p->id];
+    handler_ctx *hctx = r->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
     if (hctx->handled > 1) return HANDLER_GO_ON;
     hctx->handled = 2;
@@ -199,25 +199,25 @@ CONNECTION_FUNC(mod_setenv_handle_request_env) {
     if (aa) {
         for (uint32_t k = 0; k < hctx->conf.environment->used; ++k) {
             const data_string * const ds = (const data_string *)aa->data[k];
-            http_header_env_append(con, CONST_BUF_LEN(&ds->key),
-                                        CONST_BUF_LEN(&ds->value));
+            http_header_env_append(r, CONST_BUF_LEN(&ds->key),
+                                      CONST_BUF_LEN(&ds->value));
         }
     }
 
     if (as) {
         for (uint32_t k = 0; k < as->used; ++k) {
             const data_string * const ds = (const data_string *)as->data[k];
-            http_header_env_set(con, CONST_BUF_LEN(&ds->key),
-                                     CONST_BUF_LEN(&ds->value));
+            http_header_env_set(r, CONST_BUF_LEN(&ds->key),
+                                   CONST_BUF_LEN(&ds->value));
         }
     }
 
     return HANDLER_GO_ON;
 }
 
-CONNECTION_FUNC(mod_setenv_handle_response_start) {
+REQUEST_FUNC(mod_setenv_handle_response_start) {
     plugin_data *p = p_d;
-    handler_ctx *hctx = con->request.plugin_ctx[p->id];
+    handler_ctx *hctx = r->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
     const array * const aa = hctx->conf.response_header;
@@ -228,8 +228,8 @@ CONNECTION_FUNC(mod_setenv_handle_response_start) {
             const data_string * const ds = (const data_string *)aa->data[k];
             const enum http_header_e id =
               http_header_hkey_get(CONST_BUF_LEN(&ds->key));
-            http_header_response_insert(con, id, CONST_BUF_LEN(&ds->key),
-                                                 CONST_BUF_LEN(&ds->value));
+            http_header_response_insert(r, id, CONST_BUF_LEN(&ds->key),
+                                               CONST_BUF_LEN(&ds->value));
         }
     }
 
@@ -239,17 +239,17 @@ CONNECTION_FUNC(mod_setenv_handle_response_start) {
             const enum http_header_e id =
               http_header_hkey_get(CONST_BUF_LEN(&ds->key));
             !buffer_string_is_empty(&ds->value)
-              ? http_header_response_set(con, id, CONST_BUF_LEN(&ds->key),
-                                                  CONST_BUF_LEN(&ds->value))
-              : http_header_response_unset(con, id, CONST_BUF_LEN(&ds->key));
+              ? http_header_response_set(r, id, CONST_BUF_LEN(&ds->key),
+                                                CONST_BUF_LEN(&ds->value))
+              : http_header_response_unset(r, id, CONST_BUF_LEN(&ds->key));
         }
     }
 
     return HANDLER_GO_ON;
 }
 
-CONNECTION_FUNC(mod_setenv_reset) {
-    void ** const hctx = con->request.plugin_ctx+((plugin_data_base *)p_d)->id;
+REQUEST_FUNC(mod_setenv_reset) {
+    void ** const hctx = r->plugin_ctx+((plugin_data_base *)p_d)->id;
     if (*hctx) { handler_ctx_free(*hctx); *hctx = NULL; }
     return HANDLER_GO_ON;
 }

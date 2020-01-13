@@ -762,7 +762,7 @@ stringop(A) ::= expression(B). {
       A = buffer_init_buffer(&((data_string*)B)->value);
     } else if (B->type == TYPE_INTEGER) {
       A = buffer_init();
-      buffer_copy_int(A, ((data_integer *)B)->value);
+      buffer_append_int(A, ((data_integer *)B)->value);
     } else {
       fprintf(stderr, "operand must be string");
       ctx->ok = 0;

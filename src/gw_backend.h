@@ -320,7 +320,7 @@ typedef struct gw_handler_ctx {
     http_response_opts opts;
     gw_plugin_config conf;
 
-    connection *remote_conn;     /* dumb pointer */
+    request_st *r;               /* dumb pointer */
     gw_plugin_data *plugin_data; /* dumb pointer */
     handler_t(*stdin_append)(struct gw_handler_ctx *hctx);
     handler_t(*create_env)(struct gw_handler_ctx *hctx);
@@ -347,9 +347,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
 __attribute_cold__
 int gw_get_defaults_balance(server *srv, const buffer *b);
 
-handler_t gw_check_extension(connection *con, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
-handler_t gw_connection_reset(connection *con, void *p_d);
-handler_t gw_handle_subrequest(connection *con, void *p_d);
+handler_t gw_check_extension(request_st *r, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
+handler_t gw_connection_reset(request_st *r, void *p_d);
+handler_t gw_handle_subrequest(request_st *r, void *p_d);
 handler_t gw_handle_trigger(server *srv, void *p_d);
 handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status);
 

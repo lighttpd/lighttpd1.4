@@ -55,11 +55,11 @@ static void mod_staticfile_merge_config(plugin_config * const pconf, const confi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_staticfile_patch_config(connection * const con, plugin_data * const p) {
+static void mod_staticfile_patch_config(request_st * const r, plugin_data * const p) {
     p->conf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
-        if (config_check_cond(con, (uint32_t)p->cvlist[i].k_id))
+        if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_staticfile_merge_config(&p->conf,
                                         p->cvlist + p->cvlist[i].v.u2[0]);
     }
@@ -97,47 +97,39 @@ SETDEFAULTS_FUNC(mod_staticfile_set_defaults) {
 }
 
 URIHANDLER_FUNC(mod_staticfile_subrequest) {
-	plugin_data *p = p_d;
+    plugin_data * const p = p_d;
 
-	/* someone else has done a decision for us */
-	if (con->http_status != 0) return HANDLER_GO_ON;
-	if (buffer_is_empty(con->physical.path)) return HANDLER_GO_ON;
+    if (r->http_status != 0) return HANDLER_GO_ON;
+    if (buffer_is_empty(&r->physical.path)) return HANDLER_GO_ON;
+    if (NULL != r->handler_module) return HANDLER_GO_ON;
+    if (!http_method_get_head_post(r->http_method)) return HANDLER_GO_ON;
 
-	/* someone else has handled this request */
-	if (NULL != con->response.handler_module) return HANDLER_GO_ON;
+    mod_staticfile_patch_config(r, p);
 
-	/* we only handle GET, POST and HEAD */
-	if (!http_method_get_head_post(con->request.http_method)) return HANDLER_GO_ON;
+    if (p->conf.disable_pathinfo && !buffer_string_is_empty(&r->pathinfo)) {
+        if (r->conf.log_request_handling)
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "-- NOT handling file as static file, pathinfo forbidden");
+        return HANDLER_GO_ON;
+    }
 
-	mod_staticfile_patch_config(con, p);
+    if (p->conf.exclude_ext
+        && array_match_value_suffix(p->conf.exclude_ext, &r->physical.path)) {
+        if (r->conf.log_request_handling)
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "-- NOT handling file as static file, extension forbidden");
+        return HANDLER_GO_ON;
+    }
 
-	if (p->conf.disable_pathinfo && !buffer_string_is_empty(con->request.pathinfo)) {
-		if (con->conf.log_request_handling) {
-			log_error(con->conf.errh, __FILE__, __LINE__,
-			  "-- NOT handling file as static file, pathinfo forbidden");
-		}
-		return HANDLER_GO_ON;
-	}
+    if (r->conf.log_request_handling) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "-- handling file as static file");
+    }
 
-	/* ignore certain extensions */
-	if (p->conf.exclude_ext && array_match_value_suffix(p->conf.exclude_ext, con->physical.path)) {
-			if (con->conf.log_request_handling) {
-				log_error(con->conf.errh, __FILE__, __LINE__,
-				  "-- NOT handling file as static file, extension forbidden");
-			}
-			return HANDLER_GO_ON;
-	}
+    if (!p->conf.etags_used) r->conf.etag_flags = 0;
+    http_response_send_file(r, &r->physical.path);
 
-
-	if (con->conf.log_request_handling) {
-		log_error(con->conf.errh, __FILE__, __LINE__,
-		  "-- handling file as static file");
-	}
-
-	if (!p->conf.etags_used) con->conf.etag_flags = 0;
-	http_response_send_file(con, con->physical.path);
-
-	return HANDLER_FINISHED;
+    return HANDLER_FINISHED;
 }
 
 
