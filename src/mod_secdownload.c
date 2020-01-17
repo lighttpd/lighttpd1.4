@@ -424,7 +424,9 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
+  #ifdef __COVERITY__
 	if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
+  #endif
 
 	mod_secdownload_patch_config(r, p);
 

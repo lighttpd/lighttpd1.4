@@ -88,7 +88,7 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-	if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(&r->uri.path)) return HANDLER_GO_ON;
 	if (r->uri.path.ptr[buffer_string_length(&r->uri.path) - 1] != '/') return HANDLER_GO_ON;
 
 	mod_indexfile_patch_config(r, p);

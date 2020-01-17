@@ -206,8 +206,6 @@ static handler_t mod_usertrack_set_cookie(request_st * const r, plugin_data * co
 URIHANDLER_FUNC(mod_usertrack_uri_handler) {
     plugin_data * const p = p_d;
 
-    if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
-
     mod_usertrack_patch_config(r, p);
 
     const buffer * const b =

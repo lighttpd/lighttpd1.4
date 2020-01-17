@@ -222,7 +222,9 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
 URIHANDLER_FUNC(mod_userdir_docroot_handler) {
     /* /~user/foo.html -> /home/user/public_html/foo.html */
 
+  #ifdef __COVERITY__
     if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
+  #endif
 
     if (r->uri.path.ptr[0] != '/' ||
         r->uri.path.ptr[1] != '~') return HANDLER_GO_ON;

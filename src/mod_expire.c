@@ -281,8 +281,6 @@ REQUEST_FUNC(mod_expire_handler) {
 	vb = http_header_response_get(r, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"));
 	if (NULL != vb) return HANDLER_GO_ON;
 
-	if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
-
 	mod_expire_patch_config(r, p);
 
 	/* check expire.url */

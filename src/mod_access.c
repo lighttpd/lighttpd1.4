@@ -128,7 +128,6 @@ static int mod_access_check (const array *allow, const array *deny, const buffer
  */
 URIHANDLER_FUNC(mod_access_uri_handler) {
     plugin_data *p = p_d;
-    if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
 
     mod_access_patch_config(r, p);
 

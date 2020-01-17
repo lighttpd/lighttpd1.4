@@ -2452,7 +2452,7 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
                 if (host->fix_root_path_name && extension->key.ptr[0] == '/'
                                              && extension->key.ptr[1] == '\0') {
                     buffer_copy_buffer(&r->pathinfo, &r->uri.path);
-                    buffer_clear(&r->uri.path);
+                    buffer_string_set_length(&r->uri.path, 0);
                 } else if (extension->key.ptr[0] == '/'
                            && buffer_string_length(&r->uri.path)
                               > buffer_string_length(&extension->key)

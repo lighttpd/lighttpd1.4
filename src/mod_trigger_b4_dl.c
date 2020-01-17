@@ -358,8 +358,6 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-	if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
-
 	mod_trigger_b4_dl_patch_config(r, p);
 
 	if (!p->conf.trigger_regex || !p->conf.download_regex) return HANDLER_GO_ON;
