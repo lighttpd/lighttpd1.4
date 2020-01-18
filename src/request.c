@@ -346,7 +346,7 @@ static int request_uri_is_valid_char(const unsigned char c) {
 
 __attribute_cold__
 __attribute_noinline__
-static int http_request_header_line_invalid(request_st * const r, const int status, const char * const msg) {
+static int http_request_header_line_invalid(request_st * const restrict r, const int status, const char * const restrict msg) {
     if (r->conf.log_request_header_on_error) {
         if (msg) log_error(r->conf.errh, __FILE__, __LINE__, "%s", msg);
     }
@@ -355,7 +355,7 @@ static int http_request_header_line_invalid(request_st * const r, const int stat
 
 __attribute_cold__
 __attribute_noinline__
-static int http_request_header_char_invalid(request_st * const r, const char ch, const char * const msg) {
+static int http_request_header_char_invalid(request_st * const restrict r, const char ch, const char * const restrict msg) {
     if (r->conf.log_request_header_on_error) {
         if ((unsigned char)ch > 32 && ch != 127) {
             log_error(r->conf.errh, __FILE__, __LINE__, "%s ('%c')", msg, ch);
@@ -373,7 +373,7 @@ static int http_request_header_char_invalid(request_st * const r, const char ch,
  *
  * returns 0 on success, HTTP status on error
  */
-static int http_request_parse_single_header(request_st * const r, const enum http_header_e id, const char * const k, const size_t klen, const char * const v, const size_t vlen) {
+static int http_request_parse_single_header(request_st * const restrict r, const enum http_header_e id, const char * const restrict k, const size_t klen, const char * const restrict v, const size_t vlen) {
     buffer **saveb = NULL;
 
     /*
@@ -486,7 +486,7 @@ static int http_request_parse_single_header(request_st * const r, const enum htt
 }
 
 __attribute_cold__
-static int http_request_parse_proto_loose(request_st * const r, const char * const ptr, const size_t len, const unsigned int http_parseopts) {
+static int http_request_parse_proto_loose(request_st * const restrict r, const char * const restrict ptr, const size_t len, const unsigned int http_parseopts) {
     const char * proto = memchr(ptr, ' ', len);
     if (NULL == proto)
         return http_request_header_line_invalid(r, 400, "incomplete request line -> 400");
@@ -516,7 +516,7 @@ static int http_request_parse_proto_loose(request_st * const r, const char * con
 }
 
 __attribute_cold__
-static const char * http_request_parse_uri_alt(request_st * const r, const char * const uri, const size_t len, const unsigned int http_parseopts) {
+static const char * http_request_parse_uri_alt(request_st * const restrict r, const char * const restrict uri, const size_t len, const unsigned int http_parseopts) {
     const char *nuri;
     if ((len > 7 && buffer_eq_icase_ssn(uri, "http://", 7)
         && NULL != (nuri = memchr(uri + 7, '/', len-7)))
@@ -544,7 +544,7 @@ static const char * http_request_parse_uri_alt(request_st * const r, const char 
     }
 }
 
-static int http_request_parse_reqline(request_st * const r, const char * const ptr, const unsigned short * const hoff, const unsigned int http_parseopts) {
+static int http_request_parse_reqline(request_st * const restrict r, const char * const restrict ptr, const unsigned short * const restrict hoff, const unsigned int http_parseopts) {
     size_t len = hoff[2];
 
     /* parse the first line of the request
@@ -644,7 +644,7 @@ static int http_request_parse_reqline(request_st * const r, const char * const p
 
 __attribute_cold__
 __attribute_noinline__
-static int http_request_parse_header_other(request_st * const r, const char * const k, const int klen, const unsigned int http_header_strict) {
+static int http_request_parse_header_other(request_st * const restrict r, const char * const restrict k, const int klen, const unsigned int http_header_strict) {
     for (int i = 0; i < klen; ++i) {
         if (light_isalpha(k[i]) || k[i] == '-') continue; /*(common cases)*/
         /**
@@ -682,7 +682,7 @@ static int http_request_parse_header_other(request_st * const r, const char * co
     return 0;
 }
 
-static int http_request_parse_headers(request_st * const r, char * const ptr, const unsigned short * const hoff, const unsigned int http_parseopts) {
+static int http_request_parse_headers(request_st * const restrict r, char * const restrict ptr, const unsigned short * const restrict hoff, const unsigned int http_parseopts) {
     const unsigned int http_header_strict = (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
   #if 0 /*(not checked here; will later result in invalid label for HTTP header)*/
@@ -790,7 +790,7 @@ static int http_request_parse_headers(request_st * const r, char * const ptr, co
     return 0;
 }
 
-int http_request_parse(request_st * const r, char * const hdrs, const unsigned short * const hoff, const int scheme_port) {
+int http_request_parse(request_st * const restrict r, char * const restrict hdrs, const unsigned short * const restrict hoff, const int scheme_port) {
     /*
      * Request: "^(GET|POST|HEAD|...) ([^ ]+(\\?[^ ]+|)) (HTTP/1\\.[01])$"
      * Header : "^([-a-zA-Z]+): (.+)$"

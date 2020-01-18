@@ -62,7 +62,7 @@ void buffer_reset(buffer *b) {
 	if (b->size > BUFFER_MAX_REUSE_SIZE) buffer_free_ptr(b);
 }
 
-void buffer_move(buffer *b, buffer *src) {
+void buffer_move(buffer * restrict b, buffer * restrict src) {
 	buffer tmp;
 	force_assert(NULL != b);
 	force_assert(NULL != src);
@@ -156,11 +156,11 @@ void buffer_commit(buffer *b, size_t size)
 	b->ptr[b->used - 1] = '\0';
 }
 
-void buffer_copy_string(buffer *b, const char *s) {
+void buffer_copy_string(buffer * restrict b, const char * restrict s) {
 	buffer_copy_string_len(b, s, NULL != s ? strlen(s) : 0);
 }
 
-void buffer_copy_string_len(buffer * const b, const char * const s, const size_t s_len) {
+void buffer_copy_string_len(buffer * const restrict b, const char * const restrict s, const size_t s_len) {
 	if (NULL == b || s_len >= b->size) buffer_alloc_replace(b, s_len);
 
 	b->used = s_len + 1;
@@ -168,7 +168,7 @@ void buffer_copy_string_len(buffer * const b, const char * const s, const size_t
 	if (0 != s_len) memcpy(b->ptr, s, s_len); /*(s might be NULL)*/
 }
 
-void buffer_append_string(buffer *b, const char *s) {
+void buffer_append_string(buffer * restrict b, const char * restrict s) {
 	buffer_append_string_len(b, s, NULL != s ? strlen(s) : 0);
 }
 
@@ -183,7 +183,7 @@ void buffer_append_string(buffer *b, const char *s) {
  * @param s_len size of the string (without the terminating \0)
  */
 
-void buffer_append_string_len(buffer * const b, const char * const s, const size_t s_len) {
+void buffer_append_string_len(buffer * const restrict b, const char * const restrict s, const size_t s_len) {
 	char * const target_buf = buffer_string_prepare_append(b, s_len);
 	b->used += s_len + (0 == b->used); /*(must include '\0' for append)*/
 	target_buf[s_len] = '\0';
@@ -192,7 +192,7 @@ void buffer_append_string_len(buffer * const b, const char * const s, const size
 	if (s_len) memcpy(target_buf, s, s_len);
 }
 
-void buffer_append_path_len(buffer *b, const char *a, size_t alen) {
+void buffer_append_path_len(buffer * restrict b, const char * restrict a, size_t alen) {
     size_t blen = buffer_string_length(b);
     int aslash = (alen && a[0] == '/');
     buffer_string_prepare_append(b, alen+2); /*(+ '/' and + '\0' if 0 == blen)*/
@@ -266,7 +266,7 @@ void buffer_append_int(buffer *b, intmax_t val) {
 	buffer_append_string_len(b, str, buf_end - str);
 }
 
-void buffer_append_strftime(buffer *b, const char *format, const struct tm *tm) {
+void buffer_append_strftime(buffer * const restrict b, const char * const restrict format, const struct tm * const restrict tm) {
 	size_t rv;
 	char* buf;
 	force_assert(NULL != format);
@@ -403,7 +403,7 @@ int buffer_is_equal_right_len(const buffer *b1, const buffer *b2, size_t len) {
 }
 
 
-void li_tohex_lc(char *buf, size_t buf_len, const char *s, size_t s_len) {
+void li_tohex_lc(char * const restrict buf, size_t buf_len, const char * const restrict s, size_t s_len) {
 	force_assert(2 * s_len > s_len);
 	force_assert(2 * s_len < buf_len);
 
@@ -414,7 +414,7 @@ void li_tohex_lc(char *buf, size_t buf_len, const char *s, size_t s_len) {
 	buf[2*s_len] = '\0';
 }
 
-void li_tohex_uc(char *buf, size_t buf_len, const char *s, size_t s_len) {
+void li_tohex_uc(char * const restrict buf, size_t buf_len, const char * const restrict s, size_t s_len) {
 	force_assert(2 * s_len > s_len);
 	force_assert(2 * s_len < buf_len);
 
@@ -426,8 +426,8 @@ void li_tohex_uc(char *buf, size_t buf_len, const char *s, size_t s_len) {
 }
 
 
-void buffer_substr_replace (buffer * const b, const size_t offset,
-                            const size_t len, const buffer * const replace)
+void buffer_substr_replace (buffer * const restrict b, const size_t offset,
+                            const size_t len, const buffer * const restrict replace)
 {
     const size_t blen = buffer_string_length(b);
     const size_t rlen = buffer_string_length(replace);
@@ -446,7 +446,7 @@ void buffer_substr_replace (buffer * const b, const size_t offset,
 }
 
 
-void buffer_append_string_encoded_hex_lc(buffer *b, const char *s, size_t len) {
+void buffer_append_string_encoded_hex_lc(buffer * const restrict b, const char * const restrict s, size_t len) {
     unsigned char * const p =
       (unsigned char*) buffer_string_prepare_append(b, len*2);
     buffer_commit(b, len*2); /* fill below */
@@ -456,7 +456,7 @@ void buffer_append_string_encoded_hex_lc(buffer *b, const char *s, size_t len) {
     }
 }
 
-void buffer_append_string_encoded_hex_uc(buffer *b, const char *s, size_t len) {
+void buffer_append_string_encoded_hex_uc(buffer * const restrict b, const char * const restrict s, size_t len) {
     unsigned char * const p =
       (unsigned char*) buffer_string_prepare_append(b, len*2);
     buffer_commit(b, len*2); /* fill below */
@@ -559,7 +559,7 @@ static const char encoded_chars_minimal_xml[] = {
 
 
 
-void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_encoding_t encoding) {
+void buffer_append_string_encoded(buffer * const restrict b, const char * const restrict s, size_t s_len, buffer_encoding_t encoding) {
 	unsigned char *ds, *d;
 	size_t d_len, ndx;
 	const char *map = NULL;
@@ -631,7 +631,7 @@ void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer
 	}
 }
 
-void buffer_append_string_c_escaped(buffer *b, const char *s, size_t s_len) {
+void buffer_append_string_c_escaped(buffer * const restrict b, const char * const restrict s, size_t s_len) {
 	unsigned char *ds, *d;
 	size_t d_len, ndx;
 
@@ -688,7 +688,7 @@ void buffer_append_string_c_escaped(buffer *b, const char *s, size_t s_len) {
 }
 
 
-void buffer_copy_string_encoded_cgi_varnames(buffer *b, const char *s, size_t s_len, int is_http_header) {
+void buffer_copy_string_encoded_cgi_varnames(buffer * const restrict b, const char * const restrict s, size_t s_len, int is_http_header) {
 	size_t i, j = 0;
 
 	force_assert(NULL != b);

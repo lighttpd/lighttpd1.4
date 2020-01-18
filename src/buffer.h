@@ -39,7 +39,7 @@ void buffer_free(buffer *b); /* b can be NULL */
 void buffer_reset(buffer *b); /* b can be NULL */
 
 /* reset b. if NULL != b && NULL != src, move src content to b. reset src. */
-void buffer_move(buffer *b, buffer *src);
+void buffer_move(buffer * restrict b, buffer * restrict src);
 
 /* make sure buffer is large enough to store a string of given size
  * and a terminating zero.
@@ -79,19 +79,19 @@ void buffer_string_set_length(buffer *b, uint32_t len);
  */
 static inline void buffer_clear(buffer *b);
 
-void buffer_copy_string(buffer *b, const char *s);
-void buffer_copy_string_len(buffer *b, const char *s, size_t s_len);
-static inline void buffer_copy_buffer(buffer *b, const buffer *src);
+void buffer_copy_string(buffer * restrict b, const char * restrict s);
+void buffer_copy_string_len(buffer * restrict b, const char * restrict s, size_t s_len);
+static inline void buffer_copy_buffer(buffer * restrict b, const buffer * restrict src);
 
-void buffer_append_string(buffer *b, const char *s);
-void buffer_append_string_len(buffer *b, const char *s, size_t s_len);
-static inline void buffer_append_string_buffer(buffer *b, const buffer *src);
+void buffer_append_string(buffer * restrict b, const char * restrict s);
+void buffer_append_string_len(buffer * restrict b, const char * restrict s, size_t s_len);
+static inline void buffer_append_string_buffer(buffer * restrict b, const buffer * restrict src);
 
 #define buffer_append_uint_hex(b,len) buffer_append_uint_hex_lc((b),(len))
 void buffer_append_uint_hex_lc(buffer *b, uintmax_t len);
 void buffer_append_int(buffer *b, intmax_t val);
 
-void buffer_append_strftime(buffer *b, const char *format, const struct tm *tm);
+void buffer_append_strftime(buffer * restrict b, const char * restrict format, const struct tm * restrict tm);
 
 /* '-', log_10 (2^bits) = bits * log 2 / log 10 < bits * 0.31, terminating 0 */
 #define LI_ITOSTRING_LENGTH (2 + (8 * sizeof(intmax_t) * 31 + 99) / 100)
@@ -101,8 +101,8 @@ size_t li_utostrn(char *buf, size_t buf_len, uintmax_t val);
 
 /* buf must be (at least) 2*s_len + 1 big. uses lower-case hex letters. */
 #define li_tohex(buf,buf_len,s,s_len) li_tohex_lc((buf),(buf_len),(s),(s_len))
-void li_tohex_lc(char *buf, size_t buf_len, const char *s, size_t s_len);
-void li_tohex_uc(char *buf, size_t buf_len, const char *s, size_t s_len);
+void li_tohex_lc(char * restrict buf, size_t buf_len, const char * restrict s, size_t s_len);
+void li_tohex_uc(char * restrict buf, size_t buf_len, const char * restrict s, size_t s_len);
 
 /* NULL buffer or empty buffer (used == 0);
  * unset "string" (buffer) config options are initialized to used == 0,
@@ -138,10 +138,10 @@ int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len);
 __attribute_pure__
 int buffer_is_equal_caseless_string(const buffer *a, const char *s, size_t b_len);
 
-void buffer_substr_replace (buffer *b, size_t offset, size_t len, const buffer *replace);
+void buffer_substr_replace (buffer * restrict b, size_t offset, size_t len, const buffer * restrict replace);
 
-void buffer_append_string_encoded_hex_lc(buffer *b, const char *s, size_t len);
-void buffer_append_string_encoded_hex_uc(buffer *b, const char *s, size_t len);
+void buffer_append_string_encoded_hex_lc(buffer * restrict b, const char * restrict s, size_t len);
+void buffer_append_string_encoded_hex_uc(buffer * restrict b, const char * restrict s, size_t len);
 
 typedef enum {
 	ENCODING_REL_URI, /* for coding a rel-uri (/with space/and%percent) nicely as part of a href */
@@ -150,13 +150,13 @@ typedef enum {
 	ENCODING_MINIMAL_XML   /* minimal encoding for xml */
 } buffer_encoding_t;
 
-void buffer_append_string_encoded(buffer *b, const char *s, size_t s_len, buffer_encoding_t encoding);
+void buffer_append_string_encoded(buffer * restrict b, const char * restrict s, size_t s_len, buffer_encoding_t encoding);
 
 /* escape non-printable characters; simple escapes for \t, \r, \n; fallback to \xCC */
-void buffer_append_string_c_escaped(buffer *b, const char *s, size_t s_len);
+void buffer_append_string_c_escaped(buffer * restrict b, const char * restrict s, size_t s_len);
 
 /* to upper case, replace non alpha-numerics with '_'; if is_http_header prefix with "HTTP_" unless s is "content-type" */
-void buffer_copy_string_encoded_cgi_varnames(buffer *b, const char *s, size_t s_len, int is_http_header);
+void buffer_copy_string_encoded_cgi_varnames(buffer * restrict b, const char * restrict s, size_t s_len, int is_http_header);
 
 void buffer_urldecode_path(buffer *url);
 void buffer_urldecode_query(buffer *url);
@@ -203,7 +203,7 @@ __attribute_pure__
 static inline uint32_t buffer_string_space(const buffer *b); /* maximum length of string that can be stored without reallocating */
 
 static inline void buffer_append_slash(buffer *b); /* append '/' no non-empty strings not ending in '/' */
-void buffer_append_path_len(buffer *b, const char *a, size_t alen); /* join strings with '/', if '/' not present */
+void buffer_append_path_len(buffer * restrict b, const char * restrict a, size_t alen); /* join strings with '/', if '/' not present */
 
 #define BUFFER_APPEND_STRING_CONST(x, y) \
 	buffer_append_string_len(x, y, sizeof(y) - 1)
@@ -242,11 +242,11 @@ static inline uint32_t buffer_string_space(const buffer *b) {
 	return NULL != b && b->size ? b->size - (b->used | (0 == b->used)) : 0;
 }
 
-static inline void buffer_copy_buffer(buffer *b, const buffer *src) {
+static inline void buffer_copy_buffer(buffer * restrict b, const buffer * restrict src) {
 	buffer_copy_string_len(b, CONST_BUF_LEN(src));
 }
 
-static inline void buffer_append_string_buffer(buffer *b, const buffer *src) {
+static inline void buffer_append_string_buffer(buffer * restrict b, const buffer * restrict src) {
 	buffer_append_string_len(b, CONST_BUF_LEN(src));
 }
 

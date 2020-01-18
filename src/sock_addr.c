@@ -185,7 +185,7 @@ int sock_addr_is_addr_eq_bits(const sock_addr *a, const sock_addr *b, int bits) 
 }
 
 
-int sock_addr_assign (sock_addr *saddr, int family, unsigned short nport, const void *naddr)
+int sock_addr_assign (sock_addr * const restrict saddr, int family, unsigned short nport, const void * const restrict naddr)
 {
     switch (family) {
       case AF_INET:
@@ -223,7 +223,8 @@ int sock_addr_assign (sock_addr *saddr, int family, unsigned short nport, const 
 }
 
 
-int sock_addr_inet_pton(sock_addr *saddr, const char *str,
+int sock_addr_inet_pton(sock_addr * const restrict saddr,
+                        const char * const restrict str,
                         int family, unsigned short port)
 {
     switch (family) {
@@ -250,7 +251,7 @@ int sock_addr_inet_pton(sock_addr *saddr, const char *str,
 }
 
 
-const char * sock_addr_inet_ntop(const sock_addr *saddr, char *buf, socklen_t sz)
+const char * sock_addr_inet_ntop(const sock_addr * const restrict saddr, char * const restrict buf, socklen_t sz)
 {
     switch (saddr->plain.sa_family) {
       case AF_INET:
@@ -274,7 +275,7 @@ const char * sock_addr_inet_ntop(const sock_addr *saddr, char *buf, socklen_t sz
 }
 
 
-int sock_addr_inet_ntop_copy_buffer(buffer *b, const sock_addr *saddr)
+int sock_addr_inet_ntop_copy_buffer(buffer * const restrict b, const sock_addr * const restrict saddr)
 {
     /*(incur cost of extra copy to avoid potential extra memory allocation)*/
     char buf[UNIX_PATH_MAX];
@@ -285,7 +286,7 @@ int sock_addr_inet_ntop_copy_buffer(buffer *b, const sock_addr *saddr)
 }
 
 
-int sock_addr_inet_ntop_append_buffer(buffer *b, const sock_addr *saddr)
+int sock_addr_inet_ntop_append_buffer(buffer * const restrict b, const sock_addr * const restrict saddr)
 {
     /*(incur cost of extra copy to avoid potential extra memory allocation)*/
     char buf[UNIX_PATH_MAX];
@@ -295,7 +296,7 @@ int sock_addr_inet_ntop_append_buffer(buffer *b, const sock_addr *saddr)
     return 0;
 }
 
-int sock_addr_stringify_append_buffer(buffer *b, const sock_addr *saddr)
+int sock_addr_stringify_append_buffer(buffer * const restrict b, const sock_addr * const restrict saddr)
 {
     switch (saddr->plain.sa_family) {
       case AF_INET:
@@ -330,7 +331,7 @@ int sock_addr_stringify_append_buffer(buffer *b, const sock_addr *saddr)
 }
 
 
-int sock_addr_nameinfo_append_buffer(buffer *b, const sock_addr *saddr, log_error_st *errh)
+int sock_addr_nameinfo_append_buffer(buffer * const restrict b, const sock_addr * const restrict saddr, log_error_st * const restrict errh)
 {
     /*(this routine originates from
      * http-header-glue.c:http_response_redirect_to_directory())*/
@@ -377,7 +378,7 @@ int sock_addr_nameinfo_append_buffer(buffer *b, const sock_addr *saddr, log_erro
 }
 
 
-int sock_addr_from_str_hints(sock_addr *saddr, socklen_t *len, const char *str, int family, unsigned short port, log_error_st *errh)
+int sock_addr_from_str_hints(sock_addr * const restrict saddr, socklen_t * const restrict len, const char * const restrict str, int family, unsigned short port, log_error_st * const restrict errh)
 {
     /*(note: name resolution here is *blocking*)*/
     switch(family) {
@@ -559,7 +560,7 @@ int sock_addr_from_str_hints(sock_addr *saddr, socklen_t *len, const char *str, 
 }
 
 
-int sock_addr_from_str_numeric(sock_addr *saddr, const char *str, log_error_st *errh)
+int sock_addr_from_str_numeric(sock_addr * const restrict saddr, const char * const restrict str, log_error_st * const restrict errh)
 {
     /*(note: does not handle port if getaddrinfo() is not available)*/
     /*(note: getaddrinfo() is stricter than inet_aton() in what is accepted)*/
@@ -622,7 +623,7 @@ int sock_addr_from_str_numeric(sock_addr *saddr, const char *str, log_error_st *
 }
 
 
-int sock_addr_from_buffer_hints_numeric(sock_addr *saddr, socklen_t *len, const buffer *b, int family, unsigned short port, log_error_st *errh)
+int sock_addr_from_buffer_hints_numeric(sock_addr * const restrict saddr, socklen_t * const restrict len, const buffer * const restrict b, int family, unsigned short port, log_error_st * const restrict errh)
 {
     /*(this routine originates from mod_fastcgi.c and mod_scgi.c)*/
     if (buffer_string_is_empty(b)) {

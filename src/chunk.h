@@ -63,13 +63,13 @@ chunkqueue *chunkqueue_init(void);
 void chunkqueue_set_chunk_size (size_t sz);
 void chunkqueue_set_tempdirs_default_reset (void);
 void chunkqueue_set_tempdirs_default (const array *tempdirs, off_t upload_temp_file_size);
-void chunkqueue_set_tempdirs(chunkqueue *cq, const array *tempdirs, off_t upload_temp_file_size);
-void chunkqueue_append_file(chunkqueue *cq, const buffer *fn, off_t offset, off_t len); /* copies "fn" */
-void chunkqueue_append_file_fd(chunkqueue *cq, const buffer *fn, int fd, off_t offset, off_t len); /* copies "fn" */
-void chunkqueue_append_mem(chunkqueue *cq, const char *mem, size_t len); /* copies memory */
-void chunkqueue_append_mem_min(chunkqueue *cq, const char * mem, size_t len); /* copies memory */
-void chunkqueue_append_buffer(chunkqueue *cq, buffer *mem); /* may reset "mem" */
-void chunkqueue_append_chunkqueue(chunkqueue *cq, chunkqueue *src);
+void chunkqueue_set_tempdirs(chunkqueue * restrict cq, const array * restrict tempdirs, off_t upload_temp_file_size);
+void chunkqueue_append_file(chunkqueue * restrict cq, const buffer * restrict fn, off_t offset, off_t len); /* copies "fn" */
+void chunkqueue_append_file_fd(chunkqueue * restrict cq, const buffer * restrict fn, int fd, off_t offset, off_t len); /* copies "fn" */
+void chunkqueue_append_mem(chunkqueue * restrict cq, const char * restrict mem, size_t len); /* copies memory */
+void chunkqueue_append_mem_min(chunkqueue * restrict cq, const char * restrict mem, size_t len); /* copies memory */
+void chunkqueue_append_buffer(chunkqueue * restrict cq, buffer * restrict mem); /* may reset "mem" */
+void chunkqueue_append_chunkqueue(chunkqueue * restrict cq, chunkqueue * restrict src);
 
 __attribute_returns_nonnull__
 buffer * chunkqueue_prepend_buffer_open_sz(chunkqueue *cq, size_t sz);
@@ -87,7 +87,7 @@ buffer * chunkqueue_append_buffer_open(chunkqueue *cq);
 
 void chunkqueue_append_buffer_commit(chunkqueue *cq);
 
-int chunkqueue_append_mem_to_tempfile(chunkqueue *cq, const char *mem, size_t len, struct log_error_st *errh);
+int chunkqueue_append_mem_to_tempfile(chunkqueue * restrict cq, const char * restrict mem, size_t len, struct log_error_st * const restrict errh);
 
 /* functions to handle buffers to read into: */
 /* obtain/reserve memory in chunkqueue at least len (input) size,
@@ -98,9 +98,9 @@ int chunkqueue_append_mem_to_tempfile(chunkqueue *cq, const char *mem, size_t le
  * pass 0 in len for mem at least half of chunk_buf_sz
  */
 __attribute_returns_nonnull__
-char * chunkqueue_get_memory(chunkqueue *cq, size_t *len);
+char * chunkqueue_get_memory(chunkqueue * restrict cq, size_t * restrict len);
 /* commit len bytes of mem obtained from chunkqueue_get_memory() */
-void chunkqueue_use_memory(chunkqueue *cq, chunk *ckpt, size_t len);
+void chunkqueue_use_memory(chunkqueue * restrict cq, chunk *ckpt, size_t len);
 
 /* mark first "len" bytes as written (incrementing chunk offsets)
  * and remove finished chunks
@@ -109,10 +109,10 @@ void chunkqueue_mark_written(chunkqueue *cq, off_t len);
 
 void chunkqueue_remove_finished_chunks(chunkqueue *cq);
 
-void chunkqueue_steal(chunkqueue *dest, chunkqueue *src, off_t len);
-int chunkqueue_steal_with_tempfiles(chunkqueue *dest, chunkqueue *src, off_t len, struct log_error_st *errh);
+void chunkqueue_steal(chunkqueue * restrict dest, chunkqueue * restrict src, off_t len);
+int chunkqueue_steal_with_tempfiles(chunkqueue * restrict dest, chunkqueue * restrict src, off_t len, struct log_error_st * const restrict errh);
 
-int chunkqueue_open_file_chunk(chunkqueue *cq, struct log_error_st *errh);
+int chunkqueue_open_file_chunk(chunkqueue * restrict cq, struct log_error_st * const restrict errh);
 
 void chunkqueue_compact_mem(chunkqueue *cq, size_t clen);
 
