@@ -46,7 +46,7 @@ network_accept_tcp_nagle_disable (const int fd)
 static handler_t network_server_handle_fdevent(server *srv, void *context, int revents) {
 	server_socket *srv_socket = (server_socket *)context;
 	connection *con;
-	int loops = 0;
+	int loops;
 
 	UNUSED(context);
 
@@ -61,9 +61,13 @@ static handler_t network_server_handle_fdevent(server *srv, void *context, int r
 	/* accept()s at most 100 connections directly
 	 *
 	 * we jump out after 100 to give the waiting connections a chance */
-	for (loops = 0; loops < 100 && NULL != (con = connection_accept(srv, srv_socket)); loops++) {
+	if (srv->conns->used >= srv->max_conns) return HANDLER_GO_ON;
+	loops = (int)(srv->max_conns - srv->conns->used + 1);
+	if (loops > 100) loops = 101;
+
+	while (--loops && NULL != (con = connection_accept(srv, srv_socket)))
 		connection_state_machine(srv, con);
-	}
+
 	return HANDLER_GO_ON;
 }
 
