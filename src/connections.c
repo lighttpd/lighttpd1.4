@@ -1134,7 +1134,12 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 
 
 static int connection_handle_request(request_st * const r) {
-			int rc = http_response_prepare(r);
+			const plugin *p = r->handler_module;
+			int rc;
+			if (NULL != p
+			    || ((rc = http_response_prepare(r)) == HANDLER_GO_ON
+			        && NULL != (p = r->handler_module)))
+				rc = p->handle_subrequest(r, p->data);
 			switch (rc) {
 			case HANDLER_WAIT_FOR_EVENT:
 				if (!r->resp_body_finished && (!r->resp_body_started || 0 == r->conf.stream_response_body)) {
@@ -1142,6 +1147,7 @@ static int connection_handle_request(request_st * const r) {
 				}
 				/* response headers received from backend; fall through to start response */
 				/* fall through */
+			case HANDLER_GO_ON: /*(HANDLER_FINISHED if request not handled)*/
 			case HANDLER_FINISHED:
 				if (r->http_status == 0) r->http_status = 200;
 				if (r->error_handler_saved_status > 0) {
@@ -1229,13 +1235,10 @@ static int connection_handle_request(request_st * const r) {
 					config_reset_config(r);
 				}
 				return 1;
-			case HANDLER_ERROR:
+			/*case HANDLER_ERROR:*/
+			default:
 				/* something went wrong */
 				connection_set_state(r, CON_STATE_ERROR);
-				break;
-			default:
-				connection_set_state(r, CON_STATE_ERROR);
-				log_error(r->conf.errh, __FILE__, __LINE__, "unknown ret-value: %d %d", r->con->fd, rc);
 				break;
 			}
 

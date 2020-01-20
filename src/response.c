@@ -298,8 +298,7 @@ handler_t http_response_prepare(request_st * const r) {
 	handler_t rc;
 
 	/* looks like someone has already done a decision */
-	if (NULL == r->handler_module &&
-	    (r->http_status != 0 && r->http_status != 200)) {
+	if (r->http_status != 0 && r->http_status != 200) {
 		/* remove a packets in the queue */
 		if (r->resp_body_finished == 0) {
 			http_response_body_clear(r, 0);
@@ -309,7 +308,7 @@ handler_t http_response_prepare(request_st * const r) {
 	}
 
 	/* no decision yet, build conf->filename */
-	if (NULL == r->handler_module && buffer_is_empty(&r->physical.path)) {
+	if (buffer_is_empty(&r->physical.path)) {
 
 		/* we only come here when we have the parse the full request again
 		 *
@@ -667,13 +666,14 @@ handler_t http_response_prepare(request_st * const r) {
 		}
 	}
 
+	if (NULL != r->handler_module) return HANDLER_GO_ON;
+
 	/*
 	 * Noone catched away the file from normal path of execution yet (like mod_access)
 	 *
 	 * Go on and check of the file exists at all
 	 */
 
-	if (NULL == r->handler_module) {
 		if (r->conf.log_request_handling) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "-- handling physical path");
@@ -711,10 +711,5 @@ handler_t http_response_prepare(request_st * const r) {
 			return HANDLER_FINISHED;
 		}
 
-	}
-
-	const plugin * const p = r->handler_module;
-	rc = (NULL != p) ? p->handle_subrequest(r, p->data) : HANDLER_FINISHED;
-	if (HANDLER_GO_ON == rc) rc = HANDLER_FINISHED; /* request was not handled, looks like we are done */
-	return rc;
+		return HANDLER_GO_ON;
 }
