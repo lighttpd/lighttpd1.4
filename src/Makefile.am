@@ -10,6 +10,7 @@ noinst_PROGRAMS=\
 	t/test_mod_access \
 	t/test_mod_evhost \
 	t/test_mod_simple_vhost \
+	t/test_mod_userdir \
 	t/test_request
 
 sbin_PROGRAMS=lighttpd lighttpd-angel
@@ -25,6 +26,7 @@ TESTS=\
 	t/test_mod_access$(EXEEXT) \
 	t/test_mod_evhost$(EXEEXT) \
 	t/test_mod_simple_vhost$(EXEEXT) \
+	t/test_mod_userdir$(EXEEXT) \
 	t/test_request$(EXEEXT)
 
 lemon$(BUILD_EXEEXT): lemon.c
@@ -581,6 +583,9 @@ t_test_mod_evhost_LDADD = $(LIBUNWIND_LIBS)
 
 t_test_mod_simple_vhost_SOURCES = t/test_mod_simple_vhost.c buffer.c array.c data_integer.c data_string.c log.c
 t_test_mod_simple_vhost_LDADD = $(LIBUNWIND_LIBS)
+
+t_test_mod_userdir_SOURCES = t/test_mod_userdir.c buffer.c array.c data_integer.c data_string.c log.c
+t_test_mod_userdir_LDADD = $(LIBUNWIND_LIBS)
 
 t_test_request_SOURCES = t/test_request.c request.c buffer.c array.c data_integer.c data_string.c http_header.c http_kv.c log.c sock_addr.c
 t_test_request_LDADD = $(LIBUNWIND_LIBS)

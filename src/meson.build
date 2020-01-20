@@ -822,6 +822,19 @@ test('test_mod_simple_vhost', executable('test_mod_simple_vhost',
 	build_by_default: false,
 ))
 
+test('test_mod_userdir', executable('test_mod_userdir',
+	sources: [
+		't/test_mod_userdir.c',
+		'buffer.c',
+		'array.c',
+		'data_integer.c',
+		'data_string.c',
+		'log.c',
+	],
+	dependencies: common_flags + libunwind,
+	build_by_default: false,
+))
+
 test('test_request', executable('test_request',
 	sources: [
 		't/test_request.c',

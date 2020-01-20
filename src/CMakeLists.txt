@@ -828,6 +828,16 @@ add_executable(test_mod_simple_vhost
 )
 add_test(NAME test_mod_simple_vhost COMMAND test_mod_simple_vhost)
 
+add_executable(test_mod_userdir
+	t/test_mod_userdir.c
+	buffer.c
+	array.c
+	data_integer.c
+	data_string.c
+	log.c
+)
+add_test(NAME test_mod_userdir COMMAND test_mod_userdir)
+
 add_executable(test_request
 	t/test_request.c
 	request.c
@@ -1066,6 +1076,8 @@ if(WITH_LIBUNWIND)
 	add_target_properties(test_mod_evhost COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_mod_simple_vhost ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_mod_simple_vhost COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
+	target_link_libraries(test_mod_userdir ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_mod_userdir COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_request ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_request COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 endif()

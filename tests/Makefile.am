@@ -46,7 +46,6 @@ CONFS=\
 	mod-secdownload.t \
 	mod-setenv.t \
 	mod-ssi.t \
-	mod-userdir.t \
 	proxy.conf \
 	request.t \
 	scgi-responder.conf \

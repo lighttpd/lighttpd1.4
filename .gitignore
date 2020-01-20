@@ -56,5 +56,6 @@ test_configfile
 test_mod_access
 test_mod_evhost
 test_mod_simple_vhost
+test_mod_userdir
 test_request
 versionstamp.h

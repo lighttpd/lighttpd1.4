@@ -240,6 +240,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
     const char * const uptr = r->uri.path.ptr + 2;
     const char * const rel_url = strchr(uptr, '/');
     if (NULL == rel_url) {
+        if (!*uptr) return HANDLER_GO_ON; /* "/~" is not a valid userdir path */
         /* / is missing -> redirect to .../ as we are a user - DIRECTORY ! :) */
         http_response_redirect_to_directory(r, 301);
         return HANDLER_FINISHED;
