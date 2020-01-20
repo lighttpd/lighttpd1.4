@@ -407,10 +407,10 @@ typedef struct {
 	enum {
 		MAGNET_ENV_UNSET,
 
-		MAGNET_ENV_PHYICAL_PATH,
-		MAGNET_ENV_PHYICAL_REL_PATH,
-		MAGNET_ENV_PHYICAL_DOC_ROOT,
-		MAGNET_ENV_PHYICAL_BASEDIR,
+		MAGNET_ENV_PHYSICAL_PATH,
+		MAGNET_ENV_PHYSICAL_REL_PATH,
+		MAGNET_ENV_PHYSICAL_DOC_ROOT,
+		MAGNET_ENV_PHYSICAL_BASEDIR,
 
 		MAGNET_ENV_URI_PATH,
 		MAGNET_ENV_URI_PATH_RAW,
@@ -429,10 +429,10 @@ typedef struct {
 } magnet_env_t;
 
 static const magnet_env_t magnet_env[] = {
-	{ "physical.path", MAGNET_ENV_PHYICAL_PATH },
-	{ "physical.rel-path", MAGNET_ENV_PHYICAL_REL_PATH },
-	{ "physical.doc-root", MAGNET_ENV_PHYICAL_DOC_ROOT },
-	{ "physical.basedir", MAGNET_ENV_PHYICAL_BASEDIR },
+	{ "physical.path", MAGNET_ENV_PHYSICAL_PATH },
+	{ "physical.rel-path", MAGNET_ENV_PHYSICAL_REL_PATH },
+	{ "physical.doc-root", MAGNET_ENV_PHYSICAL_DOC_ROOT },
+	{ "physical.basedir", MAGNET_ENV_PHYSICAL_BASEDIR },
 
 	{ "uri.path", MAGNET_ENV_URI_PATH },
 	{ "uri.path-raw", MAGNET_ENV_URI_PATH_RAW },
@@ -461,13 +461,21 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	 */
 
 	switch (id) {
-	case MAGNET_ENV_PHYICAL_PATH: dest = &r->physical.path; break;
-	case MAGNET_ENV_PHYICAL_REL_PATH: dest = &r->physical.rel_path; break;
-	case MAGNET_ENV_PHYICAL_DOC_ROOT: dest = &r->physical.doc_root; break;
-	case MAGNET_ENV_PHYICAL_BASEDIR: dest = &r->physical.basedir; break;
+	case MAGNET_ENV_PHYSICAL_PATH: dest = &r->physical.path; break;
+	case MAGNET_ENV_PHYSICAL_REL_PATH: dest = &r->physical.rel_path; break;
+	case MAGNET_ENV_PHYSICAL_DOC_ROOT: dest = &r->physical.doc_root; break;
+	case MAGNET_ENV_PHYSICAL_BASEDIR: dest = &r->physical.basedir; break;
 
 	case MAGNET_ENV_URI_PATH: dest = &r->uri.path; break;
-	case MAGNET_ENV_URI_PATH_RAW: dest = &r->uri.path_raw; break;
+	case MAGNET_ENV_URI_PATH_RAW:
+	    {
+		dest = r->tmp_buf;
+		buffer_clear(dest);
+		uint32_t len = buffer_string_length(&r->target);
+		char *qmark = memchr(r->target.ptr, '?', len);
+		buffer_copy_string_len(dest, r->target.ptr, qmark ? (uint32_t)(qmark - r->target.ptr) : len);
+		break;
+	    }
 	case MAGNET_ENV_URI_SCHEME: dest = &r->uri.scheme; break;
 	case MAGNET_ENV_URI_AUTHORITY: dest = &r->uri.authority; break;
 	case MAGNET_ENV_URI_QUERY: dest = &r->uri.query; break;
@@ -525,12 +533,16 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	return dest;
 }
 
-static buffer *magnet_env_get_buffer(request_st * const r, const char * const key) {
+static int magnet_env_get_id(const char * const key) {
 	for (int i = 0; magnet_env[i].name; ++i) {
 		if (0 == strcmp(key, magnet_env[i].name))
-			return magnet_env_get_buffer_by_id(r, magnet_env[i].type);
+			return magnet_env[i].type;
 	}
-	return NULL;
+	return MAGNET_ENV_UNSET;
+}
+
+static buffer *magnet_env_get_buffer(request_st * const r, const char * const key) {
+	return magnet_env_get_buffer_by_id(r, magnet_env_get_id(key));
 }
 
 static int magnet_env_get(lua_State *L) {
@@ -542,27 +554,60 @@ static int magnet_env_get(lua_State *L) {
 }
 
 static int magnet_env_set(lua_State *L) {
-	/* __newindex: param 1 is the (empty) table the value is supposed to be set in */
-	const char *key = luaL_checkstring(L, 2);
-	buffer *dest = NULL;
+    /* __newindex: param 1 is the (empty) table the value is supposed to be set in */
+    const char * const key = luaL_checkstring(L, 2);
+    luaL_checkany(L, 3); /* nil or a string */
 
-	luaL_checkany(L, 3); /* nil or a string */
+    request_st * const r = magnet_get_request(L);
+    const int env_id = magnet_env_get_id(key);
 
-	request_st * const r = magnet_get_request(L);
-	if (NULL != (dest = magnet_env_get_buffer(r, key))) {
-		if (lua_isnil(L, 3)) {
-			buffer_reset(dest);
-		} else {
-			const_buffer val = magnet_checkconstbuffer(L, 3);
-			buffer_copy_string_len(dest, val.ptr, val.len);
-		}
-	} else {
-		/* couldn't save */
+    if (env_id == MAGNET_ENV_URI_PATH_RAW) {
+        /* modify uri-path of r->target; preserve query-part, if present */
+        /* XXX: should we require that resulting path begin with '/' or %2F ? */
+        const uint32_t len = buffer_string_length(&r->target);
+        const char * const qmark = memchr(r->target.ptr, '?', len);
+        const_buffer val = { NULL, 0 };
+        if (!lua_isnil(L, 3))
+            val = magnet_checkconstbuffer(L, 3);
+        buffer_copy_string_len(&r->uri.path_raw,val.ptr,val.len);/*(temporary)*/
+        if (NULL != qmark)
+            buffer_copy_string_len(r->tmp_buf, qmark,
+                                   len - (uint32_t)(qmark - r->target.ptr));
+        buffer_copy_string_len(&r->target, val.ptr, val.len);
+        if (NULL != qmark)
+            buffer_append_string_buffer(&r->target, r->tmp_buf);
+        return 0;
+    }
 
-		return luaL_error(L, "couldn't store '%s' in lighty.env[]", key);
-	}
+    buffer * const dest = magnet_env_get_buffer_by_id(r, env_id);
+    if (NULL == dest)
+        return luaL_error(L, "couldn't store '%s' in lighty.env[]", key);
 
-	return 0;
+    if (lua_isnil(L, 3)) {
+        if (env_id==MAGNET_ENV_URI_QUERY || env_id==MAGNET_ENV_PHYSICAL_PATH)
+            buffer_clear(dest);
+        else
+            buffer_string_set_length(dest, 0);
+    }
+    else {
+        const_buffer val = magnet_checkconstbuffer(L, 3);
+        buffer_copy_string_len(dest, val.ptr, val.len);
+        /* NB: setting r->uri.query does not modify query-part in r->target
+         * (r->uri.query is uri-decoded; r->target is not) */
+    }
+
+    switch (env_id) {
+      case MAGNET_ENV_URI_SCHEME:
+      case MAGNET_ENV_URI_AUTHORITY:
+        buffer_to_lower(dest);
+        if (env_id == MAGNET_ENV_URI_AUTHORITY)
+            r->server_name = dest;
+        break;
+      default:
+        break;
+    }
+
+    return 0;
 }
 
 static int magnet_env_next(lua_State *L) {
