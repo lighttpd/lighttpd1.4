@@ -746,7 +746,7 @@ static void deflate_compress_cleanup(request_st * const r, handler_ctx * const h
       #if 1 /* unnecessary if deflate.min-compress-size is set to a reasonable value */
 	if (hctx->bytes_in < hctx->bytes_out) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "uri %s in=%lld smaller than out=%lld", r->uri.path_raw.ptr,
+		  "uri %s in=%lld smaller than out=%lld", r->target.ptr,
 		  (long long)hctx->bytes_in, (long long)hctx->bytes_out);
 	}
       #endif

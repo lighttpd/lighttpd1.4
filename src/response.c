@@ -356,8 +356,6 @@ handler_t http_response_prepare(request_st * const r) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "URI-authority   : %s", r->uri.authority.ptr);
 			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "URI-path (raw)  : %s", r->uri.path_raw.ptr);
-			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "URI-path (clean): %s", r->uri.path.ptr);
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "URI-query       : %.*s",

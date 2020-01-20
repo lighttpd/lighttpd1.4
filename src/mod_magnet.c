@@ -569,7 +569,6 @@ static int magnet_env_set(lua_State *L) {
         const_buffer val = { NULL, 0 };
         if (!lua_isnil(L, 3))
             val = magnet_checkconstbuffer(L, 3);
-        buffer_copy_string_len(&r->uri.path_raw,val.ptr,val.len);/*(temporary)*/
         if (NULL != qmark)
             buffer_copy_string_len(r->tmp_buf, qmark,
                                    len - (uint32_t)(qmark - r->target.ptr));

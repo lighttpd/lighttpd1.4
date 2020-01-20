@@ -181,7 +181,11 @@ static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const 
                 p+=4;
             }
             else if (0 == strncmp((const char *)p, "path}", 5)) {
-                burl_append(b, CONST_BUF_LEN(ctx->burl->path), flags);
+                const buffer * const target = ctx->burl->path;
+                const uint32_t len = buffer_string_length(target);
+                const char * const ptr = target->ptr;
+                const char * const qmark = memchr(ptr, '?', len);
+                burl_append(b, ptr, qmark ? (uint32_t)(qmark-ptr) : len, flags);
                 p+=4;
             }
             else if (0 == strncmp((const char *)p, "query}", 6)) {

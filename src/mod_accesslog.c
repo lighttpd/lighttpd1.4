@@ -1072,7 +1072,11 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				accesslog_append_escaped(b, &r->uri.query);
 				break;
 			case FORMAT_URL:
-				accesslog_append_escaped(b, &r->uri.path_raw);
+				{
+					const uint32_t len = buffer_string_length(&r->target);
+					const char * const qmark = memchr(r->target.ptr, '?', len);
+					accesslog_append_escaped_str(b, r->target.ptr, qmark ? (uint32_t)(qmark - r->target.ptr) : len);
+				}
 				break;
 			case FORMAT_CONNECTION_STATUS:
 				if (r->state == CON_STATE_RESPONSE_END) {

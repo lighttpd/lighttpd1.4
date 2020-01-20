@@ -653,7 +653,6 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
     /**
      * prepare strings
      *
-     * - uri.path_raw
      * - uri.path
      * - uri.query
      *
@@ -693,7 +692,6 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
             && target->ptr[0] == '*'
             && target->ptr[1] == '\0')) {
         /* CONNECT ... (or) OPTIONS * ... */
-        buffer_copy_buffer(&r->uri.path_raw, target);
         buffer_copy_buffer(&r->uri.path, target);
         buffer_clear(&r->uri.query);
         return 0;
@@ -740,17 +738,18 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
     }
 
     /** extract query string from target */
+    const char * const pstr = target->ptr;
+    const uint32_t rlen = buffer_string_length(target);
+    uint32_t plen;
     if (NULL != qstr) {
-        const char * const pstr = target->ptr;
-        const size_t plen = (size_t)(qstr - pstr);
-        const size_t rlen = buffer_string_length(target);
+        plen = (uint32_t)(qstr - pstr);
         buffer_copy_string_len(&r->uri.query, qstr + 1, rlen - plen - 1);
-        buffer_copy_string_len(&r->uri.path_raw, pstr, plen);
     }
     else {
+        plen = rlen;
         buffer_clear(&r->uri.query);
-        buffer_copy_buffer(&r->uri.path_raw, target);
     }
+    buffer_copy_string_len(&r->uri.path, pstr, plen);
 
     /* decode url to path
      *
@@ -758,7 +757,6 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
      * - remove path-modifiers (e.g. /../)
      */
 
-    buffer_copy_buffer(&r->uri.path, &r->uri.path_raw);
     buffer_urldecode_path(&r->uri.path);
     buffer_path_simplify(&r->uri.path, &r->uri.path);
     if (r->uri.path.ptr[0] != '/') {

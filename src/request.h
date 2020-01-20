@@ -82,7 +82,6 @@ typedef struct {
 
     /* path including leading slash ("/" or "/index.html") - urldecoded, and sanitized  ( buffer_path_simplify() && buffer_urldecode_path() ) */
     buffer path;
-    buffer path_raw; /* raw path, as sent from client. no urldecoding or path simplifying */
     buffer query; /* querystring ( everything after "?", ie: in "/index.php?foo=1", query is "foo=1" ) */
 } request_uri;
 

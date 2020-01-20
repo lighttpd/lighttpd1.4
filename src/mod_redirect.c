@@ -165,7 +165,7 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     burl.scheme    = &r->uri.scheme;
     burl.authority = &r->uri.authority;
     burl.port      = sock_addr_get_port(&r->con->srv_socket->addr);
-    burl.path      = &r->uri.path_raw;
+    burl.path      = &r->target; /*(uri-encoded and includes query-part)*/
     burl.query     = &r->uri.query;
     if (buffer_string_is_empty(burl.authority))
         burl.authority = r->server_name;

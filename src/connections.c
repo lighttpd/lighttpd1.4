@@ -124,7 +124,6 @@ static void connection_close(connection *con) {
 	buffer_reset(&r->target_orig);
 	buffer_reset(&r->target);       /*(see comments in connection_reset())*/
 	buffer_reset(&r->pathinfo);     /*(see comments in connection_reset())*/
-	buffer_reset(&r->uri.path_raw); /*(see comments in connection_reset())*/
 
 	chunkqueue_reset(con->read_queue);
 	con->request_count = 0;
@@ -599,7 +598,6 @@ void connections_free(server *srv) {
 		free(r->uri.scheme.ptr);
 		free(r->uri.authority.ptr);
 		free(r->uri.path.ptr);
-		free(r->uri.path_raw.ptr);
 		free(r->uri.query.ptr);
 
 		free(r->physical.doc_root.ptr);
@@ -660,7 +658,6 @@ static int connection_reset(connection *con) {
 		 *  is a typical case, the larger buffers are likely to be reused) */
 		buffer_clear(&r->target);
 		buffer_clear(&r->pathinfo);
-		buffer_clear(&r->uri.path_raw);
 		/*buffer_clear(&r->target_orig);*/  /* reset later; used by mod_status*/
 		/*buffer_clear(&r->uri.path);*/     /* reset later; used by mod_status*/
 		/*buffer_clear(&r->uri.query);*/    /* reset later; used by mod_status*/
@@ -670,7 +667,6 @@ static int connection_reset(connection *con) {
 	else {
 		buffer_reset(&r->target);
 		buffer_reset(&r->pathinfo);
-		buffer_reset(&r->uri.path_raw);
 		/*buffer_reset(&r->target_orig);*/  /* reset later; used by mod_status*/
 		/*buffer_reset(&r->uri.path);*/     /* reset later; used by mod_status*/
 		/*buffer_reset(&r->uri.query);*/    /* reset later; used by mod_status*/

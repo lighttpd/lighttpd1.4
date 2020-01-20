@@ -284,7 +284,7 @@ static handler_t process_rewrite_rules(request_st * const r, plugin_data *p, con
 	burl.scheme    = &r->uri.scheme;
 	burl.authority = &r->uri.authority;
 	burl.port      = sock_addr_get_port(&r->con->srv_socket->addr);
-	burl.path      = &r->uri.path_raw;
+	burl.path      = &r->target; /*(uri-encoded and includes query-part)*/
 	burl.query     = &r->uri.query;
 	if (buffer_string_is_empty(burl.authority))
 		burl.authority = r->server_name;
