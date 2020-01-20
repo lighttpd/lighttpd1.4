@@ -178,6 +178,7 @@ struct request_st {
 
 
 int http_request_parse(request_st * restrict r, char * restrict hdrs, const unsigned short * restrict hloffsets, int scheme_port);
+int http_request_parse_target(request_st *r, int scheme_port);
 int http_request_host_normalize(buffer *b, int scheme_port);
 int http_request_host_policy(buffer *b, unsigned int http_parseopts, int scheme_port);
 

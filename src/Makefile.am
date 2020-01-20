@@ -587,7 +587,7 @@ t_test_mod_simple_vhost_LDADD = $(LIBUNWIND_LIBS)
 t_test_mod_userdir_SOURCES = t/test_mod_userdir.c buffer.c array.c data_integer.c data_string.c log.c
 t_test_mod_userdir_LDADD = $(LIBUNWIND_LIBS)
 
-t_test_request_SOURCES = t/test_request.c request.c buffer.c array.c data_integer.c data_string.c http_header.c http_kv.c log.c sock_addr.c
+t_test_request_SOURCES = t/test_request.c request.c base64.c buffer.c burl.c array.c data_integer.c data_string.c http_header.c http_kv.c log.c sock_addr.c
 t_test_request_LDADD = $(LIBUNWIND_LIBS)
 
 noinst_HEADERS   = $(hdr)

@@ -841,7 +841,9 @@ add_test(NAME test_mod_userdir COMMAND test_mod_userdir)
 add_executable(test_request
 	t/test_request.c
 	request.c
+	base64.c
 	buffer.c
+	burl.c
 	array.c
 	data_integer.c
 	data_string.c

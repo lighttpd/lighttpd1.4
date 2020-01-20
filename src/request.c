@@ -516,7 +516,7 @@ static int http_request_parse_proto_loose(request_st * const restrict r, const c
 }
 
 __attribute_cold__
-static const char * http_request_parse_uri_alt(request_st * const restrict r, const char * const restrict uri, const size_t len, const unsigned int http_parseopts) {
+static const char * http_request_parse_reqline_uri(request_st * const restrict r, const char * const restrict uri, const size_t len, const unsigned int http_parseopts) {
     const char *nuri;
     if ((len > 7 && buffer_eq_icase_ssn(uri, "http://", 7)
         && NULL != (nuri = memchr(uri + 7, '/', len-7)))
@@ -611,7 +611,7 @@ static int http_request_parse_reqline(request_st * const restrict r, const char 
     len = (size_t)(p - uri - 1);
 
     if (*uri != '/') { /* (common case: (*uri == '/')) */
-        uri = http_request_parse_uri_alt(r, uri, len, http_parseopts);
+        uri = http_request_parse_reqline_uri(r, uri, len, http_parseopts);
         if (NULL == uri) return 400;
         len = (size_t)(p - uri - 1);
     }
@@ -639,6 +639,134 @@ static int http_request_parse_reqline(request_st * const restrict r, const char 
 
     buffer_copy_string_len(&r->target, uri, len);
     buffer_copy_string_len(&r->target_orig, uri, len);
+    return 0;
+}
+
+int http_request_parse_target(request_st * const r, int scheme_port) {
+    /* URI is parsed into components at start of request and may
+     * also be re-parsed upon HANDLER_COMEBACK during the request
+     * r->target is expected to be a "/url-part?query-part"
+     *   (and *not* a fully-qualified URI starting https://...)
+     * r->uri.authority is expected to be parsed elsewhere into r->http_host
+     */
+
+    /**
+     * prepare strings
+     *
+     * - uri.path_raw
+     * - uri.path
+     * - uri.query
+     *
+     */
+
+    /**
+     * Name according to RFC 2396
+     *
+     * - scheme
+     * - authority
+     * - path
+     * - query
+     *
+     * (scheme)://(authority)(path)?(query)#fragment
+     *
+     */
+
+    /* take initial scheme value from connection-level state
+     * (request r->uri.scheme can be overwritten for later,
+     *  for example by mod_extforward or mod_magnet) */
+    if (scheme_port == 443)
+        buffer_copy_string_len(&r->uri.scheme, CONST_STR_LEN("https"));
+    else
+        buffer_copy_string_len(&r->uri.scheme, CONST_STR_LEN("http"));
+
+    if (r->http_host) { /*(might not know until after parsing request headers)*/
+        buffer_copy_buffer(&r->uri.authority, r->http_host);
+        buffer_to_lower(&r->uri.authority);
+    }
+    else {
+        buffer_string_set_length(&r->uri.authority, 0);
+    }
+
+    buffer * const target = &r->target;
+    if (r->http_method == HTTP_METHOD_CONNECT
+        || (r->http_method == HTTP_METHOD_OPTIONS
+            && target->ptr[0] == '*'
+            && target->ptr[1] == '\0')) {
+        /* CONNECT ... (or) OPTIONS * ... */
+        buffer_copy_buffer(&r->uri.path_raw, target);
+        buffer_copy_buffer(&r->uri.path, target);
+        buffer_clear(&r->uri.query);
+        return 0;
+    }
+
+    char *qstr;
+    if (r->conf.http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE) {
+        /*uint32_t len = (uint32_t)buffer_string_length(target);*/
+        int qs = burl_normalize(target, r->tmp_buf, r->conf.http_parseopts);
+        if (-2 == qs) {
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "invalid character in URI -> 400 %s",
+              target->ptr);
+            return 400; /* Bad Request */
+        }
+        qstr = (-1 == qs) ? NULL : target->ptr+qs;
+      #if 0  /* future: might enable here, or below for all requests */
+        /* (Note: total header size not recalculated on HANDLER_COMEBACK
+         *  even if other request headers changed during processing)
+         * (If (0 != r->loops_per_request), then the generated
+         *  request is too large.  Should a different error be returned?) */
+        r->rqst_header_len -= len;
+        len = buffer_string_length(target);
+        r->rqst_header_len += len;
+        if (len > MAX_HTTP_REQUEST_URI) {
+            return 414; /* 414 Request-URI Too Long */
+        }
+        if (r->rqst_header_len > MAX_HTTP_REQUEST_HEADER) {
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "request header fields too large: %u -> 431",
+              r->rqst_header_len);
+            return 431; /* Request Header Fields Too Large */
+        }
+      #endif
+    }
+    else {
+        size_t rlen = buffer_string_length(target);
+        qstr = memchr(target->ptr, '#', rlen);/* discard fragment */
+        if (qstr) {
+            rlen = (size_t)(qstr - target->ptr);
+            buffer_string_set_length(target, rlen);
+        }
+        qstr = memchr(target->ptr, '?', rlen);
+    }
+
+    /** extract query string from target */
+    if (NULL != qstr) {
+        const char * const pstr = target->ptr;
+        const size_t plen = (size_t)(qstr - pstr);
+        const size_t rlen = buffer_string_length(target);
+        buffer_copy_string_len(&r->uri.query, qstr + 1, rlen - plen - 1);
+        buffer_copy_string_len(&r->uri.path_raw, pstr, plen);
+    }
+    else {
+        buffer_clear(&r->uri.query);
+        buffer_copy_buffer(&r->uri.path_raw, target);
+    }
+
+    /* decode url to path
+     *
+     * - decode url-encodings  (e.g. %20 -> ' ')
+     * - remove path-modifiers (e.g. /../)
+     */
+
+    buffer_copy_buffer(&r->uri.path, &r->uri.path_raw);
+    buffer_urldecode_path(&r->uri.path);
+    buffer_path_simplify(&r->uri.path, &r->uri.path);
+    if (r->uri.path.ptr[0] != '/') {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "uri-path does not begin with '/': %s -> 400", r->uri.path.ptr);
+        return 400; /* Bad Request */
+    }
+
     return 0;
 }
 
@@ -810,6 +938,10 @@ int http_request_parse(request_st * const restrict r, char * const restrict hdrs
 
     /* check hostname field if it is set */
     if (r->http_host) {
+        if (buffer_string_is_empty(&r->uri.authority)) {
+            buffer_copy_buffer(&r->uri.authority, r->http_host);
+            buffer_to_lower(&r->uri.authority);
+        }
         if (0 != http_request_host_policy(r->http_host,
                                           http_parseopts, scheme_port))
             return http_request_header_line_invalid(r, 400, "Invalid Hostname -> 400");
