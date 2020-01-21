@@ -295,6 +295,29 @@ static handler_t http_status_set_error_close (request_st * const r, int status) 
     return HANDLER_FINISHED;
 }
 
+static handler_t http_response_config (request_st * const r) {
+    if (r->conf.log_condition_handling)
+        log_error(r->conf.errh, __FILE__, __LINE__, "run condition");
+
+    config_cond_cache_reset(r);
+    config_patch_config(r);
+
+    /* do we have to downgrade to 1.0 ? */
+    if (!r->conf.allow_http11)
+        r->http_version = HTTP_VERSION_1_0;
+
+    /* r->conf.max_request_size is in kBytes */
+    if (0 != r->conf.max_request_size &&
+        (off_t)r->reqbody_length > ((off_t)r->conf.max_request_size << 10)) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "request-size too long: %lld -> 413", (long long) r->reqbody_length);
+        return /* 413 Payload Too Large */
+          http_status_set_error_close(r, 413);
+    }
+
+    return HANDLER_GO_ON;
+}
+
 handler_t http_response_prepare(request_st * const r) {
     handler_t rc;
 
@@ -310,6 +333,12 @@ handler_t http_response_prepare(request_st * const r) {
 	/* no decision yet, build conf->filename */
 	if (buffer_is_empty(&r->physical.path)) {
 
+		if (!r->async_callback) {
+			rc = http_response_config(r);
+			if (HANDLER_GO_ON != rc) continue;
+		}
+		r->async_callback = 0; /* reset */
+
 		/* we only come here when we have the parse the full request again
 		 *
 		 * a HANDLER_COMEBACK from mod_rewrite and mod_fastcgi might be a
@@ -322,23 +351,9 @@ handler_t http_response_prepare(request_st * const r) {
 		 *
 		 */
 
-	    if (!r->async_callback) {
-
-		if (r->conf.log_condition_handling) {
-			log_error(r->conf.errh, __FILE__, __LINE__, "run condition");
-		}
-
-		config_cond_cache_reset(r);
-		config_patch_config(r);
-
-		/* do we have to downgrade to 1.0 ? */
-		if (!r->conf.allow_http11) {
-			r->http_version = HTTP_VERSION_1_0;
-		}
-
 		if (r->conf.log_request_handling) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "-- splitting Request-URI");
+			  "-- parsed Request-URI");
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "Request-URI     : %s", r->target.ptr);
 			log_error(r->conf.errh, __FILE__, __LINE__,
@@ -351,19 +366,6 @@ handler_t http_response_prepare(request_st * const r) {
 			  "URI-query       : %.*s",
 			  BUFFER_INTLEN_PTR(&r->uri.query));
 		}
-
-		/* r->conf.max_request_size is in kBytes */
-		if (0 != r->conf.max_request_size &&
-		    (off_t)r->reqbody_length > ((off_t)r->conf.max_request_size << 10)) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "request-size too long: %lld -> 413", (long long) r->reqbody_length);
-			return /* 413 Payload Too Large */
-			  http_status_set_error_close(r, 413);
-		}
-
-
-	    }
-	    r->async_callback = 0; /* reset */
 
 
 		/**
