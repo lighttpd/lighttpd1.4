@@ -841,7 +841,17 @@ static int connection_handle_read_state(connection * const con)  {
     }
 
     r->http_status = http_request_parse(r, hdrs, hoff, con->proto_default_port);
-    if (0 != r->http_status) {
+    if (0 == r->http_status) {
+        r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
+                                | (1 << COMP_HTTP_SCHEME)
+                                | (1 << COMP_HTTP_HOST)
+                                | (1 << COMP_HTTP_REMOTE_IP)
+                                | (1 << COMP_HTTP_REQUEST_METHOD)
+                                | (1 << COMP_HTTP_URL)
+                                | (1 << COMP_HTTP_QUERY_STRING)
+                                | (1 << COMP_HTTP_REQUEST_HEADER);
+    }
+    else {
         r->keep_alive = 0;
         r->reqbody_length = 0;
 
@@ -1116,8 +1126,8 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con->proto_default_port = 80; /* "http" */
 
 		config_cond_cache_reset(r);
-		r->conditional_is_valid |= (1 << COMP_SERVER_SOCKET)
-		                        |  (1 << COMP_HTTP_REMOTE_IP);
+		r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
+		                        | (1 << COMP_HTTP_REMOTE_IP);
 
 		if (HANDLER_GO_ON != plugins_call_handle_connection_accept(con)) {
 			connection_reset(con);
@@ -1214,7 +1224,7 @@ static int connection_handle_request(request_st * const r) {
 							buffer_copy_buffer(&r->target, error_handler);
 							connection_handle_errdoc_init(r);
 							r->http_status = 0; /*(after connection_handle_errdoc_init())*/
-
+							http_response_comeback(r);
 							return 1;
 						}
 					}
@@ -1227,9 +1237,7 @@ static int connection_handle_request(request_st * const r) {
 				connection_fdwaitqueue_append(r->con);
 				break;
 			case HANDLER_COMEBACK:
-				if (NULL == r->handler_module && buffer_is_empty(&r->physical.path)) {
-					config_reset_config(r);
-				}
+				http_response_comeback(r);
 				return 1;
 			/*case HANDLER_ERROR:*/
 			default:

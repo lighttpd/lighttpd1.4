@@ -439,11 +439,9 @@ static int cgi_recv_response(request_st * const r, handler_ctx * const hctx) {
 			cgi_connection_close(hctx);
 			return HANDLER_FINISHED;
 		case HANDLER_COMEBACK:
-			/* hctx->conf.local_redir */
+			/* flag for mod_cgi_handle_subrequest() */
+			hctx->conf.local_redir = 2;
 			buffer_clear(hctx->response);
-			connection_response_reset(r); /*(includes r->http_status = 0)*/
-			plugins_call_connection_reset(r);
-			/*cgi_connection_close(hctx);*//*(already cleaned up and hctx is now invalid)*/
 			return HANDLER_COMEBACK;
 		}
 }
@@ -925,6 +923,17 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	return HANDLER_GO_ON;
 }
 
+__attribute_cold__
+__attribute_noinline__
+static handler_t mod_cgi_local_redir(request_st * const r) {
+    /* must be called from mod_cgi_handle_subrequest() so that HANDLER_COMEBACK
+     * return value propagates back through connection_state_machine() */
+    connection_response_reset(r); /*(includes r->http_status = 0)*/
+    plugins_call_connection_reset(r);
+    /*cgi_connection_close(hctx);*//*(already cleaned up and hctx is now invalid)*/
+    return HANDLER_COMEBACK;
+}
+
 /*
  * - HANDLER_GO_ON : not our job
  * - HANDLER_FINISHED: got response
@@ -935,6 +944,8 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	handler_ctx * const hctx = r->plugin_ctx[p->id];
 	if (NULL == hctx) return HANDLER_GO_ON;
 
+	if (2 == hctx->conf.local_redir) return mod_cgi_local_redir(r);
+
 	if ((r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
 	    && r->resp_body_started) {
 		if (chunkqueue_length(r->write_queue) > 65536 - 4096) {
@@ -942,6 +953,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 		} else if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_IN)) {
 			/* optimistic read from backend */
 			handler_t rc = cgi_recv_response(r, hctx);  /*(might invalidate hctx)*/
+			if (rc == HANDLER_COMEBACK) mod_cgi_local_redir(r);
 			if (rc != HANDLER_GO_ON) return rc;          /*(unless HANDLER_GO_ON)*/
 			fdevent_fdnode_event_add(hctx->ev, hctx->fdn, FDEVENT_IN);
 		}

@@ -678,14 +678,6 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
     else
         buffer_copy_string_len(&r->uri.scheme, CONST_STR_LEN("http"));
 
-    if (r->http_host) { /*(might not know until after parsing request headers)*/
-        buffer_copy_buffer(&r->uri.authority, r->http_host);
-        buffer_to_lower(&r->uri.authority);
-    }
-    else {
-        buffer_string_set_length(&r->uri.authority, 0);
-    }
-
     buffer * const target = &r->target;
     if (r->http_method == HTTP_METHOD_CONNECT
         || (r->http_method == HTTP_METHOD_OPTIONS
@@ -929,17 +921,20 @@ int http_request_parse(request_st * const restrict r, char * const restrict hdrs
     status = http_request_parse_reqline(r, hdrs, hoff, http_parseopts);
     if (0 != status) return status;
 
+    status = http_request_parse_target(r, scheme_port);
+    if (0 != status) return status;
+
     status = http_request_parse_headers(r, hdrs, hoff, http_parseopts);
     if (0 != status) return status;
+
+    /*(r->http_host might not be set until after parsing request headers)*/
+    buffer_copy_buffer(&r->uri.authority, r->http_host);/*(copy even if empty)*/
+    buffer_to_lower(&r->uri.authority);
 
     /* post-processing */
 
     /* check hostname field if it is set */
     if (r->http_host) {
-        if (buffer_string_is_empty(&r->uri.authority)) {
-            buffer_copy_buffer(&r->uri.authority, r->http_host);
-            buffer_to_lower(&r->uri.authority);
-        }
         if (0 != http_request_host_policy(r->http_host,
                                           http_parseopts, scheme_port))
             return http_request_header_line_invalid(r, 400, "Invalid Hostname -> 400");

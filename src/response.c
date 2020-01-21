@@ -296,7 +296,9 @@ static handler_t http_status_set_error_close (request_st * const r, int status) 
 }
 
 handler_t http_response_prepare(request_st * const r) {
-	handler_t rc;
+    handler_t rc;
+
+    do {
 
 	/* looks like someone has already made a decision */
 	if (r->http_status != 0 && r->http_status != 200) {
@@ -322,23 +324,11 @@ handler_t http_response_prepare(request_st * const r) {
 
 	    if (!r->async_callback) {
 
-		config_cond_cache_reset(r);
-
 		if (r->conf.log_condition_handling) {
 			log_error(r->conf.errh, __FILE__, __LINE__, "run condition");
 		}
 
-		int status = http_request_parse_target(r, r->con->proto_default_port);
-		if (0 != status) return http_status_set_error_close(r, status);
-
-		r->conditional_is_valid |= (1 << COMP_SERVER_SOCKET)
-		                        |  (1 << COMP_HTTP_SCHEME)
-		                        |  (1 << COMP_HTTP_HOST)
-		                        |  (1 << COMP_HTTP_REMOTE_IP)
-		                        |  (1 << COMP_HTTP_REQUEST_METHOD)
-		                        |  (1 << COMP_HTTP_URL)
-		                        |  (1 << COMP_HTTP_QUERY_STRING)
-		                        |  (1 << COMP_HTTP_REQUEST_HEADER);
+		config_cond_cache_reset(r);
 		config_patch_config(r);
 
 		/* do we have to downgrade to 1.0 ? */
@@ -385,7 +375,7 @@ handler_t http_response_prepare(request_st * const r) {
 		 */
 
 		rc = plugins_call_handle_uri_raw(r);
-		if (HANDLER_GO_ON != rc) return rc;
+		if (HANDLER_GO_ON != rc) continue;
 
 		/**
 		 *
@@ -396,7 +386,7 @@ handler_t http_response_prepare(request_st * const r) {
 		 */
 
 		rc = plugins_call_handle_uri_clean(r);
-		if (HANDLER_GO_ON != rc) return rc;
+		if (HANDLER_GO_ON != rc) continue;
 
 		if (r->http_method == HTTP_METHOD_OPTIONS &&
 		    r->uri.path.ptr[0] == '*' && r->uri.path.ptr[1] == '\0') {
@@ -492,7 +482,7 @@ handler_t http_response_prepare(request_st * const r) {
 		 * for us (all vhost-plugins are supposed to set the doc_root)
 		 * */
 		rc = plugins_call_handle_docroot(r);
-		if (HANDLER_GO_ON != rc) return rc;
+		if (HANDLER_GO_ON != rc) continue;
 
 		/* MacOS X and Windows can't distiguish between upper and lower-case
 		 *
@@ -536,7 +526,7 @@ handler_t http_response_prepare(request_st * const r) {
 			 *  http_response_prepare() is called while processing request) */
 		} else {
 			rc = plugins_call_handle_physical(r);
-			if (HANDLER_GO_ON != rc) return rc;
+			if (HANDLER_GO_ON != rc) continue;
 
 			if (r->conf.log_request_handling) {
 				log_error(r->conf.errh, __FILE__, __LINE__,
@@ -569,7 +559,7 @@ handler_t http_response_prepare(request_st * const r) {
 		}
 
 		rc = http_response_physical_path_check(r);
-		if (HANDLER_GO_ON != rc) return rc;
+		if (HANDLER_GO_ON != rc) continue;
 
 		if (r->conf.log_request_handling) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
@@ -589,7 +579,7 @@ handler_t http_response_prepare(request_st * const r) {
 				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "-- subrequest finished");
 			}
-			return rc;
+			continue;
 		}
 
 		/* if we are still here, no one wanted the file, status 403 is ok I think */
@@ -599,4 +589,39 @@ handler_t http_response_prepare(request_st * const r) {
 		}
 
 		return HANDLER_GO_ON;
+
+    } while (HANDLER_COMEBACK == rc
+             && HANDLER_GO_ON ==(rc = http_response_comeback(r)));
+
+    return rc;
+}
+
+handler_t http_response_comeback (request_st * const r)
+{
+    if (NULL != r->handler_module || !buffer_is_empty(&r->physical.path))
+        return HANDLER_GO_ON;
+
+    config_reset_config(r);
+
+    buffer_copy_buffer(&r->uri.authority,r->http_host);/*copy even if NULL*/
+    buffer_to_lower(&r->uri.authority);
+
+    int status = http_request_parse_target(r, r->con->proto_default_port);
+    if (0 == status) {
+        r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
+                                | (1 << COMP_HTTP_SCHEME)
+                                | (1 << COMP_HTTP_HOST)
+                                | (1 << COMP_HTTP_REMOTE_IP)
+                                | (1 << COMP_HTTP_REQUEST_METHOD)
+                                | (1 << COMP_HTTP_URL)
+                                | (1 << COMP_HTTP_QUERY_STRING)
+                                | (1 << COMP_HTTP_REQUEST_HEADER);
+        return HANDLER_GO_ON;
+    }
+    else {
+        r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
+                                | (1 << COMP_HTTP_REMOTE_IP);
+        config_cond_cache_reset(r);
+        return http_status_set_error_close(r, status);
+    }
 }

@@ -680,7 +680,6 @@ void config_cond_cache_reset_item(request_st * const r, comp_key_t item) {
  * reset the config cache to its initial state at connection start
  */
 void config_cond_cache_reset(request_st * const r) {
-	r->conditional_is_valid = 0;
 	/* resetting all entries; no need to follow children as in config_cond_cache_reset_item */
 	/* static_assert(0 == COND_RESULT_UNSET); */
 	const uint32_t used = config_reference.used;
