@@ -43,12 +43,15 @@ void chunkqueue_set_tempdirs_default_reset (void)
 }
 
 /* chunk buffer (c->mem) is never NULL; specialize routines from buffer.h */
+__attribute_pure__
 static inline size_t chunk_buffer_string_length(const buffer *b) {
     return 0 != b->used ? b->used - 1 : 0;
 }
+__attribute_pure__
 static inline int chunk_buffer_string_is_empty(const buffer *b) {
     return b->used < 2;
 }
+__attribute_pure__
 static inline size_t chunk_buffer_string_space(const buffer *b) {
     return b->size ? b->size - (b->used | (0 == b->used)) : 0;
 }
@@ -220,6 +223,7 @@ void chunkqueue_chunk_pool_free(void)
     chunk_buffers = NULL;
 }
 
+__attribute_pure__
 static off_t chunk_remaining_length(const chunk *c) {
     /* MEM_CHUNK or FILE_CHUNK */
     return (c->type == MEM_CHUNK
