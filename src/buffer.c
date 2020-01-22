@@ -723,7 +723,7 @@ void buffer_copy_string_encoded_cgi_varnames(buffer * const restrict b, const ch
  * replaces non-printable characters with '_'
  */
 
-static void buffer_urldecode_internal(buffer *url, int is_query) {
+static void buffer_urldecode_internal(buffer * const url, const int is_query) {
 	unsigned char high, low;
 	char *src;
 	char *dst;
@@ -735,11 +735,17 @@ static void buffer_urldecode_internal(buffer *url, int is_query) {
 
 	src = (char*) url->ptr;
 
-	while ('\0' != *src) {
-		if ('%' == *src) break;
-		if (is_query && '+' == *src) *src = ' ';
-		src++;
+	if (!is_query) {
+		while ('\0' != *src && '%' != *src) ++src;
 	}
+	else {
+		for (; '\0' != *src && '%' != *src; ++src) {
+			if ('+' == *src) *src = ' ';
+		}
+	}
+
+	if ('\0' == *src) return;
+
 	dst = src;
 
 	while ('\0' != *src) {
@@ -923,23 +929,21 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 	buffer_string_set_length(dest, out - start);
 }
 
-void buffer_to_lower(buffer *b) {
-	size_t i;
-
-	for (i = 0; i < b->used; ++i) {
-		char c = b->ptr[i];
-		if (c >= 'A' && c <= 'Z') b->ptr[i] |= 0x20;
-	}
+void buffer_to_lower(buffer * const b) {
+    char * const s = b->ptr;
+    for (uint32_t i = 0; i < b->used; ++i) {
+        char c = s[i];
+        if (c >= 'A' && c <= 'Z') s[i] |= 0x20;
+    }
 }
 
 
-void buffer_to_upper(buffer *b) {
-	size_t i;
-
-	for (i = 0; i < b->used; ++i) {
-		char c = b->ptr[i];
-		if (c >= 'a' && c <= 'z') b->ptr[i] &= ~0x20;
-	}
+void buffer_to_upper(buffer * const b) {
+    char * const s = b->ptr;
+    for (uint32_t i = 0; i < b->used; ++i) {
+        char c = s[i];
+        if (c >= 'a' && c <= 'z') s[i] &= ~0x20;
+    }
 }
 
 

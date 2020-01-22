@@ -55,11 +55,10 @@ enum http_header_e http_header_hkey_get(const char * const s, const uint32_t sle
     const struct keyvlenvalue * const kv = http_headers;
     int i = slen < sizeof(http_headers_off) ? http_headers_off[slen] : -1;
     if (i < 0) return HTTP_HEADER_OTHER;
-    for (; slen == kv[i].vlen; ++i) {
-        if (slen == kv[i].vlen
-            && buffer_eq_icase_ssn(s, kv[i].value, slen))
+    do {
+        if (buffer_eq_icase_ssn(s, kv[i].value, slen))
             return (enum http_header_e)kv[i].key;
-    }
+    } while (slen == kv[++i].vlen);
     return HTTP_HEADER_OTHER;
 }
 

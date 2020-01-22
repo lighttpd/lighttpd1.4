@@ -404,16 +404,20 @@ static int connection_handle_write_prepare(request_st * const r) {
 			    r->http_status == 304) {
 				/* no Content-Body, no Content-Length */
 				http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
-			} else if (qlen > 0 || r->http_method != HTTP_METHOD_HEAD) {
-				/* qlen = 0 is important for Redirects (301, ...) as they MAY have
-				 * a content. Browsers are waiting for a Content otherwise
-				 */
+			} else if (qlen > 0) {
 				buffer * const tb = r->tmp_buf;
 				buffer_clear(tb);
 				buffer_append_int(tb, qlen);
 				http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
 				                         CONST_STR_LEN("Content-Length"),
 				                         CONST_BUF_LEN(tb));
+			} else if (r->http_method != HTTP_METHOD_HEAD) {
+				/* qlen = 0 is important for Redirects (301, ...) as they MAY have
+				 * a content. Browsers are waiting for a Content otherwise
+				 */
+				http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
+				                         CONST_STR_LEN("Content-Length"),
+				                         CONST_STR_LEN("0"));
 			}
 		}
 	} else {
