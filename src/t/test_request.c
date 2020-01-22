@@ -151,48 +151,42 @@ static void test_request_http_request_parse(request_st * const r)
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(r->http_host,
-                                  CONST_STR_LEN("www.example.org")));
+    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("www.example.org")));
 
     run_http_request_parse(r, __LINE__, 0,
       "IPv4 address",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: 127.0.0.1\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(r->http_host,
-                                  CONST_STR_LEN("127.0.0.1")));
+    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("127.0.0.1")));
 
     run_http_request_parse(r, __LINE__, 0,
       "IPv6 address",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: [::1]\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(r->http_host,
-                                  CONST_STR_LEN("[::1]")));
+    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("[::1]")));
 
     run_http_request_parse(r, __LINE__, 0,
       "hostname + port",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: www.example.org:80\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(r->http_host,
-                                  CONST_STR_LEN("www.example.org")));
+    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("www.example.org")));
 
     run_http_request_parse(r, __LINE__, 0,
       "IPv4 address + port",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: 127.0.0.1:80\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(r->http_host,
-                                  CONST_STR_LEN("127.0.0.1")));
+    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("127.0.0.1")));
 
     run_http_request_parse(r, __LINE__, 0,
       "IPv6 address + port",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: [::1]:80\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(r->http_host,
-                                  CONST_STR_LEN("[::1]")));
+    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("[::1]")));
 
     run_http_request_parse(r, __LINE__, 400,
       "directory traversal",
@@ -211,8 +205,7 @@ static void test_request_http_request_parse(request_st * const r)
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: jsdh.sfdg.sdfg.\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(r->http_host,
-                                  CONST_STR_LEN("jsdh.sfdg.sdfg")));
+    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("jsdh.sfdg.sdfg")));
 
     run_http_request_parse(r, __LINE__, 400,
       "leading dot",
@@ -255,8 +248,7 @@ static void test_request_http_request_parse(request_st * const r)
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: a.b-c.d123\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(r->http_host,
-                                  CONST_STR_LEN("a.b-c.d123")));
+    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("a.b-c.d123")));
 
     run_http_request_parse(r, __LINE__, 400,
       "leading dash",
@@ -327,8 +319,7 @@ static void test_request_http_request_parse(request_st * const r)
     ds = (data_string *)
       array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("Location"));
     assert(ds
-           && buffer_is_equal_string(&ds->value,
-                                     CONST_STR_LEN("foo, foobar    baz")));
+           && buffer_eq_slen(&ds->value, CONST_STR_LEN("foo, foobar    baz")));
 
     run_http_request_parse(r, __LINE__, 0,
       "#1232 - duplicate headers with line-wrapping - test 2",
@@ -339,8 +330,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "\r\n"));
     ds = (data_string *)
       array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("Location"));
-    assert(ds
-           && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foobar    baz")));
+    assert(ds && buffer_eq_slen(&ds->value, CONST_STR_LEN("foobar    baz")));
 
     run_http_request_parse(r, __LINE__, 0,
       "#1232 - duplicate headers with line-wrapping - test 3",
@@ -351,8 +341,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "\r\n"));
     ds = (data_string *)
       array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("Location"));
-    assert(ds
-           && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foobar    baz")));
+    assert(ds && buffer_eq_slen(&ds->value, CONST_STR_LEN("foobar    baz")));
 
     run_http_request_parse(r, __LINE__, 400,
       "missing protocol",
@@ -404,10 +393,8 @@ static void test_request_http_request_parse(request_st * const r)
       "absolute URI",
       CONST_STR_LEN("GET http://www.example.org/ HTTP/1.0\r\n"
                     "\r\n"));
-    assert(buffer_is_equal_string(r->http_host,
-                                  CONST_STR_LEN("www.example.org")));
-    assert(buffer_is_equal_string(&r->target,
-                                  CONST_STR_LEN("/")));
+    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("www.example.org")));
+    assert(buffer_eq_slen(&r->target, CONST_STR_LEN("/")));
 
     run_http_request_parse(r, __LINE__, 400,
       "whitespace after key",
@@ -428,7 +415,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "\r\n"));
     ds = (data_string *)
       array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("ABC"));
-    assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foo")));
+    assert(ds && buffer_eq_slen(&ds->value, CONST_STR_LEN("foo")));
 
     run_http_request_parse(r, __LINE__, 0,
       "line-folding",
@@ -438,7 +425,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "\r\n"));
     ds = (data_string *)
       array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("ABC"));
-    assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("foo    bc")));
+    assert(ds && buffer_eq_slen(&ds->value, CONST_STR_LEN("foo    bc")));
 
     run_http_request_parse(r, __LINE__, 411,
       "POST request, no Content-Length",
@@ -541,7 +528,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "\r\n"));
     ds = (data_string *)
       array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("Host"));
-    assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("zzz.example.org")));
+    assert(ds && buffer_eq_slen(&ds->value, CONST_STR_LEN("zzz.example.org")));
 
     run_http_request_parse(r, __LINE__, 0,
       "absolute-uri in request-line (with Host match)",
@@ -551,7 +538,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "\r\n"));
     ds = (data_string *)
       array_get_element_klen(&r->rqst_headers, CONST_STR_LEN("Host"));
-    assert(ds && buffer_is_equal_string(&ds->value, CONST_STR_LEN("zzz.example.org")));
+    assert(ds && buffer_eq_slen(&ds->value, CONST_STR_LEN("zzz.example.org")));
 
     run_http_request_parse(r, __LINE__, 400,
       "absolute-uri in request-line (with Host mismatch)",

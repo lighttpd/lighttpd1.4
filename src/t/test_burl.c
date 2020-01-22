@@ -16,7 +16,7 @@ static void run_burl_normalize (buffer *psrc, buffer *ptmp, int flags, int line,
                 __FILE__, line, __func__+4, in, psrc->ptr);
     }
     else {
-        if (buffer_is_equal_string(psrc, out, out_len)) return;
+        if (buffer_eq_slen(psrc, out, out_len)) return;
         fprintf(stderr,
                 "%s.%d: %s('%s') failed: expected '%s', got '%s'\n",
                 __FILE__, line, __func__+4, in, out, psrc->ptr);

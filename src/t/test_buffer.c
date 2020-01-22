@@ -12,7 +12,7 @@ static void run_buffer_path_simplify(buffer *psrc, buffer *pdest, const char *in
 
 	buffer_path_simplify(pdest, psrc);
 
-	if (!buffer_is_equal_string(pdest, out, out_len)) {
+	if (!buffer_eq_slen(pdest, out, out_len)) {
 		fprintf(stderr,
 			"%s.%d: buffer_path_simplify('%s') failed: expected '%s', got '%s'\n",
 			__FILE__,
@@ -26,7 +26,7 @@ static void run_buffer_path_simplify(buffer *psrc, buffer *pdest, const char *in
 		if (psrc != pdest) buffer_copy_buffer(psrc, pdest);
 		buffer_path_simplify(pdest, psrc);
 
-		if (!buffer_is_equal_string(pdest, out, out_len)) {
+		if (!buffer_eq_slen(pdest, out, out_len)) {
 			fprintf(stderr,
 				"%s.%d: buffer_path_simplify('%s') failed - not idempotent: expected '%s', got '%s'\n",
 				__FILE__,
@@ -85,13 +85,13 @@ static void test_buffer_to_lower_upper(void) {
 
 	buffer_copy_string_len(psrc, CONST_STR_LEN("0123456789abcdefghijklmnopqrstuvwxyz"));
 	buffer_to_lower(psrc);
-	assert(buffer_is_equal_string(psrc, CONST_STR_LEN("0123456789abcdefghijklmnopqrstuvwxyz")));
+	assert(buffer_eq_slen(psrc, CONST_STR_LEN("0123456789abcdefghijklmnopqrstuvwxyz")));
 	buffer_to_upper(psrc);
-	assert(buffer_is_equal_string(psrc, CONST_STR_LEN("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")));
+	assert(buffer_eq_slen(psrc, CONST_STR_LEN("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")));
 	buffer_to_upper(psrc);
-	assert(buffer_is_equal_string(psrc, CONST_STR_LEN("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")));
+	assert(buffer_eq_slen(psrc, CONST_STR_LEN("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")));
 	buffer_to_lower(psrc);
-	assert(buffer_is_equal_string(psrc, CONST_STR_LEN("0123456789abcdefghijklmnopqrstuvwxyz")));
+	assert(buffer_eq_slen(psrc, CONST_STR_LEN("0123456789abcdefghijklmnopqrstuvwxyz")));
 
 	buffer_free(psrc);
 }
@@ -118,31 +118,31 @@ static void test_buffer_append_path_len(void) {
 	buffer *b = buffer_init();
 
 	buffer_append_path_len(b, CONST_STR_LEN("a"));
-	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a")));
+	assert(buffer_eq_slen(b, CONST_STR_LEN("/a")));
 	buffer_clear(b);
 	buffer_append_path_len(b, CONST_STR_LEN("a"));
-	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a")));
+	assert(buffer_eq_slen(b, CONST_STR_LEN("/a")));
 	buffer_clear(b);
 	buffer_append_path_len(b, CONST_STR_LEN("/a"));
-	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a")));
+	assert(buffer_eq_slen(b, CONST_STR_LEN("/a")));
 	buffer_copy_string_len(b, CONST_STR_LEN("/"));
 	buffer_append_path_len(b, CONST_STR_LEN("a"));
-	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a")));
+	assert(buffer_eq_slen(b, CONST_STR_LEN("/a")));
 	buffer_copy_string_len(b, CONST_STR_LEN("/"));
 	buffer_append_path_len(b, CONST_STR_LEN("/a"));
-	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a")));
+	assert(buffer_eq_slen(b, CONST_STR_LEN("/a")));
 	buffer_copy_string_len(b, CONST_STR_LEN("a"));
 	buffer_append_path_len(b, CONST_STR_LEN("a"));
-	assert(buffer_is_equal_string(b, CONST_STR_LEN("a/a")));
+	assert(buffer_eq_slen(b, CONST_STR_LEN("a/a")));
 	buffer_copy_string_len(b, CONST_STR_LEN("a/"));
 	buffer_append_path_len(b, CONST_STR_LEN("a"));
-	assert(buffer_is_equal_string(b, CONST_STR_LEN("a/a")));
+	assert(buffer_eq_slen(b, CONST_STR_LEN("a/a")));
 	buffer_copy_string_len(b, CONST_STR_LEN("a/"));
 	buffer_append_path_len(b, CONST_STR_LEN("/a"));
-	assert(buffer_is_equal_string(b, CONST_STR_LEN("a/a")));
+	assert(buffer_eq_slen(b, CONST_STR_LEN("a/a")));
 	buffer_copy_string_len(b, CONST_STR_LEN("/a/"));
 	buffer_append_path_len(b, CONST_STR_LEN("/a"));
-	assert(buffer_is_equal_string(b, CONST_STR_LEN("/a/a")));
+	assert(buffer_eq_slen(b, CONST_STR_LEN("/a/a")));
 
 	buffer_free(b);
 }

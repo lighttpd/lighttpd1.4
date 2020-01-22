@@ -17,15 +17,15 @@ static void test_mod_simple_vhost_build_doc_root_path(void) {
     buffer_copy_string_len(host,  CONST_STR_LEN("www.example.org"));
     buffer_copy_string_len(droot, CONST_STR_LEN("/droot/b/"));
     build_doc_root_path(result, sroot, host, droot);
-    assert(buffer_is_equal_string(result, CONST_STR_LEN("/sroot/a/www.example.org/droot/b/")));
+    assert(buffer_eq_slen(result, CONST_STR_LEN("/sroot/a/www.example.org/droot/b/")));
 
     buffer_copy_string_len(host,  CONST_STR_LEN("www.example.org:8080"));
     build_doc_root_path(result, sroot, host, droot);
-    assert(buffer_is_equal_string(result, CONST_STR_LEN("/sroot/a/www.example.org/droot/b/")));
+    assert(buffer_eq_slen(result, CONST_STR_LEN("/sroot/a/www.example.org/droot/b/")));
 
     buffer_copy_string_len(droot, CONST_STR_LEN(""));
     build_doc_root_path(result, sroot, host, droot);
-    assert(buffer_is_equal_string(result, CONST_STR_LEN("/sroot/a/www.example.org/")));
+    assert(buffer_eq_slen(result, CONST_STR_LEN("/sroot/a/www.example.org/")));
 
     buffer_free(sroot);
     buffer_free(host);

@@ -18,7 +18,7 @@ static void test_mod_evhost_build_doc_root_path_loop(struct ttt *tt, size_t nelt
         const buffer *path_pieces = mod_evhost_parse_pattern(t->pattern);
         assert(NULL != path_pieces);
         mod_evhost_build_doc_root_path(b, a, authority, path_pieces);
-        assert(buffer_is_equal_string(b, t->expect, t->elen));
+        assert(buffer_eq_slen(b, t->expect, t->elen));
         mod_evhost_free_path_pieces(path_pieces);
     }
 }

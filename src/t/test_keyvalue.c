@@ -79,35 +79,35 @@ static void test_keyvalue_pcre_keyvalue_buffer_process (void) {
     buffer_clear(query);
     rc = pcre_keyvalue_buffer_process(kvb, &ctx, url, result);
     assert(HANDLER_FINISHED == rc);
-    assert(buffer_is_equal_string(result, CONST_STR_LEN("/foo/")));
+    assert(buffer_eq_slen(result, CONST_STR_LEN("/foo/")));
 
     buffer_copy_string_len(url, CONST_STR_LEN("/foo?a=b"));
     buffer_copy_string_len(path, CONST_STR_LEN("/foo"));
     buffer_copy_string_len(query, CONST_STR_LEN("a=b"));
     rc = pcre_keyvalue_buffer_process(kvb, &ctx, url, result);
     assert(HANDLER_FINISHED == rc);
-    assert(buffer_is_equal_string(result, CONST_STR_LEN("/foo/?a=b")));
+    assert(buffer_eq_slen(result, CONST_STR_LEN("/foo/?a=b")));
 
     buffer_copy_string_len(url, CONST_STR_LEN("/bar?a=b"));
     buffer_copy_string_len(path, CONST_STR_LEN("/bar"));
     buffer_copy_string_len(query, CONST_STR_LEN("a=b"));
     rc = pcre_keyvalue_buffer_process(kvb, &ctx, url, result);
     assert(HANDLER_FINISHED == rc);
-    assert(buffer_is_equal_string(result, CONST_STR_LEN("/?bar&a=b")));
+    assert(buffer_eq_slen(result, CONST_STR_LEN("/?bar&a=b")));
 
     buffer_copy_string_len(url, CONST_STR_LEN("/nofile?a=b"));
     buffer_copy_string_len(path, CONST_STR_LEN("/nofile"));
     buffer_copy_string_len(query, CONST_STR_LEN("a=b"));
     rc = pcre_keyvalue_buffer_process(kvb, &ctx, url, result);
     assert(HANDLER_FINISHED == rc);
-    assert(buffer_is_equal_string(result, CONST_STR_LEN("/?file=/nofile&a=b")));
+    assert(buffer_eq_slen(result, CONST_STR_LEN("/?file=/nofile&a=b")));
 
     buffer_copy_string_len(url, CONST_STR_LEN("/redirect?a=b"));
     buffer_copy_string_len(path, CONST_STR_LEN("/redirect"));
     buffer_copy_string_len(query, CONST_STR_LEN("a=b"));
     rc = pcre_keyvalue_buffer_process(kvb, &ctx, url, result);
     assert(HANDLER_FINISHED == rc);
-    assert(buffer_is_equal_string(result, CONST_STR_LEN("/?seg=www&a=b")));
+    assert(buffer_eq_slen(result, CONST_STR_LEN("/?seg=www&a=b")));
 
     buffer_free(url);
     buffer_free(result);
