@@ -8,7 +8,7 @@
 
 typedef struct keyvlenvalue {
     const int key;
-    const unsigned int vlen;
+    const uint32_t vlen;
     const char value[24];
 } keyvlenvalue;
 
@@ -51,7 +51,7 @@ static const keyvlenvalue http_headers[] = {
  ,{ HTTP_HEADER_OTHER, 0, "" }
 };
 
-enum http_header_e http_header_hkey_get(const char *s, size_t slen) {
+enum http_header_e http_header_hkey_get(const char * const s, const uint32_t slen) {
     const struct keyvlenvalue * const kv = http_headers;
     int i = slen < sizeof(http_headers_off) ? http_headers_off[slen] : -1;
     if (i < 0) return HTTP_HEADER_OTHER;
@@ -64,11 +64,11 @@ enum http_header_e http_header_hkey_get(const char *s, size_t slen) {
 }
 
 
-int http_header_str_contains_token (const char * const s, const size_t slen, const char * const m, const size_t mlen)
+int http_header_str_contains_token (const char * const s, const uint32_t slen, const char * const m, const uint32_t mlen)
 {
     /*if (slen < mlen) return 0;*//*(possible optimizations for caller)*/
     /*if (slen == mlen && buffer_eq_icase_ssn(s, m, mlen)) return 1;*/
-    size_t i = 0;
+    uint32_t i = 0;
     do {
         while (i < slen &&  (s[i]==' ' || s[i]=='\t' || s[i]==',')) ++i;
         if (i == slen) return 0;
@@ -83,34 +83,34 @@ int http_header_str_contains_token (const char * const s, const size_t slen, con
 }
 
 
-static inline void http_header_token_append(buffer * const vb, const char * const v, const size_t vlen) {
+static inline void http_header_token_append(buffer * const vb, const char * const v, const uint32_t vlen) {
     if (!buffer_string_is_empty(vb))
         buffer_append_string_len(vb, CONST_STR_LEN(", "));
     buffer_append_string_len(vb, v, vlen);
 }
 
 __attribute_pure__
-static inline buffer * http_header_generic_get_ifnotempty(const array * const a, const char * const k, const size_t klen) {
+static inline buffer * http_header_generic_get_ifnotempty(const array * const a, const char * const k, const uint32_t klen) {
     data_string * const ds =
       (data_string *)array_get_element_klen(a, k, klen);
     return ds && !buffer_string_is_empty(&ds->value) ? &ds->value : NULL;
 }
 
 
-buffer * http_header_response_get(const request_st * const r, enum http_header_e id, const char *k, size_t klen) {
+buffer * http_header_response_get(const request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
     return (id <= HTTP_HEADER_OTHER || (r->resp_htags & id))
       ? http_header_generic_get_ifnotempty(&r->resp_headers, k, klen)
       : NULL;
 }
 
-void http_header_response_unset(request_st * const r, enum http_header_e id, const char *k, size_t klen) {
+void http_header_response_unset(request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
     if (id <= HTTP_HEADER_OTHER || (r->resp_htags & id)) {
         if (id > HTTP_HEADER_OTHER) r->resp_htags &= ~id;
         array_set_key_value(&r->resp_headers, k, klen, CONST_STR_LEN(""));
     }
 }
 
-void http_header_response_set(request_st * const r, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
+void http_header_response_set(request_st * const r, enum http_header_e id, const char *k, uint32_t klen, const char *v, uint32_t vlen) {
     /* set value, including setting blank value if 0 == vlen
      * (note: if 0 == vlen, header is still inserted with blank value,
      *  which is used to indicate a "removed" header)
@@ -120,14 +120,14 @@ void http_header_response_set(request_st * const r, enum http_header_e id, const
     array_set_key_value(&r->resp_headers, k, klen, v, vlen);
 }
 
-void http_header_response_append(request_st * const r, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
+void http_header_response_append(request_st * const r, enum http_header_e id, const char *k, uint32_t klen, const char *v, uint32_t vlen) {
     if (0 == vlen) return;
     if (id > HTTP_HEADER_OTHER) r->resp_htags |= id;
     buffer * const vb = array_get_buf_ptr(&r->resp_headers, k, klen);
     http_header_token_append(vb, v, vlen);
 }
 
-void http_header_response_insert(request_st * const r, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
+void http_header_response_insert(request_st * const r, enum http_header_e id, const char *k, uint32_t klen, const char *v, uint32_t vlen) {
     if (0 == vlen) return;
     if (id > HTTP_HEADER_OTHER) r->resp_htags |= id;
     buffer * const vb = array_get_buf_ptr(&r->resp_headers, k, klen);
@@ -140,20 +140,20 @@ void http_header_response_insert(request_st * const r, enum http_header_e id, co
 }
 
 
-buffer * http_header_request_get(const request_st * const r, enum http_header_e id, const char *k, size_t klen) {
+buffer * http_header_request_get(const request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
     return (id <= HTTP_HEADER_OTHER || (r->rqst_htags & id))
       ? http_header_generic_get_ifnotempty(&r->rqst_headers, k, klen)
       : NULL;
 }
 
-void http_header_request_unset(request_st * const r, enum http_header_e id, const char *k, size_t klen) {
+void http_header_request_unset(request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
     if (id <= HTTP_HEADER_OTHER || (r->rqst_htags & id)) {
         if (id > HTTP_HEADER_OTHER) r->rqst_htags &= ~id;
         array_set_key_value(&r->rqst_headers, k, klen, CONST_STR_LEN(""));
     }
 }
 
-void http_header_request_set(request_st * const r, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
+void http_header_request_set(request_st * const r, enum http_header_e id, const char *k, uint32_t klen, const char *v, uint32_t vlen) {
     /* set value, including setting blank value if 0 == vlen
      * (note: if 0 == vlen, header is still inserted with blank value,
      *  which is used to indicate a "removed" header)
@@ -163,7 +163,7 @@ void http_header_request_set(request_st * const r, enum http_header_e id, const 
     array_set_key_value(&r->rqst_headers, k, klen, v, vlen);
 }
 
-void http_header_request_append(request_st * const r, enum http_header_e id, const char *k, size_t klen, const char *v, size_t vlen) {
+void http_header_request_append(request_st * const r, enum http_header_e id, const char *k, uint32_t klen, const char *v, uint32_t vlen) {
     if (0 == vlen) return;
     if (id > HTTP_HEADER_OTHER) r->rqst_htags |= id;
     buffer * const vb = array_get_buf_ptr(&r->rqst_headers, k, klen);
@@ -171,15 +171,15 @@ void http_header_request_append(request_st * const r, enum http_header_e id, con
 }
 
 
-buffer * http_header_env_get(const request_st * const r, const char *k, size_t klen) {
+buffer * http_header_env_get(const request_st * const r, const char *k, uint32_t klen) {
     return http_header_generic_get_ifnotempty(&r->env, k, klen);
 }
 
-void http_header_env_set(request_st * const r, const char *k, size_t klen, const char *v, size_t vlen) {
+void http_header_env_set(request_st * const r, const char *k, uint32_t klen, const char *v, uint32_t vlen) {
     array_set_key_value(&r->env, k, klen, v, vlen);
 }
 
-void http_header_env_append(request_st * const r, const char *k, size_t klen, const char *v, size_t vlen) {
+void http_header_env_append(request_st * const r, const char *k, uint32_t klen, const char *v, uint32_t vlen) {
     /*if (0 == vlen) return;*//* skip check; permit env var w/ blank value */
     buffer * const vb = array_get_buf_ptr(&r->env, k, klen);
     if (0 == vlen) return;
