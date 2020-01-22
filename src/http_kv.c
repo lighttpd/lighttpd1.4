@@ -154,6 +154,11 @@ http_method_t get_http_method_key(const char *s, size_t slen) {
 
 
 void http_status_append(buffer * const b, const int status) {
+    if (200 == status) { /*(short-circuit common case)*/
+        buffer_append_string_len(b, CONST_STR_LEN("200 OK"));
+        return;
+    }
+
     const keyvalue * const kv = http_status;
     int i;
     for (i = 0; kv[i].key != status && kv[i].vlen; ++i) ;
