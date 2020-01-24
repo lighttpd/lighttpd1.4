@@ -815,33 +815,6 @@ static int http_request_parse_headers(request_st * const restrict r, char * cons
         const char *k = ptr + hoff[i];
         /* one past last line hoff[hoff[0]] is to final "\r\n" */
         char *end = ptr + hoff[i+1];
-        for (; i+1 <= hoff[0]; ++i) {
-            end = ptr + hoff[i+1];
-            if (end[0] != ' ' && end[0] != '\t') break;
-
-            /* line folding */
-          #ifdef __COVERITY__
-            force_assert(end - k >= 2);
-          #endif
-            if (end[-2] == '\r')
-                end[-2] = ' ';
-            else if (http_header_strict)
-                return http_request_header_line_invalid(r, 400, "missing CR before LF in header -> 400");
-            end[-1] = ' ';
-        }
-      #ifdef __COVERITY__
-        /*(buf holding k has non-zero request-line, so end[-2] valid)*/
-        force_assert(end >= k + 2);
-      #endif
-        if (end[-2] == '\r')
-            --end;
-        else if (http_header_strict)
-            return http_request_header_line_invalid(r, 400, "missing CR before LF in header -> 400");
-        /* remove trailing whitespace from value (+ remove '\r\n') */
-        /* (line k[-1] is always preceded by a '\n',
-         *  including first header after request-line,
-         *  so no need to check (end != k)) */
-        do { --end; } while (end[-1] == ' ' || end[-1] == '\t');
 
         const char *colon = memchr(k, ':', end - k);
         if (NULL == colon)
@@ -889,6 +862,34 @@ static int http_request_parse_headers(request_st * const restrict r, char * cons
 
         /* remove leading whitespace from value */
         while (*v == ' ' || *v == '\t') ++v;
+
+        for (; i+1 <= hoff[0]; ++i) {
+            end = ptr + hoff[i+1];
+            if (end[0] != ' ' && end[0] != '\t') break;
+
+            /* line folding */
+          #ifdef __COVERITY__
+            force_assert(end - k >= 2);
+          #endif
+            if (end[-2] == '\r')
+                end[-2] = ' ';
+            else if (http_header_strict)
+                return http_request_header_line_invalid(r, 400, "missing CR before LF in header -> 400");
+            end[-1] = ' ';
+        }
+      #ifdef __COVERITY__
+        /*(buf holding k has non-zero request-line, so end[-2] valid)*/
+        force_assert(end >= k + 2);
+      #endif
+        if (end[-2] == '\r')
+            --end;
+        else if (http_header_strict)
+            return http_request_header_line_invalid(r, 400, "missing CR before LF in header -> 400");
+        /* remove trailing whitespace from value (+ remove '\r\n') */
+        /* (line k[-1] is always preceded by a '\n',
+         *  including first header after request-line,
+         *  so no need to check (end != k)) */
+        do { --end; } while (end[-1] == ' ' || end[-1] == '\t');
 
         const int vlen = (int)(end - v);
         /* empty header-fields are not allowed by HTTP-RFC, we just ignore them */
