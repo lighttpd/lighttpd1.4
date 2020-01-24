@@ -769,12 +769,13 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
 
     execve(name, argv, envp ? envp : environ);
 
+    int errnum = errno;
     if (0 == memcmp(argv[0], "/bin/sh", sizeof("/bin/sh")-1)
         && argv[1] && 0 == memcmp(argv[1], "-c", sizeof("-c")-1))
         perror(argv[2]);
     else
         perror(argv[0]);
-    _exit(errno);
+    _exit(errnum);
 
  #else
 
