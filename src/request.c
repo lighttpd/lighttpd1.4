@@ -603,9 +603,7 @@ static size_t http_request_parse_reqline(server *srv, connection *con, buffer *h
 				size_t j, jlen;
 
 				/* \r\n -> \0\0 */
-			      #ifdef __COVERITY__
 				if (0 == i) return 400;
-			      #endif
 				if (ptr[i-1] == '\r') {
 					ptr[i-1] = '\0';
 				} else if (http_header_strict) { /* '\n' */
