@@ -3,6 +3,60 @@
 NEWS
 ====
 
+- 1.4.55 - 2020-01-31
+  * [core] fix compile error on Solaris (fixes #2959)
+  * [core] __attribute_pure__
+  * [core] array-specialized buffer_caseless_compare()
+  * [core] specialized buffer_eq_*() for short strings
+  * [core] mark some more funcs w/ __attribute_pure__
+  * [core] use buffer_eq_icase* funcs
+  * [multiple] replace strcasecmp() on short strings
+  * [core] mark some more funcs w/ __attribute_pure__
+  * [mod_webdav] fix startup crash w/ multiple conds (fixes #2958)
+  * [core] cold func http_response_omit_header()
+  * [core] use buffer_eq_icase_ssn func
+  * [core] use buffer_eq_icase_ssn func
+  * [core] correct __attribute_pure__ syntax
+  * [core] allocate unix socket paths with SUN_LEN()+1 (fixes #2962)
+  * Use explicit_memset from NetBSD if available for safe_memclear (fixes #2971)
+  * Also use explicit_memset (NetBSD) with cmake, scons and meson
+  * [cmake]: enable CMAKE_POSITION_INDEPENDENT_CODE by default
+  * [core] improve http_headers[] data struct packing
+  * [core] fdevent_poll() is effective periodic timer
+  * [core] move con state handling to connections*.c
+  * [core] issue config error for invalid ':' (fixes #2980)
+  * [mod_deflate] fix choose encoding parse error (fixes #2981)
+  * [core] retry on some fdevent set/del temporary err
+  * [core] disable stat_cache FAM if FAM conn closed
+  * [mod_auth] http_auth_const_time_memeq improvement
+  * [build] prefer pkg-config for postgres (fixes #2965)
+  * [mod_authn_gssapi] 500 if fail to delegate creds (#2967)
+  * [mod_authn_gssapi] option to store delegated creds (fixes #2967)
+  * [mod_webdav] fix file uploads > 128M (fixes #2970)
+  * [mod_auth] do not use quoted-string for algorithm
+  * [mod_auth] require digest uri= match original URI
+  * [mod_auth] Authentication-Info: nextnonce=...
+  * [mod_auth] http_auth_const_time_memeq_pad()
+  * [mod_auth] http_auth_const_time_memeq() (#2975, #2976)
+  * [build] PGSQL_CFLAGS with pkg-config for postgres (#2965)
+  * [build] PGSQL_CFLAGS with pkg-config for postgres (#2965)
+  * [core] avoid freeaddrinfo() on NULL ptr (fixes #2984)
+  * [core] reject WS following header field-name (fixes #2985)
+  * [core] reject Transfer-Encoding + Content-Length (#2985)
+  * [mod_openssl] reject invalid ALPN
+  * [mod_accesslog] parse multiple cookies (fixes #2986)
+  * [core] Oracle Solaris does not have POLLRDHUP
+  * [multiple] address coverity warnings
+  * [core] preserve %2b and %2B in query string (fixes #2999)
+  * [core] fall back to accept() if accept4() EPERM (fixes #2998)
+  * [mod_auth] close connection after bad password
+  * [core] do not accept() > server.max-connections
+  * [core] save errno before logging if execve() fails
+  * [config] update /var/run -> /run for systemd
+  * [core] Solaris has getloadavg in sys/loadavg.h
+  * [build] Fix build when using nested CMake
+  * [core] fix one-byte OOB read (underflow)
+
 - 1.4.54 - 2019-05-27
   * [mod_evhost] handle IPv6 literal addr; add tests
   * [core] separate server_main_loop() func, mark hot
