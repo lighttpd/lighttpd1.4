@@ -21,7 +21,10 @@ Module: core
 Description
 ===========
 
-lighttpd supports SSLv2 and SSLv3 if it is compiled against openssl.
+lighttpd supports TLS with mod_openssl.
+
+The latest lighttpd SSL/TLS doc can be found at:
+https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL
 
 Configuration
 -------------
@@ -32,11 +35,10 @@ certificate and have to enable the SSL engine.::
   ssl.engine = "enable"
   ssl.pemfile = "/path/to/server.pem"
 
-The HTTPS protocol does not allow you to use name-based virtual
-hosting with SSL. If you want to run multiple SSL servers with
-one lighttpd instance you must use IP-based virtual hosting: ::
+To enable SSL for a specific port, put the directives within a
+$SERVER["socket"] condition: ::
 
-  $SERVER["socket"] == "10.0.0.1:443" {
+  $SERVER["socket"] == "*:443" {
     ssl.engine                  = "enable"
     ssl.pemfile                 = "www.example.org.pem"
     server.name                 = "www.example.org"
@@ -45,11 +47,14 @@ one lighttpd instance you must use IP-based virtual hosting: ::
   }
 
 If you have a .crt and a .key file, cat them together into a
-single PEM file:
-::
+single PEM file: ::
 
   $ cat host.key host.crt > host.pem
 
+or provide both ssl.pemfile and ssl.privkey directives: ::
+
+  ssl.pemfile = "host.crt"
+  ssl.privkey = "host.key"
 
 Self-Signed Certificates
 ------------------------
