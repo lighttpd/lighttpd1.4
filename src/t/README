@@ -1,0 +1,4 @@
+Tests have been written in the interest of "Something is better than nothing".
+
+As of this writing, the aim is to increase test coverage using simple smoke
+tests and to replace the (much) slower Perl tests in tests/*.t
