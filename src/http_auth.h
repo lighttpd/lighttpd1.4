@@ -29,6 +29,7 @@ struct http_auth_backend_t;
 typedef struct http_auth_require_t {
     const struct http_auth_scheme_t *scheme;
     const buffer *realm;
+    const buffer *nonce_secret;
     int valid_user;
     int algorithm;
     array user;

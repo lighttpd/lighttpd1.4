@@ -263,6 +263,7 @@ static handler_t mod_auth_require_parse_array(const array *value, array * const 
 			size_t m;
 			data_array *da_file = (data_array *)value->data[n];
 			const buffer *method = NULL, *realm = NULL, *require = NULL;
+			const buffer *nonce_secret = NULL;
 			const http_auth_scheme_t *auth_scheme;
 			buffer *algos = NULL;
 			int algorithm = HTTP_AUTH_DIGEST_SESS;
@@ -286,6 +287,8 @@ static handler_t mod_auth_require_parse_array(const array *value, array * const 
 						require = &ds->value;
 					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("algorithm"))) {
 						algos = &ds->value;
+					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("nonce_secret"))) {
+						nonce_secret = &ds->value;
 					} else {
 						log_error(errh, __FILE__, __LINE__,
 						  "the field is unknown in: "
@@ -348,6 +351,7 @@ static handler_t mod_auth_require_parse_array(const array *value, array * const 
 				dauth->require->scheme = auth_scheme;
 				dauth->require->algorithm = algorithm;
 				dauth->require->realm = realm;
+				dauth->require->nonce_secret = nonce_secret; /*(NULL is ok)*/
 				if (!mod_auth_require_parse(dauth->require, require, errh)) {
 					dauth->fn->free((data_unset *)dauth);
 					return HANDLER_ERROR;
@@ -662,7 +666,7 @@ static void mod_auth_digest_mutate_sha256(http_auth_info_t *ai, const char *m, c
     SHA256_Final(ai->digest, &ctx);
 }
 
-static void mod_auth_digest_nonce_sha256(buffer *b, time_t cur_ts, int rnd) {
+static void mod_auth_digest_nonce_sha256(buffer *b, time_t cur_ts, int rnd, const buffer *secret) {
     SHA256_CTX ctx;
     size_t len;
     unsigned char h[HTTP_AUTH_DIGEST_SHA256_BINLEN];
@@ -673,6 +677,10 @@ static void mod_auth_digest_nonce_sha256(buffer *b, time_t cur_ts, int rnd) {
     SHA256_Update(&ctx, (unsigned char *)hh, len);
     len = li_itostrn(hh, sizeof(hh), rnd);
     SHA256_Update(&ctx, (unsigned char *)hh, len);
+    if (secret) {
+        len = buffer_string_length(secret);
+        SHA256_Update(&ctx, (unsigned char *)secret->ptr, len);
+    }
     SHA256_Final(h, &ctx);
     li_tohex(hh, sizeof(hh), (const char *)h, sizeof(h));
     buffer_append_string_len(b, hh, sizeof(hh)-1);
@@ -731,7 +739,7 @@ static void mod_auth_digest_mutate_sha512_256(http_auth_info_t *ai, const char *
     SHA512_256_Final(ai->digest, &ctx);
 }
 
-static void mod_auth_digest_nonce_sha512_256(buffer *b, time_t cur_ts, int rnd) {
+static void mod_auth_digest_nonce_sha512_256(buffer *b, time_t cur_ts, int rnd, const buffer *secret) {
     SHA512_CTX ctx;
     size_t len;
     unsigned char h[HTTP_AUTH_DIGEST_SHA512_256_BINLEN];
@@ -742,6 +750,10 @@ static void mod_auth_digest_nonce_sha512_256(buffer *b, time_t cur_ts, int rnd) 
     SHA512_256_Update(&ctx, (unsigned char *)hh, len);
     len = li_itostrn(hh, sizeof(hh), rnd);
     SHA512_256_Update(&ctx, (unsigned char *)hh, len);
+    if (secret) {
+        len = buffer_string_length(secret);
+        SHA512_256_Update(&ctx, (unsigned char *)secret->ptr, len);
+    }
     SHA512_256_Final(h, &ctx);
     li_tohex(hh, sizeof(hh), (const char *)h, sizeof(h));
     buffer_append_string_len(b, hh, sizeof(hh)-1);
@@ -804,7 +816,7 @@ static void mod_auth_digest_mutate_md5(http_auth_info_t *ai, const char *m, cons
     li_MD5_Final(ai->digest, &ctx);
 }
 
-static void mod_auth_digest_nonce_md5(buffer *b, time_t cur_ts, int rnd) {
+static void mod_auth_digest_nonce_md5(buffer *b, time_t cur_ts, int rnd, const buffer *secret) {
     li_MD5_CTX ctx;
     size_t len;
     unsigned char h[HTTP_AUTH_DIGEST_MD5_BINLEN];
@@ -815,6 +827,10 @@ static void mod_auth_digest_nonce_md5(buffer *b, time_t cur_ts, int rnd) {
     li_MD5_Update(&ctx, (unsigned char *)hh, len);
     len = li_itostrn(hh, sizeof(hh), rnd);
     li_MD5_Update(&ctx, (unsigned char *)hh, len);
+    if (secret) {
+        len = buffer_string_length(secret);
+        li_MD5_Update(&ctx, (unsigned char *)secret->ptr, len);
+    }
     li_MD5_Final(h, &ctx);
     li_tohex(hh, sizeof(hh), (const char *)h, sizeof(h));
     buffer_append_string_len(b, hh, sizeof(hh)-1);
@@ -833,31 +849,62 @@ static void mod_auth_digest_mutate(http_auth_info_t *ai, const char *m, const ch
   #endif
 }
 
+static void mod_auth_append_nonce(buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int dalgo, int *rndptr) {
+    buffer_append_uint_hex(b, (uintmax_t)cur_ts);
+    buffer_append_string_len(b, CONST_STR_LEN(":"));
+    const buffer * const nonce_secret = require->nonce_secret;
+    int rnd;
+    if (NULL == nonce_secret)
+        rnd = rndptr ? *rndptr : li_rand_pseudo();
+    else { /*(do not directly expose random number generator single value)*/
+        rndptr
+          ? (void)(rnd = *rndptr)
+          : li_rand_pseudo_bytes((unsigned char *)&rnd, sizeof(rnd));
+        buffer_append_uint_hex(b, (uintmax_t)rnd);
+        buffer_append_string_len(b, CONST_STR_LEN(":"));
+    }
+    switch (dalgo) {
+     #ifdef USE_OPENSSL_CRYPTO
+      #ifdef SHA512_256_DIGEST_LENGTH
+      case HTTP_AUTH_DIGEST_SHA512_256:
+        mod_auth_digest_nonce_sha512_256(b, cur_ts, rnd, nonce_secret);
+        break;
+      #endif
+      case HTTP_AUTH_DIGEST_SHA256:
+        mod_auth_digest_nonce_sha256(b, cur_ts, rnd, nonce_secret);
+        break;
+     #endif
+      /*case HTTP_AUTH_DIGEST_MD5:*/
+      default:
+        mod_auth_digest_nonce_md5(b, cur_ts, rnd, nonce_secret);
+        break;
+    }
+}
+
 static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int nonce_stale) {
-    const int rnd = li_rand_pseudo();
     int algos = nonce_stale ? nonce_stale : require->algorithm;
     int n = 0;
-    void(*append_nonce[3])(buffer *, time_t, int);
+    int algoid[3];
     unsigned int algolen[3];
     const char *algoname[3];
   #ifdef USE_OPENSSL_CRYPTO
    #ifdef SHA512_256_DIGEST_LENGTH
     if (algos & HTTP_AUTH_DIGEST_SHA512_256) {
-        append_nonce[n] = mod_auth_digest_nonce_sha512_256;
+        algoid[n] = HTTP_AUTH_DIGEST_SHA512_256;
         algoname[n] = "SHA-512-256";
         algolen[n] = sizeof("SHA-512-256")-1;
         ++n;
     }
    #endif
     if (algos & HTTP_AUTH_DIGEST_SHA256) {
-        append_nonce[n] = mod_auth_digest_nonce_sha256;
+        algoid[n] = HTTP_AUTH_DIGEST_SHA256;
         algoname[n] = "SHA-256";
         algolen[n] = sizeof("SHA-256")-1;
         ++n;
     }
   #endif
     if (algos & HTTP_AUTH_DIGEST_MD5) {
-        append_nonce[n] = mod_auth_digest_nonce_md5;
+        algoid[n] = HTTP_AUTH_DIGEST_MD5;
         algoname[n] = "MD5";
         algolen[n] = sizeof("MD5")-1;
         ++n;
@@ -873,9 +920,7 @@ static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const str
         buffer_append_string_len(b, CONST_STR_LEN("\", charset=\"UTF-8\", algorithm="));
         buffer_append_string_len(b, algoname[i], algolen[i]);
         buffer_append_string_len(b, CONST_STR_LEN(", nonce=\""));
-        buffer_append_uint_hex(b, (uintmax_t)cur_ts);
-        buffer_append_string_len(b, CONST_STR_LEN(":"));
-        (append_nonce[i])(b, cur_ts, rnd);
+        mod_auth_append_nonce(b, cur_ts, require, algoid[i], NULL);
         buffer_append_string_len(b, CONST_STR_LEN("\", qop=\"auth\""));
         if (nonce_stale) {
             buffer_append_string_len(b, CONST_STR_LEN(", stale=true"));
@@ -883,30 +928,10 @@ static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const str
     }
 }
 
-static void mod_auth_digest_authentication_info(buffer *b, time_t cur_ts, int dalgo) {
-    const int rnd = li_rand_pseudo();
-    void(*append_nonce)(buffer *, time_t, int);
-    switch (dalgo) {
-     #ifdef USE_OPENSSL_CRYPTO
-      #ifdef SHA512_256_DIGEST_LENGTH
-      case HTTP_AUTH_DIGEST_SHA512_256:
-        append_nonce = mod_auth_digest_nonce_sha512_256;
-        break;
-      #endif
-      case HTTP_AUTH_DIGEST_SHA256:
-        append_nonce = mod_auth_digest_nonce_sha256;
-        break;
-     #endif
-      /*case HTTP_AUTH_DIGEST_MD5:*/
-      default:
-        append_nonce = mod_auth_digest_nonce_md5;
-        break;
-    }
+static void mod_auth_digest_authentication_info(buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int dalgo) {
     buffer_clear(b);
     buffer_append_string_len(b, CONST_STR_LEN("nextnonce=\""));
-    buffer_append_uint_hex(b, (uintmax_t)cur_ts);
-    buffer_append_string_len(b, CONST_STR_LEN(":"));
-    (append_nonce)(b, cur_ts, rnd);
+    mod_auth_append_nonce(b, cur_ts, require, dalgo, NULL);
     buffer_append_string_len(b, CONST_STR_LEN("\""));
 }
 
@@ -932,7 +957,6 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 	char *respons = NULL;
 
 	char *e, *c;
-	const char *m = NULL;
 	int i;
 	buffer *b;
 	http_auth_info_t ai;
@@ -1093,9 +1117,6 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		return mod_auth_send_400_bad_request(r);
 	}
 
-	m = get_http_method_name(r->http_method);
-	force_assert(m);
-
 	/* detect if attacker is attempting to reuse valid digest for one uri
 	 * on a different request uri.  Might also happen if intermediate proxy
 	 * altered client request line.  (Altered request would not result in
@@ -1115,6 +1136,65 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		}
 	}
 
+	/* check age of nonce.  Note, random data is used in nonce generation
+	 * in mod_auth_send_401_unauthorized_digest().  If that were replaced
+	 * with nanosecond time, then nonce secret would remain unique enough
+	 * for the purposes of Digest auth, and would be reproducible (and
+	 * verifiable) if nanoseconds were included with seconds as part of the
+	 * nonce "timestamp:secret".  However, doing so would expose a high
+	 * precision timestamp of the system to attackers.  timestamp in nonce
+	 * could theoretically be modified and still produce same md5sum, but
+	 * that is highly unlikely within a 10 min (moving) window of valid
+	 * time relative to current time (now).
+	 * If it is desired to validate that nonces were generated by server,
+	 * then specify auth.require = ( ... => ( "secret" => "..." ) )
+	 * When secret is specified, then instead of nanoseconds, the random
+	 * data value (included for unique nonces) will be exposed in the nonce
+	 * along with the timestamp, and the additional secret will be used to
+	 * validate that the server generated the nonce using that secret. */
+	int send_nextnonce;
+	{
+		time_t ts = 0;
+		const unsigned char * const nonce_uns = (unsigned char *)nonce;
+		for (i = 0; i < 8 && light_isxdigit(nonce_uns[i]); ++i) {
+			ts = (ts << 4) + hex2int(nonce_uns[i]);
+		}
+		const time_t cur_ts = log_epoch_secs;
+		if (nonce[i] != ':'
+		    || ts > cur_ts || cur_ts - ts > 600) { /*(10 mins)*/
+			/* nonce is stale; have client regenerate digest */
+			buffer_free(b);
+			return mod_auth_send_401_unauthorized_digest(r, require, ai.dalgo);
+		}
+
+		send_nextnonce = (cur_ts - ts > 540); /*(9 mins)*/
+
+		if (require->nonce_secret) {
+			unsigned int rnd = 0;
+			for (int j = i+8; i < j && light_isxdigit(nonce_uns[i]); ++i) {
+				rnd = (rnd << 4) + hex2int(nonce_uns[i]);
+			}
+			if (nonce[i] != ':') {
+				/* nonce is invalid;
+				 * expect extra field w/ require->nonce_secret */
+				log_error(r->conf.errh, __FILE__, __LINE__,
+				  "digest: nonce invalid");
+				buffer_free(b);
+				return mod_auth_send_400_bad_request(r);
+			}
+			buffer * const tb = r->tmp_buf;
+			buffer_clear(tb);
+			mod_auth_append_nonce(tb, cur_ts, require, ai.dalgo, (int *)&rnd);
+			if (!buffer_eq_slen(tb, nonce, strlen(nonce))) {
+				/* nonce not generated using current require->nonce_secret */
+				log_error(r->conf.errh, __FILE__, __LINE__,
+				  "digest: nonce mismatch");
+				buffer_free(b);
+				return mod_auth_send_401_unauthorized_digest(r, require, 0);
+			}
+		}
+	}
+
 	switch (backend->digest(r, backend->p_d, &ai)) {
 	case HANDLER_GO_ON:
 		break;
@@ -1130,6 +1210,9 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		buffer_free(b);
 		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
+
+	const char *m = get_http_method_name(r->http_method);
+	force_assert(m);
 
 	mod_auth_digest_mutate(&ai,m,uri,nonce,cnonce,nc,qop);
 
@@ -1150,36 +1233,14 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
 
-	/* check age of nonce.  Note, random data is used in nonce generation
-	 * in mod_auth_send_401_unauthorized_digest().  If that were replaced
-	 * with nanosecond time, then nonce secret would remain unique enough
-	 * for the purposes of Digest auth, and would be reproducible (and
-	 * verifiable) if nanoseconds were inclued with seconds as part of the
-	 * nonce "timestamp:secret".  Since that is not done, timestamp in
-	 * nonce could theoretically be modified and still produce same md5sum,
-	 * but that is highly unlikely within a 10 min (moving) window of valid
-	 * time relative to current time (now) */
-	{
-		time_t ts = 0;
-		const unsigned char * const nonce_uns = (unsigned char *)nonce;
-		for (i = 0; i < 8 && light_isxdigit(nonce_uns[i]); ++i) {
-			ts = (ts << 4) + hex2int(nonce_uns[i]);
-		}
-		const time_t cur_ts = log_epoch_secs;
-		if (nonce[i] != ':'
-		    || ts > cur_ts || cur_ts - ts > 600) { /*(10 mins)*/
-			/* nonce is stale; have client regenerate digest */
-			buffer_free(b);
-			return mod_auth_send_401_unauthorized_digest(r, require, ai.dalgo);
-		}
-		else if (cur_ts - ts > 540) { /*(9 mins)*/
+	if (send_nextnonce) {
 			/*(send nextnonce when expiration is approaching)*/
 			buffer * const tb = r->tmp_buf;
-			mod_auth_digest_authentication_info(tb, cur_ts, ai.dalgo);
+			const time_t cur_ts = log_epoch_secs;
+			mod_auth_digest_authentication_info(tb, cur_ts, require, ai.dalgo);
 			http_header_response_set(r, HTTP_HEADER_OTHER,
 			                         CONST_STR_LEN("Authentication-Info"),
 			                         CONST_BUF_LEN(tb));
-		}
 	}
 
 	http_auth_setenv(r, ai.username, ai.ulen, CONST_STR_LEN("Digest"));
