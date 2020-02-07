@@ -2035,7 +2035,9 @@ webdav_prop_select_propnames (const plugin_config * const pconf,
 
 
 #if defined(__APPLE__) && defined(__MACH__)
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050
 #include <copyfile.h>     /* fcopyfile() *//* OS X 10.5+ */
+#endif
 #endif
 #ifdef HAVE_ELFTC_COPYFILE/* __FreeBSD__ */
 #include <libelftc.h>     /* elftc_copyfile() */
@@ -2068,11 +2070,13 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
   #endif
 
   #if defined(__APPLE__) && defined(__MACH__)
+  #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050
     if (0 == fcopyfile(ifd, ofd, NULL, COPYFILE_ALL))
         return 0;
 
     if (0 != lseek(ifd, 0, SEEK_SET)) return -1;
     if (0 != lseek(ofd, 0, SEEK_SET)) return -1;
+  #endif
   #endif
 
   #ifdef HAVE_ELFTC_COPYFILE /* __FreeBSD__ */

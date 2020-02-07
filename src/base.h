@@ -5,6 +5,12 @@
 #include <sys/types.h>
 #include <sys/time.h>
 
+#if defined(__APPLE__) && defined(__MACH__)
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 1050
+#include <time.h>
+#endif
+#endif
+
 #include "base_decls.h"
 #include "buffer.h"
 #include "array.h"
