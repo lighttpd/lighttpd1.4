@@ -877,6 +877,9 @@ static int config_insert(server *srv) {
                         t[1] = ' ';
                         buffer_commit(b, 1);
                     }
+                    char *t = b->ptr; /*(make empty if tag is whitespace-only)*/
+                    while (*t==' ' || *t=='\t' || *t=='\r' || *t=='\n') ++t;
+                    if (*t == '\0') buffer_string_set_length(b, 0);
                 }
                 break;
               case 3: /* server.max-request-size */
