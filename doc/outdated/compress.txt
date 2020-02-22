@@ -110,7 +110,7 @@ Display compressed files
 ========================
 
 If you enable mod_compress, and you want to force clients to uncompress and display compressed text files, please force mimetype to nothing.
-Exemple :
+Example :
 If you want to add headers for uncompress and display diff.gz files , add this section in your conf : ::
 
   $HTTP["url"] =~ "\.diff\.gz" {

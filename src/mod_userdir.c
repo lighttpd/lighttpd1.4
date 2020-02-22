@@ -199,7 +199,7 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
      * but it is converted to lowercase in case of force_lowercase_filenames
      * and some special handling for trailing '.', ' ' and '/' on windows
      * we assume that no docroot/physical handler changed this
-     * (docroot should only set the docroot/server name, phyiscal should only
+     * (docroot should only set the docroot/server name, physical should only
      *  change the physical.path;
      *  the exception mod_secdownload doesn't work with userdir anyway)
      */

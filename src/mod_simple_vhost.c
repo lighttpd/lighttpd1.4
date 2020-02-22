@@ -156,7 +156,7 @@ static int build_doc_root(request_st * const r, plugin_data *p, buffer *out, con
 
 	build_doc_root_path(out, p->conf.server_root, host, p->conf.document_root);
 
-	/* one-element cache (postive cache, not negative cache) */
+	/* one-element cache (positive cache, not negative cache) */
 	if (buffer_is_equal(out, &p->last_root)) return 1;
 
 	sce = stat_cache_get_entry(out);

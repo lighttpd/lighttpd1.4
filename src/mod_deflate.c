@@ -787,8 +787,8 @@ static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx
 		 *
 		 * adaptive mem-mapping
 		 *   the problem:
-		 *     we mmap() the whole file. If someone has alot large files and 32bit
-		 *     machine the virtual address area will be unrun and we will have a failing
+		 *     we mmap() the whole file. If someone has a lot of large files and 32bit
+		 *     machine the virtual address area will be exhausted and we will have a failing
 		 *     mmap() call.
 		 *   solution:
 		 *     only mmap 16M in one chunk and move the window as soon as we have finished

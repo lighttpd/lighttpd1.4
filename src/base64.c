@@ -106,7 +106,7 @@ unsigned char* buffer_append_base64_decode(buffer *out, const char* in, size_t i
 		/* need at least 2 base64 digits per group */
 		return NULL;
 	case 2:
-		/* have 2 base64 digits in last group => one real octect, two zeroes padded */
+		/* have 2 base64 digits in last group => one real octet, two zeroes padded */
 	case 3:
 		/* have 3 base64 digits in last group => two real octects, one zero padded */
 

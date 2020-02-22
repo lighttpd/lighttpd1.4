@@ -115,7 +115,7 @@
 **
 **      %fallback ID X Y Z.
 **
-** appears in the grammer, then ID becomes a fallback token for X, Y,
+** appears in the grammar, then ID becomes a fallback token for X, Y,
 ** and Z.  Whenever one of the tokens X, Y, or Z is input to the parser
 ** but it does not parse, the type of the token is changed to ID and
 ** the parse is retried before an error is thrown.
@@ -398,7 +398,7 @@ static void yy_shift(
   yyParser *yypParser,          /* The parser to be shifted */
   int yyNewState,               /* The new state to shift in */
   int yyMajor,                  /* The major token to shift in */
-  YYMINORTYPE *yypMinor         /* Pointer ot the minor token to shift in */
+  YYMINORTYPE *yypMinor         /* Pointer to the minor token to shift in */
 ){
   yyStackEntry *yytos;
   yypParser->yyidx++;

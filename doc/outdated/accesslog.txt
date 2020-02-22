@@ -70,7 +70,7 @@ accesslog.format
   %C     cookie field (not supported)
   %D     time used in ms (not supported)
   %e     environment (not supported)
-  %f     phyiscal filename
+  %f     physical filename
   %H     request protocol (HTTP/1.0, ...)
   %m     request method (GET, POST, ...)
   %n     (not supported)
@@ -83,7 +83,7 @@ accesslog.format
   %v     server-name
   %V     (not supported)
   %X     connection status
-  %I     bytes incomming
+  %I     bytes incoming
   %O     bytes outgoing
   ====== ================================
 

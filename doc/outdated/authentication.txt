@@ -37,7 +37,7 @@ basic
 
 The Basic method transfers the username and the password in
 cleartext over the network (base64 encoded) and might result
-in security problems if not used in conjunction with a crypted
+in security problems if not used in conjunction with an encrypted
 channel between client and server.
 
 digest
@@ -70,7 +70,7 @@ plain
 `````
 
 A file which contains username and the cleartext password
-seperated by a colon. Each entry is terminated by a single
+separated by a colon. Each entry is terminated by a single
 newline.::
 
   e.g.:
@@ -81,7 +81,7 @@ htpasswd
 ````````
 
 A file which contains username and the crypt()'ed password
-seperated by a colon. Each entry is terminated by a single
+separated by a colon. Each entry is terminated by a single
 newline. ::
 
   e.g.:
@@ -97,7 +97,7 @@ htdigest
 ````````
 
 A file which contains username, realm and the md5()'ed
-password seperated by a colon. Each entry is terminated
+password separated by a colon. Each entry is terminated
 by a single newline. ::
 
   e.g.:
@@ -188,13 +188,13 @@ Configuration
   auth.require = ( "/download/" =>
                    (
 		     "method"  => "digest",
-		     "realm"   => "download archiv",
+		     "realm"   => "download archive",
 		     "require" => "user=agent007|user=agent008"
 		   ),
 		   "/server-info" =>
                    (
 		     "method"  => "digest",
-		     "realm"   => "download archiv",
+		     "realm"   => "download archive",
 		     "require" => "valid-user"
 		   )
                  )

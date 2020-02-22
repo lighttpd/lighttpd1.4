@@ -123,7 +123,7 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 
 			if (errno != ENOENT &&
 			    errno != ENOTDIR) {
-				/* we have no idea what happend. let's tell the user so. */
+				/* we have no idea what happened. let's tell the user so. */
 				r->http_status = 500;
 				log_perror(r->conf.errh, __FILE__, __LINE__,
 				  "file not found ... or so: %s -> %s",

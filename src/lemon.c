@@ -125,7 +125,7 @@ char *SetNew(/* void */);               /* A new set for element 0..N */
 void  SetFree(/* char* */);             /* Deallocate a set */
 
 int SetAdd(/* char*,int */);            /* Add element to a set */
-int SetUnion(/* char *A,char *B */);    /* A <- A U B, thru element N */
+int SetUnion(/* char *A,char *B */);    /* A <- A U B, through element N */
 
 #define SetFind(X,Y) (X[Y])       /* True if Y is in set X */
 
@@ -230,7 +230,7 @@ struct action {
 struct state {
   struct config *bp;       /* The basis configurations for this state */
   struct config *cfp;      /* All configurations in this set */
-  int index;               /* Sequencial number for this state */
+  int index;               /* Sequential number for this state */
   struct action *ap;       /* Array of actions for this state */
   int nTknAct, nNtAct;     /* Number of actions on terminals and nonterminals */
   int iTknOfst, iNtOfst;   /* yy_action[] offset for terminals and nonterms */
@@ -289,7 +289,7 @@ struct lemon {
   int nconflict;           /* Number of parsing conflicts */
   int tablesize;           /* Size of the parse tables */
   int basisflag;           /* Print only basis configurations */
-  int has_fallback;        /* True if any %fallback is seen in the grammer */
+  int has_fallback;        /* True if any %fallback is seen in the grammar */
   char *argv0;             /* Name of the program */
 };
 
@@ -793,14 +793,14 @@ PRIVATE void buildshifts(lemp,stp)
 struct lemon *lemp;
 struct state *stp;     /* The state from which successors are computed */
 {
-  struct config *cfp;  /* For looping thru the config closure of "stp" */
+  struct config *cfp;  /* For looping through the config closure of "stp" */
   struct config *bcfp; /* For the inner loop on config closure of "stp" */
   struct config *new;  /* */
   struct symbol *sp;   /* Symbol following the dot in configuration "cfp" */
   struct symbol *bsp;  /* Symbol following the dot in configuration "bcfp" */
   struct state *newstp; /* A pointer to a successor state */
 
-  /* Each configuration becomes complete after it contibutes to a successor
+  /* Each configuration becomes complete after it contributes to a successor
   ** state.  Initially, all configurations are incomplete */
   for(cfp=stp->cfp; cfp; cfp=cfp->next) cfp->status = INCOMPLETE;
 
@@ -1571,7 +1571,7 @@ int offset;
 **
 ** Return Value:
 **   A pointer to the head of a sorted list containing the elements
-**   orginally in list.
+**   originally in list.
 **
 ** Side effects:
 **   The "next" pointers for elements in list are changed.
@@ -2749,7 +2749,7 @@ struct lemon *lemp;
 }
 
 /* Search for the file "name" which is in the same directory as
-** the exacutable */
+** the executable */
 PRIVATE char *pathsearch(argv0,name,modemask)
 char *argv0;
 char *name;
@@ -3499,7 +3499,7 @@ int mhflag;     /* Output in makeheaders format if true */
   tplt_xfer(lemp->name,in,out,&lineno);
 
   /* Generate a table containing a text string that describes every
-  ** rule in the rule set of the grammer.  This information is used
+  ** rule in the rule set of the grammar.  This information is used
   ** when tracing REDUCE actions.
   */
   for(i=0, rp=lemp->rule; rp; rp=rp->next, i++){

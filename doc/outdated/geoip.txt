@@ -45,7 +45,7 @@ memory for very fast lookups. the only penalty is memory usage.
 .. note::
 
  mod_geoip will determine the database type automatically so if you enter
- GeoCity databse path it will load GeoCity Env.
+ GeoCity database path it will load GeoCity Env.
 
 Environment
 ===========
@@ -139,7 +139,7 @@ redirect.php ::
 .. note::
 
  Currently it is not possible to redirect based on mod_geoip directly in
-lighttpd config file. But i believe with the relase of lighttpd mod_magnet
+lighttpd config file. But i believe with the release of lighttpd mod_magnet
 it would be. (mod_magnet will be available in lighttpd 1.4.12+)
 
 Downloads

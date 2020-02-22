@@ -52,8 +52,8 @@ Or require authorization: ::
     ( "realm" ... ) )
 
 
-Please note that when using the server.max-worker directive, the stati of the
-childs are not combined yet, so you're going to see different stats with each
+Please note that when using the server.max-worker directive, the status of the
+children are not combined yet, so you're going to see different stats with each
 request.
 
 

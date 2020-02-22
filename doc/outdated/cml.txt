@@ -26,7 +26,7 @@ CML (Cache Meta Language) wants to solves several problems:
  * dynamic content needs caching to perform
  * checking if the content is dirty inside of the application is usually more expensive than sending out the cached data
  * a dynamic page is usually fragmented and the fragments have different livetimes
- * the different fragements can be cached independently
+ * the different fragments can be cached independently
 
 Cache Decision
 --------------
@@ -163,7 +163,7 @@ Next to all the features about Cache Decisions CML can do more. Starting
 with lighttpd 1.4.9 a power-magnet was added which attracts each request
 and allows you to manipulate the request for your needs.
 
-We want to display a maintainance page by putting a file in a specified
+We want to display a maintenance page by putting a file in a specified
 place:
 
 We enable the power magnet: ::
@@ -174,15 +174,15 @@ and create /home/www/power-magnet.cml with: ::
 
   dr = request["DOCUMENT_ROOT"]
 
-  if file_isreg(dr .. 'maintainance.html') then
-    output_include = { 'maintainance.html' }
+  if file_isreg(dr .. 'maintenance.html') then
+    output_include = { 'maintenance.html' }
     return CACHE_HIT
   end
 
   return CACHE_MISS
 
 For each requested file the /home/www/power-magnet.cml is executed which
-checks if maintainance.html exists in the docroot and displays it
+checks if maintenance.html exists in the docroot and displays it
 instead of handling the usual request.
 
 Another example, create thumbnail for requested image and serve it instead
@@ -256,6 +256,6 @@ Additionally to the functions provided by lua mod_cml provides: ::
 
 
 What ever your script does, it has to return either CACHE_HIT or CACHE_MISS.
-It case a error occures check the error-log, the user will get a error 500. If you don't like
+It case a error occurs check the error-log, the user will get a error 500. If you don't like
 the standard error-page use ``server.errorfile-prefix``.
 

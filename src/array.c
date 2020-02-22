@@ -184,7 +184,7 @@ data_unset *array_extract_element_klen(array * const a, const char *key, const s
 }
 
 static data_unset *array_get_unused_element(array * const a, const data_type_t t) {
-    /* After initial startup and config, most array usage is of homogenous types
+    /* After initial startup and config, most array usage is of homogeneous types
      * and arrays are cleared once per request, so check only the first unused
      * element to see if it can be reused */
   #if 1

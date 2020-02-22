@@ -532,7 +532,7 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		char *nm_slash;
 		/* handle remoteip limitations
 		 *
-		 * "10.0.0.1" is provided for all comparisions
+		 * "10.0.0.1" is provided for all comparisons
 		 *
 		 * only for == and != we support
 		 *

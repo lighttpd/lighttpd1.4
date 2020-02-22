@@ -27,14 +27,14 @@ Options
 =======
 
 url.rewrite-once
-  rewrites a set of URLs interally in the webserver BEFORE they are handled.
+  rewrites a set of URLs internally in the webserver BEFORE they are handled.
 
   e.g. ::
 
     url.rewrite-once = ( "<regex>" => "<relative-uri>" )
 
 url.rewrite-repeat
-  rewrites a set of URLs interally in the webserver BEFORE they are handled
+  rewrites a set of URLs internally in the webserver BEFORE they are handled
 
   e.g. ::
 

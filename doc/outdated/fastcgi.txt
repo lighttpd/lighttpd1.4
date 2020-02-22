@@ -152,14 +152,14 @@ fastcgi.server
 
   If bin-path is set:
 
-  :"max-procs": the upper limit of the processess to start
+  :"max-procs": the upper limit of the processes to start
   :"bin-environment": put an entry into the environment of
                 the started process
   :"bin-copy-environement": clean up the environment and copy
                 only the specified entries into the fresh
                 environment of the spawn process
   :"kill-signal": signal to terminate the FastCGI process with,
-                defauls to SIGTERM
+                defaults to SIGTERM
 
 Examples
 --------
@@ -193,7 +193,7 @@ Examples
   "/remote_scripts/test.cgi" will be used for the SCRIPT_NAME
   variable. Remote server may prepend it with its own
   document root. The handling of index files is also the
-  resposibility of remote server for this case.
+  responsibility of remote server for this case.
 
   In the case that the prefix is not terminated with a slash
   the prefix will be handled as file and /test.cgi would become
@@ -217,7 +217,7 @@ Examples
 Load-Balancing
 ==============
 
-The FastCGI plugin provides automaticly a load-balancing between
+The FastCGI plugin provides automatically a load-balancing between
 multiple FastCGI servers. ::
 
   fastcgi.server = ( ".php" =>
@@ -243,7 +243,7 @@ fastcgi.debug option and will get a similar output as here: ::
   proc: 127.0.0.1 1029  1 1 2 31447
 
 Even if this for multiple FastCGI children on the local machine
-the following explaination is valid for remote connections too.
+the following explanation is valid for remote connections too.
 
 The output shows:
 
@@ -303,7 +303,7 @@ Disabling Adaptive Spawning
 ---------------------------
 
 Adaptive Spawning is a quite new feature and it might misbehave
-for your setup. There are several ways to control how the spawing
+for your setup. There are several ways to control how the spawning
 is done:
 
 1. ``"max-load-per-proc" => 1``
@@ -351,7 +351,7 @@ webserver execute a small script which just contains ::
 and search for the line in that contains the configure call.
 You can use it as the base for the compilation.
 
-You have to remove all occurences of `--with-apxs`, `--with-apxs2`
+You have to remove all occurrences of `--with-apxs`, `--with-apxs2`
 and the like which would build PHP with Apache support.  Add the
 next three switches to compile PHP with FastCGI support::
 
@@ -382,7 +382,7 @@ processes locally itself if necessary: ::
   )
 
 PHP provides 2 special environment variables which control the number of
-spawned workes under the control of a single watching process
+spawned works under the control of a single watching process
 (PHP_FCGI_CHILDREN) and the number of requests what a single worker
 handles before it kills itself. ::
 
@@ -449,7 +449,7 @@ disadvantages like
 - has the same permissions as the webserver
 - has the same base-dir as the webserver
 
-As soon as you are using a seperate FastCGI Server to
+As soon as you are using a separate FastCGI Server to
 take off some load from the webserver you have to control
 the FastCGI process by a external program like spawn-fcgi.
 
@@ -476,14 +476,14 @@ a look at: ::
   ## bind to unix domain socket
   # FCGISOCKET="/tmp/php.sock"
 
-  ## number of PHP childs to spawn
+  ## number of PHP children to spawn
   PHP_FCGI_CHILDREN=10
 
   ## number of request server by a single php-process until
   ## is will be restarted
   PHP_FCGI_MAX_REQUESTS=1000
 
-  ## IP adresses where PHP should access server connections
+  ## IP addresses where PHP should access server connections
   ## from
   FCGI_WEB_SERVER_ADDRS="127.0.0.1,192.168.0.1"
 
@@ -512,7 +512,7 @@ in your processlist: ::
 The number of processes should be PHP_FCGI_CHILDREN + 1.
 Here the process 6925 is the master of the slaves which
 handle the work in parallel. Number of parallel workers can
-be set by PHP_FCGI_CHILDREN. A worker dies automaticly of
+be set by PHP_FCGI_CHILDREN. A worker dies automatically of
 handling PHP_FCGI_MAX_REQUESTS requests as PHP might have
 memory leaks.
 
@@ -524,7 +524,7 @@ the user you started script as.
 As the script might be started from a unknown stage or even
 directly from the command-line it cleans the environment
 before starting the processes. ALLOWED_ENV contains all
-the external environement variables that should be available
+the external environment variables that should be available
 to the php-process.
 
 
@@ -600,5 +600,5 @@ If you get ::
   (fcgi.c.289) connect succeeded:  7
 
 everything is fine. The connect() call just was delayed a
-little bit and is completly normal.
+little bit and is completely normal.
 

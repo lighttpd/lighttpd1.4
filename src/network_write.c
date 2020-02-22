@@ -110,7 +110,7 @@ static ssize_t network_write_data_len(int fd, const char *data, off_t len) {
 
 
 /* write next chunk(s); finished chunks are removed afterwards after successful writes.
- * return values: similar as backends (0 succes, -1 error, -2 remote close, -3 try again later (EINTR/EAGAIN)) */
+ * return values: similar as backends (0 success, -1 error, -2 remote close, -3 try again later (EINTR/EAGAIN)) */
 /* next chunk must be MEM_CHUNK. use write()/send() */
 static int network_write_mem_chunk(int fd, chunkqueue *cq, off_t *p_max_bytes, log_error_st *errh) {
     chunk* const c = cq->first;
@@ -249,8 +249,8 @@ static int network_write_file_chunk_mmap(int fd, chunkqueue *cq, off_t *p_max_by
          *
          * adaptive mem-mapping
          *   the problem:
-         *     we mmap() the whole file. If someone has alot large files and
-         *     32-bit machine the virtual address area will be unrun and we
+         *     we mmap() the whole file. If someone has a lot of large files and
+         *     32-bit machine the virtual address area will be exhausted and we
          *     will have a failing mmap() call.
          *   solution:
          *     only mmap 16M in one chunk and move the window as soon as we have

@@ -188,7 +188,7 @@ You can set your own variables in the configuration to simplify your config.
   server.document-root = basedir + server.name + "/pages/"
   accesslog.filename   = basedir + server.name + "/logs/access.log"
 
-You can also use environement variables or the default variables var.PID and
+You can also use environment variables or the default variables var.PID and
 var.CWD: ::
 
   var.basedir = env.LIGHTTPDBASE
@@ -380,7 +380,7 @@ server.modules
  				"mod_rrdtool",
 				"mod_accesslog" )
 
-  Starting with lighttpd 1.4.0 three default modules are loaded automaticly:
+  Starting with lighttpd 1.4.0 three default modules are loaded automatically:
 
   - mod_indexfile
   - mod_dirlisting
@@ -422,7 +422,7 @@ server.max-keep-alive-requests
   Default: 128
 
 server.max-keep-alive-idle
-  maximum number of seconds until a idling keep-alive connection is droped
+  maximum number of seconds until a idling keep-alive connection is dropped
 
   Default: 30
 

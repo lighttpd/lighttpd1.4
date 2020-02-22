@@ -56,7 +56,7 @@ A simple way to combine the two ways could be:
 
 1. app authenticates user and checks permissions to
    download the file.
-2. app redirects user to the file accessable by the webserver
+2. app redirects user to the file accessible by the webserver
    for further downloading.
 3. the webserver transfers the file to the user.
 

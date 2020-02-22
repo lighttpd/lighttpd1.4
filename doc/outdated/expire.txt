@@ -22,14 +22,14 @@ Description
 ===========
 
 mod_expire controls the Expire header in the Response Header of HTTP/1.0
-messages. It is usefull to set it for static files which should be cached
+messages. It is useful to set it for static files which should be cached
 aggressivly like images, stylesheets or similar.
 
 Options
 =======
 
 expire.url
-  assignes a expiration to all files below the specified path. The
+  assign a expiration to all files below the specified path. The
   specification of the time is made up of: ::
 
     <access|modification> <number> <years|months|days|hours|minutes|seconds>

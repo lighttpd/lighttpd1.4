@@ -67,7 +67,7 @@ genchanges() {
 	return 0
 }
 
-# genereate links in old textile format "text":url
+# generate links in old textile format "text":url
 genlinks_changes() {
 	local repourl ticketurl inf out
 	repourl="https://redmine.lighttpd.net/projects/lighttpd/repository/revisions/"

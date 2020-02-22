@@ -396,7 +396,7 @@ NEWS
   * [core] permit server.error_handler to static file
 
 - 1.4.50 - 2018-08-13
-  * [mod_extforward] allow explict IPs to be untrusted (#2860)
+  * [mod_extforward] allow explicit IPs to be untrusted (#2860)
   * [core] fix crash if 'host' empty in config (fixes #2876)
   * [mod_magnet] fix regression in lighty.stat (fixes #2877)
   * [core] minor code cleanup in gw_recv_response()
@@ -1002,7 +1002,7 @@ NEWS
   * [mod_cgi] consolidate CGI cleanup code
   * [mod_cgi] simplify mod_cgi_handle_subrequest()
   * [mod_cgi] kill CGI if fail to write request body
-  * [mod_proxy] use case-insensitive comparision to filter headers, send Connection: Close to backend (fixes #421)
+  * [mod_proxy] use case-insensitive comparison to filter headers, send Connection: Close to backend (fixes #421)
   * [mod_dirlisting] dir-listing.hide-dotfiles = "enabled" by default (fixes #1081)
   * [mod_secdownload] fix buffer overflow in secdl_verify_mac (reported by Fortify Open Review Project)
   * [mod_fastcgi,mod_scgi] fix leaking file-descriptor when backend spawning failed (reported by Fortify Open Review Project)
@@ -1366,7 +1366,7 @@ NEWS
   * bind to IPV6-only if ipv6 address was specified (https://redmine.lighttpd.net/projects/lighttpd/wiki/IPv6-Config)
 
 - 1.4.26 - 2010-02-07
-  * Fix request parser to handle packets with splitted \r\n\r\n (fixes #2105)
+  * Fix request parser to handle packets split on \r\n\r\n (fixes #2105)
   * Remove dependency on automake >= 1.11 with m4_ifdef check
   * mod_accesslog: support %e (fixes #2113, thx presbrey)
   * Fix mod_cgi cgi.execute-x-only option in global block
@@ -1397,7 +1397,7 @@ NEWS
   * Add server.breakagelog, a "special" stderr (fixes #1863)
   * Fix config evaluation for debug.log-timeouts option (#1529)
   * Add "cgi.execute-x-only" to mod_cgi, requires +x for cgi scripts (fixes #2013)
-  * Fix FD_SETSIZE comparision warnings
+  * Fix FD_SETSIZE comparison warnings
   * Add "lua-5.1" to searched pkg-config names for lua
   * Fix unused function webdav_lockdiscovery in mod_webdav
   * cmake: Fix crypt lib check
@@ -1687,9 +1687,9 @@ NEWS
   * fixed key compare (#1287)
   * fixed invalid char in header values (#1286)
   * fixed invalid "304 Not Modified" on broken timestamps
-  * fixed endless loop on shrinked files with sendfile() on BSD (#1289)
+  * fixed endless loop on shrunk files with sendfile() on BSD (#1289)
   * fixed counter overrun in ?auto in mod_status (#909)
-  * fixed too aggresive caching of nested conditionals (#41)
+  * fixed too aggressive caching of nested conditionals (#41)
   * fixed possible overflow in unix-socket path checks on BSD (#713)
   * fixed extra Content-Length header on 1xx, 204 and 304 (#1002)
   * fixed handling of duplicate If-Modified-Since to return 304 
@@ -1775,7 +1775,7 @@ NEWS
   * added initgroups in spawn-fcgi (#871)
   * added apr1 support htpasswd in mod-auth (#870)
   * added lighty.stat() to mod_magnet
-  * fixed segfault in splitted CRLF CRLF sequences
+  * fixed segfault in split CRLF CRLF sequences
     (introduced in 1.4.12) (#876)
   * fixed compilation of LOCK support in mod-webdav
   * fixed fragments in request-URLs (#869)
@@ -1825,7 +1825,7 @@ NEWS
   * added ability to specify which ip address spawn-fci listens on
     (agkr/at/pobox.com)
   * added mod_flv_streaming to streaming Flash Movies efficiently
-  * fixed handling of error codes returned by mod_dav_svn behing a
+  * fixed handling of error codes returned by mod_dav_svn behind a
     mod_proxy
   * fixed error-messages in mod_auth and mod_fastcgi
   * fixed re-enabling overloaded local fastcgi backends
@@ -1834,7 +1834,7 @@ NEWS
   * fixed $SERVER["socket"] on a already bound socket
   * fixed local source retrieval on windows
     (secunia)
-  * fixed hanging cgi if remote side is dieing while reading
+  * fixed hanging cgi if remote side is dying while reading
     from the pipe (sandy/at/meebo.com)
 
 - 1.4.10 - 2006-02-08
@@ -1903,7 +1903,7 @@ NEWS
   * fixed crash in mod_status
   * fixed duplicate headers in mod_proxy
   * fixed Content-Length in HEAD request in mod_proxy
-  * fixed unsigned/signed comparisions
+  * fixed unsigned/signed comparisons
   * fixed streaming in mod_cgi
   * fixed possible overflow in password-salt handling
     (reported on slashdot by james-web/at/and.org)
@@ -1959,7 +1959,7 @@ NEWS
 
 - 1.4.4 - 2005-09-16
   * added support for %V in mod_accesslog
-  * added a option for a FastCGI responser to send static files
+  * added a option for a FastCGI responder to send static files
   * added md5 and blowfish hashes to htpasswd
   * fixed METHOD in mod_accesslog of WebDAV methods
   * fixed check for permission before files in sent
@@ -1972,7 +1972,7 @@ NEWS
 
 - 1.4.3 - 2005-09-01
 
-  * added gracefull shutdown
+  * added graceful shutdown
   * added server.max-connections
   * fixed compilation on all BSD platforms
   * fixed init of kqueue and /dev/poll after daemonize
@@ -1993,7 +1993,7 @@ NEWS
 
 - 1.4.1 - 2005-08-22
 
-  * added a complete Class 1 complient mod_webdav
+  * added a complete Class 1 compliant mod_webdav
   * fixed ssl support (especially on OpenBSD)
   * fixed response header in body problem in mod_cgi
   * fixed numbers before body problem
@@ -2037,7 +2037,7 @@ NEWS
   * added ?auto to mod_status
   * relaxed handling of characters in URIs even more
   * fixed detection of sendfile() on Linux 2.4.x
-  * fixed comparision of buffers for short strings
+  * fixed comparison of buffers for short strings
   * server.errorfile-prefix is now conditional
   * fixed mod_rrdtool to close STDERR
 
@@ -2100,7 +2100,7 @@ NEWS
   * fixed min-procs and max-procs in FastCGI on PowerPC
   * fixed crash in setenv.add-response-header
   * fixed handling of nph-scripts in CGI
-  * fixed accidently sending out physical file in CGI on error
+  * fixed accidentally sending out physical file in CGI on error
   * fixed cygwin support
   * fixed handling of missing files
   * fixed HEAD requests for dynamic requests
@@ -2110,7 +2110,7 @@ NEWS
   * added traffic shaping by remote host and virtual server
   * added auto-spawning of FastCGI process on demand
   * added virtual host based on MySQL
-  * added mod_setenv to add envirnoment and http headers on the fly
+  * added mod_setenv to add environment and http headers on the fly
   * added support for syslog in mod_accesslog
   * improved output of mod_status
   * improved debug output in request handling
@@ -2193,10 +2193,10 @@ NEWS
 - 1.3.1 - 2004-09-30
 
   * fixed file-cache
-  * fixed parsing of IPv6 adresses
+  * fixed parsing of IPv6 addresses
   * fixed cgi for cygwin
   * fixed test-suite for FreeBSD and IRIX
-  * fixed handling of shrinked files
+  * fixed handling of shrunken files
   * fixed handling of REQUEST_URI after rewrite
 
 - 1.3.0 - 2004-09-17
@@ -2254,7 +2254,7 @@ NEWS
 - 1.2.3 - 2004-07-10
 
   * added a proxy module for Java and friends
-  * added support to pass accesslog through an external programm
+  * added support to pass accesslog through an external program
   * added mimetypes for text/css and text/javascript
   * fixed index-files for FastCGI if webserver is in chroot
   * fixed error messages of CGI process fails to exec()
@@ -2316,7 +2316,7 @@ NEWS
   * added REMOTE_USER to the Server->FastCGI parameters
   * added bzip2 compression
   * improved the error-messages from the new configfile parser
-  * fixed accesslog writing for errornous requests
+  * fixed accesslog writing for erroneous requests
   * fixed LFS (64bit filesizes) handling
   * fixed Content-Length for HEAD requests
   * fixed some memory leaks in the configfile parser
@@ -2375,7 +2375,7 @@ NEWS
   * moved the virtual-host code to mod_simple_vhost
   * added enhanced virtual host plugin from Christian Kruse
   * added two new auth-backends (htpasswd, htdigest)
-  * fixed and improved authentification
+  * fixed and improved authentication
   * stricter parsing of the Host: field
   * added a warning for unused configuration keys
   * improved FastCGI documentation

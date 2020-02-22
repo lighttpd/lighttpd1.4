@@ -105,8 +105,8 @@ read all the delay packet from the network.
 Sub-Requests (lightblue)
 ------------------------
 
-The FastCGI, CGI, ... intergration is done by introducing a loop in
-'handlereq' to handle all aspect which are neccesary to find out what has
+The FastCGI, CGI, ... integration is done by introducing a loop in
+'handlereq' to handle all aspect which are necessary to find out what has
 to be sent back to the client.
 
 Functions

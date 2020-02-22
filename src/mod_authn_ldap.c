@@ -602,7 +602,7 @@ static char * mod_authn_ldap_get_dn(log_error_st *errh, plugin_config_ldap *s, c
     ld = s->ldap; /*(must be after mod_authn_ldap_search(); might reconnect)*/
 
     count = ldap_count_entries(ld, lm);
-    if (0 == count) { /*(no entires found)*/
+    if (0 == count) { /*(no entries found)*/
         ldap_msgfree(lm);
         return NULL;
     } else if (count > 1) {

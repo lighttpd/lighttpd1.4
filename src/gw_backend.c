@@ -806,7 +806,7 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
             if (0 == host->active_procs) continue;
 
             cur_max = base_crc32c
-                    + generate_crc32c(CONST_BUF_LEN(host->host)); /* cachable */
+                    + generate_crc32c(CONST_BUF_LEN(host->host)); /* cacheable */
 
             if (debug) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
@@ -893,7 +893,7 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
             if (0 == host->active_procs) continue;
 
             cur_max = base_crc32c
-                    + generate_crc32c(CONST_BUF_LEN(host->host)) /* cachable */
+                    + generate_crc32c(CONST_BUF_LEN(host->host)) /* cacheable */
                     + host->port;
 
             if (debug) {

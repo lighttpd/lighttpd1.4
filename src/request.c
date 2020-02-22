@@ -31,7 +31,7 @@ static int request_check_hostname(buffer * const host) {
 	 *       port          = *digit
 	 */
 
-	/* IPv6 adress */
+	/* IPv6 address */
 	if (host->ptr[0] == '[') {
 		char *c = host->ptr + 1;
 		int colon_cnt = 0;

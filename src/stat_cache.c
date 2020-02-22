@@ -88,7 +88,7 @@ static void * stat_cache_sptree_find(splay_tree ** const sptree,
  *
  * This implementation employing FAM monitors directories as they are used,
  * and maintains a reference count for cache use within stat_cache.c.
- * A periodic job runs in lighttpd every 32 seconds, expiring entires unused
+ * A periodic job runs in lighttpd every 32 seconds, expiring entries unused
  * in last 64 seconds out of the cache and cancelling FAM monitoring.  Items
  * within the cache are checked against the filesystem upon use if last stat()
  * was greater than or equal to 16 seconds ago.
@@ -370,7 +370,7 @@ static stat_cache_fam * stat_cache_init_fam(fdevents *ev, log_error_st *errh) {
 	/* setup FAM */
 	if (0 != FAMOpen2(&scf->fam, "lighttpd")) {
 		log_error(errh, __FILE__, __LINE__,
-		  "could not open a fam connection, dieing.");
+		  "could not open a fam connection, dying.");
 		return NULL;
 	}
       #ifdef HAVE_FAMNOEXISTS

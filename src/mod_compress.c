@@ -311,7 +311,7 @@ static int deflate_file_to_buffer_gzip(plugin_data *p, char *start, off_t st_siz
 	if (Z_OK != deflateInit2(&z,
 				 Z_DEFAULT_COMPRESSION,
 				 Z_DEFLATED,
-				 -MAX_WBITS,  /* supress zlib-header */
+				 -MAX_WBITS,  /* suppress zlib-header */
 				 8,
 				 Z_DEFAULT_STRATEGY)) {
 		return -1;
@@ -383,7 +383,7 @@ static int deflate_file_to_buffer_deflate(plugin_data *p, unsigned char *start, 
 	if (Z_OK != deflateInit2(&z,
 				 Z_DEFAULT_COMPRESSION,
 				 Z_DEFLATED,
-				 -MAX_WBITS,  /* supress zlib-header */
+				 -MAX_WBITS,  /* suppress zlib-header */
 				 8,
 				 Z_DEFAULT_STRATEGY)) {
 		return -1;

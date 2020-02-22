@@ -69,7 +69,7 @@ static int request_map_insert(request_map *rm, request_st * const r, const char 
 	}
 
 	if (rm->ptr[rm->used]) {
-		/* is already alloced, just reuse it */
+		/* is already allocated, just reuse it */
 		rme = rm->ptr[rm->used];
 	} else {
 		rme = malloc(sizeof(*rme));

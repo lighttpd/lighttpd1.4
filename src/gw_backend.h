@@ -109,7 +109,7 @@ typedef struct {
     /*
      * host:port
      *
-     * if host is one of the local IP adresses the
+     * if host is one of the local IP addresses the
      * whole connection is local
      *
      * if port is not 0, and host is not specified,
@@ -140,7 +140,7 @@ typedef struct {
     const buffer *bin_path;
 
     /* bin-path is set bin-environment is taken to
-     * create the environement before starting the
+     * create the environment before starting the
      * FastCGI process
      *
      */

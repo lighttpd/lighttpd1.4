@@ -334,7 +334,7 @@ static int connection_handle_write_prepare(request_st * const r) {
 		case HTTP_METHOD_OPTIONS:
 			/*
 			 * 400 is coming from the request-parser BEFORE uri.path is set
-			 * 403 is from the response handler when noone else catched it
+			 * 403 is from the response handler when no module handled request
 			 *
 			 * */
 			if ((!r->http_status || r->http_status == 200)

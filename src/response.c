@@ -178,7 +178,7 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 			/* PATH_INFO ! :) */
 			break;
 		default:
-			/* we have no idea what happend. let's tell the user so. */
+			/* we have no idea what happened. let's tell the user so. */
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "file not found ... or so: %s -> %s",
 			  r->uri.path.ptr, r->physical.path.ptr);
@@ -486,7 +486,7 @@ handler_t http_response_prepare(request_st * const r) {
 		rc = plugins_call_handle_docroot(r);
 		if (HANDLER_GO_ON != rc) continue;
 
-		/* MacOS X and Windows can't distiguish between upper and lower-case
+		/* MacOS X and Windows can't distinguish between upper and lower-case
 		 *
 		 * convert to lower-case
 		 */
@@ -548,7 +548,7 @@ handler_t http_response_prepare(request_st * const r) {
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
 	/*
-	 * Noone catched away the file from normal path of execution yet (like mod_access)
+	 * No module grabbed the request yet (like mod_access)
 	 *
 	 * Go on and check of the file exists at all
 	 */

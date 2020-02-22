@@ -106,12 +106,12 @@ dir-listing.set-footer
   Default: empty, uses server.tag instead
 
 dir-listing.encode-readme
-  encodes all control characers, '&', '<', '>' and '\x7f' as &#x**;
+  encodes all control characters, '&', '<', '>' and '\x7f' as &#x**;
 
   Default: enabled
 
 dir-listing.encode-header
-  encodes all control characers, '&', '<', '>' and '\x7f' as &#x**;
+  encodes all control characters, '&', '<', '>' and '\x7f' as &#x**;
 
   Default: enabled
 

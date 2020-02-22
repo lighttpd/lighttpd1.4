@@ -29,7 +29,7 @@ mod_magnet is a module to control the request handling in lighty.
   ALL connections in the server. You are warned. For time-consuming or blocking scripts use mod_fastcgi and friends.
 
 For performance reasons mod_magnet caches the compiled script. For each script-run the script itself is checked for 
-freshness and recompile if neccesary.
+freshness and recompile if necessary.
 
 
 Installation
@@ -85,7 +85,7 @@ When you are using ``attract-raw-url-to`` you can access the following variables
 
   * lighty.request["Host"] = "example.org"
 
-Later in the request-handling, the URL is splitted, cleaned up and turned into a physical path name:
+Later in the request-handling, the URL is split, cleaned up and turned into a physical path name:
 
 * parts of the URI
 
@@ -149,7 +149,7 @@ Internally lighty will use the sendfile() call to send out the static files at f
 Status Codes
 ============
 
-You might have seen it already in other examples: In case you are handling the request completly in the magnet you
+You might have seen it already in other examples: In case you are handling the request completely in the magnet you
 can return your own status-codes. Examples are: Redirected, Input Validation, ... ::
 
   if (lighty.env["uri.scheme"] == "http") then
@@ -193,22 +193,22 @@ readme.lua ::
   
   return 200
 
-Maintainance pages
+Maintenance pages
 ------------------
 
-Your side might be on maintainance from time to time. Instead of shutting down the server confusing all
-users, you can just send a maintainance page.
+Your side might be on maintenance from time to time. Instead of shutting down the server confusing all
+users, you can just send a maintenance page.
 
 Config-file ::
 
-  magnet.attract-physical-path-to = server.docroot + "/maintainance.lua"
+  magnet.attract-physical-path-to = server.docroot + "/maintenance.lua"
 
-maintainance.lua ::
+maintenance.lua ::
 
   require "lfs"
 
-  if (nil == lfs.attributes(lighty.env["physical.doc-root"] .. "/maintainance.html")) then
-    lighty.content = ( lighty.env["physical.doc-root"] .. "/maintainance.html" )
+  if (nil == lfs.attributes(lighty.env["physical.doc-root"] .. "/maintenance.html")) then
+    lighty.content = ( lighty.env["physical.doc-root"] .. "/maintenance.html" )
 
     lighty.header["Content-Type"] = "text/html"
 
@@ -234,7 +234,7 @@ flv-streaming.lua::
     if (get["start"]) then
       -- missing: check if start is numeric and positive
 
-      -- send te FLV header + a seek into the file
+      -- send the FLV header + a seek into the file
       lighty.content = { "FLV\x1\x1\0\0\0\x9\0\0\0\x9", 
          { filename = lighty.env["physical.path"], offset = get["start"] } }
       lighty.header["Content-Type"] = "video/x-flv"

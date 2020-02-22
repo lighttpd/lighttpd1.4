@@ -1484,7 +1484,7 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
      * connection IPs needed, better to save the info here rather than use
      * syscalls to retrieve the info later).
      * (Exception: con->dst_addr can be further changed if mod_extforward parses
-     *  Forwaded or X-Forwarded-For request headers later, after request headers
+     *  Forwarded or X-Forwarded-For request headers later, after request headers
      *  have been received.)
      */
 

@@ -216,11 +216,11 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 	 * cml.power-magnet = server.docroot + "/rewrite.cml"
 	 *
 	 * is called on EACH request, take the original REQUEST_URI and modifies the
-	 * request header as neccesary.
+	 * request header as necessary.
 	 *
 	 * First use:
-	 * if file_exists("/maintainance.html") {
-	 *   output_include = ( "/maintainance.html" )
+	 * if file_exists("/maintenance.html") {
+	 *   output_include = ( "/maintenance.html" )
 	 *   return CACHE_HIT
 	 * }
 	 *

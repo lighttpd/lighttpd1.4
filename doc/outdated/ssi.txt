@@ -11,7 +11,7 @@ Module: mod_ssi
 :Revision: $Revision: 1.2 $
 
 :abstract:
-  The module for server-side includes provides a compatability
+  The module for server-side includes provides a compatibility
   layer for NSCA/Apache SSI.
 
 .. meta::

@@ -266,7 +266,7 @@ static void mod_evhost_parse_host(buffer *key, array *host, buffer *authority) {
 			}
 		}
 
-		/* if the . is not the first charactor of the hostname */
+		/* if the . is not the first character of the hostname */
 		if (colon != ptr) {
 			buffer_copy_string_len(key, CONST_STR_LEN("%"));
 			buffer_append_int(key, i /* ++ */);

@@ -2062,7 +2062,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
 static void
 mod_openssl_detach(handler_ctx *hctx)
 {
-    /* step aside from futher SSL processing
+    /* step aside from further SSL processing
      * (used after handle_connection_shut_wr hook) */
     /* future: might restore prior network_read and network_write fn ptrs */
     hctx->con->is_ssl_sock = 0;
