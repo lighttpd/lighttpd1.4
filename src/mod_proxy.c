@@ -813,6 +813,42 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
 }
 
 
+static handler_t proxy_stdin_append(gw_handler_ctx *hctx) {
+    /*handler_ctx *hctx = (handler_ctx *)gwhctx;*/
+    chunkqueue * const req_cq = hctx->r->reqbody_queue;
+    const off_t req_cqlen = req_cq->bytes_in - req_cq->bytes_out;
+    if (req_cqlen) {
+        /* XXX: future: use http_chunk_len_append() */
+        buffer * const tb = hctx->r->tmp_buf;
+        buffer_clear(tb);
+        buffer_append_uint_hex_lc(tb, (uintmax_t)req_cqlen);
+        buffer_append_string_len(tb, CONST_STR_LEN("\r\n"));
+
+        const off_t len = (off_t)buffer_string_length(tb)
+                        + 2 /*(+2 end chunk "\r\n")*/
+                        + req_cqlen;
+        if (-1 != hctx->wb_reqlen)
+            hctx->wb_reqlen += (hctx->wb_reqlen >= 0) ? len : -len;
+
+        (chunkqueue_is_empty(hctx->wb) || hctx->wb->first->type == MEM_CHUNK)
+                                          /* else FILE_CHUNK for temp file */
+          ? chunkqueue_append_mem(hctx->wb, CONST_BUF_LEN(tb))
+          : chunkqueue_append_mem_min(hctx->wb, CONST_BUF_LEN(tb));
+        chunkqueue_steal(hctx->wb, req_cq, req_cqlen);
+
+        chunkqueue_append_mem_min(hctx->wb, CONST_STR_LEN("\r\n"));
+    }
+
+    if (hctx->wb->bytes_in == hctx->wb_reqlen) {/*hctx->r->reqbody_length >= 0*/
+        /* terminate STDIN */
+        chunkqueue_append_mem(hctx->wb, CONST_STR_LEN("0\r\n\r\n"));
+        hctx->wb_reqlen += (int)sizeof("0\r\n\r\n");
+    }
+
+    return HANDLER_GO_ON;
+}
+
+
 static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	handler_ctx *hctx = (handler_ctx *)gwhctx;
 	request_st * const r = hctx->gw.r;
@@ -831,7 +867,13 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	buffer_append_string_buffer(b, &r->target);
 	if (remap_headers)
 		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(&r->target), &hctx->conf.header, 1);
-	if (!upgrade)
+
+	int stream_chunked = 0;
+	if (-1 == r->reqbody_length && r->conf.stream_request_body) {
+		stream_chunked = 1;
+		hctx->gw.stdin_append = proxy_stdin_append;
+	}
+	if (!stream_chunked && !upgrade)
 		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
 	else
 		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.1\r\n"));
@@ -869,6 +911,8 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			                        buf, li_itostrn(buf, sizeof(buf), r->reqbody_length));
 		}
 	}
+	else if (stream_chunked)
+		buffer_append_string_len(b, CONST_STR_LEN("Transfer-Encoding: chunked\r\n"));
 
 	/* request header */
 	for (size_t i = 0, used = r->rqst_headers.used; i < used; ++i) {

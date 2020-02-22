@@ -982,7 +982,9 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			 * (occurs here if client sends Transfer-Encoding: chunked
 			 *  and module is flagged to stream request body to backend) */
 			if (-1 == r->reqbody_length) {
-				return connection_handle_read_post_error(r, 411);
+				return (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
+				  ? connection_handle_read_post_error(r, 411)
+				  : HANDLER_WAIT_FOR_EVENT;
 			}
 		}
 	}

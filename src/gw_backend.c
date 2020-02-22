@@ -2052,43 +2052,40 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
         }
         else {
             handler_t rc = connection_handle_read_post_state(r);
-            chunkqueue *req_cq = r->reqbody_queue;
-          #if 0 /*(not reached since we send 411 Length Required below)*/
-            if (hctx->wb_reqlen < -1 && r->reqbody_length >= 0) {
-                /* (completed receiving Transfer-Encoding: chunked) */
-                hctx->wb_reqlen = -hctx->wb_reqlen + r->reqbody_length;
-                if (hctx->stdin_append) {
-                    handler_t rca = hctx->stdin_append(hctx);
-                    if (HANDLER_GO_ON != rca) return rca;
-                }
-            }
-          #endif
-            if ((0 != hctx->wb->bytes_in || -1 == hctx->wb_reqlen)
-                && !chunkqueue_is_empty(req_cq)) {
-                if (hctx->stdin_append) {
-                    handler_t rca = hctx->stdin_append(hctx);
-                    if (HANDLER_GO_ON != rca) return rca;
-                }
-                else
-                    chunkqueue_append_chunkqueue(hctx->wb, req_cq);
-                if (fdevent_fdnode_interest(hctx->fdn) & FDEVENT_OUT) {
-                    return (rc == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : rc;
-                }
-            }
-            if (rc != HANDLER_GO_ON) return rc;
-
 
             /* XXX: create configurable flag */
             /* CGI environment requires that Content-Length be set.
              * Send 411 Length Required if Content-Length missing.
              * (occurs here if client sends Transfer-Encoding: chunked
              *  and module is flagged to stream request body to backend) */
-            /* proxy currently sends HTTP/1.0 request and ideally should send
-             * Content-Length with request if request body is present, so
-             * send 411 Length Required if Content-Length missing. */
-            if (-1 == r->reqbody_length) {
-                return connection_handle_read_post_error(r, 411);
+            if (-1 == r->reqbody_length && hctx->opts.backend != BACKEND_PROXY){
+                return (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
+                  ? connection_handle_read_post_error(r, 411)
+                  : HANDLER_WAIT_FOR_EVENT;
             }
+
+            if (hctx->wb_reqlen < -1 && r->reqbody_length >= 0) {
+                /* (completed receiving Transfer-Encoding: chunked) */
+                hctx->wb_reqlen = -hctx->wb_reqlen;
+                if (hctx->stdin_append) {
+                    handler_t rca = hctx->stdin_append(hctx);
+                    if (HANDLER_GO_ON != rca) return rca;
+                }
+            }
+
+            if ((0 != hctx->wb->bytes_in || -1 == hctx->wb_reqlen)
+                && !chunkqueue_is_empty(r->reqbody_queue)) {
+                if (hctx->stdin_append) {
+                    handler_t rca = hctx->stdin_append(hctx);
+                    if (HANDLER_GO_ON != rca) return rca;
+                }
+                else
+                    chunkqueue_append_chunkqueue(hctx->wb, r->reqbody_queue);
+                if (fdevent_fdnode_interest(hctx->fdn) & FDEVENT_OUT) {
+                    return (rc == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : rc;
+                }
+            }
+            if (rc != HANDLER_GO_ON) return rc;
         }
     }
 
