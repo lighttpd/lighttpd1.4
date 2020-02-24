@@ -1452,11 +1452,11 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
             if (r->conf.log_timeouts) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "NOTE: a request from %.*s for %.*s timed out after writing "
-                  "%zd bytes. We waited %d seconds.  If this is a problem, "
+                  "%lld bytes. We waited %d seconds.  If this is a problem, "
                   "increase server.max-write-idle",
                   BUFFER_INTLEN_PTR(con->dst_addr_buf),
                   BUFFER_INTLEN_PTR(&r->target),
-                  con->bytes_written, (int)r->conf.max_write_idle);
+                  (long long)con->bytes_written, (int)r->conf.max_write_idle);
             }
             connection_set_state(r, CON_STATE_ERROR);
             changed = 1;

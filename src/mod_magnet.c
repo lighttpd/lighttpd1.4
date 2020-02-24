@@ -259,14 +259,14 @@ typedef struct {
 	size_t len;
 } const_buffer;
 
-static const_buffer magnet_checkconstbuffer(lua_State *L, int index) {
+static const_buffer magnet_checkconstbuffer(lua_State *L, int idx) {
 	const_buffer cb;
-	cb.ptr = luaL_checklstring(L, index, &cb.len);
+	cb.ptr = luaL_checklstring(L, idx, &cb.len);
 	return cb;
 }
 
-static buffer* magnet_checkbuffer(lua_State *L, int index) {
-	const_buffer cb = magnet_checkconstbuffer(L, index);
+static buffer* magnet_checkbuffer(lua_State *L, int idx) {
+	const_buffer cb = magnet_checkconstbuffer(L, idx);
 	buffer *b = buffer_init();
 	buffer_copy_string_len(b, cb.ptr, cb.len);
 	return b;

@@ -1,5 +1,6 @@
 #include "first.h"
 
+#include <string.h>
 #include <stdlib.h>
 
 #include "fdevent_impl.h"

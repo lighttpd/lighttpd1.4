@@ -937,8 +937,8 @@ static int recv_ietf_00(handler_ctx *hctx) {
     chunkqueue *cq = r->reqbody_queue;
     buffer *payload = hctx->frame.payload;
     char *mem;
-    DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%zx",
-                    r->con->fd, chunkqueue_length(cq));
+    DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%llx",
+                    r->con->fd, (long long)chunkqueue_length(cq));
     for (chunk *c = cq->first; c; c = c->next) {
         char *frame = c->mem->ptr+c->offset;
         /*(chunk_remaining_length() on MEM_CHUNK)*/
@@ -1122,8 +1122,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
     request_st * const r = hctx->gw.r;
     chunkqueue *cq = r->reqbody_queue;
     buffer *payload = hctx->frame.payload;
-    DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%zx",
-                    r->con->fd, chunkqueue_length(cq));
+    DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%llx",
+                    r->con->fd, (long long)chunkqueue_length(cq));
     for (chunk *c = cq->first; c; c = c->next) {
         char *frame = c->mem->ptr+c->offset;
         /*(chunk_remaining_length() on MEM_CHUNK)*/
@@ -1177,8 +1177,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 hctx->frame.ctl.mask_cnt = 0;
                 hctx->frame.ctl.siz = (uint64_t)(frame[i] & 0x7f);
                 if (hctx->frame.ctl.siz == 0) {
-                    DEBUG_LOG_DEBUG("specified payload size=%zx",
-                                    hctx->frame.ctl.siz);
+                    DEBUG_LOG_DEBUG("specified payload size=%llx",
+                                    (unsigned long long)hctx->frame.ctl.siz);
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                 }
                 else if (hctx->frame.ctl.siz == MOD_WEBSOCKET_FRAME_LEN16) {
@@ -1194,8 +1194,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                         MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH;
                 }
                 else {
-                    DEBUG_LOG_DEBUG("specified payload size=%zx",
-                                    hctx->frame.ctl.siz);
+                    DEBUG_LOG_DEBUG("specified payload size=%llx",
+                                    (unsigned long long)hctx->frame.ctl.siz);
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                 }
                 i++;
@@ -1211,8 +1211,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                                        MOD_WEBSOCKET_BUFMAX);
                         return -1;
                     }
-                    DEBUG_LOG_DEBUG("specified payload size=%zx",
-                                    hctx->frame.ctl.siz);
+                    DEBUG_LOG_DEBUG("specified payload size=%llx",
+                                    (unsigned long long)hctx->frame.ctl.siz);
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                 }
                 i++;
@@ -1241,8 +1241,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
             case MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD:
                 /* hctx->frame.ctl.siz <= SIZE_MAX */
                 if (hctx->frame.ctl.siz <= flen - i) {
-                    DEBUG_LOG_DEBUG("read payload, size=%zx",
-                                    hctx->frame.ctl.siz);
+                    DEBUG_LOG_DEBUG("read payload, size=%llx",
+                                    (unsigned long long)hctx->frame.ctl.siz);
                     buffer_append_string_len(payload, frame+i, (size_t)
                                              (hctx->frame.ctl.siz & SIZE_MAX));
                     i += (size_t)(hctx->frame.ctl.siz & SIZE_MAX);
@@ -1256,8 +1256,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                     buffer_append_string_len(payload, frame+i, flen - i);
                     hctx->frame.ctl.siz -= flen - i;
                     i += flen - i;
-                    DEBUG_LOG_DEBUG("rest of payload size=%zx",
-                                    hctx->frame.ctl.siz);
+                    DEBUG_LOG_DEBUG("rest of payload size=%llx",
+                                    (unsigned long long)hctx->frame.ctl.siz);
                 }
                 switch (hctx->frame.type) {
                 case MOD_WEBSOCKET_FRAME_TYPE_TEXT:
