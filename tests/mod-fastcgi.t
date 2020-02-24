@@ -15,7 +15,7 @@ my $tf = LightyTest->new();
 my $t;
 
 SKIP: {
-	skip "no php binary found", 31 unless $LightyTest::HAVE_PHP;
+	skip "no php binary found", 29 unless $LightyTest::HAVE_PHP;
 
 	$tf->{CONFIGFILE} = 'fastcgi-10.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd") or goto cleanup;
