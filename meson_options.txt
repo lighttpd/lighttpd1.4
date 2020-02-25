@@ -63,6 +63,11 @@ option('with_mysql',
 	value: false,
 	description: 'with mysql-support for mod_vhostdb_mysql [default: off]',
 )
+option('with_nettle',
+	type: 'boolean',
+	value: false,
+	description: 'with Nettle-support [default: off]',
+)
 option('with_openssl',
 	type: 'boolean',
 	value: false,

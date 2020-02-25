@@ -6,10 +6,44 @@
 #include "http_header.h"
 #include "log.h"
 
-#include "sys-crypto.h" /* USE_OPENSSL_CRYPTO */
-#ifdef USE_OPENSSL_CRYPTO
-#include <openssl/sha.h>
+#include "sys-crypto.h" /* USE_LIB_CRYPTO */
+#ifdef USE_LIB_CRYPTO
+
+#if defined(USE_NETTLE_CRYPTO)
+
+#include <nettle/sha.h>
+typedef struct sha256_ctx SHA256_CTX;
+#define SHA256_Init(ctx) \
+        sha256_init(ctx)
+#define SHA256_Final(digest, ctx) \
+        sha256_digest((ctx),sizeof(digest),(digest))
+static void
+SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
+{
+    sha256_update(ctx, length, data);
+}
+
+#ifndef SHA512_256_DIGEST_LENGTH
+#define SHA512_256_DIGEST_LENGTH 32
 #endif
+typedef struct sha512_ctx SHA512_CTX;
+#define SHA512_256_Init(ctx) \
+        sha512_256_init(ctx)
+#define SHA512_256_Final(digest, ctx) \
+        sha512_256_digest((ctx),sizeof(digest),(digest))
+static void
+SHA512_256_Update(SHA512_CTX *ctx, const void *data, size_t length)
+{
+    sha512_256_update(ctx, length, data);
+}
+
+#elif defined(USE_OPENSSL_CRYPTO)
+
+#include <openssl/sha.h>
+
+#endif
+
+#endif /* USE_LIB_CRYPTO */
 
 #include <stdlib.h>
 #include <string.h>
@@ -132,7 +166,7 @@ static int mod_auth_algorithm_parse(http_auth_info_t *ai, const char *s) {
         ai->dlen   = HTTP_AUTH_DIGEST_MD5_BINLEN;
         return 1;
     }
-  #ifdef USE_OPENSSL_CRYPTO
+  #ifdef USE_LIB_CRYPTO
     else if (len >= 7
              && 's' == (s[0] | 0x20)
              && 'h' == (s[1] | 0x20)
@@ -613,7 +647,7 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 }
 
 
-#ifdef USE_OPENSSL_CRYPTO
+#ifdef USE_LIB_CRYPTO
 
 static void mod_auth_digest_mutate_sha256(http_auth_info_t *ai, const char *m, const char *uri, const char *nonce, const char *cnonce, const char *nc, const char *qop) {
     SHA256_CTX ctx;
@@ -761,7 +795,7 @@ static void mod_auth_digest_nonce_sha512_256(buffer *b, time_t cur_ts, int rnd, 
 
 #endif /* SHA512_256_DIGEST_LENGTH */
 
-#endif /* USE_OPENSSL_CRYPTO */
+#endif /* USE_LIB_CRYPTO */
 
 static void mod_auth_digest_mutate_md5(http_auth_info_t *ai, const char *m, const char *uri, const char *nonce, const char *cnonce, const char *nc, const char *qop) {
     li_MD5_CTX ctx;
@@ -839,7 +873,7 @@ static void mod_auth_digest_nonce_md5(buffer *b, time_t cur_ts, int rnd, const b
 static void mod_auth_digest_mutate(http_auth_info_t *ai, const char *m, const char *uri, const char *nonce, const char *cnonce, const char *nc, const char *qop) {
     if (ai->dalgo & HTTP_AUTH_DIGEST_MD5)
         mod_auth_digest_mutate_md5(ai, m, uri, nonce, cnonce, nc, qop);
-  #ifdef USE_OPENSSL_CRYPTO
+  #ifdef USE_LIB_CRYPTO
     else if (ai->dalgo & HTTP_AUTH_DIGEST_SHA256)
         mod_auth_digest_mutate_sha256(ai, m, uri, nonce, cnonce, nc, qop);
    #ifdef SHA512_256_DIGEST_LENGTH
@@ -864,7 +898,7 @@ static void mod_auth_append_nonce(buffer *b, time_t cur_ts, const struct http_au
         buffer_append_string_len(b, CONST_STR_LEN(":"));
     }
     switch (dalgo) {
-     #ifdef USE_OPENSSL_CRYPTO
+     #ifdef USE_LIB_CRYPTO
       #ifdef SHA512_256_DIGEST_LENGTH
       case HTTP_AUTH_DIGEST_SHA512_256:
         mod_auth_digest_nonce_sha512_256(b, cur_ts, rnd, nonce_secret);
@@ -887,7 +921,7 @@ static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const str
     int algoid[3];
     unsigned int algolen[3];
     const char *algoname[3];
-  #ifdef USE_OPENSSL_CRYPTO
+  #ifdef USE_LIB_CRYPTO
    #ifdef SHA512_256_DIGEST_LENGTH
     if (algos & HTTP_AUTH_DIGEST_SHA512_256) {
         algoid[n] = HTTP_AUTH_DIGEST_SHA512_256;

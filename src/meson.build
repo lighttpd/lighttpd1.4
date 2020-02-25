@@ -420,6 +420,13 @@ if get_option('with_wolfssl') != 'false'
 	libcrypto += libwolfssl_includes_dep
 	conf_data.set('HAVE_WOLFSSL_SSL_H', true)
 endif
+if get_option('with_nettle') != 'false'
+	# manual search:
+	# header: nettle/nettle-types.h
+	# function: nettle_md5_init (-lnettle)
+	libcrypto = [ dependency('libnettle') ]
+	conf_data.set('HAVE_NETTLE_NETTLE_TYPES_H', true)
+endif
 
 libpcre = []
 if get_option('with_pcre')

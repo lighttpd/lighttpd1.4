@@ -12,9 +12,13 @@
 #include <string.h>
 
 #include "sys-crypto.h"
-#ifdef USE_OPENSSL_CRYPTO
+#ifdef USE_LIB_CRYPTO
+#if defined(USE_NETTLE_CRYPTO)
+#include <nettle/hmac.h>
+#elif defined(USE_OPENSSL_CRYPTO)
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#endif
 #endif
 
 #include "md5.h"
@@ -177,11 +181,17 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			return const_time_memeq((char *)HA1, (char *)md5bin, sizeof(md5bin));
 		}
 	case SECDL_HMAC_SHA1:
-#ifdef USE_OPENSSL_CRYPTO
+#ifdef USE_LIB_CRYPTO
 		{
 			unsigned char digest[20];
 			char base64_digest[27];
 
+		  #if defined(USE_NETTLE_CRYPTO)
+			struct hmac_sha1_ctx ctx;
+			hmac_sha1_set_key(&ctx, buffer_string_length(config->secret), (const uint8_t *)config->secret->ptr);
+			hmac_sha1_update(&ctx, strlen(protected_path), (const uint8_t *)protected_path);
+			hmac_sha1_digest(&ctx, sizeof(digest), (uint8_t *)digest);
+		  #elif defined(USE_OPENSSL_CRYPTO)
 			if (NULL == HMAC(
 					EVP_sha1(),
 					(unsigned char const*) config->secret->ptr, buffer_string_length(config->secret),
@@ -191,6 +201,9 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 				  "hmac-sha1: HMAC() failed");
 				return 0;
 			}
+		  #else
+		  #error "unexpected; crypto lib not configured for use by mod_secdownload"
+		  #endif
 
 			li_to_base64_no_padding(base64_digest, 27, digest, 20, BASE64_URL);
 
@@ -199,11 +212,17 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 #endif
 		break;
 	case SECDL_HMAC_SHA256:
-#ifdef USE_OPENSSL_CRYPTO
+#ifdef USE_LIB_CRYPTO
 		{
 			unsigned char digest[32];
 			char base64_digest[43];
 
+		  #if defined(USE_NETTLE_CRYPTO)
+			struct hmac_sha256_ctx ctx;
+			hmac_sha256_set_key(&ctx, buffer_string_length(config->secret), (const uint8_t *)config->secret->ptr);
+			hmac_sha256_update(&ctx, strlen(protected_path), (const uint8_t *)protected_path);
+			hmac_sha256_digest(&ctx, sizeof(digest), (uint8_t *)digest);
+		  #elif defined(USE_OPENSSL_CRYPTO)
 			if (NULL == HMAC(
 					EVP_sha256(),
 					(unsigned char const*) config->secret->ptr, buffer_string_length(config->secret),
@@ -213,6 +232,9 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 				  "hmac-sha256: HMAC() failed");
 				return 0;
 			}
+		  #else
+		  #error "unexpected; crypto lib not configured for use by mod_secdownload"
+		  #endif
 
 			li_to_base64_no_padding(base64_digest, 43, digest, 32, BASE64_URL);
 
@@ -236,7 +258,7 @@ static int mod_secdownload_parse_algorithm(config_plugin_value_t * const cpv, lo
         log_error(errh, __FILE__, __LINE__,
           "invalid secdownload.algorithm: %s", cpv->v.b->ptr);
         return 0;
-     #ifndef USE_OPENSSL_CRYPTO
+     #ifndef USE_LIB_CRYPTO
       case SECDL_HMAC_SHA1:
       case SECDL_HMAC_SHA256:
         log_error(errh, __FILE__, __LINE__,

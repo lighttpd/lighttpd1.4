@@ -13,7 +13,13 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "sys-crypto.h"
+#include "sys-crypto.h" /* USE_LIB_CRYPTO */
+#ifdef USE_NETTLE_CRYPTO
+#undef USE_OPENSSL_CRYPTO
+#include <nettle/knuth-lfib.h>
+#include <nettle/arcfour.h>
+#include <nettle/yarrow.h>
+#endif
 #ifdef USE_OPENSSL_CRYPTO
 #include <openssl/opensslv.h> /* OPENSSL_VERSION_NUMBER */
 #include <openssl/rand.h>
@@ -126,6 +132,39 @@ static int li_rand_device_bytes (unsigned char *buf, int num)
 
 static int li_rand_inited;
 static unsigned short xsubi[3];
+#ifdef USE_NETTLE_CRYPTO
+static struct knuth_lfib_ctx knuth_lfib_ctx;
+static struct arcfour_ctx    arcfour_ctx;
+static struct yarrow256_ctx  yarrow256_ctx;
+#endif
+
+#ifdef USE_NETTLE_CRYPTO
+/* adapted from Nettle documentation arcfour_set_key_hashed() in nettle.pdf */
+/* A more robust key setup function for ARCFOUR */
+static void
+li_arcfour_init_random_key_hashed(struct arcfour_ctx *ctx)
+{
+    uint8_t key[ARCFOUR_KEY_SIZE];
+    const size_t length = sizeof(key);
+    if (1 != li_rand_device_bytes(key, (int)sizeof(key))) {
+        log_failed_assert(__FILE__, __LINE__,
+                          "gathering entropy for arcfour seed failed");
+    }
+    memset(ctx, 0, sizeof(*ctx));
+
+    struct sha256_ctx hash;
+    uint8_t digest[SHA256_DIGEST_SIZE];
+    uint8_t buf[0x200];
+    memset(buf, 0, sizeof(buf));
+    sha256_init(&hash);
+    sha256_update(&hash, length, key);
+    sha256_digest(&hash, SHA256_DIGEST_SIZE, digest);
+    nettle_arcfour_set_key(ctx, SHA256_DIGEST_SIZE, digest);
+    nettle_arcfour_crypt(ctx, sizeof(buf), buf, buf);
+    nettle_arcfour_crypt(ctx, sizeof(buf), buf, buf);
+    nettle_arcfour_crypt(ctx, sizeof(buf), buf, buf);
+}
+#endif
 
 static void li_rand_init (void)
 {
@@ -158,6 +197,11 @@ static void li_rand_init (void)
   #ifdef HAVE_SRANDOM
     srandom(u); /*(initialize just in case random() used elsewhere)*/
   #endif
+  #ifdef USE_NETTLE_CRYPTO
+    nettle_knuth_lfib_init(&knuth_lfib_ctx, u);
+    nettle_yarrow256_init(&yarrow256_ctx, 0, NULL);
+    li_arcfour_init_random_key_hashed(&arcfour_ctx);
+  #endif
   #ifdef USE_OPENSSL_CRYPTO
     RAND_poll();
     RAND_seed(xsubi, (int)sizeof(xsubi));
@@ -180,6 +224,11 @@ int li_rand_pseudo (void)
   #endif
   #endif
     if (!li_rand_inited) li_rand_init();
+  #ifdef USE_NETTLE_CRYPTO
+    int i = (int)nettle_knuth_lfib_get(&knuth_lfib_ctx);
+    nettle_arcfour_crypt(&arcfour_ctx, sizeof(i), (uint8_t *)&i, (uint8_t *)&i);
+    if (i) return i; /*(cond to avoid compiler warning for code after return)*/
+  #endif
   #ifdef HAVE_ARC4RANDOM_BUF
     return (int)arc4random();
   #elif defined(HAVE_SRANDOM)
@@ -203,6 +252,21 @@ void li_rand_pseudo_bytes (unsigned char *buf, int num)
 
 int li_rand_bytes (unsigned char *buf, int num)
 {
+  #ifdef USE_NETTLE_CRYPTO
+  #if 0 /* not implemented: periodic nettle_yarrow256_update() and reseed */
+    if (!nettle_yarrow256_is_seeded(&yarrow256_ctx)) {
+        uint8_t seed_file[YARROW256_SEED_FILE_SIZE];
+        if (1 == li_rand_device_bytes((unsigned char *)seed_file,
+                                      (int)sizeof(seed_file))) {
+            nettle_yarrow256_seed(&yarrow256_ctx, sizeof(seed_file), seed_file);
+        }
+    }
+    if (nettle_yarrow256_is_seeded(&yarrow256_ctx)) {
+        nettle_yarrow256_random(&yarrow256_ctx, (size_t)num, (uint8_t *)buf);
+        return 1;
+    }
+  #endif
+  #endif
   #ifdef USE_OPENSSL_CRYPTO
     int rc = RAND_bytes(buf, num);
     if (-1 != rc) {

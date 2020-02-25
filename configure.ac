@@ -737,6 +737,35 @@ if test "$WITH_OPENSSL" != no && test "$WITH_WOLFSSL" != no; then
   AC_MSG_ERROR([lighttpd should not be built with both --with-openssl and --with-wolfssl])
 fi
 
+dnl Check for Nettle (and overwrite CRYPTO_LIB if set by OpenSSL or wolfSSL)
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for Nettle])
+AC_ARG_WITH([nettle],
+  [AC_HELP_STRING([--with-nettle@<:@=DIR@:>@],
+    [Include Nettle support (default no)]
+  )],
+  [WITH_NETTLE=$withval],
+  [WITH_NETTLE=no]
+)
+AC_MSG_RESULT([$WITH_NETTLE])
+
+if test "$WITH_NETTLE" != no; then
+  if test "$WITH_NETTLE" != yes; then
+    CPPFLAGS="${CPPFLAGS} -I$WITH_NETTLE/include"
+    LDFLAGS="${LDFLAGS} -L$WITH_NETTLE/lib"
+  fi
+
+  AC_CHECK_HEADERS([nettle/nettle-types.h], [], [
+    AC_MSG_ERROR([nettle headers not found. install them or build without --with-nettle])
+  ])
+  AC_CHECK_LIB([nettle], [nettle_md5_init],
+    [CRYPTO_LIB="-lnettle"],
+    [AC_MSG_ERROR([nettle crypto library not found. install it or build without --with-nettle])]
+  )
+
+  AC_SUBST([CRYPTO_LIB])
+fi
+
 
 dnl pcre support
 AC_MSG_NOTICE([----------------------------------------])

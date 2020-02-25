@@ -2,7 +2,7 @@
 typedef int innocuous_typedef_to_quiet_empty_translation_unit_compiler_warning;
 
 #include "sys-crypto.h"
-#ifndef USE_OPENSSL_CRYPTO
+#ifndef USE_LIB_CRYPTO
 
 #include "sys-endian.h"
 #include "algo_sha1.h"

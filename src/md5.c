@@ -33,10 +33,10 @@ documentation and/or software.
 #define POINTER unsigned char *
 
 #if 0 /* Note: not defined here or in lighttpd local "md5.h" */
-#include "sys-crypto.h" /* USE_OPENSSL_CRYPTO */
+#include "sys-crypto.h" /* USE_LIB_CRYPTO */
 #endif
 
-#ifndef USE_OPENSSL_CRYPTO
+#ifndef USE_LIB_CRYPTO
 #include <string.h>
 
 /* Constants for MD5Transform routine.

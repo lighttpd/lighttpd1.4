@@ -2,12 +2,32 @@
 #define INCLUDED_ALGO_SHA1_H
 #include "first.h"
 
-#include "sys-crypto.h"
-#ifdef USE_OPENSSL_CRYPTO
+#include "sys-crypto.h" /* USE_LIB_CRYPTO */
+#ifdef USE_LIB_CRYPTO
+
+#ifdef USE_NETTLE_CRYPTO
+#include <nettle/sha.h>
+#ifndef SHA_DIGEST_LENGTH
+#define SHA_DIGEST_LENGTH 20
+#endif
+typedef struct sha1_ctx SHA_CTX;
+#define SHA1_Init(ctx) \
+        sha1_init(ctx)
+#define SHA1_Final(digest, ctx) \
+        sha1_digest((ctx),sizeof(digest),(digest))
+static void
+SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
+{
+    sha1_update(ctx, length, data);
+}
+
+#elif defined(USE_OPENSSL_CRYPTO)
 
 #include <openssl/sha.h>
 
-#else
+#endif
+
+#else /* ! USE_LIB_CRYPTO */
 
 /*
  * sha.h

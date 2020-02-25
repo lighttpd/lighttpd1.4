@@ -253,6 +253,7 @@ vars.AddVariables(
 	PackageVariable('with_mysql', 'enable mysql support', 'no'),
 	BoolVariable('with_openssl', 'enable openssl support', 'no'),
 	PackageVariable('with_wolfssl', 'enable wolfSSL support', 'no'),
+	BoolVariable('with_nettle', 'enable Nettle support', 'no'),
 	BoolVariable('with_pam', 'enable PAM auth support', 'no'),
 	PackageVariable('with_pcre', 'enable pcre support', 'yes'),
 	PackageVariable('with_pgsql', 'enable pgsql support', 'no'),
@@ -606,6 +607,14 @@ if 1:
 			CPPFLAGS = [ '-DHAVE_WOLFSSL_SSL_H' ],
 			LIBSSL = '',
 			LIBCRYPTO = 'wolfssl',
+		)
+
+	if env['with_nettle']:
+		if not autoconf.CheckLibWithHeader('nettle', 'nettle/nettle-types.h', 'C'):
+			fail("Couldn't find Nettle")
+		autoconf.env.Append(
+			CPPFLAGS = [ '-DHAVE_NETTLE_NETTLE_TYPES_H' ],
+			LIBCRYPTO = 'nettle',
 		)
 
 	if env['with_pam']:
