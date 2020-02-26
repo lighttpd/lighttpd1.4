@@ -742,7 +742,7 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
     }
 
     if (0 != fdevent_set_stdin_stdout_stderr(fdin, fdout, fderr)) _exit(errno);
-  #ifdef FD_CLOEXEC
+  #ifndef FD_CLOEXEC
     /*(might not be sufficient for open fds, but modern OS have FD_CLOEXEC)*/
     for (int i = 3; i < 256; ++i) close(i);
   #endif
