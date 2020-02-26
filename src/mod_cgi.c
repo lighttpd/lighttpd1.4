@@ -768,8 +768,6 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		log_perror(r->conf.errh, __FILE__, __LINE__, "pipe failed");
 		return -1;
 	}
-	fdevent_setfd_cloexec(to_cgi_fds[1]);
-	fdevent_setfd_cloexec(from_cgi_fds[0]);
 
 	{
 		size_t i = 0;
