@@ -930,7 +930,10 @@ stat_cache_entry * stat_cache_get_entry(const buffer *name) {
 	/* Note: paths are expected to be normalized before calling stat_cache,
 	 * e.g. without repeated '/' */
 
-	if (name->ptr[0] != '/') return NULL;
+	if (name->ptr[0] != '/') {
+		errno = EINVAL;
+		return NULL;
+	}
 
 	/*
 	 * check if the directory for this file has changed
