@@ -562,6 +562,29 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
                 cpv->v.v = x;
                 break;
               case 1: /* accesslog.format */
+                if (NULL != strchr(cpv->v.b->ptr, '\\')) {
+                    /* process basic backslash-escapes in format string */
+                    buffer *b;
+                    *(const buffer **)&b = cpv->v.b;
+                    char *t = b->ptr;
+                    for (char *s = t; *s; ++s) {
+                        if (s[0] != '\\') { *t++ = *s; continue; }
+                        if (s[1] == '\0') continue; /*(ignore dangling '\\')*/
+                        switch (*++s) {
+                          case 'a': *t++ = '\a'; break; /* bell */
+                          case 'b': *t++ = '\b'; break; /* backspace */
+                          case 'f': *t++ = '\f'; break; /* form feed */
+                          case 'n': *t++ = '\n'; break; /* newline */
+                          case 'r': *t++ = '\r'; break; /* carriage return */
+                          case 't': *t++ = '\t'; break; /* horizontal tab */
+                          case 'v': *t++ = '\v'; break; /* vertical tab */
+                          /*case '"':*/
+                          /*case '\\':*/
+                          default:  *t++ = *s;   break; /*(use literal char)*/
+                        }
+                    }
+                    buffer_string_set_length(b, (size_t)(t - b->ptr));
+                }
                 cpv->v.v =
                   mod_accesslog_process_format(CONST_BUF_LEN(cpv->v.b), srv);
                 if (NULL == cpv->v.v) return HANDLER_ERROR;
