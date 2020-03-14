@@ -181,6 +181,10 @@
 #endif
 #endif
 
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
 #if defined(HAVE_LIBXML_H) && defined(HAVE_SQLITE3_H)
 
 #define USE_PROPPATCH
