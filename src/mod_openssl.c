@@ -824,6 +824,8 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
             break;
         }
 
+        hctx->conf.ssl_verifyclient_enforce = 0;
+        SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
         rc = SSL_TLSEXT_ERR_OK;
     } while (0);
 
