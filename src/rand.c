@@ -215,6 +215,7 @@ void li_rand_reseed (void)
 
 int li_rand_pseudo (void)
 {
+    if (!li_rand_inited) li_rand_init();
     /* randomness *is not* cryptographically strong */
     /* (attempt to use better mechanisms to replace the more portable rand()) */
   #ifdef USE_OPENSSL_CRYPTO /* (openssl 1.1.0 deprecates RAND_pseudo_bytes()) */
@@ -223,7 +224,6 @@ int li_rand_pseudo (void)
     if (-1 != RAND_pseudo_bytes((unsigned char *)&i, sizeof(i))) return i;
   #endif
   #endif
-    if (!li_rand_inited) li_rand_init();
   #ifdef USE_NETTLE_CRYPTO
     int i = (int)nettle_knuth_lfib_get(&knuth_lfib_ctx);
     nettle_arcfour_crypt(&arcfour_ctx, sizeof(i), (uint8_t *)&i, (uint8_t *)&i);
