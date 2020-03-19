@@ -252,6 +252,7 @@ vars.AddVariables(
 	BoolVariable('with_memcached', 'enable memcached support', 'no'),
 	PackageVariable('with_mysql', 'enable mysql support', 'no'),
 	BoolVariable('with_openssl', 'enable openssl support', 'no'),
+	PackageVariable('with_mbedtls', 'enable mbedTLS support', 'no'),
 	PackageVariable('with_wolfssl', 'enable wolfSSL support', 'no'),
 	BoolVariable('with_nettle', 'enable Nettle support', 'no'),
 	BoolVariable('with_pam', 'enable PAM auth support', 'no'),
@@ -341,6 +342,7 @@ if 1:
 		LIBSQLITE3 = '',
 		LIBSSL = '',
 		LIBUUID = '',
+		LIBX509 = '',
 		LIBXML2 = '',
 		LIBZ = '',
 	)
@@ -607,6 +609,16 @@ if 1:
 			CPPFLAGS = [ '-DHAVE_WOLFSSL_SSL_H' ],
 			LIBSSL = '',
 			LIBCRYPTO = 'wolfssl',
+		)
+
+	if env['with_mbedtls']:
+		if not autoconf.CheckLibWithHeader('mbedtls', 'mbedtls/ssl.h', 'C'):
+			fail("Couldn't find mbedtls")
+		autoconf.env.Append(
+			CPPFLAGS = [ '-DHAVE_LIBMBEDCRYPTO' ],
+			LIBSSL = 'mbedtls',
+			LIBX509 = 'mbedx509',
+			LIBCRYPTO = 'mbedcrypto',
 		)
 
 	if env['with_nettle']:

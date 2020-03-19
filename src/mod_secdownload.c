@@ -15,6 +15,8 @@
 #ifdef USE_LIB_CRYPTO
 #if defined(USE_NETTLE_CRYPTO)
 #include <nettle/hmac.h>
+#elif defined(USE_MBEDTLS_CRYPTO)
+#include <mbedtls/md.h>
 #elif defined(USE_OPENSSL_CRYPTO)
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
@@ -180,8 +182,8 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 
 			return const_time_memeq((char *)HA1, (char *)md5bin, sizeof(md5bin));
 		}
+     #ifdef USE_LIB_CRYPTO
 	case SECDL_HMAC_SHA1:
-#ifdef USE_LIB_CRYPTO
 		{
 			unsigned char digest[20];
 			char base64_digest[27];
@@ -191,6 +193,18 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			hmac_sha1_set_key(&ctx, buffer_string_length(config->secret), (const uint8_t *)config->secret->ptr);
 			hmac_sha1_update(&ctx, strlen(protected_path), (const uint8_t *)protected_path);
 			hmac_sha1_digest(&ctx, sizeof(digest), (uint8_t *)digest);
+		  #elif defined(USE_MBEDTLS_CRYPTO) && defined(MBEDTLS_MD_C) && defined(MBEDTLS_SHA1_C)
+			int rc =
+			  mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA1),
+			                  (const unsigned char *)config->secret->ptr,
+			                  buffer_string_length(config->secret),
+			                  (const unsigned char *)protected_path,
+			                  strlen(protected_path), digest);
+			if (0 != rc) {
+				log_error(errh, __FILE__, __LINE__,
+				  "hmac-sha1: HMAC() failed");
+				return 0;
+			}
 		  #elif defined(USE_OPENSSL_CRYPTO)
 			if (NULL == HMAC(
 					EVP_sha1(),
@@ -209,10 +223,8 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 
 			return (27 == maclen) && const_time_memeq(mac, base64_digest, 27);
 		}
-#endif
 		break;
 	case SECDL_HMAC_SHA256:
-#ifdef USE_LIB_CRYPTO
 		{
 			unsigned char digest[32];
 			char base64_digest[43];
@@ -222,6 +234,18 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			hmac_sha256_set_key(&ctx, buffer_string_length(config->secret), (const uint8_t *)config->secret->ptr);
 			hmac_sha256_update(&ctx, strlen(protected_path), (const uint8_t *)protected_path);
 			hmac_sha256_digest(&ctx, sizeof(digest), (uint8_t *)digest);
+		  #elif defined(USE_MBEDTLS_CRYPTO) && defined(MBEDTLS_MD_C) && defined(MBEDTLS_SHA256_C)
+			int rc =
+			  mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
+			                  (const unsigned char *)config->secret->ptr,
+			                  buffer_string_length(config->secret),
+			                  (const unsigned char *)protected_path,
+			                  strlen(protected_path), digest);
+			if (0 != rc) {
+				log_error(errh, __FILE__, __LINE__,
+				  "hmac-sha256: HMAC() failed");
+				return 0;
+			}
 		  #elif defined(USE_OPENSSL_CRYPTO)
 			if (NULL == HMAC(
 					EVP_sha256(),
@@ -240,7 +264,9 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 
 			return (43 == maclen) && const_time_memeq(mac, base64_digest, 43);
 		}
-#endif
+		break;
+     #endif
+	default:
 		break;
 	}
 

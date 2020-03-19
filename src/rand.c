@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "rand.h"
+#include "buffer.h"
 #include "fdevent.h"
 #include "safe_memclear.h"
 
@@ -15,10 +16,16 @@
 
 #include "sys-crypto.h" /* USE_LIB_CRYPTO */
 #ifdef USE_NETTLE_CRYPTO
+#undef USE_MBEDTLS_CRYPTO
 #undef USE_OPENSSL_CRYPTO
 #include <nettle/knuth-lfib.h>
 #include <nettle/arcfour.h>
 #include <nettle/yarrow.h>
+#endif
+#ifdef USE_MBEDTLS_CRYPTO
+#undef USE_OPENSSL_CRYPTO
+#include <mbedtls/ctr_drbg.h>
+#include <mbedtls/entropy.h>
 #endif
 #ifdef USE_OPENSSL_CRYPTO
 #include <openssl/opensslv.h> /* OPENSSL_VERSION_NUMBER */
@@ -132,6 +139,14 @@ static int li_rand_device_bytes (unsigned char *buf, int num)
 
 static int li_rand_inited;
 static unsigned short xsubi[3];
+#ifdef USE_MBEDTLS_CRYPTO
+#ifdef MBEDTLS_ENTROPY_C
+static mbedtls_entropy_context entropy;
+#ifdef MBEDTLS_CTR_DRBG_C
+static mbedtls_ctr_drbg_context ctr_drbg;
+#endif
+#endif
+#endif
 #ifdef USE_NETTLE_CRYPTO
 static struct knuth_lfib_ctx knuth_lfib_ctx;
 static struct arcfour_ctx    arcfour_ctx;
@@ -206,10 +221,33 @@ static void li_rand_init (void)
     RAND_poll();
     RAND_seed(xsubi, (int)sizeof(xsubi));
   #endif
+  #ifdef USE_MBEDTLS_CRYPTO
+  #ifdef MBEDTLS_ENTROPY_C
+    mbedtls_entropy_init(&entropy);
+  #ifdef MBEDTLS_CTR_DRBG_C
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+    int rc =
+      mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+                            (unsigned char *)xsubi, sizeof(xsubi));
+    if (0 != rc) /*(not expecting built-in entropy function to fail)*/
+        log_failed_assert(__FILE__, __LINE__, "mbedtls_ctr_drbg_seed() failed");
+  #endif
+  #endif
+  #endif
 }
 
 void li_rand_reseed (void)
 {
+  #ifdef USE_MBEDTLS_CRYPTO
+    if (li_rand_inited) {
+      #ifdef MBEDTLS_ENTROPY_C
+      #ifdef MBEDTLS_CTR_DRBG_C
+        mbedtls_ctr_drbg_free(&ctr_drbg);
+      #endif
+        mbedtls_entropy_free(&entropy);
+      #endif
+    }
+  #endif
     if (li_rand_inited) li_rand_init();
 }
 
@@ -229,6 +267,13 @@ int li_rand_pseudo (void)
     nettle_arcfour_crypt(&arcfour_ctx, sizeof(i), (uint8_t *)&i, (uint8_t *)&i);
     if (i) return i; /*(cond to avoid compiler warning for code after return)*/
   #endif
+  #ifdef USE_MBEDTLS_CRYPTO
+  #ifdef MBEDTLS_CTR_DRBG_C
+    int i;
+    if (0 == mbedtls_ctr_drbg_random(&ctr_drbg, (unsigned char *)&i, sizeof(i)))
+        return i;
+  #endif
+  #endif
   #ifdef HAVE_ARC4RANDOM_BUF
     return (int)arc4random();
   #elif defined(HAVE_SRANDOM)
@@ -246,6 +291,11 @@ int li_rand_pseudo (void)
 
 void li_rand_pseudo_bytes (unsigned char *buf, int num)
 {
+  #ifdef USE_MBEDTLS_CRYPTO
+  #ifdef MBEDTLS_CTR_DRBG_C
+    if (0 == mbedtls_ctr_drbg_random(&ctr_drbg, buf, (size_t)num)) return;
+  #endif
+  #endif
     for (int i = 0; i < num; ++i)
         buf[i] = li_rand_pseudo() & 0xFF;
 }
@@ -273,6 +323,15 @@ int li_rand_bytes (unsigned char *buf, int num)
         return rc;
     }
   #endif
+  #ifdef USE_MBEDTLS_CRYPTO
+  #ifdef MBEDTLS_ENTROPY_C
+    /*(each call <= MBEDTLS_ENTROPY_BLOCK_SIZE; could implement loop here)*/
+    if (num <= MBEDTLS_ENTROPY_BLOCK_SIZE
+        && 0 == mbedtls_entropy_func(&entropy, buf, (size_t)num)) {
+        return 1;
+    }
+  #endif
+  #endif
     if (1 == li_rand_device_bytes(buf, num)) {
         return 1;
     }
@@ -289,6 +348,14 @@ void li_rand_cleanup (void)
   #ifdef USE_OPENSSL_CRYPTO
   #if OPENSSL_VERSION_NUMBER < 0x10100000L
     RAND_cleanup();
+  #endif
+  #endif
+  #ifdef USE_MBEDTLS_CRYPTO
+  #ifdef MBEDTLS_ENTROPY_C
+  #ifdef MBEDTLS_CTR_DRBG_C
+    mbedtls_ctr_drbg_free(&ctr_drbg);
+  #endif
+    mbedtls_entropy_free(&entropy);
   #endif
   #endif
     safe_memclear(xsubi, sizeof(xsubi));

@@ -37,6 +37,22 @@ SHA512_256_Update(SHA512_CTX *ctx, const void *data, size_t length)
     sha512_256_update(ctx, length, data);
 }
 
+#elif defined(USE_MBEDTLS_CRYPTO)
+
+#include <mbedtls/sha256.h>
+#ifdef MBEDTLS_SHA256_C
+typedef struct mbedtls_sha256_context SHA256_CTX;
+#define SHA256_Init(ctx) \
+        (mbedtls_sha256_init(ctx), mbedtls_sha256_starts_ret((ctx),0))
+#define SHA256_Final(digest, ctx) \
+        (mbedtls_sha256_finish_ret((ctx),(digest)), mbedtls_sha256_free(ctx))
+static void
+SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
+{
+    mbedtls_sha256_update_ret(ctx, data, length);
+}
+#endif
+
 #elif defined(USE_OPENSSL_CRYPTO)
 
 #include <openssl/sha.h>

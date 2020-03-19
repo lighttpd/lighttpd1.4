@@ -71,8 +71,8 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC), 0 };
 #endif
 
 #include "sys-crypto.h"
-#ifdef USE_OPENSSL_CRYPTO
-#define USE_SSL
+#if defined(USE_OPENSSL_CRYPTO) \
+ || defined(USE_MBEDTLS_CRYPTO)
 #define TEXT_SSL " (ssl)"
 #else
 #define TEXT_SSL
@@ -430,10 +430,15 @@ static void show_features (void) {
 #else
       "\t- crypt support\n"
 #endif
-#ifdef USE_SSL
-      "\t+ SSL support\n"
+#ifdef USE_OPENSSL_CRYPTO
+      "\t+ OpenSSL support\n"
 #else
-      "\t- SSL support\n"
+      "\t- OpenSSL support\n"
+#endif
+#ifdef USE_MBEDTLS_CRYPTO
+      "\t+ mbedTLS support\n"
+#else
+      "\t- mbedTLS support\n"
 #endif
 #ifdef HAVE_LIBPCRE
       "\t+ PCRE support\n"

@@ -53,6 +53,11 @@ option('with_maxminddb',
 	value: false,
 	description: 'with MaxMind GeoIP2-support mod_maxminddb [default: off]',
 )
+option('with_mbedtls',
+	type: 'string',
+	value: 'false',
+	description: 'with mbedTLS-support [default: off]',
+)
 option('with_memcached',
 	type: 'boolean',
 	value: false,

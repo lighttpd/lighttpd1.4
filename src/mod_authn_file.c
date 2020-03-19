@@ -58,6 +58,38 @@ SHA512_256_Update(SHA512_CTX *ctx, const void *data, size_t length)
     sha512_256_update(ctx, length, data);
 }
 
+#elif defined(USE_MBEDTLS_CRYPTO)
+
+#include <mbedtls/md4.h>
+#ifdef MBEDTLS_MD4_C
+typedef struct mbedtls_md4_context MD4_CTX;
+#define MD4_Init(ctx) \
+        (mbedtls_md4_init(ctx), mbedtls_md4_starts_ret(ctx))
+#define MD4_Final(digest, ctx) \
+        (mbedtls_md4_finish_ret((ctx),(digest)), mbedtls_md4_free(ctx))
+static void
+MD4_Update(MD4_CTX *ctx, const void *data, size_t length)
+{
+    mbedtls_md4_update_ret(ctx, data, length);
+}
+#else /*(mbedTLS built without MD4)*/
+#define NO_MD4
+#endif
+
+#include <mbedtls/sha256.h>
+#ifdef MBEDTLS_SHA256_C
+typedef struct mbedtls_sha256_context SHA256_CTX;
+#define SHA256_Init(ctx) \
+        (mbedtls_sha256_init(ctx), mbedtls_sha256_starts_ret((ctx),0))
+#define SHA256_Final(digest, ctx) \
+        (mbedtls_sha256_finish_ret((ctx),(digest)), mbedtls_sha256_free(ctx))
+static void
+SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
+{
+    mbedtls_sha256_update_ret(ctx, data, length);
+}
+#endif
+
 #elif defined(USE_OPENSSL_CRYPTO)
 
 #include <openssl/md4.h>

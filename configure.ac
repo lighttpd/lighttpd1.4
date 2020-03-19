@@ -686,7 +686,7 @@ if test "$WITH_OPENSSL" != no; then
     [ -lcrypto "$DL_LIB" ]
   )
 
-  AC_DEFINE([HAVE_LIBSSL], [], [Have libssl])
+  AC_DEFINE([HAVE_LIBSSL], [1], [Have libssl])
   AC_SUBST([SSL_LIB])
   AC_SUBST([CRYPTO_LIB])
 fi
@@ -735,6 +735,46 @@ AM_CONDITIONAL([BUILD_WITH_OPENSSL],
 
 if test "$WITH_OPENSSL" != no && test "$WITH_WOLFSSL" != no; then
   AC_MSG_ERROR([lighttpd should not be built with both --with-openssl and --with-wolfssl])
+fi
+
+dnl Check for mbedTLS
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for mbedTLS])
+AC_ARG_WITH([mbedtls],
+  AC_HELP_STRING([--with-mbedtls@<:@=DIR@:>@],[Include mbedTLS support. DIR points to the installation root. (default no)]),
+  [WITH_MBEDTLS=$withval],
+  [WITH_MBEDTLS=no]
+)
+
+if test "$WITH_MBEDTLS" != "no"; then
+  use_mbedtls=yes
+  if test "$WITH_MBEDTLS" != "yes"; then
+      CPPFLAGS="$CPPFLAGS -I$WITH_MBEDTLS/include"
+      LDFLAGS="$LDFLAGS -L$WITH_MBEDTLS/lib"
+  fi
+else
+  use_mbedtls=no
+fi
+AC_MSG_RESULT([$use_mbedtls])
+AM_CONDITIONAL(BUILD_WITH_MBEDTLS, test ! $WITH_MBEDTLS = no)
+
+if test "x$use_mbedtls" = "xyes"; then
+  AC_CHECK_HEADERS([mbedtls/ssl.h])
+  OLDLIBS="$LIBS"
+  AC_CHECK_LIB(mbedcrypto,mbedtls_base64_encode,
+    [AC_CHECK_LIB(mbedx509, mbedtls_x509_get_name,
+      [AC_CHECK_LIB(mbedtls, mbedtls_cipher_info_from_type,
+        [MTLS_LIB="-lmbedtls -lmbedx509 -lmbedcrypto"
+         CRYPTO_LIB="-lmbedcrypto"
+         AC_DEFINE(HAVE_LIBMBEDTLS, [1], [Have libmbedtls library])
+         AC_DEFINE(HAVE_LIBMBEDX509, [1], [Have libmbedx509 library])
+         AC_DEFINE(HAVE_LIBMBEDCRYPTO, [1], [Have libmbedcrypto library]) ],
+        [],[-lmbedcrypto "$DL_LIB"])
+      ],[],[-lmbedcrypto "$DL_LIB"])
+    ],[],[])
+  LIBS="$OLDLIBS"
+  AC_SUBST(MTLS_LIB)
+  AC_SUBST(CRYPTO_LIB)
 fi
 
 dnl Check for Nettle (and overwrite CRYPTO_LIB if set by OpenSSL or wolfSSL)
@@ -1559,6 +1599,9 @@ lighty_track_feature "pam" "mod_authn_pam" \
 
 lighty_track_feature "network-openssl" "mod_openssl" \
   'test "$WITH_OPENSSL" != no || test "$WITH_WOLFSSL" != no'
+
+lighty_track_feature "network-mbedtls" "mod_mbedtls" \
+  'test "$WITH_MBEDTLS" != no'
 
 lighty_track_feature "auth-crypt" "" \
   'test "$found_crypt" != no'

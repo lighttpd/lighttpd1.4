@@ -4,6 +4,12 @@
 
 #include "sys-crypto.h" /* USE_LIB_CRYPTO */
 #ifdef USE_LIB_CRYPTO
+#if (!defined(USE_MBEDTLS_CRYPTO) || defined(MBEDTLS_SHA1_C))
+#define USE_LIB_CRYPTO_SHA1
+#endif
+#endif
+
+#ifdef USE_LIB_CRYPTO_SHA1
 
 #ifdef USE_NETTLE_CRYPTO
 #include <nettle/sha.h>
@@ -19,6 +25,23 @@ static void
 SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
 {
     sha1_update(ctx, length, data);
+}
+
+#elif defined(USE_MBEDTLS_CRYPTO) && defined(MBEDTLS_SHA1_C)
+
+#include <mbedtls/sha1.h>
+#ifndef SHA_DIGEST_LENGTH
+#define SHA_DIGEST_LENGTH 20
+#endif
+typedef struct mbedtls_sha1_context SHA_CTX;
+#define SHA1_Init(ctx) \
+        (mbedtls_sha1_init(ctx), mbedtls_sha1_starts_ret(ctx))
+#define SHA1_Final(digest, ctx) \
+        (mbedtls_sha1_finish_ret((ctx),(digest)), mbedtls_sha1_free(ctx))
+static void
+SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
+{
+    mbedtls_sha1_update_ret(ctx, data, length);
 }
 
 #elif defined(USE_OPENSSL_CRYPTO)

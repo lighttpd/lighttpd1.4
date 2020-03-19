@@ -18,6 +18,12 @@
 #include <wolfssl/options.h>
 #endif
 
+#ifdef HAVE_LIBMBEDCRYPTO
+#define USE_LIB_CRYPTO
+#define USE_MBEDTLS_CRYPTO
+#include <mbedtls/config.h>
+#endif
+
 #ifdef HAVE_NETTLE_NETTLE_TYPES_H
 #define USE_LIB_CRYPTO
 #define USE_NETTLE_CRYPTO
