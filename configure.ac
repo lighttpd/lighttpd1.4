@@ -503,6 +503,15 @@ if test "$WITH_ATTR" != no; then
   ])
   AC_SUBST([ATTR_LIB])
 
+  # Linux getxattr
+  AC_CHECK_FUNC([getxattr], [
+    AC_CHECK_HEADERS([sys/xattr.h], [
+      AC_DEFINE([HAVE_XATTR], [1], [Linux extended attributes])
+      AC_DEFINE([HAVE_SYS_XATTR_H], [1])
+      have_xattr=yes
+    ])
+  ])
+
   # (Free)BSD extattr
   AC_CHECK_FUNC([extattr_get_file], [
     AC_CHECK_HEADERS([sys/extattr.h], [

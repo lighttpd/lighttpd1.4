@@ -248,6 +248,8 @@ macro(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)
 endmacro(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)
 
 if(WITH_XATTR)
+	check_include_files("sys/types.h;sys/xattr.h" HAVE_SYS_XATTR_H)
+	check_function_exists(getxattr HAVE_XATTR)
 	check_include_files("sys/types.h;attr/attributes.h" HAVE_ATTR_ATTRIBUTES_H)
 	if(HAVE_ATTR_ATTRIBUTES_H)
 		check_library_exists(attr attr_get "" HAVE_XATTR)

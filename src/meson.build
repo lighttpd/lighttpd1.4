@@ -557,6 +557,16 @@ endif
 
 libattr = []
 if get_option('with_xattr')
+    if compiler.has_function('getxattr',
+		args: defs,
+		prefix: '''
+			#include <sys/types.h>
+			#include <sys/xattr.h>
+		'''
+    )
+	conf_data.set('HAVE_SYS_XATTR_H', true)
+	conf_data.set('HAVE_XATTR', true)
+    else
 	libattr = [ compiler.find_library('attr') ]
 	if not(compiler.has_function('attr_get',
 		args: defs,
@@ -570,6 +580,7 @@ if get_option('with_xattr')
 	endif
 	conf_data.set('HAVE_ATTR_ATTRIBUTES_H', true)
 	conf_data.set('HAVE_XATTR', true)
+    endif
 endif
 
 libz = []
