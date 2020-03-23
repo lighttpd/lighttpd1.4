@@ -201,9 +201,9 @@ static int ssi_expr_tokenizer(handler_ctx *p,
 
 				buffer_copy_string_len(token, t->input + t->offset + 2, i-3);
 			} else {
-				for (i = 1; isalpha(t->input[t->offset + i]) ||
+				for (i = 1; isalpha(((unsigned char *)t->input)[t->offset + i]) ||
 					    t->input[t->offset + i] == '_' ||
-					    ((i > 1) && isdigit(t->input[t->offset + i]));  i++);
+					    ((i > 1) && isdigit(((unsigned char *)t->input)[t->offset + i]));  i++);
 
 				buffer_copy_string_len(token, t->input + t->offset + 1, i-1);
 			}
@@ -223,7 +223,7 @@ static int ssi_expr_tokenizer(handler_ctx *p,
 
 			break;
 		default:
-			for (i = 0; isgraph(t->input[t->offset + i]);  i++) {
+			for (i = 0; isgraph(((unsigned char *)t->input)[t->offset + i]);  i++) {
 				char d = t->input[t->offset + i];
 				switch(d) {
 				case ' ':

@@ -270,11 +270,13 @@ int mod_webdav_plugin_init(plugin *p) {
         strncmp((const char *)(s), (fixed), sizeof(fixed))
 
 #include <ctype.h>      /* isupper() tolower() */
+__attribute_noinline__
 static void
-webdav_str_len_to_lower (char * const restrict s, const uint32_t len)
+webdav_str_len_to_lower (char * const ss, const uint32_t len)
 {
     /*(caller must ensure that len not truncated to (int);
      * for current intended use, NAME_MAX typically <= 255)*/
+    unsigned char * const restrict s = (unsigned char *)ss;
     for (int i = 0; i < (int)len; ++i) {
         if (isupper(s[i]))
             s[i] = tolower(s[i]);

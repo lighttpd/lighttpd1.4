@@ -939,7 +939,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 
 }
 
-static int mod_ssi_parse_ssi_stmt_value(const char * const s, const int len) {
+static int mod_ssi_parse_ssi_stmt_value(const unsigned char * const s, const int len) {
 	int n;
 	const int c = (s[0] == '"' ? '"' : s[0] == '\'' ? '\'' : 0);
 	if (0 != c) {
@@ -963,7 +963,7 @@ static int mod_ssi_parse_ssi_stmt_value(const char * const s, const int len) {
 	}
 }
 
-static int mod_ssi_parse_ssi_stmt_offlen(int o[10], const char * const s, const int len) {
+static int mod_ssi_parse_ssi_stmt_offlen(int o[10], const unsigned char * const s, const int len) {
 
 	/**
 	 * <!--#element attribute=value attribute=value ... -->
@@ -1021,7 +1021,7 @@ static void mod_ssi_parse_ssi_stmt(request_st * const r, handler_ctx * const p, 
 
 	int o[10];
 	int m;
-	const int n = mod_ssi_parse_ssi_stmt_offlen(o, s, len);
+	const int n = mod_ssi_parse_ssi_stmt_offlen(o, (unsigned char *)s, len);
 	char *l[6] = { s, NULL, NULL, NULL, NULL, NULL };
 	if (-1 == n) {
 		/* ignore <!--#comment ... --> */

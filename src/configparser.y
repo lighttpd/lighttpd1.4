@@ -331,7 +331,7 @@ value(A) ::= INTEGER(B). {
   errno = 0;
   ((data_integer *)(A))->value = strtol(B->ptr, &endptr, 10);
   /* skip trailing whitespace */
-  if (endptr != B->ptr) while (isspace(*endptr)) endptr++;
+  if (endptr != B->ptr) while (isspace(*(unsigned char *)endptr)) endptr++;
   if (0 != errno || *endptr != '\0') {
     fprintf(stderr, "error parsing number: '%s'\n", B->ptr);
     ctx->ok = 0;
