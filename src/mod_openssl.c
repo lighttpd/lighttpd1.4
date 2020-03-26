@@ -1968,6 +1968,9 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
             }
 
             switch(oerrno) {
+            case ECONNRESET:
+                if (!hctx->conf.ssl_log_noise) break;
+                /* fall through */
             default:
                 /* (oerrno should be something like ECONNABORTED not 0
                  *  if client disconnected before anything was sent
