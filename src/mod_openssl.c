@@ -1998,15 +1998,18 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
             while((ssl_err = ERR_get_error())) {
                 switch (ERR_GET_REASON(ssl_err)) {
                 case SSL_R_SSL_HANDSHAKE_FAILURE:
-                  #ifdef SSL_R_TLSV1_ALERT_UNKNOWN_CA
+              #ifdef SSL_R_UNEXPECTED_EOF_WHILE_READING
+                case SSL_R_UNEXPECTED_EOF_WHILE_READING:
+              #endif
+              #ifdef SSL_R_TLSV1_ALERT_UNKNOWN_CA
                 case SSL_R_TLSV1_ALERT_UNKNOWN_CA:
-                  #endif
-                  #ifdef SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN
+              #endif
+              #ifdef SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN
                 case SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN:
-                  #endif
-                  #ifdef SSL_R_SSLV3_ALERT_BAD_CERTIFICATE
+              #endif
+              #ifdef SSL_R_SSLV3_ALERT_BAD_CERTIFICATE
                 case SSL_R_SSLV3_ALERT_BAD_CERTIFICATE:
-                  #endif
+              #endif
                     if (!hctx->conf.ssl_log_noise) continue;
                     break;
                 default:
