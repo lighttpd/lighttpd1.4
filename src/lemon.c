@@ -3869,6 +3869,7 @@ char *data;
     free(x1a->tbl);
     /* *x1a = array; *//* copy 'array' */
     memcpy(x1a, &array, sizeof(array));
+    free(array.tbl);	  
   }
   /* Insert the new data */
   h = ph & (x1a->size-1);
@@ -4034,6 +4035,7 @@ char *key;
     free(x2a->tbl);
     /* *x2a = array; *//* copy 'array' */
     memcpy(x2a, &array, sizeof(array));
+    free(array.tbl);		  
   }
   /* Insert the new data */
   h = ph & (x2a->size-1);
@@ -4241,6 +4243,7 @@ struct config *key;
     free(x3a->tbl);
     /* *x3a = array; *//* copy 'array' */
     memcpy(x3a, &array, sizeof(array));
+    free(array.tbl);		  
   }
   /* Insert the new data */
   h = ph & (x3a->size-1);
@@ -4392,6 +4395,7 @@ struct config *data;
     free(x4a->tbl);
     /* *x4a = array; *//* copy 'array' */
     memcpy(x4a, &array, sizeof(array));
+    free(array.tbl);		  
   }
   /* Insert the new data */
   h = ph & (x4a->size-1);
