@@ -398,6 +398,14 @@ mod_mbedtls_la_LDFLAGS = $(common_module_ldflags)
 mod_mbedtls_la_LIBADD = $(MTLS_LIB) $(common_libadd)
 endif
 
+if BUILD_WITH_GNUTLS
+lib_LTLIBRARIES += mod_gnutls.la
+mod_gnutls_la_SOURCES = mod_gnutls.c
+mod_gnutls_la_LDFLAGS = $(common_module_ldflags)
+mod_gnutls_la_LIBADD = $(GNUTLS_LIBS) $(common_libadd)
+mod_gnutls_la_CPPFLAGS = $(GNUTLS_CFLAGS)
+endif
+
 
 lib_LTLIBRARIES += mod_rewrite.la
 mod_rewrite_la_SOURCES = mod_rewrite.c

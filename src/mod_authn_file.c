@@ -95,6 +95,24 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 #include <openssl/md4.h>
 #include <openssl/sha.h>
 
+#elif defined(USE_GNUTLS_CRYPTO)
+
+#include <gnutls/crypto.h>
+#define NO_MD4
+typedef gnutls_hash_hd_t SHA256_CTX;
+#define SHA256_Init(ctx)                                        \
+        do {                                                    \
+            if (gnutls_hash_init((ctx), GNUTLS_DIG_SHA256) < 0) \
+                SEGFAULT();                                     \
+        } while (0)
+#define SHA256_Final(digest, ctx) \
+        gnutls_hash_deinit(*(ctx),(digest))
+static void
+SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
+{
+    gnutls_hash(*ctx, data, length);
+}
+
 #endif
 
 #endif /* USE_LIB_CRYPTO */

@@ -48,6 +48,26 @@ SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
 
 #include <openssl/sha.h>
 
+#elif defined(USE_GNUTLS_CRYPTO)
+
+#include <gnutls/crypto.h>
+#ifndef SHA_DIGEST_LENGTH
+#define SHA_DIGEST_LENGTH 20
+#endif
+typedef gnutls_hash_hd_t SHA_CTX;
+#define SHA1_Init(ctx)                                        \
+        do {                                                  \
+            if (gnutls_hash_init((ctx), GNUTLS_DIG_SHA1) < 0) \
+                SEGFAULT();                                   \
+        } while (0)
+#define SHA1_Final(digest, ctx) \
+        gnutls_hash_deinit(*(ctx),(digest))
+static void
+SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
+{
+    gnutls_hash(*ctx, data, length);
+}
+
 #endif
 
 #else /* ! USE_LIB_CRYPTO */

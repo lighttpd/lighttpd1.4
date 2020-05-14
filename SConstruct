@@ -252,6 +252,7 @@ vars.AddVariables(
 	BoolVariable('with_memcached', 'enable memcached support', 'no'),
 	PackageVariable('with_mysql', 'enable mysql support', 'no'),
 	BoolVariable('with_openssl', 'enable openssl support', 'no'),
+	PackageVariable('with_gnutls', 'enable GnuTLS support', 'no'),
 	PackageVariable('with_mbedtls', 'enable mbedTLS support', 'no'),
 	PackageVariable('with_wolfssl', 'enable wolfSSL support', 'no'),
 	BoolVariable('with_nettle', 'enable Nettle support', 'no'),
@@ -328,6 +329,7 @@ if 1:
 		LIBDL = '',
 		LIBFCGI = '',
 		LIBGDBM = '',
+		LIBGNUTLS = '',
 		LIBGSSAPI_KRB5 = '',
 		LIBKRB5 = '',
 		LIBLBER = '',
@@ -628,6 +630,18 @@ if 1:
 			CPPFLAGS = [ '-DHAVE_NETTLE_NETTLE_TYPES_H' ],
 			LIBCRYPTO = 'nettle',
 		)
+
+	if env['with_gnutls']:
+		if not autoconf.CheckLibWithHeader('gnutls', 'gnutls/crypto.h', 'C'):
+			fail("Couldn't find gnutls")
+		autoconf.env.Append(
+			CPPFLAGS = [ '-DHAVE_GNUTLS_CRYPTO_H' ],
+			LIBGNUTLS = 'gnutls',
+		)
+		if not autoconf.env.exists('LIBCRYPTO'):
+			autoconf.env.Append(
+				LIBCRYPTO = 'gnutls',
+			)
 
 	if env['with_pam']:
 		if not autoconf.CheckLibWithHeader('pam', 'security/pam_appl.h', 'C'):

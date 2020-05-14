@@ -397,6 +397,7 @@ endif
 libssl = []
 libx509 = []
 libcrypto = []
+libgnutls = []
 if get_option('with_openssl')
 	# manual search:
 	# header: openssl/ssl.h
@@ -438,6 +439,16 @@ if get_option('with_nettle') != 'false'
 	# function: nettle_md5_init (-lnettle)
 	libcrypto = [ dependency('libnettle') ]
 	conf_data.set('HAVE_NETTLE_NETTLE_TYPES_H', true)
+endif
+if get_option('with_gnutls')
+	# manual search:
+	# header: gnutls/gnutls.h
+	# function: gnutls_check_version (-lgnutls)
+	libgnutls = [ dependency('libgnutls') ]
+	conf_data.set('HAVE_GNUTLS_CRYPTO_H', true)
+	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(getoption('with_nettle'))
+	  libcrypto = [ dependency('libgnutls') ]
+	endif
 endif
 
 libpcre = []
@@ -999,6 +1010,12 @@ endif
 if get_option('with_mbedtls') != 'false'
 	modules += [
 		[ 'mod_mbedtls', [ 'mod_mbedtls.c' ], libssl + libx509 + libcrypto ],
+	]
+endif
+
+if get_option('with_gnutls') != 'false'
+	modules += [
+		[ 'mod_gnutls', [ 'mod_gnutls.c' ], libgnutls ],
 	]
 endif
 

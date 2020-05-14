@@ -182,6 +182,9 @@ if env['with_wolfssl']:
 if env['with_mbedtls']:
 	modules['mod_mbedtls'] = { 'src' : [ 'mod_mbedtls.c' ], 'lib' : [ env['LIBSSL'], env['LIBX509'], env['LIBCRYPTO'] ] }
 
+if env['with_gnutls']:
+	modules['mod_gnutls'] = { 'src' : [ 'mod_gnutls.c' ], 'lib' : [ env['LIBGNUTLS'] ] }
+
 staticenv = env.Clone(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC' ])
 
 ## all the core-sources + the modules

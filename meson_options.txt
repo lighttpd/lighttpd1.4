@@ -23,6 +23,11 @@ option('with_geoip',
 	value: false,
 	description: 'with GeoIP-support mod_geoip [default: off]',
 )
+option('with_gnutls',
+	type: 'string',
+	value: 'false',
+	description: 'with GnuTLS-support [default: off]',
+)
 option('with_krb5',
 	type: 'boolean',
 	value: false,

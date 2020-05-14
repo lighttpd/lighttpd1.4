@@ -72,7 +72,8 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC), 0 };
 
 #include "sys-crypto.h"
 #if defined(USE_OPENSSL_CRYPTO) \
- || defined(USE_MBEDTLS_CRYPTO)
+ || defined(USE_MBEDTLS_CRYPTO) \
+ || defined(USE_GNUTLS_CRYPTO)
 #define TEXT_SSL " (ssl)"
 #else
 #define TEXT_SSL
@@ -439,6 +440,16 @@ static void show_features (void) {
       "\t+ mbedTLS support\n"
 #else
       "\t- mbedTLS support\n"
+#endif
+#ifdef USE_GNUTLS_CRYPTO
+      "\t+ GnuTLS support\n"
+#else
+      "\t- GnuTLS support\n"
+#endif
+#ifdef USE_NETTLE_CRYPTO
+      "\t+ Nettle support\n"
+#else
+      "\t- Nettle support\n"
 #endif
 #ifdef HAVE_LIBPCRE
       "\t+ PCRE support\n"

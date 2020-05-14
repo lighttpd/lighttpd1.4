@@ -307,6 +307,8 @@ static void config_compat_module_load (server *srv) {
             append_mod_staticfile = 0;
         else if (buffer_eq_slen(m, CONST_STR_LEN("mod_dirlisting")))
             append_mod_dirlisting = 0;
+        else if (buffer_eq_slen(m, CONST_STR_LEN("mod_gnutls")))
+            append_mod_openssl = 0;
         else if (buffer_eq_slen(m, CONST_STR_LEN("mod_mbedtls")))
             append_mod_openssl = 0;
         else if (buffer_eq_slen(m, CONST_STR_LEN("mod_openssl")))
@@ -704,7 +706,9 @@ static int config_insert_srvconf(server *srv) {
                 break;
               case 30:/* ssl.engine */
                 ssl_enabled = (0 != cpv->v.u);
-               #if !defined(USE_OPENSSL_CRYPTO) && !defined(USE_MBEDTLS_CRYPTO)
+               #if !defined(USE_OPENSSL_CRYPTO) \
+                && !defined(USE_MBEDTLS_CRYPTO) \
+                && !defined(USE_GNUTLS_CRYPTO)
                 if (ssl_enabled) {
                     log_error(srv->errh, __FILE__, __LINE__,
                       "ssl support is missing; "

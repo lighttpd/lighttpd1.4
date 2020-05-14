@@ -815,6 +815,43 @@ if test "$WITH_NETTLE" != no; then
   AC_SUBST([CRYPTO_LIB])
 fi
 
+dnl Check for GnuTLS
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for GnuTLS])
+AC_ARG_WITH([gnutls],
+  AC_HELP_STRING([--with-gnutls@<:@=DIR@:>@],[Include GnuTLS support. DIR points to the installation root. (default no)]),
+  [WITH_GNUTLS=$withval],
+  [WITH_GNUTLS=no]
+)
+
+if test "$WITH_GNUTLS" != "no"; then
+  use_gnutls=yes
+else
+  use_gnutls=no
+fi
+AC_MSG_RESULT([$use_gnutls])
+AM_CONDITIONAL(BUILD_WITH_GNUTLS, test ! $WITH_GNUTLS = no)
+
+GNUTLS_CFLAGS=
+GNUTLS_LIBS=
+
+if test "x$use_gnutls" = "xyes"; then
+  if test "$WITH_GNUTLS" != "yes"; then
+      GNUTLS_CFLAGS="-I$WITH_GNUTLS/include"
+      GNUTLS_LIBS="-L$WITH_GNUTLS/lib"
+  else
+      dnl oldest GnuTLS supported release is 3.3.x at time this is being written
+      PKG_CHECK_MODULES([GNUTLS], [gnutls >= 3.3.0])
+  fi
+  AC_SUBST([GNUTLS_CFLAGS])
+  AC_SUBST([GNUTLS_LIBS])
+  AC_DEFINE([HAVE_GNUTLS_CRYPTO_H], [1], [gnutls/crypto.h])
+  if test "$WITH_OPENSSL" = no && test "$WITH_WOLFSSL" = no && \
+     test "$WITH_MBEDTLS" = no && test "$WITH_NETTLE" = no; then
+      AC_SUBST([CRYPTO_LIB],[$GNUTLS_LIBS])
+  fi
+fi
+
 
 dnl pcre support
 AC_MSG_NOTICE([----------------------------------------])
@@ -1611,6 +1648,9 @@ lighty_track_feature "network-openssl" "mod_openssl" \
 
 lighty_track_feature "network-mbedtls" "mod_mbedtls" \
   'test "$WITH_MBEDTLS" != no'
+
+lighty_track_feature "network-gnutls" "mod_gnutls" \
+  'test "$WITH_GNUTLS" != no'
 
 lighty_track_feature "auth-crypt" "" \
   'test "$found_crypt" != no'

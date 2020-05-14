@@ -20,6 +20,8 @@
 #elif defined(USE_OPENSSL_CRYPTO)
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#elif defined(USE_GNUTLS_CRYPTO)
+#include <gnutls/crypto.h>
 #endif
 #endif
 
@@ -215,6 +217,18 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 				  "hmac-sha1: HMAC() failed");
 				return 0;
 			}
+		  #elif defined(USE_GNUTLS_CRYPTO)
+			int rc =
+                          gnutls_hmac_fast(GNUTLS_MAC_SHA1,
+			                  (const unsigned char *)config->secret->ptr,
+			                  buffer_string_length(config->secret),
+			                  (const unsigned char *)protected_path,
+			                  strlen(protected_path), digest);
+			if (0 != rc) {
+				log_error(errh, __FILE__, __LINE__,
+				  "hmac-sha1: HMAC() failed");
+				return 0;
+			}
 		  #else
 		  #error "unexpected; crypto lib not configured for use by mod_secdownload"
 		  #endif
@@ -252,6 +266,18 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 					(unsigned char const*) config->secret->ptr, buffer_string_length(config->secret),
 					(unsigned char const*) protected_path, strlen(protected_path),
 					digest, NULL)) {
+				log_error(errh, __FILE__, __LINE__,
+				  "hmac-sha256: HMAC() failed");
+				return 0;
+			}
+		  #elif defined(USE_GNUTLS_CRYPTO)
+			int rc =
+                          gnutls_hmac_fast(GNUTLS_MAC_SHA256,
+			                  (const unsigned char *)config->secret->ptr,
+			                  buffer_string_length(config->secret),
+			                  (const unsigned char *)protected_path,
+			                  strlen(protected_path), digest);
+			if (0 != rc) {
 				log_error(errh, __FILE__, __LINE__,
 				  "hmac-sha256: HMAC() failed");
 				return 0;

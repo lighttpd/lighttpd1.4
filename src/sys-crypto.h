@@ -29,4 +29,9 @@
 #define USE_NETTLE_CRYPTO
 #endif
 
+#ifdef HAVE_GNUTLS_CRYPTO_H
+#define USE_LIB_CRYPTO
+#define USE_GNUTLS_CRYPTO
+#endif
+
 #endif

@@ -18,18 +18,24 @@
 #ifdef USE_NETTLE_CRYPTO
 #undef USE_MBEDTLS_CRYPTO
 #undef USE_OPENSSL_CRYPTO
+#undef USE_GNUTLS_CRYPTO
 #include <nettle/knuth-lfib.h>
 #include <nettle/arcfour.h>
 #include <nettle/yarrow.h>
 #endif
 #ifdef USE_MBEDTLS_CRYPTO
 #undef USE_OPENSSL_CRYPTO
+#undef USE_GNUTLS_CRYPTO
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
 #endif
 #ifdef USE_OPENSSL_CRYPTO
+#undef USE_GNUTLS_CRYPTO
 #include <openssl/opensslv.h> /* OPENSSL_VERSION_NUMBER */
 #include <openssl/rand.h>
+#endif
+#ifdef USE_GNUTLS_CRYPTO
+#include <gnutls/crypto.h>
 #endif
 #ifdef HAVE_GETENTROPY
 #include <sys/random.h>
@@ -238,6 +244,10 @@ static void li_rand_init (void)
 
 void li_rand_reseed (void)
 {
+  #ifdef USE_GNUTLS_CRYPTO
+    gnutls_rnd_refresh();
+    return;
+  #endif
   #ifdef USE_MBEDTLS_CRYPTO
     if (li_rand_inited) {
       #ifdef MBEDTLS_ENTROPY_C
@@ -253,6 +263,10 @@ void li_rand_reseed (void)
 
 int li_rand_pseudo (void)
 {
+  #ifdef USE_GNUTLS_CRYPTO
+    int i;
+    if (0 == gnutls_rnd(GNUTLS_RND_NONCE, &i, sizeof(i))) return i;
+  #endif
     if (!li_rand_inited) li_rand_init();
     /* randomness *is not* cryptographically strong */
     /* (attempt to use better mechanisms to replace the more portable rand()) */
@@ -291,6 +305,9 @@ int li_rand_pseudo (void)
 
 void li_rand_pseudo_bytes (unsigned char *buf, int num)
 {
+  #ifdef USE_GNUTLS_CRYPTO
+    if (0 == gnutls_rnd(GNUTLS_RND_NONCE, buf, (size_t)num)) return;
+  #endif
   #ifdef USE_MBEDTLS_CRYPTO
   #ifdef MBEDTLS_CTR_DRBG_C
     if (0 == mbedtls_ctr_drbg_random(&ctr_drbg, buf, (size_t)num)) return;
@@ -302,6 +319,9 @@ void li_rand_pseudo_bytes (unsigned char *buf, int num)
 
 int li_rand_bytes (unsigned char *buf, int num)
 {
+  #ifdef USE_GNUTLS_CRYPTO /* should use GNUTLS_RND_KEY for long-term keys */
+    if (0 == gnutls_rnd(GNUTLS_RND_RANDOM, buf, (size_t)num)) return 1;
+  #endif
   #ifdef USE_NETTLE_CRYPTO
   #if 0 /* not implemented: periodic nettle_yarrow256_update() and reseed */
     if (!nettle_yarrow256_is_seeded(&yarrow256_ctx)) {
