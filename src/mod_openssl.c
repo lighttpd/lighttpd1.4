@@ -1,3 +1,25 @@
+/*
+ * mod_openssl - openssl support for lighttpd
+ */
+/*
+ * future possible enhancements: OCSP stapling
+ *
+ * Note: If session tickets are -not- disabled with
+ *     ssl.openssl.ssl-conf-cmd = ("Options" => "-SessionTicket")
+ *   mod_openssl rotates server ticket encryption key (STEK) every 24 hours.
+ *   This is fine for use with a single lighttpd instance, but with multiple
+ *   lighttpd workers, no coordinated STEK (server ticket encryption key)
+ *   rotation occurs other than by (some external job) restarting lighttpd.
+ *   Restarting lighttpd generates a new key that is shared by lighttpd workers
+ *   for the lifetime of the new key.  If the rotation period expires and
+ *   lighttpd has not been restarted, lighttpd workers will generate new
+ *   independent keys, making session tickets less effective for session
+ *   resumption, since clients have a lower chance for future connections to
+ *   reach the same lighttpd worker.  However, things will still work, and a new
+ *   session will be created if session resumption fails.  Admins should plan to
+ *   restart lighttpd at least every 24 hours if session tickets are enabled and
+ *   multiple lighttpd workers are configured.
+ */
 #include "first.h"
 
 #include <errno.h>
@@ -143,6 +165,71 @@ handler_ctx_free (handler_ctx *hctx)
     if (hctx->ssl) SSL_free(hctx->ssl);
     free(hctx);
 }
+
+
+#ifdef TLSEXT_TYPE_session_ticket
+static time_t stek_rotate_ts;
+
+static void
+mod_openssl_session_ticket_key_rotate (server * const srv, const plugin_data * const p)
+{
+    /* server ticket encryption key (STEK) is *per-SSL_CTX* in openssl
+     *   and keys are initially created in SSL_CTX_new()
+     * SSL_CTX_set_tlsext_ticket_keys() is an openssl interface,
+     *   but how to construct its arguments is not well documented.
+     * See openssl ssl/s3_lib.c
+     *   case SSL_CTRL_SET_TLSEXT_TICKET_KEYS:
+     * In openssl 1.1.x
+     *   ssl/ssl_local.h
+     *     TLSEXT_KEYNAME_LENGTH  16
+     *     TLSEXT_TICK_KEY_LENGTH 32
+     *   private SSL_CTX data members:
+     *     ssl_ctx->ext.tick_key_name          TLSEXT_KEYNAME_LENGTH
+     *     ssl_ctx->ext.secure->tick_hmac_key  TLSEXT_TICK_KEY_LENGTH
+     *     ssl_ctx->ext.secure->tick_aes_key   TLSEXT_TICK_KEY_LENGTH
+     * In openssl 1.0.x, each element is 16 bytes (TLSEXT_TICK_KEY_LENGTH 16)
+     *
+     * openssl RAND_*bytes() functions are called multiple times since the
+     * funcs might have a 32-byte limit on number of bytes returned each call
+     *
+     * (Note: session ticket encryption key rotation is not expected to fail)
+     */
+    int rc = 1;
+  #if OPENSSL_VERSION_NUMBER < 0x10100000L
+    unsigned char keys[16+16+16];
+    if (RAND_bytes(keys,16) <= 0
+        || RAND_bytes(keys+16,16) <= 0
+        || RAND_bytes(keys+16+16,16) <= 0)
+  #else
+    /*(RAND_priv_bytes() not in openssl 1.1.0; introduced in openssl 1.1.1)*/
+    #if OPENSSL_VERSION_NUMBER < 0x10101000L
+    #define RAND_priv_bytes(x,sz) RAND_bytes((x),(sz))
+    #endif
+    unsigned char keys[16+32+32];
+    if (RAND_bytes(keys,16) <= 0
+        || RAND_priv_bytes(keys+16,32) <= 0
+        || RAND_priv_bytes(keys+16+32,32) <= 0)
+  #endif
+        rc = 0;
+
+    const size_t sz = sizeof(keys);
+
+    for (uint32_t i = 0; i < srv->config_context->used; ++i) {
+        plugin_ssl_ctx * const s = p->ssl_ctxs + i;
+        if (!s->ssl_ctx) continue;
+        if (SSL_CTX_get_options(s->ssl_ctx) & SSL_OP_NO_TICKET) continue;
+        if (!rc || 1 != SSL_CTX_set_tlsext_ticket_keys(s->ssl_ctx, keys, sz)) {
+            /*(disable session tickets rather than continue to use aging keys)*/
+            long opts = SSL_CTX_get_options(s->ssl_ctx) | SSL_OP_NO_TICKET;
+            SSL_CTX_set_options(s->ssl_ctx, opts);
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: STEK rotation failed; disabling session tickets");
+        }
+    }
+
+    OPENSSL_cleanse(keys, sizeof(keys));
+}
+#endif /* TLSEXT_TYPE_session_ticket */
 
 
 INIT_FUNC(mod_openssl_init)
@@ -1512,6 +1599,13 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
         }
     }
 
+  #ifdef TLSEXT_TYPE_session_ticket
+    if (rc == HANDLER_GO_ON) {
+        mod_openssl_session_ticket_key_rotate(srv, p);
+        stek_rotate_ts = log_epoch_secs;
+    }
+  #endif
+
     free(srvplug.cvlist);
     return rc;
 }
@@ -2403,6 +2497,24 @@ REQUEST_FUNC(mod_openssl_handle_request_reset)
 }
 
 
+TRIGGER_FUNC(mod_openssl_handle_trigger) {
+    const plugin_data * const p = p_d;
+    const time_t cur_ts = log_epoch_secs;
+    if (cur_ts & 0x3f) return HANDLER_GO_ON; /*(continue once each 64 sec)*/
+    UNUSED(srv);
+    UNUSED(p);
+
+  #ifdef TLSEXT_TYPE_session_ticket
+    if (cur_ts - 86400 >= stek_rotate_ts) {  /*(24 hours)*/
+        mod_openssl_session_ticket_key_rotate(srv, p);
+        stek_rotate_ts = cur_ts;
+    }
+  #endif
+
+    return HANDLER_GO_ON;
+}
+
+
 int mod_openssl_plugin_init (plugin *p);
 int mod_openssl_plugin_init (plugin *p)
 {
@@ -2418,6 +2530,7 @@ int mod_openssl_plugin_init (plugin *p)
     p->handle_uri_raw            = mod_openssl_handle_uri_raw;
     p->handle_request_env        = mod_openssl_handle_request_env;
     p->connection_reset          = mod_openssl_handle_request_reset;
+    p->handle_trigger            = mod_openssl_handle_trigger;
 
     return 0;
 }
