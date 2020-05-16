@@ -358,8 +358,7 @@ mod_openssl_load_verify_locn (SSL_CTX *ssl_ctx, const buffer *b, server *srv)
 static int
 mod_openssl_load_ca_files (SSL_CTX *ssl_ctx, plugin_data *p, server *srv)
 {
-    /* load all ssl.ca-files specified in the config
-     * into each SSL_CTX to be prepared for SNI */
+    /* load all ssl.ca-files specified in the config into each SSL_CTX */
 
     for (uint32_t i = 0, used = p->cafiles->used; i < used; ++i) {
         const buffer *b = &((data_string *)p->cafiles->data[i])->value;
@@ -592,9 +591,69 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     return !hctx->conf.ssl_verifyclient_enforce;
 }
 
+static int
+mod_openssl_cert_cb (SSL *ssl, void *arg)
+{
+    handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
+    UNUSED(arg);
+
+    if (NULL == hctx->conf.ssl_pemfile_x509
+        || NULL == hctx->conf.ssl_pemfile_pkey) {
+        /* x509/pkey available <=> pemfile was set <=> pemfile got patched:
+         * so this should never happen, unless you nest $SERVER["socket"] */
+        log_error(hctx->r->conf.errh, __FILE__, __LINE__,
+          "SSL: no certificate/private key for TLS server name %s",
+          hctx->r->uri.authority.ptr);
+        return 0;
+    }
+
+    /* first set certificate!
+     * setting private key checks whether certificate matches it */
+    if (1 != SSL_use_certificate(ssl, hctx->conf.ssl_pemfile_x509)) {
+        log_error(hctx->r->conf.errh, __FILE__, __LINE__,
+          "SSL: failed to set certificate for TLS server name %s: %s",
+          hctx->r->uri.authority.ptr, ERR_error_string(ERR_get_error(), NULL));
+        return 0;
+    }
+
+    if (1 != SSL_use_PrivateKey(ssl, hctx->conf.ssl_pemfile_pkey)) {
+        log_error(hctx->r->conf.errh, __FILE__, __LINE__,
+          "SSL: failed to set private key for TLS server name %s: %s",
+          hctx->r->uri.authority.ptr, ERR_error_string(ERR_get_error(), NULL));
+        return 0;
+    }
+
+    if (hctx->conf.ssl_verifyclient) {
+        int mode;
+        STACK_OF(X509_NAME) * const cert_names = hctx->conf.ssl_ca_dn_file
+          ? hctx->conf.ssl_ca_dn_file
+          : hctx->conf.ssl_ca_file;
+        if (NULL == cert_names) {
+            log_error(hctx->r->conf.errh, __FILE__, __LINE__,
+              "SSL: can't verify client without ssl.ca-file "
+              "or ssl.ca-dn-file for TLS server name %s: %s",
+              hctx->r->uri.authority.ptr, ERR_error_string(ERR_get_error(),
+              NULL));
+            return 0;
+        }
+
+        SSL_set_client_CA_list(ssl, SSL_dup_CA_list(cert_names));
+        mode = SSL_VERIFY_PEER;
+        if (hctx->conf.ssl_verifyclient_enforce)
+            mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
+        SSL_set_verify(ssl, mode, verify_callback);
+        SSL_set_verify_depth(ssl, hctx->conf.ssl_verifyclient_depth + 1);
+    }
+    else {
+        SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
+    }
+
+    return 1;
+}
+
 #ifndef OPENSSL_NO_TLSEXT
 static int
-mod_openssl_SNI (SSL *ssl, handler_ctx *hctx, const char *servername, size_t len)
+mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
 {
     request_st * const r = hctx->r;
     if (len >= 1024) { /*(expecting < 256; TLSEXT_MAXLEN_host_name is 255)*/
@@ -614,8 +673,6 @@ mod_openssl_SNI (SSL *ssl, handler_ctx *hctx, const char *servername, size_t len
         return SSL_TLSEXT_ERR_ALERT_FATAL;
   #endif
 
-    const buffer * const ssl_pemfile = hctx->conf.ssl_pemfile;
-
     r->conditional_is_valid |= (1 << COMP_HTTP_SCHEME)
                             |  (1 << COMP_HTTP_HOST);
     mod_openssl_patch_config(r, &hctx->conf);
@@ -624,63 +681,13 @@ mod_openssl_SNI (SSL *ssl, handler_ctx *hctx, const char *servername, size_t len
     /*config_cond_cache_reset_item(r, COMP_HTTP_HOST);*/
     /*buffer_clear(&r->uri.authority);*/
 
-    if (!buffer_is_equal(hctx->conf.ssl_pemfile, ssl_pemfile)) {
-        /* reconfigure to use SNI-specific cert if SNI-specific cert provided */
-
-        if (NULL == hctx->conf.ssl_pemfile_x509
-            || NULL == hctx->conf.ssl_pemfile_pkey) {
-            /* x509/pkey available <=> pemfile was set <=> pemfile got patched:
-             * so this should never happen, unless you nest $SERVER["socket"] */
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "SSL: no certificate/private key for TLS server name %s",
-              r->uri.authority.ptr);
-            return SSL_TLSEXT_ERR_ALERT_FATAL;
-        }
-
-        /* first set certificate!
-         * setting private key checks whether certificate matches it */
-        if (1 != SSL_use_certificate(ssl, hctx->conf.ssl_pemfile_x509)) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "SSL: failed to set certificate for TLS server name %s: %s",
-              r->uri.authority.ptr, ERR_error_string(ERR_get_error(), NULL));
-            return SSL_TLSEXT_ERR_ALERT_FATAL;
-        }
-
-        if (1 != SSL_use_PrivateKey(ssl, hctx->conf.ssl_pemfile_pkey)) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "SSL: failed to set private key for TLS server name %s: %s",
-              r->uri.authority.ptr, ERR_error_string(ERR_get_error(), NULL));
-            return SSL_TLSEXT_ERR_ALERT_FATAL;
-        }
-    }
-
-    if (hctx->conf.ssl_verifyclient) {
-        int mode;
-        STACK_OF(X509_NAME) * const cert_names = hctx->conf.ssl_ca_dn_file
-          ? hctx->conf.ssl_ca_dn_file
-          : hctx->conf.ssl_ca_file;
-        if (NULL == cert_names) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "SSL: can't verify client without ssl.ca-file "
-              "or ssl.ca-dn-file for TLS server name %s: %s",
-              r->uri.authority.ptr, ERR_error_string(ERR_get_error(), NULL));
-            return SSL_TLSEXT_ERR_ALERT_FATAL;
-        }
-
-        SSL_set_client_CA_list(ssl, SSL_dup_CA_list(cert_names));
-        /* forcing verification here is really not that useful
-         * -- a client could just connect without SNI */
-        mode = SSL_VERIFY_PEER;
-        if (hctx->conf.ssl_verifyclient_enforce) {
-            mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
-        }
-        SSL_set_verify(ssl, mode, verify_callback);
-        SSL_set_verify_depth(ssl, hctx->conf.ssl_verifyclient_depth + 1);
-    } else {
-        SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
-    }
-
+  #if OPENSSL_VERSION_NUMBER >= 0x10002000L
     return SSL_TLSEXT_ERR_OK;
+  #else
+    return (mod_openssl_cert_cb(hctx->ssl, NULL) == 1)
+      ? SSL_TLSEXT_ERR_OK
+      : SSL_TLSEXT_ERR_ALERT_FATAL;
+  #endif
 }
 
 #ifdef SSL_CLIENT_HELLO_SUCCESS
@@ -702,7 +709,7 @@ mod_openssl_client_hello_cb (SSL *ssl, int *al, void *srv)
         && (size_t)((name[0] << 8) + name[1]) == len-2
         && name[2] == TLSEXT_TYPE_server_name
         && (slen = (name[3] << 8) + name[4]) <= len-5) { /*(first)*/
-        int rc = mod_openssl_SNI(ssl, hctx, (const char *)name+5, slen);
+        int rc = mod_openssl_SNI(hctx, (const char *)name+5, slen);
         if (rc == SSL_TLSEXT_ERR_OK)
             return SSL_CLIENT_HELLO_SUCCESS;
     }
@@ -712,7 +719,7 @@ mod_openssl_client_hello_cb (SSL *ssl, int *al, void *srv)
 }
 #else
 static int
-network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
+network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 {
     handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
     buffer_copy_string(&hctx->r->uri.scheme, "https");
@@ -721,7 +728,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, server *srv)
 
     const char *servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
     return (NULL != servername)
-      ? mod_openssl_SNI(ssl, hctx, servername, strlen(servername))
+      ? mod_openssl_SNI(hctx, servername, strlen(servername))
       : SSL_TLSEXT_ERR_NOACK; /* client did not provide SNI */
 }
 #endif
@@ -1284,8 +1291,19 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       #endif
       #endif
 
+      #if OPENSSL_VERSION_NUMBER >= 0x10002000
+
+        SSL_CTX_set_cert_cb(s->ssl_ctx, mod_openssl_cert_cb, NULL);
+        UNUSED(p);
+
+      #endif
+      #if 1
+      /*#else*/ /* OPENSSL_VERSION_NUMBER < 0x10002000 */
+
         /* load all ssl.ca-files specified in the config into each SSL_CTX
-         * to be prepared for SNI */
+         * XXX: This might be a bit excessive, but are all trusted CAs
+         *      TODO: prefer to load on-demand in mod_openssl_cert_cb()
+         *            for openssl >= 1.0.2 */
         if (!mod_openssl_load_ca_files(s->ssl_ctx, p, srv))
             return -1;
 
@@ -1340,6 +1358,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
               s->ssl_pemfile->ptr, s->ssl_privkey->ptr);
             return -1;
         }
+
+      #endif /* OPENSSL_VERSION_NUMBER < 0x10002000 */
+
         SSL_CTX_set_default_read_ahead(s->ssl_ctx, s->ssl_read_ahead);
         SSL_CTX_set_mode(s->ssl_ctx, SSL_CTX_get_mode(s->ssl_ctx)
                                    | SSL_MODE_ENABLE_PARTIAL_WRITE
@@ -1727,7 +1748,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
             }
         }
 
-        /* load all ssl.ca-files into a single chain to be prepared for SNI */
+        /* load all ssl.ca-files into a single chain */
         /*(certificate load order might matter)*/
         if (ssl_ca_dn_file)
             array_insert_value(p->cafiles, CONST_BUF_LEN(ssl_ca_dn_file));
