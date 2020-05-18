@@ -27,6 +27,9 @@
 #include <string.h>
 #include <unistd.h>
 
+/*(not needed)*/
+#define OPENSSL_NO_STDIO
+
 #ifndef USE_OPENSSL_KERBEROS
 #ifndef OPENSSL_NO_KRB5
 #define OPENSSL_NO_KRB5
@@ -65,14 +68,19 @@ typedef struct {
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
     EVP_PKEY *ssl_pemfile_pkey;
     X509 *ssl_pemfile_x509;
+    STACK_OF(X509) *ssl_pemfile_chain;
     const buffer *ssl_pemfile;
     const buffer *ssl_privkey;
 } plugin_cert;
 
 typedef struct {
     SSL_CTX *ssl_ctx;
-    EVP_PKEY *ssl_pemfile_pkey;
 } plugin_ssl_ctx;
+
+typedef struct {
+    STACK_OF(X509_NAME) *names;
+    X509_STORE *certs;
+} plugin_cacerts;
 
 typedef struct {
     SSL_CTX *ssl_ctx; /* output from network_init_ssl() */
@@ -89,11 +97,8 @@ typedef struct {
     array *ssl_conf_cmd;
 
     /*(copied from plugin_data for socket ssl_ctx config)*/
-    EVP_PKEY *ssl_pemfile_pkey;
-    X509 *ssl_pemfile_x509;
-    const buffer *ssl_pemfile;
-    const buffer *ssl_privkey;
-    STACK_OF(X509_NAME) *ssl_ca_file;
+    const plugin_cert *pc;
+    const plugin_cacerts *ssl_ca_file;
     STACK_OF(X509_NAME) *ssl_ca_dn_file;
     const buffer *ssl_ca_crl_file;
     unsigned char ssl_verifyclient;
@@ -104,10 +109,8 @@ typedef struct {
 
 typedef struct {
     /* SNI per host: w/ COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
-    EVP_PKEY *ssl_pemfile_pkey;
-    X509 *ssl_pemfile_x509;
-    const buffer *ssl_pemfile;
-    STACK_OF(X509_NAME) *ssl_ca_file;
+    plugin_cert *pc;
+    const plugin_cacerts *ssl_ca_file;
     STACK_OF(X509_NAME) *ssl_ca_dn_file;
     const buffer *ssl_ca_crl_file;
 
@@ -327,9 +330,17 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
                     plugin_cert *pc = cpv->v.v;
                     EVP_PKEY_free(pc->ssl_pemfile_pkey);
                     X509_free(pc->ssl_pemfile_x509);
+                    sk_X509_pop_free(pc->ssl_pemfile_chain, X509_free);
                 }
                 break;
               case 2: /* ssl.ca-file */
+                if (cpv->vtype == T_CONFIG_LOCAL) {
+                    plugin_cacerts *cacerts = cpv->v.v;
+                    sk_X509_NAME_pop_free(cacerts->names, X509_NAME_free);
+                    X509_STORE_free(cacerts->certs);
+                    free(cacerts);
+                }
+                break;
               case 3: /* ssl.ca-dn-file */
                 if (cpv->vtype == T_CONFIG_LOCAL)
                     sk_X509_NAME_pop_free(cpv->v.v, X509_NAME_free);
@@ -342,6 +353,228 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
 }
 
 
+/* openssl BIO_s_file() employs system stdio
+ * system stdio buffers reads and does not guarantee to clear buffer memory
+ * 'man PEM_bytes_read_bio_secmem()' and see NOTES section for more info
+ */
+
+#ifdef OPENSSL_NO_POSIX_IO
+
+#include <stdio.h>
+static BIO *
+BIO_new_rdonly_file (const char *file)
+{
+
+    BIO *in = BIO_new(BIO_s_file());
+    if (NULL == in)
+        return NULL;
+
+    if (BIO_read_filename(in, file) <= 0) {
+        BIO_free(in);
+        return NULL;
+    }
+
+    /* set I/O stream unbuffered (best-effort; not fatal)
+     * system stdio buffers reads and does not guarantee to clear buffer memory.
+     * Alternative: provide buffer (e.g. 8k) and clear after use (in caller) */
+    FILE *fp = NULL;
+    if (BIO_get_fp(in, &fp))
+        setvbuf(fp, NULL, _IONBF, 0);
+
+    return in;
+}
+
+#else  /* !OPENSSL_NO_POSIX_IO */
+
+#include <fcntl.h>
+#include "fdevent.h"
+static BIO *
+BIO_new_rdonly_file (const char *file)
+{
+    /* unbuffered fd; not using system stdio */
+    int fd = fdevent_open_cloexec(file, 1, O_RDONLY, 0);
+    if (fd < 0)
+        return NULL;
+
+    BIO *in = BIO_new_fd(fd, BIO_CLOSE);
+    if (NULL == in) {
+        close(fd);
+        return NULL;
+    }
+
+    return in;
+}
+
+#endif /* !OPENSSL_NO_POSIX_IO */
+
+
+/* use memory from openssl secure heap for temporary buffers, returned storage
+ * (pemfile might contain a private key in addition to certificate chain)
+ * Interfaces similar to those constructed in include/openssl/pem.h for
+ * PEM_read_bio_X509(), except this is named PEM_read_bio_X509_secmem().
+ * Similar for PEM_read_bio_X509_AUX_secmem().
+ *
+ * Supporting routine PEM_ASN1_read_bio_secmem() modified from openssl
+ * crypto/pem/pem_oth.c:PEM_ASN1_read_bio():
+ *   uses PEM_bytes_read_bio_secmem() instead of PEM_bytes_read_bio()
+ *   uses OPENSSL_secure_clear_free() instead of OPENSSL_free()
+ *
+ * PEM_bytes_read_bio_secmem() openssl 1.1.1 or later
+ * OPENSSL_secure_clear_free() openssl 1.1.0g or later
+ * As this comment is being written, only openssl 1.1.1 is actively maintained.
+ * Earlier vers of openssl no longer receive security patches from openssl.org.
+ */
+static void *
+PEM_ASN1_read_bio_secmem(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
+                         pem_password_cb *cb, void *u)
+{
+    const unsigned char *p = NULL;
+    unsigned char *data = NULL;
+    long len = 0;
+    char *ret = NULL;
+
+  #if OPENSSL_VERSION_NUMBER >= 0x10101000L
+    if (!PEM_bytes_read_bio_secmem(&data, &len, NULL, name, bp, cb, u))
+  #else
+    if (!PEM_bytes_read_bio(&data, &len, NULL, name, bp, cb, u))
+  #endif
+        return NULL;
+    p = data;
+    ret = d2i(x, &p, len);
+    if (ret == NULL)
+        PEMerr(PEM_F_PEM_ASN1_READ_BIO, ERR_R_ASN1_LIB);
+  #if OPENSSL_VERSION_NUMBER >= 0x10101000L
+    OPENSSL_secure_clear_free(data, len);
+  #else
+    OPENSSL_cleanse(data, len);
+    OPENSSL_free(data);
+  #endif
+    return ret;
+}
+
+
+static X509 *
+PEM_read_bio_X509_secmem(BIO *bp, X509 **x, pem_password_cb *cb, void *u)
+{
+    return PEM_ASN1_read_bio_secmem((d2i_of_void *)d2i_X509,
+                                    PEM_STRING_X509,
+                                    bp, (void **)x, cb, u);
+}
+
+
+static X509 *
+PEM_read_bio_X509_AUX_secmem(BIO *bp, X509 **x, pem_password_cb *cb, void *u)
+{
+    return PEM_ASN1_read_bio_secmem((d2i_of_void *)d2i_X509_AUX,
+                                    PEM_STRING_X509_TRUSTED,
+                                    bp, (void **)x, cb, u);
+}
+
+
+static int
+mod_openssl_load_X509_sk (const char *file, log_error_st *errh, STACK_OF(X509) **chain, BIO *in)
+{
+    STACK_OF(X509) *chain_sk = NULL;
+    for (X509 *ca; (ca = PEM_read_bio_X509_secmem(in,NULL,NULL,NULL)); ) {
+        if (NULL == chain_sk) /*(allocate only if it will not be empty)*/
+            chain_sk = sk_X509_new_null();
+        if (!chain_sk || !sk_X509_push(chain_sk, ca)) {
+            log_error(errh, __FILE__, __LINE__,
+              "SSL: couldn't read X509 certificates from '%s'", file);
+            if (chain_sk) sk_X509_pop_free(chain_sk, X509_free);
+            X509_free(ca);
+            return 0;
+        }
+    }
+    *chain = chain_sk;
+    return 1;
+}
+
+
+static int
+mod_openssl_load_X509_STORE (const char *file, log_error_st *errh, X509_STORE **chain, BIO *in)
+{
+    X509_STORE *chain_store = NULL;
+    for (X509 *ca; (ca = PEM_read_bio_X509(in,NULL,NULL,NULL)); X509_free(ca)) {
+        if (NULL == chain_store) /*(allocate only if it will not be empty)*/
+            chain_store = X509_STORE_new();
+        if (!chain_store || !X509_STORE_add_cert(chain_store, ca)) {
+            log_error(errh, __FILE__, __LINE__,
+              "SSL: couldn't read X509 certificates from '%s'", file);
+            if (chain_store) X509_STORE_free(chain_store);
+            X509_free(ca);
+            return 0;
+        }
+    }
+    *chain = chain_store;
+    return 1;
+}
+
+
+static plugin_cacerts *
+mod_openssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
+{
+    const char *file = ssl_ca_file->ptr;
+    BIO *in = BIO_new(BIO_s_file());
+    if (NULL == in) {
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: BIO_new(BIO_s_file()) failed");
+        return NULL;
+    }
+
+    if (BIO_read_filename(in, file) <= 0) {
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: BIO_read_filename('%s') failed", file);
+        BIO_free(in);
+        return NULL;
+    }
+
+    X509_STORE *chain_store = NULL;
+    if (!mod_openssl_load_X509_STORE(file, errh, &chain_store, in)) {
+        BIO_free(in);
+        return NULL;
+    }
+
+    BIO_free(in);
+
+    if (NULL == chain_store) {
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: ssl.ca-file is empty %s", file);
+        return NULL;
+    }
+
+    plugin_cacerts *cacerts = malloc(sizeof(plugin_cacerts));
+    force_assert(cacerts);
+
+    /* (would be more efficient to walk the X509_STORE and build the list,
+     *  but this works for now and matches how ssl.ca-dn-file is handled) */
+    cacerts->names = SSL_load_client_CA_file(file);
+    if (NULL == cacerts->names) {
+        X509_STORE_free(chain_store);
+        free(cacerts);
+        return NULL;
+    }
+
+    cacerts->certs = chain_store;
+    return cacerts;
+}
+
+
+static int
+mod_openssl_load_cacrls (X509_STORE *store, const buffer *ssl_ca_crl_file, server *srv)
+{
+    if (1 != X509_STORE_load_locations(store, ssl_ca_crl_file->ptr, NULL)) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: %s %s", ERR_error_string(ERR_get_error(), NULL),
+          ssl_ca_crl_file->ptr);
+        return 0;
+    }
+    X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL);
+    return 1;
+}
+
+
+#if OPENSSL_VERSION_NUMBER < 0x10002000
 static int
 mod_openssl_load_verify_locn (SSL_CTX *ssl_ctx, const buffer *b, server *srv)
 {
@@ -367,6 +600,7 @@ mod_openssl_load_ca_files (SSL_CTX *ssl_ctx, plugin_data *p, server *srv)
     }
     return 1;
 }
+#endif
 
 
 FREE_FUNC(mod_openssl_free)
@@ -383,12 +617,8 @@ mod_openssl_merge_config_cpv (plugin_config * const pconf, const config_plugin_v
 {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* ssl.pemfile */
-        if (cpv->vtype == T_CONFIG_LOCAL) {
-            plugin_cert *pc = cpv->v.v;
-            pconf->ssl_pemfile_pkey = pc->ssl_pemfile_pkey;
-            pconf->ssl_pemfile_x509 = pc->ssl_pemfile_x509;
-            pconf->ssl_pemfile      = pc->ssl_pemfile;
-        }
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->pc = cpv->v.v;
         break;
       case 1: /* ssl.privkey */
         break;
@@ -533,9 +763,7 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
         X509_STORE_CTX_set_error(ctx, err);
     }
 
-    if (preverify_ok && 0 == depth
-        && NULL != hctx->conf.ssl_ca_dn_file
-        && NULL != hctx->conf.ssl_ca_file) {
+    if (preverify_ok && 0 == depth && NULL != hctx->conf.ssl_ca_dn_file) {
         /* verify that client cert is issued by CA in ssl.ca-dn-file
          * if both ssl.ca-dn-file and ssl.ca-file were configured */
         STACK_OF(X509_NAME) * const cert_names = hctx->conf.ssl_ca_dn_file;
@@ -595,10 +823,10 @@ static int
 mod_openssl_cert_cb (SSL *ssl, void *arg)
 {
     handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
+    plugin_cert *pc = hctx->conf.pc;
     UNUSED(arg);
 
-    if (NULL == hctx->conf.ssl_pemfile_x509
-        || NULL == hctx->conf.ssl_pemfile_pkey) {
+    if (NULL == pc->ssl_pemfile_x509 || NULL == pc->ssl_pemfile_pkey) {
         /* x509/pkey available <=> pemfile was set <=> pemfile got patched:
          * so this should never happen, unless you nest $SERVER["socket"] */
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
@@ -609,14 +837,43 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
 
     /* first set certificate!
      * setting private key checks whether certificate matches it */
-    if (1 != SSL_use_certificate(ssl, hctx->conf.ssl_pemfile_x509)) {
+    if (1 != SSL_use_certificate(ssl, pc->ssl_pemfile_x509)) {
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
           "SSL: failed to set certificate for TLS server name %s: %s",
           hctx->r->uri.authority.ptr, ERR_error_string(ERR_get_error(), NULL));
         return 0;
     }
 
-    if (1 != SSL_use_PrivateKey(ssl, hctx->conf.ssl_pemfile_pkey)) {
+  #if OPENSSL_VERSION_NUMBER >= 0x10002000
+    if (pc->ssl_pemfile_chain)
+        SSL_set1_chain(ssl, pc->ssl_pemfile_chain);
+    else if (hctx->conf.ssl_ca_file) {
+        /* preserve legacy behavior whereby openssl will reuse CAs trusted for
+         * certificate verification (set by SSL_CTX_load_verify_locations() in
+         * SSL_CTX) in order to build certificate chain for server certificate
+         * sent to client */
+        SSL_set1_chain_cert_store(ssl, hctx->conf.ssl_ca_file->certs);
+
+        if (1 != SSL_build_cert_chain(ssl,
+                                        SSL_BUILD_CHAIN_FLAG_NO_ROOT
+                                      | SSL_BUILD_CHAIN_FLAG_IGNORE_ERROR
+                                      | SSL_BUILD_CHAIN_FLAG_CLEAR_ERROR)) {
+            log_error(hctx->r->conf.errh, __FILE__, __LINE__,
+              "SSL: building cert chain for TLS server name %s: %s",
+              hctx->r->uri.authority.ptr,
+              ERR_error_string(ERR_get_error(), NULL));
+            return 0;
+        }
+        else { /* copy chain for future reuse */
+            STACK_OF(X509) *chain = NULL;
+            SSL_get0_chain_certs(ssl, &chain);
+            pc->ssl_pemfile_chain = X509_chain_up_ref(chain);
+            SSL_set1_chain_cert_store(ssl, NULL);
+        }
+    }
+  #endif
+
+    if (1 != SSL_use_PrivateKey(ssl, pc->ssl_pemfile_pkey)) {
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
           "SSL: failed to set private key for TLS server name %s: %s",
           hctx->r->uri.authority.ptr, ERR_error_string(ERR_get_error(), NULL));
@@ -624,21 +881,23 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
     }
 
     if (hctx->conf.ssl_verifyclient) {
-        int mode;
-        STACK_OF(X509_NAME) * const cert_names = hctx->conf.ssl_ca_dn_file
-          ? hctx->conf.ssl_ca_dn_file
-          : hctx->conf.ssl_ca_file;
-        if (NULL == cert_names) {
+        if (NULL == hctx->conf.ssl_ca_file) {
             log_error(hctx->r->conf.errh, __FILE__, __LINE__,
               "SSL: can't verify client without ssl.ca-file "
-              "or ssl.ca-dn-file for TLS server name %s: %s",
-              hctx->r->uri.authority.ptr, ERR_error_string(ERR_get_error(),
-              NULL));
+              "for TLS server name %s", hctx->r->uri.authority.ptr);
             return 0;
         }
-
+      #if OPENSSL_VERSION_NUMBER >= 0x10002000
+        SSL_set1_verify_cert_store(ssl, hctx->conf.ssl_ca_file->certs);
+      #endif
+        /* WTH openssl?  SSL_set_client_CA_list() calls set0_CA_list(),
+         * but there is no set1_CA_list() to simply up the reference count
+         * (without needing to duplicate the list) */
+        STACK_OF(X509_NAME) * const cert_names = hctx->conf.ssl_ca_dn_file
+          ? hctx->conf.ssl_ca_dn_file
+          : hctx->conf.ssl_ca_file->names;
         SSL_set_client_CA_list(ssl, SSL_dup_CA_list(cert_names));
-        mode = SSL_VERIFY_PEER;
+        int mode = SSL_VERIFY_PEER;
         if (hctx->conf.ssl_verifyclient_enforce)
             mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
         SSL_set_verify(ssl, mode, verify_callback);
@@ -736,87 +995,68 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 
 
 static X509 *
-x509_load_pem_file (const char *file, log_error_st *errh)
+mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) **chain)
 {
-    BIO *in;
-    X509 *x = NULL;
+    *chain = NULL;
 
-    in = BIO_new(BIO_s_file());
+    BIO *in = BIO_new_rdonly_file(file);
     if (NULL == in) {
         log_error(errh, __FILE__, __LINE__,
-          "SSL: BIO_new(BIO_s_file()) failed");
-        goto error;
+          "SSL: BIO_new/BIO_read_filename('%s') failed", file);
+        return NULL;
     }
 
-    if (BIO_read_filename(in,file) <= 0) {
-        log_error(errh, __FILE__, __LINE__,
-          "SSL: BIO_read_filename('%s') failed", file);
-        goto error;
-    }
-
-    x = PEM_read_bio_X509(in, NULL, NULL, NULL);
+    X509 *x = PEM_read_bio_X509_AUX_secmem(in, NULL, NULL, NULL);
     if (NULL == x) {
         log_error(errh, __FILE__, __LINE__,
           "SSL: couldn't read X509 certificate from '%s'", file);
-        goto error;
+    }
+    else if (!mod_openssl_load_X509_sk(file, errh, chain, in)) {
+        X509_free(x);
+        x = NULL;
     }
 
     BIO_free(in);
     return x;
-
-error:
-    if (NULL != in) BIO_free(in);
-    return NULL;
 }
 
 
 static EVP_PKEY *
-evp_pkey_load_pem_file (const char *file, log_error_st *errh)
+mod_openssl_evp_pkey_load_pem_file (const char *file, log_error_st *errh)
 {
-    BIO *in;
-    EVP_PKEY *x = NULL;
-
-    in = BIO_new(BIO_s_file());
+    BIO *in = BIO_new_rdonly_file(file);
     if (NULL == in) {
         log_error(errh, __FILE__, __LINE__,
-          "SSL: BIO_new(BIO_s_file()) failed");
-        goto error;
+          "SSL: BIO_new/BIO_read_filename('%s') failed", file);
+        return NULL;
     }
 
-    if (BIO_read_filename(in,file) <= 0) {
-        log_error(errh, __FILE__, __LINE__,
-          "SSL: BIO_read_filename('%s') failed", file);
-        goto error;
-    }
-
-    x = PEM_read_bio_PrivateKey(in, NULL, NULL, NULL);
-    if (NULL == x) {
+    EVP_PKEY *x = PEM_read_bio_PrivateKey(in, NULL, NULL, NULL);
+    BIO_free(in);
+    if (NULL == x)
         log_error(errh, __FILE__, __LINE__,
           "SSL: couldn't read private key from '%s'", file);
-        goto error;
-    }
 
-    BIO_free(in);
     return x;
-
-error:
-    if (NULL != in) BIO_free(in);
-    return NULL;
 }
 
 
-static void *
+static plugin_cert *
 network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *privkey)
 {
     if (!mod_openssl_init_once_openssl(srv)) return NULL;
 
-    X509 *ssl_pemfile_x509 = x509_load_pem_file(pemfile->ptr, srv->errh);
+    STACK_OF(X509) *ssl_pemfile_chain = NULL;
+    X509 *ssl_pemfile_x509 =
+      mod_openssl_load_pem_file(pemfile->ptr, srv->errh, &ssl_pemfile_chain);
     if (NULL == ssl_pemfile_x509)
         return NULL;
 
-    EVP_PKEY *ssl_pemfile_pkey = evp_pkey_load_pem_file(privkey->ptr, srv->errh);
+    EVP_PKEY *ssl_pemfile_pkey =
+      mod_openssl_evp_pkey_load_pem_file(privkey->ptr, srv->errh);
     if (NULL == ssl_pemfile_pkey) {
         X509_free(ssl_pemfile_x509);
+        sk_X509_pop_free(ssl_pemfile_chain, X509_free);
         return NULL;
     }
 
@@ -827,6 +1067,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
           pemfile->ptr, privkey->ptr);
         EVP_PKEY_free(ssl_pemfile_pkey);
         X509_free(ssl_pemfile_x509);
+        sk_X509_pop_free(ssl_pemfile_chain, X509_free);
         return NULL;
     }
 
@@ -834,6 +1075,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     force_assert(pc);
     pc->ssl_pemfile_pkey = ssl_pemfile_pkey;
     pc->ssl_pemfile_x509 = ssl_pemfile_x509;
+    pc->ssl_pemfile_chain= ssl_pemfile_chain;
     pc->ssl_pemfile = pemfile;
     pc->ssl_privkey = privkey;
     return pc;
@@ -851,6 +1093,7 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     const buffer * const name = &hctx->r->uri.authority;
     log_error_st * const errh = hctx->r->conf.errh;
     X509 *ssl_pemfile_x509 = NULL;
+    STACK_OF(X509) *ssl_pemfile_chain = NULL;
     EVP_PKEY *ssl_pemfile_pkey = NULL;
     size_t len;
     int rc = SSL_TLSEXT_ERR_ALERT_FATAL;
@@ -876,7 +1119,8 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
 
     do {
         buffer_append_string_len(b, CONST_STR_LEN(".crt.pem"));
-        ssl_pemfile_x509 = x509_load_pem_file(b->ptr, errh);
+        ssl_pemfile_x509 =
+          mod_openssl_load_pem_file(b->ptr, errh, &ssl_pemfile_chain);
         if (NULL == ssl_pemfile_x509) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: Failed to load acme-tls/1 pemfile: %s", b->ptr);
@@ -885,7 +1129,7 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
 
         buffer_string_set_length(b, len); /*(remove ".crt.pem")*/
         buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
-        ssl_pemfile_pkey = evp_pkey_load_pem_file(b->ptr, errh);
+        ssl_pemfile_pkey = mod_openssl_evp_pkey_load_pem_file(b->ptr, errh);
         if (NULL == ssl_pemfile_pkey) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: Failed to load acme-tls/1 pemfile: %s", b->ptr);
@@ -911,6 +1155,11 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
             break;
         }
 
+        if (ssl_pemfile_chain) {
+            SSL_set0_chain(ssl, ssl_pemfile_chain);
+            ssl_pemfile_chain = NULL;
+        }
+
         if (1 != SSL_use_PrivateKey(ssl, ssl_pemfile_pkey)) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: failed to set acme-tls/1 private key for TLS server "
@@ -925,6 +1174,8 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
 
     if (ssl_pemfile_pkey) EVP_PKEY_free(ssl_pemfile_pkey);
     if (ssl_pemfile_x509) X509_free(ssl_pemfile_x509);
+    if (ssl_pemfile_chain)
+        sk_X509_pop_free(ssl_pemfile_chain, X509_free);
 
     return rc;
 }
@@ -1296,9 +1547,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         SSL_CTX_set_cert_cb(s->ssl_ctx, mod_openssl_cert_cb, NULL);
         UNUSED(p);
 
-      #endif
-      #if 1
-      /*#else*/ /* OPENSSL_VERSION_NUMBER < 0x10002000 */
+      #else /* OPENSSL_VERSION_NUMBER < 0x10002000 */
 
         /* load all ssl.ca-files specified in the config into each SSL_CTX
          * XXX: This might be a bit excessive, but are all trusted CAs
@@ -1308,15 +1557,18 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             return -1;
 
         if (s->ssl_verifyclient) {
-            STACK_OF(X509_NAME) * const cert_names = s->ssl_ca_dn_file
-              ? s->ssl_ca_dn_file
-              : s->ssl_ca_file;
-            if (NULL == cert_names) {
+            if (NULL == s->ssl_ca_file) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "SSL: You specified ssl.verifyclient.activate "
-                  "but no ssl.ca-file or ssl.ca-dn-file");
+                  "but no ssl.ca-file");
                 return -1;
             }
+            /* WTH openssl?  SSL_CTX_set_client_CA_list() calls set0_CA_list(),
+             * but there is no set1_CA_list() to simply up the reference count
+             * (without needing to duplicate the list) */
+            STACK_OF(X509_NAME) * const cert_names = s->ssl_ca_dn_file
+              ? s->ssl_ca_dn_file
+              : s->ssl_ca_file->names;
             SSL_CTX_set_client_CA_list(s->ssl_ctx, SSL_dup_CA_list(cert_names));
             int mode = SSL_VERIFY_PEER;
             if (s->ssl_verifyclient_enforce) {
@@ -1326,28 +1578,23 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             SSL_CTX_set_verify_depth(s->ssl_ctx, s->ssl_verifyclient_depth + 1);
             if (!buffer_string_is_empty(s->ssl_ca_crl_file)) {
                 X509_STORE *store = SSL_CTX_get_cert_store(s->ssl_ctx);
-                if (1 != X509_STORE_load_locations(store, s->ssl_ca_crl_file->ptr, NULL)) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "SSL: %s %s", ERR_error_string(ERR_get_error(), NULL),
-                      s->ssl_ca_crl_file->ptr);
+                if (!mod_openssl_load_cacrls(store, s->ssl_ca_crl_file, srv))
                     return -1;
-                }
-                X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL);
             }
         }
 
         if (1 != SSL_CTX_use_certificate_chain_file(s->ssl_ctx,
-                                                    s->ssl_pemfile->ptr)) {
+                                                    s->pc->ssl_pemfile->ptr)) {
             log_error(srv->errh, __FILE__, __LINE__,
               "SSL: %s %s", ERR_error_string(ERR_get_error(), NULL),
-              s->ssl_pemfile->ptr);
+              s->pc->ssl_pemfile->ptr);
             return -1;
         }
 
-        if (1 != SSL_CTX_use_PrivateKey(s->ssl_ctx, s->ssl_pemfile_pkey)) {
+        if (1 != SSL_CTX_use_PrivateKey(s->ssl_ctx, s->pc->ssl_pemfile_pkey)) {
             log_error(srv->errh, __FILE__, __LINE__,
               "SSL: %s %s %s", ERR_error_string(ERR_get_error(), NULL),
-              s->ssl_pemfile->ptr, s->ssl_privkey->ptr);
+              s->pc->ssl_pemfile->ptr, s->pc->ssl_privkey->ptr);
             return -1;
         }
 
@@ -1355,7 +1602,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             log_error(srv->errh, __FILE__, __LINE__,
               "SSL: Private key does not match the certificate public key, "
               "reason: %s %s %s", ERR_error_string(ERR_get_error(), NULL),
-              s->ssl_pemfile->ptr, s->ssl_privkey->ptr);
+              s->pc->ssl_pemfile->ptr, s->pc->ssl_privkey->ptr);
             return -1;
         }
 
@@ -1520,8 +1767,7 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
         /* fill plugin_config_socket with global context then $SERVER["socket"]
          * only for directives directly in current $SERVER["socket"] condition*/
 
-        /*conf.ssl_pemfile_pkey       = p->defaults.ssl_pemfile_pkey;*/
-        /*conf.ssl_pemfile_x509       = p->defaults.ssl_pemfile_x509;*/
+        /*conf.pc                     = p->defaults.pc;*/
         conf.ssl_ca_file              = p->defaults.ssl_ca_file;
         conf.ssl_ca_dn_file           = p->defaults.ssl_ca_dn_file;
         conf.ssl_ca_crl_file          = p->defaults.ssl_ca_crl_file;
@@ -1539,13 +1785,8 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                 ++count_not_engine;
                 switch (cpv->k_id) {
                   case 0: /* ssl.pemfile */
-                    if (cpv->vtype == T_CONFIG_LOCAL) {
-                        plugin_cert *pc = cpv->v.v;
-                        conf.ssl_pemfile_pkey = pc->ssl_pemfile_pkey;
-                        conf.ssl_pemfile_x509 = pc->ssl_pemfile_x509;
-                        conf.ssl_pemfile      = pc->ssl_pemfile;
-                        conf.ssl_privkey      = pc->ssl_privkey;
-                    }
+                    if (cpv->vtype == T_CONFIG_LOCAL)
+                        conf.pc = cpv->v.v;
                     break;
                   case 2: /* ssl.ca-file */
                     if (cpv->vtype == T_CONFIG_LOCAL)
@@ -1577,7 +1818,7 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
             break;
         }
 
-        if (NULL == conf.ssl_pemfile_x509) {
+        if (NULL == conf.pc) {
             if (0 == i && !conf.ssl_enabled) continue;
             if (0 != i) {
                 /* inherit ssl settings from global scope
@@ -1610,9 +1851,6 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
         if (0 == network_init_ssl(srv, &conf, p)) {
             plugin_ssl_ctx * const s = p->ssl_ctxs + sidx;
             s->ssl_ctx = conf.ssl_ctx;
-            /*(used to match and avoid work changing keys
-             * during SNI when pkey has not changed)*/
-            s->ssl_pemfile_pkey = conf.ssl_pemfile_pkey;
         }
         else {
             SSL_CTX_free(conf.ssl_ctx);
@@ -1688,6 +1926,8 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
     if (!config_plugin_values_init(srv, p, cpk, "mod_openssl"))
         return HANDLER_ERROR;
 
+    const buffer *default_ssl_ca_crl_file = NULL;
+
     /* process and validate config directives
      * (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
@@ -1696,6 +1936,8 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         config_plugin_value_t *privkey = NULL;
         const buffer *ssl_ca_file = NULL;
         const buffer *ssl_ca_dn_file = NULL;
+        const buffer *ssl_ca_crl_file = NULL;
+        X509_STORE *ca_store = NULL;
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* ssl.pemfile */
@@ -1705,26 +1947,41 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                 if (!buffer_string_is_empty(cpv->v.b)) privkey = cpv;
                 break;
               case 2: /* ssl.ca-file */
-              case 3: /* ssl.ca-dn-file */
+                if (buffer_string_is_empty(cpv->v.b)) break;
                 if (!mod_openssl_init_once_openssl(srv)) return HANDLER_ERROR;
-                if (!buffer_string_is_empty(cpv->v.b)) {
-                    const char * const fn = cpv->v.b->ptr;
-                    if (cpv->k_id == 2)
-                        ssl_ca_file = cpv->v.b;
-                    else
-                        ssl_ca_dn_file = cpv->v.b;
-                    cpv->v.v = SSL_load_client_CA_file(fn);
-                    if (NULL != cpv->v.v) {
-                        cpv->vtype = T_CONFIG_LOCAL;
-                    }
-                    else {
-                        log_error(srv->errh, __FILE__, __LINE__, "SSL: %s %s",
-                          ERR_error_string(ERR_get_error(), NULL), fn);
-                        return HANDLER_ERROR;
-                    }
+                ssl_ca_file = cpv->v.b;
+                cpv->v.v = mod_openssl_load_cacerts(ssl_ca_file, srv->errh);
+                if (NULL != cpv->v.v) {
+                    cpv->vtype = T_CONFIG_LOCAL;
+                    ca_store = ((plugin_cacerts *)cpv->v.v)->certs;
+                }
+                else {
+                    log_error(srv->errh, __FILE__, __LINE__, "SSL: %s %s",
+                      ERR_error_string(ERR_get_error(), NULL),
+                      ssl_ca_file->ptr);
+                    return HANDLER_ERROR;
+                }
+                break;
+              case 3: /* ssl.ca-dn-file */
+                if (buffer_string_is_empty(cpv->v.b)) break;
+                if (!mod_openssl_init_once_openssl(srv)) return HANDLER_ERROR;
+                ssl_ca_dn_file = cpv->v.b;
+                cpv->v.v = SSL_load_client_CA_file(ssl_ca_dn_file->ptr);
+                if (NULL != cpv->v.v) {
+                    cpv->vtype = T_CONFIG_LOCAL;
+                }
+                else {
+                    log_error(srv->errh, __FILE__, __LINE__, "SSL: %s %s",
+                      ERR_error_string(ERR_get_error(), NULL),
+                      ssl_ca_dn_file->ptr);
+                    return HANDLER_ERROR;
                 }
                 break;
               case 4: /* ssl.ca-crl-file */
+                if (buffer_string_is_empty(cpv->v.b)) break;
+                ssl_ca_crl_file = cpv->v.b;
+                if (0 == i) default_ssl_ca_crl_file = cpv->v.b;
+                break;
               case 5: /* ssl.read-ahead */
               case 6: /* ssl.disable-client-renegotiation */
               case 7: /* ssl.verifyclient.activate */
@@ -1748,12 +2005,40 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
             }
         }
 
+      #if OPENSSL_VERSION_NUMBER < 0x10002000 /* p->cafiles for legacy only */
         /* load all ssl.ca-files into a single chain */
         /*(certificate load order might matter)*/
         if (ssl_ca_dn_file)
             array_insert_value(p->cafiles, CONST_BUF_LEN(ssl_ca_dn_file));
         if (ssl_ca_file)
             array_insert_value(p->cafiles, CONST_BUF_LEN(ssl_ca_file));
+        UNUSED(ca_store);
+        UNUSED(ssl_ca_crl_file);
+        UNUSED(default_ssl_ca_crl_file);
+      #else
+        if (NULL == ca_store && ssl_ca_crl_file && i != 0) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "ssl.ca-crl-file (%s) ignored unless issued with ssl.ca-file",
+              ssl_ca_crl_file->ptr);
+        }
+        else if (ca_store && (ssl_ca_crl_file || default_ssl_ca_crl_file)) {
+            /* prior behavior in lighttpd allowed ssl.ca-crl-file only in global
+             * scope or $SERVER["socket"], so this inheritence from global scope
+             * is reasonable.  This code does not implement inheritance of
+             * ssl.ca-crl-file from $SERVER["socket"] into nested $HTTP["host"],
+             * but the solution is to repeat ssl.ca-crl-file where ssl.ca-file
+             * is issued (and to not unnecessarily repeat ssl.ca-file)
+             * Alternative: write code to load ssl.ca-crl-file into (X509_CRL *)
+             * using PEM_read_bio_X509_CRL() and in mod_openssl_cert_cb(),
+             * create a new (X509_STORE *) which merges with CA (X509_STORE *)
+             * using X509_STORE_add_cert() and X509_STORE_add_crl(), and keeps
+             * the result in our (plugin_cert *) for reuse */
+            if (NULL == ssl_ca_crl_file)
+                ssl_ca_crl_file = default_ssl_ca_crl_file;
+            if (!mod_openssl_load_cacrls(ca_store, ssl_ca_crl_file, srv))
+                return HANDLER_ERROR;
+        }
+      #endif
 
         if (pemfile) {
           #ifdef OPENSSL_NO_TLSEXT
@@ -2162,7 +2447,6 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
     r->plugin_ctx[p->id] = hctx;
 
     plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
-    hctx->conf.ssl_pemfile_pkey = s->ssl_pemfile_pkey;
     hctx->ssl = SSL_new(s->ssl_ctx);
     if (NULL != hctx->ssl
         && SSL_set_app_data(hctx->ssl, hctx)
