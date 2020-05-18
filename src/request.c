@@ -430,7 +430,7 @@ static int http_request_parse_single_header(request_st * const restrict r, const
             /*(trailing whitespace was removed from vlen)*/
             char *err;
             off_t clen = strtoll(v, &err, 10);
-            if (clen >= 0 && err == v+vlen) {
+            if (clen >= 0 && err == v+vlen && light_isdigit(v[0])) {
                 /* (set only if not set to -1 by Transfer-Encoding: chunked) */
                 if (0 == r->reqbody_length) r->reqbody_length = clen;
             }
