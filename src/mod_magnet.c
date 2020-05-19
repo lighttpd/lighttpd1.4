@@ -1031,10 +1031,9 @@ static handler_t magnet_attract_array(request_st * const r, plugin_data * const 
 
 	if (r->error_handler_saved_status) {
 		/* retrieve (possibly modified) REDIRECT_STATUS and store as number */
-		unsigned long x;
+		int x;
 		const buffer * const vb = http_header_env_get(r, CONST_STR_LEN("REDIRECT_STATUS"));
-		if (vb && (x = strtoul(vb->ptr, NULL, 10)) < 1000)
-			/*(simplified validity check x < 1000)*/
+		if (vb && (x = http_header_str_to_code(vb->ptr)) != -1)
 			r->error_handler_saved_status =
 			  r->error_handler_saved_status > 0 ? (int)x : -(int)x;
 	}

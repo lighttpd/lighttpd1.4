@@ -248,7 +248,7 @@ static void * mod_extforward_parse_forwarder(server *srv, const array *forwarder
         char *err;
         const int nm_bits = strtol(nm_slash + 1, &err, 10);
         int rc;
-        if (*err || nm_bits <= 0) {
+        if (*err || nm_bits <= 0 || !light_isdigit(nm_slash[1])) {
             log_error(srv->errh, __FILE__, __LINE__,
               "ERROR: invalid netmask: %s %s", ds->key.ptr, err);
             free(fwd);
@@ -1398,6 +1398,19 @@ static int hap_PROXY_recv (const int fd, union hap_PROXY_hdr * const hdr, const 
 }
 
 
+__attribute_pure__
+static int mod_extforward_str_to_port (const char * const s)
+{
+    /*(more strict than strtol(); digits only)*/
+    int port = 0;
+    for (int i = 0; i < 5; ++i, port *= 10) {
+        if (!light_isdigit(s[i])) return -1;
+        port += (s[i] - '0');
+        if (s[i+1] == '\0') return port;
+    }
+    return -1;
+}
+
 static int mod_extforward_hap_PROXY_v1 (connection * const con,
                                         union hap_PROXY_hdr * const hdr)
 {
@@ -1412,9 +1425,9 @@ static int mod_extforward_hap_PROXY_v1 (connection * const con,
      *   "PROXY UNKNOWN ffff:f...f:ffff ffff:f...f:ffff 65535 65535\r\n"
      */
     char *s = hdr->v1.line + sizeof("PROXY")-1; /*checked in hap_PROXY_recv()*/
-    char *src_addr, *dst_addr, *src_port, *dst_port, *e;
+    char *src_addr, *dst_addr, *src_port, *dst_port;
     int family;
-    long src_lport, dst_lport;
+    int src_lport, dst_lport;
     if (*s != ' ') return -1;
     ++s;
     if (s[0] == 'T' && s[1] == 'C' && s[2] == 'P' && s[4] == ' ') {
@@ -1448,10 +1461,10 @@ static int mod_extforward_hap_PROXY_v1 (connection * const con,
     if (NULL == dst_port) return -1;
     *dst_port++ = '\0';
 
-    src_lport = strtol(src_port, &e, 10);
-    if (src_lport <= 0 || src_lport > USHRT_MAX || *e != '\0') return -1;
-    dst_lport = strtol(dst_port, &e, 10);
-    if (dst_lport <= 0 || dst_lport > USHRT_MAX || *e != '\0') return -1;
+    src_lport = mod_extforward_str_to_port(src_port);
+    if (src_lport <= 0) return -1;
+    dst_lport = mod_extforward_str_to_port(dst_port);
+    if (dst_lport <= 0) return -1;
 
     if (1 != sock_addr_inet_pton(&con->dst_addr,
                                  src_addr, family, (unsigned short)src_lport))

@@ -63,6 +63,15 @@ enum http_header_e http_header_hkey_get(const char * const s, const uint32_t sle
 }
 
 
+int http_header_str_to_code (const char * const s)
+{
+    /*(more strict than strtol(); exactly 3 digits followed by SP/TAB/NIL)*/
+    return (light_isdigit(s[0]) && light_isdigit(s[1]) && light_isdigit(s[2])
+            && (s[3] == '\0' || s[3] == ' ' || s[3] == '\t'))
+      ? (s[0]-'0')*100 + (s[1]-'0')*10 + (s[2]-'0')
+      : -1;
+}
+
 int http_header_str_contains_token (const char * const s, const uint32_t slen, const char * const m, const uint32_t mlen)
 {
     /*if (slen < mlen) return 0;*//*(possible optimizations for caller)*/

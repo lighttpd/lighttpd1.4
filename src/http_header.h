@@ -44,6 +44,9 @@ __attribute_pure__
 enum http_header_e http_header_hkey_get(const char *s, uint32_t slen);
 
 __attribute_pure__
+int http_header_str_to_code (const char * const s);
+
+__attribute_pure__
 int http_header_str_contains_token (const char *s, uint32_t slen, const char *m, uint32_t mlen);
 
 __attribute_pure__

@@ -443,7 +443,9 @@ static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const 
 static int wstunnel_check_request(request_st * const r, handler_ctx * const hctx) {
     const buffer * const vers =
       http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Version"));
-    const long hybivers = (NULL != vers) ? strtol(vers->ptr, NULL, 10) : 0;
+    const long hybivers = (NULL != vers)
+      ? light_isdigit(*vers->ptr) ? strtol(vers->ptr, NULL, 10) : -1
+      : 0;
     if (hybivers < 0 || hybivers > INT_MAX) {
         DEBUG_LOG_ERR("%s", "invalid Sec-WebSocket-Version");
         r->http_status = 400; /* Bad Request */
@@ -689,7 +691,7 @@ static int get_key_number(uint32_t *ret, const buffer *b) {
     }
     tmp[j] = '\0';
     n = strtoul(tmp, NULL, 10);
-    if (n > UINT32_MAX || 0 == sp) return -1;
+    if (n > UINT32_MAX || 0 == sp || !light_isdigit(*tmp)) return -1;
     *ret = (uint32_t)n / sp;
     return 0;
 }

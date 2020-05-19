@@ -950,7 +950,7 @@ static int http_response_process_headers(request_st * const r, http_response_opt
             /* non-parsed headers ... we parse them anyway */
             if ((s[7] == '1' || s[7] == '0') && s[8] == ' ') {
                 /* after the space should be a status code for us */
-                int status = strtol(s+9, NULL, 10);
+                int status = http_header_str_to_code(s+9);
                 if (status >= 100 && status < 1000) {
                     status_is_set = 1;
                     r->resp_htags |= HTTP_HEADER_STATUS;
@@ -983,7 +983,7 @@ static int http_response_process_headers(request_st * const r, http_response_opt
         if (opts->authorizer) {
             if (0 == r->http_status || 200 == r->http_status) {
                 if (id == HTTP_HEADER_STATUS) {
-                    int status = strtol(value, NULL, 10);
+                    int status = http_header_str_to_code(value);
                     if (status >= 100 && status < 1000) {
                         r->http_status = status;
                     } else {
@@ -1004,9 +1004,8 @@ static int http_response_process_headers(request_st * const r, http_response_opt
         switch (id) {
           case HTTP_HEADER_STATUS:
             {
-                int status;
                 if (opts->backend == BACKEND_PROXY) break; /*(pass w/o parse)*/
-                status = strtol(value, NULL, 10);
+                int status = http_header_str_to_code(value);
                 if (status >= 100 && status < 1000) {
                     r->http_status = status;
                     status_is_set = 1;
@@ -1034,6 +1033,7 @@ static int http_response_process_headers(request_st * const r, http_response_opt
             break;
           case HTTP_HEADER_CONTENT_LENGTH:
             r->content_length = strtoul(value, NULL, 10);
+            if (*value == '+') ++value;
             break;
           case HTTP_HEADER_TRANSFER_ENCODING:
             break;
