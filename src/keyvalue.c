@@ -1,3 +1,10 @@
+/*
+ * keyvalue - PCRE matching and substitution for mod_redirect and mod_rewrite
+ *
+ * Fully-rewritten from original
+ * Copyright(c) 2018 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 #include "keyvalue.h"

@@ -1,3 +1,9 @@
+/*
+ * mod_vhostdb_pgsql - virtual hosts mapping from backend PostgreSQL database
+ *
+ * Copyright(c) 2017 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 #include <libpq-fe.h>
@@ -11,7 +17,7 @@
 #include "plugin.h"
 
 /*
- * virtual host plugin using Postgres for domain to directory lookups
+ * virtual host plugin using PostgreSQL for domain to directory lookups
  */
 
 typedef struct {

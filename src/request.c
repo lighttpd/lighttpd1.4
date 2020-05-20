@@ -1,3 +1,10 @@
+/*
+ * request - HTTP request processing
+ *
+ * Fully-rewritten from original EXCEPT for request_check_hostname()
+ * Copyright(c) 2018 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 #include "request.h"

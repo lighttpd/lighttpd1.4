@@ -1,3 +1,9 @@
+/*
+ * mod_vhostdb_dbi - virtual hosts mapping from backend DBI interface
+ *
+ * Copyright(c) 2017 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 #include <dbi/dbi.h>

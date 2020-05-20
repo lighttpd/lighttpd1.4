@@ -1,3 +1,9 @@
+/*
+ * http_header - HTTP header manipulation interfaces
+ *
+ * Copyright(c) 2018 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 #include "http_header.h"

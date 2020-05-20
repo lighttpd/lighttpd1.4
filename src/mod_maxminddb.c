@@ -1,3 +1,9 @@
+/*
+ * mod_maxminddb - MaxMind GeoIP2 support for lighttpd
+ *
+ * Copyright(c) 2019 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 /**
  *
  * Name:

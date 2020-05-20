@@ -1,3 +1,9 @@
+/*
+ * gw_backend - gateway backend code shared by dynamic socket backends
+ *
+ * Copyright(c) 2017 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 #include "gw_backend.h"

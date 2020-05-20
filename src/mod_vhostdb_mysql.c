@@ -1,3 +1,9 @@
+/*
+ * mod_vhostdb_mysql - virtual hosts mapping from backend MySQL/MariaDB database
+ *
+ * Copyright(c) 2017 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 #include <mysql.h>
@@ -12,7 +18,7 @@
 #include "plugin.h"
 
 /*
- * virtual host plugin using MySQL for domain to directory lookups
+ * virtual host plugin using MySQL/MariaDB for domain to directory lookups
  */
 
 typedef struct {

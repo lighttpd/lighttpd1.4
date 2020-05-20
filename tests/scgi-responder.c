@@ -6,6 +6,9 @@
  * - expect recv data for request headers netstring every 10ms or less
  * - no read timeouts for request body; might block reading request body
  * - no write timeouts; might block writing response
+ *
+ * Copyright(c) 2017 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
  */
 
 #include <sys/types.h>

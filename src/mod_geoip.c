@@ -52,6 +52,11 @@
  *
  * Note:
  * 	GeoIP Library and API must be installed!
+ *
+ *
+ * Fully-rewritten from original
+ * Copyright(c) 2016 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
  */
 
 

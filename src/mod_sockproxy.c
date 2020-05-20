@@ -1,3 +1,9 @@
+/*
+ * mod_sockproxy - socket-level proxy support for lighttpd
+ *
+ * Copyright(c) 2018 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 #include <stdlib.h>

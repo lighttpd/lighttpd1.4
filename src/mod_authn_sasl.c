@@ -1,3 +1,9 @@
+/*
+ * mod_authn_sasl - SASL backend for lighttpd HTTP auth
+ *
+ * Copyright(c) 2017 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 /* mod_authn_sasl

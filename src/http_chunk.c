@@ -1,10 +1,11 @@
-#include "first.h"
-
-/**
- * the HTTP chunk-API
+/*
+ * http_chunk - append response to chunkqueue, possibly in "chunked" encoding
  *
- *
+ * Fully-rewritten from original
+ * Copyright(c) 2019 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
  */
+#include "first.h"
 
 #include "http_chunk.h"
 #include "base.h"

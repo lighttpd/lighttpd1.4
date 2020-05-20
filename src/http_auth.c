@@ -1,3 +1,10 @@
+/*
+ * http_auth - HTTP Auth backend registration, low-level shared funcs
+ *
+ * Fully-rewritten from original
+ * Copyright(c) 2016 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 #include "http_auth.h"

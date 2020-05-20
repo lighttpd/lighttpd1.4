@@ -1,5 +1,9 @@
 /*
- * mod_webdav
+ * mod_webdav - WEBDAV support for lighttpd
+ *
+ * Fully-rewritten from original
+ * Copyright(c) 2019 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
  */
 
 /*

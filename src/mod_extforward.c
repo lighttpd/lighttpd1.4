@@ -21,6 +21,12 @@
  *                  extended, modified by Lionel Elie Mamane (LEM), lionel <at> mamane <dot> lu
  *                  support chained proxies by glen@delfi.ee, #1528
  *
+ *
+ * Mostly rewritten
+ * Portions:
+ * Copyright(c) 2017 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ *
  * Config example:
  *
  *       Trust proxy 10.0.0.232 and 10.0.0.232
