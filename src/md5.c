@@ -1,5 +1,8 @@
 #include "first.h"
 
+#include "sys-crypto-md.h"
+#ifndef USE_LIB_CRYPTO_MD5
+
 /* MD5C.C - RSA Data Security, Inc., MD5 message-digest algorithm
  */
 
@@ -32,11 +35,6 @@ documentation and/or software.
 #define UINT2 uint16_t
 #define POINTER unsigned char *
 
-#if 0 /* Note: not defined here or in lighttpd local "md5.h" */
-#include "sys-crypto.h" /* USE_LIB_CRYPTO */
-#endif
-
-#ifndef USE_LIB_CRYPTO
 #include <string.h>
 
 /* Constants for MD5Transform routine.
@@ -340,4 +338,5 @@ static void MD5_memset (POINTER output, int value, unsigned int len)
  ((char *)output)[i] = (char)value;
 }
 #endif
+
 #endif

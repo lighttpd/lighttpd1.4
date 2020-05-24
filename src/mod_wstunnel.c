@@ -650,8 +650,8 @@ int mod_wstunnel_plugin_init(plugin *p) {
 
 #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
 
-#include "sys-endian.h" /* lighttpd */
-#include "md5.h"        /* lighttpd */
+#include "sys-crypto-md.h"  /* lighttpd */
+#include "sys-endian.h"     /* lighttpd */
 
 static int get_key3(request_st * const r, char *buf) {
     /* 8 bytes should have been sent with request
@@ -787,8 +787,8 @@ static int create_response_ietf_00(handler_ctx *hctx) {
 
 #ifdef _MOD_WEBSOCKET_SPEC_RFC_6455_
 
-#include "algo_sha1.h"  /* lighttpd */
-#include "base64.h"     /* lighttpd */
+#include "sys-crypto-md.h"  /* lighttpd */
+#include "base64.h"         /* lighttpd */
 
 static int create_response_rfc_6455(handler_ctx *hctx) {
     request_st * const r = hctx->gw.r;

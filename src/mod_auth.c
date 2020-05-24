@@ -1,85 +1,15 @@
 #include "first.h"
 
+#include <stdlib.h>
+#include <string.h>
+
+#include "sys-crypto-md.h" /* USE_LIB_CRYPTO */
+
 #include "base.h"
 #include "plugin.h"
 #include "http_auth.h"
 #include "http_header.h"
 #include "log.h"
-
-#include "sys-crypto.h" /* USE_LIB_CRYPTO */
-#ifdef USE_LIB_CRYPTO
-
-#if defined(USE_NETTLE_CRYPTO)
-
-#include <nettle/sha.h>
-typedef struct sha256_ctx SHA256_CTX;
-#define SHA256_Init(ctx) \
-        sha256_init(ctx)
-#define SHA256_Final(digest, ctx) \
-        sha256_digest((ctx),sizeof(digest),(digest))
-static void
-SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
-{
-    sha256_update(ctx, length, data);
-}
-
-#ifndef SHA512_256_DIGEST_LENGTH
-#define SHA512_256_DIGEST_LENGTH 32
-#endif
-typedef struct sha512_ctx SHA512_CTX;
-#define SHA512_256_Init(ctx) \
-        sha512_256_init(ctx)
-#define SHA512_256_Final(digest, ctx) \
-        sha512_256_digest((ctx),sizeof(digest),(digest))
-static void
-SHA512_256_Update(SHA512_CTX *ctx, const void *data, size_t length)
-{
-    sha512_256_update(ctx, length, data);
-}
-
-#elif defined(USE_MBEDTLS_CRYPTO)
-
-#include <mbedtls/sha256.h>
-#ifdef MBEDTLS_SHA256_C
-typedef struct mbedtls_sha256_context SHA256_CTX;
-#define SHA256_Init(ctx) \
-        (mbedtls_sha256_init(ctx), mbedtls_sha256_starts_ret((ctx),0))
-#define SHA256_Final(digest, ctx) \
-        (mbedtls_sha256_finish_ret((ctx),(digest)), mbedtls_sha256_free(ctx))
-static void
-SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
-{
-    mbedtls_sha256_update_ret(ctx, data, length);
-}
-#endif
-
-#elif defined(USE_OPENSSL_CRYPTO)
-
-#include <openssl/sha.h>
-
-#elif defined(USE_GNUTLS_CRYPTO)
-
-#include <gnutls/crypto.h>
-typedef gnutls_hash_hd_t SHA256_CTX;
-#define SHA256_Init(ctx)                                        \
-        do {                                                    \
-            if (gnutls_hash_init((ctx), GNUTLS_DIG_SHA256) < 0) \
-                SEGFAULT();                                     \
-        } while (0)
-#define SHA256_Final(digest, ctx) \
-        gnutls_hash_deinit(*(ctx),(digest))
-static void
-SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
-{
-    gnutls_hash(*ctx, data, length);
-}
-
-#endif
-
-#endif /* USE_LIB_CRYPTO */
-
-#include <stdlib.h>
-#include <string.h>
 
 /**
  * auth framework
@@ -210,7 +140,7 @@ static int mod_auth_algorithm_parse(http_auth_info_t *ai, const char *s) {
             ai->dlen   = HTTP_AUTH_DIGEST_SHA256_BINLEN;
             return 1;
         }
-      #ifdef SHA512_256_DIGEST_LENGTH
+      #ifdef USE_LIB_CRYPTO_SHA512_256
         if (len == 11 && 0 == memcmp(s+4, "512-256", 7)) {
             ai->dalgo |= HTTP_AUTH_DIGEST_SHA512_256;
             ai->dlen   = HTTP_AUTH_DIGEST_SHA512_256_BINLEN;
@@ -579,8 +509,8 @@ int mod_auth_plugin_init(plugin *p) {
  * (could be in separate file from mod_auth.c as long as registration occurs)
  */
 
+#include "sys-crypto-md.h"
 #include "base64.h"
-#include "md5.h"
 #include "rand.h"
 #include "http_header.h"
 
@@ -753,7 +683,7 @@ static void mod_auth_digest_nonce_sha256(buffer *b, time_t cur_ts, int rnd, cons
     buffer_append_string_len(b, hh, sizeof(hh)-1);
 }
 
-#ifdef SHA512_256_DIGEST_LENGTH
+#ifdef USE_LIB_CRYPTO_SHA512_256
 
 static void mod_auth_digest_mutate_sha512_256(http_auth_info_t *ai, const char *m, const char *uri, const char *nonce, const char *cnonce, const char *nc, const char *qop) {
     SHA512_CTX ctx;
@@ -826,7 +756,7 @@ static void mod_auth_digest_nonce_sha512_256(buffer *b, time_t cur_ts, int rnd, 
     buffer_append_string_len(b, hh, sizeof(hh)-1);
 }
 
-#endif /* SHA512_256_DIGEST_LENGTH */
+#endif /* USE_LIB_CRYPTO_SHA512_256 */
 
 #endif /* USE_LIB_CRYPTO */
 
@@ -909,7 +839,7 @@ static void mod_auth_digest_mutate(http_auth_info_t *ai, const char *m, const ch
   #ifdef USE_LIB_CRYPTO
     else if (ai->dalgo & HTTP_AUTH_DIGEST_SHA256)
         mod_auth_digest_mutate_sha256(ai, m, uri, nonce, cnonce, nc, qop);
-   #ifdef SHA512_256_DIGEST_LENGTH
+   #ifdef USE_LIB_CRYPTO_SHA512_256
     else if (ai->dalgo & HTTP_AUTH_DIGEST_SHA512_256)
         mod_auth_digest_mutate_sha512_256(ai, m, uri, nonce, cnonce, nc, qop);
    #endif
@@ -932,7 +862,7 @@ static void mod_auth_append_nonce(buffer *b, time_t cur_ts, const struct http_au
     }
     switch (dalgo) {
      #ifdef USE_LIB_CRYPTO
-      #ifdef SHA512_256_DIGEST_LENGTH
+      #ifdef USE_LIB_CRYPTO_SHA512_256
       case HTTP_AUTH_DIGEST_SHA512_256:
         mod_auth_digest_nonce_sha512_256(b, cur_ts, rnd, nonce_secret);
         break;
@@ -955,7 +885,7 @@ static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const str
     unsigned int algolen[3];
     const char *algoname[3];
   #ifdef USE_LIB_CRYPTO
-   #ifdef SHA512_256_DIGEST_LENGTH
+   #ifdef USE_LIB_CRYPTO_SHA512_256
     if (algos & HTTP_AUTH_DIGEST_SHA512_256) {
         algoid[n] = HTTP_AUTH_DIGEST_SHA512_256;
         algoname[n] = "SHA-512-256";

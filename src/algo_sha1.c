@@ -1,8 +1,8 @@
 #include "first.h"
 typedef int innocuous_typedef_to_quiet_empty_translation_unit_compiler_warning;
 
-#include "sys-crypto.h"
-#ifndef USE_LIB_CRYPTO
+#include "sys-crypto-md.h"
+#ifndef USE_LIB_CRYPTO_SHA1
 
 #include "sys-endian.h"
 #include "algo_sha1.h"

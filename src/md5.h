@@ -2,6 +2,9 @@
 #define LI_MD5_H
 #include "first.h"
 
+#include "sys-crypto-md.h"
+#ifndef USE_LIB_CRYPTO_MD5
+
 /* MD5.H - header file for MD5C.C
  */
 
@@ -41,5 +44,14 @@ typedef struct {
 void li_MD5_Init (li_MD5_CTX *);
 void li_MD5_Update (li_MD5_CTX *, const void *, unsigned int);
 void li_MD5_Final (unsigned char [MD5_DIGEST_LENGTH], li_MD5_CTX *);
+
+#else  /* USE_LIB_CRYPTO_MD5 */
+
+#define li_MD5_CTX    MD5_CTX
+#define li_MD5_Init   MD5_Init
+#define li_MD5_Update MD5_Update
+#define li_MD5_Final  MD5_Final
+
+#endif /* USE_LIB_CRYPTO_MD5 */
 
 #endif

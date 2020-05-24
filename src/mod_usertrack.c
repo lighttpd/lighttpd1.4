@@ -8,10 +8,10 @@
 
 #include "plugin.h"
 
+#include "sys-crypto-md.h"
+
 #include <stdlib.h>
 #include <string.h>
-
-#include "md5.h"
 
 typedef struct {
 	const buffer *cookie_name;

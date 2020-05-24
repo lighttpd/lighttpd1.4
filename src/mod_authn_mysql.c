@@ -23,7 +23,6 @@
 #include "base.h"
 #include "http_auth.h"
 #include "log.h"
-#include "md5.h"
 #include "plugin.h"
 
 #include <stdio.h>
@@ -36,6 +35,8 @@
 #ifdef HAVE_CRYPT_H
 #include <crypt.h>
 #endif
+
+#include "sys-crypto-md.h"
 
 typedef struct {
     int auth_mysql_port;

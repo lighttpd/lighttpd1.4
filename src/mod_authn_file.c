@@ -14,124 +14,18 @@
 # define HAVE_CRYPT
 #endif
 
-#include "sys-crypto.h" /* USE_LIB_CRYPTO */
-#ifdef USE_LIB_CRYPTO
-
-#if defined(USE_NETTLE_CRYPTO)
-
-#include <nettle/md4.h>
-#include <nettle/sha.h>
-
-typedef struct md4_ctx MD4_CTX;
-#define MD4_Init(ctx) \
-        md4_init(ctx)
-#define MD4_Final(digest, ctx) \
-        md4_digest((ctx),sizeof(digest),(digest))
-static void
-MD4_Update(MD4_CTX *ctx, const void *data, size_t length)
-{
-    md4_update(ctx, length, data);
-}
-
-typedef struct sha256_ctx SHA256_CTX;
-#define SHA256_Init(ctx) \
-        sha256_init(ctx)
-#define SHA256_Final(digest, ctx) \
-        sha256_digest((ctx),sizeof(digest),(digest))
-static void
-SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
-{
-    sha256_update(ctx, length, data);
-}
-
-#ifndef SHA512_256_DIGEST_LENGTH
-#define SHA512_256_DIGEST_LENGTH 32
-#endif
-typedef struct sha512_ctx SHA512_CTX;
-#define SHA512_256_Init(ctx) \
-        sha512_256_init(ctx)
-#define SHA512_256_Final(digest, ctx) \
-        sha512_256_digest((ctx),sizeof(digest),(digest))
-static void
-SHA512_256_Update(SHA512_CTX *ctx, const void *data, size_t length)
-{
-    sha512_256_update(ctx, length, data);
-}
-
-#elif defined(USE_MBEDTLS_CRYPTO)
-
-#include <mbedtls/md4.h>
-#ifdef MBEDTLS_MD4_C
-typedef struct mbedtls_md4_context MD4_CTX;
-#define MD4_Init(ctx) \
-        (mbedtls_md4_init(ctx), mbedtls_md4_starts_ret(ctx))
-#define MD4_Final(digest, ctx) \
-        (mbedtls_md4_finish_ret((ctx),(digest)), mbedtls_md4_free(ctx))
-static void
-MD4_Update(MD4_CTX *ctx, const void *data, size_t length)
-{
-    mbedtls_md4_update_ret(ctx, data, length);
-}
-#else /*(mbedTLS built without MD4)*/
-#define NO_MD4
-#endif
-
-#include <mbedtls/sha256.h>
-#ifdef MBEDTLS_SHA256_C
-typedef struct mbedtls_sha256_context SHA256_CTX;
-#define SHA256_Init(ctx) \
-        (mbedtls_sha256_init(ctx), mbedtls_sha256_starts_ret((ctx),0))
-#define SHA256_Final(digest, ctx) \
-        (mbedtls_sha256_finish_ret((ctx),(digest)), mbedtls_sha256_free(ctx))
-static void
-SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
-{
-    mbedtls_sha256_update_ret(ctx, data, length);
-}
-#endif
-
-#elif defined(USE_OPENSSL_CRYPTO)
-
-#include <openssl/md4.h>
-#include <openssl/sha.h>
-
-#elif defined(USE_GNUTLS_CRYPTO)
-
-#include <gnutls/crypto.h>
-#define NO_MD4
-typedef gnutls_hash_hd_t SHA256_CTX;
-#define SHA256_Init(ctx)                                        \
-        do {                                                    \
-            if (gnutls_hash_init((ctx), GNUTLS_DIG_SHA256) < 0) \
-                SEGFAULT();                                     \
-        } while (0)
-#define SHA256_Final(digest, ctx) \
-        gnutls_hash_deinit(*(ctx),(digest))
-static void
-SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
-{
-    gnutls_hash(*ctx, data, length);
-}
-
-#endif
-
-#endif /* USE_LIB_CRYPTO */
+#include "sys-crypto-md.h" /* USE_LIB_CRYPTO */
 
 #include "safe_memclear.h"
-/*(htpasswd)*/
-
 
 #include "base.h"
 #include "plugin.h"
 #include "http_auth.h"
 #include "log.h"
 
-#include "algo_sha1.h"
 #include "base64.h"
-#include "md5.h"
 
 #include <sys/types.h>
-#include <sys/stat.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -270,7 +164,7 @@ static void mod_authn_file_digest_sha256(http_auth_info_t *ai, const char *pw, s
     SHA256_Final(ai->digest, &ctx);
 }
 
-#ifdef SHA512_256_DIGEST_LENGTH
+#ifdef USE_LIB_CRYPTO_SHA512_256
 static void mod_authn_file_digest_sha512_256(http_auth_info_t *ai, const char *pw, size_t pwlen) {
     SHA512_CTX ctx;
     SHA512_256_Init(&ctx);
@@ -303,7 +197,7 @@ static void mod_authn_file_digest(http_auth_info_t *ai, const char *pw, size_t p
   #ifdef USE_LIB_CRYPTO
     else if (ai->dalgo & HTTP_AUTH_DIGEST_SHA256)
         mod_authn_file_digest_sha256(ai, pw, pwlen);
-   #ifdef SHA512_256_DIGEST_LENGTH
+   #ifdef USE_LIB_CRYPTO_SHA512_256
     else if (ai->dalgo & HTTP_AUTH_DIGEST_SHA512_256)
         mod_authn_file_digest_sha512_256(ai, pw, pwlen);
    #endif
@@ -742,8 +636,7 @@ static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, 
             crypt_tmp_data.initialized = 0;
             #endif
            #endif
-           #ifdef USE_LIB_CRYPTO /*(for MD4_*() (e.g. MD4_Update()))*/
-           #ifndef NO_MD4 /*(e.g. wolfSSL built without MD4)*/
+           #ifdef USE_LIB_CRYPTO_MD4 /*(for MD4_*() (e.g. MD4_Update()))*/
             if (0 == memcmp(password->ptr, CONST_STR_LEN("$1+ntlm$"))) {
                 /* CRYPT-MD5-NTLM algorithm
                  * This algorithm allows for the construction of (slight more)
@@ -795,7 +688,6 @@ static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, 
                 }
             }
             else
-           #endif
            #endif
             {
                #if defined(HAVE_CRYPT_R)

@@ -449,7 +449,8 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \
 	configparser.h mod_ssi_exprparser.h \
 	rand.h \
-	sys-crypto.h sys-endian.h sys-mmap.h sys-socket.h sys-strings.h \
+	sys-crypto.h sys-crypto-md.h \
+	sys-endian.h sys-mmap.h sys-socket.h sys-strings.h \
 	mod_cml.h mod_cml_funcs.h \
 	safe_memclear.h sock_addr.h splaytree.h status_counter.h \
 	mod_magnet_cache.h

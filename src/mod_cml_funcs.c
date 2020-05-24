@@ -10,14 +10,14 @@
 
 #include <lauxlib.h>
 
+#include "sys-crypto-md.h"
+
 #include "mod_cml_funcs.h"
 #include "mod_cml.h"
 
 #include "buffer.h"
 #include "log.h"
 #include "plugin.h"
-
-#include "md5.h"
 
 #define HASHLEN 16
 typedef unsigned char HASH[HASHLEN];

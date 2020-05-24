@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "sys-crypto.h"
+#include "sys-crypto-md.h"
 #ifdef USE_LIB_CRYPTO
 #if defined(USE_NETTLE_CRYPTO)
 #include <nettle/hmac.h>
@@ -24,8 +24,6 @@
 #include <gnutls/crypto.h>
 #endif
 #endif
-
-#include "md5.h"
 
 /*
  * mod_secdownload verifies a checksum associated with a timestamp
