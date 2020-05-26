@@ -1759,12 +1759,29 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                 break;
               case 7: /* ssl.empty-fragments */
                 conf.ssl_empty_fragments = (0 != cpv->v.u);
+                log_error(srv->errh, __FILE__, __LINE__, "SSL: "
+                  "ssl.empty-fragments is deprecated and will soon be "
+                  "removed.  If needed, use: ssl.openssl.ssl-conf-cmd = "
+                  "(\"Options\" => \"EmptyFragments\")");
+                log_error(srv->errh, __FILE__, __LINE__, "SSL: "
+                  "ssl.empty-fragments is a "
+                  "counter-measure against a SSL 3.0/TLS 1.0 protocol "
+                  "vulnerability affecting CBC ciphers, which cannot be handled"
+                  " by some broken (Microsoft) SSL implementations.");
                 break;
               case 8: /* ssl.use-sslv2 */
                 conf.ssl_use_sslv2 = (0 != cpv->v.u);
+                log_error(srv->errh, __FILE__, __LINE__, "SSL: "
+                  "ssl.use-sslv2 is deprecated and will soon be removed.  "
+                  "Many modern TLS libraries no longer support SSLv2.");
                 break;
               case 9: /* ssl.use-sslv3 */
                 conf.ssl_use_sslv3 = (0 != cpv->v.u);
+                log_error(srv->errh, __FILE__, __LINE__, "SSL: "
+                  "ssl.use-sslv3 is deprecated and will soon be removed.  "
+                  "Many modern TLS libraries no longer support SSLv3.  "
+                  "If needed, use: "
+                  "ssl.openssl.ssl-conf-cmd = (\"MinProtocol\" => \"SSLv3\")");
                 break;
               default:/* should not happen */
                 break;
