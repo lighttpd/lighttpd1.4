@@ -972,7 +972,10 @@ mod_openssl_client_hello_cb (SSL *ssl, int *al, void *srv)
         && (size_t)((name[0] << 8) + name[1]) == len-2
         && name[2] == TLSEXT_TYPE_server_name
         && (slen = (name[3] << 8) + name[4]) <= len-5) { /*(first)*/
+        int read_ahead = hctx->conf.ssl_read_ahead;
         int rc = mod_openssl_SNI(hctx, (const char *)name+5, slen);
+        if (!read_ahead && hctx->conf.ssl_read_ahead)
+            SSL_set_read_ahead(ssl, hctx->conf.ssl_read_ahead);
         if (rc == SSL_TLSEXT_ERR_OK)
             return SSL_CLIENT_HELLO_SUCCESS;
     }
@@ -990,9 +993,13 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
     UNUSED(srv);
 
     const char *servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
-    return (NULL != servername)
-      ? mod_openssl_SNI(hctx, servername, strlen(servername))
-      : SSL_TLSEXT_ERR_NOACK; /* client did not provide SNI */
+    if (NULL == servername)
+        return SSL_TLSEXT_ERR_NOACK; /* client did not provide SNI */
+    int read_ahead = hctx->conf.ssl_read_ahead;
+    int rc = mod_openssl_SNI(hctx, servername, strlen(servername));
+    if (!read_ahead && hctx->conf.ssl_read_ahead)
+        SSL_set_read_ahead(ssl, hctx->conf.ssl_read_ahead);
+    return rc;
 }
 #endif
 #endif
