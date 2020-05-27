@@ -1096,7 +1096,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
 
 #ifndef OPENSSL_NO_TLSEXT
 
-#if OPENSSL_VERSION_NUMBER >= 0x10002000
+#ifdef TLSEXT_TYPE_application_layer_protocol_negotiation
 
 static int
 mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
@@ -1260,7 +1260,7 @@ mod_openssl_alpn_select_cb (SSL *ssl, const unsigned char **out, unsigned char *
   #endif
 }
 
-#endif /* OPENSSL_VERSION_NUMBER >= 0x10002000 */
+#endif /* TLSEXT_TYPE_application_layer_protocol_negotiation */
 
 #endif /* OPENSSL_NO_TLSEXT */
 
@@ -1645,7 +1645,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         }
        #endif
 
-       #if OPENSSL_VERSION_NUMBER >= 0x10002000
+       #ifdef TLSEXT_TYPE_application_layer_protocol_negotiation
         SSL_CTX_set_alpn_select_cb(s->ssl_ctx,mod_openssl_alpn_select_cb,NULL);
        #endif
       #endif
@@ -2351,7 +2351,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
             return -1;
         }
 
-      #if OPENSSL_VERSION_NUMBER >= 0x10002000
+      #ifdef TLSEXT_TYPE_application_layer_protocol_negotiation
         if (hctx->alpn) {
             if (hctx->alpn == MOD_OPENSSL_ALPN_ACME_TLS_1) {
                 chunkqueue_reset(cq);
