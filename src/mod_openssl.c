@@ -109,6 +109,7 @@ typedef struct {
     unsigned char ssl_verifyclient_enforce;
     unsigned char ssl_verifyclient_depth;
     unsigned char ssl_read_ahead;
+    unsigned char ssl_disable_client_renegotiation;
 } plugin_config_socket; /*(used at startup during configuration)*/
 
 typedef struct {
@@ -1391,6 +1392,11 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             return -1;
         }
 
+      #ifdef SSL_OP_NO_RENEGOTIATION /* openssl 1.1.0 */
+        if (s->ssl_disable_client_renegotiation)
+            ssloptions |= SSL_OP_NO_RENEGOTIATION;
+      #endif
+
         /* completely useless identifier;
          * required for client cert verification to work with sessions */
         if (0 == SSL_CTX_set_session_id_context(
@@ -1829,6 +1835,9 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                     break;
                   case 5: /* ssl.read-ahead */
                     conf.ssl_read_ahead = (0 != cpv->v.u);
+                    break;
+                  case 6: /* ssl.disable-client-renegotiation */
+                    conf.ssl_disable_client_renegotiation = (0 != cpv->v.u);
                     break;
                   case 7: /* ssl.verifyclient.activate */
                     conf.ssl_verifyclient = (0 != cpv->v.u);
