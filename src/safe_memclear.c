@@ -15,6 +15,10 @@
  && !defined(HAVE_EXPLICIT_MEMSET) \
  && !defined(HAVE_SECUREZEROMEMORY)
 
+typedef void *(*safe_memclear_func_t)(void *, int, size_t);
+extern volatile safe_memclear_func_t safe_memclear_func;
+volatile safe_memclear_func_t safe_memclear_func = memset;
+
 #  if defined(HAVE_WEAK_SYMBOLS)
 /* it seems weak functions are never inlined, even for static builds */
 __attribute__((weak)) void __li_safe_memset_hook(void *buf, size_t len);
@@ -33,7 +37,7 @@ static void* safe_memset(void *s, int c, size_t n)
 		volatile unsigned char *vs = (volatile unsigned char*)s;
 
 		do {
-			memset(s, c, n);
+			safe_memclear_func(s, c, n);
 		} while (vs[volatile_zero] != (unsigned char)c);
 #  if defined(HAVE_WEAK_SYMBOLS)
 		__li_safe_memset_hook(s, n);
