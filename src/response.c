@@ -63,7 +63,10 @@ int http_response_write_header(request_st * const r) {
 		r->keep_alive = 0;
 	} else if (0 != r->reqbody_length
 		   && r->reqbody_length != r->reqbody_queue->bytes_in
-		   && (NULL == r->handler_module || 0 == r->conf.stream_request_body)) {
+		   && (NULL == r->handler_module
+		       || 0 == (r->conf.stream_request_body
+		                & (FDEVENT_STREAM_REQUEST
+		                   | FDEVENT_STREAM_REQUEST_BUFMIN)))) {
 		r->keep_alive = 0;
 	} else {
 		r->con->keep_alive_idle = r->conf.max_keep_alive_idle;

@@ -7,6 +7,7 @@
 #include "base.h"
 #include "array.h"
 #include "buffer.h"
+#include "fdevent.h"
 #include "http_kv.h"
 #include "http_header.h"
 #include "log.h"
@@ -869,7 +870,9 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(&r->target), &hctx->conf.header, 1);
 
 	int stream_chunked = 0;
-	if (-1 == r->reqbody_length && r->conf.stream_request_body) {
+	if (-1 == r->reqbody_length
+	    && (r->conf.stream_request_body
+	        & (FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN))) {
 		stream_chunked = 1;
 		hctx->gw.stdin_append = proxy_stdin_append;
 	}
