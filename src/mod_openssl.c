@@ -49,6 +49,7 @@
 #include <openssl/objects.h>
 #include <openssl/pem.h>
 #include <openssl/rand.h>
+#include <openssl/tls1.h>
 #ifndef OPENSSL_NO_DH
 #include <openssl/dh.h>
 #endif
@@ -176,67 +177,137 @@ handler_ctx_free (handler_ctx *hctx)
 
 
 #ifdef TLSEXT_TYPE_session_ticket
+/* ssl/ssl_local.h */
+#define TLSEXT_KEYNAME_LENGTH  16
+#define TLSEXT_TICK_KEY_LENGTH 32
+
+/* openssl has a huge number of interfaces, but not the most useful;
+ * construct our own session ticket encryption key structure */
+typedef struct tlsext_ticket_key_st {
+    time_t active_ts; /* tickets not issued w/ key until activation timestamp */
+    time_t expire_ts; /* key not valid after expiration timestamp */
+    unsigned char tick_key_name[TLSEXT_KEYNAME_LENGTH];
+    unsigned char tick_hmac_key[TLSEXT_TICK_KEY_LENGTH];
+    unsigned char tick_aes_key[TLSEXT_TICK_KEY_LENGTH];
+} tlsext_ticket_key_t;
+
+static tlsext_ticket_key_t session_ticket_keys[4];
 static time_t stek_rotate_ts;
 
-static void
-mod_openssl_session_ticket_key_rotate (server * const srv, const plugin_data * const p)
+
+static int
+mod_openssl_session_ticket_key_generate (time_t active_ts, time_t expire_ts)
 {
-    /* server ticket encryption key (STEK) is *per-SSL_CTX* in openssl
-     *   and keys are initially created in SSL_CTX_new()
-     * SSL_CTX_set_tlsext_ticket_keys() is an openssl interface,
-     *   but how to construct its arguments is not well documented.
-     * See openssl ssl/s3_lib.c
-     *   case SSL_CTRL_SET_TLSEXT_TICKET_KEYS:
-     * In openssl 1.1.x
-     *   ssl/ssl_local.h
-     *     TLSEXT_KEYNAME_LENGTH  16
-     *     TLSEXT_TICK_KEY_LENGTH 32
-     *   private SSL_CTX data members:
-     *     ssl_ctx->ext.tick_key_name          TLSEXT_KEYNAME_LENGTH
-     *     ssl_ctx->ext.secure->tick_hmac_key  TLSEXT_TICK_KEY_LENGTH
-     *     ssl_ctx->ext.secure->tick_aes_key   TLSEXT_TICK_KEY_LENGTH
-     * In openssl 1.0.x, each element is 16 bytes (TLSEXT_TICK_KEY_LENGTH 16)
-     *
-     * openssl RAND_*bytes() functions are called multiple times since the
+    /* openssl RAND_*bytes() functions are called multiple times since the
      * funcs might have a 32-byte limit on number of bytes returned each call
      *
-     * (Note: session ticket encryption key rotation is not expected to fail)
+     * (Note: session ticket encryption key generation is not expected to fail)
+     *
+     * 3 keys are stored in session_ticket_keys[]
+     * The 4th element of session_ticket_keys[] is used for STEK construction
      */
-    int rc = 1;
-  #if OPENSSL_VERSION_NUMBER < 0x10100000L
-    unsigned char keys[16+16+16];
-    if (RAND_bytes(keys,16) <= 0
-        || RAND_bytes(keys+16,16) <= 0
-        || RAND_bytes(keys+16+16,16) <= 0)
-  #else
     /*(RAND_priv_bytes() not in openssl 1.1.0; introduced in openssl 1.1.1)*/
-    #if OPENSSL_VERSION_NUMBER < 0x10101000L
-    #define RAND_priv_bytes(x,sz) RAND_bytes((x),(sz))
-    #endif
-    unsigned char keys[16+32+32];
-    if (RAND_bytes(keys,16) <= 0
-        || RAND_priv_bytes(keys+16,32) <= 0
-        || RAND_priv_bytes(keys+16+32,32) <= 0)
+  #if OPENSSL_VERSION_NUMBER < 0x10101000L
+  #define RAND_priv_bytes(x,sz) RAND_bytes((x),(sz))
   #endif
-        rc = 0;
-
-    const size_t sz = sizeof(keys);
-
-    for (uint32_t i = 0; i < srv->config_context->used; ++i) {
-        plugin_ssl_ctx * const s = p->ssl_ctxs + i;
-        if (!s->ssl_ctx) continue;
-        if (SSL_CTX_get_options(s->ssl_ctx) & SSL_OP_NO_TICKET) continue;
-        if (!rc || 1 != SSL_CTX_set_tlsext_ticket_keys(s->ssl_ctx, keys, sz)) {
-            /*(disable session tickets rather than continue to use aging keys)*/
-            long opts = SSL_CTX_get_options(s->ssl_ctx) | SSL_OP_NO_TICKET;
-            SSL_CTX_set_options(s->ssl_ctx, opts);
-            log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: STEK rotation failed; disabling session tickets");
-        }
-    }
-
-    OPENSSL_cleanse(keys, sizeof(keys));
+    if (RAND_bytes(session_ticket_keys[3].tick_key_name,
+                   TLSEXT_KEYNAME_LENGTH) <= 0
+        || RAND_priv_bytes(session_ticket_keys[3].tick_hmac_key,
+                           TLSEXT_TICK_KEY_LENGTH) <= 0
+        || RAND_priv_bytes(session_ticket_keys[3].tick_aes_key,
+                           TLSEXT_TICK_KEY_LENGTH) <= 0)
+        return 0;
+    session_ticket_keys[3].active_ts = active_ts;
+    session_ticket_keys[3].expire_ts = expire_ts;
+    return 1;
 }
+
+
+static void
+mod_openssl_session_ticket_key_rotate (void)
+{
+    /* discard oldest key (session_ticket_keys[2]) and put newest key first
+     * 3 keys are stored in session_ticket_keys[0], [1], [2]
+     * session_ticket_keys[3] is used to construct and pass new STEK */
+
+    session_ticket_keys[2] = session_ticket_keys[1];
+    session_ticket_keys[1] = session_ticket_keys[0];
+    /*memmove(session_ticket_keys+1,
+              session_ticket_keys+0, sizeof(tlsext_ticket_key_t)*2);*/
+    session_ticket_keys[0] = session_ticket_keys[3];
+
+    /* session_ticket_keys[] is entirely wiped in mod_openssl_free_openssl() */
+    /*OPENSSL_cleanse(session_ticket_keys+3, sizeof(tlsext_ticket_key_t));*/
+}
+
+
+static tlsext_ticket_key_t *
+tlsext_ticket_key_get (void)
+{
+    const time_t cur_ts = log_epoch_secs;
+    const int e = sizeof(session_ticket_keys)/sizeof(*session_ticket_keys) - 1;
+    for (int i = 0; i < e; ++i) {
+        if (session_ticket_keys[i].active_ts > cur_ts) continue;
+        if (session_ticket_keys[i].expire_ts < cur_ts) continue;
+        return &session_ticket_keys[i];
+    }
+    return NULL;
+}
+
+
+static tlsext_ticket_key_t *
+tlsext_ticket_key_find (unsigned char key_name[16], int *refresh)
+{
+    *refresh = 0;
+    const time_t cur_ts = log_epoch_secs;
+    const int e = sizeof(session_ticket_keys)/sizeof(*session_ticket_keys) - 1;
+    for (int i = 0; i < e; ++i) {
+        if (session_ticket_keys[i].expire_ts < cur_ts) continue;
+        if (0 == memcmp(session_ticket_keys[i].tick_key_name, key_name, 16))
+            return &session_ticket_keys[i];
+        if (session_ticket_keys[i].active_ts <= cur_ts)
+            *refresh = 1; /* newer active key is available */
+    }
+    return NULL;
+}
+
+
+/* based on reference implementation from openssl 1.1.1g man page
+ *   man SSL_CTX_set_tlsext_ticket_key_cb
+ * but openssl code uses EVP_aes_256_cbc() instead of EVP_aes_128_cbc()
+ */
+static int
+ssl_tlsext_ticket_key_cb (SSL *s, unsigned char key_name[16],
+                          unsigned char iv[EVP_MAX_IV_LENGTH],
+                          EVP_CIPHER_CTX *ctx, HMAC_CTX *hctx, int enc)
+{
+    UNUSED(s);
+    if (enc) { /* create new session */
+        tlsext_ticket_key_t *k = tlsext_ticket_key_get();
+        if (NULL == k)
+            return 0; /* current key does not exist or is not valid */
+        memcpy(key_name, k->tick_key_name, 16);
+        if (RAND_bytes(iv, EVP_MAX_IV_LENGTH) <= 0)
+            return -1; /* insufficient random */
+        EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, k->tick_aes_key, iv);
+        HMAC_Init_ex(hctx, k->tick_hmac_key, sizeof(k->tick_hmac_key),
+                     EVP_sha256(), NULL);
+        return 1;
+    }
+    else { /* retrieve session */
+        int refresh;
+        tlsext_ticket_key_t *k = tlsext_ticket_key_find(key_name, &refresh);
+        if (NULL == k)
+            return 0;
+        HMAC_Init_ex(hctx, k->tick_hmac_key, sizeof(k->tick_hmac_key),
+                     EVP_sha256(), NULL);
+        EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, k->tick_aes_key, iv);
+        return refresh ? 2 : 1;
+        /* 'refresh' will trigger issuing new ticket for session
+         * even though the current ticket is still valid */
+    }
+}
+
 #endif /* TLSEXT_TYPE_session_ticket */
 
 
@@ -284,6 +355,11 @@ static int mod_openssl_init_once_openssl (server *srv)
 static void mod_openssl_free_openssl (void)
 {
     if (!ssl_is_init) return;
+
+  #ifdef TLSEXT_TYPE_session_ticket
+    OPENSSL_cleanse(session_ticket_keys, sizeof(session_ticket_keys));
+    stek_rotate_ts = 0;
+  #endif
 
   #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
    && !defined(LIBRESSL_VERSION_NUMBER)
@@ -1562,6 +1638,10 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       #endif
       #endif
 
+      #ifdef TLSEXT_TYPE_session_ticket
+        SSL_CTX_set_tlsext_ticket_key_cb(s->ssl_ctx, ssl_tlsext_ticket_key_cb);
+      #endif
+
       #if OPENSSL_VERSION_NUMBER >= 0x10002000
 
         SSL_CTX_set_cert_cb(s->ssl_ctx, mod_openssl_cert_cb, NULL);
@@ -1900,8 +1980,11 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
 
   #ifdef TLSEXT_TYPE_session_ticket
     if (rc == HANDLER_GO_ON) {
-        mod_openssl_session_ticket_key_rotate(srv, p);
-        stek_rotate_ts = log_epoch_secs;
+        const time_t cur_ts = log_epoch_secs;
+        if (mod_openssl_session_ticket_key_generate(cur_ts, cur_ts + 86400)) {
+            mod_openssl_session_ticket_key_rotate();
+            stek_rotate_ts = cur_ts;
+        }
     }
   #endif
 
@@ -2850,8 +2933,9 @@ TRIGGER_FUNC(mod_openssl_handle_trigger) {
     UNUSED(p);
 
   #ifdef TLSEXT_TYPE_session_ticket
-    if (cur_ts - 86400 >= stek_rotate_ts) {  /*(24 hours)*/
-        mod_openssl_session_ticket_key_rotate(srv, p);
+    if (cur_ts - 28800 >= stek_rotate_ts     /*(8 hours)*/
+        && mod_openssl_session_ticket_key_generate(cur_ts, cur_ts + 86400)) {
+        mod_openssl_session_ticket_key_rotate();
         stek_rotate_ts = cur_ts;
     }
   #endif
