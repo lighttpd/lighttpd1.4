@@ -10,23 +10,30 @@
  *
  * Note: If session tickets are -not- disabled with
  *     ssl.openssl.ssl-conf-cmd = ("Options" => "-SessionTicket")
- *   mod_openssl rotates server ticket encryption key (STEK) every 24 hours.
+ *   mod_openssl rotates server ticket encryption key (STEK) every 8 hours
+ *   and keeps the prior two STEKs around, so ticket lifetime is 24 hours.
  *   This is fine for use with a single lighttpd instance, but with multiple
  *   lighttpd workers, no coordinated STEK (server ticket encryption key)
- *   rotation occurs other than by (some external job) restarting lighttpd.
- *   Restarting lighttpd generates a new key that is shared by lighttpd workers
- *   for the lifetime of the new key.  If the rotation period expires and
- *   lighttpd has not been restarted, lighttpd workers will generate new
+ *   rotation occurs unless ssl.stek-file is defined and maintained (preferred),
+ *   or if some external job restarts lighttpd.  Restarting lighttpd generates a
+ *   new key that is shared by lighttpd workers for the lifetime of the new key.
+ *   If the rotation period expires and lighttpd has not been restarted, and if
+ *   ssl.stek-file is not in use, then lighttpd workers will generate new
  *   independent keys, making session tickets less effective for session
  *   resumption, since clients have a lower chance for future connections to
  *   reach the same lighttpd worker.  However, things will still work, and a new
  *   session will be created if session resumption fails.  Admins should plan to
- *   restart lighttpd at least every 24 hours if session tickets are enabled and
- *   multiple lighttpd workers are configured.
+ *   restart lighttpd at least every 8 hours if session tickets are enabled and
+ *   multiple lighttpd workers are configured.  Since that is likely disruptive,
+ *   if multiple lighttpd workers are configured, ssl.stek-file should be
+ *   defined and the file maintained externally.
  */
 #include "first.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -65,6 +72,7 @@
 #endif
 
 #include "base.h"
+#include "fdevent.h"
 #include "http_header.h"
 #include "log.h"
 #include "plugin.h"
@@ -137,6 +145,7 @@ typedef struct {
     plugin_config defaults;
     server *srv;
     array *cafiles;
+    const char *ssl_stek_file;
 } plugin_data;
 
 static int ssl_is_init;
@@ -236,8 +245,7 @@ mod_openssl_session_ticket_key_rotate (void)
               session_ticket_keys+0, sizeof(tlsext_ticket_key_t)*2);*/
     session_ticket_keys[0] = session_ticket_keys[3];
 
-    /* session_ticket_keys[] is entirely wiped in mod_openssl_free_openssl() */
-    /*OPENSSL_cleanse(session_ticket_keys+3, sizeof(tlsext_ticket_key_t));*/
+    OPENSSL_cleanse(session_ticket_keys+3, sizeof(tlsext_ticket_key_t));
 }
 
 
@@ -269,6 +277,18 @@ tlsext_ticket_key_find (unsigned char key_name[16], int *refresh)
             *refresh = 1; /* newer active key is available */
     }
     return NULL;
+}
+
+
+static void
+tlsext_ticket_wipe_expired (const time_t cur_ts)
+{
+    const int e = sizeof(session_ticket_keys)/sizeof(*session_ticket_keys) - 1;
+    for (int i = 0; i < e; ++i) {
+        if (session_ticket_keys[i].expire_ts != 0
+            && session_ticket_keys[i].expire_ts < cur_ts)
+            OPENSSL_cleanse(session_ticket_keys+i, sizeof(tlsext_ticket_key_t));
+    }
 }
 
 
@@ -305,6 +325,80 @@ ssl_tlsext_ticket_key_cb (SSL *s, unsigned char key_name[16],
         return refresh ? 2 : 1;
         /* 'refresh' will trigger issuing new ticket for session
          * even though the current ticket is still valid */
+    }
+}
+
+
+static int
+mod_openssl_session_ticket_key_file (const char *fn)
+{
+    /* session ticket encryption key (STEK)
+     *
+     * STEK file should be stored in non-persistent storage,
+     *   e.g. /dev/shm/lighttpd/stek-file  (in memory)
+     * with appropriate permissions set to keep stek-file from being
+     * read by other users.  Where possible, systems should also be
+     * configured without swap.
+     *
+     * admin should schedule an independent job to periodically
+     *   generate new STEK up to 3 times during key lifetime
+     *   (lighttpd stores up to 3 keys)
+     *
+     * format of binary file is:
+     *    4-byte - format version (always 0; for use if format changes)
+     *    4-byte - activation timestamp
+     *    4-byte - expiration timestamp
+     *   16-byte - session ticket key name
+     *   32-byte - session ticket HMAC encrpytion key
+     *   32-byte - session ticket AES encrpytion key
+     *
+     * STEK file can be created with a command such as:
+     *   dd if=/dev/random bs=1 count=80 status=none | \
+     *     perl -e 'print pack("iii",0,time()+300,time()+86400),<>' \
+     *     > STEK-file.$$ && mv STEK-file.$$ STEK-file
+     *
+     * The above delays activation time by 5 mins (+300 sec) to allow file to
+     * be propagated to other machines.  (admin must handle this independently)
+     * If STEK generation is performed immediately prior to starting lighttpd,
+     * admin should activate keys immediately (without +300).
+     */
+    int buf[23]; /* 92 bytes */
+    int fd = fdevent_open_cloexec(fn, 1, O_RDONLY, 0);
+    if (fd < 0)
+        return 0;
+
+    ssize_t rd = read(fd, buf, sizeof(buf));
+    close(fd);
+
+    int rc = 0; /*(will retry on next check interval upon any error)*/
+    if (rd == sizeof(buf) && buf[0] == 0) { /*(format version 0)*/
+        session_ticket_keys[3].active_ts = buf[1];
+        session_ticket_keys[3].expire_ts = buf[2];
+        memcpy(&session_ticket_keys[3].tick_key_name, buf+3, 80);
+        rc = 1;
+    }
+
+    OPENSSL_cleanse(buf, sizeof(buf));
+    return rc;
+}
+
+
+static void
+mod_openssl_session_ticket_key_check (const plugin_data *p, const time_t cur_ts)
+{
+    int rotate = 0;
+    if (p->ssl_stek_file) {
+        struct stat st;
+        if (0 == stat(p->ssl_stek_file, &st) && st.st_mtime > stek_rotate_ts)
+            rotate = mod_openssl_session_ticket_key_file(p->ssl_stek_file);
+        tlsext_ticket_wipe_expired(cur_ts);
+    }
+    else if (cur_ts - 28800 >= stek_rotate_ts)     /*(8 hours)*/
+        rotate = mod_openssl_session_ticket_key_generate(cur_ts, cur_ts+86400);
+
+    if (rotate) {
+        mod_openssl_session_ticket_key_rotate();
+        stek_rotate_ts = cur_ts;
     }
 }
 
@@ -468,7 +562,6 @@ BIO_new_rdonly_file (const char *file)
 #else  /* !OPENSSL_NO_POSIX_IO */
 
 #include <fcntl.h>
-#include "fdevent.h"
 static BIO *
 BIO_new_rdonly_file (const char *file)
 {
@@ -1775,6 +1868,9 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
      ,{ CONST_STR_LEN("ssl.use-sslv3"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.stek-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_SERVER }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -1871,6 +1967,10 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                   "Many modern TLS libraries no longer support SSLv3.  "
                   "If needed, use: "
                   "ssl.openssl.ssl-conf-cmd = (\"MinProtocol\" => \"SSLv3\")");
+                break;
+              case 10:/* ssl.stek-file */
+                if (!buffer_is_empty(cpv->v.b))
+                    p->ssl_stek_file = cpv->v.b->ptr;
                 break;
               default:/* should not happen */
                 break;
@@ -1979,13 +2079,8 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
     }
 
   #ifdef TLSEXT_TYPE_session_ticket
-    if (rc == HANDLER_GO_ON) {
-        const time_t cur_ts = log_epoch_secs;
-        if (mod_openssl_session_ticket_key_generate(cur_ts, cur_ts + 86400)) {
-            mod_openssl_session_ticket_key_rotate();
-            stek_rotate_ts = cur_ts;
-        }
-    }
+    if (rc == HANDLER_GO_ON && ssl_is_init)
+        mod_openssl_session_ticket_key_check(p, log_epoch_secs);
   #endif
 
     free(srvplug.cvlist);
@@ -2933,11 +3028,7 @@ TRIGGER_FUNC(mod_openssl_handle_trigger) {
     UNUSED(p);
 
   #ifdef TLSEXT_TYPE_session_ticket
-    if (cur_ts - 28800 >= stek_rotate_ts     /*(8 hours)*/
-        && mod_openssl_session_ticket_key_generate(cur_ts, cur_ts + 86400)) {
-        mod_openssl_session_ticket_key_rotate();
-        stek_rotate_ts = cur_ts;
-    }
+    mod_openssl_session_ticket_key_check(p, cur_ts);
   #endif
 
     return HANDLER_GO_ON;
