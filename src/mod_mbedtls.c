@@ -24,25 +24,32 @@
  * - session cache (though session tickets are implemented)
  *     sample code in mbedtls:programs/ssl/ssl_server2.c
  *
- * Note: session tickets are disabled by default
- *   If enabled, mbedtls rotates the session ticket key according to 2x timeout
- *   set with mbedtls_ssl_ticket_setup() (currently 43200 sec in mod_mbedtls).
+ * Note: If session tickets are -not- disabled with
+ *     ssl.openssl.ssl-conf-cmd = ("Options" => "-SessionTicket")
+ *   mbedtls rotates the session ticket key according to 2x timeout set with
+ *   mbedtls_ssl_ticket_setup() (currently 43200 s, so 24 hour ticket lifetime)
  *   This is fine for use with a single lighttpd instance, but with multiple
  *   lighttpd workers, no coordinated STEK (server ticket encryption key)
- *   rotation occurs other than by (some external job) restarting lighttpd.
- *   Restarting lighttpd generates a new key that is shared by lighttpd workers
- *   for the lifetime of the new key.  If the rotation period expires and
- *   lighttpd has not been restarted, lighttpd workers will generate new
+ *   rotation occurs unless ssl.stek-file is defined and maintained (preferred),
+ *   or if some external job restarts lighttpd.  Restarting lighttpd generates a
+ *   new key that is shared by lighttpd workers for the lifetime of the new key.
+ *   If the rotation period expires and lighttpd has not been restarted, and if
+ *   ssl.stek-file is not in use, then lighttpd workers will generate new
  *   independent keys, making session tickets less effective for session
  *   resumption, since clients have a lower chance for future connections to
  *   reach the same lighttpd worker.  However, things will still work, and a new
  *   session will be created if session resumption fails.  Admins should plan to
- *   restart lighttpd at least every 24 hours if session tickets are enabled and
- *   multiple lighttpd workers are configured.
+ *   restart lighttpd at least every 12 hours if session tickets are enabled and
+ *   multiple lighttpd workers are configured.  Since that is likely disruptive,
+ *   if multiple lighttpd workers are configured, ssl.stek-file should be
+ *   defined and the file maintained externally.
  */
 #include "first.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>      /* vsnprintf() */
@@ -76,6 +83,7 @@
 #endif
 
 #include "base.h"
+#include "fdevent.h"
 #include "http_header.h"
 #include "log.h"
 #include "plugin.h"
@@ -157,6 +165,7 @@ typedef struct {
     mbedtls_entropy_context entropy;
   #if defined(MBEDTLS_SSL_SESSION_TICKETS)
     mbedtls_ssl_ticket_context ticket_ctx;
+    const char *ssl_stek_file;
   #endif
 } plugin_data;
 
@@ -240,6 +249,120 @@ static void elogf(log_error_st * const errh,
 }
 
 
+#ifdef MBEDTLS_SSL_SESSION_TICKETS
+
+#define TLSEXT_KEYNAME_LENGTH  16
+#define TLSEXT_TICK_KEY_LENGTH 32
+
+/* construct our own session ticket encryption key structure
+ * to store keys that are not yet active
+ * (mirror from mod_openssl, even though not all bits are used here) */
+typedef struct tlsext_ticket_key_st {
+    time_t active_ts; /* tickets not issued w/ key until activation timestamp */
+    time_t expire_ts; /* key not valid after expiration timestamp */
+    unsigned char tick_key_name[TLSEXT_KEYNAME_LENGTH];
+    unsigned char tick_hmac_key[TLSEXT_TICK_KEY_LENGTH];
+    unsigned char tick_aes_key[TLSEXT_TICK_KEY_LENGTH];
+} tlsext_ticket_key_t;
+
+static tlsext_ticket_key_t session_ticket_keys[1]; /* temp store until active */
+static time_t stek_rotate_ts;
+
+
+static int
+mod_mbedtls_session_ticket_key_file (const char *fn)
+{
+    /* session ticket encryption key (STEK)
+     *
+     * STEK file should be stored in non-persistent storage,
+     *   e.g. /dev/shm/lighttpd/stek-file  (in memory)
+     * with appropriate permissions set to keep stek-file from being
+     * read by other users.  Where possible, systems should also be
+     * configured without swap.
+     *
+     * admin should schedule an independent job to periodically
+     *   generate new STEK up to 3 times during key lifetime
+     *   (lighttpd stores up to 3 keys)
+     *
+     * format of binary file is:
+     *    4-byte - format version (always 0; for use if format changes)
+     *    4-byte - activation timestamp
+     *    4-byte - expiration timestamp
+     *   16-byte - session ticket key name
+     *   32-byte - session ticket HMAC encrpytion key
+     *   32-byte - session ticket AES encrpytion key
+     *
+     * STEK file can be created with a command such as:
+     *   dd if=/dev/random bs=1 count=80 status=none | \
+     *     perl -e 'print pack("iii",0,time()+300,time()+86400),<>' \
+     *     > STEK-file.$$ && mv STEK-file.$$ STEK-file
+     *
+     * The above delays activation time by 5 mins (+300 sec) to allow file to
+     * be propagated to other machines.  (admin must handle this independently)
+     * If STEK generation is performed immediately prior to starting lighttpd,
+     * admin should activate keys immediately (without +300).
+     */
+    int buf[23]; /* 92 bytes */
+    int fd = fdevent_open_cloexec(fn, 1, O_RDONLY, 0);
+    if (fd < 0)
+        return 0;
+
+    ssize_t rd = read(fd, buf, sizeof(buf));
+    close(fd);
+
+    int rc = 0; /*(will retry on next check interval upon any error)*/
+    if (rd == sizeof(buf) && buf[0] == 0) { /*(format version 0)*/
+        session_ticket_keys[0].active_ts = buf[1];
+        session_ticket_keys[0].expire_ts = buf[2];
+        memcpy(&session_ticket_keys[0].tick_key_name, buf+3, 80);
+        rc = 1;
+    }
+
+    mbedtls_platform_zeroize(buf, sizeof(buf));
+    return rc;
+}
+
+
+static void
+mod_mbedtls_session_ticket_key_check (plugin_data *p, const time_t cur_ts)
+{
+    if (NULL == p->ssl_stek_file) return;
+
+    struct stat st;
+    if (0 == stat(p->ssl_stek_file, &st) && st.st_mtime > stek_rotate_ts
+        && mod_mbedtls_session_ticket_key_file(p->ssl_stek_file)) {
+        stek_rotate_ts = cur_ts;
+    }
+
+    tlsext_ticket_key_t *stek = session_ticket_keys;
+    if (stek->active_ts != 0 && stek->active_ts - 63 <= cur_ts) {
+        /* expect to get newer ssl.stek-file prior to mbedtls detecting
+         * expiration and internally generating a new key.  If not, then
+         * lifetime may be up to 2x specified lifetime until overwritten
+         * by mbedtls, but original key will be overwritten and discarded */
+        mbedtls_ssl_ticket_context *ctx = &p->ticket_ctx;
+        ctx->ticket_lifetime = stek->expire_ts - stek->active_ts;
+        ctx->active = 1 - ctx->active;
+        mbedtls_ssl_ticket_key *key = ctx->keys + ctx->active;
+        /* set generation_time to cur_ts instead of stek->active_ts
+         * since ctx->active was updated */
+        key->generation_time = cur_ts;
+        memcpy(key->name, stek->tick_key_name, sizeof(key->name));
+        /* With GCM and CCM, same context can encrypt & decrypt */
+        int rc = mbedtls_cipher_setkey(&key->ctx, stek->tick_aes_key,
+                                       mbedtls_cipher_get_key_bitlen(&key->ctx),
+                                       MBEDTLS_ENCRYPT);
+        if (0 != rc) { /* expire key immediately if error occurs */
+            key->generation_time = cur_ts - ctx->ticket_lifetime - 1;
+            ctx->active = 1 - ctx->active;
+        }
+        mbedtls_platform_zeroize(stek, sizeof(tlsext_ticket_key_t));
+    }
+}
+
+#endif /* MBEDTLS_SSL_SESSION_TICKETS */
+
+
 INIT_FUNC(mod_mbedtls_init)
 {
     plugin_data_singleton = (plugin_data *)calloc(1, sizeof(plugin_data));
@@ -281,6 +404,9 @@ static int mod_mbedtls_init_once_mbedtls (server *srv)
 static void mod_mbedtls_free_mbedtls (void)
 {
     if (!ssl_is_init) return;
+
+    mbedtls_platform_zeroize(session_ticket_keys, sizeof(session_ticket_keys));
+    stek_rotate_ts = 0;
 
     plugin_data * const p = plugin_data_singleton;
     mbedtls_ctr_drbg_free(&p->ctr_drbg);
@@ -1105,6 +1231,9 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
      ,{ CONST_STR_LEN("ssl.use-sslv3"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.stek-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_SERVER }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -1126,7 +1255,7 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
   #ifndef MBEDTLS_SSL_SRV_RESPECT_CLIENT_PREFERENCE
     defaults.ssl_honor_cipher_order = 1;
   #endif
-    defaults.ssl_session_ticket     = 0; /* disabled by default */
+    defaults.ssl_session_ticket     = 1; /* enabled by default */
     defaults.ssl_cipher_list = &default_ssl_cipher_list;
 
     /* process and validate config directives for global and $SERVER["socket"]
@@ -1200,6 +1329,10 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
                   "Many modern TLS libraries no longer support SSLv3.  "
                   "If needed, use: "
                   "ssl.openssl.ssl-conf-cmd = (\"MinProtocol\" => \"SSLv3\")");
+                break;
+              case 10:/* ssl.stek-file */
+                if (!buffer_is_empty(cpv->v.b))
+                    p->ssl_stek_file = cpv->v.b->ptr;
                 break;
               default:/* should not happen */
                 break;
@@ -1311,6 +1444,11 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
             rc = HANDLER_ERROR;
         }
     }
+
+  #ifdef MBEDTLS_SSL_SESSION_TICKETS
+    if (rc == HANDLER_GO_ON && ssl_is_init)
+        mod_mbedtls_session_ticket_key_check(p, log_epoch_secs);
+  #endif
 
     free(srvplug.cvlist);
     return rc;
@@ -2213,6 +2351,21 @@ REQUEST_FUNC(mod_mbedtls_handle_request_reset)
 }
 
 
+TRIGGER_FUNC(mod_mbedtls_handle_trigger) {
+    plugin_data * const p = p_d;
+    const time_t cur_ts = log_epoch_secs;
+    if (cur_ts & 0x3f) return HANDLER_GO_ON; /*(continue once each 64 sec)*/
+    UNUSED(srv);
+    UNUSED(p);
+
+  #ifdef MBEDTLS_SSL_SESSION_TICKETS
+    mod_mbedtls_session_ticket_key_check(p, cur_ts);
+  #endif
+
+    return HANDLER_GO_ON;
+}
+
+
 int mod_mbedtls_plugin_init (plugin *p);
 int mod_mbedtls_plugin_init (plugin *p)
 {
@@ -2228,6 +2381,7 @@ int mod_mbedtls_plugin_init (plugin *p)
     p->handle_uri_raw            = mod_mbedtls_handle_uri_raw;
     p->handle_request_env        = mod_mbedtls_handle_request_env;
     p->connection_reset          = mod_mbedtls_handle_request_reset;
+    p->handle_trigger            = mod_mbedtls_handle_trigger;
 
     return 0;
 }
