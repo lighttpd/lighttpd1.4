@@ -9,25 +9,31 @@
  *
  * future possible enhancements: OCSP stapling
  *
- * Note: session tickets are disabled by default.  If enabled,
+ * Note: If session tickets are -not- disabled with
+ *     ssl.openssl.ssl-conf-cmd = ("Options" => "-SessionTicket")
  *   mod_gnutls rotates server ticket encryption key (STEK) every 24 hours.
  *   This is fine for use with a single lighttpd instance, but with multiple
  *   lighttpd workers, no coordinated STEK (server ticket encryption key)
- *   rotation occurs other than by (some external job) restarting lighttpd.
- *   Restarting lighttpd generates a new key that is shared by lighttpd workers
- *   for the lifetime of the new key.  If the rotation period expires and
- *   lighttpd has not been restarted, lighttpd workers will generate new
+ *   rotation occurs unless ssl.stek-file is defined and maintained (preferred),
+ *   or if some external job restarts lighttpd.  Restarting lighttpd generates a
+ *   new key that is shared by lighttpd workers for the lifetime of the new key.
+ *   If the rotation period expires and lighttpd has not been restarted, and if
+ *   ssl.stek-file is not in use, then lighttpd workers will generate new
  *   independent keys, making session tickets less effective for session
  *   resumption, since clients have a lower chance for future connections to
  *   reach the same lighttpd worker.  However, things will still work, and a new
  *   session will be created if session resumption fails.  Admins should plan to
  *   restart lighttpd at least every 24 hours if session tickets are enabled and
- *   multiple lighttpd workers are configured.
+ *   multiple lighttpd workers are configured.  Since that is likely disruptive,
+ *   if multiple lighttpd workers are configured, ssl.stek-file should be
+ *   defined and the file maintained externally.
  */
 #include "first.h"
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>      /* vsnprintf() */
@@ -43,6 +49,7 @@ GNUTLS_SKIP_GLOBAL_INIT
 #endif
 
 #include "base.h"
+#include "fdevent.h"
 #include "http_header.h"
 #include "log.h"
 #include "plugin.h"
@@ -118,6 +125,7 @@ typedef struct {
     plugin_ssl_ctx *ssl_ctxs;
     plugin_config defaults;
     server *srv;
+    const char *ssl_stek_file;
 } plugin_data;
 
 static int ssl_is_init;
@@ -275,8 +283,39 @@ mod_gnutls_datum_wipe (gnutls_datum_t * const d)
 }
 
 
+/* session tickets
+ *
+ * gnutls expects 64 bytes of random data in gnutls_datum_t passed to
+ * gnutls_session_ticket_enable_server()
+ *
+ * (private) session ticket definitions from lib/gnutls_int.h
+ * #define TICKET_MASTER_KEY_SIZE (TICKET_KEY_NAME_SIZE+TICKET_CIPHER_KEY_SIZE+TICKET_MAC_SECRET_SIZE)
+ * #define TICKET_KEY_NAME_SIZE 16
+ * #define TICKET_CIPHER_KEY_SIZE 32
+ * #define TICKET_MAC_SECRET_SIZE 16
+ */
+#define TICKET_MASTER_KEY_SIZE 64
+
+#define TLSEXT_KEYNAME_LENGTH  16
+#define TLSEXT_TICK_KEY_LENGTH 32
+
+/* construct our own session ticket encryption key structure
+ * to store keys that are not yet active
+ * (mirror from mod_openssl, even though not all bits are used here) */
+typedef struct tlsext_ticket_key_st {
+    time_t active_ts; /* tickets not issued w/ key until activation timestamp */
+    time_t expire_ts; /* key not valid after expiration timestamp */
+    unsigned char tick_key_name[TLSEXT_KEYNAME_LENGTH];
+    unsigned char tick_hmac_key[TLSEXT_TICK_KEY_LENGTH];
+    unsigned char tick_aes_key[TLSEXT_TICK_KEY_LENGTH];
+} tlsext_ticket_key_t;
+
+static tlsext_ticket_key_t session_ticket_keys[1]; /* temp store until active */
 static time_t stek_rotate_ts;
+
 static gnutls_datum_t session_ticket_key;
+
+
 static void
 mod_gnutls_session_ticket_key_free (void)
 {
@@ -298,6 +337,91 @@ mod_gnutls_session_ticket_key_rotate (server *srv)
 {
     mod_gnutls_session_ticket_key_free();
     mod_gnutls_session_ticket_key_init(srv);
+}
+
+
+static int
+mod_gnutls_session_ticket_key_file (const char *fn)
+{
+    /* session ticket encryption key (STEK)
+     *
+     * STEK file should be stored in non-persistent storage,
+     *   e.g. /dev/shm/lighttpd/stek-file  (in memory)
+     * with appropriate permissions set to keep stek-file from being
+     * read by other users.  Where possible, systems should also be
+     * configured without swap.
+     *
+     * admin should schedule an independent job to periodically
+     *   generate new STEK up to 3 times during key lifetime
+     *   (lighttpd stores up to 3 keys)
+     *
+     * format of binary file is:
+     *    4-byte - format version (always 0; for use if format changes)
+     *    4-byte - activation timestamp
+     *    4-byte - expiration timestamp
+     *   16-byte - session ticket key name
+     *   32-byte - session ticket HMAC encrpytion key
+     *   32-byte - session ticket AES encrpytion key
+     *
+     * STEK file can be created with a command such as:
+     *   dd if=/dev/random bs=1 count=80 status=none | \
+     *     perl -e 'print pack("iii",0,time()+300,time()+86400),<>' \
+     *     > STEK-file.$$ && mv STEK-file.$$ STEK-file
+     *
+     * The above delays activation time by 5 mins (+300 sec) to allow file to
+     * be propagated to other machines.  (admin must handle this independently)
+     * If STEK generation is performed immediately prior to starting lighttpd,
+     * admin should activate keys immediately (without +300).
+     */
+    int buf[23]; /* 92 bytes */
+    int fd = fdevent_open_cloexec(fn, 1, O_RDONLY, 0);
+    if (fd < 0)
+        return 0;
+
+    ssize_t rd = read(fd, buf, sizeof(buf));
+    close(fd);
+
+    int rc = 0; /*(will retry on next check interval upon any error)*/
+    if (rd == sizeof(buf) && buf[0] == 0) { /*(format version 0)*/
+        session_ticket_keys[0].active_ts = buf[1];
+        session_ticket_keys[0].expire_ts = buf[2];
+        memcpy(&session_ticket_keys[0].tick_key_name, buf+3, 80);
+        rc = 1;
+    }
+
+    gnutls_memset(buf, 0, sizeof(buf));
+    return rc;
+}
+
+
+static void
+mod_gnutls_session_ticket_key_check (server *srv, const plugin_data *p, const time_t cur_ts)
+{
+    if (p->ssl_stek_file) {
+        struct stat st;
+        if (0 == stat(p->ssl_stek_file, &st) && st.st_mtime > stek_rotate_ts
+            && mod_gnutls_session_ticket_key_file(p->ssl_stek_file)) {
+            stek_rotate_ts = cur_ts;
+        }
+
+        tlsext_ticket_key_t *stek = session_ticket_keys;
+        if (stek->active_ts != 0 && stek->active_ts - 63 <= cur_ts) {
+            if (NULL == session_ticket_key.data) {
+                session_ticket_key.data = gnutls_malloc(TICKET_MASTER_KEY_SIZE);
+                if (NULL == session_ticket_key.data) return;
+                session_ticket_key.size = TICKET_MASTER_KEY_SIZE;
+            }
+            memcpy(session_ticket_key.data,
+                   stek->tick_key_name, TICKET_MASTER_KEY_SIZE);
+            gnutls_memset(stek->tick_key_name, 0, TICKET_MASTER_KEY_SIZE);
+        }
+        if (stek->expire_ts < cur_ts)
+            mod_gnutls_session_ticket_key_free();
+    }
+    else if (cur_ts - 86400 >= stek_rotate_ts) {  /*(24 hours)*/
+        mod_gnutls_session_ticket_key_rotate(srv);
+        stek_rotate_ts = cur_ts;
+    }
 }
 
 
@@ -333,7 +457,9 @@ static void mod_gnutls_free_gnutls (void)
 {
     if (!ssl_is_init) return;
 
+    gnutls_memset(session_ticket_keys, 0, sizeof(session_ticket_keys));
     mod_gnutls_session_ticket_key_free();
+    stek_rotate_ts = 0;
 
     gnutls_global_deinit();
 
@@ -1185,6 +1311,8 @@ mod_gnutls_client_hello_hook(gnutls_session_t ssl, unsigned int htype,
     /* GnuTLS returns an error here if TLSv1.3 (? key already set ?) */
     /* see mod_gnutls_handle_con_accept() */
     if (hctx->ssl_session_ticket && session_ticket_key.size) {
+        /* XXX: NOT done: parse client hello for session ticket extension
+         *      and choose from among multiple keys */
         rc = gnutls_session_ticket_enable_server(ssl, &session_ticket_key);
         if (rc < 0) {
             elog(hctx->r->conf.errh, __FILE__, __LINE__, rc,
@@ -1521,6 +1649,9 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
      ,{ CONST_STR_LEN("ssl.use-sslv3"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.stek-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_SERVER }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -1540,7 +1671,7 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
     plugin_config_socket defaults;
     memset(&defaults, 0, sizeof(defaults));
     defaults.ssl_honor_cipher_order = 1; /* default server preference for PFS */
-    defaults.ssl_session_ticket     = 0; /* disabled by default */
+    defaults.ssl_session_ticket     = 1; /* enabled by default */
     defaults.ssl_cipher_list        = &default_ssl_cipher_list;
 
     /* process and validate config directives for global and $SERVER["socket"]
@@ -1620,6 +1751,10 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
                   "Many modern TLS libraries no longer support SSLv3.  "
                   "If needed, use: "
                   "ssl.openssl.ssl-conf-cmd = (\"MinProtocol\" => \"SSLv3\")");
+                break;
+              case 10:/* ssl.stek-file */
+                if (!buffer_is_empty(cpv->v.b))
+                    p->ssl_stek_file = cpv->v.b->ptr;
                 break;
               default:/* should not happen */
                 break;
@@ -1721,7 +1856,8 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
         free(conf.priority_str.ptr);
     }
 
-    stek_rotate_ts = log_epoch_secs;
+    if (rc == HANDLER_GO_ON && ssl_is_init)
+        mod_gnutls_session_ticket_key_check(srv, p, log_epoch_secs);
 
     free(srvplug.cvlist);
     return rc;
@@ -1877,12 +2013,7 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
             mod_gnutls_merge_config(&p->defaults, cpv);
     }
 
-    int rc = mod_gnutls_set_defaults_sockets(srv, p);
-
-    if (ssl_is_init)
-        mod_gnutls_session_ticket_key_rotate(srv);
-
-    return rc;
+    return mod_gnutls_set_defaults_sockets(srv, p);
 }
 
 
@@ -2613,12 +2744,8 @@ TRIGGER_FUNC(mod_gnutls_handle_trigger) {
     const plugin_data * const p = p_d;
     const time_t cur_ts = log_epoch_secs;
     if (cur_ts & 0x3f) return HANDLER_GO_ON; /*(continue once each 64 sec)*/
-    UNUSED(p);
 
-    if (cur_ts - 86400 >= stek_rotate_ts) {  /*(24 hours)*/
-        mod_gnutls_session_ticket_key_rotate(srv);
-        stek_rotate_ts = cur_ts;
-    }
+    mod_gnutls_session_ticket_key_check(srv, p, cur_ts);
 
     return HANDLER_GO_ON;
 }
