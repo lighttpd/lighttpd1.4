@@ -1598,6 +1598,11 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             return -1;
         }
 
+        /* disable session cache; session tickets are preferred */
+        SSL_CTX_set_session_cache_mode(s->ssl_ctx, SSL_SESS_CACHE_OFF
+                                                 | SSL_SESS_CACHE_NO_AUTO_CLEAR
+                                                 | SSL_SESS_CACHE_NO_INTERNAL);
+
         if (s->ssl_empty_fragments) {
           #ifdef SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS
             ssloptions &= ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS;
