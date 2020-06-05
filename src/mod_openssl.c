@@ -216,7 +216,8 @@ mod_openssl_session_ticket_key_generate (time_t active_ts, time_t expire_ts)
      * The 4th element of session_ticket_keys[] is used for STEK construction
      */
     /*(RAND_priv_bytes() not in openssl 1.1.0; introduced in openssl 1.1.1)*/
-  #if OPENSSL_VERSION_NUMBER < 0x10101000L
+  #if OPENSSL_VERSION_NUMBER < 0x10101000L \
+   || defined(LIBRESSL_VERSION_NUMBER)
   #define RAND_priv_bytes(x,sz) RAND_bytes((x),(sz))
   #endif
     if (RAND_bytes(session_ticket_keys[3].tick_key_name,
@@ -607,7 +608,8 @@ PEM_ASN1_read_bio_secmem(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
     long len = 0;
     char *ret = NULL;
 
-  #if OPENSSL_VERSION_NUMBER >= 0x10101000L
+  #if OPENSSL_VERSION_NUMBER >= 0x10101000L \
+   && !defined(LIBRESSL_VERSION_NUMBER)
     if (!PEM_bytes_read_bio_secmem(&data, &len, NULL, name, bp, cb, u))
   #else
     if (!PEM_bytes_read_bio(&data, &len, NULL, name, bp, cb, u))
@@ -617,7 +619,8 @@ PEM_ASN1_read_bio_secmem(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
     ret = d2i(x, &p, len);
     if (ret == NULL)
         PEMerr(PEM_F_PEM_ASN1_READ_BIO, ERR_R_ASN1_LIB);
-  #if OPENSSL_VERSION_NUMBER >= 0x10101000L
+  #if OPENSSL_VERSION_NUMBER >= 0x10101000L \
+   && !defined(LIBRESSL_VERSION_NUMBER)
     OPENSSL_secure_clear_free(data, len);
   #else
     OPENSSL_cleanse(data, len);
@@ -748,7 +751,8 @@ mod_openssl_load_cacrls (X509_STORE *store, const buffer *ssl_ca_crl_file, serve
 }
 
 
-#if OPENSSL_VERSION_NUMBER < 0x10002000
+#if OPENSSL_VERSION_NUMBER < 0x10002000 \
+ || defined(LIBRESSL_VERSION_NUMBER)
 static int
 mod_openssl_load_verify_locn (SSL_CTX *ssl_ctx, const buffer *b, server *srv)
 {
@@ -1018,7 +1022,8 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
         return 0;
     }
 
-  #if OPENSSL_VERSION_NUMBER >= 0x10002000
+  #if OPENSSL_VERSION_NUMBER >= 0x10002000 \
+   && !defined(LIBRESSL_VERSION_NUMBER)
     if (pc->ssl_pemfile_chain)
         SSL_set1_chain(ssl, pc->ssl_pemfile_chain);
     else if (hctx->conf.ssl_ca_file) {
@@ -1061,7 +1066,8 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
               "for TLS server name %s", hctx->r->uri.authority.ptr);
             return 0;
         }
-      #if OPENSSL_VERSION_NUMBER >= 0x10002000
+      #if OPENSSL_VERSION_NUMBER >= 0x10002000 \
+       && !defined(LIBRESSL_VERSION_NUMBER)
         SSL_set1_verify_cert_store(ssl, hctx->conf.ssl_ca_file->certs);
       #endif
         /* WTH openssl?  SSL_set_client_CA_list() calls set0_CA_list(),
@@ -1114,7 +1120,8 @@ mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
     /*config_cond_cache_reset_item(r, COMP_HTTP_HOST);*/
     /*buffer_clear(&r->uri.authority);*/
 
-  #if OPENSSL_VERSION_NUMBER >= 0x10002000L
+  #if OPENSSL_VERSION_NUMBER >= 0x10002000L \
+   && !defined(LIBRESSL_VERSION_NUMBER)
     return SSL_TLSEXT_ERR_OK;
   #else
     return (mod_openssl_cert_cb(hctx->ssl, NULL) == 1)
@@ -1740,7 +1747,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         SSL_CTX_set_tlsext_ticket_key_cb(s->ssl_ctx, ssl_tlsext_ticket_key_cb);
       #endif
 
-      #if OPENSSL_VERSION_NUMBER >= 0x10002000
+      #if OPENSSL_VERSION_NUMBER >= 0x10002000 \
+       && !defined(LIBRESSL_VERSION_NUMBER)
 
         SSL_CTX_set_cert_cb(s->ssl_ctx, mod_openssl_cert_cb, NULL);
         UNUSED(p);
@@ -2228,7 +2236,8 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
             }
         }
 
-      #if OPENSSL_VERSION_NUMBER < 0x10002000 /* p->cafiles for legacy only */
+      #if OPENSSL_VERSION_NUMBER < 0x10002000 /* p->cafiles for legacy only */ \
+       || defined(LIBRESSL_VERSION_NUMBER)
         /* load all ssl.ca-files into a single chain */
         /*(certificate load order might matter)*/
         if (ssl_ca_dn_file)
