@@ -49,6 +49,17 @@
 
 #include "sys-crypto.h"
 
+#ifdef WOLFSSL_OPTIONS_H
+/* WolfSSL defines OPENSSL_VERSION_NUMBER 0x10001040L for OPENSSL_ALL
+ * or HAVE_LIGHTY.  WolfSSL does not provide many interfaces added in
+ * OpenSSL 1.0.2, including SSL_CTX_set_cert_cb(), so it is curious that
+ * WolFSSL defines OPENSSL_VERSION_NUMBER 0x10100000L for WOLFSSL_APACHE_HTTPD*/
+#ifndef OPENSSL_ALL
+#define OPENSSL_ALL
+#endif
+#include <wolfssl/ssl.h>
+#endif
+
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 #include <openssl/bn.h>
@@ -69,6 +80,26 @@
 #ifndef OPENSSL_NO_ECDH
 #include <openssl/ecdh.h>
 #endif
+#endif
+
+#ifdef WOLFSSL_VERSION
+#ifdef HAVE_ALPN
+#undef OPENSSL_NO_TLSEXT
+#else
+#define OPENSSL_NO_TLSEXT
+#endif
+#ifdef HAVE_SESSION_TICKET
+#define TLSEXT_TYPE_session_ticket
+#endif
+static char global_err_buf[WOLFSSL_MAX_ERROR_SZ];
+#undef ERR_error_string
+#define ERR_error_string(e,b) \
+        (wolfSSL_ERR_error_string_n((e),global_err_buf,WOLFSSL_MAX_ERROR_SZ), \
+         global_err_buf)
+#define OPENSSL_NO_POSIX_IO /* WolfSSL does not provide BIO_new_fd(); use alt */
+#include "safe_memclear.h"  /* WolfSSL does not provide OPENSSL_cleanse() */
+#define OPENSSL_cleanse(x,sz) safe_memclear((x),(sz))
+#define SSL_set_read_ahead(x,y) ((void)(y)) /*WolfSSL no SSL_set_read_ahead()*/
 #endif
 
 #include "base.h"
@@ -421,12 +452,19 @@ static int mod_openssl_init_once_openssl (server *srv)
     if (ssl_is_init) return 1;
 
   #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
-   && !defined(LIBRESSL_VERSION_NUMBER)
+   && !defined(LIBRESSL_VERSION_NUMBER) \
+   && !defined(WOLFSSL_VERSION)
     OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS
                     |OPENSSL_INIT_LOAD_CRYPTO_STRINGS,NULL);
     OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS
                        |OPENSSL_INIT_ADD_ALL_DIGESTS
                        |OPENSSL_INIT_LOAD_CONFIG, NULL);
+  #elif defined(WOLFSSL_VERSION)
+    if (wolfSSL_Init() != WOLFSSL_SUCCESS) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: wolfSSL_Init() failed");
+        return 0;
+    }
   #else
     SSL_load_error_strings();
     SSL_library_init();
@@ -457,9 +495,15 @@ static void mod_openssl_free_openssl (void)
   #endif
 
   #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
-   && !defined(LIBRESSL_VERSION_NUMBER)
+   && !defined(LIBRESSL_VERSION_NUMBER) \
+   && !defined(WOLFSSL_VERSION)
     /*(OpenSSL libraries handle thread init and deinit)
      * https://github.com/openssl/openssl/pull/1048 */
+  #elif defined(WOLFSSL_VERSION)
+    if (wolfSSL_Cleanup() != WOLFSSL_SUCCESS) {
+        log_error(plugin_data_singleton->srv->errh, __FILE__, __LINE__,
+          "SSL: wolfSSL_Cleanup() failed");
+    }
   #else
     CRYPTO_cleanup_all_ex_data();
     ERR_free_strings();
@@ -599,6 +643,7 @@ BIO_new_rdonly_file (const char *file)
  * As this comment is being written, only openssl 1.1.1 is actively maintained.
  * Earlier vers of openssl no longer receive security patches from openssl.org.
  */
+#ifndef WOLFSSL_VERSION /* WolfSSL limitation; does not wipe temp mem used */
 static void *
 PEM_ASN1_read_bio_secmem(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
                          pem_password_cb *cb, void *u)
@@ -628,23 +673,32 @@ PEM_ASN1_read_bio_secmem(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
   #endif
     return ret;
 }
+#endif
 
 
 static X509 *
 PEM_read_bio_X509_secmem(BIO *bp, X509 **x, pem_password_cb *cb, void *u)
 {
+  #ifdef WOLFSSL_VERSION /* WolfSSL limitation; does not wipe temp mem used */
+    return wolfSSL_PEM_read_bio_X509(bp, x, cb, u);
+  #else
     return PEM_ASN1_read_bio_secmem((d2i_of_void *)d2i_X509,
                                     PEM_STRING_X509,
                                     bp, (void **)x, cb, u);
+  #endif
 }
 
 
 static X509 *
 PEM_read_bio_X509_AUX_secmem(BIO *bp, X509 **x, pem_password_cb *cb, void *u)
 {
+  #ifdef WOLFSSL_VERSION /* WolfSSL limitation; does not wipe temp mem used */
+    return wolfSSL_PEM_read_bio_X509_AUX(bp, x, cb, u);
+  #else
     return PEM_ASN1_read_bio_secmem((d2i_of_void *)d2i_X509_AUX,
                                     PEM_STRING_X509_TRUSTED,
                                     bp, (void **)x, cb, u);
+  #endif
 }
 
 
@@ -896,7 +950,14 @@ ssl_info_callback (const SSL *ssl, int where, int ret)
      * "TLSv1.3 unexpected InfoCallback after handshake completed" */
     if (0 != (where & SSL_CB_HANDSHAKE_DONE)) {
         /* SSL_version() is valid after initial handshake completed */
-        if (SSL_version(ssl) >= TLS1_3_VERSION) {
+      #ifdef WOLFSSL_VERSION
+        SSL *ssl_nonconst;
+        *(const SSL **)&ssl_nonconst = ssl;
+        if (wolfSSL_GetVersion(ssl_nonconst) >= WOLFSSL_TLSV1_3)
+      #else
+        if (SSL_version(ssl) >= TLS1_3_VERSION)
+      #endif
+        {
             /* https://wiki.openssl.org/index.php/TLS1.3
              * "Renegotiation is not possible in a TLSv1.3 connection" */
             handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
@@ -1073,10 +1134,14 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
         /* WTH openssl?  SSL_set_client_CA_list() calls set0_CA_list(),
          * but there is no set1_CA_list() to simply up the reference count
          * (without needing to duplicate the list) */
+      #ifndef WOLFSSL_VERSION /* WolfSSL limitation */
+        /* WolfSSL does not support setting per-session CA list;
+         * limitation is to per-CTX CA list, and is not changed after SNI */
         STACK_OF(X509_NAME) * const cert_names = hctx->conf.ssl_ca_dn_file
           ? hctx->conf.ssl_ca_dn_file
           : hctx->conf.ssl_ca_file->names;
         SSL_set_client_CA_list(ssl, SSL_dup_CA_list(cert_names));
+      #endif
         int mode = SSL_VERIFY_PEER;
         if (hctx->conf.ssl_verifyclient_enforce)
             mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
@@ -1169,11 +1234,20 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
     UNUSED(al);
     UNUSED(srv);
 
+  #ifdef WOLFSSL_VERSION
+    const char *servername;
+    size_t len = (size_t)
+      wolfSSL_SNI_GetRequest(ssl, WOLFSSL_SNI_HOST_NAME, (void **)&servername);
+    if (0 == len)
+        return SSL_TLSEXT_ERR_NOACK; /* client did not provide SNI */
+  #else
     const char *servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
     if (NULL == servername)
         return SSL_TLSEXT_ERR_NOACK; /* client did not provide SNI */
+    size_t len = strlen(servername);
+  #endif
     int read_ahead = hctx->conf.ssl_read_ahead;
-    int rc = mod_openssl_SNI(hctx, servername, strlen(servername));
+    int rc = mod_openssl_SNI(hctx, servername, len);
     if (!read_ahead && hctx->conf.ssl_read_ahead)
         SSL_set_read_ahead(ssl, hctx->conf.ssl_read_ahead);
     return rc;
@@ -1344,8 +1418,13 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
         }
 
         if (ssl_pemfile_chain) {
+          #ifndef WOLFSSL_VERSION /* WolfSSL limitation */
+            /* WolfSSL does not support setting per-session chain;
+             * limitation is to per-CTX chain, and so chain is not provided for
+             * "acme-tls/1" (might be non-issue; chain might not be present) */
             SSL_set0_chain(ssl, ssl_pemfile_chain);
             ssl_pemfile_chain = NULL;
+          #endif
         }
 
         if (1 != SSL_use_PrivateKey(ssl, ssl_pemfile_pkey)) {
@@ -1577,7 +1656,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                         | SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION
                         | SSL_OP_NO_COMPRESSION;
 
-      #if OPENSSL_VERSION_NUMBER >= 0x10100000L
+      #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
+       || defined(WOLFSSL_VERSION)
         s->ssl_ctx = (!s->ssl_use_sslv2 && !s->ssl_use_sslv3)
           ? SSL_CTX_new(TLS_server_method())
           : SSL_CTX_new(SSLv23_server_method());
@@ -1888,7 +1968,12 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
     };
+  #ifdef WOLFSSL_VERSION /* WolfSSL does not have mapping for "HIGH" */
+    /* cipher list is (current) output of "openssl ciphers HIGH" */
+    static const buffer default_ssl_cipher_list = { CONST_STR_LEN("TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:TLS_AES_128_CCM_SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-DSS-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-CCM8:ECDHE-ECDSA-AES256-CCM:DHE-RSA-AES256-CCM8:DHE-RSA-AES256-CCM:ECDHE-ECDSA-ARIA256-GCM-SHA384:ECDHE-ARIA256-GCM-SHA384:DHE-DSS-ARIA256-GCM-SHA384:DHE-RSA-ARIA256-GCM-SHA384:ADH-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:DHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-CCM8:ECDHE-ECDSA-AES128-CCM:DHE-RSA-AES128-CCM8:DHE-RSA-AES128-CCM:ECDHE-ECDSA-ARIA128-GCM-SHA256:ECDHE-ARIA128-GCM-SHA256:DHE-DSS-ARIA128-GCM-SHA256:DHE-RSA-ARIA128-GCM-SHA256:ADH-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA256:ECDHE-ECDSA-CAMELLIA256-SHA384:ECDHE-RSA-CAMELLIA256-SHA384:DHE-RSA-CAMELLIA256-SHA256:DHE-DSS-CAMELLIA256-SHA256:ADH-AES256-SHA256:ADH-CAMELLIA256-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA256:DHE-DSS-AES128-SHA256:ECDHE-ECDSA-CAMELLIA128-SHA256:ECDHE-RSA-CAMELLIA128-SHA256:DHE-RSA-CAMELLIA128-SHA256:DHE-DSS-CAMELLIA128-SHA256:ADH-AES128-SHA256:ADH-CAMELLIA128-SHA256:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES256-SHA:DHE-DSS-AES256-SHA:DHE-RSA-CAMELLIA256-SHA:DHE-DSS-CAMELLIA256-SHA:AECDH-AES256-SHA:ADH-AES256-SHA:ADH-CAMELLIA256-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA:DHE-RSA-CAMELLIA128-SHA:DHE-DSS-CAMELLIA128-SHA:AECDH-AES128-SHA:ADH-AES128-SHA:ADH-CAMELLIA128-SHA:RSA-PSK-AES256-GCM-SHA384:DHE-PSK-AES256-GCM-SHA384:RSA-PSK-CHACHA20-POLY1305:DHE-PSK-CHACHA20-POLY1305:ECDHE-PSK-CHACHA20-POLY1305:DHE-PSK-AES256-CCM8:DHE-PSK-AES256-CCM:RSA-PSK-ARIA256-GCM-SHA384:DHE-PSK-ARIA256-GCM-SHA384:AES256-GCM-SHA384:AES256-CCM8:AES256-CCM:ARIA256-GCM-SHA384:PSK-AES256-GCM-SHA384:PSK-CHACHA20-POLY1305:PSK-AES256-CCM8:PSK-AES256-CCM:PSK-ARIA256-GCM-SHA384:RSA-PSK-AES128-GCM-SHA256:DHE-PSK-AES128-GCM-SHA256:DHE-PSK-AES128-CCM8:DHE-PSK-AES128-CCM:RSA-PSK-ARIA128-GCM-SHA256:DHE-PSK-ARIA128-GCM-SHA256:AES128-GCM-SHA256:AES128-CCM8:AES128-CCM:ARIA128-GCM-SHA256:PSK-AES128-GCM-SHA256:PSK-AES128-CCM8:PSK-AES128-CCM:PSK-ARIA128-GCM-SHA256:AES256-SHA256:CAMELLIA256-SHA256:AES128-SHA256:CAMELLIA128-SHA256:ECDHE-PSK-AES256-CBC-SHA384:ECDHE-PSK-AES256-CBC-SHA:SRP-DSS-AES-256-CBC-SHA:SRP-RSA-AES-256-CBC-SHA:SRP-AES-256-CBC-SHA:RSA-PSK-AES256-CBC-SHA384:DHE-PSK-AES256-CBC-SHA384:RSA-PSK-AES256-CBC-SHA:DHE-PSK-AES256-CBC-SHA:ECDHE-PSK-CAMELLIA256-SHA384:RSA-PSK-CAMELLIA256-SHA384:DHE-PSK-CAMELLIA256-SHA384:AES256-SHA:CAMELLIA256-SHA:PSK-AES256-CBC-SHA384:PSK-AES256-CBC-SHA:PSK-CAMELLIA256-SHA384:ECDHE-PSK-AES128-CBC-SHA256:ECDHE-PSK-AES128-CBC-SHA:SRP-DSS-AES-128-CBC-SHA:SRP-RSA-AES-128-CBC-SHA:SRP-AES-128-CBC-SHA:RSA-PSK-AES128-CBC-SHA256:DHE-PSK-AES128-CBC-SHA256:RSA-PSK-AES128-CBC-SHA:DHE-PSK-AES128-CBC-SHA:ECDHE-PSK-CAMELLIA128-SHA256:RSA-PSK-CAMELLIA128-SHA256:DHE-PSK-CAMELLIA128-SHA256:AES128-SHA:CAMELLIA128-SHA:PSK-AES128-CBC-SHA256:PSK-AES128-CBC-SHA:PSK-CAMELLIA128-SHA256"), 0 };
+  #else
     static const buffer default_ssl_cipher_list = { CONST_STR_LEN("HIGH"), 0 };
+  #endif
 
     p->ssl_ctxs = calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
     force_assert(p->ssl_ctxs);
@@ -2914,6 +2999,17 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
     }
 
     {
+      #ifdef WOLFSSL_VERSION
+        byte buf[64];
+        int bsz = (int)sizeof(buf);
+        if (wolfSSL_X509_get_serial_number(xs, buf, &bsz) == WOLFSSL_SUCCESS) {
+            char serialHex[128+1];
+            li_tohex_uc(serialHex, sizeof(serialHex), (char *)buf, (size_t)bsz);
+            http_header_env_set(r,
+                                CONST_STR_LEN("SSL_CLIENT_M_SERIAL"),
+                                serialHex, strlen(serialHex));
+        }
+      #else
         ASN1_INTEGER *xsn = X509_get_serialNumber(xs);
         BIGNUM *serialBN = ASN1_INTEGER_to_BN(xsn, NULL);
         char *serialHex = BN_bn2hex(serialBN);
@@ -2922,6 +3018,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
                             serialHex, strlen(serialHex));
         OPENSSL_free(serialHex);
         BN_free(serialBN);
+      #endif
     }
 
     if (!buffer_string_is_empty(hctx->conf.ssl_verifyclient_username)) {
@@ -2971,11 +3068,12 @@ http_cgi_ssl_env (request_st * const r, handler_ctx * const hctx)
     http_header_env_set(r, CONST_STR_LEN("SSL_PROTOCOL"), s, strlen(s));
 
     if ((cipher = SSL_get_current_cipher(hctx->ssl))) {
-        int usekeysize, algkeysize;
+        int usekeysize, algkeysize = 0;
         char buf[LI_ITOSTRING_LENGTH];
         s = SSL_CIPHER_get_name(cipher);
         http_header_env_set(r, CONST_STR_LEN("SSL_CIPHER"), s, strlen(s));
         usekeysize = SSL_CIPHER_get_bits(cipher, &algkeysize);
+        if (0 == algkeysize) algkeysize = usekeysize;
         http_header_env_set(r, CONST_STR_LEN("SSL_CIPHER_USEKEYSIZE"),
                             buf, li_itostrn(buf, sizeof(buf), usekeysize));
         http_header_env_set(r, CONST_STR_LEN("SSL_CIPHER_ALGKEYSIZE"),
