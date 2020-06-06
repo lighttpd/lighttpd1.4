@@ -1520,6 +1520,14 @@ mod_openssl_alpn_select_cb (SSL *ssl, const unsigned char **out, unsigned char *
 #endif /* OPENSSL_NO_TLSEXT */
 
 
+#if defined(BORINGSSL_API_VERSION) \
+ || defined(LIBRESSL_VERSION_NUMBER) \
+ || defined(WOLFSSL_VERSION)
+static int
+mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s);
+#endif
+
+
 static int
 network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
 {
@@ -1566,6 +1574,12 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
 
     SSL_CONF_CTX_free(cctx);
     return rc;
+
+  #elif defined(BORINGSSL_API_VERSION) \
+     || defined(LIBRESSL_VERSION_NUMBER) \
+     || defined(WOLFSSL_VERSION)
+
+    return mod_openssl_ssl_conf_cmd(srv, s);
 
   #else
 
@@ -3183,3 +3197,197 @@ int mod_openssl_plugin_init (plugin *p)
 
     return 0;
 }
+
+
+#if defined(BORINGSSL_API_VERSION) \
+ || defined(LIBRESSL_VERSION_NUMBER) \
+ || defined(WOLFSSL_VERSION)
+
+static int
+mod_openssl_ssl_conf_proto_val (server *srv, plugin_config_socket *s, const buffer *b, int max)
+{
+    if (NULL == b) /* default: min TLSv1.2, max TLSv1.3 */
+      #ifdef TLS1_3_VERSION
+        return max ? TLS1_3_VERSION : TLS1_2_VERSION;
+      #else
+        return TLS1_2_VERSION;
+      #endif
+    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("None"))) /*"disable" limit*/
+        return max
+          ?
+           #ifdef TLS1_3_VERSION
+            TLS1_3_VERSION
+           #else
+            TLS1_2_VERSION
+           #endif
+          : (s->ssl_use_sslv3 ? SSL3_VERSION : TLS1_VERSION);
+    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("SSLv3")))
+        return SSL3_VERSION;
+    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.0")))
+        return TLS1_VERSION;
+    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.1")))
+        return TLS1_1_VERSION;
+    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.2")))
+        return TLS1_2_VERSION;
+  #ifdef TLS1_3_VERSION
+    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.3")))
+        return TLS1_3_VERSION;
+  #endif
+    else {
+        if (buffer_eq_icase_slen(b, CONST_STR_LEN("DTLSv1"))
+            || buffer_eq_icase_slen(b, CONST_STR_LEN("DTLSv1.2")))
+            log_error(srv->errh, __FILE__, __LINE__,
+                      "SSL: ssl.openssl.ssl-conf-cmd %s %s ignored",
+                      max ? "MaxProtocol" : "MinProtocol", b->ptr);
+        else
+            log_error(srv->errh, __FILE__, __LINE__,
+                      "SSL: ssl.openssl.ssl-conf-cmd %s %s invalid; ignored",
+                      max ? "MaxProtocol" : "MinProtocol", b->ptr);
+    }
+  #ifdef TLS1_3_VERSION
+    return max ? TLS1_3_VERSION : TLS1_2_VERSION;
+  #else
+    return TLS1_2_VERSION;
+  #endif
+}
+
+
+static int
+mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
+{
+    /* reference:
+     * https://www.openssl.org/docs/man1.1.1/man3/SSL_CONF_cmd.html */
+    int rc = 0;
+    buffer *cipherstring = NULL;
+    /*buffer *ciphersuites = NULL;*/
+    buffer *minb = NULL;
+    buffer *maxb = NULL;
+    buffer *curves = NULL;
+
+    for (size_t i = 0; i < s->ssl_conf_cmd->used; ++i) {
+        data_string *ds = (data_string *)s->ssl_conf_cmd->data[i];
+        if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("CipherString")))
+            cipherstring = &ds->value;
+      #if 0
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Ciphersuites")))
+            ciphersuites = &ds->value;
+      #endif
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Curves"))
+              || buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Groups")))
+            curves = &ds->value;
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("MaxProtocol")))
+            maxb = &ds->value;
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("MinProtocol")))
+            minb = &ds->value;
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Protocol"))) {
+            /* openssl config for Protocol=... is complex and deprecated */
+            log_error(srv->errh, __FILE__, __LINE__,
+                      "SSL: ssl.openssl.ssl-conf-cmd %s ignored; "
+                      "use MinProtocol=... and MaxProtocol=... instead",
+                      ds->key.ptr);
+        }
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Options"))) {
+            for (char *v = ds->value.ptr, *e; *v; v = e) {
+                while (*v == ' ' || *v == '\t' || *v == ',') ++v;
+                int flag = 1;
+                if (*v == '-') {
+                    flag = 0;
+                    ++v;
+                }
+                for (e = v; light_isalpha(*e); ++e) ;
+                switch ((int)(e-v)) {
+                  case 11:
+                    if (buffer_eq_icase_ssn(v, "Compression", 11)) {
+                        if (flag)
+                            SSL_CTX_clear_options(s->ssl_ctx,
+                                                  SSL_OP_NO_COMPRESSION);
+                        else
+                            SSL_CTX_set_options(s->ssl_ctx,
+                                                SSL_OP_NO_COMPRESSION);
+                        continue;
+                    }
+                    break;
+                  case 13:
+                    if (buffer_eq_icase_ssn(v, "SessionTicket", 13)) {
+                        if (flag)
+                            SSL_CTX_clear_options(s->ssl_ctx,
+                                                  SSL_OP_NO_TICKET);
+                        else
+                            SSL_CTX_set_options(s->ssl_ctx,
+                                                SSL_OP_NO_TICKET);
+                        continue;
+                    }
+                    break;
+                  case 16:
+                    if (buffer_eq_icase_ssn(v, "ServerPreference", 16)) {
+                        if (flag)
+                            SSL_CTX_set_options(s->ssl_ctx,
+                                               SSL_OP_CIPHER_SERVER_PREFERENCE);
+                        else
+                            SSL_CTX_clear_options(s->ssl_ctx,
+                                               SSL_OP_CIPHER_SERVER_PREFERENCE);
+                        s->ssl_honor_cipher_order = flag;
+                        continue;
+                    }
+                    break;
+                  default:
+                    break;
+                }
+                /* warn if not explicitly handled or ignored above */
+                if (!flag) --v;
+                log_error(srv->errh, __FILE__, __LINE__,
+                          "SSL: ssl.openssl.ssl-conf-cmd Options %.*s "
+                          "ignored", (int)(e-v), v);
+            }
+        }
+      #if 0
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("..."))) {
+        }
+      #endif
+        else {
+            /* warn if not explicitly handled or ignored above */
+            log_error(srv->errh, __FILE__, __LINE__,
+                      "SSL: ssl.openssl.ssl-conf-cmd %s ignored",
+                      ds->key.ptr);
+        }
+
+    }
+
+    if (minb) {
+        /*(wolfSSL_CTX_SetMinVersion() alt uses enums with different values)*/
+        int n = mod_openssl_ssl_conf_proto_val(srv, s, minb, 0);
+        if (!SSL_CTX_set_min_proto_version(s->ssl_ctx, n))
+            rc = -1;
+    }
+
+    if (maxb) {
+      #ifndef WOLFSSL_VERSION /*WolfSSL max ver is set at WolfSSL compile-time*/
+        int x = mod_openssl_ssl_conf_proto_val(srv, s, maxb, 1);
+        if (!SSL_CTX_set_max_proto_version(s->ssl_ctx, x))
+            rc = -1;
+      #endif
+    }
+
+    if (cipherstring) {
+        /* Disable support for low encryption ciphers */
+        buffer_append_string_len(cipherstring,
+                                 CONST_STR_LEN(":!aNULL:!eNULL:!EXP"));
+        if (SSL_CTX_set_cipher_list(s->ssl_ctx, s->ssl_cipher_list->ptr) != 1) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
+            rc = -1;
+        }
+
+        if (s->ssl_honor_cipher_order)
+            SSL_CTX_set_options(s->ssl_ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
+    }
+
+    if (curves) {
+        if (!mod_openssl_ssl_conf_curves(srv, s, curves))
+            rc = -1;
+    }
+
+    return rc;
+}
+
+#endif /* BORINGSSL_API_VERSION || LIBRESSL_VERSION_NUMBER || WOLFSSL_VERSION */
