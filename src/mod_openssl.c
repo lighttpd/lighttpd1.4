@@ -1741,6 +1741,11 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             }
         }
 
+      #ifdef SSL_OP_PRIORITIZE_CHACHA /*(openssl 1.1.1)*/
+        if (s->ssl_honor_cipher_order)
+            SSL_CTX_set_options(s->ssl_ctx, SSL_OP_PRIORITIZE_CHACHA);
+      #endif
+
       #ifndef OPENSSL_NO_DH
       {
         DH *dh;
