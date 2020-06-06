@@ -1642,6 +1642,57 @@ static DH *get_dh2048(void)
 
 
 static int
+mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *ssl_ec_curve)
+{
+  #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
+  #ifndef OPENSSL_NO_ECDH
+    int nid = 0;
+    /* Support for Elliptic-Curve Diffie-Hellman key exchange */
+    if (!buffer_string_is_empty(ssl_ec_curve)) {
+        /* OpenSSL only supports the "named curves"
+         * from RFC 4492, section 5.1.1. */
+        nid = OBJ_sn2nid((char *) ssl_ec_curve->ptr);
+        if (nid == 0) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: Unknown curve name %s", ssl_ec_curve->ptr);
+            return 0;
+        }
+    }
+    else {
+      #if OPENSSL_VERSION_NUMBER < 0x10002000
+        /* Default curve */
+        nid = OBJ_sn2nid("prime256v1");
+      #elif OPENSSL_VERSION_NUMBER < 0x10100000L \
+         || defined(LIBRESSL_VERSION_NUMBER)
+        if (!SSL_CTX_set_ecdh_auto(s->ssl_ctx, 1)) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: SSL_CTX_set_ecdh_auto() failed");
+        }
+      #endif
+    }
+    if (nid) {
+        EC_KEY *ecdh;
+        ecdh = EC_KEY_new_by_curve_name(nid);
+        if (ecdh == NULL) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: Unable to create curve %s", ssl_ec_curve->ptr);
+            return 0;
+        }
+        SSL_CTX_set_tmp_ecdh(s->ssl_ctx, ecdh);
+        SSL_CTX_set_options(s->ssl_ctx, SSL_OP_SINGLE_ECDH_USE);
+        EC_KEY_free(ecdh);
+    }
+  #endif
+  #endif
+    UNUSED(srv);
+    UNUSED(s);
+    UNUSED(ssl_ec_curve);
+
+    return 1;
+}
+
+
+static int
 network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 {
     /* load SSL certificates */
@@ -1786,47 +1837,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         }
       #endif
 
-      #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
-      #ifndef OPENSSL_NO_ECDH
-      {
-        int nid = 0;
-        /* Support for Elliptic-Curve Diffie-Hellman key exchange */
-        if (!buffer_string_is_empty(s->ssl_ec_curve)) {
-            /* OpenSSL only supports the "named curves"
-             * from RFC 4492, section 5.1.1. */
-            nid = OBJ_sn2nid((char *) s->ssl_ec_curve->ptr);
-            if (nid == 0) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "SSL: Unknown curve name %s", s->ssl_ec_curve->ptr);
-                return -1;
-            }
-        } else {
-          #if OPENSSL_VERSION_NUMBER < 0x10002000
-            /* Default curve */
-            nid = OBJ_sn2nid("prime256v1");
-          #elif OPENSSL_VERSION_NUMBER < 0x10100000L \
-             || defined(LIBRESSL_VERSION_NUMBER)
-            if (!SSL_CTX_set_ecdh_auto(s->ssl_ctx, 1)) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "SSL: SSL_CTX_set_ecdh_auto() failed");
-            }
-          #endif
-        }
-        if (nid) {
-            EC_KEY *ecdh;
-            ecdh = EC_KEY_new_by_curve_name(nid);
-            if (ecdh == NULL) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "SSL: Unable to create curve %s", s->ssl_ec_curve->ptr);
-                return -1;
-            }
-            SSL_CTX_set_tmp_ecdh(s->ssl_ctx,ecdh);
-            SSL_CTX_set_options(s->ssl_ctx,SSL_OP_SINGLE_ECDH_USE);
-            EC_KEY_free(ecdh);
-        }
-      }
-      #endif
-      #endif
+        if (!mod_openssl_ssl_conf_curves(srv, s, s->ssl_ec_curve))
+            return -1;
 
       #ifdef TLSEXT_TYPE_session_ticket
         SSL_CTX_set_tlsext_ticket_key_cb(s->ssl_ctx, ssl_tlsext_ticket_key_cb);
