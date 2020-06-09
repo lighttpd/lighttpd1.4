@@ -6,8 +6,6 @@
  * License: BSD 3-clause (same as lighttpd)
  */
 /*
- * future possible enhancements: OCSP stapling
- *
  * Note: If session tickets are -not- disabled with
  *     ssl.openssl.ssl-conf-cmd = ("Options" => "-SessionTicket")
  *   mod_openssl rotates server ticket encryption key (STEK) every 8 hours
@@ -34,6 +32,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -70,6 +69,9 @@
 #include <openssl/tls1.h>
 #ifndef OPENSSL_NO_DH
 #include <openssl/dh.h>
+#endif
+#ifndef OPENSSL_NO_OCSP
+#include <openssl/ocsp.h>
 #endif
 
 #if ! defined OPENSSL_NO_TLSEXT && ! defined SSL_CTRL_SET_TLSEXT_HOSTNAME
@@ -113,8 +115,12 @@ typedef struct {
     EVP_PKEY *ssl_pemfile_pkey;
     X509 *ssl_pemfile_x509;
     STACK_OF(X509) *ssl_pemfile_chain;
+    buffer *ssl_stapling;
     const buffer *ssl_pemfile;
     const buffer *ssl_privkey;
+    const buffer *ssl_stapling_file;
+    time_t ssl_stapling_loadts;
+    time_t ssl_stapling_nextts;
 } plugin_cert;
 
 typedef struct {
@@ -437,6 +443,49 @@ mod_openssl_session_ticket_key_check (const plugin_data *p, const time_t cur_ts)
 #endif /* TLSEXT_TYPE_session_ticket */
 
 
+#ifndef OPENSSL_NO_OCSP
+#ifndef BORINGSSL_API_VERSION /* BoringSSL suggests using different API */
+static int
+ssl_tlsext_status_cb(SSL *ssl, void *arg)
+{
+  #ifdef SSL_get_tlsext_status_type
+    if (TLSEXT_STATUSTYPE_ocsp != SSL_get_tlsext_status_type(ssl))
+        return SSL_TLSEXT_ERR_NOACK; /* ignore if not client OCSP request */
+  #endif
+
+    handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
+    buffer *ssl_stapling = hctx->conf.pc->ssl_stapling;
+    if (NULL == ssl_stapling) return SSL_TLSEXT_ERR_NOACK;
+    UNUSED(arg);
+
+    int len = (int)buffer_string_length(ssl_stapling);
+
+  #ifdef WOLFSSL_VERSION /* WolfSSL does not require copy */
+    uint8_t *ocsp_resp = (uint8_t *)ssl_stapling->ptr;
+  #else
+    /* OpenSSL and LibreSSL require copy (BoringSSL, too, if using compat API)*/
+    uint8_t *ocsp_resp = OPENSSL_malloc(len);
+    if (NULL == ocsp_resp)
+        return SSL_TLSEXT_ERR_NOACK; /* ignore OCSP request if error occurs */
+    memcpy(ocsp_resp, ssl_stapling->ptr, len);
+  #endif
+
+    if (!SSL_set_tlsext_status_ocsp_resp(ssl, ocsp_resp, len)) {
+        log_error(hctx->r->conf.errh, __FILE__, __LINE__,
+          "SSL: failed to set OCSP response for TLS server name %s: %s",
+          hctx->r->uri.authority.ptr, ERR_error_string(ERR_get_error(), NULL));
+      #ifndef WOLFSSL_VERSION /* WolfSSL does not require copy */
+        OPENSSL_free(ocsp_resp);
+      #endif
+        return SSL_TLSEXT_ERR_NOACK; /* ignore OCSP request if error occurs */
+        /*return SSL_TLSEXT_ERR_ALERT_FATAL;*/
+    }
+    return SSL_TLSEXT_ERR_OK;
+}
+#endif
+#endif
+
+
 INIT_FUNC(mod_openssl_init)
 {
     plugin_data_singleton = (plugin_data *)calloc(1, sizeof(plugin_data));
@@ -551,6 +600,7 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
                     EVP_PKEY_free(pc->ssl_pemfile_pkey);
                     X509_free(pc->ssl_pemfile_x509);
                     sk_X509_pop_free(pc->ssl_pemfile_chain, X509_free);
+                    buffer_free(pc->ssl_stapling);
                 }
                 break;
               case 2: /* ssl.ca-file */
@@ -889,7 +939,9 @@ mod_openssl_merge_config_cpv (plugin_config * const pconf, const config_plugin_v
       case 12:/* ssl.acme-tls-1 */
         pconf->ssl_acme_tls_1 = cpv->v.b;
         break;
-      case 13:/* debug.log-ssl-noise */
+      case 13:/* ssl.stapling-file */
+        break;
+      case 14:/* debug.log-ssl-noise */
         pconf->ssl_log_noise = (0 != cpv->v.u);
         break;
       default:/* should not happen */
@@ -1120,6 +1172,20 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
         return 0;
     }
 
+  #ifndef OPENSSL_NO_OCSP
+  #ifdef BORINGSSL_API_VERSION
+    /* BoringSSL suggests API different than SSL_CTX_set_tlsext_status_cb() */
+    buffer *ocsp_resp = pc->ssl_stapling;
+    if (NULL != ocsp_resp
+        && !SSL_set_ocsp_response(ssl, (uint8_t *)CONST_BUF_LEN(ocsp_resp))) {
+        log_error(hctx->r->conf.errh, __FILE__, __LINE__,
+          "SSL: failed to set OCSP response for TLS server name %s: %s",
+          hctx->r->uri.authority.ptr, ERR_error_string(ERR_get_error(), NULL));
+        return 0;
+    }
+  #endif
+  #endif
+
     if (hctx->conf.ssl_verifyclient) {
         if (NULL == hctx->conf.ssl_ca_file) {
             log_error(hctx->r->conf.errh, __FILE__, __LINE__,
@@ -1303,8 +1369,327 @@ mod_openssl_evp_pkey_load_pem_file (const char *file, log_error_st *errh)
 }
 
 
+#ifndef OPENSSL_NO_OCSP
+
+static buffer *
+mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
+{
+    /* load stapling .der into buffer *b only if successful
+     *
+     * Note: for some TLS libs, the OCSP stapling response is not copied when
+     * assigned to a session (and is reasonable since not changed frequently)
+     * - BoringSSL SSL_set_ocsp_response()
+     * - WolfSSL SSL_set_tlsext_status_ocsp_resp() (differs from OpenSSL API)
+     * Therefore, there is a potential race condition if the OCSP response is
+     * assigned to the session during the handshake and the Server Hello is
+     * partially sent, AND (unlikely, if possible at all), the TLS library is
+     * in the middle of reading this OSCP response buffer.  If the OCSP response
+     * is replaced due to an updated ssl.stapling-file (checked periodically),
+     * AND the buffer is resized, this would be a problem.  Resizing the buffer
+     * is unlikely since updated OSCP response for same certificate are
+     * typically the same size with the signature and dates refreshed.
+     */
+
+  #ifdef BORINGSSL_API_VERSION
+
+    /* load raw .der file */
+    /* (similar to mod_gnutls.c:mod_gnutls_load_file(), but some differences) */
+    int fd = -1;
+    uint32_t sz = 0;
+    char *buf = NULL;
+    do {
+        fd = fdevent_open_cloexec(file,1,O_RDONLY,0); /*(1: follows symlinks)*/
+        if (fd < 0) break;
+
+        struct stat st;
+        if (0 != fstat(fd, &st)) break;
+        if (st.st_size == 0) break;
+        if (st.st_size >= UINT32_MAX) { /*(file too large for buffer uint32_t)*/
+            errno = EOVERFLOW;
+            break;
+        }
+
+        sz = (uint32_t)st.st_size;
+        buf = malloc(sz+1); /*(+1 trailing '\0')*/
+        if (NULL == buf) break;
+
+        ssize_t rd = 0;
+        unsigned int off = 0;
+        do {
+            rd = read(fd, buf+off, sz-off);
+        } while (rd > 0 ? (off += (unsigned int)rd) != sz : errno == EINTR);
+        if (off != sz) { /*(file truncated?)*/
+            if (rd >= 0) errno = EIO;
+            break;
+        }
+
+        if (NULL == b) b = buffer_init();
+        buffer_copy_string_len(b, buf, sz);
+        memset(buf, 0, sz);
+        free(buf);
+        close(fd);
+        return b;
+    } while (0);
+    int errnum = errno;
+    log_perror(errh, __FILE__, __LINE__, "%s() %s", __func__, file);
+    if (fd >= 0) close(fd);
+    if (buf) {
+        memset(buf, 0, sz);
+        free(buf);
+    }
+    errno = errnum;
+    return NULL;;
+
+  #else
+
+    BIO *in = BIO_new_rdonly_file(file);
+    if (NULL == in) {
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: BIO_new/BIO_read_filename('%s') failed", file);
+        return NULL;
+    }
+
+    OCSP_RESPONSE *x = d2i_OCSP_RESPONSE_bio(in, NULL);
+    BIO_free(in);
+    if (NULL == x) {
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: OCSP stapling file read error: %s %s",
+          ERR_error_string(ERR_get_error(), NULL), file);
+        return NULL;
+    }
+
+    unsigned char *rspder = NULL;
+    int rspderlen = i2d_OCSP_RESPONSE(x, &rspder);
+
+    if (rspderlen > 0) {
+        if (NULL == b) b = buffer_init();
+        buffer_copy_string_len(b, (char *)rspder, (uint32_t)rspderlen);
+    }
+
+    OPENSSL_free(rspder);
+    OCSP_RESPONSE_free(x);
+    return rspderlen ? b : NULL;
+
+  #endif
+}
+
+
+static time_t
+mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
+{
+  #ifdef LIBRESSL_VERSION_NUMBER
+    /* LibreSSL was forked from OpenSSL 1.0.1; does not have ASN1_TIME_diff */
+
+    /*(Note: all certificate times are expected to use UTC)*/
+    /*(Note: does not strictly validate string contains appropriate digits)*/
+    /*(Note: incorrectly assumes GMT if 'Z' or offset not provided)*/
+    /*(Note: incorrectly ignores if local timezone might be in DST)*/
+
+    if (NULL == asn1time || NULL == asn1time->data) return (time_t)-1;
+    const char *s = (const char *)asn1time->data;
+    size_t len = strlen(s);
+    struct tm x;
+    x.tm_isdst = 0;
+    x.tm_yday = 0;
+    x.tm_wday = 0;
+    switch (asn1time->type) {
+      case V_ASN1_UTCTIME:         /* 2-digit year */
+        if (len < 8) return (time_t)-1;
+        len -= 8;
+        x.tm_year = (s[0]-'0')*10 + (s[1]-'0');
+        x.tm_year += (x.tm_year < 50 ? 2000 : 1900);
+        s += 2;
+        break;
+      case V_ASN1_GENERALIZEDTIME: /* 4-digit year */
+        if (len < 10) return (time_t)-1;
+        len -= 10;
+        x.tm_year = (s[0]-'0')*1000+(s[1]-'0')*100+(s[2]-'0')*10+(s[3]-'0');
+        s += 4;
+        break;
+      default:
+        return (time_t)-1;
+    }
+    x.tm_mon  = (s[0]-'0')*10 + (s[1]-'0');
+    x.tm_mday = (s[2]-'0')*10 + (s[3]-'0');
+    x.tm_hour = (s[4]-'0')*10 + (s[5]-'0');
+    x.tm_min  = 0;
+    x.tm_sec  = 0;
+    s += 6;
+    if (len >= 2 && s[0] != '+' && s[0] != '-' && s[0] != 'Z') {
+        len -= 2;
+        x.tm_min = (s[0]-'0')*10 + (s[1]-'0');
+        s += 2;
+        if (len >= 2 && s[0] != '+' && s[0] != '-' && s[0] != 'Z') {
+            len -= 2;
+            x.tm_sec = (s[0]-'0')*10 + (s[1]-'0');
+            s += 2;
+            if (len && s[0] == '.') {
+                /*(ignore .fff fractional seconds;
+                 * should be up to 3 digits but we ignore more)*/
+                do { ++s; --len; } while (*s >= '0' && *s <= '9');
+            }
+        }
+    }
+    int offset = 0;
+    if ((*s == '-' || *s == '+') && len != 5) {
+        offset = ((s[1]-'0')*10 + (s[2]-'0')) * 3600
+               + ((s[3]-'0')*10 + (s[4]-'0')) * 60;
+        if (*s == '-') offset = -offset;
+    }
+    else if (s[0] != '\0' && (s[0] != 'Z' || s[1] != '\0'))
+        return (time_t)-1;
+
+    if (x.tm_year == 9999 && x.tm_mon == 12 && x.tm_mday == 31
+        && x.tm_hour == 23 && x.tm_min == 59 && x.tm_sec == 59 && s[0] == 'Z')
+        return (time_t)-1; // 99991231235959Z RFC 5280
+
+   #if 0
+    #if defined(_WIN32) && !defined(__CYGWIN__)
+    #define timegm(x) _mkgmtime(x)
+    #endif
+    /* timegm() might not be available, and mktime() is sensitive to TZ */
+    x.tm_year-= 1900;
+    x.tm_mon -= 1;
+    time_t t = timegm(&d);
+    return (t != (time_t)-1) ? t + offset : t;
+   #else
+    int y = x.tm_year;
+    int m = x.tm_mon;
+    int d = x.tm_mday;
+    /* days_from_civil() http://howardhinnant.github.io/date_algorithms.html */
+    y -= m <= 2;
+    int era = y / 400;
+    int yoe = y - era * 400;                                   // [0, 399]
+    int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;  // [0, 365]
+    int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;           // [0, 146096]
+    int days_since_1970 = era * 146097 + doe - 719468;
+    return 60*(60*(24L*days_since_1970+x.tm_hour)+x.tm_min)+x.tm_sec+offset;
+   #endif
+
+  #else
+
+    /* Note: this does not check for integer overflow of time_t! */
+    int day, sec;
+    return ASN1_TIME_diff(&day, &sec, NULL, asn1time)
+      ? log_epoch_secs + day*86400 + sec
+      : (time_t)-1;
+
+  #endif
+}
+
+
+static time_t
+mod_openssl_ocsp_next_update (plugin_cert *pc)
+{
+  #ifdef BORINGSSL_API_VERSION
+    UNUSED(pc);
+    return (time_t)-1; /*(not implemented)*/
+  #else
+    buffer *der = pc->ssl_stapling;
+    const unsigned char *p = (unsigned char *)der->ptr; /*(p gets modified)*/
+    OCSP_RESPONSE *ocsp = d2i_OCSP_RESPONSE(NULL,&p,buffer_string_length(der));
+    if (NULL == ocsp) return (time_t)-1;
+    OCSP_BASICRESP *bs = OCSP_response_get1_basic(ocsp);
+    if (NULL == bs) {
+        OCSP_RESPONSE_free(ocsp);
+        return (time_t)-1;
+    }
+
+    /* XXX: should save and evaluate cert status returned by these calls */
+    ASN1_TIME *nextupd = NULL;
+   #ifdef WOLFSSL_VERSION /* WolfSSL limitation */
+    /* WolfSSL does not provide OCSP_resp_get0() OCSP_single_get0_status() */
+    OCSP_CERTID *id = (NULL != pc->ssl_pemfile_chain)
+      ? OCSP_cert_to_id(NULL, pc->ssl_pemfile_x509,
+                        sk_X509_value(pc->ssl_pemfile_chain, 0))
+      : NULL;
+    if (id == NULL) {
+        OCSP_BASICRESP_free(bs);
+        OCSP_RESPONSE_free(ocsp);
+        return (time_t)-1;
+    }
+    OCSP_resp_find_status(bs, id, NULL, NULL, NULL, NULL, &nextupd);
+    OCSP_CERTID_free(id);
+   #else
+    OCSP_single_get0_status(OCSP_resp_get0(bs, 0), NULL, NULL, NULL, &nextupd);
+   #endif
+    time_t t = nextupd ? mod_openssl_asn1_time_to_posix(nextupd) : (time_t)-1;
+
+    /* Note: trust external process which creates ssl.stapling-file to verify
+     *       (as well as to validate certificate status)
+     * future: verify OCSP response here to double-check */
+
+    OCSP_BASICRESP_free(bs);
+    OCSP_RESPONSE_free(ocsp);
+
+    return t;
+  #endif
+}
+
+
+static int
+mod_openssl_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
+{
+    buffer *b = mod_openssl_load_stapling_file(pc->ssl_stapling_file->ptr,
+                                               srv->errh, pc->ssl_stapling);
+    if (!b) return 0;
+
+    pc->ssl_stapling = b; /*(unchanged unless orig was NULL)*/
+    pc->ssl_stapling_loadts = cur_ts;
+    pc->ssl_stapling_nextts = mod_openssl_ocsp_next_update(pc);
+    if (pc->ssl_stapling_nextts == (time_t)-1) {
+        /* "Next Update" might not be provided by OCSP responder
+         * Use 3600 sec (1 hour) in that case. */
+        /* retry in 1 hour if unable to determine Next Update */
+        pc->ssl_stapling_nextts = cur_ts + 3600;
+        pc->ssl_stapling_loadts = 0;
+    }
+
+    return 1;
+}
+
+
+static int
+mod_openssl_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
+{
+    if (pc->ssl_stapling && pc->ssl_stapling_nextts - 256 > cur_ts)
+        return 1; /* skip check for refresh unless close to expire */
+    struct stat st;
+    if (0 != stat(pc->ssl_stapling_file->ptr, &st)
+        || st.st_mtime <= pc->ssl_stapling_loadts) {
+        if (pc->ssl_stapling_nextts < cur_ts) {
+            /* discard expired OCSP stapling response */
+            buffer_free(pc->ssl_stapling);
+            pc->ssl_stapling = NULL;
+        }
+        return 1;
+    }
+    return mod_openssl_reload_stapling_file(srv, pc, cur_ts);
+}
+
+
+static void
+mod_openssl_refresh_stapling_files (server *srv, const plugin_data *p, const time_t cur_ts)
+{
+    /* future: might construct array of (plugin_cert *) at startup
+     *         to avoid the need to search for them here */
+    for (int i = 0, used = p->nconfig; i < used; ++i) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; cpv->k_id != -1; ++cpv) {
+            if (cpv->k_id != 0) continue; /* k_id == 0 for ssl.pemfile */
+            if (cpv->vtype != T_CONFIG_LOCAL) continue;
+            plugin_cert *pc = cpv->v.v;
+            if (!buffer_string_is_empty(pc->ssl_stapling_file))
+                mod_openssl_refresh_stapling_file(srv, pc, cur_ts);
+        }
+    }
+}
+
+#endif
+
+
 static plugin_cert *
-network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *privkey)
+network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *privkey, const buffer *ssl_stapling_file)
 {
     if (!mod_openssl_init_once_openssl(srv)) return NULL;
 
@@ -1340,6 +1725,23 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     pc->ssl_pemfile_chain= ssl_pemfile_chain;
     pc->ssl_pemfile = pemfile;
     pc->ssl_privkey = privkey;
+    pc->ssl_stapling     = NULL;
+    pc->ssl_stapling_file= ssl_stapling_file;
+    pc->ssl_stapling_loadts = 0;
+    pc->ssl_stapling_nextts = 0;
+
+    if (!buffer_string_is_empty(pc->ssl_stapling_file)) {
+      #ifndef OPENSSL_NO_OCSP
+        if (!mod_openssl_reload_stapling_file(srv, pc, log_epoch_secs)) {
+            /* continue without OCSP response if there is an error */
+        }
+      #else
+        log_error(srv->errh, __FILE__, __LINE__, "SSL:"
+          "OCSP stapling not supported; ignoring %s",
+          pc->ssl_stapling_file->ptr);
+      #endif
+    }
+
     return pc;
 }
 
@@ -1858,6 +2260,12 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         SSL_CTX_set_tlsext_ticket_key_cb(s->ssl_ctx, ssl_tlsext_ticket_key_cb);
       #endif
 
+      #ifndef OPENSSL_NO_OCSP
+      #ifndef BORINGSSL_API_VERSION /* BoringSSL suggests using different API */
+        SSL_CTX_set_tlsext_status_cb(s->ssl_ctx, ssl_tlsext_status_cb);
+      #endif
+      #endif
+
       #if OPENSSL_VERSION_NUMBER >= 0x10002000 \
        && !defined(LIBRESSL_VERSION_NUMBER)
 
@@ -2259,6 +2667,9 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
      ,{ CONST_STR_LEN("ssl.acme-tls-1"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.stapling-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("debug.log-ssl-noise"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
@@ -2281,6 +2692,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
         config_plugin_value_t *pemfile = NULL;
         config_plugin_value_t *privkey = NULL;
+        const buffer *ssl_stapling_file = NULL;
         const buffer *ssl_ca_file = NULL;
         const buffer *ssl_ca_dn_file = NULL;
         const buffer *ssl_ca_crl_file = NULL;
@@ -2345,7 +2757,11 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
               case 10:/* ssl.verifyclient.username */
               case 11:/* ssl.verifyclient.exportcert */
               case 12:/* ssl.acme-tls-1 */
-              case 13:/* debug.log-ssl-noise */
+                break;
+              case 13:/* ssl.stapling-file */
+                ssl_stapling_file = cpv->v.b;
+                break;
+              case 14:/* debug.log-ssl-noise */
                 break;
               default:/* should not happen */
                 break;
@@ -2408,7 +2824,8 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
           #endif
             if (NULL == privkey) privkey = pemfile;
             pemfile->v.v =
-              network_openssl_load_pemfile(srv, pemfile->v.b, privkey->v.b);
+              network_openssl_load_pemfile(srv, pemfile->v.b, privkey->v.b,
+                                           ssl_stapling_file);
             if (pemfile->v.v)
                 pemfile->vtype = T_CONFIG_LOCAL;
             else
@@ -3172,6 +3589,10 @@ TRIGGER_FUNC(mod_openssl_handle_trigger) {
 
   #ifdef TLSEXT_TYPE_session_ticket
     mod_openssl_session_ticket_key_check(p, cur_ts);
+  #endif
+
+  #ifndef OPENSSL_NO_OCSP
+    mod_openssl_refresh_stapling_files(srv, p, cur_ts);
   #endif
 
     return HANDLER_GO_ON;
