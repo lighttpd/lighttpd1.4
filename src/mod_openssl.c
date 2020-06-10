@@ -48,6 +48,10 @@
 
 #include "sys-crypto.h"
 
+#ifdef BORINGSSL_API_VERSION
+#undef OPENSSL_NO_STDIO /* for X509_STORE_load_locations() */
+#endif
+
 #ifdef WOLFSSL_OPTIONS_H
 /* WolfSSL defines OPENSSL_VERSION_NUMBER 0x10001040L for OPENSSL_ALL
  * or HAVE_LIGHTY.  WolfSSL does not provide many interfaces added in
@@ -72,6 +76,10 @@
 #endif
 #ifndef OPENSSL_NO_OCSP
 #include <openssl/ocsp.h>
+#endif
+#ifdef BORINGSSL_API_VERSION
+/* BoringSSL purports to have some OCSP support */
+#undef OPENSSL_NO_OCSP
 #endif
 
 #if ! defined OPENSSL_NO_TLSEXT && ! defined SSL_CTRL_SET_TLSEXT_HOSTNAME
@@ -712,8 +720,10 @@ PEM_ASN1_read_bio_secmem(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
         return NULL;
     p = data;
     ret = d2i(x, &p, len);
+  #ifndef BORINGSSL_API_VERSION /* missing PEMerr() macro */
     if (ret == NULL)
         PEMerr(PEM_F_PEM_ASN1_READ_BIO, ERR_R_ASN1_LIB);
+  #endif
   #if OPENSSL_VERSION_NUMBER >= 0x10101000L \
    && !defined(LIBRESSL_VERSION_NUMBER)
     OPENSSL_secure_clear_free(data, len);
@@ -1139,6 +1149,7 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
    && !defined(LIBRESSL_VERSION_NUMBER)
     if (pc->ssl_pemfile_chain)
         SSL_set1_chain(ssl, pc->ssl_pemfile_chain);
+   #ifndef BORINGSSL_API_VERSION /* BoringSSL limitation */
     else if (hctx->conf.ssl_ca_file) {
         /* preserve legacy behavior whereby openssl will reuse CAs trusted for
          * certificate verification (set by SSL_CTX_load_verify_locations() in
@@ -1163,6 +1174,7 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
             SSL_set1_chain_cert_store(ssl, NULL);
         }
     }
+   #endif
   #endif
 
     if (1 != SSL_use_PrivateKey(ssl, pc->ssl_pemfile_pkey)) {
@@ -1474,6 +1486,7 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
 }
 
 
+#ifndef BORINGSSL_API_VERSION
 static time_t
 mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
 {
@@ -1576,6 +1589,7 @@ mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
 
   #endif
 }
+#endif
 
 
 static time_t
@@ -2272,6 +2286,16 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         SSL_CTX_set_cert_cb(s->ssl_ctx, mod_openssl_cert_cb, NULL);
         UNUSED(p);
 
+       #if defined(BORINGSSL_API_VERSION) /* BoringSSL limitation */
+        /* set cert store for auto-chaining
+         * BoringSSL does not support SSL_set1_chain_cert_store() in cert_cb */
+        if (s->ssl_ca_file && s->ssl_ca_file->certs) {
+            if (!X509_STORE_up_ref(s->ssl_ca_file->certs))
+                return -1;
+            SSL_CTX_set_cert_store(s->ssl_ctx, s->ssl_ca_file->certs);
+        }
+       #endif
+
       #else /* OPENSSL_VERSION_NUMBER < 0x10002000 */
 
         /* load all ssl.ca-files specified in the config into each SSL_CTX
@@ -2333,6 +2357,10 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 
       #endif /* OPENSSL_VERSION_NUMBER < 0x10002000 */
 
+       #if defined(BORINGSSL_API_VERSION)
+       #define SSL_CTX_set_default_read_ahead(ctx,m) \
+               SSL_CTX_set_read_ahead(ctx,m)
+       #endif
         SSL_CTX_set_default_read_ahead(s->ssl_ctx, s->ssl_read_ahead);
         SSL_CTX_set_mode(s->ssl_ctx, SSL_CTX_get_mode(s->ssl_ctx)
                                    | SSL_MODE_ENABLE_PARTIAL_WRITE
