@@ -93,6 +93,7 @@ typedef struct {
     unsigned char ssl_verifyclient_depth;
 
     const char *priority_base;
+    buffer *priority_override;
     buffer priority_str;
   #if GNUTLS_VERSION_NUMBER < 0x030600
     gnutls_dh_params_t dh_params;
@@ -1453,6 +1454,10 @@ mod_gnutls_ssl_conf_cmd (server *srv, plugin_config_socket *s)
                           "ignored", (int)(e-v), v);
             }
         }
+        else if (buffer_eq_icase_slen(&ds->key,
+                                      CONST_STR_LEN("gnutls-override"))) {
+            s->priority_override = &ds->value;
+        }
       #if 0
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("..."))) {
         }
@@ -1490,9 +1495,6 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     UNUSED(p);
 
     /* construct GnuTLS "priority" string
-     *
-     * XXX: might make config option to allow user to define priority string
-     *      (which would short-circuit any related config directives)
      *
      * default: NORMAL (since GnuTLS 3.3.0, could also use NULL for defaults)
      * SUITEB128 and SUITEB192 are stricter than NORMAL
@@ -1603,6 +1605,16 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             --len; /* remove trailing ':' */
         buffer_append_string_len(b, s->priority_str.ptr, len);
     }
+
+    if (!buffer_string_is_empty(s->priority_override)) {
+        b = s->priority_override;
+        s->ssl_session_ticket = (NULL == strstr(b->ptr, "%NO_TICKET"));
+    }
+
+    if (p->defaults.ssl_log_noise)
+        log_error(srv->errh, __FILE__, __LINE__,
+                  "debug: GnuTLS priority string: %s", b->ptr);
+
     const char *err_pos;
     rc = gnutls_priority_init(&s->priority_cache, b->ptr, &err_pos);
     if (rc < 0) {
