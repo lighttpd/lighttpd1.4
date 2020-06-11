@@ -7,8 +7,6 @@
 /*
  * GnuTLS manual: https://www.gnutls.org/documentation.html
  *
- * future possible enhancements: OCSP stapling
- *
  * Note: If session tickets are -not- disabled with
  *     ssl.openssl.ssl-conf-cmd = ("Options" => "-SessionTicket")
  *   mod_gnutls rotates server ticket encryption key (STEK) every 24 hours.
@@ -41,6 +39,7 @@
 #include <unistd.h>
 
 #include <gnutls/gnutls.h>
+#include <gnutls/ocsp.h>
 #include <gnutls/x509.h>
 #include <gnutls/abstract.h>
 
@@ -60,6 +59,9 @@ typedef struct {
     char trust_inited;
     gnutls_datum_t *ssl_pemfile_x509;
     gnutls_privkey_t ssl_pemfile_pkey;
+    const buffer *ssl_stapling_file;
+    time_t ssl_stapling_loadts;
+    time_t ssl_stapling_nextts;
 } plugin_cert;
 
 typedef struct {
@@ -700,7 +702,9 @@ mod_gnutls_merge_config_cpv (plugin_config * const pconf, const config_plugin_va
       case 12:/* ssl.acme-tls-1 */
         pconf->ssl_acme_tls_1 = cpv->v.b;
         break;
-      case 13:/* debug.log-ssl-noise */
+      case 13:/* ssl.stapling-file */
+        break;
+      case 14:/* debug.log-ssl-noise */
         pconf->ssl_log_noise = (unsigned char)cpv->v.shrt;
         break;
       default:/* should not happen */
@@ -881,6 +885,128 @@ mod_gnutls_verify_cb (gnutls_session_t ssl)
 }
 
 
+#if GNUTLS_VERSION_NUMBER < 0x030603
+static time_t
+mod_gnutls_ocsp_next_update (plugin_cert *pc, log_error_st *errh)
+{
+    gnutls_datum_t f = { NULL, 0 };
+    int rc = mod_gnutls_load_file(pc->ssl_stapling_file->ptr, &f, errh);
+    if (rc < 0) return (time_t)-1;
+
+    gnutls_ocsp_resp_t resp = NULL;
+    time_t nextupd;
+    if (   gnutls_ocsp_resp_init(&resp) < 0
+        || gnutls_ocsp_resp_import(resp, &f) < 0
+        || gnutls_ocsp_resp_get_single(resp, 0, NULL, NULL, NULL, NULL, NULL,
+                                       NULL, &nextupd, NULL, NULL) < 0)
+        nextupd = (time_t)-1;
+    gnutls_ocsp_resp_deinit(resp);
+    mod_gnutls_datum_wipe(&f);
+    return nextupd;
+}
+#endif
+
+
+static int
+mod_gnutls_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
+{
+  #if GNUTLS_VERSION_NUMBER < 0x030603
+    /* load file into gnutls_ocsp_resp_t before loading into
+     * gnutls_certificate_credentials_t for safety.  Still ToC-ToU since file
+     * is loaded twice, but unlikely condition.  (GnuTLS limitation does not
+     * expose access to OCSP response from gnutls_certificate_credentials_t
+     * before GnuTLS 3.6.3) */
+    time_t nextupd = mod_gnutls_ocsp_next_update(pc, srv->errh);
+  #else
+    UNUSED(srv);
+  #endif
+
+    /* GnuTLS 3.5.6 added the ability to include multiple OCSP responses for
+     * certificate chain as allowed in TLSv1.3, but that is not utilized here.
+     * If implemented, it will probably operate on a new directive,
+     *   e.g. ssl.stapling-pemfile
+     * GnuTLS 3.6.3 added gnutls_certificate_set_ocsp_status_request_file2()
+     * GnuTLS 3.6.3 added gnutls_certificate_set_ocsp_status_request_mem()
+     * GnuTLS 3.6.3 added gnutls_certificate_get_ocsp_expiration() */
+
+    /* gnutls_certificate_get_ocsp_expiration() code comments:
+     *   Note that the credentials structure should be read-only when in
+     *   use, thus when reloading, either the credentials structure must not
+     *   be in use by any sessions, or a new credentials structure should be
+     *   allocated for new sessions.
+     * XXX: lighttpd is not threaded, so this is probably not an issue (?)
+     */
+
+  #if 0
+    gnutls_certificate_set_flags(pc->ssl_cred,
+                                 GNUTLS_CERTIFICATE_SKIP_OCSP_RESPONSE_CHECK);
+  #endif
+
+    const char *fn = pc->ssl_stapling_file->ptr;
+    int rc = gnutls_certificate_set_ocsp_status_request_file(pc->ssl_cred,fn,0);
+    if (rc < 0)
+        return rc;
+
+  #if GNUTLS_VERSION_NUMBER >= 0x030603
+    time_t nextupd =
+      gnutls_certificate_get_ocsp_expiration(pc->ssl_cred, 0, 0, 0);
+    if (nextupd == (time_t)-2) nextupd = (time_t)-1;
+  #endif
+
+    pc->ssl_stapling_loadts = cur_ts;
+    pc->ssl_stapling_nextts = nextupd;
+    if (pc->ssl_stapling_nextts == (time_t)-1) {
+        /* "Next Update" might not be provided by OCSP responder
+         * Use 3600 sec (1 hour) in that case. */
+        /* retry in 1 hour if unable to determine Next Update */
+        pc->ssl_stapling_nextts = cur_ts + 3600;
+        pc->ssl_stapling_loadts = 0;
+    }
+
+    return 0;
+}
+
+
+static int
+mod_gnutls_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
+{
+    if (pc->ssl_stapling_nextts >= 256
+        && pc->ssl_stapling_nextts - 256 > cur_ts)
+        return 0; /* skip check for refresh unless close to expire */
+    struct stat st;
+    if (0 != stat(pc->ssl_stapling_file->ptr, &st)
+        || st.st_mtime <= pc->ssl_stapling_loadts) {
+      #if 0
+        if (pc->ssl_stapling_nextts < cur_ts) {
+            /* discard expired OCSP stapling response */
+            /* Does GnuTLS detect expired OCSP response? */
+            /* or must we rebuild gnutls_certificate_credentials_t ? */
+        }
+      #endif
+        return 0;
+    }
+    return mod_gnutls_reload_stapling_file(srv, pc, cur_ts);
+}
+
+
+static void
+mod_gnutls_refresh_stapling_files (server *srv, const plugin_data *p, const time_t cur_ts)
+{
+    /* future: might construct array of (plugin_cert *) at startup
+     *         to avoid the need to search for them here */
+    for (int i = 0, used = p->nconfig; i < used; ++i) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; cpv->k_id != -1; ++cpv) {
+            if (cpv->k_id != 0) continue; /* k_id == 0 for ssl.pemfile */
+            if (cpv->vtype != T_CONFIG_LOCAL) continue;
+            plugin_cert *pc = cpv->v.v;
+            if (!buffer_string_is_empty(pc->ssl_stapling_file))
+                mod_gnutls_refresh_stapling_file(srv, pc, cur_ts);
+        }
+    }
+}
+
+
 static int
 mod_gnutls_construct_crt_chain (plugin_cert *pc, gnutls_datum_t *d, log_error_st *errh)
 {
@@ -955,7 +1081,7 @@ mod_gnutls_construct_crt_chain (plugin_cert *pc, gnutls_datum_t *d, log_error_st
 
 
 static void *
-network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *privkey)
+network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *privkey, const buffer *ssl_stapling_file)
 {
   #if 0 /* see comments in mod_gnutls_construct_crt_chain() above */
 
@@ -1004,6 +1130,9 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
     pc->trust_inited = 0;
     pc->ssl_pemfile_x509 = d;
     pc->ssl_pemfile_pkey = pkey;
+    pc->ssl_stapling_file= ssl_stapling_file;
+    pc->ssl_stapling_loadts = 0;
+    pc->ssl_stapling_nextts = 0;
 
     if (d->size > 1) { /*(certificate chain provided)*/
         int rc = mod_gnutls_construct_crt_chain(pc, d, srv->errh);
@@ -1012,6 +1141,12 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
             gnutls_privkey_deinit(pkey);
             free(pc);
             return NULL;
+        }
+    }
+
+    if (!buffer_string_is_empty(pc->ssl_stapling_file)) {
+        if (mod_gnutls_reload_stapling_file(srv, pc, log_epoch_secs) < 0) {
+            /* continue without OCSP response if there is an error */
         }
     }
 
@@ -1918,6 +2053,9 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
      ,{ CONST_STR_LEN("ssl.acme-tls-1"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.stapling-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("debug.log-ssl-noise"),
         T_CONFIG_SHORT,
         T_CONFIG_SCOPE_CONNECTION }
@@ -1937,6 +2075,7 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
         config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
         config_plugin_value_t *pemfile = NULL;
         config_plugin_value_t *privkey = NULL;
+        const buffer *ssl_stapling_file = NULL;
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* ssl.pemfile */
@@ -1991,9 +2130,12 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
                 break;
               case 10:/* ssl.verifyclient.username */
               case 11:/* ssl.verifyclient.exportcert */
-                break;
               case 12:/* ssl.acme-tls-1 */
-              case 13:/* debug.log-ssl-noise */
+                break;
+              case 13:/* ssl.stapling-file */
+                ssl_stapling_file = cpv->v.b;
+                break;
+              case 14:/* debug.log-ssl-noise */
                 break;
               default:/* should not happen */
                 break;
@@ -2003,7 +2145,8 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
         if (pemfile) {
             if (NULL == privkey) privkey = pemfile;
             pemfile->v.v =
-              network_gnutls_load_pemfile(srv, pemfile->v.b, privkey->v.b);
+              network_gnutls_load_pemfile(srv, pemfile->v.b, privkey->v.b,
+                                          ssl_stapling_file);
             if (pemfile->v.v)
                 pemfile->vtype = T_CONFIG_LOCAL;
             else
@@ -2758,6 +2901,7 @@ TRIGGER_FUNC(mod_gnutls_handle_trigger) {
     if (cur_ts & 0x3f) return HANDLER_GO_ON; /*(continue once each 64 sec)*/
 
     mod_gnutls_session_ticket_key_check(srv, p, cur_ts);
+    mod_gnutls_refresh_stapling_files(srv, p, cur_ts);
 
     return HANDLER_GO_ON;
 }
