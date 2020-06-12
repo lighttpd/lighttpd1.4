@@ -315,16 +315,19 @@ typedef struct {
   #endif
 } sql_config;
 
+enum { /* opts bitflags */
+  MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT      = 0x1
+};
+
 typedef struct {
     unsigned short enabled;
     unsigned short is_readonly;
     unsigned short log_xml;
-    unsigned short deprecated_unsafe_partial_put_compat;
+    unsigned short opts;
 
     sql_config *sql;
     buffer *tmpb;
     buffer *sqlite_db_name; /* not used after worker init */
-    array *opts;
 } plugin_config;
 
 typedef struct {
@@ -404,8 +407,7 @@ static void mod_webdav_merge_config_cpv(plugin_config * const pconf, const confi
         break;
       case 4: /* webdav.opts */
         if (cpv->vtype == T_CONFIG_LOCAL)
-            pconf->deprecated_unsafe_partial_put_compat =
-              (unsigned short)cpv->v.u;
+            pconf->opts = (unsigned short)cpv->v.u;
         break;
       default:/* should not happen */
         return;
@@ -485,19 +487,24 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
               case 3: /* webdav.log-xml */
                 break;
               case 4: /* webdav.opts */
-                for (uint32_t j = 0, used = cpv->v.a->used; j < used; ++j) {
-                    data_string *ds = (data_string *)cpv->v.a->data[j];
-                    if (buffer_is_equal_string(&ds->key,
-                          CONST_STR_LEN("deprecated-unsafe-partial-put"))) {
-                        cpv->v.u =
-                          buffer_eq_slen(&ds->value,CONST_STR_LEN("enable"));
-                        cpv->vtype = T_CONFIG_LOCAL;
-                        continue;
+                if (cpv->v.a->used) {
+                    unsigned short opts = 0;
+                    for (uint32_t j = 0, used = cpv->v.a->used; j < used; ++j) {
+                        data_string *ds = (data_string *)cpv->v.a->data[j];
+                        if (buffer_is_equal_string(&ds->key,
+                              CONST_STR_LEN("deprecated-unsafe-partial-put"))
+                            && buffer_eq_slen(&ds->value,
+                                              CONST_STR_LEN("enable"))) {
+                            opts |= MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT;
+                            continue;
+                        }
+                        log_error(srv->errh, __FILE__, __LINE__,
+                                  "unrecognized webdav.opts: %.*s",
+                                  BUFFER_INTLEN_PTR(&ds->key));
+                        return HANDLER_ERROR;
                     }
-                    log_error(srv->errh, __FILE__, __LINE__,
-                              "unrecognized webdav.opts: %.*s",
-                              BUFFER_INTLEN_PTR(&ds->key));
-                    return HANDLER_ERROR;
+                    cpv->v.u = opts;
+                    cpv->vtype = T_CONFIG_LOCAL;
                 }
                 break;
               default:/* should not happen */
@@ -4239,7 +4246,8 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
 {
     if (NULL != http_header_request_get(r, HTTP_HEADER_OTHER,
                                         CONST_STR_LEN("Content-Range"))) {
-        if (pconf->deprecated_unsafe_partial_put_compat) return HANDLER_GO_ON;
+        if (pconf->opts & MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT)
+            return HANDLER_GO_ON;
         /* [RFC7231] 4.3.4 PUT
          *   An origin server that allows PUT on a given target resource MUST
          *   send a 400 (Bad Request) response to a PUT request that contains a
@@ -4476,7 +4484,7 @@ mod_webdav_put (request_st * const r, const plugin_config * const pconf)
         return HANDLER_FINISHED;
     }
 
-    if (pconf->deprecated_unsafe_partial_put_compat) {
+    if (pconf->opts & MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT) {
         const buffer * const h =
           http_header_request_get(r, HTTP_HEADER_OTHER,
                                   CONST_STR_LEN("Content-Range"));
