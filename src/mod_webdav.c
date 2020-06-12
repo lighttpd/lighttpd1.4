@@ -2881,6 +2881,7 @@ typedef struct webdav_propfind_bufs {
   int propname;
   int lockdiscovery;
   int depth;
+  int recursed;
   struct stat st;
 } webdav_propfind_bufs;
 
@@ -3273,6 +3274,10 @@ webdav_propfind_resource (const webdav_propfind_bufs * const restrict pb)
 static void
 webdav_propfind_dir (webdav_propfind_bufs * const restrict pb)
 {
+    /* arbitrary recursion limit to prevent infinite loops,
+     * e.g. due to symlink loops, or excessive resource usage */
+    if (++pb->recursed > 100) return;
+
     physical_st * const dst = pb->dst;
     const int dfd = fdevent_open_dirname(dst->path.ptr, 0);
     DIR * const dir = (dfd >= 0) ? fdopendir(dfd) : NULL;
@@ -3793,6 +3798,7 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
     pb.allprop      = 0;
     pb.propname     = 0;
     pb.lockdiscovery= 0;
+    pb.recursed     = 0;
     pb.depth        = webdav_parse_Depth(r);
 
     /* future: might add config option to enable Depth: infinity
