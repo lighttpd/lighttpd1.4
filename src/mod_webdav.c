@@ -318,6 +318,7 @@ typedef struct {
 enum { /* opts bitflags */
   MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT      = 0x1
  ,MOD_WEBDAV_UNSAFE_PROPFIND_FOLLOW_SYMLINK = 0x2
+ ,MOD_WEBDAV_PROPFIND_DEPTH_INFINITY        = 0x4
 };
 
 typedef struct {
@@ -497,6 +498,13 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
                             && buffer_eq_slen(&ds->value,
                                               CONST_STR_LEN("enable"))) {
                             opts |= MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT;
+                            continue;
+                        }
+                        if (buffer_is_equal_string(&ds->key,
+                              CONST_STR_LEN("propfind-depth-infinity"))
+                            && buffer_eq_slen(&ds->value,
+                                              CONST_STR_LEN("enable"))) {
+                            opts |= MOD_WEBDAV_PROPFIND_DEPTH_INFINITY;
                             continue;
                         }
                         if (buffer_is_equal_string(&ds->key,
@@ -3810,9 +3818,7 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
     pb.recursed     = 0;
     pb.depth        = webdav_parse_Depth(r);
 
-    /* future: might add config option to enable Depth: infinity
-     * (Depth: infinity is supported if this rejection is removed) */
-    if (-1 == pb.depth) {
+    if (-1 == pb.depth && !(pconf->opts & MOD_WEBDAV_PROPFIND_DEPTH_INFINITY)) {
         webdav_xml_doc_error_propfind_finite_depth(r);
         return HANDLER_FINISHED;
     }
