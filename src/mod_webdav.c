@@ -317,6 +317,7 @@ typedef struct {
 
 enum { /* opts bitflags */
   MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT      = 0x1
+ ,MOD_WEBDAV_UNSAFE_PROPFIND_FOLLOW_SYMLINK = 0x2
 };
 
 typedef struct {
@@ -496,6 +497,13 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
                             && buffer_eq_slen(&ds->value,
                                               CONST_STR_LEN("enable"))) {
                             opts |= MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT;
+                            continue;
+                        }
+                        if (buffer_is_equal_string(&ds->key,
+                              CONST_STR_LEN("unsafe-propfind-follow-symlink"))
+                            && buffer_eq_slen(&ds->value,
+                                              CONST_STR_LEN("enable"))) {
+                            opts |= MOD_WEBDAV_UNSAFE_PROPFIND_FOLLOW_SYMLINK;
                             continue;
                         }
                         log_error(srv->errh, __FILE__, __LINE__,
@@ -2882,6 +2890,7 @@ typedef struct webdav_propfind_bufs {
   int lockdiscovery;
   int depth;
   int recursed;
+  int atflags;
   struct stat st;
 } webdav_propfind_bufs;
 
@@ -3307,7 +3316,7 @@ webdav_propfind_dir (webdav_propfind_bufs * const restrict pb)
                 || (de->d_name[1] == '.' && de->d_name[2] == '\0')))
             continue; /* ignore "." and ".." */
 
-        if (0 != fstatat(dfd, de->d_name, &pb->st, AT_SYMLINK_NOFOLLOW))
+        if (0 != fstatat(dfd, de->d_name, &pb->st, pb->atflags))
             continue; /* file *just* disappeared? */
 
         const uint32_t len = (uint32_t) _D_EXACT_NAMLEN(de);
@@ -3808,7 +3817,15 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
         return HANDLER_FINISHED;
     }
 
-    if (0 != lstat(r->physical.path.ptr, &pb.st)) {
+    pb.atflags =
+      ((pconf->opts & MOD_WEBDAV_UNSAFE_PROPFIND_FOLLOW_SYMLINK)
+       && pconf->is_readonly)
+        ? 0 /* non-standard */
+        : AT_SYMLINK_NOFOLLOW; /* WebDAV does not have symlink concept */
+
+    if (pb.atflags == AT_SYMLINK_NOFOLLOW
+        ? 0 != lstat(r->physical.path.ptr, &pb.st)
+        : 0 != stat(r->physical.path.ptr, &pb.st)) { /* non-standard */
         http_status_set_error(r, (errno == ENOENT) ? 404 : 403);
         return HANDLER_FINISHED;
     }
