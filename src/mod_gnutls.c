@@ -41,6 +41,7 @@
 #include <gnutls/gnutls.h>
 #include <gnutls/ocsp.h>
 #include <gnutls/x509.h>
+#include <gnutls/x509-ext.h>
 #include <gnutls/abstract.h>
 
 #ifdef GNUTLS_SKIP_GLOBAL_INIT
@@ -57,6 +58,7 @@ typedef struct {
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
     gnutls_certificate_credentials_t ssl_cred;
     char trust_inited;
+    char must_staple;
     gnutls_datum_t *ssl_pemfile_x509;
     gnutls_privkey_t ssl_pemfile_pkey;
     const buffer *ssl_stapling_file;
@@ -976,13 +978,19 @@ mod_gnutls_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cur
     struct stat st;
     if (0 != stat(pc->ssl_stapling_file->ptr, &st)
         || st.st_mtime <= pc->ssl_stapling_loadts) {
-      #if 0
         if (pc->ssl_stapling_nextts < cur_ts) {
+          #if 0
             /* discard expired OCSP stapling response */
             /* Does GnuTLS detect expired OCSP response? */
             /* or must we rebuild gnutls_certificate_credentials_t ? */
+          #endif
+            if (pc->must_staple) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                          "certificate marked OCSP Must-Staple, "
+                          "but OCSP response expired from ssl.stapling-file %s",
+                          pc->ssl_stapling_file->ptr);
+            }
         }
-      #endif
         return 0;
     }
     return mod_gnutls_reload_stapling_file(srv, pc, cur_ts);
@@ -1004,6 +1012,60 @@ mod_gnutls_refresh_stapling_files (server *srv, const plugin_data *p, const time
                 mod_gnutls_refresh_stapling_file(srv, pc, cur_ts);
         }
     }
+}
+
+
+static int
+mod_gnutls_crt_must_staple (gnutls_x509_crt_t crt)
+{
+    /* Look for TLS features X.509 extension with value 5
+     * RFC 7633 https://tools.ietf.org/html/rfc7633#appendix-A
+     * 5 = OCSP Must-Staple (security mechanism) */
+
+    int rc;
+
+  #if GNUTLS_VERSION_NUMBER < 0x030501
+
+    unsigned int i;
+    char oid[128];
+    size_t oidsz;
+    for (i = 0; ; ++i) {
+        oidsz = sizeof(oid);
+        rc = gnutls_x509_crt_get_extension_info(crt, i, oid, &oidsz, NULL);
+        if (rc < 0 || 0 == strcmp(oid, GNUTLS_X509EXT_OID_TLSFEATURES)) break;
+    }
+    /* ext not found if (rc == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) */
+    if (rc < 0) return rc;
+
+    gnutls_datum_t der = { NULL, 0 };
+    rc = gnutls_x509_crt_get_extension_data2(crt, i, &der);
+    if (rc < 0) return rc;
+
+    /* DER encoding (Tag, Length, Value (TLV)) expecting: 30:03:02:01:05
+     * [TL[TLV]] (30=Sequence, Len=03, (02=Integer, Len=01, Value=05))
+     * XXX: This is not future-proof if TLS feature list values are extended */
+    /*const char must_staple[] = { 0x30, 0x03, 0x02, 0x01, 0x05 };*/
+    /*rc = (der.size == 5 && 0 == memcmp(der.data, must_staple, 5))*/
+    rc = (der.size >= 5 && der.data[0] == 0x30 && der.data[1] >= 0x03
+          && der.data[2] == 0x2 && der.data[3] == 0x1 && der.data[4] == 0x5)
+      ? 1
+      : 0;
+
+    gnutls_free(der.data);
+
+  #else
+
+    gnutls_x509_tlsfeatures_t f;
+    rc = gnutls_x509_tlsfeatures_init(&f);
+    if (rc < 0) return rc;
+    rc = gnutls_x509_tlsfeatures_add(f, 5); /* 5 = OCSP Must-Staple */
+    if (rc < 0) return rc;
+    rc = (0 != gnutls_x509_tlsfeatures_check_crt(f, crt));
+    gnutls_x509_tlsfeatures_deinit(f);
+
+  #endif
+
+    return rc; /* 1 if OCSP Must-Staple found; 0 if not */
 }
 
 
@@ -1133,6 +1195,8 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
     pc->ssl_stapling_file= ssl_stapling_file;
     pc->ssl_stapling_loadts = 0;
     pc->ssl_stapling_nextts = 0;
+    pc->must_staple =
+      mod_gnutls_crt_must_staple(((gnutls_x509_crt_t *)(void *)d->data)[0]);
 
     if (d->size > 1) { /*(certificate chain provided)*/
         int rc = mod_gnutls_construct_crt_chain(pc, d, srv->errh);
@@ -1148,6 +1212,11 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
         if (mod_gnutls_reload_stapling_file(srv, pc, log_epoch_secs) < 0) {
             /* continue without OCSP response if there is an error */
         }
+    }
+    else if (pc->must_staple) {
+        log_error(srv->errh, __FILE__, __LINE__,
+                  "certificate %s marked OCSP Must-Staple, "
+                  "but ssl.stapling-file not provided", pemfile->ptr);
     }
 
     return pc;
