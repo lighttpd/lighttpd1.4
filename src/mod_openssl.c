@@ -129,6 +129,7 @@ typedef struct {
     const buffer *ssl_stapling_file;
     time_t ssl_stapling_loadts;
     time_t ssl_stapling_nextts;
+    char must_staple;
 } plugin_cert;
 
 typedef struct {
@@ -1675,6 +1676,12 @@ mod_openssl_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cu
             /* discard expired OCSP stapling response */
             buffer_free(pc->ssl_stapling);
             pc->ssl_stapling = NULL;
+            if (pc->must_staple) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                          "certificate marked OCSP Must-Staple, "
+                          "but OCSP response expired from ssl.stapling-file %s",
+                          pc->ssl_stapling_file->ptr);
+            }
         }
         return 1;
     }
@@ -1699,7 +1706,39 @@ mod_openssl_refresh_stapling_files (server *srv, const plugin_data *p, const tim
     }
 }
 
-#endif
+
+static int
+mod_openssl_crt_must_staple (const X509 *crt)
+{
+  #if OPENSSL_VERSION_NUMBER < 0x10100000L \
+   || defined(BORINGSSL_API_VERSION) \
+   || defined(LIBRESSL_VERSION_NUMBER)
+    /*(not currently supported in BoringSSL or LibreSSL)*/
+    UNUSED(crt);
+    return 0;
+  #else
+    /* openssl/x509v3.h:typedef STACK_OF(ASN1_INTEGER) TLS_FEATURE; */
+
+    TLS_FEATURE *tlsf = X509_get_ext_d2i(crt, NID_tlsfeature, NULL, NULL);
+    if (NULL == tlsf) return 0;
+
+    int rc = 0;
+
+    for (int i = 0; i < sk_ASN1_INTEGER_num(tlsf); ++i) {
+        ASN1_INTEGER *ai = sk_ASN1_INTEGER_value(tlsf, i);
+        long tlsextid = ASN1_INTEGER_get(ai);
+        if (tlsextid == 5) { /* 5 = OCSP Must-Staple */
+            rc = 1;
+            break;
+        }
+    }
+
+    sk_ASN1_INTEGER_pop_free(tlsf, ASN1_INTEGER_free);
+    return rc; /* 1 if OCSP Must-Staple found; 0 if not */
+  #endif
+}
+
+#endif /* OPENSSL_NO_OCSP */
 
 
 static plugin_cert *
@@ -1743,6 +1782,11 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     pc->ssl_stapling_file= ssl_stapling_file;
     pc->ssl_stapling_loadts = 0;
     pc->ssl_stapling_nextts = 0;
+  #ifndef OPENSSL_NO_OCSP
+    pc->must_staple = mod_openssl_crt_must_staple(ssl_pemfile_x509);
+  #else
+    pc->must_staple = 0;
+  #endif
 
     if (!buffer_string_is_empty(pc->ssl_stapling_file)) {
       #ifndef OPENSSL_NO_OCSP
@@ -1754,6 +1798,11 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
           "OCSP stapling not supported; ignoring %s",
           pc->ssl_stapling_file->ptr);
       #endif
+    }
+    else if (pc->must_staple) {
+        log_error(srv->errh, __FILE__, __LINE__,
+                  "certificate %s marked OCSP Must-Staple, "
+                  "but ssl.stapling-file not provided", pemfile->ptr);
     }
 
     return pc;
