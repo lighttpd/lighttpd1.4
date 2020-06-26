@@ -2435,6 +2435,15 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
        #endif
       #endif
 
+      #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
+       || defined(BORINGSSL_API_VERSION) \
+       || defined(LIBRESSL_VERSION_NUMBER) \
+       || defined(WOLFSSL_VERSION)
+        if (!s->ssl_use_sslv3 && !s->ssl_use_sslv2
+            && !SSL_CTX_set_min_proto_version(s->ssl_ctx, TLS1_2_VERSION))
+            return -1;
+      #endif
+
         if (s->ssl_conf_cmd && s->ssl_conf_cmd->used) {
             if (0 != network_openssl_ssl_conf_cmd(srv, s)) return -1;
         }
