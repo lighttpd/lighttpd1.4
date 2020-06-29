@@ -428,6 +428,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
             data_string *ds = (data_string *)srv->srvconf.modules->data[i];
             if (buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_openssl"))
                 || buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_mbedtls"))
+                || buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_nss"))
                 || buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_gnutls"))) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "mod_extforward must be loaded after %s in "

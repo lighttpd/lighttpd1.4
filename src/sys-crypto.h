@@ -24,6 +24,10 @@
 #include <mbedtls/config.h>
 #endif
 
+#ifdef HAVE_NSS3_NSS_H
+#define USE_NSS_CRYPTO
+#endif
+
 #ifdef HAVE_NETTLE_NETTLE_TYPES_H
 #define USE_LIB_CRYPTO
 #define USE_NETTLE_CRYPTO

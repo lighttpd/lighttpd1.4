@@ -852,6 +852,38 @@ if test "x$use_gnutls" = "xyes"; then
   fi
 fi
 
+dnl Check for NSS
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for NSS])
+AC_ARG_WITH([nss],
+  AC_HELP_STRING([--with-nss@<:@=DIR@:>@],[Include NSS support. DIR points to the installation root. (default no)]),
+  [WITH_NSS=$withval],
+  [WITH_NSS=no]
+)
+
+if test "$WITH_NSS" != "no"; then
+  use_nss=yes
+else
+  use_nss=no
+fi
+AC_MSG_RESULT([$use_nss])
+AM_CONDITIONAL(BUILD_WITH_NSS, test ! $WITH_NSS = no)
+
+NSS_CFLAGS=
+NSS_LIBS=
+
+if test "x$use_nss" = "xyes"; then
+  if test "$WITH_NSS" != "yes"; then
+      NSS_CFLAGS="-I$WITH_NSS/include"
+      NSS_LIBS="-L$WITH_NSS/lib"
+  else
+      PKG_CHECK_MODULES([NSS],[nss])
+  fi
+  AC_DEFINE([HAVE_NSS3_NSS_H], [1], [nss3/nss.h])
+  AC_SUBST([NSS_CFLAGS])
+  AC_SUBST([NSS_LIBS])
+fi
+
 
 dnl pcre support
 AC_MSG_NOTICE([----------------------------------------])
@@ -1651,6 +1683,9 @@ lighty_track_feature "network-mbedtls" "mod_mbedtls" \
 
 lighty_track_feature "network-gnutls" "mod_gnutls" \
   'test "$WITH_GNUTLS" != no'
+
+lighty_track_feature "network-nss" "mod_nss" \
+  'test "$WITH_NSS" != no'
 
 lighty_track_feature "auth-crypt" "" \
   'test "$found_crypt" != no'

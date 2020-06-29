@@ -406,6 +406,14 @@ mod_gnutls_la_LIBADD = $(GNUTLS_LIBS) $(common_libadd)
 mod_gnutls_la_CPPFLAGS = $(GNUTLS_CFLAGS)
 endif
 
+if BUILD_WITH_NSS
+lib_LTLIBRARIES += mod_nss.la
+mod_nss_la_SOURCES = mod_nss.c
+mod_nss_la_LDFLAGS = $(common_module_ldflags)
+mod_nss_la_LIBADD = $(NSS_LIBS) $(common_libadd)
+mod_nss_la_CPPFLAGS = $(NSS_CFLAGS)
+endif
+
 
 lib_LTLIBRARIES += mod_rewrite.la
 mod_rewrite_la_SOURCES = mod_rewrite.c

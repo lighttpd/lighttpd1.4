@@ -450,6 +450,19 @@ if get_option('with_gnutls')
 	  libcrypto = [ dependency('libgnutls') ]
 	endif
 endif
+if get_option('with_nss')
+	# manual search:
+	# header: nss3/nss.h
+	# function: NSSSSL_GetVersion (-lssl3)
+	# function: NSSSMIME_GetVersion (-lsmime3)
+	# function: NSS_GetVersion (-lnss3)
+	# function: NSSUTIL_GetVersion (-lnssutil3)
+	libssl3 = [ dependency('libssl3') ]
+	libsmime3 = [ dependency('libsmime3') ]
+	libnss3 = [ dependency('libnss3') ]
+	libnssutil3 = [ dependency('libnssutil3') ]
+	conf_data.set('HAVE_NSS3_NSS_H', true)
+endif
 
 libpcre = []
 if get_option('with_pcre')
@@ -1010,6 +1023,12 @@ endif
 if get_option('with_mbedtls') != 'false'
 	modules += [
 		[ 'mod_mbedtls', [ 'mod_mbedtls.c' ], libssl + libx509 + libcrypto ],
+	]
+endif
+
+if get_option('with_nss') != 'false'
+	modules += [
+		[ 'mod_nss', [ 'mod_nss.c' ], libssl3 + libsmime3 + libnss3 + libnssutil3 ],
 	]
 endif
 

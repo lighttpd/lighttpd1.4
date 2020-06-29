@@ -78,6 +78,11 @@ option('with_nettle',
 	value: false,
 	description: 'with Nettle-support [default: off]',
 )
+option('with_nss',
+	type: 'string',
+	value: 'false',
+	description: 'with NSS-crypto-support [default: off]',
+)
 option('with_openssl',
 	type: 'boolean',
 	value: false,

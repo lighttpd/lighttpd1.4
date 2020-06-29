@@ -254,6 +254,7 @@ vars.AddVariables(
 	BoolVariable('with_openssl', 'enable openssl support', 'no'),
 	PackageVariable('with_gnutls', 'enable GnuTLS support', 'no'),
 	PackageVariable('with_mbedtls', 'enable mbedTLS support', 'no'),
+	PackageVariable('with_nss', 'enable NSS crypto support', 'no'),
 	PackageVariable('with_wolfssl', 'enable wolfSSL support', 'no'),
 	BoolVariable('with_nettle', 'enable Nettle support', 'no'),
 	BoolVariable('with_pam', 'enable PAM auth support', 'no'),
@@ -337,6 +338,7 @@ if 1:
 		LIBLUA = '',
 		LIBMEMCACHED = '',
 		LIBMYSQL = '',
+		LIBNSS = '',
 		LIBPAM = '',
 		LIBPCRE = '',
 		LIBPGSQL = '',
@@ -588,6 +590,12 @@ if 1:
 		if not autoconf.CheckParseConfigForLib('LIBMYSQL', mysql_config + ' --cflags --libs'):
 			fail("Couldn't find mysql")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ])
+
+	if env['with_nss']:
+		nss_config = autoconf.checkProgram('nss', 'nss-config')
+		if not autoconf.CheckParseConfigForLib('LIBNSS', nss_config + ' --cflags --libs'):
+			fail("Couldn't find NSS")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_NSS3_NSS_H' ])
 
 	if env['with_openssl']:
 		if not autoconf.CheckLibWithHeader('ssl', 'openssl/ssl.h', 'C'):
