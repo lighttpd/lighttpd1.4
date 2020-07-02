@@ -1074,3 +1074,59 @@ int fdevent_set_so_reuseaddr (const int fd, const int opt)
 {
     return setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 }
+
+
+#include <sys/stat.h>
+#include "safe_memclear.h"
+__attribute_cold__ /*(convenience routine for use at config at startup)*/
+char *
+fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *(malloc_fn)(size_t), void(free_fn)(void *))
+{
+    int fd = -1;
+    off_t sz = 0;
+    char *buf = NULL;
+    do {
+        fd = fdevent_open_cloexec(fn, 1, O_RDONLY, 0); /*(1: follows symlinks)*/
+        if (fd < 0) break;
+
+        struct stat st;
+        if (0 != fstat(fd, &st)) break;
+        if ((sizeof(off_t) > sizeof(size_t) && st.st_size >= (off_t)~(size_t)0u)
+            || (*lim != 0 && st.st_size >= *lim)) {
+            errno = EOVERFLOW;
+            break;
+        }
+
+        sz = st.st_size;
+        buf = malloc_fn((size_t)sz+1);/*+1 trailing '\0' for str funcs on data*/
+        if (NULL == buf) break;
+
+        if (sz) {
+            ssize_t rd = 0;
+            off_t off = 0;
+            do {
+                rd = read(fd, buf+off, (size_t)(sz-off));
+            } while (rd > 0 ? (off += rd) != sz : errno == EINTR);
+            if (off != sz) { /*(file truncated?)*/
+                if (rd >= 0) errno = EIO;
+                break;
+            }
+        }
+
+        buf[sz] = '\0';
+        *lim = sz;
+        close(fd);
+        return buf;
+    } while (0);
+    int errnum = errno;
+    if (errh)
+        log_perror(errh, __FILE__, __LINE__, "%s() %s", __func__, fn);
+    if (fd >= 0) close(fd);
+    if (buf) {
+        safe_memclear(buf, (size_t)sz);
+        free_fn(buf);
+    }
+    *lim = 0;
+    errno = errnum;
+    return NULL;
+}

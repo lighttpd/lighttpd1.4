@@ -112,4 +112,6 @@ int fdevent_set_tcp_nodelay (const int fd, const int opt);
 
 int fdevent_set_so_reuseaddr (const int fd, const int opt);
 
+char * fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *(malloc_fn)(size_t), void(free_fn)(void *));
+
 #endif
