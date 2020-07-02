@@ -1403,55 +1403,21 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
      * typically the same size with the signature and dates refreshed.
      */
 
-  #ifdef BORINGSSL_API_VERSION
+  #if defined(BORINGSSL_API_VERSION) \
+   || defined(WOLFSSL_VERSION)
 
     /* load raw .der file */
-    /* (similar to mod_gnutls.c:mod_gnutls_load_file(), but some differences) */
-    int fd = -1;
-    uint32_t sz = 0;
-    char *buf = NULL;
-    do {
-        fd = fdevent_open_cloexec(file,1,O_RDONLY,0); /*(1: follows symlinks)*/
-        if (fd < 0) break;
-
-        struct stat st;
-        if (0 != fstat(fd, &st)) break;
-        if (st.st_size == 0) break;
-        if (st.st_size >= UINT32_MAX) { /*(file too large for buffer uint32_t)*/
-            errno = EOVERFLOW;
-            break;
-        }
-
-        sz = (uint32_t)st.st_size;
-        buf = malloc(sz+1); /*(+1 trailing '\0')*/
-        if (NULL == buf) break;
-
-        ssize_t rd = 0;
-        unsigned int off = 0;
-        do {
-            rd = read(fd, buf+off, sz-off);
-        } while (rd > 0 ? (off += (unsigned int)rd) != sz : errno == EINTR);
-        if (off != sz) { /*(file truncated?)*/
-            if (rd >= 0) errno = EIO;
-            break;
-        }
-
-        if (NULL == b) b = buffer_init();
-        buffer_copy_string_len(b, buf, sz);
-        memset(buf, 0, sz);
-        free(buf);
-        close(fd);
-        return b;
-    } while (0);
-    int errnum = errno;
-    log_perror(errh, __FILE__, __LINE__, "%s() %s", __func__, file);
-    if (fd >= 0) close(fd);
-    if (buf) {
-        memset(buf, 0, sz);
-        free(buf);
-    }
-    errno = errnum;
-    return NULL;;
+    off_t dlen = 1*1024*1024;/*(arbitrary limit: 1 MB file; expect < 1 KB)*/
+    char *data = fdevent_load_file(file, &dlen, errh, malloc, free);
+    if (NULL == data) return NULL;
+    if (NULL == b)
+        b = buffer_init();
+    else if (b->ptr)
+        free(b->ptr);
+    b->ptr  = data;
+    b->used = (uint32_t)dlen;
+    b->size = (uint32_t)dlen+1;
+    return b;
 
   #else
 

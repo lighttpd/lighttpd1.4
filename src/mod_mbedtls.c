@@ -87,6 +87,7 @@
 #include "http_header.h"
 #include "log.h"
 #include "plugin.h"
+#include "safe_memclear.h"
 
 typedef struct {
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
@@ -753,6 +754,70 @@ mod_mbedtls_conf_verify (handler_ctx *hctx, mbedtls_ssl_config *ssl_ctx)
 }
 
 
+/* mbedTLS interfaces are generally excellent.  mbedTLS convenience interfaces
+ * to read CRLs, X509 certs, and private keys are uniformly paranoid about
+ * clearing memory.  At the moment, stdio routines fopen(), fread(), fclose()
+ * are used for portability, but without setvbuf(stream, NULL, _IOLBF, 0),
+ * again for portability, since setvbuf() is not necessarily available.  Since
+ * stdio buffers by default, use our own funcs to read files without buffering.
+ * mbedtls_pk_load_file() includes trailing '\0' in size when contents in PEM
+ * format, so do the same with the value returned from fdevent_load_file().
+ */
+
+
+static int
+mod_mbedtls_x509_crl_parse_file (mbedtls_x509_crl *chain, const char *fn)
+{
+    int rc = MBEDTLS_ERR_X509_FILE_IO_ERROR;
+    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(fn, &dlen, NULL, malloc, free);
+    if (NULL == data) return rc;
+
+    rc = mbedtls_x509_crl_parse(chain, (unsigned char *)data, (size_t)dlen+1);
+
+    if (dlen) safe_memclear(data, (size_t)dlen);
+    free(data);
+
+    return rc;
+}
+
+
+static int
+mod_mbedtls_x509_crt_parse_file (mbedtls_x509_crt *chain, const char *fn)
+{
+    int rc = MBEDTLS_ERR_X509_FILE_IO_ERROR;
+    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(fn, &dlen, NULL, malloc, free);
+    if (NULL == data) return rc;
+
+    rc = mbedtls_x509_crt_parse(chain, (unsigned char *)data, (size_t)dlen+1);
+
+    if (dlen) safe_memclear(data, (size_t)dlen);
+    free(data);
+
+    return rc;
+}
+
+
+static int
+mod_mbedtls_pk_parse_keyfile (mbedtls_pk_context *ctx, const char *fn, const char *pwd)
+{
+    int rc = MBEDTLS_ERR_PK_FILE_IO_ERROR;
+    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(fn, &dlen, NULL, malloc, free);
+    if (NULL == data) return rc;
+
+    rc = mbedtls_pk_parse_key(ctx, (unsigned char *)data, (size_t)dlen+1,
+                              (const unsigned char *)pwd,
+                              pwd ? strlen(pwd) : 0);
+
+    if (dlen) safe_memclear(data, (size_t)dlen);
+    free(data);
+
+    return rc;
+}
+
+
 static void *
 network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *privkey)
 {
@@ -761,7 +826,7 @@ network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     int rc;
 
     mbedtls_x509_crt_init(&ssl_pemfile_x509); /* init cert structure */
-    rc = mbedtls_x509_crt_parse_file(&ssl_pemfile_x509, pemfile->ptr);
+    rc = mod_mbedtls_x509_crt_parse_file(&ssl_pemfile_x509, pemfile->ptr);
     if (0 != rc) {
         elogf(srv->errh, __FILE__, __LINE__, rc,
               "PEM file cert read failed (%s)", pemfile->ptr);
@@ -769,7 +834,7 @@ network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     }
 
     mbedtls_pk_init(&ssl_pemfile_pkey);  /* init private key context */
-    rc = mbedtls_pk_parse_keyfile(&ssl_pemfile_pkey, privkey->ptr, NULL);
+    rc = mod_mbedtls_pk_parse_keyfile(&ssl_pemfile_pkey, privkey->ptr, NULL);
     if (0 != rc) {
         elogf(srv->errh, __FILE__, __LINE__, rc,
               "PEM file private key read failed %s", privkey->ptr);
@@ -837,7 +902,7 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
         ssl_pemfile_x509 = malloc(sizeof(*ssl_pemfile_x509));
         force_assert(ssl_pemfile_x509);
         mbedtls_x509_crt_init(ssl_pemfile_x509); /* init cert structure */
-        rc = mbedtls_x509_crt_parse_file(ssl_pemfile_x509, b->ptr);
+        rc = mod_mbedtls_x509_crt_parse_file(ssl_pemfile_x509, b->ptr);
         if (0 != rc) {
             elogf(errh, __FILE__, __LINE__, rc,
                   "Failed to load acme-tls/1 pemfile: %s", b->ptr);
@@ -849,7 +914,7 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
         ssl_pemfile_pkey = malloc(sizeof(*ssl_pemfile_pkey));
         force_assert(ssl_pemfile_pkey);
         mbedtls_pk_init(ssl_pemfile_pkey);  /* init private key context */
-        rc = mbedtls_pk_parse_keyfile(ssl_pemfile_pkey, b->ptr, NULL);
+        rc = mod_mbedtls_pk_parse_keyfile(ssl_pemfile_pkey, b->ptr, NULL);
         if (0 != rc) {
             elogf(errh, __FILE__, __LINE__, rc,
                   "Failed to load acme-tls/1 pemfile: %s", b->ptr);
@@ -1533,7 +1598,8 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
                     mbedtls_x509_crt *cacert = calloc(1, sizeof(*cacert));
                     force_assert(cacert);
                     mbedtls_x509_crt_init(cacert);
-                    int rc = mbedtls_x509_crt_parse_file(cacert, cpv->v.b->ptr);
+                    int rc =
+                      mod_mbedtls_x509_crt_parse_file(cacert, cpv->v.b->ptr);
                     if (0 == rc) {
                         cpv->vtype = T_CONFIG_LOCAL;
                         cpv->v.v = cacert;
@@ -1552,7 +1618,8 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
                     mbedtls_x509_crl *crl = malloc(sizeof(*crl));
                     force_assert(crl);
                     mbedtls_x509_crl_init(crl);
-                    int rc = mbedtls_x509_crl_parse_file(crl, cpv->v.b->ptr);
+                    int rc =
+                      mod_mbedtls_x509_crl_parse_file(crl, cpv->v.b->ptr);
                     if (0 == rc) {
                         cpv->vtype = T_CONFIG_LOCAL;
                         cpv->v.v = crl;

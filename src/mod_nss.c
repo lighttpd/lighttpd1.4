@@ -330,57 +330,16 @@ mod_nss_io_dtor (PRFileDesc *ssl)
 }
 
 
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <limits.h>
-#include "fdevent.h"
 static int
 mod_nss_load_file (const char * const fn, SECItem * const d, log_error_st *errh)
 {
-    int fd = -1;
-    unsigned int sz = 0;
-    char *buf = NULL;
-    do {
-        fd = fdevent_open_cloexec(fn, 1, O_RDONLY, 0); /*(1: follows symlinks)*/
-        if (fd < 0) break;
-
-        struct stat st;
-        if (0 != fstat(fd, &st)) break;
-        if (st.st_size >= UINT_MAX) { /*(file too large for SECItem)*/
-            errno = EOVERFLOW;
-            break;
-        }
-
-        sz = (unsigned int)st.st_size;
-        buf = PORT_Alloc(sz+1); /*(+1 trailing '\0' for str funcs on PEM)*/
-        if (NULL == buf) break;
-
-        ssize_t rd = 0;
-        unsigned int off = 0;
-        do {
-            rd = read(fd, buf+off, sz-off);
-        } while (rd > 0 ? (off += (unsigned int)rd) != sz : errno == EINTR);
-        if (off != sz) { /*(file truncated?)*/
-            if (rd >= 0) errno = EIO;
-            break;
-        }
-
-        buf[sz] = '\0';
-        d->type = siBuffer;
-        d->data = (unsigned char *)buf;
-        d->len  = sz;
-        close(fd);
-        return 0;
-    } while (0);
-    int errnum = errno;
-    log_perror(errh, __FILE__, __LINE__, "%s() %s", __func__, fn);
-    if (fd >= 0) close(fd);
-    if (buf) {
-        safe_memclear(buf, sz);
-        PORT_Free(buf); /* safe_memclear() is safer than PORT_ZFree() */
-    }
-    errno = errnum;
-    return -1;
+    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(fn, &dlen, errh, PORT_Alloc, PORT_Free);
+    if (NULL == data) return -1;
+    d->type = siBuffer;
+    d->data = (unsigned char *)data;
+    d->len  = (unsigned int)dlen;
+    return 0;
 }
 
 

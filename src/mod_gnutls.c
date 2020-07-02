@@ -214,10 +214,6 @@ static void elogf(log_error_st * const errh,
  *   https://gitlab.com/gnutls/gnutls/-/issues/1002
  *   https://gitlab.com/gnutls/gnutls/-/merge_requests/1270
  */
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <limits.h>
-#include "fdevent.h"
 static int
 mod_gnutls_load_file (const char * const fn, gnutls_datum_t * const d, log_error_st *errh)
 {
@@ -227,49 +223,12 @@ mod_gnutls_load_file (const char * const fn, gnutls_datum_t * const d, log_error
         elogf(errh, __FILE__, __LINE__, rc, "%s() %s", __func__, fn);
     return rc;
   #else
-    int fd = -1;
-    unsigned int sz = 0;
-    char *buf = NULL;
-    do {
-        fd = fdevent_open_cloexec(fn, 1, O_RDONLY, 0); /*(1: follows symlinks)*/
-        if (fd < 0) break;
-
-        struct stat st;
-        if (0 != fstat(fd, &st)) break;
-        if (st.st_size >= UINT_MAX) { /*(file too large for gnutls_datum_t)*/
-            errno = EOVERFLOW;
-            break;
-        }
-
-        sz = (unsigned int)st.st_size;
-        buf = gnutls_malloc(sz+1); /*(+1 trailing '\0' for gnutls_load_file())*/
-        if (NULL == buf) break;
-
-        ssize_t rd = 0;
-        unsigned int off = 0;
-        do {
-            rd = read(fd, buf+off, sz-off);
-        } while (rd > 0 ? (off += (unsigned int)rd) != sz : errno == EINTR);
-        if (off != sz) { /*(file truncated?)*/
-            if (rd >= 0) errno = EIO;
-            break;
-        }
-
-        buf[sz] = '\0';
-        d->data = (unsigned char *)buf;
-        d->size = sz;
-        close(fd);
-        return 0;
-    } while (0);
-    int errnum = errno;
-    log_perror(errh, __FILE__, __LINE__, "%s() %s", __func__, fn);
-    if (fd >= 0) close(fd);
-    if (buf) {
-        gnutls_memset(buf, 0, sz);
-        gnutls_free(buf);
-    }
-    errno = errnum;
-    return GNUTLS_E_FILE_ERROR;
+    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(fn, &dlen, errh, gnutls_malloc, gnutls_free);
+    if (NULL == data) return GNUTLS_E_FILE_ERROR;
+    d->data = (unsigned char *)data;
+    d->size = (unsigned int)dlen;
+    return 0;
   #endif
 }
 
