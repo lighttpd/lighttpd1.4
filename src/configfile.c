@@ -711,7 +711,8 @@ static int config_insert_srvconf(server *srv) {
                #if !defined(USE_OPENSSL_CRYPTO) \
                 && !defined(USE_MBEDTLS_CRYPTO) \
                 && !defined(USE_NSS_CRYPTO) \
-                && !defined(USE_GNUTLS_CRYPTO)
+                && !defined(USE_GNUTLS_CRYPTO) \
+                && !defined(USE_WOLFSSL_CRYPTO)
                 if (ssl_enabled) {
                     log_error(srv->errh, __FILE__, __LINE__,
                       "ssl support is missing; "

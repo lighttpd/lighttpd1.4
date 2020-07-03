@@ -23,6 +23,7 @@
 #include "sys-crypto.h" /* USE_LIB_CRYPTO */
 #ifdef USE_NETTLE_CRYPTO
 #undef USE_MBEDTLS_CRYPTO
+#undef USE_WOLFSSL_CRYPTO
 #undef USE_OPENSSL_CRYPTO
 #undef USE_GNUTLS_CRYPTO
 #include <nettle/knuth-lfib.h>
@@ -30,10 +31,16 @@
 #include <nettle/yarrow.h>
 #endif
 #ifdef USE_MBEDTLS_CRYPTO
+#undef USE_WOLFSSL_CRYPTO
 #undef USE_OPENSSL_CRYPTO
 #undef USE_GNUTLS_CRYPTO
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
+#endif
+#ifdef USE_WOLFSSL_CRYPTO
+#undef USE_OPENSSL_CRYPTO
+#undef USE_GNUTLS_CRYPTO
+#include <wolfssl/wolfcrypt/random.h>
 #endif
 #ifdef USE_OPENSSL_CRYPTO
 #undef USE_GNUTLS_CRYPTO
@@ -159,6 +166,9 @@ static mbedtls_ctr_drbg_context ctr_drbg;
 #endif
 #endif
 #endif
+#ifdef USE_WOLFSSL_CRYPTO
+static WC_RNG wolf_globalRNG;
+#endif
 #ifdef USE_NETTLE_CRYPTO
 static struct knuth_lfib_ctx knuth_lfib_ctx;
 static struct arcfour_ctx    arcfour_ctx;
@@ -193,6 +203,7 @@ li_arcfour_init_random_key_hashed(struct arcfour_ctx *ctx)
 }
 #endif
 
+__attribute_cold__
 static void li_rand_init (void)
 {
     /* (intended to be called at init and after fork() in order to re-seed PRNG
@@ -229,6 +240,13 @@ static void li_rand_init (void)
     nettle_yarrow256_init(&yarrow256_ctx, 0, NULL);
     li_arcfour_init_random_key_hashed(&arcfour_ctx);
   #endif
+  #ifdef USE_WOLFSSL_CRYPTO
+    /* xsubi[] is small, so use wc_InitRng() instead of wc_InitRngNonce()
+     * to get default behavior of a larger internally-generated nonce */
+    if (0 != wolfCrypt_Init() || 0 != wc_InitRng(&wolf_globalRNG))
+        log_failed_assert(__FILE__, __LINE__,
+                          "wolfCrypt_Init or wc_InitRng() failed");
+  #endif
   #ifdef USE_OPENSSL_CRYPTO
     RAND_poll();
     RAND_seed(xsubi, (int)sizeof(xsubi));
@@ -253,6 +271,28 @@ void li_rand_reseed (void)
   #ifdef USE_GNUTLS_CRYPTO
     gnutls_rnd_refresh();
     return;
+  #endif
+  #ifdef USE_WOLFSSL_CRYPTO
+    if (li_rand_inited) {
+      #if 0 /*(wc_RNG_DRBG_Reseed() is not part of public API)*/
+        /*(XXX: might use stack to procure larger seed;
+         * xsubi[] is short (6 bytes)) */
+        if (1 == li_rand_device_bytes((unsigned char *)xsubi,
+                                      (int)sizeof(xsubi))) {
+            if (0 != wc_RNG_DRBG_Reseed(&wolf_globalRNG,
+                                        (const byte *)xsubi,
+                                        (word32)sizeof(xsubi)))
+                /*(not expecting this to fail)*/
+                log_failed_assert(__FILE__, __LINE__,
+                                  "wc_RNG_DRBG_Reseed() failed");
+        }
+      #else
+        wc_FreeRng(&wolf_globalRNG);
+        if (0 != wc_InitRng(&wolf_globalRNG))
+            log_failed_assert(__FILE__, __LINE__, "wc_InitRng() failed");
+      #endif
+        return;
+    }
   #endif
   #ifdef USE_MBEDTLS_CRYPTO
     if (li_rand_inited) {
@@ -281,6 +321,12 @@ int li_rand_pseudo (void)
     int i;
     if (-1 != RAND_pseudo_bytes((unsigned char *)&i, sizeof(i))) return i;
   #endif
+  #endif
+  #ifdef USE_WOLFSSL_CRYPTO
+    /* RAND_pseudo_bytes() in WolfSSL is equivalent to RAND_bytes() */
+    int i;
+    if (0 == wc_RNG_GenerateBlock(&wolf_globalRNG,(byte *)&i,(word32)sizeof(i)))
+        return i;
   #endif
   #ifdef USE_NETTLE_CRYPTO
     int i = (int)nettle_knuth_lfib_get(&knuth_lfib_ctx);
@@ -314,10 +360,16 @@ void li_rand_pseudo_bytes (unsigned char *buf, int num)
   #ifdef USE_GNUTLS_CRYPTO
     if (0 == gnutls_rnd(GNUTLS_RND_NONCE, buf, (size_t)num)) return;
   #endif
+    if (!li_rand_inited) li_rand_init();
   #ifdef USE_MBEDTLS_CRYPTO
   #ifdef MBEDTLS_CTR_DRBG_C
     if (0 == mbedtls_ctr_drbg_random(&ctr_drbg, buf, (size_t)num)) return;
   #endif
+  #endif
+  #ifdef USE_WOLFSSL_CRYPTO
+    /* RAND_pseudo_bytes() in WolfSSL is equivalent to RAND_bytes() */
+    if (0 == wc_RNG_GenerateBlock(&wolf_globalRNG, (byte *)buf, (word32)num))
+        return;
   #endif
     for (int i = 0; i < num; ++i)
         buf[i] = li_rand_pseudo() & 0xFF;
@@ -349,6 +401,11 @@ int li_rand_bytes (unsigned char *buf, int num)
         return rc;
     }
   #endif
+  #ifdef USE_WOLFSSL_CRYPTO
+    if (0 == wc_RNG_GenerateBlock(&wolf_globalRNG, (byte *)buf, (word32)num)) {
+        return 1;
+    }
+  #endif
   #ifdef USE_MBEDTLS_CRYPTO
   #ifdef MBEDTLS_ENTROPY_C
     /*(each call <= MBEDTLS_ENTROPY_BLOCK_SIZE; could implement loop here)*/
@@ -371,6 +428,13 @@ int li_rand_bytes (unsigned char *buf, int num)
 
 void li_rand_cleanup (void)
 {
+  #ifdef USE_WOLFSSL_CRYPTO
+    if (li_rand_inited) {
+        wc_FreeRng(&wolf_globalRNG);
+        wolfCrypt_Cleanup();
+        li_rand_inited = 0;
+    }
+  #endif
   #ifdef USE_OPENSSL_CRYPTO
   #if OPENSSL_VERSION_NUMBER < 0x10100000L
     RAND_cleanup();

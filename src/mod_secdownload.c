@@ -22,6 +22,8 @@
 #include <openssl/hmac.h>
 #elif defined(USE_GNUTLS_CRYPTO)
 #include <gnutls/crypto.h>
+#elif defined(USE_WOLFSSL_CRYPTO)
+#include <wolfssl/wolfcrypt/hmac.h>
 #endif
 #endif
 
@@ -205,6 +207,18 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 				  "hmac-sha1: HMAC() failed");
 				return 0;
 			}
+		  #elif defined(USE_WOLFSSL_CRYPTO)
+			Hmac hmac;
+			if (0 != wc_HmacInit(&hmac, NULL, INVALID_DEVID)
+			    || wc_HmacSetKey(&hmac, WC_SHA, (const byte *)config->secret->ptr,
+			                     (word32)buffer_string_length(config->secret)) < 0
+			    || wc_HmacUpdate(&hmac, (const byte *)protected_path,
+			                     (word32)strlen(protected_path)) < 0
+			    || wc_HmacFinal(&hmac, (byte *)digest) < 0) {
+				log_error(errh, __FILE__, __LINE__,
+				  "hmac-sha1: HMAC() failed");
+				return 0;
+			}
 		  #elif defined(USE_OPENSSL_CRYPTO)
 			if (NULL == HMAC(
 					EVP_sha1(),
@@ -254,6 +268,18 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			                  (const unsigned char *)protected_path,
 			                  strlen(protected_path), digest);
 			if (0 != rc) {
+				log_error(errh, __FILE__, __LINE__,
+				  "hmac-sha256: HMAC() failed");
+				return 0;
+			}
+		  #elif defined(USE_WOLFSSL_CRYPTO)
+			Hmac hmac;
+			if (0 != wc_HmacInit(&hmac, NULL, INVALID_DEVID)
+			    || wc_HmacSetKey(&hmac, WC_SHA256, (const byte *)config->secret->ptr,
+			                     (word32)buffer_string_length(config->secret)) < 0
+			    || wc_HmacUpdate(&hmac, (const byte *)protected_path,
+			                     (word32)strlen(protected_path)) < 0
+			    || wc_HmacFinal(&hmac, (byte *)digest) < 0) {
 				log_error(errh, __FILE__, __LINE__,
 				  "hmac-sha256: HMAC() failed");
 				return 0;

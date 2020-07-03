@@ -74,7 +74,8 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC), 0 };
 #if defined(USE_OPENSSL_CRYPTO) \
  || defined(USE_MBEDTLS_CRYPTO) \
  || defined(USE_NSS_CRYPTO) \
- || defined(USE_GNUTLS_CRYPTO)
+ || defined(USE_GNUTLS_CRYPTO) \
+ || defined(USE_WOLFTLS_CRYPTO)
 #define TEXT_SSL " (ssl)"
 #else
 #define TEXT_SSL
@@ -451,6 +452,11 @@ static void show_features (void) {
       "\t+ GnuTLS support\n"
 #else
       "\t- GnuTLS support\n"
+#endif
+#ifdef USE_WOLFSSL_CRYPTO
+      "\t+ WolfSSL support\n"
+#else
+      "\t- WolfSSL support\n"
 #endif
 #ifdef USE_NETTLE_CRYPTO
       "\t+ Nettle support\n"

@@ -144,6 +144,115 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 }
 #endif
 
+#elif defined(USE_WOLFSSL_CRYPTO)
+
+/* WolfSSL compatibility API for OpenSSL unnecessarily bounces through an extra
+ * layer of indirection.  However, to avoid conflicting typedefs when includers
+ * also include headers from the WolfSSL compatibility API for OpenSSL, we
+ * include those headers here, as well, and use the compatibility API typedefs.
+ * (undef of OPENSSL_EXTRA and NO_OLD_WC_NAMES not sufficient, and not friendly
+ *  to do in a header when others might rely on them) */
+
+#ifndef NO_MD4
+#include <wolfssl/wolfcrypt/md4.h>
+#include <wolfssl/openssl/md4.h>
+#undef MD4_Init
+#undef MD4_Final
+#undef MD4_Update
+#define USE_LIB_CRYPTO_MD4
+/*typedef Md4 MD4_CTX;*/
+static inline int
+MD4_Init(MD4_CTX *ctx)
+{
+    return (0 == wc_InitMd4((Md4 *)ctx));
+}
+static inline int
+MD4_Final(unsigned char *digest, MD4_CTX *ctx)
+{
+    return (0 == wc_Md4Final((Md4 *)ctx, digest));
+}
+static inline void
+MD4_Update(MD4_CTX *ctx, const void *data, size_t length)
+{
+    wc_Md4Update((Md4 *)ctx, data, length);
+}
+#endif
+
+#ifndef NO_MD5
+#include <wolfssl/wolfcrypt/md5.h>
+#include <wolfssl/openssl/md5.h>
+#undef MD5_Init
+#undef MD5_Final
+#undef MD5_Update
+#define USE_LIB_CRYPTO_MD5
+/*typedef wc_Md5 MD5_CTX;*/
+static inline int
+MD5_Init(MD5_CTX *ctx)
+{
+    return (0 == wc_InitMd5((wc_Md5 *)ctx));
+}
+static inline int
+MD5_Final(unsigned char *digest, MD5_CTX *ctx)
+{
+    return (0 == wc_Md5Final((wc_Md5 *)ctx, digest));
+}
+static inline void
+MD5_Update(MD5_CTX *ctx, const void *data, size_t length)
+{
+    wc_Md5Update((wc_Md5 *)ctx, data, length);
+}
+#endif
+
+#ifndef NO_SHA
+#include <wolfssl/wolfcrypt/sha.h>
+#include <wolfssl/openssl/sha.h>
+#undef SHA1_Init
+#undef SHA1_Final
+#undef SHA1_Update
+#define USE_LIB_CRYPTO_SHA1
+/*typedef wc_Sha SHA_CTX;*/
+static inline int
+SHA1_Init(SHA_CTX *ctx)
+{
+    return (0 == wc_InitSha((wc_Sha *)ctx));
+}
+static inline int
+SHA1_Final(unsigned char *digest, SHA_CTX *ctx)
+{
+    return (0 == wc_ShaFinal((wc_Sha *)ctx, digest));
+}
+static inline void
+SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
+{
+    wc_ShaUpdate((wc_Sha *)ctx, data, length);
+}
+#endif
+
+#ifndef NO_SHA256
+#include <wolfssl/wolfcrypt/sha256.h>
+#include <wolfssl/openssl/sha.h>
+#undef SHA256_Init
+#undef SHA256_Final
+#undef SHA256_Update
+#define USE_LIB_CRYPTO_SHA256
+/*typedef wc_Sha256 SHA256_CTX;*/
+static inline int
+SHA256_Init(SHA256_CTX *ctx)
+{
+    return (0 == wc_InitSha256((wc_Sha256 *)ctx));
+}
+static inline int
+SHA256_Final(unsigned char *digest, SHA256_CTX *ctx)
+{
+    return (0 == wc_Sha256Final((wc_Sha256 *)ctx, digest));
+}
+static inline void
+SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
+{
+    wc_Sha256Update((wc_Sha256 *)ctx, data, length);
+}
+#endif
+
 #elif defined(USE_OPENSSL_CRYPTO)
 
 #include <openssl/md4.h>

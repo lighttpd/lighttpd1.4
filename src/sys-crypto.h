@@ -9,7 +9,7 @@
 
 #ifdef HAVE_WOLFSSL_SSL_H
 #define USE_LIB_CRYPTO
-#define USE_OPENSSL_CRYPTO
+#define USE_WOLFSSL_CRYPTO
 /* wolfSSL needs to be built with ./configure --enable-lighty for lighttpd.
  * Doing so defines OPENSSL_EXTRA and HAVE_LIGHTY in <wolfssl/options.h>, and
  * these defines are necessary for wolfSSL headers to expose sufficient openssl
