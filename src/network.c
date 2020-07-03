@@ -375,6 +375,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 		if (0 != m && -1 == chmod(host, m)) {
 			log_perror(srv->errh, __FILE__, __LINE__,
 			  "chmod(\"%s\", %s)", host, s->socket_perms->ptr);
+			return -1;
 		}
 	}
 
