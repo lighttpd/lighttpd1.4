@@ -390,6 +390,9 @@ array_match_key_prefix_nc_klen (const array * const a, const char * const s, con
 data_unset *
 array_match_key_prefix (const array * const a, const buffer * const b)
 {
+  #ifdef __clang_analyzer__
+    force_assert(b);
+  #endif
     return array_match_key_prefix_klen(a, CONST_BUF_LEN(b));
 }
 

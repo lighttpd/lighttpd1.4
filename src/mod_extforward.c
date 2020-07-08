@@ -501,7 +501,7 @@ static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
         sock_addr addr;
         /* C funcs inet_aton(), inet_pton() require '\0'-terminated IP str */
         char addrstr[64]; /*(larger than INET_ADDRSTRLEN and INET6_ADDRSTRLEN)*/
-        if (iplen >= sizeof(addrstr)) return 0;
+        if (0 == iplen || iplen >= sizeof(addrstr)) return 0;
         memcpy(addrstr, ip, iplen);
         addrstr[iplen] = '\0';
 
@@ -843,6 +843,7 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
 
     /* parse out params associated with for=<ip> addr set above */
     oproto = ohost = oby = oremote_user = -1;
+    UNUSED(oby);
     j = ofor;
     if (j > 0) { do { --j; } while (j > 0 && -1 != offsets[j]); }
     if (-1 == offsets[j]) ++j;

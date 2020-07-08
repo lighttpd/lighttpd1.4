@@ -374,6 +374,9 @@ static int server_oneshot_init(server *srv, int fd) {
 	srv_socket = server_oneshot_getsock(srv, &cnt_addr);
 	if (NULL == srv_socket) return 0;
 
+      #ifdef __clang_analyzer__
+        memset(&cnt_addr, 0, sizeof(cnt_addr));
+      #endif
 	cnt_len = sizeof(cnt_addr);
 	if (0 != getpeername(fd, (struct sockaddr *)&cnt_addr, &cnt_len)) {
 		log_perror(srv->errh, __FILE__, __LINE__, "getpeername()");

@@ -44,6 +44,11 @@ const struct {
 };
 
 static void test_configfile_addrbuf_eq_remote_ip_mask (void) {
+	request_st r;
+	memset(&r, 0, sizeof(request_st));
+	r.conf.errh              = log_error_st_init();
+	r.conf.errh->errorlog_fd = -1; /* (disable) */
+
 	int i, m;
 	buffer * const s = buffer_init();
 	char *slash;
@@ -53,7 +58,7 @@ static void test_configfile_addrbuf_eq_remote_ip_mask (void) {
 		if (1 != sock_addr_inet_pton(&rmt, rmtmask[i].rmtstr, rmtmask[i].rmtfamily, 0)) exit(-1); /*(bad test)*/
 		buffer_copy_string(s, rmtmask[i].string);
 		slash = strchr(s->ptr,'/'); assert(slash);
-		m = config_addrbuf_eq_remote_ip_mask(NULL, s, slash, &rmt);
+		m = config_addrbuf_eq_remote_ip_mask(&r, s, slash, &rmt);
 		if (m != rmtmask[i].expect) {
 			fprintf(stderr, "failed assertion: %s %s %s\n",
 				rmtmask[i].string,
@@ -64,6 +69,7 @@ static void test_configfile_addrbuf_eq_remote_ip_mask (void) {
 	}
 
 	buffer_free(s);
+	log_error_st_free(r.conf.errh);
 }
 
 int main (void) {

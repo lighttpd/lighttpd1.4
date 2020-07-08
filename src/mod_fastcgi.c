@@ -348,6 +348,10 @@ static int fastcgi_get_packet(handler_ctx *hctx, fastcgi_response_packet *packet
 		}
 		return -1;
 	}
+      #ifdef __clang_analyzer__
+        /*(unnecessary (length checked above); init to quiet scan-build)*/
+        memset(&header, 0, sizeof(FCGI_Header));
+      #endif
 
 	/* get at least the FastCGI header */
 	for (chunk *c = hctx->rb->first; c; c = c->next) {

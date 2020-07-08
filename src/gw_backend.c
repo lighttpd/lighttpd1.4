@@ -2376,6 +2376,9 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
             /* check if extension matches */
             for (uint32_t k = 0; k < exts->used; ++k) {
                 gw_extension *ext = exts->exts+k;
+              #ifdef __clang_analyzer__
+                force_assert(ext); /*(unnecessary; quiet clang analyzer)*/
+              #endif
                 size_t ct_len = buffer_string_length(&ext->key);
 
                 /* check _url_ in the form "/gw_pattern" */

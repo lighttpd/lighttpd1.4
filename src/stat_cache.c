@@ -234,11 +234,17 @@ static void fam_dir_periodic_cleanup() {
 
 static void fam_dir_invalidate_tree(splay_tree *t, const char *name, size_t len)
 {
+  #ifdef __clang_analyzer__
+    force_assert(name);
+  #endif
     /*force_assert(t);*/
     if (t->left)  fam_dir_invalidate_tree(t->left,  name, len);
     if (t->right) fam_dir_invalidate_tree(t->right, name, len);
 
     fam_dir_entry * const fam_dir = t->data;
+  #ifdef __clang_analyzer__
+    force_assert(fam_dir);
+  #endif
     buffer *b = fam_dir->name;
     size_t blen = buffer_string_length(b);
     if (blen > len && b->ptr[len] == '/' && 0 == memcmp(b->ptr, name, len))

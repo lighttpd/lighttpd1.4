@@ -884,6 +884,9 @@ mod_wolfssl_load_client_CA_file (const buffer *ssl_ca_file, log_error_st *errh)
     /* similar to wolfSSL_load_client_CA_file(), plus some processing */
     buffer **certs = NULL;
     if (NULL == mod_wolfssl_load_pem_file(ssl_ca_file->ptr, errh, &certs)) {
+      #ifdef __clang_analyzer__
+        mod_wolfssl_free_der_certs(certs); /*unnecessary; quiet clang analyzer*/
+      #endif
         return NULL;
     }
 
@@ -929,6 +932,9 @@ mod_wolfssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
     /* similar to wolfSSL_load_client_CA_file(), plus some processing */
     buffer **certs = NULL;
     if (NULL == mod_wolfssl_load_pem_file(ssl_ca_file->ptr, errh, &certs)) {
+      #ifdef __clang_analyzer__
+        mod_wolfssl_free_der_certs(certs); /*unnecessary; quiet clang analyzer*/
+      #endif
         return NULL;
     }
 

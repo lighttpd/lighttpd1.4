@@ -134,6 +134,7 @@ data_config *data_config_init(void) {
 	data_config *ds;
 
 	ds = calloc(1, sizeof(*ds));
+	force_assert(ds);
 
 	ds->comp_tag = buffer_init();
 	ds->comp_key = buffer_init();

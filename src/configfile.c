@@ -1184,6 +1184,9 @@ int config_log_error_open(server *srv) {
     /* logs are opened after preflight check (srv->srvconf.preflight_check)
      * and after dropping privileges instead of being opened during config
      * processing */
+  #ifdef __clang_analyzer__
+    force_assert(srv->errh);
+  #endif
 
     /* Note: implementation does not de-dup repeated files or pipe commands */
 

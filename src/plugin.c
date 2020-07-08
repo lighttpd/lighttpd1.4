@@ -62,6 +62,7 @@ static plugin *plugin_init(void) {
 }
 
 static void plugin_free(plugin *p) {
+    if (NULL == p) return; /*(should not happen w/ current usage)*/
   #if !defined(LIGHTTPD_STATIC)
     if (p->lib) {
      #if defined(HAVE_VALGRIND_VALGRIND_H)

@@ -786,7 +786,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
             buffer_append_string_backslash_escaped(
               b, CONST_BUF_LEN(remote_user));
             buffer_append_string_len(b, CONST_STR_LEN("\""));
-            semicolon = 1;
+            /*semicolon = 1;*/
         }
     }
 

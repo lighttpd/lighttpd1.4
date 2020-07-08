@@ -141,6 +141,7 @@ static void test_burl_normalize (void) {
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/a/b?c=d%20e"), CONST_STR_LEN("/a/b?c=d+e"));
     flags &= ~HTTP_PARSEOPT_URL_NORMALIZE_QUERY_20_PLUS;
 
+    UNUSED(flags);
     buffer_free(psrc);
     buffer_free(ptmp);
 }
