@@ -338,15 +338,15 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
 }
 
 typedef struct {
-	size_t  namelen;
+	uint32_t namelen;
 	time_t  mtime;
 	off_t   size;
 } dirls_entry_t;
 
 typedef struct {
 	dirls_entry_t **ent;
-	size_t used;
-	size_t size;
+	uint32_t used;
+	uint32_t size;
 } dirls_list_t;
 
 #define DIRLIST_ENT_NAME(ent)	((char*)(ent) + sizeof(dirls_entry_t))
@@ -919,7 +919,7 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 		tmp = (dirls_entry_t*) malloc(sizeof(dirls_entry_t) + 1 + i);
 		tmp->mtime = st.st_mtime;
 		tmp->size  = st.st_size;
-		tmp->namelen = i;
+		tmp->namelen = (uint32_t)i;
 		memcpy(DIRLIST_ENT_NAME(tmp), dent->d_name, i + 1);
 
 		list->ent[list->used++] = tmp;

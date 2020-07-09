@@ -35,7 +35,7 @@ void stat_cache_free(void);
 __attribute_cold__
 void stat_cache_xattrname (const char *name);
 
-const buffer * stat_cache_mimetype_by_ext(const array *mimetypes, const char *name, size_t nlen);
+const buffer * stat_cache_mimetype_by_ext(const array *mimetypes, const char *name, uint32_t nlen);
 #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
 const buffer * stat_cache_mimetype_by_xattr(const char *name);
 const buffer * stat_cache_content_type_get_by_xattr(stat_cache_entry *sce, const array *mimetypes, int use_xattr);
@@ -45,10 +45,10 @@ const buffer * stat_cache_content_type_get_by_ext(stat_cache_entry *sce, const a
 #define stat_cache_content_type_get(con, r) stat_cache_content_type_get_by_ext((sce), (r)->conf.mimetypes)
 #endif
 const buffer * stat_cache_etag_get(stat_cache_entry *sce, int flags);
-void stat_cache_update_entry(const char *name, size_t len, struct stat *st, buffer *etagb);
-void stat_cache_delete_entry(const char *name, size_t len);
-void stat_cache_delete_dir(const char *name, size_t len);
-void stat_cache_invalidate_entry(const char *name, size_t len);
+void stat_cache_update_entry(const char *name, uint32_t len, struct stat *st, buffer *etagb);
+void stat_cache_delete_entry(const char *name, uint32_t len);
+void stat_cache_delete_dir(const char *name, uint32_t len);
+void stat_cache_invalidate_entry(const char *name, uint32_t len);
 stat_cache_entry * stat_cache_get_entry(const buffer *name);
 int stat_cache_path_contains_symlink(const buffer *name, log_error_st *errh);
 int stat_cache_open_rdonly_fstat (const buffer *name, struct stat *st, int symlinks);

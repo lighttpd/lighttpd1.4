@@ -57,26 +57,26 @@ static stat_cache sc;
 
 /* the famous DJB hash function for strings */
 __attribute_pure__
-static uint32_t djbhash(const char *str, const size_t len)
+static uint32_t djbhash(const char *str, const uint32_t len)
 {
     const unsigned char * const s = (const unsigned char *)str;
     uint32_t hash = 5381;
-    for (size_t i = 0; i < len; ++i) hash = ((hash << 5) + hash) ^ s[i];
+    for (uint32_t i = 0; i < len; ++i) hash = ((hash << 5) + hash) ^ s[i];
     return hash;
 }
 
 
 __attribute_pure__
-static uint32_t hashme(const char *str, const size_t len)
+static int32_t hashme(const char *str, const uint32_t len)
 {
     /* strip highest bit of hash value for splaytree */
-    return djbhash(str,len) & ~(((uint32_t)1) << 31);
+    return (int32_t)(djbhash(str,len) & ~(((uint32_t)1) << 31));
 }
 
 
 static void * stat_cache_sptree_find(splay_tree ** const sptree,
                                      const char * const name,
-                                     size_t len)
+                                     uint32_t len)
 {
     const int ndx = hashme(name, len);
     *sptree = splaytree_splay(*sptree, ndx);
@@ -252,7 +252,7 @@ static void fam_dir_invalidate_tree(splay_tree *t, const char *name, size_t len)
 }
 
 /* declarations */
-static void stat_cache_delete_tree(const char *name, size_t len);
+static void stat_cache_delete_tree(const char *name, uint32_t len);
 static void stat_cache_invalidate_dir_tree(const char *name, size_t len);
 
 static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
@@ -412,7 +412,7 @@ static void stat_cache_free_fam(stat_cache_fam *scf) {
 	free(scf);
 }
 
-static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, size_t dirlen, struct stat *st)
+static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t dirlen, struct stat *st)
 {
     if (NULL == scf->fdn) return NULL; /* FAM connection closed; do nothing */
     const int fn_is_dir = S_ISDIR(st->st_mode);
@@ -653,7 +653,7 @@ int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *err
     return 0;
 }
 
-const buffer * stat_cache_mimetype_by_ext(const array * const mimetypes, const char * const name, const size_t nlen)
+const buffer * stat_cache_mimetype_by_ext(const array * const mimetypes, const char * const name, const uint32_t nlen)
 {
     const char * const end = name + nlen; /*(end of string)*/
     const uint32_t used = mimetypes->used;
@@ -783,7 +783,7 @@ const buffer * stat_cache_etag_get(stat_cache_entry *sce, int flags) {
     return NULL;
 }
 
-void stat_cache_update_entry(const char *name, size_t len,
+void stat_cache_update_entry(const char *name, uint32_t len,
                              struct stat *st, buffer *etagb)
 {
     if (sc.stat_cache_engine == STAT_CACHE_ENGINE_NONE) return;
@@ -802,7 +802,7 @@ void stat_cache_update_entry(const char *name, size_t len,
     }
 }
 
-void stat_cache_delete_entry(const char *name, size_t len)
+void stat_cache_delete_entry(const char *name, uint32_t len)
 {
     if (sc.stat_cache_engine == STAT_CACHE_ENGINE_NONE) return;
     force_assert(0 != len);
@@ -815,7 +815,7 @@ void stat_cache_delete_entry(const char *name, size_t len)
     }
 }
 
-void stat_cache_invalidate_entry(const char *name, size_t len)
+void stat_cache_invalidate_entry(const char *name, uint32_t len)
 {
     splay_tree **sptree = &sc.files;
     stat_cache_entry *sce = stat_cache_sptree_find(sptree, name, len);
@@ -898,13 +898,13 @@ static void stat_cache_prune_dir_tree(const char *name, size_t len)
     sc.files = sptree;
 }
 
-static void stat_cache_delete_tree(const char *name, size_t len)
+static void stat_cache_delete_tree(const char *name, uint32_t len)
 {
     stat_cache_delete_entry(name, len);
     stat_cache_prune_dir_tree(name, len);
 }
 
-void stat_cache_delete_dir(const char *name, size_t len)
+void stat_cache_delete_dir(const char *name, uint32_t len)
 {
     force_assert(0 != len);
     if (name[len-1] == '/') { if (0 == --len) len = 1; }

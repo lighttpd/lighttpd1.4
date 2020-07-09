@@ -2225,7 +2225,7 @@ webdav_response_etag (request_st * const r, struct stat *st)
 static void
 webdav_parent_modified (const buffer *path)
 {
-    size_t dirlen = buffer_string_length(path);
+    uint32_t dirlen = buffer_string_length(path);
     const char *fn = path->ptr;
     /*force_assert(0 != dirlen);*/
     /*force_assert(fn[0] == '/');*/
@@ -2260,7 +2260,7 @@ webdav_parse_Depth (const request_st * const r)
 
 static int
 webdav_unlinkat (const plugin_config * const pconf, const buffer * const uri,
-                 const int dfd, const char * const d_name, size_t len)
+                 const int dfd, const char * const d_name, uint32_t len)
 {
     if (0 == unlinkat(dfd, d_name, 0)) {
         stat_cache_delete_entry(d_name, len);
