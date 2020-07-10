@@ -617,7 +617,7 @@ t_test_request_LDADD = $(LIBUNWIND_LIBS)
 
 noinst_HEADERS   = $(hdr)
 EXTRA_DIST = \
-	t\README \
+	t/README \
 	mod_skeleton.c \
 	configparser.y \
 	mod_ssi_exprparser.y \
