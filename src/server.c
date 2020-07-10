@@ -249,6 +249,7 @@ static server *server_init(void) {
 	srv->loadavg[0] = 0.0;
 	srv->loadavg[1] = 0.0;
 	srv->loadavg[2] = 0.0;
+	srv->stdin_fd = -1;
 
 	return srv;
 }
@@ -257,6 +258,9 @@ __attribute_cold__
 static void server_free(server *srv) {
 	if (oneshot_fd > 0) {
 		close(oneshot_fd);
+	}
+	if (srv->stdin_fd >= 0) {
+		close(srv->stdin_fd);
 	}
 
 #define CLEAN(x) \
@@ -714,7 +718,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 #ifdef HAVE_FORK
 	int parent_pipe_fd = -1;
 #endif
-	int stdin_fd = -1;
 
 #ifdef HAVE_GETUID
 	i_am_root = (0 == getuid());
@@ -833,8 +836,9 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 
 	if (srv->srvconf.bindhost && buffer_is_equal_string(srv->srvconf.bindhost, CONST_STR_LEN("/dev/stdin"))) {
-		stdin_fd = dup(STDIN_FILENO);
-		if (stdin_fd <= STDERR_FILENO) {
+		if (-1 == srv->stdin_fd)
+			srv->stdin_fd = dup(STDIN_FILENO);
+		if (srv->stdin_fd <= STDERR_FILENO) {
 			log_error(srv->errh, __FILE__, __LINE__,
 			  "Invalid fds at startup");
 			return -1;
@@ -981,9 +985,10 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 
 	/* we need root-perms for port < 1024 */
-	if (0 != network_init(srv, stdin_fd)) {
+	if (0 != network_init(srv, srv->stdin_fd)) {
 		return -1;
 	}
+	srv->stdin_fd = -1;
 
 	if (i_am_root) {
 #ifdef HAVE_PWD_H

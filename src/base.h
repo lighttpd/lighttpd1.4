@@ -188,6 +188,7 @@ struct server {
 	uid_t uid;
 	gid_t gid;
 	pid_t pid;
+	int stdin_fd;
 };
 
 
