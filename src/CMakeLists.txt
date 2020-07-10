@@ -910,6 +910,7 @@ add_executable(test_request
 	data_string.c
 	http_header.c
 	http_kv.c
+	log.c
 	sock_addr.c
 )
 add_test(NAME test_request COMMAND test_request)
