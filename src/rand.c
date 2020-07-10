@@ -222,6 +222,10 @@ static void li_rand_init (void)
       #ifdef HAVE_ARC4RANDOM_BUF
         u = arc4random();
         arc4random_buf(xsubi, sizeof(xsubi));
+      #elif defined(__COVERITY__)
+        /* Coverity Scan ignores(?) annotation below,
+         * so hide fallback path from Coverity Scan */
+        u = (unsigned int)(time(NULL) ^ getpid());
       #else
         /* NOTE: not cryptographically random !!! */
         srand((unsigned int)(time(NULL) ^ getpid()));
@@ -342,6 +346,11 @@ int li_rand_pseudo (void)
   #endif
   #ifdef HAVE_ARC4RANDOM_BUF
     return (int)arc4random();
+  #elif defined(__COVERITY__)
+    /* li_rand_pseudo() is not intended for cryptographic use */
+    /* Coverity Scan ignores(?) annotation below,
+     * so hide fallback paths from Coverity Scan */
+    return (int)(time(NULL) ^ getpid());
   #elif defined(HAVE_SRANDOM)
     /* coverity[dont_call : FALSE] */
     return (int)random();

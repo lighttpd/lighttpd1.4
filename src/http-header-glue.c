@@ -1291,6 +1291,10 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
         }
 
         buffer_commit(b, (size_t)n);
+      #ifdef __COVERITY__
+        /* Coverity Scan overlooks the effect of buffer_commit() */
+        b->ptr[buffer_string_length(b)+n] = '\0';
+      #endif
 
         if (NULL != opts->parse) {
             handler_t rc = opts->parse(r, opts, b, (size_t)n);

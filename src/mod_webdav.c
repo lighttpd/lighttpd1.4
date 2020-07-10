@@ -4346,6 +4346,11 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
         cq->last->file.length = 0;
         cq->bytes_in = 0;
     }
+  #ifdef __COVERITY__
+    /* chunkqueue_append_file_fd() does not update cq->last when 0 == cqlen,
+     * and that is handled above, so cq->last is never NULL here */
+    force_assert(cq->last);
+  #endif
     buffer_clear(cq->last->mem); /* file already unlink()ed */
     chunkqueue_set_tempdirs(cq, cq->tempdirs, INTMAX_MAX);
     /* force huge cq->upload_temp_file_size since chunkqueue_set_tempdirs()

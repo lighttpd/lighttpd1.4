@@ -97,7 +97,7 @@ static void buffer_alloc_replace(buffer * const b, const size_t size) {
 }
 
 char* buffer_string_prepare_copy(buffer * const b, const size_t size) {
-	if (NULL == b || size >= b->size) buffer_alloc_replace(b, size);
+	if (NULL == b->ptr || size >= b->size) buffer_alloc_replace(b, size);
 
 	b->used = 0;
 	return b->ptr;
@@ -124,7 +124,7 @@ static char* buffer_string_prepare_append_resize(buffer * const b, const size_t 
 }
 
 char* buffer_string_prepare_append(buffer * const b, const size_t size) {
-    return (NULL != b && size < b->size - b->used)
+    return (NULL != b->ptr && size < b->size - b->used)
       ? b->ptr + b->used - (0 != b->used)
       : buffer_string_prepare_append_resize(b, size);
 }
@@ -587,7 +587,7 @@ void buffer_append_string_encoded(buffer * const restrict b, const char * const 
 
 	/* count to-be-encoded-characters */
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
-		if (map[*ds]) {
+		if (map[*ds & 0xFF]) {
 			switch(encoding) {
 			case ENCODING_REL_URI:
 			case ENCODING_REL_URI_PART:
@@ -607,7 +607,7 @@ void buffer_append_string_encoded(buffer * const restrict b, const char * const 
 	buffer_commit(b, d_len); /* fill below */
 
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
-		if (map[*ds]) {
+		if (map[*ds & 0xFF]) {
 			switch(encoding) {
 			case ENCODING_REL_URI:
 			case ENCODING_REL_URI_PART:

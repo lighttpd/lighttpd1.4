@@ -423,6 +423,9 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
     memcpy(dst + key_len + 1, val, val_len + 1); /* add the \0 from the value */
 
     for (uint32_t i = 0; i < env->used; ++i) {
+      #ifdef __COVERITY__
+        force_assert(env->ptr); /*(non-NULL if env->used != 0)*/
+      #endif
         if (0 == strncmp(dst, env->ptr[i], key_len + 1)) {
             free(env->ptr[i]);
             env->ptr[i] = dst;

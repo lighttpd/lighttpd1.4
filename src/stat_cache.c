@@ -1072,7 +1072,7 @@ int stat_cache_path_contains_symlink(const buffer *name, log_error_st *errh) {
             log_perror(errh, __FILE__, __LINE__, "lstat failed for: %s", buf);
             return -1;
         }
-    } while ((s_cur = strrchr(buf, '/')) != buf);
+    } while ((s_cur = strrchr(buf, '/')) > buf); /*(&buf[0]==buf; NULL < buf)*/
   #endif
 
     return 0;

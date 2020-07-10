@@ -231,7 +231,7 @@ fdevents * fdevent_init(const char *event_handler, int *max_fds, int *cur_fds, l
 		if (0 == fdevent_libev_init(ev)) return ev;
 		break;
 	#endif
-	case FDEVENT_HANDLER_UNSET:
+	/*case FDEVENT_HANDLER_UNSET:*/
 	default:
 		break;
 	}
