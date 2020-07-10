@@ -55,30 +55,11 @@ typedef struct stat_cache {
 static stat_cache sc;
 
 
-/* the famous DJB hash function for strings */
-__attribute_pure__
-static uint32_t djbhash(const char *str, const uint32_t len)
-{
-    const unsigned char * const s = (const unsigned char *)str;
-    uint32_t hash = 5381;
-    for (uint32_t i = 0; i < len; ++i) hash = ((hash << 5) + hash) ^ s[i];
-    return hash;
-}
-
-
-__attribute_pure__
-static int32_t hashme(const char *str, const uint32_t len)
-{
-    /* strip highest bit of hash value for splaytree */
-    return (int32_t)(djbhash(str,len) & ~(((uint32_t)1) << 31));
-}
-
-
 static void * stat_cache_sptree_find(splay_tree ** const sptree,
                                      const char * const name,
                                      uint32_t len)
 {
-    const int ndx = hashme(name, len);
+    const int ndx = splaytree_djbhash(name, len);
     *sptree = splaytree_splay(*sptree, ndx);
     return (*sptree && (*sptree)->key == ndx) ? (*sptree)->data : NULL;
 }
@@ -428,7 +409,7 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
         while (fn[--dirlen] != '/') ;
         if (0 == dirlen) dirlen = 1; /*(should not happen for file)*/
     }
-    int dir_ndx = hashme(fn, dirlen);
+    int dir_ndx = splaytree_djbhash(fn, dirlen);
     fam_dir_entry *fam_dir = NULL;
 
     scf->dirs = splaytree_splay(scf->dirs, dir_ndx);
@@ -955,7 +936,7 @@ stat_cache_entry * stat_cache_get_entry(const buffer *name) {
 
 	const time_t cur_ts = log_epoch_secs;
 
-	file_ndx = hashme(name->ptr, len);
+	file_ndx = splaytree_djbhash(name->ptr, len);
 	splay_tree * const sptree = sc.files = splaytree_splay(sc.files, file_ndx);
 
 	if (sptree && (sptree->key == file_ndx)) {
