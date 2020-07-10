@@ -30,7 +30,6 @@ set(T_FILES
 	mod-secdownload.t
 	mod-setenv.t
 	mod-ssi.t
-	mod-userdir.t
 	request.t
 	symlink.t
 	cleanup.sh

@@ -39,7 +39,6 @@ tests = [
 	'mod-secdownload.t',
 	'mod-setenv.t',
 	'mod-ssi.t',
-	'mod-userdir.t',
 	'request.t',
 	'symlink.t',
 ]
