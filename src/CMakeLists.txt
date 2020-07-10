@@ -861,43 +861,31 @@ add_test(NAME test_keyvalue COMMAND test_keyvalue)
 
 add_executable(test_mod_access
 	t/test_mod_access.c
-	configfile-glue.c
 	buffer.c
 	array.c
 	data_integer.c
 	data_string.c
-	http_header.c
-	http_kv.c
 	log.c
-	sock_addr.c
 )
 add_test(NAME test_mod_access COMMAND test_mod_access)
 
 add_executable(test_mod_evhost
 	t/test_mod_evhost.c
-	configfile-glue.c
 	buffer.c
 	array.c
 	data_integer.c
 	data_string.c
-	http_header.c
-	http_kv.c
 	log.c
-	sock_addr.c
 )
 add_test(NAME test_mod_evhost COMMAND test_mod_evhost)
 
 add_executable(test_mod_simple_vhost
 	t/test_mod_simple_vhost.c
-	configfile-glue.c
 	buffer.c
 	array.c
 	data_integer.c
 	data_string.c
-	http_header.c
-	http_kv.c
 	log.c
-	sock_addr.c
 )
 add_test(NAME test_mod_simple_vhost COMMAND test_mod_simple_vhost)
 
@@ -922,7 +910,6 @@ add_executable(test_request
 	data_string.c
 	http_header.c
 	http_kv.c
-	log.c
 	sock_addr.c
 )
 add_test(NAME test_request COMMAND test_request)
