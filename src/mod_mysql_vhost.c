@@ -198,6 +198,10 @@ SETDEFAULTS_FUNC(mod_mysql_vhost_set_defaults) {
         T_CONFIG_SCOPE_UNSET }
     };
 
+    log_error(srv->errh, __FILE__, __LINE__,
+      "mod_mysql_vhost is deprecated and will be removed in a future version; "
+      "please migrate to use mod_vhostdb_mysql");
+
     plugin_data * const p = p_d;
     if (!config_plugin_values_init(srv, p, cpk, "mod_mysql_vhost"))
         return HANDLER_ERROR;
