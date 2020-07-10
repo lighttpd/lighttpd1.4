@@ -142,7 +142,6 @@ typedef struct {
     /* global or per-socket config; not patched per connection */
     int listen_backlog;
     unsigned char ssl_enabled;
-    unsigned char mbedtls_enabled; /* TODO: more integration needed ... */
     unsigned char use_ipv6;
     unsigned char set_v6only; /* set_v6only is only a temporary option */
     unsigned char defer_accept;
@@ -265,7 +264,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	memcpy(&srv_socket->addr, &addr, addr_len);
 	srv_socket->fd = -1;
 	srv_socket->sidx = sidx;
-	srv_socket->is_ssl = (s->ssl_enabled || s->mbedtls_enabled);
+	srv_socket->is_ssl = s->ssl_enabled;
 	srv_socket->srv = srv;
 	srv_socket->srv_token = buffer_init_buffer(host_token);
 
@@ -385,7 +384,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 		return -1;
 	}
 
-	if (s->ssl_enabled || s->mbedtls_enabled) {
+	if (s->ssl_enabled) {
 #ifdef TCP_DEFER_ACCEPT
 	} else if (s->defer_accept) {
 		int v = s->defer_accept;
