@@ -256,6 +256,14 @@ if get_option('with_fam')
 	conf_data.set('HAVE_FAM_H', true)
 endif
 
+libmaxminddb = []
+if get_option('with_maxminddb')
+	libmaxminddb = [ compiler.find_library('maxminddb') ]
+	if not(compiler.has_function('MMDB_open', args: defs, dependencies: libmaxminddb, prefix: '#include <maxminddb.h>'))
+		error('Couldn\'t find maxminddb.h or MMDB_open in lib maxminddb')
+	endif
+endif
+
 libgeoip = []
 if get_option('with_geoip')
 	libgeoip = dependency('geoip', required: false)
