@@ -388,7 +388,7 @@ if get_option('with_mysql')
 	# manual search: extend include path with 'mysql/'
 	# header: mysql.h
 	# function: mysql_real_connect (-lmariadb)
-	libmysqlclient = [ dependency('mariadb') ]
+	libmysqlclient = [ dependency('libmariadb') ]
 	#-# function: mysql_real_connect (-lmysqlclient)
 	#-libmysqlclient = [ dependency('mysqlclient') ]
 	conf_data.set('HAVE_MYSQL', true)
