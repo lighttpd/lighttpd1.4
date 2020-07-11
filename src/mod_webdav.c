@@ -3141,6 +3141,7 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
         __attribute_fallthrough__
       #endif
       default: /* WEBDAV_PROP_UNSET */
+        if (pnum == WEBDAV_PROP_ALL) break;
         return -1; /* not found */
     }
     return 0; /* found (WEBDAV_PROP_ALL) */
