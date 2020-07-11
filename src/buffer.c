@@ -161,7 +161,7 @@ void buffer_copy_string(buffer * restrict b, const char * restrict s) {
 }
 
 void buffer_copy_string_len(buffer * const restrict b, const char * const restrict s, const size_t s_len) {
-	if (NULL == b || s_len >= b->size) buffer_alloc_replace(b, s_len);
+	if (NULL == b->ptr || s_len >= b->size) buffer_alloc_replace(b, s_len);
 
 	b->used = s_len + 1;
 	b->ptr[s_len] = '\0';

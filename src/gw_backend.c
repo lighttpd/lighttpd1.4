@@ -439,6 +439,9 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
         force_assert(env->ptr);
     }
 
+  #ifdef __COVERITY__
+    force_assert(env->ptr); /*(non-NULL if env->used != 0; guaranteed above)*/
+  #endif
     env->ptr[env->used++] = dst;
 
     return 0;

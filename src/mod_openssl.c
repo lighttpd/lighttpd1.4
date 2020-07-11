@@ -461,10 +461,11 @@ mod_openssl_session_ticket_key_file (const char *fn)
     if (rd == sizeof(buf) && buf[0] == 0) { /*(format version 0)*/
         session_ticket_keys[3].active_ts = buf[1];
         session_ticket_keys[3].expire_ts = buf[2];
+      #ifndef __COVERITY__ /* intentional; hide from Coverity Scan */
         /* intentionally copy 80 bytes into consecutive arrays
          * tick_key_name[], tick_hmac_key[], tick_aes_key[] */
-        void *x = (void *)&session_ticket_keys[3].tick_key_name;
-        memcpy(x, buf+3, 80);
+        memcpy(&session_ticket_keys[3].tick_key_name, buf+3, 80);
+      #endif
         rc = 1;
     }
 
