@@ -3176,6 +3176,7 @@ webdav_propfind_resource_props (const webdav_propfind_bufs * const restrict pb)
             if (prop->name)
                 webdav_xml_prop(pb->b_404, prop, NULL, 0);
             else {
+              #ifdef USE_PROPPATCH
                 const struct live_prop_list *list = live_properties;
                 while (0 != list->len && (uint32_t)list->pnum != prop->namelen)
                     ++list;
@@ -3184,6 +3185,7 @@ webdav_propfind_resource_props (const webdav_propfind_bufs * const restrict pb)
                       { prop->ns, list->prop, prop->nslen, list->len };
                     webdav_xml_prop(pb->b_404, &lprop, NULL, 0);
                 }
+              #endif
             }
         }
     }
