@@ -32,6 +32,7 @@ typedef struct {
     const char *bindpw;
     const char *cafile;
     unsigned short starttls;
+    struct timeval timeout;
 } vhostdb_config;
 
 typedef struct {
@@ -91,6 +92,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
     const char *attr = "documentRoot";
     const char *basedn=NULL,*binddn=NULL,*bindpw=NULL,*host=NULL,*cafile=NULL;
     unsigned short starttls = 0;
+    long timeout = 2000000; /* set 2 sec default timeout (instead of infinite) */
 
     for (size_t i = 0; i < opts->used; ++i) {
         data_string *ds = (data_string *)opts->data[i];
@@ -113,6 +115,8 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("starttls"))) {
                 starttls = !buffer_is_equal_string(&ds->value, CONST_STR_LEN("disable"))
                         && !buffer_is_equal_string(&ds->value, CONST_STR_LEN("0"));
+            } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("timeout"))) {
+                timeout = strtol(ds->value.ptr, NULL, 10);
             }
         }
     }
@@ -153,6 +157,8 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
         dbconf->bindpw   = bindpw;
         dbconf->cafile   = cafile;
         dbconf->starttls = starttls;
+        dbconf->timeout.tv_sec  = timeout / 1000000;
+        dbconf->timeout.tv_usec = timeout % 1000000;
         *vdata = dbconf;
     }
 
@@ -264,6 +270,14 @@ static LDAP * mod_authn_ldap_host_init(log_error_st *errh, vhostdb_config *s) {
 
     /* restart ldap functions if interrupted by a signal, e.g. SIGCHLD */
     ldap_set_option(ld, LDAP_OPT_RESTART, LDAP_OPT_ON);
+
+  #ifdef LDAP_OPT_NETWORK_TIMEOUT /* OpenLDAP-specific */
+    ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &s->timeout);
+  #endif
+
+  #ifdef LDAP_OPT_TIMEOUT /* OpenLDAP-specific; OpenLDAP 2.4+ */
+    ldap_set_option(ld, LDAP_OPT_TIMEOUT, &s->timeout);
+  #endif
 
     if (s->starttls) {
         /* if no CA file is given, it is ok, as we will use encryption

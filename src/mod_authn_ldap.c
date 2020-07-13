@@ -25,6 +25,7 @@ typedef struct {
     const char *auth_ldap_bindpw;
     const char *auth_ldap_cafile;
     int auth_ldap_starttls;
+    struct timeval auth_ldap_timeout;
 } plugin_config_ldap;
 
 typedef struct {
@@ -117,6 +118,11 @@ static void mod_authn_ldap_merge_config_cpv(plugin_config * const pconf, const c
       case 8: /* auth.backend.ldap.groupmember */
         pconf->auth_ldap_groupmember = cpv->v.b;
         break;
+      case 9: /* auth.backend.ldap.timeout */
+        /*(not implemented as any-scope override;
+         * supported in same scope as auth.backend.ldap.hostname)*/
+        /*pconf->auth_ldap_timeout = cpv->v.b;*/
+        break;
       default:/* should not happen */
         return;
     }
@@ -199,6 +205,9 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
      ,{ CONST_STR_LEN("auth.backend.ldap.groupmember"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.backend.ldap.timeout"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -215,6 +224,7 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
         plugin_config_ldap *ldc = NULL;
         char *binddn = NULL, *bindpw = NULL, *cafile = NULL;
         int starttls = 0;
+        long timeout = 2000000; /* set 2 sec default timeout (not infinite) */
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* auth.backend.ldap.hostname */
@@ -285,6 +295,9 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
               case 7: /* auth.backend.ldap.allow-empty-pw */
               case 8: /* auth.backend.ldap.groupmember */
                 break;
+              case 9: /* auth.backend.ldap.timeout */
+                timeout = strtol(cpv->v.b->ptr, NULL, 10);
+                break;
               default:/* should not happen */
                 break;
             }
@@ -295,6 +308,8 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
             ldc->auth_ldap_bindpw = bindpw;
             ldc->auth_ldap_cafile = cafile;
             ldc->auth_ldap_starttls = starttls;
+            ldc->auth_ldap_timeout.tv_sec  = timeout / 1000000;
+            ldc->auth_ldap_timeout.tv_usec = timeout % 1000000;
         }
     }
 
@@ -479,6 +494,14 @@ static LDAP * mod_authn_ldap_host_init(log_error_st *errh, plugin_config_ldap *s
 
     /* restart ldap functions if interrupted by a signal, e.g. SIGCHLD */
     ldap_set_option(ld, LDAP_OPT_RESTART, LDAP_OPT_ON);
+
+  #ifdef LDAP_OPT_NETWORK_TIMEOUT /* OpenLDAP-specific */
+    ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &s->auth_ldap_timeout);
+  #endif
+
+  #ifdef LDAP_OPT_TIMEOUT /* OpenLDAP-specific; OpenLDAP 2.4+ */
+    ldap_set_option(ld, LDAP_OPT_TIMEOUT, &s->auth_ldap_timeout);
+  #endif
 
     if (s->auth_ldap_starttls) {
         /* if no CA file is given, it is ok, as we will use encryption
@@ -732,6 +755,7 @@ static handler_t mod_authn_ldap_basic(request_st * const r, void *p_d, const htt
         ldc_custom.auth_ldap_binddn = p->conf.auth_ldap_binddn;
         ldc_custom.auth_ldap_bindpw = p->conf.auth_ldap_bindpw;
         ldc_custom.auth_ldap_cafile = p->conf.auth_ldap_cafile;
+        ldc_custom.auth_ldap_timeout= ldc_base->auth_ldap_timeout;
         p->conf.ldc = &ldc_custom;
     }
 
