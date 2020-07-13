@@ -38,7 +38,11 @@
 #include <unistd.h>
 
 /*(not needed)*/
-#define OPENSSL_NO_STDIO
+/* correction; needed for:
+ *   SSL_load_client_CA_file()
+ *   X509_STORE_load_locations()
+ */
+/*#define OPENSSL_NO_STDIO*/
 
 #ifndef USE_OPENSSL_KERBEROS
 #ifndef OPENSSL_NO_KRB5
