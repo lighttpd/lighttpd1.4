@@ -24,7 +24,7 @@ typedef struct md4_ctx MD4_CTX;
 #define MD4_Init(ctx) \
         nettle_md4_init(ctx)
 #define MD4_Final(digest, ctx) \
-        nettle_md4_digest((ctx),sizeof(digest),(digest))
+        nettle_md4_digest((ctx),MD4_DIGEST_SIZE,(digest))
 static inline void
 MD4_Update(MD4_CTX *ctx, const void *data, size_t length)
 {
@@ -36,7 +36,7 @@ typedef struct md5_ctx MD5_CTX;
 #define MD5_Init(ctx) \
         nettle_md5_init(ctx)
 #define MD5_Final(digest, ctx) \
-        nettle_md5_digest((ctx),sizeof(digest),(digest))
+        nettle_md5_digest((ctx),MD5_DIGEST_SIZE,(digest))
 static inline void
 MD5_Update(MD5_CTX *ctx, const void *data, size_t length)
 {
@@ -48,7 +48,7 @@ typedef struct sha1_ctx SHA_CTX;
 #define SHA1_Init(ctx) \
         nettle_sha1_init(ctx)
 #define SHA1_Final(digest, ctx) \
-        nettle_sha1_digest((ctx),sizeof(digest),(digest))
+        nettle_sha1_digest((ctx),SHA1_DIGEST_SIZE,(digest))
 static inline void
 SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
 {
@@ -60,7 +60,7 @@ typedef struct sha256_ctx SHA256_CTX;
 #define SHA256_Init(ctx) \
         nettle_sha256_init(ctx)
 #define SHA256_Final(digest, ctx) \
-        nettle_sha256_digest((ctx),sizeof(digest),(digest))
+        nettle_sha256_digest((ctx),SHA256_DIGEST_SIZE,(digest))
 static inline void
 SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 {
@@ -75,7 +75,7 @@ typedef struct sha512_256_ctx SHA512_CTX;    /*(yes, SHA512_CTX)*/
 #define SHA512_256_Init(ctx) \
         nettle_sha512_256_init(ctx)
 #define SHA512_256_Final(digest, ctx) \
-        nettle_sha512_256_digest((ctx),sizeof(digest),(digest))
+        nettle_sha512_256_digest((ctx),SHA256_DIGEST_SIZE,(digest))
 static inline void
 SHA512_256_Update(SHA512_CTX *ctx, const void *data, size_t length)
 {
