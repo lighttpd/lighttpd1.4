@@ -463,7 +463,8 @@ static handler_t mod_auth_require_parse_array(const array *value, array * const 
 						require = &ds->value;
 					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("algorithm"))) {
 						algos = &ds->value;
-					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("nonce_secret"))) {
+					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("nonce_secret"))
+					           || buffer_is_equal_string(&ds->key, CONST_STR_LEN("nonce-secret"))) {
 						nonce_secret = &ds->value;
 					} else {
 						log_error(errh, __FILE__, __LINE__,
