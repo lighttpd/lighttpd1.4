@@ -192,12 +192,13 @@ static void fam_dir_tag_refcnt(splay_tree *t, int *keys, int *ndx)
     }
 }
 
+__attribute_noinline__
 static void fam_dir_periodic_cleanup() {
+    stat_cache_fam * const scf = sc.scf;
     int max_ndx, i;
     int keys[8192]; /* 32k size on stack */
-    stat_cache_fam * const scf = sc.scf;
     do {
-        if (!scf->dirs) return;
+        if (!scf->dirs) break;
         max_ndx = 0;
         fam_dir_tag_refcnt(scf->dirs, keys, &max_ndx);
         for (i = 0; i < max_ndx; ++i) {
@@ -858,13 +859,14 @@ static void stat_cache_tag_dir_tree(splay_tree *t, const char *name, size_t len,
         keys[(*ndx)++] = t->key;
 }
 
+__attribute_noinline__
 static void stat_cache_prune_dir_tree(const char *name, size_t len)
 {
+    splay_tree *sptree = sc.files;
     int max_ndx, i;
     int keys[8192]; /* 32k size on stack */
-    splay_tree *sptree = sc.files;
     do {
-        if (!sptree) return;
+        if (!sptree) break;
         max_ndx = 0;
         stat_cache_tag_dir_tree(sptree, name, len, keys, &max_ndx);
         for (i = 0; i < max_ndx; ++i) {
@@ -1101,41 +1103,37 @@ int stat_cache_open_rdonly_fstat (const buffer *name, struct stat *st, int symli
  * and remove them in a second loop
  */
 
-static void stat_cache_tag_old_entries(splay_tree * const t, int * const keys, uint32_t * const ndx, const time_t max_age, const time_t cur_ts) {
-    if (!t) return;
-
-    stat_cache_tag_old_entries(t->left, keys, ndx, max_age, cur_ts);
-    stat_cache_tag_old_entries(t->right, keys, ndx, max_age, cur_ts);
+static void stat_cache_tag_old_entries(splay_tree * const t, int * const keys, int * const ndx, const time_t max_age, const time_t cur_ts) {
+    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
+    if (t->left)
+        stat_cache_tag_old_entries(t->left, keys, ndx, max_age, cur_ts);
+    if (t->right)
+        stat_cache_tag_old_entries(t->right, keys, ndx, max_age, cur_ts);
+    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
 
     const stat_cache_entry * const sce = t->data;
-
-    if (cur_ts - sce->stat_ts > max_age) {
+    if (cur_ts - sce->stat_ts > max_age)
         keys[(*ndx)++] = t->key;
-    }
 }
 
 static void stat_cache_periodic_cleanup(const time_t max_age, const time_t cur_ts) {
-	splay_tree *sptree = sc.files;
-	if (!sptree) return;
-
-	int * const keys = calloc(1, sizeof(int) * sptree->size);
-	force_assert(NULL != keys);
-
-	uint32_t max_ndx = 0;
-	stat_cache_tag_old_entries(sptree, keys, &max_ndx, max_age, cur_ts);
-
-	for (uint32_t i = 0; i < max_ndx; ++i) {
-		int ndx = keys[i];
-		sptree = splaytree_splay(sptree, ndx);
-		if (sptree && sptree->key == ndx) {
-			stat_cache_entry_free(sptree->data);
-			sptree = splaytree_delete(sptree, ndx);
-		}
-	}
-
-	sc.files = sptree;
-
-	free(keys);
+    splay_tree *sptree = sc.files;
+    int max_ndx, i;
+    int keys[8192]; /* 32k size on stack */
+    do {
+        if (!sptree) break;
+        max_ndx = 0;
+        stat_cache_tag_old_entries(sptree, keys, &max_ndx, max_age, cur_ts);
+        for (i = 0; i < max_ndx; ++i) {
+            int ndx = keys[i];
+            sptree = splaytree_splay(sptree, ndx);
+            if (sptree && sptree->key == ndx) {
+                stat_cache_entry_free(sptree->data);
+                sptree = splaytree_delete(sptree, ndx);
+            }
+        }
+    } while (max_ndx == sizeof(keys)/sizeof(int));
+    sc.files = sptree;
 }
 
 void stat_cache_trigger_cleanup(void) {

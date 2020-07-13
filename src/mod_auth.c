@@ -10,14 +10,22 @@
 #include "http_auth.h"
 #include "http_header.h"
 #include "log.h"
+#include "safe_memclear.h"
+#include "splaytree.h"
 
 /**
  * auth framework
  */
 
 typedef struct {
+    splay_tree *sptree; /* data in nodes of tree are (http_auth_cache_entry *)*/
+    time_t max_age;
+} http_auth_cache;
+
+typedef struct {
     const http_auth_backend_t *auth_backend;
     const array *auth_require;
+    http_auth_cache *auth_cache;
     unsigned int auth_extern_authn;
 } plugin_config;
 
@@ -27,22 +35,190 @@ typedef struct {
     plugin_config conf;
 } plugin_data;
 
+typedef struct {
+    const struct http_auth_require_t *require;
+    time_t ctime;
+    int dalgo;
+    uint32_t dlen;
+    uint32_t ulen;
+    char *username;
+    char *pwdigest;
+} http_auth_cache_entry;
+
+static http_auth_cache_entry *
+http_auth_cache_entry_init (const struct http_auth_require_t * const require, const int dalgo, const char *username, const uint32_t ulen, const char *pw, const uint32_t pwlen)
+{
+    /*(similar to buffer_copy_string_len() for each element,
+     * but allocate exact lengths in single chunk of memory
+     * for cache to avoid wasting space and for memory locality)*/
+    /* http_auth_require_t is stored instead of copying realm
+     *(store pointer to http_auth_require_t, which is persistent
+     * and will be different for each realm + permissions combo)*/
+    http_auth_cache_entry * const ae =
+      malloc(sizeof(http_auth_cache_entry) + ulen + pwlen);
+    force_assert(ae);
+    ae->require = require;
+    ae->ctime = log_epoch_secs;
+    ae->dalgo = dalgo;
+    ae->ulen = ulen;
+    ae->dlen = pwlen;
+    ae->username = (char *)(ae + 1);
+    ae->pwdigest = ae->username + ulen;
+    memcpy(ae->username, username, ulen);
+    memcpy(ae->pwdigest, pw, pwlen);
+    return ae;
+}
+
+static void
+http_auth_cache_entry_free (void *data)
+{
+    http_auth_cache_entry * const ae = data;
+    safe_memclear(ae->pwdigest, ae->dlen);
+    free(ae);
+}
+
+static void
+http_auth_cache_free (http_auth_cache *ac)
+{
+    splay_tree *sptree = ac->sptree;
+    while (sptree) {
+        http_auth_cache_entry_free(sptree->data);
+        sptree = splaytree_delete(sptree, sptree->key);
+    }
+    free(ac);
+}
+
+static http_auth_cache *
+http_auth_cache_init (const array *opts)
+{
+    http_auth_cache *ac = malloc(sizeof(http_auth_cache));
+    force_assert(ac);
+    ac->sptree = NULL;
+    ac->max_age = 600; /* 10 mins */
+    for (uint32_t i = 0, used = opts->used; i < used; ++i) {
+        data_string *ds = (data_string *)opts->data[i];
+        if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("max-age"))) {
+            if (ds->type == TYPE_STRING)
+                ac->max_age = (time_t)strtol(ds->value.ptr, NULL, 10);
+            else if (ds->type == TYPE_INTEGER)
+                ac->max_age = (time_t)((data_integer *)ds)->value;
+        }
+    }
+    return ac;
+}
+
+static int
+http_auth_cache_hash (const struct http_auth_require_t * const require, const char *username, const uint32_t ulen)
+{
+    uint32_t h = /*(hash pointer value, which includes realm and permissions)*/
+      djbhash((char *)(intptr_t)require, sizeof(intptr_t), DJBHASH_INIT);
+    h = djbhash(username, ulen, h);
+    /* strip highest bit of hash value for splaytree (see splaytree_djbhash())*/
+    return (int32_t)(h & ~(((uint32_t)1) << 31));
+}
+
+static http_auth_cache_entry *
+http_auth_cache_query (splay_tree ** const sptree, const int ndx)
+{
+    *sptree = splaytree_splay(*sptree, ndx);
+    return (*sptree && (*sptree)->key == ndx) ? (*sptree)->data : NULL;
+}
+
+static void
+http_auth_cache_insert (splay_tree ** const sptree, const int ndx, void * const data, void(data_free_fn)(void *))
+{
+    /*(not necessary to re-splay (with current usage) since single-threaded
+     * and splaytree has not been modified since http_auth_cache_query())*/
+    /* *sptree = splaytree_splay(*sptree, ndx); */
+    if (NULL == *sptree || (*sptree)->key != ndx)
+        *sptree = splaytree_insert(*sptree, ndx, data);
+    else { /* collision; replace old entry */
+        data_free_fn((*sptree)->data);
+        (*sptree)->data = data;
+    }
+}
+
+/* walk though cache, collect expired ids, and remove them in a second loop */
+static void
+mod_auth_tag_old_entries (splay_tree * const t, int * const keys, int * const ndx, const time_t max_age, const time_t cur_ts)
+{
+    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
+    if (t->left)
+        mod_auth_tag_old_entries(t->left, keys, ndx, max_age, cur_ts);
+    if (t->right)
+        mod_auth_tag_old_entries(t->right, keys, ndx, max_age, cur_ts);
+    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
+
+    const http_auth_cache_entry * const ae = t->data;
+    if (cur_ts - ae->ctime > max_age)
+        keys[(*ndx)++] = t->key;
+}
+
+__attribute_noinline__
+static void
+mod_auth_periodic_cleanup(splay_tree **sptree_ptr, const time_t max_age, const time_t cur_ts)
+{
+    splay_tree *sptree = *sptree_ptr;
+    int max_ndx, i;
+    int keys[8192]; /* 32k size on stack */
+    do {
+        if (!sptree) break;
+        max_ndx = 0;
+        mod_auth_tag_old_entries(sptree, keys, &max_ndx, max_age, cur_ts);
+        for (i = 0; i < max_ndx; ++i) {
+            int ndx = keys[i];
+            sptree = splaytree_splay(sptree, ndx);
+            if (sptree && sptree->key == ndx) {
+                http_auth_cache_entry_free(sptree->data);
+                sptree = splaytree_delete(sptree, ndx);
+            }
+        }
+    } while (max_ndx == sizeof(keys)/sizeof(int));
+    *sptree_ptr = sptree;
+}
+
+TRIGGER_FUNC(mod_auth_periodic)
+{
+    const plugin_data * const p = p_d;
+    const time_t cur_ts = log_epoch_secs;
+    if (cur_ts & 0x7) return HANDLER_GO_ON; /*(continue once each 8 sec)*/
+    UNUSED(srv);
+
+    /* future: might construct array of (http_auth_cache *) at startup
+     *         to avoid the need to search for them here */
+    for (int i = 0, used = p->nconfig; i < used; ++i) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; cpv->k_id != -1; ++cpv) {
+            if (cpv->k_id != 3) continue; /* k_id == 3 for auth.cache */
+            if (cpv->vtype != T_CONFIG_LOCAL) continue;
+            http_auth_cache *ac = cpv->v.v;
+            mod_auth_periodic_cleanup(&ac->sptree, ac->max_age, cur_ts);
+        }
+    }
+
+    return HANDLER_GO_ON;
+}
+
+
+
+
 static handler_t mod_auth_check_basic(request_st *r, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
 static handler_t mod_auth_check_digest(request_st *r, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
 static handler_t mod_auth_check_extern(request_st *r, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
 
 INIT_FUNC(mod_auth_init) {
-	static const http_auth_scheme_t http_auth_scheme_basic  = { "basic",  mod_auth_check_basic,  NULL };
-	static const http_auth_scheme_t http_auth_scheme_digest = { "digest", mod_auth_check_digest, NULL };
+	static http_auth_scheme_t http_auth_scheme_basic  = { "basic",  mod_auth_check_basic,  NULL };
+	static http_auth_scheme_t http_auth_scheme_digest = { "digest", mod_auth_check_digest, NULL };
 	static const http_auth_scheme_t http_auth_scheme_extern = { "extern", mod_auth_check_extern, NULL };
-	plugin_data *p;
+	plugin_data *p = calloc(1, sizeof(*p));
+	force_assert(p);
 
 	/* register http_auth_scheme_* */
+	http_auth_scheme_basic.p_d = p;
 	http_auth_scheme_set(&http_auth_scheme_basic);
+	http_auth_scheme_digest.p_d = p;
 	http_auth_scheme_set(&http_auth_scheme_digest);
 	http_auth_scheme_set(&http_auth_scheme_extern);
-
-	p = calloc(1, sizeof(*p));
 
 	return p;
 }
@@ -58,6 +234,9 @@ FREE_FUNC(mod_auth_free) {
             switch (cpv->k_id) {
               case 1: /* auth.require */
                 array_free(cpv->v.v);
+                break;
+              case 3: /* auth.cache */
+                http_auth_cache_free(cpv->v.v);
                 break;
               default:
                 break;
@@ -372,6 +551,11 @@ static void mod_auth_merge_config_cpv(plugin_config * const pconf, const config_
         break;
       case 2: /* auth.extern-authn */
         pconf->auth_extern_authn = cpv->v.u;
+        break;
+      case 3: /* auth.cache */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->auth_cache = cpv->v.v;
+        break;
       default:/* should not happen */
         return;
     }
@@ -402,6 +586,9 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("auth.extern-authn"),
         T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("auth.cache"),
+        T_CONFIG_ARRAY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -444,6 +631,10 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
                 }
                 break;
               case 2: /* auth.extern-authn */
+                break;
+              case 3: /* auth.cache */
+                cpv->v.v = http_auth_cache_init(cpv->v.a);
+                cpv->vtype = T_CONFIG_LOCAL;
                 break;
               default:/* should not happen */
                 break;
@@ -488,12 +679,14 @@ static handler_t mod_auth_uri_handler(request_st * const r, void *p_d) {
 	}
 }
 
+
 int mod_auth_plugin_init(plugin *p);
 int mod_auth_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = "auth";
 	p->init        = mod_auth_init;
 	p->set_defaults = mod_auth_set_defaults;
+	p->handle_trigger = mod_auth_periodic;
 	p->handle_uri_clean = mod_auth_uri_handler;
 	p->cleanup     = mod_auth_free;
 
@@ -544,8 +737,6 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 	char *pw;
 	handler_t rc = HANDLER_UNSET;
 
-	UNUSED(p_d);
-
 	if (NULL == backend) {
 		log_error(r->conf.errh, __FILE__, __LINE__, "auth.backend not configured for %s", r->uri.path.ptr);
 		r->http_status = 500;
@@ -584,13 +775,41 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 		return mod_auth_send_400_bad_request(r);
 	}
 
+	uint32_t pwlen = buffer_string_length(username);
 	buffer_string_set_length(username, pw - username->ptr);
 	pw++;
+	pwlen -= (pw - username->ptr);
 
-	rc = backend->basic(r, backend->p_d, require, username, pw);
+	plugin_data * const p = p_d;
+	splay_tree ** sptree = p->conf.auth_cache
+	  ? &p->conf.auth_cache->sptree
+	  : NULL;
+	http_auth_cache_entry *ae = NULL;
+	int ndx = -1;
+	if (sptree) {
+		ndx = http_auth_cache_hash(require, CONST_BUF_LEN(username));
+		ae = http_auth_cache_query(sptree, ndx);
+		if (ae && ae->require == require
+		    && buffer_is_equal_string(username, ae->username, ae->ulen))
+			rc = http_auth_const_time_memeq_pad(ae->pwdigest, ae->dlen,
+			                                    pw, pwlen)
+			  ? HANDLER_GO_ON
+			  : HANDLER_ERROR;
+		else /*(not found or hash collision)*/
+			ae = NULL;
+	}
+
+	if (NULL == ae) /* (HANDLER_UNSET == rc) */
+		rc = backend->basic(r, backend->p_d, require, username, pw);
+
 	switch (rc) {
 	case HANDLER_GO_ON:
 		http_auth_setenv(r, CONST_BUF_LEN(username), CONST_STR_LEN("Basic"));
+		if (sptree && NULL == ae) { /*(cache (new) successful result)*/
+			ae = http_auth_cache_entry_init(require, 0, CONST_BUF_LEN(username),
+			                                pw, pwlen);
+			http_auth_cache_insert(sptree, ndx, ae, http_auth_cache_entry_free);
+		}
 		break;
 	case HANDLER_WAIT_FOR_EVENT:
 	case HANDLER_FINISHED:
@@ -988,8 +1207,6 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 	dkv[7].ptr = &nc;
 	dkv[8].ptr = &respons;
 
-	UNUSED(p_d);
-
 	if (NULL == backend) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "auth.backend not configured for %s", r->uri.path.ptr);
@@ -1192,7 +1409,33 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		}
 	}
 
-	switch (backend->digest(r, backend->p_d, &ai)) {
+	handler_t rc = HANDLER_UNSET;
+
+	plugin_data * const p = p_d;
+	splay_tree ** sptree = p->conf.auth_cache
+	  ? &p->conf.auth_cache->sptree
+	  : NULL;
+	http_auth_cache_entry *ae = NULL;
+	int ndx = -1;
+	if (sptree) {
+		ndx = http_auth_cache_hash(require, ai.username, ai.ulen);
+		ae = http_auth_cache_query(sptree, ndx);
+		if (ae && ae->require == require
+		    && ae->dalgo == ai.dalgo
+		    && ae->dlen == ai.dlen
+		    && ae->ulen == ai.ulen
+		    && 0 == memcmp(ae->username, ai.username, ai.ulen)) {
+			rc = HANDLER_GO_ON;
+			memcpy(ai.digest, ae->pwdigest, ai.dlen);
+		}
+		else /*(not found or hash collision)*/
+			ae = NULL;
+	}
+
+	if (HANDLER_UNSET == rc)
+		rc = backend->digest(r, backend->p_d, &ai);
+
+	switch (rc) {
 	case HANDLER_GO_ON:
 		break;
 	case HANDLER_WAIT_FOR_EVENT:
@@ -1206,6 +1449,12 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		r->keep_alive = 0; /*(disable keep-alive if unknown user)*/
 		buffer_free(b);
 		return mod_auth_send_401_unauthorized_digest(r, require, 0);
+	}
+
+	if (sptree && NULL == ae) { /*(cache digest from backend)*/
+		ae = http_auth_cache_entry_init(require, ai.dalgo, ai.username, ai.ulen,
+		                                (char *)ai.digest, ai.dlen);
+		http_auth_cache_insert(sptree, ndx, ae, http_auth_cache_entry_free);
 	}
 
 	const char *m = get_http_method_name(r->http_method);
