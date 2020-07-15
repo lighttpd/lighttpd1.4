@@ -1,5 +1,3 @@
-#include "first.h"
-
 /* mod_authn_mysql
  * 
  * KNOWN LIMITATIONS:
@@ -17,6 +15,17 @@
  *   (fixed) one-element cache for persistent connection open to last used db
  *   TODO: db connection pool (if asynchronous requests)
  */
+#include "first.h"
+
+#if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
+#ifndef _XOPEN_CRYPT
+#define _XOPEN_CRYPT 1
+#endif
+#include <unistd.h>     /* crypt() */
+#endif
+#ifdef HAVE_CRYPT_H
+#include <crypt.h>
+#endif
 
 #include <mysql.h>
 
@@ -24,17 +33,11 @@
 #include "http_auth.h"
 #include "log.h"
 #include "plugin.h"
+#include "safe_memclear.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
-#include <unistd.h>     /* crypt() */
-#endif
-#ifdef HAVE_CRYPT_H
-#include <crypt.h>
-#endif
 
 #include "sys-crypto-md.h"
 
@@ -293,36 +296,12 @@ SETDEFAULTS_FUNC(mod_authn_mysql_set_defaults) {
 
 static int mod_authn_mysql_password_cmp(const char *userpw, unsigned long userpwlen, const char *reqpw) {
   #if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
-    if (userpwlen >= 3 && userpw[0] == '$' && userpw[2] == '$') {
-        /* md5 crypt()
-         * request by Nicola Tiling <nti@w4w.net> */
-        const char *saltb = userpw+3;
-        const char *salte = strchr(saltb, '$');
-        char salt[32];
-        size_t slen = (NULL != salte) ? (size_t)(salte - saltb) : sizeof(salt);
-
-        if (slen < sizeof(salt)) {
-            char *crypted;
-          #if defined(HAVE_CRYPT_R)
-            struct crypt_data crypt_tmp_data;
-           #ifdef _AIX
-            memset(&crypt_tmp_data, 0, sizeof(crypt_tmp_data));
-           #else
-            crypt_tmp_data.initialized = 0;
-           #endif
-          #endif
-            memcpy(salt, saltb, slen);
-            salt[slen] = '\0';
-
-          #if defined(HAVE_CRYPT_R)
-            crypted = crypt_r(reqpw, salt, &crypt_tmp_data);
-          #else
-            crypted = crypt(reqpw, salt);
-          #endif
-            if (NULL != crypted) {
-                return strcmp(userpw, crypted);
-            }
-        }
+    if (userpwlen >= 3 && userpw[0] == '$') {
+        char *crypted = crypt(reqpw, userpw);
+        size_t crypwlen = (NULL != crypted) ? strlen(crypted) : 0;
+        int rc = (crypwlen == userpwlen) ? memcmp(crypted, userpw, crypwlen) : -1;
+        safe_memclear(crypted, crypwlen);
+        return rc;
     }
     else
   #endif

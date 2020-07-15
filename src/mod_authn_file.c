@@ -628,7 +628,7 @@ static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, 
         /* a simple DES password is 2 + 11 characters. everything else should be longer. */
         else if (buffer_string_length(password) >= 13) {
             char *crypted;
-           #if defined(HAVE_CRYPT_R)
+           #if 0 && defined(HAVE_CRYPT_R)
             struct crypt_data crypt_tmp_data;
             #ifdef _AIX
             memset(&crypt_tmp_data, 0, sizeof(crypt_tmp_data));
@@ -676,7 +676,7 @@ static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, 
                     memcpy(sample, "$1$", sizeof("$1$")-1);
                     memcpy(sample+sizeof("$1$")-1, b, slen);
                     sample[sizeof("$1$")-1+slen] = '\0';
-                   #if defined(HAVE_CRYPT_R)
+                   #if 0 && defined(HAVE_CRYPT_R)
                     crypted = crypt_r(ntlmhex, sample, &crypt_tmp_data);
                    #else
                     crypted = crypt(ntlmhex, sample);
@@ -690,7 +690,7 @@ static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, 
             else
            #endif
             {
-               #if defined(HAVE_CRYPT_R)
+               #if 0 && defined(HAVE_CRYPT_R)
                 crypted = crypt_r(pw, password->ptr, &crypt_tmp_data);
                #else
                 crypted = crypt(pw, password->ptr);
