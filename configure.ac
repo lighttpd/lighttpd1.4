@@ -1648,7 +1648,7 @@ lighty_track_feature "mysql" "mod_authn_mysql mod_mysql_vhost mod_vhostdb_mysql"
 lighty_track_feature "postgresql" "mod_vhostdb_pgsql" \
   'test "$WITH_PGSQL" != no'
 
-lighty_track_feature "dbi" "mod_vhostdb_dbi" \
+lighty_track_feature "dbi" "mod_authn_dbi mod_vhostdb_dbi" \
   'test "$WITH_DBI" != no'
 
 lighty_track_feature "lua" "mod_cml mod_magnet" \

@@ -347,6 +347,14 @@ mod_authn_file_la_SOURCES = mod_authn_file.c
 mod_authn_file_la_LDFLAGS = $(common_module_ldflags)
 mod_authn_file_la_LIBADD = $(CRYPT_LIB) $(CRYPTO_LIB) $(common_libadd)
 
+if BUILD_WITH_DBI
+lib_LTLIBRARIES += mod_authn_dbi.la
+mod_authn_dbi_la_SOURCES = mod_authn_dbi.c
+mod_authn_dbi_la_LDFLAGS = $(common_module_ldflags)
+mod_authn_dbi_la_LIBADD = $(CRYPT_LIB) $(DBI_LIBS) $(common_libadd)
+mod_authn_dbi_la_CPPFLAGS = $(DBI_CFLAGS)
+endif
+
 if BUILD_WITH_KRB5
 lib_LTLIBRARIES += mod_authn_gssapi.la
 mod_authn_gssapi_la_SOURCES = mod_authn_gssapi.c
@@ -553,7 +561,7 @@ lighttpd_CPPFLAGS += $(PGSQL_CFLAGS)
 lighttpd_LDADD += $(PGSQL_LIBS)
 endif
 if BUILD_WITH_DBI
-lighttpd_SOURCES += mod_vhostdb_dbi.c
+lighttpd_SOURCES += mod_authn_dbi.c mod_vhostdb_dbi.c
 lighttpd_CPPFLAGS += $(DBI_CFLAGS)
 lighttpd_LDADD += $(DBI_LIBS)
 endif

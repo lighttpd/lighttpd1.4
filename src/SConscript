@@ -168,6 +168,7 @@ if env['with_pgsql']:
 	modules['mod_vhostdb_pgsql'] = { 'src' : [ 'mod_vhostdb_pgsql.c' ], 'lib' : [ env['LIBPGSQL'] ] }
 
 if env['with_dbi']:
+	modules['mod_authn_dbi'] = { 'src' : [ 'mod_authn_dbi.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBDBI'] ] }
 	modules['mod_vhostdb_dbi'] = { 'src' : [ 'mod_vhostdb_dbi.c' ], 'lib' : [ env['LIBDBI'] ] }
 
 if env['with_sasl']:

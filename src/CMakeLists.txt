@@ -982,6 +982,13 @@ endif()
 if(HAVE_DBI_H AND HAVE_DBI)
 	add_and_install_library(mod_vhostdb_dbi "mod_vhostdb_dbi.c")
 	target_link_libraries(mod_vhostdb_dbi dbi)
+
+	add_and_install_library(mod_authn_dbi "mod_authn_dbi.c")
+	set(L_MOD_AUTHN_DBI)
+	if(HAVE_LIBCRYPT)
+		set(L_MOD_AUTHN_DBI ${L_MOD_AUTHN_DBI} crypt)
+	endif()
+	target_link_libraries(mod_authn_dbi ${L_MOD_AUTHN_DBI} dbi)
 endif()
 
 set(L_MOD_WEBDAV)

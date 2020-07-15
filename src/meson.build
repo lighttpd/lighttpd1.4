@@ -999,6 +999,7 @@ endif
 
 if get_option('with_dbi')
 	modules += [
+		[ 'mod_authn_dbi', [ 'mod_authn_dbi.c' ], libcrypt + libdbi ],
 		[ 'mod_vhostdb_dbi', [ 'mod_vhostdb_dbi.c' ], libdbi ],
 	]
 endif
