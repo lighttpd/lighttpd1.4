@@ -286,7 +286,7 @@ static void mod_vhostdb_patch_config(request_st * const r, plugin_data * const p
 SETDEFAULTS_FUNC(mod_vhostdb_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("vhostdb.dbi"),
-        T_CONFIG_ARRAY_KVSTRING,
+        T_CONFIG_ARRAY_KVANY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
