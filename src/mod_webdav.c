@@ -2714,7 +2714,9 @@ webdav_copymove_dir (const plugin_config * const pconf,
         else {
             switch (errno) {
               case EEXIST:
+             #if EEXIST != ENOTEMPTY
               case ENOTEMPTY:
+             #endif
                 if (!overwrite) {
                         webdav_xml_response_status(b, &src->rel_path, 412);
                         return 412; /* Precondition Failed */
