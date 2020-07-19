@@ -140,6 +140,11 @@
 # include <bzlib.h>
 #endif
 
+#if defined HAVE_BROTLI_ENCODE_H && defined HAVE_BROTLI
+# define USE_BROTLI
+# include <brotli/encode.h>
+#endif
+
 #if defined HAVE_SYS_MMAN_H && defined HAVE_MMAP && defined ENABLE_MMAP
 #define USE_MMAP
 
@@ -165,6 +170,7 @@ static void sigbus_handler(int sig) {
 #define HTTP_ACCEPT_ENCODING_BZIP2    BV(4)
 #define HTTP_ACCEPT_ENCODING_X_GZIP   BV(5)
 #define HTTP_ACCEPT_ENCODING_X_BZIP2  BV(6)
+#define HTTP_ACCEPT_ENCODING_BR       BV(7)
 
 #define KByte * 1024
 #define MByte * 1024 KByte
@@ -198,6 +204,9 @@ typedef struct {
 	      #ifdef USE_BZ2LIB
 		bz_stream bz;
 	      #endif
+	      #ifdef USE_BROTLI
+		BrotliEncoderState *br;
+	      #endif
 		int dummy;
 	} u;
 	off_t bytes_in;
@@ -205,6 +214,7 @@ typedef struct {
 	chunkqueue *in_queue;
 	buffer *output;
 	plugin_data *plugin_data;
+	request_st *r;
 	int compression_type;
 	log_error_st *errh;
 } handler_ctx;
@@ -288,7 +298,7 @@ static short mod_deflate_encodings_to_flags(const array *encodings) {
     short allowed_encodings = 0;
     if (encodings->used) {
         for (uint32_t j = 0; j < encodings->used; ++j) {
-          #if defined(USE_ZLIB) || defined(USE_BZ2LIB)
+          #if defined(USE_ZLIB) || defined(USE_BZ2LIB) || defined(USE_BROTLI)
             data_string *ds = (data_string *)encodings->data[j];
           #endif
           #ifdef USE_ZLIB
@@ -311,6 +321,10 @@ static short mod_deflate_encodings_to_flags(const array *encodings) {
             if (NULL != strstr(ds->value.ptr, "x-bzip2"))
                 allowed_encodings |= HTTP_ACCEPT_ENCODING_X_BZIP2;
           #endif
+          #ifdef USE_BROTLI
+            if (NULL != strstr(ds->value.ptr, "br"))
+                allowed_encodings |= HTTP_ACCEPT_ENCODING_BR;
+          #endif
         }
     }
     else {
@@ -323,6 +337,9 @@ static short mod_deflate_encodings_to_flags(const array *encodings) {
       #ifdef USE_BZ2LIB
         allowed_encodings |= HTTP_ACCEPT_ENCODING_BZIP2
                           |  HTTP_ACCEPT_ENCODING_X_BZIP2;
+      #endif
+      #ifdef USE_BROTLI
+        allowed_encodings |= HTTP_ACCEPT_ENCODING_BR;
       #endif
     }
     return allowed_encodings;
@@ -653,6 +670,94 @@ static int stream_bzip2_end(handler_ctx *hctx) {
 #endif
 
 
+#ifdef USE_BROTLI
+
+static int stream_br_init(handler_ctx *hctx) {
+    BrotliEncoderState * const br = hctx->u.br =
+      BrotliEncoderCreateInstance(NULL, NULL, NULL);
+    if (NULL == br) return -1;
+
+    /* future: consider allowing tunables by encoder algorithm,
+     * (i.e. not generic "compression_level") */
+    /*(note: we ignore any errors while tuning parameters here)*/
+    const plugin_data * const p = hctx->plugin_data;
+    if (p->conf.compression_level >= 0) /* 0 .. 11 are valid values */
+        BrotliEncoderSetParameter(br, BROTLI_PARAM_QUALITY,
+                                  p->conf.compression_level);
+
+    /* XXX: is this worth checking?
+     * BROTLI_MODE_GENERIC vs BROTLI_MODE_TEXT or BROTLI_MODE_FONT */
+    const buffer *vb =
+      http_header_response_get(hctx->r, HTTP_HEADER_CONTENT_TYPE,
+                               CONST_STR_LEN("Content-Type"));
+    if (NULL != vb) {
+        if (0 == strncmp(vb->ptr, "text/", sizeof("text/")-1)
+            || (0 == strncmp(vb->ptr, "application/", sizeof("application/")-1)
+                && (0 == strncmp(vb->ptr+12,"javascript",sizeof("javascript")-1)
+                 || 0 == strncmp(vb->ptr+12,"ld+json",   sizeof("ld+json")-1)
+                 || 0 == strncmp(vb->ptr+12,"json",      sizeof("json")-1)
+                 || 0 == strncmp(vb->ptr+12,"xhtml+xml", sizeof("xhtml+xml")-1)
+                 || 0 == strncmp(vb->ptr+12,"xml",       sizeof("xml")-1)))
+            || 0 == strncmp(vb->ptr, "image/svg+xml", sizeof("image/svg+xml")-1))
+            BrotliEncoderSetParameter(br, BROTLI_PARAM_MODE, BROTLI_MODE_TEXT);
+        else if (0 == strncmp(vb->ptr, "font/", sizeof("font/")-1))
+            BrotliEncoderSetParameter(br, BROTLI_PARAM_MODE, BROTLI_MODE_FONT);
+    }
+
+    return 0;
+}
+
+static int stream_br_compress(request_st * const r, handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+    const uint8_t *in = (uint8_t *)start;
+    BrotliEncoderState * const br = hctx->u.br;
+    hctx->bytes_in += st_size;
+    while (st_size || BrotliEncoderHasMoreOutput(br)) {
+        size_t insz = ((off_t)((~(uint32_t)0) >> 1) > st_size)
+          ? (size_t)st_size
+          : ((~(uint32_t)0) >> 1);
+        size_t outsz = 0;
+        BrotliEncoderCompressStream(br, BROTLI_OPERATION_PROCESS,
+                                    &insz, &in, &outsz, NULL, NULL);
+        const uint8_t *out = BrotliEncoderTakeOutput(br, &outsz);
+        st_size -= (st_size - (off_t)insz);
+        if (outsz) {
+            hctx->bytes_out += (off_t)outsz;
+            /*stream_http_chunk_append_mem(r, hctx, outsz);*/
+            if (0 != http_chunk_append_mem(r, (char *)out, outsz))
+                return -1;
+        }
+    }
+    return 0;
+}
+
+static int stream_br_flush(request_st * const r, handler_ctx * const hctx, int end) {
+    const int brmode = end ? BROTLI_OPERATION_FINISH : BROTLI_OPERATION_FLUSH;
+    BrotliEncoderState * const br = hctx->u.br;
+    do {
+        size_t insz = 0;
+        size_t outsz = 0;
+        BrotliEncoderCompressStream(br, brmode,
+                                    &insz, NULL, &outsz, NULL, NULL);
+        const uint8_t *out = BrotliEncoderTakeOutput(br, &outsz);
+        if (outsz) {
+            hctx->bytes_out += (off_t)outsz;
+            /*stream_http_chunk_append_mem(r, hctx, outsz);*/
+            if (0 != http_chunk_append_mem(r, (char *)out, outsz))
+                return -1;
+        }
+    } while (BrotliEncoderHasMoreOutput(br));
+    return 0;
+}
+
+static int stream_br_end(handler_ctx *hctx) {
+    BrotliEncoderState * const br = hctx->u.br;
+    BrotliEncoderDestroyInstance(br);
+    return 0;
+}
+
+#endif
+
+
 static int mod_deflate_stream_init(handler_ctx *hctx) {
 	switch(hctx->compression_type) {
 #ifdef USE_ZLIB
@@ -663,6 +768,10 @@ static int mod_deflate_stream_init(handler_ctx *hctx) {
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
 		return stream_bzip2_init(hctx);
+#endif
+#ifdef USE_BROTLI
+	case HTTP_ACCEPT_ENCODING_BR:
+		return stream_br_init(hctx);
 #endif
 	default:
 		return -1;
@@ -680,6 +789,10 @@ static int mod_deflate_compress(request_st * const r, handler_ctx * const hctx, 
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
 		return stream_bzip2_compress(r, hctx, start, st_size);
+#endif
+#ifdef USE_BROTLI
+	case HTTP_ACCEPT_ENCODING_BR:
+		return stream_br_compress(r, hctx, start, st_size);
 #endif
 	default:
 		UNUSED(r);
@@ -699,6 +812,10 @@ static int mod_deflate_stream_flush(request_st * const r, handler_ctx * const hc
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
 		return stream_bzip2_flush(r, hctx, end);
+#endif
+#ifdef USE_BROTLI
+	case HTTP_ACCEPT_ENCODING_BR:
+		return stream_br_flush(r, hctx, end);
 #endif
 	default:
 		UNUSED(r);
@@ -729,6 +846,10 @@ static int mod_deflate_stream_end(handler_ctx *hctx) {
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
 		return stream_bzip2_end(hctx);
+#endif
+#ifdef USE_BROTLI
+	case HTTP_ACCEPT_ENCODING_BR:
+		return stream_br_end(hctx);
 #endif
 	default:
 		return -1;
@@ -975,7 +1096,7 @@ static handler_t deflate_compress_response(request_st * const r, handler_ctx * c
 static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const char **label) {
 	/* get client side support encodings */
 	int accept_encoding = 0;
-      #if !defined(USE_ZLIB) && !defined(USE_BZ2LIB)
+      #if !defined(USE_ZLIB) && !defined(USE_BZ2LIB) && !defined(USE_BROTLI)
 	UNUSED(value);
       #else
         for (; *value; ++value) {
@@ -985,6 +1106,12 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
             while (*value!=' ' && *value!=',' && *value!=';' && *value!='\0')
                 ++value;
             switch (value - v) {
+              case 2:
+               #ifdef USE_BROTLI
+                if (0 == memcmp(v, "br", 2))
+                    accept_encoding |= HTTP_ACCEPT_ENCODING_BR;
+               #endif
+                break;
               case 4:
                #ifdef USE_ZLIB
                 if (0 == memcmp(v, "gzip", 4))
@@ -1035,6 +1162,12 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
 	accept_encoding &= p->conf.allowed_encodings;
 
 	/* select best matching encoding */
+#ifdef USE_BROTLI
+	if (accept_encoding & HTTP_ACCEPT_ENCODING_BR) {
+		*label = "br";
+		return HTTP_ACCEPT_ENCODING_BR;
+	} else
+#endif
 #ifdef USE_BZ2LIB
 	if (accept_encoding & HTTP_ACCEPT_ENCODING_BZIP2) {
 		*label = "bzip2";
@@ -1210,6 +1343,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	hctx = handler_ctx_init();
 	hctx->plugin_data = p;
 	hctx->compression_type = compression_type;
+	hctx->r = r;
 	hctx->errh = r->conf.errh;
 	/* setup output buffer */
 	buffer_clear(&p->tmp_buf);
@@ -1227,6 +1361,13 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		http_header_response_unset(r, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
 		return HANDLER_GO_ON;
 	}
+
+  #ifdef USE_BROTLI
+	if (r->resp_body_finished
+	    && (hctx->compression_type & HTTP_ACCEPT_ENCODING_BR)
+	    && (len >> 1) < (off_t)((~(uint32_t)0u) >> 1))
+		BrotliEncoderSetParameter(hctx->u.br, BROTLI_PARAM_SIZE_HINT, (uint32_t)len);
+  #endif
 
 	if (r->resp_htags & HTTP_HEADER_CONTENT_LENGTH) {
 		http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));

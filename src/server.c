@@ -435,6 +435,11 @@ static void show_features (void) {
 #else
       "\t- bzip2 support\n"
 #endif
+#if defined HAVE_BROTLI_ENCODE_H && defined HAVE_BROTLI
+      "\t+ brotli support\n"
+#else
+      "\t- brotli support\n"
+#endif
 #if defined(HAVE_CRYPT) || defined(HAVE_CRYPT_R) || defined(HAVE_LIBCRYPT)
       "\t+ crypt support\n"
 #else

@@ -1,3 +1,8 @@
+option('with_brotli',
+	type: 'boolean',
+	value: false,
+	description: 'with brotli-support for mod_deflate [default: off]',
+)
 option('with_bzip',
 	type: 'boolean',
 	value: false,

@@ -978,6 +978,34 @@ if test "$WITH_BZIP2" != no; then
   AC_SUBST([BZ_LIB])
 fi
 
+dnl brotli
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for brotli support])
+AC_ARG_WITH([brotli],
+  [AC_HELP_STRING([--with-brotli],
+    [Enable brotli support for mod_deflate]
+  )],
+  [WITH_BROTLI=$withval],
+  [WITH_BROTLI=no]
+)
+AC_MSG_RESULT([$WITH_BROTLI])
+
+if test "$WITH_BROTLI" != no; then
+  if test "$WITH_BROTLI" != yes; then
+    BROTLI_LIB="-L$WITH_BROTLI -lbrotlienc"
+    CPPFLAGS="$CPPFLAGS -I$WITH_BROTLI"
+  else
+    PKG_CHECK_MODULES([BROTLI], [libbrotlienc], [], [
+      AC_MSG_ERROR([brotli not found, install it or build without --with-brotli])
+    ])
+  fi
+
+  AC_DEFINE([HAVE_BROTLI_ENCODE_H], [1], [brotli/encode.h])
+  AC_DEFINE([HAVE_BROTLI], [1], [libbrotlienc])
+  AC_SUBST([BROTLI_CFLAGS])
+  AC_SUBST([BROTLI_LIBS])
+fi
+
 dnl Check for fam/gamin
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for FAM])
@@ -1665,6 +1693,9 @@ lighty_track_feature "compress-gzip compress-deflate" "" \
 
 lighty_track_feature "compress-bzip2" "" \
   'test "$WITH_BZIP2" != no'
+
+lighty_track_feature "compress-brotli" "" \
+  'test "$WITH_BROTLI" != no'
 
 lighty_track_feature "kerberos" "mod_authn_gssapi" \
   'test "$WITH_KRB5" != no'

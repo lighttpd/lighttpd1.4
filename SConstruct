@@ -239,6 +239,7 @@ vars.AddVariables(
 	BoolVariable('build_fullstatic', 'enable fullstatic build', 'no'),
 
 	BoolVariable('with_bzip2', 'enable bzip2 compression', 'no'),
+	BoolVariable('with_brotli', 'enable brotli compression', 'no'),
 	PackageVariable('with_dbi', 'enable dbi support', 'no'),
 	BoolVariable('with_fam', 'enable FAM/gamin support', 'no'),
 	BoolVariable('with_gdbm', 'enable gdbm support', 'no'),
@@ -323,6 +324,7 @@ if 1:
 		autoconf.env.Append(APPEND_LIBS = '')
 
 	autoconf.env.Append(
+		LIBBROTLI = '',
 		LIBBZ2 = '',
 		LIBCRYPT = '',
 		LIBCRYPTO = '',
@@ -499,6 +501,11 @@ if 1:
 			CPPFLAGS = [ '-DHAVE_BZLIB_H', '-DHAVE_LIBBZ2' ],
 			LIBBZ2 = 'bz2',
 		)
+
+	if env['with_brotli']:
+		if not autoconf.CheckParseConfigForLib('LIBBROTLI', 'pkg-config brotlienc --cflags --libs'):
+			fail("Couldn't find libbrotlienc")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_BROTLI_ENCODE_H', '-DHAVE_BROTLI' ])
 
 	if env['with_dbi']:
 		if not autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C'):
