@@ -216,7 +216,6 @@ typedef struct {
 	plugin_data *plugin_data;
 	request_st *r;
 	int compression_type;
-	log_error_st *errh;
 } handler_ctx;
 
 static handler_ctx *handler_ctx_init() {
@@ -449,10 +448,10 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
 }
 
 
-#if defined(USE_ZLIB) || defined(USE_BZ2LIB)
-static int stream_http_chunk_append_mem(request_st * const r, const handler_ctx * const hctx, size_t len) {
+#if defined(USE_ZLIB) || defined(USE_BZ2LIB) || defined(USE_BROTLI)
+static int stream_http_chunk_append_mem(handler_ctx * const hctx, const char * const out, size_t len) {
 	/* future: might also write stream to hctx temporary file in compressed file cache */
-	return http_chunk_append_mem(r, hctx->output->ptr, len);
+	return http_chunk_append_mem(hctx->r, out, len);
 }
 #endif
 
@@ -486,7 +485,7 @@ static int stream_deflate_init(handler_ctx *hctx) {
 	return 0;
 }
 
-static int stream_deflate_compress(request_st * const r, handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+static int stream_deflate_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
 	z_stream * const z = &(hctx->u.z);
 	size_t len;
 
@@ -501,7 +500,8 @@ static int stream_deflate_compress(request_st * const r, handler_ctx * const hct
 		if (z->avail_out == 0 || z->avail_in > 0) {
 			len = hctx->output->size - z->avail_out;
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(r, hctx, len);
+			if (0 != stream_http_chunk_append_mem(hctx, hctx->output->ptr, len))
+				return -1;
 			z->next_out = (unsigned char *)hctx->output->ptr;
 			z->avail_out = hctx->output->size;
 		}
@@ -510,7 +510,7 @@ static int stream_deflate_compress(request_st * const r, handler_ctx * const hct
 	return 0;
 }
 
-static int stream_deflate_flush(request_st * const r, handler_ctx * const hctx, int end) {
+static int stream_deflate_flush(handler_ctx * const hctx, int end) {
 	z_stream * const z = &(hctx->u.z);
 	const plugin_data *p = hctx->plugin_data;
 	size_t len;
@@ -540,7 +540,8 @@ static int stream_deflate_flush(request_st * const r, handler_ctx * const hctx, 
 		len = hctx->output->size - z->avail_out;
 		if (z->avail_out == 0 || (len > 0 && (end || p->conf.sync_flush))) {
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(r, hctx, len);
+			if (0 != stream_http_chunk_append_mem(hctx, hctx->output->ptr, len))
+				return -1;
 			z->next_out = (unsigned char *)hctx->output->ptr;
 			z->avail_out = hctx->output->size;
 		}
@@ -555,10 +556,10 @@ static int stream_deflate_end(handler_ctx *hctx) {
 	if (Z_OK == rc || Z_DATA_ERROR == rc) return 0;
 
 	if (z->msg != NULL) {
-		log_error(hctx->errh, __FILE__, __LINE__,
+		log_error(hctx->r->conf.errh, __FILE__, __LINE__,
 		  "deflateEnd error ret=%d, msg=%s", rc, z->msg);
 	} else {
-		log_error(hctx->errh, __FILE__, __LINE__,
+		log_error(hctx->r->conf.errh, __FILE__, __LINE__,
 		  "deflateEnd error ret=%d", rc);
 	}
 	return -1;
@@ -594,7 +595,7 @@ static int stream_bzip2_init(handler_ctx *hctx) {
 	return 0;
 }
 
-static int stream_bzip2_compress(request_st * const r, handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+static int stream_bzip2_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
 	bz_stream * const bz = &(hctx->u.bz);
 	size_t len;
 
@@ -609,7 +610,8 @@ static int stream_bzip2_compress(request_st * const r, handler_ctx * const hctx,
 		if (bz->avail_out == 0 || bz->avail_in > 0) {
 			len = hctx->output->size - bz->avail_out;
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(r, hctx, len);
+			if (0 != stream_http_chunk_append_mem(hctx, hctx->output->ptr, len))
+				return -1;
 			bz->next_out = hctx->output->ptr;
 			bz->avail_out = hctx->output->size;
 		}
@@ -618,7 +620,7 @@ static int stream_bzip2_compress(request_st * const r, handler_ctx * const hctx,
 	return 0;
 }
 
-static int stream_bzip2_flush(request_st * const r, handler_ctx * const hctx, int end) {
+static int stream_bzip2_flush(handler_ctx * const hctx, int end) {
 	bz_stream * const bz = &(hctx->u.bz);
 	const plugin_data *p = hctx->plugin_data;
 	size_t len;
@@ -648,7 +650,8 @@ static int stream_bzip2_flush(request_st * const r, handler_ctx * const hctx, in
 		len = hctx->output->size - bz->avail_out;
 		if (bz->avail_out == 0 || (len > 0 && (end || p->conf.sync_flush))) {
 			hctx->bytes_out += len;
-			stream_http_chunk_append_mem(r, hctx, len);
+			if (0 != stream_http_chunk_append_mem(hctx, hctx->output->ptr, len))
+				return -1;
 			bz->next_out = hctx->output->ptr;
 			bz->avail_out = hctx->output->size;
 		}
@@ -662,7 +665,7 @@ static int stream_bzip2_end(handler_ctx *hctx) {
 	int rc = BZ2_bzCompressEnd(bz);
 	if (BZ_OK == rc || BZ_DATA_ERROR == rc) return 0;
 
-	log_error(hctx->errh, __FILE__, __LINE__,
+	log_error(hctx->r->conf.errh, __FILE__, __LINE__,
 	  "BZ2_bzCompressEnd error ret=%d", rc);
 	return -1;
 }
@@ -707,7 +710,7 @@ static int stream_br_init(handler_ctx *hctx) {
     return 0;
 }
 
-static int stream_br_compress(request_st * const r, handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+static int stream_br_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
     const uint8_t *in = (uint8_t *)start;
     BrotliEncoderState * const br = hctx->u.br;
     hctx->bytes_in += st_size;
@@ -722,15 +725,14 @@ static int stream_br_compress(request_st * const r, handler_ctx * const hctx, un
         st_size -= (st_size - (off_t)insz);
         if (outsz) {
             hctx->bytes_out += (off_t)outsz;
-            /*stream_http_chunk_append_mem(r, hctx, outsz);*/
-            if (0 != http_chunk_append_mem(r, (char *)out, outsz))
+            if (0 != stream_http_chunk_append_mem(hctx, (char *)out, outsz))
                 return -1;
         }
     }
     return 0;
 }
 
-static int stream_br_flush(request_st * const r, handler_ctx * const hctx, int end) {
+static int stream_br_flush(handler_ctx * const hctx, int end) {
     const int brmode = end ? BROTLI_OPERATION_FINISH : BROTLI_OPERATION_FLUSH;
     BrotliEncoderState * const br = hctx->u.br;
     do {
@@ -741,8 +743,7 @@ static int stream_br_flush(request_st * const r, handler_ctx * const hctx, int e
         const uint8_t *out = BrotliEncoderTakeOutput(br, &outsz);
         if (outsz) {
             hctx->bytes_out += (off_t)outsz;
-            /*stream_http_chunk_append_mem(r, hctx, outsz);*/
-            if (0 != http_chunk_append_mem(r, (char *)out, outsz))
+            if (0 != stream_http_chunk_append_mem(hctx, (char *)out, outsz))
                 return -1;
         }
     } while (BrotliEncoderHasMoreOutput(br));
@@ -778,47 +779,45 @@ static int mod_deflate_stream_init(handler_ctx *hctx) {
 	}
 }
 
-static int mod_deflate_compress(request_st * const r, handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+static int mod_deflate_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
 	if (0 == st_size) return 0;
 	switch(hctx->compression_type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
-		return stream_deflate_compress(r, hctx, start, st_size);
+		return stream_deflate_compress(hctx, start, st_size);
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
-		return stream_bzip2_compress(r, hctx, start, st_size);
+		return stream_bzip2_compress(hctx, start, st_size);
 #endif
 #ifdef USE_BROTLI
 	case HTTP_ACCEPT_ENCODING_BR:
-		return stream_br_compress(r, hctx, start, st_size);
+		return stream_br_compress(hctx, start, st_size);
 #endif
 	default:
-		UNUSED(r);
 		UNUSED(start);
 		return -1;
 	}
 }
 
-static int mod_deflate_stream_flush(request_st * const r, handler_ctx * const hctx, int end) {
+static int mod_deflate_stream_flush(handler_ctx * const hctx, int end) {
 	if (0 == hctx->bytes_in) return 0;
 	switch(hctx->compression_type) {
 #ifdef USE_ZLIB
 	case HTTP_ACCEPT_ENCODING_GZIP:
 	case HTTP_ACCEPT_ENCODING_DEFLATE:
-		return stream_deflate_flush(r, hctx, end);
+		return stream_deflate_flush(hctx, end);
 #endif
 #ifdef USE_BZ2LIB
 	case HTTP_ACCEPT_ENCODING_BZIP2:
-		return stream_bzip2_flush(r, hctx, end);
+		return stream_bzip2_flush(hctx, end);
 #endif
 #ifdef USE_BROTLI
 	case HTTP_ACCEPT_ENCODING_BR:
-		return stream_br_flush(r, hctx, end);
+		return stream_br_flush(hctx, end);
 #endif
 	default:
-		UNUSED(r);
 		UNUSED(end);
 		return -1;
 	}
@@ -856,13 +855,13 @@ static int mod_deflate_stream_end(handler_ctx *hctx) {
 	}
 }
 
-static void deflate_compress_cleanup(request_st * const r, handler_ctx * const hctx) {
+static int deflate_compress_cleanup(request_st * const r, handler_ctx * const hctx) {
 	const plugin_data *p = hctx->plugin_data;
 	r->plugin_ctx[p->id] = NULL;
 
-	if (0 != mod_deflate_stream_end(hctx)) {
+	int rc = mod_deflate_stream_end(hctx);
+	if (0 != rc)
 		log_error(r->conf.errh, __FILE__, __LINE__, "error closing stream");
-	}
 
       #if 1 /* unnecessary if deflate.min-compress-size is set to a reasonable value */
 	if (hctx->bytes_in < hctx->bytes_out) {
@@ -873,6 +872,7 @@ static void deflate_compress_cleanup(request_st * const r, handler_ctx * const h
       #endif
 
 	handler_ctx_free(hctx);
+	return rc;
 }
 
 
@@ -1012,7 +1012,7 @@ static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx
 	}
 #endif
 
-	if (mod_deflate_compress(r, hctx,
+	if (mod_deflate_compress(hctx,
 				(unsigned char *)start + (abs_offset - c->file.mmap.offset), toSend) < 0) {
 		log_error(r->conf.errh, __FILE__, __LINE__, "compress failed.");
 		toSend = -1;
@@ -1058,7 +1058,7 @@ static handler_t deflate_compress_response(request_st * const r, handler_ctx * c
 		case MEM_CHUNK:
 			len = buffer_string_length(c->mem) - c->offset;
 			if (len > max) len = max;
-			if (mod_deflate_compress(r, hctx, (unsigned char *)c->mem->ptr+c->offset, len) < 0) {
+			if (mod_deflate_compress(hctx, (unsigned char *)c->mem->ptr+c->offset, len) < 0) {
 				log_error(r->conf.errh, __FILE__, __LINE__, "compress failed.");
 				return HANDLER_ERROR;
 			}
@@ -1084,7 +1084,7 @@ static handler_t deflate_compress_response(request_st * const r, handler_ctx * c
 	/*(current implementation requires response be complete)*/
 	close_stream = (r->resp_body_finished
                         && chunkqueue_is_empty(hctx->in_queue));
-	if (mod_deflate_stream_flush(r, hctx, close_stream) < 0) {
+	if (mod_deflate_stream_flush(hctx, close_stream) < 0) {
 		log_error(r->conf.errh, __FILE__, __LINE__, "flush error");
 		return HANDLER_ERROR;
 	}
@@ -1344,7 +1344,6 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	hctx->plugin_data = p;
 	hctx->compression_type = compression_type;
 	hctx->r = r;
-	hctx->errh = r->conf.errh;
 	/* setup output buffer */
 	buffer_clear(&p->tmp_buf);
 	hctx->output = &p->tmp_buf;
@@ -1379,7 +1378,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		if (HANDLER_FINISHED == rc) {
 			mod_deflate_note_ratio(r, hctx);
 		}
-		deflate_compress_cleanup(r, hctx);
+		if (deflate_compress_cleanup(r, hctx) < 0) return HANDLER_ERROR;
 		if (HANDLER_ERROR == rc) return HANDLER_ERROR;
 	}
 
