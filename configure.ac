@@ -955,7 +955,7 @@ AC_ARG_WITH([bzip2],
     [Enable bzip2 support for mod_compress]
   )],
   [WITH_BZIP2=$withval],
-  [WITH_BZIP2=yes]
+  [WITH_BZIP2=no]
 )
 AC_MSG_RESULT([$WITH_BZIP2])
 
