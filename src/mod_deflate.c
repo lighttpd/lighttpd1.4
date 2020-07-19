@@ -350,7 +350,7 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
       { CONST_STR_LEN("deflate.mimetypes"),
         T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
-     ,{ CONST_STR_LEN("deflate.allow-encodings"),
+     ,{ CONST_STR_LEN("deflate.allowed-encodings"),
         T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("deflate.max-compress-size"),
