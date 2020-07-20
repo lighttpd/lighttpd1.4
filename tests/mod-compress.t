@@ -87,7 +87,7 @@ User-Agent: MYOB/6.66 (AN/ON)
 Connection: close
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Type' => "text/plain; charset=utf-8" } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '-Content-Encoding' => '', 'Content-Type' => "text/plain; charset=utf-8" } ];
 ok($tf->handle_http($t) == 0, 'Empty Accept-Encoding');
 
 $t->{REQUEST}  = ( <<EOF

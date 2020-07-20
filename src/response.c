@@ -349,9 +349,6 @@ handler_t http_response_prepare(request_st * const r) {
 		 *
 		 * fastcgi-auth might lead to a COMEBACK too
 		 * fastcgi again dead server too
-		 *
-		 * mod_compress might add headers twice too
-		 *
 		 */
 
 		if (r->conf.log_request_handling) {

@@ -85,7 +85,6 @@
  * - might add deflate.mimetypes-exclude = ( ... ) for list of mimetypes
  *   to avoid compressing, even if a broader deflate.mimetypes matched,
  *   e.g. to compress all "text/" except "text/special".
- * - mod_compress and mod_deflate might merge overlapping feature sets
  *
  * Implementation notes:
  * - http_chunk_append_mem() used instead of http_chunk_append_buffer()
@@ -351,6 +350,21 @@ static void mod_deflate_merge_config_cpv(plugin_config * const pconf, const conf
       case 8: /* deflate.cache-dir */
         pconf->cache_dir = cpv->v.b;
         break;
+      case 9: /* compress.filetype */
+        pconf->mimetypes = cpv->v.a;
+        break;
+      case 10:/* compress.allowed-encodings */
+        pconf->allowed_encodings = (short)cpv->v.shrt;
+        break;
+      case 11:/* compress.cache-dir */
+        pconf->cache_dir = cpv->v.b;
+        break;
+      case 12:/* compress.max-filesize */
+        pconf->max_compress_size = cpv->v.u;
+        break;
+      case 13:/* compress.max-loadavg */
+        pconf->max_loadavg = cpv->v.d;
+        break;
       default:/* should not happen */
         return;
     }
@@ -450,6 +464,21 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
      ,{ CONST_STR_LEN("deflate.cache-dir"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("compress.filetype"),
+        T_CONFIG_ARRAY_VLIST,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("compress.allowed-encodings"),
+        T_CONFIG_ARRAY_VLIST,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("compress.cache-dir"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("compress.max-filesize"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("compress.max-loadavg"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -516,6 +545,50 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                         return HANDLER_ERROR;
                     }
                 }
+                break;
+              case 9: /* compress.filetype */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "DEPRECATED: %s replaced with deflate.mimetypes",
+                  cpk[cpv->k_id].k);
+                break;
+              case 10:/* compress.allowed-encodings */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "DEPRECATED: %s replaced with deflate.allowed-encodings",
+                  cpk[cpv->k_id].k);
+                cpv->v.shrt = (unsigned short)
+                  mod_deflate_encodings_to_flags(cpv->v.a);
+                cpv->vtype = T_CONFIG_SHORT;
+                break;
+              case 11:/* compress.cache-dir */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "DEPRECATED: %s replaced with deflate.cache-dir",
+                  cpk[cpv->k_id].k);
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    buffer *b;
+                    *(const buffer **)&b = cpv->v.b;
+                    const uint32_t len = buffer_string_length(b);
+                    if (len > 0 && '/' == b->ptr[len-1])
+                        buffer_string_set_length(b, len-1); /*remove end slash*/
+                    struct stat st;
+                    if (0 != stat(b->ptr,&st) && 0 != mkdir_recursive(b->ptr)) {
+                        log_perror(srv->errh, __FILE__, __LINE__,
+                          "can't stat %s %s", cpk[cpv->k_id].k, b->ptr);
+                        return HANDLER_ERROR;
+                    }
+                }
+                break;
+              case 12:/* compress.max-filesize */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "DEPRECATED: %s replaced with deflate.max-compress-size",
+                  cpk[cpv->k_id].k);
+                break;
+              case 13:/* compress.max-loadavg */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "DEPRECATED: %s replaced with deflate.max-loadavg",
+                  cpk[cpv->k_id].k);
+                cpv->v.d = (!buffer_string_is_empty(cpv->v.b))
+                  ? strtod(cpv->v.b->ptr, NULL)
+                  : 0.0;
                 break;
               default:/* should not happen */
                 break;
@@ -1197,6 +1270,7 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
 	int accept_encoding = 0;
       #if !defined(USE_ZLIB) && !defined(USE_BZ2LIB) && !defined(USE_BROTLI)
 	UNUSED(value);
+	UNUSED(label);
       #else
         for (; *value; ++value) {
             const char *v;

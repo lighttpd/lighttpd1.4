@@ -491,8 +491,6 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 		return;
 	}
 
-	/* mod_compress might set several data directly, don't overwrite them */
-
 	/* set response content-type, if not set already */
 
 	if (NULL == http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"))) {
