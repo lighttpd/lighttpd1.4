@@ -14,7 +14,7 @@ use LightyTest;
 my $tf = LightyTest->new();
 my $t;
 
-$tf->{CONFIGFILE} = 'mod-compress.conf';
+$tf->{CONFIGFILE} = 'mod-deflate.conf';
 
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
 

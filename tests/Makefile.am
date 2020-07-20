@@ -36,8 +36,8 @@ CONFS=\
 	mod-auth.conf \
 	mod-auth.t \
 	mod-cgi.t \
-	mod-compress.conf \
-	mod-compress.t \
+	mod-deflate.conf \
+	mod-deflate.t \
 	mod-extforward.conf \
 	mod-extforward.t \
 	mod-fastcgi.t \

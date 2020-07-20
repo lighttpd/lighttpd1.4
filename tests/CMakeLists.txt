@@ -23,7 +23,7 @@ set(T_FILES
 	lowercase.t
 	mod-auth.t
 	mod-cgi.t
-	mod-compress.t
+	mod-deflate.t
 	mod-extforward.t
 	mod-fastcgi.t
 	mod-proxy.t
