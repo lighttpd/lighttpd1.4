@@ -921,7 +921,7 @@ AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for zlib support])
 AC_ARG_WITH([zlib],
   [AC_HELP_STRING([--with-zlib],
-    [Enable zlib support for mod_compress]
+    [Enable zlib support for mod_deflate]
   )],
   [WITH_ZLIB=$withval],
   [WITH_ZLIB=yes]
@@ -952,7 +952,7 @@ AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for bzip2 support])
 AC_ARG_WITH([bzip2],
   [AC_HELP_STRING([--with-bzip2],
-    [Enable bzip2 support for mod_compress]
+    [Enable bzip2 support for mod_deflate]
   )],
   [WITH_BZIP2=$withval],
   [WITH_BZIP2=no]
@@ -1620,7 +1620,6 @@ do_build="\
   mod_auth \
   mod_authn_file \
   mod_cgi \
-  mod_compress \
   mod_deflate \
   mod_dirlisting \
   mod_evhost \

@@ -327,11 +327,6 @@ mod_access_la_SOURCES = mod_access.c
 mod_access_la_LDFLAGS = $(common_module_ldflags)
 mod_access_la_LIBADD = $(common_libadd)
 
-lib_LTLIBRARIES += mod_compress.la
-mod_compress_la_SOURCES = mod_compress.c
-mod_compress_la_LDFLAGS = $(common_module_ldflags)
-mod_compress_la_LIBADD = $(Z_LIB) $(BZ_LIB) $(common_libadd)
-
 lib_LTLIBRARIES += mod_deflate.la
 mod_deflate_la_SOURCES = mod_deflate.c
 mod_deflate_la_LDFLAGS = $(BROTLI_CFLAGS) $(common_module_ldflags)
@@ -487,7 +482,6 @@ lighttpd_SOURCES = \
   mod_auth.c \
   mod_authn_file.c \
   mod_cgi.c \
-  mod_compress.c \
   mod_deflate.c \
   mod_dirlisting.c \
   mod_evasive.c \
