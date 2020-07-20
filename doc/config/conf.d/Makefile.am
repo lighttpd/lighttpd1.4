@@ -2,8 +2,8 @@ EXTRA_DIST=access_log.conf \
 	auth.conf \
 	cgi.conf \
 	cml.conf \
-	compress.conf \
 	debug.conf \
+	deflate.conf \
 	dirlisting.conf \
 	evhost.conf \
 	expire.conf \
