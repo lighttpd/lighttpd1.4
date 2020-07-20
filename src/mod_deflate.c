@@ -86,7 +86,6 @@
  *   to avoid compressing, even if a broader deflate.mimetypes matched,
  *   e.g. to compress all "text/" except "text/special".
  * - mod_compress and mod_deflate might merge overlapping feature sets
- *     (mod_compress.cache-dir does not yet have an equivalent in mod_deflate)
  *
  * Implementation notes:
  * - http_chunk_append_mem() used instead of http_chunk_append_buffer()
@@ -109,7 +108,7 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
-#include <unistd.h>     /* read() */
+#include <unistd.h>     /* getpid() read() unlink() write() */
 
 #include "base.h"
 #include "fdevent.h"
@@ -119,6 +118,7 @@
 #include "http_chunk.h"
 #include "http_header.h"
 #include "response.h"
+#include "stat_cache.h"
 
 #include "plugin.h"
 
@@ -178,6 +178,7 @@ static void sigbus_handler(int sig) {
 
 typedef struct {
 	const array	*mimetypes;
+	const buffer    *cache_dir;
 	unsigned int	max_compress_size;
 	unsigned short	min_compress_size;
 	unsigned short	output_buffer_size;
@@ -216,6 +217,8 @@ typedef struct {
 	plugin_data *plugin_data;
 	request_st *r;
 	int compression_type;
+	int cache_fd;
+	char *cache_fn;
 } handler_ctx;
 
 static handler_ctx *handler_ctx_init() {
@@ -223,11 +226,18 @@ static handler_ctx *handler_ctx_init() {
 
 	hctx = calloc(1, sizeof(*hctx));
 	hctx->in_queue = chunkqueue_init();
+	hctx->cache_fd = -1;
 
 	return hctx;
 }
 
 static void handler_ctx_free(handler_ctx *hctx) {
+	if (hctx->cache_fn) {
+		unlink(hctx->cache_fn);
+		free(hctx->cache_fn);
+	}
+	if (-1 != hctx->cache_fd)
+		close(hctx->cache_fd);
       #if 0
 	if (hctx->output != &p->tmp_buf) {
 		buffer_free(hctx->output);
@@ -246,6 +256,70 @@ INIT_FUNC(mod_deflate_init) {
 FREE_FUNC(mod_deflate_free) {
     plugin_data *p = p_d;
     free(p->tmp_buf.ptr);
+}
+
+#if defined(_WIN32) && !defined(__CYGWIN__)
+#define mkdir(x,y) mkdir(x)
+#endif
+
+static int mkdir_for_file (char *fn) {
+    for (char *p = fn; (p = strchr(p + 1, '/')) != NULL; ) {
+        if (p[1] == '\0') return 0; /* ignore trailing slash */
+        *p = '\0';
+        int rc = mkdir(fn, 0700);
+        *p = '/';
+        if (0 != rc && errno != EEXIST) return -1;
+    }
+    return 0;
+}
+
+static int mkdir_recursive (char *dir) {
+    return 0 == mkdir_for_file(dir) && (0 == mkdir(dir,0700) || errno == EEXIST)
+      ? 0
+      : -1;
+}
+
+static buffer * mod_deflate_cache_file_name(request_st * const r, const buffer *cache_dir, const buffer * const etag) {
+    /* XXX: future: for shorter paths into the cache, we could checksum path,
+     *      and then shard it to avoid a huge single directory.
+     *      Alternatively, could use &r->uri.path, minus any
+     *      (matching) &r->pathinfo suffix, with result url-encoded */
+    buffer * const tb = r->tmp_buf;
+    buffer_copy_buffer(tb, cache_dir);
+    buffer_append_string_len(tb, CONST_BUF_LEN(&r->physical.path));
+    buffer_append_string_len(tb, CONST_STR_LEN("-"));
+    buffer_append_string_len(tb, etag->ptr+1, buffer_string_length(etag)-2);
+    return tb;
+}
+
+static void mod_deflate_cache_file_open (handler_ctx * const hctx, const buffer * const fn) {
+    /* race exists whereby up to # workers might attempt to compress same
+     * file at same time if requested at same time, but this is unlikely
+     * and resolves itself by atomic rename into place when done */
+    const uint32_t fnlen = buffer_string_length(fn);
+    hctx->cache_fn = malloc(fnlen+1+LI_ITOSTRING_LENGTH+1);
+    force_assert(hctx->cache_fn);
+    memcpy(hctx->cache_fn, fn->ptr, fnlen);
+    hctx->cache_fn[fnlen] = '.';
+    const size_t ilen =
+      li_itostrn(hctx->cache_fn+fnlen+1, LI_ITOSTRING_LENGTH, getpid());
+    hctx->cache_fn[fnlen+1+ilen] = '\0';
+    hctx->cache_fd = fdevent_open_cloexec(hctx->cache_fn, 1, O_RDWR|O_CREAT, 0600);
+    if (-1 == hctx->cache_fd) {
+        free(hctx->cache_fn);
+        hctx->cache_fn = NULL;
+    }
+}
+
+static int mod_deflate_cache_file_finish (request_st * const r, handler_ctx * const hctx, const buffer * const fn) {
+    if (0 != fdevent_rename(hctx->cache_fn, fn->ptr))
+        return -1;
+    free(hctx->cache_fn);
+    hctx->cache_fn = NULL;
+    chunkqueue_reset(r->write_queue);
+    int rc = http_chunk_append_file_fd(r, fn, hctx->cache_fd, hctx->bytes_out);
+    hctx->cache_fd = -1;
+    return rc;
 }
 
 static void mod_deflate_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -273,6 +347,9 @@ static void mod_deflate_merge_config_cpv(plugin_config * const pconf, const conf
         break;
       case 7: /* deflate.max-loadavg */
         pconf->max_loadavg = cpv->v.d;
+        break;
+      case 8: /* deflate.cache-dir */
+        pconf->cache_dir = cpv->v.b;
         break;
       default:/* should not happen */
         return;
@@ -370,6 +447,9 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
      ,{ CONST_STR_LEN("deflate.max-loadavg"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("deflate.cache-dir"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -422,6 +502,21 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                   ? strtod(cpv->v.b->ptr, NULL)
                   : 0.0;
                 break;
+              case 8: /* deflate.cache-dir */
+                if (!buffer_string_is_empty(cpv->v.b)) {
+                    buffer *b;
+                    *(const buffer **)&b = cpv->v.b;
+                    const uint32_t len = buffer_string_length(b);
+                    if (len > 0 && '/' == b->ptr[len-1])
+                        buffer_string_set_length(b, len-1); /*remove end slash*/
+                    struct stat st;
+                    if (0 != stat(b->ptr,&st) && 0 != mkdir_recursive(b->ptr)) {
+                        log_perror(srv->errh, __FILE__, __LINE__,
+                          "can't stat %s %s", cpk[cpv->k_id].k, b->ptr);
+                        return HANDLER_ERROR;
+                    }
+                }
+                break;
               default:/* should not happen */
                 break;
             }
@@ -449,9 +544,19 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
 
 
 #if defined(USE_ZLIB) || defined(USE_BZ2LIB) || defined(USE_BROTLI)
+static int mod_deflate_cache_file_append (handler_ctx * const hctx, const char *out, size_t len) {
+    ssize_t wr;
+    do {
+        wr = write(hctx->cache_fd, out, len);
+    } while (wr > 0 ? ((out += wr), (len -= (size_t)wr)) : errno == EINTR);
+    return (0 == len) ? 0 : -1;
+}
+
 static int stream_http_chunk_append_mem(handler_ctx * const hctx, const char * const out, size_t len) {
-	/* future: might also write stream to hctx temporary file in compressed file cache */
-	return http_chunk_append_mem(hctx->r, out, len);
+    if (0 == len) return 0;
+    return (-1 == hctx->cache_fd)
+      ? http_chunk_append_mem(hctx->r, out, len)
+      : mod_deflate_cache_file_append(hctx, out, len);
 }
 #endif
 
@@ -823,15 +928,15 @@ static int mod_deflate_stream_flush(handler_ctx * const hctx, int end) {
 	}
 }
 
-static void mod_deflate_note_ratio(request_st * const r, handler_ctx * const hctx) {
+static void mod_deflate_note_ratio(request_st * const r, const off_t bytes_out, const off_t bytes_in) {
     /* store compression ratio in environment
      * for possible logging by mod_accesslog
      * (late in response handling, so not seen by most other modules) */
     /*(should be called only at end of successful response compression)*/
     char ratio[LI_ITOSTRING_LENGTH];
-    if (0 == hctx->bytes_in) return;
+    if (0 == bytes_in) return;
     size_t len =
-      li_itostrn(ratio, sizeof(ratio), hctx->bytes_out * 100 / hctx->bytes_in);
+      li_itostrn(ratio, sizeof(ratio), bytes_out * 100 / bytes_in);
     http_header_env_set(r, CONST_STR_LEN("ratio"), ratio, len);
 }
 
@@ -856,19 +961,13 @@ static int mod_deflate_stream_end(handler_ctx *hctx) {
 }
 
 static int deflate_compress_cleanup(request_st * const r, handler_ctx * const hctx) {
-	const plugin_data *p = hctx->plugin_data;
-	r->plugin_ctx[p->id] = NULL;
-
 	int rc = mod_deflate_stream_end(hctx);
-	if (0 != rc)
-		log_error(r->conf.errh, __FILE__, __LINE__, "error closing stream");
 
       #if 1 /* unnecessary if deflate.min-compress-size is set to a reasonable value */
-	if (hctx->bytes_in < hctx->bytes_out) {
+	if (0 == rc && hctx->bytes_in < hctx->bytes_out)
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "uri %s in=%lld smaller than out=%lld", r->target.ptr,
 		  (long long)hctx->bytes_in, (long long)hctx->bytes_out);
-	}
       #endif
 
 	handler_ctx_free(hctx);
@@ -1203,9 +1302,10 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	handler_ctx *hctx;
 	const char *label;
 	off_t len;
-	size_t etaglen = 0;
+	uint32_t etaglen;
 	int compression_type;
 	handler_t rc;
+	int had_vary = 0;
 
 	/*(current implementation requires response be complete)*/
 	if (!r->resp_body_finished) return HANDLER_GO_ON;
@@ -1262,6 +1362,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 
 	/* Vary: Accept-Encoding (response might change according to request Accept-Encoding) */
 	if (NULL != (vb = http_header_response_get(r, HTTP_HEADER_VARY, CONST_STR_LEN("Vary")))) {
+		had_vary = 1;
 		if (NULL == strstr(vb->ptr, "Accept-Encoding")) {
 			buffer_append_string_len(vb, CONST_STR_LEN(",Accept-Encoding"));
 		}
@@ -1274,9 +1375,9 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	/* check ETag as is done in http_response_handle_cachable()
 	 * (slightly imperfect (close enough?) match of ETag "000000" to "000000-gzip") */
 	vb = http_header_response_get(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"));
+	etaglen = (NULL != vb) ? buffer_string_length(vb) : 0;
 	if (NULL != vb && (r->rqst_htags & HTTP_HEADER_IF_NONE_MATCH)) {
 		const buffer *if_none_match = http_header_response_get(r, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
-		etaglen = buffer_string_length(vb);
 		if (etaglen
 		    && r->http_status < 300 /*(want 2xx only)*/
 		    && NULL != if_none_match
@@ -1334,8 +1435,52 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		return HANDLER_GO_ON;
 	}
 
-	/* future: might use ETag to check if compressed content is in compressed file cache */
-	/*if (etaglen) { ... } *//* return if in file cache after updating r->write_queue */
+	/* restrict items eligible for cache of compressed responses
+	 * (This module does not aim to be a full caching proxy)
+	 * response must be complete (not streaming response)
+	 * must not have prior Vary response header (before Accept-Encoding added)
+	 * must not have Range response header
+	 * must have ETag
+	 * must be file
+	 * must be single FILE_CHUNK in chunkqueue
+	 * must not be chunkqueue temporary file
+	 * must be whole file, not partial content
+	 * Note: small files (< 32k (see http_chunk.c)) will have been read into
+	 *       memory and will end up getting stream-compressed rather than
+	 *       cached on disk as compressed file
+	 */
+	buffer *tb = NULL;
+	if (!buffer_is_empty(p->conf.cache_dir)
+	    && !had_vary
+	    && etaglen > 2
+	    && r->resp_body_finished
+	    && r->write_queue->first == r->write_queue->last
+	    && r->write_queue->first->type == FILE_CHUNK
+	    && r->write_queue->first->file.start == 0
+	    && !r->write_queue->first->file.is_temp
+	    && !http_header_response_get(r, HTTP_HEADER_RANGE,
+	                                 CONST_STR_LEN("Range"))) {
+		tb = mod_deflate_cache_file_name(r, p->conf.cache_dir, vb);
+		/*(checked earlier and skipped if Transfer-Encoding had been set)*/
+		stat_cache_entry *sce = stat_cache_get_entry(tb);
+		if (NULL != sce) {
+			chunkqueue_reset(r->write_queue);
+			if (0 != http_chunk_append_file(r, tb))
+				return HANDLER_ERROR;
+			if (r->resp_htags & HTTP_HEADER_CONTENT_LENGTH)
+				http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
+				                           CONST_STR_LEN("Content-Length"));
+			mod_deflate_note_ratio(r, sce->st.st_size, len);
+			return HANDLER_GO_ON;
+		}
+		/* sanity check that response was whole file;
+		 * (racy since using stat_cache, but cache file only if match) */
+		sce = stat_cache_get_entry(r->write_queue->first->mem);
+		if (NULL == sce || sce->st.st_size != len)
+			tb = NULL;
+		if (0 != mkdir_for_file(tb->ptr))
+			tb = NULL;
+	}
 
 	/* enable compression */
 	p->conf.sync_flush =
@@ -1347,6 +1492,8 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	/* setup output buffer */
 	buffer_clear(&p->tmp_buf);
 	hctx->output = &p->tmp_buf;
+	/* open cache file if caching compressed file */
+	if (tb) mod_deflate_cache_file_open(hctx, tb);
 	if (0 != mod_deflate_stream_init(hctx)) {
 		/*(should not happen unless ENOMEM)*/
 		handler_ctx_free(hctx);
@@ -1374,22 +1521,29 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	r->plugin_ctx[p->id] = hctx;
 
 	rc = deflate_compress_response(r, hctx);
-	if (HANDLER_GO_ON != rc) {
-		if (HANDLER_FINISHED == rc) {
-			mod_deflate_note_ratio(r, hctx);
+	if (HANDLER_GO_ON == rc) return HANDLER_GO_ON;
+	if (HANDLER_FINISHED == rc) {
+		if (-1 == hctx->cache_fd
+		    || 0 == mod_deflate_cache_file_finish(r, hctx, tb)) {
+			mod_deflate_note_ratio(r, hctx->bytes_out, hctx->bytes_in);
+			rc = HANDLER_GO_ON;
 		}
-		if (deflate_compress_cleanup(r, hctx) < 0) return HANDLER_ERROR;
-		if (HANDLER_ERROR == rc) return HANDLER_ERROR;
+		else
+			rc = HANDLER_ERROR;
 	}
-
-	return HANDLER_GO_ON;
+	r->plugin_ctx[p->id] = NULL;
+	if (deflate_compress_cleanup(r, hctx) < 0) return HANDLER_ERROR;
+	return rc;
 }
 
 static handler_t mod_deflate_cleanup(request_st * const r, void *p_d) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = r->plugin_ctx[p->id];
 
-	if (NULL != hctx) deflate_compress_cleanup(r, hctx);
+	if (NULL != hctx) {
+		r->plugin_ctx[p->id] = NULL;
+		deflate_compress_cleanup(r, hctx);
+	}
 
 	return HANDLER_GO_ON;
 }

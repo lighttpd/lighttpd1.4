@@ -724,8 +724,14 @@ int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr) {
 }
 
 
-#include <stdio.h>      /* perror() */
+#include <stdio.h>      /* perror() rename() */
 #include <signal.h>     /* signal() */
+
+
+int fdevent_rename(const char *oldpath, const char *newpath) {
+    return rename(oldpath, newpath);
+}
+
 
 pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd) {
  #ifdef HAVE_FORK

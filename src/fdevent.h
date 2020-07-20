@@ -82,6 +82,7 @@ int fdevent_socket_cloexec(int domain, int type, int protocol);
 int fdevent_socket_nb_cloexec(int domain, int type, int protocol);
 int fdevent_open_cloexec(const char *pathname, int symlinks, int flags, mode_t mode);
 int fdevent_mkstemp_append(char *path);
+int fdevent_rename(const char *oldpath, const char *newpath);
 
 struct sockaddr;
 int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen);
