@@ -647,6 +647,9 @@ static int config_insert_srvconf(server *srv) {
      ,{ CONST_STR_LEN("debug.log-state-handling"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_SERVER }
+     ,{ CONST_STR_LEN("server.feature-flags"),
+        T_CONFIG_ARRAY_KVANY,
+        T_CONFIG_SCOPE_SERVER }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -778,6 +781,9 @@ static int config_insert_srvconf(server *srv) {
                 break;
               case 32:/* debug.log-state-handling */
                 srv->srvconf.log_state_handling = (0 != cpv->v.u);
+                break;
+              case 33:/* server.feature-flags */
+                srv->srvconf.feature_flags = cpv->v.a;
                 break;
               default:/* should not happen */
                 break;

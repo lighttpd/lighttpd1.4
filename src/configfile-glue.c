@@ -41,6 +41,26 @@ void config_get_config_cond_info(config_cond_info * const cfginfo, uint32_t idx)
     cfginfo->op = dc->op;
 }
 
+int config_plugin_value_tobool (data_unset *du, int default_value)
+{
+    if (NULL == du) return default_value;
+    if (du->type == TYPE_STRING) {
+        const buffer *b = &((const data_string *)du)->value;
+        if (buffer_eq_icase_slen(b, CONST_STR_LEN("enable"))
+            || buffer_eq_icase_slen(b, CONST_STR_LEN("true")))
+            return 1;
+        else if (buffer_eq_icase_slen(b, CONST_STR_LEN("disable"))
+                 || buffer_eq_icase_slen(b, CONST_STR_LEN("false")))
+            return 0;
+        else
+            return default_value;
+    }
+    else if (du->type == TYPE_INTEGER)
+        return (0 != ((const data_integer *)du)->value);
+    else
+        return default_value;
+}
+
 int config_plugin_values_init_block(server * const srv, const array * const ca, const config_plugin_keys_t * const cpk, const char * const mname, config_plugin_value_t *cpv) {
     /*(cpv must be list with sufficient elements to store all matches + 1)*/
 
@@ -191,33 +211,16 @@ int config_plugin_values_init_block(server * const srv, const array * const ca, 
             }
             break;
           case T_CONFIG_BOOL:
-            if (du->type == TYPE_STRING) {
-                const buffer *b = &((const data_string *)du)->value;
-                if (buffer_eq_icase_slen(b, CONST_STR_LEN("enable"))
-                    || buffer_eq_icase_slen(b, CONST_STR_LEN("true"))) {
-                    cpv->v.u = 1;
-                }
-                else if (buffer_eq_icase_slen(b, CONST_STR_LEN("disable"))
-                         || buffer_eq_icase_slen(b,CONST_STR_LEN("false"))) {
-                    cpv->v.u = 0;
-                }
-                else {
+            {
+                int v = config_plugin_value_tobool(du, -1);
+                if (-1 == v) {
                     log_error(srv->errh, __FILE__, __LINE__,
-                      "ERROR: unexpected value for key: %s %s (enable|disable)",
-                      cpk[i].k, b->ptr);
+                      "ERROR: unexpected type for key: %s (string) "
+                      "\"(enable|disable)\"", cpk[i].k);
                     rc = 0;
                     continue;
                 }
-            }
-            else if (du->type == TYPE_INTEGER) {
-                cpv->v.u = (0 != ((const data_integer *)du)->value);
-            }
-            else {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "ERROR: unexpected type for key: %s (string) "
-                  "\"(enable|disable)\"", cpk[i].k);
-                rc = 0;
-                continue;
+                cpv->v.u = v;
             }
             break;
           case T_CONFIG_LOCAL:

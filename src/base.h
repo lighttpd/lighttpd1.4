@@ -113,6 +113,7 @@ typedef struct {
 	const buffer *username;
 	const buffer *groupname;
 	const buffer *network_backend;
+	const array *feature_flags;
 	const char *event_handler;
 	buffer *pid_file;
 	buffer *modules_dir;
