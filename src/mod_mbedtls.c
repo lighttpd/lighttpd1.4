@@ -85,6 +85,7 @@
 #include "base.h"
 #include "fdevent.h"
 #include "http_header.h"
+#include "http_kv.h"
 #include "log.h"
 #include "plugin.h"
 #include "safe_memclear.h"
@@ -965,14 +966,13 @@ mod_mbedtls_alpn_select_cb (handler_ctx *hctx, const char *in)
     unsigned short proto;
 
     switch (n) {
-     #if 0
       case 2:  /* "h2" */
         if (in[i] == 'h' && in[i+1] == '2') {
             proto = MOD_MBEDTLS_ALPN_H2;
+            hctx->r->http_version = HTTP_VERSION_2;
             break;
         }
         return 0;
-     #endif
       case 8:  /* "http/1.1" "http/1.0" */
         if (0 == memcmp(in+i, "http/1.", 7)) {
             if (in[i+7] == '1') {
@@ -1194,19 +1194,22 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
   #ifdef MBEDTLS_SSL_ALPN
     /* https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids */
     static const char *alpn_protos_http_acme[] = {
-      "http/1.1"
+      "h2"
+     ,"http/1.1"
      ,"http/1.0"
      ,"acme-tls/1"
      ,NULL
     };
     static const char *alpn_protos_http[] = {
-      "http/1.1"
+      "h2"
+     ,"http/1.1"
      ,"http/1.0"
      ,NULL
     };
     const char **alpn_protos = (!buffer_string_is_empty(s->ssl_acme_tls_1))
       ? alpn_protos_http_acme
       : alpn_protos_http;
+    if (!srv->srvconf.h2proto) ++alpn_protos;
     rc = mbedtls_ssl_conf_alpn_protocols(s->ssl_ctx, alpn_protos);
     if (0 != rc) {
         elog(srv->errh, __FILE__, __LINE__, rc, "error setting ALPN protocols");
@@ -1909,11 +1912,9 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
         }
         if (0 == rc && hctx->ssl.state == MBEDTLS_SSL_SERVER_HELLO) {
           #ifdef MBEDTLS_SSL_ALPN
-            if (!buffer_string_is_empty(hctx->conf.ssl_acme_tls_1)) {
-                const char *alpn = mbedtls_ssl_get_alpn_protocol(&hctx->ssl);
-                if (NULL != alpn)
-                    rc = mod_mbedtls_alpn_select_cb(hctx, alpn);
-            }
+            const char *alpn = mbedtls_ssl_get_alpn_protocol(&hctx->ssl);
+            if (NULL != alpn)
+                rc = mod_mbedtls_alpn_select_cb(hctx, alpn);
           #endif
         }
     }

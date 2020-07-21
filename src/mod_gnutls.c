@@ -51,6 +51,7 @@ GNUTLS_SKIP_GLOBAL_INIT
 #include "base.h"
 #include "fdevent.h"
 #include "http_header.h"
+#include "http_kv.h"
 #include "log.h"
 #include "plugin.h"
 
@@ -1313,14 +1314,13 @@ mod_gnutls_alpn_select_cb (gnutls_session_t ssl, handler_ctx *hctx)
     const int n = (int)d.size;
 
     switch (n) {
-     #if 0
       case 2:  /* "h2" */
         if (in[i] == 'h' && in[i+1] == '2') {
             proto = MOD_GNUTLS_ALPN_H2;
+            hctx->r->http_version = HTTP_VERSION_2;
             break;
         }
         return 0;
-     #endif
       case 8:  /* "http/1.1" "http/1.0" */
         if (0 == memcmp(in+i, "http/1.", 7)) {
             if (in[i+7] == '1') {
@@ -1451,13 +1451,19 @@ mod_gnutls_client_hello_hook(gnutls_session_t ssl, unsigned int htype,
   #if GNUTLS_VERSION_NUMBER >= 0x030200
     /* https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids */
     static const gnutls_datum_t alpn_protos_http_acme[] = {
-      { (unsigned char *)CONST_STR_LEN("http/1.1") }
+      { (unsigned char *)CONST_STR_LEN("h2") }
+     ,{ (unsigned char *)CONST_STR_LEN("http/1.1") }
      ,{ (unsigned char *)CONST_STR_LEN("http/1.0") }
      ,{ (unsigned char *)CONST_STR_LEN("acme-tls/1") }
     };
-    unsigned int n = !buffer_string_is_empty(hctx->conf.ssl_acme_tls_1) ? 3 : 2;
+    unsigned int n = !buffer_string_is_empty(hctx->conf.ssl_acme_tls_1) ? 4 : 3;
+    const gnutls_datum_t *alpn_protos = alpn_protos_http_acme;
+    if (!hctx->r->conf.h2proto) {
+        ++alpn_protos;
+        --n;
+    }
     /*unsigned int flags = GNUTLS_ALPN_SERVER_PRECEDENCE;*/
-    rc = gnutls_alpn_set_protocols(hctx->ssl, alpn_protos_http_acme, n, 0);
+    rc = gnutls_alpn_set_protocols(hctx->ssl, alpn_protos, n, 0);
     if (rc < 0) {
         log_error_st *errh = hctx->r->conf.errh;
         elog(errh, __FILE__, __LINE__, rc, "gnutls_alpn_set_protocols()");
@@ -2392,6 +2398,7 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 {
     handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
     gnutls_session_t ssl = hctx->ssl;
+    if (!hctx->handshake) return 0;
 
     if (hctx->pending_write) {
         int wr = gnutls_record_send(ssl, NULL, 0);

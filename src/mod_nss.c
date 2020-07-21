@@ -104,6 +104,7 @@
 #include "base.h"
 #include "fdevent.h"
 #include "http_header.h"
+#include "http_kv.h"
 #include "log.h"
 #include "plugin.h"
 #include "safe_memclear.h"
@@ -1270,7 +1271,8 @@ mod_nss_alpn_select_cb (void *arg, PRFileDesc *ssl,
 {
     /* https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids */
     static const SECItem alpn[] = {
-      { 0, (unsigned char *)CONST_STR_LEN("http/1.1") }
+      { 0, (unsigned char *)CONST_STR_LEN("h2") }
+     ,{ 0, (unsigned char *)CONST_STR_LEN("http/1.1") }
      ,{ 0, (unsigned char *)CONST_STR_LEN("http/1.0") }
      ,{ 0, (unsigned char *)CONST_STR_LEN("acme-tls/1") }
     };
@@ -1289,12 +1291,17 @@ mod_nss_alpn_select_cb (void *arg, PRFileDesc *ssl,
                 handler_ctx *hctx = arg;
                 switch (j) { /*(must match SECItem alpn[] above)*/
                   case 0:
-                    hctx->alpn = MOD_NSS_ALPN_HTTP11;
+                    if (!hctx->r->conf.h2proto) continue;
+                    hctx->alpn = MOD_NSS_ALPN_H2;
+                    hctx->r->http_version = HTTP_VERSION_2;
                     break;
                   case 1:
-                    hctx->alpn = MOD_NSS_ALPN_HTTP10;
+                    hctx->alpn = MOD_NSS_ALPN_HTTP11;
                     break;
                   case 2:
+                    hctx->alpn = MOD_NSS_ALPN_HTTP10;
+                    break;
+                  case 3:
                     if (buffer_string_is_empty(hctx->conf.ssl_acme_tls_1))
                         continue;
                     if (0 == mod_nss_acme_tls_1(hctx))

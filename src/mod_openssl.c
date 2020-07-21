@@ -153,6 +153,7 @@ WOLFSSL_API WOLF_STACK_OF(WOLFSSL_X509_NAME) *wolfSSL_dup_CA_list( WOLF_STACK_OF
 #include "base.h"
 #include "fdevent.h"
 #include "http_header.h"
+#include "http_kv.h"
 #include "log.h"
 #include "plugin.h"
 #include "safe_memclear.h"
@@ -2400,14 +2401,14 @@ mod_openssl_alpn_select_cb (SSL *ssl, const unsigned char **out, unsigned char *
         n = in[i++];
         if (i+n > inlen || 0 == n) break;
         switch (n) {
-         #if 0
           case 2:  /* "h2" */
             if (in[i] == 'h' && in[i+1] == '2') {
+                if (!hctx->r->conf.h2proto) continue;
                 proto = MOD_OPENSSL_ALPN_H2;
+                hctx->r->http_version = HTTP_VERSION_2;
                 break;
             }
             continue;
-         #endif
           case 8:  /* "http/1.1" "http/1.0" */
             if (0 == memcmp(in+i, "http/1.", 7)) {
                 if (in[i+7] == '1') {
