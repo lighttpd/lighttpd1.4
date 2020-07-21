@@ -524,7 +524,8 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	    }
 	case MAGNET_ENV_REQUEST_PROTOCOL:
 		dest = r->tmp_buf;
-		buffer_copy_string(dest, get_http_version_name(r->http_version));
+		buffer_clear(dest);
+		http_version_append(dest, r->http_version);
 		break;
 
 	case MAGNET_ENV_UNSET: break;

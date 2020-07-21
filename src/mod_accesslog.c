@@ -970,11 +970,11 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				break;
 			case FORMAT_REQUEST_LINE:
 				/*(attempt to reconstruct request line)*/
-				buffer_append_string(b, get_http_method_name(r->http_method));
+				http_method_append(b, r->http_method);
 				buffer_append_string_len(b, CONST_STR_LEN(" "));
 				accesslog_append_escaped(b, &r->target_orig);
 				buffer_append_string_len(b, CONST_STR_LEN(" "));
-				buffer_append_string(b, get_http_version_name(r->http_version));
+				http_version_append(b, r->http_version);
 				break;
 			case FORMAT_STATUS:
 				buffer_append_int(b, r->http_status);
@@ -1046,8 +1046,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				}
 				break;
 			case FORMAT_REQUEST_PROTOCOL:
-				buffer_append_string_len(b,
-					r->http_version == HTTP_VERSION_1_1 ? "HTTP/1.1" : "HTTP/1.0", 8);
+				http_version_append(b, r->http_version);
 				break;
 			case FORMAT_REQUEST_METHOD:
 				http_method_append(b, r->http_method);

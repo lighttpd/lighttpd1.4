@@ -19,6 +19,7 @@ typedef struct {
 } keyvalue;
 
 static const keyvalue http_versions[] = {
+	{ HTTP_VERSION_2,   CONST_LEN_STR("HTTP/2.0") }, /* SERVER_PROTOCOL */
 	{ HTTP_VERSION_1_1, CONST_LEN_STR("HTTP/1.1") },
 	{ HTTP_VERSION_1_0, CONST_LEN_STR("HTTP/1.0") },
 	{ HTTP_VERSION_UNSET, 0, NULL }
@@ -182,6 +183,15 @@ void http_method_append(buffer * const b, const http_method_t method) {
     const keyvalue * const kv = http_methods;
     int i;
     for (i = 0; kv[i].key != method && kv[i].vlen; ++i) ;
+    if (kv[i].vlen) {
+        buffer_append_string_len(b, kv[i].value, kv[i].vlen);
+    }
+}
+
+void http_version_append(buffer * const b, const http_version_t version) {
+    const keyvalue * const kv = http_versions;
+    int i;
+    for (i = 0; kv[i].key != version && kv[i].vlen; ++i) ;
     if (kv[i].vlen) {
         buffer_append_string_len(b, kv[i].value, kv[i].vlen);
     }
