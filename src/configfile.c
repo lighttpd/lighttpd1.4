@@ -784,6 +784,10 @@ static int config_insert_srvconf(server *srv) {
                 break;
               case 33:/* server.feature-flags */
                 srv->srvconf.feature_flags = cpv->v.a;
+                srv->srvconf.h2proto =
+                  config_plugin_value_tobool(
+                    array_get_element_klen(cpv->v.a,
+                                           CONST_STR_LEN("server.h2proto")), 0);
                 break;
               default:/* should not happen */
                 break;
@@ -1033,6 +1037,7 @@ static int config_insert(server *srv) {
       | (srv->srvconf.http_method_get_body ?  HTTP_PARSEOPT_METHOD_GET_BODY :0);
     p->defaults.http_parseopts |= srv->srvconf.http_url_normalize;
     p->defaults.mimetypes = &srv->srvconf.empty_array; /*(must not be NULL)*/
+    p->defaults.h2proto = srv->srvconf.h2proto;
 
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {

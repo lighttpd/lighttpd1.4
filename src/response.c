@@ -305,8 +305,8 @@ static handler_t http_response_config (request_st * const r) {
     config_cond_cache_reset(r);
     config_patch_config(r);
 
-    /* do we have to downgrade to 1.0 ? */
-    if (!r->conf.allow_http11)
+    /* do we have to downgrade from 1.1 to 1.0 ? (ignore for HTTP/2) */
+    if (!r->conf.allow_http11 && r->http_version == HTTP_VERSION_1_1)
         r->http_version = HTTP_VERSION_1_0;
 
     /* r->conf.max_request_size is in kBytes */

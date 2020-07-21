@@ -90,6 +90,7 @@ typedef struct {
 	unsigned char http_host_normalize;
 	unsigned char http_method_get_body;
 	unsigned char high_precision_timestamps;
+	unsigned char h2proto;
 	unsigned short http_url_normalize;
 
 	unsigned short max_worker;

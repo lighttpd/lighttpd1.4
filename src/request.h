@@ -41,6 +41,8 @@ typedef struct {
     unsigned char range_requests;
     unsigned char error_intercept;
 
+    unsigned char h2proto; /*(global setting copied for convenient access)*/
+
     /* debug */
     unsigned char log_file_not_found;
     unsigned char log_request_header;
