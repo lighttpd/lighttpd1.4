@@ -18,7 +18,8 @@ case "${build}" in
 		--with-pic --enable-extra-warnings \
 		--with-dbi --with-mysql --with-pgsql \
 		--with-ldap --with-attr --with-openssl --with-pcre \
-		--with-zlib --with-bzip2 --with-fam --with-webdav-props --with-webdav-locks --with-gdbm \
+		--with-zlib --with-brotli --with-bzip2 \
+		--with-webdav-props --with-webdav-locks --with-fam --with-gdbm \
 		--with-memcached --with-lua --with-libev --with-libunwind \
 		--with-krb5 --with-geoip
 	make clean
@@ -32,7 +33,8 @@ case "${build}" in
 		--with-pic --enable-extra-warnings \
 		--with-dbi --with-mysql --with-pgsql \
 		--with-ldap --with-attr --with-openssl --with-pcre \
-		--with-zlib --with-bzip2 --with-fam --with-webdav-props --with-webdav-locks --with-gdbm \
+		--with-zlib --with-brotli --with-bzip2 \
+		--with-webdav-props --with-webdav-locks --with-fam --with-gdbm \
 		--with-memcached --with-lua --with-libev --with-libunwind \
 		--with-krb5 --with-geoip --with-sasl
 	make
@@ -44,6 +46,7 @@ case "${build}" in
 	cmake \
 		-DBUILD_EXTRA_WARNINGS=ON \
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DWITH_BROTLI=ON \
 		-DWITH_BZIP=ON \
 		-DWITH_FAM=ON \
 		-DWITH_GDBM=ON \
@@ -71,9 +74,9 @@ case "${build}" in
 		export LIBS="-ldl"
 		;;
 	esac
-	# scons with_zlib=yes with_bzip2=yes with_openssl=yes -k check_fullstatic
-	# scons with_zlib=yes with_bzip2=yes with_openssl=yes with_memcached=yes -k check_static check_dynamic
-	scons with_zlib=yes with_bzip2=yes with_openssl=yes -k check_fullstatic check_static check_dynamic
+	# scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic
+	# scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes with_memcached=yes -k check_static check_dynamic
+	scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic check_static check_dynamic
 	;;
 *)
 	echo >&2 "Unknown build system: ${build}"
