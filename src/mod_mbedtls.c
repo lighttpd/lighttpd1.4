@@ -172,7 +172,7 @@ typedef struct {
 
 static int ssl_is_init;
 /* need assigned p->id for deep access of module handler_ctx for connection
- *   i.e. handler_ctx *hctx = r->plugin_ctx[plugin_data_singleton->id]; */
+ *   i.e. handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id]; */
 static plugin_data *plugin_data_singleton;
 #define LOCAL_SEND_BUFSIZE MBEDTLS_SSL_MAX_CONTENT_LEN
 static char *local_send_buffer;
@@ -181,13 +181,13 @@ typedef struct {
     mbedtls_ssl_context ssl;      /* mbedtls request/connection context */
     request_st *r;
     connection *con;
-    int8_t request_env_patched;
     int8_t close_notify;
     unsigned short alpn;
     int handshake_done;
     size_t pending_write;
     plugin_config conf;
     buffer *tmp_buf;
+    log_error_st *errh;
     mbedtls_pk_context *acme_tls_1_pkey;
     mbedtls_x509_crt *acme_tls_1_x509;
 } handler_ctx;
@@ -1691,8 +1691,9 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
 
 
 static int
-load_next_chunk (request_st * const r, chunkqueue * const cq, off_t max_bytes,
-                 const char ** const data, size_t * const data_len)
+load_next_chunk (chunkqueue * const cq, off_t max_bytes,
+                 const char ** const data, size_t * const data_len,
+                 log_error_st * const errh)
 {
     chunk *c = cq->first;
 
@@ -1744,7 +1745,7 @@ load_next_chunk (request_st * const r, chunkqueue * const cq, off_t max_bytes,
         return 0;
 
     case FILE_CHUNK:
-        if (0 != chunkqueue_open_file_chunk(cq, r->conf.errh)) return -1;
+        if (0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
 
         {
             off_t offset, toSend;
@@ -1757,11 +1758,11 @@ load_next_chunk (request_st * const r, chunkqueue * const cq, off_t max_bytes,
             if (toSend > max_bytes) toSend = max_bytes;
 
             if (-1 == lseek(c->file.fd, offset, SEEK_SET)) {
-                log_perror(r->conf.errh, __FILE__, __LINE__, "lseek");
+                log_perror(errh, __FILE__, __LINE__, "lseek");
                 return -1;
             }
             if (-1 == (toSend = read(c->file.fd, local_send_buffer, toSend))) {
-                log_perror(r->conf.errh, __FILE__, __LINE__, "read");
+                log_perror(errh, __FILE__, __LINE__, "read");
                 return -1;
             }
 
@@ -1813,8 +1814,7 @@ mod_mbedtls_close_notify(handler_ctx *hctx);
 static int
 connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 {
-    request_st * const r = &con->request;
-    handler_ctx *hctx = r->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
     mbedtls_ssl_context * const ssl = &hctx->ssl;
 
     if (hctx->pending_write) {
@@ -1838,12 +1838,13 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
     const int lim = mbedtls_ssl_get_max_out_record_payload(ssl);
     if (lim < 0) return mod_mbedtls_ssl_write_err(con, hctx, lim, 0);
 
+    log_error_st * const errh = hctx->errh;
     while (max_bytes > 0 && NULL != cq->first) {
         const char *data;
         size_t data_len;
         int wr;
 
-        if (0 != load_next_chunk(r, cq, max_bytes, &data, &data_len)) return -1;
+        if (0 != load_next_chunk(cq,max_bytes,&data,&data_len,errh)) return -1;
 
         /* mbedtls_ssl_write() copies the data, up to max record size, but if
          * (temporarily) unable to write the entire record, it is documented
@@ -1992,8 +1993,7 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
 static int
 connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 {
-    request_st * const r = &con->request;
-    handler_ctx *hctx = r->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
     int len;
     char *mem = NULL;
     size_t mem_len = 0;
@@ -2025,6 +2025,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 
     if (len < 0) {
         int rc = len;
+        request_st * const r = &con->request;
         switch (rc) {
           case MBEDTLS_ERR_SSL_WANT_WRITE:
             con->is_writable = -1;
@@ -2047,7 +2048,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
             if (!hctx->conf.ssl_log_noise) return -1;
             __attribute_fallthrough__
           default:
-            elog(r->conf.errh, __FILE__, __LINE__, rc, "Reading mbedtls");
+            elog(hctx->errh, __FILE__, __LINE__, rc, "Reading mbedtls");
             return -1;
         }
     } else if (len == 0) {
@@ -2082,7 +2083,8 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
     hctx->r = r;
     hctx->con = con;
     hctx->tmp_buf = con->srv->tmp_buf;
-    r->plugin_ctx[p->id] = hctx;
+    hctx->errh = r->conf.errh;
+    con->plugin_ctx[p->id] = hctx;
 
     plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
     mbedtls_ssl_init(&hctx->ssl);
@@ -2137,9 +2139,8 @@ mod_mbedtls_detach(handler_ctx *hctx)
 
 CONNECTION_FUNC(mod_mbedtls_handle_con_shut_wr)
 {
-    request_st * const r = &con->request;
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
+    handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
     hctx->close_notify = -2;
@@ -2179,14 +2180,13 @@ mod_mbedtls_close_notify (handler_ctx *hctx)
 
 CONNECTION_FUNC(mod_mbedtls_handle_con_close)
 {
-    request_st * const r = &con->request;
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
+    handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL != hctx) {
+        con->plugin_ctx[p->id] = NULL;
         if (1 != hctx->close_notify)
             mod_mbedtls_close_notify(hctx); /*(one final try)*/
         handler_ctx_free(hctx);
-        r->plugin_ctx[p->id] = NULL;
     }
 
     return HANDLER_GO_ON;
@@ -2371,10 +2371,11 @@ http_cgi_ssl_env (request_st * const r, handler_ctx * const hctx)
 REQUEST_FUNC(mod_mbedtls_handle_request_env)
 {
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
+    /* simple flag for request_env_patched */
+    if (r->plugin_ctx[p->id]) return HANDLER_GO_ON;
+    handler_ctx *hctx = r->con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
-    if (hctx->request_env_patched) return HANDLER_GO_ON;
-    hctx->request_env_patched = 1;
+    r->plugin_ctx[p->id] = (void *)(uintptr_t)1u;
 
     http_cgi_ssl_env(r, hctx);
     if (hctx->conf.ssl_verifyclient) {
@@ -2395,7 +2396,7 @@ REQUEST_FUNC(mod_mbedtls_handle_uri_raw)
      * is enabled with extforward.hap-PROXY = "enable", in which case the
      * reverse is true: mod_extforward must be loaded after mod_mbedtls */
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
+    handler_ctx *hctx = r->con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
     mod_mbedtls_patch_config(r, &hctx->conf);
@@ -2410,10 +2411,7 @@ REQUEST_FUNC(mod_mbedtls_handle_uri_raw)
 REQUEST_FUNC(mod_mbedtls_handle_request_reset)
 {
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
-    if (NULL == hctx) return HANDLER_GO_ON;
-
-    hctx->request_env_patched = 0;
+    r->plugin_ctx[p->id] = NULL; /* simple flag for request_env_patched */
     return HANDLER_GO_ON;
 }
 

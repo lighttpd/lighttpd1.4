@@ -178,7 +178,7 @@ typedef struct {
 
 static int ssl_is_init;
 /* need assigned p->id for deep access of module handler_ctx for connection
- *   i.e. handler_ctx *hctx = r->plugin_ctx[plugin_data_singleton->id]; */
+ *   i.e. handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id]; */
 static plugin_data *plugin_data_singleton;
 #define LOCAL_SEND_BUFSIZE 16384 /* DEFAULT_MAX_RECORD_SIZE */
 static char *local_send_buffer;
@@ -187,7 +187,6 @@ typedef struct {
     PRFileDesc *ssl;
     request_st *r;
     connection *con;
-    int8_t request_env_patched;
     int8_t close_notify;
     uint8_t alpn;
     int8_t ssl_session_ticket;
@@ -196,6 +195,7 @@ typedef struct {
     plugin_config conf;
     int verify_status;
     buffer *tmp_buf;
+    log_error_st *errh;
 } handler_ctx;
 
 
@@ -2032,8 +2032,9 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
 
 
 static int
-load_next_chunk (request_st * const r, chunkqueue * const cq, off_t max_bytes,
-                 const char ** const data, size_t * const data_len)
+load_next_chunk (chunkqueue * const cq, off_t max_bytes,
+                 const char ** const data, size_t * const data_len,
+                 log_error_st * const errh)
 {
     chunk *c = cq->first;
 
@@ -2085,7 +2086,7 @@ load_next_chunk (request_st * const r, chunkqueue * const cq, off_t max_bytes,
         return 0;
 
     case FILE_CHUNK:
-        if (0 != chunkqueue_open_file_chunk(cq, r->conf.errh)) return -1;
+        if (0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
 
         {
             off_t offset, toSend;
@@ -2098,11 +2099,11 @@ load_next_chunk (request_st * const r, chunkqueue * const cq, off_t max_bytes,
             if (toSend > max_bytes) toSend = max_bytes;
 
             if (-1 == lseek(c->file.fd, offset, SEEK_SET)) {
-                log_perror(r->conf.errh, __FILE__, __LINE__, "lseek");
+                log_perror(errh, __FILE__, __LINE__, "lseek");
                 return -1;
             }
             if (-1 == (toSend = read(c->file.fd, local_send_buffer, toSend))) {
-                log_perror(r->conf.errh, __FILE__, __LINE__, "read");
+                log_perror(errh, __FILE__, __LINE__, "read");
                 return -1;
             }
 
@@ -2158,7 +2159,7 @@ mod_nss_read_err(connection *con, handler_ctx *hctx)
         if (!hctx->conf.ssl_log_noise) return -1;
         __attribute_fallthrough__
       default:
-        elog(hctx->r->conf.errh, __FILE__, __LINE__, __func__);
+        elog(hctx->errh, __FILE__, __LINE__, __func__);
         return -1;
     }
 }
@@ -2171,9 +2172,9 @@ mod_nss_close_notify(handler_ctx *hctx);
 static int
 connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 {
-    request_st * const r = &con->request;
-    handler_ctx *hctx = r->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
     PRFileDesc *ssl = hctx->ssl;
+    log_error_st * const errh = hctx->errh;
 
     if (0 != hctx->close_notify) return mod_nss_close_notify(hctx);
 
@@ -2188,7 +2189,7 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         size_t data_len;
         int wr;
 
-        if (0 != load_next_chunk(r, cq, max_bytes, &data, &data_len)) return -1;
+        if (0 != load_next_chunk(cq,max_bytes,&data,&data_len,errh)) return -1;
 
         /*(if partial write occurred, expect that subsequent writes will have
          * at least that much data available from load_next_chunk(), which is
@@ -2242,8 +2243,7 @@ mod_nss_SSLHandshakeCallback (PRFileDesc *fd, void *arg)
 static int
 connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 {
-    request_st * const r = &con->request;
-    handler_ctx *hctx = r->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
 
     UNUSED(max_bytes);
 
@@ -2305,7 +2305,8 @@ CONNECTION_FUNC(mod_nss_handle_con_accept)
     hctx->r = r;
     hctx->con = con;
     hctx->tmp_buf = con->srv->tmp_buf;
-    r->plugin_ctx[p->id] = hctx;
+    hctx->errh = r->conf.errh;
+    con->plugin_ctx[p->id] = hctx;
 
     plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
     hctx->ssl_session_ticket = s->ssl_session_ticket;
@@ -2399,9 +2400,8 @@ mod_nss_detach(handler_ctx *hctx)
 
 CONNECTION_FUNC(mod_nss_handle_con_shut_wr)
 {
-    request_st * const r = &con->request;
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
+    handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
     hctx->close_notify = -2;
@@ -2438,14 +2438,13 @@ mod_nss_close_notify (handler_ctx *hctx)
 
 CONNECTION_FUNC(mod_nss_handle_con_close)
 {
-    request_st * const r = &con->request;
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
+    handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL != hctx) {
+        con->plugin_ctx[p->id] = NULL;
         if (1 != hctx->close_notify)
             mod_nss_close_notify(hctx); /*(one final try)*/
         handler_ctx_free(hctx);
-        r->plugin_ctx[p->id] = NULL;
     }
 
     return HANDLER_GO_ON;
@@ -2638,10 +2637,11 @@ http_cgi_ssl_env (request_st * const r, handler_ctx * const hctx)
 REQUEST_FUNC(mod_nss_handle_request_env)
 {
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
+    /* simple flag for request_env_patched */
+    if (r->plugin_ctx[p->id]) return HANDLER_GO_ON;
+    handler_ctx *hctx = r->con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
-    if (hctx->request_env_patched) return HANDLER_GO_ON;
-    hctx->request_env_patched = 1;
+    r->plugin_ctx[p->id] = (void *)(uintptr_t)1u;
 
     http_cgi_ssl_env(r, hctx);
     if (hctx->conf.ssl_verifyclient) {
@@ -2662,7 +2662,7 @@ REQUEST_FUNC(mod_nss_handle_uri_raw)
      * is enabled with extforward.hap-PROXY = "enable", in which case the
      * reverse is true: mod_extforward must be loaded after mod_nss */
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
+    handler_ctx *hctx = r->con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
     mod_nss_patch_config(r, &hctx->conf);
@@ -2677,10 +2677,7 @@ REQUEST_FUNC(mod_nss_handle_uri_raw)
 REQUEST_FUNC(mod_nss_handle_request_reset)
 {
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
-    if (NULL == hctx) return HANDLER_GO_ON;
-
-    hctx->request_env_patched = 0;
+    r->plugin_ctx[p->id] = NULL; /* simple flag for request_env_patched */
     return HANDLER_GO_ON;
 }
 

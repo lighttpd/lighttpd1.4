@@ -413,10 +413,10 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
     /* attempt to warn if mod_extforward is not last module loaded to hook
      * handle_connection_accept.  (Nice to have, but remove this check if
      * it reaches too far into internals and prevents other code changes.)
-     * While it would be nice to check connection_handle_accept plugin slot
+     * While it would be nice to check handle_connection_accept plugin slot
      * to make sure mod_extforward is last, that info is private to plugin.c
      * so merely warn if mod_openssl is loaded after mod_extforward, though
-     * future modules which hook connection_handle_accept might be missed.*/
+     * future modules which hook handle_connection_accept might be missed.*/
     if (hap_PROXY) {
         uint32_t i;
         for (i = 0; i < srv->srvconf.modules->used; ++i) {
@@ -543,7 +543,7 @@ static const char *last_not_in_array(array *a, plugin_data *p)
 static int mod_extforward_set_addr(request_st * const r, plugin_data *p, const char *addr) {
 	connection * const con = r->con;
 	sock_addr sock;
-	handler_ctx *hctx = r->plugin_ctx[p->id];
+	handler_ctx *hctx = con->plugin_ctx[p->id];
 
 	if (r->conf.log_request_handling) {
 		log_error(r->conf.errh, __FILE__, __LINE__, "using address: %s", addr);
@@ -566,7 +566,7 @@ static int mod_extforward_set_addr(request_st * const r, plugin_data *p, const c
 			hctx->saved_remote_addr_buf = NULL;
 		}
 	} else {
-		r->plugin_ctx[p->id] = hctx = handler_ctx_init();
+		con->plugin_ctx[p->id] = hctx = handler_ctx_init();
 	}
 	/* save old address */
 	if (extforward_check_proxy) {
@@ -1044,7 +1044,6 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
 URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	plugin_data *p = p_d;
 	const buffer *forwarded = NULL;
-	handler_ctx *hctx = r->plugin_ctx[p->id];
 	int is_forwarded_header = 0;
 
 	mod_extforward_patch_config(r, p);
@@ -1056,6 +1055,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 
 	if (p->conf.hap_PROXY_ssl_client_verify) {
 		const data_string *ds;
+		handler_ctx *hctx = r->con->plugin_ctx[p->id];
 		if (NULL != hctx && hctx->ssl_client_verify && NULL != hctx->env
 		    && NULL != (ds = (const data_string *)array_get_element_klen(hctx->env, CONST_STR_LEN("SSL_CLIENT_S_DN_CN")))) {
 			http_header_env_set(r,
@@ -1114,7 +1114,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 
 REQUEST_FUNC(mod_extforward_handle_request_env) {
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
+    handler_ctx *hctx = r->con->plugin_ctx[p->id];
     if (NULL == hctx || NULL == hctx->env) return HANDLER_GO_ON;
     for (uint32_t i=0; i < hctx->env->used; ++i) {
         /* note: replaces values which may have been set by mod_openssl
@@ -1131,11 +1131,11 @@ REQUEST_FUNC(mod_extforward_restore) {
 	/* XXX: should change this to not occur at request reset,
 	*       but instead at connection reset */
 	plugin_data *p = p_d;
-	handler_ctx *hctx = r->plugin_ctx[p->id];
+	connection * const con = r->con;
+	handler_ctx *hctx = con->plugin_ctx[p->id];
 
 	if (!hctx) return HANDLER_GO_ON;
 
-	connection * const con = r->con;
 	if (NULL != hctx->saved_network_read) {
 		con->network_read = hctx->saved_network_read;
 		hctx->saved_network_read = NULL;
@@ -1152,7 +1152,7 @@ REQUEST_FUNC(mod_extforward_restore) {
 
 	if (NULL == hctx->env) {
 		handler_ctx_free(hctx);
-		r->plugin_ctx[p->id] = NULL;
+		con->plugin_ctx[p->id] = NULL;
 	}
 
 	return HANDLER_GO_ON;
@@ -1161,9 +1161,8 @@ REQUEST_FUNC(mod_extforward_restore) {
 
 CONNECTION_FUNC(mod_extforward_handle_con_close)
 {
-    request_st * const r = &con->request;
     plugin_data *p = p_d;
-    handler_ctx *hctx = r->plugin_ctx[p->id];
+    handler_ctx *hctx = con->plugin_ctx[p->id];
     if (NULL != hctx) {
         if (NULL != hctx->saved_network_read) {
             con->network_read = hctx->saved_network_read;
@@ -1177,7 +1176,7 @@ CONNECTION_FUNC(mod_extforward_handle_con_close)
             array_free(hctx->env);
         }
         handler_ctx_free(hctx);
-        r->plugin_ctx[p->id] = NULL;
+        con->plugin_ctx[p->id] = NULL;
     }
 
     return HANDLER_GO_ON;
@@ -1195,7 +1194,7 @@ CONNECTION_FUNC(mod_extforward_handle_con_accept)
     if (NULL == p->conf.forwarder) return HANDLER_GO_ON;
     if (is_connection_trusted(con, p)) {
         handler_ctx *hctx = handler_ctx_init();
-        r->plugin_ctx[p->id] = hctx;
+        con->plugin_ctx[p->id] = hctx;
         hctx->saved_network_read = con->network_read;
         con->network_read = mod_extforward_network_read;
     }
@@ -1606,10 +1605,9 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
           case PP2_TYPE_CRC32C:
          #endif
           case PP2_TYPE_SSL: {
-            request_st * const r = &con->request;
             static const uint32_t zero = 0;
             handler_ctx *hctx =
-              r->plugin_ctx[mod_extforward_plugin_data_singleton->id];
+              con->plugin_ctx[mod_extforward_plugin_data_singleton->id];
             struct pp2_tlv_ssl *tlv_ssl =
               (struct pp2_tlv_ssl *)(void *)((char *)tlv+3);
             struct pp2_tlv *subtlv = tlv;

@@ -421,7 +421,8 @@ mod_maxmind_geoip2 (array * const env, const struct sockaddr * const dst_addr,
 
 REQUEST_FUNC(mod_maxminddb_request_env_handler)
 {
-    const sock_addr * const dst_addr = &r->con->dst_addr;
+    connection * const con = r->con;
+    const sock_addr * const dst_addr = &con->dst_addr;
     const int sa_family = dst_addr->plain.sa_family;
     if (sa_family != AF_INET && sa_family != AF_INET6) return HANDLER_GO_ON;
 
@@ -431,14 +432,14 @@ REQUEST_FUNC(mod_maxminddb_request_env_handler)
     /* check that mod_maxmind is activated and env fields were requested */
     if (!pconf.activate || NULL == pconf.env) return HANDLER_GO_ON;
 
-    array *env = r->plugin_ctx[p->id];
+    array *env = con->plugin_ctx[p->id];
     if (NULL == env) {
-        env = r->plugin_ctx[p->id] = array_init(pconf.env->used);
+        env = con->plugin_ctx[p->id] = array_init(pconf.env->used);
         if (pconf.mmdb)
             mod_maxmind_geoip2(env, (const struct sockaddr *)dst_addr, &pconf);
     }
 
-    for (size_t i = 0; i < env->used; ++i) {
+    for (uint32_t i = 0; i < env->used; ++i) {
         /* note: replaces values which may have been set by mod_openssl
          * (when mod_extforward is listed after mod_openssl in server.modules)*/
         data_string *ds = (data_string *)env->data[i];
@@ -452,12 +453,11 @@ REQUEST_FUNC(mod_maxminddb_request_env_handler)
 
 CONNECTION_FUNC(mod_maxminddb_handle_con_close)
 {
-    request_st * const r = &con->request;
     plugin_data *p = p_d;
-    array *env = r->plugin_ctx[p->id];
+    array *env = con->plugin_ctx[p->id];
     if (NULL != env) {
         array_free(env);
-        r->plugin_ctx[p->id] = NULL;
+        con->plugin_ctx[p->id] = NULL;
     }
 
     return HANDLER_GO_ON;
