@@ -88,18 +88,23 @@ static void connection_del(server *srv, connection *con) {
 #endif
 }
 
+#if 0 /* DEBUG_DEV */
 __attribute_cold__
 static void connection_plugin_ctx_check(server * const srv, request_st * const r) {
 	/* plugins should have cleaned themselves up */
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
 		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
 		plugin_data_base *pd = p->data;
-		if (!pd || NULL == r->plugin_ctx[pd->id]) continue;
+		if (!pd) continue;
+		if (NULL == r->plugin_ctx[pd->id]
+		    && NULL == r->con->plugin_ctx[pd->id]) continue;
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "missing cleanup in %s", p->name);
 		r->plugin_ctx[pd->id] = NULL;
+		r->con->plugin_ctx[pd->id] = NULL;
 	}
 }
+#endif
 
 static void connection_close(connection *con) {
 	if (con->fd < 0) con->fd = -con->fd;
@@ -109,13 +114,15 @@ static void connection_close(connection *con) {
 	server * const srv = con->srv;
 	request_st * const r = &con->request;
 
+  #if 0 /* DEBUG_DEV */
 	/* plugins should have cleaned themselves up */
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
-		if (NULL != r->plugin_ctx[i]) {
+		if (NULL != r->plugin_ctx[i] || NULL != con->plugin_ctx[i]) {
 			connection_plugin_ctx_check(srv, r);
 			break;
 		}
 	}
+  #endif
 
 	connection_set_state(r, CON_STATE_CONNECT);
 	buffer_clear(&r->uri.authority);
@@ -555,6 +562,9 @@ static connection *connection_init(server *srv) {
 
 	/* init plugin specific connection structures */
 
+	con->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
+	force_assert(NULL != con->plugin_ctx);
+
 	r->resp_header_len = 0;
 	r->loops_per_request = 0;
 	r->con = con;
@@ -617,6 +627,7 @@ void connections_free(server *srv) {
 		free(r->cond_cache);
 		free(r->cond_match);
 
+		free(con->plugin_ctx);
 		buffer_free(con->dst_addr_buf);
 
 		free(con);

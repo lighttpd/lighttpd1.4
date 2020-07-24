@@ -48,6 +48,7 @@ struct connection {
 
 	server *srv;
 	void *plugin_slots;
+	void **plugin_ctx;           /* plugin connection specific config */
 	void *config_data_base;
 
 	sock_addr dst_addr;
