@@ -546,6 +546,16 @@ static int mod_extforward_set_addr(request_st * const r, plugin_data *p, const c
 	sock_addr sock;
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 
+	/* Preserve changed addr for lifetime of h2 connection; upstream proxy
+	 * should not reuse same h2 connection for requests from different clients*/
+	if (hctx && NULL != hctx->saved_remote_addr_buf
+	    && r->http_version > HTTP_VERSION_1_1) { /*(e.g. HTTP_VERSION_2)*/
+		if (extforward_check_proxy) /* save old address */
+			http_header_env_set(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"),
+			                    CONST_BUF_LEN(hctx->saved_remote_addr_buf));
+		return 1;
+	}
+
 	if (r->conf.log_request_handling) {
 		log_error(r->conf.errh, __FILE__, __LINE__, "using address: %s", addr);
 	}
@@ -1146,6 +1156,10 @@ REQUEST_FUNC(mod_extforward_handle_request_env) {
 
 
 REQUEST_FUNC(mod_extforward_restore) {
+	/* Preserve changed addr for lifetime of h2 connection; upstream proxy
+	 * should not reuse same h2 connection for requests from different clients*/
+	if (r->http_version > HTTP_VERSION_1_1) /*(e.g. HTTP_VERSION_2)*/
+		return HANDLER_GO_ON;
 	/* XXX: should change this to not occur at request reset,
 	*       but instead at connection reset */
 	plugin_data *p = p_d;
@@ -1153,11 +1167,6 @@ REQUEST_FUNC(mod_extforward_restore) {
 	handler_ctx *hctx = con->plugin_ctx[p->id];
 
 	if (!hctx) return HANDLER_GO_ON;
-
-	if (NULL != hctx->saved_network_read) {
-		con->network_read = hctx->saved_network_read;
-		hctx->saved_network_read = NULL;
-	}
 
 	if (NULL != hctx->saved_remote_addr_buf) {
 		con->dst_addr = hctx->saved_remote_addr;
@@ -1706,17 +1715,19 @@ static int mod_extforward_network_read (connection *con,
       case  2: rc = mod_extforward_hap_PROXY_v2(con, &hdr); break;
       case  1: rc = mod_extforward_hap_PROXY_v1(con, &hdr); break;
       case  0: return  0; /*(errno == EAGAIN || errno == EWOULDBLOCK)*/
-      case -1: errh = con->request.conf.errh;
+      case -1: errh = con->srv->errh;
                log_perror(errh,__FILE__,__LINE__,"hap-PROXY recv()");
                rc = -1; break;
-      case -2: errh = con->request.conf.errh;
+      case -2: errh = con->srv->errh;
                log_error(errh,__FILE__,__LINE__,
                  "hap-PROXY proto received invalid/unsupported request");
                /* fall through */
       default: rc = -1; break;
     }
 
-    request_st * const r = &con->request;
-    mod_extforward_restore(r, mod_extforward_plugin_data_singleton);
+    handler_ctx *hctx =
+      con->plugin_ctx[mod_extforward_plugin_data_singleton->id];
+    con->network_read = hctx->saved_network_read;
+    hctx->saved_network_read = NULL;
     return (0 == rc) ? con->network_read(con, cq, max_bytes) : rc;
 }
