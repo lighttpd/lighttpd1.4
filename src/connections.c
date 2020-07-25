@@ -39,7 +39,7 @@
 __attribute_cold__
 static connection *connection_init(server *srv);
 
-static int connection_reset(connection *con);
+static void connection_reset(connection *con);
 
 
 static connection *connections_get_new_connection(server *srv) {
@@ -541,6 +541,37 @@ static void connection_handle_write_state(request_st * const r, connection * con
 
 
 __attribute_cold__
+static void
+request_init (request_st * const r, connection * const con, server * const srv)
+{
+	r->write_queue = chunkqueue_init();
+	r->read_queue = chunkqueue_init();
+	r->reqbody_queue = chunkqueue_init();
+
+	r->resp_header_len = 0;
+	r->loops_per_request = 0;
+	r->con = con;
+	r->tmp_buf = srv->tmp_buf;
+
+	/* init plugin-specific per-request structures */
+	r->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
+	force_assert(NULL != r->plugin_ctx);
+
+	r->cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
+	force_assert(NULL != r->cond_cache);
+
+      #ifdef HAVE_PCRE_H
+	if (srv->config_context->used > 1) {/*(save 128b per con if no conditions)*/
+		r->cond_match =
+		  calloc(srv->config_context->used, sizeof(cond_match_t));
+		force_assert(NULL != r->cond_match);
+	}
+      #endif
+
+	config_reset_config(r);
+}
+
+__attribute_cold__
 static connection *connection_init(server *srv) {
 	connection * const con = calloc(1, sizeof(*con));
 	force_assert(NULL != con);
@@ -556,49 +587,21 @@ static connection *connection_init(server *srv) {
 	con->config_data_base = srv->config_data_base;
 
 	request_st * const r = &con->request;
+	request_init(r, con, srv);
+	con->write_queue = r->write_queue;
+	con->read_queue = r->read_queue;
 
-	con->write_queue = r->write_queue = chunkqueue_init();
-	con->read_queue = r->read_queue = chunkqueue_init();
-
-	/* init plugin specific connection structures */
-
+	/* init plugin-specific per-connection structures */
 	con->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
 	force_assert(NULL != con->plugin_ctx);
-
-	r->resp_header_len = 0;
-	r->loops_per_request = 0;
-	r->con = con;
-	r->tmp_buf = srv->tmp_buf;
-
-	r->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
-	force_assert(NULL != r->plugin_ctx);
-
-	r->cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
-	force_assert(NULL != r->cond_cache);
-
-      #ifdef HAVE_PCRE_H
-	if (srv->config_context->used > 1) {/*save 128b per con if no conditions)*/
-		r->cond_match =
-		  calloc(srv->config_context->used, sizeof(cond_match_t));
-		force_assert(NULL != r->cond_match);
-	}
-      #endif
-
-	r->reqbody_queue = chunkqueue_init();
-
-	config_reset_config(r);
 
 	return con;
 }
 
-void connections_free(server *srv) {
-	connections * const conns = &srv->conns;
-	for (uint32_t i = 0; i < conns->size; ++i) {
-		connection *con = conns->ptr[i];
-		request_st * const r = &con->request;
 
-		connection_reset(con);
-
+static void
+request_free (request_st * const r)
+{
 		chunkqueue_free(r->reqbody_queue);
 		chunkqueue_free(r->write_queue);
 		chunkqueue_free(r->read_queue);
@@ -627,6 +630,22 @@ void connections_free(server *srv) {
 		free(r->cond_cache);
 		free(r->cond_match);
 
+		/* note: r is not zeroed here and r is not freed here */
+}
+
+void connections_free(server *srv) {
+	connections * const conns = &srv->conns;
+	for (uint32_t i = 0; i < conns->size; ++i) {
+		connection *con = conns->ptr[i];
+		request_st * const r = &con->request;
+
+		connection_reset(con);
+		if (con->write_queue != r->write_queue)
+			chunkqueue_free(con->write_queue);
+		if (con->read_queue != r->read_queue)
+			chunkqueue_free(con->read_queue);
+		request_free(r);
+
 		free(con->plugin_ctx);
 		buffer_free(con->dst_addr_buf);
 
@@ -638,16 +657,11 @@ void connections_free(server *srv) {
 }
 
 
-static int connection_reset(connection *con) {
-	request_st * const r = &con->request;
+static void
+request_reset (request_st * const r) {
 	plugins_call_connection_reset(r);
 
 	connection_response_reset(r);
-	con->is_readable = 1;
-
-	con->bytes_written = 0;
-	con->bytes_written_cur_second = 0;
-	con->bytes_read = 0;
 
 	r->resp_header_len = 0;
 	r->loops_per_request = 0;
@@ -704,9 +718,18 @@ static int connection_reset(connection *con) {
 	/*(error_handler_saved_method value is not valid unless error_handler_saved_status is set)*/
 
 	config_reset_config(r);
-
-	return 0;
 }
+
+static void connection_reset(connection *con) {
+	request_st * const r = &con->request;
+	request_reset(r);
+	con->is_readable = 1;
+
+	con->bytes_written = 0;
+	con->bytes_written_cur_second = 0;
+	con->bytes_read = 0;
+}
+
 
 __attribute_noinline__
 static void connection_discard_blank_line(request_st * const r, const char * const s, unsigned short * const hoff)  {
