@@ -78,7 +78,7 @@ static void* mod_mysql_vhost_connection_data(request_st * const r, void *p_d)
 	return r->plugin_ctx[p->id] = c;
 }
 
-REQUEST_FUNC(mod_mysql_vhost_handle_connection_reset) {
+REQUEST_FUNC(mod_mysql_vhost_handle_request_reset) {
 	plugin_data *p = p_d;
 	plugin_connection_data *c = r->plugin_ctx[p->id];
 
@@ -374,7 +374,7 @@ int mod_mysql_vhost_plugin_init(plugin *p) {
 
 	p->init           = mod_mysql_vhost_init;
 	p->cleanup        = mod_mysql_vhost_cleanup;
-	p->connection_reset = mod_mysql_vhost_handle_connection_reset;
+	p->handle_request_reset = mod_mysql_vhost_handle_request_reset;
 
 	p->set_defaults   = mod_mysql_vhost_set_defaults;
 	p->handle_docroot = mod_mysql_vhost_handle_docroot;

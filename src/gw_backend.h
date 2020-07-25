@@ -348,7 +348,7 @@ __attribute_cold__
 int gw_get_defaults_balance(server *srv, const buffer *b);
 
 handler_t gw_check_extension(request_st *r, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
-handler_t gw_connection_reset(request_st *r, void *p_d);
+handler_t gw_handle_request_reset(request_st *r, void *p_d);
 handler_t gw_handle_subrequest(request_st *r, void *p_d);
 handler_t gw_handle_trigger(server *srv, void *p_d);
 handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status);

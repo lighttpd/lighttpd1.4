@@ -254,7 +254,7 @@ int mod_webdav_plugin_init(plugin *p) {
     p->handle_uri_clean  = mod_webdav_uri_handler;
     p->handle_physical   = mod_webdav_physical_handler;
     p->handle_subrequest = mod_webdav_subrequest_handler;
-    p->connection_reset  = mod_webdav_handle_reset;
+    p->handle_request_reset = mod_webdav_handle_reset;
 
     return 0;
 }

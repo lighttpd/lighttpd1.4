@@ -820,7 +820,7 @@ void http_response_backend_error (request_st * const r) {
 
 void http_response_backend_done (request_st * const r) {
 	/* (not CON_STATE_ERROR and not CON_STATE_RESPONSE_END,
-	 *  i.e. not called from handle_connection_close or connection_reset
+	 *  i.e. not called from handle_connection_close or handle_request_reset
 	 *  hooks, except maybe from errdoc handler, which later resets state)*/
 	switch (r->state) {
 	case CON_STATE_HANDLE_REQUEST:
@@ -920,7 +920,7 @@ static handler_t http_response_process_local_redir(request_st * const r, size_t 
 
         /*(caller must reset request as follows)*/
         /*connection_response_reset(r);*/ /*(sets r->http_status = 0)*/
-        /*plugins_call_connection_reset(r);*/
+        /*plugins_call_handle_request_reset(r);*/
 
         return HANDLER_COMEBACK;
     }

@@ -325,7 +325,7 @@ int mod_uploadprogress_plugin_init(plugin *p) {
 
 	p->init        = mod_uploadprogress_init;
 	p->handle_uri_clean  = mod_uploadprogress_uri_handler;
-	p->connection_reset  = mod_uploadprogress_request_done;
+	p->handle_request_reset = mod_uploadprogress_request_done;
 	p->set_defaults  = mod_uploadprogress_set_defaults;
 	p->cleanup     = mod_uploadprogress_free;
 

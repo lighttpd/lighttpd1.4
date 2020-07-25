@@ -248,7 +248,7 @@ REQUEST_FUNC(mod_setenv_handle_response_start) {
     return HANDLER_GO_ON;
 }
 
-REQUEST_FUNC(mod_setenv_reset) {
+REQUEST_FUNC(mod_setenv_handle_request_reset) {
     void ** const hctx = r->plugin_ctx+((plugin_data_base *)p_d)->id;
     if (*hctx) { handler_ctx_free(*hctx); *hctx = NULL; }
     return HANDLER_GO_ON;
@@ -260,12 +260,12 @@ int mod_setenv_plugin_init(plugin *p) {
 	p->name        = "setenv";
 
 	p->init        = mod_setenv_init;
+	p->set_defaults= mod_setenv_set_defaults;
 	p->handle_uri_clean  = mod_setenv_uri_handler;
 	p->handle_request_env    = mod_setenv_handle_request_env;
 	p->handle_response_start = mod_setenv_handle_response_start;
-	p->set_defaults  = mod_setenv_set_defaults;
+	p->handle_request_reset  = mod_setenv_handle_request_reset;
 
-	p->connection_reset  = mod_setenv_reset;
 
 	return 0;
 }

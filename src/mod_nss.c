@@ -2707,7 +2707,7 @@ int mod_nss_plugin_init (plugin *p)
     p->handle_connection_close   = mod_nss_handle_con_close;
     p->handle_uri_raw            = mod_nss_handle_uri_raw;
     p->handle_request_env        = mod_nss_handle_request_env;
-    p->connection_reset          = mod_nss_handle_request_reset;
+    p->handle_request_reset      = mod_nss_handle_request_reset;
     p->handle_trigger            = mod_nss_handle_trigger;
 
     return 0;

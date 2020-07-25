@@ -4294,7 +4294,7 @@ int mod_openssl_plugin_init (plugin *p)
     p->handle_connection_close   = mod_openssl_handle_con_close;
     p->handle_uri_raw            = mod_openssl_handle_uri_raw;
     p->handle_request_env        = mod_openssl_handle_request_env;
-    p->connection_reset          = mod_openssl_handle_request_reset;
+    p->handle_request_reset      = mod_openssl_handle_request_reset;
     p->handle_trigger            = mod_openssl_handle_trigger;
 
     return 0;

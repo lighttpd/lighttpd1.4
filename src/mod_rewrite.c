@@ -350,7 +350,7 @@ int mod_rewrite_plugin_init(plugin *p) {
 	p->handle_uri_raw = mod_rewrite_uri_handler;
 	p->handle_physical = mod_rewrite_physical;
 	p->cleanup     = mod_rewrite_free;
-	p->connection_reset = mod_rewrite_con_reset;
+	p->handle_request_reset = mod_rewrite_con_reset;
 	p->set_defaults = mod_rewrite_set_defaults;
 
 	return 0;

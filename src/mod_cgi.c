@@ -927,7 +927,7 @@ static handler_t mod_cgi_local_redir(request_st * const r) {
     /* must be called from mod_cgi_handle_subrequest() so that HANDLER_COMEBACK
      * return value propagates back through connection_state_machine() */
     connection_response_reset(r); /*(includes r->http_status = 0)*/
-    plugins_call_connection_reset(r);
+    plugins_call_handle_request_reset(r);
     /*cgi_connection_close(hctx);*//*(already cleaned up and hctx is now invalid)*/
     return HANDLER_COMEBACK;
 }
@@ -1045,7 +1045,7 @@ int mod_cgi_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = "cgi";
 
-	p->connection_reset = cgi_connection_close_callback;
+	p->handle_request_reset = cgi_connection_close_callback;
 	p->handle_subrequest_start = cgi_is_handled;
 	p->handle_subrequest = mod_cgi_handle_subrequest;
 	p->handle_waitpid = cgi_waitpid_cb;

@@ -321,7 +321,7 @@ int mod_scgi_plugin_init(plugin *p) {
 	p->init         = gw_init;
 	p->cleanup      = gw_free;
 	p->set_defaults = mod_scgi_set_defaults;
-	p->connection_reset        = gw_connection_reset;
+	p->handle_request_reset    = gw_handle_request_reset;
 	p->handle_uri_clean        = scgi_check_extension_1;
 	p->handle_subrequest_start = scgi_check_extension_2;
 	p->handle_subrequest       = gw_handle_subrequest;

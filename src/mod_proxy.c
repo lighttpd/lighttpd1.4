@@ -1123,7 +1123,7 @@ int mod_proxy_plugin_init(plugin *p) {
 	p->init         = mod_proxy_init;
 	p->cleanup      = mod_proxy_free;
 	p->set_defaults = mod_proxy_set_defaults;
-	p->connection_reset        = gw_connection_reset;
+	p->handle_request_reset    = gw_handle_request_reset;
 	p->handle_uri_clean        = mod_proxy_check_extension;
 	p->handle_subrequest       = gw_handle_subrequest;
 	p->handle_trigger          = gw_handle_trigger;

@@ -381,7 +381,7 @@ static handler_t wstunnel_stdin_append(gw_handler_ctx *gwhctx) {
         DEBUG_LOG_INFO("disconnected from client (fd=%d)", r->con->fd);
         DEBUG_LOG_DEBUG("send close response to client (fd=%d)", r->con->fd);
         mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, CONST_STR_LEN("1000")); /* 1000 Normal Closure */
-        gw_connection_reset(r, hctx->gw.plugin_data);
+        gw_handle_request_reset(r, hctx->gw.plugin_data);
         return HANDLER_FINISHED;
     }
 }
@@ -605,7 +605,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
         if (cur_ts - con->read_idle_ts > r->conf.max_read_idle) {
             DEBUG_LOG_INFO("timeout client (fd=%d)", con->fd);
             mod_wstunnel_frame_send(hctx,MOD_WEBSOCKET_FRAME_TYPE_CLOSE,NULL,0);
-            gw_connection_reset(r, p_d);
+            gw_handle_request_reset(r, p_d);
             joblist_append(con);
             /* avoid server.c closing connection with error due to max_read_idle
              * (might instead run joblist after plugins_call_handle_trigger())*/
@@ -633,7 +633,7 @@ int mod_wstunnel_plugin_init(plugin *p) {
     p->init              = mod_wstunnel_init;
     p->cleanup           = gw_free;
     p->set_defaults      = mod_wstunnel_set_defaults;
-    p->connection_reset  = gw_connection_reset;
+    p->handle_request_reset = gw_handle_request_reset;
     p->handle_uri_clean  = mod_wstunnel_check_extension;
     p->handle_subrequest = gw_handle_subrequest;
     p->handle_trigger    = mod_wstunnel_handle_trigger;

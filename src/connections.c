@@ -659,7 +659,7 @@ void connections_free(server *srv) {
 
 static void
 request_reset (request_st * const r) {
-	plugins_call_connection_reset(r);
+	plugins_call_handle_request_reset(r);
 
 	connection_response_reset(r);
 
@@ -1235,7 +1235,7 @@ static int connection_handle_request(request_st * const r) {
 							http_header_env_set(r, CONST_STR_LEN("REDIRECT_STATUS"), CONST_BUF_LEN(tb));
 
 							if (error_handler == r->conf.error_handler) {
-								plugins_call_connection_reset(r);
+								plugins_call_handle_request_reset(r);
 
 								if (r->reqbody_length) {
 									if (r->reqbody_length != r->reqbody_queue->bytes_in) {

@@ -1289,7 +1289,7 @@ SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 			return HANDLER_FINISHED;
 }
 
-static handler_t mod_ssi_connection_reset(request_st * const r, void *p_d) {
+static handler_t mod_ssi_handle_request_reset(request_st * const r, void *p_d) {
 	plugin_data *p = p_d;
 	handler_ctx *hctx = r->plugin_ctx[p->id];
 	if (hctx) {
@@ -1309,7 +1309,7 @@ int mod_ssi_plugin_init(plugin *p) {
 	p->init        = mod_ssi_init;
 	p->handle_subrequest_start = mod_ssi_physical_path;
 	p->handle_subrequest       = mod_ssi_handle_subrequest;
-	p->connection_reset        = mod_ssi_connection_reset;
+	p->handle_request_reset    = mod_ssi_handle_request_reset;
 	p->set_defaults  = mod_ssi_set_defaults;
 	p->cleanup     = mod_ssi_free;
 

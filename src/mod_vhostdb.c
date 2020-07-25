@@ -239,7 +239,7 @@ SETDEFAULTS_FUNC(mod_vhostdb_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-REQUEST_FUNC(mod_vhostdb_handle_connection_reset) {
+REQUEST_FUNC(mod_vhostdb_handle_request_reset) {
     plugin_data *p = p_d;
     vhostdb_cache_entry *ve;
 
@@ -398,7 +398,7 @@ int mod_vhostdb_plugin_init(plugin *p) {
     p->set_defaults     = mod_vhostdb_set_defaults;
     p->handle_trigger   = mod_vhostdb_periodic;
     p->handle_docroot   = mod_vhostdb_handle_docroot;
-    p->connection_reset = mod_vhostdb_handle_connection_reset;
+    p->handle_request_reset = mod_vhostdb_handle_request_reset;
 
     return 0;
 }

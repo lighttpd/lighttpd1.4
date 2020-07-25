@@ -1797,7 +1797,7 @@ static handler_t gw_reconnect(gw_handler_ctx * const hctx, request_st * const r)
 }
 
 
-handler_t gw_connection_reset(request_st * const r, void *p_d) {
+handler_t gw_handle_request_reset(request_st * const r, void *p_d) {
     gw_plugin_data *p = p_d;
     gw_handler_ctx *hctx = r->plugin_ctx[p->id];
     if (hctx) gw_connection_close(hctx, r);

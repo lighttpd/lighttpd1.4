@@ -1219,7 +1219,7 @@ int mod_extforward_plugin_init(plugin *p) {
 	p->handle_uri_raw = mod_extforward_uri_handler;
 	p->handle_request_env = mod_extforward_handle_request_env;
 	p->handle_request_done = mod_extforward_restore;
-	p->connection_reset = mod_extforward_restore;
+	p->handle_request_reset = mod_extforward_restore;
 	p->handle_connection_close = mod_extforward_handle_con_close;
 	p->set_defaults  = mod_extforward_set_defaults;
 	p->cleanup     = mod_extforward_free;

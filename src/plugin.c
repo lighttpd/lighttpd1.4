@@ -353,7 +353,7 @@ PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_SUBREQUEST_START, handle_subrequest_s
 PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_RESPONSE_START, handle_response_start)
 PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_DOCROOT, handle_docroot)
 PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_PHYSICAL, handle_physical)
-PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_CONNECTION_RESET, connection_reset)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_CONNECTION_RESET, handle_request_reset)
 
 /**
  * plugins that use
@@ -502,7 +502,7 @@ handler_t plugins_call_init(server *srv) {
 			++offsets[PLUGIN_FUNC_HANDLE_DOCROOT];
 		if (p->handle_physical)
 			++offsets[PLUGIN_FUNC_HANDLE_PHYSICAL];
-		if (p->connection_reset)
+		if (p->handle_request_reset)
 			++offsets[PLUGIN_FUNC_CONNECTION_RESET];
 		if (p->set_defaults)
 			++offsets[PLUGIN_FUNC_SET_DEFAULTS];
@@ -557,7 +557,7 @@ handler_t plugins_call_init(server *srv) {
 					offsets[PLUGIN_FUNC_HANDLE_DOCROOT]);
 		plugins_call_init_slot(srv, p->handle_physical, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_PHYSICAL]);
-		plugins_call_init_slot(srv, p->connection_reset, p->data,
+		plugins_call_init_slot(srv, p->handle_request_reset, p->data,
 					offsets[PLUGIN_FUNC_CONNECTION_RESET]);
 		plugins_call_init_slot(srv, p->set_defaults, p->data,
 					offsets[PLUGIN_FUNC_SET_DEFAULTS]);

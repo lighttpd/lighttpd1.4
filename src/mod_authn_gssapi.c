@@ -785,7 +785,7 @@ int mod_authn_gssapi_plugin_init(plugin *p) {
     p->name        = "authn_gssapi";
     p->init        = mod_authn_gssapi_init;
     p->set_defaults= mod_authn_gssapi_set_defaults;
-    p->connection_reset = mod_authn_gssapi_handle_reset;
+    p->handle_request_reset = mod_authn_gssapi_handle_reset;
 
     return 0;
 }
