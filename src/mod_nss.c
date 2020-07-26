@@ -223,7 +223,7 @@ static void elog(log_error_st * const errh,
                  const char * const file, const int line,
                  const char * const msg)
 {
-    /* error logging convenience function that decodes gnutls result codes */
+    /* error logging convenience function that decodes NSS result codes */
     const PRErrorCode rc = PR_GetError();
     const char *s = PR_ErrorToName(rc);
     log_error(errh, file, line, "NSS: %s: (%s) %s",
@@ -1263,10 +1263,10 @@ enum {
 
 
 static SECStatus
-mod_gnutls_alpn_select_cb (void *arg, PRFileDesc *ssl,
-                           const unsigned char *protos, unsigned int protosLen,
-                           unsigned char *protoOut, unsigned int *protoOutLen,
-                           unsigned int protoMaxOut)
+mod_nss_alpn_select_cb (void *arg, PRFileDesc *ssl,
+                        const unsigned char *protos, unsigned int protosLen,
+                        unsigned char *protoOut, unsigned int *protoOutLen,
+                        unsigned int protoMaxOut)
 {
     /* https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids */
     static const SECItem alpn[] = {
@@ -2198,17 +2198,7 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         if (lim && data_len > lim) data_len = lim;
         hctx->pending_write = 0;
 
-        /* gnutls_record_send() copies the data, up to max record size, but if
-         * (temporarily) unable to write the entire record, it is documented
-         * that the caller must call gnutls_record_send() again, later, with the
-         * same arguments, or with NULL ptr and 0 data_len.  The func may return
-         * GNUTLS_E_AGAIN or GNUTLS_E_INTERRUPTED to indicate that caller should
-         * wait for fd to be readable/writable before calling the func again,
-         * which is why those (temporary) errors are returned instead of telling
-         * the caller that the data was successfully copied.
-         * Additionally, to be accurate, the size must fit into a record which
-         * is why we restrict ourselves to sending max out record payload each
-         * iteration.
+        /*
          * XXX: above comments modified from mod_mbedtls; should be verified
          */
 
@@ -2345,7 +2335,7 @@ CONNECTION_FUNC(mod_nss_handle_con_accept)
         return HANDLER_ERROR;
     }
 
-    if (SSL_SetNextProtoCallback(hctx->ssl, mod_gnutls_alpn_select_cb, hctx)<0){
+    if (SSL_SetNextProtoCallback(hctx->ssl, mod_nss_alpn_select_cb, hctx) < 0) {
         elog(r->conf.errh, __FILE__, __LINE__, "SSL_SetNextProtoCallback()");
         return HANDLER_ERROR;
     }
