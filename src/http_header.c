@@ -180,7 +180,14 @@ void http_header_response_insert(request_st * const r, enum http_header_e id, co
     buffer * const vb = array_get_buf_ptr(&r->resp_headers, k, klen);
     if (!buffer_string_is_empty(vb)) { /* append value */
         buffer_append_string_len(vb, CONST_STR_LEN("\r\n"));
-        buffer_append_string_len(vb, k, klen);
+        if (r->http_version >= HTTP_VERSION_2) {
+            char * const h = buffer_string_prepare_append(vb, klen + vlen + 2);
+            for (uint32_t i = 0; i < klen; ++i)
+                h[i] = (k[i] < 'A' || k[i] > 'Z') ? k[i] : (k[i] | 0x20);
+            buffer_commit(vb, klen);
+        }
+        else
+            buffer_append_string_len(vb, k, klen);
         buffer_append_string_len(vb, CONST_STR_LEN(": "));
     }
     buffer_append_string_len(vb, v, vlen);
