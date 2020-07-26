@@ -107,6 +107,7 @@ static const keyvalue http_status[] = {
 	{ 415, CONST_LEN_STR("415 Unsupported Media Type") },
 	{ 416, CONST_LEN_STR("416 Requested Range Not Satisfiable") },
 	{ 417, CONST_LEN_STR("417 Expectation Failed") },
+	{ 421, CONST_LEN_STR("421 Misdirected Request") }, /* RFC 7540 */
 	{ 422, CONST_LEN_STR("422 Unprocessable Entity") }, /* WebDAV */
 	{ 423, CONST_LEN_STR("423 Locked") }, /* WebDAV */
 	{ 424, CONST_LEN_STR("424 Failed Dependency") }, /* WebDAV */
