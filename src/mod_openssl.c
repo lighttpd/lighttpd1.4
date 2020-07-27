@@ -115,7 +115,7 @@ static char global_err_buf[WOLFSSL_MAX_ERROR_SZ];
 #define ERR_error_string(e,b) \
         (wolfSSL_ERR_error_string_n((e),global_err_buf,WOLFSSL_MAX_ERROR_SZ), \
          global_err_buf)
-#include "safe_memclear.h"  /* WolfSSL does not provide OPENSSL_cleanse() */
+/* WolfSSL does not provide OPENSSL_cleanse() */
 #define OPENSSL_cleanse(x,sz) safe_memclear((x),(sz))
 #define SSL_set_read_ahead(x,y) ((void)(y)) /*WolfSSL no SSL_set_read_ahead()*/
 
@@ -155,6 +155,7 @@ WOLFSSL_API WOLF_STACK_OF(WOLFSSL_X509_NAME) *wolfSSL_dup_CA_list( WOLF_STACK_OF
 #include "http_header.h"
 #include "log.h"
 #include "plugin.h"
+#include "safe_memclear.h"
 
 typedef struct {
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
@@ -701,8 +702,6 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
 #ifdef WOLFSSL_VERSION
 
 
-#define OPENSSL_NO_POSIX_IO /* WolfSSL does not provide BIO_new_fd(); use alt */
-
 /* WolfSSL OpenSSL compat API does not wipe temp mem used; write our own */
 /* (pemfile might contain private key)*/
 /* code here is based on similar code in mod_nss */
@@ -1069,60 +1068,6 @@ mod_wolfssl_load_ca_files (SSL_CTX *ssl_ctx, plugin_data *p, server *srv)
 #else /* !defined(WOLFSSL_VERSION) */
 
 
-/* openssl BIO_s_file() employs system stdio
- * system stdio buffers reads and does not guarantee to clear buffer memory
- * 'man PEM_bytes_read_bio_secmem()' and see NOTES section for more info
- */
-
-#ifdef OPENSSL_NO_POSIX_IO
-
-#include <stdio.h>
-static BIO *
-BIO_new_rdonly_file (const char *file)
-{
-
-    BIO *in = BIO_new(BIO_s_file());
-    if (NULL == in)
-        return NULL;
-
-    if (BIO_read_filename(in, file) <= 0) {
-        BIO_free(in);
-        return NULL;
-    }
-
-    /* set I/O stream unbuffered (best-effort; not fatal)
-     * system stdio buffers reads and does not guarantee to clear buffer memory.
-     * Alternative: provide buffer (e.g. 8k) and clear after use (in caller) */
-    FILE *fp = NULL;
-    if (BIO_get_fp(in, &fp))
-        setvbuf(fp, NULL, _IONBF, 0);
-
-    return in;
-}
-
-#else  /* !OPENSSL_NO_POSIX_IO */
-
-#include <fcntl.h>
-static BIO *
-BIO_new_rdonly_file (const char *file)
-{
-    /* unbuffered fd; not using system stdio */
-    int fd = fdevent_open_cloexec(file, 1, O_RDONLY, 0);
-    if (fd < 0)
-        return NULL;
-
-    BIO *in = BIO_new_fd(fd, BIO_CLOSE);
-    if (NULL == in) {
-        close(fd);
-        return NULL;
-    }
-
-    return in;
-}
-
-#endif /* !OPENSSL_NO_POSIX_IO */
-
-
 /* use memory from openssl secure heap for temporary buffers, returned storage
  * (pemfile might contain a private key in addition to certificate chain)
  * Interfaces similar to those constructed in include/openssl/pem.h for
@@ -1134,6 +1079,7 @@ BIO_new_rdonly_file (const char *file)
  *   uses PEM_bytes_read_bio_secmem() instead of PEM_bytes_read_bio()
  *   uses OPENSSL_secure_clear_free() instead of OPENSSL_free()
  *
+ * 'man PEM_bytes_read_bio_secmem()' and see NOTES section for more info
  * PEM_bytes_read_bio_secmem() openssl 1.1.1 or later
  * OPENSSL_secure_clear_free() openssl 1.1.0g or later
  * As this comment is being written, only openssl 1.1.1 is actively maintained.
@@ -1799,10 +1745,16 @@ mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) 
 {
     *chain = NULL;
 
-    BIO *in = BIO_new_rdonly_file(file);
+    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(file, &dlen, errh, malloc, free);
+    if (NULL == data) return NULL;
+
+    BIO *in = BIO_new_mem_buf(data, (int)dlen);
     if (NULL == in) {
         log_error(errh, __FILE__, __LINE__,
           "SSL: BIO_new/BIO_read_filename('%s') failed", file);
+        if (dlen) safe_memclear(data, dlen);
+        free(data);
         return NULL;
     }
 
@@ -1817,6 +1769,8 @@ mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) 
     }
 
     BIO_free(in);
+    if (dlen) safe_memclear(data, dlen);
+    free(data);
     return x;
 }
 #endif
@@ -1826,16 +1780,22 @@ mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) 
 static EVP_PKEY *
 mod_openssl_evp_pkey_load_pem_file (const char *file, log_error_st *errh)
 {
-    BIO *in = BIO_new_rdonly_file(file);
-    if (NULL == in) {
+    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(file, &dlen, errh, malloc, free);
+    if (NULL == data) return NULL;
+    EVP_PKEY *x = NULL;
+    BIO *in = BIO_new_mem_buf(data, (int)dlen);
+    if (NULL != in) {
+        x = PEM_read_bio_PrivateKey(in, NULL, NULL, NULL);
+        BIO_free(in);
+    }
+    if (dlen) safe_memclear(data, dlen);
+    free(data);
+
+    if (NULL == in)
         log_error(errh, __FILE__, __LINE__,
           "SSL: BIO_new/BIO_read_filename('%s') failed", file);
-        return NULL;
-    }
-
-    EVP_PKEY *x = PEM_read_bio_PrivateKey(in, NULL, NULL, NULL);
-    BIO_free(in);
-    if (NULL == x)
+    else if (NULL == x)
         log_error(errh, __FILE__, __LINE__,
           "SSL: couldn't read private key from '%s'", file);
 
@@ -1873,13 +1833,14 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
      * typically the same size with the signature and dates refreshed.
      */
 
-  #if defined(BORINGSSL_API_VERSION) \
-   || defined(WOLFSSL_VERSION)
-
     /* load raw .der file */
     off_t dlen = 1*1024*1024;/*(arbitrary limit: 1 MB file; expect < 1 KB)*/
     char *data = fdevent_load_file(file, &dlen, errh, malloc, free);
     if (NULL == data) return NULL;
+
+  #if defined(BORINGSSL_API_VERSION) \
+   || defined(WOLFSSL_VERSION)
+
     if (NULL == b)
         b = buffer_init();
     else if (b->ptr)
@@ -1891,15 +1852,17 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
 
   #else
 
-    BIO *in = BIO_new_rdonly_file(file);
+    BIO *in = BIO_new_mem_buf(data, (int)dlen);
     if (NULL == in) {
         log_error(errh, __FILE__, __LINE__,
           "SSL: BIO_new/BIO_read_filename('%s') failed", file);
+        free(data);
         return NULL;
     }
 
     OCSP_RESPONSE *x = d2i_OCSP_RESPONSE_bio(in, NULL);
     BIO_free(in);
+    free(data);
     if (NULL == x) {
         log_error(errh, __FILE__, __LINE__,
           "SSL: OCSP stapling file read error: %s %s",
