@@ -832,10 +832,22 @@ static int connection_handle_read_state(connection * const con)  {
                       "oversized request-header -> sending Status 431");
             r->http_status = 431; /* Request Header Fields Too Large */
             r->keep_alive = 0;
+            connection_set_state(r, CON_STATE_REQUEST_END);
             return 1;
         }
 
         if (0 != header_len) break;
+        if (((unsigned char *)c->mem->ptr)[c->offset] < 32) {
+            /* expecting ASCII method beginning with alpha char
+             * or HTTP/2 pseudo-header beginning with ':' */
+            /*(TLS handshake begins with SYN 0x16 (decimal 22))*/
+            log_error(r->conf.errh, __FILE__, __LINE__, "%s",
+                      "invalid request-line -> sending Status 400");
+            r->http_status = 400; /* Bad Request */
+            r->keep_alive = 0;
+            connection_set_state(r, CON_STATE_REQUEST_END);
+            return 1;
+        }
     } while ((c = connection_read_header_more(con, cq, c, clen)));
 
     if (keepalive_request_start) {
