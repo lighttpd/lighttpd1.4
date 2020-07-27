@@ -1385,6 +1385,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	if (!r->resp_body_finished) return HANDLER_GO_ON;
 	if (r->http_method == HTTP_METHOD_HEAD) return HANDLER_GO_ON;
 	if (r->resp_htags & HTTP_HEADER_TRANSFER_ENCODING) return HANDLER_GO_ON;
+	if (r->resp_htags & HTTP_HEADER_CONTENT_ENCODING) return HANDLER_GO_ON;
 
 	/* disable compression for some http status types. */
 	switch(r->http_status) {
@@ -1412,10 +1413,6 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	    && len > ((off_t)p->conf.max_compress_size << 10)) {
 		return HANDLER_GO_ON;
 	}
-
-	/* Check if response has a Content-Encoding. */
-	vbro = http_header_response_get(r, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
-	if (NULL != vbro) return HANDLER_GO_ON;
 
 	/* Check Accept-Encoding for supported encoding. */
 	vbro = http_header_request_get(r, HTTP_HEADER_ACCEPT_ENCODING, CONST_STR_LEN("Accept-Encoding"));
