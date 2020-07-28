@@ -148,6 +148,12 @@ static handler_t connection_handle_read_post_chunked(request_st * const r, chunk
                     te_chunked <<= 4;
                     te_chunked |= u;
                 }
+                if (s == (unsigned char *)c->mem->ptr+c->offset) { /*(no hex)*/
+                    log_error(r->conf.errh, __FILE__, __LINE__,
+                      "chunked header invalid chars -> 400");
+                    /* 400 Bad Request */
+                    return connection_handle_read_post_error(r, 400);
+                }
                 while (*s == ' ' || *s == '\t') ++s;
                 if (*s != '\r' && *s != ';') {
                     log_error(r->conf.errh, __FILE__, __LINE__,
