@@ -330,6 +330,44 @@ static void connection_handle_errdoc(request_st * const r) {
                              CONST_STR_LEN("text/html"));
 }
 
+__attribute_cold__
+static void
+connection_merge_trailers (request_st * const r)
+{
+    /* attempt to merge trailers into headers; header not yet sent by caller */
+    if (buffer_string_is_empty(&r->gw_dechunk->b)) return;
+    const int done = r->gw_dechunk->done;
+    if (!done) return; /* XXX: !done; could scan for '\n' and send only those */
+
+    /* do not include trailers if success status (when response was read from
+     * backend) subsequently changed to error status.  http_chunk could add the
+     * trailers, but such actions are better on a different code layer than in
+     * http_chunk.c */
+    if (done < 400 && r->http_status >= 400) return;
+
+    /* XXX: trailers passed through; no sanity check currently done
+     * https://tools.ietf.org/html/rfc7230#section-4.1.2
+     *
+     * Not checking for disallowed fields
+     * Not handling (deprecated) line wrapping
+     * Not strictly checking fields
+     */
+    const char *k = strchr(r->gw_dechunk->b.ptr, '\n'); /*(skip final chunk)*/
+    if (NULL == k) return; /*(should not happen)*/
+    ++k;
+    for (const char *v, *e; (e = strchr(k, '\n')); k = e+1) {
+        v = memchr(k, ':', (size_t)(e - k));
+        if (NULL == v || v == k || *k == ' ' || *k == '\t') continue;
+        uint32_t klen = (uint32_t)(v - k);
+        do { ++v; } while (*v == ' ' || *v == '\t');
+        if (*v == '\r' || *v == '\n') continue;
+        enum http_header_e id = http_header_hkey_get(k, klen);
+        http_header_response_insert(r, id, k, klen, v, (size_t)(e - v));
+    }
+    http_header_response_unset(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Trailer"));
+    buffer_clear(&r->gw_dechunk->b);
+}
+
 static int connection_handle_write_prepare(request_st * const r) {
 	if (NULL == r->handler_module) {
 		/* static files */
@@ -380,6 +418,9 @@ static int connection_handle_write_prepare(request_st * const r) {
 			connection_handle_errdoc(r);
 		break;
 	}
+
+	if (r->gw_dechunk)
+		connection_merge_trailers(r);
 
 	/* Allow filter plugins to change response headers before they are written. */
 	switch(plugins_call_handle_response_start(r)) {

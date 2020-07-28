@@ -243,6 +243,13 @@ void http_response_body_clear (request_st * const r, int preserve_length) {
         if (r->resp_htags & HTTP_HEADER_CONTENT_LENGTH) {
             http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
         }
+        /*(if not preserving Content-Length, do not preserve trailers, if any)*/
+        r->resp_decode_chunked = 0;
+        if (r->gw_dechunk) {
+            free(r->gw_dechunk->b.ptr);
+            free(r->gw_dechunk);
+            r->gw_dechunk = NULL;
+        }
     }
     chunkqueue_reset(r->write_queue);
 }
@@ -1034,7 +1041,13 @@ static int http_response_process_headers(request_st * const r, http_response_opt
             if (*value == '+') ++value;
             break;
           case HTTP_HEADER_TRANSFER_ENCODING:
-            break;
+            /*(assumes "Transfer-Encoding: chunked"; does not verify)*/
+            r->resp_decode_chunked = 1;
+            r->gw_dechunk = calloc(1, sizeof(response_dechunk));
+            /* XXX: future: might consider using chunk_buffer_acquire()
+             *      and chunk_buffer_release() for r->gw_dechunk->b */
+            force_assert(r->gw_dechunk);
+            continue;
           default:
             break;
         }
@@ -1197,9 +1210,8 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
     }
 
     if (blen > 0) {
-        if (0 != http_chunk_append_mem(r, bstart, blen)) {
+        if (0 != http_chunk_decode_append_mem(r, bstart, blen))
             return HANDLER_ERROR;
-        }
     }
 
     /* (callback for response headers complete) */
@@ -1310,7 +1322,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
             /* accumulate response in b until headers completed (or error) */
             if (r->resp_body_started) buffer_clear(b);
         } else {
-            if (0 != http_chunk_append_buffer(r, b)) {
+            if (0 != http_chunk_decode_append_buffer(r, b)) {
                 /* error writing to tempfile;
                  * truncate response or send 500 if nothing sent yet */
                 return HANDLER_ERROR;

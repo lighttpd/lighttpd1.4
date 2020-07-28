@@ -95,6 +95,12 @@ typedef struct {
     buffer etag;
 } physical;
 
+typedef struct {
+    off_t gw_chunked;
+    buffer b;
+    int done;
+} response_dechunk;
+
 /* the order of the items should be the same as they are processed
  * read before write as we use this later e.g. <= CON_STATE_REQUEST_END */
 typedef enum {
@@ -159,6 +165,7 @@ struct request_st {
     char resp_body_finished;
     char resp_body_started;
     char resp_send_chunked;
+    char resp_decode_chunked;
 
     char loops_per_request;  /* catch endless loops in a single request */
     char keep_alive; /* only request.c can enable it, all other just disable */
@@ -167,6 +174,7 @@ struct request_st {
     struct chunkqueue *write_queue;     /* HTTP response queue [ file, mem ] */
     struct chunkqueue *read_queue;      /* HTTP request queue  [ mem ] */
     buffer *tmp_buf;                    /* shared; same as srv->tmp_buf */
+    response_dechunk *gw_dechunk;
 
     struct timespec start_hp;
     time_t start_ts;

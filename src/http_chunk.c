@@ -265,6 +265,212 @@ int http_chunk_transfer_cqlen(request_st * const r, chunkqueue * const src, cons
 }
 
 void http_chunk_close(request_st * const r) {
-    if (r->resp_send_chunked)
+    if (!r->resp_send_chunked) return;
+
+    if (r->gw_dechunk && !buffer_string_is_empty(&r->gw_dechunk->b)) {
+        /* XXX: trailers passed through; no sanity check currently done */
+        chunkqueue_append_buffer(r->write_queue, &r->gw_dechunk->b);
+        if (!r->gw_dechunk->done)
+            r->keep_alive = 0;
+    }
+    else
         chunkqueue_append_mem(r->write_queue, CONST_STR_LEN("0\r\n\r\n"));
+}
+
+static int
+http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
+{
+    /*(silently discard data, if any, after final \r\n)*/
+    if (r->gw_dechunk->done) return 0;
+
+    buffer * const h = &r->gw_dechunk->b;
+    off_t te_chunked = r->gw_dechunk->gw_chunked;
+    while (len) {
+        if (0 == te_chunked) {
+            const char *p = strchr(mem, '\n');
+            /*(likely better ways to handle chunked header crossing chunkqueue
+             * chunks, but this situation is not expected to occur frequently)*/
+            if (NULL == p) { /* incomplete HTTP chunked header line */
+                uint32_t hlen = buffer_string_length(h);
+                if ((off_t)(1024 - hlen) < len) {
+                    log_error(r->conf.errh, __FILE__, __LINE__,
+                      "chunked header line too long");
+                    return -1;
+                }
+                buffer_append_string_len(h, mem, len);
+                break;
+            }
+
+            off_t hsz = ++p - mem;
+            unsigned char *s = (unsigned char *)mem;
+            if (!buffer_string_is_empty(h)) {
+                uint32_t hlen = buffer_string_length(h);
+                if (NULL == memchr(h->ptr, '\n', hlen)) {
+                    if ((off_t)(1024 - hlen) < hsz) {
+                        log_error(r->conf.errh, __FILE__, __LINE__,
+                          "chunked header line too long");
+                        return -1;
+                    }
+                    buffer_append_string_len(h, mem, hsz);
+                }
+                s = (unsigned char *)h->ptr;
+            }
+            for (unsigned char u; (u=(unsigned char)hex2int(*s))!=0xFF; ++s) {
+                if (te_chunked > (off_t)(1uLL<<(8*sizeof(off_t)-5))-1) {
+                    log_error(r->conf.errh, __FILE__, __LINE__,
+                      "chunked data size too large");
+                    return -1;
+                }
+                te_chunked <<= 4;
+                te_chunked |= u;
+            }
+            if ((char *)s == mem || (char *)s == h->ptr) return -1; /*(no hex)*/
+            while (*s == ' ' || *s == '\t') ++s;
+            if (*s != '\r' && *s != ';') { /*(not strictly checking \r\n)*/
+                log_error(r->conf.errh, __FILE__, __LINE__,
+                  "chunked header invalid chars");
+                return -1;
+            }
+
+            if (0 == te_chunked) {
+                /* do not consume final chunked header until
+                 * (optional) trailers received along with
+                 * request-ending blank line "\r\n" */
+                if (len - hsz == 2 && p[0] == '\r' && p[1] == '\n') {
+                    /* common case with no trailers; final \r\n received */
+                    /*(silently discard data, if any, after final \r\n)*/
+                  #if 0 /*(avoid allocation for common case; users must check)*/
+                    if (buffer_is_empty(h))
+                        buffer_copy_string_len(h, CONST_STR_LEN("0\r\n\r\n"));
+                  #else
+                    buffer_clear(h);
+                  #endif
+                    r->gw_dechunk->done = r->http_status;
+                    break;
+                }
+
+                /* accumulate trailers and check for end of trailers */
+                /* XXX: reuse r->conf.max_request_field_size
+                 *      or have separate limit? */
+                uint32_t hlen = buffer_string_length(h);
+                if ((off_t)(r->conf.max_request_field_size - hlen) < hsz) {
+                    /* truncate excessively long trailers */
+                    r->gw_dechunk->done = r->http_status;
+                    hsz = (off_t)(r->conf.max_request_field_size - hlen);
+                    buffer_append_string_len(h, mem, hsz);
+                    p = strrchr(h->ptr, '\n');
+                    if (NULL != p)
+                        buffer_string_set_length(h, p + 1 - h->ptr);
+                    else { /*(should not happen)*/
+                        buffer_clear(h);
+                        buffer_append_string_len(h, CONST_STR_LEN("0\r\n"));
+                    }
+                    buffer_append_string_len(h, CONST_STR_LEN("\r\n"));
+                    break;
+                }
+                buffer_append_string_len(h, mem, hsz);
+                hlen += (uint32_t)hsz; /* uint32_t fits in (buffer *) */
+                if (hlen < 4) break;
+                p = h->ptr + hlen - 4;
+                if (p[0]=='\r'&&p[1]=='\n'&&p[2]=='\r'&&p[3]=='\n')
+                    r->gw_dechunk->done = r->http_status;
+                else if ((p = strstr(h->ptr, "\r\n\r\n"))) {
+                    r->gw_dechunk->done = r->http_status;
+                    /*(silently discard data, if any, after final \r\n)*/
+                    buffer_string_set_length(h, (uint32_t)(p+4-h->ptr));
+                }
+                break;
+            }
+
+            mem += hsz;
+            len -= hsz;
+
+            if (te_chunked > (off_t)(1uLL<<(8*sizeof(off_t)-5))-1-2) {
+                log_error(r->conf.errh, __FILE__, __LINE__,
+                  "chunked data size too large");
+                return -1;
+            }
+            te_chunked += 2; /*(for trailing "\r\n" after chunked data)*/
+        }
+
+        if (te_chunked >= 2) {
+            off_t clen = te_chunked - 2;
+            if (clen > len) clen = len;
+            if (0 != http_chunk_append_mem(r, mem, clen))
+                return -1;
+            mem += clen;
+            len -= clen;
+            te_chunked -= clen;
+            if (te_chunked == 2) {
+                if (len >= 2) {
+                    if (mem[0] != '\r' || mem[1] != '\n') return -1;
+                    mem += 2;
+                    len -= 2;
+                    te_chunked = 0;
+                }
+                else if (len == 1 && mem[0] != '\r') return -1;
+            }
+        }
+        else if (1 == te_chunked) {
+            /* finish reading chunk block "\r\n" */
+            if (mem[0] != '\n') return -1;
+            ++mem;
+            --len;
+            te_chunked = 0;
+        }
+    }
+    r->gw_dechunk->gw_chunked = te_chunked;
+    return 0;
+}
+
+int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
+{
+    /*(called by funcs receiving data from backends, which might be chunked)*/
+    /*(separate from http_chunk_append_buffer() called by numerous others)*/
+    if (!r->resp_decode_chunked)
+        return http_chunk_append_buffer(r, mem);
+
+    /* no need to decode chunked to immediately re-encode chunked,
+     * though would be more robust to still validate chunk lengths sent
+     * (or else we might wait for keep-alive while client waits for final chunk)
+     * Before finishing response/stream, we *are not* checking if we got final
+     * chunk of chunked encoding from backend.  If we were, we could consider
+     * closing HTTP/1.0 and HTTP/1.1 connections (no keep-alive), and in HTTP/2
+     * we could consider sending RST_STREAM error.  http_chunk_close() would
+     * only handle case of streaming chunked to client */
+    if (r->resp_send_chunked) {
+        r->resp_send_chunked = 0;
+        int rc = http_chunk_append_buffer(r, mem); /* might append to tmpfile */
+        r->resp_send_chunked = 1;
+        return rc;
+    }
+
+    /* might avoid copy by transferring buffer if buffer is all data that is
+     * part of large chunked block, but choosing to *not* expand that out here*/
+    return http_chunk_decode_append_data(r, CONST_BUF_LEN(mem));
+}
+
+int http_chunk_decode_append_mem(request_st * const r, const char * const mem, const size_t len)
+{
+    /*(called by funcs receiving data from backends, which might be chunked)*/
+    /*(separate from http_chunk_append_mem() called by numerous others)*/
+    if (!r->resp_decode_chunked)
+        return http_chunk_append_mem(r, mem, len);
+
+    /* no need to decode chunked to immediately re-encode chunked,
+     * though would be more robust to still validate chunk lengths sent
+     * (or else we might wait for keep-alive while client waits for final chunk)
+     * Before finishing response/stream, we *are not* checking if we got final
+     * chunk of chunked encoding from backend.  If we were, we could consider
+     * closing HTTP/1.0 and HTTP/1.1 connections (no keep-alive), and in HTTP/2
+     * we could consider sending RST_STREAM error.  http_chunk_close() would
+     * only handle case of streaming chunked to client */
+    if (r->resp_send_chunked) {
+        r->resp_send_chunked = 0;
+        int rc = http_chunk_append_mem(r, mem, len); /*might append to tmpfile*/
+        r->resp_send_chunked = 1;
+        return rc;
+    }
+
+    return http_chunk_decode_append_data(r, mem, (off_t)len);
 }
