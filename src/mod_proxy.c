@@ -60,6 +60,7 @@ typedef struct {
 } plugin_data;
 
 static int proxy_check_extforward;
+static int proxy_force_http10;
 
 typedef struct {
 	gw_handler_ctx gw;
@@ -387,6 +388,12 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults)
             break;
         }
     }
+
+    proxy_force_http10 =
+      srv->srvconf.feature_flags
+      && config_plugin_value_tobool(
+           array_get_element_klen(srv->srvconf.feature_flags,
+                                  CONST_STR_LEN("proxy.force-http10")), 0);
 
     return HANDLER_GO_ON;
 }
@@ -855,8 +862,6 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	request_st * const r = hctx->gw.r;
 	const int remap_headers = (NULL != hctx->conf.header.urlpaths
 				   || NULL != hctx->conf.header.hosts_request);
-	const int upgrade = hctx->conf.header.upgrade
-	    && (NULL != http_header_request_get(r, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade")));
 	size_t rsz = (size_t)(r->read_queue->bytes_out - hctx->gw.wb->bytes_in);
 	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->gw.wb, rsz < 65536 ? rsz : r->rqst_header_len);
 
@@ -869,17 +874,10 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	if (remap_headers)
 		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(&r->target), &hctx->conf.header, 1);
 
-	int stream_chunked = 0;
-	if (-1 == r->reqbody_length
-	    && (r->conf.stream_request_body
-	        & (FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN))) {
-		stream_chunked = 1;
-		hctx->gw.stdin_append = proxy_stdin_append;
-	}
-	if (!stream_chunked && !upgrade)
-		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
-	else
+	if (!proxy_force_http10)
 		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.1\r\n"));
+	else
+		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
 
 	if (hctx->conf.replace_http_host && !buffer_string_is_empty(hctx->gw.host->id)) {
 		if (hctx->gw.conf.debug > 1) {
@@ -914,10 +912,18 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			                        buf, li_itostrn(buf, sizeof(buf), r->reqbody_length));
 		}
 	}
-	else if (stream_chunked)
+	else if (!proxy_force_http10
+	         && -1 == r->reqbody_length
+	         && (r->conf.stream_request_body
+	             & (FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN))) {
+		hctx->gw.stdin_append = proxy_stdin_append; /* stream chunked body */
 		buffer_append_string_len(b, CONST_STR_LEN("Transfer-Encoding: chunked\r\n"));
+	}
 
 	/* request header */
+	const buffer *connhdr = NULL;
+	buffer *te = NULL;
+	buffer *upgrade = NULL;
 	for (size_t i = 0, used = r->rqst_headers.used; i < used; ++i) {
 		data_string *ds = (data_string *)r->rqst_headers.data[i];
 		const size_t klen = buffer_string_length(&ds->key);
@@ -925,11 +931,26 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		switch (klen) {
 		default:
 			break;
+		case 2:
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("TE"))) {
+				if (proxy_force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
+				/* ignore if not exactly "trailers" */
+				if (!buffer_eq_icase_slen(&ds->value, CONST_STR_LEN("trailers"))) continue;
+				te = &ds->value;
+			}
+			break;
 		case 4:
 			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Host"))) continue; /*(handled further above)*/
 			break;
+		case 7:
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Upgrade"))) {
+				if (proxy_force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
+				if (!hctx->conf.header.upgrade) continue;
+				upgrade = &ds->value;
+			}
+			break;
 		case 10:
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Connection"))) continue;
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Connection"))) { connhdr = &ds->value; continue; }
 			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Set-Cookie"))) continue; /*(response header only; avoid accidental reflection)*/
 			break;
 		case 16:
@@ -987,10 +1008,20 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		http_header_remap_uri(b, buffer_string_length(b) - vlen - 2, &hctx->conf.header, 1);
 	}
 
-	if (!upgrade)
+	if (connhdr && !proxy_force_http10 && r->http_version >= HTTP_VERSION_1_1
+	    && !buffer_eq_icase_slen(connhdr, CONST_STR_LEN("close"))) {
+		/* mod_proxy always sends Connection: close to backend */
+		buffer_append_string_len(b, CONST_STR_LEN("Connection: close"));
+		/* (future: might be pedantic and also check Connection header for each
+		 * token using http_header_str_contains_token() */
+		if (!buffer_string_is_empty(te))
+			buffer_append_string_len(b, CONST_STR_LEN(", te"));
+		if (!buffer_string_is_empty(upgrade))
+			buffer_append_string_len(b, CONST_STR_LEN(", upgrade"));
+		buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
+	}
+	else    /* mod_proxy always sends Connection: close to backend */
 		buffer_append_string_len(b, CONST_STR_LEN("Connection: close\r\n\r\n"));
-	else
-		buffer_append_string_len(b, CONST_STR_LEN("Connection: close, upgrade\r\n\r\n"));
 
 	hctx->gw.wb_reqlen = buffer_string_length(b);
 	chunkqueue_prepend_buffer_commit(hctx->gw.wb);
