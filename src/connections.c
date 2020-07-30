@@ -1352,19 +1352,13 @@ static int connection_handle_request(request_st * const r) {
 }
 
 
-int connection_state_machine(connection *con) {
-	request_st * const r = &con->request;
+
+static void
+connection_state_machine_loop (request_st * const r, connection * const con)
+{
 	request_state_t ostate;
-	int rc;
-	const int log_state_handling = r->conf.log_state_handling;
-
-	if (log_state_handling) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "state at enter %d %s", con->fd, connection_get_state(r->state));
-	}
-
 	do {
-		if (log_state_handling) {
+		if (r->conf.log_state_handling) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "state for fd %d %s", con->fd, connection_get_state(r->state));
 		}
@@ -1431,13 +1425,26 @@ int connection_state_machine(connection *con) {
 			break;
 		}
 	} while (ostate != (request_state_t)r->state);
+}
+
+
+void connection_state_machine(connection *con) {
+	request_st * const r = &con->request;
+	const int log_state_handling = r->conf.log_state_handling;
+
+	if (log_state_handling) {
+		log_error(r->conf.errh, __FILE__, __LINE__,
+		  "state at enter %d %s", con->fd, connection_get_state(r->state));
+	}
+
+	connection_state_machine_loop(r, con);
 
 	if (log_state_handling) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "state at exit: %d %s", con->fd, connection_get_state(r->state));
 	}
 
-	rc = 0;
+	int rc = 0;
 	switch(r->state) {
 	case CON_STATE_READ:
 		rc = FDEVENT_IN | FDEVENT_RDHUP;
@@ -1488,8 +1495,6 @@ int connection_state_machine(connection *con) {
 			fdevent_fdnode_event_set(con->srv->ev, con->fdn, rc);
 		}
 	}
-
-	return 0;
 }
 
 static void connection_check_timeout (connection * const con, const time_t cur_ts) {

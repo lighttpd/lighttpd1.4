@@ -17,7 +17,7 @@ connection * connection_accepted(server *srv, server_socket *srv_socket, sock_ad
 
 const char * connection_get_state(request_state_t state);
 const char * connection_get_short_state(request_state_t state);
-int connection_state_machine(connection *con);
+void connection_state_machine(connection *con);
 handler_t connection_handle_read_post_state(request_st *r);
 
 __attribute_cold__
