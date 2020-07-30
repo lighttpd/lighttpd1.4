@@ -449,6 +449,11 @@ static int http_request_parse_single_header(request_st * const restrict r, const
             return http_request_header_line_invalid(r, 400, "duplicate Content-Length header -> 400");
         }
         break;
+      case HTTP_HEADER_HTTP2_SETTINGS:
+        if (r->rqst_htags & HTTP_HEADER_HTTP2_SETTINGS) {
+            return http_request_header_line_invalid(r, 400, "duplicate HTTP2-Settings header -> 400");
+        }
+        break;
       case HTTP_HEADER_IF_MODIFIED_SINCE:
         if (r->rqst_htags & HTTP_HEADER_IF_MODIFIED_SINCE) {
             /* Proxies sometimes send dup headers

@@ -1034,6 +1034,7 @@ static int http_response_process_headers(request_st * const r, http_response_opt
                 && opts->backend != BACKEND_CGI) {
                 id = HTTP_HEADER_OTHER;
             }
+            if (r->http_version >= HTTP_VERSION_2) continue;
             break;
           case HTTP_HEADER_CONNECTION:
             if (opts->backend == BACKEND_PROXY) continue;
@@ -1041,6 +1042,7 @@ static int http_response_process_headers(request_st * const r, http_response_opt
              * but this is an imperfect though simplistic attempt to honor
              * backend request to close)*/
             if (NULL != strstr(value, "lose")) r->keep_alive = 0;
+            if (r->http_version >= HTTP_VERSION_2) continue;
             break;
           case HTTP_HEADER_CONTENT_LENGTH:
             r->content_length = strtoul(value, NULL, 10);
@@ -1053,6 +1055,11 @@ static int http_response_process_headers(request_st * const r, http_response_opt
             /* XXX: future: might consider using chunk_buffer_acquire()
              *      and chunk_buffer_release() for r->gw_dechunk->b */
             force_assert(r->gw_dechunk);
+            continue;
+          case HTTP_HEADER_HTTP2_SETTINGS:
+            /* RFC7540 3.2.1
+             *   A server MUST NOT send this header field. */
+            /* (not bothering to remove HTTP2-Settings from Connection) */
             continue;
           default:
             break;

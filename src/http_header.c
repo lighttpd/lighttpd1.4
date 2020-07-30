@@ -26,7 +26,7 @@ typedef struct keyvlenvalue {
 /* Note: must be kept in sync http_headers[] and http_headers_off[] */
 /* http_headers_off lists first offset at which string of specific len occur */
 int8_t http_headers_off[] = {
-  -1, -1, -1, -1, 0, 4, 5, 9, 10, 11, 12, -1, 15, 16, 20, 21, 23, 25
+  -1, -1, -1, -1, 0, 4, 5, 9, 10, 11, 12, -1, 15, 16, 20, 22, 24, 26
 };
 static const keyvlenvalue http_headers[] = {
   { HTTP_HEADER_HOST,                 CONST_LEN_STR("Host") }
@@ -50,6 +50,7 @@ static const keyvlenvalue http_headers[] = {
  ,{ HTTP_HEADER_IF_NONE_MATCH,        CONST_LEN_STR("If-None-Match") }
  ,{ HTTP_HEADER_CACHE_CONTROL,        CONST_LEN_STR("Cache-Control") }
  ,{ HTTP_HEADER_CONTENT_LENGTH,       CONST_LEN_STR("Content-Length") }
+ ,{ HTTP_HEADER_HTTP2_SETTINGS,       CONST_LEN_STR("HTTP2-Settings") }
  ,{ HTTP_HEADER_ACCEPT_ENCODING,      CONST_LEN_STR("Accept-Encoding") }
  ,{ HTTP_HEADER_X_FORWARDED_FOR,      CONST_LEN_STR("X-Forwarded-For") }
  ,{ HTTP_HEADER_CONTENT_ENCODING,     CONST_LEN_STR("Content-Encoding") }
@@ -85,6 +86,7 @@ int http_header_str_contains_token (const char * const s, const uint32_t slen, c
 {
     /*if (slen < mlen) return 0;*//*(possible optimizations for caller)*/
     /*if (slen == mlen && buffer_eq_icase_ssn(s, m, mlen)) return 1;*/
+    /*(note: does not handle quoted-string)*/
     uint32_t i = 0;
     do {
         while (i < slen &&  (s[i]==' ' || s[i]=='\t' || s[i]==',')) ++i;
