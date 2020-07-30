@@ -821,6 +821,45 @@ static uint32_t connection_read_header_hoff(const char *n, const uint32_t clen, 
     return 0;
 }
 
+
+static void
+http_request_headers_process (request_st * const r, char * const hdrs, unsigned short * const hoff)
+{
+    if (r->conf.log_request_header) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "fd: %d request-len: %d\n%.*s", r->con->fd,
+          (int)r->rqst_header_len, (int)r->rqst_header_len, hdrs);
+    }
+
+    r->http_status =
+      http_request_parse(r, hdrs, hoff, r->con->proto_default_port);
+
+    if (0 == r->http_status) {
+        r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
+                                | (1 << COMP_HTTP_SCHEME)
+                                | (1 << COMP_HTTP_HOST)
+                                | (1 << COMP_HTTP_REMOTE_IP)
+                                | (1 << COMP_HTTP_REQUEST_METHOD)
+                                | (1 << COMP_HTTP_URL)
+                                | (1 << COMP_HTTP_QUERY_STRING)
+                                | (1 << COMP_HTTP_REQUEST_HEADER);
+    }
+    else {
+        r->keep_alive = 0;
+        r->reqbody_length = 0;
+
+        if (r->conf.log_request_header_on_error) {
+            /*(http_request_parse() modifies hdrs only to
+             * undo line-wrapping in-place using spaces)*/
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "request-header:\n%.*s", (int)r->rqst_header_len, hdrs);
+        }
+    }
+
+    connection_set_state(r, CON_STATE_REQUEST_END);
+}
+
+
 /**
  * handle request header read
  *
@@ -925,40 +964,12 @@ static int connection_handle_read_state(connection * const con)  {
         buffer_reset(&r->target_orig);
     }
 
-    if (r->conf.log_request_header) {
-        log_error(r->conf.errh, __FILE__, __LINE__,
-                  "fd: %d request-len: %d\n%.*s", con->fd, (int)header_len,
-                  (int)header_len, hdrs);
-    }
-
-    r->http_status = http_request_parse(r, hdrs, hoff, con->proto_default_port);
-    if (0 == r->http_status) {
-        r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
-                                | (1 << COMP_HTTP_SCHEME)
-                                | (1 << COMP_HTTP_HOST)
-                                | (1 << COMP_HTTP_REMOTE_IP)
-                                | (1 << COMP_HTTP_REQUEST_METHOD)
-                                | (1 << COMP_HTTP_URL)
-                                | (1 << COMP_HTTP_QUERY_STRING)
-                                | (1 << COMP_HTTP_REQUEST_HEADER);
-    }
-    else {
-        r->keep_alive = 0;
-        r->reqbody_length = 0;
-
-        if (r->conf.log_request_header_on_error) {
-            /*(http_request_parse() modifies hdrs only to
-             * undo line-wrapping in-place using spaces)*/
-            log_error(r->conf.errh, __FILE__, __LINE__, "request-header:\n%.*s",
-                      (int)header_len, hdrs);
-        }
-    }
-
     r->rqst_header_len = header_len;
-    chunkqueue_mark_written(cq, header_len);
-    connection_set_state(r, CON_STATE_REQUEST_END);
+    http_request_headers_process(r, hdrs, hoff);
+    chunkqueue_mark_written(cq, r->rqst_header_len);
     return 1;
 }
+
 
 static handler_t connection_handle_fdevent(void *context, int revents) {
 	connection *con = context;
