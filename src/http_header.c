@@ -97,6 +97,36 @@ int http_header_str_contains_token (const char * const s, const uint32_t slen, c
 }
 
 
+int http_header_remove_token (buffer * const b, const char * const m, const uint32_t mlen)
+{
+    /*(remove all instance of token from string)*/
+    /*(note: does not handle quoted-string)*/
+    int rc = 0;
+    for (char *s = b->ptr; s; ) {
+        while (*s == ' ' || *s == '\t' || *s == ',') ++s;
+        if (0 == strncasecmp(s, m, mlen)) {
+            s += mlen;
+            if (*s=='\0' || *s==' ' || *s=='\t' || *s==',' || *s==';') {
+                memset(s-mlen, ' ', mlen);
+                while (*s != '\0' && *s != ',') ++s;
+                rc = 1;
+                if (*s == ',') {
+                    *s++ = ' ';
+                    continue;
+                }
+                else {
+                    for (s -= mlen; *s != ',' && s != b->ptr; --s) ;
+                    buffer_string_set_length(b, (size_t)(s - b->ptr));
+                    break;
+                }
+            }
+        }
+        s = strchr(s, ',');
+    }
+    return rc;
+}
+
+
 static inline void http_header_token_append(buffer * const vb, const char * const v, const uint32_t vlen) {
     if (!buffer_string_is_empty(vb))
         buffer_append_string_len(vb, CONST_STR_LEN(", "));

@@ -49,6 +49,8 @@ int http_header_str_to_code (const char * const s);
 __attribute_pure__
 int http_header_str_contains_token (const char *s, uint32_t slen, const char *m, uint32_t mlen);
 
+int http_header_remove_token (buffer * const b, const char * const m, const uint32_t mlen);
+
 __attribute_pure__
 buffer * http_header_response_get(const request_st *r, enum http_header_e id, const char *k, uint32_t klen);
 void http_header_response_unset(request_st *r, enum http_header_e id, const char *k, uint32_t klen);
