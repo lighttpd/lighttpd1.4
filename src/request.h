@@ -178,6 +178,8 @@ struct request_st {
     buffer *tmp_buf;                    /* shared; same as srv->tmp_buf */
     response_dechunk *gw_dechunk;
 
+    off_t bytes_written_ckpt; /* used by mod_accesslog */
+    off_t bytes_read_ckpt;    /* used by mod_accesslog */
     struct timespec start_hp;
     time_t start_ts;
 

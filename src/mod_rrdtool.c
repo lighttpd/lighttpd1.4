@@ -424,8 +424,8 @@ REQUESTDONE_FUNC(mod_rrd_account) {
     rrd_config * const rrd = p->conf.rrd;
     if (NULL == rrd) return HANDLER_GO_ON;
     ++rrd->requests;
-    rrd->bytes_written += r->con->bytes_written;
-    rrd->bytes_read    += r->con->bytes_read;
+        rrd->bytes_written += (r->con->bytes_written - r->bytes_written_ckpt);
+        rrd->bytes_read    += (r->con->bytes_read    - r->bytes_read_ckpt);
 
     return HANDLER_GO_ON;
 }

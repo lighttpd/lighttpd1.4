@@ -981,13 +981,16 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				break;
 
 			case FORMAT_BYTES_OUT_NO_HEADER:
-				if (con->bytes_written > 0) {
-					off_t bytes = con->bytes_written - (off_t)r->resp_header_len;
+			{
+				off_t bytes = con->bytes_written - r->bytes_written_ckpt;
+				if (bytes > 0) {
+					bytes -= (off_t)r->resp_header_len;
 					buffer_append_int(b, bytes > 0 ? bytes : 0);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
+			}
 			case FORMAT_HEADER:
 				if (NULL != (vb = http_header_request_get(r, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(&f->string)))) {
 					accesslog_append_escaped(b, vb);
@@ -1018,19 +1021,25 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				}
 				break;
 			case FORMAT_BYTES_OUT:
-				if (con->bytes_written > 0) {
-					buffer_append_int(b, con->bytes_written);
+			{
+				off_t bytes = con->bytes_written - r->bytes_written_ckpt;
+				if (bytes > 0) {
+					buffer_append_int(b, bytes);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
+			}
 			case FORMAT_BYTES_IN:
-				if (con->bytes_read > 0) {
-					buffer_append_int(b, con->bytes_read);
+			{
+				off_t bytes = con->bytes_read - r->bytes_read_ckpt;
+				if (bytes > 0) {
+					buffer_append_int(b, bytes);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
+			}
 			case FORMAT_SERVER_NAME:
 				if (!buffer_string_is_empty(r->server_name)) {
 					buffer_append_string_buffer(b, r->server_name);

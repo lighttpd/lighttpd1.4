@@ -228,6 +228,8 @@ static void connection_fdwaitqueue_append(connection *con) {
     connection_list_append(&con->srv->fdwaitqueue, con);
 }
 
+static void request_reset (request_st * const r);
+
 static void connection_handle_response_end_state(request_st * const r, connection * const con) {
 	/* call request_done hook if http_status set (e.g. to log request) */
 	/* (even if error, connection dropped, as long as http_status is set) */
@@ -242,7 +244,11 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 	}
 
         if (r->keep_alive) {
-		connection_reset(con);
+		request_reset(r);
+		con->is_readable = 1; /* potentially trigger optimistic read */
+		/*(accounting used by mod_accesslog for HTTP/1.0 and HTTP/1.1)*/
+		r->bytes_read_ckpt = con->bytes_read;
+		r->bytes_written_ckpt = con->bytes_written;
 #if 0
 		r->start_ts = con->read_idle_ts = log_epoch_secs;
 #endif
@@ -764,6 +770,8 @@ request_reset (request_st * const r) {
 static void connection_reset(connection *con) {
 	request_st * const r = &con->request;
 	request_reset(r);
+	r->bytes_read_ckpt = 0;
+	r->bytes_written_ckpt = 0;
 	con->is_readable = 1;
 
 	con->bytes_written = 0;
@@ -875,7 +883,7 @@ static int connection_handle_read_state(connection * const con)  {
     int pipelined_request_start = 0;
     unsigned short hoff[8192]; /* max num header lines + 3; 16k on stack */
 
-    if (con->request_count > 1 && 0 == con->bytes_read) {
+    if (con->request_count > 1 && con->bytes_read == r->bytes_read_ckpt) {
         keepalive_request_start = 1;
         if (NULL != c) { /* !chunkqueue_is_empty(cq)) */
             pipelined_request_start = 1;
@@ -931,7 +939,7 @@ static int connection_handle_read_state(connection * const con)  {
     } while ((c = connection_read_header_more(con, cq, c, clen)));
 
     if (keepalive_request_start) {
-        if (0 != con->bytes_read) {
+        if (con->bytes_read > r->bytes_read_ckpt) {
             /* update r->start_ts timestamp when first byte of
              * next request is received on a keep-alive connection */
             r->start_ts = log_epoch_secs;
