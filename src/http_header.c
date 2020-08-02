@@ -6,6 +6,9 @@
  */
 #include "first.h"
 
+#include <string.h>
+#include "sys-strings.h"
+
 #include "http_header.h"
 #include "base.h"
 #include "array.h"
