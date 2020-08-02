@@ -103,7 +103,7 @@ modules = {
 	'mod_auth' : { 'src' : [ 'mod_auth.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
 	'mod_authn_file' : { 'src' : [ 'mod_authn_file.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBCRYPTO'] ] },
 	'mod_cgi' : { 'src' : [ 'mod_cgi.c' ] },
-	'mod_deflate' : { 'src' : [ 'mod_deflate.c' ], 'lib' : [ env['LIBZ'], env['LIBBZ2'], env['LIBBROTLI'] ] },
+	'mod_deflate' : { 'src' : [ 'mod_deflate.c' ], 'lib' : [ env['LIBZ'], env['LIBBZ2'], env['LIBBROTLI'], 'm' ] },
 	'mod_dirlisting' : { 'src' : [ 'mod_dirlisting.c' ], 'lib' : [ env['LIBPCRE'] ] },
 	'mod_evasive' : { 'src' : [ 'mod_evasive.c' ] },
 	'mod_evhost' : { 'src' : [ 'mod_evhost.c' ] },

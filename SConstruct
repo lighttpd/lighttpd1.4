@@ -280,7 +280,7 @@ env = Environment(
 
 env.Help(vars.GenerateHelpText(env))
 
-if env.subst('${CC}') is not '':
+if env.subst('${CC}') != '':
 	env['CC'] = env.subst('${CC}')
 
 env['package'] = package
@@ -507,7 +507,6 @@ if 1:
 			fail("Couldn't find libbrotlienc")
 		autoconf.env.Append(
                         CPPFLAGS = [ '-DHAVE_BROTLI_ENCODE_H', '-DHAVE_BROTLI' ],
-                        LIBS = [ 'm' ],
                 )
 
 	if env['with_dbi']:
