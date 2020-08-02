@@ -273,7 +273,7 @@ vars.AddVariables(
 )
 
 env = Environment(
-	ENV = os.environ,
+	ENV = dict(os.environ),  # make sure we have a dict here so .Clone() works properly
 	variables = vars,
 	CPPPATH = Split('#sconsbuild/build')
 )

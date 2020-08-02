@@ -10,6 +10,8 @@ if test "x${top_builddir}" = "x"; then
 	top_builddir=..
 fi
 
+echo "Testing in build directory: '${top_builddir}' and cwd: '$(pwd)'"
+
 tmpdir="${top_builddir}/tests/tmp/lighttpd"
 
 # create test-framework
