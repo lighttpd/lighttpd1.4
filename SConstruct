@@ -506,8 +506,8 @@ if 1:
 		if not autoconf.CheckParseConfigForLib('LIBBROTLI', 'pkg-config --static --cflags --libs libbrotlienc'):
 			fail("Couldn't find libbrotlienc")
 		autoconf.env.Append(
-                        CPPFLAGS = [ '-DHAVE_BROTLI_ENCODE_H', '-DHAVE_BROTLI' ],
-                )
+			CPPFLAGS = [ '-DHAVE_BROTLI_ENCODE_H', '-DHAVE_BROTLI' ],
+		)
 
 	if env['with_dbi']:
 		if not autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C'):
