@@ -401,7 +401,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 		/* FreeBSD accf_http filter */
 		struct accept_filter_arg afa;
 		memset(&afa, 0, sizeof(afa));
-		strncpy(afa.af_name, s->bsd_accept_filter->ptr, sizeof(afa.af_name));
+		strncpy(afa.af_name, s->bsd_accept_filter->ptr, sizeof(afa.af_name)-1);
 		if (setsockopt(srv_socket->fd, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa)) < 0) {
 			if (errno != ENOENT) {
 				log_perror(srv->errh, __FILE__, __LINE__,
