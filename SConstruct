@@ -503,7 +503,7 @@ if 1:
 		)
 
 	if env['with_brotli']:
-		if not autoconf.CheckParseConfigForLib('LIBBROTLI', 'pkg-config brotlienc --cflags --libs'):
+		if not autoconf.CheckParseConfigForLib('LIBBROTLI', 'pkg-config libbrotlienc --cflags --libs'):
 			fail("Couldn't find libbrotlienc")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_BROTLI_ENCODE_H', '-DHAVE_BROTLI' ])
 
