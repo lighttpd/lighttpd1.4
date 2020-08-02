@@ -1421,6 +1421,7 @@ static int mod_extforward_str_to_port (const char * const s)
     return -1;
 }
 
+/* coverity[-tainted_data_sink: arg-1] */
 static int mod_extforward_hap_PROXY_v1 (connection * const con,
                                         union hap_PROXY_hdr * const hdr)
 {
@@ -1491,6 +1492,7 @@ static int mod_extforward_hap_PROXY_v1 (connection * const con,
 }
 
 
+/* coverity[-tainted_data_sink: arg-1] */
 static int mod_extforward_hap_PROXY_v2 (connection * const con,
                                         union hap_PROXY_hdr * const hdr)
 {
