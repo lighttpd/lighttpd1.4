@@ -336,7 +336,7 @@ mod_authn_crypt_cmp (const char *reqpw, const char *userpw, unsigned long userpw
     char *crypted = crypt(reqpw, userpw);
     size_t crypwlen = (NULL != crypted) ? strlen(crypted) : 0;
     int rc = (crypwlen == userpwlen) ? memcmp(crypted, userpw, crypwlen) : -1;
-    safe_memclear(crypted, crypwlen);
+    if (crypwlen) safe_memclear(crypted, crypwlen);
     return rc;
 
  #else
@@ -456,7 +456,7 @@ mod_authn_dbi_query_build (buffer * const sqlquery, dbi_config * const dbconf, h
                     v = "SHA-256";
                 else if (ai->dalgo & HTTP_AUTH_DIGEST_MD5)
                     v = "MD5";
-                else if (ai->dalgo & HTTP_AUTH_DIGEST_NONE)
+                else if (ai->dalgo == HTTP_AUTH_DIGEST_NONE)
                     v = "NONE";
                 else
                     return NULL;
