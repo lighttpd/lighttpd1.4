@@ -1436,6 +1436,57 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 }
 
 
+static void
+connection_set_fdevent_interest (request_st * const r, connection * const con)
+{
+    if (con->fd < 0) return;
+
+    int n = 0;
+    switch(r->state) {
+      case CON_STATE_READ:
+        n = FDEVENT_IN | FDEVENT_RDHUP;
+        break;
+      case CON_STATE_WRITE:
+        if (!chunkqueue_is_empty(con->write_queue)
+            && 0 == con->is_writable && 0 == con->traffic_limit_reached)
+            n |= FDEVENT_OUT;
+        __attribute_fallthrough__
+      case CON_STATE_READ_POST:
+        if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)
+            n |= FDEVENT_IN;
+        if (!(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLRDHUP))
+            n |= FDEVENT_RDHUP;
+        break;
+      case CON_STATE_CLOSE:
+        n = FDEVENT_IN;
+        break;
+      default:
+        break;
+    }
+
+    const int events = fdevent_fdnode_interest(con->fdn);
+    if (con->is_readable < 0) {
+        con->is_readable = 0;
+        n |= FDEVENT_IN;
+    }
+    if (con->is_writable < 0) {
+        con->is_writable = 0;
+        n |= FDEVENT_OUT;
+    }
+    if (events & FDEVENT_RDHUP)
+        n |= FDEVENT_RDHUP;
+
+    if (n == events) return;
+
+    /* update timestamps when enabling interest in events */
+    if ((n & FDEVENT_IN) && !(events & FDEVENT_IN))
+        con->read_idle_ts = log_epoch_secs;
+    if ((n & FDEVENT_OUT) && !(events & FDEVENT_OUT))
+        con->write_request_ts = log_epoch_secs;
+    fdevent_fdnode_event_set(con->srv->ev, con->fdn, n);
+}
+
+
 void connection_state_machine(connection *con) {
 	request_st * const r = &con->request;
 	const int log_state_handling = r->conf.log_state_handling;
@@ -1452,57 +1503,7 @@ void connection_state_machine(connection *con) {
 		  "state at exit: %d %s", con->fd, connection_get_state(r->state));
 	}
 
-	int rc = 0;
-	switch(r->state) {
-	case CON_STATE_READ:
-		rc = FDEVENT_IN | FDEVENT_RDHUP;
-		break;
-	case CON_STATE_WRITE:
-		/* request write-fdevent only if we really need it
-		 * - if we have data to write
-		 * - if the socket is not writable yet
-		 */
-		if (!chunkqueue_is_empty(con->write_queue) &&
-		    (con->is_writable == 0) &&
-		    (con->traffic_limit_reached == 0)) {
-			rc |= FDEVENT_OUT;
-		}
-		/* fall through */
-	case CON_STATE_READ_POST:
-		if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN) {
-			rc |= FDEVENT_IN | FDEVENT_RDHUP;
-		}
-		break;
-	case CON_STATE_CLOSE:
-		rc = FDEVENT_IN;
-		break;
-	default:
-		break;
-	}
-	if (con->fd >= 0) {
-		const int events = fdevent_fdnode_interest(con->fdn);
-		if (con->is_readable < 0) {
-			con->is_readable = 0;
-			rc |= FDEVENT_IN;
-		}
-		if (con->is_writable < 0) {
-			con->is_writable = 0;
-			rc |= FDEVENT_OUT;
-		}
-		if (events & FDEVENT_RDHUP) {
-			rc |= FDEVENT_RDHUP;
-		}
-		if (rc != events) {
-			/* update timestamps when enabling interest in events */
-			if ((rc & FDEVENT_IN) && !(events & FDEVENT_IN)) {
-				con->read_idle_ts = log_epoch_secs;
-			}
-			if ((rc & FDEVENT_OUT) && !(events & FDEVENT_OUT)) {
-				con->write_request_ts = log_epoch_secs;
-			}
-			fdevent_fdnode_event_set(con->srv->ev, con->fdn, rc);
-		}
-	}
+	connection_set_fdevent_interest(r, con);
 }
 
 static void connection_check_timeout (connection * const con, const time_t cur_ts) {
