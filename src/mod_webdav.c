@@ -218,6 +218,10 @@
 
 #include "plugin.h"
 
+#if (defined(__linux__) || defined(__CYGWIN__)) && defined(O_TMPFILE)
+static int has_proc_self_fd;
+#endif
+
 #define http_status_get(r)           ((r)->http_status)
 #define http_status_set_fin(r, code) ((r)->resp_body_finished = 1,\
                                       (r)->handler_module = NULL, \
@@ -537,6 +541,11 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
         if (-1 != cpv->k_id)
             mod_webdav_merge_config(&p->defaults, cpv);
     }
+
+  #if (defined(__linux__) || defined(__CYGWIN__)) && defined(O_TMPFILE)
+    struct stat st;
+    has_proc_self_fd = (0 == stat("/proc/self/fd", &st));
+  #endif
 
     return HANDLER_GO_ON;
 }
@@ -4222,8 +4231,10 @@ mod_webdav_write_single_file_chunk (request_st * const r, chunkqueue * const cq)
     /*assert(cq->first->next != NULL);*/
     chunk * const c = cq->first;
     cq->first = c->next;
+    const off_t len = chunkqueue_length(cq);
     if (mod_webdav_write_cq(r, cq, c->file.fd)) {
         /*assert(cq->first == NULL);*/
+        c->file.length = len;
         c->next = NULL;
         cq->first = cq->last = c;
         return 1;
@@ -4383,6 +4394,7 @@ static int
 mod_webdav_put_linkat_rename (request_st * const r,
                               const char * const pathtemp)
 {
+    if (!has_proc_self_fd) return 0;
     chunkqueue * const cq = r->reqbody_queue;
     chunk *c = cq->first;
 
