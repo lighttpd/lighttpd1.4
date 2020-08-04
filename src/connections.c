@@ -831,18 +831,12 @@ static uint32_t connection_read_header_hoff(const char *n, const uint32_t clen, 
 
 
 static void
-http_request_headers_process (request_st * const r, char * const hdrs, unsigned short * const hoff)
+http_request_headers_process (request_st * const r, char * const hdrs, unsigned short * const hoff, const int scheme_port)
 {
-    if (r->conf.log_request_header) {
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "fd: %d request-len: %d\n%.*s", r->con->fd,
-          (int)r->rqst_header_len, (int)r->rqst_header_len, hdrs);
-    }
-
-    r->http_status =
-      http_request_parse(r, hdrs, hoff, r->con->proto_default_port);
+    r->http_status = http_request_parse(r, hdrs, hoff, scheme_port);
 
     if (0 == r->http_status) {
+      #if 0
         r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
                                 | (1 << COMP_HTTP_SCHEME)
                                 | (1 << COMP_HTTP_HOST)
@@ -851,6 +845,11 @@ http_request_headers_process (request_st * const r, char * const hdrs, unsigned 
                                 | (1 << COMP_HTTP_URL)
                                 | (1 << COMP_HTTP_QUERY_STRING)
                                 | (1 << COMP_HTTP_REQUEST_HEADER);
+      #else
+        /* all config conditions are valid after parsing header
+         * (set all bits; remove dependency on plugin_config.h) */
+        r->conditional_is_valid = ~0u;
+      #endif
     }
     else {
         r->keep_alive = 0;
@@ -863,8 +862,6 @@ http_request_headers_process (request_st * const r, char * const hdrs, unsigned 
               "request-header:\n%.*s", (int)r->rqst_header_len, hdrs);
         }
     }
-
-    connection_set_state(r, CON_STATE_REQUEST_END);
 }
 
 
@@ -973,8 +970,13 @@ static int connection_handle_read_state(connection * const con)  {
     }
 
     r->rqst_header_len = header_len;
-    http_request_headers_process(r, hdrs, hoff);
+    if (r->conf.log_request_header)
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "fd: %d request-len: %d\n%.*s", con->fd,
+          (int)header_len, (int)header_len, hdrs);
+    http_request_headers_process(r, hdrs, hoff, con->proto_default_port);
     chunkqueue_mark_written(cq, r->rqst_header_len);
+    connection_set_state(r, CON_STATE_REQUEST_END);
     return 1;
 }
 
