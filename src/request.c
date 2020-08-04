@@ -472,8 +472,11 @@ static int http_request_parse_single_header(request_st * const restrict r, const
         }
         break;
       case HTTP_HEADER_TRANSFER_ENCODING:
-        if (HTTP_VERSION_1_0 == r->http_version) {
-            return http_request_header_line_invalid(r, 400, "HTTP/1.0 with Transfer-Encoding (bad HTTP/1.0 proxy?) -> 400");
+        if (HTTP_VERSION_1_1 != r->http_version) {
+            return http_request_header_line_invalid(r, 400,
+              HTTP_VERSION_1_0 == r->http_version
+                ? "HTTP/1.0 with Transfer-Encoding (bad HTTP/1.0 proxy?) -> 400"
+                : "HTTP/2 with Transfer-Encoding is invalid -> 400");
         }
 
         if (!buffer_eq_icase_ss(v, vlen, CONST_STR_LEN("chunked"))) {
@@ -613,7 +616,7 @@ static int http_request_parse_pseudohdrs(request_st * const restrict r, const ch
                 if (HTTP_METHOD_UNSET != r->http_method)
                     return http_request_header_line_invalid(r, 400, "repeated pseudo-header -> 400");
                 r->http_method = get_http_method_key(v, vlen);
-                if (HTTP_METHOD_UNSET == r->http_method)
+                if (HTTP_METHOD_UNSET >= r->http_method)
                     return http_request_header_line_invalid(r, 501, "unknown http-method -> 501");
                 continue;
             }
@@ -769,7 +772,7 @@ static int http_request_parse_reqline(request_st * const restrict r, const char 
   #endif
 
     r->http_method = get_http_method_key(ptr, i);
-    if (HTTP_METHOD_UNSET == r->http_method)
+    if (HTTP_METHOD_UNSET >= r->http_method)
         return http_request_header_line_invalid(r, 501, "unknown http-method -> 501");
 
     const char *uri = ptr + i + 1;

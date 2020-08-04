@@ -22,7 +22,6 @@
 
 
 static request_st * h2_init_stream (request_st * const h2r, connection * const con);
-static void h2_retire_stream (request_st * const r, connection * const con);
 
 
 static void
@@ -1375,6 +1374,8 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
     h2con * const h2c = calloc(1, sizeof(h2con));
     force_assert(h2c);
     con->h2 = h2c;
+    con->read_idle_ts = log_epoch_secs;
+    con->keep_alive_idle = h2r->conf.max_keep_alive_idle;
 
     h2r->h2_rwin = 65535;                 /* h2 connection recv window */
     h2r->h2_swin = 65535;                 /* h2 connection send window */
@@ -1778,13 +1779,307 @@ h2_send_end_stream (request_st * const r, connection * const con)
 }
 
 
+/*
+ * (XXX: might move below to separate file)
+ */
+#include "base64.h"
+#include "chunk.h"
+#include "plugin.h"
+#include "plugin_config.h"
+#include "reqpool.h"
+
+
 static request_st *
 h2_init_stream (request_st * const h2r, connection * const con)
 {
+    h2con * const h2c = con->h2;
+    ++con->request_count;
+    force_assert(h2c->rused < sizeof(h2c->r)/sizeof(*h2c->r));
+    /* initialize stream as subrequest (request_st *) */
+    request_st * const r = calloc(1, sizeof(request_st));
+    force_assert(r);
+    /* XXX: TODO: assign default priority, etc.
+     *      Perhaps store stream id and priority in separate table */
+    h2c->r[h2c->rused++] = r;
+    server * const srv = con->srv;
+    request_init(r, con, srv);
+    r->h2_rwin = h2c->s_initial_window_size;
+    r->h2_swin = h2c->s_initial_window_size;
+    r->http_version = HTTP_VERSION_2;
+
+    /* copy config state from h2r */
+    const uint32_t used = srv->config_context->used;
+    r->conditional_is_valid = h2r->conditional_is_valid;
+    memcpy(r->cond_cache, h2r->cond_cache, used * sizeof(cond_cache_t));
+  #ifdef HAVE_PCRE_H
+    if (used > 1) /*(save 128b per con if no conditions)*/
+        memcpy(r->cond_match, h2r->cond_match, used * sizeof(cond_match_t));
+  #endif
+    r->server_name = h2r->server_name;
+    memcpy(&r->conf, &h2r->conf, sizeof(request_config));
+
+    /* stream id must be assigned by caller */
+    return r;
 }
 
 
 static void
 h2_release_stream (request_st * const r, connection * const con)
 {
+    if (r->http_status) {
+        /* (see comment in connection_handle_response_end_state()) */
+        plugins_call_handle_request_done(r);
+
+      #if 0
+        /* (fuzzy accounting for mod_accesslog, mod_rrdtool to avoid
+         *  double counting, but HTTP/2 framing and HPACK-encoded headers in
+         *  con->read_queue and con->write_queue are not equivalent to the
+         *  HPACK-decoded headers and request and response bodies in stream
+         *  r->read_queue and r->write_queue) */
+        /* DISABLED since mismatches invalidate the relationship between
+         * con->bytes_in and con->bytes_out */
+        con->read_queue->bytes_in   -= r->read_queue->bytes_in;
+        con->write_queue->bytes_out -= r->write_queue->bytes_out;
+      #else
+        UNUSED(con);
+      #endif
+    }
+
+    request_reset(r);
+    /* future: might keep a pool of reusable (request_st *) */
+    request_free(r);
+    free(r);
+}
+
+
+void
+h2_retire_stream (request_st *r, connection * const con)
+{
+    if (r == NULL) return; /*(should not happen)*/
+    h2con * const h2c = con->h2;
+    request_st ** const ar = h2c->r;
+    for (uint32_t i = 0, j = 0, rused = h2c->rused; i < rused; ++i) {
+        if (ar[i] != r)
+            ar[j++] = ar[i];
+        else {
+            h2_release_stream(r, con);
+            r = NULL;
+        }
+    }
+    if (r == NULL) /* found */
+        h2c->r[--h2c->rused] = NULL;
+    /*else ... should not happen*/
+}
+
+
+void
+h2_retire_con (request_st * const h2r, connection * const con)
+{
+    h2con * const h2c = con->h2;
+    if (NULL == h2c) return;
+
+    if (h2r->state != CON_STATE_ERROR) { /*(CON_STATE_RESPONSE_END)*/
+        h2_send_goaway(con, H2_E_NO_ERROR);
+        for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
+            /*(unexpected if CON_STATE_RESPONSE_END)*/
+            request_st * const r = h2c->r[i];
+            h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
+            h2_release_stream(r, con);
+        }
+        if (!chunkqueue_is_empty(con->write_queue)) {
+            /* similar to connection_handle_write() but without error checks,
+             * without MAX_WRITE_LIMIT, and without connection throttling */
+            /*h2r->conf.bytes_per_second = 0;*/         /* disable rate limit */
+            /*h2r->conf.global_bytes_per_second = 0;*/  /* disable rate limit */
+            /*con->traffic_limit_reached = 0;*/
+            chunkqueue * const cq = con->write_queue;
+            const off_t len = chunkqueue_length(cq);
+            off_t written = cq->bytes_out;
+            con->network_write(con, cq, len);
+            /*(optional accounting)*/
+            written = cq->bytes_out - written;
+            con->bytes_written += written;
+            con->bytes_written_cur_second += written;
+            if (h2r->conf.global_bytes_per_second_cnt_ptr)
+                *(h2r->conf.global_bytes_per_second_cnt_ptr) += written;
+        }
+    }
+    else { /* CON_STATE_ERROR */
+        for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
+            request_st * const r = h2c->r[i];
+            h2_release_stream(r, con);
+        }
+        /* XXX: perhaps attempt to send GOAWAY?  Not when CON_STATE_ERROR */
+    }
+
+    con->h2 = NULL;
+
+    /* future: might keep a pool of reusable (h2con *) */
+    free(h2c);
+}
+
+
+static void
+h2_con_upgrade_h2c (request_st * const h2r, const buffer * const http2_settings)
+{
+    /* status: (h2r->state == CON_STATE_REQUEST_END) for Upgrade: h2c */
+
+    /* HTTP/1.1 101 Switching Protocols
+     * Connection: Upgrade
+     * Upgrade: h2c
+     */
+  #if 1
+    static const char switch_proto[] = "HTTP/1.1 101 Switching Protocols\r\n"
+                                       "Connection: Upgrade\r\n"
+                                       "Upgrade: h2c\r\n\r\n";
+    chunkqueue_append_mem(h2r->write_queue,
+                          CONST_STR_LEN(switch_proto));
+    h2r->resp_header_len = sizeof(switch_proto)-1;
+  #else
+    h2r->http_status = 101;
+    http_header_response_set(h2r, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade"),
+                                                       CONST_STR_LEN("h2c"));
+    http_response_write_header(h2r);
+    http_response_reset(h2r);
+    h2r->http_status = 0;
+  #endif
+
+    connection * const con = h2r->con;
+    h2_init_con(h2r, con, http2_settings);
+    if (con->h2->sent_goaway) return;
+
+    con->h2->h2_cid = 1; /* stream id 1 is assigned to h2c upgrade */
+
+    /* copy request state from &con->request to subrequest r
+     * XXX: would be nice if there were a cleaner way to do this
+     * (This is fragile and must be kept in-sync with request_st in request.h)*/
+
+    request_st * const r = h2_init_stream(h2r, con);
+    /*(undo double-count; already incremented in CON_STATE_REQUEST_START)*/
+    --con->request_count;
+    r->state = h2r->state; /* CON_STATE_REQUEST_END */
+    r->http_status = 0;
+    r->http_method = h2r->http_method;
+    r->h2state = H2_STATE_HALF_CLOSED_REMOTE;
+    r->h2id = 1;
+    r->rqst_htags = h2r->rqst_htags;
+    h2r->rqst_htags = 0;
+    r->rqst_header_len = h2r->rqst_header_len;
+    h2r->rqst_header_len = 0;
+    r->rqst_headers = h2r->rqst_headers;        /* copy struct */
+    memset(&h2r->rqst_headers, 0, sizeof(array));
+    r->uri = h2r->uri;                          /* copy struct */
+  #if 0
+    r->physical = h2r->physical;                /* copy struct */
+    r->env = h2r->env;                          /* copy struct */
+  #endif
+    memset(&h2r->rqst_headers, 0, sizeof(array));
+    memset(&h2r->uri, 0, sizeof(request_uri));
+  #if 0
+    memset(&h2r->physical, 0, sizeof(physical));
+    memset(&h2r->env, 0, sizeof(array));
+  #endif
+  #if 0 /* expect empty request body */
+    r->reqbody_length = h2r->reqbody_length; /* currently always 0 */
+    r->te_chunked = h2r->te_chunked;         /* must be 0 */
+    swap(r->reqbody_queue, h2r->reqbody_queue); /*currently always empty queue*/
+  #endif
+    r->http_host = h2r->http_host;
+    h2r->http_host = NULL;
+  #if 0
+    r->server_name = h2r->server_name;
+    h2r->server_name = NULL;
+  #endif
+    r->target = h2r->target;                    /* copy struct */
+    r->target_orig = h2r->target_orig;          /* copy struct */
+  #if 0
+    r->pathinfo = h2r->pathinfo;                /* copy struct */
+    r->server_name_buf = h2r->server_name_buf;  /* copy struct */
+  #endif
+    memset(&h2r->target, 0, sizeof(buffer));
+    memset(&h2r->target_orig, 0, sizeof(buffer));
+  #if 0
+    memset(&h2r->pathinfo, 0, sizeof(buffer));
+    memset(&h2r->server_name_buf, 0, sizeof(buffer));
+  #endif
+  #if 0
+    /* skip copying response structures, other state not yet modified in h2r */
+    /* r write_queue and read_queue are intentionally separate from h2r */
+    /* r->gw_dechunk must be NULL for HTTP/2 */
+    /* bytes_written_ckpt and bytes_read_ckpt are for HTTP/1.1 */
+    /* error handlers have not yet been set */
+  #endif
+  #if 0
+    r->loops_per_request = h2r->loops_per_request;
+    r->async_callback = h2r->async_callback;
+  #endif
+    r->keep_alive = h2r->keep_alive;
+    r->tmp_buf = h2r->tmp_buf;                /* shared; same as srv->tmp_buf */
+    r->start_hp = h2r->start_hp;                /* copy struct */
+    r->start_ts = h2r->start_ts;
+
+    /* Note: HTTP/1.1 101 Switching Protocols is not immediately written to
+     * the network here.  As this is called from cleartext Upgrade: h2c,
+     * we choose to delay sending the status until the beginning of the response
+     * to the HTTP/1.1 request which included Upgrade: h2c */
+}
+
+
+int
+h2_check_con_upgrade_h2c (request_st * const r)
+{
+    /* RFC7540 3.2 Starting HTTP/2 for "http" URIs */
+
+    buffer *http_connection, *http2_settings;
+    buffer *upgrade = http_header_request_get(r, HTTP_HEADER_UPGRADE,
+                                              CONST_STR_LEN("Upgrade"));
+    if (NULL == upgrade) return 0;
+    http_connection = http_header_request_get(r, HTTP_HEADER_CONNECTION,
+                                              CONST_STR_LEN("Connection"));
+    if (NULL == http_connection) {
+        http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+                                  CONST_STR_LEN("Upgrade"));
+        return 0;
+    }
+    if (r->http_version != HTTP_VERSION_1_1) {
+        http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+                                  CONST_STR_LEN("Upgrade"));
+        http_header_remove_token(http_connection, CONST_STR_LEN("Upgrade"));
+        return 0;
+    }
+
+    if (!http_header_str_contains_token(CONST_BUF_LEN(upgrade),
+                                        CONST_STR_LEN("h2c")))
+        return 0;
+
+    http2_settings = http_header_request_get(r, HTTP_HEADER_HTTP2_SETTINGS,
+                                             CONST_STR_LEN("HTTP2-Settings"));
+    if (NULL != http2_settings) {
+        if (0 == r->reqbody_length) {
+            buffer * const b = r->tmp_buf;
+            buffer_clear(b);
+            if (r->conf.h2proto > 1/*(must be enabled with server.h2c feature)*/
+                &&
+                http_header_str_contains_token(CONST_BUF_LEN(http_connection),
+                                               CONST_STR_LEN("HTTP2-Settings"))
+                && buffer_append_base64_decode(b, CONST_BUF_LEN(http2_settings),
+                                               BASE64_URL)) {
+                h2_con_upgrade_h2c(r, b);
+                r->http_version = HTTP_VERSION_2;
+            } /* else ignore if invalid base64 */
+        }
+        else {
+            /* ignore Upgrade: h2c if request body present since we do not
+             * (currently) handle request body before transition to h2c */
+            /* RFC7540 3.2 Requests that contain a payload body MUST be sent
+             * in their entirety before the client can send HTTP/2 frames. */
+        }
+        http_header_request_unset(r, HTTP_HEADER_HTTP2_SETTINGS,
+                                  CONST_STR_LEN("HTTP2-Settings"));
+        http_header_remove_token(http_connection, CONST_STR_LEN("HTTP2-Settings"));
+    } /* else ignore Upgrade: h2c; HTTP2-Settings required for Upgrade: h2c */
+    http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+                              CONST_STR_LEN("Upgrade"));
+    http_header_remove_token(http_connection, CONST_STR_LEN("Upgrade"));
+    return (r->http_version == HTTP_VERSION_2);
 }

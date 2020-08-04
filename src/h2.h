@@ -106,4 +106,12 @@ void h2_send_cqdata (request_st *r, connection *con, struct chunkqueue *cq, uint
 
 void h2_send_end_stream (request_st *r, connection *con);
 
+void h2_retire_stream (request_st *r, connection *con);
+
+void h2_retire_con (request_st *h2r, connection *con);
+
+__attribute_cold__
+__attribute_noinline__
+int h2_check_con_upgrade_h2c (request_st *r);
+
 #endif

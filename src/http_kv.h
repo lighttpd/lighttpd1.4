@@ -15,6 +15,7 @@
  */
 
 typedef enum {
+	HTTP_METHOD_PRI = -2,          /* [RFC7540], Section 3.5 */
 	HTTP_METHOD_UNSET = -1,
 	HTTP_METHOD_GET,               /* [RFC2616], Section 9.3 */
 	HTTP_METHOD_HEAD,              /* [RFC2616], Section 9.4 */

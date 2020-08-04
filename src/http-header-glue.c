@@ -878,7 +878,8 @@ void http_response_backend_done (request_st * const r) {
 		} /* else fall through */
 	case CON_STATE_WRITE:
 		if (!r->resp_body_finished) {
-			http_chunk_close(r);
+			if (r->http_version == HTTP_VERSION_1_1)
+				http_chunk_close(r);
 			r->resp_body_finished = 1;
 		}
 	default:

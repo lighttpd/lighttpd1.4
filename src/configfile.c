@@ -788,6 +788,11 @@ static int config_insert_srvconf(server *srv) {
                   config_plugin_value_tobool(
                     array_get_element_klen(cpv->v.a,
                                            CONST_STR_LEN("server.h2proto")), 0);
+                if (srv->srvconf.h2proto)
+                    srv->srvconf.h2proto +=
+                      config_plugin_value_tobool(
+                        array_get_element_klen(cpv->v.a,
+                                               CONST_STR_LEN("server.h2c")), 0);
                 break;
               default:/* should not happen */
                 break;

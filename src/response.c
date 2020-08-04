@@ -888,6 +888,9 @@ http_response_write_prepare(request_st * const r)
             }
         }
     }
+    else if (r->http_version == HTTP_VERSION_2) {
+        /* handled by HTTP/2 framing */
+    }
     else {
         /**
          * response is not yet finished, but we have all headers
@@ -921,7 +924,7 @@ http_response_write_prepare(request_st * const r)
                                             CONST_STR_LEN("Transfer-Encoding"),
                                             CONST_STR_LEN("chunked"));
             }
-            else {
+            else { /* if (r->http_version == HTTP_VERSION_1_0) */
                 r->keep_alive = 0;
             }
         }

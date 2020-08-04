@@ -25,6 +25,8 @@ request_init (request_st * const r, connection * const con, server * const srv)
     r->read_queue = chunkqueue_init();
     r->reqbody_queue = chunkqueue_init();
 
+    r->http_method = HTTP_METHOD_UNSET;
+    r->http_version = HTTP_VERSION_UNSET;
     r->resp_header_len = 0;
     r->loops_per_request = 0;
     r->con = con;
@@ -57,6 +59,8 @@ request_reset (request_st * const r)
     r->resp_header_len = 0;
     r->loops_per_request = 0;
 
+    r->h2state = 0; /* H2_STATE_IDLE */
+    r->h2id = 0;
     r->http_method = HTTP_METHOD_UNSET;
     r->http_version = HTTP_VERSION_UNSET;
 
