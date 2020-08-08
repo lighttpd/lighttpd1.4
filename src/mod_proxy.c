@@ -962,6 +962,11 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			 * outgoing proxy.  See also https://httpoxy.org/ */
 			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Proxy"))) continue;
 			break;
+		case 6:
+			/* Do not forward Expect: 100-continue
+			 * since we do not handle "HTTP/1.1 100 Continue" response */
+			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Expect"))) continue;
+			break;
 		case 0:
 			continue;
 		}
