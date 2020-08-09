@@ -9,6 +9,9 @@ typedef struct server server;
 struct connection;
 typedef struct connection connection;
 
+struct h2con;
+typedef struct h2con h2con;
+
 struct plugin;
 typedef struct plugin plugin;
 

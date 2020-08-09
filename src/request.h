@@ -122,6 +122,10 @@ typedef enum {
 struct request_st {
     request_state_t state; /*(modules should not modify request state)*/
     int http_status;
+    uint32_t h2state;      /*(modules should not modify request h2state)*/
+    uint32_t h2id;
+     int32_t h2_rwin;
+     int32_t h2_swin;
 
     http_method_t http_method;
     http_version_t http_version;

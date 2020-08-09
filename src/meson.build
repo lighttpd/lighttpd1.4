@@ -685,10 +685,11 @@ main_src = [
 	'configfile.c',
 	'connections.c',
 	'data_config.c',
-	'reqpool.c',
+	'h2.c',
 	'inet_ntop_cache.c',
 	'network_write.c',
 	'network.c',
+	'reqpool.c',
 	'response.c',
 	'server.c',
 ]

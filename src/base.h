@@ -25,6 +25,7 @@ struct fdevents;        /* declaration */
 struct connection {
 
 	request_st request;
+	h2con *h2;
 
 	int fd;                      /* the FD for this connection */
 	int ndx;                     /* reverse mapping to server->connection[ndx] */

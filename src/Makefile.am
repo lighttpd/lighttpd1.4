@@ -97,7 +97,7 @@ common_src=base64.c buffer.c burl.c log.c \
 	splaytree.c \
 	safe_memclear.c
 
-src = server.c response.c connections.c reqpool.c \
+src = server.c response.c connections.c h2.c reqpool.c \
 	inet_ntop_cache.c \
 	network.c \
 	network_write.c \
@@ -450,7 +450,7 @@ mod_wstunnel_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
 
 
 hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
-	response.h request.h reqpool.h fastcgi.h chunk.h \
+	response.h request.h reqpool.h fastcgi.h chunk.h h2.h \
 	first.h http_chunk.h \
 	algo_sha1.h md5.h http_auth.h http_header.h http_vhostdb.h stream.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \

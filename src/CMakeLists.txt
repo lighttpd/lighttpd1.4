@@ -762,6 +762,7 @@ add_executable(lighttpd
 	server.c
 	response.c
 	connections.c
+	h2.c
 	reqpool.c
 	inet_ntop_cache.c
 	network.c
