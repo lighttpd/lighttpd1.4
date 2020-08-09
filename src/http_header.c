@@ -241,3 +241,21 @@ void http_header_env_append(request_st * const r, const char *k, uint32_t klen, 
     if (0 == vlen) return;
     http_header_token_append(vb, v, vlen);
 }
+
+
+uint32_t
+http_header_parse_hoff (const char *n, const uint32_t clen, unsigned short hoff[8192])
+{
+    uint32_t hlen = 0;
+    for (const char *b; (n = memchr((b = n),'\n',clen-hlen)); ++n) {
+        uint32_t x = (uint32_t)(n - b + 1);
+        hlen += x;
+        if (x <= 2 && (x == 1 || n[-1] == '\r')) {
+            hoff[hoff[0]+1] = hlen;
+            return hlen;
+        }
+        if (++hoff[0] >= /*sizeof(hoff)/sizeof(hoff[0])-1*/ 8192-1) break;
+        hoff[hoff[0]] = hlen;
+    }
+    return 0;
+}
