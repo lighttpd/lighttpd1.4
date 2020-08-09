@@ -813,40 +813,6 @@ static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chun
       : NULL;
 }
 
-static void
-http_request_headers_process (request_st * const r, char * const hdrs, unsigned short * const hoff, const int scheme_port)
-{
-    r->http_status = http_request_parse(r, hdrs, hoff, scheme_port);
-
-    if (0 == r->http_status) {
-      #if 0
-        r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
-                                | (1 << COMP_HTTP_SCHEME)
-                                | (1 << COMP_HTTP_HOST)
-                                | (1 << COMP_HTTP_REMOTE_IP)
-                                | (1 << COMP_HTTP_REQUEST_METHOD)
-                                | (1 << COMP_HTTP_URL)
-                                | (1 << COMP_HTTP_QUERY_STRING)
-                                | (1 << COMP_HTTP_REQUEST_HEADER);
-      #else
-        /* all config conditions are valid after parsing header
-         * (set all bits; remove dependency on plugin_config.h) */
-        r->conditional_is_valid = ~0u;
-      #endif
-    }
-    else {
-        r->keep_alive = 0;
-        r->reqbody_length = 0;
-
-        if (r->conf.log_request_header_on_error) {
-            /*(http_request_parse() modifies hdrs only to
-             * undo line-wrapping in-place using spaces)*/
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "request-header:\n%.*s", (int)r->rqst_header_len, hdrs);
-        }
-    }
-}
-
 
 /**
  * handle request header read

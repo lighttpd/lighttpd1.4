@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "request.h"
+#include "request.c"
 
 static void test_request_reset(request_st * const r)
 {
