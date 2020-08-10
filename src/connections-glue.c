@@ -2,12 +2,12 @@
 
 #include "sys-socket.h"
 #include "base.h"
+#include "chunk.h"
 #include "connections.h"
 #include "fdevent.h"
 #include "http_header.h"
 #include "log.h"
 #include "response.h"
-#include "settings.h"   /* MAX_READ_LIMIT */
 
 #include <stdlib.h>
 #include <string.h>

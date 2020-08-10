@@ -4,6 +4,12 @@
 
 struct tm;              /* declaration */
 
+/**
+ * max size of a buffer which will just be reset
+ * to ->used = 0 instead of really freeing the buffer
+ */
+#define BUFFER_MAX_REUSE_SIZE 4096
+
 /* generic string + binary data container; contains a terminating 0 in both
  * cases
  *

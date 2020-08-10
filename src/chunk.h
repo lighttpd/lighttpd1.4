@@ -9,6 +9,10 @@
 #include "buffer.h"
 #include "array.h"
 
+/* both should be way smaller than SSIZE_MAX :) */
+#define MAX_READ_LIMIT  (256*1024)
+#define MAX_WRITE_LIMIT (256*1024)
+
 struct log_error_st;    /*(declaration)*/
 
 typedef struct chunk {

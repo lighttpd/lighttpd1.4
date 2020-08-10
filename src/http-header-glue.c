@@ -3,6 +3,7 @@
 #include "base.h"
 #include "array.h"
 #include "buffer.h"
+#include "chunk.h"
 #include "fdevent.h"
 #include "log.h"
 #include "etag.h"
@@ -11,7 +12,6 @@
 #include "response.h"
 #include "sock_addr.h"
 #include "stat_cache.h"
-#include "settings.h"   /* MAX_HTTP_REQUEST_HEADER MAX_READ_LIMIT */
 
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +22,12 @@
 
 #include "sys-socket.h"
 #include <unistd.h>
+
+/**
+ * max size of the HTTP response header from backends
+ * (differs from server.max-request-field-size for max request field size)
+ */
+#define MAX_HTTP_RESPONSE_FIELD_SIZE 65535
 
 
 static int http_response_buffer_append_authority(request_st * const r, buffer * const o) {
@@ -1133,9 +1139,7 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
     }
 
     if (!is_header_end) {
-        /*(reuse MAX_HTTP_REQUEST_HEADER as max size
-         * for response headers from backends)*/
-        if (header_len > MAX_HTTP_REQUEST_HEADER) {
+        if (header_len > MAX_HTTP_RESPONSE_FIELD_SIZE) {
             log_error(r->conf.errh, __FILE__, __LINE__,
               "response headers too large for %s", r->uri.path.ptr);
             r->http_status = 502; /* Bad Gateway */

@@ -1,7 +1,6 @@
 #include "first.h"
 
 #include "buffer.h"
-#include "settings.h"   /* BUFFER_MAX_REUSE_SIZE */
 
 #include <stdlib.h>
 #include <string.h>

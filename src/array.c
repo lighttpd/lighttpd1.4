@@ -2,7 +2,6 @@
 
 #include "array.h"
 #include "buffer.h"
-#include "settings.h"   /* BUFFER_MAX_REUSE_SIZE */
 
 #include <string.h>
 #include <stdlib.h>
