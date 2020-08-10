@@ -73,10 +73,8 @@ void array_reset_data_strings(array * const a) {
 	for (uint32_t i = 0; i < used; ++i) {
 		data_string * const ds = data[i];
 		/*force_assert(ds->type == TYPE_STRING);*/
-		buffer * const k = &ds->key;
-		buffer * const v = &ds->value;
-		if (k->size > BUFFER_MAX_REUSE_SIZE) buffer_reset(k);
-		if (v->size > BUFFER_MAX_REUSE_SIZE) buffer_reset(v);
+		buffer_reset(&ds->key);
+		buffer_reset(&ds->value);
 	}
 }
 

@@ -41,8 +41,6 @@ __attribute_returns_nonnull__
 buffer* buffer_init_string(const char *str); /* str can  be NULL */
 
 void buffer_free(buffer *b); /* b can be NULL */
-/* truncates to used == 0; frees large buffers, might keep smaller ones for reuse */
-void buffer_reset(buffer *b); /* b can be NULL */
 
 /* reset b. if NULL != b && NULL != src, move src content to b. reset src. */
 void buffer_move(buffer * restrict b, buffer * restrict src);
@@ -84,6 +82,21 @@ void buffer_string_set_length(buffer *b, uint32_t len);
  *   (b->ptr *is not* set to an empty, '\0'-terminated string "")
  */
 static inline void buffer_clear(buffer *b);
+
+/* reset buffer
+ * - invalidate buffer contents
+ * - unsets used chars
+ * - keeps smaller buffer (unmodified) for reuse
+ *   (b->ptr *is not* set to an empty, '\0'-terminated string "")
+ * - frees larger buffer (b->size > BUFFER_MAX_REUSE_SIZE)
+ */
+static inline void buffer_reset(buffer *b);
+
+/* free buffer ptr
+ * - invalidate buffer contents; free ptr; reset ptr, used, size to 0
+ */
+__attribute_cold__
+void buffer_free_ptr(buffer *b);
 
 void buffer_copy_string(buffer * restrict b, const char * restrict s);
 void buffer_copy_string_len(buffer * restrict b, const char * restrict s, size_t s_len);
@@ -264,5 +277,12 @@ static inline void buffer_append_slash(buffer *b) {
 static inline void buffer_clear(buffer *b) {
 	b->used = 0;
 }
+
+static inline void buffer_reset(buffer *b) {
+	b->used = 0;
+	/* release buffer larger than BUFFER_MAX_REUSE_SIZE bytes */
+	if (b->size > BUFFER_MAX_REUSE_SIZE) buffer_free_ptr(b);
+}
+
 
 #endif
