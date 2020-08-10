@@ -125,6 +125,12 @@ static void * stat_cache_sptree_find(splay_tree ** const sptree,
 
 #include <fam.h>
 
+#ifdef HAVE_FAMNOEXISTS
+#ifndef LIGHTTPD_STATIC
+#include <dlfcn.h>
+#endif
+#endif
+
 typedef struct fam_dir_entry {
 	buffer *name;
 	int refcnt;
@@ -364,7 +370,14 @@ static stat_cache_fam * stat_cache_init_fam(fdevents *ev, log_error_st *errh) {
 		return NULL;
 	}
       #ifdef HAVE_FAMNOEXISTS
+      #ifdef LIGHTTPD_STATIC
 	FAMNoExists(&scf->fam);
+      #else
+	int (*FAMNoExists_fn)(FAMConnection *);
+	FAMNoExists_fn =
+	  (int (*)(FAMConnection *))(intptr_t)dlsym(RTLD_DEFAULT,"FAMNoExists");
+	if (FAMNoExists_fn) FAMNoExists_fn(&scf->fam);
+      #endif
       #endif
 
 	scf->fd = FAMCONNECTION_GETFD(&scf->fam);
