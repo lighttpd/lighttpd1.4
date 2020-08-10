@@ -685,6 +685,7 @@ main_src = [
 	'configfile.c',
 	'connections.c',
 	'data_config.c',
+	'reqpool.c',
 	'inet_ntop_cache.c',
 	'network_write.c',
 	'network.c',
