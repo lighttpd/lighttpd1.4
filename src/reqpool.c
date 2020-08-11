@@ -11,11 +11,11 @@
 
 #include "base.h"
 #include "buffer.h"
-#include "connections.h"/* connection_response_reset() */
 #include "chunk.h"
 #include "plugin.h"
 #include "plugin_config.h"
 #include "request.h"
+#include "response.h"
 
 
 void
@@ -52,7 +52,7 @@ request_reset (request_st * const r)
 {
     plugins_call_handle_request_reset(r);
 
-    connection_response_reset(r);
+    http_response_reset(r);
 
     r->resp_header_len = 0;
     r->loops_per_request = 0;

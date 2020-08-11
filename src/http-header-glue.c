@@ -261,6 +261,38 @@ void http_response_body_clear (request_st * const r, int preserve_length) {
 }
 
 
+void http_response_reset (request_st * const r) {
+    r->http_status = 0;
+    r->con->is_writable = 1;
+    r->resp_body_finished = 0;
+    r->resp_body_started = 0;
+    r->handler_module = NULL;
+    if (r->physical.path.ptr) { /*(skip for mod_fastcgi authorizer)*/
+        buffer_clear(&r->physical.doc_root);
+        buffer_clear(&r->physical.basedir);
+        buffer_clear(&r->physical.etag);
+        buffer_reset(&r->physical.path);
+        buffer_reset(&r->physical.rel_path);
+    }
+    r->resp_htags = 0;
+    array_reset_data_strings(&r->resp_headers);
+    http_response_body_clear(r, 0);
+}
+
+
+handler_t http_response_reqbody_read_error (request_st * const r, int http_status) {
+    r->keep_alive = 0;
+
+    /*(do not change status if response headers already set and possibly sent)*/
+    if (0 != r->resp_header_len) return HANDLER_ERROR;
+
+    http_response_body_clear(r, 0);
+    r->http_status = http_status;
+    r->handler_module = NULL;
+    return HANDLER_FINISHED;
+}
+
+
 static int http_response_parse_range(request_st * const r, buffer * const path, stat_cache_entry * const sce, const char * const range) {
 	int multipart = 0;
 	int error;
@@ -932,7 +964,7 @@ static handler_t http_response_process_local_redir(request_st * const r, size_t 
         }
 
         /*(caller must reset request as follows)*/
-        /*connection_response_reset(r);*/ /*(sets r->http_status = 0)*/
+        /*http_response_reset(r);*/ /*(sets r->http_status = 0)*/
         /*plugins_call_handle_request_reset(r);*/
 
         return HANDLER_COMEBACK;

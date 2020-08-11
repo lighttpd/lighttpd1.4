@@ -926,7 +926,7 @@ __attribute_noinline__
 static handler_t mod_cgi_local_redir(request_st * const r) {
     /* must be called from mod_cgi_handle_subrequest() so that HANDLER_COMEBACK
      * return value propagates back through connection_state_machine() */
-    connection_response_reset(r); /*(includes r->http_status = 0)*/
+    http_response_reset(r); /*(includes r->http_status = 0)*/
     plugins_call_handle_request_reset(r);
     /*cgi_connection_close(hctx);*//*(already cleaned up and hctx is now invalid)*/
     return HANDLER_COMEBACK;
@@ -981,7 +981,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			 *  and module is flagged to stream request body to backend) */
 			if (-1 == r->reqbody_length) {
 				return (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
-				  ? connection_handle_read_post_error(r, 411)
+				  ? http_response_reqbody_read_error(r, 411)
 				  : HANDLER_WAIT_FOR_EVENT;
 			}
 		}

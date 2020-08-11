@@ -48,9 +48,13 @@ handler_t http_response_prepare(request_st *r);
 __attribute_cold__
 handler_t http_response_comeback(request_st *r);
 
+__attribute_cold__
+handler_t http_response_reqbody_read_error(request_st *r, int http_status);
+
 int http_response_redirect_to_directory(request_st *r, int status);
 int http_response_handle_cachable(request_st *r, const buffer *mtime);
 void http_response_body_clear(request_st *r, int preserve_length);
+void http_response_reset(request_st *r);
 void http_response_send_file (request_st *r, buffer *path);
 void http_response_backend_done (request_st *r);
 void http_response_backend_error (request_st *r);
