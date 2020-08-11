@@ -38,6 +38,11 @@
 #define connection_set_state(r, n) ((r)->state = (n))
 
 __attribute_cold__
+static void connection_set_state_error(request_st * const r, const request_state_t state) {
+    connection_set_state(r, state);
+}
+
+__attribute_cold__
 static connection *connection_init(server *srv);
 
 static void connection_reset(connection *con);
@@ -381,7 +386,7 @@ connection_write_100_continue (request_st * const r, connection * const con)
         *(r->conf.global_bytes_per_second_cnt_ptr) += written;
 
     if (rc < 0) {
-        connection_set_state(r, CON_STATE_ERROR);
+        connection_set_state_error(r, CON_STATE_ERROR);
         return 0; /* error */
     }
 
@@ -411,10 +416,10 @@ static void connection_handle_write(request_st * const r, connection * const con
 	case -1: /* error on our side */
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "connection closed: write failed on fd %d", con->fd);
-		connection_set_state(r, CON_STATE_ERROR);
+		connection_set_state_error(r, CON_STATE_ERROR);
 		break;
 	case -2: /* remote close */
-		connection_set_state(r, CON_STATE_ERROR);
+		connection_set_state_error(r, CON_STATE_ERROR);
 		break;
 	case 1:
 		/* do not spin trying to send HTTP/2 server Connection Preface
@@ -462,7 +467,7 @@ static void connection_handle_write_state(request_st * const r, connection * con
                   con->fd, rc);
                 /* fall through */
             case HANDLER_ERROR:
-                connection_set_state(r, CON_STATE_ERROR);
+                connection_set_state_error(r, CON_STATE_ERROR);
                 break;
             }
         }
@@ -561,7 +566,7 @@ static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chun
         con->read_idle_ts = log_epoch_secs;
         if (0 != con->network_read(con, cq, MAX_READ_LIMIT)) {
             request_st * const r = &con->request;
-            connection_set_state(r, CON_STATE_ERROR);
+            connection_set_state_error(r, CON_STATE_ERROR);
         }
         /* check if switched to HTTP/2 (ALPN "h2" during TLS negotiation) */
         request_st * const r = &con->request;
@@ -806,7 +811,7 @@ static handler_t connection_handle_fdevent(void *context, int revents) {
 		if (r->state == CON_STATE_CLOSE) {
 			con->close_timeout_ts = log_epoch_secs - (HTTP_LINGER_TIMEOUT+1);
 		} else if (revents & FDEVENT_HUP) {
-			connection_set_state(r, CON_STATE_ERROR);
+			connection_set_state_error(r, CON_STATE_ERROR);
 		} else if (revents & FDEVENT_RDHUP) {
 			int events = fdevent_fdnode_interest(con->fdn);
 			events &= ~(FDEVENT_IN|FDEVENT_RDHUP);
@@ -834,10 +839,10 @@ static handler_t connection_handle_fdevent(void *context, int revents) {
 				/* Failure of fdevent_is_tcp_half_closed() indicates TCP RST
 				 * (or unable to tell (unsupported OS), though should not
 				 * be setting FDEVENT_RDHUP in that case) */
-				connection_set_state(r, CON_STATE_ERROR);
+				connection_set_state_error(r, CON_STATE_ERROR);
 			}
 		} else if (revents & FDEVENT_ERR) { /* error, connection reset */
-			connection_set_state(r, CON_STATE_ERROR);
+			connection_set_state_error(r, CON_STATE_ERROR);
 		} else {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "connection closed: poll() -> ??? %d", revents);
@@ -929,7 +934,7 @@ static int connection_read_cq_err(connection *con) {
     }
   #endif /* __WIN32 */
 
-    connection_set_state(r, CON_STATE_ERROR);
+    connection_set_state_error(r, CON_STATE_ERROR);
     return -1;
 }
 
@@ -1090,7 +1095,7 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 				return;
 			  /*case HANDLER_ERROR:*/
 			  default:
-				connection_set_state(r, CON_STATE_ERROR);
+				connection_set_state_error(r, CON_STATE_ERROR);
 				continue;
 			}
 			/* fall through */
@@ -1195,7 +1200,7 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
         else {
             /* network error; do not send GOAWAY, but pretend that we did */
             h2c->sent_goaway = H2_E_CONNECT_ERROR; /*any error (not NO_ERROR)*/
-            connection_set_state(h2r, CON_STATE_ERROR);
+            connection_set_state_error(h2r, CON_STATE_ERROR);
         }
     }
 
@@ -1390,7 +1395,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
                             log_error(rr->conf.errh, __FILE__, __LINE__,
                               "request aborted - read timeout: %d", con->fd);
                         }
-                        connection_set_state(r, CON_STATE_ERROR);
+                        connection_set_state_error(r, CON_STATE_ERROR);
                         changed = 1;
                     }
                 }
@@ -1415,7 +1420,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
                               (long long)r->write_queue->bytes_out,
                               (int)r->conf.max_write_idle);
                         }
-                        connection_set_state(r, CON_STATE_ERROR);
+                        connection_set_state_error(r, CON_STATE_ERROR);
                         changed = 1;
                     }
                 }
@@ -1444,7 +1449,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
                               "connection closed - read timeout: %d", con->fd);
                 }
 
-                connection_set_state(r, CON_STATE_ERROR);
+                connection_set_state_error(r, CON_STATE_ERROR);
                 changed = 1;
             }
         } else {
@@ -1456,7 +1461,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
                               con->fd);
                 }
 
-                connection_set_state(r, CON_STATE_ERROR);
+                connection_set_state_error(r, CON_STATE_ERROR);
                 changed = 1;
             }
         }
@@ -1488,7 +1493,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
                   BUFFER_INTLEN_PTR(&r->target),
                   (long long)con->bytes_written, (int)r->conf.max_write_idle);
             }
-            connection_set_state(r, CON_STATE_ERROR);
+            connection_set_state_error(r, CON_STATE_ERROR);
             changed = 1;
         }
     }
@@ -1548,7 +1553,7 @@ void connection_graceful_shutdown_maint (server *srv) {
         else if (r->state == CON_STATE_READ && con->request_count > 1
                  && chunkqueue_is_empty(con->read_queue)) {
             /* close connections in keep-alive waiting for next request */
-            connection_set_state(r, CON_STATE_ERROR);
+            connection_set_state_error(r, CON_STATE_ERROR);
             changed = 1;
         }
 
@@ -1822,7 +1827,7 @@ connection_handle_read_post_state (request_st * const r)
 
         switch(con->network_read(con, cq, MAX_READ_LIMIT)) {
         case -1:
-            connection_set_state(r, CON_STATE_ERROR);
+            connection_set_state_error(r, CON_STATE_ERROR);
             return HANDLER_ERROR;
         case -2:
             is_closed = 1;
