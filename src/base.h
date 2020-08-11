@@ -45,6 +45,7 @@ struct connection {
 
 	int (* network_write)(struct connection *con, chunkqueue *cq, off_t max_bytes);
 	int (* network_read)(struct connection *con, chunkqueue *cq, off_t max_bytes);
+	handler_t (* reqbody_read)(struct request_st *r);
 
 	server *srv;
 	void *plugin_slots;

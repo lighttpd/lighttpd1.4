@@ -967,7 +967,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			r->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
 			if (-1 != hctx->fd) return HANDLER_WAIT_FOR_EVENT;
 		} else {
-			handler_t rc = connection_handle_read_post_state(r);
+			handler_t rc = r->con->reqbody_read(r);
 			if (!chunkqueue_is_empty(cq)) {
 				if (fdevent_fdnode_interest(hctx->fdntocgi) & FDEVENT_OUT) {
 					return (rc == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : rc;

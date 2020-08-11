@@ -1048,6 +1048,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		con->fdn = fdevent_register(srv->ev, con->fd, connection_handle_fdevent, con);
 		con->network_read = connection_read_cq;
 		con->network_write = connection_write_cq;
+		con->reqbody_read = connection_handle_read_post_state;
 
 		request_st * const r = &con->request;
 		connection_set_state(r, CON_STATE_REQUEST_START);

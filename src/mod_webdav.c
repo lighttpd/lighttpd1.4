@@ -211,7 +211,6 @@
 #include "http_header.h"
 #include "etag.h"
 #include "log.h"
-#include "connections.h"/* connection_handle_read_post_state() */
 #include "request.h"
 #include "response.h"   /* http_response_redirect_to_directory() */
 #include "stat_cache.h" /* stat_cache_mimetype_by_ext() */
@@ -3809,7 +3808,7 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
     if (r->reqbody_length) {
       #ifdef USE_PROPPATCH
         if (r->state == CON_STATE_READ_POST) {
-            handler_t rc = connection_handle_read_post_state(r);
+            handler_t rc = r->con->reqbody_read(r);
             if (rc != HANDLER_GO_ON) return rc;
         }
       #else
@@ -4530,7 +4529,7 @@ mod_webdav_put (request_st * const r, const plugin_config * const pconf)
 {
     if (r->state == CON_STATE_READ_POST) {
         int first_read = chunkqueue_is_empty(r->reqbody_queue);
-        handler_t rc = connection_handle_read_post_state(r);
+        handler_t rc = r->con->reqbody_read(r);
         if (rc != HANDLER_GO_ON) {
             if (first_read && rc == HANDLER_WAIT_FOR_EVENT
                 && 0 != webdav_if_match_or_unmodified_since(r, NULL)) {
@@ -5068,7 +5067,7 @@ mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
     }
 
     if (r->state == CON_STATE_READ_POST) {
-        handler_t rc = connection_handle_read_post_state(r);
+        handler_t rc = r->con->reqbody_read(r);
         if (rc != HANDLER_GO_ON) return rc;
     }
 
@@ -5284,7 +5283,7 @@ mod_webdav_lock (request_st * const r, const plugin_config * const pconf)
 
     if (r->reqbody_length) {
         if (r->state == CON_STATE_READ_POST) {
-            handler_t rc = connection_handle_read_post_state(r);
+            handler_t rc = r->con->reqbody_read(r);
             if (rc != HANDLER_GO_ON) return rc;
         }
     }

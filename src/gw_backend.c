@@ -2063,7 +2063,7 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
             if (0 != hctx->wb->bytes_in) return HANDLER_WAIT_FOR_EVENT;
         }
         else {
-            handler_t rc = connection_handle_read_post_state(r);
+            handler_t rc = r->con->reqbody_read(r);
 
             /* XXX: create configurable flag */
             /* CGI environment requires that Content-Length be set.
