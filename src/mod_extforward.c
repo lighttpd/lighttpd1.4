@@ -606,9 +606,11 @@ static void mod_extforward_set_proto(request_st * const r, const char * const pr
 			http_header_env_set(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_PROTO"), CONST_BUF_LEN(&r->uri.scheme));
 		}
 		if (buffer_eq_icase_ss(proto, protolen, CONST_STR_LEN("https"))) {
+	                r->con->proto_default_port = 443; /* "https" */
 			buffer_copy_string_len(&r->uri.scheme, CONST_STR_LEN("https"));
 			config_cond_cache_reset_item(r, COMP_HTTP_SCHEME);
 		} else if (buffer_eq_icase_ss(proto, protolen, CONST_STR_LEN("http"))) {
+	                r->con->proto_default_port = 80; /* "http" */
 			buffer_copy_string_len(&r->uri.scheme, CONST_STR_LEN("http"));
 			config_cond_cache_reset_item(r, COMP_HTTP_SCHEME);
 		}
@@ -942,11 +944,9 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
                 buffer_copy_string_len(r->http_host, s+v, vlen-v);
             }
 
-            int scheme_port =
-              buffer_eq_slen(&r->uri.scheme,CONST_STR_LEN("https")) ? 443 : 80;
             if (0 != http_request_host_policy(r->http_host,
                                               r->conf.http_parseopts,
-                                              scheme_port)) {
+                                              r->con->proto_default_port)) {
                 /*(reject invalid chars in Host)*/
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "invalid host= value in Forwarded header");
