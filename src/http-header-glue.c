@@ -1111,6 +1111,54 @@ static int http_response_process_headers(request_st * const r, http_response_opt
 }
 
 
+__attribute_hot__
+__attribute_pure__
+static const char *
+http_response_end_of_header (const char * const restrict ptr)
+{
+    /* find \n(\r)?\n sequence */
+    for (const char *n=ptr-1, *nn=NULL; NULL != (n = strchr(n+1, '\n')); nn=n) {
+        if (n - nn == 2 ? n[-1] == '\r' : n - nn == 1) return n+1;
+    }
+    return NULL;
+}
+
+
+__attribute_cold__
+static uint32_t
+http_response_discard_1xx (buffer * const restrict b, uint32_t len)
+{
+    char * const ptr = b->ptr;
+    const char * const n = http_response_end_of_header(ptr+12);
+    if (NULL == n) return 0; /* * unfinished headers */
+
+    /* discard 100 Continue headers */
+    len -= (uint32_t)(n - ptr);
+    memmove(ptr, n, len);
+    buffer_string_set_length(b, len);
+    return len;
+}
+
+
+__attribute_cold__
+__attribute_noinline__
+static uint32_t
+http_response_check_1xx (buffer * const restrict b, uint32_t len)
+{
+    const char * const s = b->ptr;
+    while (len > 7 && 0 == memcmp(s, "HTTP/1.", 7)) {
+        /* discard HTTP/1.1 1xx responses other than 101 Switching Protocols */
+        if (len > 12
+            && s[8] == ' ' && s[9] == '1' && s[10] == '0' && s[11] != '1') {
+            len = http_response_discard_1xx(b, len);
+            continue;
+        }
+        break;
+    }
+    return len;
+}
+
+
 handler_t http_response_parse_headers(request_st * const r, http_response_opts * const opts, buffer * const b) {
     /**
      * possible formats of response headers:
@@ -1133,12 +1181,18 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
      * and hope we handle it. No headers, no header-content separator
      */
 
-    int is_nph = (0 == strncmp(b->ptr, "HTTP/1.", 7)); /*nph (non-parsed hdrs)*/
+    uint32_t header_len = buffer_string_length(b);
+    if (header_len > 12 && b->ptr[9] == '1') {
+        header_len = http_response_check_1xx(b, header_len);
+        if (0 == header_len)
+            return HANDLER_GO_ON; /* unfinished header */
+    }
+    /*("HTTP/1.1 200 " is at least 13 chars + \r\n)*/
+    const int is_nph = (header_len > 12 && 0 == memcmp(b->ptr, "HTTP/1.", 7));
+
     int is_header_end = 0;
-    size_t last_eol = 0;
-    size_t i = 0, header_len = buffer_string_length(b);
+    uint32_t i = 0, blen;
     const char *bstart;
-    size_t blen;
 
     if (b->ptr[0] == '\n' || (b->ptr[0] == '\r' && b->ptr[1] == '\n')) {
         /* no HTTP headers */
@@ -1146,20 +1200,10 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
         is_header_end = 1;
     } else if (is_nph || b->ptr[(i = strcspn(b->ptr, ":\n"))] == ':') {
         /* HTTP headers */
-        ++i;
-        for (char *c; NULL != (c = strchr(b->ptr+i, '\n')); ++i) {
-            i = (uintptr_t)(c - b->ptr);
-            /**
-             * check if we saw a \n(\r)?\n sequence
-             */
-            if (last_eol > 0 &&
-                ((i - last_eol == 1) ||
-                 (i - last_eol == 2 && b->ptr[i - 1] == '\r'))) {
-                is_header_end = 1;
-                break;
-            }
-
-            last_eol = i;
+        const char *n = http_response_end_of_header(b->ptr+i+1);
+        if (n) {
+            i = (uint32_t)(n - b->ptr - 1);
+            is_header_end = 1;
         }
     } else if (i == header_len) { /* (no newline yet; partial header line?) */
     } else if (opts->backend == BACKEND_CGI) {
