@@ -687,6 +687,8 @@ main_src = [
 	'data_config.c',
 	'h2.c',
 	'inet_ntop_cache.c',
+	'ls-hpack/lshpack.c',
+	'ls-hpack/deps/xxhash/xxhash.c',
 	'network_write.c',
 	'network.c',
 	'reqpool.c',
@@ -785,6 +787,10 @@ executable('lighttpd', configparser,
 		, libpcre
 		, libunwind
 		, libws2_32
+	],
+	c_args: [
+		'-DLS_HPACK_USE_LARGE_TABLES=0',
+		'-DXXH_HEADER_NAME="ls-hpack/deps/xxhash/xxhash.h"'
 	],
 	install: true,
 	install_dir: sbinddir,

@@ -80,6 +80,8 @@ common_src = Split("base64.c buffer.c burl.c log.c \
 
 src = Split("server.c response.c connections.c h2.c reqpool.c \
 	inet_ntop_cache.c \
+	ls-hpack/lshpack.c \
+	ls-hpack/deps/xxhash/xxhash.c \
 	network.c \
 	network_write.c \
 	data_config.c \
@@ -188,7 +190,9 @@ if env['with_nss']:
 if env['with_gnutls']:
 	modules['mod_gnutls'] = { 'src' : [ 'mod_gnutls.c' ], 'lib' : [ env['LIBGNUTLS'] ] }
 
-staticenv = env.Clone(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC' ])
+staticenv = env.Clone(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC',
+			'-DLS_HPACK_USE_LARGE_TABLES=0',
+			'-DXXH_HEADER_NAME=\\"ls-hpack/deps/xxhash/xxhash.h\\"' ])
 
 ## all the core-sources + the modules
 staticsrc = src + common_src

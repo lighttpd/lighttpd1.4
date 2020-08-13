@@ -101,6 +101,8 @@ src = server.c response.c connections.c h2.c reqpool.c \
 	inet_ntop_cache.c \
 	network.c \
 	network_write.c \
+	ls-hpack/lshpack.c \
+	ls-hpack/deps/xxhash/xxhash.c \
 	data_config.c \
 	vector.c \
 	configfile.c configparser.c
@@ -464,7 +466,11 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	sys-endian.h sys-mmap.h sys-socket.h sys-strings.h \
 	mod_cml.h mod_cml_funcs.h \
 	safe_memclear.h sock_addr.h splaytree.h status_counter.h \
-	mod_magnet_cache.h
+	mod_magnet_cache.h \
+	ls-hpack/lshpack.h \
+	ls-hpack/lsxpack_header.h \
+	ls-hpack/deps/xxhash/xxhash.h \
+	ls-hpack/huff-tables.h
 
 
 DEFS= @DEFS@ -DHAVE_VERSIONSTAMP_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
