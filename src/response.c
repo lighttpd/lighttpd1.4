@@ -9,6 +9,7 @@
 #include "log.h"
 #include "stat_cache.h"
 #include "chunk.h"
+#include "http_chunk.h"
 
 #include "plugin.h"
 
@@ -45,7 +46,10 @@ static int http_response_omit_header(request_st * const r, const data_string * c
     return 0;
 }
 
-int http_response_write_header(request_st * const r) {
+
+void
+http_response_write_header (request_st * const r)
+{
 	chunkqueue * const cq = r->write_queue;
 	buffer * const b = chunkqueue_prepend_buffer_open(cq);
 
@@ -153,8 +157,8 @@ int http_response_write_header(request_st * const r) {
 	}
 
 	chunkqueue_prepend_buffer_commit(cq);
-	return 0;
 }
+
 
 static handler_t http_response_physical_path_check(request_st * const r) {
 	stat_cache_entry *sce = stat_cache_get_entry(&r->physical.path);
@@ -340,7 +344,14 @@ static handler_t http_response_config (request_st * const r) {
     return HANDLER_GO_ON;
 }
 
-handler_t http_response_prepare(request_st * const r) {
+
+__attribute_cold__
+static handler_t http_response_comeback (request_st * const r);
+
+
+static handler_t
+http_response_prepare (request_st * const r)
+{
     handler_t rc;
 
     do {
@@ -617,7 +628,9 @@ handler_t http_response_prepare(request_st * const r) {
     return rc;
 }
 
-handler_t http_response_comeback (request_st * const r)
+
+__attribute_cold__
+static handler_t http_response_comeback (request_st * const r)
 {
     if (NULL != r->handler_module || !buffer_is_empty(&r->physical.path))
         return HANDLER_GO_ON;
@@ -644,5 +657,398 @@ handler_t http_response_comeback (request_st * const r)
                                 | (1 << COMP_HTTP_REMOTE_IP);
         config_cond_cache_reset(r);
         return http_status_set_error_close(r, status);
+    }
+}
+
+
+__attribute_cold__
+static void
+http_response_errdoc_init (request_st * const r)
+{
+    /* modules that produce headers required with error response should
+     * typically also produce an error document.  Make an exception for
+     * mod_auth WWW-Authenticate response header. */
+    buffer *www_auth = NULL;
+    if (401 == r->http_status) {
+        const buffer * const vb =
+          http_header_response_get(r, HTTP_HEADER_OTHER,
+                                   CONST_STR_LEN("WWW-Authenticate"));
+        if (NULL != vb) www_auth = buffer_init_buffer(vb);
+    }
+
+    buffer_reset(&r->physical.path);
+    r->resp_htags = 0;
+    array_reset_data_strings(&r->resp_headers);
+    http_response_body_clear(r, 0);
+
+    if (NULL != www_auth) {
+        http_header_response_set(r, HTTP_HEADER_OTHER,
+                                 CONST_STR_LEN("WWW-Authenticate"),
+                                 CONST_BUF_LEN(www_auth));
+        buffer_free(www_auth);
+    }
+}
+
+
+__attribute_cold__
+static void
+http_response_static_errdoc (request_st * const r)
+{
+    if (NULL == r->handler_module
+        ? r->error_handler_saved_status >= 65535
+        : (!r->conf.error_intercept || r->error_handler_saved_status))
+        return;
+
+    http_response_errdoc_init(r);
+    r->resp_body_finished = 1;
+
+    /* try to send static errorfile */
+    if (!buffer_string_is_empty(r->conf.errorfile_prefix)) {
+        buffer_copy_buffer(&r->physical.path, r->conf.errorfile_prefix);
+        buffer_append_int(&r->physical.path, r->http_status);
+        buffer_append_string_len(&r->physical.path, CONST_STR_LEN(".html"));
+        if (0 == http_chunk_append_file(r, &r->physical.path)) {
+            stat_cache_entry *sce = stat_cache_get_entry(&r->physical.path);
+            const buffer *content_type = (NULL != sce)
+              ? stat_cache_content_type_get(sce, r)
+              : NULL;
+            if (content_type)
+                http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+                                         CONST_STR_LEN("Content-Type"),
+                                         CONST_BUF_LEN(content_type));
+            return;
+        }
+    }
+
+    /* build default error-page */
+    buffer_reset(&r->physical.path);
+    buffer * const b = r->tmp_buf;
+    buffer_copy_string_len(b, CONST_STR_LEN(
+      "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
+      "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
+      "         \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
+      "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n"
+      " <head>\n"
+      "  <title>"));
+    http_status_append(b, r->http_status);
+    buffer_append_string_len(b, CONST_STR_LEN(
+      "</title>\n"
+      " </head>\n"
+      " <body>\n"
+      "  <h1>"));
+    http_status_append(b, r->http_status);
+    buffer_append_string_len(b, CONST_STR_LEN(
+      "</h1>\n"
+      " </body>\n"
+      "</html>\n"));
+    (void)http_chunk_append_mem(r, CONST_BUF_LEN(b));
+
+    http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+                             CONST_STR_LEN("Content-Type"),
+                             CONST_STR_LEN("text/html"));
+}
+
+
+__attribute_cold__
+static void
+http_response_merge_trailers (request_st * const r)
+{
+    /* attempt to merge trailers into headers; header not yet sent by caller */
+    if (buffer_string_is_empty(&r->gw_dechunk->b)) return;
+    const int done = r->gw_dechunk->done;
+    if (!done) return; /* XXX: !done; could scan for '\n' and send only those */
+
+    /* do not include trailers if success status (when response was read from
+     * backend) subsequently changed to error status.  http_chunk could add the
+     * trailers, but such actions are better on a different code layer than in
+     * http_chunk.c */
+    if (done < 400 && r->http_status >= 400) return;
+
+    /* XXX: trailers passed through; no sanity check currently done
+     * https://tools.ietf.org/html/rfc7230#section-4.1.2
+     *
+     * Not checking for disallowed fields
+     * Not handling (deprecated) line wrapping
+     * Not strictly checking fields
+     */
+    const char *k = strchr(r->gw_dechunk->b.ptr, '\n'); /*(skip final chunk)*/
+    if (NULL == k) return; /*(should not happen)*/
+    ++k;
+    for (const char *v, *e; (e = strchr(k, '\n')); k = e+1) {
+        v = memchr(k, ':', (size_t)(e - k));
+        if (NULL == v || v == k || *k == ' ' || *k == '\t') continue;
+        uint32_t klen = (uint32_t)(v - k);
+        do { ++v; } while (*v == ' ' || *v == '\t');
+        if (*v == '\r' || *v == '\n') continue;
+        enum http_header_e id = http_header_hkey_get(k, klen);
+        http_header_response_insert(r, id, k, klen, v, (size_t)(e - v));
+    }
+    http_header_response_unset(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Trailer"));
+    buffer_clear(&r->gw_dechunk->b);
+}
+
+
+static handler_t
+http_response_write_prepare(request_st * const r)
+{
+    if (NULL == r->handler_module) {
+        /* static files */
+        switch(r->http_method) {
+          case HTTP_METHOD_GET:
+          case HTTP_METHOD_POST:
+          case HTTP_METHOD_HEAD:
+            break;
+          case HTTP_METHOD_OPTIONS:
+            if ((!r->http_status || r->http_status == 200)
+                && !buffer_string_is_empty(&r->uri.path)
+                && r->uri.path.ptr[0] != '*') {
+                http_response_body_clear(r, 0);
+                http_header_response_append(r, HTTP_HEADER_OTHER,
+                  CONST_STR_LEN("Allow"),
+                  CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
+                r->http_status = 200;
+                r->resp_body_finished = 1;
+            }
+            break;
+          default:
+            if (r->http_status == 0)
+                r->http_status = 501;
+            break;
+        }
+    }
+
+    if (r->http_status == 0)
+        r->http_status = 403;
+
+    switch (r->http_status) {
+      case 204: /* class: header only */
+      case 205:
+      case 304:
+        /* disable chunked encoding again as we have no body */
+        http_response_body_clear(r, 1);
+        r->resp_body_finished = 1;
+        break;
+      default: /* class: header + body */
+        /* only custom body for 4xx and 5xx */
+        if (r->http_status >= 400 && r->http_status < 600)
+            http_response_static_errdoc(r);
+        break;
+    }
+
+    if (r->gw_dechunk)
+        http_response_merge_trailers(r);
+
+    /* Allow filter plugins to change response headers */
+    switch (plugins_call_handle_response_start(r)) {
+      case HANDLER_GO_ON:
+      case HANDLER_FINISHED:
+        break;
+      default:
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "response_start plugin failed");
+        return HANDLER_ERROR;
+    }
+
+    if (r->resp_body_finished) {
+        /* set content-length if length is known and not already set */
+        if (!(r->resp_htags
+              & (HTTP_HEADER_CONTENT_LENGTH | HTTP_HEADER_TRANSFER_ENCODING))) {
+            off_t qlen = chunkqueue_length(r->write_queue);
+
+            /**
+             * The Content-Length header can only be sent if we have content:
+             * - HEAD does not have a content-body (but can have content-length)
+             * - 1xx, 204 and 304 does not have a content-body
+             *   (RFC 2616 Section 4.3)
+             *
+             * Otherwise generate a Content-Length header
+             * (if chunked encoding is not available)
+             */
+            if (   r->http_status  < 200
+                || r->http_status == 204
+                || r->http_status == 304) {
+                /* no Content-Body, no Content-Length */
+                http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
+                                           CONST_STR_LEN("Content-Length"));
+            }
+            else if (qlen > 0) {
+                buffer * const tb = r->tmp_buf;
+                buffer_clear(tb);
+                buffer_append_int(tb, qlen);
+                http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
+                                         CONST_STR_LEN("Content-Length"),
+                                         CONST_BUF_LEN(tb));
+            }
+            else if (r->http_method != HTTP_METHOD_HEAD) {
+                /* Content-Length: 0 is important for Redirects (301, ...) as
+                 * there might be content. */
+                http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
+                                         CONST_STR_LEN("Content-Length"),
+                                         CONST_STR_LEN("0"));
+            }
+        }
+    }
+    else {
+        /**
+         * response is not yet finished, but we have all headers
+         *
+         * keep-alive requires one of:
+         * - Content-Length: ... (HTTP/1.0 and HTTP/1.0)
+         * - Transfer-Encoding: chunked (HTTP/1.1)
+         * - Upgrade: ... (lighttpd then acts as transparent proxy)
+         */
+
+        if (!(r->resp_htags
+              & (HTTP_HEADER_CONTENT_LENGTH
+                |HTTP_HEADER_TRANSFER_ENCODING
+                |HTTP_HEADER_UPGRADE))) {
+            if (r->http_method == HTTP_METHOD_CONNECT && r->http_status == 200){
+                /*(no transfer-encoding if successful CONNECT)*/
+            }
+            else if (r->http_version == HTTP_VERSION_1_1) {
+                off_t qlen = chunkqueue_length(r->write_queue);
+                r->resp_send_chunked = 1;
+                if (qlen) {
+                    /* create initial Transfer-Encoding: chunked segment */
+                    buffer * const b =
+                      chunkqueue_prepend_buffer_open(r->write_queue);
+                    buffer_append_uint_hex(b, (uintmax_t)qlen);
+                    buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+                    chunkqueue_prepend_buffer_commit(r->write_queue);
+                    chunkqueue_append_mem(r->write_queue,CONST_STR_LEN("\r\n"));
+                }
+                http_header_response_append(r, HTTP_HEADER_TRANSFER_ENCODING,
+                                            CONST_STR_LEN("Transfer-Encoding"),
+                                            CONST_STR_LEN("chunked"));
+            }
+            else {
+                r->keep_alive = 0;
+            }
+        }
+    }
+
+    if (r->http_method == HTTP_METHOD_HEAD) {
+        /* HEAD request is like a GET, but without the content */
+        http_response_body_clear(r, 1);
+        r->resp_body_finished = 1;
+    }
+
+    return HANDLER_GO_ON;
+}
+
+
+__attribute_cold__
+static handler_t
+http_response_call_error_handler (request_st * const r, const buffer * const error_handler)
+{
+    /* call error-handler */
+
+    /* set REDIRECT_STATUS to save current HTTP status code
+     * for access by dynamic handlers
+     * https://redmine.lighttpd.net/issues/1828 */
+    buffer * const tb = r->tmp_buf;
+    buffer_clear(tb);
+    buffer_append_int(tb, r->http_status);
+    http_header_env_set(r, CONST_STR_LEN("REDIRECT_STATUS"), CONST_BUF_LEN(tb));
+
+    if (error_handler == r->conf.error_handler) {
+        plugins_call_handle_request_reset(r);
+
+        if (r->reqbody_length) {
+            if (r->reqbody_length != r->reqbody_queue->bytes_in)
+                r->keep_alive = 0;
+            r->reqbody_length = 0;
+            chunkqueue_reset(r->reqbody_queue);
+        }
+
+        r->con->is_writable = 1;
+        r->resp_body_finished = 0;
+        r->resp_body_started = 0;
+
+        r->error_handler_saved_status = r->http_status;
+        r->error_handler_saved_method = r->http_method;
+
+        r->http_method = HTTP_METHOD_GET;
+    }
+    else { /*(preserve behavior for server.error-handler-404)*/
+        /*(negative to flag old behavior)*/
+        r->error_handler_saved_status = -r->http_status;
+    }
+
+    if (r->http_version == HTTP_VERSION_UNSET)
+        r->http_version = HTTP_VERSION_1_0;
+
+    buffer_copy_buffer(&r->target, error_handler);
+    http_response_errdoc_init(r);
+    r->http_status = 0; /*(after http_response_errdoc_init())*/
+    http_response_comeback(r);
+    return HANDLER_COMEBACK;
+}
+
+
+handler_t
+http_response_handler (request_st * const r)
+{
+    const plugin *p = r->handler_module;
+    int rc;
+    if (NULL != p
+        || ((rc = http_response_prepare(r)) == HANDLER_GO_ON
+            && NULL != (p = r->handler_module)))
+        rc = p->handle_subrequest(r, p->data);
+
+    switch (rc) {
+      case HANDLER_WAIT_FOR_EVENT:
+        if (!r->resp_body_finished
+            && (!r->resp_body_started || 0 == r->conf.stream_response_body))
+            return HANDLER_WAIT_FOR_EVENT; /* come back here */
+        /* response headers received from backend; start response */
+        __attribute_fallthrough__
+      case HANDLER_GO_ON:
+      case HANDLER_FINISHED: /*(HANDLER_FINISHED if request not handled)*/
+        if (r->http_status == 0) r->http_status = 200;
+        if (r->error_handler_saved_status > 0)
+            r->http_method = r->error_handler_saved_method;
+        if (NULL == r->handler_module || r->conf.error_intercept) {
+            if (r->error_handler_saved_status) {
+                const int subreq_status = r->http_status;
+                if (r->error_handler_saved_status > 0)
+                    r->http_status = r->error_handler_saved_status;
+                else if (r->http_status == 404 || r->http_status == 403)
+                    /* error-handler-404 is a 404 */
+                    r->http_status = -r->error_handler_saved_status;
+                else {
+                    /* error-handler-404 is back and has generated content */
+                    /* if Status: was set, take it otherwise use 200 */
+                }
+                if (200 <= subreq_status && subreq_status <= 299) {
+                    /*(flag value to indicate that error handler succeeded)
+                     *(for (NULL == r->handler_module))*/
+                    r->error_handler_saved_status = 65535; /* >= 1000 */
+                }
+            }
+            else if (r->http_status >= 400) {
+                const buffer *error_handler = NULL;
+                if (!buffer_string_is_empty(r->conf.error_handler))
+                    error_handler = r->conf.error_handler;
+                else if ((r->http_status == 404 || r->http_status == 403)
+                       && !buffer_string_is_empty(r->conf.error_handler_404))
+                    error_handler = r->conf.error_handler_404;
+
+                if (error_handler)
+                    return http_response_call_error_handler(r, error_handler);
+            }
+        }
+
+        /* we have something to send; go on */
+        /*(CON_STATE_RESPONSE_START; transient state)*/
+        return http_response_write_prepare(r);
+      case HANDLER_WAIT_FOR_FD:
+        return HANDLER_WAIT_FOR_FD;
+      case HANDLER_COMEBACK:
+        http_response_comeback(r);
+        return HANDLER_COMEBACK;
+      /*case HANDLER_ERROR:*/
+      default:
+        return HANDLER_ERROR; /* something went wrong */
     }
 }

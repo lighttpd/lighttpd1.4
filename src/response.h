@@ -9,7 +9,6 @@
 #include <time.h>
 
 int http_response_parse(server *srv, request_st *r);
-int http_response_write_header(request_st *r);
 
 typedef struct http_cgi_opts_t {
   int authorizer;
@@ -43,10 +42,6 @@ int http_cgi_headers(request_st *r, http_cgi_opts *opts, http_cgi_header_append_
 
 handler_t http_response_parse_headers(request_st *r, http_response_opts *opts, buffer *hdrs);
 handler_t http_response_read(request_st *r, http_response_opts *opts, buffer *b, fdnode *fdn);
-handler_t http_response_prepare(request_st *r);
-
-__attribute_cold__
-handler_t http_response_comeback(request_st *r);
 
 __attribute_cold__
 handler_t http_response_reqbody_read_error(request_st *r, int http_status);
@@ -59,6 +54,8 @@ void http_response_send_file (request_st *r, buffer *path);
 void http_response_backend_done (request_st *r);
 void http_response_backend_error (request_st *r);
 void http_response_upgrade_read_body_unknown(request_st *r);
+void http_response_write_header(request_st *r);
+handler_t http_response_handler(request_st *r);
 
 __attribute_cold__
 void strftime_cache_reset(void);
