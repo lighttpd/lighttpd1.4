@@ -128,6 +128,7 @@ typedef struct {
 	/* connection-level state applied to requests in handle_request_env */
 	array *env;
 	int ssl_client_verify;
+	uint32_t request_count;
 } handler_ctx;
 
 
@@ -572,6 +573,7 @@ static int mod_extforward_set_addr(request_st * const r, plugin_data *p, const c
 	if (extforward_check_proxy) {
 		http_header_env_set(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"), CONST_BUF_LEN(con->dst_addr_buf));
 	}
+	hctx->request_count = con->request_count;
 	hctx->saved_remote_addr = con->dst_addr;
 	hctx->saved_remote_addr_buf = con->dst_addr_buf;
 	/* patch connection address */
@@ -1047,6 +1049,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	int is_forwarded_header = 0;
 
 	mod_extforward_patch_config(r, p);
+	if (NULL == p->conf.forwarder) return HANDLER_GO_ON;
 
 	if (r->conf.log_request_handling) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
@@ -1074,9 +1077,24 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		}
 	}
 
-	if (NULL == p->conf.forwarder) return HANDLER_GO_ON;
+	/* Note: headers are parsed per-request even when using HAProxy PROXY
+	 * protocol since Forwarded header might provide additional info and
+	 * internal _L_ vars might be set for later use by mod_proxy or others*/
+	/*if (p->conf.hap_PROXY) return HANDLER_GO_ON;*/
+
 	if (NULL == p->conf.headers) return HANDLER_GO_ON;
-	for (uint32_t k = 0; k < p->conf.headers->used && NULL == forwarded; ++k) {
+
+	/* Do not reparse headers for same request, e.g after HANDER_COMEBACK
+	 * from mod_rewrite, mod_magnet MAGNET_RESTART_REQUEST, mod_cgi
+	 * cgi.local-redir, or gw_backend reconnect.  This has the implication
+	 * that mod_magnet and mod_cgi with local-redir should not modify
+	 * Forwarded or related headers and expect effects here. */
+	handler_ctx *hctx = r->con->plugin_ctx[p->id];
+	if (NULL != hctx && NULL != hctx->saved_remote_addr_buf
+	    && hctx->request_count == r->con->request_count)
+		return HANDLER_GO_ON;
+
+	for (uint32_t k = 0; k < p->conf.headers->used; ++k) {
 		buffer *hdr = &((data_string *)p->conf.headers->data[k])->value;
 		forwarded = http_header_request_get(r, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(hdr));
 		if (forwarded) {
