@@ -367,11 +367,8 @@ connection_write_100_continue (request_st * const r, connection * const con)
      *  which differs from connection_write_chunkqueue()) */
     static const char http_100_continue[] = "HTTP/1.1 100 Continue\r\n\r\n";
 
-    off_t max_bytes =
-      connection_write_throttle(con, sizeof(http_100_continue)-1);
-    if (max_bytes < (off_t)sizeof(http_100_continue)-1) {
-        return 1; /* success; skip sending if throttled to partial */
-    }
+    if (con->traffic_limit_reached)
+        return 1; /* success; skip sending if throttled */
 
     chunkqueue * const cq = r->write_queue;
     off_t written = cq->bytes_out;
