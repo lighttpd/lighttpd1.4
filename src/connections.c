@@ -121,8 +121,8 @@ static void connection_close(connection *con) {
 	request_st * const r = &con->request;
 
   #if 0 /* DEBUG_DEV */
-	/* plugins should have cleaned themselves up */
-	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
+	/* plugins should have cleaned themselves up (id range: [1,used]) */
+	for (uint32_t i = 1; i <= srv->plugins.used; ++i) {
 		if (NULL != r->plugin_ctx[i] || NULL != con->plugin_ctx[i]) {
 			connection_plugin_ctx_check(srv, r);
 			break;
