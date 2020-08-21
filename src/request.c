@@ -695,7 +695,7 @@ static int http_request_parse_pseudohdrs(request_st * const restrict r, const ch
     /* check uri for invalid characters */
     if (http_header_strict) {
         if ((http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)) {
-            /* URI will be checked in http_response_prepare() */
+            /* URI will be checked in http_request_parse_target() */
         }
         else {
             for (uint32_t i = 0; i < ulen; ++i) {
@@ -793,7 +793,7 @@ static int http_request_parse_reqline(request_st * const restrict r, const char 
     /* check uri for invalid characters */
     if (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) { /* http_header_strict */
         if ((http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)) {
-            /* URI will be checked in http_response_prepare() */
+            /* URI will be checked in http_request_parse_target() */
         }
         else {
             for (i = 0; i < len; ++i) {
