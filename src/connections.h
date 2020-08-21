@@ -19,7 +19,7 @@ const char * connection_get_state(request_state_t state);
 const char * connection_get_short_state(request_state_t state);
 void connection_state_machine(connection *con);
 
-#define joblist_append(con) connection_list_append(&(con)->srv->joblist, (con))
+#define joblist_append(con) connection_list_append((con)->srv->joblist, (con))
 void connection_list_append(connections *conns, connection *con);
 
 #endif

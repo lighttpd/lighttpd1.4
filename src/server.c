@@ -233,6 +233,7 @@ static server *server_init(void) {
 
 	CLEAN(tmp_buf);
 #undef CLEAN
+	srv->joblist = &srv->joblist_A;
 
 	strftime_cache_reset();
 
@@ -274,7 +275,8 @@ static void server_free(server *srv) {
 
 	config_free(srv);
 
-	free(srv->joblist.ptr);
+	free(srv->joblist_A.ptr);
+	free(srv->joblist_B.ptr);
 	free(srv->fdwaitqueue.ptr);
 
 	stat_cache_free();
@@ -1504,7 +1506,6 @@ static void server_handle_sigchld (server * const srv) {
 __attribute_hot__
 __attribute_noinline__
 static void server_main_loop (server * const srv) {
-	connections * const joblist = &srv->joblist;
 	time_t last_active_ts = time(NULL);
 
 	while (!srv_shutdown) {
@@ -1550,11 +1551,17 @@ static void server_main_loop (server * const srv) {
 			server_process_fdwaitqueue(srv);
 		}
 
-		if (fdevent_poll(srv->ev, 1000) > 0) {
+		connections * const joblist = srv->joblist;
+
+		if (fdevent_poll(srv->ev, joblist->used ? 0 : 1000) > 0) {
 			last_active_ts = log_epoch_secs;
 		}
 
-		for (uint32_t ndx = 0; ndx < joblist->used; ++ndx) {
+		srv->joblist = (joblist == &srv->joblist_A)
+		  ? &srv->joblist_B
+		  : &srv->joblist_A;
+
+		for (uint32_t ndx = 0, used = joblist->used; ndx < used; ++ndx) {
 			connection *con = joblist->ptr[ndx];
 			connection_state_machine(con);
 		}
