@@ -15,6 +15,8 @@
 #include "base_decls.h"
 #include "buffer.h"
 
+#include "ls-hpack/lshpack.h"
+
 struct chunkqueue;      /* declaration */
 
 typedef enum {
@@ -88,6 +90,8 @@ struct h2con {
      int32_t s_initial_window_size;    /* SETTINGS_INITIAL_WINDOW_SIZE    */
     uint32_t s_max_frame_size;         /* SETTINGS_MAX_FRAME_SIZE         */
     uint32_t s_max_header_list_size;   /* SETTINGS_MAX_HEADER_LIST_SIZE   */
+    struct lshpack_dec decoder;
+    struct lshpack_enc encoder;
 };
 
 void h2_send_goaway (connection *con, request_h2error_t e);

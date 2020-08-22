@@ -404,7 +404,7 @@ h2_parse_frame_settings (connection * const con, const uint8_t *s, uint32_t len)
             if (v > 4096) v = 4096;
             if (v == h2c->s_header_table_size) break;
             h2c->s_header_table_size = v;
-            /* FIXME: TODO: configure HPACK encoder */
+            lshpack_enc_set_max_capacity(&h2c->encoder, v);
             break;
           case H2_SETTINGS_ENABLE_PUSH:
             if ((v|1) != 1) { /*(v == 0 || v == 1)*/
@@ -906,10 +906,12 @@ h2_parse_request_headers (request_st * const r, char * const hdrs, const uint32_
                   "oversized request-header -> sending Status 431");
         return;
     }
+  #if 0 /*(handled in h2_parse_headers_frame())*/
     if (r->conf.log_request_header)
         log_error(r->conf.errh, __FILE__, __LINE__,
           "fd: %d request-len: %d\n%.*s", r->con->fd,
           (int)r->rqst_header_len, (int)r->rqst_header_len, hdrs);
+  #endif
     http_request_headers_process(r, hdrs, hoff, r->con->proto_default_port);
 }
 
@@ -945,13 +947,117 @@ h2_parse_request (request_st * const r)
 static int
 h2_parse_headers_frame (connection * const con, const unsigned char *psrc, const uint32_t plen, request_st * const restrict r, const int trailers)
 {
+    h2con * const h2c = con->h2;
+    struct lshpack_dec * const restrict decoder = &h2c->decoder;
+    const unsigned char * const endp = psrc + plen;
     uint32_t hlen = 0;
+    const uint32_t max_request_field_size = r->conf.max_request_field_size;
+    const int log_request_header = r->conf.log_request_header;
 
+    /*(h2_init_con() resized h2r->tmp_buf to 64k; shared with r->tmp_buf)*/
+    buffer * const tb = r->tmp_buf;
+    force_assert(tb->size >= 65536);/*(sanity check; remove in future)*/
+    const lsxpack_strlen_t tbsz = (tb->size <= LSXPACK_MAX_STRLEN)
+      ? tb->size
+      : LSXPACK_MAX_STRLEN;
 
+    /* note: #define LSHPACK_DEC_HTTP1X_OUTPUT 1 (default) configures
+     * decoder to produce output in format: "field-name: value\r\n"
+     * future: modify build system to define value to 0 in lshpack.h
+     * against which lighttpd builds (or define value in build systems)
+     * Then adjust code below to not use the HTTP/1.x compatibility,
+     * as it is less efficient to copy into HTTP/1.1 request and reparse
+     * than it is to directly parse each decoded header line. */
+    lsxpack_header_t lsx;
+    while (psrc < endp) {
+        memset(&lsx, 0, sizeof(lsxpack_header_t));
+        lsx.buf = tb->ptr;
+        lsx.val_len = tbsz - 1;
+        int rc = lshpack_dec_decode(decoder, &psrc, endp, &lsx);
+        if (rc == LSHPACK_OK) {
+            uint32_t len =
+              lsx.name_len + lsx.val_len + lshpack_dec_extra_bytes(decoder);
+            if ((hlen += len) > max_request_field_size) {
+                log_error(r->conf.errh, __FILE__, __LINE__, "%s",
+                          "oversized request-header -> sending Status 431");
+                r->http_status = 431; /* Request Header Fields Too Large */
+                r->rqst_header_len += hlen;
+                r->read_queue->bytes_in += (off_t)hlen;
+                return 1;
+            }
+            /* request parsing code expects value to be '\0'-terminated for
+             * libc string functions (e.g parsing Content-Length w/ strtoll())
+             * so subtract 1 from initial lsx.val_len and '\0'-term here */
+            lsx.buf[len] = '\0';
 
-    /* XXX: TODO: HPACK decode frame; fill in (request_st *r) */
+            if (log_request_header)
+                log_error(r->conf.errh, __FILE__, __LINE__,
+                  "fd:%d id:%u rqst: %.*s: %.*s", r->con->fd, r->h2id,
+                  (int)lsx.name_len, lsx.buf+lsx.name_offset,
+                  (int)lsx.val_len,  lsx.buf+lsx.val_offset);
 
+            if (!trailers) {
+                chunkqueue_append_mem(r->read_queue,
+                                      lsx.buf+lsx.name_offset, len);
+            }
+            else { /*(trailers)*/
+                /* ignore trailers (after required HPACK decoding) if streaming
+                 * request body to backend since headers have already been sent
+                 * to backend via Common Gateway Interface (CGI) (CGI, FastCGI,
+                 * SCGI, etc) or HTTP/1.1 (proxy) (mod_proxy does not currently
+                 * support using HTTP/2 to connect to backends) */
+                if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
+                    continue;
+                /* Note: do not unconditionally merge into headers since if
+                 * headers had already been sent to backend, then mod_accesslog
+                 * logging of request headers might be inaccurate.
+                 * Many simple backends do not support HTTP/1.1 requests sending
+                 * Transfer-Encoding: chunked, and even those that do might not
+                 * handle trailers.  Some backends do not even support HTTP/1.1.
+                 * For all these reasons, ignore trailers if streaming request
+                 * body to backend.  Revisit in future if adding support for
+                 * connecting to backends using HTTP/2 (with explicit config
+                 * option to force connecting to backends using HTTP/2) */
 
+                /* XXX: TODO: request trailers not handled if streaming reqbody
+                 * XXX: must ensure that trailers are not disallowed field-names
+                 */
+            }
+        }
+      #if 0 /*(see catch-all below)*/
+        /* Send GOAWAY (further below) (decoder state not maintained on error)
+         * (see comments above why decoder state must be maintained) */
+        /* XXX: future: could try to send :status 431 here
+         * and reset other active streams in H2_STATE_OPEN */
+        else if (rc == LSHPACK_ERR_MORE_BUF) {
+            /* XXX: TODO if (r->conf.log_request_header_on_error) */
+            r->http_status = 431; /* Request Header Fields Too Large */
+            /*(try to avoid reading/buffering more data for this request)*/
+            r->h2_rwin = 0; /*(out-of-sync with peer, but is error case)*/
+            /*r->h2state = H2_STATE_HALF_CLOSED_REMOTE*/
+            /* psrc was not advanced if LSHPACK_ERR_MORE_BUF;
+             * processing must stop (since not retrying w/ larger buf)*/
+            break;
+        }
+      #endif
+        else { /* LSHPACK_ERR_BAD_DATA */
+            /* GOAWAY with H2_E_PROTOCOL_ERROR is not specific enough
+             * to tell peer to not retry request, so send RST_STREAM
+             * (slightly more specific, but not by much) before GOAWAY*/
+            /* LSHPACK_ERR_MORE_BUF is treated as an attack, send GOAWAY
+             * (h2r->tmp_buf was resized to 64k in h2_init_con()) */
+            request_h2error_t err = (   rc == LSHPACK_ERR_BAD_DATA
+                                     || rc == LSHPACK_ERR_TOO_LARGE
+                                     || rc == LSHPACK_ERR_MORE_BUF)
+              ? H2_E_COMPRESSION_ERROR
+              : H2_E_PROTOCOL_ERROR;
+            h2_send_rst_stream(r, con, err);
+            if (!h2c->sent_goaway && !trailers)
+                h2c->h2_cid = r->h2id;
+            h2_send_goaway_e(con, err);
+            return 0;
+        }
+    }
 
   #if 1
     /* terminate reconstituted HTTP/1.1 request
@@ -1388,6 +1494,10 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
     h2c->s_max_header_list_size  = ~0u;   /* SETTINGS_MAX_HEADER_LIST_SIZE   */
     h2c->sent_settings           = log_epoch_secs; /*(send SETTINGS below)*/
 
+    lshpack_dec_init(&h2c->decoder);
+    lshpack_enc_init(&h2c->encoder);
+    lshpack_enc_use_hist(&h2c->encoder, 1);
+
     if (http2_settings) /*(if Upgrade: h2c)*/
         h2_parse_frame_settings(con, (uint8_t *)CONST_BUF_LEN(http2_settings));
 
@@ -1402,6 +1512,7 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
      #if 0  /* ? explicitly disable dynamic table ? (and adjust frame length) */
             /* If this is sent, must wait until peer sends SETTINGS with ACK
              * before disabling dynamic table in HPACK decoder */
+            /*(before calling lshpack_dec_set_max_capacity(&h2c->decoder, 0))*/
      ,0x00, H2_SETTINGS_HEADER_TABLE_SIZE
      ,0x00, 0x00, 0x00, 0x00  /* 0 */
      #endif
@@ -1527,11 +1638,70 @@ h2_send_headers_block (request_st * const r, connection * const con, const char 
     /*(h2_init_con() resized h2r->tmp_buf to 64k; shared with r->tmp_buf)*/
     buffer * const tb = r->tmp_buf;
     force_assert(tb->size >= 65536);/*(sanity check; remove in future)*/
+    unsigned char *dst = (unsigned char *)tb->ptr;
+    unsigned char * const dst_end = (unsigned char *)tb->ptr + tb->size;
 
-    /* FIXME: TODO: hpack-encode headers */
-    uint32_t dlen = 0; /* TODO: hpack-encoded len */
-    char *data = tb->ptr; /* TODO: hpack-encoded data */
+    h2con * const h2c = con->h2;
+    struct lshpack_enc * const encoder = &h2c->encoder;
+    lsxpack_header_t lsx;
 
+    int i = 1;
+    if (hdrs[0] == ':') {
+        i = 2;
+        /* expect first line to contain ":status: ..." if pseudo-header,
+         * and expecting single pseudo-header for headers, zero for trailers */
+        /*assert(0 == memcmp(hdrs, ":status: ", sizeof(":status: ")-1));*/
+        memset(&lsx, 0, sizeof(lsxpack_header_t));
+        *(const char **)&lsx.buf = hdrs;
+        lsx.name_offset = 0;
+        lsx.name_len = sizeof(":status")-1;
+        lsx.val_offset = lsx.name_len + 2;
+        lsx.val_len = 3;
+        dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
+        if (dst == (unsigned char *)tb->ptr) {
+            h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
+            return;
+        }
+    }
+
+    /*(note: not expecting any other pseudo-headers)*/
+
+    /* note: expects field-names are lowercased (http_response_write_header())*/
+
+    for (; i < hoff[0]; ++i) {
+        const char *k = hdrs + ((i > 1) ? hoff[i] : 0);
+        const char *end = hdrs + hoff[i+1];
+        const char *v = memchr(k, ':', end-k);
+        /* XXX: DOES NOT handle line wrapping (which is deprecated by RFCs)
+         * (not expecting line wrapping; not produced internally by lighttpd,
+         *  though possible from backends or with custom lua code)*/
+        if (NULL == v || k == v) continue;
+        uint32_t klen = v - k;
+        if (0 == klen) continue;
+        do { ++v; } while (*v == ' ' || *v == '\t'); /*(expect single ' ')*/
+      #ifdef __COVERITY__
+        /*(k has at least .:\n by now, so end[-2] valid)*/
+        force_assert(end >= k + 2);
+      #endif
+        if (end[-2] != '\r') /*(header line must end "\r\n")*/
+            continue;
+        end -= 2;
+        uint32_t vlen = end - v;
+        if (0 == vlen) continue;
+        memset(&lsx, 0, sizeof(lsxpack_header_t));
+        *(const char **)&lsx.buf = hdrs;
+        lsx.name_offset = k - hdrs;
+        lsx.name_len = klen;
+        lsx.val_offset = v - hdrs;
+        lsx.val_len = vlen;
+        unsigned char * const dst_in = dst;
+        dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
+        if (dst == dst_in) {
+            h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
+            return;
+        }
+    }
+    uint32_t dlen = (uint32_t)((char *)dst - tb->ptr);
     h2_send_hpack(r, con, tb->ptr, dlen, flags);
 }
 
@@ -1915,6 +2085,8 @@ h2_retire_con (request_st * const h2r, connection * const con)
     con->h2 = NULL;
 
     /* future: might keep a pool of reusable (h2con *) */
+    lshpack_enc_cleanup(&h2c->encoder);
+    lshpack_dec_cleanup(&h2c->decoder);
     free(h2c);
 }
 
