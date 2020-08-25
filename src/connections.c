@@ -1097,9 +1097,10 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 			}
 			/* fall through */
 		/*case CON_STATE_RESPONSE_START:*//*occurred;transient*/
-			http_response_write_header(r);
 			if (r->http_version > HTTP_VERSION_1_1)
-				h2_send_cqheaders(r, con);
+				h2_send_headers(r, con);
+			else
+				http_response_write_header(r);
 			connection_set_state(r, CON_STATE_WRITE);
 			/* fall through */
 		case CON_STATE_WRITE:

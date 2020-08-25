@@ -19,6 +19,7 @@
 #include "http_header.h"
 #include "log.h"
 #include "request.h"
+#include "response.h"   /* http_response_omit_header() */
 
 
 static request_st * h2_init_stream (request_st * const h2r, connection * const con);
@@ -1616,6 +1617,205 @@ h2_send_hpack (request_st * const r, connection * const con, const char *data, u
 }
 
 
+void
+h2_send_headers (request_st * const r, connection * const con)
+{
+    /*(set keep_alive_idle; out-of-place and non-event for most configs,
+     * but small attempt to (maybe) preserve behavior for specific configs)*/
+    con->keep_alive_idle = r->conf.max_keep_alive_idle;
+
+    /* specialized version of http_response_write_header(); send headers
+     * directly to HPACK encoder, rather than double-buffering in chunkqueue */
+
+    if (304 == r->http_status && (r->resp_htags & HTTP_HEADER_CONTENT_ENCODING))
+        http_header_response_unset(r, HTTP_HEADER_CONTENT_ENCODING,
+                                   CONST_STR_LEN("Content-Encoding"));
+
+    /*(h2_init_con() resized h2r->tmp_buf to 64k; shared with r->tmp_buf)*/
+    buffer * const tb = r->tmp_buf;
+    force_assert(tb->size >= 65536);/*(sanity check; remove in future)*/
+    unsigned char *dst = (unsigned char *)tb->ptr;
+    unsigned char * const dst_end = (unsigned char *)tb->ptr + tb->size;
+
+    h2con * const h2c = con->h2;
+    struct lshpack_enc * const encoder = &h2c->encoder;
+    lsxpack_header_t lsx;
+    uint32_t alen = 7+3+4; /* ":status: xxx\r\n" */
+    const int log_response_header = r->conf.log_response_header;
+    const int resp_header_repeated = r->resp_header_repeated;
+
+    char status[12] = ":status: ";
+    int x = r->http_status; /*(expect status < 1000; should be [100-599])*/
+    status[11] = (x % 10) + '0';
+    status[10] = (x / 10 % 10) + '0';
+    status[9]  = (x / 100) + '0';
+
+    if (log_response_header)
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "fd:%d id:%u resp: %.*s", r->con->fd, r->h2id, 12, status);
+
+    memset(&lsx, 0, sizeof(lsxpack_header_t));
+    lsx.buf = status;
+    lsx.name_offset = 0;
+    lsx.name_len = 7;
+    lsx.val_offset = 9;
+    lsx.val_len = 3;
+    dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
+    if (dst == (unsigned char *)tb->ptr) {
+        h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
+        return;
+    }
+
+    /* add all headers */
+    for (uint32_t i = 0, used = r->resp_headers.used; i < used; ++i) {
+        data_string * const restrict ds =(data_string *)r->resp_headers.data[i];
+        const uint32_t klen = buffer_string_length(&ds->key);
+        const uint32_t vlen = buffer_string_length(&ds->value);
+        const char * const restrict k = ds->key.ptr;
+        if (0 == vlen || 0 == klen) continue;
+        if ((k[0] & 0xdf) == 'X' && http_response_omit_header(r, ds))
+            continue;
+        alen += klen + vlen + 4;
+
+        if (alen > LSXPACK_MAX_STRLEN) {
+            /* ls-hpack default limit (UINT16_MAX) is per-line, due to field
+             * sizes of lsx.name_offset,lsx.name_len,lsx.val_offset,lsx.val_len
+             * However, similar to elsewhere, limit total size of expanded
+             * headers to (very generous) 64k - 1.  Peers might allow less. */
+            h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
+            return;
+        }
+
+        /* HTTP/2 requires lowercase keys
+         * ls-hpack requires key and value be in same buffer
+         * Since keys are typically short, append (and lowercase) key onto
+         * end of value buffer */
+        char * const v = buffer_string_prepare_append(&ds->value, klen);
+        for (uint32_t j = 0; j < klen; ++j)
+            v[j] = (k[j] < 'A' || k[j] > 'Z') ? k[j] : (k[j] | 0x20);
+        /*buffer_commit(&ds->value, klen);*//*(not necessary; truncated below)*/
+
+        uint32_t voff = 0;
+        const char *n;
+        lsx.buf = ds->value.ptr;
+        do {
+            n = !resp_header_repeated
+              ? NULL
+              : memchr(lsx.buf+voff, '\n', vlen - voff);
+
+            memset(&lsx, 0, sizeof(lsxpack_header_t));
+            lsx.buf = ds->value.ptr;
+            lsx.name_offset = vlen;
+            lsx.name_len = klen;
+            lsx.val_offset = voff;
+            if (NULL == n)
+                lsx.val_len = vlen - voff;
+            else {
+                /* multiple headers (same field-name) separated by "\r\n"
+                 * and then "field-name: " (see http_header_response_insert())*/
+                voff = (uint32_t)(n + 1 - lsx.buf);
+                lsx.val_len = voff - 2 - lsx.val_offset; /*(-2 for "\r\n")*/
+                voff += klen + 2;
+            }
+
+            if (log_response_header)
+                log_error(r->conf.errh, __FILE__, __LINE__,
+                  "fd:%d id:%u resp: %.*s: %.*s", r->con->fd, r->h2id,
+                  (int)klen, lsx.buf + lsx.name_offset,
+                  (int)lsx.val_len, lsx.buf + lsx.val_offset);
+
+            unsigned char * const dst_in = dst;
+            dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
+            if (dst == dst_in) {
+                buffer_string_set_length(&ds->value, vlen); /*(restore prior value)*/
+                h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
+                return;
+            }
+        } while (n);
+        buffer_string_set_length(&ds->value, vlen); /*(restore prior value)*/
+    }
+
+    if (!(r->resp_htags & HTTP_HEADER_DATE)) {
+        /* HTTP/1.1 and later requires a Date: header */
+        /* "date: " 6-chars + 30-chars for "%a, %d %b %Y %H:%M:%S GMT" + '\0' */
+        static char tstr[36] = "date: ";
+
+        memset(&lsx, 0, sizeof(lsxpack_header_t));
+        lsx.buf = tstr;
+        lsx.name_offset = 0;
+        lsx.name_len = 4;
+        lsx.val_offset = 6;
+        lsx.val_len = 29;
+
+        /* cache the generated timestamp */
+        static time_t tlast;
+        const time_t cur_ts = log_epoch_secs;
+        if (tlast != cur_ts) {
+            tlast = cur_ts;
+            strftime(tstr+6, sizeof(tstr)-6,
+                     "%a, %d %b %Y %H:%M:%S GMT", gmtime(&tlast));
+        }
+
+        alen += 35+2;
+
+        if (log_response_header)
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "fd:%d id:%u resp: %.*s", r->con->fd, r->h2id, 35, tstr);
+
+        unsigned char * const dst_in = dst;
+        dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
+        if (dst == dst_in) {
+            h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
+            return;
+        }
+    }
+
+    if (!(r->resp_htags & HTTP_HEADER_SERVER)
+        && !buffer_string_is_empty(r->conf.server_tag)) {
+        buffer * const b = chunk_buffer_acquire();
+        const uint32_t vlen = buffer_string_length(r->conf.server_tag);
+        buffer_copy_string_len(b, CONST_STR_LEN("server: "));
+        buffer_append_string_len(b, CONST_BUF_LEN(r->conf.server_tag));
+
+        alen += 6+vlen+4;
+
+        if (log_response_header)
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "fd:%d id:%u resp: %.*s", r->con->fd, r->h2id,
+              (int)6+vlen+2, b->ptr);
+
+        memset(&lsx, 0, sizeof(lsxpack_header_t));
+        lsx.buf = b->ptr;
+        lsx.name_offset = 0;
+        lsx.name_len = 6;
+        lsx.val_offset = 8;
+        lsx.val_len = vlen;
+        unsigned char * const dst_in = dst;
+        dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
+        chunk_buffer_release(b);
+        if (dst == dst_in) {
+            h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
+            return;
+        }
+    }
+
+    alen += 2; /* "virtual" blank line ("\r\n") ending headers */
+    r->resp_header_len = alen;
+    /*(accounting for mod_accesslog and mod_rrdtool)*/
+    chunkqueue * const wq = r->write_queue;
+    wq->bytes_in  += (off_t)alen;
+    wq->bytes_out += (off_t)alen;
+
+    const uint32_t dlen = (uint32_t)((char *)dst - tb->ptr);
+    const uint32_t flags =
+      (r->resp_body_finished && chunkqueue_is_empty(r->write_queue))
+        ? H2_FLAG_END_STREAM
+        : 0;
+    h2_send_hpack(r, con, tb->ptr, dlen, flags);
+}
+
+
+__attribute_cold__
 __attribute_noinline__
 static void
 h2_send_headers_block (request_st * const r, connection * const con, const char * const hdrs, const uint32_t hlen, uint32_t flags)
@@ -1719,6 +1919,9 @@ h2_send_100_continue (request_st * const r, connection * const con)
      * { 0x48, 0x03, 0x31, 0x30, 0x30 }
      */
 
+    /* short header block, so reuse shared code used for trailers
+     * rather than adding something specific for ls-hpack here */
+
     h2_send_headers_block(r, con, CONST_STR_LEN(":status: 100\r\n\r\n"), 0);
 }
 
@@ -1767,6 +1970,7 @@ h2_send_end_stream_trailers (request_st * const r, connection * const con, const
 }
 
 
+#if 0 /*(replaced by h2_send_headers())*/
 void
 h2_send_cqheaders (request_st * const r, connection * const con)
 {
@@ -1782,6 +1986,7 @@ h2_send_cqheaders (request_st * const r, connection * const con)
     h2_send_headers_block(r, con, c->mem->ptr + c->offset, len, flags);
     chunkqueue_mark_written(r->write_queue, len);
 }
+#endif
 
 
 #if 0

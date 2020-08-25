@@ -172,6 +172,7 @@ struct request_st {
     char resp_body_started;
     char resp_send_chunked;
     char resp_decode_chunked;
+    char resp_header_repeated;
 
     char loops_per_request;  /* catch endless loops in a single request */
     char keep_alive; /* only request.c can enable it, all other just disable */

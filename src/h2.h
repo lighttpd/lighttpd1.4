@@ -104,7 +104,7 @@ void h2_init_con (request_st * restrict h2r, connection * restrict con, const bu
 
 void h2_send_100_continue (request_st *r, connection *con);
 
-void h2_send_cqheaders (request_st *r, connection *con);
+void h2_send_headers (request_st *r, connection *con);
 
 void h2_send_cqdata (request_st *r, connection *con, struct chunkqueue *cq, uint32_t dlen);
 

@@ -183,6 +183,7 @@ void http_header_response_insert(request_st * const r, enum http_header_e id, co
     if (!buffer_string_is_empty(vb)) { /* append value */
         buffer_append_string_len(vb, CONST_STR_LEN("\r\n"));
         if (r->http_version >= HTTP_VERSION_2) {
+            r->resp_header_repeated = 1;
             char * const h = buffer_string_prepare_append(vb, klen + vlen + 2);
             for (uint32_t i = 0; i < klen; ++i)
                 h[i] = (k[i] < 'A' || k[i] > 'Z') ? k[i] : (k[i] | 0x20);

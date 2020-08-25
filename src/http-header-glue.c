@@ -275,6 +275,7 @@ void http_response_reset (request_st * const r) {
         buffer_reset(&r->physical.rel_path);
     }
     r->resp_htags = 0;
+    r->resp_header_repeated = 0;
     array_reset_data_strings(&r->resp_headers);
     http_response_body_clear(r, 0);
 }

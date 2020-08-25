@@ -54,6 +54,10 @@ void http_response_send_file (request_st *r, buffer *path);
 void http_response_backend_done (request_st *r);
 void http_response_backend_error (request_st *r);
 void http_response_upgrade_read_body_unknown(request_st *r);
+
+__attribute_cold__
+int http_response_omit_header(request_st *r, const data_string *ds);
+
 void http_response_write_header(request_st *r);
 handler_t http_response_handler(request_st *r);
 

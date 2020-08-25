@@ -22,8 +22,10 @@
 #include <string.h>
 #include <time.h>
 
-__attribute_cold__
-static int http_response_omit_header(request_st * const r, const data_string * const ds) {
+
+int
+http_response_omit_header (request_st * const r, const data_string * const ds)
+{
     const size_t klen = buffer_string_length(&ds->key);
     if (klen == sizeof("X-Sendfile")-1
         && buffer_eq_icase_ssn(ds->key.ptr, CONST_STR_LEN("X-Sendfile")))
@@ -53,21 +55,9 @@ http_response_write_header (request_st * const r)
 	chunkqueue * const cq = r->write_queue;
 	buffer * const b = chunkqueue_prepend_buffer_open(cq);
 
-	/* future: might fork this routine and send headers directly to
-	 * the HPACK encoder, rather than double-buffering in chunkqueue */
-	const int h1 = (r->http_version <= HTTP_VERSION_1_1);
-	if (!h1) {
-		buffer_append_string_len(b, CONST_STR_LEN(":status: "));
-		buffer_append_int(b, r->http_status);
-	}
-	else {
-		if (r->http_version == HTTP_VERSION_1_1) {
-			buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.1 "));
-		} else {
-			buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.0 "));
-		}
-		http_status_append(b, r->http_status);
-	}
+	const char * const httpv = (r->http_version == HTTP_VERSION_1_1) ? "HTTP/1.1 " : "HTTP/1.0 ";
+	buffer_copy_string_len(b, httpv, sizeof("HTTP/1.1 ")-1);
+	http_status_append(b, r->http_status);
 
 	/* disable keep-alive if requested */
 
@@ -87,8 +77,7 @@ http_response_write_header (request_st * const r)
 	if ((r->resp_htags & HTTP_HEADER_UPGRADE) && r->http_version == HTTP_VERSION_1_1) {
 		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("upgrade"));
 	} else if (0 == r->keep_alive) {
-		if (h1) /*(e.g. not HTTP_VERSION_2)*/
-			http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("close"));
+		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("close"));
 	} else if (r->http_version == HTTP_VERSION_1_0) {/*(&& r->keep_alive != 0)*/
 		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("keep-alive"));
 	}
@@ -107,16 +96,7 @@ http_response_write_header (request_st * const r)
 			continue;
 
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-		if (!h1) { /* HTTP/2 requires lowercase keys */
-			const size_t klen = buffer_string_length(&ds->key);
-			char * const h = buffer_string_prepare_append(b, klen);
-			const char * const k = ds->key.ptr;
-			for (uint32_t j = 0; j < klen; ++j)
-				h[j] = (k[j] < 'A' || k[j] > 'Z') ? k[j] : (k[j] | 0x20);
-			buffer_commit(b, klen);
-		}
-		else
-			buffer_append_string_buffer(b, &ds->key);
+		buffer_append_string_buffer(b, &ds->key);
 		buffer_append_string_len(b, CONST_STR_LEN(": "));
 		buffer_append_string_buffer(b, &ds->value);
 	}
@@ -135,15 +115,13 @@ http_response_write_header (request_st * const r)
 		}
 
 		/* HTTP/1.1 and later requires a Date: header */
-		buffer_append_string_len(b, !h1 ? "\r\ndate: " : "\r\nDate: ",
-		                           sizeof("\r\ndate: ")-1);
+		buffer_append_string_len(b, CONST_STR_LEN("\r\nDate: "));
 		buffer_append_string_len(b, tstr, tlen);
 	}
 
 	if (!(r->resp_htags & HTTP_HEADER_SERVER)) {
 		if (!buffer_string_is_empty(r->conf.server_tag)) {
-			buffer_append_string_len(b, !h1 ? "\r\nserver: " : "\r\nServer: ",
-		                                   sizeof("\r\nserver: ")-1);
+			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: "));
 			buffer_append_string_len(b, CONST_BUF_LEN(r->conf.server_tag));
 		}
 	}
