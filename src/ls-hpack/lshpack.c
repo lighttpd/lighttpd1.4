@@ -22,6 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+/*(lighttpd customization)*/
+/*#define NDEBUG*/
+
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>

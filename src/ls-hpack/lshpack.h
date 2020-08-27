@@ -40,6 +40,10 @@ extern "C" {
 #define lshpack_strlen_t lsxpack_strlen_t
 #define LSHPACK_MAX_STRLEN LSXPACK_MAX_STRLEN
 
+/*(lighttpd customization)*/
+/* decoder provides "field-name: value\r\n"; define to 0 to omit ": " and "\r\n" */
+/*#define LSHPACK_DEC_HTTP1X_OUTPUT 0*/
+
 #ifndef LSHPACK_DEC_HTTP1X_OUTPUT
 #define LSHPACK_DEC_HTTP1X_OUTPUT 1
 #endif
