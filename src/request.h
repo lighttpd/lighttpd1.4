@@ -193,6 +193,23 @@ struct request_st {
 };
 
 
+typedef struct http_header_parse_ctx {
+    char *k;
+    char *v;
+    uint32_t klen;
+    uint32_t vlen;
+    uint32_t hlen;
+    int pseudo;
+    int scheme;
+    int trailers;
+    uint32_t max_request_field_size;
+    unsigned int http_parseopts;
+} http_header_parse_ctx;
+
+
+int http_request_validate_pseudohdrs (request_st * restrict r, int scheme, unsigned int http_parseopts);
+int http_request_parse_header (request_st * restrict r, http_header_parse_ctx * restrict hpctx);
+void http_request_headers_process_h2 (request_st * restrict r, int scheme_port);
 void http_request_headers_process (request_st * restrict r, char * restrict hdrs, const unsigned short * restrict hoff, int scheme_port);
 int http_request_parse_target(request_st *r, int scheme_port);
 int http_request_host_normalize(buffer *b, int scheme_port);

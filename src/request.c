@@ -559,161 +559,256 @@ static const char * http_request_parse_reqline_uri(request_st * const restrict r
     }
 }
 
-static int http_request_parse_pseudohdrs(request_st * const restrict r, const char * const restrict ptr, const unsigned short * const restrict hoff, const unsigned int http_parseopts) {
-    /* HTTP/2 request pseudo-header fields */
-    const unsigned int http_header_strict = (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
-    int scheme = 0;
-    uint32_t ulen = 0, alen = 0;
-    const char *uri = NULL;
-    for (int i = 1; i < hoff[0]; ++i) {
-        const char *k = ptr + ((i > 1) ? hoff[i] : 0);
-        /* one past last line hoff[hoff[0]] is to final "\r\n" */
-        const char *end = ptr + hoff[i+1];
 
-        if (*k != ':')
-            break;
-        ++k;
-        const char *colon = memchr(k, ':', end - k);
-        if (NULL == colon)
-            return http_request_header_line_invalid(r, 400, "invalid header missing ':' -> 400");
+__attribute_cold__
+__attribute_noinline__
+static int http_request_parse_header_other(request_st * const restrict r, const char * const restrict k, const int klen, const unsigned int http_header_strict);
 
-        const int klen = (int)(colon - k);
-        if (0 == klen)
-            return http_request_header_line_invalid(r, 400, "invalid header key -> 400");
 
-        const char *v = colon + 1;
-        /* remove leading whitespace from value */
-        while (*v == ' ' || *v == '\t') ++v;
-
-      #ifdef __COVERITY__
-        /*(ptr has at least ::\r\n by now, so end[-2] valid)*/
-        force_assert(end >= k + 1);
-      #endif
-        /* remove trailing whitespace from value (+ remove '\r\n') */
-        if (end[-2] == '\r')
-            --end;
-        else if (http_header_strict)
-            return http_request_header_line_invalid(r, 400, "missing CR before LF in header -> 400");
-        --end;
-        while (v > end && (end[-1] == ' ' || end[-1] == '\t')) --end;
-
-        const int vlen = (int)(end - v);
-        if (vlen <= 0)
-            return http_request_header_line_invalid(r, 400, "invalid pseudo-header -> 400");
-
-        switch (klen) {
-          case 4:
-            if (0 == memcmp(k, "path", 4)) {
-                if (NULL != uri)
-                    return http_request_header_line_invalid(r, 400, "repeated pseudo-header -> 400");
-                uri = v;
-                ulen = (uint32_t)vlen;
-                continue;
-            }
-            break;
-          case 6:
-            if (0 == memcmp(k, "method", 6)) {
-                if (HTTP_METHOD_UNSET != r->http_method)
-                    return http_request_header_line_invalid(r, 400, "repeated pseudo-header -> 400");
-                r->http_method = get_http_method_key(v, vlen);
-                if (HTTP_METHOD_UNSET >= r->http_method)
-                    return http_request_header_line_invalid(r, 501, "unknown http-method -> 501");
-                continue;
-            }
-            else if (0 == memcmp(k, "scheme", 6)) {
-                if (scheme)
-                    return http_request_header_line_invalid(r, 400, "repeated pseudo-header -> 400");
-                switch (vlen) { /*(validated, but then value is ignored)*/
-                  case 5: /* "https" */
-                    if (v[4]!='s') break;
-                    __attribute_fallthrough__
-                  case 4: /* "http" */
-                    if (v[0]=='h' && v[1]=='t' && v[2]=='t' && v[3]=='p') {
-                        scheme = 1;
-                        continue;
-                    }
-                    break;
-                  default:
-                    break;
-                }
-                return http_request_header_line_invalid(r, 400, "unknown pseudo-header scheme -> 400");
-            }
-            break;
-          case 9:
-            if (0 == memcmp(k, "authority", 9)) {
-                if (r->http_host)
-                    return http_request_header_line_invalid(r, 400, "repeated pseudo-header -> 400");
-                if (vlen >= 1024) /*(expecting < 256)*/
-                    return http_request_header_line_invalid(r, 400, "invalid pseudo-header authority too long -> 400");
-                alen = (uint32_t)vlen;
-                /* insert as host header */
-                http_header_request_set(r, HTTP_HEADER_HOST, CONST_STR_LEN("host"), v, vlen);
-                r->http_host = http_header_request_get(r, HTTP_HEADER_HOST, CONST_STR_LEN("Host"));
-                continue;
-            }
-            break;
-          default:
-            break;
-        }
-        return http_request_header_line_invalid(r, 400, "invalid pseudo-header -> 400");
-    }
-
+int
+http_request_validate_pseudohdrs (request_st * const restrict r, const int scheme, const unsigned int http_parseopts)
+{
     /* :method is required to indicate method
      * CONNECT method must have :method and :authority
      * All other methods must have at least :method :scheme :path */
 
     if (HTTP_METHOD_UNSET == r->http_method)
-        return http_request_header_line_invalid(r, 400, "missing pseudo-header method -> 400");
+        return http_request_header_line_invalid(r, 400,
+          "missing pseudo-header method -> 400");
 
     if (HTTP_METHOD_CONNECT != r->http_method) {
         if (!scheme)
-            return http_request_header_line_invalid(r, 400, "missing pseudo-header scheme -> 400");
+            return http_request_header_line_invalid(r, 400,
+              "missing pseudo-header scheme -> 400");
 
-        if (NULL == uri)
-            return http_request_header_line_invalid(r, 400, "missing pseudo-header path -> 400");
+        if (buffer_string_is_empty(&r->target))
+            return http_request_header_line_invalid(r, 400,
+              "missing pseudo-header path -> 400");
 
+        const char * const uri = r->target.ptr;
         if (*uri != '/') { /* (common case: (*uri == '/')) */
-            if (*uri != '*' || ulen != 1 || HTTP_METHOD_OPTIONS != r->http_method)
-                return http_request_header_line_invalid(r, 400, "invalid pseudo-header path -> 400");
+            if (uri[0] != '*' || uri[1] != '\0'
+                || HTTP_METHOD_OPTIONS != r->http_method)
+                return http_request_header_line_invalid(r, 400,
+                  "invalid pseudo-header path -> 400");
         }
     }
     else { /* HTTP_METHOD_CONNECT */
         if (NULL == r->http_host)
-            return http_request_header_line_invalid(r, 400, "missing pseudo-header authority -> 400");
-        if (NULL != uri || scheme)
-            return http_request_header_line_invalid(r, 400, "invalid pseudo-header with CONNECT -> 400");
+            return http_request_header_line_invalid(r, 400,
+              "missing pseudo-header authority -> 400");
+        if (!buffer_string_is_empty(&r->target) || scheme)
+            return http_request_header_line_invalid(r, 400,
+              "invalid pseudo-header with CONNECT -> 400");
         /*(reuse uri and ulen to assign to r->target)*/
-        uri = r->http_host->ptr;
-        ulen = alen;
+        buffer_copy_buffer(&r->target, r->http_host);
     }
+    buffer_copy_buffer(&r->target_orig, &r->target);
 
     /* r->http_host, if set, is checked with http_request_host_policy()
      * in http_request_parse() */
 
-    /* copied from end of http_request_parse_reqline() */
+    /* copied and modified from end of http_request_parse_reqline() */
 
     /* check uri for invalid characters */
+    const unsigned int http_header_strict =
+      (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+    if (http_header_strict
+        && (http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT))
+        return 0; /* URI will be checked in http_request_parse_target() */
+
+    const uint32_t ulen = buffer_string_length(&r->target);
+    const uint8_t * const uri = (uint8_t *)r->target.ptr;
     if (http_header_strict) {
-        if ((http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)) {
-            /* URI will be checked in http_request_parse_target() */
-        }
-        else {
-            for (uint32_t i = 0; i < ulen; ++i) {
-                if (!request_uri_is_valid_char(uri[i]))
-                    return http_request_header_char_invalid(r, uri[i], "invalid character in URI -> 400");
-            }
+        for (uint32_t i = 0; i < ulen; ++i) {
+            if (!request_uri_is_valid_char(uri[i]))
+                return http_request_header_char_invalid(r, uri[i],
+                  "invalid character in URI -> 400");
         }
     }
     else {
-        /* check entire set of request headers for '\0' */
-        if (NULL != memchr(ptr, '\0', hoff[hoff[0]]))
-            return http_request_header_char_invalid(r, '\0', "invalid character in header -> 400");
+        if (NULL != memchr(uri, '\0', ulen))
+            return http_request_header_char_invalid(r, '\0',
+              "invalid character in header -> 400");
     }
 
-    buffer_copy_string_len(&r->target, uri, ulen);
-    buffer_copy_string_len(&r->target_orig, uri, ulen);
     return 0;
 }
+
+
+int
+http_request_parse_header (request_st * const restrict r, http_header_parse_ctx * const restrict hpctx)
+{
+    const char * const restrict k = hpctx->k;
+    const char * const restrict v = hpctx->v;
+    const uint32_t klen = hpctx->klen;
+    const uint32_t vlen = hpctx->vlen;
+
+    if (0 == klen)
+        return http_request_header_line_invalid(r, 400,
+          "invalid header key -> 400");
+    if (0 == vlen)
+        return http_request_header_line_invalid(r, 400,
+          "invalid header value -> 400");
+
+    if ((hpctx->hlen += klen + vlen + 4) > hpctx->max_request_field_size) {
+        /*(configurable with server.max-request-field-size; default 8k)*/
+      #if 1 /* emit to error log for people sending large headers */
+        log_error(r->conf.errh, __FILE__, __LINE__,
+                  "oversized request header -> 431");
+        return 431; /* Request Header Fields Too Large */
+      #else
+        /* 431 Request Header Fields Too Large */
+        return http_request_header_line_invalid(r, 431,
+          "oversized request header -> 431");
+      #endif
+    }
+
+    if (2 == klen && k[0] == 't' && k[1] == 'e'
+        && !buffer_eq_icase_ss(v, vlen, CONST_STR_LEN("trailers")))
+        return http_request_header_line_invalid(r, 400,
+          "invalid TE header value with HTTP/2 -> 400");
+
+    if (!hpctx->trailers) {
+        if (*k == ':') {
+            /* HTTP/2 request pseudo-header fields */
+            if (!hpctx->pseudo) /*(pseudo header after non-pseudo header)*/
+                return http_request_header_line_invalid(r, 400,
+                  "invalid pseudo-header -> 400");
+            switch (klen-1) {
+              case 4:
+                if (0 == memcmp(k+1, "path", 4)) {
+                    if (!buffer_string_is_empty(&r->target))
+                        return http_request_header_line_invalid(r, 400,
+                          "repeated pseudo-header -> 400");
+                    buffer_copy_string_len(&r->target, v, vlen);
+                    return 0;
+                }
+                break;
+              case 6:
+                if (0 == memcmp(k+1, "method", 6)) {
+                    if (HTTP_METHOD_UNSET != r->http_method)
+                        return http_request_header_line_invalid(r, 400,
+                          "repeated pseudo-header -> 400");
+                    r->http_method = get_http_method_key(v, vlen);
+                    if (HTTP_METHOD_UNSET >= r->http_method)
+                        return http_request_header_line_invalid(r, 501,
+                          "unknown http-method -> 501");
+                    return 0;
+                }
+                else if (0 == memcmp(k+1, "scheme", 6)) {
+                    if (hpctx->scheme)
+                        return http_request_header_line_invalid(r, 400,
+                          "repeated pseudo-header -> 400");
+                    switch (vlen) {/*(validated, but then ignored)*/
+                      case 5: /* "https" */
+                        if (v[4]!='s') break;
+                        __attribute_fallthrough__
+                      case 4: /* "http" */
+                        if (v[0]=='h' && v[1]=='t' && v[2]=='t' && v[3]=='p') {
+                            hpctx->scheme = 1;
+                            return 0;
+                        }
+                        break;
+                      default:
+                        break;
+                    }
+                    return http_request_header_line_invalid(r, 400,
+                      "unknown pseudo-header scheme -> 400");
+                }
+                break;
+              case 9:
+                if (0 == memcmp(k+1, "authority", 9)) {
+                    if (r->http_host)
+                        return http_request_header_line_invalid(r, 400,
+                          "repeated pseudo-header -> 400");
+                    if (vlen >= 1024) /*(expecting < 256)*/
+                        return http_request_header_line_invalid(r, 400,
+                          "invalid pseudo-header authority too long -> 400");
+                    /* insert as host header */
+                    http_header_request_set(r, HTTP_HEADER_HOST,
+                                            CONST_STR_LEN("host"), v, vlen);
+                    r->http_host =
+                      http_header_request_get(r, HTTP_HEADER_HOST,
+                                              CONST_STR_LEN("Host"));
+                    return 0;
+                }
+                break;
+              default:
+                break;
+            }
+            return http_request_header_line_invalid(r, 400,
+              "invalid pseudo-header -> 400");
+        }
+        else { /*(non-pseudo headers)*/
+            if (hpctx->pseudo) { /*(transition to non-pseudo headers)*/
+                hpctx->pseudo = 0;
+                int status =
+                  http_request_validate_pseudohdrs(r, hpctx->scheme,
+                                                   hpctx->http_parseopts);
+                if (0 != status) return status;
+            }
+
+            const unsigned int http_header_strict =
+              (hpctx->http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+
+            for (uint32_t j = 0; j < klen; ++j) {
+                if ((k[j] >= 'a' && k[j] <= 'z') || k[j] == '-')
+                    continue; /*(common cases)*/
+                if (k[j] >= 'A' && k[j] <= 'Z')
+                    return 400;
+                if (0 != http_request_parse_header_other(r, k+j, klen-j,
+                                                         http_header_strict))
+                    return 400;
+                break;
+            }
+
+            if (http_header_strict) {
+                for (uint32_t j = 0; j < vlen; ++j) {
+                    if ((((uint8_t *)v)[j] < 32 && v[j] != '\t') || v[j]==127)
+                        return http_request_header_char_invalid(r, v[j],
+                          "invalid character in header -> 400");
+                }
+            }
+            else {
+                if (NULL != memchr(v, '\0', vlen))
+                    return http_request_header_char_invalid(r, '\0',
+                      "invalid character in header -> 400");
+            }
+
+            const enum http_header_e id = http_header_hkey_get(k, klen);
+            return http_request_parse_single_header(r, id, k, klen, v, vlen);
+        }
+    }
+    else { /*(trailers)*/
+        /* ignore trailers (after required HPACK decoding) if streaming
+         * request body to backend since headers have already been sent
+         * to backend via Common Gateway Interface (CGI) (CGI, FastCGI,
+         * SCGI, etc) or HTTP/1.1 (proxy) (mod_proxy does not currently
+         * support using HTTP/2 to connect to backends) */
+      #if 0 /* (if needed, save flag in hpctx instead of fdevent.h dependency)*/
+        if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
+            return 0;
+      #endif
+        /* Note: do not unconditionally merge into headers since if
+         * headers had already been sent to backend, then mod_accesslog
+         * logging of request headers might be inaccurate.
+         * Many simple backends do not support HTTP/1.1 requests sending
+         * Transfer-Encoding: chunked, and even those that do might not
+         * handle trailers.  Some backends do not even support HTTP/1.1.
+         * For all these reasons, ignore trailers if streaming request
+         * body to backend.  Revisit in future if adding support for
+         * connecting to backends using HTTP/2 (with explicit config
+         * option to force connecting to backends using HTTP/2) */
+
+        /* XXX: TODO: request trailers not handled if streaming reqbody
+         * XXX: must ensure that trailers are not disallowed field-names
+         */
+
+        return 0;
+    }
+}
+
 
 static int http_request_parse_reqline(request_st * const restrict r, const char * const restrict ptr, const unsigned short * const restrict hoff, const unsigned int http_parseopts) {
     size_t len = hoff[2];
@@ -982,15 +1077,7 @@ static int http_request_parse_headers(request_st * const restrict r, char * cons
     }
   #endif
 
-    int i = 2;
-    if (r->http_version >= HTTP_VERSION_2) {
-        /* CONNECT must have :method and :authority
-         * All other methods must have at least :method :scheme :path */
-        i += (r->http_method != HTTP_METHOD_CONNECT) ? 2 : 1;
-        while (ptr[hoff[i]] == ':') ++i;
-    }
-
-    for (; i < hoff[0]; ++i) {
+    for (int i = 2; i < hoff[0]; ++i) {
         const char *k = ptr + hoff[i];
         /* one past last line hoff[hoff[0]] is to final "\r\n" */
         char *end = ptr + hoff[i+1];
@@ -1090,26 +1177,9 @@ static int http_request_parse_headers(request_st * const restrict r, char * cons
 
 
 static int
-http_request_parse (request_st * const restrict r, char * const restrict hdrs, const unsigned short * const restrict hoff, const int scheme_port)
+http_request_parse (request_st * const restrict r, const int scheme_port)
 {
-    /*
-     * Request: "^(GET|POST|HEAD|...) ([^ ]+(\\?[^ ]+|)) (HTTP/1\\.[01])$"
-     * Header : "^([-a-zA-Z]+): (.+)$"
-     * End    : "^$"
-     */
-
-    int status;
-    const unsigned int http_parseopts = r->conf.http_parseopts;
-
-    status = (r->http_version >= HTTP_VERSION_2)
-      ? http_request_parse_pseudohdrs(r, hdrs, hoff, http_parseopts)
-      : http_request_parse_reqline(r, hdrs, hoff, http_parseopts);
-    if (0 != status) return status;
-
-    status = http_request_parse_target(r, scheme_port);
-    if (0 != status) return status;
-
-    status = http_request_parse_headers(r, hdrs, hoff, http_parseopts);
+    int status = http_request_parse_target(r, scheme_port);
     if (0 != status) return status;
 
     /*(r->http_host might not be set until after parsing request headers)*/
@@ -1117,6 +1187,7 @@ http_request_parse (request_st * const restrict r, char * const restrict hdrs, c
     buffer_to_lower(&r->uri.authority);
 
     /* post-processing */
+    const unsigned int http_parseopts = r->conf.http_parseopts;
 
     /* check hostname field if it is set */
     if (r->http_host) {
@@ -1172,11 +1243,31 @@ http_request_parse (request_st * const restrict r, char * const restrict hdrs, c
 }
 
 
-void
-http_request_headers_process (request_st * const restrict r, char * const restrict hdrs, const unsigned short * const restrict hoff, const int scheme_port)
+static int
+http_request_parse_hoff (request_st * const restrict r, char * const restrict hdrs, const unsigned short * const restrict hoff, const int scheme_port)
 {
-    r->http_status = http_request_parse(r, hdrs, hoff, scheme_port);
+    /*
+     * Request: "^(GET|POST|HEAD|...) ([^ ]+(\\?[^ ]+|)) (HTTP/1\\.[01])$"
+     * Header : "^([-a-zA-Z]+): (.+)$"
+     * End    : "^$"
+     */
 
+    int status;
+    const unsigned int http_parseopts = r->conf.http_parseopts;
+
+    status = http_request_parse_reqline(r, hdrs, hoff, http_parseopts);
+    if (0 != status) return status;
+
+    status = http_request_parse_headers(r, hdrs, hoff, http_parseopts);
+    if (0 != status) return status;
+
+    return http_request_parse(r, scheme_port);
+}
+
+
+static void
+http_request_headers_fin (request_st * const restrict r)
+{
     if (0 == r->http_status) {
       #if 0
         r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
@@ -1196,12 +1287,54 @@ http_request_headers_process (request_st * const restrict r, char * const restri
     else {
         r->keep_alive = 0;
         r->reqbody_length = 0;
+    }
+}
 
+
+void
+http_request_headers_process (request_st * const restrict r, char * const restrict hdrs, const unsigned short * const restrict hoff, const int scheme_port)
+{
+    r->http_status = http_request_parse_hoff(r, hdrs, hoff, scheme_port);
+
+    http_request_headers_fin(r);
+
+    if (0 != r->http_status) {
         if (r->conf.log_request_header_on_error) {
-            /*(http_request_parse() modifies hdrs only to
+            /*(http_request_parse_headers() modifies hdrs only to
              * undo line-wrapping in-place using spaces)*/
             log_error(r->conf.errh, __FILE__, __LINE__,
               "request-header:\n%.*s", (int)r->rqst_header_len, hdrs);
         }
     }
+}
+
+
+void
+http_request_headers_process_h2 (request_st * const restrict r, const int scheme_port)
+{
+    if (0 == r->http_status)
+        r->http_status = http_request_parse(r, scheme_port);
+
+    if (0 == r->http_status) {
+        if (r->rqst_htags & HTTP_HEADER_CONNECTION)
+            r->http_status = http_request_header_line_invalid(r, 400,
+              "invalid Connection header with HTTP/2 -> 400");
+    }
+
+    http_request_headers_fin(r);
+
+  #if 0 /* not supported; headers not collected into a single buf for HTTP/2 */
+    if (0 != r->http_status) {
+        if (r->conf.log_request_header_on_error) {
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "request-header:\n%.*s", (int)r->rqst_header_len, hdrs);
+        }
+    }
+  #endif
+
+    /* ignore Upgrade if using HTTP/2 */
+    if (r->rqst_htags & HTTP_HEADER_UPGRADE)
+        http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+                                  CONST_STR_LEN("upgrade"));
+    /* XXX: should filter out other hop-by-hop connection headers, too */
 }

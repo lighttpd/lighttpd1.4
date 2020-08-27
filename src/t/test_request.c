@@ -35,11 +35,12 @@ static void run_http_request_parse(request_st * const r, int line, int status, c
     }
     --hloffsets[0]; /*(ignore final blank line "\r\n" ending headers)*/
     const int proto_default_port = 80;
-    int http_status = http_request_parse(r,hdrs,hloffsets,proto_default_port);
+    int http_status =
+      http_request_parse_hoff(r, hdrs, hloffsets, proto_default_port);
     if (http_status != status) {
         fprintf(stderr,
                 "%s.%d: %s() failed: expected '%d', got '%d' for test %s\n",
-                __FILE__, line, "http_request_parse", status, http_status,
+                __FILE__, line, "http_request_parse_hoff", status, http_status,
                 desc);
         fflush(stderr);
         abort();

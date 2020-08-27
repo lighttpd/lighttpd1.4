@@ -885,75 +885,22 @@ h2_recv_trailers_r (connection * const con, h2con * const h2c, const uint32_t id
 }
 
 
-/* prototype if HPACK-decoded HEADERS reconstituted
- * into HTTP/1.1 request format in r->read_queue */
-
-/* Note: similar to connection_handle_read_state(), except operates on single
- * buf since HTTP/2 headers delivered in a single buffer and are complete or err
- */
-__attribute_noinline__
 static void
-h2_parse_request_headers (request_st * const r, char * const hdrs, const uint32_t header_len)
+h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc, const uint32_t plen, const int trailers)
 {
-    unsigned short hoff[8192]; /* max num header lines + 3; 16k on stack */
-    hoff[0] = 1;                         /* number of lines */
-    hoff[1] = 0;                         /* base offset for all lines */
-    /*hoff[2] = ...;*/                   /* offset from base for 2nd line */
-    r->rqst_header_len = http_header_parse_hoff(hdrs, header_len, hoff);
-    if (0 == r->rqst_header_len || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1) {
-        /* error if headers incomplete or too many header fields */
-        r->http_status = 431; /* Request Header Fields Too Large */
-        log_error(r->conf.errh, __FILE__, __LINE__,
-                  "oversized request-header -> sending Status 431");
-        return;
-    }
-  #if 0 /*(handled in h2_parse_headers_frame())*/
-    if (r->conf.log_request_header)
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "fd: %d request-len: %d\n%.*s", r->con->fd,
-          (int)r->rqst_header_len, (int)r->rqst_header_len, hdrs);
-  #endif
-    http_request_headers_process(r, hdrs, hoff, r->con->proto_default_port);
-}
-
-
-static void
-h2_parse_request (request_st * const r)
-{
-    chunk * const c = r->read_queue->first;
-    r->rqst_header_len = buffer_string_length(c->mem) - (uint32_t)c->offset;
-    h2_parse_request_headers(r, c->mem->ptr + c->offset, r->rqst_header_len);
-    chunkqueue_mark_written(r->read_queue, r->rqst_header_len);
-
-    if (0 != r->http_status) {
-        if (431 == r->http_status) /*(e.g. too many header lines)*/
-            log_error(r->conf.errh, __FILE__, __LINE__,
-                      "oversized request-header -> sending Status 431");
-    }
-
-    /* ignore Upgrade if using HTTP/2 */
-    if (r->rqst_htags & HTTP_HEADER_UPGRADE) {
-        http_header_request_unset(r, HTTP_HEADER_UPGRADE,
-                                  CONST_STR_LEN("upgrade"));
-        buffer * const connhdr =
-          http_header_request_get(r, HTTP_HEADER_CONNECTION,
-                                  CONST_STR_LEN("connection"));
-        if (connhdr)
-            http_header_remove_token(connhdr, CONST_STR_LEN("upgrade"));
-    }
-    /* XXX: should filter out other hop-by-hop connection headers, too */
-}
-
-
-static int
-h2_parse_headers_frame (connection * const con, const unsigned char *psrc, const uint32_t plen, request_st * const restrict r, const int trailers)
-{
-    h2con * const h2c = con->h2;
+    h2con * const h2c = r->con->h2;
     struct lshpack_dec * const restrict decoder = &h2c->decoder;
     const unsigned char * const endp = psrc + plen;
-    uint32_t hlen = 0;
-    const uint32_t max_request_field_size = r->conf.max_request_field_size;
+    http_header_parse_ctx hpctx;
+    hpctx.hlen     = 0;
+    hpctx.pseudo   = 1;
+    hpctx.scheme   = 0;
+    hpctx.trailers = trailers;
+    hpctx.max_request_field_size = r->conf.max_request_field_size;
+    hpctx.http_parseopts = r->conf.http_parseopts;
     const int log_request_header = r->conf.log_request_header;
+    int rc = LSHPACK_OK;
+    /*buffer_clear(&r->target);*//*(initial state)*/
 
     /*(h2_init_con() resized h2r->tmp_buf to 64k; shared with r->tmp_buf)*/
     buffer * const tb = r->tmp_buf;
@@ -974,56 +921,27 @@ h2_parse_headers_frame (connection * const con, const unsigned char *psrc, const
         memset(&lsx, 0, sizeof(lsxpack_header_t));
         lsx.buf = tb->ptr;
         lsx.val_len = tbsz - 1;
-        int rc = lshpack_dec_decode(decoder, &psrc, endp, &lsx);
+        rc = lshpack_dec_decode(decoder, &psrc, endp, &lsx);
+        if (0 == lsx.name_len)
+            rc = LSHPACK_ERR_BAD_DATA;
         if (rc == LSHPACK_OK) {
-            uint32_t len =
-              lsx.name_len + lsx.val_len + lshpack_dec_extra_bytes(decoder);
-            if ((hlen += len) > max_request_field_size) {
-                log_error(r->conf.errh, __FILE__, __LINE__, "%s",
-                          "oversized request-header -> sending Status 431");
-                r->http_status = 431; /* Request Header Fields Too Large */
-                r->rqst_header_len += hlen;
-                r->read_queue->bytes_in += (off_t)hlen;
-                return 1;
-            }
             /* request parsing code expects value to be '\0'-terminated for
              * libc string functions (e.g parsing Content-Length w/ strtoll())
              * so subtract 1 from initial lsx.val_len and '\0'-term here */
-            lsx.buf[len] = '\0';
+            lsx.buf[lsx.val_offset+lsx.val_len] = '\0';
+            hpctx.k = lsx.buf+lsx.name_offset;
+            hpctx.v = lsx.buf+lsx.val_offset;
+            hpctx.klen = lsx.name_len;
+            hpctx.vlen = lsx.val_len;
 
             if (log_request_header)
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "fd:%d id:%u rqst: %.*s: %.*s", r->con->fd, r->h2id,
-                  (int)lsx.name_len, lsx.buf+lsx.name_offset,
-                  (int)lsx.val_len,  lsx.buf+lsx.val_offset);
+                  (int)hpctx.klen, hpctx.k, (int)hpctx.vlen, hpctx.v);
 
-            if (!trailers) {
-                chunkqueue_append_mem(r->read_queue,
-                                      lsx.buf+lsx.name_offset, len);
-            }
-            else { /*(trailers)*/
-                /* ignore trailers (after required HPACK decoding) if streaming
-                 * request body to backend since headers have already been sent
-                 * to backend via Common Gateway Interface (CGI) (CGI, FastCGI,
-                 * SCGI, etc) or HTTP/1.1 (proxy) (mod_proxy does not currently
-                 * support using HTTP/2 to connect to backends) */
-                if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
-                    continue;
-                /* Note: do not unconditionally merge into headers since if
-                 * headers had already been sent to backend, then mod_accesslog
-                 * logging of request headers might be inaccurate.
-                 * Many simple backends do not support HTTP/1.1 requests sending
-                 * Transfer-Encoding: chunked, and even those that do might not
-                 * handle trailers.  Some backends do not even support HTTP/1.1.
-                 * For all these reasons, ignore trailers if streaming request
-                 * body to backend.  Revisit in future if adding support for
-                 * connecting to backends using HTTP/2 (with explicit config
-                 * option to force connecting to backends using HTTP/2) */
-
-                /* XXX: TODO: request trailers not handled if streaming reqbody
-                 * XXX: must ensure that trailers are not disallowed field-names
-                 */
-            }
+            r->http_status = http_request_parse_header(r, &hpctx);
+            if (0 != r->http_status)
+                break;
         }
       #if 0 /*(see catch-all below)*/
         /* Send GOAWAY (further below) (decoder state not maintained on error)
@@ -1047,39 +965,35 @@ h2_parse_headers_frame (connection * const con, const unsigned char *psrc, const
              * (slightly more specific, but not by much) before GOAWAY*/
             /* LSHPACK_ERR_MORE_BUF is treated as an attack, send GOAWAY
              * (h2r->tmp_buf was resized to 64k in h2_init_con()) */
-            request_h2error_t err = (   rc == LSHPACK_ERR_BAD_DATA
-                                     || rc == LSHPACK_ERR_TOO_LARGE
-                                     || rc == LSHPACK_ERR_MORE_BUF)
-              ? H2_E_COMPRESSION_ERROR
-              : H2_E_PROTOCOL_ERROR;
-            h2_send_rst_stream(r, con, err);
+            request_h2error_t err = H2_E_COMPRESSION_ERROR;
+            if (rc != LSHPACK_ERR_BAD_DATA) {
+                /* LSHPACK_ERR_TOO_LARGE, LSHPACK_ERR_MORE_BUF */
+                err = H2_E_PROTOCOL_ERROR;
+                h2_send_rst_stream(r, r->con, err);
+            }
             if (!h2c->sent_goaway && !trailers)
                 h2c->h2_cid = r->h2id;
-            h2_send_goaway_e(con, err);
-            return 0;
+            h2_send_goaway_e(r->con, err);
+            h2_retire_stream(r, r->con);
+            break;
         }
     }
 
-  #if 1
-    /* terminate reconstituted HTTP/1.1 request
-     * (along with HTTP/2 pseudo-headers) */
-    chunkqueue_append_mem(r->read_queue, CONST_STR_LEN("\r\n"));
-    if (r->read_queue->first->next) {
-        hlen += 2;
-        h2_frame_cq_compact(r->read_queue, hlen);
-    }
-    h2_parse_request(r);
-  #else
-    /* future: adjust counts if bypassing HTTP/1.x compatibility
-     * (avoiding reconsitituting HTTP/1.1 request in r->read_queue) */
-    r->rqst_header_len += hlen;
+    hpctx.hlen += 2;
+    r->rqst_header_len = hpctx.hlen;
     /*(accounting for mod_accesslog and mod_rrdtool)*/
     chunkqueue * const rq = r->read_queue;
-    rq->bytes_in  += (off_t)hlen;
-    rq->bytes_out += (off_t)hlen;
-  #endif
+    rq->bytes_in  += (off_t)hpctx.hlen;
+    rq->bytes_out += (off_t)hpctx.hlen;
 
-    return 1;
+    if (0 == r->http_status && LSHPACK_OK == rc) {
+        if (hpctx.pseudo)
+            r->http_status =
+              http_request_validate_pseudohdrs(r, hpctx.scheme,
+                                               hpctx.http_parseopts);
+        if (0 == r->http_status)
+            http_request_headers_process_h2(r, r->con->proto_default_port);
+    }
 }
 
 
@@ -1185,8 +1099,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         alen -= 5;
     }
 
-    if (!h2_parse_headers_frame(con, psrc, alen, r, trailers))
-        return 0;
+    h2_parse_headers_frame(r, psrc, alen, trailers);
 
   #if 0 /*(handled in h2_parse_frames() as a connection error)*/
     if (s[3] == H2_FTYPE_PUSH_PROMISE) {
