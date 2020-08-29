@@ -3,6 +3,7 @@
 #include "base.h"
 #include "connections.h"
 #include "fdevent.h"
+#include "h2.h"
 #include "http_header.h"
 #include "log.h"
 
@@ -254,7 +255,13 @@ static void mod_status_html_rtable (buffer * const b, plugin_data * const p, con
     for (uint32_t i = 0, used = srv->conns.used; i < used; ++i) {
         const connection * const con = cptr[i];
         const request_st * const r = &con->request;
+        if (r->http_status <= HTTP_VERSION_1_1)
             mod_status_html_rtable_r(b, r, con, cur_ts);
+        else {
+            h2con * const h2c = con->h2;
+            for (uint32_t j = 0, rused = h2c->rused; j < rused; ++j)
+                mod_status_html_rtable_r(b, h2c->r[j], con, cur_ts);
+        }
     }
 
     buffer_append_string_len(b, CONST_STR_LEN(
@@ -524,12 +531,14 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	buffer_append_int(b, srv->conns.used);
 	buffer_append_string_len(b, CONST_STR_LEN(" connections</b>\n"));
 
+	int per_line = 50;
 	for (j = 0; j < srv->conns.used; ++j) {
 		connection *c = srv->conns.ptr[j];
 		const request_st * const cr = &c->request;
 		const char *state;
 
-		if (CON_STATE_READ == cr->state && !buffer_string_is_empty(&cr->target_orig)) {
+		if ((c->h2 && 0 == c->h2->rused)
+		    || (CON_STATE_READ == cr->state && !buffer_string_is_empty(&cr->target_orig))) {
 			state = "k";
 			++cstates[CON_STATE_CLOSE+2];
 		} else {
@@ -539,7 +548,8 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 
 		buffer_append_string_len(b, state, 1);
 
-		if (((j + 1) % 50) == 0) {
+		if (0 == --per_line) {
+			per_line = 50;
 			buffer_append_string_len(b, CONST_STR_LEN("\n"));
 		}
 	}
@@ -615,7 +625,8 @@ static handler_t mod_status_handle_server_status_text(server *srv, request_st * 
 		connection *c = srv->conns.ptr[i];
 		const request_st * const cr = &c->request;
 		const char *state =
-		  (CON_STATE_READ == cr->state && !buffer_string_is_empty(&cr->target_orig))
+		  ((c->h2 && 0 == c->h2->rused)
+		   || (CON_STATE_READ == cr->state && !buffer_string_is_empty(&cr->target_orig)))
 		    ? "k"
 		    : connection_get_short_state(cr->state);
 		buffer_append_string_len(b, state, 1);
