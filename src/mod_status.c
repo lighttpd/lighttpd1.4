@@ -173,6 +173,94 @@ static int mod_status_get_multiplier(double *avg, char *multiplier, int size) {
 	return 0;
 }
 
+static void mod_status_html_rtable_r (buffer * const b, const request_st * const r, const connection * const con, const time_t cur_ts) {
+    buffer_append_string_len(b, CONST_STR_LEN("<tr><td class=\"string\">"));
+
+    buffer_append_string_buffer(b, con->dst_addr_buf);
+
+    buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
+
+    if (r->reqbody_length) {
+        buffer_append_int(b, r->reqbody_queue->bytes_in);
+        buffer_append_string_len(b, CONST_STR_LEN("/"));
+        buffer_append_int(b, r->reqbody_length);
+    }
+    else
+        buffer_append_string_len(b, CONST_STR_LEN("0/0"));
+
+    buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
+
+    buffer_append_int(b, r->write_queue->bytes_out);
+    buffer_append_string_len(b, CONST_STR_LEN("/"));
+    buffer_append_int(b, r->write_queue->bytes_out + chunkqueue_length(r->write_queue));
+
+    buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
+
+    if (CON_STATE_READ == r->state && !buffer_string_is_empty(&r->target_orig)) {
+        buffer_append_string_len(b, CONST_STR_LEN("keep-alive"));
+    }
+    else
+        buffer_append_string(b, connection_get_state(r->state));
+
+    buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
+
+    buffer_append_int(b, cur_ts - r->start_ts);
+
+    buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
+
+    if (buffer_string_is_empty(r->server_name))
+        buffer_append_string_buffer(b, &r->uri.authority);
+    else
+        buffer_append_string_buffer(b, r->server_name);
+
+    buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
+
+    if (!buffer_string_is_empty(&r->uri.path))
+        buffer_append_string_encoded(b, CONST_BUF_LEN(&r->uri.path), ENCODING_HTML);
+
+    if (!buffer_string_is_empty(&r->uri.query)) {
+        buffer_append_string_len(b, CONST_STR_LEN("?"));
+        buffer_append_string_encoded(b, CONST_BUF_LEN(&r->uri.query), ENCODING_HTML);
+    }
+
+    if (!buffer_string_is_empty(&r->target_orig)) {
+        buffer_append_string_len(b, CONST_STR_LEN(" ("));
+        buffer_append_string_encoded(b, CONST_BUF_LEN(&r->target_orig), ENCODING_HTML);
+        buffer_append_string_len(b, CONST_STR_LEN(")"));
+    }
+    buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
+
+    buffer_append_string_buffer(b, &r->physical.path);
+
+    buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
+}
+
+static void mod_status_html_rtable (buffer * const b, plugin_data * const p, const server * const srv, const time_t cur_ts) {
+    buffer_append_string_len(b, CONST_STR_LEN(
+      "<table summary=\"status\" class=\"status\">\n"));
+
+    buffer_append_string_len(b, CONST_STR_LEN("<tr>"));
+    mod_status_header_append_sort(b, p, "Client IP");
+    mod_status_header_append_sort(b, p, "Read");
+    mod_status_header_append_sort(b, p, "Written");
+    mod_status_header_append_sort(b, p, "State");
+    mod_status_header_append_sort(b, p, "Time");
+    mod_status_header_append_sort(b, p, "Host");
+    mod_status_header_append_sort(b, p, "URI");
+    mod_status_header_append_sort(b, p, "File");
+    buffer_append_string_len(b, CONST_STR_LEN("</tr>\n"));
+
+    connection * const * const cptr = srv->conns.ptr;
+    for (uint32_t i = 0, used = srv->conns.used; i < used; ++i) {
+        const connection * const con = cptr[i];
+        const request_st * const r = &con->request;
+            mod_status_html_rtable_r(b, r, con, cur_ts);
+    }
+
+    buffer_append_string_len(b, CONST_STR_LEN(
+      "</table>\n"));
+}
+
 static handler_t mod_status_handle_server_status_html(server *srv, request_st * const r, plugin_data *p) {
 	buffer *b = chunkqueue_append_buffer_open(r->write_queue);
 	double avg;
@@ -473,91 +561,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	buffer_append_string_len(b, CONST_STR_LEN("</table>"));
 
 	buffer_append_string_len(b, CONST_STR_LEN("\n</pre><hr />\n<h2>Connections</h2>\n"));
-
-	buffer_append_string_len(b, CONST_STR_LEN("<table summary=\"status\" class=\"status\">\n"));
-	buffer_append_string_len(b, CONST_STR_LEN("<tr>"));
-	mod_status_header_append_sort(b, p, "Client IP");
-	mod_status_header_append_sort(b, p, "Read");
-	mod_status_header_append_sort(b, p, "Written");
-	mod_status_header_append_sort(b, p, "State");
-	mod_status_header_append_sort(b, p, "Time");
-	mod_status_header_append_sort(b, p, "Host");
-	mod_status_header_append_sort(b, p, "URI");
-	mod_status_header_append_sort(b, p, "File");
-	buffer_append_string_len(b, CONST_STR_LEN("</tr>\n"));
-
-	for (j = 0; j < srv->conns.used; ++j) {
-		connection *c = srv->conns.ptr[j];
-		const request_st * const cr = &c->request;
-
-		buffer_append_string_len(b, CONST_STR_LEN("<tr><td class=\"string\">"));
-
-		buffer_append_string_buffer(b, c->dst_addr_buf);
-
-		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
-
-		if (cr->reqbody_length) {
-			buffer_append_int(b, cr->reqbody_queue->bytes_in);
-			buffer_append_string_len(b, CONST_STR_LEN("/"));
-			buffer_append_int(b, cr->reqbody_length);
-		} else {
-			buffer_append_string_len(b, CONST_STR_LEN("0/0"));
-		}
-
-		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
-
-		buffer_append_int(b, c->write_queue->bytes_out);
-		buffer_append_string_len(b, CONST_STR_LEN("/"));
-		buffer_append_int(b, c->write_queue->bytes_out + chunkqueue_length(c->write_queue));
-
-		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
-
-		if (CON_STATE_READ == cr->state && !buffer_string_is_empty(&cr->target_orig)) {
-			buffer_append_string_len(b, CONST_STR_LEN("keep-alive"));
-		} else {
-			buffer_append_string(b, connection_get_state(cr->state));
-		}
-
-		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
-
-		buffer_append_int(b, cur_ts - cr->start_ts);
-
-		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
-
-		if (buffer_string_is_empty(cr->server_name)) {
-			buffer_append_string_buffer(b, &cr->uri.authority);
-		}
-		else {
-			buffer_append_string_buffer(b, cr->server_name);
-		}
-
-		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
-
-		if (!buffer_string_is_empty(&cr->uri.path)) {
-			buffer_append_string_encoded(b, CONST_BUF_LEN(&cr->uri.path), ENCODING_HTML);
-		}
-
-		if (!buffer_string_is_empty(&cr->uri.query)) {
-			buffer_append_string_len(b, CONST_STR_LEN("?"));
-			buffer_append_string_encoded(b, CONST_BUF_LEN(&cr->uri.query), ENCODING_HTML);
-		}
-
-		if (!buffer_string_is_empty(&cr->target_orig)) {
-			buffer_append_string_len(b, CONST_STR_LEN(" ("));
-			buffer_append_string_encoded(b, CONST_BUF_LEN(&cr->target_orig), ENCODING_HTML);
-			buffer_append_string_len(b, CONST_STR_LEN(")"));
-		}
-		buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
-
-		buffer_append_string_buffer(b, &cr->physical.path);
-
-		buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
-	}
-
-
-	buffer_append_string_len(b, CONST_STR_LEN(
-		      "</table>\n"));
-
+	mod_status_html_rtable(b, p, srv, cur_ts);
 
 	buffer_append_string_len(b, CONST_STR_LEN(
 		      " </body>\n"
