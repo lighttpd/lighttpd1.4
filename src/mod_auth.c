@@ -738,8 +738,15 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 	char *pw;
 	handler_t rc = HANDLER_UNSET;
 
-	if (NULL == backend) {
-		log_error(r->conf.errh, __FILE__, __LINE__, "auth.backend not configured for %s", r->uri.path.ptr);
+	if (NULL == backend || NULL == backend->basic) {
+		if (NULL == backend)
+			log_error(r->conf.errh, __FILE__, __LINE__,
+			  "auth.backend not configured for %s", r->uri.path.ptr);
+		else
+			log_error(r->conf.errh, __FILE__, __LINE__,
+			  "auth.require \"method\" => \"basic\" invalid "
+			  "(try \"digest\"?) for %s",
+			  r->uri.path.ptr);
 		r->http_status = 500;
 		r->handler_module = NULL;
 		return HANDLER_FINISHED;
@@ -1208,9 +1215,15 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 	dkv[7].ptr = &nc;
 	dkv[8].ptr = &respons;
 
-	if (NULL == backend) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "auth.backend not configured for %s", r->uri.path.ptr);
+	if (NULL == backend || NULL == backend->digest) {
+		if (NULL == backend)
+			log_error(r->conf.errh, __FILE__, __LINE__,
+			  "auth.backend not configured for %s", r->uri.path.ptr);
+		else
+			log_error(r->conf.errh, __FILE__, __LINE__,
+			  "auth.require \"method\" => \"digest\" invalid "
+			  "(try \"basic\"?) for %s",
+			  r->uri.path.ptr);
 		r->http_status = 500;
 		r->handler_module = NULL;
 		return HANDLER_FINISHED;
