@@ -1027,6 +1027,7 @@ static int http_response_process_headers(request_st * const r, http_response_opt
         }
 
         key_len = value - key;
+        if (0 == key_len) continue; /*(already ignored when writing response)*/
         do { ++value; } while (*value == ' ' || *value == '\t'); /* skip LWS */
         id = http_header_hkey_get(key, key_len);
 
