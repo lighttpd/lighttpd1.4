@@ -430,7 +430,7 @@ if get_option('with_wolfssl') != 'false'
 	libcrypto += libwolfssl_includes_dep
 	conf_data.set('HAVE_WOLFSSL_SSL_H', true)
 endif
-if get_option('with_mbedtls')
+if get_option('with_mbedtls') != 'false'
 	# manual search:
 	# header: mbedtls/ssl.h
 	# function: mbedtls_cipher_info_from_type (-lmbedtls)
@@ -441,14 +441,14 @@ if get_option('with_mbedtls')
 	libcrypto = [ dependency('libmbedcrypto') ]
 	conf_data.set('HAVE_LIBMBEDCRYPTO', true)
 endif
-if get_option('with_nettle') != 'false'
+if get_option('with_nettle')
 	# manual search:
 	# header: nettle/nettle-types.h
 	# function: nettle_md5_init (-lnettle)
 	libcrypto = [ dependency('libnettle') ]
 	conf_data.set('HAVE_NETTLE_NETTLE_TYPES_H', true)
 endif
-if get_option('with_gnutls')
+if get_option('with_gnutls') != 'false'
 	# manual search:
 	# header: gnutls/gnutls.h
 	# function: gnutls_check_version (-lgnutls)
@@ -458,7 +458,7 @@ if get_option('with_gnutls')
 	  libcrypto = [ dependency('libgnutls') ]
 	endif
 endif
-if get_option('with_nss')
+if get_option('with_nss') != 'false'
 	# manual search:
 	# header: nss3/nss.h
 	# function: NSSSSL_GetVersion (-lssl3)
