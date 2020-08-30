@@ -94,6 +94,7 @@ typedef struct {
 	unsigned char high_precision_timestamps;
 	unsigned char h2proto;
 	unsigned short http_url_normalize;
+	unsigned char absolute_dir_redirect;
 
 	unsigned short max_worker;
 	unsigned short max_fds;

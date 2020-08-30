@@ -76,28 +76,28 @@ $t->{REQUEST}  = ( <<EOF
 GET /dummydir HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/dummydir/' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => '/dummydir/' } ];
 ok($tf->handle_http($t) == 0, 'internal redirect in directory');
 
 $t->{REQUEST}  = ( <<EOF
 GET /dummydir?foo HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/dummydir/?foo' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => '/dummydir/?foo' } ];
 ok($tf->handle_http($t) == 0, 'internal redirect in directory + querystring');
 
 $t->{REQUEST}  = ( <<EOF
 GET /~test%20ä_ HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/~test%20%C3%A4_/' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => '/~test%20%C3%A4_/' } ];
 ok($tf->handle_http($t) == 0, 'internal redirect in directory with special characters');
 
 $t->{REQUEST}  = ( <<EOF
 GET /~test%20ä_?foo HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => 'http://'.$tf->{HOSTNAME}.':'.$tf->{PORT}.'/~test%20%C3%A4_/?foo' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => '/~test%20%C3%A4_/?foo' } ];
 ok($tf->handle_http($t) == 0, 'internal redirect in directory with special characters + querystring');
 
 ## simple-vhost

@@ -30,6 +30,7 @@
 #define MAX_HTTP_RESPONSE_FIELD_SIZE 65535
 
 
+__attribute_cold__
 static int http_response_buffer_append_authority(request_st * const r, buffer * const o) {
 	if (!buffer_string_is_empty(&r->uri.authority)) {
 		buffer_append_string_buffer(o, &r->uri.authority);
@@ -99,10 +100,14 @@ static int http_response_buffer_append_authority(request_st * const r, buffer * 
 
 int http_response_redirect_to_directory(request_st * const r, int status) {
 	buffer *o = r->tmp_buf;
-	buffer_copy_buffer(o, &r->uri.scheme);
-	buffer_append_string_len(o, CONST_STR_LEN("://"));
-	if (0 != http_response_buffer_append_authority(r, o)) {
-		return -1;
+	buffer_clear(o);
+	/* XXX: store flag in global at startup? */
+	if (r->con->srv->srvconf.absolute_dir_redirect) {
+		buffer_copy_buffer(o, &r->uri.scheme);
+		buffer_append_string_len(o, CONST_STR_LEN("://"));
+		if (0 != http_response_buffer_append_authority(r, o)) {
+			return -1;
+		}
 	}
 	buffer_append_string_encoded(o, CONST_BUF_LEN(&r->uri.path), ENCODING_REL_URI);
 	buffer_append_string_len(o, CONST_STR_LEN("/"));
