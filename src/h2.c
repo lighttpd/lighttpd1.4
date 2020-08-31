@@ -2084,18 +2084,16 @@ h2_init_stream (request_st * const h2r, connection * const con)
     ++con->request_count;
     force_assert(h2c->rused < sizeof(h2c->r)/sizeof(*h2c->r));
     /* initialize stream as subrequest (request_st *) */
-    request_st * const r = calloc(1, sizeof(request_st));
-    force_assert(r);
+    request_st * const r = request_acquire(con);
     /* XXX: TODO: assign default priority, etc.
      *      Perhaps store stream id and priority in separate table */
     h2c->r[h2c->rused++] = r;
-    server * const srv = con->srv;
-    request_init(r, con, srv);
     r->h2_rwin = h2c->s_initial_window_size;
     r->h2_swin = h2c->s_initial_window_size;
     r->http_version = HTTP_VERSION_2;
 
     /* copy config state from h2r */
+    server * const srv = con->srv;
     const uint32_t used = srv->config_context->used;
     r->conditional_is_valid = h2r->conditional_is_valid;
     memcpy(r->cond_cache, h2r->cond_cache, used * sizeof(cond_cache_t));
@@ -2103,6 +2101,7 @@ h2_init_stream (request_st * const h2r, connection * const con)
     if (used > 1) /*(save 128b per con if no conditions)*/
         memcpy(r->cond_match, h2r->cond_match, used * sizeof(cond_match_t));
   #endif
+    /*(see config_reset_config())*/
     r->server_name = h2r->server_name;
     memcpy(&r->conf, &h2r->conf, sizeof(request_config));
 
@@ -2133,10 +2132,7 @@ h2_release_stream (request_st * const r, connection * const con)
       #endif
     }
 
-    request_reset(r);
-    /* future: might keep a pool of reusable (request_st *) */
-    request_free(r);
-    free(r);
+    request_release(r);
 }
 
 

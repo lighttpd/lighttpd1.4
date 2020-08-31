@@ -56,7 +56,6 @@ request_reset (request_st * const r)
 
     http_response_reset(r);
 
-    r->resp_header_len = 0;
     r->loops_per_request = 0;
 
     r->h2state = 0; /* H2_STATE_IDLE */
@@ -109,9 +108,60 @@ request_reset (request_st * const r)
         array_reset_data_strings(&r->env);
 
     chunkqueue_reset(r->reqbody_queue);
+    /* r->read_queue, r->write_queue are shared with con for HTTP/1.1
+     * but are different than con->read_queue, con->write_queue for HTTP/2
+     * For HTTP/1.1, when r->read_queue == con->read_queue, r->read_queue
+     * is not cleared between requests since it might contain subsequent
+     * requests.  (see also request_release()) */
 
     /* The cond_cache gets reset in response.c */
     /* config_cond_cache_reset(r); */
+}
+
+
+#if 0 /* DEBUG_DEV */
+__attribute_cold__
+static void request_plugin_ctx_check(request_st * const r, server * const srv) {
+    /* plugins should have cleaned themselves up */
+    for (uint32_t i = 0, used = srv->plugins.used; i < used; ++i) {
+        plugin *p = ((plugin **)(srv->plugins.ptr))[i];
+        plugin_data_base *pd = p->data;
+        if (!pd) continue;
+        if (NULL == r->plugin_ctx[pd->id]
+            && NULL == r->con->plugin_ctx[pd->id]) continue;
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "missing cleanup in %s", p->name);
+        r->plugin_ctx[pd->id] = NULL;
+        r->con->plugin_ctx[pd->id] = NULL;
+    }
+}
+#endif
+
+
+void
+request_reset_ex (request_st * const r)
+{
+  #if 0 /* DEBUG_DEV */
+    /* plugins should have cleaned themselves up (id range: [1,used]) */
+    connection * const con = r->con;
+    server * const srv = con->srv;
+    for (uint32_t i = 1; i <= srv->plugins.used; ++i) {
+        if (NULL != r->plugin_ctx[i] || NULL != con->plugin_ctx[i]) {
+            request_plugin_ctx_check(r, srv);
+            break;
+        }
+    }
+  #endif
+
+    buffer_clear(&r->uri.authority);
+    buffer_reset(&r->uri.path);
+    buffer_reset(&r->uri.query);
+    buffer_reset(&r->target_orig);
+    buffer_reset(&r->target);       /*(see comments in request_reset())*/
+    buffer_reset(&r->pathinfo);     /*(see comments in request_reset())*/
+
+    /* preserve; callers must handle changes */
+    /*r->state = CON_STATE_CONNECT;*/
 }
 
 
@@ -147,4 +197,41 @@ request_free (request_st * const r)
     free(r->cond_match);
 
     /* note: r is not zeroed here and r is not freed here */
+}
+
+
+void
+request_release (request_st * const r)
+{
+    /* (For HTTP/1.1, r == &con->request, and so request_release() not called)
+     * r->read_queue, r->write_queue are shared with con for HTTP/1.1
+     * but are different than con->read_queue, con->write_queue for HTTP/2
+     * For HTTP/1.1, when r->read_queue == con->read_queue, r->read_queue
+     * is not cleared between requests since it might contain subsequent
+     * requests.  (see also request_reset()) */
+    chunkqueue_reset(r->read_queue);
+
+    /*(r->cond_cache and r->cond_match are re-init in h2_init_stream())*/
+
+    request_reset(r);
+    request_reset_ex(r);
+    r->state = CON_STATE_CONNECT;
+
+    /* future: might keep a pool of reusable (request_st *) */
+    request_free(r);
+    free(r);
+}
+
+
+request_st *
+request_acquire (connection * const con)
+{
+    /* future: might keep a pool of reusable (request_st *) */
+    request_st * const r = calloc(1, sizeof(request_st));
+    force_assert(r);
+    request_init(r, con, con->srv);
+
+    r->con = con;
+    r->tmp_buf = con->srv->tmp_buf;
+    return r;
 }

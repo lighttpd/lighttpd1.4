@@ -94,24 +94,6 @@ static void connection_del(server *srv, connection *con) {
 #endif
 }
 
-#if 0 /* DEBUG_DEV */
-__attribute_cold__
-static void connection_plugin_ctx_check(server * const srv, request_st * const r) {
-	/* plugins should have cleaned themselves up */
-	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
-		plugin *p = ((plugin **)(srv->plugins.ptr))[i];
-		plugin_data_base *pd = p->data;
-		if (!pd) continue;
-		if (NULL == r->plugin_ctx[pd->id]
-		    && NULL == r->con->plugin_ctx[pd->id]) continue;
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "missing cleanup in %s", p->name);
-		r->plugin_ctx[pd->id] = NULL;
-		r->con->plugin_ctx[pd->id] = NULL;
-	}
-}
-#endif
-
 static void connection_close(connection *con) {
 	if (con->fd < 0) con->fd = -con->fd;
 
@@ -119,24 +101,8 @@ static void connection_close(connection *con) {
 
 	server * const srv = con->srv;
 	request_st * const r = &con->request;
-
-  #if 0 /* DEBUG_DEV */
-	/* plugins should have cleaned themselves up (id range: [1,used]) */
-	for (uint32_t i = 1; i <= srv->plugins.used; ++i) {
-		if (NULL != r->plugin_ctx[i] || NULL != con->plugin_ctx[i]) {
-			connection_plugin_ctx_check(srv, r);
-			break;
-		}
-	}
-  #endif
-
+	request_reset_ex(r); /*(r->conf.* is still valid below)*/
 	connection_set_state(r, CON_STATE_CONNECT);
-	buffer_clear(&r->uri.authority);
-	buffer_reset(&r->uri.path);
-	buffer_reset(&r->uri.query);
-	buffer_reset(&r->target_orig);
-	buffer_reset(&r->target);       /*(see comments in request_reset())*/
-	buffer_reset(&r->pathinfo);     /*(see comments in request_reset())*/
 
 	chunkqueue_reset(con->read_queue);
 	con->request_count = 0;
@@ -711,10 +677,7 @@ static int connection_handle_read_state(connection * const con)  {
 
         /* clear buffers which may have been kept for reporting on keep-alive,
          * (e.g. mod_status) */
-        buffer_clear(&r->uri.authority);
-        buffer_reset(&r->uri.path);
-        buffer_reset(&r->uri.query);
-        buffer_reset(&r->target_orig);
+        request_reset_ex(r);
     }
     /* RFC7540 3.5 HTTP/2 Connection Preface
      * "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
