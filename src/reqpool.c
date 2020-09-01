@@ -19,7 +19,7 @@
 
 
 void
-request_init (request_st * const r, connection * const con, server * const srv)
+request_init_data (request_st * const r, connection * const con, server * const srv)
 {
     r->write_queue = chunkqueue_init();
     r->read_queue = chunkqueue_init();
@@ -166,7 +166,7 @@ request_reset_ex (request_st * const r)
 
 
 void
-request_free (request_st * const r)
+request_free_data (request_st * const r)
 {
     chunkqueue_free(r->reqbody_queue);
     chunkqueue_free(r->write_queue);
@@ -200,6 +200,32 @@ request_free (request_st * const r)
 }
 
 
+/* linked list of (request_st *) cached for reuse */
+static request_st *reqpool;
+/* max num of (request_st *) to cache */
+static uint32_t reqspace;
+
+
+void
+request_pool_init (uint32_t sz)
+{
+    reqspace = sz;
+}
+
+
+void
+request_pool_free (void)
+{
+    while (reqpool) {
+        request_st * const r = reqpool;
+        reqpool = (request_st *)r->con; /*(reuse r->con as next ptr)*/
+        request_free_data(r);
+        free(r);
+        ++reqspace;
+    }
+}
+
+
 void
 request_release (request_st * const r)
 {
@@ -217,19 +243,31 @@ request_release (request_st * const r)
     request_reset_ex(r);
     r->state = CON_STATE_CONNECT;
 
-    /* future: might keep a pool of reusable (request_st *) */
-    request_free(r);
-    free(r);
+    if (reqspace) {
+        --reqspace;
+        r->con = (connection *)reqpool; /*(reuse r->con as next ptr)*/
+        reqpool = r;
+    }
+    else {
+        request_free_data(r);
+        free(r);
+    }
 }
 
 
 request_st *
 request_acquire (connection * const con)
 {
-    /* future: might keep a pool of reusable (request_st *) */
-    request_st * const r = calloc(1, sizeof(request_st));
-    force_assert(r);
-    request_init(r, con, con->srv);
+    request_st *r = reqpool;
+    if (r) {
+        reqpool = (request_st *)r->con; /*(reuse r->con as next ptr)*/
+        ++reqspace;
+    }
+    else {
+        r = calloc(1, sizeof(request_st));
+        force_assert(r);
+        request_init_data(r, con, con->srv);
+    }
 
     r->con = con;
     r->tmp_buf = con->srv->tmp_buf;

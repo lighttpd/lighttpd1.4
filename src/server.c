@@ -14,6 +14,7 @@
 #include "stat_cache.h"
 #include "plugin.h"
 #include "network_write.h"  /* network_write_show_handlers() */
+#include "reqpool.h"        /* request_pool_init() request_pool_free() */
 #include "response.h"       /* strftime_cache_reset() */
 
 #ifdef HAVE_VERSIONSTAMP_H
@@ -1356,6 +1357,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		srv->max_conns = srv->max_fds/3;
 	}
 
+	request_pool_init(srv->max_conns);
+
 	/* libev backend overwrites our SIGCHLD handler and calls waitpid on SIGCHLD; we want our own SIGCHLD handling. */
 #ifdef HAVE_SIGACTION
 	sigaction(SIGCHLD, &act, NULL);
@@ -1627,6 +1630,7 @@ int main (int argc, char **argv) {
             server_sockets_save(srv);
         else
             network_close(srv);
+        request_pool_free();
         connections_free(srv);
         plugins_free(srv);
         server_free(srv);

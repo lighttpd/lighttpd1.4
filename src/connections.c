@@ -458,7 +458,7 @@ static connection *connection_init(server *srv) {
 	con->config_data_base = srv->config_data_base;
 
 	request_st * const r = &con->request;
-	request_init(r, con, srv);
+	request_init_data(r, con, srv);
 	config_reset_config(r);
 	con->write_queue = r->write_queue;
 	con->read_queue = r->read_queue;
@@ -482,7 +482,7 @@ void connections_free(server *srv) {
 			chunkqueue_free(con->write_queue);
 		if (con->read_queue != r->read_queue)
 			chunkqueue_free(con->read_queue);
-		request_free(r);
+		request_free_data(r);
 
 		free(con->plugin_ctx);
 		buffer_free(con->dst_addr_buf);
