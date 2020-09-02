@@ -574,6 +574,10 @@ static void show_help (void) {
 
 __attribute_cold__
 static void server_sockets_save (server *srv) {    /* graceful_restart */
+    for (uint32_t i = 0; i < srv->srv_sockets.used; ++i)
+        srv->srv_sockets.ptr[i]->srv = NULL; /* srv will shortly be invalid */
+    for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i)
+        srv->srv_sockets_inherited.ptr[i]->srv = NULL; /* srv to be invalid */
     memcpy(&graceful_sockets, &srv->srv_sockets, sizeof(server_socket_array));
     memset(&srv->srv_sockets, 0, sizeof(server_socket_array));
     memcpy(&inherited_sockets, &srv->srv_sockets_inherited, sizeof(server_socket_array));
@@ -586,6 +590,10 @@ static void server_sockets_restore (server *srv) { /* graceful_restart */
     memset(&graceful_sockets, 0, sizeof(server_socket_array));
     memcpy(&srv->srv_sockets_inherited, &inherited_sockets, sizeof(server_socket_array));
     memset(&inherited_sockets, 0, sizeof(server_socket_array));
+    for (uint32_t i = 0; i < srv->srv_sockets.used; ++i)
+        srv->srv_sockets.ptr[i]->srv = srv;           /* update ptr */
+    for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i)
+        srv->srv_sockets_inherited.ptr[i]->srv = srv; /* update ptr */
 }
 
 __attribute_cold__
