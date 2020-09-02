@@ -1,7 +1,6 @@
 #include "first.h"
 
 #include "base.h"
-#include "connections.h"
 #include "fdevent.h"
 #include "h2.h"
 #include "http_header.h"
@@ -121,6 +120,46 @@ SETDEFAULTS_FUNC(mod_status_set_defaults) {
 
 
 
+static const char *
+mod_status_get_state (request_state_t state)
+{
+    switch (state) {
+      case CON_STATE_CONNECT:        return "connect";
+      case CON_STATE_READ:           return "read";
+      case CON_STATE_READ_POST:      return "readpost";
+      case CON_STATE_WRITE:          return "write";
+      case CON_STATE_CLOSE:          return "close";
+      case CON_STATE_ERROR:          return "error";
+      case CON_STATE_HANDLE_REQUEST: return "handle-req";
+      case CON_STATE_REQUEST_START:  return "req-start";
+      case CON_STATE_REQUEST_END:    return "req-end";
+      case CON_STATE_RESPONSE_START: return "resp-start";
+      case CON_STATE_RESPONSE_END:   return "resp-end";
+      default:                       return "(unknown)";
+    }
+}
+
+
+static const char *
+mod_status_get_short_state (request_state_t state)
+{
+    switch (state) {
+      case CON_STATE_CONNECT:        return ".";
+      case CON_STATE_READ:           return "r";
+      case CON_STATE_READ_POST:      return "R";
+      case CON_STATE_WRITE:          return "W";
+      case CON_STATE_CLOSE:          return "C";
+      case CON_STATE_ERROR:          return "E";
+      case CON_STATE_HANDLE_REQUEST: return "h";
+      case CON_STATE_REQUEST_START:  return "q";
+      case CON_STATE_REQUEST_END:    return "Q";
+      case CON_STATE_RESPONSE_START: return "s";
+      case CON_STATE_RESPONSE_END:   return "S";
+      default:                       return "x";
+    }
+}
+
+
 static int mod_status_row_append(buffer *b, const char *key, const char *value) {
 	buffer_append_string_len(b, CONST_STR_LEN("   <tr>\n"));
 	buffer_append_string_len(b, CONST_STR_LEN("    <td><b>"));
@@ -201,7 +240,7 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
         buffer_append_string_len(b, CONST_STR_LEN("keep-alive"));
     }
     else
-        buffer_append_string(b, connection_get_state(r->state));
+        buffer_append_string(b, mod_status_get_state(r->state));
 
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 
@@ -542,7 +581,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 			state = "k";
 			++cstates[CON_STATE_CLOSE+2];
 		} else {
-			state = connection_get_short_state(cr->state);
+			state = mod_status_get_short_state(cr->state);
 			++cstates[(cr->state <= CON_STATE_CLOSE ? cr->state : CON_STATE_CLOSE+1)];
 		}
 
@@ -563,9 +602,9 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 		buffer_append_string_len(b, CONST_STR_LEN("<tr><td style=\"text-align:right\">"));
 		buffer_append_int(b, cstates[j]);
 		buffer_append_string_len(b, CONST_STR_LEN("</td><td>&nbsp;&nbsp;"));
-		buffer_append_string_len(b, connection_get_short_state(j), 1);
+		buffer_append_string_len(b, mod_status_get_short_state(j), 1);
 		buffer_append_string_len(b, CONST_STR_LEN(" = "));
-		buffer_append_string(b, connection_get_state(j));
+		buffer_append_string(b, mod_status_get_state(j));
 		buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
 	}
 	buffer_append_string_len(b, CONST_STR_LEN("</table>"));
@@ -628,7 +667,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, request_st * 
 		  ((c->h2 && 0 == c->h2->rused)
 		   || (CON_STATE_READ == cr->state && !buffer_string_is_empty(&cr->target_orig)))
 		    ? "k"
-		    : connection_get_short_state(cr->state);
+		    : mod_status_get_short_state(cr->state);
 		buffer_append_string_len(b, state, 1);
 	}
 	for (uint32_t i = 0; i < srv->conns.size - srv->conns.used; ++i) {
