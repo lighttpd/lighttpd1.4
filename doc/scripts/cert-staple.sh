@@ -21,9 +21,17 @@ function errexit {
 OCSP_URI=$(openssl x509 -in "$CERT_PEM" -ocsp_uri -noout)
 [[ $? = 0 ]] && [[ -n "$OCSP_URI" ]] || exit 1
 
+# exception for (unsupported, end-of-life) older versions of OpenSSL
+OCSP_HOST=
+OPENSSL_VERSION=$(openssl version)
+if [[ "${OPENSSL_VERSION}" != "${OPENSSL_VERSION#OpenSSL 1.0.}" ]]; then
+    # get authority from URI
+    OCSP_HOST=$(echo "$OCSP_URI" | cut -d/ -f3)
+fi
+
 # get OCSP response from OCSP responder
 OCSP_TMP="$OCSP_DER.$$"
-OCSP_RESP=$(openssl ocsp -issuer "$CHAIN_PEM" -cert "$CERT_PEM" -respout "$OCSP_TMP" -noverify -no_nonce -url "$OCSP_URI")
+OCSP_RESP=$(openssl ocsp -issuer "$CHAIN_PEM" -cert "$CERT_PEM" -respout "$OCSP_TMP" -noverify -no_nonce -url "$OCSP_URI" ${OCSP_HOST:+-header Host "$OCSP_HOST"})
 [[ $? = 0 ]] || errexit
 
 # parse OCSP response from OCSP responder
@@ -41,7 +49,7 @@ next_date="$(printf %s "$next_update" | sed 's/.*Next Update: //')"
 ocsp_expire=$(date -d "$next_date" +%s)
 
 # validate OCSP response
-ocsp_verify=$(openssl ocsp -issuer "$CHAIN_PEM" -cert "$CERT_PEM" -respin "$OCSP_TMP" -no_nonce -out /dev/null 2>&1)
+ocsp_verify=$(openssl ocsp -issuer "$CHAIN_PEM" -verify_other "$CHAIN_PEM" -cert "$CERT_PEM" -respin "$OCSP_TMP" -no_nonce -out /dev/null 2>&1)
 [[ "$ocsp_verify" = "Response verify OK" ]] || errexit
 
 # rename and update symlink to install OCSP response to be used in OCSP stapling
