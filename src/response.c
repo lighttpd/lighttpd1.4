@@ -135,6 +135,13 @@ http_response_write_header (request_st * const r)
 	}
 
 	chunkqueue_prepend_buffer_commit(cq);
+
+	/*(optimization to use fewer syscalls to send a small response)*/
+	off_t cqlen;
+	if (r->resp_body_finished && (r->resp_htags & HTTP_HEADER_CONTENT_LENGTH)
+	    && (cqlen = chunkqueue_length(cq) - r->resp_header_len) > 0
+	    && cqlen <= 32768)
+		chunkqueue_small_resp_optim(cq);
 }
 
 

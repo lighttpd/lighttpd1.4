@@ -134,7 +134,7 @@ int http_chunk_append_file(request_st * const r, const buffer * const fn) {
 }
 
 int http_chunk_append_file_fd(request_st * const r, const buffer * const fn, const int fd, const off_t sz) {
-    if (sz > 32768) {
+    if (sz > 32768 || !r->resp_send_chunked) {
         http_chunk_append_file_fd_range(r, fn, fd, 0, sz);
         return 0;
     }

@@ -120,6 +120,8 @@ int chunkqueue_open_file_chunk(chunkqueue * restrict cq, struct log_error_st * c
 
 void chunkqueue_compact_mem(chunkqueue *cq, size_t clen);
 
+void chunkqueue_small_resp_optim (chunkqueue * restrict cq);
+
 __attribute_pure__
 off_t chunkqueue_length(chunkqueue *cq);
 

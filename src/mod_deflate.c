@@ -1517,8 +1517,9 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	 * must not be chunkqueue temporary file
 	 * must be whole file, not partial content
 	 * Note: small files (< 32k (see http_chunk.c)) will have been read into
-	 *       memory and will end up getting stream-compressed rather than
-	 *       cached on disk as compressed file
+	 *       memory (if streaming HTTP/1.1 chunked response) and will end up
+	 *       getting stream-compressed rather than cached on disk as compressed
+	 *       file
 	 */
 	buffer *tb = NULL;
 	if (!buffer_is_empty(p->conf.cache_dir)

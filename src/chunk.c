@@ -824,3 +824,49 @@ int chunkqueue_open_file_chunk(chunkqueue * const restrict cq, log_error_st * co
 
 	return 0;
 }
+
+
+void
+chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
+{
+    /*(caller must verify response is small (and non-empty) before calling)*/
+
+    /*(optimization to use fewer syscalls to send a small response by reading
+     * small files into memory, thereby avoiding use of sendfile() and multiple
+     * calls to writev()  (benefit for cleartext (non-TLS) and <= HTTP/1.1))
+     *(If TLS, then will shortly need to be in memory for encryption anyway)*/
+
+    /*assert(cq->first);*/
+    chunk *c = cq->first;
+    chunk * const filec = c->next;
+    if (c->type != MEM_CHUNK || filec != cq->last || filec->type != FILE_CHUNK)
+        return;
+
+    const int fd = filec->file.fd;
+    if (fd < 0) return; /*(require that file already be open)*/
+    off_t offset = filec->file.start + filec->offset;
+    if (0 != offset && -1 == lseek(fd, offset, SEEK_SET)) return;
+
+    /* Note: there should be no size change in chunkqueue,
+     * so cq->bytes_in and cq->bytes_out should not be modified */
+
+    buffer *b = c->mem;
+    off_t len = filec->file.length - filec->offset;
+    if ((size_t)len > chunk_buffer_string_space(b)) {
+        chunk * const nc = chunk_acquire((size_t)len+1);
+        c->next = nc;
+        nc->next = filec;
+        b = nc->mem;
+    }
+
+    char * const ptr = b->ptr + chunk_buffer_string_length(b);
+    ssize_t rd;
+    offset = 0; /*(reuse offset var for offset into mem buffer)*/
+    do {
+        rd = read(fd, ptr+offset, len-offset);
+    } while (rd > 0 ? (offset += rd, len -= rd) : errno == EINTR);
+    /*(contents of chunkqueue kept valid even if error reading from file)*/
+    buffer_commit(b, offset);
+    filec->offset += offset;
+    chunkqueue_remove_empty_chunks(cq);
+}
