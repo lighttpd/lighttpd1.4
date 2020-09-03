@@ -90,7 +90,7 @@ int http_header_str_contains_token (const char * const s, const uint32_t slen, c
     uint32_t i = 0;
     do {
         while (i < slen &&  (s[i]==' ' || s[i]=='\t' || s[i]==',')) ++i;
-        if (i == slen) return 0;
+        if (slen - i < mlen) return 0;
         if (buffer_eq_icase_ssn(s+i, m, mlen)) {
             i += mlen;
             if (i == slen || s[i]==' ' || s[i]=='\t' || s[i]==',' || s[i]==';')

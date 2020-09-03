@@ -920,15 +920,11 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
     while (psrc < endp) {
         memset(&lsx, 0, sizeof(lsxpack_header_t));
         lsx.buf = tb->ptr;
-        lsx.val_len = tbsz - 1;
+        lsx.val_len = tbsz;
         rc = lshpack_dec_decode(decoder, &psrc, endp, &lsx);
         if (0 == lsx.name_len)
             rc = LSHPACK_ERR_BAD_DATA;
         if (rc == LSHPACK_OK) {
-            /* request parsing code expects value to be '\0'-terminated for
-             * libc string functions (e.g parsing Content-Length w/ strtoll())
-             * so subtract 1 from initial lsx.val_len and '\0'-term here */
-            lsx.buf[lsx.val_offset+lsx.val_len] = '\0';
             hpctx.k = lsx.buf+lsx.name_offset;
             hpctx.v = lsx.buf+lsx.val_offset;
             hpctx.klen = lsx.name_len;

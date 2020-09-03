@@ -15,6 +15,7 @@
 #include "sock_addr.h"
 
 #include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -374,6 +375,29 @@ static int http_request_header_char_invalid(request_st * const restrict r, const
     return 400;
 }
 
+
+static int64_t
+li_restricted_strtoint64 (const char *v, const uint32_t vlen, const char ** const err)
+{
+    /* base 10 strtoll() parsing exactly vlen chars and requiring digits 0-9 */
+    /* rejects negative numbers and considers values > INT64_MAX an error */
+    /* note: errno is not set; detect error if *err != v+vlen upon return */
+    /*(caller must check 0 == vlen if that is to be an error for caller)*/
+    int64_t rv = 0;
+    uint32_t i;
+    for (i = 0; i < vlen; ++i) {
+        const uint8_t c = ((uint8_t *)v)[i] - '0'; /*(unsigned; underflow ok)*/
+        if (c > 9) break;
+        if (rv > INT64_MAX/10) break;
+        rv *= 10;
+        if (rv > INT64_MAX - c) break;
+        rv += c;
+    }
+    *err = v+i;
+    return rv;
+}
+
+
 /* add header to list of headers
  * certain headers are also parsed
  * might drop a header if deemed unnecessary/broken
@@ -385,9 +409,13 @@ static int http_request_parse_single_header(request_st * const restrict r, const
 
     /*
      * Note: k might not be '\0'-terminated
-     * Note: v is not '\0'-terminated, and ends with whitespace
-     *   (one of '\r' '\n' ' ' '\t')
+     * Note: v is not '\0'-terminated
+     *   With lighttpd HTTP/1.1 parser, v ends with whitespace
+     *     (one of '\r' '\n' ' ' '\t')
+     *   With lighttpd HTTP/2 parser, v should not be accessed beyond vlen
+     *     (care must be taken to avoid libc funcs which expect z-strings)
      */
+    /*assert(vlen);*//*(caller must not call this func with 0 klen or 0 vlen)*/
 
     switch (id) {
       /*case HTTP_HEADER_OTHER:*/
@@ -435,9 +463,10 @@ static int http_request_parse_single_header(request_st * const restrict r, const
       case HTTP_HEADER_CONTENT_LENGTH:
         if (!(r->rqst_htags & HTTP_HEADER_CONTENT_LENGTH)) {
             /*(trailing whitespace was removed from vlen)*/
-            char *err;
-            off_t clen = strtoll(v, &err, 10);
-            if (clen >= 0 && err == v+vlen && light_isdigit(v[0])) {
+            /*(not using strtoll() since v might not be z-string)*/
+            const char *err;
+            off_t clen = (off_t)li_restricted_strtoint64(v, vlen, &err);
+            if (err == v+vlen) {
                 /* (set only if not set to -1 by Transfer-Encoding: chunked) */
                 if (0 == r->reqbody_length) r->reqbody_length = clen;
             }
@@ -639,6 +668,8 @@ http_request_validate_pseudohdrs (request_st * const restrict r, const int schem
 int
 http_request_parse_header (request_st * const restrict r, http_header_parse_ctx * const restrict hpctx)
 {
+    /* Note: k and v might not be '\0' terminated strings;
+     * care must be taken to avoid libc funcs which expect z-strings */
     const char * const restrict k = hpctx->k;
     const char * const restrict v = hpctx->v;
     const uint32_t klen = hpctx->klen;
