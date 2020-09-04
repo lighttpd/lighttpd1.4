@@ -705,7 +705,7 @@ AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for wolfSSL])
 AC_ARG_WITH([wolfssl],
   [AC_HELP_STRING([--with-wolfssl@<:@=DIR@:>@],
-    [Include openssl support (default no)]
+    [Include wolfSSL support (default no)]
   )],
   [WITH_WOLFSSL=$withval],
   [WITH_WOLFSSL=no]
