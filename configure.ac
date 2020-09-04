@@ -1588,8 +1588,6 @@ if test "$extrawarnings" = true || test "$extrawarnings" = error; then
   fi
 fi
 
-AS_VAR_APPEND([CFLAGS], [" -DLS_HPACK_USE_LARGE_TABLES=0 -DXXH_HEADER_NAME=\\\"ls-hpack/deps/xxhash/xxhash.h\\\""])
-
 dnl build version-id
 LIGHTTPD_VERSION_ID=m4_format([0x%x%02x%02x], m4_unquote(m4_split(AC_PACKAGE_VERSION, [\.])))
 AC_DEFINE_UNQUOTED([LIGHTTPD_VERSION_ID], [$LIGHTTPD_VERSION_ID], [lighttpd-version-id])

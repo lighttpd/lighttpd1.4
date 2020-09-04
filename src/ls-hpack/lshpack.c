@@ -23,7 +23,13 @@ SOFTWARE.
 */
 
 /*(lighttpd customization)*/
-/*#define NDEBUG*/
+#ifndef XXH_HEADER_NAME
+#define XXH_HEADER_NAME "ls-hpack/deps/xxhash/xxhash.h"
+#endif
+#ifndef LS_HPACK_USE_LARGE_TABLES
+#define LS_HPACK_USE_LARGE_TABLES 0
+#endif
+#define NDEBUG
 
 #include <assert.h>
 #include <stdint.h>

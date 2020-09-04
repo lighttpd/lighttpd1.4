@@ -776,8 +776,6 @@ add_executable(lighttpd
 	${COMMON_SRC}
 )
 set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd)
-add_target_properties(lighttpd COMPILE_FLAGS "-DLS_HPACK_USE_LARGE_TABLES=0")
-add_target_properties(lighttpd COMPILE_FLAGS "-DXXH_HEADER_NAME=\\\\\"ls-hpack/deps/xxhash/xxhash.h\\\\\"")
 
 add_and_install_library(mod_access mod_access.c)
 add_and_install_library(mod_accesslog mod_accesslog.c)

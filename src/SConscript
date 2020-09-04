@@ -190,9 +190,7 @@ if env['with_nss']:
 if env['with_gnutls']:
 	modules['mod_gnutls'] = { 'src' : [ 'mod_gnutls.c' ], 'lib' : [ env['LIBGNUTLS'] ] }
 
-staticenv = env.Clone(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC',
-			'-DLS_HPACK_USE_LARGE_TABLES=0',
-			'-DXXH_HEADER_NAME=\\"ls-hpack/deps/xxhash/xxhash.h\\"' ])
+staticenv = env.Clone(CPPFLAGS=[ env['CPPFLAGS'], '-DLIGHTTPD_STATIC' ])
 
 ## all the core-sources + the modules
 staticsrc = src + common_src

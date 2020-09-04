@@ -788,10 +788,6 @@ executable('lighttpd', configparser,
 		, libunwind
 		, libws2_32
 	],
-	c_args: [
-		'-DLS_HPACK_USE_LARGE_TABLES=0',
-		'-DXXH_HEADER_NAME="ls-hpack/deps/xxhash/xxhash.h"'
-	],
 	install: true,
 	install_dir: sbinddir,
 )
