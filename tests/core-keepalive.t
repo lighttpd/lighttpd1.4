@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 7;
+use Test::More tests => 9;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -83,9 +83,34 @@ Host: 123.example.org
 Connection: close
 EOF
  );
-
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } , { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
-
 ok($tf->handle_http($t) == 0, 'Implicit HTTP/1.1 Keep-Alive');
+
+$t->{REQUEST} = ( <<EOF
+GET /12345.txt HTTP/1.1
+Host: 123.example.org
+
+
+GET /12345.txt HTTP/1.1
+Host: 123.example.org
+Connection: close
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } , { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'Implicit HTTP/1.1 Keep-Alive w/ extra blank b/w requests');
+
+$t->{REQUEST} = ( <<EOF
+GET /12345.txt HTTP/1.1
+Host: 123.example.org
+
+
+
+GET /12345.txt HTTP/1.1
+Host: 123.example.org
+Connection: close
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } , { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'Implicit HTTP/1.1 Keep-Alive w/ excess blank b/w requests');
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");

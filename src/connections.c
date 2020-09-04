@@ -509,15 +509,15 @@ static void connection_reset(connection *con) {
 }
 
 
-__attribute_noinline__
-static void connection_discard_blank_line(request_st * const r, const char * const s, unsigned short * const hoff)  {
-    if ((s[0] == '\r' && s[1] == '\n')
-        || (s[0] == '\n'
-            && !(r->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT))) {
-        hoff[2] += hoff[1];
-        memmove(hoff+1, hoff+2, (--hoff[0] - 1) * sizeof(unsigned short));
-    }
+__attribute_cold__
+static chunk *
+connection_discard_blank_line (chunkqueue * const cq, uint32_t header_len)
+{
+    /*(separate func only to be able to mark with compiler hint as cold)*/
+    chunkqueue_mark_written(cq, header_len);
+    return cq->first; /* refresh c after chunkqueue_mark_written() */
 }
+
 
 static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chunk *c, const size_t olen) {
     /*(should not be reached by HTTP/2 streams)*/
@@ -591,20 +591,24 @@ static int connection_handle_read_state(connection * const con)  {
     uint32_t clen = 0;
     uint32_t header_len = 0;
     request_st * const r = &con->request;
-    int keepalive_request_start = 0;
-    int pipelined_request_start = 0;
+    uint8_t keepalive_request_start = 0;
+    uint8_t pipelined_request_start = 0;
+    uint8_t discard_blank = 0;
     unsigned short hoff[8192]; /* max num header lines + 3; 16k on stack */
 
-    if (con->request_count > 1 && con->bytes_read == r->bytes_read_ckpt) {
-        keepalive_request_start = 1;
-        if (NULL != c) { /* !chunkqueue_is_empty(cq)) */
-            pipelined_request_start = 1;
-            /* partial header of next request has already been read,
-             * so optimistically check for more data received on
-             * socket while processing the previous request */
-            con->is_readable = 1;
-            /*(if partially read next request and unable to read() any bytes,
-             * then will unnecessarily scan again before subsequent read())*/
+    if (con->request_count > 1) {
+        discard_blank = 1;
+        if (con->bytes_read == r->bytes_read_ckpt) {
+            keepalive_request_start = 1;
+            if (NULL != c) { /* !chunkqueue_is_empty(cq)) */
+                pipelined_request_start = 1;
+                /* partial header of next request has already been read,
+                 * so optimistically check for more data received on
+                 * socket while processing the previous request */
+                con->is_readable = 1;
+                /*(if partially read next request and unable to read any bytes,
+                 * then will unnecessarily scan again before subsequent read)*/
+            }
         }
     }
 
@@ -635,7 +639,22 @@ static int connection_handle_read_state(connection * const con)  {
             return 1;
         }
 
-        if (0 != header_len) break;
+        if (0 != header_len) {
+            if (hoff[0] > 1) break; /* common case; request headers complete */
+
+            if (discard_blank) { /* skip one blank line e.g. following POST */
+                if (header_len == clen) continue;
+                const int ch = c->mem->ptr[c->offset+header_len];
+                if (ch != '\r' && ch != '\n') {
+                    /* discard prior blank line if next line is not blank */
+                    discard_blank = 0;
+                    clen = 0;/*(for connection_read_header_more() to return c)*/
+                    c = connection_discard_blank_line(cq, header_len);/*cold*/
+                    continue;
+                } /*(else fall through to error out in next block)*/
+            }
+        }
+
         if (((unsigned char *)c->mem->ptr)[c->offset] < 32) {
             /* expecting ASCII method beginning with alpha char
              * or HTTP/2 pseudo-header beginning with ':' */
@@ -671,10 +690,6 @@ static int connection_handle_read_state(connection * const con)  {
     char * const hdrs = c->mem->ptr + hoff[1];
 
     if (con->request_count > 1) {
-        /* skip past \r\n or \n after previous POST request when keep-alive */
-        if (hoff[2] - hoff[1] <= 2)
-            connection_discard_blank_line(r, hdrs, hoff);
-
         /* clear buffers which may have been kept for reporting on keep-alive,
          * (e.g. mod_status) */
         request_reset_ex(r);
