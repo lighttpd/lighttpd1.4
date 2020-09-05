@@ -687,7 +687,7 @@ main_src = [
 	'h2.c',
 	'inet_ntop_cache.c',
 	'ls-hpack/lshpack.c',
-	'ls-hpack/deps/xxhash/xxhash.c',
+	'algo_xxhash.c',
 	'network_write.c',
 	'network.c',
 	'reqpool.c',

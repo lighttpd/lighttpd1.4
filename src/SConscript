@@ -80,7 +80,7 @@ common_src = Split("base64.c buffer.c burl.c log.c \
 src = Split("server.c response.c connections.c h2.c reqpool.c \
 	inet_ntop_cache.c \
 	ls-hpack/lshpack.c \
-	ls-hpack/deps/xxhash/xxhash.c \
+	algo_xxhash.c \
 	network.c \
 	network_write.c \
 	data_config.c \

@@ -765,7 +765,7 @@ add_executable(lighttpd
 	reqpool.c
 	inet_ntop_cache.c
 	ls-hpack/lshpack.c
-	ls-hpack/deps/xxhash/xxhash.c
+	algo_xxhash.c
 	network.c
 	network_write.c
 	data_config.c

@@ -24,7 +24,7 @@ SOFTWARE.
 
 /*(lighttpd customization)*/
 #ifndef XXH_HEADER_NAME
-#define XXH_HEADER_NAME "ls-hpack/deps/xxhash/xxhash.h"
+#define XXH_HEADER_NAME "algo_xxhash.h"
 #endif
 #ifndef LS_HPACK_USE_LARGE_TABLES
 #define LS_HPACK_USE_LARGE_TABLES 0
