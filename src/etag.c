@@ -1,10 +1,10 @@
 #include "first.h"
 
+#include "algo_md.h"
 #include "buffer.h"
 #include "etag.h"
 
 #include <sys/stat.h>
-#include <string.h>
 
 int etag_is_equal(const buffer *etag, const char *line, int weak_ok) {
 	enum {
@@ -170,20 +170,6 @@ int etag_create(buffer *etag, const struct stat *st, int flags) {
 	}
 
 	return 0;
-}
-
-
-/* Donald E. Knuth
- * The Art Of Computer Programming Volume 3
- * Chapter 6.4, Topic: Sorting and Search */
-__attribute_pure__
-static inline uint32_t
-dekhash (const char *str, const uint32_t len)
-{
-    const unsigned char * const s = (const unsigned char *)str;
-    uint32_t h = len;
-    for (uint32_t i = 0; i < len; ++i) h = (h << 5) ^ (h >> 27) ^ s[i];
-    return h;
 }
 
 

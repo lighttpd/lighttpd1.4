@@ -28,13 +28,13 @@
 #include <unistd.h>
 
 #include "base.h"
+#include "algo_md.h"
 #include "array.h"
 #include "buffer.h"
 #include "chunk.h"
 #include "fdevent.h"
 #include "log.h"
 #include "sock_addr.h"
-#include "splaytree.h"
 
 
 

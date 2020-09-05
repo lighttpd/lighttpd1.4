@@ -454,7 +454,7 @@ mod_wstunnel_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
 hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	response.h request.h reqpool.h fastcgi.h chunk.h h2.h \
 	first.h http_chunk.h \
-	algo_md5.h algo_sha1.h \
+	algo_md.h algo_md5.h algo_sha1.h \
 	http_auth.h http_header.h http_vhostdb.h stream.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h plugin_config.h \

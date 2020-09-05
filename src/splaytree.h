@@ -22,23 +22,10 @@ splay_tree * splaytree_size(splay_tree *t);
 /* a special version of NULL which was a real node with size 0.  */
 
 
-__attribute_pure__
-static inline uint32_t djbhash(const char *str, const uint32_t len, uint32_t hash);
+#include "algo_md.h"
 
 __attribute_pure__
 static inline int32_t splaytree_djbhash(const char *str, const uint32_t len);
-
-
-/* the famous DJB hash function for strings */
-#define DJBHASH_INIT 5381
-static inline uint32_t djbhash(const char *str, const uint32_t len, uint32_t hash)
-{
-    const unsigned char * const s = (const unsigned char *)str;
-    for (uint32_t i = 0; i < len; ++i) hash = ((hash << 5) + hash) ^ s[i];
-    return hash;
-}
-
-
 static inline int32_t splaytree_djbhash(const char *str, const uint32_t len)
 {
     /* strip highest bit of hash value for splaytree */
