@@ -29,7 +29,7 @@ documentation and/or software.
  */
 
 
-#include "md5.h"
+#include "algo_md5.h"
 
 #define UINT4 uint32_t
 #define UINT2 uint16_t

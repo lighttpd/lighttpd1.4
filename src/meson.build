@@ -637,6 +637,7 @@ configure_file(
 )
 
 common_src = [
+	'algo_md5.c',
 	'algo_sha1.c',
 	'array.c',
 	'base64.c',
@@ -666,7 +667,6 @@ common_src = [
 	'http-header-glue.c',
 	'keyvalue.c',
 	'log.c',
-	'md5.c',
 	'plugin.c',
 	'rand.c',
 	'request.c',

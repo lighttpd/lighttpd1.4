@@ -330,9 +330,9 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 #ifndef MD5_DIGEST_LENGTH
 #define MD5_DIGEST_LENGTH 16
 #endif
-#include "md5.h" /*(for legacy li_MD5_*() name mangling)*/
+#include "algo_md5.h" /*(for legacy li_MD5_*() name mangling)*/
 #else
-#include "md5.h"
+#include "algo_md5.h"
 #endif
 
 

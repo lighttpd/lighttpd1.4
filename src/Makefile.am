@@ -80,7 +80,8 @@ common_src=base64.c buffer.c burl.c log.c \
 	http_chunk.c stream.c fdevent.c gw_backend.c \
 	stat_cache.c plugin.c etag.c array.c \
 	data_string.c data_array.c \
-	data_integer.c algo_sha1.c md5.c \
+	data_integer.c \
+	algo_md5.c algo_sha1.c \
 	fdevent_select.c fdevent_libev.c \
 	fdevent_poll.c fdevent_linux_sysepoll.c \
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c \
@@ -453,7 +454,8 @@ mod_wstunnel_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
 hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	response.h request.h reqpool.h fastcgi.h chunk.h h2.h \
 	first.h http_chunk.h \
-	algo_sha1.h md5.h http_auth.h http_header.h http_vhostdb.h stream.h \
+	algo_md5.h algo_sha1.h \
+	http_auth.h http_header.h http_vhostdb.h stream.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h plugin_config.h \
 	etag.h array.h vector.h \
