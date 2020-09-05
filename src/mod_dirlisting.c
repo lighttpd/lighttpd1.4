@@ -208,7 +208,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
      ,{ CONST_STR_LEN("dir-listing.exclude"),
         T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
-     ,{ CONST_STR_LEN("dir-listing.hide-dot-files"),
+     ,{ CONST_STR_LEN("dir-listing.hide-dotfiles"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("dir-listing.external-css"),
@@ -285,6 +285,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
               case 4: /* dir-listing.external-css */
               case 5: /* dir-listing.external-js */
               case 6: /* dir-listing.encoding */
+                break;
               case 7: /* dir-listing.show-readme */
                 if (!buffer_string_is_empty(cpv->v.b)) {
                     buffer *b;
