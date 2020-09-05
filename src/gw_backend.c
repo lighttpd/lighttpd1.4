@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <string.h>
@@ -30,10 +31,10 @@
 #include "array.h"
 #include "buffer.h"
 #include "chunk.h"
-#include "crc32.h"
 #include "fdevent.h"
 #include "log.h"
 #include "sock_addr.h"
+#include "splaytree.h"
 
 
 
@@ -787,11 +788,18 @@ enum {
   GW_BALANCE_STICKY
 };
 
+__attribute_noinline__
+static uint32_t
+gw_hash(const char *str, const uint32_t len, uint32_t hash)
+{
+    return djbhash(str, len, hash);
+}
+
 static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int balance, int debug) {
     gw_host *host;
     buffer *dst_addr_buf;
-    unsigned long last_max = ULONG_MAX;
-    unsigned long base_crc32c;
+    uint32_t last_max = UINT32_MAX;
+    uint32_t base_hash = DJBHASH_INIT;
     int max_usage = INT_MAX;
     int ndx = -1;
     uint32_t k;
@@ -809,24 +817,24 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
               "proxy - used hash balancing, hosts: %u", extension->used);
         }
 
-        base_crc32c = generate_crc32c(CONST_BUF_LEN(&r->uri.path))
-                    + generate_crc32c(CONST_BUF_LEN(&r->uri.authority));
+        base_hash = gw_hash(CONST_BUF_LEN(&r->uri.path), base_hash);
+        base_hash = gw_hash(CONST_BUF_LEN(&r->uri.authority), base_hash);
 
-        for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->used; ++k) {
-            unsigned long cur_max;
+        for (k = 0, ndx = -1, last_max = UINT32_MAX; k < extension->used; ++k) {
+            uint32_t cur_max;
             host = extension->hosts[k];
             if (0 == host->active_procs) continue;
 
-            cur_max = base_crc32c
-                    + generate_crc32c(CONST_BUF_LEN(host->host)); /* cacheable */
+            /* future: hash of host->host could be cached separately, mixed in*/
+            cur_max = gw_hash(CONST_BUF_LEN(host->host), base_hash);
 
             if (debug) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
-                  "proxy - election: %s %s %s %lu", r->uri.path.ptr,
+                  "proxy - election: %s %s %s %u", r->uri.path.ptr,
                   host->host->ptr, r->uri.authority.ptr, cur_max);
             }
 
-            if (last_max < cur_max || last_max == ULONG_MAX) {
+            if (last_max < cur_max || last_max == UINT32_MAX) {
                 last_max = cur_max;
                 ndx = k;
             }
@@ -896,16 +904,16 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
               "proxy - used sticky balancing, hosts: %u", extension->used);
         }
 
-        base_crc32c = generate_crc32c(CONST_BUF_LEN(dst_addr_buf));
+        base_hash = gw_hash(CONST_BUF_LEN(dst_addr_buf), base_hash);
 
-        for (k = 0, ndx = -1, last_max = ULONG_MAX; k < extension->used; ++k) {
+        for (k = 0, ndx = -1, last_max = UINT32_MAX; k < extension->used; ++k) {
             unsigned long cur_max;
             host = extension->hosts[k];
 
             if (0 == host->active_procs) continue;
 
-            cur_max = base_crc32c
-                    + generate_crc32c(CONST_BUF_LEN(host->host)) /* cacheable */
+            /* future: hash of host->host could be cached separately, mixed in*/
+            cur_max = gw_hash(CONST_BUF_LEN(host->host), base_hash)
                     + host->port;
 
             if (debug) {
@@ -914,7 +922,7 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
                   host->host->ptr, host->port, cur_max);
             }
 
-            if (last_max < cur_max || last_max == ULONG_MAX) {
+            if (last_max < cur_max || last_max == UINT32_MAX) {
                 last_max = cur_max;
                 ndx = k;
             }

@@ -85,7 +85,6 @@ common_src=base64.c buffer.c burl.c log.c \
 	fdevent_poll.c fdevent_linux_sysepoll.c \
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c \
 	fdevent_freebsd_kqueue.c \
-	crc32.c \
 	connections-glue.c \
 	configfile-glue.c \
 	http-header-glue.c \
@@ -457,7 +456,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	algo_sha1.h md5.h http_auth.h http_header.h http_vhostdb.h stream.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h plugin_config.h \
-	etag.h array.h vector.h crc32.h \
+	etag.h array.h vector.h \
 	fdevent_impl.h network_write.h configfile.h \
 	mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \
 	configparser.h mod_ssi_exprparser.h \

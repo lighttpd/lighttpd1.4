@@ -645,7 +645,6 @@ common_src = [
 	'chunk.c',
 	'configfile-glue.c',
 	'connections-glue.c',
-	'crc32.c',
 	'data_array.c',
 	'data_integer.c',
 	'data_string.c',
