@@ -3104,8 +3104,11 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                 conf.ssl_empty_fragments = (0 != cpv->v.u);
                 log_error(srv->errh, __FILE__, __LINE__, "SSL: "
                   "ssl.empty-fragments is deprecated and will soon be "
-                  "removed.  If needed, use: ssl.openssl.ssl-conf-cmd = "
-                  "(\"Options\" => \"EmptyFragments\")");
+                  "removed.  It is disabled by default.");
+                if (conf.ssl_empty_fragments)
+                    log_error(srv->errh, __FILE__, __LINE__, "SSL: "
+                      "If needed, use: ssl.openssl.ssl-conf-cmd = "
+                      "(\"Options\" => \"EmptyFragments\")");
                 log_error(srv->errh, __FILE__, __LINE__, "SSL: "
                   "ssl.empty-fragments is a "
                   "counter-measure against a SSL 3.0/TLS 1.0 protocol "
@@ -3116,15 +3119,19 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                 conf.ssl_use_sslv2 = (0 != cpv->v.u);
                 log_error(srv->errh, __FILE__, __LINE__, "SSL: "
                   "ssl.use-sslv2 is deprecated and will soon be removed.  "
+                  "It is disabled by default.  "
                   "Many modern TLS libraries no longer support SSLv2.");
                 break;
               case 9: /* ssl.use-sslv3 */
                 conf.ssl_use_sslv3 = (0 != cpv->v.u);
                 log_error(srv->errh, __FILE__, __LINE__, "SSL: "
                   "ssl.use-sslv3 is deprecated and will soon be removed.  "
-                  "Many modern TLS libraries no longer support SSLv3.  "
-                  "If needed, use: "
-                  "ssl.openssl.ssl-conf-cmd = (\"MinProtocol\" => \"SSLv3\")");
+                  "It is disabled by default.  "
+                  "Many modern TLS libraries no longer support SSLv3.");
+                if (conf.ssl_use_sslv3)
+                    log_error(srv->errh, __FILE__, __LINE__, "SSL: "
+                      "If needed, use: ssl.openssl.ssl-conf-cmd = "
+                      "(\"MinProtocol\" => \"SSLv3\")");
                 break;
               case 10:/* ssl.stek-file */
                 if (!buffer_is_empty(cpv->v.b))
