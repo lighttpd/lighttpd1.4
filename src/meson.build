@@ -639,6 +639,7 @@ configure_file(
 common_src = [
 	'algo_md5.c',
 	'algo_sha1.c',
+	'algo_splaytree.c',
 	'array.c',
 	'base64.c',
 	'buffer.c',
@@ -672,7 +673,6 @@ common_src = [
 	'request.c',
 	'safe_memclear.c',
 	'sock_addr.c',
-	'splaytree.c',
 	'stat_cache.c',
 	'stream.c',
 	'vector.c',

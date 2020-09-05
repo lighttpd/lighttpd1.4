@@ -11,7 +11,7 @@
 #include "http_header.h"
 #include "log.h"
 #include "safe_memclear.h"
-#include "splaytree.h"
+#include "algo_splaytree.h"
 
 /**
  * auth framework

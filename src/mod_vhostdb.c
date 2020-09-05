@@ -11,7 +11,7 @@
 #include "http_vhostdb.h"
 #include "log.h"
 #include "stat_cache.h"
-#include "splaytree.h"
+#include "algo_splaytree.h"
 
 #include <stdlib.h>
 #include <string.h>

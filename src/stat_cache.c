@@ -4,7 +4,7 @@
 #include "log.h"
 #include "fdevent.h"
 #include "etag.h"
-#include "splaytree.h"
+#include "algo_splaytree.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>

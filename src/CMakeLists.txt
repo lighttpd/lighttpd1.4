@@ -724,7 +724,7 @@ set(COMMON_SRC
 	stat_cache.c plugin.c etag.c array.c
 	data_string.c data_array.c
 	data_integer.c
-	algo_md5.c algo_sha1.c
+	algo_md5.c algo_sha1.c algo_splaytree.c
 	fdevent_select.c fdevent_libev.c
 	fdevent_poll.c fdevent_linux_sysepoll.c
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c
@@ -736,7 +736,6 @@ set(COMMON_SRC
 	http_vhostdb.c
 	request.c
 	sock_addr.c
-	splaytree.c
 	rand.c
 	safe_memclear.c
 )
