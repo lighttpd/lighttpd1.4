@@ -1,6 +1,13 @@
 #!/bin/sh
 # Run this to generate all the initial makefiles, etc.
 
+function errtrace {
+   echo 1>&2 \
+     "build requires autoconf automake libtool m4 pcre pcre-devel pkg-config"
+}
+
+trap errtrace ERR
+
 set -e
 
 if [ ! -f configure.ac -o ! -f COPYING ]; then
