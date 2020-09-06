@@ -1,6 +1,7 @@
 /*(lighttpd customization)*/
-#define XXH_NO_INLINE_HINTS 1
+/*#define XXH_NO_INLINE_HINTS 1*/
 /*#define XXH_REROLL 1*/
+#define XXH_NO_LONG_LONG
 
 /*
  * xxHash - Extremely Fast Hash algorithm
