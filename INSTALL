@@ -3,25 +3,22 @@
 Installation
 ============
 
-:author: Jan Kneschke
-:Date: $Date: $
-:Revision: $Revision: $
 
-Installation
-------------
+Quick Installation
+------------------
 
-Get the source from
+Get lighttpd source from
 
 https://www.lighttpd.net/download/
 
 unpack it by ::
 
-  $ gzip -cd lighttpd-1.x.x.tar.gz | tar xf -
+  $ tar xvJf lighttpd-1.4.xx.tar.xz
 
 compile and install it with ::
 
-  $ cd lighttpd-1.x.x
-  $ ./configure
+  $ cd lighttpd-1.4.xx
+  $ ./configure -C
   $ make
   $ su -
   # make install
@@ -29,6 +26,140 @@ compile and install it with ::
 
 take look at the configfile in ./doc/lighttpd.conf,
 make your own copy of that file and modify it for your needs.
+
+
+Online documentation
+--------------------
+https://redmine.lighttpd.net/projects/lighttpd/wiki/Devel
+https://redmine.lighttpd.net/projects/lighttpd/wiki/DevelSubversion
+https://redmine.lighttpd.net/projects/lighttpd/wiki/InstallFromSource
+
+
+Custom Installation
+-------------------
+
+required packages ::
+
+  autoconf
+  automake
+  libtool
+  m4
+  pcre
+  pcre-devel
+  pkg-config
+
+optional packages for optional features ::
+
+  bzip2-devel         # bzip2      ./configure --with-bzip2
+  bzip2-libs
+  cyrus-sasl          # SASL       ./configure --with-sasl
+  cyrus-sasl-devel
+  gamin               # FAM        ./configure --with-fam
+  gamin-devel
+  gdbm                # GDBM       ./configure --with-gdbm
+  gdbm-devel
+  GeoIP-devel         # GeoIP      ./configure --with-geoip
+  GeoIP
+  gnutls              # GnuTLS     ./configure --with-gnutls
+  gnutls-devel
+  krb5-devel          # Kerberos5  ./configure --with-krb5
+  krb5-libs
+  libattr             # xattr      ./configure --with-attr
+  libattr-devel
+  libbrotli           # brotli     ./configure --with-brotli
+  brotli-devel
+  libdbi              # DBI        ./configure --with-dbi
+  libdbi-devel
+  libdbi-dbd-mysql
+  libdbi-dbd-pgsql
+  libdbi-dbd-sqlite
+  libmaxminddb        # MaxMindDB  ./configure --with-maxminddb
+  libmaxminddb-devel
+  libmemcached-devel  # Memcached  ./configure --with-memcache
+  libmemcached-libs
+  libpq               # Postgresql ./configure --with-pgsql
+  libpq-devel
+  libunwind           # libunwind  ./configure --with-libunwind
+  libuuid             # libuuid    ./configure --with-webdav-locks
+  libuuid-devel
+  libxml2             # libxml2    ./configure --with-webdav-props
+  libxml2-devel
+  libxml2-static
+  lua                 # Lua        ./configure --with-lua
+  lua-devel
+  mariadb-devel       # MariaDB    ./configure --with-mysql
+  mariadb-libs
+  mbedtls             # mbedTLS    ./configure --with-mbedtls
+  mbedtls-devel
+  nettle              # Nettle     ./configure --with-nettle
+  nettle-devel
+  nss                 # NSS        ./configure --with-nss
+  nss-devel
+  openldap            # OpenLDAP   ./configure --with-ldap
+  openldap-devel
+  openssl-devel       # OpenSSL    ./configure --with-openssl
+  openssl-libs
+  pam                 # PAM        ./configure --with-pam
+  pam-devel
+  pcre                # PCRE       ./configure --with-pcre      # (default)
+  pcre-devel
+  sqlite              # SQLite     ./configure --with-webdav-props
+  sqlite-devel
+  valgrind            # valgrind   ./configure --with-valgrind
+  valgrind-devel
+  zlib                # zlib       ./configure --with-zlib
+  zlib-devel
+
+more options: ./configure --help
+
+re-run ./configure after installing packages
+
+compile and install it with ::
+
+  $ cd lighttpd-1.4.xx
+  $ ./autogen.sh        # detect/use newer versions of autotools (if present)
+  $ ./configure -C      # add --with-xxxxx custom flags
+  $ make
+  # sudo make install
+
+
+Running Tests
+-------------
+
+required packages to run test harness ::
+
+  (e.g. on Fedora 22, sudo dnf install ...)
+  (e.g. on Arch Linux, sudo pacman ... (with lowercased package names))
+
+  perl-CGI
+  perl-Digest
+  perl-Digest-MD5
+  perl-Encode-Locale
+  perl-HTML-Entities-Interpolate
+  perl-HTML-Parser
+  perl-HTML-Tagset
+  perl-HTTP-Date
+  perl-HTTP-Message
+  perl-IO-HTML
+  perl-LWP-MediaTypes
+  perl-Tie-Function
+  perl-TimeDate
+  php
+  php-cgi
+
+optional packages to run test harness ::
+
+  fcgi-devel
+
+  $ cd tests/ && make fcgi-auth fcgi-responder
+
+run test harness
+
+  $ make check
+
+run test harness with additional FastCGI tests (requires fcgi-devel package)
+
+  $ cd tests/ && make check-am
 
 
 static build using SCons

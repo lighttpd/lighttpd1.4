@@ -1,0 +1,82 @@
+Running tests
+-------------
+
+  $ make check
+
+If run from tests/ dir, tests will fail to run tests if lighttpd not built.
+If run from top level, 'make' will build lighttpd exectuable if not yet built,
+and then will run tests.
+
+
+Running individual tests programs
+---------------------------------
+
+prep
+  $ cd tests/
+  $ ./prepare.sh
+
+then, for any particular *.t such as request.t,
+  $ ./request.t
+or
+  $ VERBOSE=1 RUNTESTS=request ./run-tests.pl
+
+More information is output by tests with additional environment settings:
+  $ TRACE_HTTP=1     ./request.t
+
+See LightyTest.pm before trying TRACEME
+  $ less LightyTest.pm
+
+  $ TRACEME=strace   ./request.t   # output to file 'strace'
+  $ TRACEME=truss    ./request.t   # output to file 'strace'
+  $ TRACEME=gdb      ./request.t   # not for interactive debugging (see below)
+  $ TRACEME=valgrind ./request.t
+
+To reduce noise from valgrind --show-leak-kinds=all (or =reachable), avoid FAM.
+Use server.stat-cache-engine = "simple" (not server.stat-cache-engine = "fam")
+in lighttpd.conf.  (FAM creates /usr/libexec/gam_server as child process.)
+
+
+Running lighttpd server with a config from tests/*.conf
+-------------------------------------------------------
+
+Each *.t loads the lighttpd server with one or more config files.
+See each *.t for which config file is used, e.g. tests/lighttpd.conf
+
+To run a specific config
+  repo=$PWD      # from root of src repository
+  cd tests/
+  ./prepare.sh
+  PERL=/usr/bin/perl PHP=/usr/bin/php-cgi SRCDIR=$repo/tests \
+    $repo/src/lighttpd -D -f lighttpd.conf -m $repo/src/.libs
+
+The PERL, PHP, and SRCDIR environment variables are set by LightyTest.pm
+when 'make check' is run.  PERL and PHP can be set to paths to perl and php,
+e.g. export PERL=/usr/bin/perl PHP=/usr/bin/php-cgi
+
+To run a specific config under gdb
+  repo=$PWD      # from root of src repository
+  cd tests/
+  ./prepare.sh
+  PERL=/usr/bin/perl PHP=/usr/bin/php-cgi SRCDIR=$repo/tests repo=$repo \
+    gdb $repo/src/lighttpd
+
+  (gdb) set args -D -f lighttpd.conf -m $repo/src/.libs
+  (gdb) start
+  (gdb) ...
+
+
+Hints and tips
+--------------
+Q: What do I do if tests fail with:
+     bind: Address already in use at LightyTest.pm line 429.
+A: It is likely that something else on the machine is already using the port
+   that tests are trying to use to run a backend.  Try exiting out of your web
+   browser and then run the tests again.  (root can use 'netstat' or 'ss' to
+   find out which process is using the port.)
+
+
+Additional documentation
+------------------------
+https://redmine.lighttpd.net/projects/lighttpd/wiki/RunningUnitTests
+https://redmine.lighttpd.net/projects/lighttpd/wiki/HowToReportABug
+https://redmine.lighttpd.net/projects/lighttpd/wiki/DebugVariables

@@ -37,21 +37,22 @@ Network
 Protocols
 `````````
 
-- HTTP/1.0 (http://www.ietf.org/rfc/rfc1945.txt)
-- HTTP/1.1 (http://www.ietf.org/rfc/rfc2616.txt)
-- HTTPS (provided by openssl)
-- CGI/1.1 (http://CGI-Spec.Golux.Com/)
+- HTTP/2   (https://tools.ietf.org/rfc/rfc7540.txt)
+- HTTP/1.1 (https://tools.ietf.org/rfc/rfc2616.txt)
+- HTTP/1.0 (https://tools.ietf.org/rfc/rfc1945.txt)
+- HTTPS (via one of openssl, BoringSSL, LibreSSL, mbedTLS, wolfSSL, GnuTLS, NSS)
+- CGI/1.1 (https://tools.ietf.org/html/rfc3875.txt)
 - FastCGI (http://www.fastcgi.com/devkit/doc/fcgi-spec.html)
 
 Advanced Features
 `````````````````
 
-- load-balanced FastCGI
+- load-balanced FastCGI, SCGI, reverse-proxy, socket proxy, websocket tunnel
   (one webserver distributes requests to multiple PHP-servers via FastCGI)
+- streaming FastCGI, SCGI, reverse-proxy, socket proxy, websocket tunnel
 - custom error pages (for Response-Code 400-599)
 - virtual hosts
 - directory listings
-- streaming CGI and FastCGI
 - URL-Rewriting
 - HTTP-Redirection
 - output-compression with transparent caching
