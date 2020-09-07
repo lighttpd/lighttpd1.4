@@ -138,6 +138,15 @@ static inline void http_header_token_append(buffer * const vb, const char * cons
     buffer_append_string_len(vb, v, vlen);
 }
 
+__attribute_cold__
+static inline void http_header_token_append_cookie(buffer * const vb, const char * const v, const uint32_t vlen) {
+    /* Cookie request header must be special-cased to use ';' separator
+     * instead of ',' to combine multiple headers (if present) */
+    if (!buffer_string_is_empty(vb))
+        buffer_append_string_len(vb, CONST_STR_LEN("; "));
+    buffer_append_string_len(vb, v, vlen);
+}
+
 __attribute_pure__
 static inline buffer * http_header_generic_get_ifnotempty(const array * const a, const char * const k, const uint32_t klen) {
     data_string * const ds =
@@ -224,7 +233,10 @@ void http_header_request_append(request_st * const r, enum http_header_e id, con
     if (0 == vlen) return;
     if (id > HTTP_HEADER_OTHER) r->rqst_htags |= id;
     buffer * const vb = array_get_buf_ptr(&r->rqst_headers, k, klen);
-    http_header_token_append(vb, v, vlen);
+    if (id != HTTP_HEADER_COOKIE)
+        http_header_token_append(vb, v, vlen);
+    else
+        http_header_token_append_cookie(vb, v, vlen);
 }
 
 
