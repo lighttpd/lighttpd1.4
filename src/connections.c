@@ -1042,7 +1042,8 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 	do {
 		if (r->conf.log_state_handling) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "state for fd %d %s", con->fd, connection_get_state(r->state));
+			  "state for fd:%d id:%d %s", con->fd, r->h2id,
+			  connection_get_state(r->state));
 		}
 
 		switch ((ostate = r->state)) {
@@ -1235,7 +1236,7 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
                      && r->state != CON_STATE_ERROR)
                     connection_set_state(r, CON_STATE_ERROR);
 
-          #if 0 /*(done in connection_state_machine(), but w/o stream id)*/
+          #if 0
             const int log_state_handling = r->conf.log_state_handling;
             if (log_state_handling)
                 log_error(r->conf.errh, __FILE__, __LINE__,
@@ -1269,7 +1270,7 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
                     resched |= (!chunkqueue_is_empty(cq));
             }
 
-          #if 0 /*(done in connection_state_machine(), but w/o stream id)*/
+          #if 0
             /* XXX: TODO: r is invalid if retired; not properly handled here */
             if (log_state_handling)
                 log_error(r->conf.errh, __FILE__, __LINE__,
