@@ -105,6 +105,7 @@ __attribute_returns_nonnull__
 char * chunkqueue_get_memory(chunkqueue * restrict cq, size_t * restrict len);
 /* commit len bytes of mem obtained from chunkqueue_get_memory() */
 void chunkqueue_use_memory(chunkqueue * restrict cq, chunk *ckpt, size_t len);
+void chunkqueue_update_file(chunkqueue * restrict cq, chunk *c, off_t len);
 
 /* mark first "len" bytes as written (incrementing chunk offsets)
  * and remove finished chunks

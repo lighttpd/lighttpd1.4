@@ -816,7 +816,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				log_error(errh, __FILE__, __LINE__, "process exited abnormally: %s", cmd);
 			}
 			if (0 == fstat(c->file.fd, &stb)) {
-				c->file.length = stb.st_size;
+				chunkqueue_update_file(cq, c, stb.st_size);
 			}
 		}
 

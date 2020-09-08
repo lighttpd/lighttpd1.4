@@ -446,6 +446,12 @@ void chunkqueue_use_memory(chunkqueue * const restrict cq, chunk *ckpt, size_t l
     *(ckpt ? &ckpt->next : &cq->first) = NULL;
 }
 
+void chunkqueue_update_file(chunkqueue * const restrict cq, chunk *c, off_t len) {
+    /*assert(c->type == FILE_CHUNK);*/
+    c->file.length += len;
+    cq->bytes_in += len;
+}
+
 void chunkqueue_set_tempdirs_default (const array *tempdirs, off_t upload_temp_file_size) {
 	chunkqueue_default_tempdirs = tempdirs;
 	chunkqueue_default_tempfile_size
