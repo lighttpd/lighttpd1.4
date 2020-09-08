@@ -1550,6 +1550,26 @@ h2_send_hpack (request_st * const r, connection * const con, const char *data, u
 }
 
 
+__attribute_cold__
+static void
+h2_log_response_header_lsx(request_st * const r, const lsxpack_header_t * const lsx)
+{
+    log_error(r->conf.errh, __FILE__, __LINE__,
+      "fd:%d id:%u resp: %.*s: %.*s", r->con->fd, r->h2id,
+      (int)lsx->name_len, lsx->buf + lsx->name_offset,
+      (int)lsx->val_len,  lsx->buf + lsx->val_offset);
+}
+
+
+__attribute_cold__
+static void
+h2_log_response_header(request_st * const r, const int len, const char * const hdr)
+{
+    log_error(r->conf.errh, __FILE__, __LINE__,
+      "fd:%d id:%u resp: %.*s", r->con->fd, r->h2id, len, hdr);
+}
+
+
 void
 h2_send_headers (request_st * const r, connection * const con)
 {
@@ -1584,8 +1604,7 @@ h2_send_headers (request_st * const r, connection * const con)
     status[9]  = (x / 100) + '0';
 
     if (log_response_header)
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "fd:%d id:%u resp: %.*s", r->con->fd, r->h2id, 12, status);
+        h2_log_response_header(r, 12, status);
 
     memset(&lsx, 0, sizeof(lsxpack_header_t));
     lsx.buf = status;
@@ -1652,10 +1671,7 @@ h2_send_headers (request_st * const r, connection * const con)
             }
 
             if (log_response_header)
-                log_error(r->conf.errh, __FILE__, __LINE__,
-                  "fd:%d id:%u resp: %.*s: %.*s", r->con->fd, r->h2id,
-                  (int)klen, lsx.buf + lsx.name_offset,
-                  (int)lsx.val_len, lsx.buf + lsx.val_offset);
+                h2_log_response_header_lsx(r, &lsx);
 
             unsigned char * const dst_in = dst;
             dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
@@ -1692,8 +1708,7 @@ h2_send_headers (request_st * const r, connection * const con)
         alen += 35+2;
 
         if (log_response_header)
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "fd:%d id:%u resp: %.*s", r->con->fd, r->h2id, 35, tstr);
+            h2_log_response_header(r, 35, tstr);
 
         unsigned char * const dst_in = dst;
         dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
@@ -1713,9 +1728,7 @@ h2_send_headers (request_st * const r, connection * const con)
         alen += 6+vlen+4;
 
         if (log_response_header)
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "fd:%d id:%u resp: %.*s", r->con->fd, r->h2id,
-              (int)6+vlen+2, b->ptr);
+            h2_log_response_header(r, (int)6+vlen+2, b->ptr);
 
         memset(&lsx, 0, sizeof(lsxpack_header_t));
         lsx.buf = b->ptr;
