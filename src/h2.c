@@ -69,6 +69,7 @@ __attribute_cold__
 static void
 h2_send_rst_stream (request_st * const r, connection * const con, const request_h2error_t e)
 {
+    r->state = CON_STATE_ERROR;
     r->h2state = H2_STATE_CLOSED;
     h2_send_rst_stream_id(r->h2id, con, e);
 }
@@ -84,8 +85,10 @@ h2_send_goaway_rst_stream (connection * const con)
         request_st * const r = h2c->r[i];
         if (r->h2state == H2_STATE_CLOSED) continue;
         /*(XXX: might consider always sending RST_STREAM)*/
-        if (!sent_goaway)
+        if (!sent_goaway) {
+            r->state = CON_STATE_ERROR;
             r->h2state = H2_STATE_CLOSED;
+        }
         else /*(also sets r->h2state = H2_STATE_CLOSED)*/
             h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
     }
@@ -201,6 +204,7 @@ h2_recv_rst_stream (connection * const con, const uint8_t * const s, const uint3
             return;
         }
         /* XXX: ? add debug trace including error code from RST_STREAM ? */
+        r->state = CON_STATE_ERROR;
         r->h2state = H2_STATE_CLOSED;
         return;
     }
@@ -970,13 +974,20 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
             if (!h2c->sent_goaway && !trailers)
                 h2c->h2_cid = r->h2id;
             h2_send_goaway_e(r->con, err);
-            h2_retire_stream(r, r->con);
+            if (!trailers) {
+                h2_retire_stream(r, r->con);
+                return;
+            }
+            else {
+                r->state = CON_STATE_ERROR;
+                r->h2state = H2_STATE_CLOSED;
+            }
             break;
         }
     }
 
     hpctx.hlen += 2;
-    r->rqst_header_len = hpctx.hlen;
+    r->rqst_header_len += hpctx.hlen;
     /*(accounting for mod_accesslog and mod_rrdtool)*/
     chunkqueue * const rq = r->read_queue;
     rq->bytes_in  += (off_t)hpctx.hlen;
@@ -1042,6 +1053,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         r->h2state = (s[4] & H2_FLAG_END_STREAM)
           ? H2_STATE_HALF_CLOSED_REMOTE
           : H2_STATE_OPEN;
+        r->state = CON_STATE_REQUEST_END;
         /* Note: timestamps here are updated only after receipt of entire header
          * (HEADERS frame might have been sent in multiple packets
          *  and CONTINUATION frames may have been sent in multiple packets)
@@ -1073,7 +1085,12 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
             /* Padding that exceeds the size remaining for the header block
              * fragment MUST be treated as a PROTOCOL_ERROR. */
             h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
-            h2_retire_stream(r, con);
+            if (!trailers)
+                h2_retire_stream(r, con);
+            else {
+                r->state = CON_STATE_ERROR;
+                r->h2state = H2_STATE_CLOSED;
+            }
             return 0;
         }
         alen -= (1 + pad); /*(alen is adjusted for PRIORITY below)*/
@@ -1084,7 +1101,8 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
           ((psrc[0]<<24)|(psrc[1]<<16)|(psrc[2]<<8)|psrc[3]) & ~0x80000000u;
         if (prio == id) {
             h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
-            h2_retire_stream(r, con);
+            if (!trailers)
+                h2_retire_stream(r, con);
             return 1;
         }
       #if 0
@@ -1098,7 +1116,9 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
     h2_parse_headers_frame(r, psrc, alen, trailers);
 
   #if 0 /*(handled in h2_parse_frames() as a connection error)*/
-    if (s[3] == H2_FTYPE_PUSH_PROMISE) {
+    /* not handled here:
+     * r is invalid if h2_parse_headers_frame() HPACK decode error */
+    if (s[3] == H2_FTYPE_PUSH_PROMISE && !trailers) {
         /* Had to process HPACK to keep HPACK tables sync'd with peer but now
          * discard the request if PUSH_PROMISE, since not expected, as this code
          * is running as a server, not as a client.
@@ -1136,7 +1156,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
          * https://github.com/summerwind/h2spec/issues/122
          */
       #if 0
-        if (400 == r->http_status) {
+        if (400 == r->http_status && !trailers) {
             h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
             h2_retire_stream(r, con);
         }

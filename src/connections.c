@@ -1226,16 +1226,6 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
             /* future: might track read/write interest per request
              * to avoid iterating through all active requests */
 
-            /* XXX: h2.c manages r->h2state, but does not modify r->state
-             *      (might revisit later and allow h2.c to modify both) */
-            if (r->state < CON_STATE_REQUEST_END
-                && (r->h2state == H2_STATE_OPEN
-                    || r->h2state == H2_STATE_HALF_CLOSED_REMOTE))
-                connection_set_state(r, CON_STATE_REQUEST_END);
-            else if (r->h2state == H2_STATE_CLOSED
-                     && r->state != CON_STATE_ERROR)
-                    connection_set_state(r, CON_STATE_ERROR);
-
           #if 0
             const int log_state_handling = r->conf.log_state_handling;
             if (log_state_handling)
@@ -1271,7 +1261,6 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
             }
 
           #if 0
-            /* XXX: TODO: r is invalid if retired; not properly handled here */
             if (log_state_handling)
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "state at exit %d %d %s", con->fd, r->h2id,
