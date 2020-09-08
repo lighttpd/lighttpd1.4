@@ -1006,7 +1006,7 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
         len = buffer_string_length(target);
         r->rqst_header_len += len;
         if (len > MAX_HTTP_REQUEST_URI) {
-            return 414; /* 414 Request-URI Too Long */
+            return 414; /* 414 URI Too Long */
         }
         if (r->rqst_header_len > MAX_HTTP_REQUEST_HEADER) {
             log_error(r->conf.errh, __FILE__, __LINE__,

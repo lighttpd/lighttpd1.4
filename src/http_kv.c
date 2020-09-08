@@ -69,10 +69,12 @@ static const keyvalue http_methods[] = {
 	{ HTTP_METHOD_UNSET, 0, NULL }
 };
 
+/* https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml */
 static const keyvalue http_status[] = {
 	{ 100, CONST_LEN_STR("100 Continue") },
 	{ 101, CONST_LEN_STR("101 Switching Protocols") },
 	{ 102, CONST_LEN_STR("102 Processing") }, /* WebDAV */
+	{ 103, CONST_LEN_STR("103 Early Hints") },
 	{ 200, CONST_LEN_STR("200 OK") },
 	{ 201, CONST_LEN_STR("201 Created") },
 	{ 202, CONST_LEN_STR("202 Accepted") },
@@ -81,6 +83,8 @@ static const keyvalue http_status[] = {
 	{ 205, CONST_LEN_STR("205 Reset Content") },
 	{ 206, CONST_LEN_STR("206 Partial Content") },
 	{ 207, CONST_LEN_STR("207 Multi-status") }, /* WebDAV */
+	{ 208, CONST_LEN_STR("208 Already Reported") },
+	{ 226, CONST_LEN_STR("226 IM Used") },
 	{ 300, CONST_LEN_STR("300 Multiple Choices") },
 	{ 301, CONST_LEN_STR("301 Moved Permanently") },
 	{ 302, CONST_LEN_STR("302 Found") },
@@ -103,23 +107,31 @@ static const keyvalue http_status[] = {
 	{ 410, CONST_LEN_STR("410 Gone") },
 	{ 411, CONST_LEN_STR("411 Length Required") },
 	{ 412, CONST_LEN_STR("412 Precondition Failed") },
-	{ 413, CONST_LEN_STR("413 Request Entity Too Large") },
-	{ 414, CONST_LEN_STR("414 Request-URI Too Long") },
+	{ 413, CONST_LEN_STR("413 Payload Too Large") },
+	{ 414, CONST_LEN_STR("414 URI Too Long") },
 	{ 415, CONST_LEN_STR("415 Unsupported Media Type") },
-	{ 416, CONST_LEN_STR("416 Requested Range Not Satisfiable") },
+	{ 416, CONST_LEN_STR("416 Range Not Satisfiable") },
 	{ 417, CONST_LEN_STR("417 Expectation Failed") },
 	{ 421, CONST_LEN_STR("421 Misdirected Request") }, /* RFC 7540 */
 	{ 422, CONST_LEN_STR("422 Unprocessable Entity") }, /* WebDAV */
 	{ 423, CONST_LEN_STR("423 Locked") }, /* WebDAV */
 	{ 424, CONST_LEN_STR("424 Failed Dependency") }, /* WebDAV */
 	{ 426, CONST_LEN_STR("426 Upgrade Required") }, /* TLS */
+	{ 428, CONST_LEN_STR("428 Precondition Required") },
+	{ 429, CONST_LEN_STR("429 Too Many Requests") },
+	{ 431, CONST_LEN_STR("431 Request Header Fields Too Large") },
+	{ 451, CONST_LEN_STR("451 Unavailable For Legal Reasons") },
 	{ 500, CONST_LEN_STR("500 Internal Server Error") },
 	{ 501, CONST_LEN_STR("501 Not Implemented") },
 	{ 502, CONST_LEN_STR("502 Bad Gateway") },
-	{ 503, CONST_LEN_STR("503 Service Not Available") },
+	{ 503, CONST_LEN_STR("503 Service Unavailable") },
 	{ 504, CONST_LEN_STR("504 Gateway Timeout") },
 	{ 505, CONST_LEN_STR("505 HTTP Version Not Supported") },
+	{ 506, CONST_LEN_STR("506 Variant Also Negotiates") },
 	{ 507, CONST_LEN_STR("507 Insufficient Storage") }, /* WebDAV */
+	{ 508, CONST_LEN_STR("508 Loop Detected") },
+	{ 510, CONST_LEN_STR("510 Not Extended") },
+	{ 511, CONST_LEN_STR("511 Network Authentication Required") },
 
 	{ -1, 0, NULL }
 };
