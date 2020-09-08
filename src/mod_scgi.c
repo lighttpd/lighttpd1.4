@@ -259,12 +259,9 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 
 	hctx->wb_reqlen = buffer_string_length(b) - offset;
 	chunkqueue_prepend_buffer_commit(hctx->wb);
-      #if 0
-	hctx->wb->first->offset += (off_t)offset;
-	hctx->wb->bytes_in -= (off_t)offset;
-      #else
 	chunkqueue_mark_written(hctx->wb, offset);
-      #endif
+	hctx->wb->bytes_in  -= (off_t)offset;
+	hctx->wb->bytes_out -= (off_t)offset;
 
 	if (r->reqbody_length) {
 		chunkqueue_append_chunkqueue(hctx->wb, r->reqbody_queue);

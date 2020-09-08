@@ -711,7 +711,7 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 			cgi_connection_close_fdtocgi(hctx); /*(closes only hctx->fdtocgi)*/
 		}
 	} else {
-		off_t cqlen = cq->bytes_in - cq->bytes_out;
+		off_t cqlen = chunkqueue_length(cq);
 		if (cq->bytes_in != r->reqbody_length && cqlen < 65536 - 16384) {
 			/*(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
 			if (!(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)) {
@@ -962,7 +962,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	if (cq->bytes_in != (off_t)r->reqbody_length) {
 		/*(64k - 4k to attempt to avoid temporary files
 		 * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
-		if (cq->bytes_in - cq->bytes_out > 65536 - 4096
+		if (chunkqueue_length(cq) > 65536 - 4096
 		    && (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)){
 			r->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
 			if (-1 != hctx->fd) return HANDLER_WAIT_FOR_EVENT;

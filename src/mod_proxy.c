@@ -824,7 +824,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
 static handler_t proxy_stdin_append(gw_handler_ctx *hctx) {
     /*handler_ctx *hctx = (handler_ctx *)gwhctx;*/
     chunkqueue * const req_cq = hctx->r->reqbody_queue;
-    const off_t req_cqlen = req_cq->bytes_in - req_cq->bytes_out;
+    const off_t req_cqlen = chunkqueue_length(req_cq);
     if (req_cqlen) {
         /* XXX: future: use http_chunk_len_append() */
         buffer * const tb = hctx->r->tmp_buf;

@@ -1240,7 +1240,7 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
                 && (r->resp_body_finished || r->conf.stream_response_body)) {
 
                 chunkqueue * const cq = r->write_queue;
-                off_t avail = cq->bytes_in - cq->bytes_out;
+                off_t avail = chunkqueue_length(cq);
                 if (avail > max_bytes)    avail = max_bytes;
                 if (avail > fsize)        avail = fsize;
                 if (avail > r->h2_swin)   avail = r->h2_swin;
@@ -1625,7 +1625,7 @@ connection_handle_read_post_chunked (request_st * const r, chunkqueue * const cq
     const off_t max_request_size = (off_t)r->conf.max_request_size << 10;
     off_t te_chunked = r->te_chunked;
     do {
-        off_t len = cq->bytes_in - cq->bytes_out;
+        off_t len = chunkqueue_length(cq);
 
         while (0 == te_chunked) {
             char *p;
@@ -1714,7 +1714,7 @@ connection_handle_read_post_chunked (request_st * const r, chunkqueue * const cq
 
                 /* consume HTTP chunked header */
                 chunkqueue_mark_written(cq, (size_t)hsz);
-                len = cq->bytes_in - cq->bytes_out;
+                len = chunkqueue_length(cq);
 
                 if (0 !=max_request_size
                     && (max_request_size < te_chunked
@@ -1757,7 +1757,7 @@ connection_handle_read_post_chunked (request_st * const r, chunkqueue * const cq
                 return http_response_reqbody_read_error(r, 500);
             }
             te_chunked -= len;
-            len = cq->bytes_in - cq->bytes_out;
+            len = chunkqueue_length(cq);
         }
 
         if (len < te_chunked) break;

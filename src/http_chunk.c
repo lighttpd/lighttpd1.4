@@ -198,7 +198,7 @@ static int http_chunk_uses_tempfile(const request_st * const r, const chunkqueue
     const chunk * const c = cq->last;
     return
       ((c && c->type == FILE_CHUNK && c->file.is_temp)
-       || cq->bytes_in - cq->bytes_out + len
+       || chunkqueue_length(cq) + len
           > ((r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
              ? 128*1024
              :  64*1024));

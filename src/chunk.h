@@ -124,7 +124,10 @@ void chunkqueue_compact_mem(chunkqueue *cq, size_t clen);
 void chunkqueue_small_resp_optim (chunkqueue * restrict cq);
 
 __attribute_pure__
-off_t chunkqueue_length(chunkqueue *cq);
+static inline off_t chunkqueue_length(const chunkqueue *cq);
+static inline off_t chunkqueue_length(const chunkqueue *cq) {
+	return cq->bytes_in - cq->bytes_out;
+}
 
 void chunkqueue_free(chunkqueue *cq);
 void chunkqueue_reset(chunkqueue *cq);

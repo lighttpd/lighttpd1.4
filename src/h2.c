@@ -665,7 +665,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     /*(similar decision logic to that in http_chunk_uses_tempfile())*/
     const chunk * const c = dst->last;
     if ((c && c->type == FILE_CHUNK && c->file.is_temp)
-        || dst->bytes_in - dst->bytes_out + alen > 65536) {
+        || chunkqueue_length(dst) + alen > 65536) {
         log_error_st * const errh = r->conf.errh;
         if (0 != chunkqueue_steal_with_tempfiles(dst, cq, (off_t)alen, errh)) {
             h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
@@ -816,10 +816,12 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
         /* (alternatively, could memmove() 9 bytes of frame header over the
          *  pad length octet, remove PADDED flag, add 1 to c->offset,
          *  add 1 to s, subtract 1 from clen and substract 1 from cqlen,
-         *  substract 1 from n) */
+         *  substract 1 from n, add 1 to cq->bytes_out) */
         s[9] = 0;
         /* set offset to beginning of padding at end of first frame */
         m -= plen;
+        /* XXX: layer violation; adjusts chunk.c internal accounting */
+        cq->bytes_out += plen;
     }
 
     do {
@@ -828,6 +830,8 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
         memmove(s+m, s+n+9, flen);
         m += flen;
         n += 9+flen;
+        /* XXX: layer violation; adjusts chunk.c internal accounting */
+        cq->bytes_out += 9;
     } while (!(flags & H2_FLAG_END_HEADERS));
     /* overwrite frame size */
     m -= 9; /*(temporarily remove frame header from len)*/
@@ -1317,7 +1321,7 @@ h2_want_read (connection * const con)
     if (chunkqueue_is_empty(cq)) return 1;
 
     /* check for partial frame */
-    const off_t cqlen = cq->bytes_in - cq->bytes_out; /*chunkqueue_length(cq);*/
+    const off_t cqlen = chunkqueue_length(cq);
     if (cqlen < 9) return 1;
     chunk *c = cq->first;
     uint32_t clen = buffer_string_length(c->mem) - c->offset;

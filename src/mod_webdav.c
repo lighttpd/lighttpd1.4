@@ -3449,7 +3449,7 @@ webdav_parse_chunkqueue (request_st * const r,
                           | XML_PARSE_PEDANTIC| XML_PARSE_NONET);
     char *xmlstr;
     chunkqueue * const cq = r->reqbody_queue;
-    size_t weWant = cq->bytes_in - cq->bytes_out;
+    size_t weWant = chunkqueue_length(cq);
     int err = XML_ERR_OK;
 
     while (weWant) {

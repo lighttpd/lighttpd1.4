@@ -362,7 +362,7 @@ void chunkqueue_append_chunkqueue(chunkqueue * const restrict cq, chunkqueue * c
 		cq->last->next = src->first;
 	}
 	cq->last = src->last;
-	cq->bytes_in += (src->bytes_in - src->bytes_out);
+	cq->bytes_in += chunkqueue_length(src);
 
 	src->first = NULL;
 	src->last = NULL;
@@ -707,17 +707,6 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue
 	}
 
 	return 0;
-}
-
-off_t chunkqueue_length(chunkqueue *cq) {
-	off_t len = 0;
-	chunk *c;
-
-	for (c = cq->first; c; c = c->next) {
-		len += chunk_remaining_length(c);
-	}
-
-	return len;
 }
 
 void chunkqueue_mark_written(chunkqueue *cq, off_t len) {

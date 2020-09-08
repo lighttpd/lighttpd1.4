@@ -221,7 +221,7 @@ static handler_t fcgi_stdin_append(handler_ctx *hctx) {
 	FCGI_Header header;
 	chunkqueue * const req_cq = hctx->r->reqbody_queue;
 	off_t offset, weWant;
-	const off_t req_cqlen = req_cq->bytes_in - req_cq->bytes_out;
+	const off_t req_cqlen = chunkqueue_length(req_cq);
 	int request_id = hctx->request_id;
 
 	/* something to send ? */

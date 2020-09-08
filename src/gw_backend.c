@@ -1968,7 +1968,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
             fdevent_fdnode_event_clr(hctx->ev, hctx->fdn, FDEVENT_OUT);
             gw_set_state(hctx, GW_STATE_READ);
         } else {
-            off_t wblen = hctx->wb->bytes_in - hctx->wb->bytes_out;
+            off_t wblen = chunkqueue_length(hctx->wb);
             if ((hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0)
                 && wblen < 65536 - 16384) {
                 /*(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
@@ -2064,7 +2064,7 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
          * buffered to disk if too large and backend can not keep up */
         /*(64k - 4k to attempt to avoid temporary files
          * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
-        if (hctx->wb->bytes_in - hctx->wb->bytes_out > 65536 - 4096) {
+        if (chunkqueue_length(hctx->wb) > 65536 - 4096) {
             if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN) {
                 r->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
             }
