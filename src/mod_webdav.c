@@ -4231,8 +4231,12 @@ mod_webdav_write_single_file_chunk (request_st * const r, chunkqueue * const cq)
     chunk * const c = cq->first;
     cq->first = c->next;
     const off_t len = chunkqueue_length(cq);
+    const off_t bytes_out = cq->bytes_out;
     if (mod_webdav_write_cq(r, cq, c->file.fd)) {
         /*assert(cq->first == NULL);*/
+        /* chunks merged; chunkqueue length did not change,
+         * so restore cq->bytes_out instead of chunkqueue_file_update() */
+        cq->bytes_out = bytes_out;
         c->file.length = len;
         c->next = NULL;
         cq->first = cq->last = c;
