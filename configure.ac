@@ -640,6 +640,7 @@ AC_ARG_WITH([openssl],
   [WITH_OPENSSL=no]
 )
 AC_MSG_RESULT([$WITH_OPENSSL])
+AM_CONDITIONAL([BUILD_WITH_OPENSSL], test ! "$WITH_OPENSSL" = no)
 
 if test "$WITH_OPENSSL" != no; then
   if test "$WITH_OPENSSL" != yes; then
@@ -690,13 +691,15 @@ if test "$WITH_OPENSSL" != no; then
     [AC_MSG_ERROR([openssl crypto library not found. install it or build without --with-openssl])]
   )
   AC_CHECK_LIB([ssl], [SSL_new],
-    [SSL_LIB="-lssl -lcrypto"],
+    [OPENSSL_LIBS="${openssl_append_LDFLAGS} -lssl -lcrypto"],
     [AC_MSG_ERROR([openssl ssl library not found. install it or build without --with-openssl])],
     [ -lcrypto "$DL_LIB" ]
   )
 
   AC_DEFINE([HAVE_LIBSSL], [1], [Have libssl])
-  AC_SUBST([SSL_LIB])
+  OPENSSL_CFLAGS="${openssl_append_CPPFLAGS}"
+  AC_SUBST([OPENSSL_CFLAGS])
+  AC_SUBST([OPENSSL_LIBS])
   AC_SUBST([CRYPTO_LIB])
 fi
 
@@ -711,20 +714,23 @@ AC_ARG_WITH([wolfssl],
   [WITH_WOLFSSL=no]
 )
 AC_MSG_RESULT([$WITH_WOLFSSL])
+AM_CONDITIONAL([BUILD_WITH_WOLFSSL], test ! "$WITH_WOLFSSL" = no)
 
 if test "$WITH_WOLFSSL" != no; then
-  if test "$WITH_WOLFSSL" = yes; then
-    WITH_WOLFSSL="/usr/local"
+  CPPFLAGS_SAVE="${CPPFLAGS}"
+  LDFLAGS_SAVE="${LDFLAGS}"
+  if test "$WITH_WOLFSSL" != yes; then
+    WOLFSSL_CFLAGS="-I$WITH_WOLFSSL/include -I$WITH_WOLFSSL/include/wolfssl"
+    WOLFSSL_LIBS="-L$WITH_WOLFSSL/lib -lwolfssl"
+    CPPFLAGS="${CPPFLAGS} $WOLFSSL_CFLAGS"
+    LDFLAGS="${LDFLAGS} $WOLFSSL_LIBS"
   fi
-
-  CPPFLAGS="${CPPFLAGS} -I$WITH_WOLFSSL/include -I$WITH_WOLFSSL/include/wolfssl"
-  LDFLAGS="${LDFLAGS} -L$WITH_WOLFSSL/lib"
 
   AC_CHECK_HEADERS([wolfssl/ssl.h], [], [
     AC_MSG_ERROR([wolfssl headers not found. install them or build without --with-wolfssl])
   ])
   AC_CHECK_LIB([wolfssl], [wolfSSL_Init],
-    [CRYPTO_LIB="-lwolfssl"],
+    [WOLFSSL_CRYPTO_LIB="-lwolfssl"],
     [AC_MSG_ERROR([wolfssl crypto library not found. install it or build without --with-wolfssl])]
   )
   AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
@@ -733,17 +739,16 @@ if test "$WITH_WOLFSSL" != no; then
     #error HAVE_LIGHTY macro not defined
     #endif
   ]])], [], [AC_MSG_ERROR([wolfssl must be built with ./configure --enable-lighty])])
-  SSL_LIB="-lwolfssl"
 
-  AC_SUBST([SSL_LIB])
-  AC_SUBST([CRYPTO_LIB])
-fi
-
-AM_CONDITIONAL([BUILD_WITH_OPENSSL],
-               [test "$WITH_OPENSSL" != no || test "$WITH_WOLFSSL" != no])
-
-if test "$WITH_OPENSSL" != no && test "$WITH_WOLFSSL" != no; then
-  AC_MSG_ERROR([lighttpd should not be built with both --with-openssl and --with-wolfssl])
+  AC_SUBST([WOLFSSL_CFLAGS])
+  AC_SUBST([WOLFSSL_LIBS])
+  if test "$WITH_OPENSSL" = no; then
+    CRYPTO_LIB="$WOLFSSL_CRYPTO_LIB"
+    AC_SUBST([CRYPTO_LIB])
+  else
+    CPPFLAGS="${CPPFLAGS_SAVE}"
+    LDFLAGS="${LDFLAGS_SAVE}"
+  fi
 fi
 
 dnl Check for mbedTLS
@@ -773,7 +778,7 @@ if test "x$use_mbedtls" = "xyes"; then
   AC_CHECK_LIB(mbedcrypto,mbedtls_base64_encode,
     [AC_CHECK_LIB(mbedx509, mbedtls_x509_get_name,
       [AC_CHECK_LIB(mbedtls, mbedtls_cipher_info_from_type,
-        [MTLS_LIB="-lmbedtls -lmbedx509 -lmbedcrypto"
+        [MTLS_LIBS="-lmbedtls -lmbedx509 -lmbedcrypto"
          CRYPTO_LIB="-lmbedcrypto"
          AC_DEFINE(HAVE_LIBMBEDTLS, [1], [Have libmbedtls library])
          AC_DEFINE(HAVE_LIBMBEDX509, [1], [Have libmbedx509 library])
@@ -782,7 +787,7 @@ if test "x$use_mbedtls" = "xyes"; then
       ],[],[-lmbedcrypto "$DL_LIB"])
     ],[],[])
   LIBS="$OLDLIBS"
-  AC_SUBST(MTLS_LIB)
+  AC_SUBST(MTLS_LIBS)
   AC_SUBST(CRYPTO_LIB)
 fi
 
@@ -1706,7 +1711,7 @@ lighty_track_feature "pam" "mod_authn_pam" \
   'test "$WITH_PAM" != no'
 
 lighty_track_feature "network-openssl" "mod_openssl" \
-  'test "$WITH_OPENSSL" != no || test "$WITH_WOLFSSL" != no'
+  'test "$WITH_OPENSSL" != no'
 
 lighty_track_feature "network-mbedtls" "mod_mbedtls" \
   'test "$WITH_MBEDTLS" != no'
@@ -1716,6 +1721,9 @@ lighty_track_feature "network-gnutls" "mod_gnutls" \
 
 lighty_track_feature "network-nss" "mod_nss" \
   'test "$WITH_NSS" != no'
+
+lighty_track_feature "network-wolfssl" "mod_wolfssl" \
+  'test "$WITH_WOLFSSL" != no'
 
 lighty_track_feature "auth-crypt" "" \
   'test "$found_crypt" != no'

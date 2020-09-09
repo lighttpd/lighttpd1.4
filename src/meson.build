@@ -1026,7 +1026,7 @@ endif
 
 if get_option('with_wolfssl') != 'false'
 	modules += [
-		[ 'mod_openssl', [ 'mod_openssl.c' ], libcrypto ],
+		[ 'mod_wolfssl', [ 'mod_wolfssl.c' ], libcrypto ],
 	]
 endif
 

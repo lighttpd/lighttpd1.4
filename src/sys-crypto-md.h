@@ -144,7 +144,7 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 }
 #endif
 
-#elif defined(USE_WOLFSSL_CRYPTO)
+#elif defined(USE_WOLFSSL_CRYPTO) && !defined(USE_OPENSSL_CRYPTO)
 
 /* WolfSSL compatibility API for OpenSSL unnecessarily bounces through an extra
  * layer of indirection.  However, to avoid conflicting typedefs when includers
@@ -164,12 +164,14 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 static inline int
 MD4_Init(MD4_CTX *ctx)
 {
-    return (0 == wc_InitMd4((Md4 *)ctx));
+    wc_InitMd4((Md4 *)ctx);
+    return 1;
 }
 static inline int
 MD4_Final(unsigned char *digest, MD4_CTX *ctx)
 {
-    return (0 == wc_Md4Final((Md4 *)ctx, digest));
+    wc_Md4Final((Md4 *)ctx, digest);
+    return 1;
 }
 static inline void
 MD4_Update(MD4_CTX *ctx, const void *data, size_t length)

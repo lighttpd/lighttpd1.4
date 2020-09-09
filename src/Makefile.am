@@ -392,14 +392,15 @@ if BUILD_WITH_OPENSSL
 lib_LTLIBRARIES += mod_openssl.la
 mod_openssl_la_SOURCES = mod_openssl.c
 mod_openssl_la_LDFLAGS = $(common_module_ldflags)
-mod_openssl_la_LIBADD = $(SSL_LIB) $(common_libadd)
+mod_openssl_la_LIBADD = $(OPENSSL_LIBS) $(common_libadd)
+mod_openssl_la_CPPFLAGS = $(OPENSSL_CFLAGS)
 endif
 
 if BUILD_WITH_MBEDTLS
 lib_LTLIBRARIES += mod_mbedtls.la
 mod_mbedtls_la_SOURCES = mod_mbedtls.c
 mod_mbedtls_la_LDFLAGS = $(common_module_ldflags)
-mod_mbedtls_la_LIBADD = $(MTLS_LIB) $(common_libadd)
+mod_mbedtls_la_LIBADD = $(MTLS_LIBS) $(common_libadd)
 endif
 
 if BUILD_WITH_GNUTLS
@@ -416,6 +417,14 @@ mod_nss_la_SOURCES = mod_nss.c
 mod_nss_la_LDFLAGS = $(common_module_ldflags)
 mod_nss_la_LIBADD = $(NSS_LIBS) $(common_libadd)
 mod_nss_la_CPPFLAGS = $(NSS_CFLAGS)
+endif
+
+if BUILD_WITH_WOLFSSL
+lib_LTLIBRARIES += mod_wolfssl.la
+mod_wolfssl_la_SOURCES = mod_wolfssl.c
+mod_wolfssl_la_LDFLAGS = $(common_module_ldflags)
+mod_wolfssl_la_LIBADD = $(WOLFSSL_LIBS) $(common_libadd)
+mod_wolfssl_la_CPPFLAGS = $(WOLFSSL_CFLAGS)
 endif
 
 
@@ -567,7 +576,27 @@ lighttpd_LDADD += $(DBI_LIBS)
 endif
 if BUILD_WITH_OPENSSL
 lighttpd_SOURCES += mod_openssl.c
-lighttpd_LDADD += $(SSL_LIB)
+lighttpd_CPPFLAGS += $(OPENSSL_CFLAGS)
+lighttpd_LDADD += $(OPENSSL_LIBS)
+endif
+if BUILD_WITH_MBEDTLS
+lighttpd_SOURCES += mod_mbedtls.c
+lighttpd_LDADD += $(MTLS_LIBS)
+endif
+if BUILD_WITH_GNUTLS
+lighttpd_SOURCES += mod_gnutls.c
+lighttpd_CPPFLAGS += $(GNUTLS_CFLAGS)
+lighttpd_LDADD += $(GNUTLS_LIBS)
+endif
+if BUILD_WITH_NSS
+lighttpd_SOURCES += mod_nss.c
+lighttpd_CPPFLAGS += $(NSS_CFLAGS)
+lighttpd_LDADD += $(NSS_LIBS)
+endif
+if BUILD_WITH_WOLFSSL
+lighttpd_SOURCES += mod_wolfssl.c
+lighttpd_CPPFLAGS += $(WOLFSSL_CFLAGS)
+lighttpd_LDADD += $(WOLFSSL_LIBS)
 endif
 if BUILD_WITH_MEMCACHED
 lighttpd_CPPFLAGS += $(MEMCACHED_CFLAGS)
