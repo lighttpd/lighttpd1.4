@@ -594,6 +594,10 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 	if (fd < 0) { /* 0-length file */
 		r->http_status = 200;
 		r->resp_body_finished = 1;
+		/*(Transfer-Encoding should not have been set at this point)*/
+		http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
+		                         CONST_STR_LEN("Content-Length"),
+		                         CONST_STR_LEN("0"));
 		return;
 	}
 
@@ -652,6 +656,13 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 	if (0 == http_chunk_append_file_fd(r, path, fd, sce->st.st_size)) {
 		r->http_status = 200;
 		r->resp_body_finished = 1;
+		/*(Transfer-Encoding should not have been set at this point)*/
+		buffer * const tb = r->tmp_buf;
+		buffer_clear(tb);
+		buffer_append_int(tb, sce->st.st_size);
+		http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
+		                         CONST_STR_LEN("Content-Length"),
+		                         CONST_BUF_LEN(tb));
 	}
 	else {
 		r->http_status = 500;
