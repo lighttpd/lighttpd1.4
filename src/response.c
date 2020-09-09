@@ -802,18 +802,22 @@ http_response_write_prepare(request_st * const r)
         }
     }
 
-    if (r->http_status == 0)
-        r->http_status = 403;
-
     switch (r->http_status) {
+      case 200: /* common case */
+        break;
       case 204: /* class: header only */
       case 205:
       case 304:
         /* disable chunked encoding again as we have no body */
         http_response_body_clear(r, 1);
+        /* no Content-Body, no Content-Length */
+        http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
+                                   CONST_STR_LEN("Content-Length"));
         r->resp_body_finished = 1;
         break;
       default: /* class: header + body */
+        if (r->http_status == 0)
+            r->http_status = 403;
         /* only custom body for 4xx and 5xx */
         if (r->http_status >= 400 && r->http_status < 600)
             http_response_static_errdoc(r);
@@ -839,7 +843,6 @@ http_response_write_prepare(request_st * const r)
         if (!(r->resp_htags
               & (HTTP_HEADER_CONTENT_LENGTH | HTTP_HEADER_TRANSFER_ENCODING))) {
             off_t qlen = chunkqueue_length(r->write_queue);
-
             /**
              * The Content-Length header can only be sent if we have content:
              * - HEAD does not have a content-body (but can have content-length)
@@ -848,15 +851,10 @@ http_response_write_prepare(request_st * const r)
              *
              * Otherwise generate a Content-Length header
              * (if chunked encoding is not available)
+             *
+             * (should not reach here if 1xx (r->http_status < 200))
              */
-            if (   r->http_status  < 200
-                || r->http_status == 204
-                || r->http_status == 304) {
-                /* no Content-Body, no Content-Length */
-                http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
-                                           CONST_STR_LEN("Content-Length"));
-            }
-            else if (qlen > 0) {
+            if (qlen > 0) {
                 buffer * const tb = r->tmp_buf;
                 buffer_clear(tb);
                 buffer_append_int(tb, qlen);
@@ -864,7 +862,8 @@ http_response_write_prepare(request_st * const r)
                                          CONST_STR_LEN("Content-Length"),
                                          CONST_BUF_LEN(tb));
             }
-            else if (r->http_method != HTTP_METHOD_HEAD) {
+            else if (r->http_method != HTTP_METHOD_HEAD
+                     && r->http_status != 204 && r->http_status != 304) {
                 /* Content-Length: 0 is important for Redirects (301, ...) as
                  * there might be content. */
                 http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
