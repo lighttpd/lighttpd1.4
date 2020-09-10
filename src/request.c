@@ -784,9 +784,9 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
               (hpctx->http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
             for (uint32_t j = 0; j < klen; ++j) {
-                if ((k[j] >= 'a' && k[j] <= 'z') || k[j] == '-')
+                if (light_islower(k[j]) || k[j] == '-')
                     continue; /*(common cases)*/
-                if (k[j] >= 'A' && k[j] <= 'Z')
+                if (light_isupper(k[j]))
                     return 400;
                 if (0 != http_request_parse_header_other(r, k+j, klen-j,
                                                          http_header_strict))

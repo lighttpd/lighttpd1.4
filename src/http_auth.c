@@ -192,10 +192,10 @@ int http_auth_digest_hex2bin (const char *hexstr, size_t len, unsigned char *bin
         int hi = hexstr[i];
         int lo = hexstr[i+1];
         if ('0' <= hi && hi <= '9')                    hi -= '0';
-        else if ((hi |= 0x20), 'a' <= hi && hi <= 'f') hi += -'a' + 10;
+        else if ((uint32_t)(hi |= 0x20)-'a' <= 'f'-'a')hi += -'a' + 10;
         else                                           return -1;
         if ('0' <= lo && lo <= '9')                    lo -= '0';
-        else if ((lo |= 0x20), 'a' <= lo && lo <= 'f') lo += -'a' + 10;
+        else if ((uint32_t)(lo |= 0x20)-'a' <= 'f'-'a')lo += -'a' + 10;
         else                                           return -1;
         bin[(i >> 1)] = (unsigned char)((hi << 4) | lo);
     }
@@ -209,9 +209,9 @@ int http_auth_md5_hex2lc (char *md5hex)
     int i;
     for (i = 0; md5hex[i]; ++i) {
         int c = md5hex[i];
-        if ('0' <= c && c <= '9')                   continue;
-        else if ((c |= 0x20), 'a' <= c && c <= 'f') md5hex[i] = c;
-        else                                        return -1;
+        if ('0' <= c && c <= '9')                      continue;
+        else if ((uint32_t)(c |= 0x20)-'a' <= 'f'-'a') md5hex[i] = c;
+        else                                           return -1;
     }
     return (32 == i) ? 0 : -1; /*(Note: char *md5hex must be a 32-char string)*/
 }

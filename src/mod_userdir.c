@@ -179,7 +179,7 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
 
         if (r->conf.force_lowercase_filenames) {
             for (size_t i = 0; i < ulen; ++i) {
-                if (u[i] >= 'A' && u[i] <= 'Z') u[i] |= 0x20;
+                if (light_isupper(u[i])) u[i] |= 0x20;
             }
         }
 

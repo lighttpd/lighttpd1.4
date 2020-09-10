@@ -477,12 +477,8 @@ static int is_hex_len(const char *str, size_t len) {
 
 	for (i = 0; i < len && *str; i++, str++) {
 		/* illegal characters */
-		if (!((*str >= '0' && *str <= '9') ||
-		      (*str >= 'a' && *str <= 'f') ||
-		      (*str >= 'A' && *str <= 'F'))
-		    ) {
+		if (!light_isxdigit(*str))
 			return 0;
-		}
 	}
 
 	return i == len;
@@ -502,13 +498,8 @@ static int is_base64_len(const char *str, size_t len) {
 
 	for (i = 0; i < len && *str; i++, str++) {
 		/* illegal characters */
-		if (!((*str >= '0' && *str <= '9') ||
-		      (*str >= 'a' && *str <= 'z') ||
-		      (*str >= 'A' && *str <= 'Z') ||
-		      (*str == '-') || (*str == '_'))
-		    ) {
+		if (!(light_isalnum(*str) || *str == '-' || *str == '_'))
 			return 0;
-		}
 	}
 
 	return i == len;

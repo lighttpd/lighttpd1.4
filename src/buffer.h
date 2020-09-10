@@ -193,19 +193,19 @@ char int2hex(char i);
 __attribute_pure__
 static inline int light_isdigit(int c);
 static inline int light_isdigit(int c) {
-	return (c >= '0' && c <= '9');
+	return ((uint32_t)c-'0' <= '9'-'0');
 }
 
 __attribute_pure__
 static inline int light_isxdigit(int c);
 static inline int light_isxdigit(int c) {
-	return light_isdigit(c) || (c |= 32, c >= 'a' && c <= 'f');
+	return light_isdigit(c) || (((uint32_t)c | 0x20)-'a' <= 'f'-'a');
 }
 
 __attribute_pure__
 static inline int light_isalpha(int c);
 static inline int light_isalpha(int c) {
-	return (c |= 32, c >= 'a' && c <= 'z');
+	return (((uint32_t)c | 0x20)-'a' <= 'z'-'a');
 }
 
 __attribute_pure__
@@ -213,6 +213,9 @@ static inline int light_isalnum(int c);
 static inline int light_isalnum(int c) {
 	return light_isdigit(c) || light_isalpha(c);
 }
+
+#define light_isupper(c) ((uint32_t)(c)-'A' <= 'Z'-'A')
+#define light_islower(c) ((uint32_t)(c)-'a' <= 'z'-'a')
 
 
 __attribute_pure__

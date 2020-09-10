@@ -1644,7 +1644,7 @@ h2_send_headers (request_st * const r, connection * const con)
          * end of value buffer */
         char * const v = buffer_string_prepare_append(&ds->value, klen);
         for (uint32_t j = 0; j < klen; ++j)
-            v[j] = (k[j] < 'A' || k[j] > 'Z') ? k[j] : (k[j] | 0x20);
+            v[j] = !light_isupper(k[j]) ? k[j] : (k[j] | 0x20);
         /*buffer_commit(&ds->value, klen);*//*(not necessary; truncated below)*/
 
         uint32_t voff = 0;
@@ -1908,7 +1908,7 @@ h2_send_end_stream_trailers (request_st * const r, connection * const con, const
         const char * const colon = memchr(k, ':', ptr+hoff[i+1]-k);
         if (NULL == colon) continue;
         do {
-            if (*k >= 'A' && *k <= 'Z') *k |= 0x20;
+            if (light_isupper(*k)) *k |= 0x20;
         } while (++k != colon);
     }
 

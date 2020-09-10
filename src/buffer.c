@@ -327,9 +327,9 @@ int buffer_eq_icase_ssn(const char * const a, const char * const b, const size_t
         if (ca != cb) {
             ca |= 0x20;
             cb |= 0x20;
-            if (ca       !=       cb) return 0;
-            if (ca < 'a' || 'z' < ca) return 0;
-            if (cb < 'a' || 'z' < cb) return 0;
+            if (ca != cb) return 0;
+            if (!light_islower(ca)) return 0;
+            if (!light_islower(cb)) return 0;
         }
     }
     return 1;
@@ -921,19 +921,17 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 }
 
 void buffer_to_lower(buffer * const b) {
-    char * const s = b->ptr;
+    unsigned char * const restrict s = (unsigned char *)b->ptr;
     for (uint32_t i = 0; i < b->used; ++i) {
-        char c = s[i];
-        if (c >= 'A' && c <= 'Z') s[i] |= 0x20;
+        if (light_isupper(s[i])) s[i] |= 0x20;
     }
 }
 
 
 void buffer_to_upper(buffer * const b) {
-    char * const s = b->ptr;
+    unsigned char * const restrict s = (unsigned char *)b->ptr;
     for (uint32_t i = 0; i < b->used; ++i) {
-        char c = s[i];
-        if (c >= 'a' && c <= 'z') s[i] &= ~0x20;
+        if (light_islower(s[i])) s[i] &= 0xdf;
     }
 }
 

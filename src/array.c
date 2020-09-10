@@ -101,8 +101,8 @@ static int array_caseless_compare(const char * const a, const char * const b, co
         if (ca == cb) continue;
 
         /* always lowercase for transitive results */
-        if (ca >= 'A' && ca <= 'Z') ca |= 32;
-        if (cb >= 'A' && cb <= 'Z') cb |= 32;
+        if (light_isupper(ca)) ca |= 0x20;
+        if (light_isupper(cb)) cb |= 0x20;
 
         if (ca == cb) continue;
         return (int)(ca - cb);

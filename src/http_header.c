@@ -195,7 +195,7 @@ void http_header_response_insert(request_st * const r, enum http_header_e id, co
             r->resp_header_repeated = 1;
             char * const h = buffer_string_prepare_append(vb, klen + vlen + 2);
             for (uint32_t i = 0; i < klen; ++i)
-                h[i] = (k[i] < 'A' || k[i] > 'Z') ? k[i] : (k[i] | 0x20);
+                h[i] = !light_isupper(k[i]) ? k[i] : (k[i] | 0x20);
             buffer_commit(vb, klen);
         }
         else
