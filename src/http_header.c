@@ -156,14 +156,14 @@ static inline buffer * http_header_generic_get_ifnotempty(const array * const a,
 
 
 buffer * http_header_response_get(const request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
-    return (id <= HTTP_HEADER_OTHER || (r->resp_htags & id))
+    return (id <= HTTP_HEADER_OTHER || light_btst(r->resp_htags, id))
       ? http_header_generic_get_ifnotempty(&r->resp_headers, k, klen)
       : NULL;
 }
 
 void http_header_response_unset(request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
-    if (id <= HTTP_HEADER_OTHER || (r->resp_htags & id)) {
-        if (id > HTTP_HEADER_OTHER) r->resp_htags &= ~id;
+    if (id <= HTTP_HEADER_OTHER || light_btst(r->resp_htags, id)) {
+        if (id > HTTP_HEADER_OTHER) light_bclr(r->resp_htags, id);
         array_set_key_value(&r->resp_headers, k, klen, CONST_STR_LEN(""));
     }
 }
@@ -174,20 +174,20 @@ void http_header_response_set(request_st * const r, enum http_header_e id, const
      *  which is used to indicate a "removed" header)
      */
     if (id > HTTP_HEADER_OTHER)
-        (vlen) ? (r->resp_htags |= id) : (r->resp_htags &= ~id);
+        (vlen) ? light_bset(r->resp_htags, id) : light_bclr(r->resp_htags, id);
     array_set_key_value(&r->resp_headers, k, klen, v, vlen);
 }
 
 void http_header_response_append(request_st * const r, enum http_header_e id, const char *k, uint32_t klen, const char *v, uint32_t vlen) {
     if (0 == vlen) return;
-    if (id > HTTP_HEADER_OTHER) r->resp_htags |= id;
+    if (id > HTTP_HEADER_OTHER) light_bset(r->resp_htags, id);
     buffer * const vb = array_get_buf_ptr(&r->resp_headers, k, klen);
     http_header_token_append(vb, v, vlen);
 }
 
 void http_header_response_insert(request_st * const r, enum http_header_e id, const char *k, uint32_t klen, const char *v, uint32_t vlen) {
     if (0 == vlen) return;
-    if (id > HTTP_HEADER_OTHER) r->resp_htags |= id;
+    if (id > HTTP_HEADER_OTHER) light_bset(r->resp_htags, id);
     buffer * const vb = array_get_buf_ptr(&r->resp_headers, k, klen);
     if (!buffer_string_is_empty(vb)) { /* append value */
         buffer_append_string_len(vb, CONST_STR_LEN("\r\n"));
@@ -207,14 +207,14 @@ void http_header_response_insert(request_st * const r, enum http_header_e id, co
 
 
 buffer * http_header_request_get(const request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
-    return (id <= HTTP_HEADER_OTHER || (r->rqst_htags & id))
+    return (id <= HTTP_HEADER_OTHER || light_btst(r->rqst_htags, id))
       ? http_header_generic_get_ifnotempty(&r->rqst_headers, k, klen)
       : NULL;
 }
 
 void http_header_request_unset(request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
-    if (id <= HTTP_HEADER_OTHER || (r->rqst_htags & id)) {
-        if (id > HTTP_HEADER_OTHER) r->rqst_htags &= ~id;
+    if (id <= HTTP_HEADER_OTHER || light_btst(r->rqst_htags, id)) {
+        if (id > HTTP_HEADER_OTHER) light_bclr(r->rqst_htags, id);
         array_set_key_value(&r->rqst_headers, k, klen, CONST_STR_LEN(""));
     }
 }
@@ -225,13 +225,13 @@ void http_header_request_set(request_st * const r, enum http_header_e id, const 
      *  which is used to indicate a "removed" header)
      */
     if (id > HTTP_HEADER_OTHER)
-        (vlen) ? (r->rqst_htags |= id) : (r->rqst_htags &= ~id);
+        (vlen) ? light_bset(r->rqst_htags, id) : light_bclr(r->rqst_htags, id);
     array_set_key_value(&r->rqst_headers, k, klen, v, vlen);
 }
 
 void http_header_request_append(request_st * const r, enum http_header_e id, const char *k, uint32_t klen, const char *v, uint32_t vlen) {
     if (0 == vlen) return;
-    if (id > HTTP_HEADER_OTHER) r->rqst_htags |= id;
+    if (id > HTTP_HEADER_OTHER) light_bset(r->rqst_htags, id);
     buffer * const vb = array_get_buf_ptr(&r->rqst_headers, k, klen);
     if (id != HTTP_HEADER_COOKIE)
         http_header_token_append(vb, v, vlen);

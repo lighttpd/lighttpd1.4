@@ -398,13 +398,13 @@ static handler_t cgi_response_headers(request_st * const r, struct http_response
     /* response headers just completed */
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
 
-    if (r->resp_htags & HTTP_HEADER_UPGRADE) {
+    if (light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) {
         if (hctx->conf.upgrade && r->http_status == 101) {
             /* 101 Switching Protocols; transition to transparent proxy */
             http_response_upgrade_read_body_unknown(r);
         }
         else {
-            r->resp_htags &= ~HTTP_HEADER_UPGRADE;
+            light_bclr(r->resp_htags, HTTP_HEADER_UPGRADE);
           #if 0
             /* preserve prior questionable behavior; likely broken behavior
              * anyway if backend thinks connection is being upgraded but client
@@ -415,7 +415,8 @@ static handler_t cgi_response_headers(request_st * const r, struct http_response
         }
     }
 
-    if (hctx->conf.upgrade && !(r->resp_htags & HTTP_HEADER_UPGRADE)) {
+    if (hctx->conf.upgrade
+        && !light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) {
         chunkqueue *cq = r->reqbody_queue;
         hctx->conf.upgrade = 0;
         if (cq->bytes_out == (off_t)r->reqbody_length) {

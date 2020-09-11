@@ -1061,14 +1061,14 @@ static handler_t proxy_response_headers(request_st * const r, struct http_respon
     /* response headers just completed */
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
 
-    if (r->resp_htags & HTTP_HEADER_UPGRADE) {
+    if (light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) {
         if (hctx->conf.header.upgrade && r->http_status == 101) {
             /* 101 Switching Protocols; transition to transparent proxy */
             gw_set_transparent(&hctx->gw);
             http_response_upgrade_read_body_unknown(r);
         }
         else {
-            r->resp_htags &= ~HTTP_HEADER_UPGRADE;
+            light_bclr(r->resp_htags, HTTP_HEADER_UPGRADE);
           #if 0
             /* preserve prior questionable behavior; likely broken behavior
              * anyway if backend thinks connection is being upgraded but client
@@ -1085,15 +1085,15 @@ static handler_t proxy_response_headers(request_st * const r, struct http_respon
         && NULL == hctx->conf.header.hosts_response)
         return HANDLER_GO_ON;
 
-    if (r->resp_htags & HTTP_HEADER_LOCATION) {
+    if (light_btst(r->resp_htags, HTTP_HEADER_LOCATION)) {
         buffer *vb = http_header_response_get(r, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"));
         if (vb) http_header_remap_uri(vb, 0, &hctx->conf.header, 0);
     }
-    if (r->resp_htags & HTTP_HEADER_CONTENT_LOCATION) {
+    if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LOCATION)) {
         buffer *vb = http_header_response_get(r, HTTP_HEADER_CONTENT_LOCATION, CONST_STR_LEN("Content-Location"));
         if (vb) http_header_remap_uri(vb, 0, &hctx->conf.header, 0);
     }
-    if (r->resp_htags & HTTP_HEADER_SET_COOKIE) {
+    if (light_btst(r->resp_htags, HTTP_HEADER_SET_COOKIE)) {
         buffer *vb = http_header_response_get(r, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"));
         if (vb) http_header_remap_setcookie(vb, 0, &hctx->conf.header);
     }

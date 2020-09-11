@@ -74,7 +74,8 @@ http_response_write_header (request_st * const r)
 		r->con->keep_alive_idle = r->conf.max_keep_alive_idle;
 	}
 
-	if ((r->resp_htags & HTTP_HEADER_UPGRADE) && r->http_version == HTTP_VERSION_1_1) {
+	if (light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)
+	    && r->http_version == HTTP_VERSION_1_1) {
 		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("upgrade"));
 	} else if (0 == r->keep_alive) {
 		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("close"));
@@ -82,7 +83,8 @@ http_response_write_header (request_st * const r)
 		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("keep-alive"));
 	}
 
-	if (304 == r->http_status && (r->resp_htags & HTTP_HEADER_CONTENT_ENCODING)) {
+	if (304 == r->http_status
+	    && light_btst(r->resp_htags, HTTP_HEADER_CONTENT_ENCODING)) {
 		http_header_response_unset(r, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
 	}
 
@@ -101,7 +103,7 @@ http_response_write_header (request_st * const r)
 		buffer_append_string_buffer(b, &ds->value);
 	}
 
-	if (!(r->resp_htags & HTTP_HEADER_DATE)) {
+	if (!light_btst(r->resp_htags, HTTP_HEADER_DATE)) {
 		static time_t tlast;
 		static char tstr[32]; /* 30-chars for "%a, %d %b %Y %H:%M:%S GMT" */
 		static size_t tlen;
@@ -119,7 +121,7 @@ http_response_write_header (request_st * const r)
 		buffer_append_string_len(b, tstr, tlen);
 	}
 
-	if (!(r->resp_htags & HTTP_HEADER_SERVER)) {
+	if (!light_btst(r->resp_htags, HTTP_HEADER_SERVER)) {
 		if (!buffer_string_is_empty(r->conf.server_tag)) {
 			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: "));
 			buffer_append_string_len(b, CONST_BUF_LEN(r->conf.server_tag));
@@ -138,7 +140,8 @@ http_response_write_header (request_st * const r)
 
 	/*(optimization to use fewer syscalls to send a small response)*/
 	off_t cqlen;
-	if (r->resp_body_finished && (r->resp_htags & HTTP_HEADER_CONTENT_LENGTH)
+	if (r->resp_body_finished
+	    && light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)
 	    && (cqlen = chunkqueue_length(cq) - r->resp_header_len) > 0
 	    && cqlen <= 32768)
 		chunkqueue_small_resp_optim(cq);
@@ -841,7 +844,8 @@ http_response_write_prepare(request_st * const r)
     if (r->resp_body_finished) {
         /* set content-length if length is known and not already set */
         if (!(r->resp_htags
-              & (HTTP_HEADER_CONTENT_LENGTH | HTTP_HEADER_TRANSFER_ENCODING))) {
+              & (light_bshift(HTTP_HEADER_CONTENT_LENGTH)
+                |light_bshift(HTTP_HEADER_TRANSFER_ENCODING)))) {
             off_t qlen = chunkqueue_length(r->write_queue);
             /**
              * The Content-Length header can only be sent if we have content:
@@ -886,9 +890,9 @@ http_response_write_prepare(request_st * const r)
          */
 
         if (!(r->resp_htags
-              & (HTTP_HEADER_CONTENT_LENGTH
-                |HTTP_HEADER_TRANSFER_ENCODING
-                |HTTP_HEADER_UPGRADE))) {
+              & (light_bshift(HTTP_HEADER_CONTENT_LENGTH)
+                |light_bshift(HTTP_HEADER_TRANSFER_ENCODING)
+                |light_bshift(HTTP_HEADER_UPGRADE)))) {
             if (r->http_method == HTTP_METHOD_CONNECT && r->http_status == 200){
                 /*(no transfer-encoding if successful CONNECT)*/
             }

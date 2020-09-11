@@ -1137,7 +1137,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
 
     if (!h2c->sent_goaway) {
         h2c->h2_cid = id;
-        if (!(r->rqst_htags & HTTP_HEADER_CONTENT_LENGTH))
+        if (!light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_LENGTH))
             r->reqbody_length = (s[4] & H2_FLAG_END_STREAM) ? 0 : -1;
       #if 0
         else if (r->reqbody_length > 0 && (s[4] & H2_FLAG_END_STREAM)) {
@@ -1580,7 +1580,8 @@ h2_send_headers (request_st * const r, connection * const con)
     /* specialized version of http_response_write_header(); send headers
      * directly to HPACK encoder, rather than double-buffering in chunkqueue */
 
-    if (304 == r->http_status && (r->resp_htags & HTTP_HEADER_CONTENT_ENCODING))
+    if (304 == r->http_status
+        && light_btst(r->resp_htags, HTTP_HEADER_CONTENT_ENCODING))
         http_header_response_unset(r, HTTP_HEADER_CONTENT_ENCODING,
                                    CONST_STR_LEN("Content-Encoding"));
 
@@ -1684,7 +1685,7 @@ h2_send_headers (request_st * const r, connection * const con)
         buffer_string_set_length(&ds->value, vlen); /*(restore prior value)*/
     }
 
-    if (!(r->resp_htags & HTTP_HEADER_DATE)) {
+    if (!light_btst(r->resp_htags, HTTP_HEADER_DATE)) {
         /* HTTP/1.1 and later requires a Date: header */
         /* "date: " 6-chars + 30-chars for "%a, %d %b %Y %H:%M:%S GMT" + '\0' */
         static char tstr[36] = "date: ";
@@ -1718,7 +1719,7 @@ h2_send_headers (request_st * const r, connection * const con)
         }
     }
 
-    if (!(r->resp_htags & HTTP_HEADER_SERVER)
+    if (!light_btst(r->resp_htags, HTTP_HEADER_SERVER)
         && !buffer_string_is_empty(r->conf.server_tag)) {
         buffer * const b = chunk_buffer_acquire();
         const uint32_t vlen = buffer_string_length(r->conf.server_tag);

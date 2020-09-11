@@ -1384,8 +1384,10 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	/*(current implementation requires response be complete)*/
 	if (!r->resp_body_finished) return HANDLER_GO_ON;
 	if (r->http_method == HTTP_METHOD_HEAD) return HANDLER_GO_ON;
-	if (r->resp_htags & HTTP_HEADER_TRANSFER_ENCODING) return HANDLER_GO_ON;
-	if (r->resp_htags & HTTP_HEADER_CONTENT_ENCODING) return HANDLER_GO_ON;
+	if (light_btst(r->resp_htags, HTTP_HEADER_TRANSFER_ENCODING))
+		return HANDLER_GO_ON;
+	if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_ENCODING))
+		return HANDLER_GO_ON;
 
 	/* disable compression for some http status types. */
 	switch(r->http_status) {
@@ -1447,7 +1449,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	 * (slightly imperfect (close enough?) match of ETag "000000" to "000000-gzip") */
 	vb = http_header_response_get(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"));
 	etaglen = (NULL != vb) ? buffer_string_length(vb) : 0;
-	if (NULL != vb && (r->rqst_htags & HTTP_HEADER_IF_NONE_MATCH)) {
+	if (NULL != vb && light_btst(r->rqst_htags, HTTP_HEADER_IF_NONE_MATCH)) {
 		const buffer *if_none_match = http_header_response_get(r, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
 		if (etaglen
 		    && r->http_status < 300 /*(want 2xx only)*/
@@ -1539,7 +1541,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 			chunkqueue_reset(r->write_queue);
 			if (0 != http_chunk_append_file(r, tb))
 				return HANDLER_ERROR;
-			if (r->resp_htags & HTTP_HEADER_CONTENT_LENGTH)
+			if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH))
 				http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
 				                           CONST_STR_LEN("Content-Length"));
 			mod_deflate_note_ratio(r, sce->st.st_size, len);
@@ -1587,7 +1589,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		BrotliEncoderSetParameter(hctx->u.br, BROTLI_PARAM_SIZE_HINT, (uint32_t)len);
   #endif
 
-	if (r->resp_htags & HTTP_HEADER_CONTENT_LENGTH) {
+	if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
 		http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 	}
 	r->plugin_ctx[p->id] = hctx;

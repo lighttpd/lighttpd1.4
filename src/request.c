@@ -422,7 +422,7 @@ static int http_request_parse_single_header(request_st * const restrict r, const
       default:
         break;
       case HTTP_HEADER_HOST:
-        if (!(r->rqst_htags & HTTP_HEADER_HOST)) {
+        if (!light_btst(r->rqst_htags, HTTP_HEADER_HOST)) {
             saveb = &r->http_host;
             if (vlen >= 1024) { /*(expecting < 256)*/
                 return http_request_header_line_invalid(r, 400, "uri-authority too long -> 400");
@@ -450,18 +450,18 @@ static int http_request_parse_single_header(request_st * const restrict r, const
         }
         break;
       case HTTP_HEADER_CONTENT_TYPE:
-        if (r->rqst_htags & HTTP_HEADER_CONTENT_TYPE) {
+        if (light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_TYPE)) {
             return http_request_header_line_invalid(r, 400, "duplicate Content-Type header -> 400");
         }
         break;
       case HTTP_HEADER_IF_NONE_MATCH:
         /* if dup, only the first one will survive */
-        if (r->rqst_htags & HTTP_HEADER_IF_NONE_MATCH) {
+        if (light_btst(r->rqst_htags, HTTP_HEADER_IF_NONE_MATCH)) {
             return 0; /* ignore header */
         }
         break;
       case HTTP_HEADER_CONTENT_LENGTH:
-        if (!(r->rqst_htags & HTTP_HEADER_CONTENT_LENGTH)) {
+        if (!light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_LENGTH)) {
             /*(trailing whitespace was removed from vlen)*/
             /*(not using strtoll() since v might not be z-string)*/
             const char *err;
@@ -479,12 +479,12 @@ static int http_request_parse_single_header(request_st * const restrict r, const
         }
         break;
       case HTTP_HEADER_HTTP2_SETTINGS:
-        if (r->rqst_htags & HTTP_HEADER_HTTP2_SETTINGS) {
+        if (light_btst(r->rqst_htags, HTTP_HEADER_HTTP2_SETTINGS)) {
             return http_request_header_line_invalid(r, 400, "duplicate HTTP2-Settings header -> 400");
         }
         break;
       case HTTP_HEADER_IF_MODIFIED_SINCE:
-        if (r->rqst_htags & HTTP_HEADER_IF_MODIFIED_SINCE) {
+        if (light_btst(r->rqst_htags, HTTP_HEADER_IF_MODIFIED_SINCE)) {
             /* Proxies sometimes send dup headers
              * if they are the same we ignore the second
              * if not, we raise an error */
@@ -1235,14 +1235,14 @@ http_request_parse (request_st * const restrict r, const int scheme_port)
         /* POST requires Content-Length (or Transfer-Encoding)
          * (-1 == r->reqbody_length when Transfer-Encoding: chunked)*/
         if (HTTP_METHOD_POST == r->http_method
-            && !(r->rqst_htags & HTTP_HEADER_CONTENT_LENGTH)) {
+            && !light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_LENGTH)) {
             return http_request_header_line_invalid(r, 411, "POST-request, but content-length missing -> 411");
         }
     }
     else {
         /* (-1 == r->reqbody_length when Transfer-Encoding: chunked)*/
         if (-1 == r->reqbody_length
-            && (r->rqst_htags & HTTP_HEADER_CONTENT_LENGTH)) {
+            && light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_LENGTH)) {
             /* RFC7230 Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
              * 3.3.3.  Message Body Length
              * [...]
@@ -1347,7 +1347,7 @@ http_request_headers_process_h2 (request_st * const restrict r, const int scheme
         r->http_status = http_request_parse(r, scheme_port);
 
     if (0 == r->http_status) {
-        if (r->rqst_htags & HTTP_HEADER_CONNECTION)
+        if (light_btst(r->rqst_htags, HTTP_HEADER_CONNECTION))
             r->http_status = http_request_header_line_invalid(r, 400,
               "invalid Connection header with HTTP/2 -> 400");
     }
@@ -1364,7 +1364,7 @@ http_request_headers_process_h2 (request_st * const restrict r, const int scheme
   #endif
 
     /* ignore Upgrade if using HTTP/2 */
-    if (r->rqst_htags & HTTP_HEADER_UPGRADE)
+    if (light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE))
         http_header_request_unset(r, HTTP_HEADER_UPGRADE,
                                   CONST_STR_LEN("upgrade"));
     /* XXX: should filter out other hop-by-hop connection headers, too */

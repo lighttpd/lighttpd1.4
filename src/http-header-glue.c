@@ -246,12 +246,12 @@ int http_response_handle_cachable(request_st * const r, const buffer * const mti
 
 void http_response_body_clear (request_st * const r, int preserve_length) {
     r->resp_send_chunked = 0;
-    if (r->resp_htags & HTTP_HEADER_TRANSFER_ENCODING) {
+    if (light_btst(r->resp_htags, HTTP_HEADER_TRANSFER_ENCODING)) {
         http_header_response_unset(r, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"));
     }
     if (!preserve_length) { /* preserve for HEAD responses and no-content responses (204, 205, 304) */
         r->content_length = -1;
-        if (r->resp_htags & HTTP_HEADER_CONTENT_LENGTH) {
+        if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
             http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
         }
         /*(if not preserving Content-Length, do not preserve trailers, if any)*/
@@ -678,7 +678,7 @@ static void http_response_xsendfile (request_st * const r, buffer * const path, 
 	 * Content-Length might later be set to size of X-Sendfile static file,
 	 * determined by open(), fstat() to reduces race conditions if the file
 	 * is modified between stat() (stat_cache_get_entry()) and open(). */
-	if (r->resp_htags & HTTP_HEADER_CONTENT_LENGTH) {
+	if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
 		http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 		r->content_length = -1;
 	}
@@ -738,7 +738,7 @@ static void http_response_xsendfile2(request_st * const r, const buffer * const 
     const int status = r->http_status;
 
     /* reset Content-Length, if set by backend */
-    if (r->resp_htags & HTTP_HEADER_CONTENT_LENGTH) {
+    if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
         http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
         r->content_length = -1;
     }
@@ -953,8 +953,8 @@ static handler_t http_response_process_local_redir(request_st * const r, size_t 
             || (   vb->ptr[ulen] != '\0'
                 && vb->ptr[ulen] != '/'
                 && vb->ptr[ulen] != '?'))
-        && 0 == blen
-        && !(r->resp_htags & HTTP_HEADER_STATUS) /*no "Status" or NPH response*/
+        && 0 == blen      /*no "Status" or NPH response*/
+        && !light_btst(r->resp_htags, HTTP_HEADER_STATUS)
         && 1 == r->resp_headers.used) {
         if (++r->loops_per_request > 5) {
             log_error(r->conf.errh, __FILE__, __LINE__,
@@ -1015,7 +1015,7 @@ static int http_response_process_headers(request_st * const r, http_response_opt
                 int status = http_header_str_to_code(s+9);
                 if (status >= 100 && status < 1000) {
                     status_is_set = 1;
-                    r->resp_htags |= HTTP_HEADER_STATUS;
+                    light_bset(r->resp_htags, HTTP_HEADER_STATUS);
                     r->http_status = status;
                 } /* else we expected 3 digits and didn't get them */
             }
@@ -1122,7 +1122,7 @@ static int http_response_process_headers(request_st * const r, http_response_opt
 
     /* CGI/1.1 rev 03 - 7.2.1.2 */
     /* (proxy requires Status-Line, so never true for proxy)*/
-    if (!status_is_set && (r->resp_htags & HTTP_HEADER_LOCATION)) {
+    if (!status_is_set && light_btst(r->resp_htags, HTTP_HEADER_LOCATION)) {
         r->http_status = 302;
     }
 
@@ -1286,7 +1286,7 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
     }
 
     if (opts->local_redir && r->http_status >= 300 && r->http_status < 400){
-        /*(r->resp_htags & HTTP_HEADER_LOCATION)*/
+        /*(light_btst(r->resp_htags, HTTP_HEADER_LOCATION))*/
         handler_t rc = http_response_process_local_redir(r, blen);
         if (NULL == r->handler_module)
             r->resp_body_started = 0;
