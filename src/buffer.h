@@ -217,10 +217,10 @@ static inline int light_isalnum(int c) {
 #define light_isupper(c) ((uint32_t)(c)-'A' <= 'Z'-'A')
 #define light_islower(c) ((uint32_t)(c)-'a' <= 'z'-'a')
 
-#define light_bshift(b)           (b)
-#define light_btst(a,b)  ((a) &   (b))
-#define light_bclr(a,b)  ((a) &= ~(b))
-#define light_bset(a,b)  ((a) |=  (b))
+#define light_bshift(b)           (1u << (b))
+#define light_btst(a,b)  ((a) &   (1u << (b)))
+#define light_bclr(a,b)  ((a) &= ~(1u << (b)))
+#define light_bset(a,b)  ((a) |=  (1u << (b)))
 
 
 __attribute_pure__
