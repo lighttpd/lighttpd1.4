@@ -807,7 +807,7 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                       "invalid character in header -> 400");
             }
 
-            const enum http_header_e id = http_header_hkey_get(k, klen);
+            const enum http_header_e id = http_header_hkey_get_lc(k, klen);
             return http_request_parse_single_header(r, id, k, klen, v, vlen);
         }
     }
