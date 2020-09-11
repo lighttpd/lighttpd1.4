@@ -94,8 +94,8 @@ data_unset *array_pop(array * const a) {
 #endif
 
 __attribute_pure__
-static int array_caseless_compare(const char * const a, const char * const b, const size_t len) {
-    for (size_t i = 0; i < len; ++i) {
+static int array_caseless_compare(const char * const a, const char * const b, const uint32_t len) {
+    for (uint32_t i = 0; i < len; ++i) {
         unsigned int ca = ((unsigned char *)a)[i];
         unsigned int cb = ((unsigned char *)b)[i];
         if (ca == cb) continue;
@@ -111,7 +111,7 @@ static int array_caseless_compare(const char * const a, const char * const b, co
 }
 
 __attribute_pure__
-static int array_keycmp(const char * const a, const size_t alen, const char * const b, const size_t blen) {
+static int array_keycmp(const char * const a, const uint32_t alen, const char * const b, const uint32_t blen) {
     return alen < blen ? -1 : alen > blen ? 1 : array_caseless_compare(a, b, blen);
 }
 
@@ -121,7 +121,7 @@ static int array_keycmp(const char * const a, const size_t alen, const char * co
  */
 __attribute_hot__
 __attribute_pure__
-static int32_t array_get_index(const array * const a, const char * const k, const size_t klen) {
+static int32_t array_get_index(const array * const a, const char * const k, const uint32_t klen) {
     /* invariant: [lower-1] < probe < [upper]
      * invariant: 0 <= lower <= upper <= a->used
      */
@@ -146,18 +146,18 @@ static int32_t array_get_index(const array * const a, const char * const k, cons
 }
 
 __attribute_hot__
-data_unset *array_get_element_klen(const array * const a, const char *key, const size_t klen) {
+data_unset *array_get_element_klen(const array * const a, const char *key, const uint32_t klen) {
     const int32_t ipos = array_get_index(a, key, klen);
     return ipos >= 0 ? a->sorted[ipos] : NULL;
 }
 
 /* non-const (data_config *) for configparser.y (not array_get_element_klen())*/
-data_unset *array_get_data_unset(const array * const a, const char *key, const size_t klen) {
+data_unset *array_get_data_unset(const array * const a, const char *key, const uint32_t klen) {
     const int32_t ipos = array_get_index(a, key, klen);
     return ipos >= 0 ? a->sorted[ipos] : NULL;
 }
 
-data_unset *array_extract_element_klen(array * const a, const char *key, const size_t klen) {
+data_unset *array_extract_element_klen(array * const a, const char *key, const uint32_t klen) {
     const int32_t ipos = array_get_index(a, key, klen);
     if (ipos < 0) return NULL;
 
@@ -249,7 +249,7 @@ static data_string * array_insert_string_at_pos(array * const a, const uint32_t 
     return ds;
 }
 
-int * array_get_int_ptr(array * const a, const char * const k, const size_t klen) {
+int * array_get_int_ptr(array * const a, const char * const k, const uint32_t klen) {
     int32_t ipos = array_get_index(a, k, klen);
     if (ipos >= 0) return &((data_integer *)a->sorted[ipos])->value;
 
@@ -259,7 +259,7 @@ int * array_get_int_ptr(array * const a, const char * const k, const size_t klen
     return &di->value;
 }
 
-buffer * array_get_buf_ptr(array * const a, const char * const k, const size_t klen) {
+buffer * array_get_buf_ptr(array * const a, const char * const k, const uint32_t klen) {
     int32_t ipos = array_get_index(a, k, klen);
     if (ipos >= 0) return &((data_string *)a->sorted[ipos])->value;
 
@@ -269,7 +269,7 @@ buffer * array_get_buf_ptr(array * const a, const char * const k, const size_t k
     return &ds->value;
 }
 
-void array_insert_value(array * const a, const char * const v, const size_t vlen) {
+void array_insert_value(array * const a, const char * const v, const uint32_t vlen) {
     data_string * const ds = array_insert_string_at_pos(a, a->used);
     buffer_clear(&ds->key);
     buffer_copy_string_len(&ds->value, v, vlen);
@@ -361,11 +361,11 @@ int array_is_kvstring(const array * const a) {
  * and the specialized routines run slightly faster */
 
 data_unset *
-array_match_key_prefix_klen (const array * const a, const char * const s, const size_t slen)
+array_match_key_prefix_klen (const array * const a, const char * const s, const uint32_t slen)
 {
     for (uint32_t i = 0; i < a->used; ++i) {
         const buffer * const key = &a->data[i]->key;
-        const size_t klen = buffer_string_length(key);
+        const uint32_t klen = buffer_string_length(key);
         if (klen <= slen && 0 == memcmp(s, key->ptr, klen))
             return a->data[i];
     }
@@ -373,11 +373,11 @@ array_match_key_prefix_klen (const array * const a, const char * const s, const 
 }
 
 data_unset *
-array_match_key_prefix_nc_klen (const array * const a, const char * const s, const size_t slen)
+array_match_key_prefix_nc_klen (const array * const a, const char * const s, const uint32_t slen)
 {
     for (uint32_t i = 0; i < a->used; ++i) {
         const buffer * const key = &a->data[i]->key;
-        const size_t klen = buffer_string_length(key);
+        const uint32_t klen = buffer_string_length(key);
         if (klen <= slen && buffer_eq_icase_ssn(s, key->ptr, klen))
             return a->data[i];
     }
@@ -402,11 +402,11 @@ array_match_key_prefix_nc (const array * const a, const buffer * const b)
 const buffer *
 array_match_value_prefix (const array * const a, const buffer * const b)
 {
-    const size_t blen = buffer_string_length(b);
+    const uint32_t blen = buffer_string_length(b);
 
     for (uint32_t i = 0; i < a->used; ++i) {
         const buffer * const value = &((data_string *)a->data[i])->value;
-        const size_t vlen = buffer_string_length(value);
+        const uint32_t vlen = buffer_string_length(value);
         if (vlen <= blen && 0 == memcmp(b->ptr, value->ptr, vlen))
             return value;
     }
@@ -416,11 +416,11 @@ array_match_value_prefix (const array * const a, const buffer * const b)
 const buffer *
 array_match_value_prefix_nc (const array * const a, const buffer * const b)
 {
-    const size_t blen = buffer_string_length(b);
+    const uint32_t blen = buffer_string_length(b);
 
     for (uint32_t i = 0; i < a->used; ++i) {
         const buffer * const value = &((data_string *)a->data[i])->value;
-        const size_t vlen = buffer_string_length(value);
+        const uint32_t vlen = buffer_string_length(value);
         if (vlen <= blen && buffer_eq_icase_ssn(b->ptr, value->ptr, vlen))
             return value;
     }
@@ -430,12 +430,12 @@ array_match_value_prefix_nc (const array * const a, const buffer * const b)
 data_unset *
 array_match_key_suffix (const array * const a, const buffer * const b)
 {
-    const size_t blen = buffer_string_length(b);
+    const uint32_t blen = buffer_string_length(b);
     const char * const end = b->ptr + blen;
 
     for (uint32_t i = 0; i < a->used; ++i) {
         const buffer * const key = &a->data[i]->key;
-        const size_t klen = buffer_string_length(key);
+        const uint32_t klen = buffer_string_length(key);
         if (klen <= blen && 0 == memcmp(end - klen, key->ptr, klen))
             return a->data[i];
     }
@@ -445,12 +445,12 @@ array_match_key_suffix (const array * const a, const buffer * const b)
 data_unset *
 array_match_key_suffix_nc (const array * const a, const buffer * const b)
 {
-    const size_t blen = buffer_string_length(b);
+    const uint32_t blen = buffer_string_length(b);
     const char * const end = b->ptr + blen;
 
     for (uint32_t i = 0; i < a->used; ++i) {
         const buffer * const key = &a->data[i]->key;
-        const size_t klen = buffer_string_length(key);
+        const uint32_t klen = buffer_string_length(key);
         if (klen <= blen && buffer_eq_icase_ssn(end - klen, key->ptr, klen))
             return a->data[i];
     }
@@ -460,12 +460,12 @@ array_match_key_suffix_nc (const array * const a, const buffer * const b)
 const buffer *
 array_match_value_suffix (const array * const a, const buffer * const b)
 {
-    const size_t blen = buffer_string_length(b);
+    const uint32_t blen = buffer_string_length(b);
     const char * const end = b->ptr + blen;
 
     for (uint32_t i = 0; i < a->used; ++i) {
         const buffer * const value = &((data_string *)a->data[i])->value;
-        const size_t vlen = buffer_string_length(value);
+        const uint32_t vlen = buffer_string_length(value);
         if (vlen <= blen && 0 == memcmp(end - vlen, value->ptr, vlen))
             return value;
     }
@@ -475,12 +475,12 @@ array_match_value_suffix (const array * const a, const buffer * const b)
 const buffer *
 array_match_value_suffix_nc (const array * const a, const buffer * const b)
 {
-    const size_t blen = buffer_string_length(b);
+    const uint32_t blen = buffer_string_length(b);
     const char * const end = b->ptr + blen;
 
     for (uint32_t i = 0; i < a->used; ++i) {
         const buffer * const value = &((data_string *)a->data[i])->value;
-        const size_t vlen = buffer_string_length(value);
+        const uint32_t vlen = buffer_string_length(value);
         if (vlen <= blen && buffer_eq_icase_ssn(end - vlen, value->ptr, vlen))
             return value;
     }
@@ -490,12 +490,12 @@ array_match_value_suffix_nc (const array * const a, const buffer * const b)
 data_unset *
 array_match_path_or_ext (const array * const a, const buffer * const b)
 {
-    const size_t blen = buffer_string_length(b);
+    const uint32_t blen = buffer_string_length(b);
 
     for (uint32_t i = 0; i < a->used; ++i) {
         /* check extension in the form "^/path" or ".ext$" */
         const buffer * const key = &a->data[i]->key;
-        const size_t klen = buffer_string_length(key);
+        const uint32_t klen = buffer_string_length(key);
         if (klen <= blen
             && 0 == memcmp((*(key->ptr) == '/' ? b->ptr : b->ptr + blen - klen),
                            key->ptr, klen))
@@ -517,11 +517,11 @@ void array_print_indent(int depth) {
 	}
 }
 
-size_t array_get_max_key_length(const array * const a) {
-	size_t maxlen = 0;
+uint32_t array_get_max_key_length(const array * const a) {
+	uint32_t maxlen = 0;
 	for (uint32_t i = 0; i < a->used; ++i) {
 		const buffer * const k = &a->data[i]->key;
-		size_t len = buffer_string_length(k);
+		uint32_t len = buffer_string_length(k);
 
 		if (len > maxlen) {
 			maxlen = len;
@@ -532,7 +532,7 @@ size_t array_get_max_key_length(const array * const a) {
 
 int array_print(const array * const a, int depth) {
 	uint32_t i;
-	size_t maxlen;
+	uint32_t maxlen;
 	int oneline = 1;
 
 	if (a->used > 5) {

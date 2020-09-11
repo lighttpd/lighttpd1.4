@@ -92,26 +92,26 @@ __attribute_pure__
 int array_is_kvstring(const array *a);
 
 __attribute_pure__
-data_unset *array_get_element_klen(const array *a, const char *key, size_t klen);
+data_unset *array_get_element_klen(const array *a, const char *key, uint32_t klen);
 
 __attribute_cold__
 __attribute_pure__
-data_unset *array_get_data_unset(const array *a, const char *key, size_t klen);
+data_unset *array_get_data_unset(const array *a, const char *key, uint32_t klen);
 
 __attribute_cold__
-data_unset *array_extract_element_klen(array *a, const char *key, size_t klen); /* removes found entry from array */
+data_unset *array_extract_element_klen(array *a, const char *key, uint32_t klen); /* removes found entry from array */
 
 __attribute_returns_nonnull__
-int * array_get_int_ptr(array *a, const char *k, size_t klen);
+int * array_get_int_ptr(array *a, const char *k, uint32_t klen);
 
 __attribute_returns_nonnull__
-buffer * array_get_buf_ptr(array *a, const char *k, size_t klen);
+buffer * array_get_buf_ptr(array *a, const char *k, uint32_t klen);
 
-void array_insert_value(array *a, const char *v, size_t vlen);
+void array_insert_value(array *a, const char *v, uint32_t vlen);
 
-static inline void array_set_key_value(array * const a, const char * const k, const size_t klen, const char * const v, const size_t vlen);
+static inline void array_set_key_value(array * const a, const char * const k, const uint32_t klen, const char * const v, const uint32_t vlen);
 
-static inline void array_set_key_value(array * const a, const char * const k, const size_t klen, const char * const v, const size_t vlen) {
+static inline void array_set_key_value(array * const a, const char * const k, const uint32_t klen, const char * const v, const uint32_t vlen) {
     buffer_copy_string_len(array_get_buf_ptr(a, k, klen), v, vlen);
 }
 
@@ -126,13 +126,13 @@ void array_print_indent(int depth);
 
 __attribute_cold__
 __attribute_pure__
-size_t array_get_max_key_length(const array *a);
+uint32_t array_get_max_key_length(const array *a);
 
 __attribute_pure__
-data_unset * array_match_key_prefix_klen (const array * const a, const char * const s, const size_t slen);
+data_unset * array_match_key_prefix_klen (const array * const a, const char * const s, const uint32_t slen);
 
 __attribute_pure__
-data_unset * array_match_key_prefix_nc_klen (const array * const a, const char * const s, const size_t slen);
+data_unset * array_match_key_prefix_nc_klen (const array * const a, const char * const s, const uint32_t slen);
 
 __attribute_pure__
 data_unset * array_match_key_prefix (const array * const a, const buffer * const b);
