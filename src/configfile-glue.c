@@ -572,7 +572,7 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		break;
 
 	case COMP_HTTP_REQUEST_HEADER:
-		*((const buffer **)&l) = http_header_request_get(r, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(dc->comp_tag));
+		*((const buffer **)&l) = http_header_request_get(r, dc->ext, CONST_BUF_LEN(dc->comp_tag));
 		if (NULL == l) l = (buffer *)&empty_string;
 		break;
 	case COMP_HTTP_REQUEST_METHOD:

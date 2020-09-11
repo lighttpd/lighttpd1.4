@@ -84,6 +84,15 @@ static void mod_setenv_patch_config(request_st * const r, plugin_data * const p,
     }
 }
 
+static void mod_setenv_prep_ext (const array * const ac) {
+    array *a;
+    *(const array **)&a = ac;
+    for (uint32_t i = 0; i < a->used; ++i) {
+        data_string * const ds = (data_string *)a->data[i];
+        ds->ext = http_header_hkey_get(CONST_BUF_LEN(&ds->key));
+    }
+}
+
 SETDEFAULTS_FUNC(mod_setenv_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("setenv.add-request-header"),
@@ -113,11 +122,6 @@ SETDEFAULTS_FUNC(mod_setenv_set_defaults) {
     if (!config_plugin_values_init(srv, p, cpk, "mod_setenv"))
         return HANDLER_ERROR;
 
-    /* future: might create custom data structures here
-     * then look up and store http_header_e at config time
-     *   enum http_header_e id = http_header_hkey_get(CONST_BUF_LEN(&ds->key));
-     */
-
     /* process and validate config directives
      * (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
@@ -126,9 +130,14 @@ SETDEFAULTS_FUNC(mod_setenv_set_defaults) {
             switch (cpv->k_id) {
               case 0: /* setenv.add-request-header */
               case 1: /* setenv.add-response-header */
+                mod_setenv_prep_ext(cpv->v.a);
+                break;
               case 2: /* setenv.add-environment */
+                break;
               case 3: /* setenv.set-request-header */
               case 4: /* setenv.set-response-header */
+                mod_setenv_prep_ext(cpv->v.a);
+                break;
               case 5: /* setenv.set-environment */
                 break;
               default:/* should not happen */
@@ -164,22 +173,18 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
     if (aa) {
         for (uint32_t k = 0; k < aa->used; ++k) {
             const data_string * const ds = (const data_string *)aa->data[k];
-            const enum http_header_e id =
-              http_header_hkey_get(CONST_BUF_LEN(&ds->key));
-            http_header_request_append(r, id, CONST_BUF_LEN(&ds->key),
-                                                CONST_BUF_LEN(&ds->value));
+            http_header_request_append(r, ds->ext, CONST_BUF_LEN(&ds->key),
+                                                   CONST_BUF_LEN(&ds->value));
         }
     }
 
     if (as) {
         for (uint32_t k = 0; k < as->used; ++k) {
             const data_string * const ds = (const data_string *)as->data[k];
-            const enum http_header_e id =
-              http_header_hkey_get(CONST_BUF_LEN(&ds->key));
             !buffer_string_is_empty(&ds->value)
-              ? http_header_request_set(r, id, CONST_BUF_LEN(&ds->key),
-                                               CONST_BUF_LEN(&ds->value))
-              : http_header_request_unset(r, id, CONST_BUF_LEN(&ds->key));
+              ? http_header_request_set(r, ds->ext, CONST_BUF_LEN(&ds->key),
+                                                    CONST_BUF_LEN(&ds->value))
+              : http_header_request_unset(r, ds->ext, CONST_BUF_LEN(&ds->key));
         }
     }
 
@@ -226,22 +231,18 @@ REQUEST_FUNC(mod_setenv_handle_response_start) {
     if (aa) {
         for (uint32_t k = 0; k < aa->used; ++k) {
             const data_string * const ds = (const data_string *)aa->data[k];
-            const enum http_header_e id =
-              http_header_hkey_get(CONST_BUF_LEN(&ds->key));
-            http_header_response_insert(r, id, CONST_BUF_LEN(&ds->key),
-                                               CONST_BUF_LEN(&ds->value));
+            http_header_response_insert(r, ds->ext, CONST_BUF_LEN(&ds->key),
+                                                    CONST_BUF_LEN(&ds->value));
         }
     }
 
     if (as) {
         for (uint32_t k = 0; k < as->used; ++k) {
             const data_string * const ds = (const data_string *)as->data[k];
-            const enum http_header_e id =
-              http_header_hkey_get(CONST_BUF_LEN(&ds->key));
             !buffer_string_is_empty(&ds->value)
-              ? http_header_response_set(r, id, CONST_BUF_LEN(&ds->key),
-                                                CONST_BUF_LEN(&ds->value))
-              : http_header_response_unset(r, id, CONST_BUF_LEN(&ds->key));
+              ? http_header_response_set(r, ds->ext, CONST_BUF_LEN(&ds->key),
+                                                     CONST_BUF_LEN(&ds->value))
+              : http_header_response_unset(r, ds->ext, CONST_BUF_LEN(&ds->key));
         }
     }
 

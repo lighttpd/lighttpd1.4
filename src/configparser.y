@@ -8,6 +8,7 @@
 #include "configfile.h"
 #include "buffer.h"
 #include "array.h"
+#include "http_header.h" /* http_header_hkey_get() */
 #include "request.h" /* http_request_host_normalize() */
 
 #include <ctype.h>
@@ -691,6 +692,10 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
             ctx->ok = 0;
           }
         }
+      }
+
+      if (COMP_HTTP_REQUEST_HEADER == dc->comp) {
+        dc->ext = http_header_hkey_get(CONST_BUF_LEN(dc->comp_tag));
       }
 
       buffer_copy_buffer(&dc->string, rvalue);

@@ -8,8 +8,7 @@
 /* Note: must be kept in sync with http_header.c http_headers[] */
 /* Note: when adding new items, must replace OTHER in existing code for item */
 enum http_header_e {
-  HTTP_HEADER_UNSPECIFIED       = -1
- ,HTTP_HEADER_OTHER             =  0
+  HTTP_HEADER_OTHER = 0
  ,HTTP_HEADER_ACCEPT_ENCODING
  ,HTTP_HEADER_AUTHORIZATION
  ,HTTP_HEADER_CACHE_CONTROL

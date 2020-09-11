@@ -115,6 +115,50 @@ static int array_keycmp(const char * const a, const uint32_t alen, const char * 
     return alen < blen ? -1 : alen > blen ? 1 : array_caseless_compare(a, b, blen);
 }
 
+__attribute_cold__
+__attribute_pure__
+static int array_keycmpb(const char * const k, const uint32_t klen, const buffer * const b) {
+    /* key is non-empty (0==b->used), though possibly blank (1==b->used)
+     * if inserted into key-value array */
+    /*force_assert(b && b->used);*/
+    return array_keycmp(k, klen, b->ptr, b->used-1);
+    /*return array_keycmp(k, klen, CONST_BUF_LEN(b));*/
+}
+
+/* returns pos into a->sorted[] which contains copy of data (ptr) in a->data[]
+ * if pos >= 0, or returns -pos-1 if that is the position-1 in a->sorted[]
+ * where the key needs to be inserted (-1 to avoid -0)
+ */
+__attribute_hot__
+__attribute_pure__
+static int32_t array_get_index_ext(const array * const a, const int ext, const char * const k, const uint32_t klen) {
+    /* invariant: [lower-1] < probe < [upper]
+     * invariant: 0 <= lower <= upper <= a->used
+     */
+    uint32_t lower = 0, upper = a->used;
+    while (lower != upper) {
+        const uint32_t probe = (lower + upper) / 2;
+        const int x = ((data_string *)a->sorted[probe])->ext;
+        /* (compare strings only if ext is 0 for both)*/
+        const int e = (ext|x)
+          ? ext
+          : array_keycmpb(k, klen, &a->sorted[probe]->key);
+        if (e < x)             /* e < [probe] */
+            upper = probe;     /* still: lower <= upper */
+        else if (e > x)        /* e > [probe] */
+            lower = probe + 1; /* still: lower <= upper */
+        else  /*(e == x)*/     /* found */
+            return (int32_t)probe;
+    }
+    /* not found: [lower-1] < key < [upper] = [lower] ==> insert at [lower] */
+    return -(int)lower - 1;
+}
+
+data_unset *array_get_element_klen_ext(const array * const a, const int ext, const char *key, const uint32_t klen) {
+    const int32_t ipos = array_get_index_ext(a, ext, key, klen);
+    return ipos >= 0 ? a->sorted[ipos] : NULL;
+}
+
 /* returns pos into a->sorted[] which contains copy of data (ptr) in a->data[]
  * if pos >= 0, or returns -pos-1 if that is the position-1 in a->sorted[]
  * where the key needs to be inserted (-1 to avoid -0)
@@ -209,6 +253,7 @@ static data_unset *array_get_unused_element(array * const a, const data_type_t t
   #endif
 }
 
+__attribute_hot__
 static void array_insert_data_at_pos(array * const a, data_unset * const entry, const uint32_t pos) {
     /* This data structure should not be used for nearly so many entries */
     force_assert(a->used + 1 <= INT32_MAX);
@@ -242,11 +287,24 @@ static data_integer * array_insert_integer_at_pos(array * const a, const uint32_
     return di;
 }
 
+__attribute_hot__
 static data_string * array_insert_string_at_pos(array * const a, const uint32_t pos) {
     data_string *ds = (data_string *)array_get_unused_element(a, TYPE_STRING);
     if (NULL == ds) ds = data_string_init();
     array_insert_data_at_pos(a, (data_unset *)ds, pos);
     return ds;
+}
+
+__attribute_hot__
+buffer * array_get_buf_ptr_ext(array * const a, const int ext, const char * const k, const uint32_t klen) {
+    int32_t ipos = array_get_index_ext(a, ext, k, klen);
+    if (ipos >= 0) return &((data_string *)a->sorted[ipos])->value;
+
+    data_string * const ds = array_insert_string_at_pos(a, (uint32_t)(-ipos-1));
+    ds->ext = ext;
+    buffer_copy_string_len(&ds->key, k, klen);
+    buffer_clear(&ds->value);
+    return &ds->value;
 }
 
 int * array_get_int_ptr(array * const a, const char * const k, const uint32_t klen) {

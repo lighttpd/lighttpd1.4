@@ -375,6 +375,15 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
                 cpv->vtype = T_CONFIG_LOCAL;
                 break;
               case 1: /* extforward.headers */
+                if (cpv->v.a->used) {
+                    array *a;
+                    *(const array **)&a = cpv->v.a;
+                    for (uint32_t j = 0; j < a->used; ++j) {
+                        data_string * const ds = (data_string *)a->data[j];
+                        ds->ext =
+                          http_header_hkey_get(CONST_BUF_LEN(&ds->value));
+                    }
+                }
                 break;
               case 2: /* extforward.params */
                 cpv->v.u = mod_extforward_parse_opts(srv, cpv->v.a);
@@ -1105,8 +1114,9 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		return HANDLER_GO_ON;
 
 	for (uint32_t k = 0; k < p->conf.headers->used; ++k) {
-		buffer *hdr = &((data_string *)p->conf.headers->data[k])->value;
-		forwarded = http_header_request_get(r, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(hdr));
+		const data_string * const ds = (data_string *)p->conf.headers->data[k];
+		const buffer * const hdr = &ds->value;
+		forwarded = http_header_request_get(r, ds->ext, CONST_BUF_LEN(hdr));
 		if (forwarded) {
 			is_forwarded_header = buffer_is_equal_caseless_string(hdr, CONST_STR_LEN("Forwarded"));
 			break;

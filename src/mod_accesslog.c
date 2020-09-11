@@ -722,6 +722,9 @@ static format_fields * mod_accesslog_process_format(const char * const format, c
 						mod_accesslog_free_format_fields(parsed_format);
 						return NULL;
 					}
+				} else if (FORMAT_HEADER == f->field
+				           || FORMAT_RESPONSE_HEADER == f->field) {
+					f->opt = http_header_hkey_get(CONST_BUF_LEN(fstr));
 				}
 			}
 
@@ -994,14 +997,14 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				break;
 			}
 			case FORMAT_HEADER:
-				if (NULL != (vb = http_header_request_get(r, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(&f->string)))) {
+				if (NULL != (vb = http_header_request_get(r, f->opt, CONST_BUF_LEN(&f->string)))) {
 					accesslog_append_escaped(b, vb);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));
 				}
 				break;
 			case FORMAT_RESPONSE_HEADER:
-				if (NULL != (vb = http_header_response_get(r, HTTP_HEADER_UNSPECIFIED, CONST_BUF_LEN(&f->string)))) {
+				if (NULL != (vb = http_header_response_get(r, f->opt, CONST_BUF_LEN(&f->string)))) {
 					accesslog_append_escaped(b, vb);
 				} else {
 					buffer_append_string_len(b, CONST_STR_LEN("-"));

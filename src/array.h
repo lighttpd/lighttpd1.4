@@ -33,7 +33,7 @@ typedef struct {
 
 typedef struct {
 	DATA_UNSET;
-
+	int ext; /*(fits in space due to alignment in 64-bit; extends 32-bit)*/
 	buffer value;
 } data_string;
 
@@ -92,6 +92,9 @@ __attribute_pure__
 int array_is_kvstring(const array *a);
 
 __attribute_pure__
+data_unset *array_get_element_klen_ext(const array *a, int ext, const char *key, uint32_t klen);
+
+__attribute_pure__
 data_unset *array_get_element_klen(const array *a, const char *key, uint32_t klen);
 
 __attribute_cold__
@@ -103,6 +106,9 @@ data_unset *array_extract_element_klen(array *a, const char *key, uint32_t klen)
 
 __attribute_returns_nonnull__
 int * array_get_int_ptr(array *a, const char *k, uint32_t klen);
+
+__attribute_returns_nonnull__
+buffer * array_get_buf_ptr_ext(array *a, int ext, const char *k, uint32_t klen);
 
 __attribute_returns_nonnull__
 buffer * array_get_buf_ptr(array *a, const char *k, uint32_t klen);
