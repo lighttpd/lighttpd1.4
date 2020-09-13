@@ -24,6 +24,9 @@ typedef struct keyvlenvalue {
 /* Note: must be sorted by length */
 /* Note: must be kept in sync with http_header.h enum http_header_e */
 /* Note: must be kept in sync http_headers[] and http_headers_off[] */
+/* Note: must be kept in sync h2.c:http_header_lc[] */
+/* Note: must be kept in sync h2.c:http_header_lshpack_idx[] */
+/* Note: must be kept in sync h2.c:lshpack_idx_http_header[] */
 /* http_headers_off lists first offset at which string of specific len occur */
 static const int8_t http_headers_off[] = {
   -1, -1,  0,  1,  4,  9, 11, 17, 21, 25, 27, -1, 30, 31,

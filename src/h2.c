@@ -22,6 +22,210 @@
 #include "response.h"   /* http_response_omit_header() */
 
 
+/* lowercased field-names
+ * (32-byte record (power-2) and single block of memory for memory locality) */
+static const char http_header_lc[][32] = {
+  [HTTP_HEADER_OTHER]                     = ""
+ ,[HTTP_HEADER_ACCEPT]                    = "accept"
+ ,[HTTP_HEADER_ACCEPT_ENCODING]           = "accept-encoding"
+ ,[HTTP_HEADER_ACCEPT_LANGUAGE]           = "accept-language"
+ ,[HTTP_HEADER_ACCEPT_RANGES]             = "accept-ranges"
+ ,[HTTP_HEADER_ACCESS_CONTROL_ALLOW_ORIGIN]="access-control-allow-origin"
+ ,[HTTP_HEADER_AGE]                       = "age"
+ ,[HTTP_HEADER_ALLOW]                     = "allow"
+ ,[HTTP_HEADER_ALT_SVC]                   = "alt-svc"
+ ,[HTTP_HEADER_ALT_USED]                  = "alt-used"
+ ,[HTTP_HEADER_AUTHORIZATION]             = "authorization"
+ ,[HTTP_HEADER_CACHE_CONTROL]             = "cache-control"
+ ,[HTTP_HEADER_CONNECTION]                = "connection"
+ ,[HTTP_HEADER_CONTENT_ENCODING]          = "content-encoding"
+ ,[HTTP_HEADER_CONTENT_LENGTH]            = "content-length"
+ ,[HTTP_HEADER_CONTENT_LOCATION]          = "content-location"
+ ,[HTTP_HEADER_CONTENT_RANGE]             = "content-range"
+ ,[HTTP_HEADER_CONTENT_SECURITY_POLICY]   = "content-security-policy"
+ ,[HTTP_HEADER_CONTENT_TYPE]              = "content-type"
+ ,[HTTP_HEADER_COOKIE]                    = "cookie"
+ ,[HTTP_HEADER_DATE]                      = "date"
+ ,[HTTP_HEADER_DNT]                       = "dnt"
+ ,[HTTP_HEADER_ETAG]                      = "etag"
+ ,[HTTP_HEADER_EXPECT]                    = "expect"
+ ,[HTTP_HEADER_EXPECT_CT]                 = "expect-ct"
+ ,[HTTP_HEADER_EXPIRES]                   = "expires"
+ ,[HTTP_HEADER_FORWARDED]                 = "forwarded"
+ ,[HTTP_HEADER_HOST]                      = "host"
+ ,[HTTP_HEADER_HTTP2_SETTINGS]            = "http2-settings"
+ ,[HTTP_HEADER_IF_MATCH]                  = "if-match"
+ ,[HTTP_HEADER_IF_MODIFIED_SINCE]         = "if-modified-since"
+ ,[HTTP_HEADER_IF_NONE_MATCH]             = "if-none-match"
+ ,[HTTP_HEADER_IF_RANGE]                  = "if-range"
+ ,[HTTP_HEADER_IF_UNMODIFIED_SINCE]       = "if-unmodified-since"
+ ,[HTTP_HEADER_LAST_MODIFIED]             = "last-modified"
+ ,[HTTP_HEADER_LINK]                      = "link"
+ ,[HTTP_HEADER_LOCATION]                  = "location"
+ ,[HTTP_HEADER_ONION_LOCATION]            = "onion-location"
+ ,[HTTP_HEADER_P3P]                       = "p3p"
+ ,[HTTP_HEADER_PRAGMA]                    = "pragma"
+ ,[HTTP_HEADER_RANGE]                     = "range"
+ ,[HTTP_HEADER_REFERER]                   = "referer"
+ ,[HTTP_HEADER_REFERRER_POLICY]           = "referrer-policy"
+ ,[HTTP_HEADER_SERVER]                    = "server"
+ ,[HTTP_HEADER_SET_COOKIE]                = "set-cookie"
+ ,[HTTP_HEADER_STATUS]                    = "status"
+ ,[HTTP_HEADER_STRICT_TRANSPORT_SECURITY] = "strict-transport-security"
+ ,[HTTP_HEADER_TE]                        = "te"
+ ,[HTTP_HEADER_TRANSFER_ENCODING]         = "transfer-encoding"
+ ,[HTTP_HEADER_UPGRADE]                   = "upgrade"
+ ,[HTTP_HEADER_UPGRADE_INSECURE_REQUESTS] = "upgrade-insecure-requests"
+ ,[HTTP_HEADER_USER_AGENT]                = "user-agent"
+ ,[HTTP_HEADER_VARY]                      = "vary"
+ ,[HTTP_HEADER_WWW_AUTHENTICATE]          = "www-authenticate"
+ ,[HTTP_HEADER_X_CONTENT_TYPE_OPTIONS]    = "x-content-type-options"
+ ,[HTTP_HEADER_X_FORWARDED_FOR]           = "x-forwarded-for"
+ ,[HTTP_HEADER_X_FORWARDED_PROTO]         = "x-forwarded-proto"
+ ,[HTTP_HEADER_X_FRAME_OPTIONS]           = "x-frame-options"
+ ,[HTTP_HEADER_X_XSS_PROTECTION]          = "x-xss-protection"
+};
+
+
+/* future optimization: could conceivably store static XXH32() hash values for
+ * field-name (e.g. for benefit of entries marked LSHPACK_HDR_UNKNOWN) to
+ * incrementally reduce cost of calculating hash values for field-name on each
+ * request where those headers are used.  Might also store single element
+ * static caches for "date:" value (updated each time static buffer is updated)
+ * and for "server:" value (often global to server), keyed on r->conf.server_tag
+ * pointer addr.  HTTP_HEADER_STATUS could be overloaded for ":status", since
+ * lighttpd should not send "Status:" response header (should not happen) */
+
+static const uint8_t http_header_lshpack_idx[] = {
+  [HTTP_HEADER_OTHER]                     = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_ACCEPT_ENCODING]           = LSHPACK_HDR_ACCEPT_ENCODING
+ ,[HTTP_HEADER_AUTHORIZATION]             = LSHPACK_HDR_AUTHORIZATION
+ ,[HTTP_HEADER_CACHE_CONTROL]             = LSHPACK_HDR_CACHE_CONTROL
+ ,[HTTP_HEADER_CONNECTION]                = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_CONTENT_ENCODING]          = LSHPACK_HDR_CONTENT_ENCODING
+ ,[HTTP_HEADER_CONTENT_LENGTH]            = LSHPACK_HDR_CONTENT_LENGTH
+ ,[HTTP_HEADER_CONTENT_LOCATION]          = LSHPACK_HDR_CONTENT_LOCATION
+ ,[HTTP_HEADER_CONTENT_TYPE]              = LSHPACK_HDR_CONTENT_TYPE
+ ,[HTTP_HEADER_COOKIE]                    = LSHPACK_HDR_COOKIE
+ ,[HTTP_HEADER_DATE]                      = LSHPACK_HDR_DATE
+ ,[HTTP_HEADER_ETAG]                      = LSHPACK_HDR_ETAG
+ ,[HTTP_HEADER_EXPECT]                    = LSHPACK_HDR_EXPECT
+ ,[HTTP_HEADER_FORWARDED]                 = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_HOST]                      = LSHPACK_HDR_HOST
+ ,[HTTP_HEADER_IF_MODIFIED_SINCE]         = LSHPACK_HDR_IF_MODIFIED_SINCE
+ ,[HTTP_HEADER_IF_NONE_MATCH]             = LSHPACK_HDR_IF_NONE_MATCH
+ ,[HTTP_HEADER_LAST_MODIFIED]             = LSHPACK_HDR_LAST_MODIFIED
+ ,[HTTP_HEADER_LOCATION]                  = LSHPACK_HDR_LOCATION
+ ,[HTTP_HEADER_RANGE]                     = LSHPACK_HDR_RANGE
+ ,[HTTP_HEADER_SERVER]                    = LSHPACK_HDR_SERVER
+ ,[HTTP_HEADER_SET_COOKIE]                = LSHPACK_HDR_SET_COOKIE
+ ,[HTTP_HEADER_STATUS]                    = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_TRANSFER_ENCODING]         = LSHPACK_HDR_TRANSFER_ENCODING
+ ,[HTTP_HEADER_UPGRADE]                   = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_USER_AGENT]                = LSHPACK_HDR_USER_AGENT
+ ,[HTTP_HEADER_VARY]                      = LSHPACK_HDR_VARY
+ ,[HTTP_HEADER_X_FORWARDED_FOR]           = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_X_FORWARDED_PROTO]         = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_HTTP2_SETTINGS]            = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_ACCEPT]                    = LSHPACK_HDR_ACCEPT
+ ,[HTTP_HEADER_ACCEPT_LANGUAGE]           = LSHPACK_HDR_ACCEPT_LANGUAGE
+ ,[HTTP_HEADER_ACCEPT_RANGES]             = LSHPACK_HDR_ACCEPT_RANGES
+ ,[HTTP_HEADER_ACCESS_CONTROL_ALLOW_ORIGIN]=LSHPACK_HDR_ACCESS_CONTROL_ALLOW_ORIGIN
+ ,[HTTP_HEADER_AGE]                       = LSHPACK_HDR_AGE
+ ,[HTTP_HEADER_ALLOW]                     = LSHPACK_HDR_ALLOW
+ ,[HTTP_HEADER_ALT_SVC]                   = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_ALT_USED]                  = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_CONTENT_RANGE]             = LSHPACK_HDR_CONTENT_RANGE
+ ,[HTTP_HEADER_CONTENT_SECURITY_POLICY]   = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_DNT]                       = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_EXPECT_CT]                 = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_EXPIRES]                   = LSHPACK_HDR_EXPIRES
+ ,[HTTP_HEADER_IF_MATCH]                  = LSHPACK_HDR_IF_MATCH
+ ,[HTTP_HEADER_IF_RANGE]                  = LSHPACK_HDR_IF_RANGE
+ ,[HTTP_HEADER_IF_UNMODIFIED_SINCE]       = LSHPACK_HDR_IF_UNMODIFIED_SINCE
+ ,[HTTP_HEADER_LINK]                      = LSHPACK_HDR_LINK
+ ,[HTTP_HEADER_ONION_LOCATION]            = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_P3P]                       = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_PRAGMA]                    = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_REFERER]                   = LSHPACK_HDR_REFERER
+ ,[HTTP_HEADER_REFERRER_POLICY]           = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_STRICT_TRANSPORT_SECURITY] = LSHPACK_HDR_STRICT_TRANSPORT_SECURITY
+ ,[HTTP_HEADER_TE]                        = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_UPGRADE_INSECURE_REQUESTS] = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_WWW_AUTHENTICATE]          = LSHPACK_HDR_WWW_AUTHENTICATE
+ ,[HTTP_HEADER_X_CONTENT_TYPE_OPTIONS]    = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_X_FRAME_OPTIONS]           = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_X_XSS_PROTECTION]          = LSHPACK_HDR_UNKNOWN
+};
+
+
+/* Note: must be kept in sync with ls-hpack/lshpack.h:lshpack_static_hdr_idx[]*/
+static const uint8_t lshpack_idx_http_header[] = {
+  [LSHPACK_HDR_UNKNOWN]                   = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_AUTHORITY]                 = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_METHOD_GET]                = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_METHOD_POST]               = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_PATH]                      = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_PATH_INDEX_HTML]           = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_SCHEME_HTTP]               = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_SCHEME_HTTPS]              = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_STATUS_200]                = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_STATUS_204]                = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_STATUS_206]                = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_STATUS_304]                = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_STATUS_400]                = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_STATUS_404]                = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_STATUS_500]                = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_ACCEPT_CHARSET]            = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_ACCEPT_ENCODING]           = HTTP_HEADER_ACCEPT_ENCODING
+ ,[LSHPACK_HDR_ACCEPT_LANGUAGE]           = HTTP_HEADER_ACCEPT_LANGUAGE
+ ,[LSHPACK_HDR_ACCEPT_RANGES]             = HTTP_HEADER_ACCEPT_RANGES
+ ,[LSHPACK_HDR_ACCEPT]                    = HTTP_HEADER_ACCEPT
+ ,[LSHPACK_HDR_ACCESS_CONTROL_ALLOW_ORIGIN]=HTTP_HEADER_ACCESS_CONTROL_ALLOW_ORIGIN
+ ,[LSHPACK_HDR_AGE]                       = HTTP_HEADER_AGE
+ ,[LSHPACK_HDR_ALLOW]                     = HTTP_HEADER_ALLOW
+ ,[LSHPACK_HDR_AUTHORIZATION]             = HTTP_HEADER_AUTHORIZATION
+ ,[LSHPACK_HDR_CACHE_CONTROL]             = HTTP_HEADER_CACHE_CONTROL
+ ,[LSHPACK_HDR_CONTENT_DISPOSITION]       = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_CONTENT_ENCODING]          = HTTP_HEADER_CONTENT_ENCODING
+ ,[LSHPACK_HDR_CONTENT_LANGUAGE]          = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_CONTENT_LENGTH]            = HTTP_HEADER_CONTENT_LENGTH
+ ,[LSHPACK_HDR_CONTENT_LOCATION]          = HTTP_HEADER_CONTENT_LOCATION
+ ,[LSHPACK_HDR_CONTENT_RANGE]             = HTTP_HEADER_CONTENT_RANGE
+ ,[LSHPACK_HDR_CONTENT_TYPE]              = HTTP_HEADER_CONTENT_TYPE
+ ,[LSHPACK_HDR_COOKIE]                    = HTTP_HEADER_COOKIE
+ ,[LSHPACK_HDR_DATE]                      = HTTP_HEADER_DATE
+ ,[LSHPACK_HDR_ETAG]                      = HTTP_HEADER_ETAG
+ ,[LSHPACK_HDR_EXPECT]                    = HTTP_HEADER_EXPECT
+ ,[LSHPACK_HDR_EXPIRES]                   = HTTP_HEADER_EXPIRES
+ ,[LSHPACK_HDR_FROM]                      = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_HOST]                      = HTTP_HEADER_HOST
+ ,[LSHPACK_HDR_IF_MATCH]                  = HTTP_HEADER_IF_MATCH
+ ,[LSHPACK_HDR_IF_MODIFIED_SINCE]         = HTTP_HEADER_IF_MODIFIED_SINCE
+ ,[LSHPACK_HDR_IF_NONE_MATCH]             = HTTP_HEADER_IF_NONE_MATCH
+ ,[LSHPACK_HDR_IF_RANGE]                  = HTTP_HEADER_IF_RANGE
+ ,[LSHPACK_HDR_IF_UNMODIFIED_SINCE]       = HTTP_HEADER_IF_UNMODIFIED_SINCE
+ ,[LSHPACK_HDR_LAST_MODIFIED]             = HTTP_HEADER_LAST_MODIFIED
+ ,[LSHPACK_HDR_LINK]                      = HTTP_HEADER_LINK
+ ,[LSHPACK_HDR_LOCATION]                  = HTTP_HEADER_LOCATION
+ ,[LSHPACK_HDR_MAX_FORWARDS]              = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_PROXY_AUTHENTICATE]        = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_PROXY_AUTHORIZATION]       = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_RANGE]                     = HTTP_HEADER_RANGE
+ ,[LSHPACK_HDR_REFERER]                   = HTTP_HEADER_REFERER
+ ,[LSHPACK_HDR_REFRESH]                   = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_RETRY_AFTER]               = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_SERVER]                    = HTTP_HEADER_SERVER
+ ,[LSHPACK_HDR_SET_COOKIE]                = HTTP_HEADER_SET_COOKIE
+ ,[LSHPACK_HDR_STRICT_TRANSPORT_SECURITY] = HTTP_HEADER_STRICT_TRANSPORT_SECURITY
+ ,[LSHPACK_HDR_TRANSFER_ENCODING]         = HTTP_HEADER_TRANSFER_ENCODING
+ ,[LSHPACK_HDR_USER_AGENT]                = HTTP_HEADER_USER_AGENT
+ ,[LSHPACK_HDR_VARY]                      = HTTP_HEADER_VARY
+ ,[LSHPACK_HDR_VIA]                       = HTTP_HEADER_OTHER
+ ,[LSHPACK_HDR_WWW_AUTHENTICATE]          = HTTP_HEADER_WWW_AUTHENTICATE
+};
+
+
 static request_st * h2_init_stream (request_st * const h2r, connection * const con);
 
 
@@ -937,11 +1141,31 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
             hpctx.v = lsx.buf+lsx.val_offset;
             hpctx.klen = lsx.name_len;
             hpctx.vlen = lsx.val_len;
+            /*assert(lsx.hpack_index < sizeof(lshpack_idx_http_header));*/
+            hpctx.id = lshpack_idx_http_header[lsx.hpack_index];
 
             if (log_request_header)
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "fd:%d id:%u rqst: %.*s: %.*s", r->con->fd, r->h2id,
                   (int)hpctx.klen, hpctx.k, (int)hpctx.vlen, hpctx.v);
+
+          #if 0
+            /* might not be worth special-casing pseudo headers here and
+             * repeating the code in http_request_parse_header() to avoid
+             * memcmp() for pseudo headers (request.c does not know ls-hpack)*/
+            if (hpctx.pseudo && lsx.hpack_index
+                && lsx.hpack_index < LSHPACK_HDR_STATUS_200 && !trailers) {
+                /* lsx.hpack_index:
+                 *   LSHPACK_HDR_AUTHORITY
+                 *   LSHPACK_HDR_METHOD_GET
+                 *   LSHPACK_HDR_METHOD_POST
+                 *   LSHPACK_HDR_PATH
+                 *   LSHPACK_HDR_PATH_INDEX_HTML
+                 *   LSHPACK_HDR_SCHEME_HTTP
+                 *   LSHPACK_HDR_SCHEME_HTTPS
+                 */
+            }
+          #endif
 
             r->http_status = http_request_parse_header(r, &hpctx);
             if (0 != r->http_status)
@@ -1613,6 +1837,17 @@ h2_send_headers (request_st * const r, connection * const con)
     lsx.name_len = 7;
     lsx.val_offset = 9;
     lsx.val_len = 3;
+    switch (r->http_status) {
+      case 200: lsx.hpack_index = LSHPACK_HDR_STATUS_200; break;
+      case 204: lsx.hpack_index = LSHPACK_HDR_STATUS_204; break;
+      case 206: lsx.hpack_index = LSHPACK_HDR_STATUS_206; break;
+      case 304: lsx.hpack_index = LSHPACK_HDR_STATUS_304; break;
+      case 400: lsx.hpack_index = LSHPACK_HDR_STATUS_400; break;
+      case 404: lsx.hpack_index = LSHPACK_HDR_STATUS_404; break;
+      case 500: lsx.hpack_index = LSHPACK_HDR_STATUS_500; break;
+      default:
+        break;
+    }
     dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
     if (dst == (unsigned char *)tb->ptr) {
         h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
@@ -1626,8 +1861,6 @@ h2_send_headers (request_st * const r, connection * const con)
         const uint32_t vlen = buffer_string_length(&ds->value);
         const char * const restrict k = ds->key.ptr;
         if (0 == vlen || 0 == klen) continue;
-        if ((k[0] & 0xdf) == 'X' && http_response_omit_header(r, ds))
-            continue;
         alen += klen + vlen + 4;
 
         if (alen > LSXPACK_MAX_STRLEN) {
@@ -1644,8 +1877,17 @@ h2_send_headers (request_st * const r, connection * const con)
          * Since keys are typically short, append (and lowercase) key onto
          * end of value buffer */
         char * const v = buffer_string_prepare_append(&ds->value, klen);
-        for (uint32_t j = 0; j < klen; ++j)
-            v[j] = !light_isupper(k[j]) ? k[j] : (k[j] | 0x20);
+        if (ds->ext != HTTP_HEADER_OTHER) {
+            memcpy(v, http_header_lc[ds->ext], klen);
+        }
+        else {
+            if ((k[0] & 0xdf) == 'X' && http_response_omit_header(r, ds)) {
+                alen -= klen + vlen + 4;
+                continue;
+            }
+            for (uint32_t j = 0; j < klen; ++j)
+                v[j] = !light_isupper(k[j]) ? k[j] : (k[j] | 0x20);
+        }
         /*buffer_commit(&ds->value, klen);*//*(not necessary; truncated below)*/
 
         uint32_t voff = 0;
@@ -1657,6 +1899,7 @@ h2_send_headers (request_st * const r, connection * const con)
               : memchr(lsx.buf+voff, '\n', vlen - voff);
 
             memset(&lsx, 0, sizeof(lsxpack_header_t));
+            lsx.hpack_index = http_header_lshpack_idx[ds->ext];
             lsx.buf = ds->value.ptr;
             lsx.name_offset = vlen;
             lsx.name_len = klen;
@@ -1696,6 +1939,7 @@ h2_send_headers (request_st * const r, connection * const con)
         lsx.name_len = 4;
         lsx.val_offset = 6;
         lsx.val_len = 29;
+        lsx.hpack_index = LSHPACK_HDR_DATE;
 
         /* cache the generated timestamp */
         static time_t tlast;
@@ -1737,6 +1981,7 @@ h2_send_headers (request_st * const r, connection * const con)
         lsx.name_len = 6;
         lsx.val_offset = 8;
         lsx.val_len = vlen;
+        lsx.hpack_index = LSHPACK_HDR_SERVER;
         unsigned char * const dst_in = dst;
         dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
         chunk_buffer_release(b);

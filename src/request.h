@@ -199,9 +199,10 @@ typedef struct http_header_parse_ctx {
     uint32_t klen;
     uint32_t vlen;
     uint32_t hlen;
-    int pseudo;
-    int scheme;
-    int trailers;
+    uint8_t pseudo;
+    uint8_t scheme;
+    uint8_t trailers;
+    uint8_t id;
     uint32_t max_request_field_size;
     unsigned int http_parseopts;
 } http_header_parse_ctx;

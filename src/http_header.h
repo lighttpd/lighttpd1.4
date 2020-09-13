@@ -11,6 +11,9 @@
  *   https://en.wikipedia.org/wiki/List_of_HTTP_header_fields
  */
 /* Note: must be kept in sync with http_header.c http_headers[] */
+/* Note: must be kept in sync h2.c:http_header_lc[] */
+/* Note: must be kept in sync h2.c:http_header_lshpack_idx[] */
+/* Note: must be kept in sync h2.c:lshpack_idx_http_header[] */
 /* Note: when adding new items, must replace OTHER in existing code for item */
 /* Note: current implementation has limit of 64 htags
  *       Use of htags is an optimization for quick existence checks in lighttpd.
