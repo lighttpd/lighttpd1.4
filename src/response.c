@@ -172,7 +172,8 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 			/* file name to be read was too long. return 404 */
 		case ENOENT:
 			if (r->http_method == HTTP_METHOD_OPTIONS
-			    && NULL != http_header_response_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Allow"))) {
+			    && NULL != http_header_response_get(r, HTTP_HEADER_ALLOW,
+			                                        CONST_STR_LEN("Allow"))) {
 				r->http_status = 200;
 				return HANDLER_FINISHED;
 			}
@@ -412,7 +413,9 @@ http_response_prepare (request_st * const r)
 		    r->uri.path.ptr[0] == '*' && r->uri.path.ptr[1] == '\0') {
 			/* option requests are handled directly without checking of the path */
 
-			http_header_response_append(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Allow"), CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
+			http_header_response_append(r, HTTP_HEADER_ALLOW,
+			  CONST_STR_LEN("Allow"),
+			  CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
 
 			r->http_status = 200;
 			r->resp_body_finished = 1;
@@ -659,7 +662,7 @@ http_response_errdoc_init (request_st * const r)
     buffer *www_auth = NULL;
     if (401 == r->http_status) {
         const buffer * const vb =
-          http_header_response_get(r, HTTP_HEADER_OTHER,
+          http_header_response_get(r, HTTP_HEADER_WWW_AUTHENTICATE,
                                    CONST_STR_LEN("WWW-Authenticate"));
         if (NULL != vb) www_auth = buffer_init_buffer(vb);
     }
@@ -670,7 +673,7 @@ http_response_errdoc_init (request_st * const r)
     http_response_body_clear(r, 0);
 
     if (NULL != www_auth) {
-        http_header_response_set(r, HTTP_HEADER_OTHER,
+        http_header_response_set(r, HTTP_HEADER_WWW_AUTHENTICATE,
                                  CONST_STR_LEN("WWW-Authenticate"),
                                  CONST_BUF_LEN(www_auth));
         buffer_free(www_auth);
@@ -791,7 +794,7 @@ http_response_write_prepare(request_st * const r)
                 && !buffer_string_is_empty(&r->uri.path)
                 && r->uri.path.ptr[0] != '*') {
                 http_response_body_clear(r, 0);
-                http_header_response_append(r, HTTP_HEADER_OTHER,
+                http_header_response_append(r, HTTP_HEADER_ALLOW,
                   CONST_STR_LEN("Allow"),
                   CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
                 r->http_status = 200;

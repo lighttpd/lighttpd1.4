@@ -16,48 +16,78 @@
 
 
 typedef struct keyvlenvalue {
-    const int key;
-    const uint32_t vlen;
-    const char value[24];
+    const  int16_t key;
+    const uint16_t vlen;
+    const char value[28];
 } keyvlenvalue;
 
 /* Note: must be sorted by length */
 /* Note: must be kept in sync with http_header.h enum http_header_e */
 /* Note: must be kept in sync http_headers[] and http_headers_off[] */
 /* http_headers_off lists first offset at which string of specific len occur */
-int8_t http_headers_off[] = {
-  -1, -1, -1, -1, 0, 4, 5, 9, 10, 11, 12, -1, 15, 16, 20, 22, 24, 26
+static const int8_t http_headers_off[] = {
+  -1, -1,  0,  1,  4,  9, 11, 17, 21, 25, 27, -1, 30, 31,
+  37, 40, 45, 49, -1, 52, -1, -1, 53, 54, -1, 55, -1, 57
 };
 static const keyvlenvalue http_headers[] = {
-  { HTTP_HEADER_HOST,                 CONST_LEN_STR("host") }
- ,{ HTTP_HEADER_DATE,                 CONST_LEN_STR("date") }
- ,{ HTTP_HEADER_ETAG,                 CONST_LEN_STR("etag") }
- ,{ HTTP_HEADER_VARY,                 CONST_LEN_STR("vary") }
- ,{ HTTP_HEADER_RANGE,                CONST_LEN_STR("range") }
- ,{ HTTP_HEADER_COOKIE,               CONST_LEN_STR("cookie") }
- ,{ HTTP_HEADER_EXPECT,               CONST_LEN_STR("expect") }
- ,{ HTTP_HEADER_STATUS,               CONST_LEN_STR("status") }
- ,{ HTTP_HEADER_SERVER,               CONST_LEN_STR("server") }
- ,{ HTTP_HEADER_UPGRADE,              CONST_LEN_STR("upgrade") }
- ,{ HTTP_HEADER_LOCATION,             CONST_LEN_STR("location") }
- ,{ HTTP_HEADER_FORWARDED,            CONST_LEN_STR("forwarded") }
- ,{ HTTP_HEADER_CONNECTION,           CONST_LEN_STR("connection") }
- ,{ HTTP_HEADER_SET_COOKIE,           CONST_LEN_STR("set-cookie") }
- ,{ HTTP_HEADER_USER_AGENT,           CONST_LEN_STR("user-agent") }
- ,{ HTTP_HEADER_CONTENT_TYPE,         CONST_LEN_STR("content-type") }
- ,{ HTTP_HEADER_LAST_MODIFIED,        CONST_LEN_STR("last-modified") }
- ,{ HTTP_HEADER_AUTHORIZATION,        CONST_LEN_STR("authorization") }
- ,{ HTTP_HEADER_IF_NONE_MATCH,        CONST_LEN_STR("if-none-match") }
- ,{ HTTP_HEADER_CACHE_CONTROL,        CONST_LEN_STR("cache-control") }
- ,{ HTTP_HEADER_CONTENT_LENGTH,       CONST_LEN_STR("content-length") }
- ,{ HTTP_HEADER_HTTP2_SETTINGS,       CONST_LEN_STR("http2-settings") }
- ,{ HTTP_HEADER_ACCEPT_ENCODING,      CONST_LEN_STR("accept-encoding") }
- ,{ HTTP_HEADER_X_FORWARDED_FOR,      CONST_LEN_STR("x-forwarded-for") }
- ,{ HTTP_HEADER_CONTENT_ENCODING,     CONST_LEN_STR("content-encoding") }
- ,{ HTTP_HEADER_CONTENT_LOCATION,     CONST_LEN_STR("content-location") }
- ,{ HTTP_HEADER_IF_MODIFIED_SINCE,    CONST_LEN_STR("if-modified-since") }
- ,{ HTTP_HEADER_TRANSFER_ENCODING,    CONST_LEN_STR("transfer-encoding") }
- ,{ HTTP_HEADER_X_FORWARDED_PROTO,    CONST_LEN_STR("x-forwarded-proto") }
+  { HTTP_HEADER_TE,                          CONST_LEN_STR("te") }
+ ,{ HTTP_HEADER_AGE,                         CONST_LEN_STR("age") }
+ ,{ HTTP_HEADER_DNT,                         CONST_LEN_STR("dnt") }
+ ,{ HTTP_HEADER_P3P,                         CONST_LEN_STR("p3p") }
+ ,{ HTTP_HEADER_HOST,                        CONST_LEN_STR("host") }
+ ,{ HTTP_HEADER_DATE,                        CONST_LEN_STR("date") }
+ ,{ HTTP_HEADER_ETAG,                        CONST_LEN_STR("etag") }
+ ,{ HTTP_HEADER_VARY,                        CONST_LEN_STR("vary") }
+ ,{ HTTP_HEADER_LINK,                        CONST_LEN_STR("link") }
+ ,{ HTTP_HEADER_ALLOW,                       CONST_LEN_STR("allow") }
+ ,{ HTTP_HEADER_RANGE,                       CONST_LEN_STR("range") }
+ ,{ HTTP_HEADER_COOKIE,                      CONST_LEN_STR("cookie") }
+ ,{ HTTP_HEADER_ACCEPT,                      CONST_LEN_STR("accept") }
+ ,{ HTTP_HEADER_STATUS,                      CONST_LEN_STR("status") }
+ ,{ HTTP_HEADER_SERVER,                      CONST_LEN_STR("server") }
+ ,{ HTTP_HEADER_EXPECT,                      CONST_LEN_STR("expect") }
+ ,{ HTTP_HEADER_PRAGMA,                      CONST_LEN_STR("pragma") }
+ ,{ HTTP_HEADER_UPGRADE,                     CONST_LEN_STR("upgrade") }
+ ,{ HTTP_HEADER_REFERER,                     CONST_LEN_STR("referer") }
+ ,{ HTTP_HEADER_EXPIRES,                     CONST_LEN_STR("expires") }
+ ,{ HTTP_HEADER_ALT_SVC,                     CONST_LEN_STR("alt-svc") }
+ ,{ HTTP_HEADER_LOCATION,                    CONST_LEN_STR("location") }
+ ,{ HTTP_HEADER_IF_MATCH,                    CONST_LEN_STR("if-match") }
+ ,{ HTTP_HEADER_IF_RANGE,                    CONST_LEN_STR("if-range") }
+ ,{ HTTP_HEADER_ALT_USED,                    CONST_LEN_STR("alt-used") }
+ ,{ HTTP_HEADER_FORWARDED,                   CONST_LEN_STR("forwarded") }
+ ,{ HTTP_HEADER_EXPECT_CT,                   CONST_LEN_STR("expect-ct") }
+ ,{ HTTP_HEADER_CONNECTION,                  CONST_LEN_STR("connection") }
+ ,{ HTTP_HEADER_SET_COOKIE,                  CONST_LEN_STR("set-cookie") }
+ ,{ HTTP_HEADER_USER_AGENT,                  CONST_LEN_STR("user-agent") }
+ ,{ HTTP_HEADER_CONTENT_TYPE,                CONST_LEN_STR("content-type") }
+ ,{ HTTP_HEADER_LAST_MODIFIED,               CONST_LEN_STR("last-modified") }
+ ,{ HTTP_HEADER_AUTHORIZATION,               CONST_LEN_STR("authorization") }
+ ,{ HTTP_HEADER_IF_NONE_MATCH,               CONST_LEN_STR("if-none-match") }
+ ,{ HTTP_HEADER_CACHE_CONTROL,               CONST_LEN_STR("cache-control") }
+ ,{ HTTP_HEADER_ACCEPT_RANGES,               CONST_LEN_STR("accept-ranges") }
+ ,{ HTTP_HEADER_CONTENT_RANGE,               CONST_LEN_STR("content-range") }
+ ,{ HTTP_HEADER_CONTENT_LENGTH,              CONST_LEN_STR("content-length") }
+ ,{ HTTP_HEADER_HTTP2_SETTINGS,              CONST_LEN_STR("http2-settings") }
+ ,{ HTTP_HEADER_ONION_LOCATION,              CONST_LEN_STR("onion-location") }
+ ,{ HTTP_HEADER_ACCEPT_ENCODING,             CONST_LEN_STR("accept-encoding") }
+ ,{ HTTP_HEADER_ACCEPT_LANGUAGE,             CONST_LEN_STR("accept-language") }
+ ,{ HTTP_HEADER_REFERRER_POLICY,             CONST_LEN_STR("referrer-policy") }
+ ,{ HTTP_HEADER_X_FORWARDED_FOR,             CONST_LEN_STR("x-forwarded-for") }
+ ,{ HTTP_HEADER_X_FRAME_OPTIONS,             CONST_LEN_STR("x-frame-options") }
+ ,{ HTTP_HEADER_WWW_AUTHENTICATE,            CONST_LEN_STR("www-authenticate") }
+ ,{ HTTP_HEADER_CONTENT_ENCODING,            CONST_LEN_STR("content-encoding") }
+ ,{ HTTP_HEADER_CONTENT_LOCATION,            CONST_LEN_STR("content-location") }
+ ,{ HTTP_HEADER_X_XSS_PROTECTION,            CONST_LEN_STR("x-xss-protection") }
+ ,{ HTTP_HEADER_IF_MODIFIED_SINCE,           CONST_LEN_STR("if-modified-since") }
+ ,{ HTTP_HEADER_TRANSFER_ENCODING,           CONST_LEN_STR("transfer-encoding") }
+ ,{ HTTP_HEADER_X_FORWARDED_PROTO,           CONST_LEN_STR("x-forwarded-proto") }
+ ,{ HTTP_HEADER_IF_UNMODIFIED_SINCE,         CONST_LEN_STR("if-unmodified-since") }
+ ,{ HTTP_HEADER_X_CONTENT_TYPE_OPTIONS,      CONST_LEN_STR("x-content-type-options") }
+ ,{ HTTP_HEADER_CONTENT_SECURITY_POLICY,     CONST_LEN_STR("content-security-policy") }
+ ,{ HTTP_HEADER_STRICT_TRANSPORT_SECURITY,   CONST_LEN_STR("strict-transport-security") }
+ ,{ HTTP_HEADER_UPGRADE_INSECURE_REQUESTS,   CONST_LEN_STR("upgrade-insecure-requests") }
+ ,{ HTTP_HEADER_ACCESS_CONTROL_ALLOW_ORIGIN, CONST_LEN_STR("access-control-allow-origin") }
  ,{ HTTP_HEADER_OTHER, 0, "" }
 };
 

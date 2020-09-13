@@ -117,12 +117,16 @@ int http_response_redirect_to_directory(request_st * const r, int status) {
 	}
 
 	if (status >= 300) {
-		http_header_response_set(r, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"), CONST_BUF_LEN(o));
+		http_header_response_set(r, HTTP_HEADER_LOCATION,
+		                         CONST_STR_LEN("Location"),
+		                         CONST_BUF_LEN(o));
 		r->http_status = status;
 		r->resp_body_finished = 1;
 	}
 	else {
-		http_header_response_set(r, HTTP_HEADER_CONTENT_LOCATION, CONST_STR_LEN("Content-Location"), CONST_BUF_LEN(o));
+		http_header_response_set(r, HTTP_HEADER_CONTENT_LOCATION,
+		                         CONST_STR_LEN("Content-Location"),
+		                         CONST_BUF_LEN(o));
 	}
 
 	return 0;
@@ -178,12 +182,14 @@ int http_response_handle_cachable(request_st * const r, const buffer * const mti
 	 *    return a 304 (Not Modified) response.
 	 */
 
-	if ((vb = http_header_request_get(r, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match")))) {
+	if ((vb = http_header_request_get(r, HTTP_HEADER_IF_NONE_MATCH,
+	                                  CONST_STR_LEN("If-None-Match")))) {
 		/*(weak etag comparison must not be used for ranged requests)*/
 		int range_request =
 		  (r->conf.range_requests
 		   && (200 == r->http_status || 0 == r->http_status)
-		   && NULL != http_header_request_get(r, HTTP_HEADER_RANGE, CONST_STR_LEN("Range")));
+		   && NULL != http_header_request_get(r, HTTP_HEADER_RANGE,
+		                                      CONST_STR_LEN("Range")));
 		if (etag_is_equal(&r->physical.etag, vb->ptr, !range_request)) {
 			if (http_method_get_or_head(r->http_method)) {
 				r->http_status = 304;
@@ -195,7 +201,8 @@ int http_response_handle_cachable(request_st * const r, const buffer * const mti
 			}
 		}
 	} else if (http_method_get_or_head(r->http_method)
-		   && (vb = http_header_request_get(r, HTTP_HEADER_IF_MODIFIED_SINCE, CONST_STR_LEN("If-Modified-Since")))) {
+		   && (vb = http_header_request_get(r, HTTP_HEADER_IF_MODIFIED_SINCE,
+		                                    CONST_STR_LEN("If-Modified-Since")))) {
 		/* last-modified handling */
 		size_t used_len;
 		char *semicolon;
@@ -247,12 +254,14 @@ int http_response_handle_cachable(request_st * const r, const buffer * const mti
 void http_response_body_clear (request_st * const r, int preserve_length) {
     r->resp_send_chunked = 0;
     if (light_btst(r->resp_htags, HTTP_HEADER_TRANSFER_ENCODING)) {
-        http_header_response_unset(r, HTTP_HEADER_TRANSFER_ENCODING, CONST_STR_LEN("Transfer-Encoding"));
+        http_header_response_unset(r, HTTP_HEADER_TRANSFER_ENCODING,
+                                   CONST_STR_LEN("Transfer-Encoding"));
     }
     if (!preserve_length) { /* preserve for HEAD responses and no-content responses (204, 205, 304) */
         r->content_length = -1;
         if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
-            http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+            http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
+                                       CONST_STR_LEN("Content-Length"));
         }
         /*(if not preserving Content-Length, do not preserve trailers, if any)*/
         r->resp_decode_chunked = 0;
@@ -306,7 +315,9 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 	off_t start, end;
 	const char *s, *minus;
 	static const char boundary[] = "fkj49sn38dcn3";
-	const buffer *content_type = http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"));
+	const buffer *content_type =
+	  http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE,
+	                           CONST_STR_LEN("Content-Type"));
 
 	start = 0;
 	end = sce->st.st_size - 1;
@@ -474,7 +485,9 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 		buffer_append_string_len(tb, boundary, sizeof(boundary)-1);
 
 		/* overwrite content-type */
-		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(tb));
+		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+		                         CONST_STR_LEN("Content-Type"),
+		                         CONST_BUF_LEN(tb));
 	} else {
 		/* add Content-Range-header */
 
@@ -485,7 +498,9 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 		buffer_append_string_len(tb, CONST_STR_LEN("/"));
 		buffer_append_int(tb, sce->st.st_size);
 
-		http_header_response_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Content-Range"), CONST_BUF_LEN(tb));
+		http_header_response_set(r, HTTP_HEADER_CONTENT_RANGE,
+		                         CONST_STR_LEN("Content-Range"),
+		                         CONST_BUF_LEN(tb));
 	}
 
 	/* ok, the file is set-up */
@@ -545,7 +560,8 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 
 	/* set response content-type, if not set already */
 
-	if (NULL == http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"))) {
+	if (NULL == http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE,
+	                                     CONST_STR_LEN("Content-Type"))) {
 		const buffer *content_type = stat_cache_content_type_get(sce, r);
 		if (buffer_string_is_empty(content_type)) {
 			/* we are setting application/octet-stream, but also announce that
@@ -554,16 +570,22 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 			 * This should fix the aggressive caching of FF and the script download
 			 * seen by the first installations
 			 */
-			http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/octet-stream"));
+			http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+			                         CONST_STR_LEN("Content-Type"),
+			                         CONST_STR_LEN("application/octet-stream"));
 
 			allow_caching = 0;
 		} else {
-			http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(content_type));
+			http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+			                         CONST_STR_LEN("Content-Type"),
+			                         CONST_BUF_LEN(content_type));
 		}
 	}
 
 	if (r->conf.range_requests) {
-		http_header_response_append(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Accept-Ranges"), CONST_STR_LEN("bytes"));
+		http_header_response_append(r, HTTP_HEADER_ACCEPT_RANGES,
+		                            CONST_STR_LEN("Accept-Ranges"),
+		                            CONST_STR_LEN("bytes"));
 	}
 
 	if (allow_caching) {
@@ -571,18 +593,25 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 		  ? stat_cache_etag_get(sce, r->conf.etag_flags)
 		  : NULL;
 		if (!buffer_string_is_empty(etag)) {
-			if (NULL == http_header_response_get(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"))) {
+			if (NULL == http_header_response_get(r, HTTP_HEADER_ETAG,
+			                                     CONST_STR_LEN("ETag"))) {
 				/* generate e-tag */
 				etag_mutate(&r->physical.etag, etag);
 
-				http_header_response_set(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(&r->physical.etag));
+				http_header_response_set(r, HTTP_HEADER_ETAG,
+				                         CONST_STR_LEN("ETag"),
+				                         CONST_BUF_LEN(&r->physical.etag));
 			}
 		}
 
 		/* prepare header */
-		if (NULL == (mtime = http_header_response_get(r, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified")))) {
+		mtime = http_header_response_get(r, HTTP_HEADER_LAST_MODIFIED,
+		                                 CONST_STR_LEN("Last-Modified"));
+		if (NULL == mtime) {
 			mtime = strftime_cache_get(sce->st.st_mtime);
-			http_header_response_set(r, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
+			http_header_response_set(r, HTTP_HEADER_LAST_MODIFIED,
+			                         CONST_STR_LEN("Last-Modified"),
+			                         CONST_BUF_LEN(mtime));
 		}
 
 		if (HANDLER_FINISHED == http_response_handle_cachable(r, mtime)) {
@@ -603,13 +632,16 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 
 	if (r->conf.range_requests
 	    && (200 == r->http_status || 0 == r->http_status)
-	    && NULL != (vb = http_header_request_get(r, HTTP_HEADER_RANGE, CONST_STR_LEN("Range")))
-	    && NULL == http_header_response_get(r, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"))) {
+	    && NULL != (vb = http_header_request_get(r, HTTP_HEADER_RANGE,
+	                                             CONST_STR_LEN("Range")))
+	    && NULL == http_header_response_get(r, HTTP_HEADER_CONTENT_ENCODING,
+	                                        CONST_STR_LEN("Content-Encoding"))) {
 		const buffer *range = vb;
 		int do_range_request = 1;
 		/* check if we have a conditional GET */
 
-		if (NULL != (vb = http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("If-Range")))) {
+		if (NULL != (vb = http_header_request_get(r, HTTP_HEADER_IF_RANGE,
+		                                          CONST_STR_LEN("If-Range")))) {
 			/* if the value is the same as our ETag, we do a Range-request,
 			 * otherwise a full 200 */
 
@@ -679,7 +711,8 @@ static void http_response_xsendfile (request_st * const r, buffer * const path, 
 	 * determined by open(), fstat() to reduces race conditions if the file
 	 * is modified between stat() (stat_cache_get_entry()) and open(). */
 	if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
-		http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+		http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
+		                           CONST_STR_LEN("Content-Length"));
 		r->content_length = -1;
 	}
 
@@ -739,7 +772,8 @@ static void http_response_xsendfile2(request_st * const r, const buffer * const 
 
     /* reset Content-Length, if set by backend */
     if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
-        http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
+        http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
+                                   CONST_STR_LEN("Content-Length"));
         r->content_length = -1;
     }
 
@@ -946,7 +980,8 @@ static handler_t http_response_process_local_redir(request_st * const r, size_t 
 
     /* r->http_status >= 300 && r->http_status < 400) */
     size_t ulen = buffer_string_length(&r->uri.path);
-    const buffer *vb = http_header_response_get(r, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"));
+    const buffer *vb = http_header_response_get(r, HTTP_HEADER_LOCATION,
+                                                CONST_STR_LEN("Location"));
     if (NULL != vb
         && vb->ptr[0] == '/'
         && (0 != strncmp(vb->ptr, r->uri.path.ptr, ulen)
@@ -1082,10 +1117,8 @@ static int http_response_process_headers(request_st * const r, http_response_opt
           case HTTP_HEADER_UPGRADE:
             /*(technically, should also verify Connection: upgrade)*/
             /*(flag only for mod_proxy and mod_cgi (for now))*/
-            if (opts->backend != BACKEND_PROXY
-                && opts->backend != BACKEND_CGI) {
-                id = HTTP_HEADER_OTHER;
-            }
+            if (opts->backend != BACKEND_PROXY && opts->backend != BACKEND_CGI)
+                continue;
             if (r->http_version >= HTTP_VERSION_2) continue;
             break;
           case HTTP_HEADER_CONNECTION:
@@ -1297,16 +1330,19 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
         buffer *vb;
         /* X-Sendfile2 is deprecated; historical for fastcgi */
         if (opts->backend == BACKEND_FASTCGI
-            && NULL != (vb = http_header_response_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Sendfile2")))) {
+            && NULL != (vb = http_header_response_get(r, HTTP_HEADER_OTHER,
+                                                      CONST_STR_LEN("X-Sendfile2")))) {
             http_response_xsendfile2(r, vb, opts->xsendfile_docroot);
             /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
             buffer_clear(vb); /*(do not send to client)*/
             if (NULL == r->handler_module)
                 r->resp_body_started = 0;
             return HANDLER_FINISHED;
-        } else if (NULL != (vb = http_header_response_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Sendfile")))
+        } else if (NULL != (vb = http_header_response_get(r, HTTP_HEADER_OTHER,
+                                                          CONST_STR_LEN("X-Sendfile")))
                    || (opts->backend == BACKEND_FASTCGI /* X-LIGHTTPD-send-file is deprecated; historical for fastcgi */
-                       && NULL != (vb = http_header_response_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("X-LIGHTTPD-send-file"))))) {
+                       && NULL != (vb = http_header_response_get(r, HTTP_HEADER_OTHER,
+                                                                 CONST_STR_LEN("X-LIGHTTPD-send-file"))))) {
             http_response_xsendfile(r, vb, opts->xsendfile_docroot);
             /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
             buffer_clear(vb); /*(do not send to client)*/

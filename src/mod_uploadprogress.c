@@ -277,8 +277,8 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/xml"));
 
 		/* just an attempt the force the IE/proxies to NOT cache the request ... doesn't help :( */
-		http_header_response_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Pragma"), CONST_STR_LEN("no-cache"));
-		http_header_response_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Expires"), CONST_STR_LEN("Thu, 19 Nov 1981 08:52:00 GMT"));
+		http_header_response_set(r, HTTP_HEADER_PRAGMA, CONST_STR_LEN("Pragma"), CONST_STR_LEN("no-cache"));
+		http_header_response_set(r, HTTP_HEADER_EXPIRES, CONST_STR_LEN("Expires"), CONST_STR_LEN("Thu, 19 Nov 1981 08:52:00 GMT"));
 		http_header_response_set(r, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"), CONST_STR_LEN("no-store, no-cache, must-revalidate, post-check=0, pre-check=0"));
 
 		/* prepare XML */

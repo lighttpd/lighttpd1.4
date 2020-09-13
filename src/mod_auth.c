@@ -727,7 +727,9 @@ static handler_t mod_auth_send_401_unauthorized_basic(request_st * const r, cons
 	buffer_append_string_buffer(tb, realm);
 	buffer_append_string_len(tb, CONST_STR_LEN("\", charset=\"UTF-8\""));
 
-	http_header_response_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(tb));
+	http_header_response_set(r, HTTP_HEADER_WWW_AUTHENTICATE,
+	                         CONST_STR_LEN("WWW-Authenticate"),
+	                         CONST_BUF_LEN(tb));
 
 	return HANDLER_FINISHED;
 }
@@ -1513,7 +1515,9 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 static handler_t mod_auth_send_401_unauthorized_digest(request_st * const r, const struct http_auth_require_t * const require, int nonce_stale) {
 	buffer * const tb = r->tmp_buf;
 	mod_auth_digest_www_authenticate(tb, log_epoch_secs, require, nonce_stale);
-	http_header_response_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_BUF_LEN(tb));
+	http_header_response_set(r, HTTP_HEADER_WWW_AUTHENTICATE,
+	                         CONST_STR_LEN("WWW-Authenticate"),
+	                         CONST_BUF_LEN(tb));
 
 	r->http_status = 401;
 	r->handler_module = NULL;

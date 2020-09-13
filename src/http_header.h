@@ -5,39 +5,83 @@
 #include "base_decls.h"
 #include "buffer.h"
 
+/* HTTP header enum for select HTTP field-names
+ * reference:
+ *   https://www.iana.org/assignments/message-headers/message-headers.xml
+ *   https://en.wikipedia.org/wiki/List_of_HTTP_header_fields
+ */
 /* Note: must be kept in sync with http_header.c http_headers[] */
 /* Note: when adding new items, must replace OTHER in existing code for item */
+/* Note: current implementation has limit of 64 htags
+ *       Use of htags is an optimization for quick existence checks in lighttpd.
+ *       (In the future, these values may also be used to map to HPACK indices.)
+ *       However, listing all possible headers here is highly discouraged,
+ *       as extending the bitmap greater than 64-bits may make quick bitmasks
+ *       check more expensive, and the cost for looking up unmarked headers
+ *       (HTTP_HEADER_OTHER) is not substantially more.  In the future, this
+ *       list may be revisitied and reviewed, and less frequent headers removed
+ *       or replaced.
+ */
 enum http_header_e {
   HTTP_HEADER_OTHER = 0
+ ,HTTP_HEADER_ACCEPT
  ,HTTP_HEADER_ACCEPT_ENCODING
+ ,HTTP_HEADER_ACCEPT_LANGUAGE
+ ,HTTP_HEADER_ACCEPT_RANGES
+ ,HTTP_HEADER_ACCESS_CONTROL_ALLOW_ORIGIN
+ ,HTTP_HEADER_AGE
+ ,HTTP_HEADER_ALLOW
+ ,HTTP_HEADER_ALT_SVC
+ ,HTTP_HEADER_ALT_USED
  ,HTTP_HEADER_AUTHORIZATION
  ,HTTP_HEADER_CACHE_CONTROL
  ,HTTP_HEADER_CONNECTION
  ,HTTP_HEADER_CONTENT_ENCODING
  ,HTTP_HEADER_CONTENT_LENGTH
  ,HTTP_HEADER_CONTENT_LOCATION
+ ,HTTP_HEADER_CONTENT_RANGE
+ ,HTTP_HEADER_CONTENT_SECURITY_POLICY
  ,HTTP_HEADER_CONTENT_TYPE
  ,HTTP_HEADER_COOKIE
  ,HTTP_HEADER_DATE
+ ,HTTP_HEADER_DNT
  ,HTTP_HEADER_ETAG
  ,HTTP_HEADER_EXPECT
+ ,HTTP_HEADER_EXPECT_CT
+ ,HTTP_HEADER_EXPIRES
  ,HTTP_HEADER_FORWARDED
  ,HTTP_HEADER_HOST
+ ,HTTP_HEADER_HTTP2_SETTINGS
+ ,HTTP_HEADER_IF_MATCH
  ,HTTP_HEADER_IF_MODIFIED_SINCE
  ,HTTP_HEADER_IF_NONE_MATCH
+ ,HTTP_HEADER_IF_RANGE
+ ,HTTP_HEADER_IF_UNMODIFIED_SINCE
  ,HTTP_HEADER_LAST_MODIFIED
+ ,HTTP_HEADER_LINK
  ,HTTP_HEADER_LOCATION
+ ,HTTP_HEADER_ONION_LOCATION
+ ,HTTP_HEADER_P3P
+ ,HTTP_HEADER_PRAGMA
  ,HTTP_HEADER_RANGE
+ ,HTTP_HEADER_REFERER
+ ,HTTP_HEADER_REFERRER_POLICY
  ,HTTP_HEADER_SERVER
  ,HTTP_HEADER_SET_COOKIE
  ,HTTP_HEADER_STATUS
+ ,HTTP_HEADER_STRICT_TRANSPORT_SECURITY
+ ,HTTP_HEADER_TE
  ,HTTP_HEADER_TRANSFER_ENCODING
  ,HTTP_HEADER_UPGRADE
+ ,HTTP_HEADER_UPGRADE_INSECURE_REQUESTS
  ,HTTP_HEADER_USER_AGENT
  ,HTTP_HEADER_VARY
+ ,HTTP_HEADER_WWW_AUTHENTICATE
+ ,HTTP_HEADER_X_CONTENT_TYPE_OPTIONS
  ,HTTP_HEADER_X_FORWARDED_FOR
  ,HTTP_HEADER_X_FORWARDED_PROTO
- ,HTTP_HEADER_HTTP2_SETTINGS
+ ,HTTP_HEADER_X_FRAME_OPTIONS
+ ,HTTP_HEADER_X_XSS_PROTECTION
 };
 
 __attribute_pure__

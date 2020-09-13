@@ -253,7 +253,9 @@ static handler_t mod_authn_gssapi_send_401_unauthorized_negotiate (request_st * 
 {
     r->http_status = 401;
     r->handler_module = NULL;
-    http_header_response_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_STR_LEN("Negotiate"));
+    http_header_response_set(r, HTTP_HEADER_WWW_AUTHENTICATE,
+                             CONST_STR_LEN("WWW-Authenticate"),
+                             CONST_STR_LEN("Negotiate"));
     return HANDLER_FINISHED;
 }
 
@@ -603,7 +605,9 @@ static handler_t mod_authn_gssapi_send_401_unauthorized_basic (request_st * cons
 {
     r->http_status = 401;
     r->handler_module = NULL;
-    http_header_response_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("WWW-Authenticate"), CONST_STR_LEN("Basic realm=\"Kerberos\""));
+    http_header_response_set(r, HTTP_HEADER_WWW_AUTHENTICATE,
+                             CONST_STR_LEN("WWW-Authenticate"),
+                             CONST_STR_LEN("Basic realm=\"Kerberos\""));
     return HANDLER_FINISHED;
 }
 

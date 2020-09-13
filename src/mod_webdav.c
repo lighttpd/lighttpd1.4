@@ -577,11 +577,11 @@ URIHANDLER_FUNC(mod_webdav_uri_handler)
                              CONST_STR_LEN("DAV"));
 
     if (pconf.is_readonly)
-        http_header_response_append(r, HTTP_HEADER_OTHER,
+        http_header_response_append(r, HTTP_HEADER_ALLOW,
           CONST_STR_LEN("Allow"),
           CONST_STR_LEN("PROPFIND"));
     else
-        http_header_response_append(r, HTTP_HEADER_OTHER,
+        http_header_response_append(r, HTTP_HEADER_ALLOW,
           CONST_STR_LEN("Allow"),
       #ifdef USE_PROPPATCH
        #ifdef USE_LOCKS
@@ -2160,7 +2160,7 @@ static int
 webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
 {
     const buffer *im = (0 != r->conf.etag_flags)
-      ? http_header_request_get(r, HTTP_HEADER_OTHER,
+      ? http_header_request_get(r, HTTP_HEADER_IF_MATCH,
                                 CONST_STR_LEN("If-Match"))
       : NULL;
 
@@ -2170,7 +2170,7 @@ webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
       : NULL;
 
     const buffer *ius =
-      http_header_request_get(r, HTTP_HEADER_OTHER,
+      http_header_request_get(r, HTTP_HEADER_IF_UNMODIFIED_SINCE,
                               CONST_STR_LEN("If-Unmodified-Since"));
 
     if (NULL == im && NULL == inm && NULL == ius) return 0;
@@ -4303,7 +4303,7 @@ mod_webdav_put_0 (request_st * const r, const plugin_config * const pconf)
 static handler_t
 mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
 {
-    if (NULL != http_header_request_get(r, HTTP_HEADER_OTHER,
+    if (NULL != http_header_request_get(r, HTTP_HEADER_CONTENT_RANGE,
                                         CONST_STR_LEN("Content-Range"))) {
         if (pconf->opts & MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT)
             return HANDLER_GO_ON;
@@ -4551,7 +4551,7 @@ mod_webdav_put (request_st * const r, const plugin_config * const pconf)
 
     if (pconf->opts & MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT) {
         const buffer * const h =
-          http_header_request_get(r, HTTP_HEADER_OTHER,
+          http_header_request_get(r, HTTP_HEADER_CONTENT_RANGE,
                                   CONST_STR_LEN("Content-Range"));
         if (NULL != h)
             return
@@ -5057,7 +5057,7 @@ static handler_t
 mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
 {
     if (!pconf->sql) {
-        http_header_response_set(r, HTTP_HEADER_OTHER,
+        http_header_response_set(r, HTTP_HEADER_ALLOW,
                                  CONST_STR_LEN("Allow"),
                                  CONST_STR_LEN("GET, HEAD, PROPFIND, DELETE, "
                                                "MKCOL, PUT, MOVE, COPY"));

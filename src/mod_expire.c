@@ -318,7 +318,9 @@ REQUEST_FUNC(mod_expire_handler) {
 			/* HTTP/1.0 */
 			buffer_clear(tb);
 			buffer_append_strftime(tb, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(expires)));
-			http_header_response_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Expires"), CONST_BUF_LEN(tb));
+			http_header_response_set(r, HTTP_HEADER_EXPIRES,
+			                         CONST_STR_LEN("Expires"),
+			                         CONST_BUF_LEN(tb));
 
 			/* HTTP/1.1 */
 			buffer_copy_string_len(tb, CONST_STR_LEN("max-age="));

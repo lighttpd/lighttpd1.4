@@ -142,8 +142,8 @@ struct request_st {
     request_config conf;
 
     /* request */
-    uint32_t rqst_htags;/* bitfield of flagged headers present in request */
     uint32_t rqst_header_len;
+    uint64_t rqst_htags;/* bitfield of flagged headers present in request */
     array rqst_headers;
 
     request_uri uri;
@@ -165,8 +165,8 @@ struct request_st {
 
     /* response */
     off_t content_length;
-    uint32_t resp_htags; /*bitfield of flagged headers present in response*/
     uint32_t resp_header_len;
+    uint64_t resp_htags; /*bitfield of flagged headers present in response*/
     array resp_headers;
     char resp_body_finished;
     char resp_body_started;
