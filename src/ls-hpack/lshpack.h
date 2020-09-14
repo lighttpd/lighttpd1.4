@@ -41,8 +41,12 @@ extern "C" {
 #define LSHPACK_MAX_STRLEN LSXPACK_MAX_STRLEN
 
 /*(lighttpd customization)*/
-/* decoder provides "field-name: value\r\n"; define to 0 to omit ": " and "\r\n" */
+/* decoder provides "field-name: value\r\n"; define to 0 to omit ": ", "\r\n" */
 #define LSHPACK_DEC_HTTP1X_OUTPUT 0
+/* decoder provides hash values for request fields; define to 0 to skip */
+/* (future: might be useful to lighttpd if lighttpd reverse-proxy (mod_proxy)
+ *  were to support HTTP/2 requests to backends, which is not currently done) */
+#define LSHPACK_DEC_CALC_HASH 0
 
 #ifndef LSHPACK_DEC_HTTP1X_OUTPUT
 #define LSHPACK_DEC_HTTP1X_OUTPUT 1
