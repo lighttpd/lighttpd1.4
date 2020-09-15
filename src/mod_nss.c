@@ -1816,7 +1816,8 @@ mod_nss_set_defaults_sockets(server *srv, plugin_data *p)
                  * (This is for convenience when defining both IPv4 and IPv6
                  *  and desiring to inherit the ssl config from global context
                  *  without having to duplicate the directives)*/
-                if (count_not_engine) {
+                if (count_not_engine
+                    || (conf.ssl_enabled && NULL == p->ssl_ctxs[0].model)) {
                     log_error(srv->errh, __FILE__, __LINE__,
                       "NSS: ssl.pemfile has to be set in same "
                       "$SERVER[\"socket\"] scope as other ssl.* directives, "
