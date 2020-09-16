@@ -275,6 +275,28 @@ void http_response_body_clear (request_st * const r, int preserve_length) {
 }
 
 
+static void http_response_header_clear (request_st * const r) {
+    r->http_status = 0;
+    r->resp_htags = 0;
+    r->resp_header_len = 0;
+    r->resp_header_repeated = 0;
+    array_reset_data_strings(&r->resp_headers);
+
+    /* Note: http_response_body_clear(r, 0) is not called here
+     * r->write_queue should be preserved for additional data after 1xx response
+     * However, if http_response_process_headers() was called and response had
+     * Transfer-Encoding: chunked set, then other items need to be reset */
+    r->resp_send_chunked = 0;
+    r->content_length = -1;
+    r->resp_decode_chunked = 0;
+    if (r->gw_dechunk) {
+        free(r->gw_dechunk->b.ptr);
+        free(r->gw_dechunk);
+        r->gw_dechunk = NULL;
+    }
+}
+
+
 void http_response_reset (request_st * const r) {
     r->http_status = 0;
     r->con->is_writable = 1;
@@ -1163,6 +1185,29 @@ static int http_response_process_headers(request_st * const r, http_response_opt
 }
 
 
+__attribute_cold__
+__attribute_noinline__
+static int
+http_response_check_1xx (request_st * const r, buffer * const restrict b, uint32_t hlen, uint32_t dlen)
+{
+    /* pass through unset r->http_status (not 1xx) or 101 Switching Protocols */
+    if (0 == r->http_status || 101 == r->http_status)
+        return 0; /* pass through as-is; do not loop for addtl response hdrs */
+
+    /* discard 1xx response from b; already processed
+     * (but further response might follow in b, so preserve addtl data) */
+    if (dlen)
+        memmove(b->ptr, b->ptr+hlen, dlen);
+    buffer_string_set_length(b, dlen);
+
+    /* Note: while GW_AUTHORIZER mode is not expected to return 1xx, as a
+     * feature, 1xx responses from authorizer are passed back to client */
+
+    http_response_header_clear(r);
+    return 1; /* 1xx response handled; loop for next response headers */
+}
+
+
 __attribute_hot__
 __attribute_pure__
 static const char *
@@ -1173,41 +1218,6 @@ http_response_end_of_header (const char * const restrict ptr)
         if (n - nn == 2 ? n[-1] == '\r' : n - nn == 1) return n+1;
     }
     return NULL;
-}
-
-
-__attribute_cold__
-static uint32_t
-http_response_discard_1xx (buffer * const restrict b, uint32_t len)
-{
-    char * const ptr = b->ptr;
-    const char * const n = http_response_end_of_header(ptr+12);
-    if (NULL == n) return 0; /* * unfinished headers */
-
-    /* discard 100 Continue headers */
-    len -= (uint32_t)(n - ptr);
-    memmove(ptr, n, len);
-    buffer_string_set_length(b, len);
-    return len;
-}
-
-
-__attribute_cold__
-__attribute_noinline__
-static uint32_t
-http_response_check_1xx (buffer * const restrict b, uint32_t len)
-{
-    const char * const s = b->ptr;
-    while (len > 7 && 0 == memcmp(s, "HTTP/1.", 7)) {
-        /* discard HTTP/1.1 1xx responses other than 101 Switching Protocols */
-        if (len > 12
-            && s[8] == ' ' && s[9] == '1' && s[10] == '0' && s[11] != '1') {
-            len = http_response_discard_1xx(b, len);
-            continue;
-        }
-        break;
-    }
-    return len;
 }
 
 
@@ -1232,19 +1242,17 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
      * Some users also forget about CGI and just send a response
      * and hope we handle it. No headers, no header-content separator
      */
+    const char *bstart;
+    uint32_t blen;
 
-    uint32_t header_len = buffer_string_length(b);
-    if (header_len > 12 && b->ptr[9] == '1') {
-        header_len = http_response_check_1xx(b, header_len);
-        if (0 == header_len)
-            return HANDLER_GO_ON; /* unfinished header */
-    }
+  do {
+
+    blen = buffer_string_length(b);
     /*("HTTP/1.1 200 " is at least 13 chars + \r\n)*/
-    const int is_nph = (header_len > 12 && 0 == memcmp(b->ptr, "HTTP/1.", 7));
+    const int is_nph = (blen > 12 && 0 == memcmp(b->ptr, "HTTP/1.", 7));
 
     int is_header_end = 0;
-    uint32_t i = 0, blen;
-    const char *bstart;
+    uint32_t i = 0;
 
     if (b->ptr[0] == '\n' || (b->ptr[0] == '\r' && b->ptr[1] == '\n')) {
         /* no HTTP headers */
@@ -1257,7 +1265,7 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
             i = (uint32_t)(n - b->ptr - 1);
             is_header_end = 1;
         }
-    } else if (i == header_len) { /* (no newline yet; partial header line?) */
+    } else if (i == blen) { /* (no newline yet; partial header line?) */
     } else if (opts->backend == BACKEND_CGI) {
         /* no HTTP headers, but a body (special-case for CGI compat) */
         /* no colon found; does not appear to be HTTP headers */
@@ -1275,7 +1283,7 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
     }
 
     if (!is_header_end) {
-        if (header_len > MAX_HTTP_RESPONSE_FIELD_SIZE) {
+        if (blen > MAX_HTTP_RESPONSE_FIELD_SIZE) {
             log_error(r->conf.errh, __FILE__, __LINE__,
               "response headers too large for %s", r->uri.path.ptr);
             r->http_status = 502; /* Bad Gateway */
@@ -1287,7 +1295,7 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
 
     /* the body starts after the EOL */
     bstart = b->ptr + (i + 1);
-    blen = header_len - (i + 1);
+    blen -= (i + 1);
 
     /* strip the last \r?\n */
     if (i > 0 && (b->ptr[i - 1] == '\r')) {
@@ -1306,6 +1314,9 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
     if (0 != http_response_process_headers(r, opts, b)) {
         return HANDLER_ERROR;
     }
+
+  } while (r->http_status < 200
+           && http_response_check_1xx(r, b, bstart - b->ptr, blen));
 
     r->resp_body_started = 1;
 
