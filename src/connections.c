@@ -1796,6 +1796,40 @@ connection_handle_read_body_unknown (request_st * const r, chunkqueue * const cq
 }
 
 
+__attribute_cold__
+static int
+connection_check_expect_100 (request_st * const r, connection * const con)
+{
+    if (!con->is_writable)
+        return 1;
+
+    const buffer * const vb =
+      http_header_request_get(r, HTTP_HEADER_EXPECT,
+                              CONST_STR_LEN("Expect"));
+    if (NULL == vb)
+        return 1;
+
+    /* (always unset Expect header so that check is not repeated for request */
+    int rc = buffer_eq_icase_slen(vb, CONST_STR_LEN("100-continue"));
+    http_header_request_unset(r, HTTP_HEADER_EXPECT,
+                              CONST_STR_LEN("Expect"));
+    if (!rc
+        || 0 != r->reqbody_queue->bytes_in
+        || !chunkqueue_is_empty(r->read_queue)
+        || !chunkqueue_is_empty(r->write_queue))
+        return 1;
+
+    /* send 100 Continue only if no request body data received yet
+     * and response has not yet started (checked above) */
+    if (r->http_version > HTTP_VERSION_1_1)
+        h2_send_100_continue(r, con);
+    else if (r->http_version == HTTP_VERSION_1_1)
+        return connection_write_100_continue(r, con);
+
+    return 1;
+}
+
+
 static handler_t
 connection_handle_read_post_state (request_st * const r)
 {
@@ -1823,28 +1857,14 @@ connection_handle_read_post_state (request_st * const r)
         default:
             break;
         }
+
+        chunkqueue_remove_finished_chunks(cq);
     }
 
-    chunkqueue_remove_finished_chunks(cq);
-
-    /* Check for Expect: 100-continue in request headers
-     * if no request body received yet */
-    if (chunkqueue_is_empty(cq) && 0 == dst_cq->bytes_in
-        && r->http_version != HTTP_VERSION_1_0
-        && chunkqueue_is_empty(r->write_queue) && con->is_writable) {
-        const buffer *vb =
-          http_header_request_get(r, HTTP_HEADER_EXPECT,
-                                  CONST_STR_LEN("Expect"));
-        if (NULL != vb
-            && buffer_eq_icase_slen(vb, CONST_STR_LEN("100-continue"))) {
-            http_header_request_unset(r, HTTP_HEADER_EXPECT,
-                                      CONST_STR_LEN("Expect"));
-            if (r->http_version > HTTP_VERSION_1_1)
-                h2_send_100_continue(r, con);
-            else if (!connection_write_100_continue(r, con))
-                return HANDLER_ERROR;
-        }
-    }
+    /* Check for Expect: 100-continue in request headers */
+    if (light_btst(r->rqst_htags, HTTP_HEADER_EXPECT)
+        && !connection_check_expect_100(r, con))
+        return HANDLER_ERROR;
 
     if (r->http_version > HTTP_VERSION_1_1) {
         /* h2_recv_data() places frame payload directly into r->reqbody_queue */
@@ -1855,6 +1875,7 @@ connection_handle_read_post_state (request_st * const r)
                      ? connection_handle_read_post_chunked(r, cq, dst_cq)
                      : connection_handle_read_body_unknown(r, cq, dst_cq);
         if (HANDLER_GO_ON != rc) return rc;
+        chunkqueue_remove_finished_chunks(cq);
     }
     else {
         off_t len = (off_t)r->reqbody_length - dst_cq->bytes_in;
@@ -1867,9 +1888,8 @@ connection_handle_read_post_state (request_st * const r)
             /* writing to temp file failed */ /* Internal Server Error */
             return http_response_reqbody_read_error(r, 500);
         }
+        chunkqueue_remove_finished_chunks(cq);
     }
-
-    chunkqueue_remove_finished_chunks(cq);
 
     if (dst_cq->bytes_in == (off_t)r->reqbody_length) {
         /* Content is ready */
