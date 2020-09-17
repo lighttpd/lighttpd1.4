@@ -616,8 +616,10 @@ static int connection_handle_read_state(connection * const con)  {
         if (NULL == c) continue;
         clen = buffer_string_length(c->mem) - c->offset;
         if (0 == clen) continue;
-        if (c->offset > USHRT_MAX) /*(highly unlikely)*/
+        if (c->offset > USHRT_MAX) { /*(highly unlikely)*/
             chunkqueue_compact_mem(cq, clen);
+            c = cq->first; /*(reload c after chunkqueue_compact_mem())*/
+        }
 
         hoff[0] = 1;                         /* number of lines */
         hoff[1] = (unsigned short)c->offset; /* base offset for all lines */
