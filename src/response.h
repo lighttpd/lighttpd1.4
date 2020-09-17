@@ -40,6 +40,11 @@ typedef struct http_response_opts_t {
 typedef int (*http_cgi_header_append_cb)(void *vdata, const char *k, size_t klen, const char *v, size_t vlen);
 int http_cgi_headers(request_st *r, http_cgi_opts *opts, http_cgi_header_append_cb cb, void *vdata);
 
+typedef int (*http_response_send_1xx_cb)(request_st *r, connection *con);
+__attribute_cold__
+void http_response_send_1xx_cb_set (http_response_send_1xx_cb fn, int vers);
+int http_response_send_1xx (request_st *r);
+
 handler_t http_response_parse_headers(request_st *r, http_response_opts *opts, buffer *hdrs);
 handler_t http_response_read(request_st *r, http_response_opts *opts, buffer *b, fdnode *fdn);
 

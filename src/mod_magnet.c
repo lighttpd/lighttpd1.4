@@ -5,6 +5,7 @@
 #include "buffer.h"
 #include "http_chunk.h"
 #include "http_header.h"
+#include "response.h"   /* http_response_send_1xx() */
 
 #include "plugin.h"
 
@@ -980,7 +981,7 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, buf
 	{
 		handler_t result = HANDLER_GO_ON;
 
-		if (lua_return_value > 99) {
+		if (lua_return_value >= 200) {
 			r->http_status = lua_return_value;
 			r->resp_body_finished = 1;
 
@@ -998,6 +999,12 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, buf
 			}
 
 			result = HANDLER_FINISHED;
+		} else if (lua_return_value >= 100) {
+			/*(custom lua code should not return 101 Switching Protocols)*/
+			r->http_status = lua_return_value;
+			result = http_response_send_1xx(r)
+			  ? HANDLER_GO_ON
+			  : HANDLER_ERROR;
 		} else if (MAGNET_RESTART_REQUEST == lua_return_value) {
 			result = HANDLER_COMEBACK;
 		}

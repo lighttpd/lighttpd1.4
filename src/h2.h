@@ -102,6 +102,8 @@ int h2_want_read (connection *con);
 
 void h2_init_con (request_st * restrict h2r, connection * restrict con, const buffer * restrict http2_settings);
 
+int h2_send_1xx (request_st *r, connection *con);
+
 void h2_send_100_continue (request_st *r, connection *con);
 
 void h2_send_headers (request_st *r, connection *con);

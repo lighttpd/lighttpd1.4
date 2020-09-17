@@ -6,6 +6,7 @@
 #include "log.h"
 #include "rand.h"
 #include "chunk.h"
+#include "h2.h"             /* h2_send_1xx() */
 #include "http_auth.h"      /* http_auth_dumbdata_reset() */
 #include "http_vhostdb.h"   /* http_vhostdb_dumbdata_reset() */
 #include "fdevent.h"
@@ -13,9 +14,10 @@
 #include "sock_addr.h"
 #include "stat_cache.h"
 #include "plugin.h"
+#include "plugin_config.h"  /* config_plugin_value_tobool() */
 #include "network_write.h"  /* network_write_show_handlers() */
 #include "reqpool.h"        /* request_pool_init() request_pool_free() */
-#include "response.h"       /* strftime_cache_reset() */
+#include "response.h"       /* http_response_send_1xx_cb_set() strftime_cache_reset() */
 
 #ifdef HAVE_VERSIONSTAMP_H
 # include "versionstamp.h"
@@ -893,6 +895,14 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		if (devnull != errfd) close(devnull);
 	      #endif
 	}
+
+	http_response_send_1xx_cb_set(NULL, HTTP_VERSION_2);
+	if (srv->srvconf.feature_flags
+	    && !config_plugin_value_tobool(
+	          array_get_element_klen(srv->srvconf.feature_flags,
+	            CONST_STR_LEN("server.h2-discard-backend-1xx")), 0))
+		http_response_send_1xx_cb_set(h2_send_1xx,
+		                              HTTP_VERSION_2);
 
 	if (0 != config_set_defaults(srv)) {
 		log_error(srv->errh, __FILE__, __LINE__,

@@ -2098,11 +2098,43 @@ h2_send_headers_block (request_st * const r, connection * const con, const char 
 }
 
 
+static void
+h2_send_1xx_block (request_st * const r, connection * const con, const char * const hdrs, const uint32_t hlen)
+{
+    h2_send_headers_block(r, con, hdrs, hlen, 0);
+}
+
+
+int
+h2_send_1xx (request_st * const r, connection * const con)
+{
+    buffer * const b = chunk_buffer_acquire();
+
+    buffer_copy_string_len(b, CONST_STR_LEN(":status: "));
+    buffer_append_int(b, r->http_status);
+    for (uint32_t i = 0; i < r->resp_headers.used; ++i) {
+        const data_string * const ds = (data_string *)r->resp_headers.data[i];
+
+        if (buffer_string_is_empty(&ds->value)) continue;
+        if (buffer_string_is_empty(&ds->key)) continue;
+
+        buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+        buffer_append_string_buffer(b, &ds->key);
+        buffer_append_string_len(b, CONST_STR_LEN(": "));
+        buffer_append_string_buffer(b, &ds->value);
+    }
+    buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
+
+    h2_send_1xx_block(r, con, CONST_BUF_LEN(b));
+
+    chunk_buffer_release(b);
+    return 1; /* for http_response_send_1xx_cb */
+}
+
+
 void
 h2_send_100_continue (request_st * const r, connection * const con)
 {
-    /* place frame directly in con->write_queue for accounting to be part of
-     * HTTP/2 protocol overhead, and not part of response header or body len */
     /* 100 Continue is small and will always fit in SETTING_MAX_FRAME_SIZE;
      * i.e. there will not be any CONTINUATION frames here */
 
@@ -2114,7 +2146,7 @@ h2_send_100_continue (request_st * const r, connection * const con)
     /* short header block, so reuse shared code used for trailers
      * rather than adding something specific for ls-hpack here */
 
-    h2_send_headers_block(r, con, CONST_STR_LEN(":status: 100\r\n\r\n"), 0);
+    h2_send_1xx_block(r, con, CONST_STR_LEN(":status: 100\r\n\r\n"));
 }
 
 

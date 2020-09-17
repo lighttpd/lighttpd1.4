@@ -1185,6 +1185,36 @@ static int http_response_process_headers(request_st * const r, http_response_opt
 }
 
 
+static http_response_send_1xx_cb http_response_send_1xx_h1;
+static http_response_send_1xx_cb http_response_send_1xx_h2;
+
+void
+http_response_send_1xx_cb_set (http_response_send_1xx_cb fn, int vers)
+{
+    if (vers >= HTTP_VERSION_2)
+        http_response_send_1xx_h2 = fn;
+    else if (vers == HTTP_VERSION_1_1)
+        http_response_send_1xx_h1 = fn;
+}
+
+
+int
+http_response_send_1xx (request_st * const r)
+{
+    http_response_send_1xx_cb http_response_send_1xx_fn = NULL;
+    if (r->http_version >= HTTP_VERSION_2)
+        http_response_send_1xx_fn = http_response_send_1xx_h2;
+    else if (r->http_version == HTTP_VERSION_1_1)
+        http_response_send_1xx_fn = http_response_send_1xx_h1;
+
+    if (http_response_send_1xx_fn && !http_response_send_1xx_fn(r, r->con))
+        return 0; /* error occurred */
+
+    http_response_header_clear(r);
+    return 1; /* 1xx response handled */
+}
+
+
 __attribute_cold__
 __attribute_noinline__
 static int
@@ -1203,8 +1233,8 @@ http_response_check_1xx (request_st * const r, buffer * const restrict b, uint32
     /* Note: while GW_AUTHORIZER mode is not expected to return 1xx, as a
      * feature, 1xx responses from authorizer are passed back to client */
 
-    http_response_header_clear(r);
-    return 1; /* 1xx response handled; loop for next response headers */
+    return http_response_send_1xx(r);
+    /* 0: error, 1: 1xx response handled; loop for next response headers */
 }
 
 
