@@ -49,14 +49,37 @@ http_response_omit_header (request_st * const r, const data_string * const ds)
 }
 
 
+__attribute_cold__
+static void
+http_response_write_header_partial_1xx (request_st * const r, buffer * const b)
+{
+    connection * const con = r->con;
+    /*assert(r->write_queue != con->write_queue);*/
+    chunkqueue * const cq = con->write_queue;
+    const uint32_t len = (uint32_t)chunkqueue_length(cq);
+    chunk *c = cq->first;
+    /*assert(c->type == MEM_CHUNK);*/
+    if (c->next) {
+        chunkqueue_compact_mem(cq, len);
+        c = cq->first; /*(reload c after chunkqueue_compact_mem())*/
+    }
+    buffer_copy_string_len(b, c->mem->ptr + c->offset, len);
+    chunkqueue_free(cq);
+    con->write_queue = r->write_queue;
+}
+
+
 void
 http_response_write_header (request_st * const r)
 {
 	chunkqueue * const cq = r->write_queue;
 	buffer * const b = chunkqueue_prepend_buffer_open(cq);
 
+        if (cq != r->con->write_queue)
+            http_response_write_header_partial_1xx(r, b);
+
 	const char * const httpv = (r->http_version == HTTP_VERSION_1_1) ? "HTTP/1.1 " : "HTTP/1.0 ";
-	buffer_copy_string_len(b, httpv, sizeof("HTTP/1.1 ")-1);
+	buffer_append_string_len(b, httpv, sizeof("HTTP/1.1 ")-1);
 	http_status_append(b, r->http_status);
 
 	/* disable keep-alive if requested */

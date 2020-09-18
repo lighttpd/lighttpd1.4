@@ -218,8 +218,13 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 
 	if (r->reqbody_length != r->reqbody_queue->bytes_in
 	    || r->state == CON_STATE_ERROR) {
-		/* request body is present and has not been read completely */
+		/* request body may not have been read completely */
 		r->keep_alive = 0;
+		/* clean up failed partial write of 1xx intermediate responses*/
+		if (r->write_queue != con->write_queue) { /*(for HTTP/1.1)*/
+			chunkqueue_free(con->write_queue);
+			con->write_queue = r->write_queue;
+		}
 	}
 
         if (r->keep_alive) {
@@ -326,21 +331,15 @@ connection_write_chunkqueue (connection * const con, chunkqueue * const cq, off_
 
 
 static int
-connection_write_100_continue (request_st * const r, connection * const con)
+connection_write_1xx_info (request_st * const r, connection * const con)
 {
-    /* Make best effort to send all or none of "HTTP/1.1 100 Continue" */
+    /* (Note: prior 1xx intermediate responses may be present in cq) */
     /* (Note: also choosing not to update con->write_request_ts
      *  which differs from connection_write_chunkqueue()) */
-    static const char http_100_continue[] = "HTTP/1.1 100 Continue\r\n\r\n";
-
-    if (con->traffic_limit_reached)
-        return 1; /* success; skip sending if throttled */
-
-    chunkqueue * const cq = r->write_queue;
+    chunkqueue * const cq = con->write_queue;
     off_t written = cq->bytes_out;
 
-    chunkqueue_append_mem(cq,http_100_continue,sizeof(http_100_continue)-1);
-    int rc = con->network_write(con, cq, sizeof(http_100_continue)-1);
+    int rc = con->network_write(con, cq, MAX_WRITE_LIMIT);
 
     written = cq->bytes_out - written;
     con->bytes_written += written;
@@ -353,18 +352,84 @@ connection_write_100_continue (request_st * const r, connection * const con)
         return 0; /* error */
     }
 
-    if (0 == written) {
-        /* skip sending 100 Continue if send would block */
-        chunkqueue_mark_written(cq, sizeof(http_100_continue)-1);
+    if (!chunkqueue_is_empty(cq)) { /* partial write (unlikely) */
         con->is_writable = 0;
+        if (cq == r->write_queue) {
+            /* save partial write of 1xx in separate chunkqueue
+             * Note: sending of remainder of 1xx might be delayed
+             * until next set of response headers are sent */
+            con->write_queue = chunkqueue_init();
+            chunkqueue_append_chunkqueue(con->write_queue, cq);
+        }
     }
-    /* else partial write (unlikely), which can cause corrupt
-     * response if response is later cleared, e.g. sending errdoc.
-     * However, situation of partial write can occur here only on
-     * keep-alive request where client has sent pipelined request,
-     * and more than 0 chars were written, but fewer than 25 chars */
 
-    return 1; /* success; sent all or none of "HTTP/1.1 100 Continue" */
+  #if 0
+    /* XXX: accounting inconsistency
+     * 1xx is not currently included in r->resp_header_len,
+     * so mod_accesslog reporting of %b or %B (FORMAT_BYTES_OUT_NO_HEADER)
+     * reports all bytes out minus len of final response headers,
+     * but including 1xx intermediate responses.  If 1xx intermediate
+     * responses were included in r->resp_header_len, then there are a
+     * few places in the code which must be adjusted to use r->resp_header_done
+     * instead of (0 == r->resp_header_len) as flag that final response was set
+     * (Doing the following would "discard" the 1xx len from bytes_out)
+     */
+    r->write_queue->bytes_in = r->write_queue->bytes_out = 0;
+  #endif
+
+    return 1; /* success */
+}
+
+
+int
+connection_send_1xx (request_st * const r, connection * const con)
+{
+    /* Make best effort to send HTTP/1.1 1xx intermediate */
+    /* (Note: if other modules set response headers *before* the
+     *  handle_response_start hook, and the backends subsequently sends 1xx,
+     *  then the response headers are sent here with 1xx and might be cleared
+     *  by caller (http_response_parse_headers() and http_response_check_1xx()),
+     *  instead of being sent with the final response.
+     *  (e.g. mod_magnet setting response headers, then backend sending 103)) */
+
+    chunkqueue * const cq = con->write_queue; /*(bypass r->write_queue)*/
+
+    buffer * const b = chunkqueue_append_buffer_open(cq);
+    buffer_copy_string_len(b, CONST_STR_LEN("HTTP/1.1 "));
+    http_status_append(b, r->http_status);
+    for (uint32_t i = 0; i < r->resp_headers.used; ++i) {
+        const data_string * const ds = (data_string *)r->resp_headers.data[i];
+
+        if (buffer_string_is_empty(&ds->value)) continue;
+        if (buffer_string_is_empty(&ds->key)) continue;
+
+        buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+        buffer_append_string_buffer(b, &ds->key);
+        buffer_append_string_len(b, CONST_STR_LEN(": "));
+        buffer_append_string_buffer(b, &ds->value);
+    }
+    buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
+    chunkqueue_append_buffer_commit(cq);
+
+    if (con->traffic_limit_reached)
+        return 1; /* success; send later if throttled */
+
+    return connection_write_1xx_info(r, con);
+}
+
+
+static int
+connection_write_100_continue (request_st * const r, connection * const con)
+{
+    /* Make best effort to send "HTTP/1.1 100 Continue" */
+    static const char http_100_continue[] = "HTTP/1.1 100 Continue\r\n\r\n";
+
+    if (con->traffic_limit_reached)
+        return 1; /* success; skip sending if throttled */
+
+    chunkqueue * const cq = con->write_queue; /*(bypass r->write_queue)*/
+    chunkqueue_append_mem(cq, http_100_continue, sizeof(http_100_continue)-1);
+    return connection_write_1xx_info(r, con);
 }
 
 
@@ -400,7 +465,6 @@ static void connection_handle_write_state(request_st * const r, connection * con
         /* only try to write if we have something in the queue */
         if (!chunkqueue_is_empty(r->write_queue)) {
             if (r->http_version <= HTTP_VERSION_1_1 && con->is_writable) {
-                /*(r->write_queue == con->write_queue)*//*(not HTTP/2 stream)*/
                 connection_handle_write(r, con);
                 if (r->state != CON_STATE_WRITE) break;
             }

@@ -904,6 +904,14 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		http_response_send_1xx_cb_set(h2_send_1xx,
 		                              HTTP_VERSION_2);
 
+	http_response_send_1xx_cb_set(NULL, HTTP_VERSION_1_1);
+	if (srv->srvconf.feature_flags
+	    && !config_plugin_value_tobool(
+	          array_get_element_klen(srv->srvconf.feature_flags,
+	            CONST_STR_LEN("server.h1-discard-backend-1xx")), 0))
+		http_response_send_1xx_cb_set(connection_send_1xx,
+		                              HTTP_VERSION_1_1);
+
 	if (0 != config_set_defaults(srv)) {
 		log_error(srv->errh, __FILE__, __LINE__,
 		  "setting default values failed");
