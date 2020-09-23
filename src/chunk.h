@@ -123,6 +123,11 @@ void chunkqueue_compact_mem(chunkqueue *cq, size_t clen);
 
 void chunkqueue_small_resp_optim (chunkqueue * restrict cq);
 
+int chunkqueue_peek_data (chunkqueue *cq, char **data, uint32_t *dlen, struct log_error_st * restrict errh);
+int chunkqueue_read_data (chunkqueue *cq, char *data, uint32_t dlen, struct log_error_st * restrict errh);
+
+buffer * chunkqueue_read_squash (chunkqueue * restrict cq, struct log_error_st * restrict errh);
+
 __attribute_pure__
 static inline off_t chunkqueue_length(const chunkqueue *cq);
 static inline off_t chunkqueue_length(const chunkqueue *cq) {
