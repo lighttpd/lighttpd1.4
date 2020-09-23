@@ -2039,90 +2039,15 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
 }
 
 
-static int
-load_next_chunk (chunkqueue * const cq, off_t max_bytes,
-                 const char ** const data, size_t * const data_len,
-                 log_error_st * const errh)
-{
-    chunk *c = cq->first;
-
     /* local_send_buffer is a static buffer of size (LOCAL_SEND_BUFSIZE)
      *
      * buffer is allocated once, is NOT realloced (note: not thread-safe)
      * */
 
-    force_assert(NULL != c);
-
-    switch (c->type) {
-    case MEM_CHUNK:
-        *data = NULL;
-        *data_len = 0;
-        do {
-            size_t have;
-
-            force_assert(c->offset >= 0
-                         && c->offset <= (off_t)buffer_string_length(c->mem));
-
-            have = buffer_string_length(c->mem) - c->offset;
-
             /* copy small mem chunks into single large buffer
              * before PR_Write() to reduce number times write() called
              * underneath PR_Write() and potentially reduce number of packets
              * generated if TCP_NODELAY */
-            if (*data_len) {
-                size_t space = LOCAL_SEND_BUFSIZE - *data_len;
-                if (have > space)
-                    have = space;
-                if (have > (size_t)max_bytes - *data_len)
-                    have = (size_t)max_bytes - *data_len;
-                if (*data != local_send_buffer) {
-                    memcpy(local_send_buffer, *data, *data_len);
-                    *data = local_send_buffer;
-                }
-                memcpy(local_send_buffer+*data_len,c->mem->ptr+c->offset,have);
-                *data_len += have;
-                continue;
-            }
-
-            if ((off_t) have > max_bytes) have = max_bytes;
-
-            *data = c->mem->ptr + c->offset;
-            *data_len = have;
-        } while ((c = c->next) && c->type == MEM_CHUNK
-                 && *data_len < LOCAL_SEND_BUFSIZE
-                 && (off_t) *data_len < max_bytes);
-        return 0;
-
-    case FILE_CHUNK:
-        if (0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
-
-        {
-            off_t offset, toSend;
-
-            force_assert(c->offset >= 0 && c->offset <= c->file.length);
-            offset = c->file.start + c->offset;
-            toSend = c->file.length - c->offset;
-
-            if (toSend > LOCAL_SEND_BUFSIZE) toSend = LOCAL_SEND_BUFSIZE;
-            if (toSend > max_bytes) toSend = max_bytes;
-
-            if (-1 == lseek(c->file.fd, offset, SEEK_SET)) {
-                log_perror(errh, __FILE__, __LINE__, "lseek");
-                return -1;
-            }
-            if (-1 == (toSend = read(c->file.fd, local_send_buffer, toSend))) {
-                log_perror(errh, __FILE__, __LINE__, "read");
-                return -1;
-            }
-
-            *data = local_send_buffer;
-            *data_len = toSend;
-        }
-        return 0;
-    }
-
-    return -1;
-}
 
 
 __attribute_cold__
@@ -2192,16 +2117,18 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
      *   PR_Writev() PR_TransmitFile() PR_SendFile()
      */
 
-    while (max_bytes > 0 && NULL != cq->first) {
-        const char *data;
-        size_t data_len;
+    while (max_bytes > 0 && !chunkqueue_is_empty(cq)) {
+        char *data = local_send_buffer;
+        uint32_t data_len = LOCAL_SEND_BUFSIZE < max_bytes
+          ? LOCAL_SEND_BUFSIZE
+          : (uint32_t)max_bytes;
         int wr;
 
-        if (0 != load_next_chunk(cq,max_bytes,&data,&data_len,errh)) return -1;
+        if (0 != chunkqueue_peek_data(cq, &data, &data_len, errh)) return -1;
 
         /*(if partial write occurred, expect that subsequent writes will have
-         * at least that much data available from load_next_chunk(), which is
-         * what should happen, but is not checked here)*/
+         * at least that much data available from chunkqueue_peek_data(), which
+         * is what should happen, but is not checked here)*/
         size_t lim = hctx->pending_write;
         if (lim && data_len > lim) data_len = lim;
         hctx->pending_write = 0;
