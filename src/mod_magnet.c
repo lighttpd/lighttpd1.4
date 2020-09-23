@@ -33,6 +33,8 @@ static jmp_buf exceptionjmp;
 typedef struct {
     const array *url_raw;
     const array *physical_path;
+    const array *response_start;
+    int stage;
 } plugin_config;
 
 typedef struct {
@@ -59,6 +61,9 @@ static void mod_magnet_merge_config_cpv(plugin_config * const pconf, const confi
         break;
       case 1: /* magnet.attract-physical-path-to */
         pconf->physical_path = cpv->v.a;
+        break;
+      case 2: /* magnet.attract-response-start-to */
+        pconf->response_start = cpv->v.a;
         break;
       default:/* should not happen */
         return;
@@ -88,6 +93,9 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
      ,{ CONST_STR_LEN("magnet.attract-physical-path-to"),
         T_CONFIG_ARRAY_VLIST,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("magnet.attract-response-start-to"),
+        T_CONFIG_ARRAY_VLIST,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -105,6 +113,7 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
             switch (cpv->k_id) {
               case 0: /* magnet.attract-raw-url-to */
               case 1: /* magnet.attract-physical-path-to */
+              case 2: /* magnet.attract-response-start-to */
                 for (uint32_t j = 0; j < cpv->v.a->used; ++j) {
                     data_string *ds = (data_string *)cpv->v.a->data[j];
                     if (buffer_string_is_empty(&ds->value)) {
@@ -425,7 +434,11 @@ typedef struct {
 		MAGNET_ENV_REQUEST_PATH_INFO,
 		MAGNET_ENV_REQUEST_REMOTE_IP,
 		MAGNET_ENV_REQUEST_SERVER_ADDR,
-		MAGNET_ENV_REQUEST_PROTOCOL
+		MAGNET_ENV_REQUEST_PROTOCOL,
+
+		MAGNET_ENV_RESPONSE_HTTP_STATUS,
+		MAGNET_ENV_RESPONSE_BODY_LENGTH,
+		MAGNET_ENV_RESPONSE_BODY
 	} type;
 } magnet_env_t;
 
@@ -449,6 +462,10 @@ static const magnet_env_t magnet_env[] = {
 	{ "request.remote-addr", MAGNET_ENV_REQUEST_REMOTE_IP },
 	{ "request.server-addr", MAGNET_ENV_REQUEST_SERVER_ADDR },
 	{ "request.protocol", MAGNET_ENV_REQUEST_PROTOCOL },
+
+	{ "response.http-status", MAGNET_ENV_RESPONSE_HTTP_STATUS },
+	{ "response.body-length", MAGNET_ENV_RESPONSE_BODY_LENGTH },
+	{ "response.body", MAGNET_ENV_RESPONSE_BODY },
 
 	{ NULL, MAGNET_ENV_UNSET }
 };
@@ -528,6 +545,36 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 		buffer_clear(dest);
 		http_version_append(dest, r->http_version);
 		break;
+	case MAGNET_ENV_RESPONSE_HTTP_STATUS:
+		dest = r->tmp_buf;
+		buffer_clear(dest);
+		buffer_append_int(dest, r->http_status);
+		break;
+	case MAGNET_ENV_RESPONSE_BODY_LENGTH:
+		dest = r->tmp_buf;
+		buffer_clear(dest);
+		if (!r->resp_body_finished)
+			break;
+		buffer_append_int(dest, chunkqueue_length(r->write_queue));
+		break;
+	case MAGNET_ENV_RESPONSE_BODY:
+		if (!r->resp_body_finished)
+			break;
+		else {
+			chunkqueue * const cq = r->write_queue;
+			off_t len = chunkqueue_length(cq);
+			if (0 == len) {
+				dest = r->tmp_buf;
+				buffer_copy_string_len(dest, CONST_STR_LEN(""));
+				break;
+			}
+			dest = chunkqueue_read_squash(cq, r->conf.errh);
+			if (NULL == dest) {
+				dest = r->tmp_buf;
+				buffer_clear(dest);
+			}
+		}
+		break;
 
 	case MAGNET_ENV_UNSET: break;
 	}
@@ -563,7 +610,11 @@ static int magnet_env_set(lua_State *L) {
     request_st * const r = magnet_get_request(L);
     const int env_id = magnet_env_get_id(key);
 
-    if (env_id == MAGNET_ENV_URI_PATH_RAW) {
+    switch (env_id) {
+      default:
+        break;
+      case MAGNET_ENV_URI_PATH_RAW:
+      {
         /* modify uri-path of r->target; preserve query-part, if present */
         /* XXX: should we require that resulting path begin with '/' or %2F ? */
         const uint32_t len = buffer_string_length(&r->target);
@@ -578,6 +629,11 @@ static int magnet_env_set(lua_State *L) {
         if (NULL != qmark)
             buffer_append_string_buffer(&r->target, r->tmp_buf);
         return 0;
+      }
+      case MAGNET_ENV_RESPONSE_HTTP_STATUS:
+      case MAGNET_ENV_RESPONSE_BODY_LENGTH:
+      case MAGNET_ENV_RESPONSE_BODY:
+        return luaL_error(L, "lighty.env['%s'] is read-only", key);
     }
 
     buffer * const dest = magnet_env_get_buffer_by_id(r, env_id);
@@ -708,6 +764,8 @@ static int magnet_attach_content(request_st * const r, lua_State * const L, int 
 		int i;
 		/* content is found, and is a table */
 
+		http_response_body_clear(r, 0);
+
 		for (i = 1; ; i++) {
 			lua_rawgeti(L, -1, i);
 
@@ -814,8 +872,10 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, buf
 
 		force_assert(lua_gettop(L) == 0); /* only the error should have been on the stack */
 
-		r->http_status = 500;
-		r->handler_module = NULL;
+		if (p->conf.stage != -1) { /* skip for response-start */
+			r->http_status = 500;
+			r->handler_module = NULL;
+		}
 
 		return HANDLER_FINISHED;
 	}
@@ -952,8 +1012,10 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, buf
 
 			force_assert(lua_gettop(L) == 1); /* only the function should be on the stack */
 
-			r->http_status = 500;
-			r->handler_module = NULL;
+			if (p->conf.stage != -1) { /* skip for response-start */
+				r->http_status = 500;
+				r->handler_module = NULL;
+			}
 
 			return HANDLER_FINISHED;
 		}
@@ -985,7 +1047,6 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, buf
 			r->http_status = lua_return_value;
 			r->resp_body_finished = 1;
 
-			/* try { ...*/
 			if (0 == setjmp(exceptionjmp)) {
 				magnet_attach_content(r, L, lighty_table_ndx);
 				if (!chunkqueue_is_empty(r->write_queue)) {
@@ -993,9 +1054,9 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, buf
 				}
 			} else {
 				lua_settop(L, 2); /* remove all but function and lighty table */
-				/* } catch () { */
 				r->http_status = 500;
 				r->handler_module = NULL;
+				http_response_body_clear(r, 0);
 			}
 
 			result = HANDLER_FINISHED;
@@ -1016,12 +1077,17 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, buf
 	}
 }
 
-static handler_t magnet_attract_array(request_st * const r, plugin_data * const p, int is_uri) {
+static handler_t magnet_attract_array(request_st * const r, plugin_data * const p, int stage) {
 	mod_magnet_patch_config(r, p);
+	p->conf.stage = stage;
 
-	const array * const files = (is_uri)
-	  ? p->conf.url_raw
-	  : p->conf.physical_path;
+	const array *files;
+	switch (stage) {
+	  case  1: files = p->conf.url_raw; break;
+	  case  0: files = p->conf.physical_path; break;
+	  case -1: files = p->conf.response_start; break;
+	  default: files = NULL; break;
+	}
 
 	/* no filename set */
 	if (NULL == files || files->used == 0) return HANDLER_GO_ON;
@@ -1057,6 +1123,10 @@ URIHANDLER_FUNC(mod_magnet_physical) {
 	return magnet_attract_array(r, p_d, 0);
 }
 
+URIHANDLER_FUNC(mod_magnet_response_start) {
+	return magnet_attract_array(r, p_d, -1);
+}
+
 
 int mod_magnet_plugin_init(plugin *p);
 int mod_magnet_plugin_init(plugin *p) {
@@ -1066,6 +1136,7 @@ int mod_magnet_plugin_init(plugin *p) {
 	p->init        = mod_magnet_init;
 	p->handle_uri_clean  = mod_magnet_uri_handler;
 	p->handle_physical   = mod_magnet_physical;
+	p->handle_response_start = mod_magnet_response_start;
 	p->set_defaults  = mod_magnet_set_defaults;
 	p->cleanup     = mod_magnet_free;
 
