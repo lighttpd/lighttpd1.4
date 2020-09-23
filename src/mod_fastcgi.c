@@ -337,7 +337,6 @@ typedef struct {
 
 static int fastcgi_get_packet(handler_ctx *hctx, fastcgi_response_packet *packet) {
 	FCGI_Header header;
-	size_t toread = sizeof(FCGI_Header), flen = 0;
 	off_t rblen = chunkqueue_length(hctx->rb);
 	if (rblen < (off_t)sizeof(FCGI_Header)) {
 		/* no header */
@@ -348,23 +347,14 @@ static int fastcgi_get_packet(handler_ctx *hctx, fastcgi_response_packet *packet
 		}
 		return -1;
 	}
-      #ifdef __clang_analyzer__
-        /*(unnecessary (length checked above); init to quiet scan-build)*/
-        memset(&header, 0, sizeof(FCGI_Header));
-      #endif
-
-	/* get at least the FastCGI header */
-	for (chunk *c = hctx->rb->first; c; c = c->next) {
-		size_t weHave = buffer_string_length(c->mem) - c->offset;
-		if (weHave >= toread) {
-			memcpy((char *)&header + flen, c->mem->ptr + c->offset, toread);
-			break;
-		}
-
-		memcpy((char *)&header + flen, c->mem->ptr + c->offset, weHave);
-		flen += weHave;
-		toread -= weHave;
-	}
+	char *ptr = (char *)&header;
+	uint32_t rd = sizeof(FCGI_Header);
+	if (chunkqueue_peek_data(hctx->rb, &ptr, &rd, hctx->r->conf.errh) < 0)
+		return -1;
+	if (rd != sizeof(FCGI_Header))
+		return -1;
+	if (ptr != (char *)&header) /* copy into aligned struct */
+		memcpy(&header, ptr, sizeof(FCGI_Header));
 
 	/* we have at least a header, now check how much we have to fetch */
 	packet->len = (header.contentLengthB0 | (header.contentLengthB1 << 8)) + header.paddingLength;
@@ -380,21 +370,15 @@ static int fastcgi_get_packet(handler_ctx *hctx, fastcgi_response_packet *packet
 	return 0;
 }
 
-static void fastcgi_get_packet_body(buffer *b, handler_ctx *hctx, fastcgi_response_packet *packet) {
-	/* copy content; hctx->rb must contain at least packet->len content */
-	size_t toread = packet->len - packet->padding;
-	buffer_string_prepare_append(b, toread);
-	for (chunk *c = hctx->rb->first; c; c = c->next) {
-		size_t weHave = buffer_string_length(c->mem) - c->offset;
-		if (weHave >= toread) {
-			buffer_append_string_len(b, c->mem->ptr + c->offset, toread);
-			break;
-		}
-
-		buffer_append_string_len(b, c->mem->ptr + c->offset, weHave);
-		toread -= weHave;
-	}
-	chunkqueue_mark_written(hctx->rb, packet->len);
+static void fastcgi_get_packet_body(buffer * const b, handler_ctx * const hctx, const fastcgi_response_packet * const packet) {
+    /* copy content; hctx->rb must contain at least packet->len content */
+    /* (read entire packet and then truncate padding, if present) */
+    const uint32_t blen = buffer_string_length(b);
+    if (chunkqueue_read_data(hctx->rb,
+                             buffer_string_prepare_append(b, packet->len),
+                             packet->len, hctx->r->conf.errh) < 0)
+        return; /*(should not happen; should all be in memory)*/
+    buffer_string_set_length(b, blen + packet->len - packet->padding);
 }
 
 static int

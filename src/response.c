@@ -53,19 +53,21 @@ __attribute_cold__
 static void
 http_response_write_header_partial_1xx (request_st * const r, buffer * const b)
 {
+    /* take data in con->write_queue and move into b
+     * (to be sent prior to final response headers in r->write_queue) */
     connection * const con = r->con;
     /*assert(r->write_queue != con->write_queue);*/
     chunkqueue * const cq = con->write_queue;
-    const uint32_t len = (uint32_t)chunkqueue_length(cq);
-    chunk *c = cq->first;
-    /*assert(c->type == MEM_CHUNK);*/
-    if (c->next) {
-        chunkqueue_compact_mem(cq, len);
-        c = cq->first; /*(reload c after chunkqueue_compact_mem())*/
-    }
-    buffer_copy_string_len(b, c->mem->ptr + c->offset, len);
-    chunkqueue_free(cq);
     con->write_queue = r->write_queue;
+
+    /*assert(0 == buffer_string_length(b));*//*expect empty buffer from caller*/
+    uint32_t len = (uint32_t)chunkqueue_length(cq);
+    /*(expecting MEM_CHUNK(s), so not expecting error reading files)*/
+    if (chunkqueue_read_data(cq, buffer_string_prepare_append(b, len),
+                             len, r->conf.errh) < 0)
+        len = 0;
+    buffer_string_set_length(b, len);/*expect initial empty buffer from caller*/
+    chunkqueue_free(cq);
 }
 
 

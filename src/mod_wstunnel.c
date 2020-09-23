@@ -653,26 +653,14 @@ int mod_wstunnel_plugin_init(plugin *p) {
 #include "sys-crypto-md.h"  /* lighttpd */
 #include "sys-endian.h"     /* lighttpd */
 
-static int get_key3(request_st * const r, char *buf) {
+static int get_key3(request_st * const r, char *buf, uint32_t bytes) {
     /* 8 bytes should have been sent with request
      * for draft-ietf-hybi-thewebsocketprotocol-00 */
     chunkqueue *cq = r->reqbody_queue;
-    size_t bytes = 8;
     /*(caller should ensure bytes available prior to calling this routine)*/
     /*assert(chunkqueue_length(cq) >= 8);*/
-    for (chunk *c = cq->first; NULL != c; c = c->next) {
-        /*(chunk_remaining_length() on MEM_CHUNK)*/
-        size_t n = (size_t)(buffer_string_length(c->mem) - c->offset);
-        /*(expecting 8 bytes to be in memory directly after headers)*/
-        if (c->type != MEM_CHUNK) break; /* FILE_CHUNK not handled here */
-        if (n > bytes) n = bytes;
-        memcpy(buf, c->mem->ptr+c->offset, n);
-        buf += n;
-        if (0 == (bytes -= n)) break;
-    }
-    if (0 != bytes) return -1;
-    chunkqueue_mark_written(cq, 8);
-    return 0;
+    /*assert(8 == bytes);*/
+    return chunkqueue_read_data(cq, buf, bytes, r->conf.errh);
 }
 
 static int get_key_number(uint32_t *ret, const buffer *b) {
@@ -707,7 +695,7 @@ static int create_MD5_sum(request_st * const r) {
 
     if (NULL == key1 || get_key_number(buf+0, key1) < 0 ||
         NULL == key2 || get_key_number(buf+1, key2) < 0 ||
-        get_key3(r, (char *)(buf+2)) < 0) {
+        get_key3(r, (char *)(buf+2), 2*sizeof(uint32_t)) < 0) {
         return -1;
     }
   #ifdef __BIG_ENDIAN__
