@@ -1293,7 +1293,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
          *  timestamp when frame + CONTINUATION(s) are complete (so that
          *  re-read of initial frame does not overwrite the timestamp))
          */
-        r->start_ts = log_epoch_secs;
+        r->start_hp.tv_sec = log_epoch_secs;
         if (r->conf.high_precision_timestamps)
             log_clock_gettime_realtime(&r->start_hp);
     }
@@ -2613,7 +2613,6 @@ h2_con_upgrade_h2c (request_st * const h2r, const buffer * const http2_settings)
     r->keep_alive = h2r->keep_alive;
     r->tmp_buf = h2r->tmp_buf;                /* shared; same as srv->tmp_buf */
     r->start_hp = h2r->start_hp;                /* copy struct */
-    r->start_ts = h2r->start_ts;
 
     /* Note: HTTP/1.1 101 Switching Protocols is not immediately written to
      * the network here.  As this is called from cleartext Upgrade: h2c,

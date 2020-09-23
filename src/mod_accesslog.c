@@ -815,7 +815,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 
 				if (f->opt & ~(FORMAT_FLAG_TIME_BEGIN|FORMAT_FLAG_TIME_END)) {
 					if (f->opt & FORMAT_FLAG_TIME_SEC) {
-						time_t t = (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) ? log_epoch_secs : r->start_ts;
+						time_t t = (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) ? log_epoch_secs : r->start_hp.tv_sec;
 						buffer_append_int(b, (intmax_t)t);
 					} else if (f->opt & (FORMAT_FLAG_TIME_MSEC|FORMAT_FLAG_TIME_USEC|FORMAT_FLAG_TIME_NSEC)) {
 						off_t t; /*(expected to be 64-bit since large file support enabled)*/
@@ -887,7 +887,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 						t = parsed_format->last_generated_accesslog_ts = cur_ts;
 						flush = 1;
 					} else {
-						t = r->start_ts;
+						t = r->start_hp.tv_sec;
 					}
 
 				      #if defined(HAVE_STRUCT_TM_GMTOFF)
@@ -936,7 +936,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			case FORMAT_TIME_USED:
 			case FORMAT_TIME_USED_US:
 				if (f->opt & FORMAT_FLAG_TIME_SEC) {
-					buffer_append_int(b, log_epoch_secs - r->start_ts);
+					buffer_append_int(b, log_epoch_secs - r->start_hp.tv_sec);
 				} else {
 					const struct timespec * const bs = &r->start_hp;
 					off_t tdiff; /*(expected to be 64-bit since large file support enabled)*/

@@ -186,7 +186,6 @@ struct request_st {
     off_t bytes_written_ckpt; /* used by mod_accesslog */
     off_t bytes_read_ckpt;    /* used by mod_accesslog */
     struct timespec start_hp;
-    time_t start_ts;
 
     int error_handler_saved_status; /* error-handler */
     http_method_t error_handler_saved_method; /* error-handler */

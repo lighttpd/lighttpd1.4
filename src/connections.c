@@ -235,7 +235,7 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 		r->bytes_read_ckpt = con->bytes_read;
 		r->bytes_written_ckpt = con->bytes_written;
 #if 0
-		r->start_ts = con->read_idle_ts = log_epoch_secs;
+		r->start_hp.tv_sec = con->read_idle_ts = log_epoch_secs;
 #endif
 		connection_set_state(r, CON_STATE_REQUEST_START);
 	} else {
@@ -736,9 +736,9 @@ static int connection_handle_read_state(connection * const con)  {
 
     if (keepalive_request_start) {
         if (con->bytes_read > r->bytes_read_ckpt) {
-            /* update r->start_ts timestamp when first byte of
+            /* update r->start_hp.tv_sec timestamp when first byte of
              * next request is received on a keep-alive connection */
-            r->start_ts = log_epoch_secs;
+            r->start_hp.tv_sec = log_epoch_secs;
             if (r->conf.high_precision_timestamps)
                 log_clock_gettime_realtime(&r->start_hp);
         }
@@ -1115,7 +1115,7 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 		switch ((ostate = r->state)) {
 		case CON_STATE_REQUEST_START: /* transient */
 			/*(should not be reached by HTTP/2 streams)*/
-			r->start_ts = con->read_idle_ts = log_epoch_secs;
+			r->start_hp.tv_sec = con->read_idle_ts = log_epoch_secs;
 			if (r->conf.high_precision_timestamps)
 				log_clock_gettime_realtime(&r->start_hp);
 

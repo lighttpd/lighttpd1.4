@@ -244,7 +244,7 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
 
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 
-    buffer_append_int(b, cur_ts - r->start_ts);
+    buffer_append_int(b, cur_ts - r->start_hp.tv_sec);
 
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
