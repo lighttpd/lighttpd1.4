@@ -47,10 +47,12 @@ int config_plugin_value_tobool (data_unset *du, int default_value)
     if (du->type == TYPE_STRING) {
         const buffer *b = &((const data_string *)du)->value;
         if (buffer_eq_icase_slen(b, CONST_STR_LEN("enable"))
-            || buffer_eq_icase_slen(b, CONST_STR_LEN("true")))
+            || buffer_eq_icase_slen(b, CONST_STR_LEN("true"))
+            || buffer_eq_icase_slen(b, CONST_STR_LEN("1")))
             return 1;
         else if (buffer_eq_icase_slen(b, CONST_STR_LEN("disable"))
-                 || buffer_eq_icase_slen(b, CONST_STR_LEN("false")))
+                 || buffer_eq_icase_slen(b, CONST_STR_LEN("false"))
+                 || buffer_eq_icase_slen(b, CONST_STR_LEN("0")))
             return 0;
         else
             return default_value;
