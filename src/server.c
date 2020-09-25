@@ -647,6 +647,101 @@ static void server_sockets_close (server *srv) {
 }
 
 __attribute_cold__
+static int server_graceful_state_bg (server *srv) {
+    /*assert(graceful_restart);*/
+    /*(SIGUSR1 set to SIG_IGN in workers, so should not reach here if worker)*/
+    if (srv_shutdown) return 0;
+    if (NULL == srv->srvconf.feature_flags) return 0;
+
+    /* check if server should fork and background (bg) itself
+     * to continue processing requests already in progress */
+    data_unset * const du =
+      array_get_element_klen(srv->srvconf.feature_flags,
+                             CONST_STR_LEN("server.graceful-restart-bg"));
+    if (!config_plugin_value_tobool(du, 0)) return 0;
+
+    /*(set flag to false to avoid repeating)*/
+    if (du->type == TYPE_STRING)
+        buffer_copy_string_len(&((data_string *)du)->value,
+                               CONST_STR_LEN("false"));
+    else /* (du->type == TYPE_INTEGER) */
+        ((data_integer *)du)->value = 0;
+
+    /* require exec'd via absolute path or daemon in foreground
+     * and exec'd with path containing '/' (e.g. "./xxxxx") */
+    char ** const argv = srv->argv;
+    if (0 == srv->srvconf.dont_daemonize
+        ? argv[0][0] != '/'
+        : NULL == strchr(argv[0], '/')) return 0;
+
+  #if 0
+    /* disabled; not fully implemented
+     * srv->srvconf.systemd_socket_activation might be cleared in network_init()
+     * leading to issuing a false warning
+     */
+    /* warn if server.systemd-socket-activation not enabled
+     * (While this warns on existing config rather than new config,
+     *  it is probably a decent predictor for presence in new config) */
+    if (!srv->srvconf.systemd_socket_activation)
+        log_error(srv->errh, __FILE__, __LINE__,
+          "[note] server.systemd-socket-activation not enabled; "
+          "listen sockets will be closed and reopened");
+  #endif
+
+    /* flush log buffers to avoid potential duplication of entries
+     * server_handle_sighup(srv) does the following, but skip logging */
+    plugins_call_handle_sighup(srv);
+    config_log_error_cycle(srv);
+
+    /* backgrounding to continue processing requests in progress */
+    /* re-exec lighttpd in original process
+     *   Note: using path in re-exec is portable and allows lighttpd upgrade.
+     *   OTOH, getauxval() AT_EXECFD and fexecve() could be used on Linux to
+     *   re-exec without access to original executable on disk, which might be
+     *   desirable in some situations, but is not implemented here.
+     *   Alternatively, if argv[] was not available, could use readlink() on
+     *   /proc/self/exe (Linux-specific), though there are ways on many other
+     *   platforms to achieve the same:
+     *   https://stackoverflow.com/questions/1023306/finding-current-executables-path-without-proc-self-exe
+     */
+    pid_t pid = fork();
+    if (pid) { /* original process */
+        if (pid < 0) return 0;
+        network_socket_activation_to_env(srv);
+        /*while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) ;*//* detach? */
+        execv(argv[0], argv);
+        _exit(1);
+    }
+    /* else child/grandchild */
+
+    /*if (-1 == setsid()) _exit(1);*//* should we detach? */
+    server_sockets_close(srv); /*(close before parent reaps pid in waitpid)*/
+    /*if (0 != fork())    _exit(0);*//* should we detach? */
+    /*(grandchild is now backgrounded and detached from original process)*/
+
+    /* XXX: might extend code to have new server.feature-flags param specify
+     *      max lifetime before aborting remaining connections */
+
+    /* (reached if lighttpd workers or if sole process w/o workers)
+     * use same code as comment elsewhere in server.c:
+     *   make sure workers do not muck with pid-file */
+    if (0 <= pid_fd) {
+            close(pid_fd);
+            pid_fd = -1;
+    }
+    if (srv->srvconf.pid_file) buffer_clear(srv->srvconf.pid_file);
+
+    /* (original process is backgrounded -- even if no active connections --
+     *  to allow graceful shutdown tasks to be run by server and by modules) */
+    log_error(srv->errh, __FILE__, __LINE__,
+      "[note] pid %lld continuing to handle %u connection(s) in progress",
+      (long long)getpid(), srv->conns.used);
+
+    graceful_restart = 0;
+    return 1;
+}
+
+__attribute_cold__
 static void server_graceful_state (server *srv) {
 
     if (!srv_shutdown) connection_graceful_shutdown_maint(srv);
@@ -662,7 +757,8 @@ static void server_graceful_state (server *srv) {
         graceful_restart = 0;
 
     if (graceful_restart) {
-        server_sockets_unregister(srv);
+        if (!server_graceful_state_bg(srv))
+            server_sockets_unregister(srv);
         if (pid_fd > 0) pid_fd = -pid_fd; /*(flag to skip removing pid file)*/
     }
     else {
@@ -756,6 +852,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	/*memset(graceful_sockets, 0, sizeof(graceful_sockets));*/
 	/*memset(inherited_sockets, 0, sizeof(inherited_sockets));*/
 	/*pid_fd = -1;*/
+	srv->argv = argv;
 
 	while(-1 != (o = getopt(argc, argv, "f:m:i:hvVD1pt"))) {
 		switch(o) {

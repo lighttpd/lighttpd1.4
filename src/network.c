@@ -452,6 +452,47 @@ int network_close(server *srv) {
 	return 0;
 }
 
+void network_socket_activation_to_env (server * const srv) {
+    /* set up listening sockets for systemd socket activation
+     * and ensure FD_CLOEXEC flag is not set on listen fds */
+    int fd = 3; /* #define SD_LISTEN_FDS_START 3 */
+    for (uint32_t n = 0, i; n < srv->srv_sockets.used; ++n) {
+        server_socket *srv_socket = srv->srv_sockets.ptr[n];
+        if (srv_socket->fd < fd) continue;
+        if (srv_socket->fd == fd) {
+            fdevent_clrfd_cloexec(fd);
+            ++fd;
+            continue;
+        }
+        /* (expecting ordered list, but check if fd is later in list)*/
+        for (i = n+1; i < srv->srv_sockets.used; ++i) {
+            if (fd == srv->srv_sockets.ptr[i]->fd)
+                break;
+        }
+        if (i < srv->srv_sockets.used) {
+            fdevent_clrfd_cloexec(fd);
+            ++fd;
+            --n; /* loop to reprocess this entry */
+            continue;
+        }
+
+        /* dup2() removes FD_CLOEXEC on newfd */
+        if (fd != dup2(srv_socket->fd, fd)) continue;
+        ++fd;
+        /* old fd will be closed upon execv() due to its FD_CLOEXEC flag
+         * (if not already closed by another dup2() over it) */
+    }
+    fd -= 3; /* now num fds; #define SD_LISTEN_FDS_START 3 */
+    if (0 == fd) return; /*(no active sockets?)*/
+    buffer * const tb = srv->tmp_buf;
+    buffer_clear(tb);
+    buffer_append_int(tb, fd);
+    setenv("LISTEN_FDS", tb->ptr, 1);
+    buffer_clear(tb);
+    buffer_append_int(tb, srv->pid); /* getpid() */
+    setenv("LISTEN_PID", tb->ptr, 1);
+}
+
 static int network_socket_activation_nfds(server *srv, network_socket_config *s, int nfds) {
     buffer *host = buffer_init();
     socklen_t addr_len;

@@ -20,4 +20,7 @@ int network_register_fdevents(server *srv);
 __attribute_cold__
 void network_unregister_sock(server *srv, struct server_socket *srv_socket);
 
+__attribute_cold__
+void network_socket_activation_to_env (server *srv);
+
 #endif

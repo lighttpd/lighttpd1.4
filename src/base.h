@@ -197,6 +197,8 @@ struct server {
 	gid_t gid;
 	pid_t pid;
 	int stdin_fd;
+
+	char **argv;
 };
 
 
