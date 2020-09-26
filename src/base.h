@@ -192,6 +192,7 @@ struct server {
 	buffer_plugin plugins;
 
 	time_t startup_ts;
+	time_t graceful_expire_ts;
 
 	uid_t uid;
 	gid_t gid;

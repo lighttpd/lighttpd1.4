@@ -744,7 +744,23 @@ static int server_graceful_state_bg (server *srv) {
 __attribute_cold__
 static void server_graceful_state (server *srv) {
 
-    if (!srv_shutdown) connection_graceful_shutdown_maint(srv);
+    if (!srv_shutdown) {
+        if (0 == srv->graceful_expire_ts && srv->srvconf.feature_flags) {
+            data_unset * const du =
+              array_get_element_klen(srv->srvconf.feature_flags,
+                CONST_STR_LEN("server.graceful-shutdown-timeout"));
+            if (NULL != du) {
+                if (du->type == TYPE_STRING)
+                    srv->graceful_expire_ts =
+                      strtol(((data_string *)du)->value.ptr, NULL, 10);
+                else if (du->type == TYPE_INTEGER)
+                    srv->graceful_expire_ts = ((data_integer *)du)->value;
+                if (srv->graceful_expire_ts)
+                    srv->graceful_expire_ts += log_epoch_secs;
+            }
+        }
+        connection_graceful_shutdown_maint(srv);
+    }
 
     if (!oneshot_fd
         && (2 == srv->sockets_disabled || 3 == srv->sockets_disabled)) return;

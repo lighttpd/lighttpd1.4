@@ -1584,7 +1584,9 @@ void connection_periodic_maint (server * const srv, const time_t cur_ts) {
 
 void connection_graceful_shutdown_maint (server *srv) {
     connections * const conns = &srv->conns;
-    for (size_t ndx = 0; ndx < conns->used; ++ndx) {
+    const int graceful_expire =
+      (srv->graceful_expire_ts && srv->graceful_expire_ts < log_epoch_secs);
+    for (uint32_t ndx = 0; ndx < conns->used; ++ndx) {
         connection * const con = conns->ptr[ndx];
         int changed = 0;
 
@@ -1607,6 +1609,11 @@ void connection_graceful_shutdown_maint (server *srv) {
         else if (r->state == CON_STATE_READ && con->request_count > 1
                  && chunkqueue_is_empty(con->read_queue)) {
             /* close connections in keep-alive waiting for next request */
+            connection_set_state_error(r, CON_STATE_ERROR);
+            changed = 1;
+        }
+
+        if (graceful_expire) {
             connection_set_state_error(r, CON_STATE_ERROR);
             changed = 1;
         }
