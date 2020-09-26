@@ -2040,7 +2040,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 		else {
 			ssize_t rd;
 			pid_t wpid;
-			int wstatus;
+			int wstatus = 0;
 			buffer *out = buffer_init();
 			close(fds[1]);
 			fds[1] = -1;

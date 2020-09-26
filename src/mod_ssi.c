@@ -798,7 +798,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 			log_perror(errh, __FILE__, __LINE__, "spawning exec failed: %s", cmd);
 		} else {
 			struct stat stb;
-			int status;
+			int status = 0;
 
 			/* wait for the client to end */
 			/* NOTE: synchronous; blocks entire lighttpd server */
