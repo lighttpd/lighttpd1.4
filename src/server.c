@@ -90,6 +90,9 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC)+1, 0 };
 #endif
 
 static int oneshot_fd = 0;
+static int oneshot_fdout = -1;
+static fdnode *oneshot_fdn = NULL;
+static int (*oneshot_read_cq)(connection *con, chunkqueue *cq, off_t max_bytes);
 static volatile int pid_fd = -2;
 static server_socket_array graceful_sockets;
 static server_socket_array inherited_sockets;
@@ -261,7 +264,15 @@ static server *server_init(void) {
 __attribute_cold__
 static void server_free(server *srv) {
 	if (oneshot_fd > 0) {
+		if (oneshot_fdn) {
+			fdevent_fdnode_event_del(srv->ev, oneshot_fdn);
+			fdevent_unregister(srv->ev, oneshot_fd);
+			oneshot_fdn = NULL;
+		}
 		close(oneshot_fd);
+	}
+	if (oneshot_fdout >= 0) {
+		close(oneshot_fdout);
 	}
 	if (srv->stdin_fd >= 0) {
 		close(srv->stdin_fd);
@@ -341,38 +352,152 @@ static server_socket * server_oneshot_getsock(server *srv, sock_addr *cnt_addr) 
 }
 
 
+static int server_oneshot_read_cq(connection *con, chunkqueue *cq, off_t max_bytes) {
+    /* temporary set con->fd to oneshot_fd (fd input) rather than outshot_fdout
+     * (lighttpd generally assumes operation on sockets, so this is a kludge) */
+    int fd = con->fd;
+    con->fd = oneshot_fd;
+    int rc = oneshot_read_cq(con, cq, max_bytes);
+    con->fd = fd;
+
+    /* note: optimistic reads (elsewhere) may or may not be enough to re-enable
+     * read interest after FDEVENT_IN interest was paused for other reasons */
+
+    const int events = fdevent_fdnode_interest(oneshot_fdn);
+    int n = con->is_readable ? 0 : FDEVENT_IN;
+    if (events & FDEVENT_RDHUP)
+        n |= FDEVENT_RDHUP;
+    fdevent_fdnode_event_set(con->srv->ev, oneshot_fdn, n);
+    return rc;
+}
+
+
+static handler_t server_oneshot_handle_fdevent(void *context, int revents) {
+    connection *con = context;
+
+    /* note: not sync'd with con->fdn or connection_set_fdevent_interest() */
+    int rdhup = 0;
+    int n = fdevent_fdnode_interest(oneshot_fdn);
+    if (revents & FDEVENT_IN)
+        n &= ~FDEVENT_IN;
+    request_st * const r = &con->request;
+    if (r->state != CON_STATE_ERROR && (revents & (FDEVENT_HUP|FDEVENT_RDHUP))){
+        revents &= ~(FDEVENT_HUP|FDEVENT_RDHUP);
+        /* copied and modified from connection_handle_fdevent()
+         * fdevent_is_tcp_half_closed() will fail on pipe
+         * and, besides, read end of pipes should treat POLLHUP as POLLRDHUP */
+        n &= ~(FDEVENT_IN|FDEVENT_RDHUP);
+        rdhup = 1;
+    }
+    fdevent_fdnode_event_set(con->srv->ev, oneshot_fdn, n);
+
+    fdnode * const fdn = con->fdn; /* fdn->ctx == con */
+    handler_t rc = ((fdevent_handler)NULL != fdn->handler)
+      ? (*fdn->handler)(con, revents)
+      : HANDLER_FINISHED;
+
+    if (rdhup) {
+        r->conf.stream_request_body &=
+          ~(FDEVENT_STREAM_REQUEST_BUFMIN|FDEVENT_STREAM_REQUEST_POLLIN);
+        r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLRDHUP;
+        r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_TCP_FIN;
+        con->is_readable = 1; /*(can read 0 for end-of-stream)*/
+        if (chunkqueue_is_empty(con->read_queue)) r->keep_alive = 0;
+        if (r->reqbody_length < -1) /*(transparent proxy mode; no more data)*/
+            r->reqbody_length = r->reqbody_queue->bytes_in;
+    }
+
+    return rc;
+}
+
+
+__attribute_cold__
+static int server_oneshot_init_pipe(server *srv, int fdin, int fdout) {
+    /* Note: attempt to work with netcat pipes though other code expects socket.
+     * netcat has different fds (pipes) for stdin and stdout.  To support
+     * netcat, need to avoid S_ISSOCK(), getsockname(), and getpeername(),
+     * reconstructing addresses from environment variables:
+     *   NCAT_LOCAL_ADDR   NCAT_LOCAL_PORT
+     *   NCAT_REMOTE_ADDR  NCAT_REMOTE_PORT
+     *   NCAT_PROTO (TCP, UDP, SCTP)
+     */
+    connection *con;
+    server_socket *srv_socket;
+    sock_addr cnt_addr;
+
+    /* detect if called from netcat or else fabricate localhost addrs */
+    const char * const ncat =
+             getenv("NCAT_LOCAL_ADDR");
+    const char * const ncat_local_addr  =
+      ncat ? ncat                       : "127.0.0.1"; /*(fabricated)*/
+    const char * const ncat_local_port  =
+      ncat ? getenv("NCAT_LOCAL_PORT")  : "80";        /*(fabricated)*/
+    const char * const ncat_remote_addr =
+      ncat ? getenv("NCAT_REMOTE_ADDR") : "127.0.0.1"; /*(fabricated)*/
+    const char * const ncat_remote_port =
+      ncat ? getenv("NCAT_REMOTE_PORT") : "48080";     /*(fabricated)*/
+    if (NULL == ncat_local_addr  || NULL == ncat_local_port)  return 0;
+    if (NULL == ncat_remote_addr || NULL == ncat_remote_port) return 0;
+
+    const int family = ncat && strchr(ncat_local_addr,':') ? AF_INET6 : AF_INET;
+    unsigned short port;
+
+    port = (unsigned short)strtol(ncat_local_port, NULL, 10);
+    if (1 != sock_addr_inet_pton(&cnt_addr, ncat_local_addr, family, port)) {
+        log_error(srv->errh, __FILE__, __LINE__, "invalid local addr");
+        return 0;
+    }
+
+    srv_socket = server_oneshot_getsock(srv, &cnt_addr);
+    if (NULL == srv_socket) return 0;
+
+    port = (unsigned short)strtol(ncat_remote_port, NULL, 10);
+    if (1 != sock_addr_inet_pton(&cnt_addr, ncat_remote_addr, family, port)) {
+        log_error(srv->errh, __FILE__, __LINE__, "invalid remote addr");
+        return 0;
+    }
+
+    /*(must set flags; fd did not pass through fdevent accept() logic)*/
+    if (-1 == fdevent_fcntl_set_nb_cloexec(fdin)) {
+        log_perror(srv->errh, __FILE__, __LINE__, "fcntl()");
+        return 0;
+    }
+    if (-1 == fdevent_fcntl_set_nb_cloexec(fdout)) {
+        log_perror(srv->errh, __FILE__, __LINE__, "fcntl()");
+        return 0;
+    }
+
+    con = connection_accepted(srv, srv_socket, &cnt_addr, fdout);
+    if (NULL == con) return 0;
+
+    /* note: existing routines assume socket, not pipe
+     * connections.c:connection_read_cq()
+     *   uses recv() ifdef __WIN32
+     *   passes S_IFSOCK to fdevent_ioctl_fionread()
+     *   (The routine could be copied and modified, if required)
+     * This is unlikely to work if TLS is used over pipe since the SSL_CTX
+     * is associated with the other end of the pipe.  However, if using
+     * pipes, using TLS is unexpected behavior.
+     */
+
+    /*assert(oneshot_fd == fdin);*/
+    oneshot_read_cq = con->network_read;
+    con->network_read = server_oneshot_read_cq;
+    oneshot_fdn =
+      fdevent_register(srv->ev, fdin, server_oneshot_handle_fdevent, con);
+    fdevent_fdnode_event_set(srv->ev, oneshot_fdn, FDEVENT_RDHUP);
+
+    connection_state_machine(con);
+    return 1;
+}
+
+
 __attribute_cold__
 static int server_oneshot_init(server *srv, int fd) {
-	/* Note: does not work with netcat due to requirement that fd be socket.
-	 * STDOUT_FILENO was not saved earlier in startup, and that is to where
-	 * netcat expects output to be sent.  Since lighttpd expects connections
-	 * to be sockets, con->fd is where output is sent; separate fds are not
-	 * stored for input and output, but netcat has different fds for stdin
-	 * and * stdout.  To support netcat, would additionally need to avoid
-	 * S_ISSOCK(), getsockname(), and getpeername() below, reconstructing
-	 * addresses from environment variables:
-	 *   NCAT_LOCAL_ADDR   NCAT_LOCAL_PORT
-	 *   NCAT_REMOTE_ADDR  NCAT_REMOTE_PORT
-	 *   NCAT_PROTO
-	 */
 	connection *con;
 	server_socket *srv_socket;
 	sock_addr cnt_addr;
 	socklen_t cnt_len;
-	struct stat st;
-
-	if (0 != fstat(fd, &st)) {
-		log_perror(srv->errh, __FILE__, __LINE__, "fstat()");
-		return 0;
-	}
-
-	if (!S_ISSOCK(st.st_mode)) {
-		/* require that fd is a socket
-		 * (modules might expect STDIN_FILENO and STDOUT_FILENO opened to /dev/null) */
-		log_error(srv->errh, __FILE__, __LINE__,
-		  "lighttpd -1 stdin is not a socket");
-		return 0;
-	}
 
 	cnt_len = sizeof(cnt_addr);
 	if (0 != getsockname(fd, (struct sockaddr *)&cnt_addr, &cnt_len)) {
@@ -855,6 +980,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 	/* initialize globals (including file-scoped static globals) */
 	oneshot_fd = 0;
+	oneshot_fdout = -1;
 	srv_shutdown = 0;
 	graceful_shutdown = 0;
 	handle_sig_alarm = 1;
@@ -963,6 +1089,27 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			srv->srvconf.max_worker = 0;
 			log_error(srv->errh, __FILE__, __LINE__,
 			  "server one-shot command line option disables server.max-worker config file option.");
+		}
+
+		struct stat st;
+		if (0 != fstat(oneshot_fd, &st)) {
+			log_perror(srv->errh, __FILE__, __LINE__, "fstat()");
+			return -1;
+		}
+
+		if (S_ISFIFO(st.st_mode)) {
+			oneshot_fdout = dup(STDOUT_FILENO);
+			if (oneshot_fdout <= STDERR_FILENO) {
+				log_perror(srv->errh, __FILE__, __LINE__, "dup()");
+				return -1;
+			}
+		}
+		else if (!S_ISSOCK(st.st_mode)) {
+			/* require that fd is a socket
+			 * (modules might expect STDIN_FILENO and STDOUT_FILENO opened to /dev/null) */
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "lighttpd -1 stdin is not a socket");
+			return -1;
 		}
 	}
 
@@ -1553,7 +1700,13 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	if (HANDLER_GO_ON != plugins_call_worker_init(srv))
 		return -1;
 
-	if (oneshot_fd && server_oneshot_init(srv, oneshot_fd)) {
+	if (oneshot_fdout > 0) {
+		if (server_oneshot_init_pipe(srv, oneshot_fd, oneshot_fdout)) {
+			oneshot_fd = -1;
+			oneshot_fdout = -1;
+		}
+	}
+	else if (oneshot_fd && server_oneshot_init(srv, oneshot_fd)) {
 		oneshot_fd = -1;
 	}
 
