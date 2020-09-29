@@ -429,8 +429,8 @@ REQUESTDONE_FUNC(mod_rrd_account) {
         rrd->bytes_read    += (r->con->bytes_read    - r->bytes_read_ckpt);
     }
     else {
-        rrd->bytes_written += r->write_queue->bytes_out;
-        rrd->bytes_read    += r->read_queue->bytes_in;
+        rrd->bytes_written += r->write_queue.bytes_out;
+        rrd->bytes_read    += r->read_queue.bytes_in;
     }
 
     return HANDLER_GO_ON;

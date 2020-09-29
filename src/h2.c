@@ -711,7 +711,7 @@ h2_recv_settings (connection * const con, const uint8_t * const s, const uint32_
 static int
 h2_recv_end_data (request_st * const r, connection * const con, const uint32_t alen)
 {
-    chunkqueue * const reqbody_queue = r->reqbody_queue;
+    chunkqueue * const reqbody_queue = &r->reqbody_queue;
     r->h2state = (r->h2state == H2_STATE_OPEN)
       ? H2_STATE_HALF_CLOSED_REMOTE
       : H2_STATE_CLOSED;
@@ -814,7 +814,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     h2_send_window_update(con, r->h2id, len); /*(r->h2_rwin)*/
     h2_send_window_update(con, 0, len);       /*(h2r->h2_rwin)*/
 
-    chunkqueue * const dst = r->reqbody_queue;
+    chunkqueue * const dst = &r->reqbody_queue;
 
     if (r->reqbody_length >= 0 && r->reqbody_length < dst->bytes_in + alen) {
         /* data exceeds Content-Length specified (client mistake) */
@@ -829,7 +829,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     }
 
     /*(accounting for mod_accesslog and mod_rrdtool)*/
-    chunkqueue * const rq = r->read_queue;
+    chunkqueue * const rq = &r->read_queue;
     rq->bytes_in  += (off_t)alen;
     rq->bytes_out += (off_t)alen;
 
@@ -1217,7 +1217,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
     hpctx.hlen += 2;
     r->rqst_header_len += hpctx.hlen;
     /*(accounting for mod_accesslog and mod_rrdtool)*/
-    chunkqueue * const rq = r->read_queue;
+    chunkqueue * const rq = &r->read_queue;
     rq->bytes_in  += (off_t)hpctx.hlen;
     rq->bytes_out += (off_t)hpctx.hlen;
 
@@ -1994,13 +1994,13 @@ h2_send_headers (request_st * const r, connection * const con)
     alen += 2; /* "virtual" blank line ("\r\n") ending headers */
     r->resp_header_len = alen;
     /*(accounting for mod_accesslog and mod_rrdtool)*/
-    chunkqueue * const wq = r->write_queue;
+    chunkqueue * const wq = &r->write_queue;
     wq->bytes_in  += (off_t)alen;
     wq->bytes_out += (off_t)alen;
 
     const uint32_t dlen = (uint32_t)((char *)dst - tb->ptr);
     const uint32_t flags =
-      (r->resp_body_finished && chunkqueue_is_empty(r->write_queue))
+      (r->resp_body_finished && chunkqueue_is_empty(&r->write_queue))
         ? H2_FLAG_END_STREAM
         : 0;
     h2_send_hpack(r, con, tb->ptr, dlen, flags);
@@ -2202,13 +2202,13 @@ h2_send_cqheaders (request_st * const r, connection * const con)
      *(future: if r->write_queue is bypassed for headers, adjust
      * r->write_queue bytes counts (bytes_in, bytes_out) with header len)*/
     /* note: expects field-names are lowercased (http_response_write_header())*/
-    chunk * const c = r->write_queue->first;
+    chunk * const c = r->write_queue.first;
     const uint32_t len = buffer_string_length(c->mem) - (uint32_t)c->offset;
     uint32_t flags = (r->resp_body_finished && NULL == c->next)
       ? H2_FLAG_END_STREAM
       : 0;
     h2_send_headers_block(r, con, c->mem->ptr + c->offset, len, flags);
-    chunkqueue_mark_written(r->write_queue, len);
+    chunkqueue_mark_written(&r->write_queue, len);
 }
 #endif
 
@@ -2436,8 +2436,8 @@ h2_release_stream (request_st * const r, connection * const con)
          *  r->read_queue and r->write_queue) */
         /* DISABLED since mismatches invalidate the relationship between
          * con->bytes_in and con->bytes_out */
-        con->read_queue->bytes_in   -= r->read_queue->bytes_in;
-        con->write_queue->bytes_out -= r->write_queue->bytes_out;
+        con->read_queue->bytes_in   -= r->read_queue.bytes_in;
+        con->write_queue->bytes_out -= r->write_queue.bytes_out;
       #else
         UNUSED(con);
       #endif
@@ -2529,7 +2529,7 @@ h2_con_upgrade_h2c (request_st * const h2r, const buffer * const http2_settings)
     static const char switch_proto[] = "HTTP/1.1 101 Switching Protocols\r\n"
                                        "Connection: Upgrade\r\n"
                                        "Upgrade: h2c\r\n\r\n";
-    chunkqueue_append_mem(h2r->write_queue,
+    chunkqueue_append_mem(&h2r->write_queue,
                           CONST_STR_LEN(switch_proto));
     h2r->resp_header_len = sizeof(switch_proto)-1;
   #else
@@ -2579,7 +2579,7 @@ h2_con_upgrade_h2c (request_st * const h2r, const buffer * const http2_settings)
   #if 0 /* expect empty request body */
     r->reqbody_length = h2r->reqbody_length; /* currently always 0 */
     r->te_chunked = h2r->te_chunked;         /* must be 0 */
-    swap(r->reqbody_queue, h2r->reqbody_queue); /*currently always empty queue*/
+    swap(&r->reqbody_queue,&h2r->reqbody_queue);/*currently always empty queue*/
   #endif
     r->http_host = h2r->http_host;
     h2r->http_host = NULL;

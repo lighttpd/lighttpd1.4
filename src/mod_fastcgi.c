@@ -219,7 +219,7 @@ static void fcgi_header(FCGI_Header * header, unsigned char type, int request_id
 
 static handler_t fcgi_stdin_append(handler_ctx *hctx) {
 	FCGI_Header header;
-	chunkqueue * const req_cq = hctx->r->reqbody_queue;
+	chunkqueue * const req_cq = &hctx->r->reqbody_queue;
 	off_t offset, weWant;
 	const off_t req_cqlen = chunkqueue_length(req_cq);
 	int request_id = hctx->request_id;
@@ -237,20 +237,20 @@ static handler_t fcgi_stdin_append(handler_ctx *hctx) {
 		}
 
 		fcgi_header(&(header), FCGI_STDIN, request_id, weWant, 0);
-		(chunkqueue_is_empty(hctx->wb) || hctx->wb->first->type == MEM_CHUNK) /* else FILE_CHUNK for temp file */
-		  ? chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header))
-		  : chunkqueue_append_mem_min(hctx->wb, (const char *)&header, sizeof(header));
-		chunkqueue_steal(hctx->wb, req_cq, weWant);
+		(chunkqueue_is_empty(&hctx->wb) || hctx->wb.first->type == MEM_CHUNK) /* else FILE_CHUNK for temp file */
+		  ? chunkqueue_append_mem(&hctx->wb, (const char *)&header, sizeof(header))
+		  : chunkqueue_append_mem_min(&hctx->wb, (const char *)&header, sizeof(header));
+		chunkqueue_steal(&hctx->wb, req_cq, weWant);
 		/*(hctx->wb_reqlen already includes reqbody_length)*/
 	}
 
-	if (hctx->wb->bytes_in == hctx->wb_reqlen) {
+	if (hctx->wb.bytes_in == hctx->wb_reqlen) {
 		/* terminate STDIN */
 		/* (future: must defer ending FCGI_STDIN
 		 *  if might later upgrade protocols
 		 *  and then have more data to send) */
 		fcgi_header(&(header), FCGI_STDIN, request_id, 0, 0);
-		chunkqueue_append_mem(hctx->wb, (const char *)&header, sizeof(header));
+		chunkqueue_append_mem(&hctx->wb, (const char *)&header, sizeof(header));
 		hctx->wb_reqlen += (int)sizeof(header);
 	}
 
@@ -272,8 +272,9 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 	  host->strip_request_uri
 	};
 
-	size_t rsz = (size_t)(r->read_queue->bytes_out - hctx->wb->bytes_in);
-	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, rsz < 65536 ? rsz : r->rqst_header_len);
+	size_t rsz = (size_t)(r->read_queue.bytes_out - hctx->wb.bytes_in);
+	if (rsz >= 65536) rsz = r->rqst_header_len;
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(&hctx->wb, rsz);
 
 	/* send FCGI_BEGIN_REQUEST */
 
@@ -301,7 +302,7 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 		r->http_status = 400;
 		r->handler_module = NULL;
 		buffer_clear(b);
-		chunkqueue_remove_finished_chunks(hctx->wb);
+		chunkqueue_remove_finished_chunks(&hctx->wb);
 		return HANDLER_FINISHED;
 	} else {
 		fcgi_header(&(header), FCGI_PARAMS, request_id,
@@ -312,11 +313,11 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 		buffer_append_string_len(b, (const char *)&header, sizeof(header));
 
 		hctx->wb_reqlen = buffer_string_length(b);
-		chunkqueue_prepend_buffer_commit(hctx->wb);
+		chunkqueue_prepend_buffer_commit(&hctx->wb);
 	}
 
 	if (r->reqbody_length) {
-		/*chunkqueue_append_chunkqueue(hctx->wb, r->reqbody_queue);*/
+		/*chunkqueue_append_chunkqueue(&hctx->wb, &r->reqbody_queue);*/
 		if (r->reqbody_length > 0)
 			hctx->wb_reqlen += r->reqbody_length;/* (eventual) (minimal) total request size, not necessarily including all fcgi_headers around content length yet */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
@@ -522,7 +523,7 @@ static handler_t fcgi_check_extension(request_st * const r, void *p_d, int uri_p
 		hctx->stdin_append = fcgi_stdin_append;
 		hctx->create_env = fcgi_create_env;
 		if (!hctx->rb) {
-			hctx->rb = chunkqueue_init();
+			hctx->rb = chunkqueue_init(NULL);
 		}
 		else {
 			chunkqueue_reset(hctx->rb);

@@ -62,7 +62,7 @@ void chunkqueue_chunk_pool_clear(void);
 void chunkqueue_chunk_pool_free(void);
 
 __attribute_returns_nonnull__
-chunkqueue *chunkqueue_init(void);
+chunkqueue *chunkqueue_init(chunkqueue *cq);
 
 void chunkqueue_set_chunk_size (size_t sz);
 void chunkqueue_set_tempdirs_default_reset (void);
@@ -134,7 +134,9 @@ static inline off_t chunkqueue_length(const chunkqueue *cq) {
 	return cq->bytes_in - cq->bytes_out;
 }
 
+__attribute_cold__
 void chunkqueue_free(chunkqueue *cq);
+
 void chunkqueue_reset(chunkqueue *cq);
 
 __attribute_pure__

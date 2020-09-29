@@ -260,7 +260,7 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 						break;
 					}
 				} else {
-					chunkqueue_append_file_fd(r->write_queue, b, fd, 0, st.st_size);
+					chunkqueue_append_file_fd(&r->write_queue, b, fd, 0, st.st_size);
 					if (st.st_mtime > mtime) mtime = st.st_mtime;
 				}
 			} else {
@@ -292,11 +292,11 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 				/* ok, the client already has our content,
 				 * no need to send it again */
 
-				chunkqueue_reset(r->write_queue);
+				chunkqueue_reset(&r->write_queue);
 				ret = 0; /* cache-hit */
 			}
 		} else {
-			chunkqueue_reset(r->write_queue);
+			chunkqueue_reset(&r->write_queue);
 		}
 	}
 
@@ -308,7 +308,7 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 		buffer_copy_buffer(&r->physical.path, &p->basedir);
 		buffer_append_string_buffer(&r->physical.path, &p->trigger_handler);
 
-		chunkqueue_reset(r->write_queue);
+		chunkqueue_reset(&r->write_queue);
 	}
 
 error:

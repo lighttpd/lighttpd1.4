@@ -215,8 +215,9 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 	  ? scgi_env_add_scgi
 	  : scgi_env_add_uwsgi;
 	size_t offset;
-	size_t rsz = (size_t)(r->read_queue->bytes_out - hctx->wb->bytes_in);
-	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->wb, rsz < 65536 ? rsz : r->rqst_header_len);
+	size_t rsz = (size_t)(r->read_queue.bytes_out - hctx->wb.bytes_in);
+	if (rsz >= 65536) rsz = r->rqst_header_len;
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(&hctx->wb, rsz);
 
         /* save space for 9 digits (plus ':'), though incoming HTTP request
 	 * currently limited to 64k (65535, so 5 chars) */
@@ -226,7 +227,7 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 		r->http_status = 400;
 		r->handler_module = NULL;
 		buffer_clear(b);
-		chunkqueue_remove_finished_chunks(hctx->wb);
+		chunkqueue_remove_finished_chunks(&hctx->wb);
 		return HANDLER_FINISHED;
 	}
 
@@ -249,7 +250,7 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 			r->http_status = 431; /* Request Header Fields Too Large */
 			r->handler_module = NULL;
 			buffer_clear(b);
-			chunkqueue_remove_finished_chunks(hctx->wb);
+			chunkqueue_remove_finished_chunks(&hctx->wb);
 			return HANDLER_FINISHED;
 		}
 		offset = 10 - 4;
@@ -258,13 +259,13 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 	}
 
 	hctx->wb_reqlen = buffer_string_length(b) - offset;
-	chunkqueue_prepend_buffer_commit(hctx->wb);
-	chunkqueue_mark_written(hctx->wb, offset);
-	hctx->wb->bytes_in  -= (off_t)offset;
-	hctx->wb->bytes_out -= (off_t)offset;
+	chunkqueue_prepend_buffer_commit(&hctx->wb);
+	chunkqueue_mark_written(&hctx->wb, offset);
+	hctx->wb.bytes_in  -= (off_t)offset;
+	hctx->wb.bytes_out -= (off_t)offset;
 
 	if (r->reqbody_length) {
-		chunkqueue_append_chunkqueue(hctx->wb, r->reqbody_queue);
+		chunkqueue_append_chunkqueue(&hctx->wb, &r->reqbody_queue);
 		if (r->reqbody_length > 0)
 			hctx->wb_reqlen += r->reqbody_length; /* total req size */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/

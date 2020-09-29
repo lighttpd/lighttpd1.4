@@ -71,7 +71,7 @@ static int http_chunk_append_read_fd_range(request_st * const r, const buffer * 
      * offset in for cq->bytes_in in chunkqueue_append_buffer_commit() */
     UNUSED(fn);
 
-    chunkqueue * const cq = r->write_queue;
+    chunkqueue * const cq = &r->write_queue;
 
     if (r->resp_send_chunked)
         http_chunk_len_append(cq, (uintmax_t)len);
@@ -93,7 +93,7 @@ static int http_chunk_append_read_fd_range(request_st * const r, const buffer * 
 }
 
 static void http_chunk_append_file_fd_range(request_st * const r, const buffer * const fn, const int fd, const off_t offset, const off_t len) {
-    chunkqueue * const cq = r->write_queue;
+    chunkqueue * const cq = &r->write_queue;
 
     if (r->resp_send_chunked)
         http_chunk_len_append(cq, (uintmax_t)len);
@@ -146,7 +146,7 @@ int http_chunk_append_file_fd(request_st * const r, const buffer * const fn, con
 }
 
 static int http_chunk_append_to_tempfile(request_st * const r, const char * const mem, const size_t len) {
-    chunkqueue * const cq = r->write_queue;
+    chunkqueue * const cq = &r->write_queue;
     log_error_st * const errh = r->conf.errh;
 
     if (r->resp_send_chunked
@@ -165,7 +165,7 @@ static int http_chunk_append_to_tempfile(request_st * const r, const char * cons
 }
 
 static int http_chunk_append_cq_to_tempfile(request_st * const r, chunkqueue * const src, const size_t len) {
-    chunkqueue * const cq = r->write_queue;
+    chunkqueue * const cq = &r->write_queue;
     log_error_st * const errh = r->conf.errh;
 
     if (r->resp_send_chunked
@@ -208,7 +208,7 @@ int http_chunk_append_buffer(request_st * const r, buffer * const mem) {
     size_t len = buffer_string_length(mem);
     if (0 == len) return 0;
 
-    chunkqueue * const cq = r->write_queue;
+    chunkqueue * const cq = &r->write_queue;
 
     if (http_chunk_uses_tempfile(r, cq, len))
         return http_chunk_append_to_tempfile(r, mem->ptr, len);
@@ -229,7 +229,7 @@ int http_chunk_append_mem(request_st * const r, const char * const mem, const si
     if (0 == len) return 0;
     force_assert(NULL != mem);
 
-    chunkqueue * const cq = r->write_queue;
+    chunkqueue * const cq = &r->write_queue;
 
     if (http_chunk_uses_tempfile(r, cq, len))
         return http_chunk_append_to_tempfile(r, mem, len);
@@ -248,7 +248,7 @@ int http_chunk_append_mem(request_st * const r, const char * const mem, const si
 int http_chunk_transfer_cqlen(request_st * const r, chunkqueue * const src, const size_t len) {
     if (0 == len) return 0;
 
-    chunkqueue * const cq = r->write_queue;
+    chunkqueue * const cq = &r->write_queue;
 
     if (http_chunk_uses_tempfile(r, cq, len))
         return http_chunk_append_cq_to_tempfile(r, src, len);
@@ -269,12 +269,12 @@ void http_chunk_close(request_st * const r) {
 
     if (r->gw_dechunk && !buffer_string_is_empty(&r->gw_dechunk->b)) {
         /* XXX: trailers passed through; no sanity check currently done */
-        chunkqueue_append_buffer(r->write_queue, &r->gw_dechunk->b);
+        chunkqueue_append_buffer(&r->write_queue, &r->gw_dechunk->b);
         if (!r->gw_dechunk->done)
             r->keep_alive = 0;
     }
     else
-        chunkqueue_append_mem(r->write_queue, CONST_STR_LEN("0\r\n\r\n"));
+        chunkqueue_append_mem(&r->write_queue, CONST_STR_LEN("0\r\n\r\n"));
 }
 
 static int

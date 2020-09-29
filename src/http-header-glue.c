@@ -271,7 +271,7 @@ void http_response_body_clear (request_st * const r, int preserve_length) {
             r->gw_dechunk = NULL;
         }
     }
-    chunkqueue_reset(r->write_queue);
+    chunkqueue_reset(&r->write_queue);
 }
 
 
@@ -479,10 +479,10 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 				buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
 				r->content_length += buffer_string_length(b);
-				chunkqueue_append_mem(r->write_queue, CONST_BUF_LEN(b));
+				chunkqueue_append_mem(&r->write_queue, CONST_BUF_LEN(b));
 			}
 
-			chunkqueue_append_file(r->write_queue, path, start, end - start + 1);
+			chunkqueue_append_file(&r->write_queue, path, start, end - start + 1);
 			r->content_length += end - start + 1;
 		}
 	}
@@ -499,7 +499,7 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 		buffer_append_string_len(tb, "--\r\n", 4);
 
 		r->content_length += buffer_string_length(tb);
-		chunkqueue_append_mem(r->write_queue, CONST_BUF_LEN(tb));
+		chunkqueue_append_mem(&r->write_queue, CONST_BUF_LEN(tb));
 
 		/* set header-fields */
 
@@ -1025,12 +1025,10 @@ static handler_t http_response_process_local_redir(request_st * const r, size_t 
         buffer_copy_buffer(&r->target, vb);
 
         if (r->reqbody_length) {
-            if (r->reqbody_length
-                != r->reqbody_queue->bytes_in) {
+            if (r->reqbody_length != r->reqbody_queue.bytes_in)
                 r->keep_alive = 0;
-            }
             r->reqbody_length = 0;
-            chunkqueue_reset(r->reqbody_queue);
+            chunkqueue_reset(&r->reqbody_queue);
         }
 
         if (r->http_status != 307 && r->http_status != 308) {
@@ -1439,7 +1437,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
         }
 
         if (r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN) {
-            off_t cqlen = chunkqueue_length(r->write_queue);
+            off_t cqlen = chunkqueue_length(&r->write_queue);
             if (cqlen + (off_t)toread > 65536 - 4096) {
                 if (!r->con->is_writable) {
                     /*(defer removal of FDEVENT_IN interest since
@@ -1515,7 +1513,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
         }
 
         if (r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN) {
-            if (chunkqueue_length(r->write_queue) > 65536 - 4096) {
+            if (chunkqueue_length(&r->write_queue) > 65536 - 4096) {
                 /*(defer removal of FDEVENT_IN interest since
                  * connection_state_machine() might be able to send
                  * data immediately, unless !con->is_writable, where

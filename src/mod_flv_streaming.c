@@ -123,7 +123,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 			/* let's build a flv header */
 			http_chunk_append_mem(r, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
 			if (0 != http_chunk_append_file_range(r, &r->physical.path, start, len)) {
-				chunkqueue_reset(r->write_queue);
+				chunkqueue_reset(&r->write_queue);
 				return HANDLER_GO_ON;
 			}
 

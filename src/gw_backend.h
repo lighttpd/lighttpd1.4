@@ -302,8 +302,8 @@ typedef struct gw_handler_ctx {
     time_t   state_timestamp;
 
     chunkqueue *rb; /* read queue */
-    chunkqueue *wb; /* write queue */
     off_t     wb_reqlen;
+    chunkqueue wb; /* write queue */
 
     buffer   *response;
 

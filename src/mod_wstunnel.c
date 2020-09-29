@@ -352,7 +352,7 @@ static handler_t wstunnel_create_env(gw_handler_ctx *gwhctx) {
     handler_t rc;
     if (0 == r->reqbody_length) {
         http_response_upgrade_read_body_unknown(r);
-        chunkqueue_append_chunkqueue(r->reqbody_queue, r->read_queue);
+        chunkqueue_append_chunkqueue(&r->reqbody_queue, &r->read_queue);
     }
     rc = mod_wstunnel_handshake_create_response(hctx);
     if (rc != HANDLER_GO_ON) return rc;
@@ -369,7 +369,7 @@ static handler_t wstunnel_create_env(gw_handler_ctx *gwhctx) {
 static handler_t wstunnel_stdin_append(gw_handler_ctx *gwhctx) {
     /* prepare websocket frames to backend */
     /* (caller should verify r->reqbody_queue) */
-    /*assert(!chunkqueue_is_empty(r->reqbody_queue));*/
+    /*assert(!chunkqueue_is_empty(&r->reqbody_queue));*/
     handler_ctx *hctx = (handler_ctx *)gwhctx;
     if (0 == mod_wstunnel_frame_recv(hctx))
         return HANDLER_GO_ON;
@@ -656,7 +656,7 @@ int mod_wstunnel_plugin_init(plugin *p) {
 static int get_key3(request_st * const r, char *buf, uint32_t bytes) {
     /* 8 bytes should have been sent with request
      * for draft-ietf-hybi-thewebsocketprotocol-00 */
-    chunkqueue *cq = r->reqbody_queue;
+    chunkqueue *cq = &r->reqbody_queue;
     /*(caller should ensure bytes available prior to calling this routine)*/
     /*assert(chunkqueue_length(cq) >= 8);*/
     /*assert(8 == bytes);*/
@@ -710,7 +710,7 @@ static int create_MD5_sum(request_st * const r) {
     li_MD5_Init(&ctx);
     li_MD5_Update(&ctx, buf, sizeof(buf));
     li_MD5_Final((unsigned char *)buf, &ctx); /*(overwrite buf[] with result)*/
-    chunkqueue_append_mem(r->write_queue, (char *)buf, sizeof(buf));
+    chunkqueue_append_mem(&r->write_queue, (char *)buf, sizeof(buf));
     return 0;
 }
 
@@ -846,7 +846,7 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
       #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
         /* 8 bytes should have been sent with request
          * for draft-ietf-hybi-thewebsocketprotocol-00 */
-        chunkqueue *cq = r->reqbody_queue;
+        chunkqueue *cq = &r->reqbody_queue;
         if (chunkqueue_length(cq) < 8)
             return HANDLER_WAIT_FOR_EVENT;
       #endif /* _MOD_WEBSOCKET_SPEC_IETF_00_ */
@@ -924,7 +924,7 @@ static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const
 
 static int recv_ietf_00(handler_ctx *hctx) {
     request_st * const r = hctx->gw.r;
-    chunkqueue *cq = r->reqbody_queue;
+    chunkqueue *cq = &r->reqbody_queue;
     buffer *payload = hctx->frame.payload;
     char *mem;
     DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%llx",
@@ -982,7 +982,7 @@ static int recv_ietf_00(handler_ctx *hctx) {
                 if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_TEXT
                     && !buffer_is_empty(payload)) {
                     hctx->frame.ctl.siz = 0;
-                    chunkqueue_append_buffer(hctx->gw.wb, payload);
+                    chunkqueue_append_buffer(&hctx->gw.wb, payload);
                     buffer_clear(payload);
                 }
                 else {
@@ -991,8 +991,8 @@ static int recv_ietf_00(handler_ctx *hctx) {
                         buffer *b;
                         size_t len = buffer_string_length(payload);
                         len = (len+3)/4*3+1;
-                        chunkqueue_get_memory(hctx->gw.wb, &len);
-                        b = hctx->gw.wb->last->mem;
+                        chunkqueue_get_memory(&hctx->gw.wb, &len);
+                        b = hctx->gw.wb.last->mem;
                         len = buffer_string_length(b);
                         DEBUG_LOG_DEBUG("try to base64 decode: %s",
                                         payload->ptr);
@@ -1002,7 +1002,7 @@ static int recv_ietf_00(handler_ctx *hctx) {
                         }
                         buffer_clear(payload);
                         /*chunkqueue_use_memory()*/
-                        hctx->gw.wb->bytes_in += buffer_string_length(b)-len;
+                        hctx->gw.wb.bytes_in += buffer_string_length(b)-len;
                     }
                 }
                 break;
@@ -1110,7 +1110,7 @@ static void unmask_payload(handler_ctx *hctx) {
 
 static int recv_rfc_6455(handler_ctx *hctx) {
     request_st * const r = hctx->gw.r;
-    chunkqueue *cq = r->reqbody_queue;
+    chunkqueue *cq = &r->reqbody_queue;
     buffer *payload = hctx->frame.payload;
     DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%llx",
                     r->con->fd, (long long)chunkqueue_length(cq));
@@ -1254,7 +1254,7 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 case MOD_WEBSOCKET_FRAME_TYPE_BIN:
                   {
                     unmask_payload(hctx);
-                    chunkqueue_append_buffer(hctx->gw.wb, payload);
+                    chunkqueue_append_buffer(&hctx->gw.wb, payload);
                     buffer_clear(payload);
                     break;
                   }

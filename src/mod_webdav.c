@@ -880,7 +880,7 @@ webdav_xml_doc_multistatus (request_st * const r,
     http_status_set_fin(r, 207); /* Multi-status */
 
     buffer * const b = /*(optimization; buf extended as needed)*/
-      chunkqueue_append_buffer_open_sz(r->write_queue, 128 + ms->used);
+      chunkqueue_append_buffer_open_sz(&r->write_queue, 128 + ms->used);
 
     webdav_xml_doctype(b, r);
     buffer_append_string_len(b, CONST_STR_LEN(
@@ -893,7 +893,7 @@ webdav_xml_doc_multistatus (request_st * const r,
         log_error(r->conf.errh, __FILE__, __LINE__,
                   "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
 
-    chunkqueue_append_buffer_commit(r->write_queue);
+    chunkqueue_append_buffer_commit(&r->write_queue);
 }
 
 
@@ -906,7 +906,7 @@ webdav_xml_doc_multistatus_response (request_st * const r,
     http_status_set_fin(r, 207); /* Multi-status */
 
     buffer * const b = /*(optimization; buf extended as needed)*/
-      chunkqueue_append_buffer_open_sz(r->write_queue, 128 + ms->used);
+      chunkqueue_append_buffer_open_sz(&r->write_queue, 128 + ms->used);
 
     webdav_xml_doctype(b, r);
     buffer_append_string_len(b, CONST_STR_LEN(
@@ -922,7 +922,7 @@ webdav_xml_doc_multistatus_response (request_st * const r,
         log_error(r->conf.errh, __FILE__, __LINE__,
                   "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
 
-    chunkqueue_append_buffer_commit(r->write_queue);
+    chunkqueue_append_buffer_commit(&r->write_queue);
 }
 #endif
 
@@ -944,7 +944,7 @@ webdav_xml_doc_lock_acquired (request_st * const r,
       tbuf, tbuf_len);
 
     buffer * const b =
-      chunkqueue_append_buffer_open_sz(r->write_queue, 1024);
+      chunkqueue_append_buffer_open_sz(&r->write_queue, 1024);
 
     webdav_xml_doctype(b, r);
     buffer_append_string_len(b, CONST_STR_LEN(
@@ -959,7 +959,7 @@ webdav_xml_doc_lock_acquired (request_st * const r,
         log_error(r->conf.errh, __FILE__, __LINE__,
                   "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
 
-    chunkqueue_append_buffer_commit(r->write_queue);
+    chunkqueue_append_buffer_commit(&r->write_queue);
 }
 #endif
 
@@ -989,11 +989,11 @@ webdav_xml_doc_error_propfind_finite_depth (request_st * const r)
     r->resp_body_finished = 1;
 
     buffer * const b =
-      chunkqueue_append_buffer_open_sz(r->write_queue, 256);
+      chunkqueue_append_buffer_open_sz(&r->write_queue, 256);
     webdav_xml_doctype(b, r);
     buffer_append_string_len(b, CONST_STR_LEN(
       "<D:error><DAV:propfind-finite-depth/></D:error>\n"));
-    chunkqueue_append_buffer_commit(r->write_queue);
+    chunkqueue_append_buffer_commit(&r->write_queue);
 }
 
 
@@ -1006,11 +1006,11 @@ webdav_xml_doc_error_lock_token_matches_request_uri (request_st * const r)
     r->resp_body_finished = 1;
 
     buffer * const b =
-      chunkqueue_append_buffer_open_sz(r->write_queue, 256);
+      chunkqueue_append_buffer_open_sz(&r->write_queue, 256);
     webdav_xml_doctype(b, r);
     buffer_append_string_len(b, CONST_STR_LEN(
       "<D:error><DAV:lock-token-matches-request-uri/></D:error>\n"));
-    chunkqueue_append_buffer_commit(r->write_queue);
+    chunkqueue_append_buffer_commit(&r->write_queue);
 }
 #endif
 
@@ -1025,7 +1025,7 @@ webdav_xml_doc_423_locked (request_st * const r, buffer * const hrefs,
     r->resp_body_finished = 1;
 
     buffer * const b = /*(optimization; buf extended as needed)*/
-      chunkqueue_append_buffer_open_sz(r->write_queue, 256 + hrefs->used);
+      chunkqueue_append_buffer_open_sz(&r->write_queue, 256 + hrefs->used);
 
     webdav_xml_doctype(b, r);
     buffer_append_string_len(b, CONST_STR_LEN(
@@ -1042,7 +1042,7 @@ webdav_xml_doc_423_locked (request_st * const r, buffer * const hrefs,
       ">\n"
       "</D:error>\n"));
 
-    chunkqueue_append_buffer_commit(r->write_queue);
+    chunkqueue_append_buffer_commit(&r->write_queue);
 }
 #endif
 
@@ -3448,7 +3448,7 @@ webdav_parse_chunkqueue (request_st * const r,
     xmlCtxtUseOptions(ctxt, XML_PARSE_NOERROR | XML_PARSE_NOWARNING
                           | XML_PARSE_PEDANTIC| XML_PARSE_NONET);
     char *xmlstr;
-    chunkqueue * const cq = r->reqbody_queue;
+    chunkqueue * const cq = &r->reqbody_queue;
     size_t weWant = chunkqueue_length(cq);
     int err = XML_ERR_OK;
 
@@ -3999,7 +3999,7 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
     pb.pconf = pconf;
     pb.dst   = &r->physical;
     pb.b     = /*(optimization; buf extended as needed)*/
-      chunkqueue_append_buffer_open_sz(r->write_queue, 8192);
+      chunkqueue_append_buffer_open_sz(&r->write_queue, 8192);
     pb.b_200 = chunk_buffer_acquire();
     pb.b_404 = chunk_buffer_acquire();
 
@@ -4360,7 +4360,7 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
      * (still, loop on partial writes)
      * (Note: copying might take some time, temporarily pausing server)
      * (error status is set if error occurs) */
-    chunkqueue * const cq = r->reqbody_queue;
+    chunkqueue * const cq = &r->reqbody_queue;
     off_t cqlen = chunkqueue_length(cq);
     if (!mod_webdav_write_cq(r, cq, fd)) {
         close(fd);
@@ -4398,7 +4398,7 @@ mod_webdav_put_linkat_rename (request_st * const r,
                               const char * const pathtemp)
 {
     if (!has_proc_self_fd) return 0;
-    chunkqueue * const cq = r->reqbody_queue;
+    chunkqueue * const cq = &r->reqbody_queue;
     chunk *c = cq->first;
 
     char pathproc[32] = "/proc/self/fd/";
@@ -4482,7 +4482,7 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (request_st * const r,
      * check that reqbody is contained in single tempfile and open fd (expected)
      * (Note: copying might take some time, temporarily pausing server)
      */
-    chunkqueue * const cq = r->reqbody_queue;
+    chunkqueue * const cq = &r->reqbody_queue;
     chunk *c = cq->first;
     off_t cqlen = chunkqueue_length(cq);
     if (c->type == FILE_CHUNK && NULL == c->next && c->file.fd >= 0) {
@@ -4506,7 +4506,7 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (request_st * const r,
      * (still, loop on partial writes)
      * (Note: copying might take some time, temporarily pausing server)
      * (error status is set if error occurs) */
-    mod_webdav_write_cq(r, r->reqbody_queue, fd);
+    mod_webdav_write_cq(r, &r->reqbody_queue, fd);
   }
 
     struct stat st;
@@ -4532,7 +4532,7 @@ static handler_t
 mod_webdav_put (request_st * const r, const plugin_config * const pconf)
 {
     if (r->state == CON_STATE_READ_POST) {
-        int first_read = chunkqueue_is_empty(r->reqbody_queue);
+        int first_read = chunkqueue_is_empty(&r->reqbody_queue);
         handler_t rc = r->con->reqbody_read(r);
         if (rc != HANDLER_GO_ON) {
             if (first_read && rc == HANDLER_WAIT_FOR_EVENT
@@ -4566,7 +4566,7 @@ mod_webdav_put (request_st * const r, const plugin_config * const pconf)
      *  so add pid and fd to avoid conflict with an unlikely parallel
      *  PUT request being handled by same server pid (presumably by
      *  same client using same lock token)) */
-    chunkqueue * const cq = r->reqbody_queue;
+    chunkqueue * const cq = &r->reqbody_queue;
     chunk *c = cq->first;
 
     /* future: might support client specifying getcontenttype property
@@ -5756,8 +5756,8 @@ REQUEST_FUNC(mod_webdav_handle_reset) {
     if (*dptr) {
         free(*dptr);
         *dptr = NULL;
-        chunkqueue_set_tempdirs(r->reqbody_queue, /* reset sz */
-                                r->reqbody_queue->tempdirs, 0);
+        chunkqueue_set_tempdirs(&r->reqbody_queue, /* reset sz */
+                                r->reqbody_queue.tempdirs, 0);
     }
     return HANDLER_GO_ON;
 }

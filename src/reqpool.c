@@ -21,9 +21,9 @@
 void
 request_init_data (request_st * const r, connection * const con, server * const srv)
 {
-    r->write_queue = chunkqueue_init();
-    r->read_queue = chunkqueue_init();
-    r->reqbody_queue = chunkqueue_init();
+    chunkqueue_init(&r->write_queue);
+    chunkqueue_init(&r->read_queue);
+    chunkqueue_init(&r->reqbody_queue);
 
     r->http_method = HTTP_METHOD_UNSET;
     r->http_version = HTTP_VERSION_UNSET;
@@ -107,10 +107,10 @@ request_reset (request_st * const r)
     if (0 != r->env.used)
         array_reset_data_strings(&r->env);
 
-    chunkqueue_reset(r->reqbody_queue);
+    chunkqueue_reset(&r->reqbody_queue);
     /* r->read_queue, r->write_queue are shared with con for HTTP/1.1
      * but are different than con->read_queue, con->write_queue for HTTP/2
-     * For HTTP/1.1, when r->read_queue == con->read_queue, r->read_queue
+     * For HTTP/1.1, when &r->read_queue == con->read_queue, r->read_queue
      * is not cleared between requests since it might contain subsequent
      * requests.  (see also request_release()) */
 
@@ -168,9 +168,9 @@ request_reset_ex (request_st * const r)
 void
 request_free_data (request_st * const r)
 {
-    chunkqueue_free(r->reqbody_queue);
-    chunkqueue_free(r->write_queue);
-    chunkqueue_free(r->read_queue);
+    chunkqueue_reset(&r->reqbody_queue);
+    chunkqueue_reset(&r->write_queue);
+    chunkqueue_reset(&r->read_queue);
     array_free_data(&r->rqst_headers);
     array_free_data(&r->resp_headers);
     array_free_data(&r->env);
@@ -232,10 +232,10 @@ request_release (request_st * const r)
     /* (For HTTP/1.1, r == &con->request, and so request_release() not called)
      * r->read_queue, r->write_queue are shared with con for HTTP/1.1
      * but are different than con->read_queue, con->write_queue for HTTP/2
-     * For HTTP/1.1, when r->read_queue == con->read_queue, r->read_queue
+     * For HTTP/1.1, when &r->read_queue == con->read_queue, r->read_queue
      * is not cleared between requests since it might contain subsequent
      * requests.  (see also request_reset()) */
-    chunkqueue_reset(r->read_queue);
+    chunkqueue_reset(&r->read_queue);
 
     /*(r->cond_cache and r->cond_match are re-init in h2_init_stream())*/
 

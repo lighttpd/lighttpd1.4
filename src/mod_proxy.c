@@ -823,7 +823,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
 
 static handler_t proxy_stdin_append(gw_handler_ctx *hctx) {
     /*handler_ctx *hctx = (handler_ctx *)gwhctx;*/
-    chunkqueue * const req_cq = hctx->r->reqbody_queue;
+    chunkqueue * const req_cq = &hctx->r->reqbody_queue;
     const off_t req_cqlen = chunkqueue_length(req_cq);
     if (req_cqlen) {
         /* XXX: future: use http_chunk_len_append() */
@@ -838,18 +838,18 @@ static handler_t proxy_stdin_append(gw_handler_ctx *hctx) {
         if (-1 != hctx->wb_reqlen)
             hctx->wb_reqlen += (hctx->wb_reqlen >= 0) ? len : -len;
 
-        (chunkqueue_is_empty(hctx->wb) || hctx->wb->first->type == MEM_CHUNK)
+        (chunkqueue_is_empty(&hctx->wb) || hctx->wb.first->type == MEM_CHUNK)
                                           /* else FILE_CHUNK for temp file */
-          ? chunkqueue_append_mem(hctx->wb, CONST_BUF_LEN(tb))
-          : chunkqueue_append_mem_min(hctx->wb, CONST_BUF_LEN(tb));
-        chunkqueue_steal(hctx->wb, req_cq, req_cqlen);
+          ? chunkqueue_append_mem(&hctx->wb, CONST_BUF_LEN(tb))
+          : chunkqueue_append_mem_min(&hctx->wb, CONST_BUF_LEN(tb));
+        chunkqueue_steal(&hctx->wb, req_cq, req_cqlen);
 
-        chunkqueue_append_mem_min(hctx->wb, CONST_STR_LEN("\r\n"));
+        chunkqueue_append_mem_min(&hctx->wb, CONST_STR_LEN("\r\n"));
     }
 
-    if (hctx->wb->bytes_in == hctx->wb_reqlen) {/*hctx->r->reqbody_length >= 0*/
+    if (hctx->wb.bytes_in == hctx->wb_reqlen) {/*hctx->r->reqbody_length >= 0*/
         /* terminate STDIN */
-        chunkqueue_append_mem(hctx->wb, CONST_STR_LEN("0\r\n\r\n"));
+        chunkqueue_append_mem(&hctx->wb, CONST_STR_LEN("0\r\n\r\n"));
         hctx->wb_reqlen += (int)sizeof("0\r\n\r\n");
     }
 
@@ -862,8 +862,9 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	request_st * const r = hctx->gw.r;
 	const int remap_headers = (NULL != hctx->conf.header.urlpaths
 				   || NULL != hctx->conf.header.hosts_request);
-	size_t rsz = (size_t)(r->read_queue->bytes_out - hctx->gw.wb->bytes_in);
-	buffer * const b = chunkqueue_prepend_buffer_open_sz(hctx->gw.wb, rsz < 65536 ? rsz : r->rqst_header_len);
+	size_t rsz = (size_t)(r->read_queue.bytes_out - hctx->gw.wb.bytes_in);
+	if (rsz >= 65536) rsz = r->rqst_header_len;
+	buffer * const b = chunkqueue_prepend_buffer_open_sz(&hctx->gw.wb, rsz);
 
 	/* build header */
 
@@ -1029,10 +1030,10 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		buffer_append_string_len(b, CONST_STR_LEN("Connection: close\r\n\r\n"));
 
 	hctx->gw.wb_reqlen = buffer_string_length(b);
-	chunkqueue_prepend_buffer_commit(hctx->gw.wb);
+	chunkqueue_prepend_buffer_commit(&hctx->gw.wb);
 
 	if (r->reqbody_length) {
-		chunkqueue_append_chunkqueue(hctx->gw.wb, r->reqbody_queue);
+		chunkqueue_append_chunkqueue(&hctx->gw.wb, &r->reqbody_queue);
 		if (r->reqbody_length > 0)
 			hctx->gw.wb_reqlen += r->reqbody_length; /* total req size */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/

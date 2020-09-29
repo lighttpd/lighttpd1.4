@@ -373,7 +373,7 @@ static handler_t cgi_handle_fdevent_send (void *ctx, int revents) {
 	if (revents & FDEVENT_HUP) {
 		/* skip sending remaining data to CGI */
 		if (r->reqbody_length) {
-			chunkqueue *cq = r->reqbody_queue;
+			chunkqueue *cq = &r->reqbody_queue;
 			chunkqueue_mark_written(cq, chunkqueue_length(cq));
 			if (cq->bytes_in != (off_t)r->reqbody_length) {
 				r->keep_alive = 0;
@@ -417,7 +417,7 @@ static handler_t cgi_response_headers(request_st * const r, struct http_response
 
     if (hctx->conf.upgrade
         && !light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) {
-        chunkqueue *cq = r->reqbody_queue;
+        chunkqueue *cq = &r->reqbody_queue;
         hctx->conf.upgrade = 0;
         if (cq->bytes_out == (off_t)r->reqbody_length) {
             cgi_connection_close_fdtocgi(hctx); /*(closes hctx->fdtocgi)*/
@@ -641,7 +641,7 @@ static ssize_t cgi_write_file_chunk_mmap(request_st * const r, int fd, chunkqueu
 
 static int cgi_write_request(handler_ctx *hctx, int fd) {
 	request_st * const r = hctx->r;
-	chunkqueue *cq = r->reqbody_queue;
+	chunkqueue *cq = &r->reqbody_queue;
 	chunk *c;
 
 	/* old comment: windows doesn't support select() on pipes - wouldn't be easy to fix for all platforms.
@@ -947,7 +947,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 
 	if ((r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
 	    && r->resp_body_started) {
-		if (chunkqueue_length(r->write_queue) > 65536 - 4096) {
+		if (chunkqueue_length(&r->write_queue) > 65536 - 4096) {
 			fdevent_fdnode_event_clr(hctx->ev, hctx->fdn, FDEVENT_IN);
 		} else if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_IN)) {
 			/* optimistic read from backend */
@@ -958,7 +958,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 		}
 	}
 
-	chunkqueue * const cq = r->reqbody_queue;
+	chunkqueue * const cq = &r->reqbody_queue;
 
 	if (cq->bytes_in != (off_t)r->reqbody_length) {
 		/*(64k - 4k to attempt to avoid temporary files

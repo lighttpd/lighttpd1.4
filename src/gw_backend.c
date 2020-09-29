@@ -1094,7 +1094,7 @@ static gw_handler_ctx * handler_ctx_init(size_t sz) {
     hctx->send_content_body = 1;
 
     /*hctx->rb = chunkqueue_init();*//*(allocated when needed)*/
-    hctx->wb = chunkqueue_init();
+    chunkqueue_init(&hctx->wb);
     hctx->wb_reqlen = 0;
 
     return hctx;
@@ -1105,8 +1105,8 @@ static void handler_ctx_free(gw_handler_ctx *hctx) {
     if (hctx->handler_ctx_free) hctx->handler_ctx_free(hctx);
     chunk_buffer_release(hctx->response);
 
-    chunkqueue_free(hctx->rb);
-    chunkqueue_free(hctx->wb);
+    if (hctx->rb) chunkqueue_free(hctx->rb);
+    chunkqueue_reset(&hctx->wb);
 
     free(hctx);
 }
@@ -1124,7 +1124,7 @@ static void handler_ctx_clear(gw_handler_ctx *hctx) {
     /*hctx->state_timestamp = 0;*//*(unused; left as-is)*/
 
     if (hctx->rb) chunkqueue_reset(hctx->rb);
-    if (hctx->wb) chunkqueue_reset(hctx->wb);
+    chunkqueue_reset(&hctx->wb);
     hctx->wb_reqlen = 0;
 
     if (hctx->response) buffer_clear(hctx->response);
@@ -1816,7 +1816,7 @@ handler_t gw_handle_request_reset(request_st * const r, void *p_d) {
 
 static void gw_conditional_tcp_fin(gw_handler_ctx * const hctx, request_st * const r) {
     /*assert(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_TCP_FIN);*/
-    if (!chunkqueue_is_empty(hctx->wb)) return;
+    if (!chunkqueue_is_empty(&hctx->wb))return;
     if (!hctx->host->tcp_fin_propagate) return;
     if (hctx->gw_mode == GW_AUTHORIZER) return;
     if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BACKEND_SHUT_WR)
@@ -1931,16 +1931,16 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
         gw_set_state(hctx, GW_STATE_WRITE);
         /* fall through */
     case GW_STATE_WRITE:
-        if (!chunkqueue_is_empty(hctx->wb)) {
+        if (!chunkqueue_is_empty(&hctx->wb)) {
             log_error_st * const errh = r->conf.errh;
           #if 0
             if (hctx->conf.debug > 1) {
                 log_error(errh, __FILE__, __LINE__, "sdsx",
                   "send data to backend (fd=%d), size=%zu",
-                  hctx->fd, chunkqueue_length(hctx->wb));
+                  hctx->fd, chunkqueue_length(&hctx->wb));
             }
           #endif
-            if (r->con->srv->network_backend_write(hctx->fd, hctx->wb,
+            if (r->con->srv->network_backend_write(hctx->fd, &hctx->wb,
                                                    MAX_WRITE_LIMIT, errh) < 0) {
                 switch(errno) {
                 case EPIPE:
@@ -1954,7 +1954,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
                       "connection was dropped after accept() "
                       "(perhaps the gw process died), "
                       "write-offset: %lld socket: %s",
-                      (long long)hctx->wb->bytes_out,
+                      (long long)hctx->wb.bytes_out,
                       hctx->proc->connection_name->ptr);
                     return HANDLER_ERROR;
                 default:
@@ -1964,12 +1964,12 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
             }
         }
 
-        if (hctx->wb->bytes_out == hctx->wb_reqlen) {
+        if (hctx->wb.bytes_out == hctx->wb_reqlen) {
             fdevent_fdnode_event_clr(hctx->ev, hctx->fdn, FDEVENT_OUT);
             gw_set_state(hctx, GW_STATE_READ);
         } else {
-            off_t wblen = chunkqueue_length(hctx->wb);
-            if ((hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0)
+            off_t wblen = chunkqueue_length(&hctx->wb);
+            if ((hctx->wb.bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0)
                 && wblen < 65536 - 16384) {
                 /*(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
                 if (!(r->conf.stream_request_body
@@ -2040,7 +2040,7 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
 
     if ((r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
         && r->resp_body_started) {
-        if (chunkqueue_length(r->write_queue) > 65536 - 4096) {
+        if (chunkqueue_length(&r->write_queue) > 65536 - 4096) {
             fdevent_fdnode_event_clr(hctx->ev, hctx->fdn, FDEVENT_IN);
         }
         else if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_IN)) {
@@ -2057,18 +2057,18 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
      *  the FastCGI Authorizer) */
 
     if (hctx->gw_mode != GW_AUTHORIZER
-        && (0 == hctx->wb->bytes_in
+        && (0 == hctx->wb.bytes_in
             ? (r->state == CON_STATE_READ_POST || -1 == hctx->wb_reqlen)
-            : (hctx->wb->bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0))) {
+            : (hctx->wb.bytes_in < hctx->wb_reqlen || hctx->wb_reqlen < 0))) {
         /* leave excess data in r->reqbody_queue, which is
          * buffered to disk if too large and backend can not keep up */
         /*(64k - 4k to attempt to avoid temporary files
          * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
-        if (chunkqueue_length(hctx->wb) > 65536 - 4096) {
+        if (chunkqueue_length(&hctx->wb) > 65536 - 4096) {
             if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN) {
                 r->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
             }
-            if (0 != hctx->wb->bytes_in) return HANDLER_WAIT_FOR_EVENT;
+            if (0 != hctx->wb.bytes_in) return HANDLER_WAIT_FOR_EVENT;
         }
         else {
             handler_t rc = r->con->reqbody_read(r);
@@ -2093,14 +2093,14 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
                 }
             }
 
-            if ((0 != hctx->wb->bytes_in || -1 == hctx->wb_reqlen)
-                && !chunkqueue_is_empty(r->reqbody_queue)) {
+            if ((0 != hctx->wb.bytes_in || -1 == hctx->wb_reqlen)
+                && !chunkqueue_is_empty(&r->reqbody_queue)) {
                 if (hctx->stdin_append) {
                     handler_t rca = hctx->stdin_append(hctx);
                     if (HANDLER_GO_ON != rca) return rca;
                 }
                 else
-                    chunkqueue_append_chunkqueue(hctx->wb, r->reqbody_queue);
+                    chunkqueue_append_chunkqueue(&hctx->wb, &r->reqbody_queue);
                 if (fdevent_fdnode_interest(hctx->fdn) & FDEVENT_OUT) {
                     return (rc == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : rc;
                 }
@@ -2110,7 +2110,7 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
     }
 
     {
-        handler_t rc =((0==hctx->wb->bytes_in || !chunkqueue_is_empty(hctx->wb))
+        handler_t rc =((0==hctx->wb.bytes_in || !chunkqueue_is_empty(&hctx->wb))
                        && hctx->state != GW_STATE_CONNECT_DELAYED)
           ? gw_send_request(hctx, r)
           : HANDLER_WAIT_FOR_EVENT;
@@ -2217,9 +2217,7 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
         if (r->resp_body_started == 0) {
             /* nothing has been sent out yet, try to use another child */
 
-            if (hctx->wb->bytes_out == 0 &&
-                hctx->reconnects++ < 5) {
-
+            if (hctx->wb.bytes_out == 0 && hctx->reconnects++ < 5) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "response not received, request not sent on "
                   "socket: %s for %s?%.*s, reconnecting",
@@ -2232,7 +2230,7 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
             log_error(r->conf.errh, __FILE__, __LINE__,
               "response not received, request sent: %lld on "
               "socket: %s for %s?%.*s, closing connection",
-              (long long)hctx->wb->bytes_out, proc->connection_name->ptr,
+              (long long)hctx->wb.bytes_out, proc->connection_name->ptr,
               r->uri.path.ptr, BUFFER_INTLEN_PTR(&r->uri.query));
         } else {
             log_error(r->conf.errh, __FILE__, __LINE__,

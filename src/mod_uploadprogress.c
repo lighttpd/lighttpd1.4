@@ -269,7 +269,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		if (NULL == (post_r = request_map_get_request(&p->request_map, id, len))) {
 			log_error(r->conf.errh, __FILE__, __LINE__, "ID not known: %s", id);
 
-			chunkqueue_append_mem(r->write_queue, CONST_STR_LEN("not in progress"));
+			chunkqueue_append_mem(&r->write_queue, CONST_STR_LEN("not in progress"));
 
 			return HANDLER_FINISHED;
 		}
@@ -291,11 +291,11 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		buffer_append_string_len(b, CONST_STR_LEN(
 			"</size>"
 			"<received>"));
-		buffer_append_int(b, post_r->reqbody_queue->bytes_in);
+		buffer_append_int(b, post_r->reqbody_queue.bytes_in);
 		buffer_append_string_len(b, CONST_STR_LEN(
 			"</received>"
 			"</upload>"));
-		chunkqueue_append_mem(r->write_queue, CONST_BUF_LEN(b));
+		chunkqueue_append_mem(&r->write_queue, CONST_BUF_LEN(b));
 		return HANDLER_FINISHED;
 	default:
 		break;

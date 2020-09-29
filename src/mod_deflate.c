@@ -211,20 +211,20 @@ typedef struct {
 	} u;
 	off_t bytes_in;
 	off_t bytes_out;
-	chunkqueue *in_queue;
 	buffer *output;
 	plugin_data *plugin_data;
 	request_st *r;
 	int compression_type;
 	int cache_fd;
 	char *cache_fn;
+	chunkqueue in_queue;
 } handler_ctx;
 
 static handler_ctx *handler_ctx_init() {
 	handler_ctx *hctx;
 
 	hctx = calloc(1, sizeof(*hctx));
-	hctx->in_queue = chunkqueue_init();
+	chunkqueue_init(&hctx->in_queue);
 	hctx->cache_fd = -1;
 
 	return hctx;
@@ -242,7 +242,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 		buffer_free(hctx->output);
 	}
       #endif
-	chunkqueue_free(hctx->in_queue);
+	chunkqueue_reset(&hctx->in_queue);
 	free(hctx);
 }
 
@@ -315,7 +315,7 @@ static int mod_deflate_cache_file_finish (request_st * const r, handler_ctx * co
         return -1;
     free(hctx->cache_fn);
     hctx->cache_fn = NULL;
-    chunkqueue_reset(r->write_queue);
+    chunkqueue_reset(&r->write_queue);
     int rc = http_chunk_append_file_fd(r, fn, hctx->cache_fd, hctx->bytes_out);
     hctx->cache_fd = -1;
     return rc;
@@ -1207,14 +1207,14 @@ static handler_t deflate_compress_response(request_st * const r, handler_ctx * c
 
 	/* move all chunk from write_queue into our in_queue, then adjust
 	 * counters since r->write_queue is reused for compressed output */
-	chunkqueue * const cq = r->write_queue;
+	chunkqueue * const cq = &r->write_queue;
 	len = chunkqueue_length(cq);
 	chunkqueue_remove_finished_chunks(cq);
-	chunkqueue_append_chunkqueue(hctx->in_queue, cq);
+	chunkqueue_append_chunkqueue(&hctx->in_queue, cq);
 	cq->bytes_in  -= len;
 	cq->bytes_out -= len;
 
-	max = chunkqueue_length(hctx->in_queue);
+	max = chunkqueue_length(&hctx->in_queue);
       #if 0
 	/* calculate max bytes to compress for this call */
 	if (p->conf.sync_flush && max > (len = p->conf.work_block_size << 10)) {
@@ -1224,7 +1224,7 @@ static handler_t deflate_compress_response(request_st * const r, handler_ctx * c
 
 	/* Compress chunks from in_queue into chunks for write_queue */
 	while (max) {
-		chunk *c = hctx->in_queue->first;
+		chunk *c = hctx->in_queue.first;
 
 		switch(c->type) {
 		case MEM_CHUNK:
@@ -1249,13 +1249,13 @@ static handler_t deflate_compress_response(request_st * const r, handler_ctx * c
 		}
 
 		max -= len;
-		chunkqueue_mark_written(hctx->in_queue, len);
+		chunkqueue_mark_written(&hctx->in_queue, len);
 	}
 
 	/*(currently should always be true)*/
 	/*(current implementation requires response be complete)*/
 	close_stream = (r->resp_body_finished
-                        && chunkqueue_is_empty(hctx->in_queue));
+                        && chunkqueue_is_empty(&hctx->in_queue));
 	if (mod_deflate_stream_flush(hctx, close_stream) < 0) {
 		log_error(r->conf.errh, __FILE__, __LINE__, "flush error");
 		return HANDLER_ERROR;
@@ -1409,7 +1409,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 
 	/* check if size of response is below min-compress-size or exceeds max*/
 	/* (r->resp_body_finished checked at top of routine) */
-	len = chunkqueue_length(r->write_queue);
+	len = chunkqueue_length(&r->write_queue);
 	if (len <= (off_t)p->conf.min_compress_size) return HANDLER_GO_ON;
 	if (p->conf.max_compress_size /*(max_compress_size in KB)*/
 	    && len > ((off_t)p->conf.max_compress_size << 10)) {
@@ -1528,17 +1528,17 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	    && !had_vary
 	    && etaglen > 2
 	    && r->resp_body_finished
-	    && r->write_queue->first == r->write_queue->last
-	    && r->write_queue->first->type == FILE_CHUNK
-	    && r->write_queue->first->file.start == 0
-	    && !r->write_queue->first->file.is_temp
+	    && r->write_queue.first == r->write_queue.last
+	    && r->write_queue.first->type == FILE_CHUNK
+	    && r->write_queue.first->file.start == 0
+	    && !r->write_queue.first->file.is_temp
 	    && !http_header_response_get(r, HTTP_HEADER_RANGE,
 	                                 CONST_STR_LEN("Range"))) {
 		tb = mod_deflate_cache_file_name(r, p->conf.cache_dir, vb);
 		/*(checked earlier and skipped if Transfer-Encoding had been set)*/
 		stat_cache_entry *sce = stat_cache_get_entry(tb);
 		if (NULL != sce) {
-			chunkqueue_reset(r->write_queue);
+			chunkqueue_reset(&r->write_queue);
 			if (0 != http_chunk_append_file(r, tb))
 				return HANDLER_ERROR;
 			if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH))
@@ -1549,7 +1549,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		}
 		/* sanity check that response was whole file;
 		 * (racy since using stat_cache, but cache file only if match) */
-		sce = stat_cache_get_entry(r->write_queue->first->mem);
+		sce = stat_cache_get_entry(r->write_queue.first->mem);
 		if (NULL == sce || sce->st.st_size != len)
 			tb = NULL;
 		if (0 != mkdir_for_file(tb->ptr))

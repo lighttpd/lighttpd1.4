@@ -56,11 +56,12 @@ static inline size_t chunk_buffer_string_space(const buffer *b) {
     return b->size ? b->size - (b->used | (0 == b->used)) : 0;
 }
 
-chunkqueue *chunkqueue_init(void) {
-	chunkqueue *cq;
-
-	cq = calloc(1, sizeof(*cq));
-	force_assert(NULL != cq);
+chunkqueue *chunkqueue_init(chunkqueue *cq) {
+	/* (if caller passes non-NULL cq, it must be 0-init) */
+	if (NULL == cq) {
+		cq = calloc(1, sizeof(*cq));
+		force_assert(NULL != cq);
+	}
 
 	cq->first = NULL;
 	cq->last = NULL;

@@ -555,13 +555,13 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 		buffer_clear(dest);
 		if (!r->resp_body_finished)
 			break;
-		buffer_append_int(dest, chunkqueue_length(r->write_queue));
+		buffer_append_int(dest, chunkqueue_length(&r->write_queue));
 		break;
 	case MAGNET_ENV_RESPONSE_BODY:
 		if (!r->resp_body_finished)
 			break;
 		else {
-			chunkqueue * const cq = r->write_queue;
+			chunkqueue * const cq = &r->write_queue;
 			off_t len = chunkqueue_length(cq);
 			if (0 == len) {
 				dest = r->tmp_buf;
@@ -773,7 +773,7 @@ static int magnet_attach_content(request_st * const r, lua_State * const L, int 
 			if (lua_isstring(L, -1)) {
 				const_buffer data = magnet_checkconstbuffer(L, -1);
 
-				chunkqueue_append_mem(r->write_queue, data.ptr, data.len);
+				chunkqueue_append_mem(&r->write_queue, data.ptr, data.len);
 			} else if (lua_istable(L, -1)) {
 				lua_getfield(L, -1, "filename");
 				lua_getfield(L, -2, "length"); /* (0-based) end of range (not actually "length") */
@@ -1049,7 +1049,7 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, buf
 
 			if (0 == setjmp(exceptionjmp)) {
 				magnet_attach_content(r, L, lighty_table_ndx);
-				if (!chunkqueue_is_empty(r->write_queue)) {
+				if (!chunkqueue_is_empty(&r->write_queue)) {
 					r->handler_module = p->self;
 				}
 			} else {

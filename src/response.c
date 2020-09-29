@@ -56,9 +56,9 @@ http_response_write_header_partial_1xx (request_st * const r, buffer * const b)
     /* take data in con->write_queue and move into b
      * (to be sent prior to final response headers in r->write_queue) */
     connection * const con = r->con;
-    /*assert(r->write_queue != con->write_queue);*/
+    /*assert(&r->write_queue != con->write_queue);*/
     chunkqueue * const cq = con->write_queue;
-    con->write_queue = r->write_queue;
+    con->write_queue = &r->write_queue;
 
     /*assert(0 == buffer_string_length(b));*//*expect empty buffer from caller*/
     uint32_t len = (uint32_t)chunkqueue_length(cq);
@@ -74,7 +74,7 @@ http_response_write_header_partial_1xx (request_st * const r, buffer * const b)
 void
 http_response_write_header (request_st * const r)
 {
-	chunkqueue * const cq = r->write_queue;
+	chunkqueue * const cq = &r->write_queue;
 	buffer * const b = chunkqueue_prepend_buffer_open(cq);
 
         if (cq != r->con->write_queue)
@@ -89,7 +89,7 @@ http_response_write_header (request_st * const r)
 	if (r->con->request_count > r->conf.max_keep_alive_requests || 0 == r->conf.max_keep_alive_idle) {
 		r->keep_alive = 0;
 	} else if (0 != r->reqbody_length
-		   && r->reqbody_length != r->reqbody_queue->bytes_in
+		   && r->reqbody_length != r->reqbody_queue.bytes_in
 		   && (NULL == r->handler_module
 		       || 0 == (r->conf.stream_request_body
 		                & (FDEVENT_STREAM_REQUEST
@@ -877,7 +877,7 @@ http_response_write_prepare(request_st * const r)
         if (!(r->resp_htags
               & (light_bshift(HTTP_HEADER_CONTENT_LENGTH)
                 |light_bshift(HTTP_HEADER_TRANSFER_ENCODING)))) {
-            off_t qlen = chunkqueue_length(r->write_queue);
+            off_t qlen = chunkqueue_length(&r->write_queue);
             /**
              * The Content-Length header can only be sent if we have content:
              * - HEAD does not have a content-body (but can have content-length)
@@ -928,16 +928,17 @@ http_response_write_prepare(request_st * const r)
                 /*(no transfer-encoding if successful CONNECT)*/
             }
             else if (r->http_version == HTTP_VERSION_1_1) {
-                off_t qlen = chunkqueue_length(r->write_queue);
+                off_t qlen = chunkqueue_length(&r->write_queue);
                 r->resp_send_chunked = 1;
                 if (qlen) {
                     /* create initial Transfer-Encoding: chunked segment */
                     buffer * const b =
-                      chunkqueue_prepend_buffer_open(r->write_queue);
+                      chunkqueue_prepend_buffer_open(&r->write_queue);
                     buffer_append_uint_hex(b, (uintmax_t)qlen);
                     buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-                    chunkqueue_prepend_buffer_commit(r->write_queue);
-                    chunkqueue_append_mem(r->write_queue,CONST_STR_LEN("\r\n"));
+                    chunkqueue_prepend_buffer_commit(&r->write_queue);
+                    chunkqueue_append_mem(&r->write_queue,
+                                          CONST_STR_LEN("\r\n"));
                 }
                 http_header_response_append(r, HTTP_HEADER_TRANSFER_ENCODING,
                                             CONST_STR_LEN("Transfer-Encoding"),
@@ -977,10 +978,10 @@ http_response_call_error_handler (request_st * const r, const buffer * const err
         plugins_call_handle_request_reset(r);
 
         if (r->reqbody_length) {
-            if (r->reqbody_length != r->reqbody_queue->bytes_in)
+            if (r->reqbody_length != r->reqbody_queue.bytes_in)
                 r->keep_alive = 0;
             r->reqbody_length = 0;
-            chunkqueue_reset(r->reqbody_queue);
+            chunkqueue_reset(&r->reqbody_queue);
         }
 
         r->con->is_writable = 1;

@@ -404,7 +404,7 @@ static handler_t server_oneshot_handle_fdevent(void *context, int revents) {
         con->is_readable = 1; /*(can read 0 for end-of-stream)*/
         if (chunkqueue_is_empty(con->read_queue)) r->keep_alive = 0;
         if (r->reqbody_length < -1) /*(transparent proxy mode; no more data)*/
-            r->reqbody_length = r->reqbody_queue->bytes_in;
+            r->reqbody_length = r->reqbody_queue.bytes_in;
     }
 
     return rc;

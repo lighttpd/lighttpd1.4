@@ -931,7 +931,7 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 
 	if (files.used) http_dirls_sort(files.ent, files.used);
 
-	out = chunkqueue_append_buffer_open(r->write_queue);
+	out = chunkqueue_append_buffer_open(&r->write_queue);
 	http_list_directory_header(r, p, out);
 
 	/* directories */
@@ -1015,7 +1015,7 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(&p->tmp_buf));
 	}
 
-	chunkqueue_append_buffer_commit(r->write_queue);
+	chunkqueue_append_buffer_commit(&r->write_queue);
 	r->resp_body_finished = 1;
 
 	return 0;

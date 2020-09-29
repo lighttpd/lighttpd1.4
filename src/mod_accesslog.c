@@ -987,7 +987,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			{
 				off_t bytes = r->http_version <= HTTP_VERSION_1_1
 				  ? con->bytes_written - r->bytes_written_ckpt
-				  : r->write_queue->bytes_out;
+				  : r->write_queue.bytes_out;
 				if (bytes > 0) {
 					bytes -= (off_t)r->resp_header_len;
 					buffer_append_int(b, bytes > 0 ? bytes : 0);
@@ -1029,7 +1029,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			{
 				off_t bytes = r->http_version <= HTTP_VERSION_1_1
 				  ? con->bytes_written - r->bytes_written_ckpt
-				  : r->write_queue->bytes_out;
+				  : r->write_queue.bytes_out;
 				if (bytes > 0) {
 					buffer_append_int(b, bytes);
 				} else {
@@ -1041,7 +1041,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			{
 				off_t bytes = r->http_version <= HTTP_VERSION_1_1
 				  ? con->bytes_read - r->bytes_read_ckpt
-				  : r->read_queue->bytes_in + (off_t)r->rqst_header_len;
+				  : r->read_queue.bytes_in + (off_t)r->rqst_header_len;
 				if (bytes > 0) {
 					buffer_append_int(b, bytes);
 				} else {

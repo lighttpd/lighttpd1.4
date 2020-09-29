@@ -216,14 +216,14 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 
 	if (r->state != CON_STATE_ERROR) ++con->srv->con_written;
 
-	if (r->reqbody_length != r->reqbody_queue->bytes_in
+	if (r->reqbody_length != r->reqbody_queue.bytes_in
 	    || r->state == CON_STATE_ERROR) {
 		/* request body may not have been read completely */
 		r->keep_alive = 0;
 		/* clean up failed partial write of 1xx intermediate responses*/
-		if (r->write_queue != con->write_queue) { /*(for HTTP/1.1)*/
+		if (&r->write_queue != con->write_queue) { /*(for HTTP/1.1)*/
 			chunkqueue_free(con->write_queue);
-			con->write_queue = r->write_queue;
+			con->write_queue = &r->write_queue;
 		}
 	}
 
@@ -354,11 +354,11 @@ connection_write_1xx_info (request_st * const r, connection * const con)
 
     if (!chunkqueue_is_empty(cq)) { /* partial write (unlikely) */
         con->is_writable = 0;
-        if (cq == r->write_queue) {
+        if (cq == &r->write_queue) {
             /* save partial write of 1xx in separate chunkqueue
              * Note: sending of remainder of 1xx might be delayed
              * until next set of response headers are sent */
-            con->write_queue = chunkqueue_init();
+            con->write_queue = chunkqueue_init(NULL);
             chunkqueue_append_chunkqueue(con->write_queue, cq);
         }
     }
@@ -374,7 +374,7 @@ connection_write_1xx_info (request_st * const r, connection * const con)
      * instead of (0 == r->resp_header_len) as flag that final response was set
      * (Doing the following would "discard" the 1xx len from bytes_out)
      */
-    r->write_queue->bytes_in = r->write_queue->bytes_out = 0;
+    r->write_queue.bytes_in = r->write_queue.bytes_out = 0;
   #endif
 
     return 1; /* success */
@@ -463,7 +463,7 @@ static void connection_handle_write(request_st * const r, connection * const con
 static void connection_handle_write_state(request_st * const r, connection * const con) {
     do {
         /* only try to write if we have something in the queue */
-        if (!chunkqueue_is_empty(r->write_queue)) {
+        if (!chunkqueue_is_empty(&r->write_queue)) {
             if (r->http_version <= HTTP_VERSION_1_1 && con->is_writable) {
                 connection_handle_write(r, con);
                 if (r->state != CON_STATE_WRITE) break;
@@ -500,7 +500,7 @@ static void connection_handle_write_state(request_st * const r, connection * con
         }
     } while (r->state == CON_STATE_WRITE
              && r->http_version <= HTTP_VERSION_1_1
-             && (!chunkqueue_is_empty(r->write_queue)
+             && (!chunkqueue_is_empty(&r->write_queue)
                  ? con->is_writable
                  : r->resp_body_finished));
 }
@@ -524,8 +524,8 @@ static connection *connection_init(server *srv) {
 	request_st * const r = &con->request;
 	request_init_data(r, con, srv);
 	config_reset_config(r);
-	con->write_queue = r->write_queue;
-	con->read_queue = r->read_queue;
+	con->write_queue = &r->write_queue;
+	con->read_queue = &r->read_queue;
 
 	/* init plugin-specific per-connection structures */
 	con->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
@@ -542,9 +542,9 @@ void connections_free(server *srv) {
 		request_st * const r = &con->request;
 
 		connection_reset(con);
-		if (con->write_queue != r->write_queue)
+		if (con->write_queue != &r->write_queue)
 			chunkqueue_free(con->write_queue);
-		if (con->read_queue != r->read_queue)
+		if (con->read_queue != &r->read_queue)
 			chunkqueue_free(con->read_queue);
 		request_free_data(r);
 
@@ -861,7 +861,7 @@ static handler_t connection_handle_fdevent(void *context, int revents) {
 			con->is_readable = 1; /*(can read 0 for end-of-stream)*/
 			if (chunkqueue_is_empty(con->read_queue)) r->keep_alive = 0;
 			if (r->reqbody_length < -1) { /*(transparent proxy mode; no more data to read)*/
-				r->reqbody_length = r->reqbody_queue->bytes_in;
+				r->reqbody_length = r->reqbody_queue.bytes_in;
 			}
 			if (sock_addr_get_family(&con->dst_addr) == AF_UNIX) {
 				/* future: will getpeername() on AF_UNIX properly check if still connected? */
@@ -1302,10 +1302,10 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
 
             connection_state_machine_loop(r, con);
 
-            if (r->resp_header_len && !chunkqueue_is_empty(r->write_queue)
+            if (r->resp_header_len && !chunkqueue_is_empty(&r->write_queue)
                 && (r->resp_body_finished || r->conf.stream_response_body)) {
 
-                chunkqueue * const cq = r->write_queue;
+                chunkqueue * const cq = &r->write_queue;
                 off_t avail = chunkqueue_length(cq);
                 if (avail > max_bytes)    avail = max_bytes;
                 if (avail > fsize)        avail = fsize;
@@ -1437,7 +1437,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
                     changed = 1;
                     continue;
                 }
-                if (rr->reqbody_length != rr->reqbody_queue->bytes_in) {
+                if (rr->reqbody_length != rr->reqbody_queue.bytes_in) {
                     /* XXX: should timeout apply if not trying to read on h2con?
                      * (still applying timeout to catch stuck connections) */
                     /* XXX: con->read_idle_ts is not per-request, so timeout
@@ -1471,7 +1471,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
                               "server.max-write-idle",
                               BUFFER_INTLEN_PTR(con->dst_addr_buf),
                               BUFFER_INTLEN_PTR(&r->target),
-                              (long long)r->write_queue->bytes_out,
+                              (long long)r->write_queue.bytes_out,
                               (int)r->conf.max_write_idle);
                         }
                         connection_set_state_error(r, CON_STATE_ERROR);
@@ -1887,9 +1887,9 @@ connection_check_expect_100 (request_st * const r, connection * const con)
     http_header_request_unset(r, HTTP_HEADER_EXPECT,
                               CONST_STR_LEN("Expect"));
     if (!rc
-        || 0 != r->reqbody_queue->bytes_in
-        || !chunkqueue_is_empty(r->read_queue)
-        || !chunkqueue_is_empty(r->write_queue))
+        || 0 != r->reqbody_queue.bytes_in
+        || !chunkqueue_is_empty(&r->read_queue)
+        || !chunkqueue_is_empty(&r->write_queue))
         return 1;
 
     /* send 100 Continue only if no request body data received yet
@@ -1907,8 +1907,8 @@ static handler_t
 connection_handle_read_post_state (request_st * const r)
 {
     connection * const con = r->con;
-    chunkqueue * const cq = r->read_queue;
-    chunkqueue * const dst_cq = r->reqbody_queue;
+    chunkqueue * const cq = &r->read_queue;
+    chunkqueue * const dst_cq = &r->reqbody_queue;
 
     int is_closed = 0;
 

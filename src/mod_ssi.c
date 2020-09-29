@@ -281,7 +281,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 		}
 	}
 
-	chunkqueue * const cq = r->write_queue;
+	chunkqueue * const cq = &r->write_queue;
 
 	switch(ssicmd) {
 	case SSI_ECHO: {
@@ -1030,7 +1030,7 @@ static void mod_ssi_parse_ssi_stmt(request_st * const r, handler_ctx * const p, 
 		    && (s[12] == ' ' || s[12] == '\t'))
 			return;
 		/* XXX: perhaps emit error comment instead of invalid <!--#...--> code to client */
-		chunkqueue_append_mem(r->write_queue, s, len); /* append stmt as-is */
+		chunkqueue_append_mem(&r->write_queue, s, len); /* append stmt as-is */
 		return;
 	}
 
@@ -1094,7 +1094,7 @@ static void mod_ssi_read_fd(request_st * const r, handler_ctx * const p, struct 
 	size_t offset, pretag;
 	const size_t bufsz = 8192;
 	char * const buf = malloc(bufsz); /* allocate to reduce chance of stack exhaustion upon deep recursion */
-	chunkqueue * const cq = r->write_queue;
+	chunkqueue * const cq = &r->write_queue;
 	force_assert(buf);
 
 	offset = 0;
@@ -1238,7 +1238,7 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 			/* ok, the client already has our content,
 			 * no need to send it again */
 
-			chunkqueue_reset(r->write_queue);
+			chunkqueue_reset(&r->write_queue);
 		}
 	}
 

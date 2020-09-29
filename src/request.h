@@ -7,6 +7,7 @@
 #include "base_decls.h"
 #include "buffer.h"
 #include "array.h"
+#include "chunk.h"
 #include "http_kv.h"
 
 struct log_error_st;    /* declaration */
@@ -152,7 +153,6 @@ struct request_st {
 
     off_t reqbody_length; /* request Content-Length */
     off_t te_chunked;
-    struct chunkqueue *reqbody_queue; /*(might use tempfiles)*/
 
     buffer *http_host; /* copy of array value buffer ptr; not alloc'ed */
     const buffer *server_name;
@@ -178,8 +178,6 @@ struct request_st {
     char keep_alive; /* only request.c can enable it, all other just disable */
     char async_callback;
 
-    struct chunkqueue *write_queue;     /* HTTP response queue [ file, mem ] */
-    struct chunkqueue *read_queue;      /* HTTP request queue  [ mem ] */
     buffer *tmp_buf;                    /* shared; same as srv->tmp_buf */
     response_dechunk *gw_dechunk;
 
@@ -189,6 +187,10 @@ struct request_st {
 
     int error_handler_saved_status; /* error-handler */
     http_method_t error_handler_saved_method; /* error-handler */
+
+    struct chunkqueue write_queue;     /* HTTP response queue [ file, mem ] */
+    struct chunkqueue read_queue;      /* HTTP request queue  [ mem ] */
+    struct chunkqueue reqbody_queue; /*(might use tempfiles)*/
 };
 
 
