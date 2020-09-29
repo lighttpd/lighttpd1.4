@@ -423,7 +423,7 @@ REQUEST_FUNC(mod_maxminddb_request_env_handler)
 {
     connection * const con = r->con;
     const sock_addr * const dst_addr = &con->dst_addr;
-    const int sa_family = dst_addr->plain.sa_family;
+    const int sa_family = sock_addr_get_family(dst_addr);
     if (sa_family != AF_INET && sa_family != AF_INET6) return HANDLER_GO_ON;
 
     plugin_config pconf;

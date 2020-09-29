@@ -1719,8 +1719,8 @@ static int mod_extforward_network_read (connection *con,
 
     union hap_PROXY_hdr hdr;
     log_error_st *errh;
-    int rc = hap_PROXY_recv(con->fd, &hdr,
-                            con->dst_addr.plain.sa_family, SOCK_STREAM);
+    const int family = sock_addr_get_family(&con->dst_addr);
+    int rc = hap_PROXY_recv(con->fd, &hdr, family, SOCK_STREAM);
     switch (rc) {
       case  2: rc = mod_extforward_hap_PROXY_v2(con, &hdr); break;
       case  1: rc = mod_extforward_hap_PROXY_v1(con, &hdr); break;

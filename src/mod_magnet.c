@@ -512,7 +512,7 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 		const server_socket * const srv_socket = r->con->srv_socket;
 		dest = r->tmp_buf;
 		buffer_clear(dest);
-		switch (srv_socket->addr.plain.sa_family) {
+		switch (sock_addr_get_family(&srv_socket->addr)) {
 		case AF_INET:
 		case AF_INET6:
 			if (sock_addr_is_addr_wildcard(&srv_socket->addr)) {

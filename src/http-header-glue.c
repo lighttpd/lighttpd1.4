@@ -1685,7 +1685,7 @@ int http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi
     rc |= cb(vdata, CONST_STR_LEN("SERVER_PORT"),
              buf, li_utostrn(buf,sizeof(buf),sock_addr_get_port(addr)));
 
-    switch (addr->plain.sa_family) {
+    switch (sock_addr_get_family(addr)) {
     case AF_INET:
     case AF_INET6:
         if (sock_addr_is_addr_wildcard(addr)) {

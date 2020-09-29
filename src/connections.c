@@ -137,7 +137,7 @@ static void connection_read_for_eos_plain(connection * const con) {
 	 * it will make the client not see all our output.
 	 */
 	ssize_t len;
-	const int type = con->dst_addr.plain.sa_family;
+	const int type = sock_addr_get_family(&con->dst_addr);
 	char buf[16384];
 	do {
 		len = fdevent_socket_read_discard(con->fd, buf, sizeof(buf),
