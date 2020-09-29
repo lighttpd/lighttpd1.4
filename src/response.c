@@ -310,6 +310,9 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 		return HANDLER_FINISHED;
 	}
 
+	if (S_ISREG(sce->st.st_mode)) /*(common case)*/
+		return HANDLER_GO_ON;
+
 	if (S_ISDIR(sce->st.st_mode)) {
 		if (r->uri.path.ptr[buffer_string_length(&r->uri.path) - 1] != '/') {
 			/* redirect to .../ */
@@ -318,8 +321,8 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 
 			return HANDLER_FINISHED;
 		}
-	} else if (!S_ISREG(sce->st.st_mode)) {
-		/* any special handling of non-reg files ?*/
+	} else {
+		/* any special handling of other non-reg files ?*/
 	}
 
 	return HANDLER_GO_ON;
