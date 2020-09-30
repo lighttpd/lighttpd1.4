@@ -107,6 +107,7 @@ static void connection_close(connection *con) {
 	chunkqueue_reset(con->read_queue);
 	con->request_count = 0;
 	con->is_ssl_sock = 0;
+	con->revents_err = 0;
 
 	fdevent_fdnode_event_del(srv->ev, con->fdn);
 	fdevent_unregister(srv->ev, con->fd);
@@ -802,101 +803,27 @@ static int connection_handle_read_state(connection * const con)  {
 }
 
 
-static void connection_state_machine_h2 (request_st *r, connection *con);
+static handler_t connection_handle_fdevent(void * const context, const int revents) {
+    connection * restrict con = context;
+    const int is_ssl_sock = con->is_ssl_sock;
 
-static handler_t connection_handle_fdevent(void *context, int revents) {
-	connection *con = context;
+    joblist_append(con);
 
-	if (con->is_ssl_sock) {
-		/* ssl may read and write for both reads and writes */
-		if (revents & (FDEVENT_IN | FDEVENT_OUT)) {
-			con->is_readable = 1;
-			con->is_writable = 1;
-		}
-	} else {
-		if (revents & FDEVENT_IN) {
-			con->is_readable = 1;
-		}
-		if (revents & FDEVENT_OUT) {
-			con->is_writable = 1;
-			/* we don't need the event twice */
-		}
-	}
+    if (revents & ~(FDEVENT_IN | FDEVENT_OUT))
+        con->revents_err |= (revents & ~(FDEVENT_IN | FDEVENT_OUT));
 
-	request_st * const r = &con->request;
+    if (revents & (FDEVENT_IN | FDEVENT_OUT)) {
+        if (is_ssl_sock) /*(ssl may read and write for both reads and writes)*/
+            con->is_readable = con->is_writable = 1;
+        else {
+            if (revents & FDEVENT_IN)
+                con->is_readable = 1;
+            if (revents & FDEVENT_OUT)
+                con->is_writable = 1;
+        }
+    }
 
-	if (r->http_version == HTTP_VERSION_2) {
-		connection_state_machine_h2(r, con);
-		if (-1 == con->fd) /*(con closed; CON_STATE_CONNECT)*/
-			return HANDLER_FINISHED;
-	}
-	else {
-		joblist_append(con);
-
-		if (r->state == CON_STATE_READ) {
-			if (!connection_handle_read_state(con)
-			    && r->http_version == HTTP_VERSION_2)
-				connection_transition_h2(r, con);
-		}
-
-		if (r->state == CON_STATE_WRITE &&
-		    !chunkqueue_is_empty(con->write_queue)) {
-			connection_handle_write(r, con);
-		}
-	}
-
-	if (r->state == CON_STATE_CLOSE) {
-		/* flush the read buffers */
-		connection_read_for_eos(con);
-	}
-
-
-	/* attempt (above) to read data in kernel socket buffers
-	 * prior to handling FDEVENT_HUP and FDEVENT_ERR */
-
-	if ((revents & ~(FDEVENT_IN | FDEVENT_OUT)) && r->state != CON_STATE_ERROR) {
-		if (r->state == CON_STATE_CLOSE) {
-			con->close_timeout_ts = log_epoch_secs - (HTTP_LINGER_TIMEOUT+1);
-		} else if (revents & FDEVENT_HUP) {
-			connection_set_state_error(r, CON_STATE_ERROR);
-		} else if (revents & FDEVENT_RDHUP) {
-			int events = fdevent_fdnode_interest(con->fdn);
-			events &= ~(FDEVENT_IN|FDEVENT_RDHUP);
-			r->conf.stream_request_body &= ~(FDEVENT_STREAM_REQUEST_BUFMIN|FDEVENT_STREAM_REQUEST_POLLIN);
-			r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLRDHUP;
-			con->is_readable = 1; /*(can read 0 for end-of-stream)*/
-			if (chunkqueue_is_empty(con->read_queue)) r->keep_alive = 0;
-			if (r->reqbody_length < -1) { /*(transparent proxy mode; no more data to read)*/
-				r->reqbody_length = r->reqbody_queue.bytes_in;
-			}
-			if (sock_addr_get_family(&con->dst_addr) == AF_UNIX) {
-				/* future: will getpeername() on AF_UNIX properly check if still connected? */
-				fdevent_fdnode_event_set(con->srv->ev, con->fdn, events);
-			} else if (fdevent_is_tcp_half_closed(con->fd)) {
-				/* Success of fdevent_is_tcp_half_closed() after FDEVENT_RDHUP indicates TCP FIN received,
-				 * but does not distinguish between client shutdown(fd, SHUT_WR) and client close(fd).
-				 * Remove FDEVENT_RDHUP so that we do not spin on the ready event.
-				 * However, a later TCP RST will not be detected until next write to socket.
-				 * future: might getpeername() to check for TCP RST on half-closed sockets
-				 * (without FDEVENT_RDHUP interest) when checking for write timeouts
-				 * once a second in server.c, though getpeername() on Windows might not indicate this */
-				r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_TCP_FIN;
-				fdevent_fdnode_event_set(con->srv->ev, con->fdn, events);
-			} else {
-				/* Failure of fdevent_is_tcp_half_closed() indicates TCP RST
-				 * (or unable to tell (unsupported OS), though should not
-				 * be setting FDEVENT_RDHUP in that case) */
-				connection_set_state_error(r, CON_STATE_ERROR);
-			}
-		} else if (revents & FDEVENT_ERR) { /* error, connection reset */
-			connection_set_state_error(r, CON_STATE_ERROR);
-		} else {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "connection closed: poll() -> ??? %d", revents);
-		}
-	}
-
-	return HANDLER_FINISHED;
+    return HANDLER_FINISHED;
 }
 
 
@@ -1107,6 +1034,9 @@ connection_get_state (request_state_t state)
 }
 
 
+static void connection_state_machine_h2 (request_st *h2r, connection *con);
+
+
 static void
 connection_state_machine_loop (request_st * const r, connection * const con)
 {
@@ -1202,10 +1132,74 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 }
 
 
+__attribute_cold__
+static void
+connection_revents_err (request_st * const r, connection * const con)
+{
+    /* defer handling FDEVENT_HUP and FDEVENT_ERR to here in order to
+     * first attempt (in callers) to read data in kernel socket buffers */
+    /*assert(con->revents_err & ~(FDEVENT_IN | FDEVENT_OUT));*/
+    const int revents = (int)con->revents_err;
+    con->revents_err = 0;
+
+    if (r->state == CON_STATE_CLOSE)
+        con->close_timeout_ts = log_epoch_secs - (HTTP_LINGER_TIMEOUT+1);
+    else if (revents & FDEVENT_HUP)
+        connection_set_state_error(r, CON_STATE_ERROR);
+    else if (revents & FDEVENT_RDHUP) {
+        int events = fdevent_fdnode_interest(con->fdn);
+        events &= ~(FDEVENT_IN|FDEVENT_RDHUP);
+        r->conf.stream_request_body &=
+          ~(FDEVENT_STREAM_REQUEST_BUFMIN|FDEVENT_STREAM_REQUEST_POLLIN);
+        r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLRDHUP;
+        con->is_readable = 1; /*(can read 0 for end-of-stream)*/
+        if (chunkqueue_is_empty(con->read_queue)) r->keep_alive = 0;
+        if (r->reqbody_length < -1)/*(transparent proxy mode; no more rd data)*/
+            r->reqbody_length = r->reqbody_queue.bytes_in;
+        if (sock_addr_get_family(&con->dst_addr) == AF_UNIX) {
+            /* future: will getpeername() on AF_UNIX check if still connected?*/
+            fdevent_fdnode_event_set(con->srv->ev, con->fdn, events);
+        }
+        else if (fdevent_is_tcp_half_closed(con->fd)) {
+            /* Success of fdevent_is_tcp_half_closed() after FDEVENT_RDHUP
+             * indicates TCP FIN received, but does not distinguish between
+             * client shutdown(fd, SHUT_WR) and client close(fd).  Remove
+             * FDEVENT_RDHUP so that we do not spin on ready event.  However,
+             * a later TCP RST will not be detected until next write to socket.
+             * future: might getpeername() to check for TCP RST on half-closed
+             * sockets (without FDEVENT_RDHUP interest) when checking for write
+             * timeouts once a second in server.c, though getpeername() on
+             * Windows might not indicate this */
+            r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_TCP_FIN;
+            fdevent_fdnode_event_set(con->srv->ev, con->fdn, events);
+        }
+        else {
+            /* Failure of fdevent_is_tcp_half_closed() indicates TCP RST
+             * (or unable to tell (unsupported OS), though should not
+             * be setting FDEVENT_RDHUP in that case) */
+            connection_set_state_error(r, CON_STATE_ERROR);
+        }
+    }
+    else if (revents & FDEVENT_ERR)  /* error, connection reset */
+        connection_set_state_error(r, CON_STATE_ERROR);
+    else
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "connection closed: poll() -> ??? %d", revents);
+}
+
+
 static void
 connection_set_fdevent_interest (request_st * const r, connection * const con)
 {
     if (con->fd < 0) return;
+
+    if (con->revents_err && r->state != CON_STATE_ERROR) {
+        connection_revents_err(r, con); /* resets con->revents_err = 0 */
+        connection_state_machine(con);
+        return;
+        /* connection_state_machine() will end up calling back into
+         * connection_set_fdevent_interest(), but with 0 == con->revents_err */
+    }
 
     int n = 0;
     switch(r->state) {

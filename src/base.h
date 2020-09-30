@@ -36,6 +36,8 @@ struct connection {
 	signed char is_writable;
 	char is_ssl_sock;
 	char traffic_limit_reached;
+	uint16_t revents_err;
+	uint16_t proto_default_port;
 
 	chunkqueue *write_queue;      /* a large queue for low-level write ( HTTP response ) [ file, mem ] */
 	chunkqueue *read_queue;       /* a small queue for low-level read ( HTTP request ) [ mem ] */
@@ -65,8 +67,6 @@ struct connection {
 	time_t connection_start;
 	uint32_t request_count;      /* number of requests handled in this connection */
 	int keep_alive_idle;         /* remember max_keep_alive_idle from config */
-
-	uint16_t proto_default_port;
 };
 
 typedef struct {
