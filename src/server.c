@@ -1799,6 +1799,16 @@ static void server_handle_sigchld (server * const srv) {
 }
 
 __attribute_hot__
+static void server_run_con_queue (connections * const restrict joblist) {
+    connection * const * const restrict conlist = joblist->ptr;
+    const uint32_t used = joblist->used;
+    joblist->used = 0;
+    for (uint32_t i = 0; i < used; ++i) {
+        connection_state_machine(conlist[i]);
+    }
+}
+
+__attribute_hot__
 __attribute_noinline__
 static void server_main_loop (server * const srv) {
 	time_t last_active_ts = time(NULL);
@@ -1856,11 +1866,7 @@ static void server_main_loop (server * const srv) {
 		  ? &srv->joblist_B
 		  : &srv->joblist_A;
 
-		for (uint32_t ndx = 0, used = joblist->used; ndx < used; ++ndx) {
-			connection *con = joblist->ptr[ndx];
-			connection_state_machine(con);
-		}
-		joblist->used = 0;
+		server_run_con_queue(joblist);
 	}
 }
 
