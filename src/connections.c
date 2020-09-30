@@ -433,22 +433,26 @@ connection_write_100_continue (request_st * const r, connection * const con)
 }
 
 
-static void connection_handle_write(request_st * const r, connection * const con) {
+static int connection_handle_write(request_st * const r, connection * const con) {
+	/*assert(!chunkqueue_is_empty(cq));*//* checked by callers */
+
+	if (!con->is_writable) return CON_STATE_WRITE;
 	int rc = connection_write_chunkqueue(con, con->write_queue, MAX_WRITE_LIMIT);
 	switch (rc) {
 	case 0:
 		if (r->resp_body_finished) {
 			connection_set_state(r, CON_STATE_RESPONSE_END);
+			return CON_STATE_RESPONSE_END;
 		}
 		break;
 	case -1: /* error on our side */
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "connection closed: write failed on fd %d", con->fd);
 		connection_set_state_error(r, CON_STATE_ERROR);
-		break;
+		return CON_STATE_ERROR;
 	case -2: /* remote close */
 		connection_set_state_error(r, CON_STATE_ERROR);
-		break;
+		return CON_STATE_ERROR;
 	case 1:
 		/* do not spin trying to send HTTP/2 server Connection Preface
 		 * while waiting for TLS negotiation to complete */
@@ -458,19 +462,21 @@ static void connection_handle_write(request_st * const r, connection * const con
 		/* not finished yet -> WRITE */
 		break;
 	}
+
+	return CON_STATE_WRITE; /*(state did not change)*/
 }
 
-static void connection_handle_write_state(request_st * const r, connection * const con) {
+static int connection_handle_write_state(request_st * const r, connection * const con) {
     do {
         /* only try to write if we have something in the queue */
         if (!chunkqueue_is_empty(&r->write_queue)) {
-            if (r->http_version <= HTTP_VERSION_1_1 && con->is_writable) {
-                connection_handle_write(r, con);
-                if (r->state != CON_STATE_WRITE) break;
+            if (r->http_version <= HTTP_VERSION_1_1) {
+                int rc = connection_handle_write(r, con);
+                if (rc != CON_STATE_WRITE) return rc;
             }
         } else if (r->resp_body_finished) {
             connection_set_state(r, CON_STATE_RESPONSE_END);
-            break;
+            return CON_STATE_RESPONSE_END;
         }
 
         if (r->handler_module && !r->resp_body_finished) {
@@ -495,14 +501,15 @@ static void connection_handle_write_state(request_st * const r, connection * con
                 /* fall through */
             case HANDLER_ERROR:
                 connection_set_state_error(r, CON_STATE_ERROR);
-                break;
+                return CON_STATE_ERROR;
             }
         }
-    } while (r->state == CON_STATE_WRITE
-             && r->http_version <= HTTP_VERSION_1_1
+    } while (r->http_version <= HTTP_VERSION_1_1
              && (!chunkqueue_is_empty(&r->write_queue)
                  ? con->is_writable
                  : r->resp_body_finished));
+
+    return CON_STATE_WRITE;
 }
 
 
@@ -833,8 +840,7 @@ static handler_t connection_handle_fdevent(void *context, int revents) {
 		}
 
 		if (r->state == CON_STATE_WRITE &&
-		    !chunkqueue_is_empty(con->write_queue) &&
-		    con->is_writable) {
+		    !chunkqueue_is_empty(con->write_queue)) {
 			connection_handle_write(r, con);
 		}
 	}
@@ -1171,8 +1177,9 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 			connection_set_state(r, CON_STATE_WRITE);
 			/* fall through */
 		case CON_STATE_WRITE:
-			connection_handle_write_state(r, con);
-			if (r->state != CON_STATE_RESPONSE_END) break;
+			if (connection_handle_write_state(r, con)
+			    != CON_STATE_RESPONSE_END)
+				break;
 			/* fall through */
 		case CON_STATE_RESPONSE_END: /* transient */
 		case CON_STATE_ERROR:        /* transient */
@@ -1362,7 +1369,7 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
 
     if (h2r->state == CON_STATE_WRITE) {
         /* write HTTP/2 frames to socket */
-        if (!chunkqueue_is_empty(con->write_queue) && con->is_writable)
+        if (!chunkqueue_is_empty(con->write_queue))
             connection_handle_write(h2r, con);
 
         if (chunkqueue_is_empty(con->write_queue)
