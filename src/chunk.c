@@ -897,7 +897,7 @@ chunkqueue_peek_data (chunkqueue * const cq,
             }
 
           case FILE_CHUNK:
-            if (0 == chunk_open_file_chunk(c, errh)) {
+            if (c->file.fd >= 0 || 0 == chunk_open_file_chunk(c, errh)) {
                 off_t offset = c->file.start + c->offset;
                 off_t toSend = c->file.length - c->offset;
                 if (toSend > (off_t)space)
@@ -908,7 +908,7 @@ chunkqueue_peek_data (chunkqueue * const cq,
                     return -1;
                 }
                 toSend = read(c->file.fd, data_in + *dlen, (size_t)toSend);
-                if (-1 == toSend) {
+                if (toSend <= 0) { /* -1 error; 0 EOF (unexpected) */
                     log_perror(errh, __FILE__, __LINE__, "read");
                     return -1;
                 }

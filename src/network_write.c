@@ -157,7 +157,7 @@ static int network_write_file_chunk_no_mmap(int fd, chunkqueue *cq, off_t *p_max
         return 0;
     }
 
-    if (0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
+    if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
 
     if (toSend > (off_t)sizeof(buf)) toSend = (off_t)sizeof(buf);
 
@@ -165,8 +165,8 @@ static int network_write_file_chunk_no_mmap(int fd, chunkqueue *cq, off_t *p_max
         log_perror(errh, __FILE__, __LINE__, "lseek");
         return -1;
     }
-    if (-1 == (toSend = read(c->file.fd, buf, toSend))) {
-        log_perror(errh, __FILE__, __LINE__, "read");
+    if ((toSend = read(c->file.fd, buf, toSend)) <= 0) {
+        log_perror(errh, __FILE__, __LINE__, "read");/* err or unexpected EOF */
         return -1;
     }
 
@@ -233,7 +233,7 @@ static int network_write_file_chunk_mmap(int fd, chunkqueue *cq, off_t *p_max_by
         return 0;
     }
 
-    if (0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
+    if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
 
     /* mmap buffer if offset is outside old mmap area or not mapped at all */
     if (MAP_FAILED == c->file.mmap.start
@@ -452,7 +452,7 @@ static int network_write_file_chunk_sendfile(int fd, chunkqueue *cq, off_t *p_ma
         return 0;
     }
 
-    if (0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
+    if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
 
     /* Darwin, FreeBSD, and Solaris variants support iovecs and could
      * be optimized to send more than just file in single syscall */
@@ -526,9 +526,14 @@ static int network_write_file_chunk_sendfile(int fd, chunkqueue *cq, off_t *p_ma
         }
     }
 
-    if (written >= 0) { /*(always true)*/
+    if (written > 0) {
         chunkqueue_mark_written(cq, written);
         *p_max_bytes -= written;
+    }
+    else if (0 == wr) { /*(-1 != wr && 0 == written)*/
+        log_error(errh, __FILE__, __LINE__,
+                  "sendfile(): fd: %d file truncated", fd);
+        return -1;
     }
 
     return (wr >= 0 && written == toSend) ? 0 : -3;
