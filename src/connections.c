@@ -282,8 +282,10 @@ connection_write_throttle (connection * const con, off_t max_bytes)
 
 
 static int
-connection_write_chunkqueue (connection * const con, chunkqueue * const cq, off_t max_bytes)
+connection_write_chunkqueue (connection * const con, chunkqueue * const restrict cq, off_t max_bytes)
 {
+    /*assert(!chunkqueue_is_empty(cq));*//* checked by callers */
+
     con->write_request_ts = log_epoch_secs;
 
     max_bytes = connection_write_throttle(con, max_bytes);
@@ -293,24 +295,33 @@ connection_write_chunkqueue (connection * const con, chunkqueue * const cq, off_
     int ret;
 
   #ifdef TCP_CORK
-    /* Linux: put a cork into socket as we want to combine write() calls
-     * but only if we really have multiple chunks including non-MEM_CHUNK,
-     * and only if TCP socket
-     */
     int corked = 0;
-    if (cq->first && cq->first->next) {
-        const int sa_family = sock_addr_get_family(&con->srv_socket->addr);
-        if (sa_family == AF_INET || sa_family == AF_INET6) {
-            chunk *c = cq->first;
-            while (c->type == MEM_CHUNK && NULL != (c = c->next)) ;
-            if (NULL != c) {
+  #endif
+
+    /* walk chunkqueue up to first FILE_CHUNK (if present)
+     * This may incur memory load misses for pointer chasing, but effectively
+     * preloads part of the chunkqueue, something which used to be a side effect
+     * of a previous (less efficient) version of chunkqueue_length() which
+     * walked the entire chunkqueue (on each and every call).  The loads here
+     * make a measurable difference in performance in underlying call to
+     * con->network_write() */
+    if (cq->first->next) {
+        const chunk *c = cq->first;
+        while (c->type == MEM_CHUNK && NULL != (c = c->next)) ;
+      #ifdef TCP_CORK
+        /* Linux: put a cork into socket as we want to combine write() calls
+         * but only if we really have multiple chunks including non-MEM_CHUNK
+         * (or if multiple chunks and TLS), and only if TCP socket */
+        if (NULL != c || con->is_ssl_sock) {
+            const int sa_family = sock_addr_get_family(&con->srv_socket->addr);
+            if (sa_family == AF_INET || sa_family == AF_INET6) {
                 corked = 1;
                 (void)setsockopt(con->fd, IPPROTO_TCP, TCP_CORK,
                                  &corked, sizeof(corked));
             }
         }
+      #endif
     }
-  #endif
 
     ret = con->network_write(con, cq, max_bytes);
     if (ret >= 0) {
