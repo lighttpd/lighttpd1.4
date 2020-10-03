@@ -239,7 +239,7 @@ static server *server_init(void) {
 
 	CLEAN(tmp_buf);
 #undef CLEAN
-	srv->joblist = &srv->joblist_A;
+	connection_joblist = &srv->joblist_A;
 
 	strftime_cache_reset();
 
@@ -1856,13 +1856,13 @@ static void server_main_loop (server * const srv) {
 			server_process_fdwaitqueue(srv);
 		}
 
-		connections * const joblist = srv->joblist;
+		connections * const joblist = connection_joblist;
 
 		if (fdevent_poll(srv->ev, joblist->used ? 0 : 1000) > 0) {
 			last_active_ts = log_epoch_secs;
 		}
 
-		srv->joblist = (joblist == &srv->joblist_A)
+		connection_joblist = (joblist == &srv->joblist_A)
 		  ? &srv->joblist_B
 		  : &srv->joblist_A;
 

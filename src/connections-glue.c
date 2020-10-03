@@ -5,6 +5,8 @@
 
 #include <stdlib.h>
 
+connections *connection_joblist;
+
 __attribute_cold__
 static void connection_list_resize(connections *conns) {
     conns->size += 16;

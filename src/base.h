@@ -158,7 +158,6 @@ struct server {
 	buffer *tmp_buf;
 
 	connections conns;
-	connections *joblist;
 	connections joblist_A;
 	connections joblist_B;
 	connections fdwaitqueue;

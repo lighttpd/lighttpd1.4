@@ -19,7 +19,8 @@ connection * connection_accepted(server *srv, server_socket *srv_socket, sock_ad
 
 void connection_state_machine(connection *con);
 
-#define joblist_append(con) connection_list_append((con)->srv->joblist, (con))
+extern connections *connection_joblist;
+#define joblist_append(con) connection_list_append(connection_joblist, (con))
 void connection_list_append(connections *conns, connection *con);
 
 #endif
