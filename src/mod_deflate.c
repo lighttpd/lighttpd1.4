@@ -1558,7 +1558,9 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 
 	/* enable compression */
 	p->conf.sync_flush =
-	  (r->conf.stream_response_body && 0 == p->conf.output_buffer_size);
+	  ((r->conf.stream_response_body
+	    & (FDEVENT_STREAM_RESPONSE | FDEVENT_STREAM_RESPONSE_BUFMIN))
+	   && 0 == p->conf.output_buffer_size);
 	hctx = handler_ctx_init();
 	hctx->plugin_data = p;
 	hctx->compression_type = compression_type;

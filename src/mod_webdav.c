@@ -5732,7 +5732,8 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
     }
 
     r->handler_module = ((plugin_data *)p_d)->self;
-    r->conf.stream_request_body = 0;
+    r->conf.stream_request_body &=
+      ~(FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN);
     r->plugin_ctx[((plugin_data *)p_d)->id] = &pconf;
     const handler_t rc =
       mod_webdav_subrequest_handler(r, p_d); /*p->handle_subrequest()*/

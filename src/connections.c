@@ -1320,7 +1320,10 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
             connection_state_machine_loop(r, con);
 
             if (r->resp_header_len && !chunkqueue_is_empty(&r->write_queue)
-                && (r->resp_body_finished || r->conf.stream_response_body)) {
+                && (r->resp_body_finished
+                    || (r->conf.stream_response_body
+                        & (FDEVENT_STREAM_RESPONSE
+                          |FDEVENT_STREAM_RESPONSE_BUFMIN)))) {
 
                 chunkqueue * const cq = &r->write_queue;
                 off_t avail = chunkqueue_length(cq);
@@ -1793,8 +1796,10 @@ connection_handle_read_post_chunked (request_st * const r, chunkqueue * const cq
                         }
                         hsz = p + 4 - (c->mem->ptr+c->offset);
                         /* trailers currently ignored, but could be processed
-                         * here if 0 == r->conf.stream_request_body, taking
-                         * care to reject any fields forbidden in trailers,
+                         * here if 0 == (r->conf.stream_request_body &
+                         *               & (FDEVENT_STREAM_REQUEST
+                         *                 |FDEVENT_STREAM_REQUEST_BUFMIN))
+                         * taking care to reject fields forbidden in trailers,
                          * making trailers available to CGI and other backends*/
                     }
                     chunkqueue_mark_written(cq, (size_t)hsz);

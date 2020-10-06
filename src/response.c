@@ -1022,7 +1022,10 @@ http_response_handler (request_st * const r)
     switch (rc) {
       case HANDLER_WAIT_FOR_EVENT:
         if (!r->resp_body_finished
-            && (!r->resp_body_started || 0 == r->conf.stream_response_body))
+            && (!r->resp_body_started
+                || 0 == (r->conf.stream_response_body
+                         & (FDEVENT_STREAM_RESPONSE
+                           |FDEVENT_STREAM_RESPONSE_BUFMIN))))
             return HANDLER_WAIT_FOR_EVENT; /* come back here */
         /* response headers received from backend; start response */
         __attribute_fallthrough__
