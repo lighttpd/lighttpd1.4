@@ -115,4 +115,6 @@ int fdevent_set_so_reuseaddr (const int fd, const int opt);
 
 char * fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *(malloc_fn)(size_t), void(free_fn)(void *));
 
+int fdevent_load_file_bytes (char *buf, off_t sz, off_t off, const char *fn, log_error_st *errh);
+
 #endif

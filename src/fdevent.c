@@ -1112,7 +1112,7 @@ fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *
             off_t off = 0;
             do {
                 rd = read(fd, buf+off, (size_t)(sz-off));
-            } while (rd > 0 ? (off += rd) != sz : errno == EINTR);
+            } while (rd > 0 ? (off += rd) != sz : rd < 0 && errno == EINTR);
             if (off != sz) { /*(file truncated?)*/
                 if (rd >= 0) errno = EIO;
                 break;
@@ -1135,4 +1135,37 @@ fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *
     *lim = 0;
     errno = errnum;
     return NULL;
+}
+
+
+int
+fdevent_load_file_bytes (char * const buf, const off_t sz, off_t off, const char * const fn, log_error_st *errh)
+{
+    int fd = -1;
+    do {
+        fd = fdevent_open_cloexec(fn, 1, O_RDONLY, 0); /*(1: follows symlinks)*/
+        if (fd < 0) break;
+
+        if (0 != off && (off_t)-1 == lseek(fd, off, SEEK_SET)) break;
+        off = 0;
+
+        ssize_t rd = 0;
+        do {
+            rd = read(fd, buf+off, (size_t)(sz-off));
+        } while (rd > 0 ? (off += rd) != sz : rd < 0 && errno == EINTR);
+        if (off != sz) { /*(file truncated? or incorrect sz requested)*/
+            if (rd >= 0) errno = EIO;
+            break;
+        }
+
+        close(fd);
+        return 0;
+    } while (0);
+    int errnum = errno;
+    if (errh)
+        log_perror(errh, __FILE__, __LINE__, "%s() %s", __func__, fn);
+    if (fd >= 0) close(fd);
+    safe_memclear(buf, (size_t)sz);
+    errno = errnum;
+    return -1;
 }
