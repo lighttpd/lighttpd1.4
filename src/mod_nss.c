@@ -77,7 +77,6 @@
 #include <stdlib.h>
 #include <stdio.h>      /* vsnprintf() */
 #include <string.h>
-#include <unistd.h>
 
 #if defined(__CYGWIN__)
 #include <nspr/nspr.h>

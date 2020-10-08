@@ -54,7 +54,6 @@
 #include <stdlib.h>
 #include <stdio.h>      /* vsnprintf() */
 #include <string.h>
-#include <unistd.h>
 
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/dhm.h>
@@ -305,15 +304,10 @@ mod_mbedtls_session_ticket_key_file (const char *fn)
      * admin should activate keys immediately (without +300).
      */
     int buf[23]; /* 92 bytes */
-    int fd = fdevent_open_cloexec(fn, 1, O_RDONLY, 0);
-    if (fd < 0)
-        return 0;
-
-    ssize_t rd = read(fd, buf, sizeof(buf));
-    close(fd);
-
     int rc = 0; /*(will retry on next check interval upon any error)*/
-    if (rd == sizeof(buf) && buf[0] == 0) { /*(format version 0)*/
+    if (0 != fdevent_load_file_bytes((char *)buf,(off_t)sizeof(buf),0,fn,NULL))
+        return rc;
+    if (buf[0] == 0) { /*(format version 0)*/
         session_ticket_keys[0].active_ts = buf[1];
         session_ticket_keys[0].expire_ts = buf[2];
         memcpy(&session_ticket_keys[0].tick_key_name, buf+3, 80);
