@@ -1551,7 +1551,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		sce = stat_cache_get_entry(r->write_queue.first->mem);
 		if (NULL == sce || sce->st.st_size != len)
 			tb = NULL;
-		if (0 != mkdir_for_file(tb->ptr))
+		else if (0 != mkdir_for_file(tb->ptr))
 			tb = NULL;
 	}
 
