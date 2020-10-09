@@ -269,7 +269,6 @@ SETDEFAULTS_FUNC(mod_mysql_vhost_set_defaults) {
 REQUEST_FUNC(mod_mysql_vhost_handle_docroot) {
 	plugin_data *p = p_d;
 	plugin_connection_data *c;
-	stat_cache_entry *sce;
 
 	unsigned  cols;
 	MYSQL_ROW row;
@@ -329,13 +328,8 @@ REQUEST_FUNC(mod_mysql_vhost_handle_docroot) {
 	buffer_copy_string(b, row[0]);
 	buffer_append_slash(b);
 
-	sce = stat_cache_get_entry(b);
-	if (NULL == sce) {
+	if (!stat_cache_path_isdir(b)) {
 		log_perror(r->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
-		goto ERR500;
-	}
-	if (!S_ISDIR(sce->st.st_mode)) {
-		log_error(r->conf.errh, __FILE__, __LINE__, "Not a directory %s", b->ptr);
 		goto ERR500;
 	}
 

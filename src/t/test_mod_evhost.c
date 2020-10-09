@@ -75,9 +75,9 @@ int main (void) {
  * stub functions
  */
 
-stat_cache_entry * stat_cache_get_entry(const buffer *name) {
+int stat_cache_path_isdir(const buffer *name) {
     UNUSED(name);
-    return NULL;
+    return 1;
 }
 
 int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname) {

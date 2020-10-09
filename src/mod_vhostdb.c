@@ -273,7 +273,6 @@ REQUEST_FUNC(mod_vhostdb_handle_docroot) {
     vhostdb_cache_entry *ve;
     const http_vhostdb_backend_t *backend;
     buffer *b;
-    stat_cache_entry *sce;
 
     /* no host specified? */
     if (buffer_string_is_empty(&r->uri.authority)) return HANDLER_GO_ON;
@@ -303,14 +302,8 @@ REQUEST_FUNC(mod_vhostdb_handle_docroot) {
 
     /* sanity check that really is a directory */
     buffer_append_slash(b);
-    sce = stat_cache_get_entry(b);
-    if (NULL == sce) {
+    if (!stat_cache_path_isdir(b)) {
         log_perror(r->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
-        return mod_vhostdb_error_500(r); /* HANDLER_FINISHED */
-    }
-    if (!S_ISDIR(sce->st.st_mode)) {
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "Not a directory: %s", b->ptr);
         return mod_vhostdb_error_500(r); /* HANDLER_FINISHED */
     }
 

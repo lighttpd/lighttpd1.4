@@ -10,6 +10,7 @@
 
 #include "stat_cache.h"
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
@@ -1025,7 +1026,6 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 
 URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 	plugin_data *p = p_d;
-	stat_cache_entry *sce = NULL;
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 	if (buffer_string_is_empty(&r->uri.path)) return HANDLER_GO_ON;
@@ -1044,15 +1044,13 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 		  "URI          : %s", r->uri.path.ptr);
 	}
 
-	sce = stat_cache_get_entry(&r->physical.path);
-	if (NULL == sce) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "stat_cache_get_entry failed: %s", r->physical.path.ptr);
+	if (!stat_cache_path_isdir(&r->physical.path)) {
+		if (errno == ENOTDIR)
+			return HANDLER_GO_ON;
+		log_perror(r->conf.errh,__FILE__,__LINE__,"%s",r->physical.path.ptr);
 		r->http_status = 500;
 		return HANDLER_FINISHED;
 	}
-
-	if (!S_ISDIR(sce->st.st_mode)) return HANDLER_GO_ON;
 
 	if (http_list_directory(r, p, &r->physical.path)) {
 		/* dirlisting failed */

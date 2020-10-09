@@ -152,20 +152,16 @@ static void build_doc_root_path(buffer *out, const buffer *sroot, const buffer *
 }
 
 static int build_doc_root(request_st * const r, plugin_data *p, buffer *out, const buffer *host) {
-	stat_cache_entry *sce = NULL;
 
 	build_doc_root_path(out, p->conf.server_root, host, p->conf.document_root);
 
 	/* one-element cache (positive cache, not negative cache) */
 	if (buffer_is_equal(out, &p->last_root)) return 1;
 
-	sce = stat_cache_get_entry(out);
-	if (NULL == sce) {
+	if (!stat_cache_path_isdir(out)) {
 		if (p->conf.debug) {
 			log_perror(r->conf.errh, __FILE__, __LINE__, "%s", out->ptr);
 		}
-		return 0;
-	} else if (!S_ISDIR(sce->st.st_mode)) {
 		return 0;
 	}
 

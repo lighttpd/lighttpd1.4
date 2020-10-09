@@ -326,7 +326,6 @@ static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, buffer
 
 static handler_t mod_evhost_uri_handler(request_st * const r, void *p_d) {
 	plugin_data *p = p_d;
-	stat_cache_entry *sce = NULL;
 
 	/* not authority set */
 	if (buffer_string_is_empty(&r->uri.authority)) return HANDLER_GO_ON;
@@ -339,11 +338,8 @@ static handler_t mod_evhost_uri_handler(request_st * const r, void *p_d) {
 	buffer * const b = &p->tmp_buf;
 	mod_evhost_build_doc_root_path(b, &p->split_vals, &r->uri.authority, p->conf.path_pieces);
 
-	sce = stat_cache_get_entry(b);
-	if (NULL == sce) {
+	if (!stat_cache_path_isdir(b)) {
 		log_perror(r->conf.errh, __FILE__, __LINE__, "%s", b->ptr);
-	} else if(!S_ISDIR(sce->st.st_mode)) {
-		log_error(r->conf.errh, __FILE__, __LINE__, "not a directory: %s", b->ptr);
 	} else {
 		buffer_copy_buffer(&r->physical.doc_root, b);
 	}
