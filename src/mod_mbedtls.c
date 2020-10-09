@@ -2094,6 +2094,8 @@ mod_mbedtls_close_notify (handler_ctx *hctx)
       default:
         elog(hctx->r->conf.errh, __FILE__, __LINE__, rc,
              "mbedtls_ssl_close_notify()");
+        __attribute_fallthrough__
+      case MBEDTLS_ERR_NET_CONN_RESET:
         mbedtls_ssl_session_reset(&hctx->ssl);
         mod_mbedtls_detach(hctx);
         return -1;
