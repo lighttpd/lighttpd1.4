@@ -4303,8 +4303,7 @@ mod_webdav_put_0 (request_st * const r, const plugin_config * const pconf)
 static handler_t
 mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
 {
-    if (NULL != http_header_request_get(r, HTTP_HEADER_CONTENT_RANGE,
-                                        CONST_STR_LEN("Content-Range"))) {
+    if (light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_RANGE)) {
         if (pconf->opts & MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT)
             return HANDLER_GO_ON;
         /* [RFC7231] 4.3.4 PUT

@@ -197,8 +197,7 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 			/* file name to be read was too long. return 404 */
 		case ENOENT:
 			if (r->http_method == HTTP_METHOD_OPTIONS
-			    && NULL != http_header_response_get(r, HTTP_HEADER_ALLOW,
-			                                        CONST_STR_LEN("Allow"))) {
+			    && light_btst(r->resp_htags, HTTP_HEADER_ALLOW)) {
 				r->http_status = 200;
 				return HANDLER_FINISHED;
 			}

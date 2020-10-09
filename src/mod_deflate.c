@@ -1532,8 +1532,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	    && r->write_queue.first->type == FILE_CHUNK
 	    && r->write_queue.first->file.start == 0
 	    && !r->write_queue.first->file.is_temp
-	    && !http_header_response_get(r, HTTP_HEADER_RANGE,
-	                                 CONST_STR_LEN("Range"))) {
+	    && !light_btst(r->resp_htags, HTTP_HEADER_RANGE)) {
 		tb = mod_deflate_cache_file_name(r, p->conf.cache_dir, vb);
 		/*(checked earlier and skipped if Transfer-Encoding had been set)*/
 		stat_cache_entry *sce = stat_cache_get_entry(tb);

@@ -1020,7 +1020,7 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
 
   #if 0
     if ((p->conf.opts & PROXY_FORWARDED_CREATE_XFF)
-        && NULL == http_header_request_get(r, HTTP_HEADER_X_FORWARDED_FOR, CONST_STR_LEN("X-Forwarded-For"))) {
+        && !light_btst(r->rqst_htags, HTTP_HEADER_X_FORWARDED_FOR)) {
         /* create X-Forwarded-For if not present
          * (and at least original connecting IP is a trusted proxy) */
         buffer *xff = r->tmp_buf;

@@ -906,7 +906,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		hctx->conf.upgrade =
 		  hctx->conf.upgrade
 		  && r->http_version == HTTP_VERSION_1_1
-		  && NULL != http_header_request_get(r, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade"));
+		  && light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE);
 		hctx->opts.fdfmt = S_IFIFO;
 		hctx->opts.backend = BACKEND_CGI;
 		hctx->opts.authorizer = 0;

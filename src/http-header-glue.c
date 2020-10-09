@@ -186,10 +186,9 @@ int http_response_handle_cachable(request_st * const r, const buffer * const mti
 	                                  CONST_STR_LEN("If-None-Match")))) {
 		/*(weak etag comparison must not be used for ranged requests)*/
 		int range_request =
-		  (r->conf.range_requests
-		   && (200 == r->http_status || 0 == r->http_status)
-		   && NULL != http_header_request_get(r, HTTP_HEADER_RANGE,
-		                                      CONST_STR_LEN("Range")));
+		  (light_btst(r->rqst_htags, HTTP_HEADER_RANGE)
+		   && r->conf.range_requests
+		   && (200 == r->http_status || 0 == r->http_status));
 		if (etag_is_equal(&r->physical.etag, vb->ptr, !range_request)) {
 			if (http_method_get_or_head(r->http_method)) {
 				r->http_status = 304;
@@ -582,8 +581,7 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 
 	/* set response content-type, if not set already */
 
-	if (NULL == http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE,
-	                                     CONST_STR_LEN("Content-Type"))) {
+	if (!light_btst(r->resp_htags, HTTP_HEADER_CONTENT_TYPE)) {
 		const buffer *content_type = stat_cache_content_type_get(sce, r);
 		if (buffer_string_is_empty(content_type)) {
 			/* we are setting application/octet-stream, but also announce that
@@ -611,15 +609,13 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 	}
 
 	if (allow_caching) {
-		const buffer *etag = (0 != r->conf.etag_flags)
-		  ? stat_cache_etag_get(sce, r->conf.etag_flags)
-		  : NULL;
-		if (!buffer_string_is_empty(etag)) {
-			if (NULL == http_header_response_get(r, HTTP_HEADER_ETAG,
-			                                     CONST_STR_LEN("ETag"))) {
+		if (!light_btst(r->resp_htags, HTTP_HEADER_ETAG)
+		    && 0 != r->conf.etag_flags) {
+			const buffer *etag =
+			  stat_cache_etag_get(sce, r->conf.etag_flags);
+			if (!buffer_string_is_empty(etag)) {
 				/* generate e-tag */
 				etag_mutate(&r->physical.etag, etag);
-
 				http_header_response_set(r, HTTP_HEADER_ETAG,
 				                         CONST_STR_LEN("ETag"),
 				                         CONST_BUF_LEN(&r->physical.etag));
@@ -656,8 +652,7 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 	    && (200 == r->http_status || 0 == r->http_status)
 	    && NULL != (vb = http_header_request_get(r, HTTP_HEADER_RANGE,
 	                                             CONST_STR_LEN("Range")))
-	    && NULL == http_header_response_get(r, HTTP_HEADER_CONTENT_ENCODING,
-	                                        CONST_STR_LEN("Content-Encoding"))) {
+	    && !light_btst(r->resp_htags, HTTP_HEADER_CONTENT_ENCODING)) {
 		const buffer *range = vb;
 		int do_range_request = 1;
 		/* check if we have a conditional GET */
