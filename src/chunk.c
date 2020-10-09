@@ -507,6 +507,8 @@ void chunkqueue_steal(chunkqueue * const restrict dest, chunkqueue * const restr
 			case FILE_CHUNK:
 				/* tempfile flag is in "last" chunk after the split */
 				chunkqueue_append_file(dest, c->mem, c->file.start + c->offset, use);
+				if (c->file.fd >= 0)
+					dest->last->file.fd = fdevent_dup_cloexec(c->file.fd);
 				break;
 			}
 
@@ -679,6 +681,8 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue
 				/* partial chunk with length "use" */
 				/* tempfile flag is in "last" chunk after the split */
 				chunkqueue_append_file(dest, c->mem, c->file.start + c->offset, use);
+				if (c->file.fd >= 0)
+					dest->last->file.fd = fdevent_dup_cloexec(c->file.fd);
 
 				c->offset += use;
 				force_assert(0 == len);
