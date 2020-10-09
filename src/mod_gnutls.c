@@ -2584,6 +2584,8 @@ mod_gnutls_close_notify (handler_ctx *hctx)
       default:
         elog(hctx->r->conf.errh, __FILE__, __LINE__, rc,
              "mod_gnutls_close_notify()");
+        __attribute_fallthrough__
+      case GNUTLS_E_PUSH_ERROR: /*(noisy; probably connection reset)*/
         mod_gnutls_detach(hctx);
         return -1;
     }
