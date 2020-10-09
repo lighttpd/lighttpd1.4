@@ -1174,17 +1174,10 @@ static void mod_ssi_read_fd(request_st * const r, handler_ctx * const p, struct 
 
 
 static int mod_ssi_process_file(request_st * const r, handler_ctx * const p, struct stat * const st) {
-	int fd = fdevent_open_cloexec(r->physical.path.ptr, r->conf.follow_symlink, O_RDONLY, 0);
+	int fd = stat_cache_open_rdonly_fstat(&r->physical.path, st, r->conf.follow_symlink);
 	if (-1 == fd) {
 		log_perror(r->conf.errh, __FILE__, __LINE__,
 		  "open(): %s", r->physical.path.ptr);
-		return -1;
-	}
-
-	if (0 != fstat(fd, st)) {
-		log_perror(r->conf.errh, __FILE__, __LINE__,
-		  "fstat(): %s", r->physical.path.ptr);
-		close(fd);
 		return -1;
 	}
 
