@@ -1048,6 +1048,11 @@ stat_cache_entry * stat_cache_get_entry(const buffer *name) {
 	return sce;
 }
 
+int stat_cache_path_isdir(const buffer *name) {
+    const stat_cache_entry * const sce = stat_cache_get_entry(name);
+    return (sce && (S_ISDIR(sce->st.st_mode) ? 1 : (errno = ENOTDIR, 0)));
+}
+
 int stat_cache_path_contains_symlink(const buffer *name, log_error_st *errh) {
     /* caller should check for symlinks only if we should block symlinks. */
 

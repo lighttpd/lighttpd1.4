@@ -50,6 +50,7 @@ void stat_cache_delete_entry(const char *name, uint32_t len);
 void stat_cache_delete_dir(const char *name, uint32_t len);
 void stat_cache_invalidate_entry(const char *name, uint32_t len);
 stat_cache_entry * stat_cache_get_entry(const buffer *name);
+int stat_cache_path_isdir(const buffer *name);
 
 __attribute_cold__
 int stat_cache_path_contains_symlink(const buffer *name, log_error_st *errh);
