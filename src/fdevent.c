@@ -522,6 +522,16 @@ int fdevent_socket_nb_cloexec(int domain, int type, int protocol) {
 	return fd;
 }
 
+int fdevent_dup_cloexec (int fd) {
+  #ifdef F_DUPFD_CLOEXEC
+    return fcntl(fd, F_DUPFD_CLOEXEC, 3);
+  #else
+    const int newfd = fcntl(fd, F_DUPFD, 3);
+    if (newfd >= 0) fdevent_setfd_cloexec(newfd);
+    return newfd;
+  #endif
+}
+
 #ifndef O_BINARY
 #define O_BINARY 0
 #endif
