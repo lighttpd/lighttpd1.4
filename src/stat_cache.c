@@ -1101,7 +1101,9 @@ int stat_cache_open_rdonly_fstat (const buffer *name, struct stat *st, int symli
 		if (0 == fstat(fd, st)) {
 			return fd;
 		} else {
+			const int errnum = errno;
 			close(fd);
+			errno = errnum;
 		}
 	}
 	return -1;
