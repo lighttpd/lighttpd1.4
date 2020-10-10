@@ -92,7 +92,7 @@ static int http_chunk_append_read_fd_range(request_st * const r, const buffer * 
     return (rd >= 0) ? 0 : -1;
 }
 
-static void http_chunk_append_file_fd_range(request_st * const r, const buffer * const fn, const int fd, const off_t offset, const off_t len) {
+void http_chunk_append_file_fd_range(request_st * const r, const buffer * const fn, const int fd, const off_t offset, const off_t len) {
     chunkqueue * const cq = &r->write_queue;
 
     if (r->resp_send_chunked)

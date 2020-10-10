@@ -328,7 +328,7 @@ handler_t http_response_reqbody_read_error (request_st * const r, int http_statu
 }
 
 
-static int http_response_parse_range(request_st * const r, buffer * const path, stat_cache_entry * const sce, const char * const range) {
+static int http_response_parse_range(request_st * const r, const buffer * const path, const int fd, const stat_cache_entry * const sce, const char * const range) {
 	int n = 0;
 	int error;
 	off_t start, end;
@@ -489,10 +489,10 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 
 				/* write END-OF-HEADER */
 				buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
-				chunkqueue_append_mem(&r->write_queue, CONST_BUF_LEN(b));
+				http_chunk_append_mem(r, CONST_BUF_LEN(b));
 			}
 
-			chunkqueue_append_file(&r->write_queue, path, start, end - start + 1);
+			http_chunk_append_file_fd_range(r, path, i < 8 ? fdevent_dup_cloexec(fd) : -1, start, end - start + 1);
 	}
 
 	buffer * const tb = r->tmp_buf;
@@ -502,7 +502,7 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 		buffer_copy_string_len(tb, "\r\n--", 4);
 		buffer_append_string_len(tb, boundary, sizeof(boundary)-1);
 		buffer_append_string_len(tb, "--\r\n", 4);
-		chunkqueue_append_mem(&r->write_queue, CONST_BUF_LEN(tb));
+		http_chunk_append_mem(r, CONST_BUF_LEN(tb));
 
 		/* set header-fields */
 
@@ -692,7 +692,7 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 			/* content prepared, I'm done */
 			r->resp_body_finished = 1;
 
-			if (0 == http_response_parse_range(r, path, sce, range->ptr+6)) {
+			if (0 == http_response_parse_range(r, path, fd, sce, range->ptr+6)) {
 				r->http_status = 206;
 			}
 			close(fd);
