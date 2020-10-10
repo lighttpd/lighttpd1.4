@@ -332,6 +332,7 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 	int n = 0;
 	int error;
 	off_t start, end;
+	const off_t st_size = sce->st.st_size;
 	const char *s, *minus;
 	static const char boundary[] = "fkj49sn38dcn3";
 	const buffer *content_type =
@@ -340,7 +341,7 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 	off_t ranges[16];
 
 	start = 0;
-	end = sce->st.st_size - 1;
+	end = st_size - 1;
 
 	for (s = range, error = 0;
 	     !error && *s && NULL != (minus = strchr(s, '-')); ) {
@@ -377,13 +378,13 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 				/* end */
 				s = err;
 
-				end = sce->st.st_size - 1;
-				start = sce->st.st_size + le;
+				end = st_size - 1;
+				start = st_size + le;
 			} else if (*err == ',') {
 				s = err + 1;
 
-				end = sce->st.st_size - 1;
-				start = sce->st.st_size + le;
+				end = st_size - 1;
+				start = st_size + le;
 			} else {
 				error = 1;
 			}
@@ -396,13 +397,13 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 				if (*(err + 1) == '\0') {
 					s = err + 1;
 
-					end = sce->st.st_size - 1;
+					end = st_size - 1;
 					start = la;
 
 				} else if (*(err + 1) == ',') {
 					s = err + 2;
 
-					end = sce->st.st_size - 1;
+					end = st_size - 1;
 					start = la;
 				} else {
 					error = 1;
@@ -439,9 +440,9 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 			if (start < 0) start = 0;
 
 			/* RFC 2616 - 14.35.1 */
-			if (end > sce->st.st_size - 1) end = sce->st.st_size - 1;
+			if (end > st_size - 1) end = st_size - 1;
 
-			if (start > sce->st.st_size - 1) {
+			if (start > st_size - 1) {
 				error = 1;
 
 				r->http_status = 416;
@@ -479,7 +480,7 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 				buffer_append_string_len(b, CONST_STR_LEN("-"));
 				buffer_append_int(b, end);
 				buffer_append_string_len(b, CONST_STR_LEN("/"));
-				buffer_append_int(b, sce->st.st_size);
+				buffer_append_int(b, st_size);
 
 				if (content_type) {
 					buffer_append_string_len(b, CONST_STR_LEN("\r\nContent-Type: "));
@@ -520,7 +521,7 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 		buffer_append_string_len(tb, CONST_STR_LEN("-"));
 		buffer_append_int(tb, end);
 		buffer_append_string_len(tb, CONST_STR_LEN("/"));
-		buffer_append_int(tb, sce->st.st_size);
+		buffer_append_int(tb, st_size);
 
 		http_header_response_set(r, HTTP_HEADER_CONTENT_RANGE,
 		                         CONST_STR_LEN("Content-Range"),
