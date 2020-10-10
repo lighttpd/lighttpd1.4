@@ -1535,10 +1535,12 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	    && !light_btst(r->resp_htags, HTTP_HEADER_RANGE)) {
 		tb = mod_deflate_cache_file_name(r, p->conf.cache_dir, vb);
 		/*(checked earlier and skipped if Transfer-Encoding had been set)*/
-		stat_cache_entry *sce = stat_cache_get_entry(tb);
+		stat_cache_entry *sce = stat_cache_get_entry_open(tb, 1);
 		if (NULL != sce) {
 			chunkqueue_reset(&r->write_queue);
-			if (0 != http_chunk_append_file(r, tb))
+			int fd = sce->fd >= 0 ? fdevent_dup_cloexec(sce->fd) : -1;
+			if (fd < 0
+			    || 0 != http_chunk_append_file_fd(r, tb, fd, sce->st.st_size))
 				return HANDLER_ERROR;
 			if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH))
 				http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,

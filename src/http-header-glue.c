@@ -534,7 +534,7 @@ static int http_response_parse_range(request_st * const r, const buffer * const 
 
 
 void http_response_send_file (request_st * const r, buffer * const path) {
-	stat_cache_entry * const sce = stat_cache_get_entry(path);
+	stat_cache_entry * const sce = stat_cache_get_entry_open(path, r->conf.follow_symlink);
 	const buffer *mtime = NULL;
 	const buffer *vb;
 	int allow_caching = (0 == r->http_status || 200 == r->http_status);
@@ -569,12 +569,7 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 		return;
 	}
 
-	/*(Note: O_NOFOLLOW affects only the final path segment,
-	 * the target file, not any intermediate symlinks along path)*/
-	const int fd = (0 != sce->st.st_size)
-	  ? fdevent_open_cloexec(path->ptr, r->conf.follow_symlink, O_RDONLY, 0)
-	  : -1;
-	if (fd < 0 && 0 != sce->st.st_size) {
+	if (sce->fd < 0 && 0 != sce->st.st_size) {
 		r->http_status = (errno == ENOENT) ? 404 : 403;
 		if (r->conf.log_request_handling) {
 			log_perror(r->conf.errh, __FILE__, __LINE__,
@@ -637,12 +632,11 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 		}
 
 		if (HANDLER_FINISHED == http_response_handle_cachable(r, mtime)) {
-			if (fd >= 0) close(fd);
 			return;
 		}
 	}
 
-	if (fd < 0) { /* 0-length file */
+	if (0 == sce->st.st_size) {
 		r->http_status = 200;
 		r->resp_body_finished = 1;
 		/*(Transfer-Encoding should not have been set at this point)*/
@@ -692,10 +686,9 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 			/* content prepared, I'm done */
 			r->resp_body_finished = 1;
 
-			if (0 == http_response_parse_range(r, path, fd, sce, range->ptr+6)) {
+			if (0 == http_response_parse_range(r, path, sce->fd, sce, range->ptr+6)) {
 				r->http_status = 206;
 			}
-			close(fd);
 			return;
 		}
 	}
@@ -706,6 +699,7 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 	 * the HEAD request will drop it afterwards again
 	 */
 
+	int fd = sce->fd >= 0 ? fdevent_dup_cloexec(sce->fd) : -1;
 	if (0 == http_chunk_append_file_fd(r, path, fd, sce->st.st_size)) {
 		r->http_status = 200;
 		r->resp_body_finished = 1;
@@ -849,7 +843,7 @@ static void http_response_xsendfile2(request_st * const r, const buffer * const 
             }
         }
 
-        sce = stat_cache_get_entry(b);
+        sce = stat_cache_get_entry_open(b, r->conf.follow_symlink);
         if (NULL == sce) {
             log_error(r->conf.errh, __FILE__, __LINE__,
               "send-file error: couldn't get stat_cache entry for "
@@ -906,11 +900,12 @@ range_success: ;
             break;
         }
         if (range_len != 0) {
-            if (0 !=
-                http_chunk_append_file_range(r, b, begin_range, range_len)) {
+            int fd = sce->fd >= 0 ? fdevent_dup_cloexec(sce->fd) : -1;
+            if (fd < 0) {
                 r->http_status = 502;
                 break;
             }
+            http_chunk_append_file_fd_range(r, b, fd, begin_range, range_len);
         }
 
         if (*pos == ',') pos++;
