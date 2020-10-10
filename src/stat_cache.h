@@ -13,6 +13,7 @@
 typedef struct {
     buffer name;
     time_t stat_ts;
+    int fd;
 #ifdef HAVE_FAM_H
     void *fam_dir;
 #endif
@@ -50,6 +51,7 @@ void stat_cache_delete_entry(const char *name, uint32_t len);
 void stat_cache_delete_dir(const char *name, uint32_t len);
 void stat_cache_invalidate_entry(const char *name, uint32_t len);
 stat_cache_entry * stat_cache_get_entry(const buffer *name);
+stat_cache_entry * stat_cache_get_entry_open(const buffer *name, int symlinks);
 int stat_cache_path_isdir(const buffer *name);
 
 __attribute_cold__

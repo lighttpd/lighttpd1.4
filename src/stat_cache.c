@@ -532,6 +532,7 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
 static stat_cache_entry * stat_cache_entry_init(void) {
     stat_cache_entry *sce = calloc(1, sizeof(*sce));
     force_assert(NULL != sce);
+    sce->fd = -1;
     return sce;
 }
 
@@ -548,6 +549,7 @@ static void stat_cache_entry_free(void *data) {
     free(sce->name.ptr);
     free(sce->etag.ptr);
     if (sce->content_type.size) free(sce->content_type.ptr);
+    if (sce->fd >= 0) close(sce->fd);
 
     free(sce);
 }
@@ -778,6 +780,22 @@ const buffer * stat_cache_etag_get(stat_cache_entry *sce, int flags) {
     return NULL;
 }
 
+__attribute_pure__
+static int stat_cache_stat_eq(const struct stat * const sta, const struct stat * const stb) {
+    return
+      #ifdef st_mtime /* use high-precision timestamp if available */
+      #if defined(__APPLE__) && defined(__MACH__)
+        sta->st_mtimespec.tv_nsec == stb->st_mtimespec.tv_nsec
+      #else
+        sta->st_mtim.tv_nsec == stb->st_mtim.tv_nsec
+      #endif
+      #endif
+        && sta->st_mtime == stb->st_mtime
+        && sta->st_size  == stb->st_size
+        && sta->st_ino   == stb->st_ino
+        && sta->st_dev   == stb->st_dev;
+}
+
 void stat_cache_update_entry(const char *name, uint32_t len,
                              struct stat *st, buffer *etagb)
 {
@@ -788,12 +806,19 @@ void stat_cache_update_entry(const char *name, uint32_t len,
     stat_cache_entry *sce =
       stat_cache_sptree_find(sptree, name, len);
     if (sce && buffer_is_equal_string(&sce->name, name, len)) {
+        if (!stat_cache_stat_eq(&sce->st, st)) {
+            /* etagb might be NULL to clear etag (invalidate) */
+            buffer_copy_string_len(&sce->etag, CONST_BUF_LEN(etagb));
+          #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
+            buffer_clear(&sce->content_type);
+          #endif
+            if (sce->fd >= 0) {
+                close(sce->fd);
+                sce->fd = -1;
+            }
+            sce->st = *st;
+        }
         sce->stat_ts = log_epoch_secs;
-        sce->st = *st; /* etagb might be NULL to clear etag (invalidate) */
-        buffer_copy_string_len(&sce->etag, CONST_BUF_LEN(etagb));
-      #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
-        buffer_clear(&sce->content_type);
-      #endif
     }
 }
 
@@ -1028,6 +1053,14 @@ stat_cache_entry * stat_cache_get_entry(const buffer *name) {
 
 	}
 
+	if (sce->fd >= 0) {
+		/* close fd if file changed */
+		if (!stat_cache_stat_eq(&sce->st, &st)) {
+			close(sce->fd);
+			sce->fd = -1;
+		}
+	}
+
 	sce->st = st; /*(copy prior to calling fam_dir_monitor())*/
 
 #ifdef HAVE_FAM_H
@@ -1046,6 +1079,15 @@ stat_cache_entry * stat_cache_get_entry(const buffer *name) {
 
 	sce->stat_ts = cur_ts;
 	return sce;
+}
+
+stat_cache_entry * stat_cache_get_entry_open(const buffer * const name, const int symlinks) {
+    stat_cache_entry * const sce = stat_cache_get_entry(name);
+    if (NULL == sce) return NULL;
+    if (sce->fd >= 0) return sce;
+    if (sce->st.st_size > 0)
+        sce->fd = stat_cache_open_rdonly_fstat(name, &sce->st, symlinks);
+    return sce; /* (note: sce->fd might still be -1 if open() failed) */
 }
 
 int stat_cache_path_isdir(const buffer *name) {
