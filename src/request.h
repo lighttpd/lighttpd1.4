@@ -164,7 +164,6 @@ struct request_st {
     buffer server_name_buf;
 
     /* response */
-    off_t content_length;
     uint32_t resp_header_len;
     uint64_t resp_htags; /*bitfield of flagged headers present in response*/
     array resp_headers;

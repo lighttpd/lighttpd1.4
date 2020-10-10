@@ -257,7 +257,6 @@ void http_response_body_clear (request_st * const r, int preserve_length) {
                                    CONST_STR_LEN("Transfer-Encoding"));
     }
     if (!preserve_length) { /* preserve for HEAD responses and no-content responses (204, 205, 304) */
-        r->content_length = -1;
         if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
             http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
                                        CONST_STR_LEN("Content-Length"));
@@ -286,7 +285,6 @@ static void http_response_header_clear (request_st * const r) {
      * However, if http_response_process_headers() was called and response had
      * Transfer-Encoding: chunked set, then other items need to be reset */
     r->resp_send_chunked = 0;
-    r->content_length = -1;
     r->resp_decode_chunked = 0;
     if (r->gw_dechunk) {
         free(r->gw_dechunk->b.ptr);
@@ -343,8 +341,6 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 
 	start = 0;
 	end = sce->st.st_size - 1;
-
-	r->content_length = 0;
 
 	for (s = range, error = 0;
 	     !error && *s && NULL != (minus = strchr(s, '-')); ) {
@@ -492,13 +488,10 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 
 				/* write END-OF-HEADER */
 				buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
-
-				r->content_length += buffer_string_length(b);
 				chunkqueue_append_mem(&r->write_queue, CONST_BUF_LEN(b));
 			}
 
 			chunkqueue_append_file(&r->write_queue, path, start, end - start + 1);
-			r->content_length += end - start + 1;
 	}
 
 	buffer * const tb = r->tmp_buf;
@@ -508,8 +501,6 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 		buffer_copy_string_len(tb, "\r\n--", 4);
 		buffer_append_string_len(tb, boundary, sizeof(boundary)-1);
 		buffer_append_string_len(tb, "--\r\n", 4);
-
-		r->content_length += buffer_string_length(tb);
 		chunkqueue_append_mem(&r->write_queue, CONST_BUF_LEN(tb));
 
 		/* set header-fields */
@@ -742,7 +733,6 @@ static void http_response_xsendfile (request_st * const r, buffer * const path, 
 	if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
 		http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
 		                           CONST_STR_LEN("Content-Length"));
-		r->content_length = -1;
 	}
 
 	buffer_urldecode_path(path);
@@ -803,7 +793,6 @@ static void http_response_xsendfile2(request_st * const r, const buffer * const 
     if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
         http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
                                    CONST_STR_LEN("Content-Length"));
-        r->content_length = -1;
     }
 
     while (*pos) {
@@ -1157,7 +1146,6 @@ static int http_response_process_headers(request_st * const r, http_response_opt
             if (r->http_version >= HTTP_VERSION_2) continue;
             break;
           case HTTP_HEADER_CONTENT_LENGTH:
-            r->content_length = strtoul(value, NULL, 10);
             if (*value == '+') ++value;
             break;
           case HTTP_HEADER_TRANSFER_ENCODING:
