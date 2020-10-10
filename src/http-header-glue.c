@@ -185,10 +185,7 @@ int http_response_handle_cachable(request_st * const r, const buffer * const mti
 	if ((vb = http_header_request_get(r, HTTP_HEADER_IF_NONE_MATCH,
 	                                  CONST_STR_LEN("If-None-Match")))) {
 		/*(weak etag comparison must not be used for ranged requests)*/
-		int range_request =
-		  (light_btst(r->rqst_htags, HTTP_HEADER_RANGE)
-		   && r->conf.range_requests
-		   && (200 == r->http_status || 0 == r->http_status));
+		int range_request = (0 != light_btst(r->rqst_htags, HTTP_HEADER_RANGE));
 		if (etag_is_equal(&r->physical.etag, vb->ptr, !range_request)) {
 			if (http_method_get_or_head(r->http_method)) {
 				r->http_status = 304;
@@ -325,6 +322,46 @@ handler_t http_response_reqbody_read_error (request_st * const r, int http_statu
     r->http_status = http_status;
     r->handler_module = NULL;
     return HANDLER_FINISHED;
+}
+
+
+static int http_response_coalesce_ranges (off_t * const ranges, int n)
+{
+    /* coalesce/combine overlapping ranges and ranges separated by a
+     * gap which is smaller than the overhead of sending multiple parts
+     * (typically around 80 bytes) ([RFC7233] 4.1 206 Partial Content)
+     * (ranges are known to be positive, so subtract 80 instead of add 80
+     *  to avoid any chance of integer overflow)
+     * (max n should be limited in caller since a malicious set of ranges has
+     *  n^2 cost for the simplistic algorithm below)
+     * (sorting the ranges and then combining would lower the cost, but the
+     *  cost should not be an issue since client should not send many ranges
+     *  and caller should restrict the max number of ranges to limit abuse)
+     * [RFC7233] 4.1 206 Partial Content recommends:
+     *   When a multipart response payload is generated, the server SHOULD send
+     *   the parts in the same order that the corresponding byte-range-spec
+     *   appeared in the received Range header field, excluding those ranges
+     *   that were deemed unsatisfiable or that were coalesced into other ranges
+     */
+    for (int i = 0; i+2 < n; i += 2) {
+        const off_t b = ranges[i];
+        const off_t e = ranges[i+1];
+        for (int j = i+2; j < n; j += 2) {
+            /* common case: ranges do not overlap */
+            if (b <= ranges[j] ? e < ranges[j]-80 : ranges[j+1] < b-80)
+                continue;
+            /* else ranges do overlap, so combine into first range */
+            ranges[i]   = b <= ranges[j]   ? b : ranges[j];
+            ranges[i+1] = e >= ranges[j+1] ? e : ranges[j+1];
+            memmove(ranges+j, ranges+j+2, (n-j-2)*sizeof(off_t));
+            /* restart outer loop from beginning */
+            n -= 2;
+            i = -2;
+            break;
+        }
+    }
+
+    return n;
 }
 
 
@@ -465,6 +502,8 @@ static int http_response_parse_range(request_st * const r, const buffer * const 
 	/* something went wrong */
 	if (error) return -1;
 
+	if (n > 2) n = http_response_coalesce_ranges(ranges, n);
+
 	for (int i = 0; i < n; i += 2) {
 			start = ranges[i];
 			end = ranges[i+1];
@@ -601,6 +640,9 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 		}
 	}
 
+	if (!http_method_get_or_head(r->http_method)
+	    || r->http_version < HTTP_VERSION_1_1)
+		r->conf.range_requests = 0;
 	if (r->conf.range_requests) {
 		http_header_response_append(r, HTTP_HEADER_ACCEPT_RANGES,
 		                            CONST_STR_LEN("Accept-Ranges"),

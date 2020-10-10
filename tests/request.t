@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 51;
+use Test::More tests => 52;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -253,80 +253,97 @@ ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked; chunked head
 ## ranges
 
 $t->{REQUEST}  = ( <<EOF
-GET /12345.txt HTTP/1.0
+GET /12345.txt HTTP/1.1
 Host: 123.example.org
+Connection: close
 Range: bytes=0-3
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => '1234' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 206, 'HTTP-Content' => '1234' } ];
 ok($tf->handle_http($t) == 0, 'GET, Range 0-3');
 
 $t->{REQUEST}  = ( <<EOF
-GET /12345.txt HTTP/1.0
+GET /12345.txt HTTP/1.1
 Host: 123.example.org
+Connection: close
 Range: bytes=-3
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => '45'."\n" } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 206, 'HTTP-Content' => '45'."\n" } ];
 ok($tf->handle_http($t) == 0, 'GET, Range -3');
 
 $t->{REQUEST}  = ( <<EOF
-GET /12345.txt HTTP/1.0
+GET /12345.txt HTTP/1.1
 Host: 123.example.org
+Connection: close
 Range: bytes=3-
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => '45'."\n" } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 206, 'HTTP-Content' => '45'."\n" } ];
 ok($tf->handle_http($t) == 0, 'GET, Range 3-');
 
 $t->{REQUEST}  = ( <<EOF
-GET /12345.txt HTTP/1.0
+GET /12345.txt HTTP/1.1
 Host: 123.example.org
+Connection: close
 Range: bytes=0-1,3-4
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => <<EOF
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 206, 'HTTP-Content' => '12345' } ];
+ok($tf->handle_http($t) == 0, 'GET, Range 0-1,3-4 (ranges merged)');
+
+$t->{REQUEST}  = ( <<EOF
+GET /100.txt HTTP/1.1
+Host: 123.example.org
+Connection: close
+Range: bytes=0-1,97-98
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 206, 'HTTP-Content' => <<EOF
 \r
 --fkj49sn38dcn3\r
-Content-Range: bytes 0-1/6\r
+Content-Range: bytes 0-1/100\r
 Content-Type: text/plain\r
 \r
 12\r
 --fkj49sn38dcn3\r
-Content-Range: bytes 3-4/6\r
+Content-Range: bytes 97-98/100\r
 Content-Type: text/plain\r
 \r
-45\r
+hi\r
 --fkj49sn38dcn3--\r
 EOF
  } ];
-ok($tf->handle_http($t) == 0, 'GET, Range 0-1,3-4');
+ok($tf->handle_http($t) == 0, 'GET, Range 0-1,97-98 (ranges not merged)');
 
 $t->{REQUEST}  = ( <<EOF
-GET /12345.txt HTTP/1.0
+GET /12345.txt HTTP/1.1
 Host: 123.example.org
+Connection: close
 Range: bytes=0--
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'GET, Range 0--');
 
 $t->{REQUEST}  = ( <<EOF
-GET /12345.txt HTTP/1.0
+GET /12345.txt HTTP/1.1
 Host: 123.example.org
+Connection: close
 Range: bytes=-2-3
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'GET, Range -2-3');
 
 $t->{REQUEST}  = ( <<EOF
-GET /12345.txt HTTP/1.0
+GET /12345.txt HTTP/1.1
 Host: 123.example.org
+Connection: close
 Range: bytes=-0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 416, 'HTTP-Content' => <<EOF
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 416, 'HTTP-Content' => <<EOF
 <?xml version="1.0" encoding="iso-8859-1"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -343,12 +360,13 @@ EOF
 ok($tf->handle_http($t) == 0, 'GET, Range -0');
 
 $t->{REQUEST}  = ( <<EOF
-GET /12345.txt HTTP/1.0
+GET /12345.txt HTTP/1.1
 Host: 123.example.org
+Connection: close
 Range: bytes=25-
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 416, 'HTTP-Content' => <<EOF
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 416, 'HTTP-Content' => <<EOF
 <?xml version="1.0" encoding="iso-8859-1"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -384,31 +402,35 @@ ok($tf->handle_http($t) == 0, 'larger headers');
 
 
 $t->{REQUEST}  = ( <<EOF
-GET /range.pdf HTTP/1.0
+GET /range.pdf HTTP/1.1
+Host: 123.example.org
 Range: bytes=0-
+Connection: close
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'GET, Range with range-requests-disabled');
 
 $t->{REQUEST}  = ( <<EOF
-GET /12345.txt HTTP/1.0
+GET /12345.txt HTTP/1.1
 Host: 123.example.org
+Connection: close
 Range: 0
 Range: bytes=0-3
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => "12345\n" } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, 'HTTP-Content' => "12345\n" } ];
 ok($tf->handle_http($t) == 0, 'GET, Range invalid range-unit (first)');
 
 $t->{REQUEST}  = ( <<EOF
-GET /12345.txt HTTP/1.0
+GET /12345.txt HTTP/1.1
 Host: 123.example.org
+Connection: close
 Range: bytes=0-3
 Range: 0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 206 } ];
 ok($tf->handle_http($t) == 0, 'GET, Range ignore invalid range (second)');
 
 $t->{REQUEST}  = ( <<EOF

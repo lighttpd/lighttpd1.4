@@ -163,12 +163,14 @@ EOF
 }
 
 $t->{REQUEST}  = ( <<EOF
-GET / HTTP/1.0
+GET / HTTP/1.1
+Host: www.example.org
 If-None-Match: W/$etag
+Connection: close
 Range: bytes=0-0
 EOF
 );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 206, 'HTTP-Content' => '<' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 206, 'HTTP-Content' => '<' } ];
 ok($tf->handle_http($t) == 0, 'A weak etag does not match for ranged requests');
 
 $t->{REQUEST}  = ( <<EOF

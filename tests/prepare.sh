@@ -54,7 +54,7 @@ touch "${tmpdir}/servers/www.example.org/pages/image.jpg" \
       "${tmpdir}/servers/www.example.org/pages/Foo.txt" \
       "${tmpdir}/servers/www.example.org/pages/a" \
       "${tmpdir}/servers/www.example.org/pages/index.html~"
-echo "12345" > "${tmpdir}/servers/www.example.org/pages/range.pdf"
+echo "12345" > "${tmpdir}/servers/123.example.org/pages/range.pdf"
 
 printf "%-40s" "preparing infrastructure"
 
