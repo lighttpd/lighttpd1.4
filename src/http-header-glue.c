@@ -331,7 +331,7 @@ handler_t http_response_reqbody_read_error (request_st * const r, int http_statu
 
 
 static int http_response_parse_range(request_st * const r, buffer * const path, stat_cache_entry * const sce, const char * const range) {
-	int multipart = 0;
+	int n = 0;
 	int error;
 	off_t start, end;
 	const char *s, *minus;
@@ -339,6 +339,7 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 	const buffer *content_type =
 	  http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE,
 	                           CONST_STR_LEN("Content-Type"));
+	off_t ranges[16];
 
 	start = 0;
 	end = sce->st.st_size - 1;
@@ -383,7 +384,6 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 				end = sce->st.st_size - 1;
 				start = sce->st.st_size + le;
 			} else if (*err == ',') {
-				multipart = 1;
 				s = err + 1;
 
 				end = sce->st.st_size - 1;
@@ -404,7 +404,6 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 					start = la;
 
 				} else if (*(err + 1) == ',') {
-					multipart = 1;
 					s = err + 2;
 
 					end = sce->st.st_size - 1;
@@ -429,7 +428,6 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 					end = le;
 					start = la;
 				} else if (*err == ',') {
-					multipart = 1;
 					s = err + 1;
 
 					end = le;
@@ -455,7 +453,25 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 		}
 
 		if (!error) {
-			if (multipart) {
+			if (n < (int)(sizeof(ranges)/sizeof(*ranges))) {
+				ranges[n] = start;
+				ranges[n+1] = end;
+				n += 2;
+			}
+			else { /* excessive num ranges in request */
+				error = 1;
+				r->http_status = 416;
+			}
+		}
+	}
+
+	/* something went wrong */
+	if (error) return -1;
+
+	for (int i = 0; i < n; i += 2) {
+			start = ranges[i];
+			end = ranges[i+1];
+			if (n > 2) {
 				/* write boundary-header */
 				buffer *b = r->tmp_buf;
 				buffer_copy_string_len(b, CONST_STR_LEN("\r\n--"));
@@ -483,15 +499,11 @@ static int http_response_parse_range(request_st * const r, buffer * const path, 
 
 			chunkqueue_append_file(&r->write_queue, path, start, end - start + 1);
 			r->content_length += end - start + 1;
-		}
 	}
-
-	/* something went wrong */
-	if (error) return -1;
 
 	buffer * const tb = r->tmp_buf;
 
-	if (multipart) {
+	if (n > 2) {
 		/* add boundary end */
 		buffer_copy_string_len(tb, "\r\n--", 4);
 		buffer_append_string_len(tb, boundary, sizeof(boundary)-1);
