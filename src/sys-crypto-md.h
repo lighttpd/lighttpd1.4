@@ -257,6 +257,13 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 
 #elif defined(USE_OPENSSL_CRYPTO)
 
+#include <openssl/opensslv.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/macros.h>
+#undef DEPRECATEDIN_3_0
+#define DEPRECATEDIN_3_0(f) f;
+#endif
+
 #include <openssl/md4.h>
 #include <openssl/md5.h>
 #include <openssl/sha.h>
