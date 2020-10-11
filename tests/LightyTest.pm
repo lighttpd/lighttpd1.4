@@ -234,15 +234,15 @@ sub handle_http {
 
 			print $remote $_;
 			diag("<< ".$_."\n") if $is_debug;
-			select(undef, undef, undef, 0.1);
+			select(undef, undef, undef, 0.001);
 			print $remote "\015";
-			select(undef, undef, undef, 0.1);
+			select(undef, undef, undef, 0.001);
 			print $remote "\012";
-			select(undef, undef, undef, 0.1);
+			select(undef, undef, undef, 0.001);
 			print $remote "\015";
-			select(undef, undef, undef, 0.1);
+			select(undef, undef, undef, 0.001);
 			print $remote "\012";
-			select(undef, undef, undef, 0.1);
+			select(undef, undef, undef, 0.001);
 		}
 
 	}
