@@ -50,7 +50,6 @@
 #endif
 
 #include "sys-crypto.h"
-#include "sys-crypto-md.h"
 
 #ifdef BORINGSSL_API_VERSION
 #undef OPENSSL_NO_STDIO /* for X509_STORE_load_locations() */
@@ -83,6 +82,10 @@
 #ifndef OPENSSL_NO_ECDH
 #include <openssl/ecdh.h>
 #endif
+#endif
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/core_names.h>
 #endif
 
 #include "base.h"
@@ -314,9 +317,11 @@ tlsext_ticket_wipe_expired (const time_t cur_ts)
 }
 
 
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+
 /* based on reference implementation from openssl 1.1.1g man page
  *   man SSL_CTX_set_tlsext_ticket_key_cb
- * but openssl code uses EVP_aes_256_cbc() instead of EVP_aes_128_cbc()
+ * but mod_openssl code uses EVP_aes_256_cbc() instead of EVP_aes_128_cbc()
  */
 static int
 ssl_tlsext_ticket_key_cb (SSL *s, unsigned char key_name[16],
@@ -349,6 +354,56 @@ ssl_tlsext_ticket_key_cb (SSL *s, unsigned char key_name[16],
          * even though the current ticket is still valid */
     }
 }
+
+#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+/* based on reference implementation from openssl 3.0.0 man page
+ *   man SSL_CTX_set_tlsext_ticket_key_cb
+ */
+static int
+ssl_tlsext_ticket_key_cb(SSL *s, unsigned char key_name[16],
+                         unsigned char *iv, EVP_CIPHER_CTX *ctx,
+                         EVP_MAC_CTX *hctx, int enc)
+{
+    OSSL_PARAM params[3];
+    UNUSED(s);
+    if (enc) { /* create new session */
+        tlsext_ticket_key_t *k = tlsext_ticket_key_get();
+        if (NULL == k)
+            return 0; /* current key does not exist or is not valid */
+        memcpy(key_name, k->tick_key_name, 16);
+        if (RAND_bytes(iv, EVP_MAX_IV_LENGTH) <= 0)
+            return -1; /* insufficient random */
+        EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, k->tick_aes_key, iv);
+        params[0] = OSSL_PARAM_construct_octet_string(OSSL_MAC_PARAM_KEY,
+                                                      k->tick_hmac_key,
+                                                      sizeof(k->tick_hmac_key));
+        params[1] = OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST,
+                                                     CONST_STR_LEN("sha256")+1);
+        params[2] = OSSL_PARAM_construct_end();
+        EVP_MAC_CTX_set_params(hctx, params);
+        return 1;
+    }
+    else { /* retrieve session */
+        int refresh;
+        tlsext_ticket_key_t *k = tlsext_ticket_key_find(key_name, &refresh);
+        if (NULL == k)
+            return 0;
+        params[0] = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_KEY,
+                                                      k->tick_hmac_key,
+                                                      sizeof(k->tick_hmac_key));
+        params[1] = OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST,
+                                                     CONST_STR_LEN("sha256")+1);
+        params[2] = OSSL_PARAM_construct_end();
+        EVP_MAC_CTX_set_params(hctx, params);
+        EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, k->tick_aes_key, iv);
+        return refresh ? 2 : 1;
+        /* 'refresh' will trigger issuing new ticket for session
+         * even though the current ticket is still valid */
+    }
+}
+
+#endif
 
 
 static int
@@ -2152,7 +2207,12 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             return -1;
 
       #ifdef TLSEXT_TYPE_session_ticket
+       #if OPENSSL_VERSION_NUMBER < 0x30000000L
         SSL_CTX_set_tlsext_ticket_key_cb(s->ssl_ctx, ssl_tlsext_ticket_key_cb);
+       #else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+        SSL_CTX_set_tlsext_ticket_key_evp_cb(s->ssl_ctx,
+                                             ssl_tlsext_ticket_key_cb);
+       #endif
       #endif
 
       #ifndef OPENSSL_NO_OCSP
