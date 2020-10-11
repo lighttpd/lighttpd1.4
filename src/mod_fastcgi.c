@@ -382,12 +382,11 @@ static void fastcgi_get_packet_body(buffer * const b, handler_ctx * const hctx, 
     buffer_string_set_length(b, blen + packet->len - packet->padding);
 }
 
+__attribute_cold__
+__attribute_noinline__
 static int
 mod_fastcgi_chunk_decode_transfer_cqlen (request_st * const r, chunkqueue * const src, const unsigned int len)
 {
-    if (!r->resp_decode_chunked)
-        return http_chunk_transfer_cqlen(r, src, len);
-
     if (0 == len) return 0;
 
     /* specialized for mod_fastcgi to decode chunked encoding;
@@ -405,6 +404,14 @@ mod_fastcgi_chunk_decode_transfer_cqlen (request_st * const r, chunkqueue * cons
     }
     chunkqueue_mark_written(src, len);
     return 0;
+}
+
+static int
+mod_fastcgi_transfer_cqlen (request_st * const r, chunkqueue * const src, const unsigned int len)
+{
+    return (!r->resp_decode_chunked)
+      ? http_chunk_transfer_cqlen(r, src, len)
+      : mod_fastcgi_chunk_decode_transfer_cqlen(r, src, len);
 }
 
 static handler_t fcgi_recv_parse(request_st * const r, struct http_response_opts_t *opts, buffer *b, size_t n) {
@@ -469,7 +476,7 @@ static handler_t fcgi_recv_parse(request_st * const r, struct http_response_opts
 					hctx->send_content_body = 0;
 				}
 			} else if (hctx->send_content_body) {
-				if (0 != mod_fastcgi_chunk_decode_transfer_cqlen(r, hctx->rb, packet.len - packet.padding)) {
+				if (0 != mod_fastcgi_transfer_cqlen(r, hctx->rb, packet.len - packet.padding)) {
 					/* error writing to tempfile;
 					 * truncate response or send 500 if nothing sent yet */
 					fin = 1;
