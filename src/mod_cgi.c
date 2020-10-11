@@ -526,6 +526,7 @@ static int cgi_env_add(void *venv, const char *key, size_t key_len, const char *
 	return 0;
 }
 
+#ifndef SPLICE_F_NONBLOCK
 /*(improved from network_write_mmap.c)*/
 static off_t mmap_align_offset(off_t start) {
     static off_t pagemask = 0;
@@ -536,6 +537,7 @@ static off_t mmap_align_offset(off_t start) {
     }
     return (start & pagemask);
 }
+#endif
 
 /* returns: 0: continue, -1: fatal error, -2: connection reset */
 /* similar to network_write_file_chunk_mmap, but doesn't use send on windows (because we're on pipes),
@@ -546,10 +548,8 @@ static off_t mmap_align_offset(off_t start) {
  */
 static ssize_t cgi_write_file_chunk_mmap(request_st * const r, int fd, chunkqueue *cq) {
 	chunk* const c = cq->first;
-	off_t offset, toSend, file_end;
+	off_t offset, toSend;
 	ssize_t wr;
-	size_t mmap_offset, mmap_avail;
-	char *data = NULL;
 
 	force_assert(NULL != c);
 	force_assert(FILE_CHUNK == c->type);
@@ -557,12 +557,20 @@ static ssize_t cgi_write_file_chunk_mmap(request_st * const r, int fd, chunkqueu
 
 	offset = c->file.start + c->offset;
 	toSend = c->file.length - c->offset;
-	file_end = c->file.start + c->file.length; /* offset to file end in this chunk */
 
 	if (0 == toSend) {
 		chunkqueue_remove_finished_chunks(cq);
 		return 0;
 	}
+
+  #ifdef SPLICE_F_NONBLOCK
+	loff_t abs_offset = offset;
+	wr = splice(c->file.fd, &abs_offset, fd, NULL,
+	            (size_t)toSend, SPLICE_F_NONBLOCK);
+  #else
+	size_t mmap_offset, mmap_avail;
+	char *data = NULL;
+	off_t file_end = c->file.start + c->file.length; /* offset to file end in this chunk */
 
 	/*(simplified from chunk.c:chunkqueue_open_file_chunk())*/
 	if (-1 == c->file.fd) {
@@ -619,6 +627,7 @@ static ssize_t cgi_write_file_chunk_mmap(request_st * const r, int fd, chunkqueu
 	wr = write(fd, data, toSend);
 
 	if (MAP_FAILED == c->file.mmap.start) free(data);
+  #endif
 
 	if (wr < 0) {
 		switch (errno) {
