@@ -758,27 +758,40 @@ static void chunkqueue_remove_empty_chunks(chunkqueue *cq) {
 	}
 }
 
+void chunkqueue_compact_mem_offset(chunkqueue * const cq) {
+    chunk * const restrict c = cq->first;
+    if (0 == c->offset) return;
+    if (c->type != MEM_CHUNK) return; /*(should not happen)*/
+
+    buffer * const restrict b = c->mem;
+    size_t len = chunk_buffer_string_length(b) - c->offset;
+    memmove(b->ptr, b->ptr+c->offset, len);
+    c->offset = 0;
+    buffer_string_set_length(b, len);
+}
+
 void chunkqueue_compact_mem(chunkqueue *cq, size_t clen) {
+    /* caller must guarantee that chunks in chunkqueue are MEM_CHUNK,
+     * which is currently always true when reading input from client */
     chunk *c = cq->first;
     buffer *b = c->mem;
-    size_t len = buffer_string_length(b) - c->offset;
+    size_t len = chunk_buffer_string_length(b) - c->offset;
+    if (len <= clen) return;
     if (b->size > clen) {
-        if (0 != c->offset) {
-            memmove(b->ptr, b->ptr+c->offset, len);
-            buffer_string_set_length(b, len);
-            c->offset = 0;
-        }
+        if (chunk_buffer_string_space(b) < clen - len)
+            chunkqueue_compact_mem_offset(cq);
     }
     else {
-        b = chunkqueue_prepend_buffer_open_sz(cq, clen + 8192);
+        b = chunkqueue_prepend_buffer_open_sz(cq, clen+1);
         buffer_append_string_len(b, c->mem->ptr + c->offset, len);
         cq->first->next = c->next;
         if (NULL == c->next) cq->last = cq->first;
         chunk_release(c);
         c = cq->first;
     }
+
     for (chunk *fc = c; ((clen -= len) && (c = fc->next)); ) {
-        len = buffer_string_length(c->mem) - c->offset;
+        len = chunk_buffer_string_length(c->mem) - c->offset;
         if (len > clen) {
             buffer_append_string_len(b, c->mem->ptr + c->offset, clen);
             c->offset += clen;
@@ -893,7 +906,8 @@ chunkqueue_peek_data (chunkqueue * const cq,
         switch (c->type) {
           case MEM_CHUNK:
             {
-                uint32_t have = buffer_string_length(c->mem) - (uint32_t)c->offset;
+                uint32_t have =
+                  chunk_buffer_string_length(c->mem) - (uint32_t)c->offset;
                 if (have > space)
                     have = space;
                 if (*dlen)

@@ -896,42 +896,8 @@ h2_frame_cq_compact (chunkqueue * const cq, uint32_t len)
         /*assert(cq->first != cq->last);*//*(multiple chunks)*/
     /* caller must guarantee that chunks in chunkqueue are all MEM_CHUNK */
 
-    /* move data to beginning of buffer if offset is large or data is short */
-    chunk *c = cq->first;
-    uint32_t mlen = buffer_string_length(c->mem);
-    if (mlen < c->offset) {
-        memmove(c->mem->ptr, c->mem->ptr + c->offset, mlen);
-        buffer_string_set_length(c->mem, mlen);
-        c->offset = 0;
-    }
-
-    /* combine first mem chunk with next non-empty mem chunks up to len
-     * (loop if next chunk is empty) */
-    /* (modified from connection_handle_read_post_cq_compact()) */
-    uint32_t clen = mlen;
-    do {
-        buffer * const mem = c->next->mem;
-        const off_t offset = c->next->offset;
-        mlen = buffer_string_length(mem) - (uint32_t)offset;
-        force_assert(c->type == MEM_CHUNK);
-        force_assert(c->next->type == MEM_CHUNK);
-        if (mlen > clen - len) {
-            mlen = clen - len;
-            buffer_append_string_len(c->mem, mem->ptr+offset, mlen);
-            c->next->offset += mlen;
-            return len;
-        }
-
-        buffer_append_string_len(c->mem, mem->ptr+offset, mlen);
-        clen += mlen;
-        /*(swap first and second chunk, then remove first chunk)*/
-        c->next->offset = c->offset;
-        c->next->mem = c->mem;
-        c->mem = mem;
-        c->offset = offset + (off_t)mlen;
-        chunkqueue_remove_finished_chunks(cq);
-    } while ((c = cq->first)); /*(need to re-read cq->first)*/
-    return clen;
+    chunkqueue_compact_mem(cq, len);
+    return buffer_string_length(cq->first->mem) - (uint32_t)cq->first->offset;
 }
 
 

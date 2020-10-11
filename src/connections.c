@@ -704,10 +704,8 @@ static int connection_handle_read_state(connection * const con)  {
         if (NULL == c) continue;
         clen = buffer_string_length(c->mem) - c->offset;
         if (0 == clen) continue;
-        if (c->offset > USHRT_MAX) { /*(highly unlikely)*/
-            chunkqueue_compact_mem(cq, clen);
-            c = cq->first; /*(reload c after chunkqueue_compact_mem())*/
-        }
+        if (c->offset > USHRT_MAX) /*(highly unlikely)*/
+            chunkqueue_compact_mem_offset(cq);
 
         hoff[0] = 1;                         /* number of lines */
         hoff[1] = (unsigned short)c->offset; /* base offset for all lines */
@@ -1659,20 +1657,14 @@ connection_handle_read_post_cq_compact (chunkqueue * const cq)
 {
     /* combine first mem chunk with next non-empty mem chunk
      * (loop if next chunk is empty) */
-    chunk *c;
-    while (NULL != (c = cq->first) && NULL != c->next) {
-        buffer *mem = c->next->mem;
-        off_t offset = c->next->offset;
-        size_t blen = buffer_string_length(mem) - (size_t)offset;
-        force_assert(c->type == MEM_CHUNK);
-        force_assert(c->next->type == MEM_CHUNK);
-        buffer_append_string_len(c->mem, mem->ptr+offset, blen);
-        c->next->offset = c->offset;
-        c->next->mem = c->mem;
-        c->mem = mem;
-        c->offset = offset + (off_t)blen;
-        chunkqueue_remove_finished_chunks(cq);
-        if (0 != blen) return 1;
+    chunk *c = cq->first;
+    if (NULL == c) return 0;
+    const uint32_t mlen = buffer_string_length(c->mem) - (size_t)c->offset;
+    while ((c = c->next)) {
+        const uint32_t blen = buffer_string_length(c->mem) - (size_t)c->offset;
+        if (0 == blen) continue;
+        chunkqueue_compact_mem(cq, mlen + blen);
+        return 1;
     }
     return 0;
 }
