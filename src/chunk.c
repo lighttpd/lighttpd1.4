@@ -779,7 +779,11 @@ void chunkqueue_compact_mem(chunkqueue *cq, size_t clen) {
     }
     for (chunk *fc = c; ((clen -= len) && (c = fc->next)); ) {
         len = buffer_string_length(c->mem) - c->offset;
-        if (len > clen) len = clen;
+        if (len > clen) {
+            buffer_append_string_len(b, c->mem->ptr + c->offset, clen);
+            c->offset += clen;
+            break;
+        }
         buffer_append_string_len(b, c->mem->ptr + c->offset, len);
         fc->next = c->next;
         if (NULL == c->next) cq->last = fc;
