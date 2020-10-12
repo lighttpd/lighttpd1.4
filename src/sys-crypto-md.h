@@ -22,49 +22,53 @@
 #define USE_LIB_CRYPTO_MD4
 typedef struct md4_ctx MD4_CTX;
 #define MD4_Init(ctx) \
-        nettle_md4_init(ctx)
+        (nettle_md4_init(ctx), 1)
 #define MD4_Final(digest, ctx) \
-        nettle_md4_digest((ctx),MD4_DIGEST_SIZE,(digest))
-static inline void
+        (nettle_md4_digest((ctx),MD4_DIGEST_SIZE,(digest)), 1)
+static inline int
 MD4_Update(MD4_CTX *ctx, const void *data, size_t length)
 {
     nettle_md4_update(ctx, length, data);
+    return 1;
 }
 
 #define USE_LIB_CRYPTO_MD5
 typedef struct md5_ctx MD5_CTX;
 #define MD5_Init(ctx) \
-        nettle_md5_init(ctx)
+        (nettle_md5_init(ctx), 1)
 #define MD5_Final(digest, ctx) \
-        nettle_md5_digest((ctx),MD5_DIGEST_SIZE,(digest))
-static inline void
+        (nettle_md5_digest((ctx),MD5_DIGEST_SIZE,(digest)), 1)
+static inline int
 MD5_Update(MD5_CTX *ctx, const void *data, size_t length)
 {
     nettle_md5_update(ctx, length, data);
+    return 1;
 }
 
 #define USE_LIB_CRYPTO_SHA1
 typedef struct sha1_ctx SHA_CTX;
 #define SHA1_Init(ctx) \
-        nettle_sha1_init(ctx)
+        (nettle_sha1_init(ctx), 1)
 #define SHA1_Final(digest, ctx) \
-        nettle_sha1_digest((ctx),SHA1_DIGEST_SIZE,(digest))
-static inline void
+        (nettle_sha1_digest((ctx),SHA1_DIGEST_SIZE,(digest)), 1)
+static inline int
 SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
 {
     nettle_sha1_update(ctx, length, data);
+    return 1;
 }
 
 #define USE_LIB_CRYPTO_SHA256
 typedef struct sha256_ctx SHA256_CTX;
 #define SHA256_Init(ctx) \
-        nettle_sha256_init(ctx)
+        (nettle_sha256_init(ctx), 1)
 #define SHA256_Final(digest, ctx) \
-        nettle_sha256_digest((ctx),SHA256_DIGEST_SIZE,(digest))
-static inline void
+        (nettle_sha256_digest((ctx),SHA256_DIGEST_SIZE,(digest)), 1)
+static inline int
 SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 {
     nettle_sha256_update(ctx, length, data);
+    return 1;
 }
 
 #define USE_LIB_CRYPTO_SHA512_256
@@ -73,13 +77,14 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 #endif
 typedef struct sha512_256_ctx SHA512_CTX;    /*(yes, SHA512_CTX)*/
 #define SHA512_256_Init(ctx) \
-        nettle_sha512_256_init(ctx)
+        (nettle_sha512_256_init(ctx), 1)
 #define SHA512_256_Final(digest, ctx) \
-        nettle_sha512_256_digest((ctx),SHA256_DIGEST_SIZE,(digest))
-static inline void
+        (nettle_sha512_256_digest((ctx),SHA256_DIGEST_SIZE,(digest)), 1)
+static inline int
 SHA512_256_Update(SHA512_CTX *ctx, const void *data, size_t length)
 {
     nettle_sha512_update(ctx, length, data); /*(yes, nettle_sha512_update())*/
+    return 1;
 }
 
 #elif defined(USE_MBEDTLS_CRYPTO)
@@ -89,13 +94,18 @@ SHA512_256_Update(SHA512_CTX *ctx, const void *data, size_t length)
 #include <mbedtls/md4.h>
 typedef struct mbedtls_md4_context MD4_CTX;
 #define MD4_Init(ctx) \
-        (mbedtls_md4_init(ctx), mbedtls_md4_starts_ret(ctx))
-#define MD4_Final(digest, ctx) \
-        (mbedtls_md4_finish_ret((ctx),(digest)), mbedtls_md4_free(ctx))
-static inline void
+        (mbedtls_md4_init(ctx), 0 == mbedtls_md4_starts_ret(ctx))
+static inline int
+MD4_Final(unsigned char *digest, MD4_CTX *ctx)
+{
+    int rc = mbedtls_md4_finish_ret(ctx, digest);
+    mbedtls_md4_free(ctx);
+    return (0 == rc);
+}
+static inline int
 MD4_Update(MD4_CTX *ctx, const void *data, size_t length)
 {
-    mbedtls_md4_update_ret(ctx, data, length);
+    return (0 == mbedtls_md4_update_ret(ctx, data, length));
 }
 #endif
 
@@ -104,13 +114,18 @@ MD4_Update(MD4_CTX *ctx, const void *data, size_t length)
 #include <mbedtls/md5.h>
 typedef struct mbedtls_md5_context MD5_CTX;
 #define MD5_Init(ctx) \
-        (mbedtls_md5_init(ctx), mbedtls_md5_starts_ret(ctx))
-#define MD5_Final(digest, ctx) \
-        (mbedtls_md5_finish_ret((ctx),(digest)), mbedtls_md5_free(ctx))
-static inline void
+        (mbedtls_md5_init(ctx), 0 == mbedtls_md5_starts_ret(ctx))
+static inline int
+MD5_Final(unsigned char *digest, MD5_CTX *ctx)
+{
+    int rc = mbedtls_md5_finish_ret(ctx, digest);
+    mbedtls_md5_free(ctx);
+    return (0 == rc);
+}
+static inline int
 MD5_Update(MD5_CTX *ctx, const void *data, size_t length)
 {
-    mbedtls_md5_update_ret(ctx, data, length);
+    return (0 == mbedtls_md5_update_ret(ctx, data, length));
 }
 #endif
 
@@ -119,13 +134,18 @@ MD5_Update(MD5_CTX *ctx, const void *data, size_t length)
 #include <mbedtls/sha1.h>
 typedef struct mbedtls_sha1_context SHA_CTX;
 #define SHA1_Init(ctx) \
-        (mbedtls_sha1_init(ctx), mbedtls_sha1_starts_ret(ctx))
-#define SHA1_Final(digest, ctx) \
-        (mbedtls_sha1_finish_ret((ctx),(digest)), mbedtls_sha1_free(ctx))
-static inline void
+        (mbedtls_sha1_init(ctx), 0 == mbedtls_sha1_starts_ret(ctx))
+static inline int
+SHA1_Final(unsigned char *digest, SHA_CTX *ctx)
+{
+    int rc = mbedtls_sha1_finish_ret(ctx, digest);
+    mbedtls_sha1_free(ctx);
+    return (0 == rc);
+}
+static inline int
 SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
 {
-    mbedtls_sha1_update_ret(ctx, data, length);
+    return (0 == mbedtls_sha1_update_ret(ctx, data, length));
 }
 #endif
 
@@ -134,13 +154,18 @@ SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
 #include <mbedtls/sha256.h>
 typedef struct mbedtls_sha256_context SHA256_CTX;
 #define SHA256_Init(ctx) \
-        (mbedtls_sha256_init(ctx), mbedtls_sha256_starts_ret((ctx),0))
-#define SHA256_Final(digest, ctx) \
-        (mbedtls_sha256_finish_ret((ctx),(digest)), mbedtls_sha256_free(ctx))
-static inline void
+        (mbedtls_sha256_init(ctx), 0 == mbedtls_sha256_starts_ret((ctx),0))
+static inline int
+SHA256_Final(unsigned char *digest, SHA256_CTX *ctx)
+{
+    int rc = mbedtls_sha256_finish_ret(ctx, digest);
+    mbedtls_sha256_free(ctx);
+    return (0 == rc);
+}
+static inline int
 SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 {
-    mbedtls_sha256_update_ret(ctx, data, length);
+    return (0 == mbedtls_sha256_update_ret(ctx, data, length));
 }
 #endif
 
@@ -173,10 +198,11 @@ MD4_Final(unsigned char *digest, MD4_CTX *ctx)
     wc_Md4Final((Md4 *)ctx, digest);
     return 1;
 }
-static inline void
+static inline int
 MD4_Update(MD4_CTX *ctx, const void *data, size_t length)
 {
     wc_Md4Update((Md4 *)ctx, data, length);
+    return 1;
 }
 #endif
 
@@ -198,10 +224,11 @@ MD5_Final(unsigned char *digest, MD5_CTX *ctx)
 {
     return (0 == wc_Md5Final((wc_Md5 *)ctx, digest));
 }
-static inline void
+static inline int
 MD5_Update(MD5_CTX *ctx, const void *data, size_t length)
 {
     wc_Md5Update((wc_Md5 *)ctx, data, length);
+    return 1;
 }
 #endif
 
@@ -223,10 +250,11 @@ SHA1_Final(unsigned char *digest, SHA_CTX *ctx)
 {
     return (0 == wc_ShaFinal((wc_Sha *)ctx, digest));
 }
-static inline void
+static inline int
 SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
 {
     wc_ShaUpdate((wc_Sha *)ctx, data, length);
+    return 1;
 }
 #endif
 
@@ -248,10 +276,11 @@ SHA256_Final(unsigned char *digest, SHA256_CTX *ctx)
 {
     return (0 == wc_Sha256Final((wc_Sha256 *)ctx, digest));
 }
-static inline void
+static inline int
 SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 {
     wc_Sha256Update((wc_Sha256 *)ctx, data, length);
+    return 1;
 }
 #endif
 
@@ -416,50 +445,72 @@ EVP_SHA512_256_Update(EVP_SHA512_256_CTX *ctx, const void *data, size_t length)
 #elif defined(USE_GNUTLS_CRYPTO)
 
 #include <gnutls/crypto.h>
+#include "buffer.h"     /* SEGFAULT() */
 
 #define USE_LIB_CRYPTO_MD5
 typedef gnutls_hash_hd_t MD5_CTX;
-#define MD5_Init(ctx)                                        \
-        do {                                                  \
-            if (gnutls_hash_init((ctx), GNUTLS_DIG_MD5) < 0) \
-                SEGFAULT();                                   \
-        } while (0)
-#define MD5_Final(digest, ctx) \
-        gnutls_hash_deinit(*(ctx),(digest))
-static inline void
+static inline int
+MD5_Init(MD5_CTX *ctx)
+{
+    if (gnutls_hash_init(ctx, GNUTLS_DIG_MD5) < 0)
+        SEGFAULT();
+    return 1;
+}
+static inline int
+MD5_Final(unsigned char *digest, MD5_CTX *ctx)
+{
+    gnutls_hash_deinit(*ctx, digest);
+    return 1;
+}
+static inline int
 MD5_Update(MD5_CTX *ctx, const void *data, size_t length)
 {
     gnutls_hash(*ctx, data, length);
+    return 1;
 }
 
 #define USE_LIB_CRYPTO_SHA1
 typedef gnutls_hash_hd_t SHA_CTX;
-#define SHA1_Init(ctx)                                        \
-        do {                                                  \
-            if (gnutls_hash_init((ctx), GNUTLS_DIG_SHA1) < 0) \
-                SEGFAULT();                                   \
-        } while (0)
-#define SHA1_Final(digest, ctx) \
-        gnutls_hash_deinit(*(ctx),(digest))
-static inline void
+static inline int
+SHA1_Init(SHA_CTX *ctx)
+{
+    if (gnutls_hash_init(ctx, GNUTLS_DIG_SHA1) < 0)
+        SEGFAULT();
+    return 1;
+}
+static inline int
+SHA1_Final(unsigned char *digest, SHA_CTX *ctx)
+{
+    gnutls_hash_deinit(*ctx, digest);
+    return 1;
+}
+static inline int
 SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
 {
     gnutls_hash(*ctx, data, length);
+    return 1;
 }
 
 #define USE_LIB_CRYPTO_SHA256
 typedef gnutls_hash_hd_t SHA256_CTX;
-#define SHA256_Init(ctx)                                        \
-        do {                                                    \
-            if (gnutls_hash_init((ctx), GNUTLS_DIG_SHA256) < 0) \
-                SEGFAULT();                                     \
-        } while (0)
-#define SHA256_Final(digest, ctx) \
-        gnutls_hash_deinit(*(ctx),(digest))
-static inline void
+static inline int
+SHA256_Init(SHA256_CTX *ctx)
+{
+    if (gnutls_hash_init(ctx, GNUTLS_DIG_SHA256) < 0)
+        SEGFAULT();
+    return 1;
+}
+static inline int
+SHA256_Final(unsigned char *digest, SHA256_CTX *ctx)
+{
+    gnutls_hash_deinit(*ctx, digest);
+    return 1;
+}
+static inline int
 SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 {
     gnutls_hash(*ctx, data, length);
+    return 1;
 }
 
 #endif
