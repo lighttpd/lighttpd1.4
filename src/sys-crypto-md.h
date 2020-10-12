@@ -257,20 +257,11 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 
 #elif defined(USE_OPENSSL_CRYPTO)
 
-#include <openssl/opensslv.h>
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-#include <openssl/macros.h>
-#undef DEPRECATEDIN_3_0
-#define DEPRECATEDIN_3_0(f) f;
-#endif
-
 #include <openssl/md4.h>
 #include <openssl/md5.h>
 #include <openssl/sha.h>
 #ifndef OPENSSL_NO_MD4
-#ifndef NO_MD4 /*(e.g. wolfSSL built without MD4)*/
 #define USE_LIB_CRYPTO_MD4
-#endif
 #endif
 #ifndef OPENSSL_NO_MD5
 #define USE_LIB_CRYPTO_MD5
@@ -280,6 +271,147 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 #ifdef SHA512_256_DIGEST_LENGTH
 #define USE_LIB_CRYPTO_SHA512_256
 #endif
+
+#include <openssl/opensslv.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/evp.h>
+
+#ifdef USE_LIB_CRYPTO_MD4
+#define MD4_CTX EVP_MD4_CTX
+#define MD4_Init EVP_MD4_Init
+#define MD4_Final EVP_MD4_Final
+#define MD4_Update EVP_MD4_Update
+typedef EVP_MD_CTX * MD4_CTX;
+static inline int
+EVP_MD4_Init(EVP_MD4_CTX *ctx)
+{
+    return ((*ctx = EVP_MD_CTX_new()) != NULL
+            && 1 == EVP_DigestInit_ex(*ctx, EVP_md4(), NULL));
+}
+static inline int
+EVP_MD4_Final(unsigned char *digest, EVP_MD4_CTX *ctx)
+{
+    /* MD4_DIGEST_LENGTH; EVP_MD_size(EVP_md4()) */
+    int rc = EVP_DigestFinal_ex(*ctx, digest, NULL);
+    EVP_MD_CTX_free(*ctx);
+    return (1 == rc);
+}
+static inline int
+EVP_MD4_Update(EVP_MD4_CTX *ctx, const void *data, size_t length)
+{
+    return (1 == EVP_DigestUpdate(*ctx, data, length));
+}
+#endif
+
+#ifdef USE_LIB_CRYPTO_MD5
+#define MD5_CTX EVP_MD5_CTX
+#define MD5_Init EVP_MD5_Init
+#define MD5_Final EVP_MD5_Final
+#define MD5_Update EVP_MD5_Update
+typedef EVP_MD_CTX * EVP_MD5_CTX;
+static inline int
+EVP_MD5_Init(EVP_MD5_CTX *ctx)
+{
+    return ((*ctx = EVP_MD_CTX_new()) != NULL
+            && 1 == EVP_DigestInit_ex(*ctx, EVP_md5(), NULL));
+}
+static inline int
+EVP_MD5_Final(unsigned char *digest, EVP_MD5_CTX *ctx)
+{
+    /* MD5_DIGEST_LENGTH; EVP_MD_size(EVP_md5()) */
+    int rc = EVP_DigestFinal_ex(*ctx, digest, NULL);
+    EVP_MD_CTX_free(*ctx);
+    return (1 == rc);
+}
+static inline int
+EVP_MD5_Update(EVP_MD5_CTX *ctx, const void *data, size_t length)
+{
+    return (1 == EVP_DigestUpdate(*ctx, data, length));
+}
+#endif
+
+#ifdef USE_LIB_CRYPTO_SHA1
+#define SHA_CTX EVP_SHA1_CTX
+#define SHA1_Init EVP_SHA1_Init
+#define SHA1_Final EVP_SHA1_Final
+#define SHA1_Update EVP_SHA1_Update
+typedef EVP_MD_CTX * EVP_SHA1_CTX;
+static inline int
+EVP_SHA1_Init(EVP_SHA1_CTX *ctx)
+{
+    return ((*ctx = EVP_MD_CTX_new()) != NULL
+            && 1 == EVP_DigestInit_ex(*ctx, EVP_sha1(), NULL));
+}
+static inline int
+EVP_SHA1_Final(unsigned char *digest, EVP_SHA1_CTX *ctx)
+{
+    /* SHA_DIGEST_LENGTH; EVP_MD_size(EVP_sha1()) */
+    int rc = EVP_DigestFinal_ex(*ctx, digest, NULL);
+    EVP_MD_CTX_free(*ctx);
+    return (1 == rc);
+}
+static inline int
+EVP_SHA1_Update(EVP_SHA1_CTX *ctx, const void *data, size_t length)
+{
+    return (1 == EVP_DigestUpdate(*ctx, data, length));
+}
+#endif
+
+#ifdef USE_LIB_CRYPTO_SHA256
+#define SHA256_CTX EVP_SHA256_CTX
+#define SHA256_Init EVP_SHA256_Init
+#define SHA256_Final EVP_SHA256_Final
+#define SHA256_Update EVP_SHA256_Update
+typedef EVP_MD_CTX * EVP_SHA256_CTX;
+static inline int
+EVP_SHA256_Init(EVP_SHA256_CTX *ctx)
+{
+    return ((*ctx = EVP_MD_CTX_new()) != NULL
+            && 1 == EVP_DigestInit_ex(*ctx, EVP_sha256(), NULL));
+}
+static inline int
+EVP_SHA256_Final(unsigned char *digest, EVP_SHA256_CTX *ctx)
+{
+    /* SHA256_DIGEST_LENGTH; EVP_MD_size(EVP_sha256()) */
+    int rc = EVP_DigestFinal_ex(*ctx, digest, NULL);
+    EVP_MD_CTX_free(*ctx);
+    return (1 == rc);
+}
+static inline int
+EVP_SHA256_Update(EVP_SHA256_CTX *ctx, const void *data, size_t length)
+{
+    return (1 == EVP_DigestUpdate(*ctx, data, length));
+}
+#endif
+
+#ifdef USE_LIB_CRYPTO_SHA512_256
+#define SHA512_256_CTX EVP_SHA512_256_CTX
+#define SHA512_256_Init EVP_SHA512_256_Init
+#define SHA512_256_Final EVP_SHA512_256_Final
+#define SHA512_256_Update EVP_SHA512_256_Update
+typedef EVP_MD_CTX * EVP_SHA512_256_CTX;
+static inline int
+EVP_SHA512_256_Init(EVP_SHA512_256_CTX *ctx)
+{
+    return ((*ctx = EVP_MD_CTX_new()) != NULL
+            && 1 == EVP_DigestInit_ex(*ctx, EVP_sha512_256(), NULL));
+}
+static inline int
+EVP_SHA512_256_Final(unsigned char *digest, EVP_SHA512_256_CTX *ctx)
+{
+    /* SHA256_DIGEST_LENGTH; EVP_MD_size(EVP_sha512_256()) */
+    int rc = EVP_DigestFinal_ex(*ctx, digest, NULL);
+    EVP_MD_CTX_free(*ctx);
+    return (1 == rc);
+}
+static inline int
+EVP_SHA512_256_Update(EVP_SHA512_256_CTX *ctx, const void *data, size_t length)
+{
+    return (1 == EVP_DigestUpdate(*ctx, data, length));
+}
+#endif
+
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #elif defined(USE_GNUTLS_CRYPTO)
 

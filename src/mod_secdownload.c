@@ -27,6 +27,32 @@
 #endif
 #endif
 
+#if defined(USE_OPENSSL_CRYPTO) && OPENSSL_VERSION_NUMBER >= 0x30000000L
+#define HMAC EVP_HMAC
+static unsigned char *
+EVP_HMAC (const EVP_MD *evp_md, const void *key,
+          int key_len, const unsigned char *d, int n,
+          unsigned char *md, size_t *md_len)
+{
+    EVP_PKEY * const pkey =
+      EVP_PKEY_new_mac_key(EVP_PKEY_HMAC, NULL, key, key_len);
+    if (NULL == pkey) return NULL;
+
+    EVP_MD_CTX * const ctx = EVP_MD_CTX_new();
+    if (NULL == ctx) {
+        EVP_PKEY_free(pkey);
+        return NULL;
+    }
+
+    int rc = (1 == EVP_DigestSignInit(ctx, NULL, evp_md, NULL, pkey))
+          && (1 == EVP_DigestSignUpdate(ctx, d, n))
+          && (1 == EVP_DigestSignFinal(ctx, md, md_len));
+    EVP_MD_CTX_free(ctx);
+    EVP_PKEY_free(pkey);
+    return (1 == rc) ? md : NULL;
+}
+#endif
+
 /*
  * mod_secdownload verifies a checksum associated with a timestamp
  * and a path.
@@ -68,9 +94,9 @@
     my $protected_path = '/' . sprintf("%08x", time) . $rel_path;
     my $url = '/'. encode_base64url(hmac_sha1($protected_path, $secret)) . $protected_path;
  *
- * # hmac-256
+ * # hmac-sha256
  * mac_len := 43  (no base64 padding)
- * mac := base64-url(hmac-256(<secret>, <protected-path>))
+ * mac := base64-url(hmac-sha256(<secret>, <protected-path>))
     use Digest::SHA qw(hmac_sha256);
     use MIME::Base64 qw(encode_base64url);
     my $secret = "verysecret";
