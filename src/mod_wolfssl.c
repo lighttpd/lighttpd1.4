@@ -1808,9 +1808,6 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       #ifndef SSL_OP_NO_COMPRESSION
       #define SSL_OP_NO_COMPRESSION 0
       #endif
-      #ifndef SSL_MODE_RELEASE_BUFFERS    /* OpenSSL >= 1.0.0 */
-      #define SSL_MODE_RELEASE_BUFFERS 0
-      #endif
         long ssloptions = SSL_OP_ALL
                         | SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION
                         | SSL_OP_NO_COMPRESSION;
@@ -2003,10 +2000,14 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         }
 
         SSL_CTX_set_default_read_ahead(s->ssl_ctx, s->ssl_read_ahead);
-        SSL_CTX_set_mode(s->ssl_ctx, SSL_CTX_get_mode(s->ssl_ctx)
-                                   | SSL_MODE_ENABLE_PARTIAL_WRITE
-                                   | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER
-                                   | SSL_MODE_RELEASE_BUFFERS);
+        wolfSSL_CTX_set_mode(s->ssl_ctx,
+                             SSL_MODE_ENABLE_PARTIAL_WRITE);
+        wolfSSL_CTX_set_mode(s->ssl_ctx, /*(wolfSSL default mode)*/
+                             WOLFSSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+      #ifdef wolfSSL_SSL_MODE_RELEASE_BUFFERS
+        wolfSSL_CTX_set_mode(s->ssl_ctx, /*(not currently implemented)*/
+                             wolfSSL_SSL_MODE_RELEASE_BUFFERS);
+      #endif
 
       #ifdef HAVE_TLS_EXTENSIONS
         wolfSSL_CTX_set_servername_callback(
