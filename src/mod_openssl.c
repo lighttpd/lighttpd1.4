@@ -365,7 +365,6 @@ ssl_tlsext_ticket_key_cb(SSL *s, unsigned char key_name[16],
                          unsigned char *iv, EVP_CIPHER_CTX *ctx,
                          EVP_MAC_CTX *hctx, int enc)
 {
-    OSSL_PARAM params[3];
     UNUSED(s);
     if (enc) { /* create new session */
         tlsext_ticket_key_t *k = tlsext_ticket_key_get();
@@ -375,12 +374,13 @@ ssl_tlsext_ticket_key_cb(SSL *s, unsigned char key_name[16],
         if (RAND_bytes(iv, EVP_MAX_IV_LENGTH) <= 0)
             return -1; /* insufficient random */
         EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, k->tick_aes_key, iv);
-        params[0] = OSSL_PARAM_construct_octet_string(OSSL_MAC_PARAM_KEY,
-                                                      k->tick_hmac_key,
-                                                      sizeof(k->tick_hmac_key));
-        params[1] = OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST,
-                                                     CONST_STR_LEN("sha256")+1);
-        params[2] = OSSL_PARAM_construct_end();
+        OSSL_PARAM params[] = {
+          OSSL_PARAM_DEFN(OSSL_MAC_PARAM_KEY, OSSL_PARAM_OCTET_STRING,
+                          k->tick_hmac_key, sizeof(k->tick_hmac_key)),
+          OSSL_PARAM_DEFN(OSSL_MAC_PARAM_DIGEST, OSSL_PARAM_UTF8_STRING,
+                          "sha256", sizeof("sha256")),
+          OSSL_PARAM_END
+        };
         EVP_MAC_CTX_set_params(hctx, params);
         return 1;
     }
@@ -389,12 +389,13 @@ ssl_tlsext_ticket_key_cb(SSL *s, unsigned char key_name[16],
         tlsext_ticket_key_t *k = tlsext_ticket_key_find(key_name, &refresh);
         if (NULL == k)
             return 0;
-        params[0] = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_KEY,
-                                                      k->tick_hmac_key,
-                                                      sizeof(k->tick_hmac_key));
-        params[1] = OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST,
-                                                     CONST_STR_LEN("sha256")+1);
-        params[2] = OSSL_PARAM_construct_end();
+        OSSL_PARAM params[] = {
+          OSSL_PARAM_DEFN(OSSL_KDF_PARAM_KEY, OSSL_PARAM_OCTET_STRING,
+                          k->tick_hmac_key, sizeof(k->tick_hmac_key)),
+          OSSL_PARAM_DEFN(OSSL_MAC_PARAM_DIGEST, OSSL_PARAM_UTF8_STRING,
+                          "sha256", sizeof("sha256")),
+          OSSL_PARAM_END
+        };
         EVP_MAC_CTX_set_params(hctx, params);
         EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, k->tick_aes_key, iv);
         return refresh ? 2 : 1;
