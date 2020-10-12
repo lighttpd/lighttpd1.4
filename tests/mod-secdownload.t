@@ -81,7 +81,7 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
 ok($tf->handle_http($t) == 0, 'secdownload - timeout (md5)');
 
 
-if (!$tf->has_feature("SSL support")) {
+if (!$tf->has_crypto()) {
 
     for (1..4) { ok(1, "secdownload (hmac-sha1) (skipped) - (missing SSL support)"); }
     for (1..5) { ok(1, "secdownload (hmac-sha256) (skipped) - (missing SSL support)"); }

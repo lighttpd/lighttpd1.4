@@ -457,4 +457,17 @@ sub has_feature {
 	return 0;
 }
 
+sub has_crypto {
+	# quick-n-dirty crude parse of "lighttpd -V"
+	# (XXX: should be run on demand and only once per instance, then cached)
+	my ($self) = @_;
+	my $FH;
+	open($FH, "-|",$self->{LIGHTTPD_PATH}, "-V") || return 0;
+	while (<$FH>) {
+		return 1 if (/[+] (?i:OpenSSL|mbedTLS|GnuTLS|WolfSSL|Nettle) support/);
+	}
+	close $FH;
+	return 0;
+}
+
 1;
