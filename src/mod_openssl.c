@@ -318,7 +318,6 @@ tlsext_ticket_wipe_expired (const time_t cur_ts)
 
 
 #if OPENSSL_VERSION_NUMBER < 0x30000000L
-
 /* based on reference implementation from openssl 1.1.1g man page
  *   man SSL_CTX_set_tlsext_ticket_key_cb
  * but mod_openssl code uses EVP_aes_256_cbc() instead of EVP_aes_128_cbc()
@@ -327,36 +326,7 @@ static int
 ssl_tlsext_ticket_key_cb (SSL *s, unsigned char key_name[16],
                           unsigned char iv[EVP_MAX_IV_LENGTH],
                           EVP_CIPHER_CTX *ctx, HMAC_CTX *hctx, int enc)
-{
-    UNUSED(s);
-    if (enc) { /* create new session */
-        tlsext_ticket_key_t *k = tlsext_ticket_key_get();
-        if (NULL == k)
-            return 0; /* current key does not exist or is not valid */
-        memcpy(key_name, k->tick_key_name, 16);
-        if (RAND_bytes(iv, EVP_MAX_IV_LENGTH) <= 0)
-            return -1; /* insufficient random */
-        EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, k->tick_aes_key, iv);
-        HMAC_Init_ex(hctx, k->tick_hmac_key, sizeof(k->tick_hmac_key),
-                     EVP_sha256(), NULL);
-        return 1;
-    }
-    else { /* retrieve session */
-        int refresh;
-        tlsext_ticket_key_t *k = tlsext_ticket_key_find(key_name, &refresh);
-        if (NULL == k)
-            return 0;
-        HMAC_Init_ex(hctx, k->tick_hmac_key, sizeof(k->tick_hmac_key),
-                     EVP_sha256(), NULL);
-        EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, k->tick_aes_key, iv);
-        return refresh ? 2 : 1;
-        /* 'refresh' will trigger issuing new ticket for session
-         * even though the current ticket is still valid */
-    }
-}
-
-#else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-
+#else /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 /* based on reference implementation from openssl 3.0.0 man page
  *   man SSL_CTX_set_tlsext_ticket_key_cb
  */
@@ -364,6 +334,7 @@ static int
 ssl_tlsext_ticket_key_cb(SSL *s, unsigned char key_name[16],
                          unsigned char *iv, EVP_CIPHER_CTX *ctx,
                          EVP_MAC_CTX *hctx, int enc)
+#endif
 {
     UNUSED(s);
     if (enc) { /* create new session */
@@ -374,6 +345,10 @@ ssl_tlsext_ticket_key_cb(SSL *s, unsigned char key_name[16],
         if (RAND_bytes(iv, EVP_MAX_IV_LENGTH) <= 0)
             return -1; /* insufficient random */
         EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, k->tick_aes_key, iv);
+      #if OPENSSL_VERSION_NUMBER < 0x30000000L
+        HMAC_Init_ex(hctx, k->tick_hmac_key, sizeof(k->tick_hmac_key),
+                     EVP_sha256(), NULL);
+      #else
         OSSL_PARAM params[] = {
           OSSL_PARAM_DEFN(OSSL_MAC_PARAM_KEY, OSSL_PARAM_OCTET_STRING,
                           k->tick_hmac_key, sizeof(k->tick_hmac_key)),
@@ -382,6 +357,7 @@ ssl_tlsext_ticket_key_cb(SSL *s, unsigned char key_name[16],
           OSSL_PARAM_END
         };
         EVP_MAC_CTX_set_params(hctx, params);
+      #endif
         return 1;
     }
     else { /* retrieve session */
@@ -389,6 +365,10 @@ ssl_tlsext_ticket_key_cb(SSL *s, unsigned char key_name[16],
         tlsext_ticket_key_t *k = tlsext_ticket_key_find(key_name, &refresh);
         if (NULL == k)
             return 0;
+      #if OPENSSL_VERSION_NUMBER < 0x30000000L
+        HMAC_Init_ex(hctx, k->tick_hmac_key, sizeof(k->tick_hmac_key),
+                     EVP_sha256(), NULL);
+      #else
         OSSL_PARAM params[] = {
           OSSL_PARAM_DEFN(OSSL_KDF_PARAM_KEY, OSSL_PARAM_OCTET_STRING,
                           k->tick_hmac_key, sizeof(k->tick_hmac_key)),
@@ -397,14 +377,13 @@ ssl_tlsext_ticket_key_cb(SSL *s, unsigned char key_name[16],
           OSSL_PARAM_END
         };
         EVP_MAC_CTX_set_params(hctx, params);
+      #endif
         EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, k->tick_aes_key, iv);
         return refresh ? 2 : 1;
         /* 'refresh' will trigger issuing new ticket for session
          * even though the current ticket is still valid */
     }
 }
-
-#endif
 
 
 static int
