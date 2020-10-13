@@ -371,7 +371,7 @@ static int mod_nss_init_once_nss (void)
 
     /*PR_Init(PR_USER_THREAD, PR_PRIORITY_NORMAL, 0);*//*implicit on first use*/
 
-    if (NSS_NoDB_Init(NULL) < 0)
+    if (!NSS_IsInitialized() && NSS_NoDB_Init(NULL) < 0)
         return 0;
 
     if (SSL_OptionSetDefault(SSL_ENABLE_SSL2, PR_FALSE) < 0)

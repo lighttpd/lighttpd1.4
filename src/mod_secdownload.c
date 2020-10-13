@@ -24,6 +24,8 @@
 #include <gnutls/crypto.h>
 #elif defined(USE_WOLFSSL_CRYPTO)
 #include <wolfssl/wolfcrypt/hmac.h>
+#elif defined(USE_NSS_CRYPTO)
+#include <nss3/alghmac.h>
 #endif
 #endif
 
@@ -267,6 +269,31 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 				  "hmac-sha1: HMAC() failed");
 				return 0;
 			}
+		  #elif defined(USE_NSS_CRYPTO)
+			/*(HMAC* funcs not public export of libfreebl3.so,
+			 * even though nss3/alghmac.h is public (WTH?!))*/
+		      #if 0
+			HMACContext *hmac =
+			  HMAC_Create(HASH_GetHashObject(HASH_AlgSHA1),
+			              (const unsigned char *)config->secret->ptr,
+			              buffer_string_length(config->secret), PR_FALSE);
+			int rc;
+			if ((rc = (NULL != hmac) ? SECSuccess : SECFailure)) {
+				HMAC_Begin(hmac);
+				HMAC_Update(hmac, (const unsigned char *)protected_path,
+                                            strlen(protected_path));
+				unsigned int len;
+				rc = HMAC_Finish(hmac, digest, &len, sizeof(digest));
+				HMAC_Destroy(hmac, PR_TRUE);
+			}
+			if (SECSuccess != rc) {
+				log_error(errh, __FILE__, __LINE__,
+				  "hmac-sha1: HMAC() failed");
+				return 0;
+			}
+		      #else
+			return 0;
+		      #endif
 		  #else
 		  #error "unexpected; crypto lib not configured for use by mod_secdownload"
 		  #endif
@@ -332,6 +359,31 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 				  "hmac-sha256: HMAC() failed");
 				return 0;
 			}
+		  #elif defined(USE_NSS_CRYPTO)
+			/*(HMAC* funcs not public export of libfreebl3.so,
+			 * even though nss3/alghmac.h is public (WTH?!))*/
+		      #if 0
+			HMACContext *hmac =
+			  HMAC_Create(HASH_GetHashObject(HASH_AlgSHA256),
+			              (const unsigned char *)config->secret->ptr,
+			              buffer_string_length(config->secret), PR_FALSE);
+			int rc;
+			if ((rc = (NULL != hmac) ? SECSuccess : SECFailure)) {
+				HMAC_Begin(hmac);
+				HMAC_Update(hmac, (const unsigned char *)protected_path,
+                                            strlen(protected_path));
+				unsigned int len;
+				rc = HMAC_Finish(hmac, digest, &len, sizeof(digest));
+				HMAC_Destroy(hmac, PR_TRUE);
+			}
+			if (SECSuccess != rc) {
+				log_error(errh, __FILE__, __LINE__,
+				  "hmac-sha256: HMAC() failed");
+				return 0;
+			}
+		      #else
+			return 0;
+		      #endif
 		  #else
 		  #error "unexpected; crypto lib not configured for use by mod_secdownload"
 		  #endif

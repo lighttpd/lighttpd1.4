@@ -26,6 +26,7 @@
 #undef USE_WOLFSSL_CRYPTO
 #undef USE_OPENSSL_CRYPTO
 #undef USE_GNUTLS_CRYPTO
+#undef USE_NSS_CRYPTO
 #include <nettle/knuth-lfib.h>
 #include <nettle/arcfour.h>
 #include <nettle/yarrow.h>
@@ -34,21 +35,29 @@
 #undef USE_WOLFSSL_CRYPTO
 #undef USE_OPENSSL_CRYPTO
 #undef USE_GNUTLS_CRYPTO
+#undef USE_NSS_CRYPTO
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
 #endif
 #ifdef USE_OPENSSL_CRYPTO
 #undef USE_WOLFSSL_CRYPTO
 #undef USE_GNUTLS_CRYPTO
+#undef USE_NSS_CRYPTO
 #include <openssl/opensslv.h> /* OPENSSL_VERSION_NUMBER */
 #include <openssl/rand.h>
 #endif
 #ifdef USE_WOLFSSL_CRYPTO
 #undef USE_GNUTLS_CRYPTO
+#undef USE_NSS_CRYPTO
 #include <wolfssl/wolfcrypt/random.h>
 #endif
 #ifdef USE_GNUTLS_CRYPTO
+#undef USE_NSS_CRYPTO
 #include <gnutls/crypto.h>
+#endif
+#ifdef USE_NSS_CRYPTO
+#include <nss3/nss.h>
+#include <nss3/pk11pub.h>
 #endif
 #ifdef HAVE_GETENTROPY
 #include <sys/random.h>
@@ -268,6 +277,11 @@ static void li_rand_init (void)
   #endif
   #endif
   #endif
+  #ifdef USE_NSS_CRYPTO
+    if (!NSS_IsInitialized() && NSS_NoDB_Init(NULL) < 0)
+        SEGFAULT();
+    PK11_RandomUpdate(xsubi, sizeof(xsubi));
+  #endif
 }
 
 void li_rand_reseed (void)
@@ -344,6 +358,10 @@ int li_rand_pseudo (void)
         return i;
   #endif
   #endif
+  #ifdef USE_NSS_CRYPTO
+    if (SECSuccess == PK11_GenerateRandom((unsigned char *)&i, sizeof(i)))
+        return i;
+  #endif
   #ifdef HAVE_ARC4RANDOM_BUF
     return (int)arc4random();
   #elif defined(__COVERITY__)
@@ -370,6 +388,9 @@ void li_rand_pseudo_bytes (unsigned char *buf, int num)
     if (0 == gnutls_rnd(GNUTLS_RND_NONCE, buf, (size_t)num)) return;
   #endif
     if (!li_rand_inited) li_rand_init();
+  #ifdef USE_NSS_CRYPTO
+    if (SECSuccess == PK11_GenerateRandom(buf, num)) return;
+  #endif
   #ifdef USE_MBEDTLS_CRYPTO
   #ifdef MBEDTLS_CTR_DRBG_C
     if (0 == mbedtls_ctr_drbg_random(&ctr_drbg, buf, (size_t)num)) return;
@@ -388,6 +409,10 @@ int li_rand_bytes (unsigned char *buf, int num)
 {
   #ifdef USE_GNUTLS_CRYPTO /* should use GNUTLS_RND_KEY for long-term keys */
     if (0 == gnutls_rnd(GNUTLS_RND_RANDOM, buf, (size_t)num)) return 1;
+  #endif
+  #ifdef USE_NSS_CRYPTO
+    if (!li_rand_inited) li_rand_init();
+    if (SECSuccess == PK11_GenerateRandom(buf, num)) return 1;
   #endif
   #ifdef USE_NETTLE_CRYPTO
   #if 0 /* not implemented: periodic nettle_yarrow256_update() and reseed */

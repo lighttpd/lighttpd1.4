@@ -513,6 +513,54 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
     return 1;
 }
 
+#elif defined(USE_NSS_CRYPTO)
+
+#include <nss3/sechash.h>
+
+#define NSS_gen_hashfuncs(name, typ)                                          \
+static inline int                                                             \
+name##_Init(void **ctx)                                                       \
+{                                                                             \
+    const SECHashObject * const hashObj = HASH_GetHashObject(typ);            \
+    return ((*ctx=hashObj->create()) != NULL) ? (hashObj->begin(*ctx),1) : 0; \
+}                                                                             \
+static inline int                                                             \
+name##_Final(unsigned char *dest, void **ctx)                                 \
+{                                                                             \
+    const SECHashObject * const hashObj = HASH_GetHashObject(typ);            \
+    unsigned int retLen;                                                      \
+    hashObj->end(*ctx, dest, &retLen, hashObj->length);                       \
+    hashObj->destroy(*ctx, PR_TRUE);                                          \
+    return 1;                                                                 \
+}                                                                             \
+static inline int                                                             \
+name##_Update(void **ctx, const void *src, size_t len)                        \
+{                                                                             \
+    const SECHashObject * const hashObj = HASH_GetHashObject(typ);            \
+    hashObj->update(*ctx, src, (int)len);                                     \
+    return 1;                                                                 \
+}                                                                             \
+typedef void * name##_CTX
+typedef void * SHA_CTX;
+
+#define USE_LIB_CRYPTO_MD5
+/* MD5_Init()
+ * MD5_Update()
+ * MD5_Final() */
+NSS_gen_hashfuncs(MD5, HASH_AlgMD5);
+
+#define USE_LIB_CRYPTO_SHA1
+/* SHA1_Init()
+ * SHA1_Update()
+ * SHA1_Final() */
+NSS_gen_hashfuncs(SHA1, HASH_AlgSHA1);
+
+#define USE_LIB_CRYPTO_SHA256
+/* SHA256_Init()
+ * SHA256_Update()
+ * SHA256_Final() */
+NSS_gen_hashfuncs(SHA256, HASH_AlgSHA256);
+
 #endif
 
 #endif /* USE_LIB_CRYPTO */
