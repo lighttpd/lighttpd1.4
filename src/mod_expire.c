@@ -304,10 +304,10 @@ REQUEST_FUNC(mod_expire_handler) {
 		expires += cur_ts;
 	}
 	else {             /* modification */
-		stat_cache_entry *sce = stat_cache_get_entry(&r->physical.path);
+		const stat_cache_st * const st = stat_cache_path_stat(&r->physical.path);
 		/* can't set modification-based expire if mtime is not available */
-		if (NULL == sce) return HANDLER_GO_ON;
-		expires += sce->st.st_mtime;
+		if (NULL == st) return HANDLER_GO_ON;
+		expires += st->st_mtime;
 	}
 
 			/* expires should be at least cur_ts */

@@ -174,9 +174,9 @@ http_response_write_header (request_st * const r)
 
 
 static handler_t http_response_physical_path_check(request_st * const r) {
-	stat_cache_entry *sce = stat_cache_get_entry(&r->physical.path);
+	const stat_cache_st *st = stat_cache_path_stat(&r->physical.path);
 
-	if (sce) {
+	if (st) {
 		/* file exists */
 	} else {
 		char *pathinfo = NULL;
@@ -246,16 +246,16 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 		buffer * const tb = r->tmp_buf;
 		for (char *pprev = pathinfo; pathinfo; pprev = pathinfo, pathinfo = strchr(pathinfo+1, '/')) {
 			buffer_copy_string_len(tb, r->physical.path.ptr, pathinfo - r->physical.path.ptr);
-			stat_cache_entry *nsce = stat_cache_get_entry(tb);
-			if (NULL == nsce) {
+			const stat_cache_st * const nst = stat_cache_path_stat(tb);
+			if (NULL == nst) {
 				pathinfo = pathinfo != pprev ? pprev : NULL;
 				break;
 			}
-			sce = nsce;
-			if (!S_ISDIR(sce->st.st_mode)) break;
+			st = nst;
+			if (!S_ISDIR(st->st_mode)) break;
 		}
 
-		if (NULL == pathinfo || !S_ISREG(sce->st.st_mode)) {
+		if (NULL == pathinfo || !S_ISREG(st->st_mode)) {
 			/* no it really doesn't exists */
 			r->http_status = 404;
 
@@ -309,10 +309,10 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 		return HANDLER_FINISHED;
 	}
 
-	if (S_ISREG(sce->st.st_mode)) /*(common case)*/
+	if (S_ISREG(st->st_mode)) /*(common case)*/
 		return HANDLER_GO_ON;
 
-	if (S_ISDIR(sce->st.st_mode)) {
+	if (S_ISDIR(st->st_mode)) {
 		if (r->uri.path.ptr[buffer_string_length(&r->uri.path) - 1] != '/') {
 			/* redirect to .../ */
 

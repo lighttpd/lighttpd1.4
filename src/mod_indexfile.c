@@ -113,8 +113,7 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 		}
 		buffer_append_string_buffer(b, &ds->value);
 
-		stat_cache_entry * const sce = stat_cache_get_entry(b);
-		if (NULL == sce) {
+		if (NULL == stat_cache_path_stat(b)) {
 			if (errno == EACCES) {
 				r->http_status = 403;
 				buffer_reset(&r->physical.path);

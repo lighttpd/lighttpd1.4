@@ -10,6 +10,8 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 
+typedef struct stat stat_cache_st;
+
 typedef struct {
     buffer name;
     time_t stat_ts;
@@ -52,6 +54,7 @@ void stat_cache_delete_dir(const char *name, uint32_t len);
 void stat_cache_invalidate_entry(const char *name, uint32_t len);
 stat_cache_entry * stat_cache_get_entry(const buffer *name);
 stat_cache_entry * stat_cache_get_entry_open(const buffer *name, int symlinks);
+const stat_cache_st * stat_cache_path_stat(const buffer *name);
 int stat_cache_path_isdir(const buffer *name);
 
 __attribute_cold__

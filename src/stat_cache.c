@@ -1090,6 +1090,11 @@ stat_cache_entry * stat_cache_get_entry_open(const buffer * const name, const in
     return sce; /* (note: sce->fd might still be -1 if open() failed) */
 }
 
+const stat_cache_st * stat_cache_path_stat (const buffer * const name) {
+    const stat_cache_entry * const sce = stat_cache_get_entry(name);
+    return sce ? &sce->st : NULL;
+}
+
 int stat_cache_path_isdir(const buffer *name) {
     const stat_cache_entry * const sce = stat_cache_get_entry(name);
     return (sce && (S_ISDIR(sce->st.st_mode) ? 1 : (errno = ENOTDIR, 0)));

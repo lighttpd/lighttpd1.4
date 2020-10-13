@@ -323,8 +323,8 @@ URIHANDLER_FUNC(mod_rewrite_physical) {
     if (!p->conf.rewrite_NF || !p->conf.rewrite_NF->used) return HANDLER_GO_ON;
 
     /* skip if physical.path is a regular file */
-    stat_cache_entry *sce = stat_cache_get_entry(&r->physical.path);
-    if (sce && S_ISREG(sce->st.st_mode)) return HANDLER_GO_ON;
+    const stat_cache_st * const st = stat_cache_path_stat(&r->physical.path);
+    if (st && S_ISREG(st->st_mode)) return HANDLER_GO_ON;
 
     return process_rewrite_rules(r, p, p->conf.rewrite_NF);
 }
