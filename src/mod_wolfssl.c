@@ -3347,7 +3347,7 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
         /* WolfSSL max ver is set at WolfSSL compile-time */
     }
 
-    if (cipherstring) {
+    if (!buffer_string_is_empty(cipherstring)) {
         /* Disable support for low encryption ciphers */
         buffer_append_string_len(cipherstring,
                                  CONST_STR_LEN(":!aNULL:!eNULL:!EXP"));

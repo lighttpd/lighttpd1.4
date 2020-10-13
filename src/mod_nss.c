@@ -3444,7 +3444,7 @@ mod_nss_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *cip
                   "Ciphersuite support not implemented for %s",
                   ciphersuites->ptr);
 
-    if (!cipherstring)
+    if (buffer_string_is_empty(cipherstring))
         return 1; /* nothing to do */
 
     /*

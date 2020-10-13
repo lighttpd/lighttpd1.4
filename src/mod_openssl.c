@@ -1882,6 +1882,8 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
     if (NULL != ds) {
         buffer *cipher_string =
           array_get_buf_ptr(s->ssl_conf_cmd, CONST_STR_LEN("CipherString"));
+        if (buffer_string_is_empty(cipher_string))
+            buffer_append_string_len(cipher_string, CONST_STR_LEN("HIGH"));
         buffer_append_string_len(cipher_string,
                                  CONST_STR_LEN(":!aNULL:!eNULL:!EXP"));
     }
@@ -3660,7 +3662,7 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
             rc = -1;
     }
 
-    if (cipherstring) {
+    if (!buffer_string_is_empty(cipherstring)) {
         /* Disable support for low encryption ciphers */
         buffer_append_string_len(cipherstring,
                                  CONST_STR_LEN(":!aNULL:!eNULL:!EXP"));

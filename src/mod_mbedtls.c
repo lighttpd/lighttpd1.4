@@ -3128,7 +3128,7 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
      *
      * XXX: not done: could make a list of ciphers with bitflag of attributes
      *      to make future combining easier */
-    if (cipherstring) {
+    if (!buffer_string_is_empty(cipherstring)) {
         const buffer *b = cipherstring;
         const char *e = b->ptr;
 
