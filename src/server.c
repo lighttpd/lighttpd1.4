@@ -1237,7 +1237,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 	{
 #ifdef HAVE_GETRLIMIT
-		struct rlimit rlim;
+		struct rlimit rlim = { 4096, 4096 };
 		int use_rlimit = 1;
 #ifdef HAVE_VALGRIND_VALGRIND_H
 		if (RUNNING_ON_VALGRIND) use_rlimit = 0;
@@ -1245,7 +1245,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 		if (0 != getrlimit(RLIMIT_NOFILE, &rlim)) {
 			log_perror(srv->errh, __FILE__, __LINE__, "getrlimit()");
-			return -1;
+			use_rlimit = 0;
 		}
 
 		/**
