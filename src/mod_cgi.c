@@ -555,7 +555,7 @@ static ssize_t cgi_write_file_chunk_mmap(request_st * const r, int fd, chunkqueu
 	force_assert(FILE_CHUNK == c->type);
 	force_assert(c->offset >= 0 && c->offset <= c->file.length);
 
-	offset = c->file.start + c->offset;
+	offset = c->offset;
 	toSend = c->file.length - c->offset;
 
 	if (0 == toSend) {
@@ -570,7 +570,7 @@ static ssize_t cgi_write_file_chunk_mmap(request_st * const r, int fd, chunkqueu
   #else
 	size_t mmap_offset, mmap_avail;
 	char *data = NULL;
-	off_t file_end = c->file.start + c->file.length; /* offset to file end in this chunk */
+	off_t file_end = c->file.length; /* offset to file end in this chunk */
 
 	/*(simplified from chunk.c:chunkqueue_open_file_chunk())*/
 	if (-1 == c->file.fd) {

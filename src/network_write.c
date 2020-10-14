@@ -148,7 +148,7 @@ static int network_write_file_chunk_no_mmap(int fd, chunkqueue *cq, off_t *p_max
 
     force_assert(c->offset >= 0 && c->offset <= c->file.length);
 
-    offset = c->file.start + c->offset;
+    offset = c->offset;
     toSend = c->file.length - c->offset;
     if (toSend > *p_max_bytes) toSend = *p_max_bytes;
 
@@ -223,10 +223,10 @@ static int network_write_file_chunk_mmap(int fd, chunkqueue *cq, off_t *p_max_by
 
     force_assert(c->offset >= 0 && c->offset <= c->file.length);
 
-    offset = c->file.start + c->offset;
+    offset = c->offset;
     toSend = c->file.length - c->offset;
     if (toSend > *p_max_bytes) toSend = *p_max_bytes;
-    file_end = c->file.start + c->file.length; /*file end offset in this chunk*/
+    file_end = c->file.length; /*file end offset in this chunk*/
 
     if (0 == toSend) {
         chunkqueue_remove_finished_chunks(cq);
@@ -443,7 +443,7 @@ static int network_write_file_chunk_sendfile(int fd, chunkqueue *cq, off_t *p_ma
 
     force_assert(c->offset >= 0 && c->offset <= c->file.length);
 
-    offset = c->file.start + c->offset;
+    offset = c->offset;
     toSend = c->file.length - c->offset;
     if (toSend > *p_max_bytes) toSend = *p_max_bytes;
 

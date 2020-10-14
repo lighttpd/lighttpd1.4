@@ -74,29 +74,31 @@ chunkqueue *chunkqueue_init(chunkqueue *cq) {
 
 __attribute_returns_nonnull__
 static chunk *chunk_init(size_t sz) {
-	chunk *c;
-
-	c = calloc(1, sizeof(*c));
+	chunk * const restrict c = calloc(1, sizeof(*c));
 	force_assert(NULL != c);
 
+      #if 0 /*(zeroed by calloc())*/
 	c->type = MEM_CHUNK;
-	c->mem = buffer_init();
-	c->file.start = c->file.length = c->file.mmap.offset = 0;
+	c->next = NULL;
+	c->offset = 0;
+	c->file.length = 0;
+	c->file.mmap.length = c->file.mmap.offset = 0;
+	c->file.is_temp = 0;
+      #endif
 	c->file.fd = -1;
 	c->file.mmap.start = MAP_FAILED;
-	c->file.mmap.length = 0;
-	c->file.is_temp = 0;
-	c->offset = 0;
-	c->next = NULL;
 
+	c->mem = buffer_init();
 	buffer_string_prepare_copy(c->mem, sz-1);
 
 	return c;
 }
 
 static void chunk_reset_file_chunk(chunk *c) {
-	if (c->file.is_temp && !chunk_buffer_string_is_empty(c->mem)) {
-		unlink(c->mem->ptr);
+	if (c->file.is_temp) {
+		c->file.is_temp = 0;
+		if (!chunk_buffer_string_is_empty(c->mem))
+			unlink(c->mem->ptr);
 	}
 	if (c->file.fd != -1) {
 		close(c->file.fd);
@@ -105,10 +107,9 @@ static void chunk_reset_file_chunk(chunk *c) {
 	if (MAP_FAILED != c->file.mmap.start) {
 		munmap(c->file.mmap.start, c->file.mmap.length);
 		c->file.mmap.start = MAP_FAILED;
+		c->file.mmap.length = c->file.mmap.offset = 0;
 	}
-	c->file.start = c->file.length = c->file.mmap.offset = 0;
-	c->file.mmap.length = 0;
-	c->file.is_temp = 0;
+	c->file.length = 0;
 	c->type = MEM_CHUNK;
 }
 
@@ -277,8 +278,8 @@ static chunk * chunkqueue_append_file_chunk(chunkqueue * const restrict cq, cons
     chunk *c = chunk_acquire(buffer_string_length(fn)+1);
     chunkqueue_append_chunk(cq, c);
     c->type = FILE_CHUNK;
-    c->file.start = offset;
-    c->file.length = len;
+    c->offset = offset;
+    c->file.length = offset + len;
     cq->bytes_in += len;
     buffer_copy_buffer(c->mem, fn);
     return c;
@@ -506,7 +507,7 @@ void chunkqueue_steal(chunkqueue * const restrict dest, chunkqueue * const restr
 				break;
 			case FILE_CHUNK:
 				/* tempfile flag is in "last" chunk after the split */
-				chunkqueue_append_file(dest, c->mem, c->file.start + c->offset, use);
+				chunkqueue_append_file(dest, c->mem, c->offset, use);
 				if (c->file.fd >= 0)
 					dest->last->file.fd = fdevent_dup_cloexec(c->file.fd);
 				break;
@@ -680,7 +681,7 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue
 			} else {
 				/* partial chunk with length "use" */
 				/* tempfile flag is in "last" chunk after the split */
-				chunkqueue_append_file(dest, c->mem, c->file.start + c->offset, use);
+				chunkqueue_append_file(dest, c->mem, c->offset, use);
 				if (c->file.fd >= 0)
 					dest->last->file.fd = fdevent_dup_cloexec(c->file.fd);
 
@@ -814,7 +815,7 @@ static int chunk_open_file_chunk(chunk * const restrict c, log_error_st * const 
 	force_assert(FILE_CHUNK == c->type);
 	force_assert(c->offset >= 0 && c->offset <= c->file.length);
 
-	offset = c->file.start + c->offset;
+	offset = c->offset;
 	toSend = c->file.length - c->offset;
 
 	if (-1 == c->file.fd) {
@@ -864,7 +865,7 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
 
     const int fd = filec->file.fd;
     if (fd < 0) return; /*(require that file already be open)*/
-    off_t offset = filec->file.start + filec->offset;
+    off_t offset = filec->offset;
     if (0 != offset && -1 == lseek(fd, offset, SEEK_SET)) return;
 
     /* Note: there should be no size change in chunkqueue,
@@ -920,7 +921,7 @@ chunkqueue_peek_data (chunkqueue * const cq,
 
           case FILE_CHUNK:
             if (c->file.fd >= 0 || 0 == chunk_open_file_chunk(c, errh)) {
-                off_t offset = c->file.start + c->offset;
+                off_t offset = c->offset;
                 off_t toSend = c->file.length - c->offset;
                 if (toSend > (off_t)space)
                     toSend = (off_t)space;

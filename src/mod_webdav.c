@@ -3418,7 +3418,7 @@ webdav_mmap_file_chunk (chunk * const c)
      * be able to be re-opened if it was a tmpfile that was unlinked */
     /*assert(c->type == FILE_CHUNK);*/
     if (MAP_FAILED != c->file.mmap.start)
-        return c->file.mmap.start + c->offset;
+        return c->file.mmap.start + c->offset - c->file.mmap.offset;
 
     if (webdav_open_chunk_file_rd(c) < 0)
         return NULL;
@@ -3432,7 +3432,7 @@ webdav_mmap_file_chunk (chunk * const c)
     close(c->file.fd);
     c->file.fd = -1;
     c->file.mmap.length = c->file.length;
-    return c->file.mmap.start + c->offset;
+    return c->file.mmap.start + c->offset - c->file.mmap.offset;
 }
 
 
@@ -3466,7 +3466,7 @@ webdav_parse_chunkqueue (request_st * const r,
         }
         else if (c->type == FILE_CHUNK) {
             xmlstr = webdav_mmap_file_chunk(c);
-            /*xmlstr = c->file.mmap.start + c->offset;*/
+            /*xmlstr = c->file.mmap.start + c->offset - c->file.mmap.offset;*/
             if (NULL != xmlstr) {
                 weHave = c->file.length - c->offset;
             }
@@ -3487,7 +3487,7 @@ webdav_parse_chunkqueue (request_st * const r,
                 }
                 ssize_t rd = -1;
                 do {
-                    if (-1 ==lseek(c->file.fd,c->file.start+c->offset,SEEK_SET))
+                    if (-1 == lseek(c->file.fd, c->offset, SEEK_SET))
                         break;
                     off_t len = c->file.length - c->offset;
                     if (len > (off_t)sizeof(buf)) len = (off_t)sizeof(buf);
@@ -4149,7 +4149,8 @@ mod_webdav_write_cq_first_chunk (request_st * const r, chunkqueue * const cq,
     case FILE_CHUNK:
         if (NULL != webdav_mmap_file_chunk(c)) {
             do {
-                wr = write(fd, c->file.mmap.start+c->offset,
+                wr = write(fd,
+                           c->file.mmap.start + c->offset - c->file.mmap.offset,
                            c->file.length - c->offset);
             } while (-1 == wr && errno == EINTR);
             break;
@@ -4170,7 +4171,7 @@ mod_webdav_write_cq_first_chunk (request_st * const r, chunkqueue * const cq,
             ssize_t rd = -1;
             char buf[16384];
             do {
-                if (-1 == lseek(c->file.fd, c->file.start+c->offset, SEEK_SET))
+                if (-1 == lseek(c->file.fd, c->offset, SEEK_SET))
                     break;
                 off_t len = c->file.length - c->offset;
                 if (len > (off_t)sizeof(buf)) len = (off_t)sizeof(buf);
@@ -4437,7 +4438,7 @@ mod_webdav_put_linkat_rename (request_st * const r,
                 webdav_response_etag(r, &st);
         }
 
-        chunkqueue_mark_written(cq, c->file.length);
+        chunkqueue_mark_written(cq, c->file.length); /*(c->offset == 0)*/
         return 1;
     }
 

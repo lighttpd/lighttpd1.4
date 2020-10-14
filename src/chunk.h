@@ -22,15 +22,14 @@ typedef struct chunk {
 	buffer *mem; /* either the storage of the mem-chunk or the name of the file */
 
 	/* the size of the chunk is either:
-	 * - mem-chunk: buffer_string_length(chunk::mem)
-	 * - file-chunk: chunk::file.length
+	 * - mem-chunk: buffer_string_length(chunk::mem) - c->offset
+	 * - file-chunk: chunk::file.length - c->offset
 	 */
-	off_t  offset; /* octets sent from this chunk */
+	off_t offset;
 
 	struct {
 		/* filechunk */
-		off_t  start; /* starting offset in the file */
-		off_t  length; /* octets to send from the starting offset */
+		off_t  length; /* end pos + 1 in file (octets to send: file.length - c->offset) */
 
 		int    fd;
 		int is_temp; /* file is temporary and will be deleted if on cleanup */

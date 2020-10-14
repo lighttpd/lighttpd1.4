@@ -1053,7 +1053,7 @@ static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx
 	off_t toSend = -1;
 	char *start;
 #ifdef USE_MMAP
-	off_t we_want_to_mmap = 2 MByte;
+	const off_t we_want_to_mmap = 2 MByte; /* must be power-of-2 */
 	off_t we_want_to_send = st_size;
 	volatile int mapped = 0;/* quiet warning: might be clobbered by 'longjmp' */
 #else
@@ -1067,7 +1067,7 @@ static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx
 		}
 	}
 
-	abs_offset = c->file.start + c->offset;
+	abs_offset = c->offset;
 
 #ifdef USE_MMAP
 	/* mmap the buffer
@@ -1106,15 +1106,10 @@ static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx
 			c->file.mmap.offset += we_want_to_mmap;
 		} else {
 			/* in case the range-offset is after the first mmap()ed area we skip the area */
-			c->file.mmap.offset = 0;
-
-			while (c->file.mmap.offset + we_want_to_mmap < c->file.start) {
-				c->file.mmap.offset += we_want_to_mmap;
-			}
+			c->file.mmap.offset = c->offset & ~(we_want_to_mmap-1);
 		}
 
-		/* length is rel, c->offset too, assume there is no limit at the mmap-boundaries */
-		to_mmap = (c->file.start + c->file.length) - c->file.mmap.offset;
+		to_mmap = c->file.length - c->file.mmap.offset;
 		if (to_mmap > we_want_to_mmap) to_mmap = we_want_to_mmap;
 		/* we have more to send than we can mmap() at once */
 		if (we_want_to_send > to_mmap) we_want_to_send = to_mmap;
@@ -1530,7 +1525,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	    && r->resp_body_finished
 	    && r->write_queue.first == r->write_queue.last
 	    && r->write_queue.first->type == FILE_CHUNK
-	    && r->write_queue.first->file.start == 0
+	    && r->write_queue.first->offset == 0
 	    && !r->write_queue.first->file.is_temp
 	    && !light_btst(r->resp_htags, HTTP_HEADER_RANGE)) {
 		tb = mod_deflate_cache_file_name(r, p->conf.cache_dir, vb);
