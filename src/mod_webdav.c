@@ -4019,6 +4019,7 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
         log_error(r->conf.errh, __FILE__, __LINE__, "XML-response-body: %.*s",
                   BUFFER_INTLEN_PTR(pb.b));
 
+    chunkqueue_append_buffer_commit(&r->write_queue);
     http_status_set_fin(r, 207); /* Multi-status */
 
     chunk_buffer_release(pb.b_404);
