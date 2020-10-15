@@ -1337,6 +1337,8 @@ SERVER_FUNC(mod_webdav_worker_init)
                     cpv->vtype = T_CONFIG_LOCAL;
                     if (!mod_webdav_sqlite3_prep(cpv->v.v, dbname, srv->errh))
                         return HANDLER_ERROR;
+                    /*(update p->defaults after init)*/
+                    if (0 == i) p->defaults.sql = cpv->v.v;
                 }
                 break;
              #endif
