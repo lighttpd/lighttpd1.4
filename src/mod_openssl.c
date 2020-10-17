@@ -109,6 +109,7 @@
 #include "http_kv.h"
 #include "log.h"
 #include "plugin.h"
+#include "sock_addr.h"
 
 typedef struct {
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
@@ -130,6 +131,7 @@ typedef struct {
     buffer *ech_keydir;
     int32_t ech_keydir_refresh_interval;
     time_t ech_keydir_refresh_ts;
+    const array *ech_public_hosts;
 } plugin_ssl_ctx;
 
 typedef struct {
@@ -181,6 +183,7 @@ typedef struct {
     plugin_config defaults;
     server *srv;
     array *cafiles;
+    array *ech_only_hosts;
     const char *ssl_stek_file;
 } plugin_data;
 
@@ -200,10 +203,13 @@ typedef struct {
     connection *con;
     short renegotiations; /* count of SSL_CB_HANDSHAKE_START */
     short close_notify;
-    unsigned short alpn;
+    uint8_t alpn;
+    uint8_t ech_only_policy;
     plugin_config conf;
     buffer *tmp_buf;
     log_error_st *errh;
+    const array *ech_only_hosts;
+    const array *ech_public_hosts;
 } handler_ctx;
 
 
@@ -685,6 +691,142 @@ mod_openssl_ech_cb (SSL * const ssl, const char * const str)
 
 #endif /* LIGHTTPD_OPENSSL_ECH_DEBUG */
 
+
+__attribute_pure__
+static const buffer *
+mod_openssl_ech_only (const handler_ctx * const hctx, const char * const h, size_t hlen)
+{
+    /* design choice: match host SNI without port
+     *   (ech_only_hosts also have port stripped from config string at startup)
+     *   (might consider being more precise if sni_ech is canonicalized w/ port
+     *    if non-default port)
+     */
+    const char * const colon = memchr(h, ':', hlen);
+    if (colon) hlen = (size_t)(colon - h);
+
+    const array * const ech_only_hosts = hctx->ech_only_hosts;
+    const array * const ech_public_hosts = hctx->ech_public_hosts; /*("outer")*/
+    if (ech_only_hosts) {
+        const data_unset *du = array_get_element_klen(ech_only_hosts, h, hlen);
+        if (du) return &((const data_string *)du)->value;
+    }
+    if (ech_public_hosts
+        && NULL == array_get_element_klen(ech_public_hosts, h, hlen)) {
+        /*(return first host in ech_public_hosts list as non-ech-host)*/
+        return &ech_public_hosts->data[0]->key;
+    }
+    return NULL;
+}
+
+
+__attribute_pure__
+static int
+mod_openssl_ech_only_host_match (const char *a, size_t alen, const char *b, size_t blen)
+{
+    /* compare two host strings
+     * - host strings    with port must match exactly
+     * - host strings without port must match exactly
+     * - host string  without port must prefix-match host string with port
+     * This comparison tries to do this right thing with regards to what is
+     * generally expected when a port is not provided (for whatever reason),
+     * but does not reject the case where two ECH-only hosts with the same
+     * name, but different ports, are independent rather than the same site */
+
+    if (alen == blen)
+        return (0 == memcmp(a, b, alen)); /* chk exact match */
+
+    /* make a longer string, b shorter string, and len the prefix len */
+    size_t len = blen;
+    if (alen < blen) {
+        len = alen;
+        const char *t = b;
+        b = a;
+        a = t;
+    }
+
+    if (a[len] == ':' && 0 == memcmp(a, b, len)) {
+        for (a += len + 1; light_isdigit(*a); ++a) ;
+        return (*a == '\0');              /* chk prefix match, then port num */
+    }
+
+    return 0;
+}
+
+
+__attribute_cold__
+static handler_t
+mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hctx)
+{
+    if (NULL == r->http_host)
+        return HANDLER_GO_ON; /* ignore HTTP/1.0 without Host: header */
+
+    char *sni_ech = NULL;
+    char *sni_clr = NULL;
+    switch (SSL_ech_get_status(hctx->ssl, &sni_ech, &sni_clr)) {
+      case SSL_ECH_STATUS_SUCCESS:
+        /* require that request :authority (Host) match SNI in ECH to avoid one
+         * ECH-provided host testing for existence of another ECH-only host.
+         * 'sni_ech' is assumed normalized since ECH decryption succeeded. */
+        if (!mod_openssl_ech_only_host_match(CONST_BUF_LEN(r->http_host),
+                                             sni_ech, strlen(sni_ech))) {
+            r->http_status = 400;
+            return HANDLER_FINISHED;
+        }
+        break;
+      /*case SSL_ECH_STATUS_NOT_TRIED:*/
+      default:
+        if (0 == r->loops_per_request && r->http_host) {
+            /* avoid acknowledging existence of ECH-only host in request
+             * if connection not ECH and some hosts configured ECH-only */
+            /* always restart request once to minimize timing differences */
+            /* always attempt to do equivalent work, even if wasteful */
+            /* always attempt to provide same behavior for authority in
+             * request whether or not it matches cleartext SNI */
+            /* (r->uri.authority is ECH-only if redo_host *is not* NULL) */
+            const buffer *redo_host =
+              mod_openssl_ech_only(hctx, CONST_BUF_LEN(&r->uri.authority));
+            buffer * const http_host = r->http_host;
+            if (NULL == sni_clr)
+                *(const char **)&sni_clr =
+                  SSL_get_servername(hctx->ssl, TLSEXT_NAMETYPE_host_name);
+            if (NULL != sni_clr) {
+                buffer * const tb = r->tmp_buf;
+                buffer_copy_string_len(tb, sni_clr, strlen(sni_clr));
+                buffer_to_lower(tb); /*(normalized in policy checks)*/
+                if (0 != http_request_host_policy(tb,
+                                                  r->conf.http_parseopts, 443)){
+                    r->http_status = 400;
+                    return HANDLER_FINISHED;
+                }
+                const buffer * const redo_host_sni =
+                  mod_openssl_ech_only(hctx, CONST_BUF_LEN(tb));
+                redo_host = (NULL != redo_host)
+                  ? (NULL == redo_host_sni) ? tb : redo_host_sni
+                  : http_host;
+            }
+            else if (NULL == redo_host)
+                redo_host = http_host;
+            /* always copy r->http_host, even if copying over itself */
+            buffer_copy_buffer(http_host, redo_host);
+            /* always normalize port, if not 443 */
+            const server_socket * const srv_sock = r->con->srv_socket;
+            if (sock_addr_get_port(&srv_sock->addr) != 443) {
+                const char * const colon = strchr(http_host->ptr, ':');
+                if (colon)
+                    buffer_string_set_length(http_host, colon - http_host->ptr);
+                const buffer * const srv_token = srv_sock->srv_token;
+                const size_t o = srv_sock->srv_token_colon;
+                const size_t n = buffer_string_length(srv_token) - o;
+                buffer_append_string_len(http_host, srv_token->ptr+o, n);
+            }
+            ++r->loops_per_request;
+            return HANDLER_COMEBACK;
+        }
+        break;
+    }
+    return HANDLER_GO_ON;
+}
+
 #endif /* !OPENSSL_NO_ECH */
 
 
@@ -758,6 +900,7 @@ static void
 mod_openssl_free_config (server *srv, plugin_data * const p)
 {
     array_free(p->cafiles);
+    array_free(p->ech_only_hosts);
 
     if (NULL != p->ssl_ctxs) {
         SSL_CTX * const ssl_ctx_global_scope = p->ssl_ctxs->ssl_ctx;
@@ -1190,6 +1333,8 @@ mod_openssl_merge_config_cpv (plugin_config * const pconf, const config_plugin_v
       case 17:/* ssl.verifyclient.ca-crl-file */
         break;
      #endif
+      case 18:/* ssl.non-ech-host */
+        break;
       default:/* should not happen */
         return;
     }
@@ -1486,15 +1631,44 @@ mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
 
     /* use SNI to patch mod_openssl config and then reset COMP_HTTP_HOST */
     buffer_copy_string_len_lc(&r->uri.authority, servername, len);
-  #if 0
-    /*(r->uri.authority used below for configuration before request read;
-     * revisit for h2)*/
+
+    /*(r->uri.authority used below for configuration before request read)
+     *(r->uri.authority is set here since it is used by config merging,
+     * but r->uri.authority is later overwritten by each HTTP request)*/
     if (0 != http_request_host_policy(&r->uri.authority,
                                       r->conf.http_parseopts, 443))
         return SSL_TLSEXT_ERR_ALERT_FATAL;
-  #endif
 
   #ifndef OPENSSL_NO_ECH
+    if (hctx->ech_only_policy) { /* ECH-only hosts are configured */
+        /*(given: r->uri.authority contains value from SSL_get_servername())*/
+        /*(check if host is ech-only before mod_openssl_patch_config() to try to
+         * avoid timing differences (which might reveal existence of specific
+         * ech-only host due to having to reset, re-patch if host is ech-only).
+         * This is possible with the global list of ech_only_hosts configured
+         * by ssl.non-ech-host.  We have chosen to unconditionally strip port
+         * to help admins avoid mistakes where ech-only host might be accessed
+         * on a different port.  Admin can use separate lighttpd instances if
+         * there is a need for such complex behavior on different ports.) */
+        char *sni_ech = NULL;
+        char *sni_clr = NULL;
+        switch (SSL_ech_get_status(hctx->ssl, &sni_ech, &sni_clr)) {
+          case SSL_ECH_STATUS_SUCCESS:
+            break;
+          /*case SSL_ECH_STATUS_NOT_TRIED:*/
+          default:
+            /* **ignore** cleartext SNI if servername is marked ECH-only;
+             * avoid acknowledging existence of host sent in cleartext SNI */
+            /* alternative: apply config for mod_openssl_ech_only() fallback */
+            if (NULL != mod_openssl_ech_only(hctx,
+                                             CONST_BUF_LEN(&r->uri.authority))){
+                buffer_clear(&r->uri.authority);
+                return SSL_TLSEXT_ERR_OK;
+            }
+            break;
+        }
+    }
+
     /* (might be called again after ECH is decrypted) */
     if (r->conditional_is_valid & (1 << COMP_HTTP_HOST))
         config_cond_cache_reset_item(r, COMP_HTTP_HOST);
@@ -3105,7 +3279,7 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
             plugin_ssl_ctx * const s = p->ssl_ctxs + sidx;
             s->ssl_ctx = conf.ssl_ctx;
             if (conf.ech_opts) {
-                array *ech_opts = conf.ech_opts;
+                const array * const ech_opts = conf.ech_opts;
                 const data_unset *du;
                 du = array_get_element_klen(ech_opts, CONST_STR_LEN("keydir"));
                 s->ech_keydir = du ? &((data_string *)du)->value : NULL;
@@ -3114,6 +3288,27 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                 du = array_get_element_klen(ech_opts, CONST_STR_LEN("refresh"));
                 s->ech_keydir_refresh_interval =
                   config_plugin_value_to_int32(du, 900);
+                du = array_get_element_klen(ech_opts,
+                                            CONST_STR_LEN("public-hosts"));
+                if (du && du->type == TYPE_ARRAY) {
+                    s->ech_public_hosts = &((data_array *)du)->value;
+                    if (s->ech_public_hosts->used == 0)
+                        s->ech_public_hosts = NULL;
+                    else {
+                        /*(error out if "public-hosts" has ports appended)
+                         *(could instead re-create/re-index array, but naw)*/
+                        const array * const a = s->ech_public_hosts;
+                        for (uint32_t j = 0; j < a->used; ++j) {
+                            const buffer * h = &a->data[j]->key;
+                            if (NULL != strchr(h->ptr, ':')) {
+                                log_error(srv->errh, __FILE__, __LINE__,
+                                  "ssl.ech-opts \"public-hosts\" must be listed"
+                                  "without port: %s", h->ptr);
+                                rc = HANDLER_ERROR;
+                            }
+                        }
+                    }
+                }
             }
         }
         else {
@@ -3216,6 +3411,9 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.verifyclient.ca-crl-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.non-ech-host"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
@@ -3329,6 +3527,38 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
               case 16:/* ssl.verifyclient.ca-dn-file */
               case 17:/* ssl.verifyclient.ca-crl-file */
              #endif
+                break;
+              case 18:/* ssl.non-ech-host */
+                if (0 != i) {
+                    config_cond_info cfginfo;
+                    config_get_config_cond_info(&cfginfo,
+                                                (uint32_t)p->cvlist[i].k_id);
+                    if (cfginfo.comp == COMP_HTTP_HOST
+                        && cfginfo.cond == CONFIG_COND_EQ) {
+                        if (NULL == p->ech_only_hosts)
+                            p->ech_only_hosts = array_init(4);
+                      #if 0
+                        array_set_key_value(p->ech_only_hosts,
+                                            CONST_BUF_LEN(cfginfo.string),
+                                            CONST_BUF_LEN(cpv->v.b));
+                      #else
+                        /*(not expecting IPv6-literal as ECH-only)*/
+                        const char *kcolon = strchr(cfginfo.string->ptr, ':');
+                        size_t klen = kcolon
+                          ? (size_t)(kcolon - cfginfo.string->ptr)
+                          : buffer_string_length(cfginfo.string);
+                        array_set_key_value(p->ech_only_hosts,
+                                            cfginfo.string->ptr, klen,
+                                            CONST_BUF_LEN(cpv->v.b));
+                      #endif
+                    }
+                    else {
+                        log_error(srv->errh, __FILE__, __LINE__,
+                          "%s valid only in $HTTP[\"...\"] == \"...\" config "
+                          "condition, not: %s", cpk[cpv->k_id].k,
+                          cfginfo.comp_key);
+                    }
+                }
                 break;
               default:/* should not happen */
                 break;
@@ -3820,6 +4050,11 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
 
     plugin_ssl_ctx *s = p->ssl_ctxs + srv_sock->sidx;
     if (NULL == s->ssl_ctx) s = p->ssl_ctxs; /*(inherit from global scope)*/
+  #ifndef OPENSSL_NO_ECH
+    hctx->ech_public_hosts = s->ech_public_hosts;
+    hctx->ech_only_hosts   = p->ech_only_hosts;
+    hctx->ech_only_policy  = (hctx->ech_only_hosts || hctx->ech_public_hosts);
+  #endif
     hctx->ssl = SSL_new(s->ssl_ctx);
     if (NULL != hctx->ssl
         && SSL_set_app_data(hctx->ssl, hctx)
@@ -4189,6 +4424,13 @@ REQUEST_FUNC(mod_openssl_handle_uri_raw)
     plugin_data *p = p_d;
     handler_ctx *hctx = r->con->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
+
+  #ifndef OPENSSL_NO_ECH
+    if (hctx->ech_only_policy) { /* ECH-only hosts are configured */
+        handler_t rc = mod_openssl_ech_only_policy_check(r, hctx);
+        if (HANDLER_GO_ON != rc) return rc;
+    }
+  #endif
 
     mod_openssl_patch_config(r, &hctx->conf);
     if (hctx->conf.ssl_verifyclient) {
