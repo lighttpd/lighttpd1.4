@@ -779,7 +779,12 @@ mod_openssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
 static int
 mod_openssl_load_cacrls (X509_STORE *store, const buffer *ssl_ca_crl_file, server *srv)
 {
-    if (1 != X509_STORE_load_locations(store, ssl_ca_crl_file->ptr, NULL)) {
+  #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    if (1 != X509_STORE_load_file(store, ssl_ca_crl_file->ptr))
+  #else
+    if (1 != X509_STORE_load_locations(store, ssl_ca_crl_file->ptr, NULL))
+  #endif
+    {
         log_error(srv->errh, __FILE__, __LINE__,
           "SSL: %s %s", ERR_error_string(ERR_get_error(), NULL),
           ssl_ca_crl_file->ptr);
