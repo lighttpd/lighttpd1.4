@@ -874,15 +874,9 @@ static void server_graceful_state (server *srv) {
             data_unset * const du =
               array_get_element_klen(srv->srvconf.feature_flags,
                 CONST_STR_LEN("server.graceful-shutdown-timeout"));
-            if (NULL != du) {
-                if (du->type == TYPE_STRING)
-                    srv->graceful_expire_ts =
-                      strtol(((data_string *)du)->value.ptr, NULL, 10);
-                else if (du->type == TYPE_INTEGER)
-                    srv->graceful_expire_ts = ((data_integer *)du)->value;
-                if (srv->graceful_expire_ts)
-                    srv->graceful_expire_ts += log_epoch_secs;
-            }
+            srv->graceful_expire_ts = config_plugin_value_to_int32(du, 0);
+            if (srv->graceful_expire_ts)
+                srv->graceful_expire_ts += log_epoch_secs;
         }
         connection_graceful_shutdown_maint(srv);
     }

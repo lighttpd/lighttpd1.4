@@ -134,6 +134,9 @@ __attribute_cold__
 int config_plugin_value_tobool(data_unset *du, int default_value);
 
 __attribute_cold__
+int32_t config_plugin_value_to_int32 (data_unset *du, int32_t default_value);
+
+__attribute_cold__
 int config_plugin_values_init_block(server * const srv, const array * const ca, const config_plugin_keys_t * const cpk, const char * const mname, config_plugin_value_t *cpv);
 
 __attribute_cold__

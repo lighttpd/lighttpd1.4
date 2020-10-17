@@ -63,6 +63,23 @@ int config_plugin_value_tobool (data_unset *du, int default_value)
         return default_value;
 }
 
+int32_t config_plugin_value_to_int32 (data_unset *du, int32_t default_value)
+{
+    if (NULL == du) return default_value;
+    if (du->type == TYPE_STRING) {
+        const buffer * const b = &((const data_string *)du)->value;
+        char *err;
+        long v = strtol(b->ptr, &err, 10);
+        return (*err=='\0' && err != b->ptr && INT32_MIN <= v && v <= INT32_MAX)
+          ? (int32_t)v
+          : default_value;
+    }
+    else if (du->type == TYPE_INTEGER)
+        return ((const data_integer *)du)->value;
+    else
+        return default_value;
+}
+
 int config_plugin_values_init_block(server * const srv, const array * const ca, const config_plugin_keys_t * const cpk, const char * const mname, config_plugin_value_t *cpv) {
     /*(cpv must be list with sufficient elements to store all matches + 1)*/
 

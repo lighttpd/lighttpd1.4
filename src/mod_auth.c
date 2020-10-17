@@ -7,6 +7,7 @@
 
 #include "base.h"
 #include "plugin.h"
+#include "plugin_config.h"
 #include "http_auth.h"
 #include "http_header.h"
 #include "log.h"
@@ -96,13 +97,9 @@ http_auth_cache_init (const array *opts)
     ac->sptree = NULL;
     ac->max_age = 600; /* 10 mins */
     for (uint32_t i = 0, used = opts->used; i < used; ++i) {
-        data_string *ds = (data_string *)opts->data[i];
-        if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("max-age"))) {
-            if (ds->type == TYPE_STRING)
-                ac->max_age = (time_t)strtol(ds->value.ptr, NULL, 10);
-            else if (ds->type == TYPE_INTEGER)
-                ac->max_age = (time_t)((data_integer *)ds)->value;
-        }
+        data_unset *du = opts->data[i];
+        if (buffer_is_equal_string(&du->key, CONST_STR_LEN("max-age")))
+            ac->max_age = (time_t)config_plugin_value_to_int32(du, ac->max_age);
     }
     return ac;
 }

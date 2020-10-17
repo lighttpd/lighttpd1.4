@@ -8,6 +8,7 @@
 
 #include "base.h"
 #include "plugin.h"
+#include "plugin_config.h"
 #include "http_vhostdb.h"
 #include "log.h"
 #include "stat_cache.h"
@@ -88,13 +89,9 @@ vhostdb_cache_init (const array *opts)
     vc->sptree = NULL;
     vc->max_age = 600; /* 10 mins */
     for (uint32_t i = 0, used = opts->used; i < used; ++i) {
-        data_string *ds = (data_string *)opts->data[i];
-        if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("max-age"))) {
-            if (ds->type == TYPE_STRING)
-                vc->max_age = (time_t)strtol(ds->value.ptr, NULL, 10);
-            else if (ds->type == TYPE_INTEGER)
-                vc->max_age = (time_t)((data_integer *)ds)->value;
-        }
+        data_unset *du = opts->data[i];
+        if (buffer_is_equal_string(&du->key, CONST_STR_LEN("max-age")))
+            vc->max_age = (time_t)config_plugin_value_to_int32(du, vc->max_age);
     }
     return vc;
 }
