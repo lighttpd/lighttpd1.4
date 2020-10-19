@@ -772,6 +772,18 @@ static void server_sockets_close (server *srv) {
 }
 
 __attribute_cold__
+static void server_graceful_signal_prev_generation (void)
+{
+    const char * const prev_gen = getenv("LIGHTTPD_PREV_GEN");
+    if (NULL == prev_gen) return;
+    pid_t pid = (pid_t)strtol(prev_gen, NULL, 10);
+    unsetenv("LIGHTTPD_PREV_GEN");
+    if (pid <= 0) return; /*(should not happen)*/
+    if (pid == waitpid(pid, NULL, WNOHANG)) return; /*(pid exited; unexpected)*/
+    kill(pid, SIGINT); /* signal previous generation for graceful shutdown */
+}
+
+__attribute_cold__
 static int server_graceful_state_bg (server *srv) {
     /*assert(graceful_restart);*/
     /*(SIGUSR1 set to SIG_IGN in workers, so should not reach here if worker)*/
@@ -833,6 +845,16 @@ static int server_graceful_state_bg (server *srv) {
     if (pid) { /* original process */
         if (pid < 0) return 0;
         network_socket_activation_to_env(srv);
+        /* save pid of original server in environment so that it can be
+         * signalled by restarted server once restarted server is ready
+         * to accept new connections */
+        server_graceful_signal_prev_generation();/*(expect no prev gen active)*/
+        if (0 == srv->srvconf.max_worker) {
+            buffer * const tb = srv->tmp_buf;
+            buffer_clear(tb);
+            buffer_append_int(tb, pid);
+            setenv("LIGHTTPD_PREV_GEN", tb->ptr, 1);
+        }
         /*while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) ;*//* detach? */
         execv(argv[0], argv);
         _exit(1);
@@ -840,7 +862,10 @@ static int server_graceful_state_bg (server *srv) {
     /* else child/grandchild */
 
     /*if (-1 == setsid()) _exit(1);*//* should we detach? */
-    server_sockets_close(srv); /*(close before parent reaps pid in waitpid)*/
+    /* Note: restarted server will fail with socket-in-use error if
+     *       server.systemd-socket-activation not enabled in restarted server */
+    if (0 != srv->srvconf.max_worker)
+        server_sockets_close(srv);/*(close before parent reaps pid in waitpid)*/
     /*if (0 != fork())    _exit(0);*//* should we detach? */
     /*(grandchild is now backgrounded and detached from original process)*/
 
@@ -862,6 +887,11 @@ static int server_graceful_state_bg (server *srv) {
       "[note] pid %lld continuing to handle %u connection(s) in progress",
       (long long)getpid(), srv->conns.used);
 
+    if (0 == srv->srvconf.max_worker) {
+        /* reset graceful_shutdown; wait for signal from restarted server */
+        srv->graceful_expire_ts = 0;
+        graceful_shutdown = 0;
+    }
     graceful_restart = 0;
     return 1;
 }
@@ -1490,6 +1520,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		int child = 0;
 		unsigned int timer = 0;
 		for (int n = 0; n < npids; ++n) pids[n] = -1;
+		server_graceful_signal_prev_generation();
 		while (!child && !srv_shutdown && !graceful_shutdown) {
 			if (num_childs > 0) {
 				switch ((pid = fork())) {
@@ -1704,6 +1735,9 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		oneshot_fd = -1;
 	}
 
+	if (0 == srv->srvconf.max_worker)
+		server_graceful_signal_prev_generation();
+
 	return 1;
 }
 
@@ -1834,7 +1868,7 @@ static void server_main_loop (server * const srv) {
 
 		if (graceful_shutdown) {
 			server_graceful_state(srv);
-			if (0 == srv->conns.used) {
+			if (0 == srv->conns.used && graceful_shutdown) {
 				/* we are in graceful shutdown phase and all connections are closed
 				 * we are ready to terminate without harming anyone */
 				srv_shutdown = 1;
