@@ -171,10 +171,6 @@ static void sigbus_handler(int sig) {
 #define HTTP_ACCEPT_ENCODING_X_BZIP2  BV(6)
 #define HTTP_ACCEPT_ENCODING_BR       BV(7)
 
-#define KByte * 1024
-#define MByte * 1024 KByte
-#define GByte * 1024 MByte
-
 typedef struct {
 	const array	*mimetypes;
 	const buffer    *cache_dir;
@@ -248,7 +244,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 
 INIT_FUNC(mod_deflate_init) {
     plugin_data * const p = calloc(1, sizeof(plugin_data));
-    buffer_string_prepare_copy(&p->tmp_buf, 64 KByte);
+    buffer_string_prepare_copy(&p->tmp_buf, 65536);
     return p;
 }
 
@@ -1053,7 +1049,9 @@ static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx
 	off_t toSend = -1;
 	char *start;
 #ifdef USE_MMAP
-	const off_t we_want_to_mmap = 2 MByte; /* must be power-of-2 */
+	/* use large chunks since server blocks while compressing, anyway
+	 * (mod_deflate is not recommended for large files) */
+	const off_t mmap_chunk_size = 16 * 1024 * 1024; /* must be power-of-2 */
 	off_t we_want_to_send = st_size;
 	volatile int mapped = 0;/* quiet warning: might be clobbered by 'longjmp' */
 #else
@@ -1078,6 +1076,8 @@ static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx
 
 		/* Optimizations for the future:
 		 *
+		 * (comment is outdated since server blocks compressing file and then munmap()s file)
+		 *
 		 * adaptive mem-mapping
 		 *   the problem:
 		 *     we mmap() the whole file. If someone has a lot of large files and 32bit
@@ -1097,20 +1097,20 @@ static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx
 		 *     3. use non-blocking IO for file-transfers
 		 *   */
 
-		/* all mmap()ed areas are 512kb expect the last which might be smaller */
+		/* all mmap()ed areas are mmap_chunk_size except the last which might be smaller */
 		off_t to_mmap;
 
 		/* this is a remap, move the mmap-offset */
 		if (c->file.mmap.start != MAP_FAILED) {
 			munmap(c->file.mmap.start, c->file.mmap.length);
-			c->file.mmap.offset += we_want_to_mmap;
+			c->file.mmap.offset += mmap_chunk_size;
 		} else {
 			/* in case the range-offset is after the first mmap()ed area we skip the area */
-			c->file.mmap.offset = c->offset & ~(we_want_to_mmap-1);
+			c->file.mmap.offset = c->offset & ~(mmap_chunk_size-1);
 		}
 
 		to_mmap = c->file.length - c->file.mmap.offset;
-		if (to_mmap > we_want_to_mmap) to_mmap = we_want_to_mmap;
+		if (to_mmap > mmap_chunk_size) to_mmap = mmap_chunk_size;
 		/* we have more to send than we can mmap() at once */
 		if (we_want_to_send > to_mmap) we_want_to_send = to_mmap;
 
@@ -1124,8 +1124,8 @@ static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx
 
 		c->file.mmap.length = to_mmap;
 #ifdef HAVE_MADVISE
-		/* don't advise files < 64Kb */
-		if (c->file.mmap.length > (64 KByte) &&
+		/* don't advise files <= 64Kb */
+		if (c->file.mmap.length > 65536 &&
 		    0 != madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED)) {
 			log_perror(r->conf.errh, __FILE__, __LINE__,
 			  "madvise failed %s %d", c->mem->ptr, c->file.fd);
@@ -1155,7 +1155,7 @@ static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx
 
 	if (MAP_FAILED == c->file.mmap.start) {
 		toSend = st_size;
-		if (toSend > 2 MByte) toSend = 2 MByte;
+		if (toSend > 2*1024*1024) toSend = 2*1024*1024;
 		if (NULL == (start = malloc((size_t)toSend)) || -1 == lseek(c->file.fd, abs_offset, SEEK_SET) || toSend != read(c->file.fd, start, (size_t)toSend)) {
 			log_perror(r->conf.errh, __FILE__, __LINE__, "reading %s failed", c->mem->ptr);
 
