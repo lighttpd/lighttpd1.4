@@ -1201,6 +1201,13 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
 static int
 h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
 {
+  #ifdef __COVERITY__
+    /* Coverity does not notice that values used in s are checked.
+     * Although silencing here, would prefer not to do so since doing so
+     * disables Coverity from reporting questionable modifications which
+     * might be made to the code in the future. */
+    __coverity_tainted_data_sink__(s);
+  #endif
     request_st *r = NULL;
     h2con * const h2c = con->h2;
     const uint32_t id =
@@ -2419,16 +2426,16 @@ h2_retire_stream (request_st *r, connection * const con)
     if (r == NULL) return; /*(should not happen)*/
     h2con * const h2c = con->h2;
     request_st ** const ar = h2c->r;
-    for (uint32_t i = 0, j = 0, rused = h2c->rused; i < rused; ++i) {
-        if (ar[i] != r)
-            ar[j++] = ar[i];
-        else {
-            h2_release_stream(r, con);
-            r = NULL;
-        }
+    uint32_t i = 0, rused = h2c->rused;
+    while (i < rused && ar[i] != r) ++i;
+    if (i != rused) {
+        /* swap with last element; might need to revisit if ordered by priority */
+        /*if (i != --rused) ar[i] = ar[rused];*/
+        /* shift elements; currently choosing to preserve order requested */
+        if (i != --rused) memmove(ar+i, ar+i+1, (rused-i)*sizeof(*ar));
+        h2c->r[(h2c->rused = rused)] = NULL;
+        h2_release_stream(r, con);
     }
-    if (r == NULL) /* found */
-        h2c->r[--h2c->rused] = NULL;
     /*else ... should not happen*/
 }
 

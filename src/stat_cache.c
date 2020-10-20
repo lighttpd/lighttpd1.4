@@ -996,7 +996,7 @@ stat_cache_entry * stat_cache_get_entry(const buffer *name) {
 	const time_t cur_ts = log_epoch_secs;
 
 	file_ndx = splaytree_djbhash(name->ptr, len);
-	splay_tree * const sptree = sc.files = splaytree_splay(sc.files, file_ndx);
+	splay_tree *sptree = sc.files = splaytree_splay(sc.files, file_ndx);
 
 	if (sptree && (sptree->key == file_ndx)) {
 		/* we have seen this file already and
@@ -1060,7 +1060,7 @@ stat_cache_entry * stat_cache_get_entry(const buffer *name) {
 			stat_cache_entry_free(sptree->data);
 			sptree->data = sce;
 		} else {
-			sc.files = splaytree_insert(sptree, file_ndx, sce);
+			sptree = sc.files = splaytree_insert(sptree, file_ndx, sce);
 		}
 
 	} else {

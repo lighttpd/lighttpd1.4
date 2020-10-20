@@ -1593,6 +1593,10 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	rc = deflate_compress_response(r, hctx);
 	if (HANDLER_GO_ON == rc) return HANDLER_GO_ON;
 	if (HANDLER_FINISHED == rc) {
+	  #ifdef __COVERITY__
+		/* coverity misses if hctx->cache_fd is not -1, then tb is not NULL */
+		force_assert(-1 == hctx->cache_fd || NULL != tb);
+	  #endif
 		if (-1 == hctx->cache_fd
 		    || 0 == mod_deflate_cache_file_finish(r, hctx, tb)) {
 			mod_deflate_note_ratio(r, hctx->bytes_out, hctx->bytes_in);
