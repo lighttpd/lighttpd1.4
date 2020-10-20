@@ -482,6 +482,7 @@ static void chunkqueue_steal_partial_file_chunk(chunkqueue * const restrict dest
     if (c->file.fd >= 0) {
         chunk * const d = dest->last;
         if (c->file.refchg) {
+            d->file.fd = c->file.fd;
             d->file.ref = c->file.ref;
             d->file.refchg = c->file.refchg;
             d->file.refchg(d->file.ref, 1);
