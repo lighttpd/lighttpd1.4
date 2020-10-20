@@ -92,6 +92,26 @@ static int http_chunk_append_read_fd_range(request_st * const r, const buffer * 
     return (rd >= 0) ? 0 : -1;
 }
 
+void http_chunk_append_file_ref_range(request_st * const r, stat_cache_entry * const sce, const off_t offset, const off_t len) {
+    chunkqueue * const cq = &r->write_queue;
+
+    if (r->resp_send_chunked)
+        http_chunk_len_append(cq, (uintmax_t)len);
+
+    const buffer * const fn = &sce->name;
+    const int fd = sce->fd;
+    chunkqueue_append_file_fd(cq, fn, fd, offset, len);
+    if (fd >= 0) {
+        chunk * const d = cq->last;
+        d->file.ref = sce;
+        d->file.refchg = stat_cache_entry_refchg;
+        stat_cache_entry_refchg(sce, 1);
+    }
+
+    if (r->resp_send_chunked)
+        chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
+}
+
 void http_chunk_append_file_fd_range(request_st * const r, const buffer * const fn, const int fd, const off_t offset, const off_t len) {
     chunkqueue * const cq = &r->write_queue;
 
@@ -142,6 +162,20 @@ int http_chunk_append_file_fd(request_st * const r, const buffer * const fn, con
     /*(read small files into memory)*/
     int rc = (0 != sz) ? http_chunk_append_read_fd_range(r,fn,fd,0,sz) : 0;
     close(fd);
+    return rc;
+}
+
+int http_chunk_append_file_ref(request_st * const r, stat_cache_entry * const sce) {
+    const off_t sz = sce->st.st_size;
+    if (sz > 32768 || !r->resp_send_chunked) {
+        http_chunk_append_file_ref_range(r, sce, 0, sz);
+        return 0;
+    }
+
+    /*(read small files into memory)*/
+    const buffer * const fn = &sce->name;
+    const int fd = sce->fd;
+    int rc = (0 != sz) ? http_chunk_append_read_fd_range(r,fn,fd,0,sz) : 0;
     return rc;
 }
 
