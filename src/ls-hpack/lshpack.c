@@ -763,7 +763,7 @@ lshpack_enc_huff_encode (const unsigned char *src,
         else if (p_dst + sizeof(bits) <= dst_end)
         {
           #ifdef __COVERITY__
-            assert(bits_used);
+            assert(bits_used > 0);
           #endif
             bits <<= sizeof(bits) * 8 - bits_used;
             bits_used = cur_enc_code.bits - (sizeof(bits) * 8 - bits_used);

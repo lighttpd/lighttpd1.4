@@ -1399,6 +1399,13 @@ h2_parse_frames (connection * const con)
             c = cq->first; /*(reload after h2_frame_cq_compact())*/
         }
         uint8_t *s = (uint8_t *)(c->mem->ptr + c->offset);
+      #ifdef __COVERITY__
+        /* Coverity does not notice that values used in s are checked.
+         * Although silencing here, would prefer not to do so since doing so
+         * disables Coverity from reporting questionable modifications which
+         * might be made to the code in the future. */
+        __coverity_tainted_data_sink__(s);
+      #endif
         uint32_t flen = (s[0] << 16) | (s[1] << 8) | s[2];
         if (flen > fsize) {
             h2_send_goaway_e(con, H2_E_FRAME_SIZE_ERROR);
