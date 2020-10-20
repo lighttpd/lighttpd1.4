@@ -882,7 +882,7 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
     const int fd = filec->file.fd;
     if (fd < 0) return; /*(require that file already be open)*/
     off_t offset = filec->offset;
-    if (0 != offset && -1 == lseek(fd, offset, SEEK_SET)) return;
+    if (-1 == lseek(fd, offset, SEEK_SET)) return;
 
     /* Note: there should be no size change in chunkqueue,
      * so cq->bytes_in and cq->bytes_out should not be modified */
