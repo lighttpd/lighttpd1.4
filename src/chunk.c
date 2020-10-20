@@ -100,7 +100,12 @@ static void chunk_reset_file_chunk(chunk *c) {
 		if (!chunk_buffer_string_is_empty(c->mem))
 			unlink(c->mem->ptr);
 	}
-	if (c->file.fd != -1) {
+	if (c->file.refchg) {
+		c->file.refchg(c->file.ref, -1);
+		c->file.refchg = 0; /* NULL fn ptr */
+		c->file.ref = NULL;
+	}
+	else if (c->file.fd != -1) {
 		close(c->file.fd);
 		c->file.fd = -1;
 	}
@@ -472,6 +477,20 @@ void chunkqueue_set_tempdirs(chunkqueue * const restrict cq, const array * const
 	cq->tempdir_idx = 0;
 }
 
+static void chunkqueue_steal_partial_file_chunk(chunkqueue * const restrict dest, const chunk * const restrict c, const off_t len) {
+    chunkqueue_append_file(dest, c->mem, c->offset, len);
+    if (c->file.fd >= 0) {
+        chunk * const d = dest->last;
+        if (c->file.refchg) {
+            d->file.ref = c->file.ref;
+            d->file.refchg = c->file.refchg;
+            d->file.refchg(d->file.ref, 1);
+        }
+        else
+            d->file.fd = fdevent_dup_cloexec(c->file.fd);
+    }
+}
+
 void chunkqueue_steal(chunkqueue * const restrict dest, chunkqueue * const restrict src, off_t len) {
 	while (len > 0) {
 		chunk *c = src->first;
@@ -507,9 +526,7 @@ void chunkqueue_steal(chunkqueue * const restrict dest, chunkqueue * const restr
 				break;
 			case FILE_CHUNK:
 				/* tempfile flag is in "last" chunk after the split */
-				chunkqueue_append_file(dest, c->mem, c->offset, use);
-				if (c->file.fd >= 0)
-					dest->last->file.fd = fdevent_dup_cloexec(c->file.fd);
+				chunkqueue_steal_partial_file_chunk(dest, c, use);
 				break;
 			}
 
@@ -583,6 +600,7 @@ int chunkqueue_append_mem_to_tempfile(chunkqueue * const restrict dest, const ch
 
 			if (dst_c->file.length >= (off_t)dest->upload_temp_file_size) {
 				/* the chunk is too large now, close it */
+				force_assert(0 == dst_c->file.refchg); /*(else should not happen)*/
 				int rc = close(dst_c->file.fd);
 				dst_c->file.fd = -1;
 				if (0 != rc) {
@@ -633,6 +651,7 @@ int chunkqueue_append_mem_to_tempfile(chunkqueue * const restrict dest, const ch
 				/*(remove empty chunk and unlink tempfile)*/
 				chunkqueue_remove_empty_chunks(dest);
 			} else {/*(close tempfile; avoid later attempts to append)*/
+				force_assert(0 == dst_c->file.refchg); /*(else should not happen)*/
 				int rc = close(dst_c->file.fd);
 				dst_c->file.fd = -1;
 				if (0 != rc) {
@@ -681,10 +700,7 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue
 			} else {
 				/* partial chunk with length "use" */
 				/* tempfile flag is in "last" chunk after the split */
-				chunkqueue_append_file(dest, c->mem, c->offset, use);
-				if (c->file.fd >= 0)
-					dest->last->file.fd = fdevent_dup_cloexec(c->file.fd);
-
+				chunkqueue_steal_partial_file_chunk(dest, c, use);
 				c->offset += use;
 				force_assert(0 == len);
 			}

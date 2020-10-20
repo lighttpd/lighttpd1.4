@@ -38,6 +38,8 @@ typedef struct chunk {
 			size_t length; /* size of the mmap'ed area */
 			off_t  offset; /* start is <n> octet away from the start of the file */
 		} mmap;
+		void *ref;
+		void(*refchg)(void *, int);
 	} file;
 } chunk;
 
