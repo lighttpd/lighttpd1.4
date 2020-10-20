@@ -365,7 +365,7 @@ static int http_response_coalesce_ranges (off_t * const ranges, int n)
 }
 
 
-static int http_response_parse_range(request_st * const r, const buffer * const path, const int fd, const stat_cache_entry * const sce, const char * const range) {
+static int http_response_parse_range(request_st * const r, stat_cache_entry * const sce, const char * const range) {
 	int n = 0;
 	int error;
 	off_t start, end;
@@ -531,7 +531,7 @@ static int http_response_parse_range(request_st * const r, const buffer * const 
 				http_chunk_append_mem(r, CONST_BUF_LEN(b));
 			}
 
-			http_chunk_append_file_fd_range(r, path, i < 8 ? fdevent_dup_cloexec(fd) : -1, start, end - start + 1);
+			http_chunk_append_file_ref_range(r, sce, start, end - start + 1);
 	}
 
 	buffer * const tb = r->tmp_buf;
@@ -728,7 +728,7 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 			/* content prepared, I'm done */
 			r->resp_body_finished = 1;
 
-			if (0 == http_response_parse_range(r, path, sce->fd, sce, range->ptr+6)) {
+			if (0 == http_response_parse_range(r, sce, range->ptr+6)) {
 				r->http_status = 206;
 			}
 			return;
@@ -741,8 +741,7 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 	 * the HEAD request will drop it afterwards again
 	 */
 
-	int fd = sce->fd >= 0 ? fdevent_dup_cloexec(sce->fd) : -1;
-	if (0 == http_chunk_append_file_fd(r, path, fd, sce->st.st_size)) {
+	if (0 == http_chunk_append_file_ref(r, sce)) {
 		r->http_status = 200;
 		r->resp_body_finished = 1;
 		/*(Transfer-Encoding should not have been set at this point)*/
@@ -942,12 +941,7 @@ range_success: ;
             break;
         }
         if (range_len != 0) {
-            int fd = sce->fd >= 0 ? fdevent_dup_cloexec(sce->fd) : -1;
-            if (fd < 0) {
-                r->http_status = 502;
-                break;
-            }
-            http_chunk_append_file_fd_range(r, b, fd, begin_range, range_len);
+            http_chunk_append_file_ref_range(r, sce, begin_range, range_len);
         }
 
         if (*pos == ',') pos++;

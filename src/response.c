@@ -727,12 +727,8 @@ http_response_static_errdoc (request_st * const r)
         buffer_append_string_len(&r->physical.path, CONST_STR_LEN(".html"));
         stat_cache_entry *sce =
           stat_cache_get_entry_open(&r->physical.path, r->conf.follow_symlink);
-        int fd = sce && sce->fd >= 0 ? fdevent_dup_cloexec(sce->fd) : -1;
-        if (fd >= 0 && 0 == http_chunk_append_file_fd(r, &r->physical.path,
-                                                      fd, sce->st.st_size)) {
-            const buffer *content_type = (NULL != sce)
-              ? stat_cache_content_type_get(sce, r)
-              : NULL;
+        if (sce && 0 == http_chunk_append_file_ref(r, sce)) {
+            const buffer *content_type = stat_cache_content_type_get(sce, r);
             if (content_type)
                 http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
                                          CONST_STR_LEN("Content-Type"),

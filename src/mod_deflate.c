@@ -1533,9 +1533,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		stat_cache_entry *sce = stat_cache_get_entry_open(tb, 1);
 		if (NULL != sce) {
 			chunkqueue_reset(&r->write_queue);
-			int fd = sce->fd >= 0 ? fdevent_dup_cloexec(sce->fd) : -1;
-			if (fd < 0
-			    || 0 != http_chunk_append_file_fd(r, tb, fd, sce->st.st_size))
+			if (sce->fd < 0 || 0 != http_chunk_append_file_ref(r, sce))
 				return HANDLER_ERROR;
 			if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH))
 				http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
