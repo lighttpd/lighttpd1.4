@@ -699,7 +699,7 @@ lshpack_enc_huff_encode (const unsigned char *src,
     uintptr_t bits;  /* OK not to initialize this variable */
     unsigned bits_used = 0, adj;
     struct encode_el cur_enc_code;
-#if __GNUC__
+#if __GNUC__ && !defined(__COVERITY__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #pragma GCC diagnostic ignored "-Wuninitialized"
@@ -762,6 +762,9 @@ lshpack_enc_huff_encode (const unsigned char *src,
         }
         else if (p_dst + sizeof(bits) <= dst_end)
         {
+          #ifdef __COVERITY__
+            assert(bits_used);
+          #endif
             bits <<= sizeof(bits) * 8 - bits_used;
             bits_used = cur_enc_code.bits - (sizeof(bits) * 8 - bits_used);
             bits |= cur_enc_code.code >> bits_used;
