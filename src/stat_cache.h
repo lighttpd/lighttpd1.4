@@ -12,10 +12,11 @@
 
 typedef struct stat stat_cache_st;
 
-typedef struct {
+typedef struct stat_cache_entry {
     buffer name;
     time_t stat_ts;
     int fd;
+    int refcnt;
 #ifdef HAVE_FAM_H
     void *fam_dir;
 #endif
@@ -34,6 +35,8 @@ int stat_cache_init(struct fdevents *ev, log_error_st *errh);
 
 __attribute_cold__
 void stat_cache_free(void);
+
+void stat_cache_entry_refchg(void *data, int mod);
 
 __attribute_cold__
 void stat_cache_xattrname (const char *name);

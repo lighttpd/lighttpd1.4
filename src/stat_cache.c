@@ -533,12 +533,15 @@ static stat_cache_entry * stat_cache_entry_init(void) {
     stat_cache_entry *sce = calloc(1, sizeof(*sce));
     force_assert(NULL != sce);
     sce->fd = -1;
+    sce->refcnt = 1;
     return sce;
 }
 
 static void stat_cache_entry_free(void *data) {
     stat_cache_entry *sce = data;
     if (!sce) return;
+
+    if (--sce->refcnt) return;
 
   #ifdef HAVE_FAM_H
     /*(decrement refcnt only;
@@ -552,6 +555,15 @@ static void stat_cache_entry_free(void *data) {
     if (sce->fd >= 0) close(sce->fd);
 
     free(sce);
+}
+
+void stat_cache_entry_refchg(void *data, int mod) {
+    /*(expect mod == -1 or mod == 1)*/
+    stat_cache_entry * const sce = data;
+    if (mod < 0 && 1 == sce->refcnt)
+        stat_cache_entry_free(data);
+    else
+        sce->refcnt += mod;
 }
 
 #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
@@ -813,8 +825,15 @@ void stat_cache_update_entry(const char *name, uint32_t len,
             buffer_clear(&sce->content_type);
           #endif
             if (sce->fd >= 0) {
-                close(sce->fd);
-                sce->fd = -1;
+                if (1 == sce->refcnt) {
+                    close(sce->fd);
+                    sce->fd = -1;
+                }
+                else {
+                    --sce->refcnt; /* stat_cache_entry_free(sce); */
+                    (*sptree)->data = sce = stat_cache_entry_init();
+                    buffer_copy_string_len(&sce->name, name, len);
+                }
             }
             sce->st = *st;
         }
@@ -1056,8 +1075,15 @@ stat_cache_entry * stat_cache_get_entry(const buffer *name) {
 	if (sce->fd >= 0) {
 		/* close fd if file changed */
 		if (!stat_cache_stat_eq(&sce->st, &st)) {
-			close(sce->fd);
-			sce->fd = -1;
+			if (1 == sce->refcnt) {
+				close(sce->fd);
+				sce->fd = -1;
+			}
+			else {
+				--sce->refcnt; /* stat_cache_entry_free(sce); */
+				sptree->data = sce = stat_cache_entry_init();
+				buffer_copy_string_len(&sce->name, name->ptr, len);
+			}
 		}
 	}
 
