@@ -12,6 +12,11 @@ Module: mod_compress
 
 .. contents:: Table of Contents
 
+WARNING
+=======
+
+mod_compress has been subsumed by mod_deflate.
+
 Description
 ===========
 

@@ -6,7 +6,7 @@ option('with_brotli',
 option('with_bzip',
 	type: 'boolean',
 	value: false,
-	description: 'with bzip2-support for mod_compress [default: off]',
+	description: 'with bzip2-support for mod_deflate [default: off]',
 )
 option('with_dbi',
 	type: 'boolean',
@@ -141,7 +141,7 @@ option('with_xattr',
 option('with_zlib',
 	type: 'boolean',
 	value: true,
-	description: 'with deflate-support for mod_compress [default: on]',
+	description: 'with deflate-support for mod_deflate [default: on]',
 )
 
 option('build_extra_warnings',

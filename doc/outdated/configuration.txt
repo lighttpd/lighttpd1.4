@@ -374,7 +374,7 @@ server.modules
 				"mod_proxy",
 				"mod_cgi",
                                 "mod_ssi",
-				"mod_compress",
+				"mod_deflate",
                                 "mod_usertrack",
 				"mod_expire",
  				"mod_rrdtool",
