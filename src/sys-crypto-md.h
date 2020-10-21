@@ -571,12 +571,28 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 
 #elif defined(USE_NSS_CRYPTO)
 
+/* basic algorithms fail if NSS library has not been init'd (WTH).
+ * lighttpd defers initialization of rand and crypto until first use
+ * to attempt to avoid long, blocking init at startup while waiting
+ * for sufficient system entropy to become available */
+#include <nss3/nss.h>   /* NSS_IsInitialized() NSS_NoDB_Init() */
+#include <stdlib.h>     /* abort() */
+__attribute_cold__
+static inline void
+nss_requires_explicit_init_for_basic_crypto_wth(void)
+{
+    if (NSS_NoDB_Init(NULL) < 0)
+        abort();
+}
+
 #include <nss3/sechash.h>
 
 #define NSS_gen_hashfuncs(name, typ)                                          \
 static inline int                                                             \
 name##_Init(void **ctx)                                                       \
 {                                                                             \
+    if (!NSS_IsInitialized())                                                 \
+        nss_requires_explicit_init_for_basic_crypto_wth();                    \
     const SECHashObject * const hashObj = HASH_GetHashObject(typ);            \
     return ((*ctx=hashObj->create()) != NULL) ? (hashObj->begin(*ctx),1) : 0; \
 }                                                                             \
