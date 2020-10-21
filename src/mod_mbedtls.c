@@ -741,6 +741,7 @@ mod_mbedtls_conf_verify (handler_ctx *hctx, mbedtls_ssl_config *ssl_ctx)
     mbedtls_ssl_context * const ssl = &hctx->ssl;
     mbedtls_ssl_set_hs_ca_chain(ssl, ca_certs, hctx->conf.ssl_ca_crl_file);
   #if MBEDTLS_VERSION_NUMBER >= 0x02120000 /* mbedtls 2.18.0 */
+    UNUSED(ssl_ctx);
     mbedtls_ssl_set_verify(ssl, mod_mbedtls_verify_cb, hctx);
   #else
     mbedtls_ssl_conf_verify(ssl_ctx, mod_mbedtls_verify_cb, hctx);
