@@ -359,6 +359,7 @@ int li_rand_pseudo (void)
   #endif
   #endif
   #ifdef USE_NSS_CRYPTO
+    int i;
     if (SECSuccess == PK11_GenerateRandom((unsigned char *)&i, sizeof(i)))
         return i;
   #endif
