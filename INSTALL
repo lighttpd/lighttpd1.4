@@ -195,12 +195,12 @@ build using CMake and Xcode on Mac OS X with MacPorts
   $ xcodebuild --license
   $ xcode-select --install
   $ sudo port selfupdate
-  $ sudo port install autoconf automake cmake libtool m4 pcre pkgconfig zlib bzip2 openssl libxml sqlite3 openldap fcgi p5-cgi libunwind libunwind-headers mysql57 libev gdbm openldap ossp-uuid
+  $ sudo port install autoconf automake cmake libtool m4 pcre pkgconfig zlib brotli openssl libxml sqlite3 openldap fcgi p5-cgi libunwind libunwind-headers mysql57 libev gdbm openldap ossp-uuid
   # Note: some of the above require more fiddling to configure with CMake...
 
   # cmake and build
   # (all -DWITH_... flags below are optional)
-  $ cmake -Wno-dev -DWITH_OPENSSL=1 -DWITH_LUA=1 -DWITH_ZLIB=1 -DWITH_BZIP2=1 -DWITH_WEBDAV_PROPS=1 .
+  $ cmake -Wno-dev -DWITH_OPENSSL=1 -DWITH_LUA=1 -DWITH_ZLIB=1 -DWITH_BROTLI=1 -DWITH_WEBDAV_PROPS=1 .
   $ make -j 4
   $ make test
 
