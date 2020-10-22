@@ -78,7 +78,13 @@
 #include <stdio.h>      /* vsnprintf() */
 #include <string.h>
 
-#if defined(__CYGWIN__)
+#ifdef __has_include
+#if __has_include(<nss3/nss.h>)
+#define NSS_VER_INCLUDE
+#endif
+#endif
+
+#ifndef NSS_VER_INCLUDE
 #include <nspr/nspr.h>
 #include <nspr/private/pprio.h> /* see mod_nss_io_ctor() comments */
 #include <nss/nss.h>

@@ -575,7 +575,11 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
  * lighttpd defers initialization of rand and crypto until first use
  * to attempt to avoid long, blocking init at startup while waiting
  * for sufficient system entropy to become available */
+#ifdef NSS_VER_INCLUDE
 #include <nss3/nss.h>   /* NSS_IsInitialized() NSS_NoDB_Init() */
+#else
+#include <nss/nss.h>    /* NSS_IsInitialized() NSS_NoDB_Init() */
+#endif
 #include <stdlib.h>     /* abort() */
 __attribute_cold__
 static inline void
@@ -585,7 +589,11 @@ nss_requires_explicit_init_for_basic_crypto_wth(void)
         abort();
 }
 
+#ifdef NSS_VER_INCLUDE
 #include <nss3/sechash.h>
+#else
+#include <nss/sechash.h>
+#endif
 
 #define NSS_gen_hashfuncs(name, typ)                                          \
 static inline int                                                             \

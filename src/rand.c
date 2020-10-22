@@ -56,8 +56,13 @@
 #include <gnutls/crypto.h>
 #endif
 #ifdef USE_NSS_CRYPTO
+#ifdef NSS_VER_INCLUDE
 #include <nss3/nss.h>
 #include <nss3/pk11pub.h>
+#else
+#include <nss/nss.h>
+#include <nss/pk11pub.h>
+#endif
 #endif
 #ifdef HAVE_GETENTROPY
 #include <sys/random.h>
