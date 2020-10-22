@@ -39,12 +39,6 @@ lighttpd_angel_SOURCES=lighttpd-angel.c
 versionstamp:
 	@test -f versionstamp.h || touch versionstamp.h; \
 	REVISION=""; \
-	if test -d "$(top_srcdir)/.svn" -a -x "`which svnversion`"; then \
-		REVISION="$$(LANG= LC_ALL=C svnversion "$(top_srcdir)" 2>/dev/null || echo exported)"; \
-		if test "$$REVISION" = "exported"; then \
-			REVISION=""; \
-		fi; \
-	fi; \
 	if test -z "$$REVISION" -a -d "$(top_srcdir)/.git" -a -x "`which git`"; then \
 		REVISION="$$(cd "$(top_srcdir)"; LANG= LC_ALL=C git describe --always 2>/dev/null || echo)"; \
 	fi; \
