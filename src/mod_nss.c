@@ -89,6 +89,7 @@
 #include <nspr/private/pprio.h> /* see mod_nss_io_ctor() comments */
 #include <nss/nss.h>
 #include <nss/nssb64.h>
+#include <nss/keyhi.h>
 #include <nss/pk11pub.h>
 #include <nss/secder.h>
 #include <nss/secerr.h>
@@ -99,6 +100,7 @@
 #include <nspr4/private/pprio.h> /* see mod_nss_io_ctor() comments */
 #include <nss3/nss.h>
 #include <nss3/nssb64.h>
+#include <nss3/keyhi.h>
 #include <nss3/pk11pub.h>
 #include <nss3/secder.h>
 #include <nss3/secerr.h>
@@ -2874,7 +2876,7 @@ int countciphers(PRBool cipher_state[ciphernum], int version);
 #include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
-#if defined(__CYGWIN__)
+#ifndef NSS_VER_INCLUDE
 #include <nss/sslproto.h>
 #else
 #include <nss3/sslproto.h>
