@@ -1,7 +1,7 @@
 #!/bin/sh
 # Run this to generate all the initial makefiles, etc.
 
-function errtrace {
+errtrace() {
    echo 1>&2 \
      "build requires autoconf automake libtool m4 pcre pcre-devel pkg-config"
 }
