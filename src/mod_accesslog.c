@@ -441,6 +441,7 @@ static void mod_accesslog_free_accesslog(accesslog_st * const x, plugin_data *p)
         close(x->log_access_fd);
     }
     free(x->access_logbuffer.ptr);
+    free(x);
 }
 
 static void mod_accesslog_free_format_fields(format_fields * const ff) {

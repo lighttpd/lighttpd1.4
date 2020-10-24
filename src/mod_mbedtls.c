@@ -450,6 +450,7 @@ mod_mbedtls_free_config (server *srv, plugin_data * const p)
                     plugin_cert *pc = cpv->v.v;
                     mbedtls_pk_free(&pc->ssl_pemfile_pkey);
                     mbedtls_x509_crt_free(&pc->ssl_pemfile_x509);
+                    free(pc);
                 }
                 break;
               case 2: /* ssl.ca-file */

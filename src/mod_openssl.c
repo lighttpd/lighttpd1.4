@@ -597,6 +597,7 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
                     X509_free(pc->ssl_pemfile_x509);
                     sk_X509_pop_free(pc->ssl_pemfile_chain, X509_free);
                     buffer_free(pc->ssl_stapling);
+                    free(pc);
                 }
                 break;
               case 2: /* ssl.ca-file */

@@ -552,6 +552,7 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
                     /*buffer_free(pc->ssl_pemfile_x509);*//*(part of chain)*/
                     mod_wolfssl_free_der_certs(pc->ssl_pemfile_chain);
                     buffer_free(pc->ssl_stapling);
+                    free(pc);
                 }
                 break;
               case 2: /* ssl.ca-file */
