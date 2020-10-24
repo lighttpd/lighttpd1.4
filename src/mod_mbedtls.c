@@ -3580,11 +3580,20 @@ static void
 mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *b, int max)
 {
     int v = MBEDTLS_SSL_MINOR_VERSION_3; /* default: TLS v1.2 */
-    if (NULL == b) /* default: min TLSv1.2, max TLSv1.2 */
+    if (NULL == b) /* default: min TLSv1.2, max TLSv1.3 */
+      #ifdef MBEDTLS_SSL_MINOR_VERSION_4
+        v = max ? MBEDTLS_SSL_MINOR_VERSION_4 : MBEDTLS_SSL_MINOR_VERSION_3;
+      #else
         v = max ? MBEDTLS_SSL_MINOR_VERSION_3 : MBEDTLS_SSL_MINOR_VERSION_3;
+      #endif
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("None"))) /*"disable" limit*/
         v = max
-          ? MBEDTLS_SSL_MINOR_VERSION_3  /* TLS v1.2 */
+          ?
+           #ifdef MBEDTLS_SSL_MINOR_VERSION_4
+            MBEDTLS_SSL_MINOR_VERSION_4  /* TLS v1.3 */
+           #else
+            MBEDTLS_SSL_MINOR_VERSION_3  /* TLS v1.2 */
+           #endif
           : s->ssl_use_sslv3
               ? MBEDTLS_SSL_MINOR_VERSION_0  /* SSL v3.0 */
               : MBEDTLS_SSL_MINOR_VERSION_1; /* TLS v1.0 */
@@ -3596,6 +3605,10 @@ mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *
         v = MBEDTLS_SSL_MINOR_VERSION_2; /* TLS v1.1 */
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.2")))
         v = MBEDTLS_SSL_MINOR_VERSION_3; /* TLS v1.2 */
+  #ifdef MBEDTLS_SSL_MINOR_VERSION_4
+    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.3")))
+        v = MBEDTLS_SSL_MINOR_VERSION_4; /* TLS v1.3 */
+  #endif
     else {
         if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.3")))
             log_error(srv->errh, __FILE__, __LINE__,
