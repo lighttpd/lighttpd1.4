@@ -787,6 +787,8 @@ SIGHUP_FUNC(log_access_cycle) {
                     log_perror(srv->errh, __FILE__, __LINE__,
                       "cycling access log failed: %s", x->access_logfile->ptr);
                 }
+                /*(update p->defaults after cycling log)*/
+                if (0 == i) p->defaults.log_access_fd = x->log_access_fd;
                 break;
               }
               default:
