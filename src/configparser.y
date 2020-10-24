@@ -323,7 +323,10 @@ value(A) ::= key(B). {
 
 value(A) ::= STRING(B). {
   A = (data_unset *)data_string_init();
-  buffer_copy_buffer(&((data_string *)A)->value, B);
+  /* assumes data_string_init() result does not require swap and buffer_free()*/
+  memcpy(&((data_string *)A)->value, B, sizeof(*B));
+  free(B);
+  B = NULL;
 }
 
 value(A) ::= INTEGER(B). {
@@ -342,7 +345,9 @@ value(A) ::= INTEGER(B). {
 }
 value(A) ::= array(B). {
   A = (data_unset *)data_array_init();
-  array_copy_array(&((data_array *)(A))->value, B);
+  /* assumes data_array_init() result does not require swap and array_free() */
+  memcpy(&((data_array *)(A))->value, B, sizeof(*B));
+  free(B);
   B = NULL;
 }
 array(A) ::= LPARAN RPARAN. {
