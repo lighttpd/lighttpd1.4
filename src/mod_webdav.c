@@ -159,6 +159,11 @@
 #if !defined(_XOPEN_SOURCE) || _XOPEN_SOURCE-0 < 700
 #undef  _XOPEN_SOURCE
 #define _XOPEN_SOURCE 700
+/* NetBSD dirent.h improperly hides fdopendir() (POSIX.1-2008) declaration
+ * which should be visible with _XOPEN_SOURCE 700 or _POSIX_C_SOURCE 200809L */
+#ifdef __NetBSD__
+#define _NETBSD_SOURCE
+#endif
 #endif
 /* DT_UNKNOWN DTTOIF() */
 #ifndef _GNU_SOURCE
