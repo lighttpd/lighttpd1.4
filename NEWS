@@ -3,6 +3,539 @@
 NEWS
 ====
 
+- 1.4.56 - unreleased
+  * [core] perf: request processing
+  * [core] http_header_str_contains_token()
+  * [mod_flv_streaming] parse query string w/o copying
+  * [mod_evhost] use local array to split values
+  * [core] remove srv->split_vals
+  * [core] add User-Agent to http_header_e enum
+  * [core] store struct server * in struct connection
+  * [core] use func rc to indicate done reading header
+  * [core] replace connection_set_state w/ assignment
+  * [core] do not pass srv to http header parsing func
+  * [core] cold buffer_string_prepare_append_resize()
+  * [core] chunkqueue_compact_mem()
+  * [core] connection_chunkqueue_compact()
+  * [core] pass con around request, not srv and con
+  * [core] reduce use of struct parse_header_state
+  * [core] perf: HTTP header parsing using \n offsets
+  * [core] no need to pass srv to connection_set_state
+  * [core] perf: connection_read_header_more()
+  * [core] perf: connection_read_header_hoff() hot
+  * [core] inline connection_read_header()
+  * [core] pass ptr to http_request_parse()
+  * [core] more 'const' in request.c prototypes
+  * [core] handle common case of alnum or - field-name
+  * [mod_extforward] simplify code: use light_isxdigit
+  * [core] perf: array.c performance enhancements
+  * [core] mark some data_* funcs cold
+  * [core] http_header.c internal inline funcs
+  * [core] remove unused array_reset()
+  * [core] prefer uint32_t to size_t in base.h
+  * [core] uint32_t for struct buffer sizes
+  * [core] remove unused members of struct server
+  * [core] short-circuit path to clear request.headers
+  * [core] array keys are non-empty in key-value list
+  * [core] keep a->data[] sorted; remove a->sorted[]
+  * [core] __attribute_returns_nonnull__
+  * [core] differentiate array_get_* for ro and rw
+  * [core] (const buffer *) in (struct burl_parts_t)
+  * [core] (const buffer *) for con->server_name
+  * [core] perf: initialize con->conf using memcpy()
+  * [core] run config_setup_connection() fewer times
+  * [core] isolate data_config.c, vector.c
+  * [core] treat con->conditional_is_valid as bitfield
+  * [core] http_header_hkey_get() over const array
+  * [core] inline buffer as part of DATA_UNSET key
+  * [core] inline buffer key for *_patch_connection()
+  * [core] (data_unset *) from array_get_element_klen
+  * [core] inline buffer as part of data_string value
+  * [core] add const to callers of http_header_*_get()
+  * [core] inline array as part of data_array value
+  * [core] const char *op in data_config
+  * [core] buffer string in data_config
+  * [core] streamline config_check_cond()
+  * [core] keep a->data[] sorted (REVERT)
+  * [core] array a->sorted[] as ptrs rather than pos
+  * [core] inline header and env arrays into con
+  * [mod_accesslog] avoid alloc for parsing cookie val
+  * [core] simpler config_check_cond()
+  * [mod_redirect,mod_rewrite] store context_ndx
+  * [core] const char *name in struct plugin
+  * [core] srv->plugin_slots as compact list
+  * [core] rearrange server_config, server members
+  * [core] macros CONST_LEN_STR and CONST_STR_LEN
+  * [core] struct plugin_data_base
+  * [core] improve condition caching perf
+  * [core] config_plugin_values_init() new interface
+  * [mod_access] use config_plugin_values_init()
+  * [core] (const buffer *) from strftime_cache_get()
+  * [core] mv config_setup_connection to connections.c
+  * [core] use (const char *) in config file parsing
+  * [mod_staticfile] use config_plugin_values_init()
+  * [mod_skeleton] use config_plugin_values_init()
+  * [mod_setenv] use config_plugin_values_init()
+  * [mod_alias] use config_plugin_values_init()
+  * [mod_indexfile] use config_plugin_values_init()
+  * [mod_expire] use config_plugin_values_init()
+  * [mod_flv_streaming] use config_plugin_values_init()
+  * [mod_magnet] use config_plugin_values_init()
+  * [mod_usertrack] use config_plugin_values_init()
+  * [mod_userdir] split policy from userdir path build
+  * [mod_userdir] use config_plugin_values_init()
+  * [mod_ssi] use config_plugin_values_init()
+  * [mod_uploadprogress] use config_plugin_values_init()
+  * [mod_status] use config_plugin_values_init()
+  * [mod_cml] use config_plugin_values_init()
+  * [mod_secdownload] use config_plugin_values_init()
+  * [mod_geoip] use config_plugin_values_init()
+  * [mod_evasive] use config_plugin_values_init()
+  * [mod_trigger_b4_dl] use config_plugin_values_init()
+  * [mod_accesslog] use config_plugin_values_init()
+  * [mod_simple_vhost] use config_plugin_values_init()
+  * [mod_evhost] use config_plugin_values_init()
+  * [mod_vhostdb*] use config_plugin_values_init()
+  * [mod_mysql_vhost] use config_plugin_values_init()
+  * [mod_maxminddb] use config_plugin_values_init()
+  * [mod_auth*] use config_plugin_values_init()
+  * [mod_deflate] use config_plugin_values_init()
+  * [mod_compress] use config_plugin_values_init()
+  * [core] add xsendfile* check if xdocroot is NULL
+  * [mod_cgi] use config_plugin_values_init()
+  * [mod_dirlisting] use config_plugin_values_init()
+  * [mod_extforward] use config_plugin_values_init()
+  * [mod_webdav] use config_plugin_values_init()
+  * [core] store addtl data in pcre_keyvalue_buffer
+  * [mod_redirect] use config_plugin_values_init()
+  * [mod_rewrite] use config_plugin_values_init()
+  * [mod_rrdtool] use config_plugin_values_init()
+  * [multiple] gw_backends config_plugin_values_init()
+  * [core] config_get_config_cond_info()
+  * [mod_openssl] use config_plugin_values_init()
+  * [core] use config_plugin_values_init()
+  * [core] collect more config logic into configfile.c
+  * [core] config_plugin_values_init_block()
+  * [core] gw_backend config_plugin_values_init_block
+  * [core] remove old config_insert_values_*() funcs
+  * [multiple] plugin.c handles common FREE_FUNC code
+  * [core] run all trigger and sighup handlers
+  * [mod_wstunnel] change DEBUG_LOG to use log_error()
+  * [core] stat_cache_path_contains_symlink use errh
+  * [core] isolate use of data_config, configfile.h
+  * [core] split cond cache from cond matches
+  * [mod_auth] inline arrays in http_auth_require_t
+  * [core] array_init() arg for initial size
+  * [core] gw_exts_clear_check_local()
+  * [core] gw_backend less pointer chasing
+  * [core] connection_handle_errdoc() separate func
+  * [multiple] prefer (connection *) to (srv *)
+  * [core] create http chunk header on the stack
+  * [multiple] connection hooks no longer get (srv *)
+  * [multiple] plugin_stats array
+  * [core] read up-to fixed size chunk before fionread
+  * [core] default chunk size 8k (was 4k)
+  * [core] pass con around gw_backend instead of srv
+  * [core] log_error_multiline_buffer()
+  * [multiple] reduce direct use of srv->cur_ts
+  * [multiple] extern log_epoch_secs
+  * [multiple] reduce direct use of srv->errh
+  * [multiple] stat_cache singleton
+  * [mod_expire] parse config into structured data
+  * [multiple] generic config array type checking
+  * [multiple] rename r to rc rv rd wr to be different
+  * [core] (minor) config_plugin_keys_t data packing
+  * [core] inline buffer in log_error_st errh
+  * [multiple] store srv->tmp_buf in tb var
+  * [multiple] quiet clang compiler warnings
+  * [core] http_status_set_error_close()
+  * [core] http_request_host_policy w/ http_parseopts
+  * [multiple] con->proto_default_port
+  * [core] store log filename in (log_error_st *)
+  * [core] separate log_error_open* funcs
+  * [core] fdevent uses uint32_t instead of size_t
+  * [mod_webdav] large buffer reuse
+  * [mod_accesslog] flush file log buffer at 8k size
+  * [core] include settings.h where used
+  * [core] static buffers for mtime_cache
+  * [core] convenience macros to check req methods
+  * [core] support multiple error logs
+  * [multiple] omit passing srv to fdevent_handler
+  * [core] remove unused arg to fdevent_fcntl_set_nb*
+  * [core] slightly simpify server_(over)load_check()
+  * [core] isolate fdevent subsystem
+  * [core] isolate stat_cache subsystem
+  * [core] remove include base.h where unused
+  * [core] restart dead piped loggers every 64 sec
+  * [mod_webdav] use copy_file_range() if available
+  * [core] perf: buffer copy and append
+  * [core] copy some srv->srvconf into con->conf
+  * [core] move keep_alive flag into request_st
+  * [core] pass scheme port to http_request_parse()
+  * [core] pass http_parseopts around request.c
+  * [core] rename specific_config to request_config
+  * [core] move request_st,request_config to request.h
+  * [core] pass (request_st *) to request.c funcs
+  * [core] remove unused request_st member 'request'
+  * [core] rename content_length to reqbody_length
+  * [core] t/test_request.c using (request_st *)
+  * [core] (const connection *) in http_header_*_get()
+  * [mod_accesslog] log_access_record() fmt log record
+  * [core] move request start ts into (request_st *)
+  * [core] move addtl request-specific struct members
+  * [core] move addtl request-specific struct members
+  * [core] move plugin_ctx into (request_st *)
+  * [core] move addtl request-specific struct members
+  * [core] move request state into (request_st *)
+  * [core] store (plugin *) in p->data
+  * [core] store subrequest_handler instead of mode
+  * [multiple] copy small struct instead of memcpy()
+  * [multiple] split con, request (very large change)
+  * [core] r->uri.path always set, though might be ""
+  * [core] C99 restrict on some base funcs
+  * [tests] stub out config funcs in test_mod_*
+  * [tests] t/test_mod_userdir
+  * [core] dispatch handler in handle_request func
+  * [core] http_request_parse_target()
+  * [mod_magnet] modify r->target with "uri.path-raw"
+  * [core] remove r->uri.path_raw; generate as needed
+  * [core] http_response_comeback()
+  * [core] http_response_config()
+  * [tests] use buffer_eq_slen() for str comparison
+  * [core] http_status_append() short-circuit 200 OK
+  * [core] mark some chunk.c funcs as pure
+  * [core] use uint32_t in http_header.[ch]
+  * [core] perf: tighten some code in some hot paths
+  * [core] parse header label before end of line
+  * [doc] add link to wiki in doc/outdated/ssl.txt
+  * [doc] src/t/README
+  * [mod_auth] "nonce_secret" option to validate nonce (fixes #2976)
+  * [build] fix build on MacOS X Tiger
+  * [doc] lighttpd.conf: lighttpd choose event-handler
+  * [config] blank server.tag if whitespace-only
+  * [mod_proxy] stream request using HTTP/1.1 chunked (fixes #3006)
+  * [multiple] correct misspellings in comments
+  * [multiple] fix some cc warnings in 32-bit, powerpc
+  * [tests] fix skip count in mod-fastcgi w/o php-cgi
+  * [multiple] ./configure --with-nettle to use Nettle
+  * [core] skip excess close() when FD_CLOEXEC defined
+  * [mod_cgi] remove redundant calls to set FD_CLOEXEC
+  * [core] return EINVAL if stat_cache_get_entry w/o /
+  * [mod_webdav] define PATH_MAX if not defined
+  * [mod_accesslog] process backslash-escapes in fmt
+  * [mod_openssl] disable cert vrfy if ALPN acme-tls/1
+  * [core] add seed before openssl RAND_pseudo_bytes()
+  * [mod_mbedtls] mbedTLS option for TLS
+  * [core] prefer getxattr() instead of get_attr()
+  * [multiple] use *(unsigned char *) with ctypes
+  * [mod_openssl] do not log ECONNRESET unless debug
+  * [mod_openssl] SSL_R_UNEXPECTED_EOF_WHILE_READING
+  * [mod_gnutls] GnuTLS option for TLS (fixes #109)
+  * [mod_openssl] rotate session ticket encryption key
+  * [mod_openssl] set cert from callback in 1.0.2+ (fixes #2842)
+  * [mod_openssl] set chains from callback in 1.0.2+ (#2842)
+  * [core] RFC-strict parse of Content-Length
+  * [build] point ./configure --help to support forum
+  * [core] stricter parse of numerical digits
+  * [multiple] add summaries to top of some modules
+  * [core] sys-crypto-md.h w/ inline message digest fn
+  * [mod_openssl] enable read-ahead, if set, after SNI
+  * [mod_openssl] issue warning for deprecated options
+  * [mod_openssl] use SSL_OP_NO_RENEGOTIATION if avail
+  * [mod_openssl] use openssl feature define for ALPN
+  * [mod_openssl] update default DH params
+  * [core] SecureZeroMemory() on _WIN32
+  * [core] safe memset calls memset() through volatile
+  * [doc] update comments in doc/config/modules.conf
+  * [core] more precise check for request stream flags
+  * [mod_openssl] rotate session ticket encryption key
+  * [mod_openssl] ssl.stek-file to specify encrypt key
+  * [mod_mbedtls] ssl.stek-file to specify encrypt key
+  * [mod_gnutls] ssl.stek-file to specify encrypt key
+  * [mod_openssl] disable session cache; prefer ticket
+  * [mod_openssl] compat with LibreSSL
+  * [mod_openssl] compat with WolfSSL
+  * [mod_openssl] set SSL_OP_PRIORITIZE_CHACHA
+  * [mod_openssl] move SSL_CTX curve conf to new func
+  * [mod_openssl] basic SSL_CONF_cmd for alt TLS libs
+  * [mod_openssl] OCSP stapling (fixes #2469)
+  * [TLS] cert-staple.sh - refresh OCSP responses (#2469)
+  * [mod_openssl] compat with BoringSSL
+  * [mod_gnutls] option to override GnuTLS priority
+  * [mod_gnutls] OCSP stapling (#2469)
+  * [mod_extforward] config warning for module order
+  * [mod_webdav] store webdav.opts as bitflags
+  * [mod_webdav] limit webdav_propfind_dir() recursion
+  * [mod_webdav] unsafe-propfind-follow-symlink option
+  * [mod_webdav] webdav.opts "propfind-depth-infinity"
+  * [mod_openssl] detect certs marked OCSP Must-Staple
+  * [mod_gnutls] detect certs marked OCSP Must-Staple
+  * [mod_openssl] default to set MinProtocol TLSv1.2
+  * [mod_nss] NSS option for TLS (fixes #1218)
+  * [core] fdevent_load_file() shared code
+  * [mod_openssl,mbedtls,gnutls,nss] fdevent_load_file
+  * [core] error if s->socket_perms chmod() fails
+  * [mod_openssl] prefer some WolfSSL native APIs
+  * quiet clang analyzer scan-build warnings
+  * [core] uint32_t is plenty large for path names
+  * [mod_mysql_vhost] deprecated; use mod_vhostdb_mysql
+  * [core] splaytree_djbhash() in splaytree.h (reuse)
+  * [cmake] update deps for src/t/test_*
+  * [cmake] update deps for src/t/test_*
+  * [build] remove tests/mod-userdir.t from builds
+  * [build] fix typo in src/Makefile.am EXTRA_DIST
+  * [core] remove unused mbedtls_enabled flag
+  * [core] store fd in srv->stdin_fd during setup
+  * [multiple] address coverity warnings
+  * [mod_webdav] fix theoretical NULL dereference
+  * [mod_webdav] update rc for PROPFIND allprop
+  * [mod_webdav] build fix: ifdef live_properties
+  * [multiple] address coverity warnings
+  * [meson] fix libmariadb dependency
+  * [meson] add missing libmaxminddb section
+  * [mod_auth,mod_vhostdb] add caching option (fixes #2805)
+  * [mod_authn_ldap,mod_vhostdb_ldap] add timeout opt (#2805)
+  * [mod_auth] accept "nonce-secret" & "nonce_secret"
+  * [mod_openssl] fix build warnings on MacOS X
+  * [core] Nettle assert()s if buffer len > digest sz
+  * [mod_authn_dbi] authn backend employing DBI
+  * [mod_authn_mysql,file] use crypt() to save stack
+  * [mod_vhostdb_dbi] allow strings and ints in config
+  * add ci-build.sh
+  * move ci-build.sh to scripts
+  * [build] build fixes for AIX
+  * [mod_deflate] Brotli support
+  * [build] bzip2 default to not-enabled in build
+  * [mod_deflate] fix typo in config option
+  * [mod_deflate] propagate errs from internal funcs
+  * [mod_deflate] deflate.cache-dir compressed cache
+  * [mod_deflate] mod_deflate subsumes mod_compress
+  * [doc] mod_compress -> mod_deflate
+  * [tests] mod_compress -> mod_deflate
+  * [mod_compress] remove mod_compress
+  * [build] add --with-brotli to CI build
+  * [core] server.feature-flags extensible config
+  * [core] con layer plugin_ctx separate from request
+  * [multiple] con hooks store ctx in con->plugin_ctx
+  * [core] separate funcs to reset (request_st *)
+  * [multiple] rename connection_reset hook to request
+  * [mod_nss] func renames for consistency
+  * [core] detect and reject TLS connect to cleartext
+  * [mod_deflate] quicker check for Content-Encoding
+  * [mod_openssl] read secret data w/ BIO_new_mem_buf
+  * [core] decode Transfer-Encoding: chunked from gw
+  * [mod_fastcgi] decode Transfer-Encoding: chunked
+  * [core] stricter parsing of POST chunked block hdr
+  * [mod_proxy] send HTTP/1.1 requests to backends
+  * [tests] test_base64.c clear buf vs reset
+  * [core] http_header_remove_token()
+  * [mod_webdav] fix inadvertent string truncation
+  * [core] add some missing standard includes
+  * [mod_extforward] attempt to quiet Coverity warning
+  * [mod_authn_dbi,mod_authn_mysql] fix coverity issue
+  * [build] fix SCons build for detection of brotli
+  * [build] SCons build with brotli needs -lm on *BSD
+  * [build] SCons build mod_deflate w/ libm for brotli
+  * [build] SCons brotli needs pkg-config --static
+  * [build] avoid accept_filter_arg compiler warning
+  * [build] SCons fix space/tabs inconsistency
+  * scons: fix check environment
+  * Add avahi service file under doc/avahi/
+  * [mod_webdav] fix fallback if linkat() fails
+  * [mod_proxy] do not forward Expect: 100-continue
+  * [core] chunkqueue_compact_mem() must upd cq->last
+  * [core] dlsym for FAMNoExists() for compat w/ fam
+  * [core] disperse settings.h to appropriate headers
+  * [core] inline buffer_reset()
+  * [mod_extforward] save proto per connection
+  * [mod_extforward] skip after HANDLER_COMEBACK
+  * [core] server.feature-flags to enable h2
+  * [core] HTTP_VERSION_2
+  * [multiple] allow TLS ALPN "h2" if "server.h2proto"
+  * [mod_extforward] preserve changed addr for h2 con
+  * [core] do not send Connection: close if h2
+  * [core] lowercase response hdr field names for h2
+  * [core] recognize status: 421 Misdirected Request
+  * [core] parse h2 pseudo-headers
+  * [core] request_headers_process()
+  * [core] connection_state_machine_loop()
+  * [core] reset connection counters per connection
+  * [mod_accesslog,mod_rrdtool] HTTP/2 basic accounting
+  * [core] connection_set_fdevent_interest()
+  * [core] HTTP2-Settings
+  * [core] adjust http_request_headers_process()
+  * [core] http_header_parse_hoff()
+  * [core] move http_request_headers_process()
+  * [core] reqpool.[ch] for (request_st *)
+  * [multiple] modules read reqbody via fn ptr
+  * [multiple] isolate more con code in connections.c
+  * [core] isolate more resp code in response.c
+  * [core] h2.[ch] with stub funcs (incomplete)
+  * [core] alternate between two joblists
+  * [core] connection transition to HTTP/2; incomplete
+  * [core] mark some error paths with attribute cold
+  * [core] discard 100 102 103 responses from backend
+  * [core] skip write throttle for 100 Continue
+  * [core] adjust (disabled) debug code
+  * [core] update comment
+  * [core] link in ls-hpack (EXPERIMENTAL)
+  * [core] HTTP/2 HPACK using LiteSpeed ls-hpack
+  * [core] h2_send_headers() specialized for resp hdrs
+  * [core] http_request_parse_header() specialized
+  * [core] comment possible future ls-hpack optimize
+  * [mod_status] separate funcs to print request table
+  * [mod_status] adjust to print HTTP/2 requests
+  * [core] redirect to dir using relative-path
+  * [core] ignore empty field-name from backends
+  * [build] fix meson build
+  * [mod_auth] fix crash if auth.require misconfigured (fixes #3023)
+  * [core] fix 1-char trunc of default server.tag
+  * [core] request_acquire(), request_release()
+  * [core] keep pool of (request_st *) for HTTP/2
+  * [mod_status] dedicated funcs for r->state labels
+  * [core] move connections_get_state to connections.c
+  * [core] fix crash on master after graceful restart
+  * [core] defer optimization to read small files
+  * [core] do not require '\0' term for k,v hdr parse
+  * [scripts] cert-staple.sh enhancements
+  * [core] document algorithm used in lighttpd etag
+  * [core] ls-hpack optimizations
+  * [core] fix crash on master if blank line request
+  * [build] fix typo in option description for wolfSSL
+  * [core] use djbhash in gw_backend to choose host
+  * [core] rename md5.[ch] to algo_md5.[ch]
+  * [core] move djbhash(), dekhash() to algo_md.h
+  * [core] rename splaytree.[ch] to algo_splaytree.[ch]
+  * [core] import xxHash v0.8.0
+  * [build] modify build, includes for xxHash v0.8.0
+  * [build] remove ls-hpack/deps
+  * [core] xxhash no inline hints; let compiler choose
+  * [mod_dirlisting] fix config parsing crash
+  * [mod_openssl] clarify trace w/ deprecated options
+  * [doc] refresh doc/config/*/*
+  * [core] code size: disable XXH64(), XXH3()
+  * [doc] update README and INSTALL
+  * [build] add to autogen.sh hint listing reqd pkgs
+  * [core] combine Cookie request headers with ';'
+  * [core] log stream id with debug.log-state-handling
+  * [core] set r->state in h2.c
+  * [mod_ssi] update chunk after shell output redirect
+  * [mod_webdav] preserve bytes_out when chunks merged
+  * [multiple] inline chunkqueue_length()
+  * [core] cold h2_log_response_header*() funcs
+  * [core] update HTTP status codes list from IANA
+  * [mod_wolfssl] standalone module
+  * [core] Content-Length in http_response_send_file()
+  * [core] adjust response header prep for common case
+  * [core] light_isupper(), light_islower()
+  * [core] tst,set,clr macros for r->{rqst,resp}_htags
+  * [core] separate http_header_e from _htags bitmask
+  * [core] http_header_hkey_get_lc() for HTTP/2
+  * [core] array.[ch] using uint32_t instead of size_t
+  * [core] extend (data_string *) to store header id
+  * [multiple] extend enum http_header_e list
+  * [core] http_header_e <=> lshpack_static_hdr_idx
+  * [core] skip ls-hpack decode work unused by lighttpd
+  * [TLS] error if inherit empty TLS cfg from globals
+  * [core] connection_check_expect_100()
+  * [core] support multiple 1xx responses from backend
+  * [core] reload c after chunkqueue_compact_mem()
+  * [core] relay 1xx from backend over HTTP/2
+  * [core] relay 1xx from backend over HTTP/1.1
+  * [core] chunkqueue_{peek,read}_data(), squash
+  * [multiple] TLS modules use chunkqueue_peek_data()
+  * [mod_magnet] magnet.attract-response-start-to
+  * [multiple] code reuse chunkqueue_peek_data()
+  * [core] reuse r->start_hp.tv_sec for r->start_ts
+  * [core] config_plugin_value_tobool() accept "0","1"
+  * [core] graceful and immediate restart option
+  * [mod_ssi] init status var before waitpid()
+  * [core] graceful shutdown timeout option
+  * [core] lighttpd -1 supports pipes (e.g. netcat)
+  * [core] perf adjustments to avoid load miss
+  * [multiple] use sock_addr_get_family in more places
+  * [multiple] inline chunkqueue where always alloc'd
+  * [core] propagate state after writing
+  * [core] server_run_con_queue()
+  * [core] defer handling FDEVENT_HUP and FDEVENT_ERR
+  * [core] handle unexpected EOF reading FILE_CHUNK
+  * [core] short-circuit connection_write_throttle()
+  * [core] walk queue in connection_write_chunkqueue()
+  * [core] connection_joblist global
+  * [core] be more precise checking streaming flags
+  * [core] fdevent_load_file_bytes()
+  * [TLS] use fdevent_load_file_bytes() for STEK file
+  * [core] allow symlinks under /dev for rand devices
+  * [multiple] use light_btst() for hdr existence chk
+  * [mod_deflate] fix potential NULL deref in err case
+  * [core] save errno around close() if fstat() fails
+  * [mod_ssi] use stat_cache_open_rdonly_fstat()
+  * [core] fdevent_dup_cloexec()
+  * [core] dup FILE_CHUNK fd when splitting FILE_CHUNK
+  * [core] stat_cache_path_isdir()
+  * [multiple] use stat_cache_path_isdir()
+  * [mod_mbedtls] quiet CLOSE_NOTIFY after conn reset
+  * [mod_gnutls] quiet CLOSE_NOTIFY after conn reset
+  * [core] limit num ranges in Range requests
+  * [core] remove unused r->content_length
+  * [core] http_response_parse_range() const file sz
+  * [core] pass open fd to http_response_parse_range
+  * [core] stat_cache_get_entry_open()
+  * [core,mod_deflate] leverage cache of open fd
+  * [doc] comment out config disabling Range for .pdf
+  * [core] coalesce nearby ranges in Range requests
+  * [tests] simulate slow, small packets more quickly
+  * [mod_fastcgi] decode chunked is cold code path
+  * [core] fix chunkqueue_compact_mem w/ partial chunk
+  * [core] alloc optim reading file, sending chunked
+  * [core] reuse chunkqueue_compact_mem*()
+  * [mod_cgi] use splice() to send input to CGI
+  * [multiple] ignore openssl 3.0.0 deprecation warns
+  * [mod_openssl] migrate ticket cb to openssl 3.0.0
+  * [mod_openssl] construct OSSL_PARAM on stack
+  * [mod_openssl] merge ssl_tlsext_ticket_key_cb impls
+  * [multiple] openssl 3.0.0 digest interface migrate
+  * [tests] detect multiple SSL/TLS/crypto providers
+  * [core] sys-crypto-md.h consistent interfaces
+  * [wolfssl] wolfSSL_CTX_set_mode differs from others
+  * [multiple] use NSS crypto if no other crypto avail
+  * [multiple] stat_cache_path_stat() for struct st
+  * [TLS] ignore empty "CipherString" in ssl-conf-cmd
+  * [multiple] remove chunk file.start member
+  * [core] modify use of getrlimit() to not be fatal
+  * [mod_webdav] add missing update to cq accounting
+  * [mod_webdav] update defaults after worker_init
+  * [mod_openssl] use newer openssl 3.0.0 func
+  * [core] config_plugin_value_to_int32()
+  * [core] minimize pause during graceful restart
+  * [mod_deflate] use large mmap chunks to compress
+  * [core] stat_cache_entry reference counting
+  * [core] FILE_CHUNK can hold stat_cache_entry ref
+  * [core] http_chunk_append_file_ref_range()
+  * [multiple] use http_chunk_append_file_ref()
+  * [core] always lseek() with shared fd
+  * [core] silence coverity warnings (false positives)
+  * [core] silence coverity warnings in ls-hpack
+  * [core] silence coverity warnings (another try)
+  * [core] fix fd sharing when splitting file chunk
+  * [mod_mbedtls] quiet unused variable warning
+  * [core] use inline funcs in sys-crypto-md.h
+  * [core] add missing declaration for NSS rand
+  * [core] init NSS lib for basic crypto algorithms
+  * [doc] change mod_compress refs to mod_deflate
+  * [doc] replace bzip2 refs with brotli
+  * [build] remove svnversion from versionstamp rule
+  * [doc] /var/run -> /run
+  * [multiple] test for nss includes
+  * [mod_nss] more nss includes fixes
+  * [build] more portable autogen.sh shell script
+  * [mod_webdav] define _NETBSD_SOURCE on NetBSD
+  * [core] silence coverity warnings (another try)
+  * [mod_mbedtls] newer mbedTLS vers support TLSv1.3
+  * [mod_accesslog] update defaults after cycling log
+  * [multiple] add some missing config cleanup
+  * [core] fix (startup) mem leaks in configparser.y
+
 - 1.4.55 - 2020-01-31
   * [core] fix compile error on Solaris (fixes #2959)
   * [core] __attribute_pure__
