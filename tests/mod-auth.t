@@ -48,6 +48,8 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - plain');
 
+SKIP: {
+	skip "no crypt-des under openbsd", 2 if $^O eq 'openbsd';
 $t->{REQUEST}  = ( <<EOF
 GET /server-config HTTP/1.0
 Host: auth-htpasswd.example.org
@@ -65,6 +67,7 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (des) (lowercase)');
+}
 
 $t->{REQUEST}  = ( <<EOF
 GET /server-config HTTP/1.0
@@ -105,6 +108,7 @@ ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (apr-md5,
 SKIP: {
 	skip "no crypt-md5 under cygwin", 1 if $^O eq 'cygwin';
 	skip "no crypt-md5 under darwin", 1 if $^O eq 'darwin';
+	skip "no crypt-md5 under openbsd",1 if $^O eq 'openbsd';
 $t->{REQUEST}  = ( <<EOF
 GET /server-config HTTP/1.0
 Host: auth-htpasswd.example.org
