@@ -722,10 +722,17 @@ if test "$WITH_WOLFSSL" != no; then
   if test "$WITH_WOLFSSL" != yes; then
     WOLFSSL_CFLAGS="-I$WITH_WOLFSSL/include -I$WITH_WOLFSSL/include/wolfssl"
     WOLFSSL_LIBS="-L$WITH_WOLFSSL/lib -lwolfssl"
-    CPPFLAGS="${CPPFLAGS} $WOLFSSL_CFLAGS"
-    LDFLAGS="${LDFLAGS} $WOLFSSL_LIBS"
+    LDFLAGS="${LDFLAGS} -L$WITH_WOLFSSL/lib"
+  else
+    PKG_CHECK_MODULES([WOLFSSL], [wolfssl], [], [
+      AC_MSG_ERROR([wolfssl not found, install it or build without --with-wolfssl])
+    ])
+    if test "$WOLFSSL_LIBS" != "-lwolfssl"; then
+      LDFLAGS="${LDFLAGS} ${WOLFSSL_LIBS% -lwolfssl}"
+    fi
   fi
 
+  CPPFLAGS="${CPPFLAGS} $WOLFSSL_CFLAGS"
   AC_CHECK_HEADERS([wolfssl/ssl.h], [], [
     AC_MSG_ERROR([wolfssl headers not found. install them or build without --with-wolfssl])
   ])
