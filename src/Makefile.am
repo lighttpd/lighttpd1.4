@@ -163,7 +163,7 @@ lib_LTLIBRARIES += mod_cml.la
 mod_cml_la_SOURCES = mod_cml.c mod_cml_lua.c mod_cml_funcs.c
 mod_cml_la_CFLAGS = $(AM_CFLAGS) $(LUA_CFLAGS)
 mod_cml_la_LDFLAGS = $(common_module_ldflags)
-mod_cml_la_LIBADD = $(MEMCACHED_LIB) $(common_libadd) $(LUA_LIBS) -lm
+mod_cml_la_LIBADD = $(MEMCACHED_LIB) $(common_libadd) $(LUA_LIBS) $(CRYPTO_LIB) -lm
 endif
 
 if BUILD_MOD_TRIGGER_B4_DL
@@ -265,7 +265,7 @@ mod_rrdtool_la_LIBADD = $(common_libadd)
 lib_LTLIBRARIES += mod_usertrack.la
 mod_usertrack_la_SOURCES = mod_usertrack.c
 mod_usertrack_la_LDFLAGS = $(common_module_ldflags)
-mod_usertrack_la_LIBADD = $(common_libadd)
+mod_usertrack_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
 
 lib_LTLIBRARIES += mod_proxy.la
 mod_proxy_la_SOURCES = mod_proxy.c
@@ -341,7 +341,7 @@ if BUILD_WITH_DBI
 lib_LTLIBRARIES += mod_authn_dbi.la
 mod_authn_dbi_la_SOURCES = mod_authn_dbi.c
 mod_authn_dbi_la_LDFLAGS = $(common_module_ldflags)
-mod_authn_dbi_la_LIBADD = $(CRYPT_LIB) $(DBI_LIBS) $(common_libadd)
+mod_authn_dbi_la_LIBADD = $(CRYPT_LIB) $(DBI_LIBS) $(CRYPTO_LIB) $(common_libadd)
 mod_authn_dbi_la_CPPFLAGS = $(DBI_CFLAGS)
 endif
 
@@ -370,7 +370,7 @@ if BUILD_WITH_MYSQL
 lib_LTLIBRARIES += mod_authn_mysql.la
 mod_authn_mysql_la_SOURCES = mod_authn_mysql.c
 mod_authn_mysql_la_LDFLAGS = $(common_module_ldflags)
-mod_authn_mysql_la_LIBADD = $(CRYPT_LIB) $(MYSQL_LIBS) $(common_libadd)
+mod_authn_mysql_la_LIBADD = $(CRYPT_LIB) $(MYSQL_LIBS) $(CRYPTO_LIB) $(common_libadd)
 mod_authn_mysql_la_CPPFLAGS = $(MYSQL_CFLAGS)
 endif
 

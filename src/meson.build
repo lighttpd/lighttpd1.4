@@ -776,7 +776,6 @@ executable('lighttpd-angel',
 
 executable('lighttpd', configparser,
 	sources: common_src + main_src,
-	# libssl needed?
 	dependencies: [ common_flags, lighttpd_flags
 		, libattr
 		, libcrypto
@@ -947,7 +946,7 @@ modules = [
 	[ 'mod_status', [ 'mod_status.c' ] ],
 	[ 'mod_uploadprogress', [ 'mod_uploadprogress.c' ] ],
 	[ 'mod_userdir', [ 'mod_userdir.c' ] ],
-	[ 'mod_usertrack', [ 'mod_usertrack.c' ] ],
+	[ 'mod_usertrack', [ 'mod_usertrack.c' ], libcrypto ],
 	[ 'mod_vhostdb', [ 'mod_vhostdb.c' ] ],
 	[ 'mod_webdav', [ 'mod_webdav.c' ], libsqlite3 + libuuid + libxml2 + libelftc ],
 	[ 'mod_wstunnel', [ 'mod_wstunnel.c' ], libcrypto ],
@@ -967,7 +966,7 @@ endif
 
 if get_option('with_lua')
 	modules += [
-		[ 'mod_cml', [ 'mod_cml.c', 'mod_cml_lua.c', 'mod_cml_funcs.c' ], liblua + libmemcached ],
+		[ 'mod_cml', [ 'mod_cml.c', 'mod_cml_lua.c', 'mod_cml_funcs.c' ], liblua + libmemcached + libcrypto ],
 		[ 'mod_magnet', [ 'mod_magnet.c', 'mod_magnet_cache.c' ], liblua ],
 	]
 endif
@@ -986,7 +985,7 @@ endif
 
 if get_option('with_mysql')
 	modules += [
-		[ 'mod_authn_mysql', [ 'mod_authn_mysql.c' ], libcrypt + libmysqlclient ],
+		[ 'mod_authn_mysql', [ 'mod_authn_mysql.c' ], libcrypt + libmysqlclient + libcrypto ],
 		[ 'mod_mysql_vhost', [ 'mod_mysql_vhost.c' ], libmysqlclient ],
 		[ 'mod_vhostdb_mysql', [ 'mod_vhostdb_mysql.c' ], libmysqlclient ],
 	]
@@ -1000,7 +999,7 @@ endif
 
 if get_option('with_dbi')
 	modules += [
-		[ 'mod_authn_dbi', [ 'mod_authn_dbi.c' ], libcrypt + libdbi ],
+		[ 'mod_authn_dbi', [ 'mod_authn_dbi.c' ], libcrypt + libdbi + libcrypto ],
 		[ 'mod_vhostdb_dbi', [ 'mod_vhostdb_dbi.c' ], libdbi ],
 	]
 endif

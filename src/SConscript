@@ -127,7 +127,7 @@ modules = {
 	'mod_status' : { 'src' : [ 'mod_status.c' ] },
 	'mod_uploadprogress' : { 'src' : [ 'mod_uploadprogress.c' ] },
 	'mod_userdir' : { 'src' : [ 'mod_userdir.c' ] },
-	'mod_usertrack' : { 'src' : [ 'mod_usertrack.c' ] },
+	'mod_usertrack' : { 'src' : [ 'mod_usertrack.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
 	'mod_vhostdb' : { 'src' : [ 'mod_vhostdb.c' ] },
 	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'], env['LIBUUID'] ] },
 	'mod_wstunnel' : { 'src' : [ 'mod_wstunnel.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
@@ -150,7 +150,7 @@ if env['with_lua']:
 	modules['mod_magnet'] = { 'src' : [ 'mod_magnet.c', 'mod_magnet_cache.c' ], 'lib' : [ env['LIBLUA'] ] }
 	modules['mod_cml'] = {
 		'src' : [ 'mod_cml_lua.c', 'mod_cml.c', 'mod_cml_funcs.c' ],
-		'lib' : [ env['LIBMEMCACHED'], env['LIBLUA'] ]
+		'lib' : [ env['LIBMEMCACHED'], env['LIBLUA'], env['LIBCRYPTO'] ]
 	}
 
 if env['with_pam']:
@@ -160,7 +160,7 @@ if env['with_pcre'] and (env['with_memcached'] or env['with_gdbm']):
 	modules['mod_trigger_b4_dl'] = { 'src' : [ 'mod_trigger_b4_dl.c' ], 'lib' : [ env['LIBPCRE'], env['LIBMEMCACHED'], env['LIBGDBM'] ] }
 
 if env['with_mysql']:
-	modules['mod_authn_mysql'] = { 'src' : [ 'mod_authn_mysql.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBMYSQL'] ] }
+	modules['mod_authn_mysql'] = { 'src' : [ 'mod_authn_mysql.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBMYSQL'], env['LIBCRYPTO'] ] }
 	modules['mod_mysql_vhost'] = { 'src' : [ 'mod_mysql_vhost.c' ], 'lib' : [ env['LIBMYSQL'] ] }
 	modules['mod_vhostdb_mysql'] = { 'src' : [ 'mod_vhostdb_mysql.c' ], 'lib' : [ env['LIBMYSQL'] ] }
 
@@ -168,7 +168,7 @@ if env['with_pgsql']:
 	modules['mod_vhostdb_pgsql'] = { 'src' : [ 'mod_vhostdb_pgsql.c' ], 'lib' : [ env['LIBPGSQL'] ] }
 
 if env['with_dbi']:
-	modules['mod_authn_dbi'] = { 'src' : [ 'mod_authn_dbi.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBDBI'] ] }
+	modules['mod_authn_dbi'] = { 'src' : [ 'mod_authn_dbi.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBDBI'], env['LIBCRYPTO'] ] }
 	modules['mod_vhostdb_dbi'] = { 'src' : [ 'mod_vhostdb_dbi.c' ], 'lib' : [ env['LIBDBI'] ] }
 
 if env['with_sasl']:
