@@ -25,10 +25,12 @@
 #elif defined(USE_WOLFSSL_CRYPTO)
 #include <wolfssl/wolfcrypt/hmac.h>
 #elif defined(USE_NSS_CRYPTO)
+#if 0 /*(nss/alghmac.h might not be present)*/
 #ifdef NSS_VER_INCLUDE
 #include <nss3/alghmac.h>
 #else
 #include <nss/alghmac.h>
+#endif
 #endif
 #endif
 #endif
