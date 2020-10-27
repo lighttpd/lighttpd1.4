@@ -322,8 +322,11 @@ else()
 endif()
 
 if(WITH_WOLFSSL)
+	pkg_check_modules(WOLFSSL QUIET wolfssl)
 	if(NOT ${WITH_WOLFSSL} EQUAL "")
 		find_path(WOLFSSL_INCLUDE_DIR wolfssl/ssl.h ${WITH_WOLFSSL}/include)
+	elseif(WOLFSSL_FOUND)
+		set(WOLFSSL_INCLUDE_DIR ${WOLFSSL_INCLUDE_DIRS})
 	elseif(APPLE)
 		find_path(WOLFSSL_INCLUDE_DIR wolfssl/ssl.h /opt/local/include)
 	else()
@@ -335,6 +338,8 @@ if(WITH_WOLFSSL)
 			NAMES wolfssl
 			PATHS ${WITH_WOLFSSL}/lib
 		)
+	elseif(WOLFSSL_FOUND)
+		set(WOLFSSL_LIBRARY ${WOLFSSL_LIBRARY_DIRS})
 	else()
 		find_library(WOLFSSL_LIBRARY
 			NAMES wolfssl
