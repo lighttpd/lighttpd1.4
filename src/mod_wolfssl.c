@@ -1520,6 +1520,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
 
 #ifdef HAVE_TLS_EXTENSIONS
 
+#ifdef HAVE_ALPN
 #ifdef TLSEXT_TYPE_application_layer_protocol_negotiation
 
 static int
@@ -1687,6 +1688,7 @@ mod_openssl_alpn_select_cb (SSL *ssl, const unsigned char **out, unsigned char *
 }
 
 #endif /* TLSEXT_TYPE_application_layer_protocol_negotiation */
+#endif /* HAVE_ALPN */
 
 #endif /* HAVE_TLS_EXTENSIONS */
 
@@ -2034,8 +2036,10 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         UNUSED(network_ssl_servername_callback);
        #endif
 
+       #ifdef HAVE_ALPN
        #ifdef TLSEXT_TYPE_application_layer_protocol_negotiation
         SSL_CTX_set_alpn_select_cb(s->ssl_ctx,mod_openssl_alpn_select_cb,NULL);
+       #endif
        #endif
       #endif
 
@@ -2681,6 +2685,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
             return -1;
         }
 
+      #ifdef HAVE_ALPN
       #ifdef TLSEXT_TYPE_application_layer_protocol_negotiation
         if (hctx->alpn) {
             if (hctx->alpn == MOD_OPENSSL_ALPN_ACME_TLS_1) {
@@ -2694,6 +2699,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
             }
             hctx->alpn = 0;
         }
+      #endif
       #endif
     } while (len > 0
              && (hctx->conf.ssl_read_ahead || SSL_pending(hctx->ssl) > 0));
