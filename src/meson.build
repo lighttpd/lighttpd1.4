@@ -482,6 +482,11 @@ if get_option('with_nss') != 'false'
 	libnssutil3 = [ dependency('libnssutil3') ]
 	conf_data.set('HAVE_NSS3_NSS_H', true)
 endif
+if get_option('with_nss') != 'false'
+	# manual search:
+	# header: nss/nss.h
+	conf_data.set('HAVE_NSS_NSS_H', true)
+endif
 
 libpcre = []
 if get_option('with_pcre')

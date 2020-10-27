@@ -892,6 +892,7 @@ if test "x$use_nss" = "xyes"; then
       PKG_CHECK_MODULES([NSS],[nss])
       CPPFLAGS="$CPPFLAGS -I/usr/include/nspr4"
   fi
+  AC_DEFINE([HAVE_NSS_NSS_H], [1], [nss/nss.h])
   AC_DEFINE([HAVE_NSS3_NSS_H], [1], [nss3/nss.h])
   AC_SUBST([NSS_CFLAGS])
   AC_SUBST([NSS_LIBS])

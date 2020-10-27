@@ -35,6 +35,10 @@
 #endif
 #endif
 #endif
+#ifdef HAVE_NSS_NSS_H
+#define USE_LIB_CRYPTO
+#define USE_NSS_CRYPTO
+#endif
 
 #ifdef HAVE_NETTLE_NETTLE_TYPES_H
 #define USE_LIB_CRYPTO
