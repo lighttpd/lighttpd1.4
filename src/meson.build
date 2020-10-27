@@ -223,6 +223,17 @@ if not(get_option('build_static'))
 	endif
 endif
 
+libbrotli = []
+if get_option('with_brotli')
+	libbrotli = [ compiler.find_library('brotlienc') ]
+	if compiler.has_function('BrotliEncoderCreateInstance', args: defs, dependencies: libbrotlienc, prefix: '#include <brotli/encode.h>')
+		conf_data.set('HAVE_BROTLI_ENCODE_H', true)
+		conf_data.set('HAVE_BROTLI', true)
+	else
+		error('Couldn\'t find brotli header / library')
+	endif
+endif
+
 libbz2 = []
 if get_option('with_bzip')
 	libbz2 = [ compiler.find_library('bz2') ]
@@ -923,7 +934,7 @@ modules = [
 	[ 'mod_alias', [ 'mod_alias.c' ] ],
 	[ 'mod_auth', [ 'mod_auth.c' ], [ libcrypto ] ],
 	[ 'mod_authn_file', [ 'mod_authn_file.c' ], [ libcrypt, libcrypto ] ],
-	[ 'mod_deflate', [ 'mod_deflate.c' ], libbz2 + libz ],
+	[ 'mod_deflate', [ 'mod_deflate.c' ], libbz2 + libz + libbrotli ],
 	[ 'mod_dirlisting', [ 'mod_dirlisting.c' ], libpcre ],
 	[ 'mod_evasive', [ 'mod_evasive.c' ] ],
 	[ 'mod_evhost', [ 'mod_evhost.c' ] ],
