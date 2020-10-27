@@ -48,12 +48,6 @@
  * or HAVE_LIGHTY.  WolfSSL does not provide many interfaces added in
  * OpenSSL 1.0.2, including SSL_CTX_set_cert_cb(), so it is curious that
  * WolfSSL defines OPENSSL_VERSION_NUMBER 0x10100000L for WOLFSSL_APACHE_HTTPD*/
-#ifndef OPENSSL_EXTRA
-#define OPENSSL_EXTRA
-#endif
-#ifndef OPENSSL_ALL
-#define OPENSSL_ALL
-#endif
 #include <wolfssl/ssl.h>
 
 static char global_err_buf[WOLFSSL_MAX_ERROR_SZ];
@@ -426,7 +420,7 @@ mod_openssl_session_ticket_key_check (const plugin_data *p, const time_t cur_ts)
 #endif /* HAVE_SESSION_TICKET */
 
 
-#ifndef OPENSSL_NO_OCSP
+#ifdef HAVE_OCSP
 static int
 ssl_tlsext_status_cb(SSL *ssl, void *arg)
 {
@@ -1250,7 +1244,11 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 
     const char *servername;
     size_t len = (size_t)
+    #ifdef HAVE_SNI
       wolfSSL_SNI_GetRequest(ssl, WOLFSSL_SNI_HOST_NAME, (void **)&servername);
+    #else
+      0;
+    #endif
     if (0 == len)
         return SSL_TLSEXT_ERR_NOACK; /* client did not provide SNI */
   #if 0  /* WolfSSL does not provide per-session SSL_set_read_ahead() */
@@ -1266,7 +1264,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 #endif
 
 
-#ifndef OPENSSL_NO_OCSP
+#ifdef HAVE_OCSP
 
 #define OCSP_RESPONSE             OcspResponse
 #define OCSP_RESPONSE_free        wolfSSL_OCSP_RESPONSE_free
@@ -1453,7 +1451,7 @@ mod_openssl_crt_must_staple (const X509 *crt)
     return 0;
 }
 
-#endif /* OPENSSL_NO_OCSP */
+#endif /* HAVE_OCSP */
 
 
 static plugin_cert *
@@ -1488,7 +1486,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     pc->ssl_stapling_file= ssl_stapling_file;
     pc->ssl_stapling_loadts = 0;
     pc->ssl_stapling_nextts = 0;
-  #ifndef OPENSSL_NO_OCSP
+  #ifdef HAVE_OCSP
     /*(not implemented for WolfSSL, though could convert the DER to (X509 *),
      * check Must-Staple, and then destroy (X509 *))*/
     (void)mod_openssl_crt_must_staple(NULL);
@@ -1498,7 +1496,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
   #endif
 
     if (!buffer_string_is_empty(pc->ssl_stapling_file)) {
-      #ifndef OPENSSL_NO_OCSP
+      #ifdef HAVE_OCSP
         if (!mod_openssl_reload_stapling_file(srv, pc, log_epoch_secs)) {
             /* continue without OCSP response if there is an error */
         }
@@ -1763,7 +1761,6 @@ static DH *get_dh2048(void)
 static int
 mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *ssl_ec_curve)
 {
-  #ifndef OPENSSL_NO_ECDH
     int nid = 0;
     /* Support for Elliptic-Curve Diffie-Hellman key exchange */
     if (!buffer_string_is_empty(ssl_ec_curve)) {
@@ -1788,14 +1785,10 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
               "SSL: Unable to create curve %s", ssl_ec_curve->ptr);
             return 0;
         }
-        SSL_CTX_set_tmp_ecdh(s->ssl_ctx, ecdh);
+        wolfSSL_SSL_CTX_set_tmp_ecdh(s->ssl_ctx, ecdh);
         SSL_CTX_set_options(s->ssl_ctx, SSL_OP_SINGLE_ECDH_USE);
         EC_KEY_free(ecdh);
     }
-  #endif
-    UNUSED(srv);
-    UNUSED(s);
-    UNUSED(ssl_ec_curve);
 
     return 1;
 }
@@ -1934,11 +1927,11 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             return -1;
 
       #ifdef HAVE_SESSION_TICKET
-        SSL_CTX_set_tlsext_ticket_key_cb(s->ssl_ctx, ssl_tlsext_ticket_key_cb);
+        wolfSSL_CTX_set_tlsext_ticket_key_cb(s->ssl_ctx, ssl_tlsext_ticket_key_cb);
       #endif
 
-      #ifndef OPENSSL_NO_OCSP
-        SSL_CTX_set_tlsext_status_cb(s->ssl_ctx, ssl_tlsext_status_cb);
+      #ifdef HAVE_OCSP
+        wolfSSL_CTX_set_tlsext_status_cb(s->ssl_ctx, ssl_tlsext_status_cb);
       #endif
 
         /* load all ssl.ca-files specified in the config into each SSL_CTX
@@ -2011,9 +2004,13 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       #endif
 
       #ifdef HAVE_TLS_EXTENSIONS
+       #ifdef HAVE_SNI
         wolfSSL_CTX_set_servername_callback(
             s->ssl_ctx, network_ssl_servername_callback);
         wolfSSL_CTX_set_servername_arg(s->ssl_ctx, srv);
+       #else
+        UNUSED(network_ssl_servername_callback);
+       #endif
 
        #ifdef TLSEXT_TYPE_application_layer_protocol_negotiation
         SSL_CTX_set_alpn_select_cb(s->ssl_ctx,mod_openssl_alpn_select_cb,NULL);
@@ -3150,7 +3147,7 @@ TRIGGER_FUNC(mod_openssl_handle_trigger) {
     mod_openssl_session_ticket_key_check(p, cur_ts);
   #endif
 
-  #ifndef OPENSSL_NO_OCSP
+  #ifdef HAVE_OCSP
     mod_openssl_refresh_stapling_files(srv, p, cur_ts);
   #endif
 
