@@ -50,4 +50,8 @@
 #define USE_GNUTLS_CRYPTO
 #endif
 
+#ifdef WITHOUT_LIB_CRYPTO
+#undef USE_LIB_CRYPTO
+#endif
+
 #endif

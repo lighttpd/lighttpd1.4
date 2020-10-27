@@ -64,6 +64,14 @@
 #include <nss/pk11pub.h>
 #endif
 #endif
+#ifndef USE_LIB_CRYPTO
+#undef USE_NETTLE_CRYPTO
+#undef USE_MBEDTLS_CRYPTO
+#undef USE_WOLFSSL_CRYPTO
+#undef USE_OPENSSL_CRYPTO
+#undef USE_GNUTLS_CRYPTO
+#undef USE_NSS_CRYPTO
+#endif
 #ifdef HAVE_GETENTROPY
 #include <sys/random.h>
 #endif
