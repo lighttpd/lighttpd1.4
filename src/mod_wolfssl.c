@@ -43,11 +43,6 @@
 
 #include "sys-crypto.h"
 #include <wolfssl/options.h>
-
-/* WolfSSL defines OPENSSL_VERSION_NUMBER 0x10001040L for OPENSSL_ALL
- * or HAVE_LIGHTY.  WolfSSL does not provide many interfaces added in
- * OpenSSL 1.0.2, including SSL_CTX_set_cert_cb(), so it is curious that
- * WolfSSL defines OPENSSL_VERSION_NUMBER 0x10100000L for WOLFSSL_APACHE_HTTPD*/
 #include <wolfssl/ssl.h>
 
 static char global_err_buf[WOLFSSL_MAX_ERROR_SZ];
@@ -76,10 +71,16 @@ WOLFSSL_API WOLFSSL_ASN1_OBJECT * wolfSSL_X509_NAME_ENTRY_get_object(WOLFSSL_X50
 WOLFSSL_API WOLFSSL_X509_NAME_ENTRY *wolfSSL_X509_NAME_get_entry(WOLFSSL_X509_NAME *name, int loc);
 #endif
 
-#if 0 /* symbols and definitions requires WolfSSL built with -DOPENSSL_ALL */
-WOLFSSL_API WOLF_STACK_OF(WOLFSSL_X509_NAME) *wolfSSL_dup_CA_list( WOLF_STACK_OF(WOLFSSL_X509_NAME) *sk );
-/*wolfSSL_sk_X509_NAME_new()*/
-/*wolfSSL_sk_X509_NAME_push()*/
+#ifndef OPENSSL_ALL
+/*(invalid; but centralize making these calls no-ops)*/
+#define wolfSSL_sk_X509_NAME_num(a)          0
+#define wolfSSL_sk_X509_NAME_push(a, b)      0
+#define wolfSSL_sk_X509_NAME_pop_free(a, b)  do { } while (0)
+#define wolfSSL_sk_X509_NAME_free(a)         do { } while (0)
+#define wolfSSL_X509_get_subject_name(ca) \
+        ((WOLFSSL_X509_NAME *)1) /* ! NULL */
+#define wolfSSL_sk_X509_NAME_new(a) \
+        ((WOLF_STACK_OF(WOLFSSL_X509_NAME) *)1) /* ! NULL */
 #endif
 
 #include "base.h"
@@ -552,14 +553,15 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
               case 2: /* ssl.ca-file */
                 if (cpv->vtype == T_CONFIG_LOCAL) {
                     plugin_cacerts *cacerts = cpv->v.v;
-                    sk_X509_NAME_pop_free(cacerts->names, X509_NAME_free);
+                    wolfSSL_sk_X509_NAME_pop_free(cacerts->names,
+                                                  X509_NAME_free);
                     X509_STORE_free(cacerts->certs);
                     free(cacerts);
                 }
                 break;
               case 3: /* ssl.ca-dn-file */
                 if (cpv->vtype == T_CONFIG_LOCAL)
-                    sk_X509_NAME_pop_free(cpv->v.v, X509_NAME_free);
+                    wolfSSL_sk_X509_NAME_pop_free(cpv->v.v, X509_NAME_free);
                 break;
               default:
                 break;
@@ -1103,7 +1105,7 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
         if (-1 != sk_X509_NAME_find(cert_names, issuer))
             return preverify_ok; /* match */
       #else
-        for (int i = 0, len = sk_X509_NAME_num(cert_names); i < len; ++i) {
+        for (int i=0, len=wolfSSL_sk_X509_NAME_num(cert_names); i < len; ++i) {
             if (0 == wolfSSL_X509_NAME_cmp(sk_X509_NAME_value(cert_names, i),
                                            issuer))
                 return preverify_ok; /* match */
@@ -1948,6 +1950,12 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                   "but no ssl.ca-file");
                 return -1;
             }
+          #ifndef OPENSSL_ALL
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "SSL: You specified ssl.verifyclient.activate "
+                  "but wolfssl library built without necessary support");
+                return -1;
+          #else
             /* WTH wolfssl?  wolfSSL_dup_CA_list() is a stub which returns NULL
              * and so DN names in cert request are not set here.
              * (A patch has been submitted to WolfSSL to correct this)
@@ -1964,6 +1972,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             wolfSSL_CTX_set_verify(s->ssl_ctx, mode, verify_callback);
             wolfSSL_CTX_set_verify_depth(s->ssl_ctx,
                                          s->ssl_verifyclient_depth + 1);
+          #endif
             if (!buffer_string_is_empty(s->ssl_ca_crl_file)) {
                 if (!mod_wolfssl_load_cacrls(s->ssl_ctx,s->ssl_ca_crl_file,srv))
                     return -1;
@@ -2004,11 +2013,24 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       #endif
 
       #ifdef HAVE_TLS_EXTENSIONS
+        /*(wolfSSL preprocessor defines are obnoxious)*/
+        /*(code should be HAVE_SNI, but is hidden by OPENSSL_ALL
+         * even though the comment in wolfssl code on the #endif
+         * says (OPENSSL_ALL
+         *       || (OPENSSL_EXTRA
+         *           && (HAVE_STUNNEL || WOLFSSL_NGINX || HAVE_LIGHTY)))
+         * and sniRecvCb sniRecvCbArg are hidden by *different* set of defines
+         * in wolfssl/internal.h)
+         * Note: SNI callbacks disabled if wolfSSL is not built OPENSSL_ALL ! */
+       #ifdef OPENSSL_ALL /* regretable */
        #ifdef HAVE_SNI
         wolfSSL_CTX_set_servername_callback(
             s->ssl_ctx, network_ssl_servername_callback);
         wolfSSL_CTX_set_servername_arg(s->ssl_ctx, srv);
+       #endif             /* regretable */
        #else
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: WARNING: SNI callbacks *crippled* in wolfSSL library build");
         UNUSED(network_ssl_servername_callback);
        #endif
 
@@ -2394,6 +2416,14 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                 if (buffer_string_is_empty(cpv->v.b)) break;
                 if (!mod_openssl_init_once_openssl(srv)) return HANDLER_ERROR;
                 ssl_ca_dn_file = cpv->v.b;
+               #ifndef OPENSSL_ALL
+                {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "SSL: You specified ssl.ca-dn-file "
+                      "but wolfssl library built without necessary support");
+                    return HANDLER_ERROR;
+                }
+               #endif
                 cpv->v.v = mod_wolfssl_load_client_CA_file(ssl_ca_dn_file,
                                                            srv->errh);
                 if (NULL != cpv->v.v) {
@@ -3074,16 +3104,23 @@ http_cgi_ssl_env (request_st * const r, handler_ctx * const hctx)
     http_header_env_set(r, CONST_STR_LEN("SSL_PROTOCOL"), s, strlen(s));
 
     if ((cipher = SSL_get_current_cipher(hctx->ssl))) {
-        int usekeysize, algkeysize = 0;
-        char buf[LI_ITOSTRING_LENGTH];
         s = SSL_CIPHER_get_name(cipher);
         http_header_env_set(r, CONST_STR_LEN("SSL_CIPHER"), s, strlen(s));
+        /*(wolfSSL preprocessor defines are obnoxious)*/
+      #if defined(OPENSSL_ALL) \
+       || (defined(OPENSSL_EXTRA) \
+           && (defined(HAVE_STUNNEL)    || \
+               defined(WOLFSSL_NGINX)   || defined(HAVE_LIGHTY) || \
+               defined(WOLFSSL_HAPROXY) || defined(WOLFSSL_OPENSSH)))
+        int usekeysize, algkeysize = 0;
+        char buf[LI_ITOSTRING_LENGTH];
         usekeysize = wolfSSL_CIPHER_get_bits(cipher, &algkeysize);
         if (0 == algkeysize) algkeysize = usekeysize;
         http_header_env_set(r, CONST_STR_LEN("SSL_CIPHER_USEKEYSIZE"),
                             buf, li_itostrn(buf, sizeof(buf), usekeysize));
         http_header_env_set(r, CONST_STR_LEN("SSL_CIPHER_ALGKEYSIZE"),
                             buf, li_itostrn(buf, sizeof(buf), algkeysize));
+      #endif
     }
 }
 

@@ -348,7 +348,7 @@ if(WITH_WOLFSSL)
 
 		check_c_source_compiles("
 		#include <wolfssl/options.h>
-		#if !defined(HAVE_LIGHTY) && !defined(OPENSSL_ALL)
+		#if !defined(HAVE_LIGHTY) && !defined(OPENSSL_EXTRA)
 		#error HAVE_LIGHTY macro not defined
 		#endif
 		int main() { return 0; }

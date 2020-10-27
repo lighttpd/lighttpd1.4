@@ -742,7 +742,7 @@ if test "$WITH_WOLFSSL" != no; then
   )
   AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
     #include <wolfssl/options.h>
-    #if !defined(HAVE_LIGHTY) && !defined(OPENSSL_ALL)
+    #if !defined(HAVE_LIGHTY) && !defined(OPENSSL_EXTRA)
     #error HAVE_LIGHTY macro not defined
     #endif
   ]])], [], [AC_MSG_ERROR([wolfssl must be built with ./configure --enable-lighty])])
