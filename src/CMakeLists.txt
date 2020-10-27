@@ -375,10 +375,6 @@ else()
 	unset(HAVE_WOLFSSL_SSL_H)
 endif()
 
-if(WITH_OPENSSL AND WITH_WOLFSSL)
-	message(FATAL_ERROR "lighttpd should not be built with both --with-openssl and --with-wolfssl")
-endif()
-
 if(WITH_MBEDTLS)
 	check_include_files(mbedtls/ssl.h HAVE_MBEDTLS_SSL_H)
 	if(HAVE_MBEDTLS_SSL_H)
