@@ -850,7 +850,7 @@ GNUTLS_LIBS=
 if test "x$use_gnutls" = "xyes"; then
   if test "$WITH_GNUTLS" != "yes"; then
       GNUTLS_CFLAGS="-I$WITH_GNUTLS/include"
-      GNUTLS_LIBS="-L$WITH_GNUTLS/lib"
+      GNUTLS_LIBS="-L$WITH_GNUTLS/lib -lgnutls"
   else
       dnl oldest GnuTLS supported release is 3.3.x at time this is being written
       PKG_CHECK_MODULES([GNUTLS], [gnutls >= 3.3.0])
@@ -887,7 +887,7 @@ NSS_LIBS=
 if test "x$use_nss" = "xyes"; then
   if test "$WITH_NSS" != "yes"; then
       NSS_CFLAGS="-I$WITH_NSS/include"
-      NSS_LIBS="-L$WITH_NSS/lib"
+      NSS_LIBS="-L$WITH_NSS/lib -lnss3"
   else
       PKG_CHECK_MODULES([NSS],[nss])
       CPPFLAGS="$CPPFLAGS -I/usr/include/nspr4"
