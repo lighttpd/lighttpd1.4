@@ -11,7 +11,7 @@ option('with_bzip',
 option('with_dbi',
 	type: 'boolean',
 	value: false,
-	description: 'with dbi-support for mod_vhostdb_dbi [default: off]',
+	description: 'with dbi-support for mod_auth mod_vhostdb_dbi [default: off]',
 )
 option('with_fam',
 	type: 'boolean',
@@ -29,7 +29,7 @@ option('with_geoip',
 	description: 'with GeoIP-support mod_geoip [default: off]',
 )
 option('with_gnutls',
-	type: 'string',
+	type: 'boolean',
 	value: 'false',
 	description: 'with GnuTLS-support [default: off]',
 )
@@ -64,7 +64,7 @@ option('with_maxminddb',
 	description: 'with MaxMind GeoIP2-support mod_maxminddb [default: off]',
 )
 option('with_mbedtls',
-	type: 'string',
+	type: 'boolean',
 	value: 'false',
 	description: 'with mbedTLS-support [default: off]',
 )
@@ -84,7 +84,7 @@ option('with_nettle',
 	description: 'with Nettle-support [default: off]',
 )
 option('with_nss',
-	type: 'string',
+	type: 'boolean',
 	value: 'false',
 	description: 'with NSS-crypto-support [default: off]',
 )
@@ -129,7 +129,7 @@ option('with_webdav_props',
 	description: 'with property-support for mod_webdav [default: off]',
 )
 option('with_wolfssl',
-	type: 'string',
+	type: 'boolean',
 	value: 'false',
 	description: 'with wolfSSL-support [default: off]',
 )

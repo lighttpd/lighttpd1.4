@@ -382,8 +382,10 @@ if get_option('with_lua')
 	found_lua = false
 	foreach l: ['lua5.3', 'lua-5.3', 'lua5.2', 'lua-5.2', 'lua5.1', 'lua-5.1', 'lua']
 		if not(found_lua)
-			liblua = dependency(l, required: false)
-			found_lua = liblua.found()
+			liblua = compiler.find_library(l, required: false)
+			if (liblua.found())
+			  found_lua = liblua.found()
+			endif
 		endif
 	endforeach
 	if not(found_lua)
@@ -427,62 +429,64 @@ if get_option('with_openssl')
 	conf_data.set('HAVE_OPENSSL_SSL_H', true)
 	conf_data.set('HAVE_LIBSSL', true)
 endif
-if get_option('with_wolfssl') != 'false'
+if get_option('with_wolfssl')
 	# manual search:
 	# header: wolfssl/ssl.h
 	# function: wolfSSL_Init (-lwolfssl)
-	p = get_option('with_wolfssl')
-	if p == 'true'
-		p = '/usr/local'
-	endif
-	i = include_directories(p+'/include', p+'/include/wolfssl')
-	libwolfssl_includes_dep = [ declare_dependency(include_directories: i) ]
-	libcrypto = [ compiler.find_library('libwolfssl', dirs: [ p+'/lib', p+'/lib64' ]) ]
-	libcrypto += libwolfssl_includes_dep
+	libssl = [ dependency('wolfssl') ]
+	libcrypto = [ dependency('wolfssl') ]
 	conf_data.set('HAVE_WOLFSSL_SSL_H', true)
 endif
-if get_option('with_mbedtls') != 'false'
+if get_option('with_mbedtls')
 	# manual search:
 	# header: mbedtls/ssl.h
 	# function: mbedtls_cipher_info_from_type (-lmbedtls)
 	# function: mbedtls_x509_get_name (-lmbedx509)
 	# function: mbedtls_base64_encode (-lmbedcrypto)
-	libssl = [ dependency('libmbedtls') ]
-	libx509 = [ dependency('libmbedx509') ]
-	libcrypto = [ dependency('libmbedcrypto') ]
+	libssl = [ compiler.find_library('mbedtls') ]
+	libx509 = [ compiler.find_library('mbedx509') ]
+	libcrypto = [ compiler.find_library('mbedcrypto') ]
 	conf_data.set('HAVE_LIBMBEDCRYPTO', true)
 endif
 if get_option('with_nettle')
 	# manual search:
 	# header: nettle/nettle-types.h
 	# function: nettle_md5_init (-lnettle)
-	libcrypto = [ dependency('libnettle') ]
+	libcrypto = [ dependency('nettle') ]
 	conf_data.set('HAVE_NETTLE_NETTLE_TYPES_H', true)
 endif
-if get_option('with_gnutls') != 'false'
+if get_option('with_gnutls')
 	# manual search:
 	# header: gnutls/gnutls.h
 	# function: gnutls_check_version (-lgnutls)
-	libgnutls = [ dependency('libgnutls') ]
+	libgnutls = [ dependency('gnutls') ]
 	conf_data.set('HAVE_GNUTLS_CRYPTO_H', true)
 	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(getoption('with_nettle'))
-	  libcrypto = [ dependency('libgnutls') ]
+	  libcrypto = [ dependency('gnutls') ]
 	endif
 endif
-if get_option('with_nss') != 'false'
+libssl3 = []
+libsmime3 = []
+libnss3 = []
+libnssutil3 = []
+if get_option('with_nss')
 	# manual search:
 	# header: nss3/nss.h
 	# function: NSSSSL_GetVersion (-lssl3)
 	# function: NSSSMIME_GetVersion (-lsmime3)
 	# function: NSS_GetVersion (-lnss3)
 	# function: NSSUTIL_GetVersion (-lnssutil3)
-	libssl3 = [ dependency('libssl3') ]
-	libsmime3 = [ dependency('libsmime3') ]
-	libnss3 = [ dependency('libnss3') ]
-	libnssutil3 = [ dependency('libnssutil3') ]
+	libnss3 = [ dependency('nss') ]
+	#libssl3 = [ compiler.find_library('libssl3') ]
+	#libsmime3 = [ compiler.find_library('libsmime3') ]
+	#libnss3 = [ compiler.find_library('libnss3') ]
+	#libnssutil3 = [ compiler.find_library('libnssutil3') ]
 	conf_data.set('HAVE_NSS3_NSS_H', true)
+	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(getoption('with_nettle')) and not(getoption('with_gnutls'))
+	  libcrypto = [ dependency('nss') ]
+	endif
 endif
-if get_option('with_nss') != 'false'
+if get_option('with_nss')
 	# manual search:
 	# header: nss/nss.h
 	conf_data.set('HAVE_NSS_NSS_H', true)
@@ -1039,25 +1043,25 @@ if get_option('with_openssl')
 	]
 endif
 
-if get_option('with_wolfssl') != 'false'
+if get_option('with_wolfssl')
 	modules += [
 		[ 'mod_wolfssl', [ 'mod_wolfssl.c' ], libcrypto ],
 	]
 endif
 
-if get_option('with_mbedtls') != 'false'
+if get_option('with_mbedtls')
 	modules += [
 		[ 'mod_mbedtls', [ 'mod_mbedtls.c' ], libssl + libx509 + libcrypto ],
 	]
 endif
 
-if get_option('with_nss') != 'false'
+if get_option('with_nss')
 	modules += [
 		[ 'mod_nss', [ 'mod_nss.c' ], libssl3 + libsmime3 + libnss3 + libnssutil3 ],
 	]
 endif
 
-if get_option('with_gnutls') != 'false'
+if get_option('with_gnutls')
 	modules += [
 		[ 'mod_gnutls', [ 'mod_gnutls.c' ], libgnutls ],
 	]
