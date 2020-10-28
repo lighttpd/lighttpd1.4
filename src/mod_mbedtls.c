@@ -401,8 +401,10 @@ static void mod_mbedtls_free_mbedtls (void)
 {
     if (!ssl_is_init) return;
 
+  #ifdef MBEDTLS_SSL_SESSION_TICKETS
     mbedtls_platform_zeroize(session_ticket_keys, sizeof(session_ticket_keys));
     stek_rotate_ts = 0;
+  #endif
 
     plugin_data * const p = plugin_data_singleton;
     mbedtls_ctr_drbg_free(&p->ctr_drbg);
@@ -1395,8 +1397,14 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
                   "ssl.openssl.ssl-conf-cmd = (\"MinProtocol\" => \"SSLv3\")");
                 break;
               case 10:/* ssl.stek-file */
+               #ifdef MBEDTLS_SSL_SESSION_TICKETS
                 if (!buffer_is_empty(cpv->v.b))
                     p->ssl_stek_file = cpv->v.b->ptr;
+               #else
+                log_error(srv->errh, __FILE__, __LINE__, "MTLS: "
+                  "ssl.stek-file ignored; mbedtls library not built with "
+                  "support for SSL session tickets");
+               #endif
                 break;
               default:/* should not happen */
                 break;
@@ -2039,11 +2047,13 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
      * overlap, and so renegotiation setting is not reset upon connection close.
      * Once enabled, renegotiation will remain so for this mbedtls_ssl_config.
      * mbedtls defaults to disable client renegotiation
-     *   (MBEDTLS_SSL_RENEGOTIATION_DISABLED)
+     *   (MBEDTLS_LEGACY_SSL_RENEGOTIATION_DISABLED)
      * and it is recommended to leave it disabled (lighttpd mbedtls default) */
+  #ifdef MBEDTLS_LEGACY_SSL_RENEGOTIATION_ENABLED
     if (!hctx->conf.ssl_disable_client_renegotiation)
-        mbedtls_ssl_conf_renegotiation(s->ssl_ctx,
-                                       MBEDTLS_SSL_RENEGOTIATION_ENABLED);
+        mbedtls_legacy_ssl_conf_renegotiation(s->ssl_ctx,
+                                      MBEDTLS_LEGACY_SSL_RENEGOTIATION_ENABLED);
+  #endif
 
     return HANDLER_GO_ON;
 }
