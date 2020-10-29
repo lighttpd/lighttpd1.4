@@ -1,3 +1,8 @@
+#include "first.h"
+typedef int innocuous_typedef_to_quiet_empty_translation_unit_compiler_warning;
+
+#ifndef HAVE_XXHASH_H
+
 /*
  * xxHash - Extremely Fast Hash algorithm
  * Copyright (C) 2012-2020 Yann Collet
@@ -41,3 +46,5 @@
 #define XXH_IMPLEMENTATION   /* access definitions */
 
 #include "algo_xxhash.h"
+
+#endif /* ! HAVE_XXHASH_H */

@@ -1,7 +1,18 @@
+#ifndef INCLUDED_ALGO_XXHASH_H
+#define INCLUDED_ALGO_XXHASH_H
+#include "first.h"
+
 /*(lighttpd customization)*/
 /*#define XXH_NO_INLINE_HINTS 1*/
 /*#define XXH_REROLL 1*/
 #define XXH_NO_LONG_LONG
+
+
+#ifdef HAVE_XXHASH_H
+
+#include <xxhash.h>
+
+#else  /* ! HAVE_XXHASH_H */
 
 /*
  * xxHash - Extremely Fast Hash algorithm
@@ -4768,4 +4779,8 @@ XXH128_hashFromCanonical(const XXH128_canonical_t* src)
 
 #if defined (__cplusplus)
 }
+#endif
+
+#endif /* ! HAVE_XXHASH_H */
+
 #endif
