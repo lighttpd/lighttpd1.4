@@ -9,7 +9,8 @@
  *
  * Note: If session tickets are -not- disabled with
  *     ssl.openssl.ssl-conf-cmd = ("Options" => "-SessionTicket")
- *   mod_gnutls rotates server ticket encryption key (STEK) every 24 hours.
+ *   mod_gnutls rotates server ticket encryption key (STEK) every 18 hours.
+ *   (https://gnutls.org/manual/html_node/Session-resumption.html)
  *   This is fine for use with a single lighttpd instance, but with multiple
  *   lighttpd workers, no coordinated STEK (server ticket encryption key)
  *   rotation occurs unless ssl.stek-file is defined and maintained (preferred),
@@ -21,10 +22,15 @@
  *   resumption, since clients have a lower chance for future connections to
  *   reach the same lighttpd worker.  However, things will still work, and a new
  *   session will be created if session resumption fails.  Admins should plan to
- *   restart lighttpd at least every 24 hours if session tickets are enabled and
+ *   restart lighttpd at least every 18 hours if session tickets are enabled and
  *   multiple lighttpd workers are configured.  Since that is likely disruptive,
  *   if multiple lighttpd workers are configured, ssl.stek-file should be
  *   defined and the file maintained externally.
+ *
+ * future possible enhancements to lighttpd mod_gnutls:
+ * - session cache (though session tickets are implemented)
+ *     See gnutls_db_set_store_function() and gnutls_db_set_retrieve_function()
+ *     (and do not enable unless server.feature-flags ssl.session-cache enabled)
  */
 #include "first.h"
 

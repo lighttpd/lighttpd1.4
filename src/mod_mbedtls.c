@@ -23,6 +23,7 @@
  * future possible enhancements to lighttpd mod_mbedtls:
  * - session cache (though session tickets are implemented)
  *     sample code in mbedtls:programs/ssl/ssl_server2.c
+ *     (and do not enable unless server.feature-flags ssl.session-cache enabled)
  *
  * Note: If session tickets are -not- disabled with
  *     ssl.openssl.ssl-conf-cmd = ("Options" => "-SessionTicket")

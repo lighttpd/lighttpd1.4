@@ -1835,10 +1835,17 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         }
 
       #if !defined(NO_SESSION_CACHE)
-        /* disable session cache; session tickets are preferred */
-        SSL_CTX_set_session_cache_mode(s->ssl_ctx, SSL_SESS_CACHE_OFF
-                                                 | SSL_SESS_CACHE_NO_AUTO_CLEAR
-                                                 | SSL_SESS_CACHE_NO_INTERNAL);
+        const int disable_sess_cache =
+          srv->srvconf.feature_flags
+          && !config_plugin_value_tobool(
+               array_get_element_klen(srv->srvconf.feature_flags,
+                                      CONST_STR_LEN("ssl.session-cache")), 0);
+        if (disable_sess_cache)
+            /* disable session cache; session tickets are preferred */
+            SSL_CTX_set_session_cache_mode(s->ssl_ctx,
+                                             SSL_SESS_CACHE_OFF
+                                           | SSL_SESS_CACHE_NO_AUTO_CLEAR
+                                           | SSL_SESS_CACHE_NO_INTERNAL);
       #endif
 
         if (s->ssl_empty_fragments) {
