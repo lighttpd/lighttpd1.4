@@ -267,6 +267,7 @@ vars.AddVariables(
 	# with_valgrind not supported
 	# with_xattr not supported
 	PackageVariable('with_xml', 'enable xml support (required for webdav props)', 'no'),
+	BoolVariable('with_xxhash', 'build with system-provided xxhash', 'no'),
 	BoolVariable('with_zlib', 'enable deflate/gzip compression', 'no'),
 
 	BoolVariable('with_all', 'enable all with_* features', 'no'),
@@ -350,6 +351,7 @@ if 1:
 		LIBUUID = '',
 		LIBX509 = '',
 		LIBXML2 = '',
+		LIBXXHASH = '',
 		LIBZ = '',
 	)
 
@@ -708,6 +710,14 @@ if 1:
 		if not autoconf.CheckParseConfigForLib('LIBXML2', xml2_config + ' --cflags --libs'):
 			fail("Couldn't find xml2")
 		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LIBXML_H', '-DHAVE_LIBXML2' ])
+
+	if env['with_xxhash']:
+		if not autoconf.CheckLibWithHeader('xxhash', 'xxhash.h', 'C'):
+			fail("Couldn't find xxhash")
+		autoconf.env.Append(
+			CPPFLAGS = [ '-DHAVE_XXHASH_H' ],
+			LIBXXHASH = 'xxhash',
+		)
 
 	if env['with_zlib']:
 		if not autoconf.CheckLibWithHeader('z', 'zlib.h', 'C'):

@@ -635,6 +635,20 @@ if get_option('with_xattr')
     endif
 endif
 
+libxxhash = []
+if get_option('with_xxhash')
+	libxxhash = dependency('libxxhash', required: false)
+	if libxxhash.found()
+		libxxhash = [ libxxhash ]
+	else
+		libxxhash = [ compiler.find_library('xxhash') ]
+		if not(compiler.has_function('XXH_versionNumber', args: defs, dependencies: libxxhash, prefix: '#include <xxhash.h>'))
+			error('Couldn\'t find xxhash/xxhash.h or XXH_versionNumber in lib xxhash')
+		endif
+	endif
+	conf_data.set('HAVE_XXHASH_H', true)
+endif
+
 libz = []
 if get_option('with_zlib')
 	libz = dependency('zlib', required: false)
@@ -804,6 +818,7 @@ executable('lighttpd', configparser,
 		, libfam
 		, libpcre
 		, libunwind
+		, libxxhash
 		, libws2_32
 	],
 	install: true,

@@ -1181,6 +1181,34 @@ if test "$WITH_WEBDAV_LOCKS" != no; then
   AC_SUBST([UUID_LIBS])
 fi
 
+dnl xxhash
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for xxhash support])
+AC_ARG_WITH([xxhash],
+  [AC_HELP_STRING([--with-xxhash],
+    [Enable system-provided xxhash]
+  )],
+  [WITH_XXHASH=$withval],
+  [WITH_XXHASH=no]
+)
+AC_MSG_RESULT([$WITH_XXHASH])
+
+if test "$WITH_XXHASH" != no; then
+  if test "$WITH_XXHASH" != yes; then
+    XXHASH_LIBS="-L$WITH_XXHASH -lxxhash"
+    CPPFLAGS="$CPPFLAGS -I$WITH_XXHASH"
+  else
+    PKG_CHECK_MODULES([XXHASH], [libxxhash], [], [
+      AC_MSG_ERROR([xxhash not found, install it or build without --with-xxhash])
+    ])
+  fi
+
+  AC_DEFINE([HAVE_XXHASH_H], [1], [xxhash.h])
+  AC_DEFINE([HAVE_XXHASH], [1], [xxhash])
+  AC_SUBST([XXHASH_CFLAGS])
+  AC_SUBST([XXHASH_LIBS])
+fi
+
 dnl Check for gdbm
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for gdbm])

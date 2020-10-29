@@ -45,6 +45,7 @@ option(WITH_LIBUNWIND "with libunwind to print backtraces in asserts [default: o
 option(WITH_GEOIP "with GeoIP-support mod_geoip [default: off]")
 option(WITH_MAXMINDDB "with MaxMind GeoIP2-support mod_maxminddb [default: off]")
 option(WITH_SASL "with SASL-support for mod_authn_sasl [default: off]")
+option(WITH_XXHASH "with system-provided xxhash [default: off]")
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
 	option(BUILD_EXTRA_WARNINGS "extra warnings")
@@ -564,6 +565,14 @@ else()
 	unset(HAVE_LIBUUID)
 endif()
 
+if(WITH_XXHASH)
+	check_include_files(xxhash.h HAVE_XXHASH_H)
+	check_library_exists(xxhash XXH_versionNumber "" HAVE_XXHASH)
+else()
+	unset(HAVE_XXHASH_H)
+	unset(HAVE_XXHASH)
+endif()
+
 if(WITH_ZLIB)
 	if(NOT WIN32)
 		check_include_files(zlib.h HAVE_ZLIB_H)
@@ -1081,6 +1090,10 @@ endif()
 
 if(HAVE_XATTR)
 	target_link_libraries(lighttpd attr)
+endif()
+
+if(HAVE_XXHASH)
+	target_link_libraries(lighttpd xxhash)
 endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
