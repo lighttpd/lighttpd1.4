@@ -129,6 +129,8 @@ SHA512_256_Update(SHA512_CTX *ctx, const void *data, size_t length)
 
 #elif defined(USE_MBEDTLS_CRYPTO)
 
+#include <mbedtls/config.h>
+
 #ifdef MBEDTLS_MD4_C
 #define USE_LIB_CRYPTO_MD4
 #include <mbedtls/md4.h>

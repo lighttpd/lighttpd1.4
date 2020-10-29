@@ -56,6 +56,7 @@
 #include <stdio.h>      /* vsnprintf() */
 #include <string.h>
 
+#include <mbedtls/config.h>
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/dhm.h>
 #include <mbedtls/error.h>

@@ -20,7 +20,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "sys-crypto.h" /* USE_LIB_CRYPTO */
+#include "sys-crypto-md.h" /* USE_LIB_CRYPTO and additional crypto lib config */
 #ifdef USE_NETTLE_CRYPTO
 #undef USE_MBEDTLS_CRYPTO
 #undef USE_WOLFSSL_CRYPTO
