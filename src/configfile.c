@@ -973,8 +973,9 @@ static int config_insert(server *srv) {
               case 9: /* server.error-handler */
               case 10:/* server.error-handler-404 */
               case 11:/* server.error-intercept */
-                break;
               case 12:/* server.force-lowercase-filenames */
+                break;
+              case 13:/* server.follow-symlink */
                #ifndef HAVE_LSTAT
                 if (0 == cpv->v.u)
                     log_error(srv->errh, __FILE__, __LINE__,
@@ -983,7 +984,6 @@ static int config_insert(server *srv) {
                       "Please remove server.follow-symlinks from your config.");
                #endif
                 break;
-              case 13:/* server.follow-symlink */
               case 14:/* server.protocol-http11 */
               case 15:/* server.range-requests */
                 break;
