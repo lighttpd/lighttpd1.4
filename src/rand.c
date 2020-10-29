@@ -39,17 +39,17 @@
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
 #endif
+#ifdef USE_WOLFSSL_CRYPTO
+#undef USE_OPENSSL_CRYPTO
+#undef USE_GNUTLS_CRYPTO
+#undef USE_NSS_CRYPTO
+#include <wolfssl/wolfcrypt/random.h>
+#endif
 #ifdef USE_OPENSSL_CRYPTO
-#undef USE_WOLFSSL_CRYPTO
 #undef USE_GNUTLS_CRYPTO
 #undef USE_NSS_CRYPTO
 #include <openssl/opensslv.h> /* OPENSSL_VERSION_NUMBER */
 #include <openssl/rand.h>
-#endif
-#ifdef USE_WOLFSSL_CRYPTO
-#undef USE_GNUTLS_CRYPTO
-#undef USE_NSS_CRYPTO
-#include <wolfssl/wolfcrypt/random.h>
 #endif
 #ifdef USE_GNUTLS_CRYPTO
 #undef USE_NSS_CRYPTO
