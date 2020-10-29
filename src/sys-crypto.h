@@ -20,11 +20,6 @@
 #ifdef HAVE_NSS3_NSS_H
 #define USE_LIB_CRYPTO
 #define USE_NSS_CRYPTO
-#ifdef __has_include
-#if __has_include(<nss3/nss.h>)
-#define NSS_VER_INCLUDE
-#endif
-#endif
 #endif
 #ifdef HAVE_NSS_NSS_H
 #define USE_LIB_CRYPTO

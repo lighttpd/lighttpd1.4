@@ -579,6 +579,12 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 
 #elif defined(USE_NSS_CRYPTO)
 
+#ifdef __has_include
+#if __has_include(<nss3/nss.h>)
+#define NSS_VER_INCLUDE
+#endif
+#endif
+
 /* basic algorithms fail if NSS library has not been init'd (WTH).
  * lighttpd defers initialization of rand and crypto until first use
  * to attempt to avoid long, blocking init at startup while waiting
