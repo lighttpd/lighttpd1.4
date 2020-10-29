@@ -17,6 +17,23 @@
  * compatibility layer for wolfSSL to be able to provide an openssl substitute
  * for use by lighttpd */
 #include <wolfssl/options.h>
+
+/* workaround fragile code in wolfssl/wolfcrypto/types.h */
+#ifdef __SIZEOF_LONG__
+#ifndef SIZEOF_LONG
+#define SIZEOF_LONG __SIZEOF_LONG__
+#endif
+#endif
+#ifdef __SIZEOF_LONG_LONG__
+#ifndef SIZEOF_LONG_LONG
+#define SIZEOF_LONG_LONG __SIZEOF_LONG_LONG__
+#endif
+#endif
+#if !defined(SIZEOF_LONG) && !defined(SIZEOF_LONG_LONG)
+#undef SIZEOF_LONG
+#undef SIZEOF_LONG_LONG
+#endif
+
 #endif
 #endif
 
