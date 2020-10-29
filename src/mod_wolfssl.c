@@ -41,7 +41,18 @@
  * (wolfSSL provides an OpenSSL compatibility layer)
  */
 
-#include "sys-crypto.h"
+/* wolfSSL needs to be built with ./configure --enable-lighty for lighttpd.
+ * Doing so defines OPENSSL_EXTRA and HAVE_LIGHTY in <wolfssl/options.h>, and
+ * these defines are necessary for wolfSSL headers to expose sufficient openssl
+ * compatibility layer for wolfSSL to be able to provide an openssl substitute
+ * for use by lighttpd */
+
+/* workaround fragile code in wolfssl/wolfcrypto/types.h */
+#if !defined(SIZEOF_LONG) || !defined(SIZEOF_LONG_LONG)
+#undef SIZEOF_LONG
+#undef SIZEOF_LONG_LONG
+#endif
+
 #include <wolfssl/options.h>
 #include <wolfssl/ssl.h>
 

@@ -227,7 +227,7 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 }
 #endif
 
-#elif defined(USE_WOLFSSL_CRYPTO) && !defined(USE_OPENSSL_CRYPTO)
+#elif defined(USE_WOLFSSL_CRYPTO)
 
 /* WolfSSL compatibility API for OpenSSL unnecessarily bounces through an extra
  * layer of indirection.  However, to avoid conflicting typedefs when includers
@@ -235,6 +235,12 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
  * include those headers here, as well, and use the compatibility API typedefs.
  * (undef of OPENSSL_EXTRA and NO_OLD_WC_NAMES not sufficient, and not friendly
  *  to do in a header when others might rely on them) */
+
+/* workaround fragile code in wolfssl/wolfcrypto/types.h */
+#if !defined(SIZEOF_LONG) || !defined(SIZEOF_LONG_LONG)
+#undef SIZEOF_LONG
+#undef SIZEOF_LONG_LONG
+#endif
 
 #ifndef NO_MD4
 #include <wolfssl/wolfcrypt/md4.h>

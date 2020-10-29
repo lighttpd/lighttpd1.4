@@ -49,8 +49,6 @@
 #endif
 #endif
 
-#include "sys-crypto.h"
-
 #ifdef BORINGSSL_API_VERSION
 #undef OPENSSL_NO_STDIO /* for X509_STORE_load_locations() */
 #endif
