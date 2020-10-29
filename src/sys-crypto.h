@@ -29,7 +29,7 @@
 #define SIZEOF_LONG_LONG __SIZEOF_LONG_LONG__
 #endif
 #endif
-#if !defined(SIZEOF_LONG) && !defined(SIZEOF_LONG_LONG)
+#if !defined(SIZEOF_LONG) || !defined(SIZEOF_LONG_LONG)
 #undef SIZEOF_LONG
 #undef SIZEOF_LONG_LONG
 #endif
