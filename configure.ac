@@ -1010,7 +1010,7 @@ AC_MSG_RESULT([$WITH_BROTLI])
 
 if test "$WITH_BROTLI" != no; then
   if test "$WITH_BROTLI" != yes; then
-    BROTLI_LIB="-L$WITH_BROTLI -lbrotlienc"
+    BROTLI_LIBS="-L$WITH_BROTLI -lbrotlienc"
     CPPFLAGS="$CPPFLAGS -I$WITH_BROTLI"
   else
     PKG_CHECK_MODULES([BROTLI], [libbrotlienc], [], [
