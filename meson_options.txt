@@ -138,6 +138,11 @@ option('with_xattr',
 	value: false,
 	description: 'with xattr-support for the stat-cache [default: off]',
 )
+option('with_xxhash',
+	type: 'boolean',
+	value: false,
+	description: 'with system-provided libxxhash [default: off]',
+)
 option('with_zlib',
 	type: 'boolean',
 	value: true,
