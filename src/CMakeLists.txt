@@ -645,7 +645,7 @@ else()
 endif()
 
 if(WITH_LUA)
-	pkg_search_module(LUA REQUIRED lua5.3 lua-5.3 lua5.2 lua-5.2 lua5.1 lua-5.1 lua)
+	pkg_search_module(LUA REQUIRED lua5.4 lua-5.4 lua5.3 lua-5.3 lua5.2 lua-5.2 lua5.1 lua-5.1 lua)
 	message(STATUS "found lua at: INCDIR: ${LUA_INCLUDE_DIRS} LIBDIR: ${LUA_LIBRARY_DIRS} LDFLAGS: ${LUA_LDFLAGS} CFLAGS: ${LUA_CFLAGS}")
 	set(HAVE_LIBLUA 1 "Have liblua")
 	set(HAVE_LUA_H  1 "Have liblua header")

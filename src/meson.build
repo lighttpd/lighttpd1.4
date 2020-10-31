@@ -380,7 +380,7 @@ endif
 liblua = []
 if get_option('with_lua')
 	found_lua = false
-	foreach l: ['lua5.3', 'lua-5.3', 'lua5.2', 'lua-5.2', 'lua5.1', 'lua-5.1', 'lua']
+	foreach l: ['lua5.4', 'lua-5.4', 'lua5.3', 'lua-5.3', 'lua5.2', 'lua-5.2', 'lua5.1', 'lua-5.1', 'lua']
 		if not(found_lua)
 			liblua = dependency(l, required: false)
 			if (liblua.found())
