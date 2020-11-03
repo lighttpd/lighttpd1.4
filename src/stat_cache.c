@@ -39,9 +39,10 @@
  */
 
 enum {
-  STAT_CACHE_ENGINE_SIMPLE, /*(default)*/
-  STAT_CACHE_ENGINE_NONE,
-  STAT_CACHE_ENGINE_FAM
+  STAT_CACHE_ENGINE_SIMPLE  = 0  /*(default)*/
+ ,STAT_CACHE_ENGINE_NONE    = 1
+ ,STAT_CACHE_ENGINE_FAM     = 2  /* same as STAT_CACHE_ENGINE_INOTIFY */
+ ,STAT_CACHE_ENGINE_INOTIFY = 2  /* same as STAT_CACHE_ENGINE_FAM */
 };
 
 struct stat_cache_fam;  /* declaration */
@@ -64,6 +65,12 @@ static void * stat_cache_sptree_find(splay_tree ** const sptree,
     return (*sptree && (*sptree)->key == ndx) ? (*sptree)->data : NULL;
 }
 
+
+#ifdef HAVE_SYS_INOTIFY_H
+#ifndef HAVE_FAM_H
+#define HAVE_FAM_H
+#endif
+#endif
 
 #ifdef HAVE_FAM_H
 
@@ -123,12 +130,40 @@ static void * stat_cache_sptree_find(splay_tree ** const sptree,
  * different files recently accessed and part of the stat_cache.
  */
 
+#ifdef HAVE_SYS_INOTIFY_H
+
+#include <sys/inotify.h>
+
+/*(translate FAM API to inotify; this is specific to stat_cache.c use of FAM)*/
+#define fam fd /*(translate struct stat_cache_fam scf->fam -> scf->fd)*/
+typedef int FAMRequest; /*(fr)*/
+#define FAMClose(fd) \
+        close(*(fd))
+#define FAMCancelMonitor(fd, wd) \
+        inotify_rm_watch(*(fd), *(wd))
+#define fam_watch_mask IN_ATTRIB | IN_CREATE | IN_DELETE | IN_DELETE_SELF \
+                     | IN_MODIFY | IN_MOVE_SELF | IN_MOVED_FROM \
+                     | IN_EXCL_UNLINK | IN_ONLYDIR
+                     /*(note: follows symlinks; not providing IN_DONT_FOLLOW)*/
+#define FAMMonitorDirectory(fd, fn, wd, userData) \
+        ((*(wd) = inotify_add_watch(*(fd), (fn), (fam_watch_mask))) < 0)
+typedef enum FAMCodes { /*(copied from fam.h to define arbitrary enum values)*/
+    FAMChanged=1,
+    FAMDeleted=2,
+    FAMCreated=5,
+    FAMMoved=6,
+} FAMCodes;
+
+#else
+
 #include <fam.h>
 
 #ifdef HAVE_FAMNOEXISTS
 #ifndef LIGHTTPD_STATIC
 #include <dlfcn.h>
 #endif
+#endif
+
 #endif
 
 typedef struct fam_dir_entry {
@@ -142,8 +177,12 @@ typedef struct fam_dir_entry {
 } fam_dir_entry;
 
 typedef struct stat_cache_fam {
-	splay_tree *dirs; /* the nodes of the tree are fam_dir_entry */
+	splay_tree *dirs; /* indexed by path; node data is fam_dir_entry */
+  #ifdef HAVE_SYS_INOTIFY_H
+	splay_tree *wds;  /* indexed by inotify watch descriptor */
+  #else
 	FAMConnection fam;
+  #endif
 	log_error_st *errh;
 	fdevents *ev;
 	fdnode *fdn;
@@ -213,6 +252,9 @@ static void fam_dir_periodic_cleanup() {
             if (node && node->key == ndx) {
                 fam_dir_entry *fam_dir = node->data;
                 scf->dirs = splaytree_delete(scf->dirs, ndx);
+              #ifdef HAVE_SYS_INOTIFY_H
+                scf->wds = splaytree_delete(scf->wds, fam_dir->req);
+              #endif
                 FAMCancelMonitor(&scf->fam, &fam_dir->req);
                 fam_dir_entry_free(fam_dir);
             }
@@ -242,9 +284,61 @@ static void fam_dir_invalidate_tree(splay_tree *t, const char *name, size_t len)
 /* declarations */
 static void stat_cache_delete_tree(const char *name, uint32_t len);
 static void stat_cache_invalidate_dir_tree(const char *name, size_t len);
+static void stat_cache_handle_fdevent_fn(stat_cache_fam * const scf, fam_dir_entry * const fam_dir, const char * const fn, const uint32_t fnlen, int code);
 
 static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
 {
+  #ifdef HAVE_SYS_INOTIFY_H
+    /*(inotify pads in->len to align struct following in->name[])*/
+    char buf[4096]
+      __attribute__ ((__aligned__(__alignof__(struct inotify_event))));
+    int rd;
+    do {
+        rd = (int)read(scf->fd, buf, sizeof(buf));
+        if (rd <= 0) {
+            if (-1 == rd && errno != EINTR && errno != EAGAIN) {
+                log_perror(scf->errh, __FILE__, __LINE__, "inotify error");
+                /* TODO: could flush cache, close scf->fd, and re-open inotify*/
+            }
+            break;
+        }
+        for (int i = 0; i < rd; ) {
+            struct inotify_event * const in =
+              (struct inotify_event *)((uintptr_t)buf + i);
+            i += sizeof(struct inotify_event) + in->len;
+            if (in->mask & IN_CREATE)
+                continue; /*(see comment below for FAMCreated)*/
+            if (in->mask & IN_Q_OVERFLOW) {
+                log_error(scf->errh, __FILE__, __LINE__,
+                          "inotify queue overflow");
+                continue;
+            }
+            /* ignore events which may have been pending for
+             * paths recently cancelled via FAMCancelMonitor() */
+            scf->wds = splaytree_splay(scf->wds, in->wd);
+            if (!scf->wds || scf->wds->key != in->wd)
+                continue;
+            fam_dir_entry *fam_dir = scf->wds->data;
+            if (NULL == fam_dir)        /*(should not happen)*/
+                continue;
+            if (fam_dir->req != in->wd) /*(should not happen)*/
+                continue;
+            /*(specific to use here in stat_cache.c)*/
+            int code = 0;
+            if (in->mask & (IN_ATTRIB | IN_MODIFY))
+                code = FAMChanged;
+            else if (in->mask & (IN_DELETE | IN_DELETE_SELF | IN_UNMOUNT))
+                code = FAMDeleted;
+            else if (in->mask & (IN_MOVE_SELF | IN_MOVED_FROM))
+                code = FAMMoved;
+
+            if (in->len) {
+                do { --in->len; } while (in->len && in->name[in->len-1]=='\0');
+            }
+            stat_cache_handle_fdevent_fn(scf, fam_dir, in->name, in->len, code);
+        }
+    } while (rd + sizeof(struct inotify_event) + NAME_MAX + 1 > sizeof(buf));
+  #else
     for (int i = 0, ndx; i || (i = FAMPending(&scf->fam)) > 0; --i) {
         FAMEvent fe;
         if (FAMNextEvent(&scf->fam, &fe) < 0) break;
@@ -262,11 +356,21 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
             continue;
         }
 
-        if (fe.filename[0] != '/') {
+        uint32_t fnlen = (fe.code != FAMCreated && fe.filename[0] != '/')
+          ? (uint32_t)strlen(fe.filename)
+          : 0;
+        stat_cache_handle_fdevent_fn(scf, fam_dir, fe.filename, fnlen, fe.code);
+    }
+  #endif
+}
+
+static void stat_cache_handle_fdevent_fn(stat_cache_fam * const scf, fam_dir_entry *fam_dir, const char * const fn, const uint32_t fnlen, int code)
+{
+        if (fnlen) {
             buffer * const n = fam_dir->name;
             fam_dir_entry *fam_link;
-            size_t len;
-            switch(fe.code) {
+            uint32_t len;
+            switch (code) {
             case FAMCreated:
                 /* file created in monitored dir modifies dir and
                  * we should get a separate FAMChanged event for dir.
@@ -275,7 +379,7 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
                  * FAMCreated events as changes are made e.g. in monitored
                  * sub-sub-sub dirs and the library discovers new (already
                  * existing) dir entries */
-                continue;
+                return;
             case FAMChanged:
                 /* file changed in monitored dir does not modify dir */
             case FAMDeleted:
@@ -287,7 +391,7 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
                  * construct path, then delete stat_cache entry (if any)*/
                 len = buffer_string_length(n);
                 buffer_append_string_len(n, CONST_STR_LEN("/"));
-                buffer_append_string_len(n,fe.filename,strlen(fe.filename));
+                buffer_append_string_len(n, fn, fnlen);
                 /* (alternatively, could chose to stat() and update)*/
                 stat_cache_invalidate_entry(CONST_BUF_LEN(n));
 
@@ -302,17 +406,17 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
                     /* replaced symlink changes containing dir */
                     stat_cache_invalidate_entry(CONST_BUF_LEN(n));
                     /* handle symlink to dir as deleted dir below */
-                    fe.code = FAMDeleted;
+                    code = FAMDeleted;
                     fam_dir = fam_link;
                     break;
                 }
-                continue;
+                return;
             default:
-                continue;
+                return;
             }
         }
 
-        switch(fe.code) {
+        switch(code) {
         case FAMChanged:
             stat_cache_invalidate_entry(CONST_BUF_LEN(fam_dir->name));
             break;
@@ -327,7 +431,6 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
         default:
             break;
         }
-    }
 }
 
 static handler_t stat_cache_handle_fdevent(void *ctx, int revent)
@@ -363,6 +466,13 @@ static stat_cache_fam * stat_cache_init_fam(fdevents *ev, log_error_st *errh) {
 	scf->ev = ev;
 	scf->errh = errh;
 
+  #ifdef HAVE_SYS_INOTIFY_H
+	scf->fd = inotify_init1(IN_NONBLOCK|IN_CLOEXEC);
+	if (scf->fd < 0) {
+		log_perror(errh, __FILE__, __LINE__, "inotify_init1()");
+		return NULL;
+	}
+  #else
 	/* setup FAM */
 	if (0 != FAMOpen2(&scf->fam, "lighttpd")) {
 		log_error(errh, __FILE__, __LINE__,
@@ -382,6 +492,7 @@ static stat_cache_fam * stat_cache_init_fam(fdevents *ev, log_error_st *errh) {
 
 	scf->fd = FAMCONNECTION_GETFD(&scf->fam);
 	fdevent_setfd_cloexec(scf->fd);
+  #endif
 	scf->fdn = fdevent_register(scf->ev, scf->fd, stat_cache_handle_fdevent, scf);
 	fdevent_fdnode_event_set(scf->ev, scf->fdn, FDEVENT_IN | FDEVENT_RDHUP);
 
@@ -391,6 +502,12 @@ static stat_cache_fam * stat_cache_init_fam(fdevents *ev, log_error_st *errh) {
 static void stat_cache_free_fam(stat_cache_fam *scf) {
 	if (NULL == scf) return;
 
+      #ifdef HAVE_SYS_INOTIFY_H
+	while (scf->wds) {
+		splay_tree *node = scf->wds;
+		scf->wds = splaytree_delete(scf->wds, node->key);
+	}
+      #endif
 	while (scf->dirs) {
 		/*(skip entry invalidation and FAMCancelMonitor())*/
 		splay_tree *node = scf->dirs;
@@ -471,6 +588,9 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
                 stat_cache_update_entry(fn, dirlen, st, NULL);
             /*(must not delete tree since caller is holding a valid node)*/
             stat_cache_invalidate_dir_tree(fn, dirlen);
+          #ifdef HAVE_SYS_INOTIFY_H
+            scf->wds = splaytree_delete(scf->wds, fam_dir->req);
+          #endif
             if (0 != FAMCancelMonitor(&scf->fam, &fam_dir->req)
                 || 0 != FAMMonitorDirectory(&scf->fam, fam_dir->name->ptr,
                                             &fam_dir->req,
@@ -480,6 +600,9 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
             }
             fam_dir->st_dev = st->st_dev;
             fam_dir->st_ino = st->st_ino;
+          #ifdef HAVE_SYS_INOTIFY_H
+            scf->wds = splaytree_insert(scf->wds, fam_dir->req, fam_dir);
+          #endif
         }
         fam_dir->stat_ts = cur_ts;
     }
@@ -489,14 +612,23 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
 
         if (0 != FAMMonitorDirectory(&scf->fam,fam_dir->name->ptr,&fam_dir->req,
                                      (void *)(intptr_t)dir_ndx)) {
+          #ifdef HAVE_SYS_INOTIFY_H
+            log_perror(scf->errh, __FILE__, __LINE__,
+              "monitoring dir failed: %s file: %s",
+              fam_dir->name->ptr, fn);
+          #else
             log_error(scf->errh, __FILE__, __LINE__,
               "monitoring dir failed: %s file: %s %s",
               fam_dir->name->ptr, fn, FamErrlist[FAMErrno]);
+          #endif
             fam_dir_entry_free(fam_dir);
             return NULL;
         }
 
         scf->dirs = splaytree_insert(scf->dirs, dir_ndx, fam_dir);
+      #ifdef HAVE_SYS_INOTIFY_H
+        scf->wds = splaytree_insert(scf->wds, fam_dir->req, fam_dir);
+      #endif
         fam_dir->stat_ts= cur_ts;
         fam_dir->st_dev = st->st_dev;
         fam_dir->st_ino = st->st_ino;
@@ -644,6 +776,11 @@ int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *err
         sc.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("simple")))
         sc.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
+#ifdef HAVE_SYS_INOTIFY_H
+    else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("inotify")))
+        sc.stat_cache_engine = STAT_CACHE_ENGINE_INOTIFY;
+        /*(STAT_CACHE_ENGINE_FAM == STAT_CACHE_ENGINE_INOTIFY)*/
+#endif
 #ifdef HAVE_FAM_H
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("fam")))
         sc.stat_cache_engine = STAT_CACHE_ENGINE_FAM;
@@ -653,6 +790,9 @@ int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *err
     else {
         log_error(errh, __FILE__, __LINE__,
           "server.stat-cache-engine can be one of \"disable\", \"simple\","
+#ifdef HAVE_SYS_INOTIFY_H
+          " \"inotify\","
+#endif
 #ifdef HAVE_FAM_H
           " \"fam\","
 #endif
