@@ -371,6 +371,7 @@ if 1:
 		'sys/devpoll.h',
 		'sys/epoll.h',
 		'sys/filio.h',
+		'sys/inotify.h',
 		'sys/loadavg.h',
 		'sys/poll.h',
 		'sys/port.h',
@@ -519,7 +520,7 @@ if 1:
 			LIBDBI = 'dbi',
 		)
 
-	if env['with_fam']:
+	if env['with_fam'] and not self.CheckCHeader('sys/inotify.h'):
 		if not autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
 			fail("Couldn't find fam")
 		autoconf.env.Append(

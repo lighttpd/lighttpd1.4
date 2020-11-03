@@ -112,6 +112,7 @@ AC_CHECK_HEADERS([\
   sys/epoll.h \
   sys/event.h \
   sys/filio.h \
+  sys/inotify.h \
   sys/loadavg.h \
   sys/mman.h \
   sys/poll.h \
@@ -1035,6 +1036,10 @@ AC_ARG_WITH([fam],
   [WITH_FAM=no]
 )
 AC_MSG_RESULT([$WITH_FAM])
+
+if test "$HAVE_SYS_NOTIFY_H" != no; then
+  WITH_FAM=no
+fi
 
 if test "$WITH_FAM" != no; then
   if test "$WITH_FAM" != yes; then

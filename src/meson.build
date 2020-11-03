@@ -29,6 +29,7 @@ conf_data = configuration_data()
 conf_data.set('HAVE_SYS_DEVPOLL_H', compiler.has_header('sys/devpoll.h'))
 conf_data.set('HAVE_SYS_EPOLL_H', compiler.has_header('sys/epoll.h'))
 conf_data.set('HAVE_SYS_EVENT_H', compiler.has_header('sys/event.h'))
+conf_data.set('HAVE_SYS_INOTIFY_H', compiler.has_header('sys/inotify.h'))
 conf_data.set('HAVE_SYS_LOADAVG_H', compiler.has_header('sys/loadavg.h'))
 conf_data.set('HAVE_SYS_MMAN_H', compiler.has_header('sys/mman.h'))
 conf_data.set('HAVE_SYS_POLL_H', compiler.has_header('sys/poll.h'))
@@ -259,7 +260,7 @@ if get_option('with_dbi')
 endif
 
 libfam = []
-if get_option('with_fam')
+if get_option('with_fam') and not(conf_data.get('HAVE_SYS_INOTIFY_H'))
 	libfam = [ compiler.find_library('fam') ]
 	if not(compiler.has_function('FAMOpen2', args: defs, dependencies: libfam, prefix: '#include <fam.h>'))
 		error('Couldn\'t find fam.h or FAMOpen2 in lib fam')
