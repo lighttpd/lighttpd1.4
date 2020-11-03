@@ -8,8 +8,6 @@
  *   Copyright 2001-2004 The Apache Software Foundation
  */
 /*
- * WARNING: EXPERIMENTAL code sketch; mod_nss is INCOMPLETE and UNTESTED
- *
  * NSS docs: https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS
  *
  * NSS documentation is seriously lacking and man pages exist only for apps;
@@ -36,7 +34,10 @@
  *   PK11SymKey *masterSecret in ssl3CipherSpec in ssl3State in sslSessionID
  *     is private in lib/ssl/ssl3con.c
  *
- *   XXX: due to limitations, consider disabling session tickets in mod_nss
+ *   Update: NSS developer explains:
+ *   "The way that we currently operate is to tie the session key encryption to
+ *    the server public key. Which only works if you have an RSA key configured"
+ *   https://bugzilla.mozilla.org/show_bug.cgi?id=1673254
  *
  * not implemented:
  * - session ticket rotation (see comments above)
