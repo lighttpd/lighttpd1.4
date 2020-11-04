@@ -1940,6 +1940,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
                   hctx->fd, chunkqueue_length(&hctx->wb));
             }
           #endif
+            off_t bytes_out = hctx->wb.bytes_out;
             if (r->con->srv->network_backend_write(hctx->fd, &hctx->wb,
                                                    MAX_WRITE_LIMIT, errh) < 0) {
                 switch(errno) {
@@ -1962,6 +1963,8 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
                     return HANDLER_ERROR;
                 }
             }
+            else if (hctx->wb.bytes_out > bytes_out)
+                hctx->proc->last_used = log_epoch_secs;
         }
 
         if (hctx->wb.bytes_out == hctx->wb_reqlen) {
@@ -2125,21 +2128,30 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
 
 
 static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * const r) {
-    gw_proc *proc = hctx->proc;
-    gw_host *host = hctx->host;
     /*(XXX: make this a configurable flag for other protocols)*/
     buffer *b = hctx->opts.backend == BACKEND_FASTCGI
       ? chunk_buffer_acquire()
       : hctx->response;
+    const off_t bytes_in = r->write_queue.bytes_in;
 
     handler_t rc = http_response_read(r, &hctx->opts, b, hctx->fdn);
 
     if (b != hctx->response) chunk_buffer_release(b);
 
+    gw_proc * const proc = hctx->proc;
+
     switch (rc) {
     default:
+        /* change in r->write_queue.bytes_in used to approximate backend read,
+         * since bytes read from backend, if any, might be consumed from b by
+         * hctx->opts->parse callback, hampering detection here.  However, this
+         * may not be triggered for partial collection of HTTP response headers
+         * or partial packets for backend protocol (e.g. FastCGI) */
+        if (r->write_queue.bytes_in > bytes_in)
+            proc->last_used = log_epoch_secs;
         return HANDLER_GO_ON;
     case HANDLER_FINISHED:
+        proc->last_used = log_epoch_secs;
         if (hctx->gw_mode == GW_AUTHORIZER
             && (200 == r->http_status || 0 == r->http_status)) {
             /*
@@ -2149,6 +2161,7 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
              */
             char *physpath = NULL;
 
+            gw_host * const host = hctx->host;
             if (!buffer_string_is_empty(host->docroot)) {
                 buffer_copy_buffer(&r->physical.doc_root, host->docroot);
                 buffer_copy_buffer(&r->physical.basedir, host->docroot);
@@ -2158,7 +2171,6 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
                 physpath = r->physical.path.ptr;
             }
 
-            proc->last_used = log_epoch_secs;
             gw_backend_close(hctx, r);
             handler_ctx_clear(hctx);
 
@@ -2198,6 +2210,7 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
             && proc->state != PROC_STATE_DIED
             && 0 == r->con->srv->srvconf.max_worker) {
             /* intentionally check proc->disabed_until before gw_proc_waitpid */
+            gw_host * const host = hctx->host;
             log_error_st * const errh = r->con->srv->errh;
             if (proc->disabled_until < log_epoch_secs
                 && 0 != gw_proc_waitpid(host, proc, errh)) {
