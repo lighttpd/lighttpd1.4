@@ -2127,6 +2127,10 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
 }
 
 
+__attribute_cold__
+static handler_t gw_recv_response_error(gw_handler_ctx * const hctx, request_st * const r, gw_proc * const proc);
+
+
 static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * const r) {
     /*(XXX: make this a configurable flag for other protocols)*/
     buffer *b = hctx->opts.backend == BACKEND_FASTCGI
@@ -2204,6 +2208,14 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
         return HANDLER_FINISHED;
     case HANDLER_COMEBACK: /*(not expected; treat as error)*/
     case HANDLER_ERROR:
+        return gw_recv_response_error(hctx, r, proc);
+    }
+}
+
+
+__attribute_cold__
+static handler_t gw_recv_response_error(gw_handler_ctx * const hctx, request_st * const r, gw_proc * const proc)
+{
         /* (optimization to detect backend process exit while processing a
          *  large number of ready events; (this block could be removed)) */
         if (proc->is_local && 1 == proc->load && proc->pid == hctx->pid
@@ -2257,7 +2269,6 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
         http_response_backend_error(r);
         gw_connection_close(hctx, r);
         return HANDLER_FINISHED;
-    }
 }
 
 
