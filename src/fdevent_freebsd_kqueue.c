@@ -97,7 +97,15 @@ static int fdevent_freebsd_kqueue_poll(fdevents * const ev, int timeout_ms) {
 
 __attribute_cold__
 static int fdevent_freebsd_kqueue_reset(fdevents *ev) {
-	return (-1 != (ev->kq_fd = kqueue())) ? 0 : -1;
+  #ifdef __NetBSD__
+	ev->kq_fd = kqueue1(O_NONBLOCK|O_CLOEXEC|O_NOSIGPIPE);
+	return (-1 != ev->kq_fd) ? 0 : -1;
+  #else
+	ev->kq_fd = kqueue();
+	if (-1 == ev->kq_fd) return -1;
+	fdevent_setfd_cloexec(ev->kq_fd);
+	return 0;
+  #endif
 }
 
 __attribute_cold__

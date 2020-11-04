@@ -17,7 +17,7 @@ typedef struct stat_cache_entry {
     time_t stat_ts;
     int fd;
     int refcnt;
-  #if defined(HAVE_FAM_H) || defined(HAVE_SYS_INOTIFY_H)
+  #if defined(HAVE_FAM_H) || defined(HAVE_SYS_INOTIFY_H) || defined(HAVE_SYS_EVENT_H)
     void *fam_dir;
   #endif
     buffer etag;

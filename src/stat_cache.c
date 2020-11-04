@@ -43,6 +43,7 @@ enum {
  ,STAT_CACHE_ENGINE_NONE    = 1
  ,STAT_CACHE_ENGINE_FAM     = 2  /* same as STAT_CACHE_ENGINE_INOTIFY */
  ,STAT_CACHE_ENGINE_INOTIFY = 2  /* same as STAT_CACHE_ENGINE_FAM */
+ ,STAT_CACHE_ENGINE_KQUEUE  = 2  /* same as STAT_CACHE_ENGINE_FAM */
 };
 
 struct stat_cache_fam;  /* declaration */
@@ -66,7 +67,8 @@ static void * stat_cache_sptree_find(splay_tree ** const sptree,
 }
 
 
-#ifdef HAVE_SYS_INOTIFY_H
+#if defined(HAVE_SYS_INOTIFY_H) \
+ || (defined(HAVE_SYS_EVENT_H) && defined(HAVE_KQUEUE))
 #ifndef HAVE_FAM_H
 #define HAVE_FAM_H
 #endif
@@ -154,6 +156,47 @@ typedef enum FAMCodes { /*(copied from fam.h to define arbitrary enum values)*/
     FAMMoved=6,
 } FAMCodes;
 
+#elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+
+#include <sys/event.h>
+#include <sys/time.h>
+
+/*(translate FAM API to inotify; this is specific to stat_cache.c use of FAM)*/
+#define fam fd /*(translate struct stat_cache_fam scf->fam -> scf->fd)*/
+typedef int FAMRequest; /*(fr)*/
+#define FAMClose(fd) \
+        (-1 != (*(fd)) ? close(*(fd)) : 0)
+static int FAMCancelMonitor (const int * const fd, int * const wd)
+{
+    if (-1 == *fd) return 0;
+    if (-1 == *wd) return 0;
+    struct timespec t0 = { 0, 0 };
+    struct kevent kev;
+    EV_SET(&kev, *wd, EVFILT_VNODE, EV_DELETE, 0, 0, 0);
+    int rc = kevent(*fd, &kev, 1, NULL, 0, &t0);
+    close(*wd);
+    *wd = -1;
+    return rc;
+}
+static int FAMMonitorDirectory (int * const fd, char * const fn, int * const wd, void * const userData)
+{
+    *wd = fdevent_open_dirname(fn, 1); /*(note: follows symlinks)*/
+    if (-1 == *wd) return -1;
+    struct timespec t0 = { 0, 0 };
+    struct kevent kev;
+    unsigned short kev_flags = EV_ADD | EV_ENABLE | EV_CLEAR;
+    unsigned int kev_fflags = NOTE_ATTRIB | NOTE_EXTEND | NOTE_LINK | NOTE_WRITE
+                            | NOTE_DELETE | NOTE_REVOKE | NOTE_RENAME;
+    EV_SET(&kev, *wd, EVFILT_VNODE, kev_flags, kev_fflags, 0, userData);
+    return kevent(*fd, &kev, 1, NULL, 0, &t0);
+}
+typedef enum FAMCodes { /*(copied from fam.h to define arbitrary enum values)*/
+    FAMChanged=1,
+    FAMDeleted=2,
+    FAMCreated=5,
+    FAMMoved=6,
+} FAMCodes;
+
 #else
 
 #include <fam.h>
@@ -180,6 +223,7 @@ typedef struct stat_cache_fam {
 	splay_tree *dirs; /* indexed by path; node data is fam_dir_entry */
   #ifdef HAVE_SYS_INOTIFY_H
 	splay_tree *wds;  /* indexed by inotify watch descriptor */
+  #elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
   #else
 	FAMConnection fam;
   #endif
@@ -197,6 +241,9 @@ static fam_dir_entry * fam_dir_entry_init(const char *name, size_t len)
     fam_dir->name = buffer_init();
     buffer_copy_string_len(fam_dir->name, name, len);
     fam_dir->refcnt = 0;
+  #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+    fam_dir->req = -1;
+  #endif
 
     return fam_dir;
 }
@@ -206,6 +253,10 @@ static void fam_dir_entry_free(fam_dir_entry *fam_dir)
     if (!fam_dir) return;
     /*(fam_dir->parent might be invalid pointer here; ignore)*/
     buffer_free(fam_dir->name);
+  #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+    if (-1 != fam_dir->req)
+        close(fam_dir->req);
+  #endif
     free(fam_dir);
 }
 
@@ -246,6 +297,11 @@ static void fam_dir_periodic_cleanup() {
         if (!scf->dirs) break;
         max_ndx = 0;
         fam_dir_tag_refcnt(scf->dirs, keys, &max_ndx);
+      #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+        /* batch process kevent removal */
+        if (0 == max_ndx) break;
+        struct kevent * const kevl = malloc(sizeof(struct kevent)*max_ndx);
+      #endif
         for (i = 0; i < max_ndx; ++i) {
             const int ndx = keys[i];
             splay_tree *node = scf->dirs = splaytree_splay(scf->dirs, ndx);
@@ -254,11 +310,23 @@ static void fam_dir_periodic_cleanup() {
                 scf->dirs = splaytree_delete(scf->dirs, ndx);
               #ifdef HAVE_SYS_INOTIFY_H
                 scf->wds = splaytree_delete(scf->wds, fam_dir->req);
+              #elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+                /* batch process kevent removal; defer cancel */
+                EV_SET(kevl+i, fam_dir->req, EVFILT_VNODE, EV_DELETE, 0, 0, 0);
+                fam_dir->req = -1; /*(make FAMCancelMonitor() a no-op)*/
               #endif
                 FAMCancelMonitor(&scf->fam, &fam_dir->req);
                 fam_dir_entry_free(fam_dir);
             }
         }
+      #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+        /* future: batch process: kevent() to submit EV_DELETE, close fds, free memory */
+        struct timespec t0 = { 0, 0 };
+        kevent(scf->fd, kevl, max_ndx, NULL, 0, &t0);
+        for (i = 0; i < max_ndx; ++i)
+            close((int)kevl[i].ident);
+        free(kevl);
+      #endif
     } while (max_ndx == sizeof(keys)/sizeof(int));
 }
 
@@ -338,6 +406,43 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
             stat_cache_handle_fdevent_fn(scf, fam_dir, in->name, in->len, code);
         }
     } while (rd + sizeof(struct inotify_event) + NAME_MAX + 1 > sizeof(buf));
+  #elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+    struct kevent kevl[256];
+    struct timespec t0 = { 0, 0 };
+    int n;
+    do {
+        n = kevent(scf->fd, NULL, 0, kevl, sizeof(kevl)/sizeof(*kevl), &t0);
+        if (n <= 0) break;
+        for (int i = 0; i < n; ++i) {
+            const struct kevent * const kev = kevl+i;
+            /* ignore events which may have been pending for
+             * paths recently cancelled via FAMCancelMonitor() */
+            int ndx = (int)(intptr_t)kev->udata;
+            scf->dirs = splaytree_splay(scf->dirs, ndx);
+            if (!scf->dirs || scf->dirs->key != ndx)
+                continue;
+            fam_dir_entry *fam_dir = scf->dirs->data;
+            if (fam_dir->req != (int)kev->ident)
+                continue;
+            /*(specific to use here in stat_cache.c)*/
+            /* note: stat_cache only monitors on directories,
+             *       so events here are only on directories
+             * note: changes are treated as FAMDeleted since
+             *       it is unknown which file in dir was changed
+             *       This is not efficient, but this stat_cache mechanism also
+             *       should not be used on frequently modified directories. */
+            int code = 0;
+            if (kev->fflags & (NOTE_WRITE|NOTE_ATTRIB|NOTE_EXTEND|NOTE_LINK))
+                code = FAMDeleted; /*(not FAMChanged; see comment above)*/
+            else if (kev->fflags & (NOTE_DELETE|NOTE_REVOKE))
+                code = FAMDeleted;
+            else if (kev->fflags & NOTE_RENAME)
+                code = FAMMoved;
+            if (kev->flags & EV_ERROR) /*(not expected; treat as FAMDeleted)*/
+                code = FAMDeleted;
+            stat_cache_handle_fdevent_fn(scf, fam_dir, NULL, 0, code);
+        }
+    } while (n == sizeof(kevl)/sizeof(*kevl));
   #else
     for (int i = 0, ndx; i || (i = FAMPending(&scf->fam)) > 0; --i) {
         FAMEvent fe;
@@ -472,6 +577,17 @@ static stat_cache_fam * stat_cache_init_fam(fdevents *ev, log_error_st *errh) {
 		log_perror(errh, __FILE__, __LINE__, "inotify_init1()");
 		return NULL;
 	}
+  #elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+   #ifdef __NetBSD__
+	scf->fd = kqueue1(O_NONBLOCK|O_CLOEXEC|O_NOSIGPIPE);
+   #else
+	scf->fd = kqueue();
+	if (scf->fd >= 0) fdevent_setfd_cloexec(scf->fd);
+   #endif
+	if (scf->fd < 0) {
+		log_perror(errh, __FILE__, __LINE__, "kqueue()");
+		return NULL;
+	}
   #else
 	/* setup FAM */
 	if (0 != FAMOpen2(&scf->fam, "lighttpd")) {
@@ -507,6 +623,10 @@ static void stat_cache_free_fam(stat_cache_fam *scf) {
 		splay_tree *node = scf->wds;
 		scf->wds = splaytree_delete(scf->wds, node->key);
 	}
+      #elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+	/*(quicker cleanup to close kqueue() before cancel per entry)*/
+	close(scf->fd);
+	scf->fd = -1;
       #endif
 	while (scf->dirs) {
 		/*(skip entry invalidation and FAMCancelMonitor())*/
@@ -612,7 +732,8 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
 
         if (0 != FAMMonitorDirectory(&scf->fam,fam_dir->name->ptr,&fam_dir->req,
                                      (void *)(intptr_t)dir_ndx)) {
-          #ifdef HAVE_SYS_INOTIFY_H
+          #if defined(HAVE_SYS_INOTIFY_H) \
+           || (defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE)
             log_perror(scf->errh, __FILE__, __LINE__,
               "monitoring dir failed: %s file: %s",
               fam_dir->name->ptr, fn);
@@ -780,6 +901,10 @@ int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *err
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("inotify")))
         sc.stat_cache_engine = STAT_CACHE_ENGINE_INOTIFY;
         /*(STAT_CACHE_ENGINE_FAM == STAT_CACHE_ENGINE_INOTIFY)*/
+#elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+    else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("kqueue")))
+        sc.stat_cache_engine = STAT_CACHE_ENGINE_KQUEUE;
+        /*(STAT_CACHE_ENGINE_FAM == STAT_CACHE_ENGINE_KQUEUE)*/
 #endif
 #ifdef HAVE_FAM_H
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("fam")))
@@ -792,6 +917,8 @@ int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *err
           "server.stat-cache-engine can be one of \"disable\", \"simple\","
 #ifdef HAVE_SYS_INOTIFY_H
           " \"inotify\","
+#elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+          " \"kqueue\","
 #endif
 #ifdef HAVE_FAM_H
           " \"fam\","
