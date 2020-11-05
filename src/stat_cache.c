@@ -276,10 +276,10 @@ static void fam_dir_invalidate_node(fam_dir_entry *fam_dir)
 
 static void fam_dir_tag_refcnt(splay_tree *t, int *keys, int *ndx)
 {
-    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
+    if (*ndx == 512) return; /*(must match num array entries in keys[])*/
     if (t->left)  fam_dir_tag_refcnt(t->left,  keys, ndx);
     if (t->right) fam_dir_tag_refcnt(t->right, keys, ndx);
-    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
+    if (*ndx == 512) return; /*(must match num array entries in keys[])*/
 
     fam_dir_entry * const fam_dir = t->data;
     if (0 == fam_dir->refcnt) {
@@ -292,16 +292,14 @@ __attribute_noinline__
 static void fam_dir_periodic_cleanup() {
     stat_cache_fam * const scf = sc.scf;
     int max_ndx, i;
-    int keys[8192]; /* 32k size on stack */
+    int keys[512]; /* 2k size on stack */
+  #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+    struct kevent kevl[512]; /* 32k size on stack to batch kevent EV_DELETE */
+  #endif
     do {
         if (!scf->dirs) break;
         max_ndx = 0;
         fam_dir_tag_refcnt(scf->dirs, keys, &max_ndx);
-      #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
-        /* batch process kevent removal */
-        if (0 == max_ndx) break;
-        struct kevent * const kevl = malloc(sizeof(struct kevent)*max_ndx);
-      #endif
         for (i = 0; i < max_ndx; ++i) {
             const int ndx = keys[i];
             splay_tree *node = scf->dirs = splaytree_splay(scf->dirs, ndx);
@@ -320,12 +318,12 @@ static void fam_dir_periodic_cleanup() {
             }
         }
       #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
-        /* future: batch process: kevent() to submit EV_DELETE, close fds, free memory */
+        /* batch process: kevent() to submit EV_DELETE, then close dir fds */
+        if (0 == max_ndx) break;
         struct timespec t0 = { 0, 0 };
         kevent(scf->fd, kevl, max_ndx, NULL, 0, &t0);
         for (i = 0; i < max_ndx; ++i)
             close((int)kevl[i].ident);
-        free(kevl);
       #endif
     } while (max_ndx == sizeof(keys)/sizeof(int));
 }
