@@ -132,7 +132,8 @@ static void * stat_cache_sptree_find(splay_tree ** const sptree,
  * different files recently accessed and part of the stat_cache.
  */
 
-#ifdef HAVE_SYS_INOTIFY_H
+#if defined(HAVE_SYS_INOTIFY_H) \
+ && !(defined(HAVE_SYS_EVENT_H) && defined(HAVE_KQUEUE))
 
 #include <sys/inotify.h>
 
@@ -157,6 +158,7 @@ typedef enum FAMCodes { /*(copied from fam.h to define arbitrary enum values)*/
 } FAMCodes;
 
 #elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
+#undef HAVE_SYS_INOTIFY_H
 
 #include <sys/event.h>
 #include <sys/time.h>
