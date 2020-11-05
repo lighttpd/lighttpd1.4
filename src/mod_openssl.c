@@ -508,7 +508,8 @@ static int mod_openssl_init_once_openssl (server *srv)
     if (ssl_is_init) return 1;
 
   #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
-   && !defined(LIBRESSL_VERSION_NUMBER)
+   && (!defined(LIBRESSL_VERSION_NUMBER) \
+       || LIBRESSL_VERSION_NUMBER >= 0x2070000fL)
     OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS
                     |OPENSSL_INIT_LOAD_CRYPTO_STRINGS,NULL);
     OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS
@@ -1068,7 +1069,8 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
     }
 
   #if OPENSSL_VERSION_NUMBER >= 0x10002000 \
-   && !defined(LIBRESSL_VERSION_NUMBER)
+   && (!defined(LIBRESSL_VERSION_NUMBER) \
+       || LIBRESSL_VERSION_NUMBER >= 0x3000000fL)
     if (pc->ssl_pemfile_chain)
         SSL_set1_chain(ssl, pc->ssl_pemfile_chain);
    #ifndef BORINGSSL_API_VERSION /* BoringSSL limitation */
