@@ -841,7 +841,26 @@ static int server_graceful_state_bg (server *srv) {
      *   platforms to achieve the same:
      *   https://stackoverflow.com/questions/1023306/finding-current-executables-path-without-proc-self-exe
      */
+  #if defined(HAVE_KQUEUE)
+   #if defined(__FreeBSD__) || defined(__DragonFly__)
+    /*(must *exclude* rfork RFFDG flag for kqueue to work across rfork)*/
+    pid_t pid = rfork(RFPROC);
+   #else
+    pid_t pid = -1;
+    if (pid < 0) {
+        /* kqueue is not inherited across fork
+         * future: fdevent kqueue and stat_cache kqueue would need to be closed,
+         *         re-opened, and active fds re-registered.  Not current done.
+         *         Need to create some routines like fdevent_reinit_after_fork*/
+        log_error(srv->errh, __FILE__, __LINE__,
+          "server.graceful-restart-bg ignored on OpenBSD and NetBSD "
+          "due to limitation in kqueue inheritance and lacking rfork");
+        return 0;
+    }
+   #endif
+  #else
     pid_t pid = fork();
+  #endif
     if (pid) { /* original process */
         if (pid < 0) return 0;
         network_socket_activation_to_env(srv);
