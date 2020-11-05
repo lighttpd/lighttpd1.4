@@ -1069,8 +1069,8 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
     }
 
   #if OPENSSL_VERSION_NUMBER >= 0x10002000 \
-   && (!defined(LIBRESSL_VERSION_NUMBER) \
-       || LIBRESSL_VERSION_NUMBER >= 0x3000000fL)
+   && !defined(LIBRESSL_VERSION_NUMBER)
+    /* libressl >= 0x3000000fL has SSL_set1_chain(), but not other APIs below)*/
     if (pc->ssl_pemfile_chain)
         SSL_set1_chain(ssl, pc->ssl_pemfile_chain);
    #ifndef BORINGSSL_API_VERSION /* BoringSSL limitation */
