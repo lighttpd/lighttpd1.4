@@ -1091,9 +1091,11 @@ static int http_response_process_headers(request_st * const r, http_response_opt
         ns[0] = '\0';
         if (ns > s && ns[-1] == '\r') ns[-1] = '\0';
 
-        if (0 == line && 0 == strncmp(s, "HTTP/1.", 7)) {
+        if (0 == line && (ns - s) >= 12 && 0 == memcmp(s, "HTTP/", 5)) {
             /* non-parsed headers ... we parse them anyway */
-            if ((s[7] == '1' || s[7] == '0') && s[8] == ' ') {
+            /* (accept HTTP/2.0 and HTTP/3.0 from naive non-proxy backends) */
+            if ((s[5] == '1' || opts->backend != BACKEND_PROXY) && s[6] == '.'
+                && (s[7] == '1' || s[7] == '0') && s[8] == ' ') {
                 /* after the space should be a status code for us */
                 int status = http_header_str_to_code(s+9);
                 if (status >= 100 && status < 1000) {
@@ -1303,8 +1305,8 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
   do {
 
     blen = buffer_string_length(b);
-    /*("HTTP/1.1 200 " is at least 13 chars + \r\n)*/
-    const int is_nph = (blen > 12 && 0 == memcmp(b->ptr, "HTTP/1.", 7));
+    /*("HTTP/1.1 200 " is at least 13 chars + \r\n, but accept w/o final ' ')*/
+    const int is_nph = (blen >= 12 && 0 == memcmp(b->ptr, "HTTP/", 5));
 
     int is_header_end = 0;
     uint32_t i = 0;
