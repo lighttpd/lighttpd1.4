@@ -78,6 +78,9 @@ sub new {
 		$self->{MODULES_PATH} = $self->{BASEDIR}.'/build';
 	}
 	$self->{LIGHTTPD_PATH} = $self->{BINDIR}.'/lighttpd';
+	if (exists $ENV{LIGHTTPD_EXE_PATH}) {
+		$self->{LIGHTTPD_PATH} = $ENV{LIGHTTPD_EXE_PATH};
+	}
 	$self->{PORT} = 2048;
 
 	my ($name, $aliases, $addrtype, $net) = gethostbyaddr(inet_aton("127.0.0.1"), AF_INET);
@@ -159,6 +162,7 @@ sub start_proc {
 	$ENV{'PORT'} = $self->{PORT};
 
 	my @cmdline = ($self->{LIGHTTPD_PATH}, "-D", "-f", $self->{SRCDIR}."/".$self->{CONFIGFILE}, "-m", $self->{MODULES_PATH});
+	splice(@cmdline, -2) if exists $ENV{LIGHTTPD_EXE_PATH};
 	if (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'strace') {
 		@cmdline = (qw(strace -tt -s 4096 -o strace -f -v), @cmdline);
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'truss') {
