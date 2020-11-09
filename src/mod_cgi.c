@@ -500,7 +500,7 @@ static int cgi_env_add(void *venv, const char *key, size_t key_len, const char *
 	env_accum *env = venv;
 	char *dst;
 
-	if (!key || !val) return -1;
+	if (!key || (!val && val_len)) return -1;
 
 	if (env->size - env->used < key_len + val_len + 2) {
 		if (0 == env->size) env->size = 4096;

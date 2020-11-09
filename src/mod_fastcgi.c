@@ -149,7 +149,7 @@ static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char 
 	size_t len_enc_len = 0;
 	char *dst;
 
-	if (!key || !val) return -1;
+	if (!key || (!val && val_len)) return -1;
 
 	len = key_len + val_len;
 

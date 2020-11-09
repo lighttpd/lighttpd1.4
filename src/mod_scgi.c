@@ -149,7 +149,7 @@ static int scgi_env_add_scgi(void *venv, const char *key, size_t key_len, const 
 	char *dst;
 	size_t len;
 
-	if (!key || !val) return -1;
+	if (!key || (!val && val_len)) return -1;
 
 	len = key_len + val_len + 2;
 
