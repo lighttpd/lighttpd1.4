@@ -1204,7 +1204,13 @@ if test "$WITH_XXHASH" != no; then
     CPPFLAGS="$CPPFLAGS -I$WITH_XXHASH"
   else
     PKG_CHECK_MODULES([XXHASH], [libxxhash], [], [
-      AC_MSG_ERROR([xxhash not found, install it or build without --with-xxhash])
+      AC_CHECK_LIB([xxhash], [XXH_versionNumber],
+        [XXHASH_LIBS=-lxxhash],
+        [AC_MSG_ERROR([xxhash not found, install it or build without --with-xxhash])]
+      )
+      AC_CHECK_HEADERS([xxhash.h], [],
+        [AC_MSG_ERROR([xxhash not found, install it or build without --with-xxhash])]
+      )
     ])
   fi
 
