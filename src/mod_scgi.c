@@ -183,7 +183,7 @@ static int scgi_env_add_uwsgi(void *venv, const char *key, size_t key_len, const
 	size_t len;
 	uint16_t uwlen;
 
-	if (!key || !val) return -1;
+	if (!key || (!val && val_len)) return -1;
 	if (key_len > USHRT_MAX || val_len > USHRT_MAX) return -1;
 
 	len = 2 + key_len + 2 + val_len;
