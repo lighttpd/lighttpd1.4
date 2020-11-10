@@ -31,7 +31,7 @@
 
 
 __attribute_cold__
-static int http_response_buffer_append_authority(request_st * const r, buffer * const o) {
+int http_response_buffer_append_authority(request_st * const r, buffer * const o) {
 	if (!buffer_string_is_empty(&r->uri.authority)) {
 		buffer_append_string_buffer(o, &r->uri.authority);
 	} else {

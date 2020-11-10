@@ -51,6 +51,7 @@ handler_t http_response_read(request_st *r, http_response_opts *opts, buffer *b,
 __attribute_cold__
 handler_t http_response_reqbody_read_error(request_st *r, int http_status);
 
+int http_response_buffer_append_authority(request_st *r, buffer *o);
 int http_response_redirect_to_directory(request_st *r, int status);
 int http_response_handle_cachable(request_st *r, const buffer *mtime);
 void http_response_body_clear(request_st *r, int preserve_length);
