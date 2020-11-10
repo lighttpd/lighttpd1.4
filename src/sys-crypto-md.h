@@ -104,9 +104,6 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 }
 
 #define USE_LIB_CRYPTO_SHA512_256
-#ifndef SHA512_256_DIGEST_LENGTH
-#define SHA512_256_DIGEST_LENGTH 32
-#endif
 typedef struct sha512_256_ctx SHA512_CTX;    /*(yes, SHA512_CTX)*/
 static inline int
 SHA512_256_Init(SHA512_CTX *ctx)
@@ -676,6 +673,20 @@ NSS_gen_hashfuncs(SHA256, HASH_AlgSHA256);
 #endif
 #else
 #include "algo_sha1.h"
+#endif
+
+
+#ifdef USE_LIB_CRYPTO_SHA256
+#ifndef SHA256_DIGEST_LENGTH
+#define SHA256_DIGEST_LENGTH 32
+#endif
+#endif
+
+
+#ifdef USE_LIB_CRYPTO_SHA512_256
+#ifndef SHA512_256_DIGEST_LENGTH
+#define SHA512_256_DIGEST_LENGTH 32
+#endif
 #endif
 
 
