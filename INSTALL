@@ -54,8 +54,6 @@ optional packages for optional features ::
   bzip2-libs
   cyrus-sasl          # SASL       ./configure --with-sasl
   cyrus-sasl-devel
-  gamin               # FAM        ./configure --with-fam
-  gamin-devel
   gdbm                # GDBM       ./configure --with-gdbm
   gdbm-devel
   GeoIP-devel         # GeoIP      ./configure --with-geoip
@@ -64,8 +62,6 @@ optional packages for optional features ::
   gnutls-devel
   krb5-devel          # Kerberos5  ./configure --with-krb5
   krb5-libs
-  libattr             # xattr      ./configure --with-attr
-  libattr-devel
   libbrotli           # brotli     ./configure --with-brotli
   brotli-devel
   libdbi              # DBI        ./configure --with-dbi
@@ -107,6 +103,8 @@ optional packages for optional features ::
   sqlite-devel
   valgrind            # valgrind   ./configure --with-valgrind
   valgrind-devel
+  wolfssl             # wolfSSL    ./configure --with-wolfssl
+  wolfssl-devel
   zlib                # zlib       ./configure --with-zlib
   zlib-devel
 
