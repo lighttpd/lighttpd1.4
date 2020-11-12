@@ -51,10 +51,10 @@ static void mod_alias_patch_config(request_st * const r, plugin_data * const p) 
 
 static int mod_alias_check_order(server * const srv, const array * const a) {
     for (uint32_t j = 0; j < a->used; ++j) {
-        const buffer * const prefix = &a->sorted[j]->key;
+        const buffer * const prefix = &a->data[j]->key;
         const size_t plen = buffer_string_length(prefix);
         for (uint32_t k = j + 1; k < a->used; ++k) {
-            const buffer * const key = &a->sorted[k]->key;
+            const buffer * const key = &a->data[k]->key;
             if (buffer_string_length(key) < plen) {
                 break;
             }
@@ -62,8 +62,8 @@ static int mod_alias_check_order(server * const srv, const array * const a) {
                 break;
             }
             /* ok, they have same prefix. check position */
-            const data_unset *dj = a->sorted[j];
-            const data_unset *dk = a->sorted[k];
+            const data_unset *dj = a->data[j];
+            const data_unset *dk = a->data[k];
             const data_unset **data = (const data_unset **)a->data;
             while (*data != dj && *data != dk) ++data;
             if (*data == dj) {
