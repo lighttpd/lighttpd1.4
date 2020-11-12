@@ -844,27 +844,24 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 
 		cgi_pid_add(p, hctx->pid, hctx);
 
-		++r->con->srv->cur_fds;
-
 		if (0 == r->reqbody_length) {
 			close(to_cgi_fds[1]);
-		} else {
-			/* there is content to send */
-			if (-1 == fdevent_fcntl_set_nb(to_cgi_fds[1])) {
-				log_perror(r->conf.errh, __FILE__, __LINE__, "fcntl failed");
-				close(to_cgi_fds[1]);
-				cgi_connection_close(hctx);
-				return -1;
-			}
-
-			if (0 != cgi_write_request(hctx, to_cgi_fds[1])) {
-				close(to_cgi_fds[1]);
-				cgi_connection_close(hctx);
-				return -1;
-			}
-
+		}
+		else if (0 == fdevent_fcntl_set_nb(to_cgi_fds[1])
+		         && 0 == cgi_write_request(hctx, to_cgi_fds[1])) {
 			++r->con->srv->cur_fds;
 		}
+		else {
+			close(to_cgi_fds[1]);
+			/*(hctx->fd not yet registered with fdevent, so manually
+			 * cleanup here; see fdevent_register() further below)*/
+			close(hctx->fd);
+			hctx->fd = -1;
+			cgi_connection_close(hctx);
+			return -1;
+		}
+
+		++r->con->srv->cur_fds;
 
 		struct fdevents * const ev = hctx->ev;
 		hctx->fdn = fdevent_register(ev, hctx->fd, cgi_handle_fdevent, hctx);
