@@ -288,6 +288,36 @@ static void config_warn_openssl_module (server *srv) {
 }
 #endif
 
+static void config_check_module_duplicates (server *srv) {
+    int dup = 0;
+    data_string ** const data = (data_string **)srv->srvconf.modules->data;
+    const uint32_t used = srv->srvconf.modules->used;
+    for (uint32_t i = 0; i < used; ++i) {
+        const buffer * const m = &data[i]->value;
+        for (uint32_t j = i+1; j < used; ++j) {
+            if (buffer_is_equal(m, &data[j]->value)) {
+                ++dup;
+                break;
+            }
+        }
+    }
+    if (!dup) return;
+
+    array * const modules = array_init(used - dup);
+    for (uint32_t i = 0; i < used; ++i) {
+        const buffer * const m = &data[i]->value;
+        uint32_t j;
+        for (j = 0; j < modules->used; ++j) {
+            buffer *n = &((data_string *)modules->data[j])->value;
+            if (buffer_is_equal(m, n)) break; /* duplicate */
+        }
+        if (j == modules->used)
+            array_insert_value(modules, CONST_BUF_LEN(m));
+    }
+    array_free(srv->srvconf.modules);
+    srv->srvconf.modules = modules;
+}
+
 static void config_compat_module_load (server *srv) {
     int prepend_mod_indexfile  = 1;
     int append_mod_dirlisting  = 1;
@@ -806,6 +836,8 @@ static int config_insert_srvconf(server *srv) {
 
     if (0 == srv->srvconf.port)
         srv->srvconf.port = ssl_enabled ? 443 : 80;
+
+    config_check_module_duplicates(srv);
 
     if (srv->srvconf.compat_module_load)
         config_compat_module_load(srv);

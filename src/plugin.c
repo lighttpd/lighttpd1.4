@@ -130,16 +130,6 @@ int plugins_load(server *srv) {
 		char *module = ds->value.ptr;
 
 		uint32_t j;
-		for (j = 0; j < i; ++j) {
-			if (buffer_is_equal(&ds->value, &((data_string *) srv->srvconf.modules->data[j])->value)) {
-				log_error(srv->errh, __FILE__, __LINE__,
-				  "Cannot load plugin %s "
-				  "more than once, please fix your config (lighttpd may not accept such configs in future releases)",
-				  ds->value.ptr);
-				continue;
-			}
-		}
-
 		for (j = 0; load_functions[j].name; ++j) {
 			if (0 == strcmp(load_functions[j].name, module)) {
 				plugin * const p = plugin_init();
@@ -165,26 +155,14 @@ int plugins_load(server *srv) {
 	buffer * const tb = srv->tmp_buf;
 	plugin *p;
 	int (*init)(plugin *pl);
-	size_t i, j;
 
-	for (i = 0; i < srv->srvconf.modules->used; i++) {
-		data_string *ds = (data_string *)srv->srvconf.modules->data[i];
-		char *module = ds->value.ptr;
-
-		for (j = 0; j < i; j++) {
-			if (buffer_is_equal(&ds->value, &((data_string *) srv->srvconf.modules->data[j])->value)) {
-				log_error(srv->errh, __FILE__, __LINE__,
-				  "Cannot load plugin %s "
-				  "more than once, please fix your config (lighttpd may not accept such configs in future releases)",
-				  ds->value.ptr);
-				continue;
-			}
-		}
+	for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
+		const buffer * const module = &((data_string *)srv->srvconf.modules->data[i])->value;
 
 		buffer_copy_buffer(tb, srv->srvconf.modules_dir);
 
 		buffer_append_string_len(tb, CONST_STR_LEN("/"));
-		buffer_append_string(tb, module);
+		buffer_append_string_buffer(tb, module);
 #if defined(__WIN32) || defined(__CYGWIN__)
 		buffer_append_string_len(tb, CONST_STR_LEN(".dll"));
 #else
@@ -223,7 +201,7 @@ int plugins_load(server *srv) {
 		}
 
 #endif
-		buffer_copy_string(tb, module);
+		buffer_copy_buffer(tb, module);
 		buffer_append_string_len(tb, CONST_STR_LEN("_plugin_init"));
 
 #ifdef __WIN32
@@ -267,13 +245,13 @@ int plugins_load(server *srv) {
 
 #endif
 		if ((*init)(p)) {
-			log_error(srv->errh, __FILE__, __LINE__, "%s plugin init failed", module);
+			log_error(srv->errh, __FILE__, __LINE__, "%s plugin init failed", module->ptr);
 
 			plugin_free(p);
 			return -1;
 		}
 #if 0
-		log_error(srv->errh, __FILE__, __LINE__, "%s plugin loaded", module);
+		log_error(srv->errh, __FILE__, __LINE__, "%s plugin loaded", module->ptr);
 #endif
 		plugins_register(srv, p);
 	}
