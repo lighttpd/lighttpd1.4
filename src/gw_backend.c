@@ -1963,8 +1963,15 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
                     return HANDLER_ERROR;
                 }
             }
-            else if (hctx->wb.bytes_out > bytes_out)
+            else if (hctx->wb.bytes_out > bytes_out) {
                 hctx->proc->last_used = log_epoch_secs;
+                if (hctx->stdin_append
+                    && chunkqueue_length(&hctx->wb) < 65536 - 16384
+                    && !chunkqueue_is_empty(&r->reqbody_queue)) {
+                    handler_t rc = hctx->stdin_append(hctx);
+                    if (HANDLER_GO_ON != rc) return rc;
+                }
+            }
         }
 
         if (hctx->wb.bytes_out == hctx->wb_reqlen) {
@@ -2098,7 +2105,8 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
 
             if ((0 != hctx->wb.bytes_in || -1 == hctx->wb_reqlen)
                 && !chunkqueue_is_empty(&r->reqbody_queue)) {
-                if (hctx->stdin_append) {
+                if (hctx->stdin_append
+                    && chunkqueue_length(&hctx->wb) < 65536 - 16384) {
                     handler_t rca = hctx->stdin_append(hctx);
                     if (HANDLER_GO_ON != rca) return rca;
                 }

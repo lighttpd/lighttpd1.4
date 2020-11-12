@@ -221,8 +221,9 @@ static handler_t fcgi_stdin_append(handler_ctx *hctx) {
 	FCGI_Header header;
 	chunkqueue * const req_cq = &hctx->r->reqbody_queue;
 	off_t offset, weWant;
-	const off_t req_cqlen = chunkqueue_length(req_cq);
+	off_t req_cqlen = chunkqueue_length(req_cq);
 	int request_id = hctx->request_id;
+	if (req_cqlen > MAX_WRITE_LIMIT) req_cqlen = MAX_WRITE_LIMIT;
 
 	/* something to send ? */
 	for (offset = 0; offset != req_cqlen; offset += weWant) {
