@@ -563,6 +563,14 @@ static ssize_t cgi_write_file_chunk_mmap(request_st * const r, int fd, chunkqueu
 		return 0;
 	}
 
+	/*(simplified from chunk.c:chunkqueue_open_file_chunk())*/
+	if (-1 == c->file.fd) {
+		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, r->conf.follow_symlink, O_RDONLY, 0))) {
+			log_perror(r->conf.errh, __FILE__, __LINE__, "open failed: %s", c->mem->ptr);
+			return -1;
+		}
+	}
+
   #ifdef SPLICE_F_NONBLOCK
 	loff_t abs_offset = offset;
 	wr = splice(c->file.fd, &abs_offset, fd, NULL,
@@ -571,14 +579,6 @@ static ssize_t cgi_write_file_chunk_mmap(request_st * const r, int fd, chunkqueu
 	size_t mmap_offset, mmap_avail;
 	char *data = NULL;
 	off_t file_end = c->file.length; /* offset to file end in this chunk */
-
-	/*(simplified from chunk.c:chunkqueue_open_file_chunk())*/
-	if (-1 == c->file.fd) {
-		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, r->conf.follow_symlink, O_RDONLY, 0))) {
-			log_perror(r->conf.errh, __FILE__, __LINE__, "open failed: %s", c->mem->ptr);
-			return -1;
-		}
-	}
 
 	/* (re)mmap the buffer if range is not covered completely */
 	if (MAP_FAILED == c->file.mmap.start
