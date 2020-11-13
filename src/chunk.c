@@ -794,7 +794,7 @@ void chunkqueue_compact_mem(chunkqueue *cq, size_t clen) {
     chunk *c = cq->first;
     buffer *b = c->mem;
     size_t len = chunk_buffer_string_length(b) - c->offset;
-    if (len <= clen) return;
+    if (len >= clen) return;
     if (b->size > clen) {
         if (chunk_buffer_string_space(b) < clen - len)
             chunkqueue_compact_mem_offset(cq);
