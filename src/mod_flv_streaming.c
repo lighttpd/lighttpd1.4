@@ -6,9 +6,11 @@
 #include "log.h"
 #include "http_chunk.h"
 #include "http_header.h"
+#include "stat_cache.h"
 
 #include "plugin.h"
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -115,6 +117,16 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 	else if (0 == start)
 		return HANDLER_GO_ON; /* let mod_staticfile send whole file */
 
+	stat_cache_entry * const sce =
+	  stat_cache_get_entry_open(&r->physical.path, r->conf.follow_symlink);
+	if (NULL == sce || (sce->fd < 0 && 0 != sce->st.st_size)) {
+		r->http_status = (errno == ENOENT) ? 404 : 403;
+		return HANDLER_FINISHED;
+	}
+
+	if (0 == sce->st.st_size)
+		return HANDLER_FINISHED;
+
 			/* if there is a start=[0-9]+ in the header use it as start,
 			 * otherwise set start to beginning of file */
 			/* if there is a end=[0-9]+ in the header use it as end pos,
@@ -122,11 +134,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 
 			/* let's build a flv header */
 			http_chunk_append_mem(r, CONST_STR_LEN("FLV\x1\x1\0\0\0\x9\0\0\0\x9"));
-			if (0 != http_chunk_append_file_range(r, &r->physical.path, start, len)) {
-				chunkqueue_reset(&r->write_queue);
-				return HANDLER_GO_ON;
-			}
-
+			http_chunk_append_file_ref_range(r, sce, start, len);
 			http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("video/x-flv"));
 			r->resp_body_finished = 1;
 			return HANDLER_FINISHED;
