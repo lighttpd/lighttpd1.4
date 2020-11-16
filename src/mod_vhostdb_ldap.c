@@ -113,8 +113,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("ca-file"))) {
                 if (!buffer_string_is_empty(&ds->value)) cafile = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("starttls"))) {
-                starttls = !buffer_is_equal_string(&ds->value, CONST_STR_LEN("disable"))
-                        && !buffer_is_equal_string(&ds->value, CONST_STR_LEN("0"));
+                starttls = config_plugin_value_tobool((data_unset *)ds, 1);
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("timeout"))) {
                 timeout = strtol(ds->value.ptr, NULL, 10);
             }

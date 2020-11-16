@@ -302,31 +302,18 @@ static unsigned int mod_extforward_parse_opts(server *srv, const array *opts_par
             log_error(srv->errh, __FILE__, __LINE__,
               "extforward.params keys must be one of: "
               "host, remote_user, but not: %s", du->key.ptr);
-            return HANDLER_ERROR;
+            return UINT_MAX;
         }
 
-        if (du->type == TYPE_STRING) {
-            data_string *ds = (data_string *)du;
-            if (buffer_eq_slen(&ds->value, CONST_STR_LEN("enable"))) {
-                opts |= param;
-            }
-            else if (!buffer_eq_slen(&ds->value, CONST_STR_LEN("disable"))) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "extforward.params values must be one of: "
-                  "0, 1, enable, disable; error for key: %s", du->key.ptr);
-                return UINT_MAX;
-            }
-        }
-        else if (du->type == TYPE_INTEGER) {
-            data_integer *di = (data_integer *)du;
-            if (di->value) opts |= param;
-        }
-        else {
+        int val = config_plugin_value_tobool(du, 2);
+        if (2 == val) {
             log_error(srv->errh, __FILE__, __LINE__,
               "extforward.params values must be one of: "
               "0, 1, enable, disable; error for key: %s", du->key.ptr);
             return UINT_MAX;
         }
+        if (val)
+            opts |= param;
     }
     return opts;
 }

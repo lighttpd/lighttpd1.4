@@ -177,27 +177,15 @@ static unsigned int mod_proxy_parse_forwarded(server *srv, const array *a)
               "by, for, host, proto, remote_user, but not: %s", du->key.ptr);
             return UINT_MAX;
         }
-        if (du->type == TYPE_STRING) {
-            data_string *ds = (data_string *)du;
-            if (buffer_eq_slen(&ds->value, CONST_STR_LEN("enable")))
-                forwarded |= param;
-            else if (!buffer_eq_slen(&ds->value, CONST_STR_LEN("disable"))) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "proxy.forwarded values must be one of: "
-                  "0, 1, enable, disable; error for key: %s", du->key.ptr);
-                return UINT_MAX;
-            }
-        }
-        else if (du->type == TYPE_INTEGER) {
-            data_integer *di = (data_integer *)du;
-            if (di->value) forwarded |= param;
-        }
-        else {
+        int val = config_plugin_value_tobool(du, 2);
+        if (2 == val) {
             log_error(srv->errh, __FILE__, __LINE__,
               "proxy.forwarded values must be one of: "
               "0, 1, enable, disable; error for key: %s", du->key.ptr);
             return UINT_MAX;
         }
+        if (val)
+            forwarded |= param;
     }
     return forwarded;
 }
@@ -210,42 +198,36 @@ static http_header_remap_opts * mod_proxy_parse_header_opts(server *srv, const a
     for (uint32_t j = 0, used = a->used; j < used; ++j) {
         data_array *da = (data_array *)a->data[j];
         if (buffer_eq_slen(&da->key, CONST_STR_LEN("https-remap"))) {
-            data_string *ds = (data_string *)da;
-            if (ds->type != TYPE_STRING) {
+            int val = config_plugin_value_tobool((data_unset *)da, 2);
+            if (2 == val) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected value for proxy.header; "
-                  "expected \"enable\" or \"disable\" for https-remap");
+                  "expected \"https-remap\" => \"enable\" or \"disable\"");
                 return NULL;
             }
-            header.https_remap =
-              !buffer_eq_slen(&ds->value, CONST_STR_LEN("disable"))
-              && !buffer_eq_slen(&ds->value, CONST_STR_LEN("0"));
+            header.https_remap = val;
             continue;
         }
         else if (buffer_eq_slen(&da->key, CONST_STR_LEN("upgrade"))) {
-            data_string *ds = (data_string *)da;
-            if (ds->type != TYPE_STRING) {
+            int val = config_plugin_value_tobool((data_unset *)da, 2);
+            if (2 == val) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected value for proxy.header; "
                   "expected \"upgrade\" => \"enable\" or \"disable\"");
                 return NULL;
             }
-            header.upgrade =
-              !buffer_eq_slen(&ds->value, CONST_STR_LEN("disable"))
-              && !buffer_eq_slen(&ds->value, CONST_STR_LEN("0"));
+            header.upgrade = val;
             continue;
         }
         else if (buffer_eq_slen(&da->key, CONST_STR_LEN("connect"))) {
-            data_string *ds = (data_string *)da;
-            if (ds->type != TYPE_STRING) {
+            int val = config_plugin_value_tobool((data_unset *)da, 2);
+            if (2 == val) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected value for proxy.header; "
                   "expected \"connect\" => \"enable\" or \"disable\"");
                 return NULL;
             }
-            header.connect_method =
-              !buffer_eq_slen(&ds->value, CONST_STR_LEN("disable"))
-              && !buffer_eq_slen(&ds->value, CONST_STR_LEN("0"));
+            header.connect_method = val;
             continue;
         }
         if (da->type != TYPE_ARRAY || !array_is_kvstring(&da->value)) {

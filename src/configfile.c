@@ -476,17 +476,12 @@ static int config_http_parseopts (server *srv, const array *a) {
     for (size_t i = 0; i < a->used; ++i) {
         const data_string * const ds = (const data_string *)a->data[i];
         const buffer *k = &ds->key;
-        const buffer *v = &ds->value;
         unsigned short int opt;
-        int val = 0;
-        if (buffer_eq_slen(v, CONST_STR_LEN("enable")))
-            val = 1;
-        else if (buffer_eq_slen(v, CONST_STR_LEN("disable")))
-            val = 0;
-        else {
+        int val = config_plugin_value_tobool((data_unset *)ds, 2);
+        if (2 == val) {
             log_error(srv->errh, __FILE__, __LINE__,
               "unrecognized value for server.http-parseopts: "
-              "%s => %s (expect \"[enable|disable]\")", k->ptr, v->ptr);
+              "%s => %s (expect \"[enable|disable]\")", k->ptr, ds->value.ptr);
             rc = 0;
         }
         if (buffer_eq_slen(k, CONST_STR_LEN("url-normalize")))

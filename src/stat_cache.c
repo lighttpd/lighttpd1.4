@@ -910,7 +910,8 @@ int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *err
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("fam")))
         sc.stat_cache_engine = STAT_CACHE_ENGINE_FAM;
 #endif
-    else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("disable")))
+    else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("disable"))
+             || buffer_eq_slen(stat_cache_string, CONST_STR_LEN("none")))
         sc.stat_cache_engine = STAT_CACHE_ENGINE_NONE;
     else {
         log_error(errh, __FILE__, __LINE__,

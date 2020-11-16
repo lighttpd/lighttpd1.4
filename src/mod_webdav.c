@@ -503,22 +503,19 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
                         data_string *ds = (data_string *)cpv->v.a->data[j];
                         if (buffer_is_equal_string(&ds->key,
                               CONST_STR_LEN("deprecated-unsafe-partial-put"))
-                            && buffer_eq_slen(&ds->value,
-                                              CONST_STR_LEN("enable"))) {
+                            && config_plugin_value_tobool((data_unset *)ds,0)) {
                             opts |= MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT;
                             continue;
                         }
                         if (buffer_is_equal_string(&ds->key,
                               CONST_STR_LEN("propfind-depth-infinity"))
-                            && buffer_eq_slen(&ds->value,
-                                              CONST_STR_LEN("enable"))) {
+                            && config_plugin_value_tobool((data_unset *)ds,0)) {
                             opts |= MOD_WEBDAV_PROPFIND_DEPTH_INFINITY;
                             continue;
                         }
                         if (buffer_is_equal_string(&ds->key,
                               CONST_STR_LEN("unsafe-propfind-follow-symlink"))
-                            && buffer_eq_slen(&ds->value,
-                                              CONST_STR_LEN("enable"))) {
+                            && config_plugin_value_tobool((data_unset *)ds,0)) {
                             opts |= MOD_WEBDAV_UNSAFE_PROPFIND_FOLLOW_SYMLINK;
                             continue;
                         }
