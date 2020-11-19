@@ -17,7 +17,9 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
+#endif
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -806,11 +808,9 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 			/*
 			 * OpenBSD and Solaris send a EINTR on SIGCHILD even if we ignore it
 			 */
-			while (-1 == waitpid(pid, &status, 0)) {
-				if (errno != EINTR) {
-					log_perror(errh, __FILE__, __LINE__, "waitpid failed");
-					break;
-				}
+			if (fdevent_waitpid(pid, &status, 0) < 0) {
+				log_perror(errh, __FILE__, __LINE__, "waitpid failed");
+				break;
 			}
 			if (!WIFEXITED(status)) {
 				log_error(errh, __FILE__, __LINE__, "process exited abnormally: %s", cmd);

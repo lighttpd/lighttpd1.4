@@ -93,6 +93,7 @@ int fdevent_open_devnull(void);
 int fdevent_open_dirname(char *path, int symlinks);
 int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr);
 pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd);
+int fdevent_waitpid(pid_t pid, int *status, int nb);
 int fdevent_open_logger(const char *logger);
 int fdevent_cycle_logger(const char *logger, int *curfd);
 int fdevent_reaped_logger_pipe(pid_t pid);

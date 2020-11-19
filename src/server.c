@@ -31,7 +31,6 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC)+1, 0 };
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
 
 #include <string.h>
 #include <errno.h>
@@ -50,10 +49,6 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC)+1, 0 };
 
 #ifdef HAVE_VALGRIND_VALGRIND_H
 # include <valgrind/valgrind.h>
-#endif
-
-#ifdef HAVE_SYS_WAIT_H
-# include <sys/wait.h>
 #endif
 
 #ifdef HAVE_PWD_H
@@ -779,7 +774,7 @@ static void server_graceful_signal_prev_generation (void)
     pid_t pid = (pid_t)strtol(prev_gen, NULL, 10);
     unsetenv("LIGHTTPD_PREV_GEN");
     if (pid <= 0) return; /*(should not happen)*/
-    if (pid == waitpid(pid, NULL, WNOHANG)) return; /*(pid exited; unexpected)*/
+    if (pid == fdevent_waitpid(pid,NULL,1)) return; /*(pid exited; unexpected)*/
     kill(pid, SIGINT); /* signal previous generation for graceful shutdown */
 }
 
@@ -874,7 +869,7 @@ static int server_graceful_state_bg (server *srv) {
             buffer_append_int(tb, pid);
             setenv("LIGHTTPD_PREV_GEN", tb->ptr, 1);
         }
-        /*while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) ;*//* detach? */
+        /*fdevent_waitpid(pid, NULL, 0);*//* detach? */
         execv(argv[0], argv);
         _exit(1);
     }
@@ -1576,7 +1571,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			} else {
 				int status;
 
-				if (-1 != (pid = wait(&status))) {
+				if (-1 != (pid = fdevent_waitpid(-1, &status, 0))) {
 					log_epoch_secs = time(NULL);
 					if (plugins_call_handle_waitpid(srv, pid, status) != HANDLER_GO_ON) {
 						if (!timer) alarm((timer = 5));
@@ -1845,7 +1840,7 @@ static void server_handle_sigchld (server * const srv) {
 			pid_t pid;
 			do {
 				int status;
-				pid = waitpid(-1, &status, WNOHANG);
+				pid = fdevent_waitpid(-1, &status, 1);
 				if (pid > 0) {
 					if (plugins_call_handle_waitpid(srv, pid, status) != HANDLER_GO_ON) {
 						continue;
@@ -1998,7 +1993,7 @@ int main (int argc, char **argv) {
         if (rc < 0 || !graceful_restart) break;
 
         /* wait for all children to exit before graceful restart */
-        while (waitpid(-1, NULL, 0) > 0) ;
+        while (fdevent_waitpid(-1, NULL, 0) > 0) ;
     } while (graceful_restart);
 
     return rc;

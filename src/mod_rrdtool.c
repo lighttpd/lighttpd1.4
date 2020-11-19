@@ -7,7 +7,6 @@
 #include "plugin.h"
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
 
 #include <fcntl.h>
 #include <stdlib.h>
@@ -72,7 +71,7 @@ FREE_FUNC(mod_rrd_free) {
     if (p->write_fd >= 0) close(p->write_fd);
     if (p->rrdtool_pid > 0 && p->srv_pid == p->srv->pid) {
         /* collect status (blocking) */
-        while (-1 == waitpid(p->rrdtool_pid, NULL, 0) && errno == EINTR) ;
+        fdevent_waitpid(p->rrdtool_pid, NULL, 0);
     }
 }
 

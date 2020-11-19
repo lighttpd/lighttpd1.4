@@ -15,7 +15,9 @@
 #include "sys-crypto.h"
 
 #include <sys/stat.h>
+#ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
+#endif
 
 #include <stdlib.h>
 #include <fcntl.h>
@@ -2087,7 +2089,6 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 		}
 		else {
 			ssize_t rd;
-			pid_t wpid;
 			int wstatus = 0;
 			buffer *out = buffer_init();
 			close(fds[1]);
@@ -2102,8 +2103,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 			}
 			close(fds[0]);
 			fds[0] = -1;
-			while (-1 == (wpid = waitpid(pid, &wstatus, 0)) && errno == EINTR) ;
-			if (wpid != pid) {
+			if (pid != fdevent_waitpid(pid, &wstatus, 0)) {
 				log_perror(srv->errh, __FILE__, __LINE__, "waitpid \"%s\"",cmd);
 				ret = -1;
 			}

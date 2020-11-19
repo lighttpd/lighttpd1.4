@@ -6,7 +6,6 @@
 #include "log.h"
 
 #include <sys/types.h>
-#include <sys/wait.h>
 #include "sys-socket.h"
 
 #include <unistd.h>
@@ -797,6 +796,18 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
     return (pid_t)-1;
 
  #endif
+}
+
+
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
+
+int fdevent_waitpid(pid_t pid, int * const status, int nb) {
+    const int flags = nb ? WNOHANG : 0;
+    pid_t rv;
+    do { rv = waitpid(pid, status, flags); } while (-1 == rv && errno == EINTR);
+    return rv;
 }
 
 

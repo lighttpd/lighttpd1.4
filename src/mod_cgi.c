@@ -14,7 +14,9 @@
 #include <sys/types.h>
 #include "sys-mmap.h"
 #include "sys-socket.h"
-# include <sys/wait.h>
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
 
 #include <unistd.h>
 #include <errno.h>

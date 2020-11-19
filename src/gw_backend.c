@@ -343,9 +343,7 @@ static int gw_proc_waitpid(gw_host *host, gw_proc *proc, log_error_st *errh) {
     if (!proc->is_local) return 0;
     if (proc->pid <= 0) return 0;
 
-    do {
-        rc = waitpid(proc->pid, &status, WNOHANG);
-    } while (-1 == rc && errno == EINTR);
+    rc = fdevent_waitpid(proc->pid, &status, 1);
     if (0 == rc) return 0; /* child still running */
 
     /* child terminated */
