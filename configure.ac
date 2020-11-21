@@ -1479,6 +1479,7 @@ AC_CHECK_FUNCS([\
   sigaction \
   signal \
   srandom \
+  timegm \
   writev \
 ])
 AC_CHECK_HEADERS([sys/random.h], [AC_CHECK_FUNCS([getentropy])])

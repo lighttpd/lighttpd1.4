@@ -84,6 +84,7 @@ common_src=base64.c buffer.c burl.c log.c \
 	configfile-glue.c \
 	http-header-glue.c \
 	http_auth.c \
+	http_date.c \
 	http_vhostdb.c \
 	rand.c \
 	request.c \
@@ -457,7 +458,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	response.h request.h reqpool.h chunk.h h2.h \
 	first.h http_chunk.h \
 	algo_md.h algo_md5.h algo_sha1.h algo_splaytree.h algo_xxhash.h \
-	http_auth.h http_header.h http_vhostdb.h stream.h \
+	http_auth.h http_date.h http_header.h http_vhostdb.h stream.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h plugin_config.h \
 	etag.h array.h vector.h \

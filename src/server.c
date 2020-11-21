@@ -1944,6 +1944,7 @@ int main (int argc, char **argv) {
 
     /* for nice %b handling in strftime() */
     setlocale(LC_TIME, "C");
+    tzset();
 
     do {
         server * const srv = server_init();

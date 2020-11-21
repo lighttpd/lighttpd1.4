@@ -448,6 +448,7 @@ if 1:
 		'strftime',
 		'strstr',
 		'strtol',
+		'timegm',
 		'writev',
 	])
 	autoconf.haveFunc('getentropy', 'sys/random.h')

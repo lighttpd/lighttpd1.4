@@ -143,6 +143,7 @@ conf_data.set('HAVE_SIGTIMEDWAIT', compiler.has_function('sigtimedwait', args: d
 conf_data.set('HAVE_SRANDOM', compiler.has_function('srandom', args: defs))
 conf_data.set('HAVE_STRPTIME', compiler.has_function('strptime', args: defs))
 conf_data.set('HAVE_SYSLOG', compiler.has_function('syslog', args: defs))
+conf_data.set('HAVE_TIMEGM', compiler.has_function('timegm', args: defs))
 conf_data.set('HAVE_WRITEV', compiler.has_function('writev', args: defs))
 conf_data.set('HAVE_INET_ATON', compiler.has_function('inet_aton', args: defs))
 conf_data.set('HAVE_ISSETUGID', compiler.has_function('issetugid', args: defs))
@@ -713,6 +714,7 @@ common_src = [
 	'gw_backend.c',
 	'http_auth.c',
 	'http_chunk.c',
+	'http_date.c',
 	'http_header.c',
 	'http_kv.c',
 	'http_vhostdb.c',

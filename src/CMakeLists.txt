@@ -188,6 +188,7 @@ check_function_exists(sigtimedwait HAVE_SIGTIMEDWAIT)
 check_function_exists(srandom HAVE_SRANDOM)
 check_function_exists(strptime HAVE_STRPTIME)
 check_function_exists(syslog HAVE_SYSLOG)
+check_function_exists(timegm HAVE_TIMEGM)
 check_function_exists(writev HAVE_WRITEV)
 check_function_exists(inet_aton HAVE_INET_ATON)
 check_function_exists(issetugid HAVE_ISSETUGID)
@@ -745,6 +746,7 @@ set(COMMON_SRC
 	configfile-glue.c
 	http-header-glue.c
 	http_auth.c
+	http_date.c
 	http_vhostdb.c
 	request.c
 	sock_addr.c
