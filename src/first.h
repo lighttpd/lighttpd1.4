@@ -60,6 +60,10 @@
 #define __has_attribute(x) 0
 #endif
 
+#ifndef __has_builtin         /* clang */
+#define __has_builtin(x) 0
+#endif
+
 #ifdef __GNUC__
 #ifndef __GNUC_PREREQ
 #  ifdef __GNUC_PREREQ__
@@ -73,6 +77,13 @@
 #endif
 #else
 #define __GNUC_PREREQ(maj,min) 0
+#endif
+
+#ifndef __builtin_expect
+#if !__has_builtin(__builtin_expect) \
+ && !__GNUC_PREREQ(2,96)
+#define __builtin_expect(x,y) (x)
+#endif
 #endif
 
 #ifndef __attribute_noinline__
