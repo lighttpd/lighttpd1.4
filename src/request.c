@@ -991,12 +991,9 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
     if (r->conf.http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE) {
         /*uint32_t len = (uint32_t)buffer_string_length(target);*/
         int qs = burl_normalize(target, r->tmp_buf, r->conf.http_parseopts);
-        if (-2 == qs) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "invalid character in URI -> 400 %s",
-              target->ptr);
-            return 400; /* Bad Request */
-        }
+        if (-2 == qs)
+            return http_request_header_line_invalid(r, 400,
+              "invalid character in URI -> 400"); /* Bad Request */
         qstr = (-1 == qs) ? NULL : target->ptr+qs;
       #if 0  /* future: might enable here, or below for all requests */
         /* (Note: total header size not recalculated on HANDLER_COMEBACK
@@ -1049,11 +1046,9 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
 
     buffer_urldecode_path(&r->uri.path);
     buffer_path_simplify(&r->uri.path, &r->uri.path);
-    if (r->uri.path.ptr[0] != '/') {
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "uri-path does not begin with '/': %s -> 400", r->uri.path.ptr);
-        return 400; /* Bad Request */
-    }
+    if (r->uri.path.ptr[0] != '/')
+        return http_request_header_line_invalid(r, 400,
+          "uri-path does not begin with '/' -> 400"); /* Bad Request */
 
     return 0;
 }
@@ -1355,14 +1350,18 @@ http_request_headers_process_h2 (request_st * const restrict r, const int scheme
 
     http_request_headers_fin(r);
 
-  #if 0 /* not supported; headers not collected into a single buf for HTTP/2 */
-    if (0 != r->http_status) {
+    /* limited; headers not collected into a single buf for HTTP/2 */
+    if (__builtin_expect( (0 != r->http_status), 0)) {
         if (r->conf.log_request_header_on_error) {
             log_error(r->conf.errh, __FILE__, __LINE__,
-              "request-header:\n%.*s", (int)r->rqst_header_len, hdrs);
+              "request-header:\n:authority: %s\n:method: %s\n:path: %s",
+              r->http_host ? r->http_host->ptr : "",
+              (HTTP_METHOD_UNSET != r->http_method)
+                ? get_http_method_name(r->http_method)
+                : "",
+              !buffer_string_is_empty(&r->target) ? r->target.ptr : "");
         }
     }
-  #endif
 
     /* ignore Upgrade if using HTTP/2 */
     if (light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE))
