@@ -278,17 +278,13 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 		if (ret == 0) {
 			const buffer *vb = http_header_response_get(r, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"));
 			if (NULL == vb) { /* no Last-Modified specified */
-				char timebuf[sizeof("Sat, 23 Jul 2005 21:20:01 GMT")];
 				if (0 == mtime) mtime = time(NULL); /* default last-modified to now */
-				strftime(timebuf, sizeof(timebuf), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&mtime));
-				http_header_response_set(r, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), timebuf, sizeof(timebuf) - 1);
-				vb = http_header_response_get(r, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"));
-				force_assert(NULL != vb);
+				vb = http_response_set_last_modified(r, mtime);
 			}
 
 			r->resp_body_finished = 1;
 
-			if (HANDLER_FINISHED == http_response_handle_cachable(r, vb)) {
+			if (HANDLER_FINISHED == http_response_handle_cachable(r, vb, mtime)) {
 				/* ok, the client already has our content,
 				 * no need to send it again */
 

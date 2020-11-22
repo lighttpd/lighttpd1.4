@@ -234,8 +234,10 @@ http_date_parse_IMF_fixdate (const char * const s, struct tm * const tm)
 
 
 static const char *
-http_date_str_to_tm (const char * const s, struct tm * const tm)
+http_date_str_to_tm (const char * const s, const uint32_t len,
+                     struct tm * const tm)
 {
+
     /* attempt strptime() using multiple date formats
      * support RFC 822,1123,7231; RFC 850; and ANSI C asctime() date strings,
      * as required by [RFC7231] https://tools.ietf.org/html/rfc7231#section-7.1
@@ -250,8 +252,9 @@ http_date_str_to_tm (const char * const s, struct tm * const tm)
      * - HTTP expected date formats are known, so not needed as input param
      * - HTTP expected date string content is in C locale and is case-sensitive
      * - returns (const char *) instead of strptime() (char *) return type
-     * - returns NULL if error (if date string could not be parsed) */
-    const size_t len = strlen(s); /*(require '\0'-terminated string)*/
+     * - returns NULL if error (if date string could not be parsed)
+     * Note: internal implementation requires '\0'-terminated string, or at
+     * least one valid char after partial match of RFC 850 or asctime formats */
     if (len == 29)
         return http_date_parse_IMF_fixdate(s, tm);
     else if (len > 29)
@@ -261,13 +264,14 @@ http_date_str_to_tm (const char * const s, struct tm * const tm)
 }
 
 
-size_t
-http_date_time_to_str (char * const s, const size_t max, const time_t t)
+uint32_t
+http_date_time_to_str (char * const s, const size_t sz, const time_t t)
 {
     /*('max' is expected to be >= 30 (IMF-fixdate is 29 chars + '\0'))*/
     struct tm tm;
+    const char fmt[] = "%a, %d %b %Y %T GMT";       /*IMF-fixdate fmt*/
     return (__builtin_expect( (NULL != gmtime_r(&t, &tm)), 1))
-      ? strftime(s, max, "%a, %d %b %Y %T GMT", &tm) /* IMF-fixdate format */
+      ? (uint32_t)strftime(s, sz, fmt, &tm)
       : 0;
 }
 
@@ -280,37 +284,28 @@ http_date_time_to_str (char * const s, const size_t max, const time_t t)
 #else
 /* If OS missing timegm(), then for best portability it is recommended to set
  *   $ export LC_TIME=C TZ=UTC0
+ * or else time comparisons may be off by timezone offset (!!)
  *
  * tm->tm_isdst = 0 for mktime() to indicate daylight saving time not in effect
- * which is fine since two strings should be GMT dates, and both are converted
- * with mktime() and then the results compared */
+ * which is fine since HTTP date strings should be GMT dates
+ *
+ * If not TZ=UTC0, and timegm() is not present, then can we expect gmtime() to
+ * be available so that we can mktime(gmtime_r(lmtime, &gtm)) ?  That would be
+ * an expensive way to obtain TZ offset.  XXX: maybe calculate TZ offset once
+ * at startup?  Are there any (modern) systems missing timegm() or _mkgmtime()?
+ */
 #define http_date_timegm(tm) ((tm)->tm_isdst = 0, mktime(tm))
 #endif
 #endif
 
 
 int
-http_date_if_modified_since (const char * const ifmod,
-                             const char * const lmod, time_t lmtime)
+http_date_if_modified_since (const char * const ifmod, const uint32_t ifmodlen,
+                             const time_t lmtime)
 {
-    /* if caller provides non-zero lmtime, it must match Last-Modified lmod,
-     * and will typically be same arg given to http_response_set_last_modified()
-     * (small opt to elide one strptime(),timegm() call)
-     * (In absense of timegm(), substitute mktime(), which works reasonably well
-     *  since mktime() strings are used for comparison of If-Modified-Since)
-     * (use mktime() to convert both strings for compare) */
     struct tm ifmodtm;
-    if (NULL == http_date_str_to_tm(ifmod, &ifmodtm))
+    if (NULL == http_date_str_to_tm(ifmod, ifmodlen, &ifmodtm))
         return 1; /* date parse error */
-  #if defined(HAVE_TIMEGM) || defined(_WIN32)
-    if (0 == lmtime)
-  #endif
-    {
-        struct tm lmodtm;
-        if (NULL == http_date_str_to_tm(lmod, &lmodtm))
-            return 1; /* date parse error */
-        lmtime = http_date_timegm(&lmodtm);
-    }
     const time_t ifmtime = http_date_timegm(&ifmodtm);
     return (lmtime > ifmtime);
     /* returns 0 if not modified since,

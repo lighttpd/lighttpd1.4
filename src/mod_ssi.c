@@ -14,6 +14,7 @@
 #include "mod_ssi.h"
 
 #include "sys-socket.h"
+#include "sys-time.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -26,7 +27,6 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <time.h>
 #include <unistd.h>
 
 #ifdef HAVE_PWD_H
@@ -385,34 +385,22 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 			chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
 			break;
 		}
-		case SSI_ECHO_LAST_MODIFIED: {
-			time_t t = st->st_mtime;
-
-			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
-				chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
-			} else {
-				chunkqueue_append_mem(cq, buf, strlen(buf));
-			}
-			break;
-		}
-		case SSI_ECHO_DATE_LOCAL: {
-			time_t t = time(NULL);
-
-			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
-				chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
-			} else {
-				chunkqueue_append_mem(cq, buf, strlen(buf));
-			}
-			break;
-		}
+		case SSI_ECHO_LAST_MODIFIED:
+		case SSI_ECHO_DATE_LOCAL:
 		case SSI_ECHO_DATE_GMT: {
-			time_t t = time(NULL);
+			struct tm tm;
+			time_t t = (var == SSI_ECHO_LAST_MODIFIED)
+			  ? st->st_mtime
+			  : time(NULL);
+			uint32_t len = strftime(buf, sizeof(buf), p->timefmt->ptr,
+			                        (var != SSI_ECHO_DATE_GMT)
+			                        ? localtime_r(&t, &tm)
+			                        : gmtime_r(&t, &tm));
 
-			if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, gmtime(&t))) {
+			if (len)
+				chunkqueue_append_mem(cq, buf, len);
+			else
 				chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
-			} else {
-				chunkqueue_append_mem(cq, buf, strlen(buf));
-			}
 			break;
 		}
 		case SSI_ECHO_DOCUMENT_NAME: {
@@ -611,13 +599,15 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				}
 				chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
 				break;
-			case SSI_FLASTMOD:
-				if (0 == strftime(buf, sizeof(buf), p->timefmt->ptr, localtime(&t))) {
+			case SSI_FLASTMOD: {
+				struct tm tm;
+				uint32_t len = (uint32_t)strftime(buf, sizeof(buf), p->timefmt->ptr, localtime_r(&t, &tm));
+				if (len)
+					chunkqueue_append_mem(cq, buf, len);
+				else
 					chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
-				} else {
-					chunkqueue_append_mem(cq, buf, strlen(buf));
-				}
 				break;
+			}
 			case SSI_INCLUDE:
 				/* Keep the newest mtime of included files */
 				if (stb.st_mtime > include_file_last_mtime)
@@ -1214,7 +1204,6 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 
 	if (p->conf.conditional_requests) {
 		/* Generate "ETag" & "Last-Modified" headers */
-		const buffer *mtime = NULL;
 
 		/* use most recently modified include file for ETag and Last-Modified */
 		if (st.st_mtime < include_file_last_mtime)
@@ -1224,10 +1213,8 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 		etag_mutate(&r->physical.etag, &r->physical.etag);
 		http_header_response_set(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(&r->physical.etag));
 
-		mtime = strftime_cache_get(st.st_mtime);
-		http_header_response_set(r, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"), CONST_BUF_LEN(mtime));
-
-		if (HANDLER_FINISHED == http_response_handle_cachable(r, mtime)) {
+		const buffer * const mtime = http_response_set_last_modified(r, st.st_mtime);
+		if (HANDLER_FINISHED == http_response_handle_cachable(r, mtime, st.st_mtime)) {
 			/* ok, the client already has our content,
 			 * no need to send it again */
 

@@ -8,8 +8,8 @@
 #include "log.h"
 
 #include <sys/types.h>
+#include "sys-time.h"
 #include <errno.h>
-#include <time.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>      /* vsnprintf() */
@@ -60,22 +60,27 @@ ssize_t write_all(int fd, const void * const buf, size_t count) {
 
 static int log_buffer_prepare(const log_error_st *errh, const char *filename, unsigned int line, buffer *b) {
 	static time_t tlast;
-	static char tstr[20]; /* 20-chars needed for "%Y-%m-%d %H:%M:%S" */
-	static size_t tlen;
+	static uint32_t tlen;
+	static char tstr[24]; /* 20 "%Y-%m-%d %H:%M:%S" incl '\0' +3 ": (" */
 	switch(errh->errorlog_mode) {
 	case ERRORLOG_PIPE:
 	case ERRORLOG_FILE:
 	case ERRORLOG_FD:
 		if (-1 == errh->errorlog_fd) return -1;
 		/* cache the generated timestamp */
-		if (tlast != log_epoch_secs) {
+		if (__builtin_expect( (tlast != log_epoch_secs), 0)) {
+			struct tm tm;
 			tlast = log_epoch_secs;
-			tlen = strftime(tstr, sizeof(tstr),
-			                "%Y-%m-%d %H:%M:%S", localtime(&tlast));
+			tlen = (uint32_t)
+			  strftime(tstr, sizeof(tstr), "%Y-%m-%d %H:%M:%S",
+			           localtime_r(&tlast, &tm));
+			tstr[  tlen] = ':';
+			tstr[++tlen] = ' ';
+			tstr[++tlen] = '(';
+			/*tstr[++tlen] = '\0';*//*(not necessary for our use)*/
 		}
 
 		buffer_copy_string_len(b, tstr, tlen);
-		buffer_append_string_len(b, CONST_STR_LEN(": ("));
 		break;
 	case ERRORLOG_SYSLOG:
 		/* syslog is generating its own timestamps */

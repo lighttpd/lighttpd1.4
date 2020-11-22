@@ -261,7 +261,7 @@ void buffer_append_strftime(buffer * const restrict b, const char * const restri
 	size_t rv;
 	char* buf;
 	force_assert(NULL != format);
-	force_assert(NULL != tm);
+	if (NULL == tm) return;
 
 	buf = buffer_string_prepare_append(b, 255);
 	rv = strftime(buf, buffer_string_space(b), format, tm);

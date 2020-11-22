@@ -6,14 +6,12 @@
  */
 #ifndef INCLUDED_SYS_TIME_H
 #define INCLUDED_SYS_TIME_H
-/* _XOPEN_SOURCE for strptime() */
-#ifndef _XOPEN_SOURCE
-#define _XOPEN_SOURCE 700
-#endif
 #include "first.h"
 
+#ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>/* gettimeofday() */
-#include <time.h>    /* time() localtime_r() gmtime_r() strftime() strptime() */
+#endif
+#include <time.h>    /* time() localtime_r() gmtime_r() strftime() */
 
 /*(provide rudimentary localtime_r() and gmtime_r() for platforms lacking)
  *(Note that 'result' preprocessor arg is repeated, so callers should avoid

@@ -16,6 +16,7 @@
 #include "buffer.h"
 #include "chunk.h"
 #include "fdevent.h"    /* FDEVENT_STREAM_REQUEST_BUFMIN */
+#include "http_date.h"
 #include "http_header.h"
 #include "log.h"
 #include "request.h"
@@ -1912,6 +1913,7 @@ h2_send_headers (request_st * const r, connection * const con)
     if (!light_btst(r->resp_htags, HTTP_HEADER_DATE)) {
         /* HTTP/1.1 and later requires a Date: header */
         /* "date: " 6-chars + 30-chars for "%a, %d %b %Y %H:%M:%S GMT" + '\0' */
+        static time_t tlast = 0;
         static char tstr[36] = "date: ";
 
         memset(&lsx, 0, sizeof(lsxpack_header_t));
@@ -1923,13 +1925,9 @@ h2_send_headers (request_st * const r, connection * const con)
         lsx.hpack_index = LSHPACK_HDR_DATE;
 
         /* cache the generated timestamp */
-        static time_t tlast;
         const time_t cur_ts = log_epoch_secs;
-        if (tlast != cur_ts) {
-            tlast = cur_ts;
-            strftime(tstr+6, sizeof(tstr)-6,
-                     "%a, %d %b %Y %H:%M:%S GMT", gmtime(&tlast));
-        }
+        if (__builtin_expect ( (tlast != cur_ts), 0))
+            http_date_time_to_str(tstr+6, sizeof(tstr)-6, (tlast = cur_ts));
 
         alen += 35+2;
 

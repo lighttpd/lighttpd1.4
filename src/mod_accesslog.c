@@ -1,5 +1,7 @@
 #include "first.h"
 
+#include "sys-time.h"
+
 #include "base.h"
 #include "fdevent.h"
 #include "log.h"
@@ -16,7 +18,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <time.h>
 
 #ifdef HAVE_SYSLOG_H
 # include <syslog.h>
@@ -871,15 +872,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 					/* cache the generated timestamp (only if ! FORMAT_FLAG_TIME_BEGIN) */
 					struct tm *tmptr;
 					time_t t;
-				      #if defined(HAVE_STRUCT_TM_GMTOFF)
-				      # ifdef HAVE_LOCALTIME_R
 					struct tm tm;
-				      # endif /* HAVE_LOCALTIME_R */
-				      #else /* HAVE_STRUCT_TM_GMTOFF */
-				      # ifdef HAVE_GMTIME_R
-					struct tm tm;
-				      # endif /* HAVE_GMTIME_R */
-				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 
 					if (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) {
 						const time_t cur_ts = log_epoch_secs;
@@ -894,17 +887,9 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 					}
 
 				      #if defined(HAVE_STRUCT_TM_GMTOFF)
-				      # ifdef HAVE_LOCALTIME_R
 					tmptr = localtime_r(&t, &tm);
-				      # else /* HAVE_LOCALTIME_R */
-					tmptr = localtime(&t);
-				      # endif /* HAVE_LOCALTIME_R */
 				      #else /* HAVE_STRUCT_TM_GMTOFF */
-				      # ifdef HAVE_GMTIME_R
 					tmptr = gmtime_r(&t, &tm);
-				      # else /* HAVE_GMTIME_R */
-					tmptr = gmtime(&t);
-				      # endif /* HAVE_GMTIME_R */
 				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 
 					buffer_clear(ts_accesslog_str);

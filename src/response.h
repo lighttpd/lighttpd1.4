@@ -53,7 +53,8 @@ handler_t http_response_reqbody_read_error(request_st *r, int http_status);
 
 int http_response_buffer_append_authority(request_st *r, buffer *o);
 int http_response_redirect_to_directory(request_st *r, int status);
-int http_response_handle_cachable(request_st *r, const buffer *mtime);
+const buffer * http_response_set_last_modified(request_st *r, time_t lmtime);
+int http_response_handle_cachable(request_st *r, const buffer *lmod, time_t lmtime);
 void http_response_body_clear(request_st *r, int preserve_length);
 void http_response_reset(request_st *r);
 void http_response_send_file (request_st *r, buffer *path);
@@ -70,5 +71,4 @@ handler_t http_response_handler(request_st *r);
 __attribute_cold__
 void strftime_cache_reset(void);
 
-const buffer * strftime_cache_get(time_t last_mod);
 #endif

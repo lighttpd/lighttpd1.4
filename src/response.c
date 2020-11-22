@@ -10,6 +10,7 @@
 #include "stat_cache.h"
 #include "chunk.h"
 #include "http_chunk.h"
+#include "http_date.h"
 
 #include "plugin.h"
 
@@ -129,21 +130,17 @@ http_response_write_header (request_st * const r)
 	}
 
 	if (!light_btst(r->resp_htags, HTTP_HEADER_DATE)) {
-		static time_t tlast;
-		static char tstr[32]; /* 30-chars for "%a, %d %b %Y %H:%M:%S GMT" */
-		static size_t tlen;
+		/* HTTP/1.1 and later requires a Date: header */
+		/* "\r\nDate: " 8-chars + 30-chars "%a, %d %b %Y %H:%M:%S GMT" + '\0' */
+		static time_t tlast = 0;
+		static char tstr[40] = "\r\nDate: ";
 
 		/* cache the generated timestamp */
 		const time_t cur_ts = log_epoch_secs;
-		if (tlast != cur_ts) {
-			tlast = cur_ts;
-			tlen = strftime(tstr, sizeof(tstr),
-			                "%a, %d %b %Y %H:%M:%S GMT", gmtime(&tlast));
-		}
+		if (__builtin_expect ( (tlast != cur_ts), 0))
+			http_date_time_to_str(tstr+8, sizeof(tstr)-8, (tlast = cur_ts));
 
-		/* HTTP/1.1 and later requires a Date: header */
-		buffer_append_string_len(b, CONST_STR_LEN("\r\nDate: "));
-		buffer_append_string_len(b, tstr, tlen);
+		buffer_append_string_len(b, tstr, 37);
 	}
 
 	if (!light_btst(r->resp_htags, HTTP_HEADER_SERVER)) {

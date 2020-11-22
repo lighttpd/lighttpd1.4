@@ -174,6 +174,7 @@
 #include "sys-mmap.h"
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "sys-time.h"
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -229,6 +230,7 @@
 #include "buffer.h"
 #include "chunk.h"
 #include "fdevent.h"
+#include "http_date.h"
 #include "http_header.h"
 #include "etag.h"
 #include "log.h"
@@ -2221,11 +2223,8 @@ webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
     if (NULL != ius) {
         if (NULL == st)
             return 412; /* Precondition Failed */
-        struct tm itm, *ftm = gmtime(&st->st_mtime);
-        if (NULL == strptime(ius->ptr, "%a, %d %b %Y %H:%M:%S GMT", &itm)
-            || mktime(ftm) > mktime(&itm)) { /* timegm() not standard */
+        if (http_date_if_modified_since(CONST_BUF_LEN(ius), st->st_mtime))
             return 412; /* Precondition Failed */
-        }
     }
 
     return 0;
@@ -3081,13 +3080,10 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
          *  i.e. wherever the status is 201 Created)
          */
         struct tm tm;
-        char ctime_buf[sizeof("2005-08-18T07:27:16Z")];
         if (__builtin_expect( (NULL != gmtime_r(&pb->st.st_ctime, &tm)), 1)) {
             buffer_append_string_len(b, CONST_STR_LEN(
               "<D:creationdate ns0:dt=\"dateTime.tz\">"));
-            buffer_append_string_len(b, ctime_buf,
-                                     strftime(ctime_buf, sizeof(ctime_buf),
-                                              "%Y-%m-%dT%TZ", &tm));
+            buffer_append_strftime(b, "%Y-%m-%dT%TZ", &tm));
             buffer_append_string_len(b, CONST_STR_LEN(
               "</D:creationdate>"));
         }
@@ -3179,17 +3175,18 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
             return -1; /* invalid; report 'not found' */
         if (pnum != WEBDAV_PROP_ALL) return 0;/* found *//*(else fall through)*/
         __attribute_fallthrough__
-      case WEBDAV_PROP_GETLASTMODIFIED:
-        {
+      case WEBDAV_PROP_GETLASTMODIFIED: {
+        struct tm tm;
+        if (__builtin_expect( (NULL != gmtime_r(&pb->st.st_mtime, &tm)), 1)) {
             buffer_append_string_len(b, CONST_STR_LEN(
               "<D:getlastmodified ns0:dt=\"dateTime.rfc1123\">"));
-            buffer_append_strftime(b, "%a, %d %b %Y %H:%M:%S GMT",
-                                   gmtime(&pb->st.st_mtime));
+            buffer_append_strftime(b, "%a, %d %b %Y %H:%M:%S GMT", &tm);
             buffer_append_string_len(b, CONST_STR_LEN(
               "</D:getlastmodified>"));
         }
         if (pnum != WEBDAV_PROP_ALL) return 0;/* found *//*(else fall through)*/
         __attribute_fallthrough__
+      }
       #if 0
       #ifdef USE_LOCKS
       case WEBDAV_PROP_LOCKDISCOVERY:

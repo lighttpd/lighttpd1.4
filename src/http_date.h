@@ -16,9 +16,9 @@ extern "C" {
 
 #define HTTP_DATE_SZ 30  /* (IMF-fixdate is 29 chars + '\0') */
 
-size_t http_date_time_to_str (char *s, size_t max, time_t t);
+uint32_t http_date_time_to_str (char *s, size_t sz, time_t t);
 
-int http_date_if_modified_since (const char *ifmod, const char *lmod, time_t lmtime);
+int http_date_if_modified_since (const char *ifmod, uint32_t ifmodlen, time_t lmtime);
 
 
 #ifdef __cplusplus

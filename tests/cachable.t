@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 25;
+use Test::More tests => 24;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -43,14 +43,6 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
 ok($tf->handle_http($t) == 0, 'Conditional GET - new If-Modified-Since');
-
-$t->{REQUEST}  = ( <<EOF
-GET / HTTP/1.0
-If-Modified-Since: $now; foo
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
-ok($tf->handle_http($t) == 0, 'Conditional GET - new If-Modified-Since, comment');
 
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0

@@ -9,9 +9,9 @@
 #include "plugin.h"
 #include "stat_cache.h"
 
+#include "sys-time.h"
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 /**
  * set HTTP headers Cache-Control and Expires
@@ -314,10 +314,11 @@ REQUEST_FUNC(mod_expire_handler) {
 			if (expires < cur_ts) expires = cur_ts;
 
 			buffer * const tb = r->tmp_buf;
+			struct tm tm;
 
 			/* HTTP/1.0 */
 			buffer_clear(tb);
-			buffer_append_strftime(tb, "%a, %d %b %Y %H:%M:%S GMT", gmtime(&(expires)));
+			buffer_append_strftime(tb, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&expires, &tm));
 			http_header_response_set(r, HTTP_HEADER_EXPIRES,
 			                         CONST_STR_LEN("Expires"),
 			                         CONST_BUF_LEN(tb));

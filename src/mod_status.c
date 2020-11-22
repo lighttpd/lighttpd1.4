@@ -9,11 +9,11 @@
 #include "plugin.h"
 
 #include <sys/types.h>
+#include "sys-time.h"
 
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <stdio.h>
 
 typedef struct {
@@ -474,8 +474,8 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 
 	ts = srv->startup_ts;
 
-	strftime(buf, sizeof(buf) - 1, "%Y-%m-%d %H:%M:%S", localtime(&ts));
-	buffer_append_string(b, buf);
+	struct tm tm;
+	buffer_append_strftime(b, "%Y-%m-%d %H:%M:%S", localtime_r(&ts, &tm));
 	buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
 
 
