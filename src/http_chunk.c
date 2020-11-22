@@ -350,7 +350,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 s = (unsigned char *)h->ptr;
             }
             for (unsigned char u; (u=(unsigned char)hex2int(*s))!=0xFF; ++s) {
-                if (te_chunked > (off_t)(1uLL<<(8*sizeof(off_t)-5))-1) {
+                if (te_chunked > (off_t)(1uLL<<(8*sizeof(off_t)-5))-1-2) {
                     log_error(r->conf.errh, __FILE__, __LINE__,
                       "chunked data size too large");
                     return -1;
@@ -419,11 +419,6 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
             mem += hsz;
             len -= hsz;
 
-            if (te_chunked > (off_t)(1uLL<<(8*sizeof(off_t)-5))-1-2) {
-                log_error(r->conf.errh, __FILE__, __LINE__,
-                  "chunked data size too large");
-                return -1;
-            }
             te_chunked += 2; /*(for trailing "\r\n" after chunked data)*/
         }
 

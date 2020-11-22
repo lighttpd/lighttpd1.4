@@ -1722,7 +1722,7 @@ connection_handle_read_post_chunked (request_st * const r, chunkqueue * const cq
                 off_t hsz = p + 1 - (c->mem->ptr+c->offset);
                 unsigned char *s = (unsigned char *)c->mem->ptr+c->offset;
                 for (unsigned char u;(u=(unsigned char)hex2int(*s))!=0xFF;++s) {
-                    if (te_chunked > (off_t)(1uLL<<(8*sizeof(off_t)-5))-1) {
+                    if (te_chunked > (off_t)(1uLL<<(8*sizeof(off_t)-5))-1-2) {
                         log_error(r->conf.errh, __FILE__, __LINE__,
                           "chunked data size too large -> 400");
                         /* 400 Bad Request */
