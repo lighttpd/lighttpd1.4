@@ -276,26 +276,24 @@ http_date_time_to_str (char * const s, const size_t sz, const time_t t)
 }
 
 
-#ifdef HAVE_TIMEGM
-#define http_date_timegm(tm) timegm(tm)
-#else
-#ifdef _WIN32
-#define http_date_timegm(tm) _mkgmtime(tm)
-#else
-/* If OS missing timegm(), then for best portability it is recommended to set
- *   $ export LC_TIME=C TZ=UTC0
- * or else time comparisons may be off by timezone offset (!!)
- *
- * tm->tm_isdst = 0 for mktime() to indicate daylight saving time not in effect
- * which is fine since HTTP date strings should be GMT dates
- *
- * If not TZ=UTC0, and timegm() is not present, then can we expect gmtime() to
- * be available so that we can mktime(gmtime_r(lmtime, &gtm)) ?  That would be
- * an expensive way to obtain TZ offset.  XXX: maybe calculate TZ offset once
- * at startup?  Are there any (modern) systems missing timegm() or _mkgmtime()?
- */
-#define http_date_timegm(tm) ((tm)->tm_isdst = 0, mktime(tm))
-#endif
+#if !defined(HAVE_TIMEGM) && !defined(_WIN32)
+time_t
+http_date_timegm (const struct tm * const tm)
+{
+    int y = tm->tm_year + 1900;
+    int m = tm->tm_mon + 1;
+    int d = tm->tm_mday;
+
+    /* days_from_civil() http://howardhinnant.github.io/date_algorithms.html */
+    y -= m <= 2;
+    int era = y / 400;
+    int yoe = y - era * 400;                                   // [0, 399]
+    int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;  // [0, 365]
+    int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;           // [0, 146096]
+    int days_since_1970 = era * 146097 + doe - 719468;
+
+    return 60*(60*(24L*days_since_1970+tm->tm_hour)+tm->tm_min)+tm->tm_sec;
+}
 #endif
 
 
