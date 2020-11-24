@@ -190,10 +190,8 @@ fdlog_pipe_open (const char * const fn)
     }
 
     int fds[2];
-    if (pipe(fds))
+    if (fdevent_pipe_cloexec(fds, 65536))
         return NULL;
-    fdevent_setfd_cloexec(fds[0]);
-    fdevent_setfd_cloexec(fds[1]);
 
     pid_t pid = fdlog_pipe_spawn(fn, fds[0]);
     if (pid > 0) {

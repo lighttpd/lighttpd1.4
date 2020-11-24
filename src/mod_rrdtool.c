@@ -86,18 +86,16 @@ static int mod_rrd_create_pipe(server *srv, plugin_data *p) {
 	 * If pipes were to be shared, then existing pipes would need to be
 	 * reused here, if they already exist (not -1), and after flushing
 	 * existing contents (read and discard from read-end of pipes). */
-	if (pipe(to_rrdtool_fds)) {
+	if (fdevent_pipe_cloexec(to_rrdtool_fds, 4096)) {
 		log_perror(srv->errh, __FILE__, __LINE__, "pipe()");
 		return 0;
 	}
-	if (pipe(from_rrdtool_fds)) {
+	if (fdevent_pipe_cloexec(from_rrdtool_fds, 4096)) {
 		log_perror(srv->errh, __FILE__, __LINE__, "pipe()");
 		close(to_rrdtool_fds[0]);
 		close(to_rrdtool_fds[1]);
 		return 0;
 	}
-	fdevent_setfd_cloexec(to_rrdtool_fds[1]);
-	fdevent_setfd_cloexec(from_rrdtool_fds[0]);
 	const char * const path_rrdtool_bin = p->path_rrdtool_bin
 	  ? p->path_rrdtool_bin->ptr
 	  : "/usr/bin/rrdtool";

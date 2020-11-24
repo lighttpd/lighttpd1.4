@@ -609,6 +609,35 @@ int fdevent_open_dirname(char *path, int symlinks) {
 }
 
 
+#ifdef _WIN32
+#include <stdio.h>
+#endif
+
+int fdevent_pipe_cloexec (int * const fds, const unsigned int bufsz_hint) {
+ #ifdef _WIN32
+    return _pipe(fds, bufsz_hint, _O_BINARY | _O_NOINHERIT);
+ #else
+  #ifdef HAVE_PIPE2
+    if (0 != pipe2(fds, O_CLOEXEC))
+  #endif
+    {
+        if (0 != pipe(fds)
+         #ifdef FD_CLOEXEC
+         || 0 != fcntl(fds[0], F_SETFD, FD_CLOEXEC)
+         || 0 != fcntl(fds[1], F_SETFD, FD_CLOEXEC)
+         #endif
+           )
+        return -1;
+    }
+  #ifdef F_SETPIPE_SZ
+    if (bufsz_hint > 65536)
+        fcntl(fds[1], F_SETPIPE_SZ, bufsz_hint);
+  #endif
+    return 0;
+ #endif
+}
+
+
 int fdevent_mkostemp(char *path, int flags) {
  #if defined(HAVE_MKOSTEMP)
     return mkostemp(path, O_CLOEXEC | flags);

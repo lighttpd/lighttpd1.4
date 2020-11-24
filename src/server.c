@@ -197,7 +197,7 @@ static int daemonize(void) {
 	signal(SIGTSTP, SIG_IGN);
 #endif
 
-	if (pipe(pipefd) < 0) exit(-1);
+	if (fdevent_pipe_cloexec(pipefd, 64) < 0) exit(-1);
 
 	if (0 > (pid = fork())) exit(-1);
 
@@ -231,7 +231,6 @@ static int daemonize(void) {
 
 	if (0 != chdir("/")) exit(0);
 
-	fdevent_setfd_cloexec(pipefd[1]);
 	return pipefd[1];
 }
 #endif

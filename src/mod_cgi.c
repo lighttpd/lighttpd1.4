@@ -27,19 +27,6 @@
 #include <fcntl.h>
 #include <signal.h>
 
-static int pipe_cloexec(int pipefd[2]) {
-  #ifdef HAVE_PIPE2
-    if (0 == pipe2(pipefd, O_CLOEXEC)) return 0;
-  #endif
-    return 0 == pipe(pipefd)
-       #ifdef FD_CLOEXEC
-        && 0 == fcntl(pipefd[0], F_SETFD, FD_CLOEXEC)
-        && 0 == fcntl(pipefd[1], F_SETFD, FD_CLOEXEC)
-       #endif
-      ?  0
-      : -1;
-}
-
 typedef struct {
 	uintptr_t *offsets;
 	size_t osize;
@@ -665,8 +652,6 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 	chunkqueue_remove_finished_chunks(cq); /* unnecessary? */
 
 	/* old comment: windows doesn't support select() on pipes - wouldn't be easy to fix for all platforms.
-	 * solution: if this is still a problem on windows, then substitute
-	 * socketpair() for pipe() and closesocket() for close() on windows.
 	 */
 
 	for (c = cq->first; c; c = cq->first) {
@@ -791,11 +776,16 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	}
   #endif
 
-	if (-1 == to_cgi_fds[0] && pipe_cloexec(to_cgi_fds)) {
+	unsigned int bufsz_hint = 16384;
+  #ifdef _WIN32
+	if (r->reqbody_length <= 1048576)
+		bufsz_hint = (unsigned int)r->reqbody_length;
+  #endif
+	if (-1 == to_cgi_fds[0] && fdevent_pipe_cloexec(to_cgi_fds, bufsz_hint)) {
 		log_perror(r->conf.errh, __FILE__, __LINE__, "pipe failed");
 		return -1;
 	}
-	if (pipe_cloexec(from_cgi_fds)) {
+	if (fdevent_pipe_cloexec(from_cgi_fds, bufsz_hint)) {
 		if (0 == r->reqbody_length) {
 			close(to_cgi_fds[0]);
 		}

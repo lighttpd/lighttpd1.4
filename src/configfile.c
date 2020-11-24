@@ -2240,7 +2240,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 		}
 	}
 
-	if (pipe(fds)) {
+	if (fdevent_pipe_cloexec(fds, 65536)) {
 		log_perror(srv->errh, __FILE__, __LINE__, "pipe()");
 		ret = -1;
 	}
@@ -2253,7 +2253,6 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 		*(const char **)&args[2] = cmd;
 		args[3] = NULL;
 
-		fdevent_setfd_cloexec(fds[0]);
 		pid = fdevent_fork_execve(args[0], args, NULL, -1, fds[1], -1, -1);
 		if (-1 == pid) {
 			log_perror(srv->errh, __FILE__, __LINE__, "fork/exec(%s)", cmd);
