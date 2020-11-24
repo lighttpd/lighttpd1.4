@@ -15,6 +15,12 @@
 #include <errno.h>
 #include <fcntl.h>
 
+#ifdef _WIN32
+#include <sys/stat.h>   /* _S_IREAD _S_IWRITE */
+#include <io.h>
+#include <share.h>      /* _SH_DENYRW */
+#endif
+
 #ifdef SOCK_CLOEXEC
 static int use_sock_cloexec;
 #endif
@@ -639,7 +645,17 @@ int fdevent_pipe_cloexec (int * const fds, const unsigned int bufsz_hint) {
 
 
 int fdevent_mkostemp(char *path, int flags) {
- #if defined(HAVE_MKOSTEMP)
+ #ifdef _WIN32
+    /* future: if _sopen_s() returns EEXIST, might reset template (path) with
+     * trailing "XXXXXX", and then loop to try again */
+    int fd;      /*(flags might have _O_APPEND)*/
+    return (0 == _mktemp_s(path, strlen(path)+1))
+        && (0 == _sopen_s(&fd, path, _O_CREAT  | _O_EXCL   | _O_TEMPORARY
+                                   | flags     | _O_BINARY | _O_NOINHERIT,
+                          _SH_DENYRW, _S_IREAD | _S_IWRITE))
+      ? fd
+      : -1;
+ #elif defined(HAVE_MKOSTEMP)
     return mkostemp(path, O_CLOEXEC | flags);
  #else
   #ifdef __COVERITY__
@@ -660,6 +676,7 @@ int fdevent_mkostemp(char *path, int flags) {
 
     fdevent_setfd_cloexec(fd);
     return fd;
+ #endif
 }
 
 
