@@ -11,6 +11,11 @@
 
 #include "sys-mmap.h"
 
+#ifdef _WIN32
+#include <Windows.h>
+#include <MemoryAPI.h>
+#endif
+
 #ifndef O_BINARY
 # define O_BINARY 0
 #endif
@@ -70,9 +75,9 @@ int stream_open(stream *f, const char *fn) {
 
 #elif defined __WIN32
 
-	HANDLE *fh, *mh;
+	HANDLE fh, mh;
 	void *p;
-	LARGE_INTEGER fsize;
+	int64_t fsize;
 
 	f->start = NULL;
 	f->size = 0;
@@ -87,7 +92,7 @@ int stream_open(stream *f, const char *fn) {
 
 	if (!fh) return -1;
 
-	if (0 != GetFileSizeEx(fh, &fsize)) {
+	if (!GetFileSizeEx(fh, (PLARGE_INTEGER)&fsize)) {
 		CloseHandle(fh);
 		return -1;
 	}
@@ -105,17 +110,6 @@ int stream_open(stream *f, const char *fn) {
 			NULL);
 
 	if (!mh) {
-/*
-		LPVOID lpMsgBuf;
-		FormatMessage(
-		        FORMAT_MESSAGE_ALLOCATE_BUFFER |
-		        FORMAT_MESSAGE_FROM_SYSTEM,
-		        NULL,
-		        GetLastError(),
-		        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		        (LPTSTR) &lpMsgBuf,
-		        0, NULL );
-*/
 		CloseHandle(fh);
 		return -1;
 	}

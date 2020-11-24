@@ -3477,7 +3477,7 @@ webdav_mmap_file_rd (void ** const addr, const size_t length,
         return 0;
     }
 
-  #ifdef HAVE_MMAP
+  #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
 
     *addr = mmap(NULL, length, PROT_READ, MAP_SHARED, fd, offset);
     if (*addr == MAP_FAILED && errno == EINVAL)
@@ -3486,6 +3486,8 @@ webdav_mmap_file_rd (void ** const addr, const size_t length,
 
   #else
 
+    UNUSED(fd);
+    UNUSED(offset);
     return -1;
 
   #endif

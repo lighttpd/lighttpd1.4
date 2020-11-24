@@ -955,7 +955,7 @@ int chunkqueue_open_file_chunk(chunkqueue * const restrict cq, log_error_st * co
 }
 
 
-#if defined(HAVE_MMAP)
+#if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
 __attribute_cold__
 #endif
 __attribute_noinline__
@@ -975,14 +975,18 @@ chunkqueue_write_chunk_file_intermed (const int fd, chunk * const restrict c, lo
 }
 
 
-#if defined(HAVE_MMAP)
+#if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
 /*(improved from network_write_mmap.c)*/
 static off_t
 mmap_align_offset (off_t start)
 {
     static off_t pagemask = 0;
     if (0 == pagemask) {
+      #ifndef _WIN32
         long pagesize = sysconf(_SC_PAGESIZE);
+      #else
+        long pagesize = -1; /*(not implemented (yet))*/
+      #endif
         if (-1 == pagesize) pagesize = 4096;
         pagemask = ~((off_t)pagesize - 1); /* pagesize always power-of-2 */
     }
@@ -1021,7 +1025,7 @@ chunkqueue_write_chunk_file (const int fd, chunk * const restrict c, log_error_s
     if (wr < 0 && (errno == EINVAL || errno == ENOSYS))
   #endif
     {
-      #if defined(HAVE_MMAP)
+      #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
         /*(caller is responsible for handling SIGBUS if chunkqueue might contain
          * untrusted file, i.e. any file other than lighttpd-created tempfile)*/
         /*(tempfiles are expected for input, MAP_PRIVATE used for portability)*/
