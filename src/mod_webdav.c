@@ -182,6 +182,13 @@
 #include <string.h>
 #include <unistd.h>     /* getpid() linkat() rmdir() unlinkat() */
 
+/* Note: filesystem access race conditions exist without _ATFILE_SOURCE */
+#ifndef _ATFILE_SOURCE
+#define AT_SYMLINK_NOFOLLOW 0
+/*(trigger linkat() fail to fallback logic in mod_webdav.c)*/
+#define linkat(odfd,opath,ndfd,npath,flags) -1
+#endif
+
 #ifndef _D_EXACT_NAMLEN
 #ifdef _DIRENT_HAVE_D_NAMLEN
 #define _D_EXACT_NAMLEN(d) ((d)->d_namlen)
@@ -2270,6 +2277,9 @@ webdav_parse_Depth (const request_st * const r)
 }
 
 
+#ifndef _ATFILE_SOURCE
+#define webdav_unlinkat(pconf,dst,dfd,d_name) webdav_delete_file((pconf),(dst))
+#else
 static int
 webdav_unlinkat (const plugin_config * const pconf,
                  const physical_st * const dst,
@@ -2286,6 +2296,7 @@ webdav_unlinkat (const plugin_config * const pconf,
       default:                 return 501; /* Not Implemented */
     }
 }
+#endif
 
 
 static int
@@ -2312,8 +2323,13 @@ webdav_delete_dir (const plugin_config * const pconf,
                    const int flags)
 {
     int multi_status = 0;
+  #ifndef _ATFILE_SOURCE /*(not using fdopendir unless _ATFILE_SOURCE)*/
+    const int dfd = -1;
+    DIR * const dir = opendir(dst->path.ptr);
+  #else
     const int dfd = fdevent_open_dirname(dst->path.ptr, 0);
     DIR * const dir = (dfd >= 0) ? fdopendir(dfd) : NULL;
+  #endif
     if (NULL == dir) {
         if (dfd >= 0) close(dfd);
         webdav_xml_response_status(b, &dst->rel_path, 403);
@@ -2338,12 +2354,14 @@ webdav_delete_dir (const plugin_config * const pconf,
         else
       #endif
         {
+          #ifdef _ATFILE_SOURCE
             struct stat st;
             if (0 != fstatat(dfd, de->d_name, &st, AT_SYMLINK_NOFOLLOW))
                 continue; /* file *just* disappeared? */
                 /* parent rmdir() will fail later if file still exists
                  * and fstatat() failed for other reasons */
             s_isdir = S_ISDIR(st.st_mode);
+          #endif
         }
 
         const uint32_t len = (uint32_t) _D_EXACT_NAMLEN(de);
@@ -2351,6 +2369,18 @@ webdav_delete_dir (const plugin_config * const pconf,
             webdav_str_len_to_lower(de->d_name, len);
         buffer_append_string_len(&dst->path, de->d_name, len);
         buffer_append_string_len(&dst->rel_path, de->d_name, len);
+
+      #ifndef _ATFILE_SOURCE
+      #ifndef _DIRENT_HAVE_D_TYPE
+        struct stat st;
+        if (0 != stat(dst->path.ptr, &st)) {
+            dst->path.ptr[    (dst->path.used     = dst_path_used)    -1]='\0';
+            dst->rel_path.ptr[(dst->rel_path.used = dst_rel_path_used)-1]='\0';
+            continue; /* file *just* disappeared? */
+        }
+        s_isdir = S_ISDIR(st.st_mode);
+      #endif
+      #endif
 
         if (s_isdir) {
             buffer_append_string_len(&dst->path, CONST_STR_LEN("/"));
@@ -2393,6 +2423,9 @@ webdav_delete_dir (const plugin_config * const pconf,
 }
 
 
+#ifndef _ATFILE_SOURCE
+#define webdav_linktmp_rename(pconf, src, dst) -1
+#else
 static int
 webdav_linktmp_rename (const plugin_config * const pconf,
                        const buffer * const src,
@@ -2426,6 +2459,7 @@ webdav_linktmp_rename (const plugin_config * const pconf,
     }
     return rc;
 }
+#endif
 
 
 static int
@@ -2812,8 +2846,13 @@ webdav_copymove_dir (const plugin_config * const pconf,
     const uint32_t dst_path_used     = dst->path.used;
     const uint32_t dst_rel_path_used = dst->rel_path.used;
 
+  #ifndef _ATFILE_SOURCE /*(not using fdopendir unless _ATFILE_SOURCE)*/
+    dfd = -1;
+    DIR * const srcdir = opendir(src->path.ptr);
+  #else
     dfd = fdevent_open_dirname(src->path.ptr, 0);
     DIR * const srcdir = (dfd >= 0) ? fdopendir(dfd) : NULL;
+  #endif
     if (NULL == srcdir) {
         if (dfd >= 0) close(dfd);
         webdav_xml_response_status(b, &src->rel_path, 403);
@@ -2834,9 +2873,11 @@ webdav_copymove_dir (const plugin_config * const pconf,
         else
       #endif
         {
+          #ifdef _ATFILE_SOURCE
             if (0 != fstatat(dfd, de->d_name, &st, AT_SYMLINK_NOFOLLOW))
                 continue; /* file *just* disappeared? */
             d_type = st.st_mode;
+          #endif
         }
 
         const uint32_t len = (uint32_t) _D_EXACT_NAMLEN(de);
@@ -2847,6 +2888,19 @@ webdav_copymove_dir (const plugin_config * const pconf,
         buffer_append_string_len(&dst->path,     de->d_name, len);
         buffer_append_string_len(&src->rel_path, de->d_name, len);
         buffer_append_string_len(&dst->rel_path, de->d_name, len);
+
+      #ifndef _ATFILE_SOURCE
+      #ifndef _DIRENT_HAVE_D_TYPE
+        if (0 != stat(src->path.ptr, &st)) {
+            src->path.ptr[    (src->path.used     = src_path_used)    -1]='\0';
+            src->rel_path.ptr[(src->rel_path.used = src_rel_path_used)-1]='\0';
+            dst->path.ptr[    (dst->path.used     = dst_path_used)    -1]='\0';
+            dst->rel_path.ptr[(dst->rel_path.used = dst_rel_path_used)-1]='\0';
+            continue; /* file *just* disappeared? */
+        }
+        d_type = st.st_mode;
+      #endif
+      #endif
 
         if (S_ISDIR(d_type)) { /* recursive call; depth first */
             buffer_append_string_len(&src->path,     CONST_STR_LEN("/"));
@@ -3325,8 +3379,13 @@ webdav_propfind_dir (webdav_propfind_bufs * const restrict pb)
     if (++pb->recursed > 100) return;
 
     physical_st * const dst = pb->dst;
+  #ifndef _ATFILE_SOURCE /*(not using fdopendir unless _ATFILE_SOURCE)*/
+    const int dfd = -1;
+    DIR * const dir = opendir(dst->path.ptr);
+  #else
     const int dfd = fdevent_open_dirname(dst->path.ptr, 0);
     DIR * const dir = (dfd >= 0) ? fdopendir(dfd) : NULL;
+  #endif
     if (NULL == dir) {
         int errnum = errno;
         if (dfd >= 0) close(dfd);
@@ -3353,14 +3412,23 @@ webdav_propfind_dir (webdav_propfind_bufs * const restrict pb)
                 || (de->d_name[1] == '.' && de->d_name[2] == '\0')))
             continue; /* ignore "." and ".." */
 
+      #ifdef _ATFILE_SOURCE
         if (0 != fstatat(dfd, de->d_name, &pb->st, pb->atflags))
             continue; /* file *just* disappeared? */
+      #endif
 
         const uint32_t len = (uint32_t) _D_EXACT_NAMLEN(de);
         if (flags & WEBDAV_FLAG_LC_NAMES) /*(needed by rel_path)*/
             webdav_str_len_to_lower(de->d_name, len);
         buffer_append_string_len(&dst->path, de->d_name, len);
         buffer_append_string_len(&dst->rel_path, de->d_name, len);
+      #ifndef _ATFILE_SOURCE
+        if (0 != stat(dst->path.ptr, &pb->st)) {
+            dst->path.ptr[    (dst->path.used     = dst_path_used)    -1]='\0';
+            dst->rel_path.ptr[(dst->rel_path.used = dst_rel_path_used)-1]='\0';
+            continue; /* file *just* disappeared? */
+        }
+      #endif
         if (S_ISDIR(pb->st.st_mode)) {
             buffer_append_string_len(&dst->path,     CONST_STR_LEN("/"));
             buffer_append_string_len(&dst->rel_path, CONST_STR_LEN("/"));
