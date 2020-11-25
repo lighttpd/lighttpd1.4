@@ -22,7 +22,7 @@ typedef gw_handler_ctx   handler_ctx;
 # ifdef HAVE_FASTCGI_H
 #  include <fastcgi.h>
 # else
-#  include "fastcgi.h"
+#  include "compat/fastcgi.h"
 # endif
 #endif /* HAVE_FASTCGI_FASTCGI_H */
 
