@@ -2271,12 +2271,13 @@ webdav_parse_Depth (const request_st * const r)
 
 
 static int
-webdav_unlinkat (const plugin_config * const pconf, const buffer * const uri,
-                 const int dfd, const char * const d_name, uint32_t len)
+webdav_unlinkat (const plugin_config * const pconf,
+                 const physical_st * const dst,
+                 const int dfd, const char * const d_name)
 {
     if (0 == unlinkat(dfd, d_name, 0)) {
-        stat_cache_delete_entry(d_name, len);
-        return webdav_prop_delete_uri(pconf, uri);
+        stat_cache_delete_entry(CONST_BUF_LEN(&dst->path));
+        return webdav_prop_delete_uri(pconf, &dst->rel_path);
     }
 
     switch(errno) {
@@ -2358,7 +2359,7 @@ webdav_delete_dir (const plugin_config * const pconf,
         }
         else {
             int status =
-              webdav_unlinkat(pconf, &dst->rel_path, dfd, de->d_name, len);
+              webdav_unlinkat(pconf, dst, dfd, de->d_name);
             if (0 != status) {
                 webdav_xml_response_status(b, &dst->rel_path, status);
                 multi_status = 1;
