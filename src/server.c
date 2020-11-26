@@ -104,6 +104,14 @@ static size_t malloc_top_pad;
 /* #define USE_ALARM */
 #endif
 
+#ifdef _WIN32
+/* (Note: assume overwrite == 1 in this setenv() replacement) */
+/*#define setenv(name,value,overwrite)  SetEnvironmentVariable((name),(value))*/
+/*#define unsetenv(name)                SetEnvironmentVariable((name),NULL)*/
+#define setenv(name,value,overwrite)  _putenv_s((name), strdup(value))
+#define unsetenv(name)                _putenv_s((name), "")
+#endif
+
 #if 1 /*(until switch to mod_h2)*/
 extern const struct http_dispatch h2_dispatch_table; /* declaration */
 #endif

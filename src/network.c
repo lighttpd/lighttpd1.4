@@ -21,6 +21,14 @@
 #include <string.h>
 #include <stdlib.h>
 
+#ifdef _WIN32
+/* (Note: assume overwrite == 1 in this setenv() replacement) */
+/*#define setenv(name,value,overwrite)  SetEnvironmentVariable((name),(value))*/
+/*#define unsetenv(name)                SetEnvironmentVariable((name),NULL)*/
+#define setenv(name,value,overwrite)  _putenv_s((name), strdup(value))
+#define unsetenv(name)                _putenv_s((name), "")
+#endif
+
 void
 network_accept_tcp_nagle_disable (const int fd)
 {
