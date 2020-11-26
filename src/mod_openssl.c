@@ -54,6 +54,12 @@
 #undef OPENSSL_NO_STDIO /* for X509_STORE_load_locations() */
 #endif
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <Windows.h>
+#undef OCSP_REQUEST /*(defined in wincrypt.h)*/
+#endif
+
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 #include <openssl/bn.h>

@@ -1153,11 +1153,13 @@ static int config_insert(server *srv) {
                 break;
               case 13:/* server.follow-symlink */
                #ifndef HAVE_LSTAT
+               #ifndef _WIN32
                 if (0 == cpv->v.u)
                     log_error(srv->errh, __FILE__, __LINE__,
                       "Your system lacks lstat(). "
-                      "We can not differ symlinks from files. "
-                      "Please remove server.follow-symlinks from your config.");
+                      "We can not differentiate symlinks from files. "
+                      "Please remove server.follow-symlink from your config.");
+               #endif
                #endif
                 break;
               case 14:/* server.protocol-http11 */
@@ -2561,6 +2563,9 @@ int config_set_defaults(server *srv) {
 
 	if (!srv->srvconf.upload_tempdirs->used) {
 		const char *tmpdir = getenv("TMPDIR");
+	  #ifdef _WIN32
+		if (NULL == tmpdir) tmpdir = getenv("TEMP");
+	  #endif
 		if (NULL == tmpdir) tmpdir = "/var/tmp";
 		array_insert_value(srv->srvconf.upload_tempdirs, tmpdir, strlen(tmpdir));
 	}

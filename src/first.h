@@ -27,6 +27,60 @@
 #define __STDC_WANT_LIB_EXT1__ 1
 #endif
 
+#ifdef _WIN32
+/* https://learn.microsoft.com/en-us/windows/win32/winprog/using-the-windows-headers */
+/* http://web.archive.org/web/20121219084749/http://support.microsoft.com/kb/166474 */
+#define WIN32_LEAN_AND_MEAN
+#define VC_EXTRALEAN
+/* https://learn.microsoft.com/en-us/windows/win32/winsock/default-state-for-a-socket-s-overlapped-attribute-2 */
+#ifndef FD_SETSIZE
+#define FD_SETSIZE 4096
+#endif
+/* https://docs.microsoft.com/en-us/previous-versions/ms235384(v=vs.100) */
+#define _CRT_NONSTDC_NO_DEPRECATE
+#define _CRT_SECURE_NO_DEPRECATE
+#define _CRT_DECLARE_NONSTDC_NAMES 1
+#if defined(__MINGW32__) || defined(__MINGW64__)
+#define _POSIX
+#define __USE_MINGW_ALARM 1
+/* https://sourceforge.net/p/mingw-w64/wiki2/gnu%20printf/ */
+#define __USE_MINGW_ANSI_STDIO 1
+/*#include <stdio.h>*/
+#undef __printf__
+/*#define __printf__ __MINGW_PRINTF_FORMAT*/
+#define __printf__ __gnu_printf__
+/* override pid_t before <sys/types.h> is included; modified from:
+ * /usr/x86_64-w64-mingw32/sys-root/mingw/include/sys/types.h */
+#ifndef _PID_T_
+#define _PID_T_
+#ifndef _WIN64
+typedef int _pid_t;
+#else
+typedef long long _pid_t;
+#endif
+typedef int pid_t;
+#endif
+#endif /* __MINGW32__ || __MINGW64__ */
+#ifdef _MSC_VER
+#pragma warning(disable:4003)
+#pragma warning(disable:4113)
+#pragma warning(disable:4244)
+#pragma warning(disable:4267)
+#pragma warning(disable:4996)
+#pragma warning(disable:5105) /* warning in winbase.h; good job MS */
+typedef int pid_t;
+typedef int mode_t;
+/* "C:Program Files (x86)/Windows Kits/10/Include/10.0.19041.0/ucrt/sys/types.h"
+ * unconditionally sets 'typedef _off_t off_t;' if _CRT_DECLARE_NONSTDC_NAMES,
+ * but (long) is only 4 bytes on _WIN32, so override off_t here */
+#define _OFF_T_DEFINED
+typedef long _off_t;
+typedef long long off_t;
+#endif /* _MSC_VER */
+#include <basetsd.h> /* SSIZE_T */
+#define ssize_t SSIZE_T
+#endif
+
 #ifdef __COVERITY__
 #define _Float128 long double
 #define _Float64x long double
