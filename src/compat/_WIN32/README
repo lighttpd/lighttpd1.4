@@ -1,0 +1,6 @@
+headers specific to _WIN32 port
+
+sys/queue.h
+  LICENSE: BSD 3-clause
+  (not _WIN32 specific)
+

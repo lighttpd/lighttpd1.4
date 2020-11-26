@@ -37,7 +37,9 @@ SOFTWARE.
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32 /*(<sys/queue.h> included in "lshpack.h" immediately below)*/
 #include <sys/queue.h>
+#endif
 
 #include "lshpack.h"
 #if LS_HPACK_EMIT_TEST_CODE

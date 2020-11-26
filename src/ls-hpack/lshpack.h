@@ -219,7 +219,11 @@ lshpack_dec_set_max_capacity (struct lshpack_dec *, unsigned);
  * These structures are not very complicated.
  */
 
+#ifdef _WIN32
+#include "../compat/_WIN32/sys/queue.h"
+#else
 #include <sys/queue.h>
+#endif
 
 #ifdef __OpenBSD__
 #define STAILQ_HEAD             SIMPLEQ_HEAD
