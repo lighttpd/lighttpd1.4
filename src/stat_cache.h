@@ -2,7 +2,7 @@
 #define _FILE_CACHE_H_
 #include "first.h"
 
-#include <sys/stat.h>
+#include "sys-stat.h"
 #include "sys-time.h"
 
 #include "base_decls.h"

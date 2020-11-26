@@ -1,5 +1,7 @@
 #include "first.h"
 
+#include "sys-stat.h"
+
 #include "base.h"
 #include "burl.h"
 #include "chunk.h"
@@ -17,11 +19,6 @@
 #include "sock_addr.h"
 #include "stat_cache.h"
 #include "sys-crypto.h"
-
-#include <sys/stat.h>
-#ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
-#endif
 
 #include <stdlib.h>
 #include <fcntl.h>

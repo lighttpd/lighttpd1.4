@@ -99,11 +99,11 @@
 #include "first.h"
 
 #include <sys/types.h>
-#include <sys/stat.h>
 #include "sys-mmap.h"
 #ifdef HAVE_MMAP
 #include "sys-setjmp.h"
 #endif
+#include "sys-stat.h"
 #include "sys-time.h"
 
 #include <fcntl.h>
@@ -292,10 +292,6 @@ FREE_FUNC(mod_deflate_free) {
         }
     }
 }
-
-#if defined(_WIN32) && !defined(__CYGWIN__)
-#define mkdir(x,y) mkdir(x)
-#endif
 
 static int mkdir_for_file (char *fn) {
     for (char *p = fn; (p = strchr(p + 1, '/')) != NULL; ) {

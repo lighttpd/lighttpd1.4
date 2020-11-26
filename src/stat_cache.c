@@ -1,13 +1,13 @@
 #include "first.h"
 
 #include "stat_cache.h"
+
+#include "sys-stat.h"
+
 #include "log.h"
 #include "fdevent.h"
 #include "http_etag.h"
 #include "algo_splaytree.h"
-
-#include <sys/types.h>
-#include <sys/stat.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -23,13 +23,6 @@
 
 #ifdef HAVE_SYS_EXTATTR_H
 # include <sys/extattr.h>
-#endif
-
-#ifndef HAVE_LSTAT
-#define lstat stat
-#ifndef S_ISLNK
-#define S_ISLNK(mode) (0)
-#endif
 #endif
 
 /*
@@ -1452,6 +1445,9 @@ int stat_cache_path_contains_symlink(const buffer *name, log_error_st *errh) {
             return -1;
         }
     } while ((s_cur = strrchr(buf, '/')) > buf); /*(&buf[0]==buf; NULL < buf)*/
+  #else
+    UNUSED(name);
+    UNUSED(errh);
   #endif
 
     return 0;

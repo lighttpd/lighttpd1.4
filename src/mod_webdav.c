@@ -178,7 +178,7 @@
 #include "first.h"      /* first */
 #include "sys-mmap.h"
 #include <sys/types.h>
-#include <sys/stat.h>
+#include "sys-stat.h"
 #include "sys-time.h"
 #include <dirent.h>
 #include <errno.h>

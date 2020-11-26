@@ -11,6 +11,7 @@
 
 #include "first.h"
 
+#include "sys-stat.h"
 #include "sys-time.h"
 
 #include "base.h"
@@ -1548,8 +1549,6 @@ static int mod_dirlisting_write_cq (const int fd, chunkqueue * const cq, log_err
 }
 
 
-#include <sys/stat.h>   /* mkdir() */
-#include <sys/types.h>
 /*(similar to mod_deflate.c:mkdir_recursive(), but starts mid-path)*/
 static int mkdir_recursive (char *dir, size_t off) {
     char *p = dir+off;
