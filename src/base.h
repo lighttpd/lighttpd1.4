@@ -12,6 +12,16 @@
 #include "request.h"
 #include "sock_addr.h"
 
+#ifdef _WIN32 /* quick kludges; revisit */
+typedef int gid_t;
+/*typedef int uid_t;*/
+#ifndef __uid_t_defined
+#define __uid_t_defined 1
+typedef unsigned __uid_t;
+typedef __uid_t uid_t;
+#endif /* __uid_t_defined */
+#endif
+
 struct fdevents;        /* declaration */
 struct server_socket;   /* declaration */
 struct http_dispatch;   /* declaration */

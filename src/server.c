@@ -1719,8 +1719,10 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 	server_main_setup_signals();
 
+  #ifdef HAVE_GETUID
 	srv->gid = getgid();
 	srv->uid = getuid();
+  #endif
 	srv->pid = getpid();
 
 	/* write pid file */
