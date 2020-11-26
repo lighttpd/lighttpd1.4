@@ -914,6 +914,7 @@ static void server_sockets_close (server *srv) {
 __attribute_cold__
 static void server_graceful_signal_prev_generation (void)
 {
+  #ifdef HAVE_FORK
     const char * const prev_gen = getenv("LIGHTTPD_PREV_GEN");
     if (NULL == prev_gen) return;
     pid_t pid = (pid_t)strtol(prev_gen, NULL, 10);
@@ -921,6 +922,7 @@ static void server_graceful_signal_prev_generation (void)
     if (pid <= 0) return; /*(should not happen)*/
     if (pid == fdevent_waitpid(pid,NULL,1)) return; /*(pid exited; unexpected)*/
     kill(pid, SIGINT); /* signal previous generation for graceful shutdown */
+  #endif
 }
 
 __attribute_cold__
@@ -983,8 +985,10 @@ static int server_graceful_state_bg (server *srv) {
         return 0;
     }
    #endif
-  #else
+  #elif defined(HAVE_FORK)
     pid_t pid = fork();
+  #else
+    pid_t pid = -1;
   #endif
     if (pid) { /* original process */
         if (pid < 0) return 0;
@@ -1327,6 +1331,9 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		srv->srvconf.modules_dir = "modules";
 		if (config_read(srv, "conf/lighttpd.conf")) return -1;
 	}
+      #ifndef HAVE_FORK
+	srv->srvconf.dont_daemonize = 1;
+      #endif
       #endif
 
 	if (!srv->config_data_base) {
