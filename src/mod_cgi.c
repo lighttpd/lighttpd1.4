@@ -208,26 +208,47 @@ __attribute_cold__
 __attribute_pure__
 static int mod_cgi_str_to_signal (const char *s, int default_sig) {
     static const struct { const char *name; int sig; } sigs[] = {
-      { "HUP",  SIGHUP  }
-     ,{ "INT",  SIGINT  }
+     #ifdef SIGHUP
+      { "HUP",  SIGHUP  },
+     #endif
+      { "INT",  SIGINT  }
+     #ifdef SIGQUIT
      ,{ "QUIT", SIGQUIT }
+     #endif
+     #ifdef SIGILL
      ,{ "ILL",  SIGILL  }
+     #endif
+     #ifdef SIGTRAP
      ,{ "TRAP", SIGTRAP }
+     #endif
+     #ifdef SIGABRT
      ,{ "ABRT", SIGABRT }
+     #endif
      #ifdef SIGBUS
      ,{ "BUS",  SIGBUS  }
      #endif
+     #ifdef SIGFPE
      ,{ "FPE",  SIGFPE  }
+     #endif
+     #ifndef SIGKILL
+     #define SIGKILL 9
+     #endif
      ,{ "KILL", SIGKILL }
      #ifdef SIGUSR1
      ,{ "USR1", SIGUSR1 }
      #endif
+     #ifdef SIGSEGV
      ,{ "SEGV", SIGSEGV }
+     #endif
      #ifdef SIGUSR2
      ,{ "USR2", SIGUSR2 }
      #endif
+     #ifdef SIGPIPE
      ,{ "PIPE", SIGPIPE }
+     #endif
+     #ifdef SIGALRM
      ,{ "ALRM", SIGALRM }
+     #endif
      ,{ "TERM", SIGTERM }
      #ifdef SIGCHLD
      ,{ "CHLD", SIGCHLD }

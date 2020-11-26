@@ -27,6 +27,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifndef SIGKILL
+#define SIGKILL 9
+#endif
+
 #include "base.h"
 #include "algo_md.h"
 #include "array.h"

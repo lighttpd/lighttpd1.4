@@ -11,6 +11,15 @@
  * it has to stay safe and small to be trustable
  */
 
+#ifdef _WIN32
+#include <stdio.h>
+int main (void) {
+    fprintf(stderr, "lighttpd-angel is not implemented on Windows.  "
+                    "Prefer using Windows services.\n");
+    return 1;
+}
+#else /* ! _WIN32 */
+
 #include <sys/wait.h>
 
 #include <stdio.h>
@@ -104,3 +113,5 @@ int main (int argc, char **argv)
 
     return 0;
 }
+
+#endif /* ! _WIN32 */

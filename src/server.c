@@ -135,6 +135,16 @@ static volatile sig_atomic_t handle_sig_alarm = 1;
 static volatile sig_atomic_t handle_sig_hup = 0;
 static int idle_limit = 0;
 
+#ifdef _WIN32
+#ifndef SIGBREAK
+#define SIGBREAK 21
+#endif
+/* Ctrl-BREAK (repurposed and treated as SIGUSR1)*/
+#ifndef SIGUSR1
+#define SIGUSR1 SIGBREAK
+#endif
+#endif
+
 #if defined(HAVE_SIGACTION) && defined(SA_SIGINFO)
 static volatile siginfo_t last_sigterm_info;
 static volatile siginfo_t last_sighup_info;
@@ -201,13 +211,56 @@ static void signal_handler(int sig) {
 			graceful_shutdown = 1;
 		}
 		break;
+  #ifndef _WIN32
 	case SIGALRM: handle_sig_alarm = 1; break;
 	case SIGHUP:  handle_sig_hup = 1; break;
 	case SIGCHLD: handle_sig_child = 1; break;
+  #endif
 	}
 }
 #endif
 
+#if defined(HAVE_SIGNAL)
+#ifdef _WIN32
+static BOOL WINAPI ConsoleCtrlHandler(DWORD dwType)
+{
+    /* Note: Windows handles "signals" inconsistently, varying depending on
+     * whether or not the program is attached to a non-hidden window.
+     * CTRL_CLOSE_EVENT sent by taskkill can be received if attached to a
+     * non-hidden window, but taskkill /f must be used (and CTRL_CLOSE_EVENT
+     * is not received here) if process is not attached to a window, or if
+     * the window is hidden. (WTH MS?!)  This *does not* catch CTRL_CLOSE_EVENT:
+     *   start -FilePath .\lighttpd.exe -ArgumentList "-D -f lighttpd.conf"
+     *     -WindowStyle Hidden   # (or None)
+     * but any other -WindowStyle can catch CTRL_CLOSE_EVENT.
+     * CTRL_C_EVENT can only be sent to 0 (self process group) or self pid
+     * and is ignored by default (sending signal does not indicate failure)
+     * in numerous other cases.  Some people have resorted to standalone helper
+     * programs to attempt AttachConsole() to a target pid before sending
+     * CTRL_C_EVENT via GenerateConsoleCtrlEvent().  Another alternative is
+     * running lighttpd as a Windows service, which uses a different mechanism,
+     * also more limited than unix signals.  Other alternatives include
+     * NSSM (Non-Sucking Service Manager) or cygwin's cygrunsrv program */
+    switch(dwType) {
+      case CTRL_C_EVENT:
+        signal_handler(SIGINT);
+        break;
+      case CTRL_BREAK_EVENT:
+        /* Ctrl-BREAK (repurposed and treated as SIGUSR1)*/
+        signal_handler(SIGUSR1);
+        break;
+      case CTRL_CLOSE_EVENT:/* sent by taskkill */
+      case CTRL_LOGOFF_EVENT:
+      case CTRL_SHUTDOWN_EVENT:
+        /* non-cancellable event; program terminates soon after return */
+        signal_handler(SIGTERM);/* trigger server shutdown in main thread */
+        Sleep(2000);            /* sleep 2 secs to give threads chance to exit*/
+        return FALSE;
+    }
+    return TRUE;
+}
+#endif
+#endif
 
 static void server_main_setup_signals (void) {
   #ifdef HAVE_SIGACTION
@@ -246,20 +299,27 @@ static void server_main_setup_signals (void) {
     act.sa_flags |= SA_RESTART | SA_NOCLDSTOP;
     sigaction(SIGCHLD, &act, NULL);
   #elif defined(HAVE_SIGNAL)
+   #ifndef _WIN32
     /* ignore the SIGPIPE from sendfile() */
     signal(SIGPIPE, SIG_IGN);
-    signal(SIGALRM, signal_handler);
-    signal(SIGTERM, signal_handler);
-    signal(SIGHUP,  signal_handler);
-    signal(SIGCHLD, signal_handler);
+   #endif
     signal(SIGINT,  signal_handler);
+    signal(SIGTERM, signal_handler);
+   #ifndef _WIN32
+    signal(SIGHUP,  signal_handler);
+    signal(SIGALRM, signal_handler);
     signal(SIGUSR1, signal_handler);
+    signal(SIGCHLD, signal_handler);
+   #else
+    /* Ctrl-BREAK (repurposed and treated as SIGUSR1)*/
+    signal(SIGUSR1, signal_handler);
+    SetConsoleCtrlHandler((PHANDLER_ROUTINE)ConsoleCtrlHandler,TRUE);
+   #endif
    #ifndef _MSC_VER
     signal(SIGBUS,  sys_setjmp_sigbus);
    #endif
   #endif
 }
-
 
 #ifdef HAVE_FORK
 static int daemonize(void) {
