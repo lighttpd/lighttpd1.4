@@ -242,7 +242,9 @@ log_error_write (const log_error_st * const errh, buffer * const restrict b)
         write_all(errh->fd, BUF_PTR_LEN(b));
     }
     else {
+      #ifdef HAVE_SYSLOG_H
         syslog(LOG_ERR, "%s", b->ptr);
+      #endif
     }
 }
 

@@ -453,7 +453,9 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
         }
     }
 
+  #ifdef HAVE_SYSLOG_H
     p->defaults.syslog_level = LOG_INFO;
+  #endif
 
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {

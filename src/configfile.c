@@ -1682,6 +1682,10 @@ static void config_log_error_open_syslog(server *srv, log_error_st *errh, const 
         }
     }
     openlog("lighttpd", LOG_CONS|LOG_PID, -1==facility ? LOG_DAEMON : facility);
+  #else
+    UNUSED(srv);
+    UNUSED(errh);
+    UNUSED(syslog_facility);
   #endif
 }
 
