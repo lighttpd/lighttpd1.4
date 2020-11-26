@@ -288,6 +288,8 @@ const char * sock_addr_inet_ntop(const sock_addr * const restrict saddr, char * 
        #if defined(HAVE_INET_PTON) /*(expect inet_ntop if inet_pton)*/
         return inet_ntop(AF_INET,(const void *)&saddr->ipv4.sin_addr,buf,sz);
        #else /*(inet_ntoa() not thread-safe)*/
+        UNUSED(buf);
+        UNUSED(sz);
         return inet_ntoa(saddr->ipv4.sin_addr);
        #endif
      #ifdef HAVE_IPV6
@@ -689,7 +691,11 @@ int sock_addr_from_buffer_hints_numeric(sock_addr * const restrict saddr, sockle
     else if (1 == sock_addr_inet_pton(saddr, b->ptr, family, port)) {
         *len = (family == AF_INET)
           ? sizeof(struct sockaddr_in)   /* family == AF_INET */
+         #ifdef HAVE_IPV6
           : sizeof(struct sockaddr_in6); /* family == AF_INET6 */
+         #else
+          : 0; /*(should not happen; sock_addr_inet_pton() would not succeed)*/
+         #endif
         return 1;
     }
   #if defined(HAVE_IPV6) && defined(HAVE_INET_PTON)

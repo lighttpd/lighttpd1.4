@@ -369,7 +369,9 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 	sock_addr addr;
 	int family = 0;
 	int use_ipv6 = s->use_ipv6;
+      #ifdef HAVE_IPV6
 	int set_v6only = 0;
+      #endif
 
 	if (buffer_is_blank(host_token)) {
 		log_error(srv->errh, __FILE__, __LINE__,
