@@ -730,6 +730,7 @@ static void gw_proc_kill(gw_host *host, gw_proc *proc) {
     gw_proc_set_state(host, proc, PROC_STATE_KILLED);
 }
 
+#ifdef HAVE_SYS_UN_H
 __attribute_pure__
 static gw_host * unixsocket_is_dup(gw_plugin_data *p, const buffer *unixsocket) {
     if (NULL == p->cvlist) return NULL;
@@ -764,6 +765,7 @@ static gw_host * unixsocket_is_dup(gw_plugin_data *p, const buffer *unixsocket) 
 
     return NULL;
 }
+#endif
 
 static void parse_binpath(char_array *env, const buffer *b) {
     char *start = b->ptr;
@@ -1527,6 +1529,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
             }
 
             if (host->unixsocket) {
+              #ifdef HAVE_SYS_UN_H
                 /* unix domain socket */
                 struct sockaddr_un un;
 
@@ -1554,6 +1557,12 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                 }
 
                 host->family = AF_UNIX;
+              #else
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "unixsocket not supported on this platform: %s = (%s => (%s ( ...",
+                  cpkkey, da_ext->key.ptr, da_host->key.ptr);
+                goto error;
+              #endif
             } else {
                 /* tcp/ip */
 
