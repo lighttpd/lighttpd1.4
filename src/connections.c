@@ -88,11 +88,7 @@ static void connection_close(connection *con) {
 	fdevent_fdnode_event_del(srv->ev, con->fdn);
 	fdevent_unregister(srv->ev, con->fdn);
 	con->fdn = NULL;
-#ifdef __WIN32
-	if (0 == closesocket(con->fd))
-#else
-	if (0 == close(con->fd))
-#endif
+	if (0 == fdio_close_socket(con->fd))
 		--srv->cur_fds;
 	else
 		log_perror(r->conf.errh, __FILE__, __LINE__,

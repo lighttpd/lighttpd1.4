@@ -473,13 +473,16 @@ static void server_free(server *srv) {
 			fdevent_unregister(srv->ev, oneshot_fdn);
 			oneshot_fdn = NULL;
 		}
-		close(oneshot_fd);
+		if (oneshot_fdout >= 0)
+			fdio_close_pipe(oneshot_fd);
+		else
+			fdio_close_socket(oneshot_fd);
 	}
 	if (oneshot_fdout >= 0) {
-		close(oneshot_fdout);
+		fdio_close_pipe(oneshot_fdout);
 	}
 	if (srv->stdin_fd >= 0) {
-		close(srv->stdin_fd);
+		fdio_close_socket(srv->stdin_fd);
 	}
 
 	buffer_free(srv->tmp_buf);
@@ -714,7 +717,7 @@ static int server_oneshot_init(server *srv, int fd) {
 	}
 
 	/*(must set flags; fd did not pass through fdevent accept() logic)*/
-	if (-1 == fdevent_fcntl_set_nb_cloexec(fd)) {
+	if (-1 == fdevent_socket_set_nb_cloexec(fd)) {
 		log_perror(srv->errh, __FILE__, __LINE__, "fcntl()");
 		return 0;
 	}
@@ -965,7 +968,7 @@ static void server_sockets_close (server *srv) {
         server_socket *srv_socket = srv->srv_sockets.ptr[i];
         if (-1 == srv_socket->fd) continue;
         if (2 != srv->sockets_disabled) network_unregister_sock(srv,srv_socket);
-        close(srv_socket->fd);
+        fdio_close_socket(srv_socket->fd);
         srv_socket->fd = -1;
         /* network_close() will cleanup after us */
     }

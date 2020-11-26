@@ -172,7 +172,9 @@ fdevent_init (const char *event_handler, int *max_fds, int *cur_fds, log_error_s
     int type = fdevent_config(&event_handler, errh);
     if (type <= 0) return NULL;
 
+  #ifndef _WIN32
     fdevent_socket_nb_cloexec_init();
+  #endif
 
       #ifdef FDEVENT_USE_SELECT
     /* select limits itself

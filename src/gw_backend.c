@@ -514,7 +514,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
         unlink(proc->unixsocket->ptr);
     }
 
-    close(gw_fd);
+    fdio_close_socket(gw_fd);
 
     if (-1 == status) {
         /* server is not up, spawn it  */
@@ -522,7 +522,15 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
         uint32_t i;
 
         /* reopen socket */
+
+      #ifdef _WIN32
+        /* Note: not using WSA_FLAG_OVERLAPPED
+         * because we are assigning to hStdInput of child process */
+        gw_fd = WSASocketA(proc->saddr->sa_family, SOCK_STREAM, 0, NULL, 0,
+                           WSA_FLAG_NO_HANDLE_INHERIT);
+      #else
         gw_fd = fdevent_socket_cloexec(proc->saddr->sa_family, SOCK_STREAM, 0);
+      #endif
         if (-1 == gw_fd) {
             log_perror(errh, __FILE__, __LINE__, "socket()");
             return -1;
@@ -530,7 +538,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
 
         if (fdevent_set_so_reuseaddr(gw_fd, 1) < 0) {
             log_perror(errh, __FILE__, __LINE__, "socketsockopt()");
-            close(gw_fd);
+            fdio_close_socket(gw_fd);
             return -1;
         }
 
@@ -538,13 +546,13 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
         if (-1 == bind(gw_fd, proc->saddr, proc->saddrlen)) {
             log_perror(errh, __FILE__, __LINE__,
               "bind failed for: %s", proc->connection_name->ptr);
-            close(gw_fd);
+            fdio_close_socket(gw_fd);
             return -1;
         }
 
         if (-1 == listen(gw_fd, host->listen_backlog)) {
             log_perror(errh, __FILE__, __LINE__, "listen()");
-            close(gw_fd);
+            fdio_close_socket(gw_fd);
             return -1;
         }
 
@@ -627,7 +635,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
         for (i = 0; i < env.used; ++i) free(env.ptr[i]);
         free(env.ptr);
         if (dfd >= 0) close(dfd);
-        close(gw_fd);
+        fdio_close_socket(gw_fd);
 
         if (-1 == proc->pid) {
             proc->pid = 0;

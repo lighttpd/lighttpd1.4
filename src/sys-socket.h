@@ -2,14 +2,19 @@
 #define WIN32_SOCKET_H
 #include "first.h"
 
-#ifdef __WIN32
+#ifdef _WIN32
 
 #include <winsock2.h>
-
-#define ECONNRESET WSAECONNRESET
-#define EINPROGRESS WSAEINPROGRESS
-#define EALREADY WSAEALREADY
-#define ECONNABORTED WSAECONNABORTED
+/* https://docs.microsoft.com/en-us/windows/win32/winsock/sockaddr-2 */
+#include <ws2tcpip.h>
+typedef uint32_t in_addr_t;
+typedef unsigned short sa_family_t;
+#define recv(a,b,c,d) recv((a),(char *)(b),(c),(d))
+#define getsockopt(a,b,c,d,e) getsockopt((a),(b),(c),(char *)(d),(e))
+#define setsockopt(a,b,c,d,e) setsockopt((a),(b),(c),(char *)(d),(e))
+#ifndef S_IFSOCK /*(used by lighttpd to mark fd type)*/
+#define S_IFSOCK 0140000
+#endif
 
 #else
 

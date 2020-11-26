@@ -240,6 +240,95 @@ int fdevent_socketpair_nb_cloexec (int domain, int typ, int protocol, int sv[2])
 }
 
 
+int fdevent_socket_set_cloexec (int fd)
+{
+    return SetHandleInformation((HANDLE)(uint64_t)fd,
+                                HANDLE_FLAG_INHERIT, 0) ? 0 : -1;
+}
+
+
+int fdevent_socket_clr_cloexec (int fd)
+{
+    return SetHandleInformation((HANDLE)(uint64_t)fd,
+                                HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)
+      ? 0
+      : -1;
+}
+
+
+int fdevent_socket_set_nb (int fd)
+{
+    u_long ul = 1;
+    return ioctlsocket(fd, FIONBIO, &ul);
+}
+
+
+int fdevent_socket_set_nb_cloexec (int fd)
+{
+    return SetHandleInformation((HANDLE)(uint64_t)fd, HANDLE_FLAG_INHERIT, 0)
+      ? fdevent_socket_set_nb(fd)
+      : -1;
+}
+
+
+int fdevent_socket_cloexec (int domain, int type, int protocol)
+{
+    return WSASocketA(domain, type, protocol, NULL, 0,
+                      WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+}
+
+
+int fdevent_socket_nb_cloexec (int domain, int type, int protocol)
+{
+    SOCKET fd = WSASocketA(domain, type, protocol, NULL, 0,
+                           WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+    if (fd != INVALID_SOCKET) {
+        if (0 != fdevent_socket_set_nb(fd)) {
+            closesocket(fd);
+            fd = INVALID_SOCKET; /* INVALID_SOCKET is (unsigned long long)-1 */
+        }
+    }
+    return fd;
+}
+
+
+void fdevent_setfd_cloexec (int fd)
+{
+    SetHandleInformation((HANDLE)_get_osfhandle(fd),
+                         HANDLE_FLAG_INHERIT, 0);
+}
+
+
+void fdevent_clrfd_cloexec (int fd)
+{
+    SetHandleInformation((HANDLE)_get_osfhandle(fd),
+                         HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+}
+
+
+int fdevent_fcntl_set_nb (int fd)
+{
+    DWORD mode = PIPE_READMODE_BYTE | PIPE_NOWAIT;
+    return SetNamedPipeHandleState((HANDLE)_get_osfhandle(fd),
+                                   &mode, NULL, NULL) ? 0 : -1;
+}
+
+
+int fdevent_fcntl_set_nb_cloexec (int fd)
+{
+    fdevent_setfd_cloexec(fd);
+    return fdevent_fcntl_set_nb(fd);
+}
+
+
+int fdevent_fcntl_set_nb_cloexec_sock (int fd)
+{
+    /*(should have created listening sockets non-blocking and no-inherit)*/
+    UNUSED(fd);
+    return 0;
+}
+
+
 #include <windows.h>
 #include <signal.h>     /* sig_atomic_t */
 
@@ -648,6 +737,151 @@ pid_t fdevent_createprocess (char *argv[], char *envp[], intptr_t fdin, intptr_t
     free(dirp);
 
     return pid;
+}
+
+
+int fdevent_dup_cloexec (int fd)
+{
+    const int newfd = _dup(fd);
+    if (newfd >= 0) fdevent_setfd_cloexec(newfd);
+    return newfd;
+}
+
+
+#include <fcntl.h>
+
+int fdevent_open_cloexec (const char *pathname, int symlinks, int flags, mode_t mode)
+{
+    UNUSED(symlinks);
+    return _open(pathname, flags | _O_BINARY | _O_NOINHERIT, mode);
+}
+
+
+int fdevent_open_devnull (void)
+{
+    return fdevent_open_cloexec("nul:", 0, O_RDWR, 0);
+}
+
+
+#if 0 /* not currently used on _WIN32 */
+int fdevent_open_dirname (char *path, int symlinks)
+{
+    /*(handle special cases of no dirname or dirname is root directory)*/
+    char *c = strrchr(path, '/');
+    char * const bs = strrchr(path, '\\');
+    if (c < bs) c = bs;
+    const char * const dname = (NULL != c ? c == path ? "/" : path : ".");
+    if (NULL != c) *c = '\0';
+    int dfd = fdevent_open_cloexec(dname, symlinks, _O_RDONLY, 0);
+    if (NULL != c) *c = (c == bs) ? '\\' : '/';
+    return dfd;
+}
+#endif
+
+
+int fdevent_pipe_cloexec (int * const fds, const unsigned int bufsz_hint)
+{
+    return _pipe(fds, bufsz_hint, _O_BINARY | _O_NOINHERIT);
+}
+
+
+int fdevent_socket_close (int fd)
+{
+    return closesocket(fd);
+}
+
+
+int fdevent_accept_listenfd (int listenfd, struct sockaddr *addr, size_t *addrlen)
+{
+    socklen_t len = (socklen_t) *addrlen;
+    SOCKET fd = accept(listenfd, addr, &len);
+    if (fd == INVALID_SOCKET)
+        return -1;
+    *addrlen = (size_t)len;
+   #if 0 /*WSA_FLAG_NO_HANDLE_INHERIT and non-blocking inherited from listenfd*/
+    if (0 != fdevent_socket_set_nb_cloexec(fd)) {
+        closesocket(fd);
+        return -1;
+    }
+   #endif
+   #if 0
+    if (fd > INT_MAX)
+        fprintf(stderr, "warning: SOCKET fd > INT_MAX (fd:%llu)", fd);
+   #endif
+    return (int)fd;
+}
+
+
+char ** fdevent_environ (void)
+{
+    return environ;
+}
+
+
+#include <sys/stat.h>   /* _S_IREAD _S_IWRITE */
+#include <share.h>      /* _SH_DENYRW */
+int fdevent_mkostemp (char *path, int flags)
+{
+    /* notes:
+     * - _O_TEMPORARY omitted since file deleted if all handles closed,
+     *   but close may occur in chunkqueue with large request/response using
+     *   multiple temp files
+     * - XXX: might convert path from UTF-8 to wide-char
+     */
+    char *p;
+    for (p = path; *p; ++p) if (*p == '\\') *p = '/';
+    int fd;      /*(flags might have _O_APPEND)*/
+    flags |= _O_RDWR | _O_CREAT | _O_EXCL | _O_BINARY | _O_NOINHERIT;
+    return (0 == _mktemp_s(path, (size_t)(p - path + 1)))
+        && (0 == _sopen_s(&fd, path, flags, _SH_DENYRW, _S_IREAD | _S_IWRITE))
+      ? fd
+      : -1;
+    /* future: if _sopen_s() returns EEXIST, might reset template (path) with
+     * trailing "XXXXXX", and then loop to try again */
+}
+
+
+int fdevent_rename (const char *oldpath, const char *newpath)
+{
+    /* MoveFileExA() vs ReplaceFileA() difference should not matter for use in
+     * caches, e.g. mod_deflate and mod_dirlisting, but ReplaceFileA() may be
+     * preferred in other places, such as mod_webdav. */
+  #if 1
+    return MoveFileExA(oldpath, newpath,
+                         MOVEFILE_COPY_ALLOWED
+                       | MOVEFILE_REPLACE_EXISTING) ? 0 : -1;
+  #else
+    return ReplaceFileA(newpath, oldpath, NULL,
+                          REPLACEFILE_IGNORE_MERGE_ERRORS
+                        | REPLACEFILE_IGNORE_ACL_ERRORS, NULL, NULL) ? 0 : -1;
+  #endif
+}
+
+
+ssize_t fdevent_socket_read_discard (int fd, char *buf, size_t sz, int family, int so_type)
+{
+    UNUSED(family);
+    UNUSED(so_type);
+    ssize_t rd = recv(fd, buf, sz, 0);
+    if (rd == SOCKET_ERROR) {
+        switch (WSAGetLastError()) {
+          case WSAEINTR:       errno = EINTR;  break;
+          case WSAEWOULDBLOCK: errno = EAGAIN; break;
+          default:             errno = EIO;    break;
+        }
+    }
+    return rd;
+}
+
+
+#include "sys-socket.h" /*(custom definition for S_IFSOCK)*/
+int fdevent_ioctl_fionread (int fd, int fdfmt, int *toread)
+{
+    if (fdfmt != S_IFSOCK) { errno = ENOTSOCK; return -1; }
+    u_long l;
+    int rc = ioctlsocket(fd, FIONREAD, &l);
+    if (0 == rc) *toread = (int)l;
+    return rc;
 }
 
 

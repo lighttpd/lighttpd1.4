@@ -79,7 +79,8 @@ mod_authn_dbi_error_callback (dbi_conn dbconn, void *vdata)
 
     while (++dbconf->reconnect_count <= 3) { /* retry */
         if (0 == dbi_conn_connect(dbconn)) {
-            fdevent_setfd_cloexec(dbi_conn_get_socket(dbconn));
+            /* _WIN32: ok if SOCKET (unsigned long long) actually <= INT_MAX */
+            (void)fdevent_socket_set_cloexec(dbi_conn_get_socket(dbconn));
             return;
         }
     }

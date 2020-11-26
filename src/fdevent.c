@@ -11,15 +11,10 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#ifdef _WIN32
-#include <sys/stat.h>   /* _S_IREAD _S_IWRITE */
-#include <io.h>
-#include <share.h>      /* _SH_DENYRW */
-#include <winsock2.h>
-#endif
-
 #include "ck.h"
 #define force_assert(x) ck_assert(x)
+
+#ifndef _WIN32
 
 #ifdef SOCK_CLOEXEC
 static int use_sock_cloexec;
@@ -135,7 +130,6 @@ int fdevent_socket_nb_cloexec(int domain, int type, int protocol) {
 	return fd;
 }
 
-#ifndef _WIN32
 #if 0 /* not used */
 
 int fdevent_socketpair_cloexec (int domain, int typ, int protocol, int sv[2])
@@ -145,9 +139,13 @@ int fdevent_socketpair_cloexec (int domain, int typ, int protocol, int sv[2])
     return socketpair(domain, typ | SOCK_CLOEXEC, protocol, sv);
   #else
     if (0 == socketpair(domain, typ, protocol, sv)) {
-        fdevent_setfd_cloexec(sv[0]);
-        fdevent_setfd_cloexec(sv[1]);
-        return 0;
+        if (0 == fdevent_socket_set_cloexec(sv[0])
+         && 0 == fdevent_socket_set_cloexec(sv[1]))
+            return 0;
+
+        close(sv[0]);
+        close(sv[1]);
+        sv[0] = sv[1] = -1;
     }
     return -1;
   #endif
@@ -160,8 +158,8 @@ int fdevent_socketpair_nb_cloexec (int domain, int typ, int protocol, int sv[2])
     return socketpair(domain, typ | SOCK_NONBLOCK | SOCK_CLOEXEC, protocol, sv);
   #else
     if (0 == socketpair(domain, typ, protocol, sv)) {
-        if (0 == fdevent_fcntl_set_nb_cloexec(sv[0])
-         && 0 == fdevent_fcntl_set_nb_cloexec(sv[1]))
+        if (0 == fdevent_socket_set_nb_cloexec(sv[0])
+         && 0 == fdevent_socket_set_nb_cloexec(sv[1]))
             return 0;
 
         close(sv[0]);
@@ -173,8 +171,6 @@ int fdevent_socketpair_nb_cloexec (int domain, int typ, int protocol, int sv[2])
 }
 
 #endif /* not used */
-
-#endif /* !_WIN32 */
 
 int fdevent_dup_cloexec (int fd) {
   #ifdef F_DUPFD_CLOEXEC
@@ -228,9 +224,7 @@ int fdevent_open_cloexec(const char *pathname, int symlinks, int flags, mode_t m
 
 
 int fdevent_open_devnull(void) {
-  #if defined(_WIN32)
-    return fdevent_open_cloexec("nul", 0, O_RDWR, 0);
-  #elif defined(__sun) /* /dev/null is a symlink on Illumos */
+  #if defined(__sun) /* /dev/null is a symlink on Illumos */
     return fdevent_open_cloexec("/dev/null", 1, O_RDWR, 0);
   #else
     return fdevent_open_cloexec("/dev/null", 0, O_RDWR, 0);
@@ -254,14 +248,7 @@ int fdevent_open_dirname(char *path, int symlinks) {
 }
 
 
-#ifdef _WIN32
-#include <stdio.h>
-#endif
-
 int fdevent_pipe_cloexec (int * const fds, const unsigned int bufsz_hint) {
- #ifdef _WIN32
-    return _pipe(fds, bufsz_hint, _O_BINARY | _O_NOINHERIT);
- #else
   #ifdef HAVE_PIPE2
     if (0 != pipe2(fds, O_CLOEXEC))
   #endif
@@ -281,22 +268,16 @@ int fdevent_pipe_cloexec (int * const fds, const unsigned int bufsz_hint) {
     UNUSED(bufsz_hint);
   #endif
     return 0;
- #endif
+}
+
+
+int fdevent_socket_close(int fd) {
+    return close(fd);
 }
 
 
 int fdevent_mkostemp(char *path, int flags) {
- #ifdef _WIN32
-    /* future: if _sopen_s() returns EEXIST, might reset template (path) with
-     * trailing "XXXXXX", and then loop to try again */
-    int fd;      /*(flags might have _O_APPEND)*/
-    return (0 == _mktemp_s(path, strlen(path)+1))
-        && (0 == _sopen_s(&fd, path, _O_CREAT  | _O_EXCL   | _O_TEMPORARY
-                                   | flags     | _O_BINARY | _O_NOINHERIT,
-                          _SH_DENYRW, _S_IREAD | _S_IWRITE))
-      ? fd
-      : -1;
- #elif defined(HAVE_MKOSTEMP)
+ #if defined(HAVE_MKOSTEMP)
     return mkostemp(path, O_CLOEXEC | flags);
  #else
   #ifdef __COVERITY__
@@ -458,8 +439,6 @@ int fdevent_rename(const char *oldpath, const char *newpath) {
 }
 
 
-#ifndef _WIN32
-
 pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd) {
  #ifdef HAVE_FORK
 
@@ -531,8 +510,6 @@ int fdevent_waitpid_intr(pid_t pid, int * const status) {
     return waitpid(pid, status, 0);
 }
 
-#endif /* !_WIN32 */
-
 
 #ifndef MSG_DONTWAIT
 #define MSG_DONTWAIT 0
@@ -560,14 +537,7 @@ ssize_t fdevent_socket_read_discard (int fd, char *buf, size_t sz, int family, i
 #ifdef HAVE_SYS_FILIO_H
 #include <sys/filio.h>  /* FIONREAD (for illumos (OpenIndiana)) */
 #endif
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
 int fdevent_ioctl_fionread (int fd, int fdfmt, int *toread) {
-  #ifdef _WIN32
-    if (fdfmt != S_IFSOCK) { errno = ENOTSOCK; return -1; }
-    return ioctlsocket(fd, FIONREAD, toread);
-  #else
    #ifdef __CYGWIN__
     /*(cygwin supports FIONREAD on pipes, not sockets)*/
     if (fdfmt != S_IFIFO) { errno = EOPNOTSUPP; return -1; }
@@ -575,7 +545,6 @@ int fdevent_ioctl_fionread (int fd, int fdfmt, int *toread) {
     UNUSED(fdfmt);
    #endif
     return ioctl(fd, FIONREAD, toread);
-  #endif
 }
 
 
@@ -587,8 +556,12 @@ int fdevent_connect_status(int fd) {
     return (0 == getsockopt(fd,SOL_SOCKET,SO_ERROR,&opt,&len)) ? opt : errno;
 }
 
+#endif /* !_WIN32 */
 
+
+#ifndef _WIN32
 #include <netinet/tcp.h>
+#endif
 #if  defined(__FreeBSD__) || defined(__NetBSD__) \
   || defined(__OpenBSD__) || defined(__DragonFly__)
 #include <netinet/tcp_fsm.h>

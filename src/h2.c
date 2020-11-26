@@ -7,7 +7,11 @@
 #include "first.h"
 #include "h2.h"
 
+#ifndef _WIN32
 #include <arpa/inet.h>  /* htonl() */
+#else
+#include <winsock2.h>   /* htonl() */
+#endif
 #include <stdint.h>     /* INT32_MAX INT32_MIN */
 #include <stdlib.h>
 #include <string.h>

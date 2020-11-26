@@ -115,6 +115,22 @@ void fdevent_win32_cleanup (void);
 pid_t fdevent_createprocess(char *argv[], char *envp[], intptr_t fdin, intptr_t fdout, int fderr, int dfd);
 #endif /* _WIN32 */
 
+#define fdio_close_dirfd(fd) close(fd)
+#define fdio_close_file(fd) close(fd)
+#define fdio_close_pipe(fd) close(fd)
+#define fdio_close_socket(fd) fdevent_socket_close(fd)
+#ifdef _WIN32
+int fdevent_socket_set_cloexec(int fd);
+int fdevent_socket_clr_cloexec(int fd);
+int fdevent_socket_set_nb(int fd);
+int fdevent_socket_set_nb_cloexec(int fd);
+#else
+#define fdevent_socket_set_cloexec(fd)    (fdevent_setfd_cloexec(fd), 0)
+#define fdevent_socket_clr_cloexec(fd)    (fdevent_clrfd_cloexec(fd), 0)
+#define fdevent_socket_set_nb(fd)         fdevent_fcntl_set_nb(fd)
+#define fdevent_socket_set_nb_cloexec(fd) fdevent_fcntl_set_nb_cloexec(fd)
+#endif
+int fdevent_socket_close (int fd);
 ssize_t fdevent_socket_read_discard (int fd, char *buf, size_t sz, int family, int so_type);
 
 int fdevent_ioctl_fionread (int fd, int fdfmt, int *toread);

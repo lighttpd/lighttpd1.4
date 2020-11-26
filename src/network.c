@@ -472,8 +472,8 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 
 	if (-1 != stdin_fd) {
 		srv_socket->fd = stdin_fd;
-		if (-1 == fdevent_fcntl_set_nb_cloexec(stdin_fd)) {
-			log_perror(srv->errh, __FILE__, __LINE__, "fcntl");
+		if (-1 == fdevent_socket_set_nb_cloexec(stdin_fd)) {
+			log_perror(srv->errh, __FILE__, __LINE__, "fcntl()");
 			return -1;
 		}
 	} else
@@ -504,8 +504,8 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 			return -1;
 		}
 
-		if (-1 == fdevent_fcntl_set_nb(srv_socket->fd)) {
-			log_perror(srv->errh, __FILE__, __LINE__, "fcntl");
+		if (-1 == fdevent_socket_set_nb(srv_socket->fd)) {
+			log_perror(srv->errh, __FILE__, __LINE__, "fcntl()");
 			return -1;
 		}
 	} else
@@ -609,7 +609,7 @@ int network_close(server *srv) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
 		if (srv_socket->fd != -1) {
 			network_unregister_sock(srv, srv_socket);
-			close(srv_socket->fd);
+			fdio_close_socket(srv_socket->fd);
 		}
 
 		buffer_free(srv_socket->srv_token);
@@ -624,7 +624,7 @@ int network_close(server *srv) {
 	for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i) {
 		server_socket *srv_socket = srv->srv_sockets_inherited.ptr[i];
 		if (srv_socket->fd != -1 && srv_socket->sidx != (unsigned short)~0u) {
-			close(srv_socket->fd);
+			fdio_close_socket(srv_socket->fd);
 		}
 
 		buffer_free(srv_socket->srv_token);
@@ -647,7 +647,7 @@ void network_socket_activation_to_env (server * const srv) {
         server_socket *srv_socket = srv->srv_sockets.ptr[n];
         if (srv_socket->fd < fd) continue;
         if (srv_socket->fd == fd) {
-            fdevent_clrfd_cloexec(fd);
+            (void)fdevent_socket_clr_cloexec(fd);
             ++fd;
             continue;
         }
@@ -657,7 +657,7 @@ void network_socket_activation_to_env (server * const srv) {
                 break;
         }
         if (i < srv->srv_sockets.used) {
-            fdevent_clrfd_cloexec(fd);
+            (void)fdevent_socket_clr_cloexec(fd);
             ++fd;
             --n; /* loop to reprocess this entry */
             continue;
@@ -812,7 +812,7 @@ int network_init(server *srv, int stdin_fd) {
             /*assert(buffer_eq_slen(b, CONST_STR_LEN("/dev/stdin")));*/
             rc = (0 == srv->srv_sockets.used)
               ? network_server_init(srv, &p->defaults, b, 0, stdin_fd)
-              : close(stdin_fd);/*(graceful restart listening to "/dev/stdin")*/
+              : fdio_close_socket(stdin_fd);/*(graceful restart; "/dev/stdin")*/
             buffer_free(b);
             if (0 != rc) break;
         }
