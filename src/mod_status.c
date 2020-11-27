@@ -249,9 +249,9 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
     if (buffer_string_is_empty(r->server_name))
-        buffer_append_string_buffer(b, &r->uri.authority);
+        buffer_append_string_encoded(b, CONST_BUF_LEN(&r->uri.authority), ENCODING_HTML);
     else
-        buffer_append_string_buffer(b, r->server_name);
+        buffer_append_string_encoded(b, CONST_BUF_LEN(r->server_name), ENCODING_HTML);
 
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
@@ -270,7 +270,7 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
     }
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
-    buffer_append_string_buffer(b, &r->physical.path);
+    buffer_append_string_encoded(b, CONST_BUF_LEN(&r->physical.path), ENCODING_HTML);
 
     buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
 }
@@ -432,9 +432,9 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 
 	buffer_append_string_len(b, CONST_STR_LEN("<table summary=\"status\" class=\"status\">"));
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><td>Hostname</td><td class=\"string\">"));
-	buffer_append_string_buffer(b, &r->uri.authority);
+	buffer_append_string_encoded(b, CONST_BUF_LEN(&r->uri.authority), ENCODING_HTML);
 	buffer_append_string_len(b, CONST_STR_LEN(" ("));
-	buffer_append_string_buffer(b, r->server_name);
+	buffer_append_string_encoded(b, CONST_BUF_LEN(r->server_name), ENCODING_HTML);
 	buffer_append_string_len(b, CONST_STR_LEN(")</td></tr>\n"));
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><td>Uptime</td><td class=\"string\">"));
 
