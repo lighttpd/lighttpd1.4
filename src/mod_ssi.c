@@ -459,7 +459,6 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 	case SSI_FSIZE: {
 		const char * file_path = NULL, *virt_path = NULL;
 		struct stat stb;
-		char *sl;
 
 		for (i = 2; i < n; i += 2) {
 			if (0 == strcmp(l[i], "file")) {
@@ -491,11 +490,9 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 
 		if (file_path) {
 			/* current doc-root */
-			if (NULL == (sl = strrchr(r->physical.path.ptr, '/'))) {
-				buffer_copy_string_len(p->stat_fn, CONST_STR_LEN("/"));
-			} else {
-				buffer_copy_string_len(p->stat_fn, r->physical.path.ptr, sl - r->physical.path.ptr + 1);
-			}
+			char *sl = strrchr(r->physical.path.ptr, '/');
+			if (NULL == sl) break; /*(not expected)*/
+			buffer_copy_string_len(p->stat_fn, r->physical.path.ptr, sl - r->physical.path.ptr + 1);
 
 			buffer_copy_string(tb, file_path);
 			buffer_urldecode_path(tb);
@@ -505,17 +502,15 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				break;
 			}
 			buffer_path_simplify(tb, tb);
-			buffer_append_string_buffer(p->stat_fn, tb);
+			buffer_append_path_len(p->stat_fn, CONST_BUF_LEN(tb));
 		} else {
 			/* virtual */
-			size_t remain;
 
 			if (virt_path[0] == '/') {
 				buffer_copy_string(tb, virt_path);
 			} else {
 				/* there is always a / */
-				sl = strrchr(r->uri.path.ptr, '/');
-
+				const char * const sl = strrchr(r->uri.path.ptr, '/');
 				buffer_copy_string_len(tb, r->uri.path.ptr, sl - r->uri.path.ptr + 1);
 				buffer_append_string(tb, virt_path);
 			}
@@ -557,18 +552,18 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 			if (r->conf.force_lowercase_filenames) {
 				buffer_to_lower(tb);
 			}
-			remain = buffer_string_length(&r->uri.path) - i;
+			uint32_t remain = buffer_string_length(&r->uri.path) - i;
 			if (!r->conf.force_lowercase_filenames
 			    ? buffer_is_equal_right_len(&r->physical.path, &r->physical.rel_path, remain)
 			    :(buffer_string_length(&r->physical.path) >= remain
 			      && buffer_eq_icase_ssn(r->physical.path.ptr+buffer_string_length(&r->physical.path)-remain, r->physical.rel_path.ptr+i, remain))) {
 				buffer_copy_string_len(p->stat_fn, r->physical.path.ptr, buffer_string_length(&r->physical.path)-remain);
-				buffer_append_string_len(p->stat_fn, tb->ptr+i, buffer_string_length(tb)-i);
+				buffer_append_path_len(p->stat_fn, tb->ptr+i, buffer_string_length(tb)-i);
 			} else {
 				/* unable to perform physical path remap here;
 				 * assume doc_root/rel_path and no remapping */
 				buffer_copy_buffer(p->stat_fn, &r->physical.doc_root);
-				buffer_append_string_buffer(p->stat_fn, tb);
+				buffer_append_path_len(p->stat_fn, CONST_BUF_LEN(tb));
 			}
 		}
 

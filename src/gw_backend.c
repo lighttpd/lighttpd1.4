@@ -2183,7 +2183,8 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
                 buffer_copy_buffer(&r->physical.basedir, host->docroot);
 
                 buffer_copy_buffer(&r->physical.path, host->docroot);
-                buffer_append_string_buffer(&r->physical.path, &r->uri.path);
+                buffer_append_path_len(&r->physical.path,
+                                       CONST_BUF_LEN(&r->uri.path));
                 physpath = r->physical.path.ptr;
             }
 

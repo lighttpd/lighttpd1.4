@@ -498,8 +498,7 @@ static void stat_cache_handle_fdevent_fn(stat_cache_fam * const scf, fam_dir_ent
                 /* temporarily append filename to dir in fam_dir->name to
                  * construct path, then delete stat_cache entry (if any)*/
                 len = buffer_string_length(n);
-                buffer_append_string_len(n, CONST_STR_LEN("/"));
-                buffer_append_string_len(n, fn, fnlen);
+                buffer_append_path_len(n, fn, fnlen);
                 /* (alternatively, could chose to stat() and update)*/
                 stat_cache_invalidate_entry(CONST_BUF_LEN(n));
 

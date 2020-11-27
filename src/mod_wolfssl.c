@@ -1569,8 +1569,6 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     /* check if acme-tls/1 protocol is enabled (path to dir of cert(s) is set)*/
     if (buffer_string_is_empty(hctx->conf.ssl_acme_tls_1))
         return SSL_TLSEXT_ERR_NOACK; /*(reuse value here for not-configured)*/
-    buffer_copy_buffer(b, hctx->conf.ssl_acme_tls_1);
-    buffer_append_slash(b);
 
     /* check if SNI set server name (required for acme-tls/1 protocol)
      * and perform simple path checks for no '/'
@@ -1582,7 +1580,8 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     if (0 != http_request_host_policy(name,hctx->r->conf.http_parseopts,443))
         return rc;
   #endif
-    buffer_append_string_buffer(b, name);
+    buffer_copy_buffer(b, hctx->conf.ssl_acme_tls_1);
+    buffer_append_path_len(b, CONST_BUF_LEN(name));
     len = buffer_string_length(b);
 
     do {

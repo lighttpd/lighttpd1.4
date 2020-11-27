@@ -111,7 +111,7 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 		} else {
 			buffer_copy_buffer(b, &r->physical.path);
 		}
-		buffer_append_string_buffer(b, &ds->value);
+		buffer_append_path_len(b, CONST_BUF_LEN(&ds->value));
 
 		if (NULL == stat_cache_path_stat(b)) {
 			if (errno == EACCES) {

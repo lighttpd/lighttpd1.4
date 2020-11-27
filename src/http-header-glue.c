@@ -1654,7 +1654,7 @@ int http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi
             } else {
                 buffer_copy_buffer(tb, &r->physical.basedir);
             }
-            buffer_append_string_buffer(tb, &r->pathinfo);
+            buffer_append_path_len(tb, CONST_BUF_LEN(&r->pathinfo));
             rc |= cb(vdata, CONST_STR_LEN("PATH_TRANSLATED"),
                             CONST_BUF_LEN(tb));
         }
@@ -1670,7 +1670,7 @@ int http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi
     if (!buffer_string_is_empty(opts->docroot)) {
         /* alternate docroot, e.g. for remote FastCGI or SCGI server */
         buffer_copy_buffer(tb, opts->docroot);
-        buffer_append_string_buffer(tb, &r->uri.path);
+        buffer_append_path_len(tb, CONST_BUF_LEN(&r->uri.path));
         rc |= cb(vdata, CONST_STR_LEN("SCRIPT_FILENAME"),
                         CONST_BUF_LEN(tb));
         rc |= cb(vdata, CONST_STR_LEN("DOCUMENT_ROOT"),
@@ -1683,7 +1683,7 @@ int http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi
              * see src/sapi/cgi_main.c, init_request_info()
              */
             buffer_copy_buffer(tb, &r->physical.path);
-            buffer_append_string_buffer(tb, &r->pathinfo);
+            buffer_append_path_len(tb, CONST_BUF_LEN(&r->pathinfo));
             rc |= cb(vdata, CONST_STR_LEN("SCRIPT_FILENAME"),
                             CONST_BUF_LEN(tb));
         } else {

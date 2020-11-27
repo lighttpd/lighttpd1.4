@@ -2005,7 +2005,7 @@ int config_parse_file(server *srv, config_t *context, const char *fn) {
 		filename = buffer_init_string(fn);
 	} else {
 		filename = buffer_init_buffer(context->basedir);
-		buffer_append_string(filename, fn);
+		buffer_append_path_len(filename, fn, strlen(fn));
 	}
 
 	switch (glob(filename->ptr, flags, NULL, &gl)) {
@@ -2257,14 +2257,17 @@ int config_set_defaults(server *srv) {
 		buffer_clear(b);
 		if (!buffer_string_is_empty(srv->srvconf.changeroot)) {
 			buffer_copy_buffer(b, srv->srvconf.changeroot);
-			buffer_append_slash(b);
 		}
 		len = buffer_string_length(b);
 
 		for (i = 0; i < srv->srvconf.upload_tempdirs->used; ++i) {
 			const data_string * const ds = (data_string *)srv->srvconf.upload_tempdirs->data[i];
-			buffer_string_set_length(b, len); /*(truncate)*/
-			buffer_append_string_buffer(b, &ds->value);
+			if (len) {
+				buffer_string_set_length(b, len); /*(truncate)*/
+				buffer_append_path_len(b, CONST_BUF_LEN(&ds->value));
+			} else {
+				buffer_copy_buffer(b, &ds->value);
+			}
 			if (-1 == stat(b->ptr, &st1)) {
 				log_error(srv->errh, __FILE__, __LINE__,
 				  "server.upload-dirs doesn't exist: %s", b->ptr);

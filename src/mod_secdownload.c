@@ -702,7 +702,8 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	buffer_copy_buffer(&r->physical.basedir, p->conf.doc_root);
 	buffer_copy_string(&r->physical.rel_path, rel_uri);
 	buffer_copy_buffer(&r->physical.path, &r->physical.doc_root);
-	buffer_append_string_buffer(&r->physical.path, &r->physical.rel_path);
+	buffer_append_path_len(&r->physical.path,
+			       CONST_BUF_LEN(&r->physical.rel_path));
 
 	return HANDLER_GO_ON;
 }

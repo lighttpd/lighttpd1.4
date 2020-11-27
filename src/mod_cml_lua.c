@@ -220,16 +220,17 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 			/* key' is at index -2 and value' at index -1 */
 
 			if (lua_isstring(L, -1)) {
-				const char *s = lua_tostring(L, -1);
+				size_t slen;
+				const char * const s = lua_tolstring(L, -1, &slen);
 				struct stat st;
 				int fd;
 
 				/* the file is relative, make it absolute */
 				if (s[0] != '/') {
 					buffer_copy_buffer(b, &p->basedir);
-					buffer_append_string(b, lua_tostring(L, -1));
+					buffer_append_path_len(b, s, (uint32_t)slen);
 				} else {
-					buffer_copy_string(b, lua_tostring(L, -1));
+					buffer_copy_string_len(b, s, (uint32_t)slen);
 				}
 
 				fd = stat_cache_open_rdonly_fstat(b, &st, r->conf.follow_symlink);
@@ -302,7 +303,7 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 		buffer_append_string_buffer(&r->uri.path, &p->trigger_handler);
 
 		buffer_copy_buffer(&r->physical.path, &p->basedir);
-		buffer_append_string_buffer(&r->physical.path, &p->trigger_handler);
+		buffer_append_path_len(&r->physical.path, CONST_BUF_LEN(&p->trigger_handler));
 
 		chunkqueue_reset(&r->write_queue);
 	}

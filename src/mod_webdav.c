@@ -4899,9 +4899,9 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
       #endif
         buffer_copy_string_len(dst_path, r->physical.path.ptr,
                                r->physical.path.used - 1 - remain);
-        buffer_append_string_len(dst_path,
-                                 dst_rel_path->ptr+i,
-                                 dst_rel_path->used - 1 - i);
+        buffer_append_path_len(dst_path,
+                               dst_rel_path->ptr+i,
+                               dst_rel_path->used - 1 - i);
         if (buffer_string_length(dst_path) >= PATH_MAX) {
             http_status_set_error(r, 403); /* Forbidden */
             return HANDLER_FINISHED;
@@ -4917,7 +4917,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
         buffer_copy_buffer(dst_path, &r->physical.doc_root);
         if (dst_path->ptr[dst_path->used-2] == '/')
             --dst_path->used; /* since dst_rel_path begins with '/' */
-        buffer_append_string_buffer(dst_path, dst_rel_path);
+        buffer_append_path_len(dst_path, CONST_BUF_LEN(dst_rel_path));
         if (buffer_string_length(dst_rel_path) >= PATH_MAX) {
             http_status_set_error(r, 403); /* Forbidden */
             return HANDLER_FINISHED;
