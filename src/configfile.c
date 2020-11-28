@@ -26,7 +26,9 @@
 #include <errno.h>
 #include <string.h>
 #include <limits.h>
+#ifndef _WIN32
 #include <glob.h>
+#endif
 
 #ifdef HAVE_SYSLOG_H
 # include <syslog.h>
@@ -2229,6 +2231,110 @@ static int config_parse_file_stream(server *srv, config_t *context, const char *
     free(data);
     return rc;
 }
+
+#ifdef _WIN32
+/*(minimal glob implementation for lighttpd configfile.c)*/
+#include <windows.h>
+#include <stringapiset.h>
+#include <stdio.h>      /* FILENAME_MAX */
+typedef struct {
+    size_t gl_pathc;
+    char **gl_pathv;
+} glob_t;
+#define GLOB_NOSPACE  1
+#define GLOB_ABORTED  2
+#define GLOB_NOMATCH  3
+static void globfree (glob_t * const gl)
+{
+    for (size_t i = 0; i < gl->gl_pathc; ++i)
+        free(gl->gl_pathv[i]);
+    free(gl->gl_pathv);
+    gl->gl_pathc = 0;
+    gl->gl_pathv = NULL;
+}
+static int glob_C_cmp(const void *arg1, const void *arg2)
+{
+   return strcmp(*(char **)arg1, *(char **)arg2);
+}
+static int glob(const char *pattern, int flags,
+                int (*errfunc) (const char *epath, int eerrno),
+                glob_t * const gl)
+{
+    UNUSED(flags);   /*(not implemented; ignore GLOB_BRACE)*/
+    UNUSED(errfunc); /*(not implemented)*/
+    gl->gl_pathc = 0;
+    gl->gl_pathv = NULL;
+    size_t sz = 0;
+
+    WCHAR wbuf[4096];
+    int wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, pattern, -1,
+                                   wbuf, (sizeof(wbuf)/sizeof(*wbuf)));
+    if (0 == wlen) return GLOB_NOSPACE;
+    WIN32_FIND_DATAW ffd;
+    HANDLE hFind = FindFirstFileExW(wbuf, FindExInfoBasic, &ffd,
+                                    FindExSearchNameMatch, NULL,
+                                    FIND_FIRST_EX_LARGE_FETCH);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        DWORD rc = GetLastError();
+        return (rc == ERROR_FILE_NOT_FOUND || rc == ERROR_NO_MORE_FILES)
+          ? GLOB_NOMATCH
+          : GLOB_ABORTED;
+    }
+    const char * const slash = strrchr(pattern, '/');
+    const char * const bslash = strrchr(pattern, '\\');
+    const size_t pathlen = (slash || bslash)
+      ? (size_t)(((slash > bslash) ? slash : bslash) - pattern + 1)
+      : 0;
+
+    char fnUTF8[FILENAME_MAX*4+1];
+    do {
+        if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            continue; /*(dir check is specific to lighttpd configfile.c use)*/
+
+        if (gl->gl_pathc == sz) {
+            if (0 == sz) sz = 4;
+            sz <<= 1;
+            char **gl_pathv = realloc(gl->gl_pathv, sz * sizeof(char *));
+            if (NULL == gl_pathv) {
+                globfree(gl);
+                return GLOB_NOSPACE;
+            }
+            gl->gl_pathv = gl_pathv;
+        }
+
+        /* construct result with path, if present */
+        /* WC_ERR_INVALID_CHARS not used in string conversion since
+         * expecting valid unicode from reading directory */
+        const size_t len = (size_t)
+          WideCharToMultiByte(CP_UTF8, 0, ffd.cFileName, -1,
+                              fnUTF8, sizeof(fnUTF8), NULL, NULL);
+        if (0 == len) continue; /*(unexpected; skip)*/
+        char * const fn = malloc(pathlen + len); /*(includes '\0')*/
+        if (NULL == fn) {
+            globfree(gl);
+            return GLOB_NOSPACE;
+        }
+        if (pathlen) memcpy(fn, pattern, pathlen);
+        memcpy(fn+pathlen, fnUTF8, len);
+
+        gl->gl_pathv[gl->gl_pathc++] = fn;
+    } while (FindNextFileW(hFind, &ffd));
+
+    DWORD err = GetLastError();
+    FindClose(hFind);
+
+    if (err != ERROR_NO_MORE_FILES) {
+        globfree(gl);
+        return GLOB_ABORTED; /*(actual error in GetLastError())*/
+    }
+    else if (0 == gl->gl_pathc) /*(found only directories)*/
+        return GLOB_NOMATCH;
+
+    qsort(gl->gl_pathv, gl->gl_pathc, sizeof(char *), glob_C_cmp);
+
+    return 0;
+}
+#endif
 
 int config_parse_file(server *srv, config_t *context, const char *fn) {
 	buffer * const filename = buffer_init();
