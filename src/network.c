@@ -145,6 +145,7 @@ typedef struct {
     unsigned char use_ipv6;
     unsigned char set_v6only; /* set_v6only is only a temporary option */
     unsigned char defer_accept;
+    int8_t v4mapped;
     const buffer *socket_perms;
     const buffer *bsd_accept_filter;
 } network_socket_config;
@@ -177,6 +178,9 @@ static void network_merge_config_cpv(network_socket_config * const pconf, const 
         break;
       case 6: /* server.set-v6only */
         pconf->set_v6only = (0 != cpv->v.u);
+        break;
+      case 7: /* server.v4mapped */
+        pconf->v4mapped = (0 != cpv->v.u);
         break;
       default:/* should not happen */
         return;
@@ -242,6 +246,9 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 			  "warning: server.set-v6only will be removed soon, "
 			  "update your config to have different sockets for ipv4 and ipv6");
 		}
+	}
+	if (AF_INET6 == family && -1 != s->v4mapped) { /*(configured; -1 is unset)*/
+		set_v6only = (s->v4mapped ? -1 : 0);
 	}
       #endif
 
@@ -330,17 +337,17 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 			log_perror(srv->errh, __FILE__, __LINE__, "socket");
 			return -1;
 		}
-	}
 
 #ifdef HAVE_IPV6
-		if (set_v6only && -1 == stdin_fd) {
-				int val = 1;
+		if (set_v6only) {
+				int val = (set_v6only > 0);
 				if (-1 == setsockopt(srv_socket->fd, IPPROTO_IPV6, IPV6_V6ONLY, &val, sizeof(val))) {
 					log_perror(srv->errh, __FILE__, __LINE__, "setsockopt(IPV6_V6ONLY)");
 					return -1;
 				}
 		}
 #endif
+	}
 
 	/* */
 	srv->cur_fds = srv_socket->fd;
@@ -556,6 +563,9 @@ int network_init(server *srv, int stdin_fd) {
      ,{ CONST_STR_LEN("server.set-v6only"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("server.v4mapped"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
     #if 0 /* TODO: more integration needed ... */
      ,{ CONST_STR_LEN("mbedtls.engine"),
         T_CONFIG_BOOL,
@@ -588,6 +598,7 @@ int network_init(server *srv, int stdin_fd) {
     p->defaults.defer_accept = 0;
     p->defaults.use_ipv6 = 0;
     p->defaults.set_v6only = 1;
+    p->defaults.v4mapped = -1; /*(-1 for unset; not 0 or 1)*/
 
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
