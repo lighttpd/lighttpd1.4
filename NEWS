@@ -3,7 +3,7 @@
 NEWS
 ====
 
-- 1.4.56 - unreleased
+- 1.4.56 - 2020-11-29
   * [core] perf: request processing
   * [core] http_header_str_contains_token()
   * [mod_flv_streaming] parse query string w/o copying
@@ -535,6 +535,74 @@ NEWS
   * [mod_accesslog] update defaults after cycling log
   * [multiple] add some missing config cleanup
   * [core] fix (startup) mem leaks in configparser.y
+  * [core] STAILQ_* -> SIMPLEQ_* on OpenBSD
+  * [tests] OpenBSD crypt() support limited to bcrypt
+  * [build] mark dependencies on crypto lib for MD5()
+  * [build] use pkg-config with wolfssl
+  * [mod_wolfssl] use more wolfssl/options.h defines
+  * [mod_wolfssl] cripple SNI if not built OPENSSL_ALL
+  * [mod_wolfssl] need to build --enable-alpn for ALPN
+  * [mod_secdownload] fix compile w/ NSS on FreeBSD
+  * [build] fix lib paths for GnuTLS, NSS
+  * [build] add --with-brotli to meson.build
+  * [build] CMake mod_openssl, mod_wolfssl can coexist
+  * [build] CMake use pkg_check_modules() w/ wolfssl
+  * [build] detect nss3/nss.h or nss/nss.h for NSS
+  * [build] WITHOUT_LIB_CRYPTO option in code
+  * [build] adjust meson.build for use by OpenWRT
+  * [mod_mbedtls] wrap addtl code in preproc defines
+  * [TLS] server.feature-flags "ssl.session-cache"
+  * [core] workaround fragile code in wolfssl types.h
+  * [core] move misplaced error trace to match option
+  * [core] adjust wolfssl workaround for another case
+  * [multiple] consistent order for crypto lib select
+  * [multiple] include mbedtls/config.h after select
+  * [multiple] include wolfssl/options.h after select
+  * [core] set NSS_VER_INCLUDE after crypto lib select
+  * [core] use system xxhash lib if available
+  * [build] fix typo in configure.ac
+  * [build] option to use system-provided libxxhash
+  * [build] meson --with-xxhash option
+  * [doc] refresh doc/config/conf.d/mime.conf
+  * [meson] add matching -I for lua lib version
+  * [build] prepend search for lua version 5.4
+  * [core] use inotify in stat_cache.[ch] on Linux
+  * [build] detect inotify header <sys/inotify.h>
+  * [mod_nss] update session ticket NSS devel comment
+  * [core] set last_used on rd/wr from backend (fixes #3029)
+  * [core] cold func for gw_recv_response error case
+  * [core] use kqueue() instead of FAM/gamin on *BSD
+  * [core] no graceful-restart-bg on OpenBSD, NetBSD
+  * [mod_openssl] add LIBRESSL_VERSION_NUMBER checks
+  * [core] use struct kevent on stack in stat_cache
+  * [core] stat_cache preprocessor paranoia
+  * [mod_openssl] adjust LIBRESSL_VERSION_NUMBER check
+  * [mod_maxminddb] fix config validation typo
+  * [tests] allow LIGHTTPD_EXE_PATH override
+  * [multiple] handle NULL val as empty in *_env_add (fixes #3030)
+  * [core] accept "HTTP/2.0", "HTTP/3.0" from backends (fixes #3031)
+  * [build] check for xxhash in more ways
+  * [core] accept "HTTP/2.0", "HTTP/3.0" from backends (#3031)
+  * [core] http_response_buffer_append_authority()
+  * [core] define SHA*_DIGEST_LENGTH macros if missing
+  * [doc] update optional pkg dependencies in INSTALL
+  * [mod_alias] validate given order, not sorted order
+  * [core] filter out duplicate modules
+  * [mod_cgi] fix crash if initial write to CGI fails
+  * [mod_cgi] ensure tmp file open() before splice()
+  * [multiple] add back-pressure gw data pump (fixes #3033)
+  * [core] fix bug when HTTP/2 frames span chunks
+  * [multiple] more forgiving config str to boolean (fixes #3036)
+  * [core] check for __builtin_expect() availability
+  * [core] quiet more request parse errs unless debug
+  * [core] consolidate chunk size checks
+  * [mod_flv_streaming] use stat_cache_get_entry_open
+  * [mod_webdav] pass full path to webdav_unlinkat()
+  * [mod_webdav] fallbacks if _ATFILE_SOURCE not avail
+  * [mod_fastcgi] move src/fastcgi.h into src/compat/
+  * [mod_status] add additional HTML-encoding
+  * [core] server.v4mapped option
+  * [mod_webdav] workaround for gvfs dir redir bug
 
 - 1.4.55 - 2020-01-31
   * [core] fix compile error on Solaris (fixes #2959)
