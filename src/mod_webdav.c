@@ -3812,6 +3812,7 @@ webdav_has_lock (request_st * const r,
                         chunk_buffer_release(cbdata.b);
                         return 0;
                     }
+                    cbdata.size = 16;
                     cbdata.tokens =
                       realloc(cbdata.tokens, sizeof(*(cbdata.tokens)) * 16);
                     force_assert(cbdata.tokens); /*(see above limit)*/
@@ -3944,6 +3945,12 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
                 http_response_redirect_to_directory(r, 308);
                 return HANDLER_FINISHED;
             }
+            if (vb && 0 == strncmp(vb->ptr, "gvfs/", sizeof("gvfs/")-1)) {
+                /* workaround gvfs bug */
+                /* (gvfs unable to open folder if not redirected) */
+                http_response_redirect_to_directory(r, 308);
+                return HANDLER_FINISHED;
+            }
             /* set "Content-Location" instead of sending 308 redirect to dir */
             if (!http_response_redirect_to_directory(r, 0))
                 return HANDLER_FINISHED;
@@ -4013,6 +4020,7 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
                         xmlFreeDoc(xml);
                         return HANDLER_FINISHED;
                     }
+                    pb.proplist.size = 32;
                     pb.proplist.ptr =
                       realloc(pb.proplist.ptr, sizeof(*(pb.proplist.ptr)) * 32);
                     force_assert(pb.proplist.ptr); /*(see above limit)*/
@@ -4033,6 +4041,8 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
                         ++list;
                     if (NULL != list->prop) {
                         if (cmd->name[0] == 'p') { /* "prop", not "include" */
+                            pb.proplist.ptr[pb.proplist.used].ns = "";
+                            pb.proplist.ptr[pb.proplist.used].nslen = 0;
                             pb.proplist.ptr[pb.proplist.used].name = NULL;
                             pb.proplist.ptr[pb.proplist.used].namelen =
                               list->pnum;
@@ -5170,6 +5180,12 @@ mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
                 /* workaround Microsoft-WebDAV-MiniRedir bug */
                 /* (might not be necessary for PROPPATCH here,
                  *  but match behavior in mod_webdav_propfind() for PROPFIND) */
+                http_response_redirect_to_directory(r, 308);
+                return HANDLER_FINISHED;
+            }
+            if (vb && 0 == strncmp(vb->ptr, "gvfs/", sizeof("gvfs/")-1)) {
+                /* workaround gvfs bug */
+                /* (gvfs unable to open folder if not redirected) */
                 http_response_redirect_to_directory(r, 308);
                 return HANDLER_FINISHED;
             }
