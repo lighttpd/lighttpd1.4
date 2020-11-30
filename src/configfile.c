@@ -1880,6 +1880,13 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 
 					t->offset += i;
 					t->line_pos += i;
+				} else if (0 == i
+				           && ((uint8_t *)t->input)[t->offset+0] == 0xc2
+				           && ((uint8_t *)t->input)[t->offset+1] == 0xa0) {
+					/* treat U+00A0	(c2 a0) "NO-BREAK SPACE" as whitespace */
+					/* http://www.fileformat.info/info/unicode/char/a0/index.htm */
+					t->offset+=2;
+					t->line_pos+=2;
 				} else {
 					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
 							"invalid character in variable name");
