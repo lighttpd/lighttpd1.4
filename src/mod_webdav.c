@@ -182,6 +182,14 @@
 #include <string.h>
 #include <unistd.h>     /* getpid() linkat() rmdir() unlinkat() */
 
+#if defined(__APPLE__) && defined(__MACH__)
+#ifdef AT_SYMLINK_NOFOLLOW
+#ifndef _ATFILE_SOURCE
+#define _ATFILE_SOURCE
+#endif
+#endif
+#endif
+
 /* Note: filesystem access race conditions exist without _ATFILE_SOURCE */
 #ifndef _ATFILE_SOURCE
 #define AT_SYMLINK_NOFOLLOW 0
