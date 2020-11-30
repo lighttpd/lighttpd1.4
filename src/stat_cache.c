@@ -373,7 +373,9 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
         for (int i = 0; i < rd; ) {
             struct inotify_event * const in =
               (struct inotify_event *)((uintptr_t)buf + i);
-            i += sizeof(struct inotify_event) + in->len;
+            uint32_t len = in->len;
+            i += sizeof(struct inotify_event) + len;
+            if (i > rd) break; /*(should not happen (partial record))*/
             if (in->mask & IN_CREATE)
                 continue; /*(see comment below for FAMCreated)*/
             if (in->mask & IN_Q_OVERFLOW) {
@@ -400,10 +402,10 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
             else if (in->mask & (IN_MOVE_SELF | IN_MOVED_FROM))
                 code = FAMMoved;
 
-            if (in->len) {
-                do { --in->len; } while (in->len && in->name[in->len-1]=='\0');
+            if (len) {
+                do { --len; } while (len && in->name[len-1] == '\0');
             }
-            stat_cache_handle_fdevent_fn(scf, fam_dir, in->name, in->len, code);
+            stat_cache_handle_fdevent_fn(scf, fam_dir, in->name, len, code);
         }
     } while (rd + sizeof(struct inotify_event) + NAME_MAX + 1 > sizeof(buf));
   #elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
@@ -575,6 +577,7 @@ static stat_cache_fam * stat_cache_init_fam(fdevents *ev, log_error_st *errh) {
 	scf->fd = inotify_init1(IN_NONBLOCK|IN_CLOEXEC);
 	if (scf->fd < 0) {
 		log_perror(errh, __FILE__, __LINE__, "inotify_init1()");
+		free(scf);
 		return NULL;
 	}
   #elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
@@ -586,6 +589,7 @@ static stat_cache_fam * stat_cache_init_fam(fdevents *ev, log_error_st *errh) {
    #endif
 	if (scf->fd < 0) {
 		log_perror(errh, __FILE__, __LINE__, "kqueue()");
+		free(scf);
 		return NULL;
 	}
   #else
@@ -593,6 +597,7 @@ static stat_cache_fam * stat_cache_init_fam(fdevents *ev, log_error_st *errh) {
 	if (0 != FAMOpen2(&scf->fam, "lighttpd")) {
 		log_error(errh, __FILE__, __LINE__,
 		  "could not open a fam connection, dying.");
+		free(scf);
 		return NULL;
 	}
       #ifdef HAVE_FAMNOEXISTS
