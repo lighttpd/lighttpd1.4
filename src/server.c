@@ -356,7 +356,7 @@ static int server_oneshot_read_cq(connection *con, chunkqueue *cq, off_t max_byt
     /* temporary set con->fd to oneshot_fd (fd input) rather than outshot_fdout
      * (lighttpd generally assumes operation on sockets, so this is a kludge) */
     int fd = con->fd;
-    con->fd = oneshot_fd;
+    con->fd = oneshot_fdn->fd;
     int rc = oneshot_read_cq(con, cq, max_bytes);
     con->fd = fd;
 
