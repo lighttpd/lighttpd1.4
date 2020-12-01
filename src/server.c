@@ -930,8 +930,10 @@ static void server_graceful_state (server *srv) {
         connection_graceful_shutdown_maint(srv);
     }
 
-    if (!oneshot_fd
-        && (2 == srv->sockets_disabled || 3 == srv->sockets_disabled)) return;
+    if (2 == srv->sockets_disabled || 3 == srv->sockets_disabled) {
+        if (oneshot_fd) graceful_restart = 0;
+        return;
+    }
 
     log_error(srv->errh,__FILE__,__LINE__,"[note] graceful shutdown started");
 
@@ -1125,7 +1127,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			return -1;
 		}
 		graceful_shutdown = 1;
-		srv->sockets_disabled = 1;
+		srv->sockets_disabled = 2;
 		srv->srvconf.dont_daemonize = 1;
 		if (srv->srvconf.pid_file) buffer_clear(srv->srvconf.pid_file);
 		if (srv->srvconf.max_worker) {
@@ -1496,7 +1498,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			log_error(srv->errh, __FILE__, __LINE__, "Opening errorlog failed. Going down.");
 			return -1;
 		}
-		log_error(srv->errh, __FILE__, __LINE__, "server started (" PACKAGE_DESC ")");
+		if (!oneshot_fd)
+			log_error(srv->errh, __FILE__, __LINE__, "server started (" PACKAGE_DESC ")");
 	}
 
 	if (HANDLER_GO_ON != plugins_call_set_defaults(srv)) {
@@ -1955,7 +1958,7 @@ int main (int argc, char **argv) {
             if (2 == graceful_shutdown) { /* value 2 indicates idle timeout */
                 log_error(srv->errh, __FILE__, __LINE__,
                   "server stopped after idle timeout");
-            } else {
+            } else if (!oneshot_fd) {
               #ifdef HAVE_SIGACTION
                 log_error(srv->errh, __FILE__, __LINE__,
                   "server stopped by UID = %d PID = %d",
