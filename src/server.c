@@ -916,6 +916,17 @@ static int server_graceful_state_bg (server *srv) {
 }
 
 __attribute_cold__
+__attribute_noinline__
+static void server_graceful_shutdown_maint (server *srv) {
+    if (oneshot_fd) {
+        /* permit keep-alive on one-shot connections until graceful_expire_ts */
+        if (!srv->graceful_expire_ts) return;
+        if (srv->graceful_expire_ts >= log_epoch_secs) return;
+    }
+    connection_graceful_shutdown_maint(srv);
+}
+
+__attribute_cold__
 static void server_graceful_state (server *srv) {
 
     if (!srv_shutdown) {
@@ -927,7 +938,7 @@ static void server_graceful_state (server *srv) {
             if (srv->graceful_expire_ts)
                 srv->graceful_expire_ts += log_epoch_secs;
         }
-        connection_graceful_shutdown_maint(srv);
+        server_graceful_shutdown_maint(srv);
     }
 
     if (2 == srv->sockets_disabled || 3 == srv->sockets_disabled) {
@@ -1824,7 +1835,8 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 				/* reset global/aggregate rate limit counters */
 				config_reset_config_bytes_sec(srv->config_data_base);
 				/* if graceful_shutdown, accelerate cleanup of recently completed request/responses */
-				if (graceful_shutdown && !srv_shutdown) connection_graceful_shutdown_maint(srv);
+				if (graceful_shutdown && !srv_shutdown)
+					server_graceful_shutdown_maint(srv);
 				connection_periodic_maint(srv, min_ts);
 }
 
