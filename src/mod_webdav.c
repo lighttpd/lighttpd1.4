@@ -182,17 +182,18 @@
 #include <string.h>
 #include <unistd.h>     /* getpid() linkat() rmdir() unlinkat() */
 
-#if defined(__APPLE__) && defined(__MACH__)
-#ifdef AT_SYMLINK_NOFOLLOW
+#ifdef AT_FDCWD
 #ifndef _ATFILE_SOURCE
 #define _ATFILE_SOURCE
 #endif
 #endif
+
+#ifndef AT_SYMLINK_NOFOLLOW
+#define AT_SYMLINK_NOFOLLOW 0
 #endif
 
 /* Note: filesystem access race conditions exist without _ATFILE_SOURCE */
 #ifndef _ATFILE_SOURCE
-#define AT_SYMLINK_NOFOLLOW 0
 /*(trigger linkat() fail to fallback logic in mod_webdav.c)*/
 #define linkat(odfd,opath,ndfd,npath,flags) -1
 #endif
@@ -2379,7 +2380,10 @@ webdav_delete_dir (const plugin_config * const pconf,
         buffer_append_string_len(&dst->rel_path, de->d_name, len);
 
       #ifndef _ATFILE_SOURCE
-      #ifndef _DIRENT_HAVE_D_TYPE
+      #ifdef _DIRENT_HAVE_D_TYPE
+      if (de->d_type == DT_UNKNOWN)
+      #endif
+      {
         struct stat st;
         if (0 != stat(dst->path.ptr, &st)) {
             dst->path.ptr[    (dst->path.used     = dst_path_used)    -1]='\0';
@@ -2387,7 +2391,7 @@ webdav_delete_dir (const plugin_config * const pconf,
             continue; /* file *just* disappeared? */
         }
         s_isdir = S_ISDIR(st.st_mode);
-      #endif
+      }
       #endif
 
         if (s_isdir) {
@@ -2898,7 +2902,10 @@ webdav_copymove_dir (const plugin_config * const pconf,
         buffer_append_string_len(&dst->rel_path, de->d_name, len);
 
       #ifndef _ATFILE_SOURCE
-      #ifndef _DIRENT_HAVE_D_TYPE
+      #ifdef _DIRENT_HAVE_D_TYPE
+      if (de->d_type == DT_UNKNOWN)
+      #endif
+      {
         if (0 != stat(src->path.ptr, &st)) {
             src->path.ptr[    (src->path.used     = src_path_used)    -1]='\0';
             src->rel_path.ptr[(src->rel_path.used = src_rel_path_used)-1]='\0';
@@ -2907,7 +2914,7 @@ webdav_copymove_dir (const plugin_config * const pconf,
             continue; /* file *just* disappeared? */
         }
         d_type = st.st_mode;
-      #endif
+      }
       #endif
 
         if (S_ISDIR(d_type)) { /* recursive call; depth first */
