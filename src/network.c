@@ -248,7 +248,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 		}
 	}
 	if (AF_INET6 == family && -1 != s->v4mapped) { /*(configured; -1 is unset)*/
-		set_v6only = (s->v4mapped ? -1 : 0);
+		set_v6only = (s->v4mapped ? -1 : 1);
 	}
       #endif
 
