@@ -432,15 +432,20 @@ if get_option('with_mysql')
 endif
 
 libssl = []
-libx509 = []
 libcrypto = []
+libsslcrypto = []
 libgnutls = []
+libmbedtls = []
+libmbedcrypto = []
+libmbedx509 = []
+libwolfssl = []
 if get_option('with_openssl')
 	# manual search:
 	# header: openssl/ssl.h
 	# function: SSL_new (-lssl)
 	# function: BIO_f_base64 (-lcrypto)
 	libssl = [ dependency('libssl') ]
+	libsslcrypto = [ dependency('libcrypto') ]
 	libcrypto = [ dependency('libcrypto') ]
 	conf_data.set('HAVE_OPENSSL_SSL_H', true)
 	conf_data.set('HAVE_LIBSSL', true)
@@ -449,7 +454,7 @@ if get_option('with_wolfssl')
 	# manual search:
 	# header: wolfssl/ssl.h
 	# function: wolfSSL_Init (-lwolfssl)
-	libssl = [ dependency('wolfssl') ]
+	libwolfssl = [ dependency('wolfssl') ]
 	libcrypto = [ dependency('wolfssl') ]
 	conf_data.set('HAVE_WOLFSSL_SSL_H', true)
 endif
@@ -459,8 +464,9 @@ if get_option('with_mbedtls')
 	# function: mbedtls_cipher_info_from_type (-lmbedtls)
 	# function: mbedtls_x509_get_name (-lmbedx509)
 	# function: mbedtls_base64_encode (-lmbedcrypto)
-	libssl = [ compiler.find_library('mbedtls') ]
-	libx509 = [ compiler.find_library('mbedx509') ]
+	libmbedtls = [ compiler.find_library('mbedtls') ]
+	libmbedx509 = [ compiler.find_library('mbedx509') ]
+	libmbedcrypto = [ compiler.find_library('mbedcrypto') ]
 	libcrypto = [ compiler.find_library('mbedcrypto') ]
 	conf_data.set('HAVE_LIBMBEDCRYPTO', true)
 endif
@@ -1070,19 +1076,19 @@ endif
 
 if get_option('with_openssl')
 	modules += [
-		[ 'mod_openssl', [ 'mod_openssl.c' ], libssl + libcrypto ],
+		[ 'mod_openssl', [ 'mod_openssl.c' ], libssl + libsslcrypto ],
 	]
 endif
 
 if get_option('with_wolfssl')
 	modules += [
-		[ 'mod_wolfssl', [ 'mod_wolfssl.c' ], libcrypto ],
+		[ 'mod_wolfssl', [ 'mod_wolfssl.c' ], libwolfssl ],
 	]
 endif
 
 if get_option('with_mbedtls')
 	modules += [
-		[ 'mod_mbedtls', [ 'mod_mbedtls.c' ], libssl + libx509 + libcrypto ],
+		[ 'mod_mbedtls', [ 'mod_mbedtls.c' ], libmbedtls + libmbedx509 + libmbedcrypto ],
 	]
 endif
 
