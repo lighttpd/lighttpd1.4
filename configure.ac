@@ -1457,6 +1457,7 @@ AC_CHECK_FUNCS([\
   getrlimit \
   getuid \
   gmtime_r \
+  inet_aton \
   inet_pton \
   issetugid \
   jrand48 \

@@ -410,7 +410,7 @@ if 1:
 		'getopt',
 		'getrlimit',
 		'getuid',
-		'inet_ntoa',
+		'inet_aton',
 		'inet_ntop',
 		'inet_pton',
 		'issetugid',
