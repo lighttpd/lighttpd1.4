@@ -345,6 +345,8 @@ static void config_compat_module_load (server *srv) {
             append_mod_openssl = 0;
         else if (buffer_eq_slen(m, CONST_STR_LEN("mod_openssl")))
             append_mod_openssl = 0;
+        else if (buffer_eq_slen(m, CONST_STR_LEN("mod_wolfssl")))
+            append_mod_openssl = 0;
         else if (buffer_eq_slen(m, CONST_STR_LEN("mod_authn_file")))
             append_mod_authn_file = 0;
         else if (buffer_eq_slen(m, CONST_STR_LEN("mod_authn_ldap")))
