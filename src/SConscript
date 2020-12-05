@@ -175,13 +175,13 @@ if env['with_sasl']:
 	modules['mod_authn_sasl'] = { 'src' : [ 'mod_authn_sasl.c' ], 'lib' : [ env['LIBSASL'] ] }
 
 if env['with_openssl']:
-	modules['mod_openssl'] = { 'src' : [ 'mod_openssl.c' ], 'lib' : [ env['LIBSSL'], env['LIBCRYPTO'] ] }
+	modules['mod_openssl'] = { 'src' : [ 'mod_openssl.c' ], 'lib' : [ env['LIBSSL'], env['LIBSSLCRYPTO'] ] }
 
 if env['with_wolfssl']:
-	modules['mod_wolfssl'] = { 'src' : [ 'mod_wolfssl.c' ], 'lib' : [ env['LIBCRYPTO'], 'm' ] }
+	modules['mod_wolfssl'] = { 'src' : [ 'mod_wolfssl.c' ], 'lib' : [ env['LIBWOLFSSL'], 'm' ] }
 
 if env['with_mbedtls']:
-	modules['mod_mbedtls'] = { 'src' : [ 'mod_mbedtls.c' ], 'lib' : [ env['LIBSSL'], env['LIBX509'], env['LIBCRYPTO'] ] }
+	modules['mod_mbedtls'] = { 'src' : [ 'mod_mbedtls.c' ], 'lib' : [ env['LIBMBEDTLS'], env['LIBMBEDX509'], env['LIBMBEDCRYPTO'] ] }
 
 if env['with_nss']:
 	modules['mod_nss'] = { 'src' : [ 'mod_nss.c' ], 'lib' : [ env['LIBNSS'] ] }

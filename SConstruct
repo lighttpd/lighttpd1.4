@@ -339,6 +339,9 @@ if 1:
 		LIBLBER = '',
 		LIBLDAP = '',
 		LIBLUA = '',
+		LIBMBEDTLS = '',
+		LIBMBEDX509 = '',
+		LIBMBEDCRYPTO = '',
 		LIBMEMCACHED = '',
 		LIBMYSQL = '',
 		LIBNSS = '',
@@ -348,7 +351,9 @@ if 1:
 		LIBSASL = '',
 		LIBSQLITE3 = '',
 		LIBSSL = '',
+		LIBSSLCRYPTO = '',
 		LIBUUID = '',
+		LIBWOLFSSL = '',
 		LIBX509 = '',
 		LIBXML2 = '',
 		LIBXXHASH = '',
@@ -615,6 +620,7 @@ if 1:
 		autoconf.env.Append(
 			CPPFLAGS = [ '-DHAVE_OPENSSL_SSL_H', '-DHAVE_LIBSSL'],
 			LIBSSL = 'ssl',
+			LIBSSLCRYPTO = 'crypto',
 			LIBCRYPTO = 'crypto',
 		)
 
@@ -629,7 +635,7 @@ if 1:
 			fail("Couldn't find wolfssl")
 		autoconf.env.Append(
 			CPPFLAGS = [ '-DHAVE_WOLFSSL_SSL_H' ],
-			LIBSSL = '',
+			LIBWOLFSSL= 'wolfssl',
 			LIBCRYPTO = 'wolfssl',
 		)
 
@@ -638,8 +644,9 @@ if 1:
 			fail("Couldn't find mbedtls")
 		autoconf.env.Append(
 			CPPFLAGS = [ '-DHAVE_LIBMBEDCRYPTO' ],
-			LIBSSL = 'mbedtls',
-			LIBX509 = 'mbedx509',
+			LIBMBEDTLS = 'mbedtls',
+			LIBMBEDX509 = 'mbedx509',
+			LIBMBEDCRYPTO = 'mbedcrypto',
 			LIBCRYPTO = 'mbedcrypto',
 		)
 
