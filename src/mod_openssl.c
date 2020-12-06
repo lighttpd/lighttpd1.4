@@ -72,10 +72,6 @@
 #undef OPENSSL_NO_OCSP
 #endif
 
-#if ! defined OPENSSL_NO_TLSEXT && ! defined SSL_CTRL_SET_TLSEXT_HOSTNAME
-#define OPENSSL_NO_TLSEXT
-#endif
-
 #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
 #ifndef OPENSSL_NO_ECDH
 #include <openssl/ecdh.h>
