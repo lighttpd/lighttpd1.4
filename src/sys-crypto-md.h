@@ -124,6 +124,27 @@ SHA512_256_Update(SHA512_CTX *ctx, const void *data, size_t length)
     return 1;
 }
 
+#define USE_LIB_CRYPTO_SHA512
+typedef struct sha512_ctx SHA512_CTX;
+static inline int
+SHA512_Init(SHA512_CTX *ctx)
+{
+    nettle_sha512_init(ctx);
+    return 1;
+}
+static inline int
+SHA512_Final(unsigned char *digest, SHA512_CTX *ctx)
+{
+    nettle_sha512_digest(ctx, SHA512_DIGEST_SIZE, digest);
+    return 1;
+}
+static inline int
+SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
+{
+    nettle_sha512_update(ctx, length, data);
+    return 1;
+}
+
 #elif defined(USE_MBEDTLS_CRYPTO)
 
 #include <mbedtls/config.h>
@@ -221,6 +242,30 @@ static inline int
 SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 {
     return (0 == mbedtls_sha256_update_ret(ctx, data, length));
+}
+#endif
+
+#ifdef MBEDTLS_SHA512_C
+#define USE_LIB_CRYPTO_SHA512
+#include <mbedtls/sha512.h>
+typedef struct mbedtls_sha512_context SHA512_CTX;
+static inline int
+SHA512_Init(SHA512_CTX *ctx)
+{
+    mbedtls_sha512_init(ctx);
+    return (0 == mbedtls_sha512_starts_ret(ctx, 0));
+}
+static inline int
+SHA512_Final(unsigned char *digest, SHA512_CTX *ctx)
+{
+    int rc = mbedtls_sha512_finish_ret(ctx, digest);
+    mbedtls_sha512_free(ctx);
+    return (0 == rc);
+}
+static inline int
+SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
+{
+    return (0 == mbedtls_sha512_update_ret(ctx, data, length));
 }
 #endif
 
@@ -345,6 +390,32 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 }
 #endif
 
+#ifndef NO_SHA512
+#include <wolfssl/wolfcrypt/sha512.h>
+#include <wolfssl/openssl/sha.h>
+#undef SHA512_Init
+#undef SHA512_Final
+#undef SHA512_Update
+#define USE_LIB_CRYPTO_SHA512
+/*typedef wc_Sha512 SHA512_CTX;*/
+static inline int
+SHA512_Init(SHA512_CTX *ctx)
+{
+    return (0 == wc_InitSha512((wc_Sha512 *)ctx));
+}
+static inline int
+SHA512_Final(unsigned char *digest, SHA512_CTX *ctx)
+{
+    return (0 == wc_Sha512Final((wc_Sha512 *)ctx, digest));
+}
+static inline int
+SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
+{
+    wc_Sha512Update((wc_Sha512 *)ctx, data, length);
+    return 1;
+}
+#endif
+
 #elif defined(USE_OPENSSL_CRYPTO)
 
 #include <openssl/md4.h>
@@ -360,6 +431,9 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 #define USE_LIB_CRYPTO_SHA256
 #ifdef SHA512_256_DIGEST_LENGTH
 #define USE_LIB_CRYPTO_SHA512_256
+#endif
+#ifdef SHA512_DIGEST_LENGTH
+#define USE_LIB_CRYPTO_SHA512
 #endif
 
 #include <openssl/opensslv.h>
@@ -501,6 +575,33 @@ EVP_SHA512_256_Update(EVP_SHA512_256_CTX *ctx, const void *data, size_t length)
 }
 #endif
 
+#ifdef USE_LIB_CRYPTO_SHA512
+#define SHA512_CTX EVP_SHA512_CTX
+#define SHA512_Init EVP_SHA512_Init
+#define SHA512_Final EVP_SHA512_Final
+#define SHA512_Update EVP_SHA512_Update
+typedef EVP_MD_CTX * EVP_SHA512_CTX;
+static inline int
+EVP_SHA512_Init(EVP_SHA512_CTX *ctx)
+{
+    return ((*ctx = EVP_MD_CTX_new()) != NULL
+            && 1 == EVP_DigestInit_ex(*ctx, EVP_sha512(), NULL));
+}
+static inline int
+EVP_SHA512_Final(unsigned char *digest, EVP_SHA512_CTX *ctx)
+{
+    /* SHA512_DIGEST_LENGTH; EVP_MD_size(EVP_sha512()) */
+    int rc = EVP_DigestFinal_ex(*ctx, digest, NULL);
+    EVP_MD_CTX_free(*ctx);
+    return (1 == rc);
+}
+static inline int
+EVP_SHA512_Update(EVP_SHA512_CTX *ctx, const void *data, size_t length)
+{
+    return (1 == EVP_DigestUpdate(*ctx, data, length));
+}
+#endif
+
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 #elif defined(USE_GNUTLS_CRYPTO)
@@ -569,6 +670,28 @@ SHA256_Final(unsigned char *digest, SHA256_CTX *ctx)
 }
 static inline int
 SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
+{
+    gnutls_hash(*ctx, data, length);
+    return 1;
+}
+
+#define USE_LIB_CRYPTO_SHA512
+typedef gnutls_hash_hd_t SHA512_CTX;
+static inline int
+SHA512_Init(SHA512_CTX *ctx)
+{
+    if (gnutls_hash_init(ctx, GNUTLS_DIG_SHA512) < 0)
+        SEGFAULT();
+    return 1;
+}
+static inline int
+SHA512_Final(unsigned char *digest, SHA512_CTX *ctx)
+{
+    gnutls_hash_deinit(*ctx, digest);
+    return 1;
+}
+static inline int
+SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
 {
     gnutls_hash(*ctx, data, length);
     return 1;
@@ -652,6 +775,12 @@ NSS_gen_hashfuncs(SHA1, HASH_AlgSHA1);
  * SHA256_Final() */
 NSS_gen_hashfuncs(SHA256, HASH_AlgSHA256);
 
+#define USE_LIB_CRYPTO_SHA512
+/* SHA512_Init()
+ * SHA512_Update()
+ * SHA512_Final() */
+NSS_gen_hashfuncs(SHA512, HASH_AlgSHA512);
+
 #endif
 
 #endif /* USE_LIB_CRYPTO */
@@ -686,6 +815,13 @@ NSS_gen_hashfuncs(SHA256, HASH_AlgSHA256);
 #ifdef USE_LIB_CRYPTO_SHA512_256
 #ifndef SHA512_256_DIGEST_LENGTH
 #define SHA512_256_DIGEST_LENGTH 32
+#endif
+#endif
+
+
+#ifdef USE_LIB_CRYPTO_SHA512
+#ifndef SHA512_DIGEST_LENGTH
+#define SHA512_DIGEST_LENGTH 64
 #endif
 #endif
 
