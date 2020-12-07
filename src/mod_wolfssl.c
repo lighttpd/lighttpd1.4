@@ -2041,13 +2041,22 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
          *           && (HAVE_STUNNEL || WOLFSSL_NGINX || HAVE_LIGHTY)))
          * and sniRecvCb sniRecvCbArg are hidden by *different* set of defines
          * in wolfssl/internal.h)
-         * Note: SNI callbacks disabled if wolfSSL is not built OPENSSL_ALL ! */
-       #ifdef OPENSSL_ALL /* regretable */
+         * Note: wolfSSL SNI callbacks members not present unless wolfSSL is
+         * built OPENSSL_ALL or some additional combination of preprocessor
+         * defines.  The following should work with more recent wolfSSL versions
+         * (and HAVE_LIGHTY is not sufficient in wolfssl <= 4.5.0) */
+       #if defined(OPENSSL_ALL) \
+        || (defined(OPENSSL_EXTRA) \
+            && (defined(HAVE_STUNNEL) \
+                || defined(WOLFSSL_NGINX) \
+                || defined(WOLFSSL_HAPROXY)))
+       #else
+       #undef HAVE_SNI
+       #endif
        #ifdef HAVE_SNI
         wolfSSL_CTX_set_servername_callback(
             s->ssl_ctx, network_ssl_servername_callback);
         wolfSSL_CTX_set_servername_arg(s->ssl_ctx, srv);
-       #endif             /* regretable */
        #else
         log_error(srv->errh, __FILE__, __LINE__,
           "SSL: WARNING: SNI callbacks *crippled* in wolfSSL library build");
