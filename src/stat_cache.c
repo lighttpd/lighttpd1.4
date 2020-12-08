@@ -144,9 +144,9 @@ typedef int FAMRequest; /*(fr)*/
         close(*(fd))
 #define FAMCancelMonitor(fd, wd) \
         inotify_rm_watch(*(fd), *(wd))
-#define fam_watch_mask IN_ATTRIB | IN_CREATE | IN_DELETE | IN_DELETE_SELF \
-                     | IN_MODIFY | IN_MOVE_SELF | IN_MOVED_FROM \
-                     | IN_EXCL_UNLINK | IN_ONLYDIR
+#define fam_watch_mask ( IN_ATTRIB | IN_CREATE | IN_DELETE | IN_DELETE_SELF \
+                       | IN_MODIFY | IN_MOVE_SELF | IN_MOVED_FROM \
+                       | IN_EXCL_UNLINK | IN_ONLYDIR )
                      /*(note: follows symlinks; not providing IN_DONT_FOLLOW)*/
 #define FAMMonitorDirectory(fd, fn, wd, userData) \
         ((*(wd) = inotify_add_watch(*(fd), (fn), (fam_watch_mask))) < 0)
