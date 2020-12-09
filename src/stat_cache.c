@@ -1074,6 +1074,8 @@ static int stat_cache_stat_eq(const struct stat * const sta, const struct stat *
       #else
         sta->st_mtim.tv_nsec == stb->st_mtim.tv_nsec
       #endif
+      #else
+        1
       #endif
         && sta->st_mtime == stb->st_mtime
         && sta->st_size  == stb->st_size
