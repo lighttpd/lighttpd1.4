@@ -33,6 +33,7 @@
 #include "buffer.h"
 #include "chunk.h"
 #include "fdevent.h"
+#include "http_header.h"
 #include "log.h"
 #include "sock_addr.h"
 
@@ -2265,7 +2266,7 @@ static handler_t gw_recv_response_error(gw_handler_ctx * const hctx, request_st 
               "socket: %s for %s?%.*s, closing connection",
               (long long)hctx->wb.bytes_out, proc->connection_name->ptr,
               r->uri.path.ptr, BUFFER_INTLEN_PTR(&r->uri.query));
-        } else {
+        } else if (!light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) {
             log_error(r->conf.errh, __FILE__, __LINE__,
               "response already sent out, but backend returned error on "
               "socket: %s for %s?%.*s, terminating connection",
