@@ -932,11 +932,23 @@ http_response_write_prepare(request_st * const r)
                     /* create initial Transfer-Encoding: chunked segment */
                     buffer * const b =
                       chunkqueue_prepend_buffer_open(&r->write_queue);
+                    if (r->resp_decode_chunked
+                        && 0 != r->gw_dechunk->gw_chunked) {
+                        /*(reconstitute initial partially-decoded chunk)*/
+                        off_t gw_chunked = r->gw_dechunk->gw_chunked;
+                        if (gw_chunked > 2)
+                            qlen += gw_chunked - 2;
+                        else if (1 == gw_chunked)
+                            chunkqueue_append_mem(&r->write_queue,
+                                                  CONST_STR_LEN("\r"));
+                    }
+                    else {
+                        chunkqueue_append_mem(&r->write_queue,
+                                              CONST_STR_LEN("\r\n"));
+                    }
                     buffer_append_uint_hex(b, (uintmax_t)qlen);
                     buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
                     chunkqueue_prepend_buffer_commit(&r->write_queue);
-                    chunkqueue_append_mem(&r->write_queue,
-                                          CONST_STR_LEN("\r\n"));
                 }
                 http_header_response_append(r, HTTP_HEADER_TRANSFER_ENCODING,
                                             CONST_STR_LEN("Transfer-Encoding"),
