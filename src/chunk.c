@@ -107,13 +107,13 @@ static void chunk_reset_file_chunk(chunk *c) {
 	}
 	else if (c->file.fd != -1) {
 		close(c->file.fd);
-		c->file.fd = -1;
 	}
 	if (MAP_FAILED != c->file.mmap.start) {
 		munmap(c->file.mmap.start, c->file.mmap.length);
 		c->file.mmap.start = MAP_FAILED;
 		c->file.mmap.length = c->file.mmap.offset = 0;
 	}
+	c->file.fd = -1;
 	c->file.length = 0;
 	c->type = MEM_CHUNK;
 }
