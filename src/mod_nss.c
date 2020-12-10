@@ -2995,12 +2995,14 @@ static const cipher_properties ciphers_def[] =
     {"dhe_rsa_chacha20_poly1305_sha_256", TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256, "DHE-RSA-CHACHA20-POLY1305", SSL_kDHE|SSL_aRSA|SSL_CHACHA20POLY1305|SSL_AEAD, TLSV1_2, SSL_HIGH, 256, 256, NULL},
 //#endif
 //#ifdef NSS_SUPPORTS_TLS_1_3
+  #ifdef TLS_AES_128_GCM_SHA256
     /* Special TLS 1.3 cipher suites that really just specify AEAD
      * TLS 1.3 ciphers don't specify key exchange and authentication.
      */
     {"aes_128_gcm_sha_256", TLS_AES_128_GCM_SHA256, "TLS-AES-128-GCM-SHA256", SSL_AES128GCM|SSL_AEAD, TLSV1_3, SSL_HIGH, 128, 128, NULL},
     {"aes_256_gcm_sha_384", TLS_AES_256_GCM_SHA384, "TLS-AES-256-GCM-SHA384", SSL_AES256GCM|SSL_AEAD, TLSV1_3, SSL_HIGH, 256, 256, NULL},
     {"chacha20_poly1305_sha_256", TLS_CHACHA20_POLY1305_SHA256, "TLS-CHACHA20-POLY1305_SHA256", SSL_CHACHA20POLY1305|SSL_AEAD, TLSV1_3, SSL_HIGH, 256, 256, NULL},
+  #endif
 //#endif
 };
 
