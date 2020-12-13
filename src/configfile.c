@@ -241,31 +241,6 @@ static int config_burl_normalize_cond (server *srv) {
     return 1;
 }
 
-#if defined(HAVE_MYSQL) || (defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER))
-static void config_warn_authn_module (server *srv, const char *module, size_t len) {
-	for (uint32_t i = 0; i < srv->config_context->used; ++i) {
-		const data_config *config = (data_config const*)srv->config_context->data[i];
-		const data_unset *du = array_get_element_klen(config->value, CONST_STR_LEN("auth.backend"));
-		if (NULL != du && du->type == TYPE_STRING) {
-			data_string *ds = (data_string *)du;
-			if (buffer_is_equal_string(&ds->value, module, len)) {
-				buffer * const tb = srv->tmp_buf;
-				buffer_copy_string_len(tb, CONST_STR_LEN("mod_authn_"));
-				buffer_append_string_len(tb, module, len);
-				array_insert_value(srv->srvconf.modules, CONST_BUF_LEN(tb));
-				log_error(srv->errh, __FILE__, __LINE__,
-				  "Warning: please add \"mod_authn_%s\" to server.modules list "
-				  "in lighttpd.conf.  A future release of lighttpd 1.4.x will "
-				  "not automatically load mod_authn_%s and lighttpd will fail "
-				  "to start up since your lighttpd.conf uses "
-				  "auth.backend = \"%s\".", module, module, module);
-				return;
-			}
-		}
-	}
-}
-#endif
-
 #ifdef USE_OPENSSL_CRYPTO
 static void config_warn_openssl_module (server *srv) {
 	for (uint32_t i = 0; i < srv->config_context->used; ++i) {
@@ -316,6 +291,32 @@ static void config_check_module_duplicates (server *srv) {
     }
     array_free(srv->srvconf.modules);
     srv->srvconf.modules = modules;
+}
+
+static const char * config_has_opt_and_value (server * const srv, const char * const opt, const uint32_t olen, const char * const v, const uint32_t vlen) {
+    for (uint32_t i = 0; i < srv->config_context->used; ++i) {
+        const data_config * const config =
+            (data_config const *)srv->config_context->data[i];
+        const data_string * const ds =
+            (data_string *)array_get_element_klen(config->value, opt, olen);
+        if (NULL != ds && ds->type == TYPE_STRING
+            && buffer_eq_slen(&ds->value, v, vlen))
+            return v;
+    }
+    return NULL;
+}
+
+static void config_warn_authn_module (server *srv, const char *module, uint32_t len, const char *v) {
+    buffer * const tb = srv->tmp_buf;
+    buffer_copy_string_len(tb, CONST_STR_LEN("mod_authn_"));
+    buffer_append_string_len(tb, module, len);
+    array_insert_value(srv->srvconf.modules, CONST_BUF_LEN(tb));
+    log_error(srv->errh, __FILE__, __LINE__,
+      "Warning: please add \"mod_authn_%s\" to server.modules list "
+      "in lighttpd.conf.  A future release of lighttpd 1.4.x will "
+      "not automatically load mod_authn_%s and lighttpd will fail "
+      "to start up since your lighttpd.conf uses auth.backend = \"%s\".",
+      module, module, v);
 }
 
 static void config_compat_module_load (server *srv) {
@@ -405,16 +406,27 @@ static void config_compat_module_load (server *srv) {
      * existing lighttpd 1.4.x configs */
     if (contains_mod_auth) {
         if (append_mod_authn_file) {
-            array_insert_value(srv->srvconf.modules, CONST_STR_LEN("mod_authn_file"));
+            const char *v;
+            if (  (v=config_has_opt_and_value(srv,CONST_STR_LEN("auth.backend"),
+                                                  CONST_STR_LEN("htdigest")))
+                ||(v=config_has_opt_and_value(srv,CONST_STR_LEN("auth.backend"),
+                                                  CONST_STR_LEN("htpasswd")))
+                ||(v=config_has_opt_and_value(srv,CONST_STR_LEN("auth.backend"),
+                                                  CONST_STR_LEN("plain"))))
+                config_warn_authn_module(srv, CONST_STR_LEN("file"), v);
         }
         if (append_mod_authn_ldap) {
           #if defined(HAVE_LDAP_H) && defined(HAVE_LBER_H) && defined(HAVE_LIBLDAP) && defined(HAVE_LIBLBER)
-            config_warn_authn_module(srv, CONST_STR_LEN("ldap"));
+            if (config_has_opt_and_value(srv, CONST_STR_LEN("auth.backend"),
+                                              CONST_STR_LEN("ldap")))
+                config_warn_authn_module(srv, CONST_STR_LEN("ldap"), "ldap");
           #endif
         }
         if (append_mod_authn_mysql) {
           #if defined(HAVE_MYSQL)
-            config_warn_authn_module(srv, CONST_STR_LEN("mysql"));
+            if (config_has_opt_and_value(srv, CONST_STR_LEN("auth.backend"),
+                                              CONST_STR_LEN("mysql")))
+                config_warn_authn_module(srv, CONST_STR_LEN("mysql"), "mysql");
           #endif
         }
     }
