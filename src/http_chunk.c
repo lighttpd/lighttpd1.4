@@ -420,6 +420,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
             len -= hsz;
 
             te_chunked += 2; /*(for trailing "\r\n" after chunked data)*/
+            if (0 == len) break;
         }
 
         if (te_chunked >= 2) {
@@ -437,7 +438,13 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                     len -= 2;
                     te_chunked = 0;
                 }
-                else if (len == 1 && mem[0] != '\r') return -1;
+                else if (len == 1) {
+                    if (mem[0] != '\r') return -1;
+                    /*++mem;*/
+                    /*--len;*/
+                    te_chunked = 1;
+                    break;
+                }
             }
         }
         else if (1 == te_chunked) {
