@@ -232,7 +232,7 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
                     buffer *b;
                     *(const buffer **)&b = cpv->v.b;
                     mod_authn_add_scheme(srv, b);
-                    ldc = malloc(sizeof(plugin_config_ldap));
+                    ldc = calloc(1, sizeof(plugin_config_ldap));
                     force_assert(ldc);
                     ldc->errh = srv->errh;
                     ldc->auth_ldap_hostname = b->ptr;
