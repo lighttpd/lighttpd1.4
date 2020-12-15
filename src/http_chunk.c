@@ -314,8 +314,7 @@ void http_chunk_close(request_st * const r) {
 static int
 http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
 {
-    /*(silently discard data, if any, after final \r\n)*/
-    if (r->gw_dechunk->done) return 0;
+    if (r->gw_dechunk->done) return -1; /*(excess data)*/
 
     buffer * const h = &r->gw_dechunk->b;
     off_t te_chunked = r->gw_dechunk->gw_chunked;
@@ -372,7 +371,6 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                  * request-ending blank line "\r\n" */
                 if (len - hsz == 2 && p[0] == '\r' && p[1] == '\n') {
                     /* common case with no trailers; final \r\n received */
-                    /*(silently discard data, if any, after final \r\n)*/
                   #if 0 /*(avoid allocation for common case; users must check)*/
                     if (buffer_is_empty(h))
                         buffer_copy_string_len(h, CONST_STR_LEN("0\r\n\r\n"));
@@ -404,14 +402,28 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 }
                 buffer_append_string_len(h, mem, hsz);
                 hlen += (uint32_t)hsz; /* uint32_t fits in (buffer *) */
+                if (hlen < 2) break;
+                p = h->ptr;
+                if (p[0] == '\r' && p[1] == '\n') {
+                    if (hlen > 2) return -1; /*(excess data)*/
+                    /* common case with no trailers; final \r\n received */
+                  #if 0 /*(avoid allocation for common case; users must check)*/
+                    if (buffer_is_empty(h))
+                        buffer_copy_string_len(h, CONST_STR_LEN("0\r\n\r\n"));
+                  #else
+                    buffer_clear(h);
+                  #endif
+                    r->gw_dechunk->done = r->http_status;
+                    break;
+                }
                 if (hlen < 4) break;
-                p = h->ptr + hlen - 4;
+                p += hlen - 4;
                 if (p[0]=='\r'&&p[1]=='\n'&&p[2]=='\r'&&p[3]=='\n')
                     r->gw_dechunk->done = r->http_status;
                 else if ((p = strstr(h->ptr, "\r\n\r\n"))) {
                     r->gw_dechunk->done = r->http_status;
-                    /*(silently discard data, if any, after final \r\n)*/
                     buffer_string_set_length(h, (uint32_t)(p+4-h->ptr));
+                    if (p+4 != h->ptr+hlen) return -1; /*(excess data)*/
                 }
                 break;
             }
