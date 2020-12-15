@@ -483,8 +483,26 @@ int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
 
     /*(called by funcs receiving data from backends, which might be chunked)*/
     /*(separate from http_chunk_append_buffer() called by numerous others)*/
-    if (!r->resp_decode_chunked)
+    if (!r->resp_decode_chunked) {
+        if (r->resp_body_scratchpad > 0) {
+            off_t len = (off_t)buffer_string_length(mem);
+            r->resp_body_scratchpad -= len;
+            if (r->resp_body_scratchpad <= 0) {
+                r->resp_body_finished = 1;
+                if (r->resp_body_scratchpad < 0) {
+                    /*(silently truncate if data exceeds Content-Length)*/
+                    len += r->resp_body_scratchpad;
+                    r->resp_body_scratchpad = 0;
+                    buffer_string_set_length(mem, (uint32_t)len);
+                }
+            }
+        }
+        else if (0 == r->resp_body_scratchpad) {
+            /*(silently truncate if data exceeds Content-Length)*/
+            return 0;
+        }
         return http_chunk_append_buffer(r, mem);
+    }
 
     /* might avoid copy by transferring buffer if buffer is all data that is
      * part of large chunked block, but choosing to *not* expand that out here*/
@@ -508,12 +526,28 @@ int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
     return 0;
 }
 
-int http_chunk_decode_append_mem(request_st * const r, const char * const mem, const size_t len)
+int http_chunk_decode_append_mem(request_st * const r, const char * const mem, size_t len)
 {
     /*(called by funcs receiving data from backends, which might be chunked)*/
     /*(separate from http_chunk_append_mem() called by numerous others)*/
-    if (!r->resp_decode_chunked)
+    if (!r->resp_decode_chunked) {
+        if (r->resp_body_scratchpad > 0) {
+            r->resp_body_scratchpad -= (off_t)len;
+            if (r->resp_body_scratchpad <= 0) {
+                r->resp_body_finished = 1;
+                if (r->resp_body_scratchpad < 0) {
+                    /*(silently truncate if data exceeds Content-Length)*/
+                    len = (size_t)(r->resp_body_scratchpad + (off_t)len);
+                    r->resp_body_scratchpad = 0;
+                }
+            }
+        }
+        else if (0 == r->resp_body_scratchpad) {
+            /*(silently truncate if data exceeds Content-Length)*/
+            return 0;
+        }
         return http_chunk_append_mem(r, mem, len);
+    }
 
     if (0 != http_chunk_decode_append_data(r, mem, (off_t)len))
         return -1;

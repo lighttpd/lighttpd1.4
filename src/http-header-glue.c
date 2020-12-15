@@ -249,6 +249,7 @@ int http_response_handle_cachable(request_st * const r, const buffer * const mti
 
 void http_response_body_clear (request_st * const r, int preserve_length) {
     r->resp_send_chunked = 0;
+    r->resp_body_scratchpad = -1;
     if (light_btst(r->resp_htags, HTTP_HEADER_TRANSFER_ENCODING)) {
         http_header_response_unset(r, HTTP_HEADER_TRANSFER_ENCODING,
                                    CONST_STR_LEN("Transfer-Encoding"));
@@ -283,6 +284,7 @@ static void http_response_header_clear (request_st * const r) {
      * Transfer-Encoding: chunked set, then other items need to be reset */
     r->resp_send_chunked = 0;
     r->resp_decode_chunked = 0;
+    r->resp_body_scratchpad = -1;
     if (r->gw_dechunk) {
         free(r->gw_dechunk->b.ptr);
         free(r->gw_dechunk);
@@ -1181,8 +1183,37 @@ static int http_response_process_headers(request_st * const r, http_response_opt
             break;
           case HTTP_HEADER_CONTENT_LENGTH:
             if (*value == '+') ++value;
+            if (!r->resp_decode_chunked
+                && !light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
+                const char *err = ns;
+                if (err[-1] == '\0') --err; /*(skip one '\0', trailing whitespace)*/
+                while (err > value && (err[-1] == ' ' || err[-1] == '\t')) --err;
+                if (err <= value) continue; /*(might error 502 Bad Gateway)*/
+                uint32_t vlen = (uint32_t)(err - value);
+                r->resp_body_scratchpad =
+                  (off_t)li_restricted_strtoint64(value, vlen, &err);
+                if (err != value + vlen) {
+                    /*(invalid Content-Length value from backend;
+                     * read from backend until backend close, hope for the best)
+                     *(might choose to treat this as 502 Bad Gateway) */
+                    r->resp_body_scratchpad = -1;
+                }
+            }
+            else {
+                /* ignore Content-Length if Transfer-Encoding: chunked
+                 * ignore subsequent (multiple) Content-Length
+                 * (might choose to treat this as 502 Bad Gateway) */
+                continue;
+            }
             break;
           case HTTP_HEADER_TRANSFER_ENCODING:
+            if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
+                /* ignore Content-Length if Transfer-Encoding: chunked
+                 * (might choose to treat this as 502 Bad Gateway) */
+                r->resp_body_scratchpad = -1;
+                http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
+                                           CONST_STR_LEN("Content-Length"));
+            }
             /*(assumes "Transfer-Encoding: chunked"; does not verify)*/
             r->resp_decode_chunked = 1;
             r->gw_dechunk = calloc(1, sizeof(response_dechunk));

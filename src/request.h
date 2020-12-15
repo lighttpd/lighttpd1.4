@@ -153,6 +153,7 @@ struct request_st {
 
     off_t reqbody_length; /* request Content-Length */
     off_t te_chunked;
+    off_t resp_body_scratchpad;
 
     buffer *http_host; /* copy of array value buffer ptr; not alloc'ed */
     const buffer *server_name;

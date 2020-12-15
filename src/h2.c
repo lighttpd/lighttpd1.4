@@ -2560,6 +2560,7 @@ h2_con_upgrade_h2c (request_st * const h2r, const buffer * const http2_settings)
   #if 0 /* expect empty request body */
     r->reqbody_length = h2r->reqbody_length; /* currently always 0 */
     r->te_chunked = h2r->te_chunked;         /* must be 0 */
+    r->resp_body_scratchpad = h2r->resp_body_scratchpad; /*(not started yet)*/
     swap(&r->reqbody_queue,&h2r->reqbody_queue);/*currently always empty queue*/
   #endif
     r->http_host = h2r->http_host;

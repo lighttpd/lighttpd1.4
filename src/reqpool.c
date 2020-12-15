@@ -31,6 +31,7 @@ request_init_data (request_st * const r, connection * const con, server * const 
     r->loops_per_request = 0;
     r->con = con;
     r->tmp_buf = srv->tmp_buf;
+    r->resp_body_scratchpad = -1;
 
     /* init plugin-specific per-request structures */
     r->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
@@ -68,6 +69,7 @@ request_reset (request_st * const r)
     r->http_host = NULL;
     r->reqbody_length = 0;
     r->te_chunked = 0;
+    r->resp_body_scratchpad = -1;
     r->rqst_htags = 0;
 
     r->async_callback = 0;
