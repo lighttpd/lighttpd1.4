@@ -304,6 +304,7 @@ void http_chunk_close(request_st * const r) {
     if (r->gw_dechunk && !buffer_string_is_empty(&r->gw_dechunk->b)) {
         /* XXX: trailers passed through; no sanity check currently done */
         chunkqueue_append_buffer(&r->write_queue, &r->gw_dechunk->b);
+        buffer_clear(&r->gw_dechunk->b);
         if (!r->gw_dechunk->done)
             r->keep_alive = 0;
     }
@@ -438,7 +439,8 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
         if (te_chunked >= 2) {
             off_t clen = te_chunked - 2;
             if (clen > len) clen = len;
-            if (0 != http_chunk_append_mem(r, mem, clen))
+            if (!r->resp_send_chunked
+                && 0 != http_chunk_append_mem(r, mem, clen))
                 return -1;
             mem += clen;
             len -= clen;
@@ -467,25 +469,35 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
             te_chunked = 0;
         }
     }
+    if (r->gw_dechunk->done)
+        r->resp_body_finished = 1;
     r->gw_dechunk->gw_chunked = te_chunked;
     return 0;
 }
 
 int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
 {
+    /* Note: this routine is separate from http_chunk_decode_append_mem() to
+     * potentially avoid copying in http_chunk_append_buffer().  Otherwise this
+     * would be: return http_chunk_decode_append_mem(r, CONST_BUF_LEN(mem)); */
+
     /*(called by funcs receiving data from backends, which might be chunked)*/
     /*(separate from http_chunk_append_buffer() called by numerous others)*/
     if (!r->resp_decode_chunked)
         return http_chunk_append_buffer(r, mem);
 
-    /* no need to decode chunked to immediately re-encode chunked,
-     * though would be more robust to still validate chunk lengths sent
-     * (or else we might wait for keep-alive while client waits for final chunk)
-     * Before finishing response/stream, we *are not* checking if we got final
-     * chunk of chunked encoding from backend.  If we were, we could consider
-     * closing HTTP/1.0 and HTTP/1.1 connections (no keep-alive), and in HTTP/2
-     * we could consider sending RST_STREAM error.  http_chunk_close() would
-     * only handle case of streaming chunked to client */
+    /* might avoid copy by transferring buffer if buffer is all data that is
+     * part of large chunked block, but choosing to *not* expand that out here*/
+    if (0 != http_chunk_decode_append_data(r, CONST_BUF_LEN(mem)))
+        return -1;
+
+    /* no need to decode chunked to immediately re-encode chunked;
+     * pass through chunked encoding as provided by backend,
+     * though it is still parsed (above) to maintain state.
+     * XXX: consider having callers use chunk buffers for hctx->b
+     *      for more efficient data copy avoidance and buffer reuse
+     * note: r->resp_send_chunked = 0 until response headers sent,
+     * which is when Transfer-Encoding: chunked might be chosen */
     if (r->resp_send_chunked) {
         r->resp_send_chunked = 0;
         int rc = http_chunk_append_buffer(r, mem); /* might append to tmpfile */
@@ -493,9 +505,7 @@ int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
         return rc;
     }
 
-    /* might avoid copy by transferring buffer if buffer is all data that is
-     * part of large chunked block, but choosing to *not* expand that out here*/
-    return http_chunk_decode_append_data(r, CONST_BUF_LEN(mem));
+    return 0;
 }
 
 int http_chunk_decode_append_mem(request_st * const r, const char * const mem, const size_t len)
@@ -505,14 +515,14 @@ int http_chunk_decode_append_mem(request_st * const r, const char * const mem, c
     if (!r->resp_decode_chunked)
         return http_chunk_append_mem(r, mem, len);
 
-    /* no need to decode chunked to immediately re-encode chunked,
-     * though would be more robust to still validate chunk lengths sent
-     * (or else we might wait for keep-alive while client waits for final chunk)
-     * Before finishing response/stream, we *are not* checking if we got final
-     * chunk of chunked encoding from backend.  If we were, we could consider
-     * closing HTTP/1.0 and HTTP/1.1 connections (no keep-alive), and in HTTP/2
-     * we could consider sending RST_STREAM error.  http_chunk_close() would
-     * only handle case of streaming chunked to client */
+    if (0 != http_chunk_decode_append_data(r, mem, (off_t)len))
+        return -1;
+
+    /* no need to decode chunked to immediately re-encode chunked;
+     * pass through chunked encoding as provided by backend,
+     * though it is still parsed (above) to maintain state.
+     * note: r->resp_send_chunked = 0 until response headers sent,
+     * which is when Transfer-Encoding: chunked might be chosen */
     if (r->resp_send_chunked) {
         r->resp_send_chunked = 0;
         int rc = http_chunk_append_mem(r, mem, len); /*might append to tmpfile*/
@@ -520,5 +530,5 @@ int http_chunk_decode_append_mem(request_st * const r, const char * const mem, c
         return rc;
     }
 
-    return http_chunk_decode_append_data(r, mem, (off_t)len);
+    return 0;
 }
