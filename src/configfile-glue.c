@@ -349,8 +349,8 @@ static void config_cond_result_trace(request_st * const r, const data_config * c
       case COND_RESULT_TRUE:  msg = "true"; break;
       default:                msg = "invalid cond_result_t"; break;
     }
-    log_error(r->conf.errh, __FILE__, __LINE__, "%d (%s) result: %s",
-              dc->context_ndx, &"uncached"[cached ? 2 : 0], msg);
+    log_error(r->conf.errh, __FILE__, __LINE__, "%d (%s) result: %s (cond: %s)",
+              dc->context_ndx, &"uncached"[cached ? 2 : 0], msg, dc->key.ptr);
 }
 
 static cond_result_t config_check_cond_nocache(request_st *r, const data_config *dc, int debug_cond, cond_cache_t *cache);
