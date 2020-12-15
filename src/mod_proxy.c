@@ -27,6 +27,7 @@ typedef struct http_header_remap_opts {
     const array *urlpaths;
     const array *hosts_request;
     const array *hosts_response;
+    int force_http10;
     int https_remap;
     int upgrade;
     int connect_method;
@@ -60,7 +61,6 @@ typedef struct {
 } plugin_data;
 
 static int proxy_check_extforward;
-static int proxy_force_http10;
 
 typedef struct {
 	gw_handler_ctx gw;
@@ -206,6 +206,17 @@ static http_header_remap_opts * mod_proxy_parse_header_opts(server *srv, const a
                 return NULL;
             }
             header.https_remap = val;
+            continue;
+        }
+        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("force-http10"))) {
+            int val = config_plugin_value_tobool((data_unset *)da, 2);
+            if (2 == val) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "unexpected value for proxy.header; "
+                  "expected \"force-http10\" => \"enable\" or \"disable\"");
+                return NULL;
+            }
+            header.force_http10 = val;
             continue;
         }
         else if (buffer_eq_slen(&da->key, CONST_STR_LEN("upgrade"))) {
@@ -355,6 +366,12 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults)
     /* default is 0 */
     /*p->defaults.balance = (unsigned int)gw_get_defaults_balance(srv, NULL);*/
 
+    p->defaults.header.force_http10 =
+      srv->srvconf.feature_flags
+      && config_plugin_value_tobool(
+           array_get_element_klen(srv->srvconf.feature_flags,
+                                  CONST_STR_LEN("proxy.force-http10")), 0);
+
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
         const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
@@ -370,12 +387,6 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults)
             break;
         }
     }
-
-    proxy_force_http10 =
-      srv->srvconf.feature_flags
-      && config_plugin_value_tobool(
-           array_get_element_klen(srv->srvconf.feature_flags,
-                                  CONST_STR_LEN("proxy.force-http10")), 0);
 
     return HANDLER_GO_ON;
 }
@@ -857,7 +868,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	if (remap_headers)
 		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(&r->target), &hctx->conf.header, 1);
 
-	if (!proxy_force_http10)
+	if (!hctx->conf.header.force_http10)
 		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.1\r\n"));
 	else
 		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
@@ -895,7 +906,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			                        buf, li_itostrn(buf, sizeof(buf), r->reqbody_length));
 		}
 	}
-	else if (!proxy_force_http10
+	else if (!hctx->conf.header.force_http10
 	         && -1 == r->reqbody_length
 	         && (r->conf.stream_request_body
 	             & (FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN))) {
@@ -916,7 +927,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			break;
 		case 2:
 			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("TE"))) {
-				if (proxy_force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
+				if (hctx->conf.header.force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
 				/* ignore if not exactly "trailers" */
 				if (!buffer_eq_icase_slen(&ds->value, CONST_STR_LEN("trailers"))) continue;
 				te = &ds->value;
@@ -927,7 +938,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			break;
 		case 7:
 			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Upgrade"))) {
-				if (proxy_force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
+				if (hctx->conf.header.force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
 				if (!hctx->conf.header.upgrade) continue;
 				upgrade = &ds->value;
 			}
@@ -996,7 +1007,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		http_header_remap_uri(b, buffer_string_length(b) - vlen - 2, &hctx->conf.header, 1);
 	}
 
-	if (connhdr && !proxy_force_http10 && r->http_version >= HTTP_VERSION_1_1
+	if (connhdr && !hctx->conf.header.force_http10 && r->http_version >= HTTP_VERSION_1_1
 	    && !buffer_eq_icase_slen(connhdr, CONST_STR_LEN("close"))) {
 		/* mod_proxy always sends Connection: close to backend */
 		buffer_append_string_len(b, CONST_STR_LEN("Connection: close"));
