@@ -376,7 +376,7 @@ static int http_request_header_char_invalid(request_st * const restrict r, const
 }
 
 
-static int64_t
+int64_t
 li_restricted_strtoint64 (const char *v, const uint32_t vlen, const char ** const err)
 {
     /* base 10 strtoll() parsing exactly vlen chars and requiring digits 0-9 */

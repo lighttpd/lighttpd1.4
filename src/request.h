@@ -216,4 +216,6 @@ int http_request_parse_target(request_st *r, int scheme_port);
 int http_request_host_normalize(buffer *b, int scheme_port);
 int http_request_host_policy(buffer *b, unsigned int http_parseopts, int scheme_port);
 
+int64_t li_restricted_strtoint64 (const char *v, const uint32_t vlen, const char ** const err);
+
 #endif
