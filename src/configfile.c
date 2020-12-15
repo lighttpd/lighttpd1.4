@@ -2190,6 +2190,27 @@ int config_read(server *srv, const char *fn) {
 		return ret;
 	}
 
+	/* reorder dc->context_ndx to match srv->config_context->data[] index.
+	 * srv->config_context->data[] may have been re-ordered in configparser.y.
+	 * Since the dc->context_ndx (id) is reused by config_insert*() and by
+	 * plugins to index into srv->config_context->data[], reorder into the
+	 * order encountered during config file parsing for least surprise to
+	 * end-users writing config files.  Note: this manipulation *breaks* the
+	 * srv->config_context->sorted[] structure, so searching the array by key
+	 * is no longer valid. */
+	for (uint32_t i = 0; i < srv->config_context->used; ++i) {
+		dc = (data_config *)srv->config_context->data[i];
+		if (dc->context_ndx == (int)i) continue;
+		for (uint32_t j = i; j < srv->config_context->used; ++j) {
+			dc = (data_config *)srv->config_context->data[j];
+			if (dc->context_ndx == (int)i) {
+				srv->config_context->data[j] = srv->config_context->data[i];
+				srv->config_context->data[i] = (data_unset *)dc;
+				break;
+			}
+		}
+	}
+
 	if (0 != config_insert_srvconf(srv)) {
 		return -1;
 	}
