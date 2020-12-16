@@ -435,7 +435,7 @@ static int cgi_recv_response(request_st * const r, handler_ctx * const hctx) {
 			return HANDLER_GO_ON;
 		case HANDLER_ERROR:
 			http_response_backend_error(r);
-			/* fall through */
+			__attribute_fallthrough__
 		case HANDLER_FINISHED:
 			cgi_connection_close(hctx);
 			return HANDLER_FINISHED;

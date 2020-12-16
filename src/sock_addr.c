@@ -426,7 +426,7 @@ int sock_addr_from_str_hints(sock_addr * const restrict saddr, socklen_t * const
             return 1;
         }
        #else
-        /* fall through */
+        __attribute_fallthrough__
        #endif
      #ifdef HAVE_IPV6
       case AF_INET6:

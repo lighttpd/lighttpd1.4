@@ -3062,7 +3062,7 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
     buffer * const restrict b = pb->b_200;
     switch (pnum) {
       case WEBDAV_PROP_ALL:
-        /*(fall through)*/
+        __attribute_fallthrough__
       /*case WEBDAV_PROP_CREATIONDATE:*/  /* (located in database, if present)*/
       #if 0
       case WEBDAV_PROP_CREATIONDATE: {
@@ -5100,7 +5100,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
                         break;
                     }
                 }
-                /* fall through */
+                __attribute_fallthrough__
               /*case ENOTDIR:*/
               default:
                 http_status_set_error(r, 409); /* Conflict */
@@ -5715,7 +5715,7 @@ mod_webdav_unlock (request_st * const r, const plugin_config * const pconf)
             http_status_set_fin(r, 204); /* No Content */
             return HANDLER_FINISHED;
         }
-        /* fall through */
+        __attribute_fallthrough__
       default:
       case -1: /* lock does not exist */
       case -2: /* URI not in scope of locktoken and depth */
@@ -5792,7 +5792,8 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
         break;
       case HTTP_METHOD_DELETE:
       case HTTP_METHOD_MOVE:
-        reject_reqbody = 1; /*(fall through)*/ __attribute_fallthrough__
+        reject_reqbody = 1;
+        __attribute_fallthrough__
       case HTTP_METHOD_PROPPATCH:
       case HTTP_METHOD_PUT:
         check_readonly = check_lock_src = 1;

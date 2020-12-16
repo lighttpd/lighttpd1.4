@@ -2657,7 +2657,7 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 
                 if (wr == 0) return -2;
 
-                /* fall through */
+                __attribute_fallthrough__
             default:
                 while((err = ERR_get_error())) {
                     log_error(errh, __FILE__, __LINE__,
@@ -2737,7 +2737,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         switch ((rc = SSL_get_error(hctx->ssl, len))) {
         case SSL_ERROR_WANT_WRITE:
             con->is_writable = -1;
-            /* fall through */
+            __attribute_fallthrough__
         case SSL_ERROR_WANT_READ:
             con->is_readable = 0;
 
@@ -2770,7 +2770,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
             switch(oerrno) {
             case ECONNRESET:
                 if (!hctx->conf.ssl_log_noise) break;
-                /* fall through */
+                __attribute_fallthrough__
             default:
                 /* (oerrno should be something like ECONNABORTED not 0
                  *  if client disconnected before anything was sent
@@ -2793,7 +2793,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
                 /* FIXME: later */
             }
 
-            /* fall through */
+            __attribute_fallthrough__
         default:
             while((ssl_err = ERR_get_error())) {
                 switch (ERR_GET_REASON(ssl_err)) {
@@ -2954,7 +2954,7 @@ mod_openssl_close_notify(handler_ctx *hctx)
                 break;
             }
 
-            /* fall through */
+            __attribute_fallthrough__
         default:
 
             if (!SSL_is_init_finished(hctx->ssl)) {

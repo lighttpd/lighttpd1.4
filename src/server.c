@@ -1585,7 +1585,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 					switch (fdevent_reaped_logger_pipe(pid)) {
 					  default: break;
 					  case -1: if (!timer) alarm((timer = 5));
-						   /* fall through */
+						   __attribute_fallthrough__
 					  case  1: continue;
 					}
 					/** 

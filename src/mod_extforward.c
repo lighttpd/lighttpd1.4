@@ -1718,7 +1718,7 @@ static int mod_extforward_network_read (connection *con,
       case -2: errh = con->srv->errh;
                log_error(errh,__FILE__,__LINE__,
                  "hap-PROXY proto received invalid/unsupported request");
-               /* fall through */
+               __attribute_fallthrough__
       default: rc = -1; break;
     }
 

@@ -515,7 +515,7 @@ static int connection_handle_write_state(request_st * const r, connection * cons
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "unexpected subrequest handler ret-value: %d %d",
                   con->fd, rc);
-                /* fall through */
+                __attribute_fallthrough__
             case HANDLER_ERROR:
                 connection_set_state_error(r, CON_STATE_ERROR);
                 return CON_STATE_ERROR;
@@ -1073,7 +1073,7 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 			r->loops_per_request = 0;
 
 			connection_set_state(r, CON_STATE_READ);
-			/* fall through */
+			__attribute_fallthrough__
 		case CON_STATE_READ:
 			/*(should not be reached by HTTP/2 streams)*/
 			if (!connection_handle_read_state(con)) {
@@ -1085,13 +1085,13 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 				break;
 			}
 			/*if (r->state != CON_STATE_REQUEST_END) break;*/
-			/* fall through */
+			__attribute_fallthrough__
 		case CON_STATE_REQUEST_END: /* transient */
 			ostate = (0 == r->reqbody_length)
 			  ? CON_STATE_HANDLE_REQUEST
 			  : CON_STATE_READ_POST;
 			connection_set_state(r, ostate);
-			/* fall through */
+			__attribute_fallthrough__
 		case CON_STATE_READ_POST:
 		case CON_STATE_HANDLE_REQUEST:
 			switch (http_response_handler(r)) {
@@ -1112,19 +1112,19 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 				connection_set_state_error(r, CON_STATE_ERROR);
 				continue;
 			}
-			/* fall through */
+			/*__attribute_fallthrough__*/
 		/*case CON_STATE_RESPONSE_START:*//*occurred;transient*/
 			if (r->http_version > HTTP_VERSION_1_1)
 				h2_send_headers(r, con);
 			else
 				http_response_write_header(r);
 			connection_set_state(r, CON_STATE_WRITE);
-			/* fall through */
+			__attribute_fallthrough__
 		case CON_STATE_WRITE:
 			if (connection_handle_write_state(r, con)
 			    != CON_STATE_RESPONSE_END)
 				break;
-			/* fall through */
+			__attribute_fallthrough__
 		case CON_STATE_RESPONSE_END: /* transient */
 		case CON_STATE_ERROR:        /* transient */
 			if (r->http_version > HTTP_VERSION_1_1 && r != &con->request)

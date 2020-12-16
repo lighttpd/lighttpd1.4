@@ -1030,7 +1030,7 @@ static void gw_restart_dead_procs(gw_host * const host, log_error_st * const err
             }
 
             if (proc->state != PROC_STATE_DIED) break;
-            /* fall through *//*(we have a dead proc now)*/
+            __attribute_fallthrough__/*(we have a dead proc now)*/
 
         case PROC_STATE_DIED:
             /* local procs get restarted by us,
@@ -1891,7 +1891,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
             hctx->reconnects = 0;
             break;
         }
-        /* fall through */
+        __attribute_fallthrough__
     case GW_STATE_CONNECT_DELAYED:
         if (hctx->state == GW_STATE_CONNECT_DELAYED) { /*(not GW_STATE_INIT)*/
             int socket_error = fdevent_connect_status(hctx->fd);
@@ -1906,7 +1906,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
         gw_proc_connect_success(hctx->host, hctx->proc, hctx->conf.debug, r);
 
         gw_set_state(hctx, GW_STATE_PREPARE_WRITE);
-        /* fall through */
+        __attribute_fallthrough__
     case GW_STATE_PREPARE_WRITE:
         /* ok, we have the connection */
 
@@ -1930,7 +1930,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
 
         fdevent_fdnode_event_add(hctx->ev, hctx->fdn, FDEVENT_IN|FDEVENT_RDHUP);
         gw_set_state(hctx, GW_STATE_WRITE);
-        /* fall through */
+        __attribute_fallthrough__
     case GW_STATE_WRITE:
         if (!chunkqueue_is_empty(&hctx->wb)) {
             log_error_st * const errh = r->conf.errh;

@@ -979,7 +979,8 @@ void http_response_backend_done (request_st * const r) {
 			r->http_status = 500;
 			r->handler_module = NULL;
 			break;
-		} /* else fall through */
+		}
+		__attribute_fallthrough__
 	case CON_STATE_WRITE:
 		if (!r->resp_body_finished) {
 			if (r->http_version == HTTP_VERSION_1_1)
