@@ -49,6 +49,8 @@ typedef struct {
     buffer ldap_filter;
 } plugin_data;
 
+static const char *default_cafile;
+
 static handler_t mod_authn_ldap_basic(request_st * const r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
 INIT_FUNC(mod_authn_ldap_init) {
@@ -85,6 +87,7 @@ FREE_FUNC(mod_authn_ldap_free) {
     }
 
     free(p->ldap_filter.ptr);
+    default_cafile = NULL;
 }
 
 static void mod_authn_ldap_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -175,6 +178,9 @@ static void mod_authn_add_scheme (server *srv, buffer *host)
         buffer_copy_buffer(host, tb);
     }
 }
+
+__attribute_cold__
+static void mod_authn_ldap_err(log_error_st *errh, const char *file, unsigned long line, const char *fn, int err);
 
 SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
@@ -323,6 +329,17 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
         const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
         if (-1 != cpv->k_id)
             mod_authn_ldap_merge_config(&p->defaults, cpv);
+    }
+
+    if (p->defaults.auth_ldap_starttls && p->defaults.auth_ldap_cafile) {
+        const int ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE,
+                                        p->defaults.auth_ldap_cafile);
+        if (LDAP_OPT_SUCCESS != ret) {
+            mod_authn_ldap_err(srv->errh, __FILE__, __LINE__,
+              "ldap_set_option(LDAP_OPT_X_TLS_CACERTFILE)", ret);
+            return HANDLER_ERROR;
+        }
+        default_cafile = p->defaults.auth_ldap_cafile;
     }
 
     return HANDLER_GO_ON;
@@ -506,8 +523,10 @@ static LDAP * mod_authn_ldap_host_init(log_error_st *errh, plugin_config_ldap *s
     if (s->auth_ldap_starttls) {
         /* if no CA file is given, it is ok, as we will use encryption
          * if the server requires a CAfile it will tell us */
-        if (s->auth_ldap_cafile) {
-            ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE,
+        if (s->auth_ldap_cafile
+            && (!default_cafile
+                || 0 != strcmp(s->auth_ldap_cafile, default_cafile))) {
+            ret = ldap_set_option(ld, LDAP_OPT_X_TLS_CACERTFILE,
                                   s->auth_ldap_cafile);
             if (LDAP_OPT_SUCCESS != ret) {
                 mod_authn_ldap_err(errh, __FILE__, __LINE__,

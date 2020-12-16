@@ -45,6 +45,8 @@ typedef struct {
     plugin_config conf;
 } plugin_data;
 
+static const char *default_cafile;
+
 static void mod_vhostdb_dbconf_free (void *vdata)
 {
     vhostdb_config *dbconf = (vhostdb_config *)vdata;
@@ -281,8 +283,9 @@ static LDAP * mod_authn_ldap_host_init(log_error_st *errh, vhostdb_config *s) {
     if (s->starttls) {
         /* if no CA file is given, it is ok, as we will use encryption
          * if the server requires a CAfile it will tell us */
-        if (s->cafile) {
-            ret = ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE, s->cafile);
+        if (s->cafile
+            && (!default_cafile || 0 != strcmp(s->cafile, default_cafile))) {
+            ret = ldap_set_option(ld, LDAP_OPT_X_TLS_CACERTFILE, s->cafile);
             if (LDAP_OPT_SUCCESS != ret) {
                 mod_authn_ldap_err(errh, __FILE__, __LINE__,
                   "ldap_set_option(LDAP_OPT_X_TLS_CACERTFILE)", ret);
@@ -495,6 +498,7 @@ FREE_FUNC(mod_vhostdb_cleanup) {
             }
         }
     }
+    default_cafile = NULL;
 }
 
 static void mod_vhostdb_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -562,6 +566,18 @@ SETDEFAULTS_FUNC(mod_vhostdb_set_defaults) {
         const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
         if (-1 != cpv->k_id)
             mod_vhostdb_merge_config(&p->defaults, cpv);
+    }
+
+    vhostdb_config * const dbconf = (vhostdb_config *)p->defaults.vdata;
+    if (dbconf && dbconf->starttls && dbconf->cafile) {
+        const int ret =
+          ldap_set_option(NULL, LDAP_OPT_X_TLS_CACERTFILE, dbconf->cafile);
+        if (LDAP_OPT_SUCCESS != ret) {
+            mod_authn_ldap_err(srv->errh, __FILE__, __LINE__,
+              "ldap_set_option(LDAP_OPT_X_TLS_CACERTFILE)", ret);
+            return HANDLER_ERROR;
+        }
+        default_cafile = dbconf->cafile;
     }
 
     return HANDLER_GO_ON;
