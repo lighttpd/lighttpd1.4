@@ -45,16 +45,9 @@ void array_copy_array(array * const dst, const array * const src) {
 	array_free_data(dst);
 	if (0 == src->size) return;
 
-	dst->used = src->used;
-	dst->size = src->size;
-
-	dst->data = calloc(src->size, sizeof(*src->data));
-	force_assert(NULL != dst->data);
-	dst->sorted = malloc(sizeof(*src->sorted) * src->size);
-	force_assert(NULL != dst->sorted);
-	memcpy(dst->sorted, src->sorted, sizeof(*src->sorted) * src->used);
+	array_extend(dst, src->size);
 	for (uint32_t i = 0; i < src->used; ++i) {
-		dst->data[i] = src->data[i]->fn->copy(src->data[i]);
+		array_insert_unique(dst, src->data[i]->fn->copy(src->data[i]));
 	}
 }
 
