@@ -374,6 +374,7 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
             struct inotify_event * const in =
               (struct inotify_event *)((uintptr_t)buf + i);
             uint32_t len = in->len;
+            if (len > sizeof(buf)) break; /*(should not happen)*/
             i += sizeof(struct inotify_event) + len;
             if (i > rd) break; /*(should not happen (partial record))*/
             if (in->mask & IN_CREATE)
