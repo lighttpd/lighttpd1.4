@@ -3,6 +3,46 @@
 NEWS
 ====
 
+- 1.4.57 - 2020-12-17
+  * [core] attempt to quiet some coverity warnings
+  * [mod_webdav] compile fix for Mac OSX/11
+  * [core] handle U+00A0 in config parser
+  * [core] fix lighttpd -1 one-shot with pipes
+  * [core] quiet start/shutdown trace in one-shot mode
+  * [core] allow keep-alives in one-shot mode (#3042)
+  * [mod_webdav] define _ATFILE_SOURCE if AT_FDCWD
+  * [core] setsockopt IPV6_V6ONLY if server.v4mapped
+  * [build] fix meson.build when building all TLS mods
+  * [core] prefer inet_aton() over inet_addr()
+  * [build] fix SCons build when building all TLS mods
+  * [core] add missing mod_wolfssl to ssl compat list
+  * [mod_openssl] remove ancient preprocessor logic
+  * [core] SHA512_Init, SHA512_Update, SHA512_Final
+  * [mod_wolfssl] add complex preproc logic for SNI
+  * [core] wrap a macro value with parens
+  * [core] fix handling chunked response from backend (fixes #3044)
+  * [core] always set file.fd = -1 on FILE_CHUNK reset (fixes #3044)
+  * [core] skip some trace if backend Upgrade (#3044)
+  * [TLS] cert-staple.sh POSIX sh compat (fixes #3043)
+  * [core] portability fix if st_mtime not defined
+  * [mod_nss] portability fix
+  * [core] warn if mod_authn_file needed in conf
+  * [core] fix chunked decoding from backend (fixes #3044)
+  * [core] reject excess data after chunked encoding (#3046)
+  * [core] track chunked encoding state from backend (fixes #3046)
+  * [core] li_restricted_strtoint64()
+  * [core] track Content-Length from backend (fixes #3046)
+  * [core] enhance config parsing debugging (#3047)
+  * [core] reorder srv->config_context to match ndx (fixes #3047)
+  * [mod_proxy] proxy.header = ("force-http10" => ...)
+  * [mod_authn_ldap] fix crash (fixes #3048)
+  * [mod_authn_ldap, mod_vhostdb_ldap] default cafile
+  * [core] fix array_copy_array() sorted[]
+  * [multiple] replace fall through comment with attr
+  * [core] fix crash printing trace if backend is down
+  * [core] fix decoding chunked from backend (fixes #3049)
+  * [core] attempt to quiet some coverity warnings
+
 - 1.4.56 - 2020-11-29
   * [core] perf: request processing
   * [core] http_header_str_contains_token()
