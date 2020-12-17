@@ -315,7 +315,7 @@ static void gw_proc_check_enable(gw_host * const host, gw_proc * const proc, log
     log_error(errh, __FILE__, __LINE__,
       "gw-server re-enabled: %s %s %hu %s",
       proc->connection_name->ptr, host->host->ptr, host->port,
-      host->unixsocket->ptr ? host->unixsocket->ptr : "");
+      host->unixsocket && host->unixsocket->ptr ? host->unixsocket->ptr : "");
 }
 
 static void gw_proc_waitpid_log(const gw_host * const host, const gw_proc * const proc, log_error_st * const errh, const int status) {
