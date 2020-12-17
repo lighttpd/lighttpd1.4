@@ -301,10 +301,7 @@ int http_chunk_transfer_cqlen(request_st * const r, chunkqueue * const src, cons
 void http_chunk_close(request_st * const r) {
     if (!r->resp_send_chunked) return;
 
-    if (r->gw_dechunk && !buffer_string_is_empty(&r->gw_dechunk->b)) {
-        /* XXX: trailers passed through; no sanity check currently done */
-        chunkqueue_append_buffer(&r->write_queue, &r->gw_dechunk->b);
-        buffer_clear(&r->gw_dechunk->b);
+    if (r->gw_dechunk) {
         if (!r->gw_dechunk->done)
             r->keep_alive = 0;
     }
@@ -321,34 +318,46 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
     off_t te_chunked = r->gw_dechunk->gw_chunked;
     while (len) {
         if (0 == te_chunked) {
-            const char *p = strchr(mem, '\n');
-            /*(likely better ways to handle chunked header crossing chunkqueue
-             * chunks, but this situation is not expected to occur frequently)*/
-            if (NULL == p) { /* incomplete HTTP chunked header line */
-                uint32_t hlen = buffer_string_length(h);
-                if ((off_t)(1024 - hlen) < len) {
-                    log_error(r->conf.errh, __FILE__, __LINE__,
-                      "chunked header line too long");
-                    return -1;
-                }
-                buffer_append_string_len(h, mem, len);
-                break;
-            }
-
-            off_t hsz = ++p - mem;
+            const char *p;
             unsigned char *s = (unsigned char *)mem;
-            if (!buffer_string_is_empty(h)) {
+            off_t hsz;
+            if (buffer_string_is_empty(h)) {
+                /*(short-circuit common case: complete chunked header line)*/
+                p = memchr(mem, '\n', (size_t)len);
+                if (p)
+                    hsz = (off_t)(++p - mem);
+                else {
+                    if (len >= 1024) {
+                        log_error(r->conf.errh, __FILE__, __LINE__,
+                          "chunked header line too long");
+                        return -1;
+                    }
+                    buffer_append_string_len(h, mem, (uint32_t)len);
+                    break; /* incomplete HTTP chunked header line */
+                }
+            }
+            else {
                 uint32_t hlen = buffer_string_length(h);
-                if (NULL == memchr(h->ptr, '\n', hlen)) {
+                p = strchr(h->ptr, '\n');
+                if (p)
+                    hsz = (off_t)(++p - h->ptr);
+                else {
+                    p = memchr(mem, '\n', (size_t)len);
+                    hsz = (p ? (off_t)(++p - mem) : len);
                     if ((off_t)(1024 - hlen) < hsz) {
                         log_error(r->conf.errh, __FILE__, __LINE__,
                           "chunked header line too long");
                         return -1;
                     }
                     buffer_append_string_len(h, mem, hsz);
+                    if (NULL == p) break;/*incomplete HTTP chunked header line*/
+                    mem += hsz;
+                    len -= hsz;
+                    hsz = 0;
                 }
-                s = (unsigned char *)h->ptr;
+                s = (unsigned char *)h->ptr;/*(note: read h->ptr after append)*/
             }
+
             for (unsigned char u; (u=(unsigned char)hex2int(*s))!=0xFF; ++s) {
                 if (te_chunked > (off_t)(1uLL<<(8*sizeof(off_t)-5))-1-2) {
                     log_error(r->conf.errh, __FILE__, __LINE__,
@@ -370,7 +379,8 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 /* do not consume final chunked header until
                  * (optional) trailers received along with
                  * request-ending blank line "\r\n" */
-                if (len - hsz == 2 && p[0] == '\r' && p[1] == '\n') {
+                if (len - hsz >= 2 && p[0] == '\r' && p[1] == '\n') {
+                    if (len - hsz > 2) return -1; /*(excess data)*/
                     /* common case with no trailers; final \r\n received */
                   #if 0 /*(avoid allocation for common case; users must check)*/
                     if (buffer_is_empty(h))
@@ -385,15 +395,22 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 /* accumulate trailers and check for end of trailers */
                 /* XXX: reuse r->conf.max_request_field_size
                  *      or have separate limit? */
-                uint32_t hlen = buffer_string_length(h);
-                if ((off_t)(r->conf.max_request_field_size - hlen) < hsz) {
+                uint32_t mlen = buffer_string_length(h);
+                mlen = (r->conf.max_request_field_size > mlen)
+                     ?  r->conf.max_request_field_size - mlen
+                     :  0;
+                if ((off_t)mlen < len) {
                     /* truncate excessively long trailers */
+                    /* (not truncated; passed as-is if r->resp_send_chunked) */
+                    if (r->resp_send_chunked) r->keep_alive = 0;
                     r->gw_dechunk->done = r->http_status;
-                    hsz = (off_t)(r->conf.max_request_field_size - hlen);
-                    buffer_append_string_len(h, mem, hsz);
+                    buffer_append_string_len(h, mem, mlen);
                     p = strrchr(h->ptr, '\n');
-                    if (NULL != p)
+                    if (NULL != p) {
                         buffer_string_set_length(h, p + 1 - h->ptr);
+                        if (p[-1] != '\r')
+                            buffer_append_string_len(h, CONST_STR_LEN("\r\n"));
+                    }
                     else { /*(should not happen)*/
                         buffer_clear(h);
                         buffer_append_string_len(h, CONST_STR_LEN("0\r\n"));
@@ -401,30 +418,11 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                     buffer_append_string_len(h, CONST_STR_LEN("\r\n"));
                     break;
                 }
-                buffer_append_string_len(h, mem, hsz);
-                hlen += (uint32_t)hsz; /* uint32_t fits in (buffer *) */
-                if (hlen < 2) break;
-                p = h->ptr;
-                if (p[0] == '\r' && p[1] == '\n') {
-                    if (hlen > 2) return -1; /*(excess data)*/
-                    /* common case with no trailers; final \r\n received */
-                  #if 0 /*(avoid allocation for common case; users must check)*/
-                    if (buffer_is_empty(h))
-                        buffer_copy_string_len(h, CONST_STR_LEN("0\r\n\r\n"));
-                  #else
-                    buffer_clear(h);
-                  #endif
+                buffer_append_string_len(h, mem, (uint32_t)len);
+                if ((p = strstr(h->ptr, "\r\n\r\n"))) {
                     r->gw_dechunk->done = r->http_status;
-                    break;
-                }
-                if (hlen < 4) break;
-                p += hlen - 4;
-                if (p[0]=='\r'&&p[1]=='\n'&&p[2]=='\r'&&p[3]=='\n')
-                    r->gw_dechunk->done = r->http_status;
-                else if ((p = strstr(h->ptr, "\r\n\r\n"))) {
-                    r->gw_dechunk->done = r->http_status;
-                    buffer_string_set_length(h, (uint32_t)(p+4-h->ptr));
-                    if (p+4 != h->ptr+hlen) return -1; /*(excess data)*/
+                    if (p[4] != '\0') return -1; /*(excess data)*/
+                        /*buffer_string_set_length(h, (uint32_t)(p+4-h->ptr));*/
                 }
                 break;
             }
@@ -433,6 +431,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
             len -= hsz;
 
             te_chunked += 2; /*(for trailing "\r\n" after chunked data)*/
+            buffer_clear(h);
             if (0 == len) break;
         }
 
