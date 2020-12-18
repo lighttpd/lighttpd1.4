@@ -1052,7 +1052,6 @@ ssl_info_callback (const SSL *ssl, int where, int ret)
         handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
         if (hctx->renegotiations >= 0) ++hctx->renegotiations;
     }
-  #ifdef TLS1_3_VERSION
     /* https://github.com/openssl/openssl/issues/5721
      * "TLSv1.3 unexpected InfoCallback after handshake completed" */
     if (0 != (where & SSL_CB_HANDSHAKE_DONE)) {
@@ -1066,7 +1065,6 @@ ssl_info_callback (const SSL *ssl, int where, int ret)
             hctx->renegotiations = -1;
         }
     }
-  #endif
 }
 
 /* https://wiki.openssl.org/index.php/Manual:SSL_CTX_set_verify(3)#EXAMPLES */
@@ -3250,32 +3248,21 @@ static int
 mod_openssl_ssl_conf_proto_val (server *srv, plugin_config_socket *s, const buffer *b, int max)
 {
     if (NULL == b) /* default: min TLSv1.2, max TLSv1.3 */
-      #ifdef TLS1_3_VERSION
-        return max ? TLS1_3_VERSION : TLS1_2_VERSION;
-      #else
-        return TLS1_2_VERSION;
-      #endif
+        return max ? WOLFSSL_TLSV1_3 : WOLFSSL_TLSV1_2;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("None"))) /*"disable" limit*/
         return max
-          ?
-           #ifdef TLS1_3_VERSION
-            TLS1_3_VERSION
-           #else
-            TLS1_2_VERSION
-           #endif
-          : (s->ssl_use_sslv3 ? SSL3_VERSION : TLS1_VERSION);
+          ? WOLFSSL_TLSV1_3
+          : (s->ssl_use_sslv3 ? WOLFSSL_SSLV3 : WOLFSSL_TLSV1);
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("SSLv3")))
-        return SSL3_VERSION;
+        return WOLFSSL_SSLV3;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.0")))
-        return TLS1_VERSION;
+        return WOLFSSL_TLSV1;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.1")))
-        return TLS1_1_VERSION;
+        return WOLFSSL_TLSV1_1;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.2")))
-        return TLS1_2_VERSION;
-  #ifdef TLS1_3_VERSION
+        return WOLFSSL_TLSV1_2;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.3")))
-        return TLS1_3_VERSION;
-  #endif
+        return WOLFSSL_TLSV1_3;
     else {
         if (buffer_eq_icase_slen(b, CONST_STR_LEN("DTLSv1"))
             || buffer_eq_icase_slen(b, CONST_STR_LEN("DTLSv1.2")))
@@ -3287,11 +3274,7 @@ mod_openssl_ssl_conf_proto_val (server *srv, plugin_config_socket *s, const buff
                       "SSL: ssl.openssl.ssl-conf-cmd %s %s invalid; ignored",
                       max ? "MaxProtocol" : "MinProtocol", b->ptr);
     }
-  #ifdef TLS1_3_VERSION
-    return max ? TLS1_3_VERSION : TLS1_2_VERSION;
-  #else
-    return TLS1_2_VERSION;
-  #endif
+    return max ? WOLFSSL_TLSV1_3 : WOLFSSL_TLSV1_2;
 }
 
 
@@ -3398,15 +3381,6 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
 
     if (minb) {
         int n = mod_openssl_ssl_conf_proto_val(srv, s, minb, 0);
-        /*(wolfSSL_CTX_SetMinVersion() alt uses enums with different values)*/
-        switch (n) {
-          case SSL3_VERSION:   n = WOLFSSL_SSLV3;   break;
-          case TLS1_VERSION:   n = WOLFSSL_TLSV1;   break;
-          case TLS1_1_VERSION: n = WOLFSSL_TLSV1_1; break;
-          case TLS1_2_VERSION: n = WOLFSSL_TLSV1_2; break;
-          case TLS1_3_VERSION: n = WOLFSSL_TLSV1_3; break;
-          default: rc = -1; break;
-        }
         if (wolfSSL_CTX_SetMinVersion(s->ssl_ctx, n) != WOLFSSL_SUCCESS)
             rc = -1;
     }
