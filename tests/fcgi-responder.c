@@ -11,10 +11,8 @@
 #include <string.h>
 
 int main (void) {
-	int num_requests = 1;
 
-	while (num_requests > 0 &&
-	       FCGI_Accept() >= 0) {
+	while (FCGI_Accept() >= 0) {
 		char* p;
 
 		if (NULL != (p = getenv("QUERY_STRING"))) {
@@ -32,7 +30,9 @@ int main (void) {
 				printf("\r\n");
 			} else if (0 == strcmp(p, "die-at-end")) {
 				printf("Status: 200 OK\r\n\r\n");
-				num_requests--;
+				printf("test123");
+				FCGI_Finish();
+				break;
 			} else {
 				printf("Status: 200 OK\r\n\r\n");
 			}
@@ -50,8 +50,6 @@ int main (void) {
 		} else {
 			printf("test123");
 		}
-
-		if (0 == num_requests) FCGI_Finish();
 	}
 
 	return 0;

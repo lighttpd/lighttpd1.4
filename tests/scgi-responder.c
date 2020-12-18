@@ -56,7 +56,6 @@ static void
 scgi_process (const int fd)
 {
     ssize_t rd = 0, offset = 0;
-    int num_requests = 1;
     char *p = NULL, *r;
     unsigned long rlen;
     long long cl;
@@ -178,7 +177,7 @@ scgi_process (const int fd)
 				printf("\r\n");
 			} else if (0 == strcmp(p, "die-at-end")) {
 				printf("Status: 200 OK\r\n\r\n");
-				num_requests--;
+				finished = 1;
 			} else {
 				printf("Status: 200 OK\r\n\r\n");
 			}
@@ -199,7 +198,6 @@ scgi_process (const int fd)
     }
 
     fflush(stdout);
-    if (0 == num_requests) finished = 1;
 }
 
 
