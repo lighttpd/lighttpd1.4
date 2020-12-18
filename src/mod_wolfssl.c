@@ -82,7 +82,7 @@ WOLFSSL_API WOLFSSL_ASN1_OBJECT * wolfSSL_X509_NAME_ENTRY_get_object(WOLFSSL_X50
 WOLFSSL_API WOLFSSL_X509_NAME_ENTRY *wolfSSL_X509_NAME_get_entry(WOLFSSL_X509_NAME *name, int loc);
 #endif
 
-#ifndef OPENSSL_ALL
+#if !defined(OPENSSL_ALL) || LIBWOLFSSL_VERSION_HEX < 0x04002000
 /*(invalid; but centralize making these calls no-ops)*/
 #define wolfSSL_sk_X509_NAME_num(a)          0
 #define wolfSSL_sk_X509_NAME_push(a, b)      0
@@ -92,6 +92,12 @@ WOLFSSL_API WOLFSSL_X509_NAME_ENTRY *wolfSSL_X509_NAME_get_entry(WOLFSSL_X509_NA
         ((WOLFSSL_X509_NAME *)1) /* ! NULL */
 #define wolfSSL_sk_X509_NAME_new(a) \
         ((WOLF_STACK_OF(WOLFSSL_X509_NAME) *)1) /* ! NULL */
+#endif
+
+#if LIBWOLFSSL_VERSION_HEX < 0x04002000 /*(exact version needed not checked)*/
+#ifndef STACK_OF
+#define STACK_OF(x) WOLFSSL_STACK
+#endif
 #endif
 
 #include "base.h"
@@ -324,6 +330,9 @@ tlsext_ticket_wipe_expired (const time_t cur_ts)
  *   man SSL_CTX_set_tlsext_ticket_key_cb
  * but openssl code uses EVP_aes_256_cbc() instead of EVP_aes_128_cbc()
  */
+#ifndef EVP_MAX_IV_LENGTH
+#define EVP_MAX_IV_LENGTH 16
+#endif
 static int
 ssl_tlsext_ticket_key_cb (SSL *s, unsigned char key_name[16],
                           unsigned char iv[EVP_MAX_IV_LENGTH],
@@ -566,7 +575,7 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
                     plugin_cacerts *cacerts = cpv->v.v;
                     wolfSSL_sk_X509_NAME_pop_free(cacerts->names,
                                                   X509_NAME_free);
-                    X509_STORE_free(cacerts->certs);
+                    wolfSSL_X509_STORE_free(cacerts->certs);
                     free(cacerts);
                 }
                 break;
@@ -1034,9 +1043,15 @@ mod_openssl_patch_config (request_st * const r, plugin_config * const pconf)
 static int
 safer_X509_NAME_oneline(X509_NAME *name, char *buf, size_t sz)
 {
+  #if LIBWOLFSSL_VERSION_HEX < 0x04003000
+    UNUSED(name);
+    UNUSED(sz);
+  #else
     if (wolfSSL_X509_get_name_oneline(name, buf, (int)sz))
         return (int)strlen(buf);
-    else {
+    else
+  #endif
+    {
         buf[0] = '\0';
         return -1;
     }
@@ -1321,11 +1336,18 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
 static time_t
 mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
 {
+  #if LIBWOLFSSL_VERSION_HEX >= 0x04002000
+    /* Note: up to at least wolfSSL 4.5.0 (current version as this is written)
+     * wolfSSL_ASN1_TIME_diff() is a stub function which always returns 0 */
     /* Note: this does not check for integer overflow of time_t! */
     int day, sec;
     return wolfSSL_ASN1_TIME_diff(&day, &sec, NULL, asn1time)
       ? log_epoch_secs + day*86400 + sec
       : (time_t)-1;
+  #else
+    UNUSED(asn1time);
+    return (time_t)-1;
+  #endif
 }
 
 
@@ -1707,6 +1729,7 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s);
 
 
 #ifndef NO_DH
+#include <wolfssl/openssl/dh.h>
 /* wolfSSL provides wolfSSL_DH_set0_pqg() for
  * Apache w/ OPENSSL_VERSION_NUMBER >= 0x10100000L
  * but does not provide most other openssl 1.1.0+ interfaces
@@ -1819,9 +1842,13 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                         | SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION
                         | SSL_OP_NO_COMPRESSION;
 
+      #if LIBWOLFSSL_VERSION_HEX >= 0x04002000
         s->ssl_ctx = (!s->ssl_use_sslv2 && !s->ssl_use_sslv3)
           ? SSL_CTX_new(TLS_server_method())
           : SSL_CTX_new(SSLv23_server_method());
+      #else
+        s->ssl_ctx = SSL_CTX_new(SSLv23_server_method());
+      #endif
         if (NULL == s->ssl_ctx) {
             log_error(srv->errh, __FILE__, __LINE__,
               "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
@@ -3015,6 +3042,15 @@ CONNECTION_FUNC(mod_openssl_handle_con_close)
 
     return HANDLER_GO_ON;
 }
+
+
+#ifndef OBJ_nid2sn
+#define OBJ_nid2sn  wolfSSL_OBJ_nid2sn
+#endif
+#ifndef OBJ_obj2nid
+#define OBJ_obj2nid wolfSSL_OBJ_obj2nid
+#endif
+#include <wolfssl/wolfcrypt/asn_public.h>
 
 
 static void
