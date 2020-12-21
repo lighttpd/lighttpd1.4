@@ -142,22 +142,10 @@ required packages to run test harness ::
   perl-LWP-MediaTypes
   perl-Tie-Function
   perl-TimeDate
-  php
-  php-cgi
-
-optional packages to run test harness ::
-
-  fcgi-devel
-
-  $ cd tests/ && make fcgi-auth fcgi-responder
 
 run test harness
 
   $ make check
-
-run test harness with additional FastCGI tests (requires fcgi-devel package)
-
-  $ cd tests/ && make check-am
 
 
 static build using SCons
@@ -193,7 +181,7 @@ build using CMake and Xcode on Mac OS X with MacPorts
   $ xcodebuild --license
   $ xcode-select --install
   $ sudo port selfupdate
-  $ sudo port install autoconf automake cmake libtool m4 pcre pkgconfig zlib brotli openssl libxml sqlite3 openldap fcgi p5-cgi libunwind libunwind-headers mysql57 libev gdbm openldap ossp-uuid
+  $ sudo port install autoconf automake cmake libtool m4 pcre pkgconfig zlib brotli openssl libxml sqlite3 openldap libunwind libunwind-headers mysql57 libev gdbm openldap ossp-uuid
   # Note: some of the above require more fiddling to configure with CMake...
 
   # cmake and build

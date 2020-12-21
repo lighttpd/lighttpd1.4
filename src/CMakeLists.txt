@@ -116,10 +116,6 @@ check_include_files(stdint.h HAVE_STDINT_H)
 check_include_files(strings.h HAVE_STRINGS_H)
 check_include_files(syslog.h HAVE_SYSLOG_H)
 
-# check for fastcgi lib, for the tests only
-check_include_files(fastcgi.h HAVE_FASTCGI_H)
-check_include_files(fastcgi/fastcgi.h HAVE_FASTCGI_FASTCGI_H)
-
 # will be needed for auth
 check_include_files(crypt.h HAVE_CRYPT_H)
 # check if we need libcrypt for crypt_r()

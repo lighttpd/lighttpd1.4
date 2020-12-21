@@ -25,13 +25,8 @@ extra_dist = Split('fastcgi-10.conf \
 	LightyTest.pm \
 	mod-setenv.t')
 
-fcgi_auth = None
-fcgi_responder = None
+fcgi_responder = env.Program("fcgi-responder", "fcgi-responder.c")
 scgi_responder = env.Program("scgi-responder", "scgi-responder.c")
-
-if env['LIBFCGI']:
-	fcgi_auth = env.Program("fcgi-auth", "fcgi-auth.c", LIBS=[env['LIBFCGI'], env['APPEND_LIBS']])
-	fcgi_responder = env.Program("fcgi-responder", "fcgi-responder.c", LIBS=[env['LIBFCGI'], env['APPEND_LIBS']])
 
 def CopyTestBinary(env, binary):
 	return env.Command(target = env['ENV']['top_builddir'] + '/tests/' + binary, source = binary, action = Copy("$TARGET", "$SOURCE"))
@@ -55,9 +50,8 @@ def BuildTestEnv(env, build_type):
 
 	testenv.Depends(runtests, dependencies)
 
-	if env['LIBFCGI']:
-		fcgis = [CopyTestBinary(testenv, 'fcgi-auth'), CopyTestBinary(testenv, 'fcgi-responder')]
-		testenv.Depends(runtests, fcgis)
+	fcgis = [CopyTestBinary(testenv, 'fcgi-responder'), CopyTestBinary(testenv, 'scgi-responder')]
+	testenv.Depends(runtests, fcgis)
 
 	return [prepare, runtests, cleanup]
 

@@ -1,16 +1,7 @@
-if conf_data.get('HAVE_FASTCGI_H') or conf_data.get('HAVE_FASTCGI_FASTCGI_H')
-	libfcgi = compiler.find_library('fcgi', required: false)
-	if libfcgi.found()
-		executable('fcgi-auth',
-			sources: 'fcgi-auth.c',
-			dependencies: common_flags + [ libfcgi ],
-		)
-		executable('fcgi-responder',
-			sources: 'fcgi-responder.c',
-			dependencies: common_flags + [ libfcgi ],
-		)
-	endif
-endif
+executable('fcgi-responder',
+	sources: 'fcgi-responder.c',
+	dependencies: common_flags,
+)
 
 executable('scgi-responder',
 	sources: 'scgi-responder.c',

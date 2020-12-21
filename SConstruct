@@ -331,7 +331,6 @@ if 1:
 		LIBCRYPTO = '',
 		LIBDBI = '',
 		LIBDL = '',
-		LIBFCGI = '',
 		LIBGDBM = '',
 		LIBGNUTLS = '',
 		LIBGSSAPI_KRB5 = '',
@@ -497,10 +496,6 @@ if 1:
 
 	if autoconf.CheckLibWithHeader('dl', 'dlfcn.h', 'C'):
 		autoconf.env.Append(LIBDL = 'dl')
-
-	# used in tests if present
-	if autoconf.CheckLibWithHeader('fcgi', 'fastcgi.h', 'C'):
-		autoconf.env.Append(LIBFCGI = 'fcgi')
 
 	if env['with_bzip2']:
 		if not autoconf.CheckLibWithHeader('bz2', 'bzlib.h', 'C'):

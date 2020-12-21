@@ -1604,17 +1604,6 @@ if test "$mmap" = true; then
   AC_DEFINE([ENABLE_MMAP], [1], [Use mmap if available])
 fi
 
-dnl check for fastcgi lib, for the tests only
-AC_MSG_NOTICE([----------------------------------------])
-fastcgi_found=no
-AC_CHECK_LIB([fcgi], [FCGI_Accept], [
-  AC_CHECK_HEADERS([fastcgi.h fastcgi/fastcgi.h], [
-    fastcgi_found=yes
-  ])
-])
-
-AM_CONDITIONAL([CHECK_WITH_FASTCGI], [test "$fastcgi_found" = yes])
-
 
 AC_MSG_NOTICE([----------------------------------------])
 dnl check for extra compiler options (warning options)

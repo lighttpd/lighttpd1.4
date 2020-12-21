@@ -16,15 +16,7 @@ typedef gw_handler_ctx   handler_ctx;
 #include "log.h"
 #include "status_counter.h"
 
-#ifdef HAVE_FASTCGI_FASTCGI_H
-# include <fastcgi/fastcgi.h>
-#else
-# ifdef HAVE_FASTCGI_H
-#  include <fastcgi.h>
-# else
-#  include "compat/fastcgi.h"
-# endif
-#endif /* HAVE_FASTCGI_FASTCGI_H */
+#include "compat/fastcgi.h"
 
 #if GW_RESPONDER  != FCGI_RESPONDER
 #error "mismatched defines: (GW_RESPONDER != FCGI_RESPONDER)"

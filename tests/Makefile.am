@@ -1,16 +1,9 @@
 # lighttpd.conf and conformance.pl expect this directory
 testdir=$(srcdir)/tmp/lighttpd/
 
-if CHECK_WITH_FASTCGI
-check_PROGRAMS=fcgi-auth fcgi-responder scgi-responder
-
-fcgi_auth_SOURCES=fcgi-auth.c
-fcgi_auth_LDADD=-lfcgi
+check_PROGRAMS=fcgi-responder scgi-responder
 
 fcgi_responder_SOURCES=fcgi-responder.c
-fcgi_responder_LDADD=-lfcgi
-endif
-
 scgi_responder_SOURCES=scgi-responder.c
 
 TESTS=\

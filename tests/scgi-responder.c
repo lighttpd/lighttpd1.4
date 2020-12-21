@@ -160,42 +160,47 @@ scgi_process (const int fd)
         cl -= rd;
     }
 
-    /*(from fcgi-responder.c, substituting scgi_getenv() for getenv())*/
-    {
-		if (NULL != (p = scgi_getenv(r, rlen, "QUERY_STRING"))) {
-			if (0 == strcmp(p, "lf")) {
-				printf("Status: 200 OK\n\n");
-			} else if (0 == strcmp(p, "crlf")) {
-				printf("Status: 200 OK\r\n\r\n");
-			} else if (0 == strcmp(p, "slow-lf")) {
-				printf("Status: 200 OK\n");
-				fflush(stdout);
-				printf("\n");
-			} else if (0 == strcmp(p,"slow-crlf")) {
-				printf("Status: 200 OK\r\n");
-				fflush(stdout);
-				printf("\r\n");
-			} else if (0 == strcmp(p, "die-at-end")) {
-				printf("Status: 200 OK\r\n\r\n");
-				finished = 1;
-			} else {
-				printf("Status: 200 OK\r\n\r\n");
-			}
-		} else {
-			printf("Status: 500 Internal Foo\r\n\r\n");
-		}
-
-		if (0 == strcmp(p, "path_info")) {
-			printf("%s", scgi_getenv(r, rlen, "PATH_INFO"));
-		} else if (0 == strcmp(p, "script_name")) {
-			printf("%s", scgi_getenv(r, rlen, "SCRIPT_NAME"));
-		} else if (0 == strcmp(p, "var")) {
-			p = scgi_getenv(r, rlen, "X_LIGHTTPD_FCGI_AUTH");
-			printf("%s", p ? p : "(no value)");
-		} else {
-			printf("test123");
-		}
+    /*(similar to fcgi-responder.c:fcgi_process_params())*/
+    const char *cdata = NULL;
+    if (NULL != (p = scgi_getenv(r, rlen, "QUERY_STRING"))) {
+        if (0 == strcmp(p, "lf"))
+            cdata = "Status: 200 OK\n\n";
+        else if (0 == strcmp(p, "crlf"))
+            cdata = "Status: 200 OK\r\n\r\n";
+        else if (0 == strcmp(p, "slow-lf")) {
+            printf("Status: 200 OK\n");
+            fflush(stdout);
+            cdata = "\n";
+        }
+        else if (0 == strcmp(p,"slow-crlf")) {
+            printf("Status: 200 OK\r\n");
+            fflush(stdout);
+            cdata = "\r\n";
+        }
+        else if (0 == strcmp(p, "die-at-end")) {
+            cdata = "Status: 200 OK\r\n\r\n";
+            finished = 1;
+        }
+        else
+            cdata = "Status: 200 OK\r\n\r\n";
     }
+    else {
+        cdata = "Status: 500 Internal Foo\r\n\r\n";
+        p = NULL;
+    }
+
+    if (cdata) printf("%s", cdata);
+
+    if (NULL == p)
+        cdata = NULL;
+    else if (0 == strcmp(p, "path_info"))
+        cdata = scgi_getenv(r, rlen, "PATH_INFO");
+    else if (0 == strcmp(p, "script_name"))
+        cdata = scgi_getenv(r, rlen, "SCRIPT_NAME");
+    else
+        cdata = "test123";
+
+    if (cdata) printf("%s", cdata);
 
     fflush(stdout);
 }

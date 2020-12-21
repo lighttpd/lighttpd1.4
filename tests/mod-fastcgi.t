@@ -239,14 +239,14 @@ EOF
 }
 
 SKIP: {
-	skip "no fcgi-auth, fcgi-responder found", 15
-	  unless (-x $tf->{BASEDIR}."/tests/fcgi-auth"      || -x $tf->{BASEDIR}."/tests/fcgi-auth.exe")
-	      && (-x $tf->{BASEDIR}."/tests/fcgi-responder" || -x $tf->{BASEDIR}."/tests/fcgi-responder.exe");
+	skip "no fcgi-responder found", 15
+	  unless (   -x $tf->{BASEDIR}."/tests/fcgi-responder"
+		  || -x $tf->{BASEDIR}."/tests/fcgi-responder.exe");
 
 	$tf->{CONFIGFILE} = 'fastcgi-responder.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
 	$t->{REQUEST}  = ( <<EOF
-GET /index.html?ok HTTP/1.0
+GET /index.html?auth-ok HTTP/1.0
 Host: auth.example.org
 EOF
  );
@@ -254,7 +254,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'FastCGI - Auth');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /index.html?fail HTTP/1.0
+GET /index.html?auth-fail HTTP/1.0
 Host: auth.example.org
 EOF
  );
@@ -262,7 +262,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'FastCGI - Auth');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /expire/access.txt?ok HTTP/1.0
+GET /expire/access.txt?auth-ok HTTP/1.0
 Host: auth.example.org
 EOF
  );
@@ -270,7 +270,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'FastCGI - Auth in subdirectory');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /index.fcgi?varfail HTTP/1.0
+GET /index.fcgi?auth-varfail HTTP/1.0
 Host: auth.example.org
 EOF
  );
@@ -278,7 +278,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'FastCGI - Auth Fail with FastCGI responder afterwards');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /index.fcgi?var HTTP/1.0
+GET /index.fcgi?auth-var HTTP/1.0
 Host: auth.example.org
 EOF
  );

@@ -54,12 +54,6 @@ conf_data.set('HAVE_STDINT_H', compiler.has_header('stdint.h'))
 conf_data.set('HAVE_STRINGS_H', compiler.has_header('strings.h'))
 conf_data.set('HAVE_SYSLOG_H', compiler.has_header('syslog.h'))
 
-# check for fastcgi lib, for the tests only
-conf_data.set('HAVE_FASTCGI_H', compiler.has_header('fastcgi.h'))
-if not(conf_data.get('HAVE_FASTCGI_H'))
-	conf_data.set('HAVE_FASTCGI_FASTCGI_H', compiler.has_header('fastcgi/fastcgi.h'))
-endif
-
 # will be needed for auth
 conf_data.set('HAVE_CRYPT_H', compiler.has_header('crypt.h'))
 if conf_data.get('HAVE_CRYPT_H')
