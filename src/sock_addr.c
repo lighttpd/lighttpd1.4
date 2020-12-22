@@ -238,11 +238,15 @@ int sock_addr_inet_pton(sock_addr * const restrict saddr,
         memset(&saddr->ipv4, 0, sizeof(struct sockaddr_in));
         saddr->ipv4.sin_family  = AF_INET;
         saddr->ipv4.sin_port    = htons(port);
+     #ifdef HAVE_IPV6
+        return inet_pton(AF_INET, str, &saddr->ipv4.sin_addr);
+     #else
       #if defined(HAVE_INET_ATON) /*(Windows does not provide inet_aton())*/
         return (0 != inet_aton(str, &saddr->ipv4.sin_addr));
       #else
         return ((saddr->ipv4.sin_addr.s_addr = inet_addr(str)) != INADDR_NONE);
       #endif
+     #endif
      #ifdef HAVE_IPV6
       case AF_INET6:
         memset(&saddr->ipv6, 0, sizeof(struct sockaddr_in6));
@@ -343,6 +347,7 @@ int sock_addr_nameinfo_append_buffer(buffer * const restrict b, const sock_addr 
      * http-header-glue.c:http_response_redirect_to_directory())*/
     /*(note: name resolution here is *blocking*)*/
     switch (saddr->plain.sa_family) {
+     #ifndef HAVE_IPV6
       case AF_INET:
       {
         struct hostent *he = gethostbyaddr((char *)&saddr->ipv4.sin_addr,
@@ -358,15 +363,34 @@ int sock_addr_nameinfo_append_buffer(buffer * const restrict b, const sock_addr 
         }
         return 0;
       }
-     #ifdef HAVE_IPV6
+     #else /* HAVE_IPV6 */
+      case AF_INET:
+      {
+        char hbuf[256];
+        int rc = getnameinfo((const struct sockaddr *)(&saddr->ipv4),
+                             sizeof(saddr->ipv4),
+                             hbuf, sizeof(hbuf), NULL, 0, 0);
+        if (0 != rc) {
+            log_error(errh, __FILE__, __LINE__,
+              "NOTICE: getnameinfo failed; using ip-address instead: %s",
+              gai_strerror(rc));
+
+            sock_addr_inet_ntop_append_buffer(b, saddr);
+        } else {
+            buffer_append_string(b, hbuf);
+        }
+        return 0;
+      }
       case AF_INET6:
       {
         char hbuf[256];
-        if (0 != getnameinfo((const struct sockaddr *)(&saddr->ipv6),
+        int rc = getnameinfo((const struct sockaddr *)(&saddr->ipv6),
                              sizeof(saddr->ipv6),
-                             hbuf, sizeof(hbuf), NULL, 0, 0)) {
-            log_perror(errh, __FILE__, __LINE__,
-              "NOTICE: getnameinfo failed; using ip-address instead");
+                             hbuf, sizeof(hbuf), NULL, 0, 0);
+        if (0 != rc) {
+            log_error(errh, __FILE__, __LINE__,
+              "NOTICE: getnameinfo failed; using ip-address instead: %s",
+              gai_strerror(rc));
 
             buffer_append_string_len(b, CONST_STR_LEN("["));
             sock_addr_inet_ntop_append_buffer(b, saddr);
