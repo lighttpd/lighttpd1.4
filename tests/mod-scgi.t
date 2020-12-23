@@ -51,7 +51,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'line-ending \r\n + \r\n');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /abc/def/ghi?path_info HTTP/1.0
+GET /abc/def/ghi?env=PATH_INFO HTTP/1.0
 Host: wsgi.example.org
 EOF
  );
@@ -59,7 +59,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'PATH_INFO (wsgi)');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /abc/def/ghi?script_name HTTP/1.0
+GET /abc/def/ghi?env=SCRIPT_NAME HTTP/1.0
 Host: wsgi.example.org
 EOF
  );

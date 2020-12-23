@@ -1,3 +1,1 @@
-<?php
-echo $_SERVER[$_GET["var"]];
-?>
+# (file exists for mod-fastcgi.t test case)

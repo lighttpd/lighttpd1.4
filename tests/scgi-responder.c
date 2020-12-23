@@ -193,10 +193,8 @@ scgi_process (const int fd)
 
     if (NULL == p)
         cdata = NULL;
-    else if (0 == strcmp(p, "path_info"))
-        cdata = scgi_getenv(r, rlen, "PATH_INFO");
-    else if (0 == strcmp(p, "script_name"))
-        cdata = scgi_getenv(r, rlen, "SCRIPT_NAME");
+    else if (0 == strncmp(p, "env=", 4))
+        cdata = scgi_getenv(r, rlen, p+4);
     else
         cdata = "test123";
 

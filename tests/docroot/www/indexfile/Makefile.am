@@ -1,1 +1,1 @@
-EXTRA_DIST=index.php return-404.php query_string.pl
+EXTRA_DIST=index.pl query_string.pl

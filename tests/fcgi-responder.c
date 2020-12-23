@@ -198,10 +198,6 @@ fcgi_process_params (FILE * const stream, int req_id, int role, unsigned char * 
 
     if (NULL == p)
         cdata = NULL;
-    else if (9 == len && 0 == memcmp(p, "path_info", 9))
-        cdata = fcgi_getenv(r, rlen, "PATH_INFO", 9, &len);
-    else if (11 == len && 0 == memcmp(p, "script_name", 11))
-        cdata = fcgi_getenv(r, rlen, "SCRIPT_NAME", 11, &len);
     else if (len > 4 && 0 == memcmp(p, "env=", 4))
         cdata = fcgi_getenv(r, rlen, p+4, len-4, &len);
     else if (8 == len && 0 == memcmp(p, "auth-var", 8))

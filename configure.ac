@@ -1653,7 +1653,6 @@ AC_CONFIG_FILES([\
   tests/docroot/123/Makefile \
   tests/docroot/Makefile \
   tests/docroot/www/expire/Makefile \
-  tests/docroot/www/go/Makefile \
   tests/docroot/www/indexfile/Makefile \
   tests/docroot/www/Makefile \
   tests/Makefile \

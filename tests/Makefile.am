@@ -21,7 +21,6 @@ CONFS=\
 	core-request.t \
 	core-response.t \
 	core-var-include.t \
-	fastcgi-10.conf \
 	fastcgi-responder.conf \
 	LightyTest.pm \
 	lowercase.conf \

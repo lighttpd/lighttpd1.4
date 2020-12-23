@@ -36,7 +36,6 @@ sub find_program {
 }
 
 BEGIN {
-	our $HAVE_PHP = find_program('PHP', 'php-cgi');
 	our $HAVE_PERL = find_program('PERL', 'perl');
 	if (!$HAVE_PERL) {
 		die "Couldn't find path to perl, but it obviously seems to be running";

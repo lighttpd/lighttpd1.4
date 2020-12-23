@@ -46,21 +46,20 @@ To run a specific config
   repo=$PWD      # from root of src repository
   cd tests/
   ./prepare.sh
-  PERL=/usr/bin/perl PHP=/usr/bin/php-cgi SRCDIR=$repo/tests \
+  PERL=/usr/bin/perl SRCDIR=$repo/tests \
     $repo/src/lighttpd -D -f lighttpd.conf -m $repo/src/.libs
 
 The PERL, PHP, and SRCDIR environment variables are set by LightyTest.pm
 when 'make check' is run.  PERL and PHP can be set to paths to perl and php,
-e.g. export PERL=/usr/bin/perl PHP=/usr/bin/php-cgi
+e.g. export PERL=/usr/bin/perl
 
 To run a specific config under gdb
   repo=$PWD      # from root of src repository
   cd tests/
   ./prepare.sh
-  PERL=/usr/bin/perl PHP=/usr/bin/php-cgi SRCDIR=$repo/tests repo=$repo \
-    gdb $repo/src/lighttpd
+  PERL=/usr/bin/perl SRCDIR=$repo/tests \
+    gdb --args $repo/src/lighttpd -D -f lighttpd.conf -m $repo/src/.libs
 
-  (gdb) set args -D -f lighttpd.conf -m $repo/src/.libs
   (gdb) start
   (gdb) ...
 

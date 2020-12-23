@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 52;
+use Test::More tests => 53;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -523,6 +523,13 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
 ok($tf->handle_http($t) == 0, 'static file with forbidden pathinfo');
+
+$t->{REQUEST}  = ( <<EOF
+GET /www/abc/def HTTP/1.0
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
+ok($tf->handle_http($t) == 0, 'pathinfo on a directory');
 
 
 $t->{REQUEST}  = ( <<EOF
