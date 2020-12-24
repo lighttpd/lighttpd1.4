@@ -28,16 +28,20 @@
 static size_t chunk_buf_sz = 8192;
 static chunk *chunks, *chunks_oversized;
 static chunk *chunk_buffers;
+static int chunks_oversized_n;
 static const array *chunkqueue_default_tempdirs = NULL;
 static off_t chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
 
 void chunkqueue_set_chunk_size (size_t sz)
 {
-    chunk_buf_sz = sz > 0 ? ((sz + 1023) & ~1023uL) : 8192;
+    size_t x = 1024;
+    while (x < sz && x < (1u << 30)) x <<= 1;
+    chunk_buf_sz = sz > 0 ? x : 8192;
 }
 
 void chunkqueue_set_tempdirs_default_reset (void)
 {
+    chunk_buf_sz = 8192;
     chunkqueue_default_tempdirs = NULL;
     chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
 }
@@ -131,15 +135,50 @@ static void chunk_free(chunk *c) {
 	free(c);
 }
 
-buffer * chunk_buffer_acquire(void) {
+static chunk * chunk_pop_oversized(size_t sz) {
+    /* future: might have buckets of certain sizes, up to socket buf sizes */
+    if (chunks_oversized && chunks_oversized->mem->size >= sz) {
+        --chunks_oversized_n;
+        chunk *c = chunks_oversized;
+        chunks_oversized = c->next;
+        return c;
+    }
+    return NULL;
+}
+
+static void chunk_push_oversized(chunk * const c, const size_t sz) {
+    if (chunks_oversized_n < 64 && chunk_buf_sz >= 4096) {
+        ++chunks_oversized_n;
+        chunk **co = &chunks_oversized;
+        while (*co && sz < (*co)->mem->size) co = &(*co)->next;
+        c->next = *co;
+        *co = c;
+    }
+    else
+        chunk_free(c);
+}
+
+__attribute_returns_nonnull__
+static buffer * chunk_buffer_acquire_sz(size_t sz) {
     chunk *c;
     buffer *b;
-    if (chunks) {
-        c = chunks;
-        chunks = c->next;
+    if (sz <= chunk_buf_sz) {
+        if (chunks) {
+            c = chunks;
+            chunks = c->next;
+        }
+        else
+            c = chunk_init(chunk_buf_sz);
+            /* future: might choose to pop from chunks_oversized, if available
+             * (even if larger than sz) rather than allocating new chunk
+             * (and if doing so, might replace chunks_oversized_n) */
     }
     else {
-        c = chunk_init(chunk_buf_sz);
+        /*(round up to nearest chunk_buf_sz)*/
+        sz = (sz + (chunk_buf_sz-1)) & ~(chunk_buf_sz-1);
+        c = chunk_pop_oversized(sz);
+        if (NULL == c)
+            c = chunk_init(sz);
     }
     c->next = chunk_buffers;
     chunk_buffers = c;
@@ -148,19 +187,45 @@ buffer * chunk_buffer_acquire(void) {
     return b;
 }
 
+buffer * chunk_buffer_acquire(void) {
+    return chunk_buffer_acquire_sz(chunk_buf_sz);
+}
+
 void chunk_buffer_release(buffer *b) {
     if (NULL == b) return;
-    if (b->size >= chunk_buf_sz && chunk_buffers) {
+    if (chunk_buffers) {
         chunk *c = chunk_buffers;
         chunk_buffers = c->next;
         c->mem = b;
-        c->next = chunks;
-        chunks = c;
         buffer_clear(b);
+        if (b->size == chunk_buf_sz) {
+            c->next = chunks;
+            chunks = c;
+        }
+        else if (b->size > chunk_buf_sz)
+            chunk_push_oversized(c, b->size);
+        else
+            chunk_free(c);
     }
     else {
         buffer_free(b);
     }
+}
+
+size_t chunk_buffer_prepare_append(buffer * const b, size_t sz) {
+    if (sz > chunk_buffer_string_space(b)) {
+        sz += b->used ? b->used : 1;
+        buffer * const cb = chunk_buffer_acquire_sz(sz);
+        /* swap buffer contents and copy original b->ptr into larger b->ptr */
+        /*(this does more than buffer_move())*/
+        buffer tb = *b;
+        *b = *cb;
+        *cb = tb;
+        if ((b->used = tb.used))
+            memcpy(b->ptr, tb.ptr, tb.used);
+        chunk_buffer_release(cb);
+    }
+    return chunk_buffer_string_space(b);
 }
 
 __attribute_returns_nonnull__
@@ -174,13 +239,10 @@ static chunk * chunk_acquire(size_t sz) {
         sz = chunk_buf_sz;
     }
     else {
-        sz = (sz + 8191) & ~8191uL;
-        /* future: might have buckets of certain sizes, up to socket buf sizes*/
-        if (chunks_oversized && chunks_oversized->mem->size >= sz) {
-            chunk *c = chunks_oversized;
-            chunks_oversized = c->next;
-            return c;
-        }
+        /*(round up to nearest chunk_buf_sz)*/
+        sz = (sz + (chunk_buf_sz-1)) & ~(chunk_buf_sz-1);
+        chunk *c = chunk_pop_oversized(sz);
+        if (c) return c;
     }
 
     return chunk_init(sz);
@@ -195,10 +257,7 @@ static void chunk_release(chunk *c) {
     }
     else if (sz > chunk_buf_sz) {
         chunk_reset(c);
-        chunk **co = &chunks_oversized;
-        while (*co && sz < (*co)->mem->size) co = &(*co)->next;
-        c->next = *co;
-        *co = c;
+        chunk_push_oversized(c, sz);
     }
     else {
         chunk_free(c);
@@ -217,6 +276,7 @@ void chunkqueue_chunk_pool_clear(void)
         chunk_free(c);
     }
     chunks_oversized = NULL;
+    chunks_oversized_n = 0;
 }
 
 void chunkqueue_chunk_pool_free(void)

@@ -1521,7 +1521,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
         if (avail < toread) {
             /*(add avail+toread to reduce allocations when ioctl EOPNOTSUPP)*/
             avail = avail ? avail - 1 + toread : toread;
-            buffer_string_prepare_append(b, avail);
+            avail = chunk_buffer_prepare_append(b, avail);
         }
 
         n = read(fd, b->ptr+buffer_string_length(b), avail);

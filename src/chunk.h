@@ -59,6 +59,8 @@ buffer * chunk_buffer_acquire(void);
 
 void chunk_buffer_release(buffer *b);
 
+size_t chunk_buffer_prepare_append (buffer *b, size_t sz);
+
 void chunkqueue_chunk_pool_clear(void);
 void chunkqueue_chunk_pool_free(void);
 
