@@ -2052,6 +2052,11 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
     if ((r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
         && r->resp_body_started) {
         if (chunkqueue_length(&r->write_queue) > 65536 - 4096) {
+            /* Note: if apps inheriting gw_handle use hctx->rb, then those apps
+             * are responsible for limiting amount of data buffered in memory
+             * in hctx->rb.  Currently, mod_fastcgi is the only core app doing
+             * so, and the maximum FCGI_Record size is 8 + 65535 + 255 = 65798
+             * (FCGI_HEADER_LEN(8)+contentLength(65535)+paddingLength(255)) */
             fdevent_fdnode_event_clr(hctx->ev, hctx->fdn, FDEVENT_IN);
         }
         else if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_IN)) {
