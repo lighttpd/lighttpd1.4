@@ -1026,11 +1026,14 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	chunkqueue_prepend_buffer_commit(&hctx->gw.wb);
 
 	if (r->reqbody_length) {
-		chunkqueue_append_chunkqueue(&hctx->gw.wb, &r->reqbody_queue);
 		if (r->reqbody_length > 0)
 			hctx->gw.wb_reqlen += r->reqbody_length; /* total req size */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
 			hctx->gw.wb_reqlen = -hctx->gw.wb_reqlen;
+		if (hctx->gw.stdin_append == proxy_stdin_append)
+			proxy_stdin_append(&hctx->gw);
+		else
+			chunkqueue_append_chunkqueue(&hctx->gw.wb, &r->reqbody_queue);
 	}
 
 	status_counter_inc(CONST_STR_LEN("proxy.requests"));
