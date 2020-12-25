@@ -384,7 +384,8 @@ static int gw_proc_sockaddr_init(gw_host * const host, gw_proc * const proc, log
             errno = EINVAL;
             return -1;
         }
-        else {
+        else if (host->host->size) {
+            /*(skip if constant string set in gw_set_defaults_backend())*/
             /* overwrite host->host buffer with IP addr string so that
              * any further use of gw_host does not block on DNS lookup */
             buffer *h;
@@ -1532,7 +1533,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                 }
 
                 if (buffer_string_is_empty(host->host)) {
-                    static const buffer lhost = {CONST_STR_LEN("127.0.0.1"), 0};
+                    static const buffer lhost ={CONST_STR_LEN("127.0.0.1")+1,0};
                     host->host = &lhost;
                 }
 
