@@ -738,7 +738,7 @@ main_src = [
 	'connections.c',
 	'data_config.c',
 	'h2.c',
-	'inet_ntop_cache.c',
+	'sock_addr_cache.c',
 	'ls-hpack/lshpack.c',
 	'algo_xxhash.c',
 	'network_write.c',

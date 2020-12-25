@@ -18,7 +18,7 @@
 
 #include "plugin.h"
 
-#include "inet_ntop_cache.h"
+#include "sock_addr_cache.h"
 
 #include <sys/stat.h>
 
@@ -1007,7 +1007,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 
 		con->connection_start = log_epoch_secs;
 		con->dst_addr = *cnt_addr;
-		buffer_copy_string(con->dst_addr_buf, inet_ntop_cache_get_ip(srv, &(con->dst_addr)));
+		sock_addr_cache_inet_ntop_copy_buffer(con->dst_addr_buf,&con->dst_addr);
 		con->srv_socket = srv_socket;
 		con->is_ssl_sock = srv_socket->is_ssl;
 		con->proto_default_port = 80; /* "http" */

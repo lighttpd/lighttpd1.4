@@ -777,7 +777,7 @@ add_executable(lighttpd
 	connections.c
 	h2.c
 	reqpool.c
-	inet_ntop_cache.c
+	sock_addr_cache.c
 	ls-hpack/lshpack.c
 	algo_xxhash.c
 	network.c

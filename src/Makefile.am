@@ -92,7 +92,7 @@ common_src=base64.c buffer.c burl.c log.c \
 	safe_memclear.c
 
 src = server.c response.c connections.c h2.c reqpool.c \
-	inet_ntop_cache.c \
+	sock_addr_cache.c \
 	network.c \
 	network_write.c \
 	ls-hpack/lshpack.c \
@@ -463,7 +463,8 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	plugin.h plugin_config.h \
 	etag.h array.h vector.h \
 	fdevent_impl.h network_write.h configfile.h \
-	mod_ssi.h mod_ssi_expr.h inet_ntop_cache.h \
+	mod_ssi.h mod_ssi_expr.h \
+	sock_addr_cache.h \
 	configparser.h mod_ssi_exprparser.h \
 	rand.h \
 	sys-crypto.h sys-crypto-md.h \
