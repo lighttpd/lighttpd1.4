@@ -124,10 +124,10 @@ sub wait_for_port_with_proc {
 	my $self = shift;
 	my $port = shift;
 	my $child = shift;
-	my $timeout = 10*50; # 10 secs (valgrind might take a while), select waits 0.02 s
+	my $timeout = 10*100; # 10 secs (valgrind might take a while), select waits 0.01 s
 
 	while (0 == $self->listening_on($port)) {
-		select(undef, undef, undef, 0.02);
+		select(undef, undef, undef, 0.01);
 		$timeout--;
 
 		# the process is gone, we failed
