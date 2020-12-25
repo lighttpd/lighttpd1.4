@@ -2,8 +2,8 @@
 
 #include "base.h"
 #include "burl.h"
-#include "etag.h"
 #include "fdevent.h"
+#include "http_etag.h"
 #include "keyvalue.h"
 #include "log.h"
 #include "stream.h"

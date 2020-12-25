@@ -13,7 +13,6 @@
 #include "sock_addr.h"
 #include "stat_cache.h"
 #include "status_counter.h"
-#include "etag.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -345,10 +344,7 @@ static int magnet_stat(lua_State *L) {
 	request_st * const r = magnet_get_request(L);
 	const buffer *etag = stat_cache_etag_get(sce, r->conf.etag_flags);
 	if (!buffer_string_is_empty(etag)) {
-		/* we have to mutate the etag */
-		buffer * const tb = r->tmp_buf;
-		etag_mutate(tb, etag);
-		lua_pushlstring(L, CONST_BUF_LEN(tb));
+		lua_pushlstring(L, CONST_BUF_LEN(etag));
 	} else {
 		lua_pushnil(L);
 	}

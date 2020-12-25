@@ -231,8 +231,8 @@
 #include "chunk.h"
 #include "fdevent.h"
 #include "http_date.h"
+#include "http_etag.h"
 #include "http_header.h"
-#include "etag.h"
 #include "log.h"
 #include "request.h"
 #include "response.h"   /* http_response_redirect_to_directory() */
@@ -2203,12 +2203,11 @@ webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
 
     buffer *etagb = &r->physical.etag;
     if (NULL != st && (NULL != im || NULL != inm)) {
-        etag_create(etagb, st, r->conf.etag_flags);
-        etag_mutate(etagb, etagb);
+        http_etag_create(etagb, st, r->conf.etag_flags);
     }
 
     if (NULL != im) {
-        if (NULL == st || !etag_is_equal(etagb, im->ptr, 0))
+        if (NULL == st || !http_etag_matches(etagb, im->ptr, 0))
             return 412; /* Precondition Failed */
     }
 
@@ -2216,7 +2215,7 @@ webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
         if (NULL == st
             ? !buffer_is_equal_string(inm,CONST_STR_LEN("*"))
               || (errno != ENOENT && errno != ENOTDIR)
-            : etag_is_equal(etagb, inm->ptr, 1))
+            : http_etag_matches(etagb, inm->ptr, 1))
             return 412; /* Precondition Failed */
     }
 
@@ -2236,9 +2235,8 @@ webdav_response_etag (request_st * const r, struct stat *st)
 {
     if (0 != r->conf.etag_flags) {
         buffer *etagb = &r->physical.etag;
-        etag_create(etagb, st, r->conf.etag_flags);
+        http_etag_create(etagb, st, r->conf.etag_flags);
         stat_cache_update_entry(CONST_BUF_LEN(&r->physical.path), st, etagb);
-        etag_mutate(etagb, etagb);
         http_header_response_set(r, HTTP_HEADER_ETAG,
                                  CONST_STR_LEN("ETag"),
                                  CONST_BUF_LEN(etagb));
@@ -3162,8 +3160,7 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
       case WEBDAV_PROP_GETETAG:
         if (0 != pb->r->conf.etag_flags) {
             buffer *etagb = &pb->r->physical.etag;
-            etag_create(etagb, &pb->st, pb->r->conf.etag_flags);
-            etag_mutate(etagb, etagb);
+            http_etag_create(etagb, &pb->st, pb->r->conf.etag_flags);
             buffer_append_string_len(b, CONST_STR_LEN(
               "<D:getetag>"));
             buffer_append_string_buffer(b, etagb);
@@ -3788,10 +3785,9 @@ webdav_has_lock (request_st * const r,
                     }
                     if (S_ISDIR(st.st_mode)) continue;/*we ignore etag if dir*/
                     buffer *etagb = &r->physical.etag;
-                    etag_create(etagb, &st, r->conf.etag_flags);
-                    etag_mutate(etagb, etagb);
+                    http_etag_create(etagb, &st, r->conf.etag_flags);
                     *p = '\0';
-                    int ematch = etag_is_equal(etagb, etag, 0);
+                    int ematch = http_etag_matches(etagb, etag, 0);
                     *p = ']';
                     if (!ematch) {
                         http_status_set_error(r, 412); /* Precondition Failed */

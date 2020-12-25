@@ -4,6 +4,7 @@
 #include "fdevent.h"
 #include "log.h"
 #include "buffer.h"
+#include "http_etag.h"
 #include "http_header.h"
 #include "stat_cache.h"
 
@@ -36,8 +37,6 @@
 #ifdef HAVE_SYS_FILIO_H
 # include <sys/filio.h>
 #endif
-
-#include "etag.h"
 
 static handler_ctx * handler_ctx_init(plugin_data *p, log_error_st *errh) {
 	handler_ctx *hctx = calloc(1, sizeof(*hctx));
@@ -1204,8 +1203,7 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 		if (st.st_mtime < include_file_last_mtime)
 			st.st_mtime = include_file_last_mtime;
 
-		etag_create(&r->physical.etag, &st, r->conf.etag_flags);
-		etag_mutate(&r->physical.etag, &r->physical.etag);
+		http_etag_create(&r->physical.etag, &st, r->conf.etag_flags);
 		http_header_response_set(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(&r->physical.etag));
 
 		const buffer * const mtime = http_response_set_last_modified(r, st.st_mtime);

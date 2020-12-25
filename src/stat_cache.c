@@ -3,7 +3,7 @@
 #include "stat_cache.h"
 #include "log.h"
 #include "fdevent.h"
-#include "etag.h"
+#include "http_etag.h"
 #include "algo_splaytree.h"
 
 #include <sys/types.h>
@@ -1058,7 +1058,7 @@ const buffer * stat_cache_etag_get(stat_cache_entry *sce, int flags) {
 
     if (S_ISREG(sce->st.st_mode) || S_ISDIR(sce->st.st_mode)) {
         if (0 == flags) return NULL;
-        etag_create(&sce->etag, &sce->st, flags);
+        http_etag_create(&sce->etag, &sce->st, flags);
         return &sce->etag;
     }
 

@@ -8,9 +8,9 @@
 #include "chunk.h"
 #include "fdevent.h"
 #include "log.h"
-#include "etag.h"
 #include "http_chunk.h"
 #include "http_date.h"
+#include "http_etag.h"
 #include "http_header.h"
 #include "response.h"
 #include "sock_addr.h"
@@ -200,7 +200,7 @@ int http_response_handle_cachable(request_st * const r, const buffer * const lmo
 	                                  CONST_STR_LEN("If-None-Match")))) {
 		/*(weak etag comparison must not be used for ranged requests)*/
 		int range_request = (0 != light_btst(r->rqst_htags, HTTP_HEADER_RANGE));
-		if (etag_is_equal(&r->physical.etag, vb->ptr, !range_request)) {
+		if (http_etag_matches(&r->physical.etag, vb->ptr, !range_request)) {
 			if (http_method_get_or_head(r->http_method)) {
 				r->http_status = 304;
 				return HANDLER_FINISHED;
@@ -635,8 +635,7 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 			const buffer *etag =
 			  stat_cache_etag_get(sce, r->conf.etag_flags);
 			if (!buffer_string_is_empty(etag)) {
-				/* generate e-tag */
-				etag_mutate(&r->physical.etag, etag);
+				buffer_copy_buffer(&r->physical.etag, etag);
 				http_header_response_set(r, HTTP_HEADER_ETAG,
 				                         CONST_STR_LEN("ETag"),
 				                         CONST_BUF_LEN(&r->physical.etag));

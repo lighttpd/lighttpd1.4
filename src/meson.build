@@ -702,7 +702,7 @@ common_src = [
 	'data_array.c',
 	'data_integer.c',
 	'data_string.c',
-	'etag.c',
+	'http_etag.c',
 	'fdevent_freebsd_kqueue.c',
 	'fdevent_libev.c',
 	'fdevent_linux_sysepoll.c',
