@@ -6,11 +6,11 @@
 #include "http_etag.h"
 #include "keyvalue.h"
 #include "log.h"
-#include "stream.h"
 
 #include "configparser.h"
 #include "configfile.h"
 #include "plugin.h"
+#include "safe_memclear.h"
 #include "stat_cache.h"
 #include "sys-crypto.h"
 
@@ -1978,17 +1978,21 @@ static int config_parse(server *srv, config_t *context, const char *source, cons
 }
 
 static int config_parse_file_stream(server *srv, config_t *context, const char *fn) {
-	stream s;
+    off_t dlen = 32*1024*1024;/*(arbitrary limit: 32 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(fn, &dlen, NULL, malloc, free);
+    if (NULL == data) {
+        log_perror(srv->errh, __FILE__, __LINE__,
+          "opening configfile %s failed", fn);
+        return -1;
+    }
 
-	if (0 != stream_open(&s, fn)) {
-		log_perror(srv->errh, __FILE__, __LINE__,
-		  "opening configfile %s failed", fn);
-		return -1;
-	}
-
-	int ret = config_parse(srv, context, fn, s.start, (size_t)s.size);
-	stream_close(&s);
-	return ret;
+    int rc = 0;
+    if (dlen) {
+        rc = config_parse(srv, context, fn, data, (size_t)dlen);
+        safe_memclear(data, (size_t)dlen);
+    }
+    free(data);
+    return rc;
 }
 
 int config_parse_file(server *srv, config_t *context, const char *fn) {

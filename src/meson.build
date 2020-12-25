@@ -744,7 +744,6 @@ common_src = [
 	'safe_memclear.c',
 	'sock_addr.c',
 	'stat_cache.c',
-	'stream.c',
 	'vector.c',
 ]
 if target_machine.system() == 'windows'
