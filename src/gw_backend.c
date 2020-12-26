@@ -2110,10 +2110,11 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
 
             if ((0 != hctx->wb.bytes_in || -1 == hctx->wb_reqlen)
                 && !chunkqueue_is_empty(&r->reqbody_queue)) {
-                if (hctx->stdin_append
-                    && chunkqueue_length(&hctx->wb) < 65536 - 16384) {
-                    handler_t rca = hctx->stdin_append(hctx);
-                    if (HANDLER_GO_ON != rca) return rca;
+                if (hctx->stdin_append) {
+                    if (chunkqueue_length(&hctx->wb) < 65536 - 16384) {
+                        handler_t rca = hctx->stdin_append(hctx);
+                        if (HANDLER_GO_ON != rca) return rca;
+                    }
                 }
                 else
                     chunkqueue_append_chunkqueue(&hctx->wb, &r->reqbody_queue);
