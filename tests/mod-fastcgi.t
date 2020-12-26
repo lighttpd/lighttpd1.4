@@ -75,6 +75,9 @@ EOF
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 , 'HTTP-Content' => '' } ];
 	ok($tf->handle_http($t) == 0, 'FastCGI + bin-copy-environment');
 
+SKIP: {
+	skip "no crypt-des under openbsd", 2 if $^O eq 'openbsd';
+
 	$t->{REQUEST}  = ( <<EOF
 GET /get-server-env.php?env=REMOTE_USER HTTP/1.0
 Host: auth.example.org
@@ -92,6 +95,7 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'Basic' } ];
 	ok($tf->handle_http($t) == 0, '$_SERVER["AUTH_TYPE"]');
+}
 
 	$t->{REQUEST}  = ( <<EOF
 GET /index.html?auth-ok HTTP/1.0
