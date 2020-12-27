@@ -552,6 +552,16 @@ static int http_response_parse_range(request_st * const r, stat_cache_entry * co
 }
 
 
+__attribute_pure__
+static int http_response_match_if_range(request_st * const r, const buffer * const mtime) {
+    const buffer *vb = http_header_request_get(r, HTTP_HEADER_IF_RANGE,
+                                               CONST_STR_LEN("If-Range"));
+    return NULL == vb
+        || ((vb->ptr[0] == '"')
+            ? buffer_is_equal(vb, &r->physical.etag) /*compare ETag ("...") */
+            : mtime && buffer_is_equal(vb, mtime));  /*compare Last-Modified*/
+}
+
 void http_response_send_file (request_st * const r, buffer * const path) {
 	stat_cache_entry * const sce = stat_cache_get_entry_open(path, r->conf.follow_symlink);
 	const buffer *mtime = NULL;
@@ -668,47 +678,13 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 	    && (200 == r->http_status || 0 == r->http_status)
 	    && NULL != (vb = http_header_request_get(r, HTTP_HEADER_RANGE,
 	                                             CONST_STR_LEN("Range")))
-	    && !light_btst(r->resp_htags, HTTP_HEADER_CONTENT_ENCODING)) {
-		const buffer *range = vb;
-		int do_range_request = 1;
-		/* check if we have a conditional GET */
-
-		if (NULL != (vb = http_header_request_get(r, HTTP_HEADER_IF_RANGE,
-		                                          CONST_STR_LEN("If-Range")))) {
-			/* if the value is the same as our ETag, we do a Range-request,
-			 * otherwise a full 200 */
-
-			if (vb->ptr[0] == '"') {
-				/**
-				 * client wants a ETag
-				 */
-				if (!buffer_is_equal(vb, &r->physical.etag)) {
-					do_range_request = 0;
-				}
-			} else if (!mtime) {
-				/**
-				 * we don't have a Last-Modified and can match the If-Range:
-				 *
-				 * sending all
-				 */
-				do_range_request = 0;
-			} else if (!buffer_is_equal(vb, mtime)) {
-				do_range_request = 0;
-			}
-		}
-
-		if (do_range_request
-		    && !buffer_string_is_empty(range)
-		    && 0 == strncmp(range->ptr, "bytes=", 6)) {
-			/* support only "bytes" byte-unit */
-			/* content prepared, I'm done */
+	    && !light_btst(r->resp_htags, HTTP_HEADER_CONTENT_ENCODING)
+	    && http_response_match_if_range(r, mtime) /* "If-Range" */
+	    && !buffer_string_is_empty(vb) && 0 == strncmp(vb->ptr, "bytes=", 6)) {
 			r->resp_body_finished = 1;
-
-			if (0 == http_response_parse_range(r, sce, range->ptr+6)) {
+			if (0 == http_response_parse_range(r, sce, vb->ptr+6))
 				r->http_status = 206;
-			}
 			return;
-		}
 	}
 
 	/* if we are still here, prepare body */
