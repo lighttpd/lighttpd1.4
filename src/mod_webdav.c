@@ -4568,6 +4568,9 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (request_st * const r,
     }
 
   #ifdef HAVE_COPY_FILE_RANGE
+   #ifdef __FreeBSD__
+   typedef off_t loff_t;
+   #endif
     /* use Linux copy_file_range() if available
      * (Linux 4.5, but glibc 2.27 provides a user-space emulation)
      * fd_in and fd_out must be on same mount (handled in mod_webdav_put_prep())
