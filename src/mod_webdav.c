@@ -3553,36 +3553,13 @@ webdav_parse_chunkqueue (request_st * const r,
                 weHave = c->file.length - c->offset;
             }
             else {
-                switch (errno) {
-                  case ENOSYS: case ENODEV: case EINVAL: break;
-                  default:
-                    log_perror(r->conf.errh, __FILE__, __LINE__,
-                               "open() or mmap() '%*.s'",
-                               BUFFER_INTLEN_PTR(c->mem));
-                }
-                if (webdav_open_chunk_file_rd(c) < 0) {
-                    log_perror(r->conf.errh, __FILE__, __LINE__,
-                               "open() '%*.s'",
-                               BUFFER_INTLEN_PTR(c->mem));
-                    err = XML_IO_UNKNOWN;
-                    break;
-                }
-                ssize_t rd = -1;
-                do {
-                    if (-1 == lseek(c->file.fd, c->offset, SEEK_SET))
-                        break;
-                    off_t len = c->file.length - c->offset;
-                    if (len > (off_t)sizeof(buf)) len = (off_t)sizeof(buf);
-                    rd = read(c->file.fd, buf, (size_t)len);
-                } while (-1 == rd && errno == EINTR);
-                if (rd >= 0) {
-                    xmlstr = buf;
-                    weHave = (size_t)rd;
+                char *data = buf;
+                uint32_t dlen = sizeof(buf);
+                if (0 == chunkqueue_peek_data(cq, &data, &dlen, r->conf.errh)) {
+                    xmlstr = data;
+                    weHave = dlen;
                 }
                 else {
-                    log_perror(r->conf.errh, __FILE__, __LINE__,
-                               "read() '%*.s'",
-                               BUFFER_INTLEN_PTR(c->mem));
                     err = XML_IO_UNKNOWN;
                     break;
                 }
@@ -4229,85 +4206,20 @@ mod_webdav_delete (request_st * const r, const plugin_config * const pconf)
 }
 
 
-static ssize_t
-mod_webdav_write_cq_first_chunk (request_st * const r, chunkqueue * const cq,
-                                 const int fd)
-{
-    /* (Note: copying might take some time, temporarily pausing server) */
-    chunk *c = cq->first;
-    ssize_t wr = 0;
-
-    switch(c->type) {
-    case FILE_CHUNK:
-        if (NULL != webdav_mmap_file_chunk(c)) {
-            do {
-                wr = write(fd,
-                           c->file.mmap.start + c->offset - c->file.mmap.offset,
-                           c->file.length - c->offset);
-            } while (-1 == wr && errno == EINTR);
-            break;
-        }
-        else {
-            switch (errno) {
-              case ENOSYS: case ENODEV: case EINVAL: break;
-              default:
-                log_perror(r->conf.errh, __FILE__, __LINE__,
-                           "open() or mmap() '%*.s'",
-                           BUFFER_INTLEN_PTR(c->mem));
-            }
-
-            if (webdav_open_chunk_file_rd(c) < 0) {
-                http_status_set_error(r, 500); /* Internal Server Error */
-                return -1;
-            }
-            ssize_t rd = -1;
-            char buf[16384];
-            do {
-                if (-1 == lseek(c->file.fd, c->offset, SEEK_SET))
-                    break;
-                off_t len = c->file.length - c->offset;
-                if (len > (off_t)sizeof(buf)) len = (off_t)sizeof(buf);
-                rd = read(c->file.fd, buf, (size_t)len);
-            } while (-1 == rd && errno == EINTR);
-            if (rd >= 0) {
-                do {
-                    wr = write(fd, buf, (size_t)rd);
-                } while (-1 == wr && errno == EINTR);
-                break;
-            }
-            else {
-                log_perror(r->conf.errh, __FILE__, __LINE__,
-                           "read() '%*.s'",
-                           BUFFER_INTLEN_PTR(c->mem));
-                http_status_set_error(r, 500); /* Internal Server Error */
-                return -1;
-            }
-        }
-    case MEM_CHUNK:
-        do {
-            wr = write(fd, c->mem->ptr + c->offset,
-                       buffer_string_length(c->mem) - c->offset);
-        } while (-1 == wr && errno == EINTR);
-        break;
-    }
-
-    if (wr > 0) {
-        chunkqueue_mark_written(cq, wr);
-    }
-    else if (wr < 0)
-        http_status_set_error(r, (errno == ENOSPC) ? 507 : 403);
-
-    return wr;
-}
-
-
 __attribute_noinline__
 static int
 mod_webdav_write_cq (request_st * const r, chunkqueue * const cq, const int fd)
 {
+    /* (Note: copying might take some time, temporarily pausing server) */
     chunkqueue_remove_finished_chunks(cq);
     while (!chunkqueue_is_empty(cq)) {
-        if (mod_webdav_write_cq_first_chunk(r, cq, fd) < 0) return 0;
+        ssize_t wr = chunkqueue_write_chunk(fd, cq, r->conf.errh);
+        if (wr > 0)
+            chunkqueue_mark_written(cq, wr);
+        else if (wr < 0) {
+            http_status_set_error(r, (errno == ENOSPC) ? 507 : 403);
+            return 0;
+        }
     }
     return 1;
 }

@@ -12,7 +12,6 @@
 #include "plugin.h"
 
 #include <sys/types.h>
-#include "sys-mmap.h"
 #include "sys-socket.h"
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
@@ -528,132 +527,12 @@ static int cgi_env_add(void *venv, const char *key, size_t key_len, const char *
 	return 0;
 }
 
-#ifndef SPLICE_F_NONBLOCK
-/*(improved from network_write_mmap.c)*/
-static off_t mmap_align_offset(off_t start) {
-    static off_t pagemask = 0;
-    if (0 == pagemask) {
-        long pagesize = sysconf(_SC_PAGESIZE);
-        if (-1 == pagesize) pagesize = 4096;
-        pagemask = ~((off_t)pagesize - 1); /* pagesize always power-of-2 */
-    }
-    return (start & pagemask);
-}
-#endif
-
-/* returns: 0: continue, -1: fatal error, -2: connection reset */
-/* similar to network_write_file_chunk_mmap, but doesn't use send on windows (because we're on pipes),
- * also mmaps and sends complete chunk instead of only small parts - the files
- * are supposed to be temp files with reasonable chunk sizes.
- *
- * Also always use mmap; the files are "trusted", as we created them.
- */
-static ssize_t cgi_write_file_chunk_mmap(request_st * const r, int fd, chunkqueue *cq) {
-	chunk* const c = cq->first;
-	off_t offset, toSend;
-	ssize_t wr;
-
-	force_assert(NULL != c);
-	force_assert(FILE_CHUNK == c->type);
-	force_assert(c->offset >= 0 && c->offset <= c->file.length);
-
-	offset = c->offset;
-	toSend = c->file.length - c->offset;
-
-	if (0 == toSend) {
-		chunkqueue_remove_finished_chunks(cq);
-		return 0;
-	}
-
-	/*(simplified from chunk.c:chunkqueue_open_file_chunk())*/
-	if (-1 == c->file.fd) {
-		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, r->conf.follow_symlink, O_RDONLY, 0))) {
-			log_perror(r->conf.errh, __FILE__, __LINE__, "open failed: %s", c->mem->ptr);
-			return -1;
-		}
-	}
-
-  #ifdef SPLICE_F_NONBLOCK
-	loff_t abs_offset = offset;
-	wr = splice(c->file.fd, &abs_offset, fd, NULL,
-	            (size_t)toSend, SPLICE_F_NONBLOCK);
-  #else
-	size_t mmap_offset, mmap_avail;
-	char *data = NULL;
-	off_t file_end = c->file.length; /* offset to file end in this chunk */
-
-	/* (re)mmap the buffer if range is not covered completely */
-	if (MAP_FAILED == c->file.mmap.start
-		|| offset < c->file.mmap.offset
-		|| file_end > (off_t)(c->file.mmap.offset + c->file.mmap.length)) {
-
-		if (MAP_FAILED != c->file.mmap.start) {
-			munmap(c->file.mmap.start, c->file.mmap.length);
-			c->file.mmap.start = MAP_FAILED;
-		}
-
-		c->file.mmap.offset = mmap_align_offset(offset);
-		c->file.mmap.length = file_end - c->file.mmap.offset;
-
-		if (MAP_FAILED == (c->file.mmap.start = mmap(NULL, c->file.mmap.length, PROT_READ, MAP_PRIVATE, c->file.fd, c->file.mmap.offset))) {
-			if (toSend > 65536) toSend = 65536;
-			data = malloc(toSend);
-			force_assert(data);
-			if (-1 == lseek(c->file.fd, offset, SEEK_SET)
-			    || 0 >= (toSend = read(c->file.fd, data, toSend))) {
-				if (-1 == toSend) {
-					log_perror(r->conf.errh, __FILE__, __LINE__,
-					  "lseek/read %s %d %lld failed:",
-					  c->mem->ptr, c->file.fd, (long long)offset);
-				} else { /*(0 == toSend)*/
-					log_error(r->conf.errh, __FILE__, __LINE__,
-					  "unexpected EOF (input truncated?): %s %d %lld",
-					  c->mem->ptr, c->file.fd, (long long)offset);
-				}
-				free(data);
-				return -1;
-			}
-		}
-	}
-
-	if (MAP_FAILED != c->file.mmap.start) {
-		force_assert(offset >= c->file.mmap.offset);
-		mmap_offset = offset - c->file.mmap.offset;
-		force_assert(c->file.mmap.length > mmap_offset);
-		mmap_avail = c->file.mmap.length - mmap_offset;
-		force_assert(toSend <= (off_t) mmap_avail);
-
-		data = c->file.mmap.start + mmap_offset;
-	}
-
-	wr = write(fd, data, toSend);
-
-	if (MAP_FAILED == c->file.mmap.start) free(data);
-  #endif
-
-	if (wr < 0) {
-		switch (errno) {
-		case EAGAIN:
-		case EINTR:
-			return 0;
-		case EPIPE:
-		case ECONNRESET:
-			return -2;
-		default:
-			log_perror(r->conf.errh, __FILE__, __LINE__,
-			  "write %d failed", fd);
-			return -1;
-		}
-	}
-
-	chunkqueue_mark_written(cq, wr);
-	return wr;
-}
-
 static int cgi_write_request(handler_ctx *hctx, int fd) {
 	request_st * const r = hctx->r;
 	chunkqueue *cq = &r->reqbody_queue;
 	chunk *c;
+
+	chunkqueue_remove_finished_chunks(cq); /* unnecessary? */
 
 	/* old comment: windows doesn't support select() on pipes - wouldn't be easy to fix for all platforms.
 	 * solution: if this is still a problem on windows, then substitute
@@ -661,54 +540,37 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 	 */
 
 	for (c = cq->first; c; c = cq->first) {
-		ssize_t wr = -1;
-
-		switch(c->type) {
-		case FILE_CHUNK:
-			wr = cgi_write_file_chunk_mmap(r, fd, cq);
-			break;
-
-		case MEM_CHUNK:
-			if ((wr = write(fd, c->mem->ptr + c->offset, buffer_string_length(c->mem) - c->offset)) < 0) {
+		ssize_t wr = chunkqueue_write_chunk_to_pipe(fd, cq, r->conf.errh);
+		if (wr > 0) {
+			chunkqueue_mark_written(cq, wr);
+			/* continue if wrote whole chunk or wrote 16k block
+			 * (see chunkqueue_write_chunk_file_intermed()) */
+			if (c != cq->first || wr == 16384)
+				continue;
+			/*(else partial write)*/
+		}
+		else if (wr < 0) {
 				switch(errno) {
 				case EAGAIN:
 				case EINTR:
-					/* ignore and try again */
-					wr = 0;
+					/* ignore and try again later */
 					break;
 				case EPIPE:
 				case ECONNRESET:
 					/* connection closed */
-					wr = -2;
+					log_error(r->conf.errh, __FILE__, __LINE__,
+					  "failed to send post data to cgi, connection closed by CGI");
+					/* skip all remaining data */
+					chunkqueue_mark_written(cq, chunkqueue_length(cq));
 					break;
 				default:
 					/* fatal error */
 					log_perror(r->conf.errh, __FILE__, __LINE__, "write() failed");
-					wr = -1;
-					break;
+					return -1;
 				}
-			} else if (wr > 0) {
-				chunkqueue_mark_written(cq, wr);
-			}
-			break;
 		}
-
-		if (0 == wr) break; /*(might block)*/
-
-		switch (wr) {
-		case -1:
-			/* fatal error */
-			return -1;
-		case -2:
-			/* connection reset */
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "failed to send post data to cgi, connection closed by CGI");
-			/* skip all remaining data */
-			chunkqueue_mark_written(cq, chunkqueue_length(cq));
-			break;
-		default:
-			break;
-		}
+		/*if (0 == wr) break;*/ /*(might block)*/
+		break;
 	}
 
 	if (cq->bytes_out == (off_t)r->reqbody_length && !hctx->conf.upgrade) {

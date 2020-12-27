@@ -127,6 +127,9 @@ void chunkqueue_compact_mem(chunkqueue *cq, size_t clen);
 
 void chunkqueue_small_resp_optim (chunkqueue * restrict cq);
 
+ssize_t chunkqueue_write_chunk (int fd, chunkqueue * restrict cq, struct log_error_st * restrict errh);
+ssize_t chunkqueue_write_chunk_to_pipe (int fd, chunkqueue * restrict cq, struct log_error_st * restrict errh);
+
 int chunkqueue_peek_data (chunkqueue *cq, char **data, uint32_t *dlen, struct log_error_st * restrict errh);
 int chunkqueue_read_data (chunkqueue *cq, char *data, uint32_t dlen, struct log_error_st * restrict errh);
 

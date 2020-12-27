@@ -885,16 +885,6 @@ void chunkqueue_compact_mem(chunkqueue *cq, size_t clen) {
 }
 
 static int chunk_open_file_chunk(chunk * const restrict c, log_error_st * const restrict errh) {
-	off_t offset, toSend;
-	struct stat st;
-
-	force_assert(NULL != c);
-	force_assert(FILE_CHUNK == c->type);
-	force_assert(c->offset >= 0 && c->offset <= c->file.length);
-
-	offset = c->offset;
-	toSend = c->file.length - c->offset;
-
 	if (-1 == c->file.fd) {
 		/* (permit symlinks; should already have been checked.  However, TOC-TOU remains) */
 		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, 1, O_RDONLY, 0))) {
@@ -906,11 +896,17 @@ static int chunk_open_file_chunk(chunk * const restrict c, log_error_st * const 
 	/*(skip file size checks if file is temp file created by lighttpd)*/
 	if (c->file.is_temp) return 0;
 
+	force_assert(FILE_CHUNK == c->type);
+	force_assert(c->offset >= 0 && c->offset <= c->file.length);
+
+	struct stat st;
 	if (-1 == fstat(c->file.fd, &st)) {
 		log_perror(errh, __FILE__, __LINE__, "fstat failed");
 		return -1;
 	}
 
+	const off_t offset = c->offset;
+	const off_t toSend = c->file.length - c->offset;
 	if (offset > st.st_size || toSend > st.st_size || offset > st.st_size - toSend) {
 		log_error(errh, __FILE__, __LINE__, "file shrunk: %s", c->mem->ptr);
 		return -1;
@@ -921,6 +917,165 @@ static int chunk_open_file_chunk(chunk * const restrict c, log_error_st * const 
 
 int chunkqueue_open_file_chunk(chunkqueue * const restrict cq, log_error_st * const restrict errh) {
     return chunk_open_file_chunk(cq->first, errh);
+}
+
+
+#if defined(HAVE_MMAP)
+__attribute_cold__
+#endif
+__attribute_noinline__
+static ssize_t
+chunkqueue_write_chunk_file_intermed (const int fd, chunk * const restrict c, log_error_st * const errh)
+{
+    char buf[16384];
+    char *data = buf;
+    const off_t count = c->file.length - c->offset;
+    uint32_t dlen = count < (off_t)sizeof(buf) ? (uint32_t)count : sizeof(buf);
+    chunkqueue cq = {c,c,0,0,0,0,0}; /*(fake cq for chunkqueue_peek_data())*/
+    if (0 != chunkqueue_peek_data(&cq, &data, &dlen, errh) && 0 == dlen)
+        return -1;
+    ssize_t wr;
+    do { wr = write(fd, data, dlen); } while (-1 == wr && errno == EINTR);
+    return wr;
+}
+
+
+#if defined(HAVE_MMAP)
+/*(improved from network_write_mmap.c)*/
+static off_t
+mmap_align_offset (off_t start)
+{
+    static off_t pagemask = 0;
+    if (0 == pagemask) {
+        long pagesize = sysconf(_SC_PAGESIZE);
+        if (-1 == pagesize) pagesize = 4096;
+        pagemask = ~((off_t)pagesize - 1); /* pagesize always power-of-2 */
+    }
+    return (start & pagemask);
+}
+#endif
+
+
+#if defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILE \
+ && (!defined _LARGEFILE_SOURCE || defined HAVE_SENDFILE64) \
+ && defined(__linux__) && !defined HAVE_SENDFILE_BROKEN
+#include <sys/sendfile.h>
+#include <stdint.h>
+#endif
+static ssize_t
+chunkqueue_write_chunk_file (const int fd, chunk * const restrict c, log_error_st * const errh)
+{
+    /*(similar to network_write_file_chunk_mmap(), but does not use send() on
+    *  Windows because fd is expected to be file or pipe here, not socket)*/
+
+    if (0 != chunk_open_file_chunk(c, errh))
+        return -1;
+
+    const off_t count = c->file.length - c->offset;
+    if (0 == count) return 0; /*(sanity check)*/
+
+    ssize_t wr;
+  #if defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILE \
+   && (!defined _LARGEFILE_SOURCE || defined HAVE_SENDFILE64) \
+   && defined(__linux__) && !defined HAVE_SENDFILE_BROKEN
+    /* Linux kernel >= 2.6.33 supports sendfile() between most fd types */
+    off_t offset = c->offset;
+    wr = sendfile(fd, c->file.fd, &offset, count<INT32_MAX ? count : INT32_MAX);
+    if (wr >= 0) return wr;
+
+    if (wr < 0 && (errno == EINVAL || errno == ENOSYS))
+  #endif
+    {
+      #if defined(HAVE_MMAP)
+        /*(caller is responsible for handling SIGBUS if chunkqueue might contain
+         * untrusted file, i.e. any file other than lighttpd-created tempfile)*/
+        /*(tempfiles are expected for input, MAP_PRIVATE used for portability)*/
+        /*(mmaps and writes complete chunk instead of only small parts; files
+         * are expected to be temp files with reasonable chunk sizes)*/
+
+        /* (re)mmap the buffer if range is not covered completely */
+        if (MAP_FAILED == c->file.mmap.start
+            || c->offset < c->file.mmap.offset
+            || c->file.length
+                 > (off_t)(c->file.mmap.offset + c->file.mmap.length)) {
+
+            if (MAP_FAILED != c->file.mmap.start) {
+                munmap(c->file.mmap.start, c->file.mmap.length);
+                c->file.mmap.start = MAP_FAILED;
+            }
+
+            c->file.mmap.offset = mmap_align_offset(c->offset);
+            c->file.mmap.length = c->file.length - c->file.mmap.offset;
+            c->file.mmap.start  =
+              mmap(NULL, c->file.mmap.length, PROT_READ, MAP_PRIVATE,
+                   c->file.fd, c->file.mmap.offset);
+
+          #if 0
+            /* close() fd as soon as fully mmap() rather than when done w/ chunk
+             * (possibly worthwhile to keep active fd count lower) */
+            if (c->file.is_temp && !c->file.refchg) {
+                close(c->file.fd);
+                c->file.fd = -1;
+            }
+          #endif
+        }
+
+        if (MAP_FAILED != c->file.mmap.start) {
+            const char * const data =
+              c->file.mmap.start + c->offset - c->file.mmap.offset;
+            do { wr = write(fd,data,count); } while (-1 == wr && errno==EINTR);
+        }
+        else
+      #endif
+            wr = chunkqueue_write_chunk_file_intermed(fd, c, errh);
+    }
+    return wr;
+}
+
+
+static ssize_t
+chunkqueue_write_chunk_mem (const int fd, const chunk * const restrict c)
+{
+    const void * const buf = c->mem->ptr + c->offset;
+    const size_t count = chunk_buffer_string_length(c->mem) - (size_t)c->offset;
+    ssize_t wr;
+    do { wr = write(fd, buf, count); } while (-1 == wr && errno == EINTR);
+    return wr;
+}
+
+
+ssize_t
+chunkqueue_write_chunk (const int fd, chunkqueue * const restrict cq, log_error_st * const restrict errh)
+{
+    /*(note: expects non-empty cq->first)*/
+    chunk * const c = cq->first;
+    switch (c->type) {
+      case MEM_CHUNK:
+        return chunkqueue_write_chunk_mem(fd, c);
+      case FILE_CHUNK:
+        return chunkqueue_write_chunk_file(fd, c, errh);
+      default:
+        errno = EINVAL;
+        return -1;
+    }
+}
+
+
+ssize_t
+chunkqueue_write_chunk_to_pipe (const int fd, chunkqueue * const restrict cq, log_error_st * const restrict errh)
+{
+    /*(note: expects non-empty cq->first)*/
+  #ifdef SPLICE_F_NONBLOCK /* splice() temp files to pipe on Linux */
+    chunk * const c = cq->first;
+    if (c->type == FILE_CHUNK) {
+        loff_t abs_offset = c->offset;
+        return (0 == chunk_open_file_chunk(c, errh))
+          ? splice(c->file.fd, &abs_offset, fd, NULL,
+                   (size_t)(c->file.length - c->offset), SPLICE_F_NONBLOCK)
+          : -1;
+    }
+  #endif
+    return chunkqueue_write_chunk(fd, cq, errh);
 }
 
 
@@ -1004,12 +1159,16 @@ chunkqueue_peek_data (chunkqueue * const cq,
                     toSend = (off_t)space;
 
                 if (-1 == lseek(c->file.fd, offset, SEEK_SET)) {
-                    log_perror(errh, __FILE__, __LINE__, "lseek");
+                    log_perror(errh, __FILE__, __LINE__, "lseek(\"%s\")",
+                               c->mem->ptr);
                     return -1;
                 }
-                toSend = read(c->file.fd, data_in + *dlen, (size_t)toSend);
+                do {
+                    toSend = read(c->file.fd, data_in + *dlen, (size_t)toSend);
+                } while (-1 == toSend && errno == EINTR);
                 if (toSend <= 0) { /* -1 error; 0 EOF (unexpected) */
-                    log_perror(errh, __FILE__, __LINE__, "read");
+                    log_perror(errh, __FILE__, __LINE__, "read(\"%s\")",
+                               c->mem->ptr);
                     return -1;
                 }
 
