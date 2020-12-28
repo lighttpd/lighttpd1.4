@@ -3455,6 +3455,8 @@ webdav_propfind_dir (webdav_propfind_bufs * const restrict pb)
 }
 
 
+#if defined(USE_PROPPATCH) || defined(USE_LOCKS)
+
 static int
 webdav_open_chunk_file_rd (chunk * const c)
 {
@@ -3518,7 +3520,6 @@ webdav_mmap_file_chunk (chunk * const c)
 }
 
 
-#if defined(USE_PROPPATCH) || defined(USE_LOCKS)
 __attribute_noinline__
 static xmlDoc *
 webdav_parse_chunkqueue (request_st * const r,
@@ -3610,6 +3611,7 @@ webdav_parse_chunkqueue (request_st * const r,
     xmlFreeParserCtxt(ctxt);
     return NULL;
 }
+
 #endif
 
 
