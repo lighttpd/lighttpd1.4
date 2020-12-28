@@ -22,10 +22,18 @@
  * could turn these into subroutines which take a local mutex to protect the
  * calls to localtime() or gmtime()) */
 #ifndef HAVE_LOCALTIME_R
+#ifdef _WIN32
+#define localtime_r(timep,result) (localtime_s((result),(timep)),     (result))
+#else
 #define localtime_r(timep,result) ((*(result) = *(localtime(timep))), (result))
 #endif
+#endif
 #ifndef HAVE_GMTIME_R
+#ifdef _WIN32
+#define gmtime_r(timep,result)    (gmtime_s((result),(timep)),        (result))
+#else
 #define gmtime_r(timep,result)    ((*(result) = *(gmtime(timep))),    (result))
+#endif
 #endif
 
 #ifndef HAVE_TIMEGM
