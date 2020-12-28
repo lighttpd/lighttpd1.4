@@ -906,8 +906,8 @@ static int chunk_open_file_chunk(chunk * const restrict c, log_error_st * const 
 	}
 
 	const off_t offset = c->offset;
-	const off_t toSend = c->file.length - c->offset;
-	if (offset > st.st_size || toSend > st.st_size || offset > st.st_size - toSend) {
+	const off_t len = c->file.length - c->offset;
+	if (offset > st.st_size || len > st.st_size || offset > st.st_size - len) {
 		log_error(errh, __FILE__, __LINE__, "file shrunk: %s", c->mem->ptr);
 		return -1;
 	}
@@ -1154,25 +1154,26 @@ chunkqueue_peek_data (chunkqueue * const cq,
           case FILE_CHUNK:
             if (c->file.fd >= 0 || 0 == chunk_open_file_chunk(c, errh)) {
                 off_t offset = c->offset;
-                off_t toSend = c->file.length - c->offset;
-                if (toSend > (off_t)space)
-                    toSend = (off_t)space;
+                off_t len = c->file.length - c->offset;
+                if (len > (off_t)space)
+                    len = (off_t)space;
 
                 if (-1 == lseek(c->file.fd, offset, SEEK_SET)) {
                     log_perror(errh, __FILE__, __LINE__, "lseek(\"%s\")",
                                c->mem->ptr);
                     return -1;
                 }
+                ssize_t rd;
                 do {
-                    toSend = read(c->file.fd, data_in + *dlen, (size_t)toSend);
-                } while (-1 == toSend && errno == EINTR);
-                if (toSend <= 0) { /* -1 error; 0 EOF (unexpected) */
+                    rd = read(c->file.fd, data_in + *dlen, (size_t)len);
+                } while (-1 == rd && errno == EINTR);
+                if (rd <= 0) { /* -1 error; 0 EOF (unexpected) */
                     log_perror(errh, __FILE__, __LINE__, "read(\"%s\")",
                                c->mem->ptr);
                     return -1;
                 }
 
-                *dlen += (uint32_t)toSend;
+                *dlen += (uint32_t)rd;
                 break;
             }
             return -1;
