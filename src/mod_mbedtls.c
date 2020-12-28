@@ -68,6 +68,7 @@
 #include <mbedtls/x509.h>
 #include <mbedtls/x509_crt.h>
 #include <mbedtls/version.h>
+#include <mbedtls/platform_util.h> /* mbedtls_platform_zeroize() */
 
 #if MBEDTLS_VERSION_NUMBER >= 0x02040000 /* mbedtls 2.04.0 */
 #include <mbedtls/net_sockets.h>
