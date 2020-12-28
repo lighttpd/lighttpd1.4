@@ -3,6 +3,37 @@
 NEWS
 ====
 
+- 1.4.58 - 2020-12-27
+  * [mod_wolfssl] use wolfSSL TLS version defines
+  * [mod_wolfssl] compile with earlier wolfSSL vers
+  * [tests] collect code for "die-at-end" tests
+  * [tests] remove FastCGI test dependency on libfcgi
+  * [core] prefer IPv6+IPv4 func vs IPv4-specific func
+  * [tests] remove FastCGI test dependency on PHP
+  * [core] reuse large mem chunks (fix mem usage) (fixes #3033)
+  * [core] add comment for FastCGI mem use in hctx->rb (#3033)
+  * [mod_proxy] fix sending of initial reqbody chunked
+  * [multiple] fdevent_waitpid() wrapper
+  * [core] sys-time.h - localtime_r,gmtime_r macros
+  * [core] http_date.[ch] encapsulate HTTP-date parse
+  * [core] specialized strptime() for HTTP date fmts
+  * [multiple] employ http_date.h, sys-time.h
+  * [core] http_date_timegm() (portable timegm())
+  * buffer_append_path_len() to join paths
+  * [core] inet_ntop_cache -> sock_addr_cache
+  * [tests] slight speed up checking for server ready
+  * [tests] load required modules in alt .conf tests
+  * [multiple] etag.[ch] -> http_etag.[ch]; better imp
+  * [core] fix crash after specific err in config file
+  * [core] fix bug in FastCGI uploads (#3033)
+  * [tests] OpenBSD crypt() support limited to bcrypt
+  * [core] http_response_match_if_range()
+  * [mod_webdav] typedef off_t loff_t for FreeBSD
+  * [multiple] chunkqueue_write_chunk()
+  * [build] add GNUMAKEFLAGS=--no-print-directory
+  * [tests] consolidate some tests/ content
+  * [core] fix bug in read retry found by coverity
+
 - 1.4.57 - 2020-12-17
   * [core] attempt to quiet some coverity warnings
   * [mod_webdav] compile fix for Mac OSX/11
