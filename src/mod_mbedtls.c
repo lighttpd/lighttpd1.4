@@ -3155,27 +3155,28 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
         /* manually handle first token, since one-offs apply */
         /* (openssl syntax NOT fully supported) */
         int default_suite = 0;
-        if (0 == strncmp(e, "!ALL", 4) || 0 == strncmp(e, "-ALL", 4)) {
+        #define strncmp_const(s,cs) strncmp((s),(cs),sizeof(cs)-1)
+        if (0 == strncmp_const(e, "!ALL") || 0 == strncmp_const(e, "-ALL")) {
             /* "!ALL" excluding all ciphers does not make sense; ignore */
             e += sizeof("!ALL")-1; /* same as sizeof("-ALL")-1 */
         }
-        else if (0 == strncmp(e, CONST_STR_LEN("!DEFAULT"))
-              || 0 == strncmp(e, CONST_STR_LEN("-DEFAULT"))) {
+        else if (0 == strncmp_const(e, "!DEFAULT")
+              || 0 == strncmp_const(e, "-DEFAULT")) {
             /* "!DEFAULT" excluding default ciphers is empty list; no effect */
             e += sizeof("!DEFAULT")-1; /* same as sizeof("-DEFAULT")-1 */
         }
-        else if (0 == strncmp(e, CONST_STR_LEN("DEFAULT"))) {
+        else if (0 == strncmp_const(e, "DEFAULT")) {
             e += sizeof("DEFAULT")-1;
             default_suite = 1;
         }
         else if (0 == /* effectively the same as "DEFAULT" */
-                 strncmp(e, CONST_STR_LEN("ALL:!COMPLEMENTOFDEFAULT:!eNULL"))) {
+                 strncmp_const(e, "ALL:!COMPLEMENTOFDEFAULT:!eNULL")) {
             e += sizeof("ALL:!COMPLEMENTOFDEFAULT:!eNULL")-1;
             default_suite = 1;
         }
-        else if (0 == strncmp(e, CONST_STR_LEN("SUITEB128"))
-              || 0 == strncmp(e, CONST_STR_LEN("SUITEB128ONLY"))
-              || 0 == strncmp(e, CONST_STR_LEN("SUITEB192"))) {
+        else if (0 == strncmp_const(e, "SUITEB128")
+              || 0 == strncmp_const(e, "SUITEB128ONLY")
+              || 0 == strncmp_const(e, "SUITEB192")) {
             mbedtls_ssl_conf_cert_profile(s->ssl_ctx,
                                           &mbedtls_x509_crt_profile_suiteb);
             /* re-initialize mbedtls_ssl_config defaults */
@@ -3190,7 +3191,7 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
                      "Init of ssl config context SUITEB defaults failed");
                 return 0;
             }
-            e += (0 == strncmp(e, CONST_STR_LEN("SUITEB128ONLY")))
+            e += (0 == strncmp_const(e, "SUITEB128ONLY"))
                  ? sizeof("SUITEB128ONLY")-1
                  : sizeof("SUITEB128")-1;
             if (*e)
