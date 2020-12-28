@@ -106,7 +106,7 @@ ok($tf->handle_http($t) == 0, 'HEAD request, file-not-found, query-string');
 # (expect 200 OK instead of 100 Continue since request body sent with request)
 # (if we waited to send request body, would expect 100 Continue, first)
 $t->{REQUEST}  = ( <<EOF
-POST /get-post-len.pl HTTP/1.1
+POST /cgi.pl?post-len HTTP/1.1
 Host: www.example.org
 Connection: close
 Content-Type: application/x-www-form-urlencoded
@@ -122,7 +122,7 @@ ok($tf->handle_http($t) == 0, 'Continue, Expect');
 # note Transfer-Encoding: chunked tests will fail with 411 Length Required if
 #   server.stream-request-body != 0 in lighttpd.conf
 $t->{REQUEST}  = ( <<EOF
-POST /get-post-len.pl HTTP/1.1
+POST /cgi.pl?post-len HTTP/1.1
 Host: www.example.org
 Connection: close
 Content-Type: application/x-www-form-urlencoded
@@ -138,7 +138,7 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, lc hex');
 
 $t->{REQUEST}  = ( <<EOF
-POST /get-post-len.pl HTTP/1.1
+POST /cgi.pl?post-len HTTP/1.1
 Host: www.example.org
 Connection: close
 Content-Type: application/x-www-form-urlencoded
@@ -154,7 +154,7 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, uc hex');
 
 $t->{REQUEST}  = ( <<EOF
-POST /get-post-len.pl HTTP/1.1
+POST /cgi.pl?post-len HTTP/1.1
 Host: www.example.org
 Connection: close
 Content-Type: application/x-www-form-urlencoded
@@ -170,7 +170,7 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, two hex');
 
 $t->{REQUEST}  = ( <<EOF
-POST /get-post-len.pl HTTP/1.1
+POST /cgi.pl?post-len HTTP/1.1
 Host: www.example.org
 Connection: close
 Content-Type: application/x-www-form-urlencoded
@@ -187,7 +187,7 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, with trailer');
 
 $t->{REQUEST}  = ( <<EOF
-POST /get-post-len.pl HTTP/1.1
+POST /cgi.pl?post-len HTTP/1.1
 Host: www.example.org
 Connection: close
 Content-Type: application/x-www-form-urlencoded
@@ -203,7 +203,7 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, chunked header comment');
 
 $t->{REQUEST}  = ( <<EOF
-POST /get-post-len.pl HTTP/1.1
+POST /cgi.pl?post-len HTTP/1.1
 Host: www.example.org
 Connection: close
 Content-Type: application/x-www-form-urlencoded
@@ -219,7 +219,7 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked; bad chunked header');
 
 $t->{REQUEST}  = ( <<EOF
-POST /get-post-len.pl HTTP/1.1
+POST /cgi.pl?post-len HTTP/1.1
 Host: www.example.org
 Connection: close
 Content-Type: application/x-www-form-urlencoded
@@ -235,7 +235,7 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked; mismatch chunked header size and chunked data size');
 
 $t->{REQUEST}  = ( <<EOF
-POST /get-post-len.pl HTTP/1.1
+POST /cgi.pl?post-len HTTP/1.1
 Host: www.example.org
 Connection: close
 Content-Type: application/x-www-form-urlencoded

@@ -35,21 +35,35 @@ cp "${srcdir}/docroot/www/"*.html \
    "${srcdir}/docroot/www/"*.shtml \
    "${srcdir}/docroot/www/"*.txt \
    "${tmpdir}/servers/www.example.org/pages/"
-cp "${srcdir}/docroot/www/expire/"*.txt "${tmpdir}/servers/www.example.org/pages/expire/"
 cp "${srcdir}/docroot/www/indexfile/"*.pl "${tmpdir}/servers/www.example.org/pages/indexfile/"
-cp "${srcdir}/docroot/123/"*.txt \
-   "${srcdir}/docroot/123/"*.html \
-   "${srcdir}/docroot/123/"*.bla \
-   "${tmpdir}/servers/123.example.org/pages/"
 cp "${srcdir}/lighttpd.user" "${tmpdir}/"
 cp "${srcdir}/lighttpd.htpasswd" "${tmpdir}/"
 cp "${srcdir}/var-include-sub.conf" "${tmpdir}/../"
+
+# create some content
 touch "${tmpdir}/servers/www.example.org/pages/image.jpg" \
       "${tmpdir}/servers/www.example.org/pages/image.JPG" \
       "${tmpdir}/servers/www.example.org/pages/Foo.txt" \
       "${tmpdir}/servers/www.example.org/pages/a" \
-      "${tmpdir}/servers/www.example.org/pages/index.html~"
+      "${tmpdir}/servers/www.example.org/pages/index.html~" \
+      "${tmpdir}/servers/www.example.org/pages/expire/access.txt" \
+      "${tmpdir}/servers/www.example.org/pages/expire/modification.txt"
+echo "12345" > "${tmpdir}/servers/123.example.org/pages/12345.txt"
+echo "12345" > "${tmpdir}/servers/123.example.org/pages/12345.html"
+echo "12345" > "${tmpdir}/servers/123.example.org/pages/dummyfile.bla"
 echo "12345" > "${tmpdir}/servers/123.example.org/pages/range.pdf"
+cat - <<HERE > "${tmpdir}/servers/123.example.org/pages/100.txt"
+123456789
+123456789
+123456789
+123456789
+123456789
+123456789
+123456789
+123456789
+123456789
+abcdefghi
+HERE
 
 printf "%-40s" "preparing infrastructure"
 [ -z "$MAKELEVEL" ] && echo

@@ -73,7 +73,7 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-
 ok($tf->handle_http($t) == 0, '404 handler => dynamic(nostatus)');
 
 $t->{REQUEST}  = ( <<EOF
-GET /send404.pl HTTP/1.0
+GET /cgi.pl?send404 HTTP/1.0
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => "send404\n" } ];

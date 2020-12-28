@@ -1651,9 +1651,7 @@ AC_CONFIG_FILES([\
   doc/systemd/Makefile \
   Makefile \
   src/Makefile \
-  tests/docroot/123/Makefile \
   tests/docroot/Makefile \
-  tests/docroot/www/expire/Makefile \
   tests/docroot/www/indexfile/Makefile \
   tests/docroot/www/Makefile \
   tests/Makefile \

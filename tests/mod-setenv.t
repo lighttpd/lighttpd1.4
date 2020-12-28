@@ -17,7 +17,7 @@ my $t;
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
 $t->{REQUEST} = ( <<EOF
-GET /get-header.pl?TRAC_ENV HTTP/1.0
+GET /cgi.pl?env=TRAC_ENV HTTP/1.0
 Host: www.example.org
 EOF
  );
@@ -25,7 +25,7 @@ $t->{RESPONSE}  = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP
 ok($tf->handle_http($t) == 0, 'query first setenv');
 
 $t->{REQUEST}  = ( <<EOF
-GET /get-header.pl?SETENV HTTP/1.0
+GET /cgi.pl?env=SETENV HTTP/1.0
 Host: www.example.org
 EOF
  );
@@ -33,7 +33,7 @@ $t->{RESPONSE}  = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP
 ok($tf->handle_http($t) == 0, 'query second setenv');
 
 $t->{REQUEST}  = ( <<EOF
-GET /get-header.pl?NEWENV HTTP/1.0
+GET /cgi.pl?env=NEWENV HTTP/1.0
 Host: www.example.org
 EOF
  );
@@ -41,7 +41,7 @@ $t->{RESPONSE}  = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP
 ok($tf->handle_http($t) == 0, 'query set-environment');
 
 $t->{REQUEST}  = ( <<EOF
-GET /get-header.pl?HTTP_FOO HTTP/1.0
+GET /cgi.pl?env=HTTP_FOO HTTP/1.0
 Host: www.example.org
 EOF
  );
@@ -49,7 +49,7 @@ $t->{RESPONSE}  = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP
 ok($tf->handle_http($t) == 0, 'query add-request-header');
 
 $t->{REQUEST}  = ( <<EOF
-GET /get-header.pl?HTTP_FOO2 HTTP/1.0
+GET /cgi.pl?env=HTTP_FOO2 HTTP/1.0
 Host: www.example.org
 EOF
  );
