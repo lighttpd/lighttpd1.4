@@ -813,45 +813,24 @@ static void http_list_directory_footer(const request_st * const r, plugin_data *
 }
 
 static int http_list_directory(request_st * const r, plugin_data * const p, buffer * const dir) {
-	DIR *dp;
-	buffer *out;
-	struct dirent *dent;
-	struct stat st;
-	char *path, *path_file;
-	size_t i;
-	int hide_dotfiles = p->conf.hide_dot_files;
-	dirls_list_t dirs, files, *list;
-	dirls_entry_t *tmp;
-	char sizebuf[sizeof("999.9K")];
-	const buffer *content_type;
-	long name_max;
-	log_error_st * const errh = r->conf.errh;
-	struct tm tm;
-
-	if (buffer_string_is_empty(dir)) return -1;
-
-	i = buffer_string_length(dir);
-
-#ifdef HAVE_PATHCONF
-	if (0 >= (name_max = pathconf(dir->ptr, _PC_NAME_MAX))) {
-		/* some broken fs (fuse) return 0 instead of -1 */
-#ifdef NAME_MAX
-		name_max = NAME_MAX;
+	const uint32_t dlen = buffer_string_length(dir);
+#if defined __WIN32
+	const uint32_t name_max = FILENAME_MAX;
 #else
-		name_max = 255; /* stupid default */
+#ifndef PATH_MAX
+#define PATH_MAX 4096
 #endif
-	}
-#elif defined __WIN32
-	name_max = FILENAME_MAX;
-#else
-	name_max = NAME_MAX;
+	/* allocate based on PATH_MAX rather than pathconf() to get _PC_NAME_MAX */
+	const uint32_t name_max = PATH_MAX - dlen - 1;
 #endif
-
-	path = malloc(i + name_max + 1);
+	char * const path = malloc(dlen + name_max + 1);
 	force_assert(NULL != path);
-	memcpy(path, dir->ptr, i+1);
-	path_file = path + i;
+	memcpy(path, dir->ptr, dlen+1);
+	char *path_file = path + dlen;
+	log_error_st * const errh = r->conf.errh;
 
+	DIR *dp;
+	struct dirent *dent;
 	if (NULL == (dp = opendir(path))) {
 		log_error(errh, __FILE__, __LINE__,
 		  "opendir failed: %s", dir->ptr);
@@ -860,6 +839,7 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 		return -1;
 	}
 
+	dirls_list_t dirs, files;
 	dirs.ent   = (dirls_entry_t**) malloc(sizeof(dirls_entry_t*) * DIRLIST_BLOB_SIZE);
 	force_assert(dirs.ent);
 	dirs.size  = DIRLIST_BLOB_SIZE;
@@ -869,60 +849,58 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 	files.size = DIRLIST_BLOB_SIZE;
 	files.used = 0;
 
+	const int hide_dotfiles = p->conf.hide_dot_files;
+	struct stat st;
 	while ((dent = readdir(dp)) != NULL) {
-		if (dent->d_name[0] == '.') {
+		const char * const d_name = dent->d_name;
+		if (d_name[0] == '.') {
 			if (hide_dotfiles)
 				continue;
-			if (dent->d_name[1] == '\0')
+			if (d_name[1] == '\0')
 				continue;
-			if (dent->d_name[1] == '.' && dent->d_name[2] == '\0')
+			if (d_name[1] == '.' && d_name[2] == '\0')
 				continue;
 		}
 
 		if (p->conf.hide_readme_file && !buffer_string_is_empty(p->conf.show_readme)) {
-			if (strcmp(dent->d_name, p->conf.show_readme->ptr) == 0)
+			if (strcmp(d_name, p->conf.show_readme->ptr) == 0)
 				continue;
 		}
 		if (p->conf.hide_header_file && !buffer_string_is_empty(p->conf.show_header)) {
-			if (strcmp(dent->d_name, p->conf.show_header->ptr) == 0)
+			if (strcmp(d_name, p->conf.show_header->ptr) == 0)
 				continue;
 		}
 
-		i = strlen(dent->d_name);
+		const uint32_t dsz = (uint32_t)strlen(d_name);
 
 		/* compare d_name against excludes array
 		 * elements, skipping any that match.
 		 */
 		if (p->conf.excludes
-		    && mod_dirlisting_exclude(errh, p->conf.excludes, dent->d_name, i))
+		    && mod_dirlisting_exclude(errh, p->conf.excludes, d_name, dsz))
 			continue;
 
 		/* NOTE: the manual says, d_name is never more than NAME_MAX
 		 *       so this should actually not be a buffer-overflow-risk
 		 */
-		if (i > (size_t)name_max) continue;
+		if (dsz > name_max) continue;
 
-		memcpy(path_file, dent->d_name, i + 1);
+		memcpy(path_file, d_name, dsz + 1);
 		if (stat(path, &st) != 0)
 			continue;
 
-		list = &files;
-		if (S_ISDIR(st.st_mode))
-			list = &dirs;
-
+		dirls_list_t * const list = !S_ISDIR(st.st_mode) ? &files : &dirs;
 		if (list->used == list->size) {
 			list->size += DIRLIST_BLOB_SIZE;
 			list->ent   = (dirls_entry_t**) realloc(list->ent, sizeof(dirls_entry_t*) * list->size);
 			force_assert(list->ent);
 		}
-
-		tmp = (dirls_entry_t*) malloc(sizeof(dirls_entry_t) + 1 + i);
+		dirls_entry_t * const tmp = list->ent[list->used++] =
+		  (dirls_entry_t*) malloc(sizeof(dirls_entry_t) + 1 + dsz);
 		tmp->mtime = st.st_mtime;
 		tmp->size  = st.st_size;
-		tmp->namelen = (uint32_t)i;
-		memcpy(DIRLIST_ENT_NAME(tmp), dent->d_name, i + 1);
-
-		list->ent[list->used++] = tmp;
+		tmp->namelen = dsz;
+		memcpy(DIRLIST_ENT_NAME(tmp), d_name, dsz + 1);
 	}
 	closedir(dp);
 
@@ -930,12 +908,15 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 
 	if (files.used) http_dirls_sort(files.ent, files.used);
 
-	out = chunkqueue_append_buffer_open(&r->write_queue);
+	char sizebuf[sizeof("999.9K")];
+	struct tm tm;
+
+	buffer * const out = chunkqueue_append_buffer_open(&r->write_queue);
 	http_list_directory_header(r, p, out);
 
 	/* directories */
-	for (i = 0; i < dirs.used; i++) {
-		tmp = dirs.ent[i];
+	for (uint32_t i = 0; i < dirs.used; ++i) {
+		dirls_entry_t * const tmp = dirs.ent[i];
 
 		buffer_append_string_len(out, CONST_STR_LEN("<tr class=\"d\"><td class=\"n\"><a href=\""));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);
@@ -950,9 +931,9 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 
 	/* files */
 	const array * const mimetypes = r->conf.mimetypes;
-	for (i = 0; i < files.used; i++) {
-		tmp = files.ent[i];
-
+	for (uint32_t i = 0; i < files.used; ++i) {
+		dirls_entry_t * const tmp = files.ent[i];
+		const buffer *content_type;
 	  #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) /*(pass full path)*/
 		content_type = NULL;
 		if (r->conf.use_xattr) {
@@ -1016,7 +997,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 	if (buffer_string_is_empty(&r->uri.path)) return HANDLER_GO_ON;
 	if (r->uri.path.ptr[buffer_string_length(&r->uri.path) - 1] != '/') return HANDLER_GO_ON;
 	if (!http_method_get_or_head(r->http_method)) return HANDLER_GO_ON;
-	if (buffer_is_empty(&r->physical.path)) return HANDLER_GO_ON;
+	if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;
 
 	mod_dirlisting_patch_config(r, p);
 
