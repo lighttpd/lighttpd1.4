@@ -31,7 +31,6 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -41,12 +40,21 @@
 #endif
 #endif
 
+#ifndef _WIN32
+#include <dirent.h>
+#endif
 #ifndef _D_EXACT_NAMLEN
 #ifdef _DIRENT_HAVE_D_NAMLEN
 #define _D_EXACT_NAMLEN(d) ((d)->d_namlen)
 #else
 #define _D_EXACT_NAMLEN(d) (strlen ((d)->d_name))
 #endif
+#endif
+
+#ifdef _WIN32
+#include <windows.h>
+#include <stringapiset.h>
+#include <stdio.h>      /* FILENAME_MAX */
 #endif
 
 /**
@@ -118,7 +126,9 @@ typedef struct {
 #define DIRLIST_BLOB_SIZE      16
 
 typedef struct {
+  #ifndef _WIN32
 	DIR *dp;
+  #endif
 	dirls_list_t dirs;
 	dirls_list_t files;
 	char *path;
@@ -131,6 +141,11 @@ typedef struct {
 	char *jfn;
 	uint32_t jfn_len;
 	plugin_config conf;
+  #ifdef _WIN32
+	HANDLE hFind;
+	WIN32_FIND_DATAW ffd;
+	char fnUTF8[FILENAME_MAX*4+1];
+  #endif
 } handler_ctx;
 
 #define DIRLIST_BATCH 32
@@ -139,13 +154,21 @@ static int dirlist_max_in_progress;
 
 static handler_ctx * mod_dirlisting_handler_ctx_init (plugin_data * const p) {
     handler_ctx *hctx = ck_calloc(1, sizeof(*hctx));
+  #ifdef _WIN32
+    hctx->hFind = INVALID_HANDLE_VALUE;
+  #endif
     memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
     return hctx;
 }
 
 static void mod_dirlisting_handler_ctx_free (handler_ctx *hctx) {
+  #ifdef _WIN32
+    if (INVALID_HANDLE_VALUE != hctx->hFind)
+        FindClose(hctx->hFind);
+  #else
     if (hctx->dp)
         closedir(hctx->dp);
+  #endif
     if (hctx->files.ent) {
         dirls_entry_t ** const ent = hctx->files.ent;
         for (uint32_t i = 0, used = hctx->files.used; i < used; ++i)
@@ -987,8 +1010,8 @@ static void http_list_directory_footer(request_st * const r, const handler_ctx *
 
 static int http_open_directory(request_st * const r, handler_ctx * const hctx) {
     const uint32_t dlen = buffer_clen(&r->physical.path);
-#if defined __WIN32
-    hctx->name_max = FILENAME_MAX;
+#ifdef _WIN32
+    hctx->name_max = FILENAME_MAX*4; /*(260 chars * 4 for (max) UTF-8 bytes)*/
 #else
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -998,10 +1021,30 @@ static int http_open_directory(request_st * const r, handler_ctx * const hctx) {
 #endif
     hctx->path = ck_malloc(dlen + hctx->name_max + 1);
     memcpy(hctx->path, r->physical.path.ptr, dlen+1);
-  #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) || !defined(_ATFILE_SOURCE)
+  #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) \
+   || (!defined(_ATFILE_SOURCE) && !defined(_WIN32))
     hctx->path_file = hctx->path + dlen;
   #endif
 
+  #ifdef _WIN32
+    hctx->path[dlen] = '*';
+    hctx->path[dlen+1] = '\0';
+    WCHAR wbuf[4096];
+    int wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                                   hctx->path, dlen+1,
+                                   wbuf, (sizeof(wbuf)/sizeof(*wbuf))-2);
+    if (0 == wlen) return -1;
+    hctx->hFind = FindFirstFileExW(wbuf, FindExInfoBasic, &hctx->ffd,
+                                   FindExSearchNameMatch, NULL,
+                                   FIND_FIRST_EX_LARGE_FETCH);
+    if (INVALID_HANDLE_VALUE == hctx->hFind) {
+        if (GetLastError() != ERROR_FILE_NOT_FOUND) {
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "FindFirstFileEx failed: %s", r->physical.path.ptr);
+            return -1;
+        }
+    }
+  #else
   #ifndef _ATFILE_SOURCE /*(not using fdopendir unless _ATFILE_SOURCE)*/
     hctx->dfd = -1;
     hctx->dp = opendir(hctx->path);
@@ -1017,6 +1060,7 @@ static int http_open_directory(request_st * const r, handler_ctx * const hctx) {
         }
         return -1;
     }
+  #endif
 
     if (hctx->conf.json) return 0;
 
@@ -1031,14 +1075,35 @@ static int http_open_directory(request_st * const r, handler_ctx * const hctx) {
 }
 
 static int http_read_directory(handler_ctx * const p) {
-	struct dirent *dent;
 	const int hide_dotfiles = p->conf.hide_dot_files;
 	const uint32_t name_max = p->name_max;
-	struct stat st;
+  #ifdef _WIN32
+	int count = 0;
+	if (INVALID_HANDLE_VALUE == p->hFind) {
+		/* GetLastError() == ERROR_FILE_NOT_FOUND
+		 * (other errors handled in http_open_directory()) */
+	}
+	else do
+  #else
 	int count = -1;
-	while (++count < DIRLIST_BATCH && (dent = readdir(p->dp)) != NULL) {
+	struct dirent *dent;
+	struct stat st;
+	while (++count < DIRLIST_BATCH && (dent = readdir(p->dp)) != NULL)
+  #endif
+	{
+	  #ifdef _WIN32
+		/* WC_ERR_INVALID_CHARS not used in string conversion since
+		 * expecting valid unicode from reading directory */
+		const char * const d_name = p->fnUTF8;
+		uint32_t dsz = (uint32_t)
+		  WideCharToMultiByte(CP_UTF8, 0, p->ffd.cFileName, -1,
+		                      p->fnUTF8, sizeof(p->fnUTF8), NULL, NULL);
+		if (0 == dsz) continue;
+		--dsz;
+	  #else
 		const char * const d_name = dent->d_name;
 		const uint32_t dsz = (uint32_t) _D_EXACT_NAMLEN(dent);
+	  #endif
 		if (d_name[0] == '.') {
 			if (hide_dotfiles)
 				continue;
@@ -1075,6 +1140,7 @@ static int http_read_directory(handler_ctx * const p) {
 		force_assert(dsz < sizeof(dent->d_name));
 	  #endif
 
+	  #ifndef _WIN32
 	  #ifndef _ATFILE_SOURCE
 		memcpy(p->path_file, d_name, dsz + 1);
 		if (stat(p->path, &st) != 0)
@@ -1083,6 +1149,7 @@ static int http_read_directory(handler_ctx * const p) {
 		/*(XXX: follow symlinks, like stat(); not using AT_SYMLINK_NOFOLLOW) */
 		if (0 != fstatat(p->dfd, d_name, &st, 0))
 			continue; /* file *just* disappeared? */
+	  #endif
 	  #endif
 
 		if (p->jb) { /* json output */
@@ -1096,7 +1163,12 @@ static int http_read_directory(handler_ctx * const p) {
 
 			const char *t;
 			size_t tlen;
-			if (!S_ISDIR(st.st_mode)) {
+		  #ifndef _WIN32
+			if (!S_ISDIR(st.st_mode))
+		  #else
+			if (!(p->ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+		  #endif
+			{
 				t =           "\",\"type\":\"file\",\"size\":";
 				tlen = sizeof("\",\"type\":\"file\",\"size\":")-1;
 			}
@@ -1108,30 +1180,69 @@ static int http_read_directory(handler_ctx * const p) {
 			char mstr[LI_ITOSTRING_LENGTH];
 			struct const_iovec iov[] = {
 			  { t, tlen }
+			 #ifndef _WIN32
 			 ,{ sstr, li_itostrn(sstr, sizeof(sstr), st.st_size) }
 			 ,{ CONST_STR_LEN(",\"mtime\":") }
 			 ,{ mstr, li_itostrn(mstr, sizeof(mstr), TIME64_CAST(st.st_mtime)) }
+			 #else
+			 ,{ sstr, li_itostrn(sstr, sizeof(sstr),
+			                     ((int64_t)p->ffd.nFileSizeHigh << 32)
+			                             | p->ffd.nFileSizeLow) }
+			 ,{ CONST_STR_LEN(",\"mtime\":") }
+			 ,{ mstr, li_itostrn(mstr, sizeof(mstr),
+			            ((((int64_t)p->ffd.ftLastWriteTime.dwHighDateTime << 32)
+			                      | p->ffd.ftLastWriteTime.dwLowDateTime)
+			            / 10000000 - 11644473600LL)) }
+			 #endif
 			 ,{ CONST_STR_LEN("}") }
 			};
 			buffer_append_iovec(p->jb, iov, sizeof(iov)/sizeof(*iov));
 			continue;
 		}
 
+	  #ifndef _WIN32
 		dirls_list_t * const list = !S_ISDIR(st.st_mode) ? &p->files : &p->dirs;
+	  #else  /* _WIN32 */
+		dirls_list_t * const list =
+		  !(p->ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		    ? &p->files
+		    : &p->dirs;
+	  #endif /* _WIN32 */
 		if (!(list->used & (DIRLIST_BLOB_SIZE-1)))
 			ck_realloc_u32((void **)&list->ent, list->used,
 			               DIRLIST_BLOB_SIZE, sizeof(*list->ent));
 		dirls_entry_t * const tmp = list->ent[list->used++] =
 		  (dirls_entry_t*) ck_malloc(sizeof(dirls_entry_t) + 1 + dsz);
+	  #ifdef _WIN32 /*(convert 100ns ticks since 1 Jan 1601 to unix time_t)*/
+		/*(future: preserve FILETIME here and use Windows fn to format time
+		 * below instead of localtime_r() and buffer_append_strftime())*/
+		tmp->mtime = (time_t)
+                  ((((int64_t)p->ffd.ftLastWriteTime.dwHighDateTime << 32)
+		            | p->ffd.ftLastWriteTime.dwLowDateTime)
+                  / 10000000 - 11644473600LL);
+		tmp->size = ((int64_t)p->ffd.nFileSizeHigh << 32) | p->ffd.nFileSizeLow;
+	  #else
 		tmp->mtime = st.st_mtime;
 		tmp->size  = st.st_size;
+	  #endif
 		tmp->namelen = dsz;
 		memcpy(DIRLIST_ENT_NAME(tmp), d_name, dsz + 1);
 	}
+  #ifdef _WIN32
+	  while (++count < DIRLIST_BATCH && FindNextFileW(p->hFind, &p->ffd) != 0);
+	if (count == DIRLIST_BATCH)
+		return HANDLER_WAIT_FOR_EVENT;
+	if (GetLastError() != ERROR_NO_MORE_FILES) {
+		/*(some other GetLastError() value; ignore; truncate listing)*/
+	}
+	FindClose(p->hFind);
+	p->hFind = INVALID_HANDLE_VALUE;
+  #else
 	if (count == DIRLIST_BATCH)
 		return HANDLER_WAIT_FOR_EVENT;
 	closedir(p->dp);
 	p->dp = NULL;
+  #endif
 
 	return HANDLER_FINISHED;
 }
