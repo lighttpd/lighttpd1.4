@@ -13,7 +13,7 @@ dnl   must be on their own line too
 dnl - if an argument uses more than one line and is not a single
 dnl   function call, the argument should be on different lines than the
 dnl   wrapping braces
-AC_PREREQ(2.60)
+AC_PREREQ([2.60])
 AC_INIT([lighttpd], [1.4.59], [https://redmine.lighttpd.net/projects/lighttpd/boards/2], [lighttpd], [https://www.lighttpd.net/])
 AC_CONFIG_SRCDIR([src/server.c])
 AC_CONFIG_HEADER([config.h])
@@ -63,7 +63,7 @@ dnl Checks for programs.
 AC_PROG_CC
 AC_PROG_CC_STDC
 AX_PROG_CC_FOR_BUILD
-AC_PROG_LD
+LT_PATH_LD
 AC_PROG_INSTALL
 AC_PROG_CPP
 AC_PROG_MAKE_SET
@@ -83,11 +83,7 @@ AM_CONDITIONAL([LIGHTTPD_STATIC], [test "$LIGHTTPD_STATIC" = yes])
 AC_EXEEXT
 
 dnl libtool
-AC_DISABLE_STATIC
-AC_ENABLE_SHARED
-
-AC_LIBTOOL_DLOPEN
-AC_PROG_LIBTOOL
+LT_INIT([dlopen,disable-static,enable-shared])
 
 dnl for solaris
 CPPFLAGS="${CPPFLAGS} -D_REENTRANT"
@@ -191,7 +187,7 @@ dnl checking for libev
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for libev support])
 AC_ARG_WITH([libev],
-  [AC_HELP_STRING([--with-libev@<:@=PATH@:>@],
+  [AS_HELP_STRING([--with-libev@<:@=PATH@:>@],
     [Include libev support for fdevent handlers in PATH/include and PATH/lib]
   )],
   [WITH_LIBEV=$withval],
@@ -233,7 +229,7 @@ dnl Checks for mysql
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for MySQL support])
 AC_ARG_WITH([mysql],
-  [AC_HELP_STRING([--with-mysql@<:@=PATH@:>@],
+  [AS_HELP_STRING([--with-mysql@<:@=PATH@:>@],
     [Include MySQL support. PATH is the path to 'mysql_config']
   )],
   [WITH_MYSQL=$withval],
@@ -292,7 +288,7 @@ dnl Checks for pgsql
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for PgSQL support])
 AC_ARG_WITH([pgsql],
-  [AC_HELP_STRING([--with-pgsql@<:@=PATH@:>@],
+  [AS_HELP_STRING([--with-pgsql@<:@=PATH@:>@],
     [Include PgSQL support. PATH is the path to 'pg_config']
   )],
   [WITH_PGSQL=$withval],
@@ -343,7 +339,7 @@ dnl Checks for libdbi library
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for LibDBI support])
 AC_ARG_WITH([dbi],
-  [AC_HELP_STRING([--with-dbi@<:@=PATH@:>@],
+  [AS_HELP_STRING([--with-dbi@<:@=PATH@:>@],
     [Include DBI support in PATH/include/dbi.h and PATH/lib]
   )],
   [WITH_DBI=$withval],
@@ -382,7 +378,7 @@ dnl Checks for libsasl2 library
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for LibSASL support])
 AC_ARG_WITH([sasl],
-  [AC_HELP_STRING([--with-sasl@<:@=PATH@:>@],
+  [AS_HELP_STRING([--with-sasl@<:@=PATH@:>@],
     [Include SASL support in PATH/include/sasl/sasl.h and PATH/lib]
   )],
   [WITH_SASL=$withval],
@@ -422,7 +418,7 @@ dnl Check for LDAP
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for LDAP support])
 AC_ARG_WITH([ldap],
-  [AC_HELP_STRING([--with-ldap], [enable LDAP support])],
+  [AS_HELP_STRING([--with-ldap], [enable LDAP support])],
   [WITH_LDAP=$withval],
   [WITH_LDAP=no]
 )
@@ -460,7 +456,7 @@ dnl Check for PAM
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING(for PAM support)
 AC_ARG_WITH([pam],
-  [AC_HELP_STRING([--with-pam],[enable PAM support])],
+  [AS_HELP_STRING([--with-pam],[enable PAM support])],
   [WITH_PAM=$withval],
   [WITH_PAM=no]
 )
@@ -485,7 +481,7 @@ dnl Check for xattr
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for extended attributes support])
 AC_ARG_WITH([attr],
-  [AC_HELP_STRING([--with-attr], [enable extended attribute support])],
+  [AS_HELP_STRING([--with-attr], [enable extended attribute support])],
   [WITH_ATTR=$withval],
   [WITH_ATTR=no]
 )
@@ -531,7 +527,7 @@ dnl Check for valgrind
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for valgrind])
 AC_ARG_WITH([valgrind],
-  [AC_HELP_STRING([--with-valgrind],
+  [AS_HELP_STRING([--with-valgrind],
     [enable internal support for valgrind]
   )],
   [WITH_VALGRIND=$withval],
@@ -549,7 +545,7 @@ dnl Checking for libunwind
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for libunwind])
 AC_ARG_WITH([libunwind],
-  [AC_HELP_STRING([--with-libunwind],
+  [AS_HELP_STRING([--with-libunwind],
     [Include libunwind support for backtraces on assert failures]
   )],
   [WITH_LIBUNWIND=$withval],
@@ -568,7 +564,7 @@ dnl Checking for kerberos5
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for kerberos5])
 AC_ARG_WITH([krb5],
-  [AC_HELP_STRING([--with-krb5@<:@=DIR@:>@], [Use Kerberos 5])],
+  [AS_HELP_STRING([--with-krb5@<:@=DIR@:>@], [Use Kerberos 5])],
   [WITH_KRB5=$withval],
   [WITH_KRB5=no]
 )
@@ -583,7 +579,7 @@ fi
 
 AC_MSG_CHECKING([custom include directory for kerberos5])
 AC_ARG_WITH([krb5-includes],
-  [AC_HELP_STRING([--with-krb5-includes=DIR], [Kerberos includes])],
+  [AS_HELP_STRING([--with-krb5-includes=DIR], [Kerberos includes])],
   [
     if test "$WITH_KRB5" = no; then
       AC_MSG_ERROR([build --with-krb5 to use --with-krb5-includes])
@@ -596,7 +592,7 @@ AC_ARG_WITH([krb5-includes],
 
 AC_MSG_CHECKING([custom lib directory for kerberos5])
 AC_ARG_WITH([krb5-libs],
-  [AC_HELP_STRING([--with-krb5-libs=DIR], [Kerberos libraries])],
+  [AS_HELP_STRING([--with-krb5-libs=DIR], [Kerberos libraries])],
   [
     if test "$WITH_KRB5" = no; then
       AC_MSG_ERROR([build --with-krb5 to use --with-krb5-libs])
@@ -634,7 +630,7 @@ dnl Check for openssl
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for OpenSSL])
 AC_ARG_WITH([openssl],
-  [AC_HELP_STRING([--with-openssl@<:@=DIR@:>@],
+  [AS_HELP_STRING([--with-openssl@<:@=DIR@:>@],
     [Include openssl support (default no)]
   )],
   [WITH_OPENSSL=$withval],
@@ -652,7 +648,7 @@ fi
 
 AC_MSG_CHECKING([custom include directory for openssl])
 AC_ARG_WITH([openssl-includes],
-  [AC_HELP_STRING([--with-openssl-includes=DIR], [OpenSSL includes])],
+  [AS_HELP_STRING([--with-openssl-includes=DIR], [OpenSSL includes])],
   [
     if test "$WITH_OPENSSL" = no; then
       AC_MSG_ERROR([build --with-openssl to use --with-openssl-includes])
@@ -665,7 +661,7 @@ AC_ARG_WITH([openssl-includes],
 
 AC_MSG_CHECKING([custom lib directory for openssl])
 AC_ARG_WITH([openssl-libs],
-  [AC_HELP_STRING([--with-openssl-libs=DIR], [OpenSSL libraries])],
+  [AS_HELP_STRING([--with-openssl-libs=DIR], [OpenSSL libraries])],
   [
     if test "$WITH_OPENSSL" = no; then
       AC_MSG_ERROR([build --with-openssl to use --with-openssl-libs])
@@ -708,7 +704,7 @@ dnl Check for wolfSSL
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for wolfSSL])
 AC_ARG_WITH([wolfssl],
-  [AC_HELP_STRING([--with-wolfssl@<:@=DIR@:>@],
+  [AS_HELP_STRING([--with-wolfssl@<:@=DIR@:>@],
     [Include wolfSSL support (default no)]
   )],
   [WITH_WOLFSSL=$withval],
@@ -763,7 +759,7 @@ dnl Check for mbedTLS
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for mbedTLS])
 AC_ARG_WITH([mbedtls],
-  AC_HELP_STRING([--with-mbedtls@<:@=DIR@:>@],[Include mbedTLS support. DIR points to the installation root. (default no)]),
+  AS_HELP_STRING([--with-mbedtls@<:@=DIR@:>@],[Include mbedTLS support. DIR points to the installation root. (default no)]),
   [WITH_MBEDTLS=$withval],
   [WITH_MBEDTLS=no]
 )
@@ -803,7 +799,7 @@ dnl Check for Nettle (and overwrite CRYPTO_LIB if set by OpenSSL or wolfSSL)
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for Nettle])
 AC_ARG_WITH([nettle],
-  [AC_HELP_STRING([--with-nettle@<:@=DIR@:>@],
+  [AS_HELP_STRING([--with-nettle@<:@=DIR@:>@],
     [Include Nettle support (default no)]
   )],
   [WITH_NETTLE=$withval],
@@ -832,7 +828,7 @@ dnl Check for GnuTLS
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for GnuTLS])
 AC_ARG_WITH([gnutls],
-  AC_HELP_STRING([--with-gnutls@<:@=DIR@:>@],[Include GnuTLS support. DIR points to the installation root. (default no)]),
+  AS_HELP_STRING([--with-gnutls@<:@=DIR@:>@],[Include GnuTLS support. DIR points to the installation root. (default no)]),
   [WITH_GNUTLS=$withval],
   [WITH_GNUTLS=no]
 )
@@ -869,7 +865,7 @@ dnl Check for NSS
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for NSS])
 AC_ARG_WITH([nss],
-  AC_HELP_STRING([--with-nss@<:@=DIR@:>@],[Include NSS support. DIR points to the installation root. (default no)]),
+  AS_HELP_STRING([--with-nss@<:@=DIR@:>@],[Include NSS support. DIR points to the installation root. (default no)]),
   [WITH_NSS=$withval],
   [WITH_NSS=no]
 )
@@ -908,7 +904,7 @@ dnl pcre support
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for perl regular expressions support])
 AC_ARG_WITH([pcre],
-  [AC_HELP_STRING([--with-pcre], [Enable pcre support (default yes)])],
+  [AS_HELP_STRING([--with-pcre], [Enable pcre support (default yes)])],
   [WITH_PCRE=$withval],
   [WITH_PCRE=yes]
 )
@@ -939,7 +935,7 @@ dnl zlib
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for zlib support])
 AC_ARG_WITH([zlib],
-  [AC_HELP_STRING([--with-zlib],
+  [AS_HELP_STRING([--with-zlib],
     [Enable zlib support for mod_deflate]
   )],
   [WITH_ZLIB=$withval],
@@ -970,7 +966,7 @@ dnl bzip2
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for bzip2 support])
 AC_ARG_WITH([bzip2],
-  [AC_HELP_STRING([--with-bzip2],
+  [AS_HELP_STRING([--with-bzip2],
     [Enable bzip2 support for mod_deflate]
   )],
   [WITH_BZIP2=$withval],
@@ -1001,7 +997,7 @@ dnl brotli
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for brotli support])
 AC_ARG_WITH([brotli],
-  [AC_HELP_STRING([--with-brotli],
+  [AS_HELP_STRING([--with-brotli],
     [Enable brotli support for mod_deflate]
   )],
   [WITH_BROTLI=$withval],
@@ -1029,7 +1025,7 @@ dnl Check for fam/gamin
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for FAM])
 AC_ARG_WITH([fam],
-  [AC_HELP_STRING([--with-fam],
+  [AS_HELP_STRING([--with-fam],
     [fam/gamin for reducing number of stat() calls]
   )],
   [WITH_FAM=$withval],
@@ -1074,7 +1070,7 @@ dnl webdav props (xml2 and sqlite3)
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for properties in mod_webdav])
 AC_ARG_WITH([webdav-props],
-  [AC_HELP_STRING([--with-webdav-props], [properties in mod_webdav])],
+  [AS_HELP_STRING([--with-webdav-props], [properties in mod_webdav])],
   [WITH_WEBDAV_PROPS=$withval],
   [WITH_WEBDAV_PROPS=no]
 )
@@ -1083,7 +1079,7 @@ AC_MSG_RESULT([$WITH_WEBDAV_PROPS])
 if test "$WITH_WEBDAV_PROPS" != no; then
   AC_MSG_CHECKING([for libxml2])
   AC_ARG_WITH([libxml],
-    [AC_HELP_STRING([--with-libxml],
+    [AS_HELP_STRING([--with-libxml],
       [libxml2 for properties in mod_webdav]
     )],
     [WITH_LIBXML=$withval],
@@ -1111,7 +1107,7 @@ if test "$WITH_WEBDAV_PROPS" != no; then
 
   AC_MSG_CHECKING([for sqlite])
   AC_ARG_WITH([sqlite],
-    [AC_HELP_STRING([--with-sqlite],
+    [AS_HELP_STRING([--with-sqlite],
       [sqlite for properties in mod_webdav]
     )],
     [WITH_SQLITE=$withval],
@@ -1143,7 +1139,7 @@ dnl webdav locks (uuid)
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for locks in mod_webdav])
 AC_ARG_WITH([webdav-locks],
-  [AC_HELP_STRING([--with-webdav-locks],
+  [AS_HELP_STRING([--with-webdav-locks],
     [locks in mod_webdav (requires webdav properties)]
   )],
   [WITH_WEBDAV_LOCKS=$withval],
@@ -1158,7 +1154,7 @@ if test "$WITH_WEBDAV_LOCKS" != no; then
 
   AC_MSG_CHECKING([for libuuid])
   AC_ARG_WITH([uuid],
-    [AC_HELP_STRING([--with-uuid], [uuid for locks in mod_webdav])],
+    [AS_HELP_STRING([--with-uuid], [uuid for locks in mod_webdav])],
     [WITH_UUID=$withval],
     [WITH_UUID=yes]
   )
@@ -1190,7 +1186,7 @@ dnl xxhash
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for xxhash support])
 AC_ARG_WITH([xxhash],
-  [AC_HELP_STRING([--with-xxhash],
+  [AS_HELP_STRING([--with-xxhash],
     [Enable system-provided xxhash]
   )],
   [WITH_XXHASH=$withval],
@@ -1224,7 +1220,7 @@ dnl Check for gdbm
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for gdbm])
 AC_ARG_WITH([gdbm],
-  [AC_HELP_STRING([--with-gdbm], [gdbm storage for mod_trigger_b4_dl])],
+  [AS_HELP_STRING([--with-gdbm], [gdbm storage for mod_trigger_b4_dl])],
   [WITH_GDBM=$withval],
   [WITH_GDBM=no]
 )
@@ -1254,7 +1250,7 @@ dnl Check for GeoIP
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for GeoIP])
 AC_ARG_WITH([geoip],
-  [AC_HELP_STRING([--with-geoip], [IP-based geolocation lookup])],
+  [AS_HELP_STRING([--with-geoip], [IP-based geolocation lookup])],
   [WITH_GEOIP=$withval],
   [WITH_GEOIP=no]
 )
@@ -1284,7 +1280,7 @@ dnl Check for maxminddb
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for maxminddb])
 AC_ARG_WITH([maxminddb],
-  [AC_HELP_STRING([--with-maxminddb], [IP-based geolocation lookup])],
+  [AS_HELP_STRING([--with-maxminddb], [IP-based geolocation lookup])],
   [WITH_MAXMINDDB=$withval],
   [WITH_MAXMINDDB=no]
 )
@@ -1314,7 +1310,7 @@ dnl Check for memcached
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for memcached])
 AC_ARG_WITH([memcached],
-  [AC_HELP_STRING([--with-memcached],
+  [AS_HELP_STRING([--with-memcached],
     [memcached storage for mod_trigger_b4_dl/mod_cml]
   )],
   [WITH_MEMCACHED=$withval],
@@ -1352,7 +1348,7 @@ dnl Check for lua
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([if lua-support is requested])
 AC_ARG_WITH([lua],
-  [AC_HELP_STRING([--with-lua], [lua engine for mod_magnet/mod_cml])],
+  [AS_HELP_STRING([--with-lua], [lua engine for mod_magnet/mod_cml])],
   [WITH_LUA=$withval],
   [WITH_LUA=no]
 )
@@ -1502,7 +1498,7 @@ AC_LINK_IFELSE(
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for Large File System support])
 AC_ARG_ENABLE([lfs],
-  [AC_HELP_STRING([--enable-lfs],
+  [AS_HELP_STRING([--enable-lfs],
     [Turn on Large File System (default)]
   )],
   [
@@ -1524,8 +1520,8 @@ if test "$ac_cv_func_sendfile" = yes; then
   AC_MSG_NOTICE([----------------------------------------])
   AC_MSG_CHECKING([if sendfile works])
   if test "$cross_compiling" = no; then
-    AC_TRY_RUN(
-      [
+    AC_RUN_IFELSE([AC_LANG_SOURCE(
+      [[
         #ifdef HAVE_SYS_SENDFILE_H
         #include <sys/sendfile.h>
         #endif /* HAVE_SYS_SENDFILE_H */
@@ -1535,12 +1531,12 @@ if test "$ac_cv_func_sendfile" = yes; then
           if (-1 == sendfile(-1, 0, &o, 0) && errno == ENOSYS) return -1;
           return 0;
         }
-      ],
+      ]])],
       [AC_MSG_RESULT([yes])],
       [
         AC_MSG_RESULT([no])
         AC_DEFINE([HAVE_SENDFILE_BROKEN], [1], [broken sendfile])
-      ]
+      ],[]
     )
   fi
 fi
@@ -1548,7 +1544,7 @@ fi
 dnl Check for IPv6 support
 AC_MSG_NOTICE([----------------------------------------])
 AC_ARG_ENABLE([ipv6],
-  [AC_HELP_STRING([--disable-ipv6], [disable IPv6 support])],
+  [AS_HELP_STRING([--disable-ipv6], [disable IPv6 support])],
   [
     case "${enableval}" in
     yes) ipv6=true ;;
@@ -1561,15 +1557,15 @@ AC_ARG_ENABLE([ipv6],
 
 if test "$ipv6" = true; then
   AC_CACHE_CHECK([for IPv6 support], [ac_cv_ipv6_support], [
-    AC_TRY_LINK(
-      [
+    AC_LINK_IFELSE([AC_LANG_PROGRAM(
+      [[
         #include <sys/types.h>
         #include <sys/socket.h>
         #include <netinet/in.h>
-      ],
-      [
+      ]],
+      [[
         struct sockaddr_in6 s; struct in6_addr t=in6addr_any; int i=AF_INET6; s; t.s6_addr[0] = 0;
-      ],
+      ]])],
       [ac_cv_ipv6_support=yes],
       [ac_cv_ipv6_support=no]
     )
@@ -1587,7 +1583,7 @@ fi
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([use mmap if available])
 AC_ARG_ENABLE([mmap],
-  [AC_HELP_STRING([--enable-mmap],
+  [AS_HELP_STRING([--enable-mmap],
     [use mmap if available]
   )],
   [
@@ -1613,7 +1609,7 @@ if test "${GCC}" = yes; then
 fi
 
 AC_ARG_ENABLE([extra-warnings],
-  [AC_HELP_STRING([--enable-extra-warnings],
+  [AS_HELP_STRING([--enable-extra-warnings],
     [enable extra warnings (gcc specific)]
   )],
   [
