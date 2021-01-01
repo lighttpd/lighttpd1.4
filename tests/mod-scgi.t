@@ -16,8 +16,12 @@ my $t;
 SKIP: {
 	skip "no scgi-responder found", 10 unless -x $tf->{BASEDIR}."/tests/scgi-responder" || -x $tf->{BASEDIR}."/tests/scgi-responder.exe";
 
+	my $ephemeral_port = LightyTest->get_ephemeral_tcp_port();
+	$ENV{EPHEMERAL_PORT} = $ephemeral_port;
+
 	$tf->{CONFIGFILE} = 'scgi-responder.conf';
 	ok($tf->start_proc == 0, "Starting lighttpd with $tf->{CONFIGFILE}") or die();
+
 	$t->{REQUEST}  = ( <<EOF
 GET /index.scgi?lf HTTP/1.0
 Host: www.example.org
@@ -77,7 +81,7 @@ EOF
 
 	# (might take lighttpd 1 sec to detect backend exit)
 	select(undef, undef, undef, .5);
-	for (my $c = 2*20; $c && 0 == $tf->listening_on(10000); --$c) {
+	for (my $c = 2*20; $c && 0 == $tf->listening_on($ephemeral_port); --$c) {
 		select(undef, undef, undef, 0.05);
 	}
 	$t->{REQUEST}  = ( <<EOF

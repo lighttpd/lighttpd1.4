@@ -20,14 +20,12 @@ my $t;
 ## 1. the real webserver
 ## 2. the proxy server
 
-$tf_real->{PORT} = 2048;
 $tf_real->{CONFIGFILE} = 'lighttpd.conf';
-
-$tf_proxy->{PORT} = 2050;
 $tf_proxy->{CONFIGFILE} = 'proxy.conf';
 
 ok($tf_real->start_proc == 0, "Starting lighttpd") or goto cleanup;
 
+$ENV{EPHEMERAL_PORT} = $tf_real->{PORT};
 ok($tf_proxy->start_proc == 0, "Starting lighttpd as proxy") or goto cleanup;
 
 $t->{REQUEST}  = ( <<EOF
