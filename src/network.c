@@ -686,6 +686,8 @@ int network_init(server *srv, int stdin_fd) {
                 force_assert(NULL != srv_socket);
                 memcpy(srv_socket, srv->srv_sockets_inherited.ptr[i],
                        sizeof(server_socket));
+                srv_socket->srv_token =
+                  buffer_init_buffer(srv_socket->srv_token);
                 network_srv_sockets_append(srv, srv_socket);
             }
         }
