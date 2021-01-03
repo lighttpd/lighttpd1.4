@@ -61,8 +61,6 @@ static char global_err_buf[WOLFSSL_MAX_ERROR_SZ];
 #define ERR_error_string(e,b) \
         (wolfSSL_ERR_error_string_n((e),global_err_buf,WOLFSSL_MAX_ERROR_SZ), \
          global_err_buf)
-/* WolfSSL does not provide OPENSSL_cleanse() */
-#define OPENSSL_cleanse(x,sz) safe_memclear((x),(sz))
 
 #if 0 /* symbols and definitions requires WolfSSL built with -DOPENSSL_EXTRA */
 #define SSL_TLSEXT_ERR_OK               0
@@ -92,6 +90,10 @@ WOLFSSL_API WOLFSSL_X509_NAME_ENTRY *wolfSSL_X509_NAME_get_entry(WOLFSSL_X509_NA
         ((WOLFSSL_X509_NAME *)1) /* ! NULL */
 #define wolfSSL_sk_X509_NAME_new(a) \
         ((WOLF_STACK_OF(WOLFSSL_X509_NAME) *)1) /* ! NULL */
+#endif
+
+#if LIBWOLFSSL_VERSION_HEX < 0x04006000 || defined(WOLFSSL_NO_FORCE_ZERO)
+#define wolfSSL_OPENSSL_cleanse(x,sz) safe_memclear((x),(sz))
 #endif
 
 #if LIBWOLFSSL_VERSION_HEX < 0x04002000 /*(exact version needed not checked)*/
@@ -279,7 +281,7 @@ mod_openssl_session_ticket_key_rotate (void)
               session_ticket_keys+0, sizeof(tlsext_ticket_key_t)*2);*/
     session_ticket_keys[0] = session_ticket_keys[3];
 
-    OPENSSL_cleanse(session_ticket_keys+3, sizeof(tlsext_ticket_key_t));
+    wolfSSL_OPENSSL_cleanse(session_ticket_keys+3, sizeof(tlsext_ticket_key_t));
 }
 
 
@@ -321,7 +323,8 @@ tlsext_ticket_wipe_expired (const time_t cur_ts)
     for (int i = 0; i < e; ++i) {
         if (session_ticket_keys[i].expire_ts != 0
             && session_ticket_keys[i].expire_ts < cur_ts)
-            OPENSSL_cleanse(session_ticket_keys+i, sizeof(tlsext_ticket_key_t));
+            wolfSSL_OPENSSL_cleanse(session_ticket_keys+i,
+                                    sizeof(tlsext_ticket_key_t));
     }
 }
 
@@ -414,7 +417,7 @@ mod_openssl_session_ticket_key_file (const char *fn)
         rc = 1;
     }
 
-    OPENSSL_cleanse(buf, sizeof(buf));
+    wolfSSL_OPENSSL_cleanse(buf, sizeof(buf));
     return rc;
 }
 
@@ -511,7 +514,7 @@ static void mod_openssl_free_openssl (void)
     if (!ssl_is_init) return;
 
   #ifdef HAVE_SESSION_TICKET
-    OPENSSL_cleanse(session_ticket_keys, sizeof(session_ticket_keys));
+    wolfSSL_OPENSSL_cleanse(session_ticket_keys, sizeof(session_ticket_keys));
     stek_rotate_ts = 0;
   #endif
 
@@ -1477,11 +1480,40 @@ mod_openssl_refresh_stapling_files (server *srv, const plugin_data *p, const tim
 
 
 static int
-mod_openssl_crt_must_staple (const X509 *crt)
+mod_openssl_crt_must_staple (const WOLFSSL_X509 *crt)
 {
     /* XXX: TODO: not implemented */
+  #if 1
     UNUSED(crt);
     return 0;
+  #else
+    STACK_OF(ASN1_OBJECT) * const tlsf = (STACK_OF(ASN1_OBJECT)*)
+      wolfSSL_X509_get_ext_d2i(crt, NID_tlsfeature, NULL, NULL);
+    if (NULL == tlsf) return 0;
+
+    int rc = 0;
+
+    /* wolfSSL_sk_ASN1_INTEGER_num() not implemented */
+    /* wolfSSL_sk_ASN1_INTEGER_value() not implemented */
+    /* wolfSSL_sk_ASN1_INTEGER_pop_free() not implemented */
+    #define wolfSSL_sk_ASN1_INTEGER_num(sk) wolfSSL_sk_num(sk)
+    #define wolfSSL_sk_ASN1_INTEGER_value(sk, i) wolfSSL_sk_value(sk, i)
+    #define wolfSSL_sk_ASN1_INTEGER_pop_free(sk, fn) wolfSSL_sk_pop_free(sk, fn)
+
+    /* wolfSSL_ASN1_INTEGER_get() is a stub func <= 4.6.0; always returns 0 */
+
+    for (int i = 0; i < wolfSSL_sk_ASN1_INTEGER_num(tlsf); ++i) {
+        WOLFSSL_ASN1_INTEGER *ai = wolfSSL_sk_ASN1_INTEGER_value(tlsf, i);
+        long tlsextid = wolfSSL_ASN1_INTEGER_get(ai);
+        if (tlsextid == 5) { /* 5 = OCSP Must-Staple */
+            rc = 1;
+            break;
+        }
+    }
+
+    wolfSSL_sk_ASN1_INTEGER_pop_free(tlsf, wolfSSL_ASN1_INTEGER_free);
+    return rc; /* 1 if OCSP Must-Staple found; 0 if not */
+  #endif
 }
 
 #endif /* HAVE_OCSP */
@@ -2000,9 +2032,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                   "but wolfssl library built without necessary support");
                 return -1;
           #else
-            /* WTH wolfssl?  wolfSSL_dup_CA_list() is a stub which returns NULL
-             * and so DN names in cert request are not set here.
-             * (A patch has been submitted to WolfSSL to correct this)
+            /* Before wolfssl 4.6.0, wolfSSL_dup_CA_list() is a stub function
+             * which returns NULL, so DN names in cert request are not set here.
+             * (A patch has been submitted to WolfSSL add is part of 4.6.0)
              * https://github.com/wolfSSL/wolfssl/pull/3098 */
             STACK_OF(X509_NAME) * const cert_names = s->ssl_ca_dn_file
               ? s->ssl_ca_dn_file
@@ -3422,6 +3454,28 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
 
     if (maxb) {
         /* WolfSSL max ver is set at WolfSSL compile-time */
+      #if LIBWOLFSSL_VERSION_HEX >= 0x04002000
+        /*(could use SSL_OP_NO_* before 4.2.0)*/
+        /*(wolfSSL_CTX_set_max_proto_version() 4.6.0 uses different defines)*/
+        int n = mod_openssl_ssl_conf_proto_val(srv, s, maxb, 1);
+        switch (n) {
+          case WOLFSSL_SSLV3:
+            wolfSSL_CTX_set_options(s->ssl_ctx, WOLFSSL_OP_NO_TLSv1);
+            __attribute_fallthrough__
+          case WOLFSSL_TLSV1:
+            wolfSSL_CTX_set_options(s->ssl_ctx, WOLFSSL_OP_NO_TLSv1_1);
+            __attribute_fallthrough__
+          case WOLFSSL_TLSV1_1:
+            wolfSSL_CTX_set_options(s->ssl_ctx, WOLFSSL_OP_NO_TLSv1_2);
+            __attribute_fallthrough__
+          case WOLFSSL_TLSV1_2:
+            wolfSSL_CTX_set_options(s->ssl_ctx, WOLFSSL_OP_NO_TLSv1_3);
+            __attribute_fallthrough__
+          case WOLFSSL_TLSV1_3:
+          default:
+            break;
+        }
+      #endif
     }
 
     if (!buffer_string_is_empty(cipherstring)) {
