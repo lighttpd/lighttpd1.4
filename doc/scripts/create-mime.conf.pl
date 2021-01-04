@@ -71,12 +71,21 @@ my %manual_conflicts_resolve = (
 open MIMETYPES, "/etc/mime.types" or die "Can't open /etc/mime.types: $!";
 
 my %extensions;
+my %lcext;
 sub set {
 	my ($extension, $mimetype) = @_;
 	$extensions{$extension} = $mimetype;
+	$lcext{lc($extension)} = $extension;
 }
 sub add {
 	my ($extension, $mimetype) = @_;
+	# lighttpd uses case-insensitive extension mapping to mime type.  Still,
+	# preserve case of first ext seen if case-insensitive duplicates exist.
+	my $seen = $lcext{lc($extension)};
+	if (defined($seen) && $seen ne $extension) {
+		# update @_ too for calls to set
+		$_[0] = $extension = $seen;
+	}
 	my $have = $extensions{$extension};
 
 	my $r = $manual_conflicts_resolve{$extension};
@@ -107,6 +116,19 @@ sub add {
 				return set @_; # overwrite
 			} elsif ($have_type eq "text" && $type eq "application") {
 				return; # ignore
+			}
+		}
+
+		# non-vnd.* subtype wins over vnd.* subtype
+		if ($type eq $have_type) {
+			my $have_vnd = ($have_subtype =~ /^vnd\./);
+			if (($subtype =~ /^vnd\./) ^ $have_vnd) {
+				if ($have_vnd) {
+					return set @_; # overwrite
+				}
+				else {
+					return; # ignore
+				}
 			}
 		}
 
