@@ -1874,6 +1874,15 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
 
     for (size_t i = 0; i < s->ssl_conf_cmd->used; ++i) {
         ds = (data_string *)s->ssl_conf_cmd->data[i];
+        /* ("SecurityLevel" is lighttpd extension to SSL_CONF_cmd() syntax)
+         * SSL_CTX_set_security_level() is specific to OpenSSL >= 1.1.0 */
+        if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("SecurityLevel"))) {
+          #if OPENSSL_VERSION_NUMBER >= 0x10100000L
+            int level = atoi(ds->value.ptr);
+            if (level >= 0) SSL_CTX_set_security_level(s->ssl_ctx, level);
+          #endif
+            continue;
+        }
         ERR_clear_error();
         if (SSL_CONF_cmd(cctx, ds->key.ptr, ds->value.ptr) <= 0) {
             log_error(srv->errh, __FILE__, __LINE__,
