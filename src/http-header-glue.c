@@ -1746,8 +1746,8 @@ int http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi
             /* Security: Do not emit HTTP_PROXY in environment.
              * Some executables use HTTP_PROXY to configure
              * outgoing proxy.  See also https://httpoxy.org/ */
-            if (buffer_is_equal_caseless_string(&ds->key,
-                                                CONST_STR_LEN("Proxy"))) {
+            if (ds->ext == HTTP_HEADER_OTHER
+                && buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy"))) {
                 continue;
             }
             buffer_copy_string_encoded_cgi_varnames(tb,

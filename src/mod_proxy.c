@@ -916,57 +916,47 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 
 	/* request header */
 	const buffer *connhdr = NULL;
-	buffer *te = NULL;
-	buffer *upgrade = NULL;
+	const buffer *te = NULL;
+	const buffer *upgrade = NULL;
 	for (size_t i = 0, used = r->rqst_headers.used; i < used; ++i) {
-		data_string *ds = (data_string *)r->rqst_headers.data[i];
-		const size_t klen = buffer_string_length(&ds->key);
-		size_t vlen;
-		switch (klen) {
+		const data_string * const ds = (data_string *)r->rqst_headers.data[i];
+		switch (ds->ext) {
 		default:
 			break;
-		case 2:
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("TE"))) {
-				if (hctx->conf.header.force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
-				/* ignore if not exactly "trailers" */
-				if (!buffer_eq_icase_slen(&ds->value, CONST_STR_LEN("trailers"))) continue;
-				te = &ds->value;
-			}
+		case HTTP_HEADER_TE:
+			if (hctx->conf.header.force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
+			/* ignore if not exactly "trailers" */
+			if (!buffer_eq_icase_slen(&ds->value, CONST_STR_LEN("trailers"))) continue;
+			te = &ds->value;
 			break;
-		case 4:
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Host"))) continue; /*(handled further above)*/
+		case HTTP_HEADER_HOST:
+			continue; /*(handled further above)*/
+		case HTTP_HEADER_UPGRADE:
+			if (hctx->conf.header.force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
+			if (!hctx->conf.header.upgrade) continue;
+			upgrade = &ds->value;
 			break;
-		case 7:
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Upgrade"))) {
-				if (hctx->conf.header.force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
-				if (!hctx->conf.header.upgrade) continue;
-				upgrade = &ds->value;
-			}
-			break;
-		case 10:
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Connection"))) { connhdr = &ds->value; continue; }
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Set-Cookie"))) continue; /*(response header only; avoid accidental reflection)*/
-			break;
-		case 16:
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
-			break;
-		case 5:
+		case HTTP_HEADER_CONNECTION:
+			connhdr = &ds->value;
+			continue;
+		case HTTP_HEADER_SET_COOKIE:
+			continue; /*(response header only; avoid accidental reflection)*/
+		case HTTP_HEADER_OTHER:
+			if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
 			/* Do not emit HTTP_PROXY in environment.
 			 * Some executables use HTTP_PROXY to configure
 			 * outgoing proxy.  See also https://httpoxy.org/ */
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Proxy"))) continue;
+			if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy"))) continue;
 			break;
-		case 6:
+		case HTTP_HEADER_EXPECT:
 			/* Do not forward Expect: 100-continue
 			 * since we do not handle "HTTP/1.1 100 Continue" response */
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Expect"))) continue;
-			break;
-		case 0:
 			continue;
 		}
 
-		vlen = buffer_string_length(&ds->value);
-		if (0 == vlen) continue;
+		const uint32_t klen = buffer_string_length(&ds->key);
+		const uint32_t vlen = buffer_string_length(&ds->value);
+		if (0 == klen || 0 == vlen) continue;
 
 		if (buffer_string_space(b) < klen + vlen + 4) {
 			size_t extend = b->size * 2 - buffer_string_length(b);
@@ -988,19 +978,19 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			continue;
 	      #if 0 /* "URI" is HTTP response header (non-standard; historical in Apache) */
 		case 3:
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("URI"))) break;
+			if (ds->ext == HTTP_HEADER_OTHER && buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("URI"))) break;
 			continue;
 	      #endif
 	      #if 0 /* "Location" is HTTP response header */
 		case 8:
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Location"))) break;
+			if (ds->ext == HTTP_HEADER_LOCATION) break;
 			continue;
 	      #endif
 		case 11: /* "Destination" is WebDAV request header */
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Destination"))) break;
+			if (ds->ext == HTTP_HEADER_OTHER && buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Destination"))) break;
 			continue;
 		case 16: /* "Content-Location" may be HTTP request or response header */
-			if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("Content-Location"))) break;
+			if (ds->ext == HTTP_HEADER_CONTENT_LOCATION) break;
 			continue;
 		}
 

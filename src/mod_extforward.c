@@ -1110,7 +1110,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		const buffer * const hdr = &ds->value;
 		forwarded = http_header_request_get(r, ds->ext, CONST_BUF_LEN(hdr));
 		if (forwarded) {
-			is_forwarded_header = buffer_is_equal_caseless_string(hdr, CONST_STR_LEN("Forwarded"));
+			is_forwarded_header = (ds->ext == HTTP_HEADER_FORWARDED);
 			break;
 		}
 	}
