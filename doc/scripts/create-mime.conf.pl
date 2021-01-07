@@ -120,15 +120,13 @@ sub add {
 		}
 
 		# non-vnd.* subtype wins over vnd.* subtype
-		if ($type eq $have_type) {
-			my $have_vnd = ($have_subtype =~ /^vnd\./);
-			if (($subtype =~ /^vnd\./) ^ $have_vnd) {
-				if ($have_vnd) {
-					return set @_; # overwrite
-				}
-				else {
-					return; # ignore
-				}
+		my $have_vnd = ($have_subtype =~ /^vnd\./);
+		if (($subtype =~ /^vnd\./) ^ $have_vnd) {
+			if ($have_vnd) {
+				return set @_; # overwrite
+			}
+			else {
+				return; # ignore
 			}
 		}
 
