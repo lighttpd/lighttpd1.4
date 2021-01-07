@@ -405,6 +405,10 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
         p->defaults.headers = p->default_headers = array_init(2);
         array_insert_value(p->default_headers,CONST_STR_LEN("X-Forwarded-For"));
         array_insert_value(p->default_headers,CONST_STR_LEN("Forwarded-For"));
+        for (uint32_t i = 0; i < p->default_headers->used; ++i) {
+            data_string * const ds = (data_string *)p->default_headers->data[i];
+            ds->ext = http_header_hkey_get(CONST_BUF_LEN(&ds->value));
+        }
     }
 
     /* attempt to warn if mod_extforward is not last module loaded to hook
