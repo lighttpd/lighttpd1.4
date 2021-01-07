@@ -884,6 +884,12 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 		 *       so this should actually not be a buffer-overflow-risk
 		 */
 		if (dsz > name_max) continue;
+	  #ifdef __COVERITY__
+		/* For some reason, Coverity overlooks the strlen() performed
+		 * a few lines above and thinks memcpy() below might access
+		 * bytes beyond end of d_name[] with dsz+1 */
+		force_assert(dsz < sizeof(dent->d_name));
+	  #endif
 
 		memcpy(path_file, d_name, dsz + 1);
 		if (stat(path, &st) != 0)
