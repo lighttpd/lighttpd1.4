@@ -491,7 +491,7 @@ static int http_request_parse_single_header(request_st * const restrict r, const
             const buffer *vb =
               http_header_request_get(r, HTTP_HEADER_IF_MODIFIED_SINCE,
                                       CONST_STR_LEN("If-Modified-Since"));
-            if (vb && buffer_is_equal_caseless_string(vb, v, vlen)) {
+            if (vb && buffer_eq_icase_slen(vb, v, vlen)) {
                 /* ignore it if they are the same */
                 return 0; /* ignore header */
             }

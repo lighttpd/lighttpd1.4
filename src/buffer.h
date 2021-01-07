@@ -141,6 +141,7 @@ int buffer_eq_icase_ss(const char * const a, const size_t alen, const char * con
 
 __attribute_pure__
 int buffer_eq_icase_slen(const buffer * const b, const char * const s, const size_t slen);
+#define buffer_is_equal_caseless_string buffer_eq_icase_slen
 
 __attribute_pure__
 int buffer_eq_slen(const buffer * const b, const char * const s, const size_t slen);
@@ -153,9 +154,6 @@ int buffer_is_equal_right_len(const buffer *a, const buffer *b, size_t len);
 
 __attribute_pure__
 int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len);
-
-__attribute_pure__
-int buffer_is_equal_caseless_string(const buffer *a, const char *s, size_t b_len);
 
 void buffer_substr_replace (buffer * restrict b, size_t offset, size_t len, const buffer * restrict replace);
 

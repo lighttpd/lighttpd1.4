@@ -603,7 +603,7 @@ static int mod_extforward_set_addr(request_st * const r, plugin_data *p, const c
 }
 
 static void mod_extforward_set_proto(request_st * const r, const char * const proto, size_t protolen) {
-	if (0 != protolen && !buffer_is_equal_caseless_string(&r->uri.scheme, proto, protolen)) {
+	if (0 != protolen && !buffer_eq_icase_slen(&r->uri.scheme, proto, protolen)) {
 		/* update scheme if X-Forwarded-Proto is set
 		 * Limitations:
 		 * - Only "http" or "https" are currently accepted since the request to lighttpd currently has to

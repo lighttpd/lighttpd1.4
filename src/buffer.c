@@ -372,14 +372,6 @@ int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len) {
 	return (a->used == b_len + 1 && 0 == memcmp(a->ptr, s, b_len));
 }
 
-/* buffer_is_equal_caseless_string(b, CONST_STR_LEN("value")) */
-int buffer_is_equal_caseless_string(const buffer *a, const char *s, size_t b_len) {
-	force_assert(NULL != a && NULL != s);
-	force_assert(b_len + 1 > b_len);
-	/* 1 = equal; 0 = not equal */
-	return buffer_eq_icase_slen(a, s, b_len);
-}
-
 int buffer_is_equal_right_len(const buffer *b1, const buffer *b2, size_t len) {
 	/* no len -> equal */
 	if (len == 0) return 1;
