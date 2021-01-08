@@ -314,7 +314,8 @@ static void gw_proc_check_enable(gw_host * const host, gw_proc * const proc, log
 
     log_error(errh, __FILE__, __LINE__,
       "gw-server re-enabled: %s %s %hu %s",
-      proc->connection_name->ptr, host->host->ptr, host->port,
+      proc->connection_name->ptr,
+      host->host ? host->host->ptr : "", host->port,
       host->unixsocket && host->unixsocket->ptr ? host->unixsocket->ptr : "");
 }
 
@@ -831,7 +832,8 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
             if (debug) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "proxy - election: %s %s %s %u", r->uri.path.ptr,
-                  host->host->ptr, r->uri.authority.ptr, cur_max);
+                  host->host ? host->host->ptr : "",
+                  r->uri.authority.ptr, cur_max);
             }
 
             if (last_max < cur_max || last_max == UINT32_MAX) {
@@ -919,7 +921,8 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
             if (debug) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "proxy - election: %s %s %hu %ld", dst_addr_buf->ptr,
-                  host->host->ptr, host->port, cur_max);
+                  host->host ? host->host->ptr : "",
+                  host->port, cur_max);
             }
 
             if (last_max < cur_max || last_max == UINT32_MAX) {
@@ -939,7 +942,8 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
 
         if (debug) {
             log_error(r->conf.errh, __FILE__, __LINE__,
-              "gw - found a host %s %hu", host->host->ptr, host->port);
+              "gw - found a host %s %hu",
+              host->host ? host->host->ptr : "", host->port);
         }
 
         return host;
@@ -2625,7 +2629,7 @@ static void gw_handle_trigger_host(gw_host * const host, log_error_st * const er
         if (debug) {
             log_error(errh, __FILE__, __LINE__,
               "idle-timeout reached, terminating child: socket: %s pid %d",
-              proc->unixsocket->ptr, proc->pid);
+              proc->unixsocket ? proc->unixsocket->ptr : "", proc->pid);
         }
 
         gw_proc_kill(host, proc);
