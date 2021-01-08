@@ -83,7 +83,7 @@ AM_CONDITIONAL([LIGHTTPD_STATIC], [test "$LIGHTTPD_STATIC" = yes])
 AC_EXEEXT
 
 dnl libtool
-LT_INIT([dlopen,disable-static,enable-shared])
+LT_INIT([dlopen disable-static shared])
 
 dnl for solaris
 CPPFLAGS="${CPPFLAGS} -D_REENTRANT"
