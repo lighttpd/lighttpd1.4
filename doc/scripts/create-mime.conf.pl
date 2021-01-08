@@ -5,6 +5,10 @@
 
 use strict;
 
+# future: might use Getopt::Std, but this is simple enough for now
+my $verbose = 0;
+foreach (@ARGV) { $verbose = 1 if ($_ eq "-v"); }
+
 # text/* subtypes to serve as "text/...; charset=utf-8"
 # text/html IS NOT INCLUDED: html has its own method for defining charset
 #   (<meta>), but the standards specify that content-type in HTTP wins over
@@ -130,7 +134,7 @@ sub add {
 			}
 		}
 
-		print STDERR "Duplicate mimetype: '${extension}' => '${mimetype}' (already have '${have}'), merging to 'application/octet-stream'\n";
+		print STDERR "Duplicate mimetype: '${extension}' => '${mimetype}' (already have '${have}'), merging to 'application/octet-stream'\n" if $verbose;
 		set ($extension, 'application/octet-stream');
 	} else {
 		set @_;
