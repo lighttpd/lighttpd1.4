@@ -125,7 +125,8 @@ sub add {
 
 		# non-vnd.* subtype wins over vnd.* subtype
 		my $have_vnd = ($have_subtype =~ /^vnd\./);
-		if (($subtype =~ /^vnd\./) ^ $have_vnd) {
+		my $vnd = ($subtype =~ /^vnd\./);
+		if ($vnd ^ $have_vnd) {
 			if ($have_vnd) {
 				return set @_; # overwrite
 			}
@@ -134,7 +135,9 @@ sub add {
 			}
 		}
 
-		print STDERR "Duplicate mimetype: '${extension}' => '${mimetype}' (already have '${have}'), merging to 'application/octet-stream'\n" if $verbose;
+		if ($verbose && !$vnd) {
+			print STDERR "Duplicate mimetype: '${extension}' => '${mimetype}' (already have '${have}'), merging to 'application/octet-stream'\n"
+		}
 		set ($extension, 'application/octet-stream');
 	} else {
 		set @_;
