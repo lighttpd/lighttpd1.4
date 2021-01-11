@@ -3559,7 +3559,7 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
      * https://www.openssl.org/docs/man1.1.1/man3/SSL_CONF_cmd.html */
     int rc = 0;
     buffer *cipherstring = NULL;
-    /*buffer *ciphersuites = NULL;*/
+    buffer *ciphersuites = NULL;
     buffer *minb = NULL;
     buffer *maxb = NULL;
     buffer *curves = NULL;
@@ -3568,10 +3568,8 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
         data_string *ds = (data_string *)s->ssl_conf_cmd->data[i];
         if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("CipherString")))
             cipherstring = &ds->value;
-      #if 0
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Ciphersuites")))
             ciphersuites = &ds->value;
-      #endif
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Curves"))
               || buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Groups")))
             curves = &ds->value;
@@ -3663,6 +3661,16 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
         int x = mod_openssl_ssl_conf_proto_val(srv, s, maxb, 1);
         if (!SSL_CTX_set_max_proto_version(s->ssl_ctx, x))
             rc = -1;
+    }
+
+    if (!buffer_string_is_empty(ciphersuites)) {
+      #if defined(LIBRESSL_VERSION_NUMBER) && defined(LIBRESSL_HAS_TLS1_3)
+        if (SSL_CTX_set_ciphersuites(s->ssl_ctx, ciphersuites->ptr) != 1) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
+            rc = -1;
+        }
+      #endif
     }
 
     if (!buffer_string_is_empty(cipherstring)) {
