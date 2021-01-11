@@ -1,3 +1,14 @@
+/* fstatat() fdopendir() */
+#if !defined(_XOPEN_SOURCE) || _XOPEN_SOURCE-0 < 700
+#undef  _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+/* NetBSD dirent.h improperly hides fdopendir() (POSIX.1-2008) declaration
+ * which should be visible with _XOPEN_SOURCE 700 or _POSIX_C_SOURCE 200809L */
+#ifdef __NetBSD__
+#define _NETBSD_SOURCE
+#endif
+#endif
+
 #include "first.h"
 
 #include "sys-time.h"
@@ -18,6 +29,20 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+#ifdef AT_FDCWD
+#ifndef _ATFILE_SOURCE
+#define _ATFILE_SOURCE
+#endif
+#endif
+
+#ifndef _D_EXACT_NAMLEN
+#ifdef _DIRENT_HAVE_D_NAMLEN
+#define _D_EXACT_NAMLEN(d) ((d)->d_namlen)
+#else
+#define _D_EXACT_NAMLEN(d) (strlen ((d)->d_name))
+#endif
+#endif
 
 #ifdef HAVE_PCRE_H
 #include <pcre.h>
@@ -829,12 +854,17 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 	char *path_file = path + dlen;
 	log_error_st * const errh = r->conf.errh;
 
-	DIR *dp;
 	struct dirent *dent;
-	if (NULL == (dp = opendir(path))) {
-		log_error(errh, __FILE__, __LINE__,
-		  "opendir failed: %s", dir->ptr);
-
+  #ifndef _ATFILE_SOURCE /*(not using fdopendir unless _ATFILE_SOURCE)*/
+	const int dfd = -1;
+	DIR * const dp = opendir(path);
+  #else
+	const int dfd = fdevent_open_dirname(path, r->conf.follow_symlink);
+	DIR * const dp = (dfd >= 0) ? fdopendir(dfd) : NULL;
+  #endif
+	if (NULL == dp) {
+		log_perror(errh, __FILE__, __LINE__, "opendir %s", path);
+		if (dfd >= 0) close(dfd);
 		free(path);
 		return -1;
 	}
@@ -853,6 +883,7 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 	struct stat st;
 	while ((dent = readdir(dp)) != NULL) {
 		const char * const d_name = dent->d_name;
+		const uint32_t dsz = (uint32_t) _D_EXACT_NAMLEN(dent);
 		if (d_name[0] == '.') {
 			if (hide_dotfiles)
 				continue;
@@ -862,16 +893,14 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 				continue;
 		}
 
-		if (p->conf.hide_readme_file && !buffer_string_is_empty(p->conf.show_readme)) {
-			if (strcmp(d_name, p->conf.show_readme->ptr) == 0)
-				continue;
-		}
-		if (p->conf.hide_header_file && !buffer_string_is_empty(p->conf.show_header)) {
-			if (strcmp(d_name, p->conf.show_header->ptr) == 0)
-				continue;
-		}
-
-		const uint32_t dsz = (uint32_t)strlen(d_name);
+		if (p->conf.hide_readme_file
+		    && p->conf.show_readme
+		    && buffer_eq_slen(p->conf.show_readme, d_name, dsz))
+			continue;
+		if (p->conf.hide_header_file
+		    && p->conf.show_header
+		    && buffer_eq_slen(p->conf.show_header, d_name, dsz))
+			continue;
 
 		/* compare d_name against excludes array
 		 * elements, skipping any that match.
@@ -891,9 +920,15 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 		force_assert(dsz < sizeof(dent->d_name));
 	  #endif
 
+	  #ifndef _ATFILE_SOURCE
 		memcpy(path_file, d_name, dsz + 1);
 		if (stat(path, &st) != 0)
 			continue;
+	  #else
+		/*(XXX: follow symlinks, like stat(); not using AT_SYMLINK_NOFOLLOW) */
+		if (0 != fstatat(dfd, d_name, &st, 0))
+			continue; /* file *just* disappeared? */
+	  #endif
 
 		dirls_list_t * const list = !S_ISDIR(st.st_mode) ? &files : &dirs;
 		if (list->used == list->size) {
