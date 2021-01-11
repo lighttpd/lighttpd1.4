@@ -1066,11 +1066,13 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
     }
 
   #if OPENSSL_VERSION_NUMBER >= 0x10002000 \
-   && !defined(LIBRESSL_VERSION_NUMBER)
-    /* libressl >= 0x3000000fL has SSL_set1_chain(), but not other APIs below)*/
+   && (!defined(LIBRESSL_VERSION_NUMBER) \
+       || LIBRESSL_VERSION_NUMBER >= 0x3000000fL)
     if (pc->ssl_pemfile_chain)
         SSL_set1_chain(ssl, pc->ssl_pemfile_chain);
-   #ifndef BORINGSSL_API_VERSION /* BoringSSL limitation */
+   #if defined(BORINGSSL_API_VERSION) \
+    || defined(LIBRESSL_VERSION_NUMBER)
+    /* (missing SSL_set1_chain_cert_store() and SSL_build_cert_chain()) */
     else if (hctx->conf.ssl_ca_file) {
         /* preserve legacy behavior whereby openssl will reuse CAs trusted for
          * certificate verification (set by SSL_CTX_load_verify_locations() in
@@ -1921,7 +1923,8 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
 
 #ifndef OPENSSL_NO_DH
 #if OPENSSL_VERSION_NUMBER < 0x10100000L \
- || defined(LIBRESSL_VERSION_NUMBER)
+ || (defined(LIBRESSL_VERSION_NUMBER) \
+     && LIBRESSL_VERSION_NUMBER < 0x2070000fL)
 #define DH_set0_pqg(dh, dh_p, NULL, dh_g) \
         ((dh)->p = (dh_p), (dh)->g = (dh_g), (dh_p) != NULL && (dh_g) != NULL)
 #endif
