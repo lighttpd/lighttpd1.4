@@ -269,6 +269,7 @@ vars.AddVariables(
 	PackageVariable('with_xml', 'enable xml support (required for webdav props)', 'no'),
 	BoolVariable('with_xxhash', 'build with system-provided xxhash', 'no'),
 	BoolVariable('with_zlib', 'enable deflate/gzip compression', 'no'),
+	BoolVariable('with_zstd', 'enable zstd compression', 'no'),
 
 	BoolVariable('with_all', 'enable all with_* features', 'no'),
 )
@@ -357,6 +358,7 @@ if 1:
 		LIBXML2 = '',
 		LIBXXHASH = '',
 		LIBZ = '',
+		LIBZSTD = '',
 	)
 
 	autoconf.haveCHeaders([
@@ -729,6 +731,14 @@ if 1:
 		autoconf.env.Append(
 			CPPFLAGS = [ '-DHAVE_ZLIB_H', '-DHAVE_LIBZ' ],
 			LIBZ = 'z',
+		)
+
+	if env['with_zstd']:
+		if not autoconf.CheckLibWithHeader('zstd', 'zstd.h', 'C'):
+			fail("Couldn't find zstd")
+		autoconf.env.Append(
+			CPPFLAGS = [ '-DHAVE_ZSTD_H', '-DHAVE_ZSTD' ],
+			LIBZSTD = 'zstd',
 		)
 
 	env = autoconf.Finish()

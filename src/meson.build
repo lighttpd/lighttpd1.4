@@ -683,6 +683,21 @@ if get_option('with_zlib')
 	conf_data.set('HAVE_LIBZ', true)
 endif
 
+libzstd = []
+if get_option('with_zstd')
+	libz = dependency('zstd', required: false)
+	if libzstd.found()
+		libzstd = [ libzstd ]
+	else
+		libzstd = [ compiler.find_library('zstd') ]
+		if not(compiler.has_function('ZSTD_versionNumber', args: defs, dependencies: libzstd, prefix: '#include <zstd.h>'))
+			error('Couldn\'t find zstd header / library')
+		endif
+	endif
+	conf_data.set('HAVE_ZSTD_H', true)
+	conf_data.set('HAVE_ZSTD', true)
+endif
+
 configure_file(
 	output : 'config.h',
 	configuration : conf_data,
@@ -977,7 +992,7 @@ modules = [
 	[ 'mod_alias', [ 'mod_alias.c' ] ],
 	[ 'mod_auth', [ 'mod_auth.c' ], [ libcrypto ] ],
 	[ 'mod_authn_file', [ 'mod_authn_file.c' ], [ libcrypt, libcrypto ] ],
-	[ 'mod_deflate', [ 'mod_deflate.c' ], libbz2 + libz + libbrotli ],
+	[ 'mod_deflate', [ 'mod_deflate.c' ], libbz2 + libz + libzstd + libbrotli ],
 	[ 'mod_dirlisting', [ 'mod_dirlisting.c' ], libpcre ],
 	[ 'mod_evasive', [ 'mod_evasive.c' ] ],
 	[ 'mod_evhost', [ 'mod_evhost.c' ] ],

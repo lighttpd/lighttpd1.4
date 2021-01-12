@@ -962,6 +962,37 @@ if test "$WITH_ZLIB" != no; then
   AC_SUBST([Z_LIB])
 fi
 
+dnl zstd
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for zstd support])
+AC_ARG_WITH([zstd],
+  [AS_HELP_STRING([--with-zstd],
+    [Enable zstd support for mod_deflate]
+  )],
+  [WITH_ZSTD=$withval],
+  [WITH_ZSTD=no]
+)
+AC_MSG_RESULT([$WITH_ZSTD])
+
+if test "$WITH_ZSTD" != no; then
+  if test "$WITH_ZSTD" != yes; then
+    ZSTD_LIB="-L$WITH_ZSTD -lzstd"
+    CPPFLAGS="$CPPFLAGS -I$WITH_ZSTD"
+  else
+    AC_CHECK_HEADERS([zstd.h], [],
+      [AC_MSG_ERROR([zstd headers not found, install them or build without --with-zstd])]
+    )
+    AC_CHECK_LIB([zstd], [ZSTD_versionNumber],
+      [ZSTD_LIB=-lzstd],
+      [AC_MSG_ERROR([zstd library not found, install it or build without --with-zstd])]
+    )
+  fi
+
+  AC_DEFINE([HAVE_ZSTD], [1], [libzstd])
+  AC_DEFINE([HAVE_ZSTD_H], [1])
+  AC_SUBST([ZSTD_LIB])
+fi
+
 dnl bzip2
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for bzip2 support])

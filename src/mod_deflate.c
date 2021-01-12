@@ -144,6 +144,14 @@
 # include <brotli/encode.h>
 #endif
 
+#if defined HAVE_ZSTD_H && defined HAVE_ZSTD
+# define USE_ZSTD
+/* FIXME: wrote initial implementation to support zstd and then realized
+ * bufferless streaming compression is an experimental (unstable) zstd API */
+# define ZSTD_STATIC_LINKING_ONLY
+# include <zstd.h>
+#endif
+
 #if defined HAVE_SYS_MMAN_H && defined HAVE_MMAP && defined ENABLE_MMAP
 #define USE_MMAP
 
@@ -170,6 +178,7 @@ static void sigbus_handler(int sig) {
 #define HTTP_ACCEPT_ENCODING_X_GZIP   BV(5)
 #define HTTP_ACCEPT_ENCODING_X_BZIP2  BV(6)
 #define HTTP_ACCEPT_ENCODING_BR       BV(7)
+#define HTTP_ACCEPT_ENCODING_ZSTD     BV(8)
 
 typedef struct {
 	const array	*mimetypes;
@@ -202,6 +211,9 @@ typedef struct {
 	      #endif
 	      #ifdef USE_BROTLI
 		BrotliEncoderState *br;
+	      #endif
+	      #ifdef USE_ZSTD
+		ZSTD_CCtx *cctx;
 	      #endif
 		int dummy;
 	} u;
@@ -244,7 +256,12 @@ static void handler_ctx_free(handler_ctx *hctx) {
 
 INIT_FUNC(mod_deflate_init) {
     plugin_data * const p = calloc(1, sizeof(plugin_data));
+  #ifdef USE_ZSTD
+    buffer_string_prepare_copy(&p->tmp_buf,       /* 131072 */
+                               ZSTD_COMPRESSBOUND(ZSTD_BLOCKSIZE_MAX));
+  #else
     buffer_string_prepare_copy(&p->tmp_buf, 65536);
+  #endif
     return p;
 }
 
@@ -384,7 +401,8 @@ static short mod_deflate_encodings_to_flags(const array *encodings) {
     short allowed_encodings = 0;
     if (encodings->used) {
         for (uint32_t j = 0; j < encodings->used; ++j) {
-          #if defined(USE_ZLIB) || defined(USE_BZ2LIB) || defined(USE_BROTLI)
+          #if defined(USE_ZLIB) || defined(USE_BZ2LIB) || defined(USE_BROTLI) \
+           || defined(USE_ZSTD)
             data_string *ds = (data_string *)encodings->data[j];
           #endif
           #ifdef USE_ZLIB
@@ -411,6 +429,10 @@ static short mod_deflate_encodings_to_flags(const array *encodings) {
             if (NULL != strstr(ds->value.ptr, "br"))
                 allowed_encodings |= HTTP_ACCEPT_ENCODING_BR;
           #endif
+          #ifdef USE_ZSTD
+            if (NULL != strstr(ds->value.ptr, "zstd"))
+                allowed_encodings |= HTTP_ACCEPT_ENCODING_ZSTD;
+          #endif
         }
     }
     else {
@@ -426,6 +448,9 @@ static short mod_deflate_encodings_to_flags(const array *encodings) {
       #endif
       #ifdef USE_BROTLI
         allowed_encodings |= HTTP_ACCEPT_ENCODING_BR;
+      #endif
+      #ifdef USE_ZSTD
+        allowed_encodings |= HTTP_ACCEPT_ENCODING_ZSTD;
       #endif
     }
     return allowed_encodings;
@@ -612,7 +637,8 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
 }
 
 
-#if defined(USE_ZLIB) || defined(USE_BZ2LIB) || defined(USE_BROTLI)
+#if defined(USE_ZLIB) || defined(USE_BZ2LIB) || defined(USE_BROTLI) \
+ || defined(USE_ZSTD)
 static int mod_deflate_cache_file_append (handler_ctx * const hctx, const char *out, size_t len) {
     ssize_t wr;
     do {
@@ -933,6 +959,71 @@ static int stream_br_end(handler_ctx *hctx) {
 #endif
 
 
+#ifdef USE_ZSTD
+
+static int stream_zstd_init(handler_ctx *hctx) {
+    ZSTD_CCtx * const cctx = hctx->u.cctx = ZSTD_createCCtx();
+    if (NULL == cctx) return -1;
+    return 0;
+}
+
+static int stream_zstd_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+    ZSTD_CCtx * const cctx = hctx->u.cctx;
+
+    /* Note: each chunkqueue chunk is sent in its own frame, which may be
+     * suboptimal.  lighttpd might read FILE_CHUNK into a reused buffer, so
+     * we can not meet ZSTD_compressContinue() requirement that prior input
+     * is still accessible and unmodified (up to maximum distance size).
+     * Also, chunkqueue_mark_written() on MEM_CHUNK might result in something
+     * else reusing those chunk buffers
+     *
+     * future: migrate to use Zstd streaming API */
+
+    /* future: consider allowing tunables by encoder algorithm,
+     * (i.e. not generic "compression_level" across all compression algorithms)
+     * (ZSTD_CCtx_setParameter()) */
+    /*(note: we ignore any errors while tuning parameters here)*/
+    const plugin_data * const p = hctx->plugin_data;
+    int level = ZSTD_CLEVEL_DEFAULT;
+    if (p->conf.compression_level >= 0) /* -1 is lighttpd default for "unset" */
+        level = p->conf.compression_level;
+    ZSTD_compressBegin(cctx, level);
+
+    char * const out = hctx->output->ptr;
+    const size_t outsz = hctx->output->size;
+    hctx->bytes_in += st_size;
+    for (off_t off = 0; st_size; ) {
+        /* XXX: size check must match mod_deflate_init ZSTD_COMPRESSBOUND arg */
+        size_t len = (size_t)st_size;
+        const size_t rv = (len > ZSTD_BLOCKSIZE_MAX)
+          ? ZSTD_compressContinue(cctx, out, outsz, start+off,
+                                  (len = ZSTD_BLOCKSIZE_MAX))
+          : ZSTD_compressEnd(cctx, out, outsz, start+off, len);
+        off += (off_t)len;
+        st_size -= (off_t)len;
+        if (ZSTD_isError(rv)) return -1;
+        hctx->bytes_out += (off_t)rv;
+        if (0 != stream_http_chunk_append_mem(hctx, out, rv))
+            return -1;
+    }
+    return 0;
+}
+
+static int stream_zstd_flush(handler_ctx * const hctx, int end) {
+    UNUSED(hctx);
+    UNUSED(end);
+    return 0;
+}
+
+static int stream_zstd_end(handler_ctx *hctx) {
+    ZSTD_CCtx * const cctx = hctx->u.cctx;
+    ZSTD_freeCCtx(cctx);
+    return 0;
+}
+
+#endif
+
+
 static int mod_deflate_stream_init(handler_ctx *hctx) {
 	switch(hctx->compression_type) {
 #ifdef USE_ZLIB
@@ -947,6 +1038,10 @@ static int mod_deflate_stream_init(handler_ctx *hctx) {
 #ifdef USE_BROTLI
 	case HTTP_ACCEPT_ENCODING_BR:
 		return stream_br_init(hctx);
+#endif
+#ifdef USE_ZSTD
+	case HTTP_ACCEPT_ENCODING_ZSTD:
+		return stream_zstd_init(hctx);
 #endif
 	default:
 		return -1;
@@ -969,6 +1064,10 @@ static int mod_deflate_compress(handler_ctx * const hctx, unsigned char * const 
 	case HTTP_ACCEPT_ENCODING_BR:
 		return stream_br_compress(hctx, start, st_size);
 #endif
+#ifdef USE_ZSTD
+	case HTTP_ACCEPT_ENCODING_ZSTD:
+		return stream_zstd_compress(hctx, start, st_size);
+#endif
 	default:
 		UNUSED(start);
 		return -1;
@@ -990,6 +1089,10 @@ static int mod_deflate_stream_flush(handler_ctx * const hctx, int end) {
 #ifdef USE_BROTLI
 	case HTTP_ACCEPT_ENCODING_BR:
 		return stream_br_flush(hctx, end);
+#endif
+#ifdef USE_ZSTD
+	case HTTP_ACCEPT_ENCODING_ZSTD:
+		return stream_zstd_flush(hctx, end);
 #endif
 	default:
 		UNUSED(end);
@@ -1023,6 +1126,10 @@ static int mod_deflate_stream_end(handler_ctx *hctx) {
 #ifdef USE_BROTLI
 	case HTTP_ACCEPT_ENCODING_BR:
 		return stream_br_end(hctx);
+#endif
+#ifdef USE_ZSTD
+	case HTTP_ACCEPT_ENCODING_ZSTD:
+		return stream_zstd_end(hctx);
 #endif
 	default:
 		return -1;
@@ -1263,7 +1370,8 @@ static handler_t deflate_compress_response(request_st * const r, handler_ctx * c
 static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const char **label) {
 	/* get client side support encodings */
 	int accept_encoding = 0;
-      #if !defined(USE_ZLIB) && !defined(USE_BZ2LIB) && !defined(USE_BROTLI)
+      #if !defined(USE_ZLIB) && !defined(USE_BZ2LIB) && !defined(USE_BROTLI) \
+       && !defined(USE_ZSTD)
 	UNUSED(value);
 	UNUSED(label);
       #else
@@ -1284,6 +1392,13 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
                #ifdef USE_ZLIB
                 if (0 == memcmp(v, "gzip", 4))
                     accept_encoding |= HTTP_ACCEPT_ENCODING_GZIP;
+               #endif
+               #ifdef USE_ZSTD
+                #ifdef USE_ZLIB
+                else
+                #endif
+                if (0 == memcmp(v, "zstd", 4))
+                    accept_encoding |= HTTP_ACCEPT_ENCODING_ZSTD;
                #endif
                 break;
               case 5:
@@ -1330,6 +1445,12 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
 	accept_encoding &= p->conf.allowed_encodings;
 
 	/* select best matching encoding */
+#ifdef USE_ZSTD
+	if (accept_encoding & HTTP_ACCEPT_ENCODING_ZSTD) {
+		*label = "zstd";
+		return HTTP_ACCEPT_ENCODING_ZSTD;
+	} else
+#endif
 #ifdef USE_BROTLI
 	if (accept_encoding & HTTP_ACCEPT_ENCODING_BR) {
 		*label = "br";

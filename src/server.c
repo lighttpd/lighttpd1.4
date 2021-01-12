@@ -555,6 +555,11 @@ static void show_features (void) {
 #else
       "\t- zlib support\n"
 #endif
+#if defined HAVE_ZSTD_H && defined HAVE_ZSTD
+      "\t+ zstd support\n"
+#else
+      "\t- zstd support\n"
+#endif
 #if defined HAVE_BZLIB_H && defined HAVE_LIBBZ2
       "\t+ bzip2 support\n"
 #else
