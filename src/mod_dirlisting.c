@@ -851,7 +851,9 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 	char * const path = malloc(dlen + name_max + 1);
 	force_assert(NULL != path);
 	memcpy(path, dir->ptr, dlen+1);
+  #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) || !defined(_ATFILE_SOURCE)
 	char *path_file = path + dlen;
+  #endif
 	log_error_st * const errh = r->conf.errh;
 
 	struct dirent *dent;
