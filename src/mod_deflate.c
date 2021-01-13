@@ -146,9 +146,6 @@
 
 #if defined HAVE_ZSTD_H && defined HAVE_ZSTD
 # define USE_ZSTD
-/* FIXME: wrote initial implementation to support zstd and then realized
- * bufferless streaming compression is an experimental (unstable) zstd API */
-# define ZSTD_STATIC_LINKING_ONLY
 # include <zstd.h>
 #endif
 
@@ -213,7 +210,7 @@ typedef struct {
 		BrotliEncoderState *br;
 	      #endif
 	      #ifdef USE_ZSTD
-		ZSTD_CCtx *cctx;
+		ZSTD_CStream *cctx;
 	      #endif
 		int dummy;
 	} u;
@@ -257,8 +254,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 INIT_FUNC(mod_deflate_init) {
     plugin_data * const p = calloc(1, sizeof(plugin_data));
   #ifdef USE_ZSTD
-    buffer_string_prepare_copy(&p->tmp_buf,       /* 131072 */
-                               ZSTD_COMPRESSBOUND(ZSTD_BLOCKSIZE_MAX));
+    buffer_string_prepare_copy(&p->tmp_buf, ZSTD_CStreamOutSize());
   #else
     buffer_string_prepare_copy(&p->tmp_buf, 65536);
   #endif
@@ -962,62 +958,64 @@ static int stream_br_end(handler_ctx *hctx) {
 #ifdef USE_ZSTD
 
 static int stream_zstd_init(handler_ctx *hctx) {
-    ZSTD_CCtx * const cctx = hctx->u.cctx = ZSTD_createCCtx();
+    ZSTD_CStream * const cctx = hctx->u.cctx = ZSTD_createCStream();
     if (NULL == cctx) return -1;
-    return 0;
-}
-
-static int stream_zstd_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
-    ZSTD_CCtx * const cctx = hctx->u.cctx;
-
-    /* Note: each chunkqueue chunk is sent in its own frame, which may be
-     * suboptimal.  lighttpd might read FILE_CHUNK into a reused buffer, so
-     * we can not meet ZSTD_compressContinue() requirement that prior input
-     * is still accessible and unmodified (up to maximum distance size).
-     * Also, chunkqueue_mark_written() on MEM_CHUNK might result in something
-     * else reusing those chunk buffers
-     *
-     * future: migrate to use Zstd streaming API */
+    hctx->output->used = 0;
 
     /* future: consider allowing tunables by encoder algorithm,
-     * (i.e. not generic "compression_level" across all compression algorithms)
-     * (ZSTD_CCtx_setParameter()) */
+     * (i.e. not generic "compression_level" across all compression algos) */
     /*(note: we ignore any errors while tuning parameters here)*/
     const plugin_data * const p = hctx->plugin_data;
     int level = ZSTD_CLEVEL_DEFAULT;
     if (p->conf.compression_level >= 0) /* -1 is lighttpd default for "unset" */
         level = p->conf.compression_level;
-    ZSTD_compressBegin(cctx, level);
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, level);
+    return 0;
+}
 
-    char * const out = hctx->output->ptr;
-    const size_t outsz = hctx->output->size;
+static int stream_zstd_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+    ZSTD_CStream * const cctx = hctx->u.cctx;
+    struct ZSTD_inBuffer_s zib = { start, (size_t)st_size, 0 };
+    struct ZSTD_outBuffer_s zob = { hctx->output->ptr,
+                                    hctx->output->size,
+                                    hctx->output->used };
+    hctx->output->used = 0;
     hctx->bytes_in += st_size;
-    for (off_t off = 0; st_size; ) {
-        /* XXX: size check must match mod_deflate_init ZSTD_COMPRESSBOUND arg */
-        size_t len = (size_t)st_size;
-        const size_t rv = (len > ZSTD_BLOCKSIZE_MAX)
-          ? ZSTD_compressContinue(cctx, out, outsz, start+off,
-                                  (len = ZSTD_BLOCKSIZE_MAX))
-          : ZSTD_compressEnd(cctx, out, outsz, start+off, len);
-        off += (off_t)len;
-        st_size -= (off_t)len;
+    while (zib.pos < zib.size) {
+        const size_t rv = ZSTD_compressStream2(cctx,&zob,&zib,ZSTD_e_continue);
         if (ZSTD_isError(rv)) return -1;
-        hctx->bytes_out += (off_t)rv;
-        if (0 != stream_http_chunk_append_mem(hctx, out, rv))
+        if (zib.pos == zib.size) break; /* defer flush */
+        hctx->bytes_out += (off_t)zob.pos;
+        if (0 != stream_http_chunk_append_mem(hctx, zob.dst, zob.pos))
             return -1;
+        zob.pos = 0;
     }
+    hctx->output->used = (uint32_t)zob.pos;
     return 0;
 }
 
 static int stream_zstd_flush(handler_ctx * const hctx, int end) {
-    UNUSED(hctx);
-    UNUSED(end);
+    const ZSTD_EndDirective endOp = end ? ZSTD_e_end : ZSTD_e_flush;
+    ZSTD_CStream * const cctx = hctx->u.cctx;
+    struct ZSTD_inBuffer_s zib = { NULL, 0, 0 };
+    struct ZSTD_outBuffer_s zob = { hctx->output->ptr,
+                                    hctx->output->size,
+                                    hctx->output->used };
+    size_t rv;
+    do {
+        rv = ZSTD_compressStream2(cctx, &zob, &zib, endOp);
+        if (ZSTD_isError(rv)) return -1;
+        hctx->bytes_out += (off_t)zob.pos;
+        if (0 != stream_http_chunk_append_mem(hctx, zob.dst, zob.pos))
+            return -1;
+        zob.pos = 0;
+    } while (0 != rv);
     return 0;
 }
 
 static int stream_zstd_end(handler_ctx *hctx) {
-    ZSTD_CCtx * const cctx = hctx->u.cctx;
-    ZSTD_freeCCtx(cctx);
+    ZSTD_CStream * const cctx = hctx->u.cctx;
+    ZSTD_freeCStream(cctx);
     return 0;
 }
 
