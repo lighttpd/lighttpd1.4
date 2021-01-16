@@ -46,7 +46,6 @@ case "${build}" in
 		--with-nettle \
 		--with-gnutls \
 		--with-mbedtls \
-		--with-nss \
 		--with-openssl
 	make
 	make check
@@ -72,7 +71,6 @@ case "${build}" in
 		-DWITH_GNUTLS=ON \
 		-DWITH_MBEDTLS=ON \
 		-DWITH_NETTLE=ON \
-		-DWITH_NSS=ON \
 		-DWITH_OPENSSL=ON \
 		-DWITH_WEBDAV_LOCKS=ON \
 		-DWITH_WEBDAV_PROPS=ON \
@@ -88,9 +86,9 @@ case "${build}" in
 		export LIBS="-ldl"
 		;;
 	esac
-	# scons with_zlib=yes with_zstd=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic
-	# scons with_zlib=yes with_zstd=yes with_brotli=yes with_bzip2=yes with_openssl=yes with_memcached=yes -k check_static check_dynamic
-	scons with_zlib=yes with_zstd=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic check_static check_dynamic
+	# scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic
+	# scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes with_memcached=yes -k check_static check_dynamic
+	scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic check_static check_dynamic
 	;;
 *)
 	echo >&2 "Unknown build system: ${build}"
