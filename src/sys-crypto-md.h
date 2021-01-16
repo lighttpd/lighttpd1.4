@@ -391,6 +391,7 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 #endif
 
 #ifndef NO_SHA512
+#ifdef WOLFSSL_SHA512
 #include <wolfssl/wolfcrypt/sha512.h>
 #include <wolfssl/openssl/sha.h>
 #undef SHA512_Init
@@ -414,6 +415,7 @@ SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
     wc_Sha512Update((wc_Sha512 *)ctx, data, length);
     return 1;
 }
+#endif
 #endif
 
 #elif defined(USE_OPENSSL_CRYPTO)
