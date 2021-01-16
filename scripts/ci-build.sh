@@ -45,7 +45,6 @@ case "${build}" in
 		--with-krb5 --with-sasl \
 		--with-nettle \
 		--with-gnutls \
-		--with-mbedtls \
 		--with-openssl
 	make
 	make check
@@ -69,7 +68,6 @@ case "${build}" in
 		-DWITH_MYSQL=ON \
 		-DWITH_PGSQL=ON \
 		-DWITH_GNUTLS=ON \
-		-DWITH_MBEDTLS=ON \
 		-DWITH_NETTLE=ON \
 		-DWITH_OPENSSL=ON \
 		-DWITH_WEBDAV_LOCKS=ON \
