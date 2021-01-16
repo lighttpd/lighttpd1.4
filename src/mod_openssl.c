@@ -1070,8 +1070,8 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
        || LIBRESSL_VERSION_NUMBER >= 0x3000000fL)
     if (pc->ssl_pemfile_chain)
         SSL_set1_chain(ssl, pc->ssl_pemfile_chain);
-   #if defined(BORINGSSL_API_VERSION) \
-    || defined(LIBRESSL_VERSION_NUMBER)
+   #if !defined(BORINGSSL_API_VERSION) \
+    && !defined(LIBRESSL_VERSION_NUMBER)
     /* (missing SSL_set1_chain_cert_store() and SSL_build_cert_chain()) */
     else if (hctx->conf.ssl_ca_file) {
         /* preserve legacy behavior whereby openssl will reuse CAs trusted for
