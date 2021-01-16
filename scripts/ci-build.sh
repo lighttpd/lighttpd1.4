@@ -47,8 +47,7 @@ case "${build}" in
 		--with-gnutls \
 		--with-mbedtls \
 		--with-nss \
-		--with-openssl \
-		--with-wolfssl
+		--with-openssl
 	make
 	make check
 	;;
@@ -75,7 +74,6 @@ case "${build}" in
 		-DWITH_NETTLE=ON \
 		-DWITH_NSS=ON \
 		-DWITH_OPENSSL=ON \
-		-DWITH_WOLFSSL=ON \
 		-DWITH_WEBDAV_LOCKS=ON \
 		-DWITH_WEBDAV_PROPS=ON \
 		..
