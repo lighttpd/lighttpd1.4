@@ -17,11 +17,16 @@ case "${build}" in
 	./configure \
 		--with-pic --enable-extra-warnings \
 		--with-dbi --with-mysql --with-pgsql \
-		--with-ldap --with-attr --with-openssl --with-pcre \
-		--with-zlib --with-brotli --with-bzip2 \
-		--with-webdav-props --with-webdav-locks --with-fam --with-gdbm \
+		--with-ldap --with-pcre \
+		--with-zlib --with-zstd --with-brotli --with-bzip2 \
+		--with-webdav-props --with-webdav-locks --with-gdbm \
 		--with-memcached --with-lua --with-libev --with-libunwind \
-		--with-krb5 --with-geoip
+		--with-krb5 \
+		--with-gnutls \
+		--with-mbedtls \
+		--with-nss \
+		--with-openssl \
+		--with-wolfssl
 	make clean
 	export PATH="${COVERITY_PATH}"
 	cov-build --dir "cov-int" make
@@ -32,11 +37,16 @@ case "${build}" in
 	./configure \
 		--with-pic --enable-extra-warnings \
 		--with-dbi --with-mysql --with-pgsql \
-		--with-ldap --with-attr --with-openssl --with-pcre \
-		--with-zlib --with-brotli --with-bzip2 \
-		--with-webdav-props --with-webdav-locks --with-fam --with-gdbm \
+		--with-ldap --with-pcre \
+		--with-zlib --with-zstd --with-brotli --with-bzip2 \
+		--with-webdav-props --with-webdav-locks --with-gdbm \
 		--with-memcached --with-lua --with-libev --with-libunwind \
-		--with-krb5 --with-geoip --with-sasl
+		--with-krb5 --with-sasl \
+		--with-gnutls \
+		--with-mbedtls \
+		--with-nss \
+		--with-openssl \
+		--with-wolfssl
 	make
 	make check
 	;;
@@ -46,9 +56,9 @@ case "${build}" in
 	cmake \
 		-DBUILD_EXTRA_WARNINGS=ON \
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DWITH_ZSTD=ON \
 		-DWITH_BROTLI=ON \
 		-DWITH_BZIP=ON \
-		-DWITH_FAM=ON \
 		-DWITH_GDBM=ON \
 		-DWITH_LDAP=ON \
 		-DWITH_LIBEV=ON \
@@ -58,10 +68,13 @@ case "${build}" in
 		-DWITH_DBI=ON \
 		-DWITH_MYSQL=ON \
 		-DWITH_PGSQL=ON \
+		-DWITH_GNUTLS=ON \
+		-DWITH_MBEDTLS=ON \
+		-DWITH_NSS=ON \
 		-DWITH_OPENSSL=ON \
+		-DWITH_WOLFSSL=ON \
 		-DWITH_WEBDAV_LOCKS=ON \
 		-DWITH_WEBDAV_PROPS=ON \
-		-DWITH_XATTR=ON \
 		..
 	make
 	ctest -V
@@ -74,9 +87,9 @@ case "${build}" in
 		export LIBS="-ldl"
 		;;
 	esac
-	# scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic
-	# scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes with_memcached=yes -k check_static check_dynamic
-	scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic check_static check_dynamic
+	# scons with_zlib=yes with_zstd=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic
+	# scons with_zlib=yes with_zstd=yes with_brotli=yes with_bzip2=yes with_openssl=yes with_memcached=yes -k check_static check_dynamic
+	scons with_zlib=yes with_zstd=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic check_static check_dynamic
 	;;
 *)
 	echo >&2 "Unknown build system: ${build}"
