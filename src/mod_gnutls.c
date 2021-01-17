@@ -828,7 +828,7 @@ mod_gnutls_verify_cb (gnutls_session_t ssl)
         /* verify that client cert is issued by CA in ssl.ca-dn-file
          * if both ssl.ca-dn-file and ssl.ca-file were configured */
         gnutls_x509_crt_t *CA_list =
-          (gnutls_x509_crt_t *)&hctx->conf.ssl_ca_dn_file->data;
+          (gnutls_x509_crt_t *)hctx->conf.ssl_ca_dn_file->data;
         unsigned int len = hctx->conf.ssl_ca_dn_file->size;
         unsigned int i;
         gnutls_x509_dn_t issuer, subject;
