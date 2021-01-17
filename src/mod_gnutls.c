@@ -385,11 +385,20 @@ mod_gnutls_session_ticket_key_check (server *srv, const plugin_data *p, const ti
                 if (NULL == session_ticket_key.data) return;
                 session_ticket_key.size = TICKET_MASTER_KEY_SIZE;
             }
+          #ifndef __COVERITY__
             memcpy(session_ticket_key.data,
                    stek->tick_key_name, TICKET_MASTER_KEY_SIZE);
-          #ifndef __COVERITY__
             gnutls_memset(stek->tick_key_name, 0, TICKET_MASTER_KEY_SIZE);
           #else
+            char * const data = (char *)session_ticket_key.data;
+            memcpy(data,
+                   stek->tick_key_name, TLSEXT_KEYNAME_LENGTH);
+            memcpy(data+TLSEXT_KEYNAME_LENGTH,
+                   stek->tick_hmac_key, TLSEXT_TICK_KEY_LENGTH);
+            memcpy(data+TLSEXT_KEYNAME_LENGTH+TLSEXT_TICK_KEY_LENGTH,
+                   stek->tick_aes_key,
+                   TICKET_MASTER_KEY_SIZE
+                    - TLSEXT_KEYNAME_LENGTH + TLSEXT_TICK_KEY_LENGTH);
             gnutls_memset(stek->tick_key_name, 0, TLSEXT_KEYNAME_LENGTH);
             gnutls_memset(stek->tick_hmac_key, 0, TLSEXT_TICK_KEY_LENGTH);
             gnutls_memset(stek->tick_aes_key, 0, TLSEXT_TICK_KEY_LENGTH);
@@ -3095,6 +3104,7 @@ mod_gnutls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *
             const char * const p = e+1;
             e = strchr(p, ':');
             size_t len = e ? (size_t)(e - p) : strlen(p);
+            if (0 == len) continue;
             if (len >= sizeof(n)) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "GnuTLS: skipped ciphersuite; too long: %.*s",
@@ -3226,7 +3236,7 @@ mod_gnutls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *
                 continue;
             }
 
-            if (*e != ':' && *e != '\0') {
+            {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "GnuTLS: error: missing support for cipher list: %.*s",
                   (int)len, p);

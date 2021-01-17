@@ -3236,6 +3236,7 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
             const char * const p = e+1;
             e = strchr(p, ':');
             size_t len = e ? (size_t)(e - p) : strlen(p);
+            if (0 == len) continue;
             if (len >= sizeof(n)) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "MTLS: skipped ciphersuite; too long: %.*s",
@@ -3505,7 +3506,7 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
                 continue;
             }
 
-            if (*e != ':' && *e != '\0') {
+            {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "MTLS: error: missing support for cipher list: %.*s",
                   (int)len, p);
@@ -3530,6 +3531,11 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
         if (-1 == nids) return 0;
     }
 
+    if (nids >= idsz) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "MTLS: error: too many ciphersuites during list expand");
+        return 0;
+    }
     ids[++nids] = 0; /* terminate list */
     ++nids;
 
