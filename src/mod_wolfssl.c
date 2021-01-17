@@ -747,7 +747,7 @@ mod_wolfssl_evp_pkey_load_pem_file (const char *fn, log_error_st *errh)
     if (rc < 0) {
         log_error(errh, __FILE__, __LINE__, "%s() %s", __func__, fn);
         if (pkey) {
-            wolfSSL_OPENSSL_cleanse(pkey->ptr, pkey->size)
+            wolfSSL_OPENSSL_cleanse(pkey->ptr, pkey->size);
             buffer_free(pkey);
         }
         return NULL;
@@ -1689,7 +1689,7 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     } while (0);
 
     if (ssl_pemfile_pkey) {
-        wolfSSL_OPENSSL_cleanse(b->ptr, b->size)
+        wolfSSL_OPENSSL_cleanse(b->ptr, b->size);
         buffer_free(ssl_pemfile_pkey);
     }
     /*if (ssl_pemfile_x509) buffer_free(ssl_pemfile_x509);*//*(part of chain)*/
