@@ -350,7 +350,16 @@ mod_gnutls_session_ticket_key_file (const char *fn)
     if (buf[0] == 0) { /*(format version 0)*/
         session_ticket_keys[0].active_ts = buf[1];
         session_ticket_keys[0].expire_ts = buf[2];
+      #ifndef __COVERITY__
         memcpy(&session_ticket_keys[0].tick_key_name, buf+3, 80);
+      #else
+        memcpy(&session_ticket_keys[0].tick_key_name,
+               buf+3, TLSEXT_KEYNAME_LENGTH);
+        memcpy(&session_ticket_keys[0].tick_hmac_key,
+               buf+7, TLSEXT_TICK_KEY_LENGTH);
+        memcpy(&session_ticket_keys[0].tick_aes_key,
+               buf+15, TLSEXT_TICK_KEY_LENGTH);
+      #endif
         rc = 1;
     }
 
@@ -378,7 +387,13 @@ mod_gnutls_session_ticket_key_check (server *srv, const plugin_data *p, const ti
             }
             memcpy(session_ticket_key.data,
                    stek->tick_key_name, TICKET_MASTER_KEY_SIZE);
+          #ifndef __COVERITY__
             gnutls_memset(stek->tick_key_name, 0, TICKET_MASTER_KEY_SIZE);
+          #else
+            gnutls_memset(stek->tick_key_name, 0, TLSEXT_KEYNAME_LENGTH);
+            gnutls_memset(stek->tick_hmac_key, 0, TLSEXT_TICK_KEY_LENGTH);
+            gnutls_memset(stek->tick_aes_key, 0, TLSEXT_TICK_KEY_LENGTH);
+          #endif
         }
         if (stek->expire_ts < cur_ts)
             mod_gnutls_session_ticket_key_free();

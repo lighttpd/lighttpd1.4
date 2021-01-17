@@ -744,6 +744,7 @@ mod_wolfssl_evp_pkey_load_pem_file (const char *fn, log_error_st *errh)
 
     if (rc < 0) {
         log_error(errh, __FILE__, __LINE__, "%s() %s", __func__, fn);
+        buffer_free(pkey);
         return NULL;
     }
 
@@ -783,7 +784,7 @@ mod_wolfssl_load_client_CA_file (const buffer *ssl_ca_file, log_error_st *errh)
     /* similar to wolfSSL_load_client_CA_file(), plus some processing */
     buffer **certs = NULL;
     if (NULL == mod_wolfssl_load_pem_file(ssl_ca_file->ptr, errh, &certs)) {
-      #ifdef __clang_analyzer__
+      #if defined(__clang_analyzer__) || defined(__COVERITY__)
         mod_wolfssl_free_der_certs(certs); /*unnecessary; quiet clang analyzer*/
       #endif
         return NULL;
@@ -831,7 +832,7 @@ mod_wolfssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
     /* similar to wolfSSL_load_client_CA_file(), plus some processing */
     buffer **certs = NULL;
     if (NULL == mod_wolfssl_load_pem_file(ssl_ca_file->ptr, errh, &certs)) {
-      #ifdef __clang_analyzer__
+      #if defined(__clang_analyzer__) || defined(__COVERITY__)
         mod_wolfssl_free_der_certs(certs); /*unnecessary; quiet clang analyzer*/
       #endif
         return NULL;
@@ -1527,8 +1528,12 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     buffer **ssl_pemfile_chain = NULL;
     buffer *ssl_pemfile_x509 =
       mod_wolfssl_load_pem_file(pemfile->ptr, srv->errh, &ssl_pemfile_chain);
-    if (NULL == ssl_pemfile_x509)
+    if (NULL == ssl_pemfile_x509) {
+      #if defined(__clang_analyzer__) || defined(__COVERITY__)
+        mod_wolfssl_free_der_certs(ssl_pemfile_chain); /*unnecessary*/
+      #endif
         return NULL;
+    }
 
     buffer *ssl_pemfile_pkey =
       mod_wolfssl_evp_pkey_load_pem_file(privkey->ptr, srv->errh);

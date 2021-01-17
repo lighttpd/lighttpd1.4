@@ -313,7 +313,16 @@ mod_mbedtls_session_ticket_key_file (const char *fn)
     if (buf[0] == 0) { /*(format version 0)*/
         session_ticket_keys[0].active_ts = buf[1];
         session_ticket_keys[0].expire_ts = buf[2];
+      #ifndef __COVERITY__
         memcpy(&session_ticket_keys[0].tick_key_name, buf+3, 80);
+      #else
+        memcpy(&session_ticket_keys[0].tick_key_name,
+               buf+3, TLSEXT_KEYNAME_LENGTH);
+        memcpy(&session_ticket_keys[0].tick_hmac_key,
+               buf+7, TLSEXT_TICK_KEY_LENGTH);
+        memcpy(&session_ticket_keys[0].tick_aes_key,
+               buf+15, TLSEXT_TICK_KEY_LENGTH);
+      #endif
         rc = 1;
     }
 
@@ -2292,7 +2301,10 @@ http_cgi_ssl_env (request_st * const r, handler_ctx * const hctx)
     s = cipher_info->name;
     http_header_env_set(r, CONST_STR_LEN("SSL_CIPHER"), s, strlen(s));
 
-    if (cipher_info != NULL) {
+  #if 0 /*(for use with mbedtls_cipher_info_from_type() above)*/
+    if (cipher_info != NULL)
+  #endif
+    {
         /* SSL_CIPHER_ALGKEYSIZE - Number of cipher bits (possible) */
         /* SSL_CIPHER_USEKEYSIZE - Number of cipher bits (actually used) */
         /* XXX: is usekeysize correct? XXX: reaching into ssl_internal.h here */
@@ -3598,7 +3610,7 @@ mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *
       #ifdef MBEDTLS_SSL_MINOR_VERSION_4
         v = max ? MBEDTLS_SSL_MINOR_VERSION_4 : MBEDTLS_SSL_MINOR_VERSION_3;
       #else
-        v = max ? MBEDTLS_SSL_MINOR_VERSION_3 : MBEDTLS_SSL_MINOR_VERSION_3;
+        v = MBEDTLS_SSL_MINOR_VERSION_3;
       #endif
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("None"))) /*"disable" limit*/
         v = max

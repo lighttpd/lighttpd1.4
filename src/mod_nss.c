@@ -2228,8 +2228,10 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         /* the other end closed the connection -> KEEP-ALIVE */
 
         return -2;
+  #ifndef __COVERITY__
     } else {
         return 0;
+  #endif
     }
 }
 
@@ -3490,10 +3492,9 @@ mod_nss_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *cip
     char *ciphers = strdup(cipherstring->ptr);/*(string modified during parse)*/
     if (NULL == ciphers) return 0;
 
-    if (nss_parse_ciphers(srv->errh, ciphers, cipher_state) == -1)
-        return 0;
-
+    int rc = nss_parse_ciphers(srv->errh, ciphers, cipher_state);
     free(ciphers);
+    if (-1 == rc) return 0;
 
     if (((s->protos.min && s->protos.min <= SSL_LIBRARY_VERSION_3_0)
          || s->ssl_use_sslv3)
