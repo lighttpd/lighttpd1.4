@@ -398,7 +398,7 @@ mod_gnutls_session_ticket_key_check (server *srv, const plugin_data *p, const ti
             memcpy(data+TLSEXT_KEYNAME_LENGTH+TLSEXT_TICK_KEY_LENGTH,
                    stek->tick_aes_key,
                    TICKET_MASTER_KEY_SIZE
-                    - TLSEXT_KEYNAME_LENGTH + TLSEXT_TICK_KEY_LENGTH);
+                    - (TLSEXT_KEYNAME_LENGTH + TLSEXT_TICK_KEY_LENGTH));
             gnutls_memset(stek->tick_key_name, 0, TLSEXT_KEYNAME_LENGTH);
             gnutls_memset(stek->tick_hmac_key, 0, TLSEXT_TICK_KEY_LENGTH);
             gnutls_memset(stek->tick_aes_key, 0, TLSEXT_TICK_KEY_LENGTH);
