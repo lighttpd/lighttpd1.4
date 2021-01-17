@@ -22,6 +22,7 @@ case "${build}" in
 		--with-webdav-props --with-webdav-locks --with-gdbm \
 		--with-memcached --with-lua --with-libev --with-libunwind \
 		--with-krb5 \
+		--with-maxminddb \
 		--with-nettle \
 		--with-gnutls \
 		--with-mbedtls \
@@ -43,6 +44,7 @@ case "${build}" in
 		--with-webdav-props --with-webdav-locks --with-gdbm \
 		--with-memcached --with-lua --with-libev --with-libunwind \
 		--with-krb5 --with-sasl \
+		--with-maxminddb \
 		--with-nettle \
 		--with-gnutls \
 		--with-openssl
@@ -63,6 +65,7 @@ case "${build}" in
 		-DWITH_LIBEV=ON \
 		-DWITH_LIBUNWIND=ON \
 		-DWITH_LUA=ON \
+		-DWITH_MAXMINDDB=ON \
 		-DWITH_MEMCACHED=ON \
 		-DWITH_DBI=ON \
 		-DWITH_MYSQL=ON \
