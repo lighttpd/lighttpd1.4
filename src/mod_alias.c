@@ -117,54 +117,65 @@ SETDEFAULTS_FUNC(mod_alias_set_defaults) {
     return HANDLER_GO_ON;
 }
 
+static handler_t
+mod_alias_remap (request_st * const r, const array * const aliases)
+{
+    /* do not include trailing slash on basedir */
+    uint32_t basedir_len = buffer_string_length(&r->physical.basedir);
+    if ('/' == r->physical.basedir.ptr[basedir_len-1]) --basedir_len;
+
+    const uint32_t path_len = buffer_string_length(&r->physical.path);
+    if (0 == path_len || path_len < basedir_len) return HANDLER_GO_ON;
+
+    const uint32_t uri_len = path_len - basedir_len;
+    const char * const uri_ptr = r->physical.path.ptr + basedir_len;
+    data_string * const ds = (data_string *)
+      (!r->conf.force_lowercase_filenames
+        ? array_match_key_prefix_klen(aliases, uri_ptr, uri_len)
+        : array_match_key_prefix_nc_klen(aliases, uri_ptr, uri_len));
+    if (NULL == ds) return HANDLER_GO_ON;
+
+    /* matched */
+
+    const uint32_t alias_len = buffer_string_length(&ds->key);
+    const uint32_t vlen = buffer_string_length(&ds->value);
+
+    /* check for path traversal in url-path following alias if key
+     * does not end in slash, but replacement value ends in slash */
+    if (uri_ptr[alias_len] == '.') {
+        const char *s = uri_ptr + alias_len + 1;
+        if (*s == '.') ++s;
+        if (*s == '/' || *s == '\0') {
+            if (0 != alias_len && ds->key.ptr[alias_len-1] != '/'
+                && 0 != vlen && ds->value.ptr[vlen-1] == '/') {
+                r->http_status = 403;
+                return HANDLER_FINISHED;
+            }
+        }
+    }
+
+    /*(not buffer_append_path_len();
+     * alias could be prefix instead of complete path segment,
+     * (though resulting r->physical.basedir would not be a dir))*/
+    if (vlen != basedir_len + alias_len) {
+        const uint32_t nlen = vlen + uri_len - alias_len;
+        if (path_len + buffer_string_space(&r->physical.path) < nlen)
+            buffer_string_prepare_append(&r->physical.path, nlen - path_len);
+        memmove(r->physical.path.ptr + vlen,
+                uri_ptr + alias_len, uri_len - alias_len);
+        buffer_string_set_length(&r->physical.path, nlen);
+    }
+    memcpy(r->physical.path.ptr, ds->value.ptr, vlen);
+
+    buffer_copy_string_len(&r->physical.basedir, ds->value.ptr, vlen);
+
+    return HANDLER_GO_ON;
+}
+
 PHYSICALPATH_FUNC(mod_alias_physical_handler) {
-	plugin_data *p = p_d;
-	char *uri_ptr;
-	size_t uri_len = buffer_string_length(&r->physical.path);
-	size_t basedir_len, alias_len;
-	data_string *ds;
-
-	if (0 == uri_len) return HANDLER_GO_ON;
-
-	mod_alias_patch_config(r, p);
-	if (NULL == p->conf.alias) return HANDLER_GO_ON;
-
-	/* do not include trailing slash on basedir */
-	basedir_len = buffer_string_length(&r->physical.basedir);
-	if ('/' == r->physical.basedir.ptr[basedir_len-1]) --basedir_len;
-	uri_len -= basedir_len;
-	uri_ptr = r->physical.path.ptr + basedir_len;
-
-	ds = (!r->conf.force_lowercase_filenames)
-	   ? (data_string *)array_match_key_prefix_klen(p->conf.alias, uri_ptr, uri_len)
-	   : (data_string *)array_match_key_prefix_nc_klen(p->conf.alias, uri_ptr, uri_len);
-	if (NULL == ds) { return HANDLER_GO_ON; }
-
-			/* matched */
-
-			/* check for path traversal in url-path following alias if key
-			 * does not end in slash, but replacement value ends in slash */
-			alias_len = buffer_string_length(&ds->key);
-			if (uri_ptr[alias_len] == '.') {
-				char *s = uri_ptr + alias_len + 1;
-				if (*s == '.') ++s;
-				if (*s == '/' || *s == '\0') {
-					size_t vlen = buffer_string_length(&ds->value);
-					if (0 != alias_len && ds->key.ptr[alias_len-1] != '/'
-					    && 0 != vlen && ds->value.ptr[vlen-1] == '/') {
-						r->http_status = 403;
-						return HANDLER_FINISHED;
-					}
-				}
-			}
-
-			buffer * const tb = r->tmp_buf;
-			buffer_copy_buffer(&r->physical.basedir, &ds->value);
-			buffer_copy_buffer(tb, &ds->value);
-			buffer_append_string(tb, uri_ptr + alias_len);
-			buffer_copy_buffer(&r->physical.path, tb);
-
-			return HANDLER_GO_ON;
+    plugin_data * const p = p_d;
+    mod_alias_patch_config(r, p);
+    return p->conf.alias ? mod_alias_remap(r, p->conf.alias) : HANDLER_GO_ON;
 }
 
 
