@@ -968,7 +968,11 @@ static int stream_zstd_init(handler_ctx *hctx) {
     const plugin_data * const p = hctx->plugin_data;
     if (p->conf.compression_level >= 0) { /* -1 is lighttpd default for "unset" */
         int level = p->conf.compression_level;
+      #if ZSTD_VERSION_NUMBER >= 10000+400+0 /* v1.4.0 */
         ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, level);
+      #else
+        ZSTD_initCStream(cctx, level);
+      #endif
     }
     return 0;
 }
@@ -982,7 +986,11 @@ static int stream_zstd_compress(handler_ctx * const hctx, unsigned char * const 
     hctx->output->used = 0;
     hctx->bytes_in += st_size;
     while (zib.pos < zib.size) {
+      #if ZSTD_VERSION_NUMBER >= 10000+400+0 /* v1.4.0 */
         const size_t rv = ZSTD_compressStream2(cctx,&zob,&zib,ZSTD_e_continue);
+      #else
+        const size_t rv = ZSTD_compressStream(cctx, &zob, &zib);
+      #endif
         if (ZSTD_isError(rv)) return -1;
         if (zib.pos == zib.size) break; /* defer flush */
         hctx->bytes_out += (off_t)zob.pos;
@@ -996,14 +1004,22 @@ static int stream_zstd_compress(handler_ctx * const hctx, unsigned char * const 
 
 static int stream_zstd_flush(handler_ctx * const hctx, int end) {
     ZSTD_CStream * const cctx = hctx->u.cctx;
+  #if ZSTD_VERSION_NUMBER >= 10000+400+0 /* v1.4.0 */
     const ZSTD_EndDirective endOp = end ? ZSTD_e_end : ZSTD_e_flush;
     ZSTD_inBuffer zib = { NULL, 0, 0 };
+  #endif
     ZSTD_outBuffer zob = { hctx->output->ptr,
                            hctx->output->size,
                            hctx->output->used };
     size_t rv;
     do {
+      #if ZSTD_VERSION_NUMBER >= 10000+400+0 /* v1.4.0 */
         rv = ZSTD_compressStream2(cctx, &zob, &zib, endOp);
+      #else
+        rv = end
+           ? ZSTD_endStream(cctx, &zob)
+           : ZSTD_flushStream(cctx, &zob);
+      #endif
         if (ZSTD_isError(rv)) return -1;
         hctx->bytes_out += (off_t)zob.pos;
         if (0 != stream_http_chunk_append_mem(hctx, zob.dst, zob.pos))
