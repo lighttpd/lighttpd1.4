@@ -966,19 +966,19 @@ static int stream_zstd_init(handler_ctx *hctx) {
      * (i.e. not generic "compression_level" across all compression algos) */
     /*(note: we ignore any errors while tuning parameters here)*/
     const plugin_data * const p = hctx->plugin_data;
-    int level = ZSTD_CLEVEL_DEFAULT;
-    if (p->conf.compression_level >= 0) /* -1 is lighttpd default for "unset" */
-        level = p->conf.compression_level;
-    ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, level);
+    if (p->conf.compression_level >= 0) { /* -1 is lighttpd default for "unset" */
+        int level = p->conf.compression_level;
+        ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, level);
+    }
     return 0;
 }
 
 static int stream_zstd_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
     ZSTD_CStream * const cctx = hctx->u.cctx;
-    struct ZSTD_inBuffer_s zib = { start, (size_t)st_size, 0 };
-    struct ZSTD_outBuffer_s zob = { hctx->output->ptr,
-                                    hctx->output->size,
-                                    hctx->output->used };
+    ZSTD_inBuffer zib = { start, (size_t)st_size, 0 };
+    ZSTD_outBuffer zob = { hctx->output->ptr,
+                           hctx->output->size,
+                           hctx->output->used };
     hctx->output->used = 0;
     hctx->bytes_in += st_size;
     while (zib.pos < zib.size) {
@@ -995,12 +995,12 @@ static int stream_zstd_compress(handler_ctx * const hctx, unsigned char * const 
 }
 
 static int stream_zstd_flush(handler_ctx * const hctx, int end) {
-    const ZSTD_EndDirective endOp = end ? ZSTD_e_end : ZSTD_e_flush;
     ZSTD_CStream * const cctx = hctx->u.cctx;
-    struct ZSTD_inBuffer_s zib = { NULL, 0, 0 };
-    struct ZSTD_outBuffer_s zob = { hctx->output->ptr,
-                                    hctx->output->size,
-                                    hctx->output->used };
+    const ZSTD_EndDirective endOp = end ? ZSTD_e_end : ZSTD_e_flush;
+    ZSTD_inBuffer zib = { NULL, 0, 0 };
+    ZSTD_outBuffer zob = { hctx->output->ptr,
+                           hctx->output->size,
+                           hctx->output->used };
     size_t rv;
     do {
         rv = ZSTD_compressStream2(cctx, &zob, &zib, endOp);
