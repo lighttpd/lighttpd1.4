@@ -2991,7 +2991,9 @@ mod_gnutls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *
     if (ciphersuites) {
         buffer *b = ciphersuites;
         buffer_to_upper(b); /*(ciphersuites are all uppercase (currently))*/
-        for (const char *p, *e = b->ptr-1; e && (e = strchr((p = e+1),':')); ) {
+        for (const char *e = b->ptr-1; e; ) {
+            const char * const p = e+1;
+            e = strchr(p, ':');
             size_t len = e ? (size_t)(e - p) : strlen(p);
 
             if (buffer_eq_icase_ss(p, len,
@@ -3089,7 +3091,9 @@ mod_gnutls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *
 
         int rc = 1;
         if (e == b->ptr || *e == '\0') --e; /*initial condition for loop below*/
-        for (const char *p; e && (e = strchr((p = e+1),':')); ) {
+        do {
+            const char * const p = e+1;
+            e = strchr(p, ':');
             size_t len = e ? (size_t)(e - p) : strlen(p);
             if (len >= sizeof(n)) {
                 log_error(srv->errh, __FILE__, __LINE__,
@@ -3229,7 +3233,7 @@ mod_gnutls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *
                 rc = 0;
                 continue;
             }
-        }
+        } while (e);
         if (0 == rc) return 0;
     }
 
@@ -3264,7 +3268,9 @@ mod_gnutls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *c
 
     buffer * const plist = &s->priority_str;
     const buffer * const b = curvelist;
-    for (const char *n, *e = b->ptr-1; e && (e = strchr((n = e+1),':')); ) {
+    for (const char *e = b->ptr-1; e; ) {
+        const char * const n = e+1;
+        e = strchr(n, ':');
         size_t len = e ? (size_t)(e - n) : strlen(n);
         uint32_t i;
         for (i = 0; i < sizeof(names)/sizeof(*names)/2; i += 2) {
