@@ -104,7 +104,9 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 }
 
 #define USE_LIB_CRYPTO_SHA512_256
-typedef struct sha512_256_ctx SHA512_CTX;    /*(yes, SHA512_CTX)*/
+/*(nettle/sha2.h: #define sha512_256_ctx sha512_ctx)*/
+/*typedef struct sha512_256_ctx SHA512_CTX;*/    /*(yes, SHA512_CTX)*/
+typedef struct sha512_ctx SHA512_CTX;
 static inline int
 SHA512_256_Init(SHA512_CTX *ctx)
 {
@@ -125,7 +127,7 @@ SHA512_256_Update(SHA512_CTX *ctx, const void *data, size_t length)
 }
 
 #define USE_LIB_CRYPTO_SHA512
-typedef struct sha512_ctx SHA512_CTX;
+/*typedef struct sha512_ctx SHA512_CTX;*//*(defined above)*/
 static inline int
 SHA512_Init(SHA512_CTX *ctx)
 {
