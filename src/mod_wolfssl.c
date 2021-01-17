@@ -566,6 +566,8 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
               case 0: /* ssl.pemfile */
                 if (cpv->vtype == T_CONFIG_LOCAL) {
                     plugin_cert *pc = cpv->v.v;
+                    wolfSSL_OPENSSL_cleanse(pc->ssl_pemfile_pkey->ptr,
+                                            pc->ssl_pemfile_pkey->size);
                     buffer_free(pc->ssl_pemfile_pkey);
                     /*buffer_free(pc->ssl_pemfile_x509);*//*(part of chain)*/
                     mod_wolfssl_free_der_certs(pc->ssl_pemfile_chain);
@@ -744,7 +746,10 @@ mod_wolfssl_evp_pkey_load_pem_file (const char *fn, log_error_st *errh)
 
     if (rc < 0) {
         log_error(errh, __FILE__, __LINE__, "%s() %s", __func__, fn);
-        buffer_free(pkey);
+        if (pkey) {
+            wolfSSL_OPENSSL_cleanse(pkey->ptr, pkey->size)
+            buffer_free(pkey);
+        }
         return NULL;
     }
 
@@ -1683,7 +1688,10 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
         rc = SSL_TLSEXT_ERR_OK;
     } while (0);
 
-    if (ssl_pemfile_pkey) buffer_free(ssl_pemfile_pkey);
+    if (ssl_pemfile_pkey) {
+        wolfSSL_OPENSSL_cleanse(b->ptr, b->size)
+        buffer_free(ssl_pemfile_pkey);
+    }
     /*if (ssl_pemfile_x509) buffer_free(ssl_pemfile_x509);*//*(part of chain)*/
     mod_wolfssl_free_der_certs(ssl_pemfile_chain);
 
