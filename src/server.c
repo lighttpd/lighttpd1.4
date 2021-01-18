@@ -359,7 +359,7 @@ static int server_oneshot_read_cq(connection *con, chunkqueue *cq, off_t max_byt
      * read interest after FDEVENT_IN interest was paused for other reasons */
 
     const int events = fdevent_fdnode_interest(oneshot_fdn);
-    int n = con->is_readable ? 0 : FDEVENT_IN;
+    int n = con->is_readable > 0 ? 0 : FDEVENT_IN;
     if (events & FDEVENT_RDHUP)
         n |= FDEVENT_RDHUP;
     fdevent_fdnode_event_set(con->srv->ev, oneshot_fdn, n);

@@ -453,7 +453,7 @@ connection_write_100_continue (request_st * const r, connection * const con)
 static int connection_handle_write(request_st * const r, connection * const con) {
 	/*assert(!chunkqueue_is_empty(cq));*//* checked by callers */
 
-	if (!con->is_writable) return CON_STATE_WRITE;
+	if (con->is_writable <= 0) return CON_STATE_WRITE;
 	int rc = connection_write_chunkqueue(con, con->write_queue, MAX_WRITE_LIMIT);
 	switch (rc) {
 	case 0:
@@ -523,7 +523,7 @@ static int connection_handle_write_state(request_st * const r, connection * cons
         }
     } while (r->http_version <= HTTP_VERSION_1_1
              && (!chunkqueue_is_empty(&r->write_queue)
-                 ? con->is_writable
+                 ? con->is_writable > 0
                  : r->resp_body_finished));
 
     return CON_STATE_WRITE;
@@ -613,7 +613,7 @@ static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chun
     /*(However, new connections over TLS may become HTTP/2 connections via ALPN
      * and return from this routine with r->http_version == HTTP_VERSION_2) */
 
-    if ((NULL == c || NULL == c->next) && con->is_readable) {
+    if ((NULL == c || NULL == c->next) && con->is_readable > 0) {
         con->read_idle_ts = log_epoch_secs;
         if (0 != con->network_read(con, cq, MAX_READ_LIMIT)) {
             request_st * const r = &con->request;
@@ -1270,7 +1270,7 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
 
     if (h2c->sent_goaway <= 0
         && (chunkqueue_is_empty(con->read_queue) || h2_parse_frames(con))
-        && con->is_readable) {
+        && con->is_readable > 0) {
         chunkqueue * const cq = con->read_queue;
         const off_t mark = cq->bytes_in;
         if (0 == con->network_read(con, cq, MAX_READ_LIMIT)) {
@@ -1292,7 +1292,7 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
          * obtain an approximate limit, not refreshed per request_st,
          * even though we are not calculating response HEADERS frames
          * or frame overhead here */
-        off_t max_bytes = con->is_writable
+        off_t max_bytes = con->is_writable > 0
           ? connection_write_throttle(con, MAX_WRITE_LIMIT)
           : 0;
         const off_t fsize = (off_t)h2c->s_max_frame_size;
@@ -1887,7 +1887,7 @@ __attribute_cold__
 static int
 connection_check_expect_100 (request_st * const r, connection * const con)
 {
-    if (!con->is_writable)
+    if (con->is_writable <= 0)
         return 1;
 
     const buffer * const vb =
@@ -1931,7 +1931,7 @@ connection_handle_read_post_state (request_st * const r)
         if (r->h2state >= H2_STATE_HALF_CLOSED_REMOTE)
             is_closed = 1;
     }
-    else if (con->is_readable) {
+    else if (con->is_readable > 0) {
         con->read_idle_ts = log_epoch_secs;
 
         switch(con->network_read(con, cq, MAX_READ_LIMIT)) {
