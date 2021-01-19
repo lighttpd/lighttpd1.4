@@ -523,7 +523,7 @@ static int connection_handle_write_state(request_st * const r, connection * cons
         }
     } while (r->http_version <= HTTP_VERSION_1_1
              && (!chunkqueue_is_empty(&r->write_queue)
-                 ? con->is_writable > 0
+                 ? con->is_writable > 0 && 0 == con->traffic_limit_reached
                  : r->resp_body_finished));
 
     return CON_STATE_WRITE;
