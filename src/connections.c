@@ -1218,7 +1218,9 @@ connection_set_fdevent_interest (request_st * const r, connection * const con)
     int n = 0;
     switch(r->state) {
       case CON_STATE_READ:
-        n = FDEVENT_IN | FDEVENT_RDHUP;
+        n = FDEVENT_IN;
+        if (!(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLRDHUP))
+            n |= FDEVENT_RDHUP;
         break;
       case CON_STATE_WRITE:
         if (!chunkqueue_is_empty(con->write_queue)
