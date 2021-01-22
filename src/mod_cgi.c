@@ -513,7 +513,7 @@ static int cgi_env_add(void *venv, const char *key, size_t key_len, const char *
 	dst = env->ptr + env->used;
 	memcpy(dst, key, key_len);
 	dst[key_len] = '=';
-	memcpy(dst + key_len + 1, val, val_len);
+	if (val_len) memcpy(dst + key_len + 1, val, val_len);
 	dst[key_len + 1 + val_len] = '\0';
 
 	if (env->osize == env->oused) {

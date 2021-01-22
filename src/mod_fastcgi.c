@@ -190,7 +190,7 @@ static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char 
 	dst = buffer_string_prepare_append(env, len);
 	memcpy(dst, len_enc, len_enc_len);
 	memcpy(dst + len_enc_len, key, key_len);
-	memcpy(dst + len_enc_len + key_len, val, val_len);
+	if (val_len) memcpy(dst + len_enc_len + key_len, val, val_len);
 	buffer_commit(env, len);
 
 	return 0;

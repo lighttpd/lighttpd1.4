@@ -29,6 +29,7 @@ static void run_http_request_parse(request_st * const r, int line, int status, c
     memcpy(hdrs, req, reqlen);
     hloffsets[0] = 1;
     hloffsets[1] = 0;
+    hloffsets[2] = 0;
     for (const char *n=req, *end=req+reqlen; (n=memchr(n,'\n',end-n)); ++n) {
         if (++hloffsets[0] >= sizeof(hloffsets)/sizeof(*hloffsets)) break;
         hloffsets[hloffsets[0]] = n - req + 1;

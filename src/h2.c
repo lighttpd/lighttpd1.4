@@ -1479,7 +1479,7 @@ h2_parse_frames (connection * const con)
              */
             if (cqlen < 9+flen) return 1; /* incomplete frame; go on */
             if (clen < 9+flen) {
-                clen = h2_frame_cq_compact(cq, 9+flen);
+                clen = h2_frame_cq_compact(cq, 9+flen); UNUSED(clen);
                 c = cq->first; /*(reload after h2_frame_cq_compact())*/
                 s = (uint8_t *)(c->mem->ptr + c->offset);
             }
