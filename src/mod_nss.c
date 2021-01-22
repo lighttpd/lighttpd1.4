@@ -1014,6 +1014,20 @@ mod_nss_verify_cb (void *arg, PRFileDesc *ssl, PRBool checkSig, PRBool isServer)
 }
 
 
+__attribute_cold__
+static void
+mod_nss_expire_stapling_file (server *srv, plugin_cert *pc)
+{
+    /* discard expired OCSP stapling response */
+    pc->ssl_credex.stapledOCSPResponses = NULL;
+    if (pc->must_staple)
+        log_error(srv->errh, __FILE__, __LINE__,
+                  "certificate marked OCSP Must-Staple, "
+                  "but OCSP response expired from ssl.stapling-file %s",
+                  pc->ssl_stapling_file->ptr);
+}
+
+
 static int
 mod_nss_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
 {
@@ -1059,6 +1073,8 @@ mod_nss_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
         pc->ssl_stapling_nextts = cur_ts + 3600;
         pc->ssl_stapling_loadts = 0;
     }
+    else if (pc->ssl_stapling_nextts < cur_ts)
+        mod_nss_expire_stapling_file(srv, pc);
 
     return 0;
 }
@@ -1067,22 +1083,13 @@ mod_nss_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
 static int
 mod_nss_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
 {
-    if (pc->ssl_stapling_nextts >= 256
-        && pc->ssl_stapling_nextts - 256 > cur_ts)
+    if (pc->ssl_stapling_nextts > cur_ts + 256)
         return 0; /* skip check for refresh unless close to expire */
     struct stat st;
     if (0 != stat(pc->ssl_stapling_file->ptr, &st)
         || st.st_mtime <= pc->ssl_stapling_loadts) {
-        if (pc->ssl_stapling_nextts < cur_ts) {
-            /* discard expired OCSP stapling response */
-            pc->ssl_credex.stapledOCSPResponses = NULL;
-            if (pc->must_staple) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                          "certificate marked OCSP Must-Staple, "
-                          "but OCSP response expired from ssl.stapling-file %s",
-                          pc->ssl_stapling_file->ptr);
-            }
-        }
+        if (pc->ssl_stapling_nextts < cur_ts)
+            mod_nss_expire_stapling_file(srv, pc);
         return 0;
     }
     return mod_nss_reload_stapling_file(srv, pc, cur_ts);

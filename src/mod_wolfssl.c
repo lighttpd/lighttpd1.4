@@ -1420,6 +1420,24 @@ mod_openssl_ocsp_next_update (plugin_cert *pc)
 }
 
 
+__attribute_cold__
+static void
+mod_openssl_expire_stapling_file (server *srv, plugin_cert *pc)
+{
+    if (NULL == pc->ssl_stapling) /*(previously discarded or never loaded)*/
+        return;
+
+    /* discard expired OCSP stapling response */
+    buffer_free(pc->ssl_stapling);
+    pc->ssl_stapling = NULL;
+    if (pc->must_staple)
+        log_error(srv->errh, __FILE__, __LINE__,
+                  "certificate marked OCSP Must-Staple, "
+                  "but OCSP response expired from ssl.stapling-file %s",
+                  pc->ssl_stapling_file->ptr);
+}
+
+
 static int
 mod_openssl_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
 {
@@ -1437,6 +1455,10 @@ mod_openssl_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur
         pc->ssl_stapling_nextts = cur_ts + 3600;
         pc->ssl_stapling_loadts = 0;
     }
+    else if (pc->ssl_stapling_nextts < cur_ts) {
+        mod_openssl_expire_stapling_file(srv, pc);
+        return 0;
+    }
 
     return 1;
 }
@@ -1445,22 +1467,13 @@ mod_openssl_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur
 static int
 mod_openssl_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
 {
-    if (pc->ssl_stapling && pc->ssl_stapling_nextts - 256 > cur_ts)
+    if (pc->ssl_stapling && pc->ssl_stapling_nextts > cur_ts + 256)
         return 1; /* skip check for refresh unless close to expire */
     struct stat st;
     if (0 != stat(pc->ssl_stapling_file->ptr, &st)
         || st.st_mtime <= pc->ssl_stapling_loadts) {
-        if (pc->ssl_stapling_nextts < cur_ts) {
-            /* discard expired OCSP stapling response */
-            buffer_free(pc->ssl_stapling);
-            pc->ssl_stapling = NULL;
-            if (pc->must_staple) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                          "certificate marked OCSP Must-Staple, "
-                          "but OCSP response expired from ssl.stapling-file %s",
-                          pc->ssl_stapling_file->ptr);
-            }
-        }
+        if (pc->ssl_stapling && pc->ssl_stapling_nextts < cur_ts)
+            mod_openssl_expire_stapling_file(srv, pc);
         return 1;
     }
     return mod_openssl_reload_stapling_file(srv, pc, cur_ts);
