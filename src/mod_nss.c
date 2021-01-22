@@ -1101,7 +1101,9 @@ mod_nss_refresh_stapling_files (server *srv, const plugin_data *p, const time_t 
 {
     /* future: might construct array of (plugin_cert *) at startup
      *         to avoid the need to search for them here */
-    for (int i = 0, used = p->nconfig; i < used; ++i) {
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    if (NULL == p->cvlist) return;
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
         const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
         for (; cpv->k_id != -1; ++cpv) {
             if (cpv->k_id != 0) continue; /* k_id == 0 for ssl.pemfile */
