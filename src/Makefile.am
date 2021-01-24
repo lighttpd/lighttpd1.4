@@ -308,6 +308,11 @@ mod_simple_vhost_la_SOURCES = mod_simple_vhost.c
 mod_simple_vhost_la_LDFLAGS = $(common_module_ldflags)
 mod_simple_vhost_la_LIBADD = $(common_libadd)
 
+lib_LTLIBRARIES += mod_ajp13.la
+mod_ajp13_la_SOURCES = mod_ajp13.c
+mod_ajp13_la_LDFLAGS = $(common_module_ldflags)
+mod_ajp13_la_LIBADD = $(common_libadd)
+
 lib_LTLIBRARIES += mod_fastcgi.la
 mod_fastcgi_la_SOURCES = mod_fastcgi.c
 mod_fastcgi_la_LDFLAGS = $(common_module_ldflags)

@@ -18,11 +18,11 @@ typedef struct http_cgi_opts_t {
 } http_cgi_opts;
 
 enum {
-  BACKEND_UNSET = 0,
-  BACKEND_PROXY,
-  BACKEND_CGI,
-  BACKEND_FASTCGI,
-  BACKEND_SCGI
+  BACKEND_PROXY = 0
+ ,BACKEND_CGI
+ ,BACKEND_FASTCGI
+ ,BACKEND_SCGI
+ ,BACKEND_AJP13
 };
 
 typedef struct http_response_opts_t {

@@ -989,6 +989,7 @@ test('test_request', executable('test_request',
 modules = [
 	[ 'mod_access', [ 'mod_access.c' ] ],
 	[ 'mod_accesslog', [ 'mod_accesslog.c' ] ],
+	[ 'mod_ajp13', [ 'mod_ajp13.c' ] ],
 	[ 'mod_alias', [ 'mod_alias.c' ] ],
 	[ 'mod_auth', [ 'mod_auth.c' ], [ libcrypto ] ],
 	[ 'mod_authn_file', [ 'mod_authn_file.c' ], [ libcrypt, libcrypto ] ],

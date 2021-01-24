@@ -805,6 +805,7 @@ set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd)
 
 add_and_install_library(mod_access mod_access.c)
 add_and_install_library(mod_accesslog mod_accesslog.c)
+add_and_install_library(mod_ajp13 mod_ajp13.c)
 add_and_install_library(mod_alias mod_alias.c)
 add_and_install_library(mod_auth "mod_auth.c")
 add_and_install_library(mod_authn_file "mod_authn_file.c")

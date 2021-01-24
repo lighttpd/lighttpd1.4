@@ -2151,7 +2151,8 @@ static handler_t gw_recv_response_error(gw_handler_ctx * const hctx, request_st 
 
 static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * const r) {
     /*(XXX: make this a configurable flag for other protocols)*/
-    buffer *b = hctx->opts.backend == BACKEND_FASTCGI
+    buffer *b = (hctx->opts.backend == BACKEND_FASTCGI
+                 || hctx->opts.backend == BACKEND_AJP13)
       ? chunk_buffer_acquire()
       : hctx->response;
     const off_t bytes_in = r->write_queue.bytes_in;

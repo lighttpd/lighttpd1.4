@@ -101,6 +101,7 @@ mod_ssi_exprparser = Lemon(env, 'mod_ssi_exprparser.y')
 modules = {
 	'mod_access' : { 'src' : [ 'mod_access.c' ] },
 	'mod_accesslog' : { 'src' : [ 'mod_accesslog.c' ] },
+	'mod_ajp13' : { 'src' : [ 'mod_ajp13.c' ] },
 	'mod_alias' : { 'src' : [ 'mod_alias.c' ] },
 	'mod_auth' : { 'src' : [ 'mod_auth.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
 	'mod_authn_file' : { 'src' : [ 'mod_authn_file.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBCRYPTO'] ] },
