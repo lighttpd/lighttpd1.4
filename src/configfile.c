@@ -696,6 +696,8 @@ static int config_insert_srvconf(server *srv) {
         T_CONFIG_SCOPE_UNSET }
     };
 
+    srv->srvconf.h2proto = 2; /* enable HTTP/2 and h2c by default */
+
     int rc = 0;
     plugin_data_base srvplug;
     memset(&srvplug, 0, sizeof(srvplug));
@@ -828,12 +830,12 @@ static int config_insert_srvconf(server *srv) {
                 srv->srvconf.h2proto =
                   config_plugin_value_tobool(
                     array_get_element_klen(cpv->v.a,
-                                           CONST_STR_LEN("server.h2proto")), 0);
+                                           CONST_STR_LEN("server.h2proto")), 1);
                 if (srv->srvconf.h2proto)
                     srv->srvconf.h2proto +=
                       config_plugin_value_tobool(
                         array_get_element_klen(cpv->v.a,
-                                               CONST_STR_LEN("server.h2c")), 0);
+                                               CONST_STR_LEN("server.h2c")), 1);
                 srv->srvconf.absolute_dir_redirect =
                   config_plugin_value_tobool(
                     array_get_element_klen(cpv->v.a,
