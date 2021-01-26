@@ -95,7 +95,7 @@ __attribute_pure__
 data_unset *array_get_element_klen_ext(const array *a, int ext, const char *key, uint32_t klen);
 
 __attribute_pure__
-data_unset *array_get_element_klen(const array *a, const char *key, uint32_t klen);
+const data_unset *array_get_element_klen(const array *a, const char *key, uint32_t klen);
 
 __attribute_cold__
 __attribute_pure__

@@ -41,7 +41,7 @@ void config_get_config_cond_info(config_cond_info * const cfginfo, uint32_t idx)
     cfginfo->op = dc->op;
 }
 
-int config_plugin_value_tobool (data_unset *du, int default_value)
+int config_plugin_value_tobool (const data_unset *du, int default_value)
 {
     if (NULL == du) return default_value;
     if (du->type == TYPE_STRING) {
@@ -63,7 +63,7 @@ int config_plugin_value_tobool (data_unset *du, int default_value)
         return default_value;
 }
 
-int32_t config_plugin_value_to_int32 (data_unset *du, int32_t default_value)
+int32_t config_plugin_value_to_int32 (const data_unset *du, int32_t default_value)
 {
     if (NULL == du) return default_value;
     if (du->type == TYPE_STRING) {
@@ -86,7 +86,7 @@ int config_plugin_values_init_block(server * const srv, const array * const ca, 
     int rc = 1; /* default is success */
 
     for (int i = 0; cpk[i].ktype != T_CONFIG_UNSET; ++i) {
-        data_unset * const du =
+        const data_unset * const du =
           array_get_element_klen(ca, cpk[i].k, cpk[i].klen);
         if (NULL == du) continue; /* not found */
 
@@ -287,7 +287,7 @@ int config_plugin_values_init(server * const srv, void *p_d, const config_plugin
 
         matches[n] = 0;
         for (int i = 0; cpk[i].ktype != T_CONFIG_UNSET; ++i) {
-            data_unset * const du =
+            const data_unset * const du =
               array_get_element_klen(ca, cpk[i].k, cpk[i].klen);
             if (NULL == du) continue; /* not found */
 

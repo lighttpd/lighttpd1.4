@@ -793,8 +793,8 @@ static int server_graceful_state_bg (server *srv) {
     /* check if server should fork and background (bg) itself
      * to continue processing requests already in progress */
     data_unset * const du =
-      array_get_element_klen(srv->srvconf.feature_flags,
-                             CONST_STR_LEN("server.graceful-restart-bg"));
+      array_get_data_unset(srv->srvconf.feature_flags,
+                           CONST_STR_LEN("server.graceful-restart-bg"));
     if (!config_plugin_value_tobool(du, 0)) return 0;
 
     /*(set flag to false to avoid repeating)*/
@@ -931,7 +931,7 @@ static void server_graceful_state (server *srv) {
 
     if (!srv_shutdown) {
         if (0 == srv->graceful_expire_ts && srv->srvconf.feature_flags) {
-            data_unset * const du =
+            const data_unset * const du =
               array_get_element_klen(srv->srvconf.feature_flags,
                 CONST_STR_LEN("server.graceful-shutdown-timeout"));
             srv->graceful_expire_ts = config_plugin_value_to_int32(du, 0);
