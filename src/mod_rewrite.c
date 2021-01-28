@@ -261,8 +261,7 @@ static handler_t process_rewrite_rules(request_st * const r, plugin_data *p, con
 				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, "
 				  "perhaps you want to use url.rewrite-once instead of "
-				  "url.rewrite-repeat ($%s %s \"%s\")", cfginfo.comp_key->ptr,
-				  cfginfo.op, cfginfo.string->ptr);
+				  "url.rewrite-repeat (%s)", cfginfo.comp_key);
 				return HANDLER_ERROR;
 			}
 

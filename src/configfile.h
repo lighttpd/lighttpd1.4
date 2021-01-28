@@ -38,9 +38,8 @@ struct data_config {
 	struct pcre_extra *regex_study;
 #endif
 	int ext;
-	buffer *comp_tag;
-	buffer *comp_key;
-	const char *op;
+	buffer comp_tag;
+	const char *comp_key;
 
 	vector_config_weak children;
 	array *value;

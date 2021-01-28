@@ -17,9 +17,11 @@ static data_unset *data_config_copy(const data_unset *s) {
 	data_config *ds = data_config_init();
 
 	ds->comp = src->comp;
-	if (!buffer_is_empty(&src->key)) buffer_copy_buffer(&ds->key, &src->key);
-	buffer_copy_buffer(ds->comp_tag, src->comp_tag);
-	buffer_copy_buffer(ds->comp_key, src->comp_key);
+	if (!buffer_is_empty(&src->key)) {
+		buffer_copy_buffer(&ds->key, &src->key);
+		ds->comp_key = ds->key.ptr + (src->comp_key - src->key.ptr);
+	}
+	buffer_copy_buffer(&ds->comp_tag, &src->comp_tag);
 	array_copy_array(ds->value, src->value);
 	return (data_unset *)ds;
 }
@@ -29,8 +31,7 @@ static void data_config_free(data_unset *d) {
 	data_config *ds = (data_config *)d;
 
 	free(ds->key.ptr);
-	buffer_free(ds->comp_tag);
-	buffer_free(ds->comp_key);
+	free(ds->comp_tag.ptr);
 
 	array_free(ds->value);
 	vector_config_weak_clear(&ds->children);
@@ -65,8 +66,7 @@ static void data_config_print(const data_unset *d, int depth) {
 	}
 	else {
 		if (ds->cond != CONFIG_COND_ELSE) {
-			fprintf(stdout, "$%s %s \"%s\" {\n",
-					ds->comp_key->ptr, ds->op, ds->string.ptr);
+			fprintf(stdout, "%s {\n", ds->comp_key);
 		} else {
 			fprintf(stdout, "{\n");
 		}
@@ -109,8 +109,7 @@ static void data_config_print(const data_unset *d, int depth) {
 	fprintf(stdout, "}");
 	if (0 != ds->context_ndx) {
 		if (ds->cond != CONFIG_COND_ELSE) {
-			fprintf(stdout, " # end of $%s %s \"%s\"",
-					ds->comp_key->ptr, ds->op, ds->string.ptr);
+			fprintf(stdout, " # end of %s", ds->comp_key);
 		} else {
 			fprintf(stdout, " # end of else");
 		}
@@ -136,8 +135,7 @@ data_config *data_config_init(void) {
 	ds = calloc(1, sizeof(*ds));
 	force_assert(ds);
 
-	ds->comp_tag = buffer_init();
-	ds->comp_key = buffer_init();
+	ds->comp_key = "";
 	ds->value = array_init(4);
 	vector_config_weak_init(&ds->children);
 
@@ -183,9 +181,9 @@ int data_config_pcre_compile(data_config *dc) {
     }
     return 1;
 #else
-    fprintf(stderr, "can't handle '$%s[%s] =~ ...' as you compiled without pcre support. \n"
+    fprintf(stderr, "can't handle '%s' as you compiled without pcre support. \n"
                     "(perhaps just a missing pcre-devel package ?) \n",
-                    dc->comp_key->ptr, dc->comp_tag->ptr);
+                    dc->comp_key);
     return 0;
 #endif
 }

@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 
+__attribute_pure__
 static data_config * configparser_get_data_config(const array *a, const char *k, const size_t klen) {
   return (data_config *)array_get_data_unset(a, k, klen);
 }
@@ -148,6 +149,200 @@ static int configparser_remoteip_normalize_compat(buffer *rvalue) {
 
   buffer_free(b);
   return rc;
+}
+
+__attribute_pure__
+static comp_key_t
+configparser_comp_key_id(const buffer * const obj_tag, const buffer * const comp_tag)
+{
+  /* $REQUEST_HEADER["..."] */
+  /* $SERVER["socket"] */
+  /* $HTTP["..."] */
+  if (buffer_eq_slen(obj_tag, CONST_STR_LEN("REQUEST_HEADER")))
+    return COMP_HTTP_REQUEST_HEADER;
+  else if (buffer_eq_slen(obj_tag, CONST_STR_LEN("SERVER")))
+    return (buffer_eq_slen(comp_tag, CONST_STR_LEN("socket")))
+      ? COMP_SERVER_SOCKET
+      : COMP_UNSET;
+  else if (buffer_eq_slen(obj_tag, CONST_STR_LEN("HTTP"))) {
+    static const struct {
+      comp_key_t comp;
+      uint32_t len;
+      const char *comp_tag;
+    } comps[] = {
+      { COMP_HTTP_URL,            CONST_LEN_STR("url"           ) },
+      { COMP_HTTP_HOST,           CONST_LEN_STR("host"          ) },
+      { COMP_HTTP_REQUEST_HEADER, CONST_LEN_STR("referer"       ) },
+      { COMP_HTTP_USER_AGENT,     CONST_LEN_STR("useragent"     ) },
+      { COMP_HTTP_REQUEST_HEADER, CONST_LEN_STR("user-agent"    ) },
+      { COMP_HTTP_LANGUAGE,       CONST_LEN_STR("language"      ) },
+      { COMP_HTTP_REQUEST_HEADER, CONST_LEN_STR("cookie"        ) },
+      { COMP_HTTP_REMOTE_IP,      CONST_LEN_STR("remoteip"      ) },
+      { COMP_HTTP_REMOTE_IP,      CONST_LEN_STR("remote-ip"     ) },
+      { COMP_HTTP_QUERY_STRING,   CONST_LEN_STR("querystring"   ) },
+      { COMP_HTTP_QUERY_STRING,   CONST_LEN_STR("query-string"  ) },
+      { COMP_HTTP_REQUEST_METHOD, CONST_LEN_STR("request-method") },
+      { COMP_HTTP_SCHEME,         CONST_LEN_STR("scheme"        ) }
+    };
+
+    for (uint32_t i = 0; i < sizeof(comps)/sizeof(comps[0]); ++i) {
+      if (buffer_eq_slen(comp_tag, comps[i].comp_tag, comps[i].len))
+        return comps[i].comp;
+    }
+  }
+  return COMP_UNSET;
+}
+
+static void
+configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag, const buffer * const comp_tag, const config_cond_t cond, buffer * const rvalue)
+{
+    const char *op = NULL;
+    switch(cond) {
+    case CONFIG_COND_NE:      op = "!="; break;
+    case CONFIG_COND_EQ:      op = "=="; break;
+    case CONFIG_COND_NOMATCH: op = "!~"; break;
+    case CONFIG_COND_MATCH:   op = "=~"; break;
+    default:
+      force_assert(0);
+      return; /* unreachable */
+    }
+
+    buffer * const tb = ctx->srv->tmp_buf;
+    buffer_copy_buffer(tb, &ctx->current->key);
+    buffer_append_string_len(tb, CONST_STR_LEN(" / "));
+    const uint32_t comp_offset = buffer_string_length(tb);
+    buffer_append_string_len(tb, CONST_STR_LEN("$"));
+    buffer_append_string_buffer(tb, obj_tag); /*(HTTP, REQUEST_HEADER, SERVER)*/
+    buffer_append_string_len(tb, CONST_STR_LEN("[\""));
+    buffer_append_string_buffer(tb, comp_tag);
+    buffer_append_string_len(tb, CONST_STR_LEN("\"] "));
+    buffer_append_string_len(tb, op, 2);
+    buffer_append_string_len(tb, CONST_STR_LEN(" \""));
+    buffer_append_string_buffer(tb, rvalue);
+    buffer_append_string_len(tb, CONST_STR_LEN("\""));
+
+    data_config *dc;
+    if (NULL != (dc = configparser_get_data_config(ctx->all_configs,
+                                                   CONST_BUF_LEN(tb)))) {
+      configparser_push(ctx, dc, 0);
+    }
+    else {
+      dc = data_config_init();
+      dc->cond = cond;
+      dc->comp = configparser_comp_key_id(obj_tag, comp_tag);
+
+      buffer_copy_buffer(&dc->key, tb);
+      buffer_copy_buffer(&dc->comp_tag, comp_tag);
+      dc->comp_key = dc->key.ptr + comp_offset;
+
+      if (COMP_UNSET == dc->comp) {
+          fprintf(stderr, "error comp_key %s", dc->comp_key);
+          ctx->ok = 0;
+      }
+      else if (COMP_HTTP_LANGUAGE == dc->comp) {
+        dc->comp = COMP_HTTP_REQUEST_HEADER;
+        buffer_copy_string_len(&dc->comp_tag, CONST_STR_LEN("Accept-Language"));
+      }
+      else if (COMP_HTTP_USER_AGENT == dc->comp) {
+        dc->comp = COMP_HTTP_REQUEST_HEADER;
+        buffer_copy_string_len(&dc->comp_tag, CONST_STR_LEN("User-Agent"));
+      }
+      else if (COMP_HTTP_REMOTE_IP == dc->comp
+               && (dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE)) {
+        char * const slash = strchr(rvalue->ptr, '/'); /* CIDR mask */
+        char * const colon = strchr(rvalue->ptr, ':'); /* IPv6 */
+        if (NULL != slash && slash == rvalue->ptr){/*(skip AF_UNIX /path/file)*/
+        }
+        else if (NULL != slash) {
+          char *nptr;
+          const unsigned long nm_bits = strtoul(slash + 1, &nptr, 10);
+          if (*nptr || 0 == nm_bits || nm_bits > (NULL != colon ? 128 : 32)) {
+            /*(also rejects (slash+1 == nptr) which results in nm_bits = 0)*/
+            fprintf(stderr, "invalid or missing netmask: %s\n", rvalue->ptr);
+            ctx->ok = 0;
+          }
+          else {
+            int rc;
+            buffer_string_set_length(rvalue, (size_t)(slash - rvalue->ptr)); /*(truncate)*/
+            rc = (NULL == colon)
+              ? http_request_host_normalize(rvalue, 0)
+              : configparser_remoteip_normalize_compat(rvalue);
+            buffer_append_string_len(rvalue, CONST_STR_LEN("/"));
+            buffer_append_int(rvalue, (int)nm_bits);
+            if (0 != rc) {
+              fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
+              ctx->ok = 0;
+            }
+          }
+        }
+        else {
+          int rc = (NULL == colon)
+            ? http_request_host_normalize(rvalue, 0)
+            : configparser_remoteip_normalize_compat(rvalue);
+          if (0 != rc) {
+            fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
+            ctx->ok = 0;
+          }
+        }
+      }
+      else if (COMP_SERVER_SOCKET == dc->comp) {
+        /*(redundant with parsing in network.c; not actually required here)*/
+        if (rvalue->ptr[0] != ':' /*(network.c special-cases ":" and "[]")*/
+            && !(rvalue->ptr[0] == '[' && rvalue->ptr[1] == ']')) {
+          if (http_request_host_normalize(rvalue, 0)) {
+            fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
+            ctx->ok = 0;
+          }
+        }
+      }
+      else if (COMP_HTTP_HOST == dc->comp) {
+        if (dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE) {
+          if (http_request_host_normalize(rvalue, 0)) {
+            fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
+            ctx->ok = 0;
+          }
+        }
+      }
+
+      if (COMP_HTTP_REQUEST_HEADER == dc->comp) {
+        dc->ext = http_header_hkey_get(CONST_BUF_LEN(&dc->comp_tag));
+      }
+
+      buffer_copy_buffer(&dc->string, rvalue);
+
+      if (ctx->ok) switch(dc->cond) {
+      case CONFIG_COND_NE:
+      case CONFIG_COND_EQ:
+        break;
+      case CONFIG_COND_NOMATCH:
+      case CONFIG_COND_MATCH: {
+        if (!data_config_pcre_compile(dc)) {
+          ctx->ok = 0;
+        }
+        break;
+      }
+      default:
+        fprintf(stderr, "unknown condition for %s\n", dc->comp_key);
+        ctx->ok = 0;
+        break;
+      }
+
+      if (ctx->ok)
+        configparser_push(ctx, dc, 1);
+      else
+        dc->fn->free((data_unset*) dc);
+    }
+}
+
+static void
+configparser_parse_else_condition(config_t * const ctx)
+{
+    data_config * const dc = data_config_init();
+    dc->cond = CONFIG_COND_ELSE;
+    buffer_copy_buffer(&dc->key, &ctx->current->key);
+    buffer_append_string_len(&dc->key, CONST_STR_LEN(" / "));
+    buffer_append_string_len(&dc->key, CONST_STR_LEN("else_tmp_token"));
+    configparser_push(ctx, dc, 1);
 }
 
 }
@@ -467,10 +662,11 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
     dc = (data_config *)array_extract_element_klen(ctx->all_configs, CONST_BUF_LEN(&C->key));
     force_assert(C == dc);
     buffer_copy_buffer(&C->key, &B->key);
+    C->comp_key = C->key.ptr + (B->comp_key - B->key.ptr);
     C->comp = B->comp;
-    /*buffer_copy_buffer(C->comp_key, B->comp_key);*/
     /*buffer_copy_buffer(&C->string, &B->string);*/
-    pos = buffer_string_length(&C->key)-buffer_string_length(&B->string)-2;
+    /* -2 for "==" and minus 3 for spaces and quotes around string (in key) */
+    pos = buffer_string_length(&C->key)-buffer_string_length(&B->string)-5;
     switch(B->cond) {
     case CONFIG_COND_NE:
       C->key.ptr[pos] = '='; /* opposite cond */
@@ -544,9 +740,6 @@ cond_else(A) ::= context_else LCURLY metalines RCURLY. {
 }
 
 context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expression(D). {
-  data_config *dc;
-  buffer *b = NULL, *rvalue;
-  const char *op = NULL;
 
   if (ctx->ok && D->type != TYPE_STRING) {
     fprintf(stderr, "rvalue must be string");
@@ -554,201 +747,20 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
   }
 
   if (ctx->ok) {
-    switch(E) {
-    case CONFIG_COND_NE:
-      op = "!=";
-      break;
-    case CONFIG_COND_EQ:
-      op = "==";
-      break;
-    case CONFIG_COND_NOMATCH:
-      op = "!~";
-      break;
-    case CONFIG_COND_MATCH:
-      op = "=~";
-      break;
-    default:
-      force_assert(0);
-      return; /* unreachable */
-    }
-
-    b = buffer_init();
-    buffer_copy_buffer(b, &ctx->current->key);
-    buffer_append_string_len(b, CONST_STR_LEN("/"));
-    buffer_append_string_buffer(b, B);
-    buffer_append_string_buffer(b, C);
-    buffer_append_string_len(b, op, 2);
-    rvalue = &((data_string*)D)->value;
-    buffer_append_string_buffer(b, rvalue);
-
-    if (NULL != (dc = configparser_get_data_config(ctx->all_configs, CONST_BUF_LEN(b)))) {
-      configparser_push(ctx, dc, 0);
-    } else {
-      static const struct {
-        comp_key_t comp;
-        char *comp_key;
-        size_t len;
-      } comps[] = {
-        { COMP_SERVER_SOCKET,      CONST_STR_LEN("SERVER[\"socket\"]"   ) },
-        { COMP_HTTP_URL,           CONST_STR_LEN("HTTP[\"url\"]"        ) },
-        { COMP_HTTP_HOST,          CONST_STR_LEN("HTTP[\"host\"]"       ) },
-        { COMP_HTTP_REQUEST_HEADER,CONST_STR_LEN("HTTP[\"referer\"]"    ) },
-        { COMP_HTTP_USER_AGENT,    CONST_STR_LEN("HTTP[\"useragent\"]"  ) },
-        { COMP_HTTP_REQUEST_HEADER,CONST_STR_LEN("HTTP[\"user-agent\"]" ) },
-        { COMP_HTTP_LANGUAGE,      CONST_STR_LEN("HTTP[\"language\"]"   ) },
-        { COMP_HTTP_REQUEST_HEADER,CONST_STR_LEN("HTTP[\"cookie\"]"     ) },
-        { COMP_HTTP_REMOTE_IP,     CONST_STR_LEN("HTTP[\"remoteip\"]"   ) },
-        { COMP_HTTP_REMOTE_IP,     CONST_STR_LEN("HTTP[\"remote-ip\"]"   ) },
-        { COMP_HTTP_QUERY_STRING,  CONST_STR_LEN("HTTP[\"querystring\"]") },
-        { COMP_HTTP_QUERY_STRING,  CONST_STR_LEN("HTTP[\"query-string\"]") },
-        { COMP_HTTP_REQUEST_METHOD, CONST_STR_LEN("HTTP[\"request-method\"]") },
-        { COMP_HTTP_SCHEME,        CONST_STR_LEN("HTTP[\"scheme\"]"     ) },
-        { COMP_UNSET, NULL, 0 },
-      };
-      size_t i;
-
-      dc = data_config_init();
-
-      buffer_copy_buffer(&dc->key, b);
-      dc->op = op;
-      buffer_copy_buffer(dc->comp_tag, C);
-      buffer_copy_buffer(dc->comp_key, B);
-      buffer_append_string_len(dc->comp_key, CONST_STR_LEN("[\""));
-      buffer_append_string_buffer(dc->comp_key, C);
-      buffer_append_string_len(dc->comp_key, CONST_STR_LEN("\"]"));
-      dc->cond = E;
-
-      for (i = 0; comps[i].comp_key; i ++) {
-        if (buffer_is_equal_string(
-              dc->comp_key, comps[i].comp_key, comps[i].len)) {
-          dc->comp = comps[i].comp;
-          break;
-        }
-      }
-      if (COMP_UNSET == dc->comp) {
-        if (buffer_is_equal_string(B, CONST_STR_LEN("REQUEST_HEADER"))) {
-          dc->comp = COMP_HTTP_REQUEST_HEADER;
-        }
-        else {
-          fprintf(stderr, "error comp_key %s", dc->comp_key->ptr);
-          ctx->ok = 0;
-        }
-      }
-      else if (COMP_HTTP_LANGUAGE == dc->comp) {
-        dc->comp = COMP_HTTP_REQUEST_HEADER;
-        buffer_copy_string_len(dc->comp_tag, CONST_STR_LEN("Accept-Language"));
-      }
-      else if (COMP_HTTP_USER_AGENT == dc->comp) {
-        dc->comp = COMP_HTTP_REQUEST_HEADER;
-        buffer_copy_string_len(dc->comp_tag, CONST_STR_LEN("User-Agent"));
-      }
-      else if (COMP_HTTP_REMOTE_IP == dc->comp
-               && (dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE)) {
-        char * const slash = strchr(rvalue->ptr, '/'); /* CIDR mask */
-        char * const colon = strchr(rvalue->ptr, ':'); /* IPv6 */
-        if (NULL != slash && slash == rvalue->ptr){/*(skip AF_UNIX /path/file)*/
-        }
-        else if (NULL != slash) {
-          char *nptr;
-          const unsigned long nm_bits = strtoul(slash + 1, &nptr, 10);
-          if (*nptr || 0 == nm_bits || nm_bits > (NULL != colon ? 128 : 32)) {
-            /*(also rejects (slash+1 == nptr) which results in nm_bits = 0)*/
-            fprintf(stderr, "invalid or missing netmask: %s\n", rvalue->ptr);
-            ctx->ok = 0;
-          }
-          else {
-            int rc;
-            buffer_string_set_length(rvalue, (size_t)(slash - rvalue->ptr)); /*(truncate)*/
-            rc = (NULL == colon)
-              ? http_request_host_normalize(rvalue, 0)
-              : configparser_remoteip_normalize_compat(rvalue);
-            buffer_append_string_len(rvalue, CONST_STR_LEN("/"));
-            buffer_append_int(rvalue, (int)nm_bits);
-            if (0 != rc) {
-              fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
-              ctx->ok = 0;
-            }
-          }
-        }
-        else {
-          int rc = (NULL == colon)
-            ? http_request_host_normalize(rvalue, 0)
-            : configparser_remoteip_normalize_compat(rvalue);
-          if (0 != rc) {
-            fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
-            ctx->ok = 0;
-          }
-        }
-      }
-      else if (COMP_SERVER_SOCKET == dc->comp) {
-        /*(redundant with parsing in network.c; not actually required here)*/
-        if (rvalue->ptr[0] != ':' /*(network.c special-cases ":" and "[]")*/
-            && !(rvalue->ptr[0] == '[' && rvalue->ptr[1] == ']')) {
-          if (http_request_host_normalize(rvalue, 0)) {
-            fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
-            ctx->ok = 0;
-          }
-        }
-      }
-      else if (COMP_HTTP_HOST == dc->comp) {
-        if (dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE) {
-          if (http_request_host_normalize(rvalue, 0)) {
-            fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
-            ctx->ok = 0;
-          }
-        }
-      }
-
-      if (COMP_HTTP_REQUEST_HEADER == dc->comp) {
-        dc->ext = http_header_hkey_get(CONST_BUF_LEN(dc->comp_tag));
-      }
-
-      buffer_copy_buffer(&dc->string, rvalue);
-
-      if (ctx->ok) switch(E) {
-      case CONFIG_COND_NE:
-      case CONFIG_COND_EQ:
-        break;
-      case CONFIG_COND_NOMATCH:
-      case CONFIG_COND_MATCH: {
-        if (!data_config_pcre_compile(dc)) {
-          ctx->ok = 0;
-        }
-        break;
-      }
-
-      default:
-        fprintf(stderr, "unknown condition for $%s[%s]\n",
-                        B->ptr, C->ptr);
-        ctx->ok = 0;
-        break;
-      }
-
-      if (ctx->ok) {
-        configparser_push(ctx, dc, 1);
-      } else {
-        dc->fn->free((data_unset*) dc);
-      }
-    }
+    configparser_parse_condition(ctx, B, C, E, &((data_string *)D)->value);
   }
 
-  buffer_free(b);
   buffer_free(B);
   B = NULL;
   buffer_free(C);
   C = NULL;
-  if (D) D->fn->free(D);
+  D->fn->free(D);
   D = NULL;
 }
 
 context_else ::= . {
   if (ctx->ok) {
-    data_config *dc = data_config_init();
-    buffer_copy_buffer(&dc->key, &ctx->current->key);
-    buffer_append_string_len(&dc->key, CONST_STR_LEN("/"));
-    buffer_append_string_len(&dc->key, CONST_STR_LEN("else_tmp_token"));
-    dc->cond = CONFIG_COND_ELSE;
-    configparser_push(ctx, dc, 1);
+    configparser_parse_else_condition(ctx);
   }
 }
 

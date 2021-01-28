@@ -43,9 +43,7 @@ typedef struct {
 	comp_key_t comp;
 	config_cond_t cond;
 	const buffer *string;
-	const buffer *comp_tag;
-	const buffer *comp_key;
-	const char *op;
+	const char *comp_key;
 } config_cond_info;
 
 __attribute_cold__

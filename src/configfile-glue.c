@@ -36,9 +36,7 @@ void config_get_config_cond_info(config_cond_info * const cfginfo, uint32_t idx)
     cfginfo->comp = dc->comp;
     cfginfo->cond = dc->cond;
     cfginfo->string = &dc->string;
-    cfginfo->comp_tag = dc->comp_tag;
     cfginfo->comp_key = dc->comp_key;
-    cfginfo->op = dc->op;
 }
 
 int config_plugin_value_tobool (const data_unset *du, int default_value)
@@ -591,7 +589,8 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		break;
 
 	case COMP_HTTP_REQUEST_HEADER:
-		*((const buffer **)&l) = http_header_request_get(r, dc->ext, CONST_BUF_LEN(dc->comp_tag));
+		*((const buffer **)&l) =
+		  http_header_request_get(r, dc->ext, CONST_BUF_LEN(&dc->comp_tag));
 		if (NULL == l) l = (buffer *)&empty_string;
 		break;
 	case COMP_HTTP_REQUEST_METHOD:
@@ -605,12 +604,12 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 
 	if (NULL == l) { /*(should not happen)*/
 		log_error(r->conf.errh, __FILE__, __LINE__,
-			"%s () compare to NULL", dc->comp_key->ptr);
+			"%s compare to NULL", dc->comp_key);
 		return COND_RESULT_FALSE;
 	}
 	else if (debug_cond) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
-			"%s (%s) compare to %s", dc->comp_key->ptr, l->ptr, dc->string.ptr);
+			"%s compare to %s", dc->comp_key, l->ptr);
 	}
 
 	switch(dc->cond) {
