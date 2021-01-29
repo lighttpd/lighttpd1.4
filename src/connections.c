@@ -626,7 +626,7 @@ static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chun
 
     if (cq->first != cq->last && 0 != olen) {
         const size_t clen = chunkqueue_length(cq);
-        size_t block = (olen + (16384-1)) & (16384-1);
+        size_t block = (olen + (16384-1)) & ~(16384-1);
         block += (block - olen > 1024 ? 0 : 16384);
         chunkqueue_compact_mem(cq, block > clen ? clen : block);
     }
