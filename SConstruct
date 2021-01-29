@@ -523,7 +523,7 @@ if 1:
 			LIBDBI = 'dbi',
 		)
 
-	if env['with_fam'] and not self.CheckCHeader('sys/inotify.h'):
+	if env['with_fam'] and not autoconf.CheckCHeader('sys/inotify.h'):
 		if not autoconf.CheckLibWithHeader('fam', 'fam.h', 'C'):
 			fail("Couldn't find fam")
 		autoconf.env.Append(
