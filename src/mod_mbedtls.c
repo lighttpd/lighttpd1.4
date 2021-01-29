@@ -3213,6 +3213,25 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
                   "MTLS: ignoring cipher string after SUITEB: %s", e);
             return 1;
         }
+        else if (0 == strncmp_const(e,
+                  "EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384")) {
+            e += sizeof(
+                  "EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384")-1;
+            if (nids + 9 >= idsz) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "MTLS: error: too many ciphersuites during list expand");
+                return 0;
+            }
+            ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_CCM;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256;
+            ids[++nids] = MBEDTLS_TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256;
+        }
 
         if (e != b->ptr && *e != ':' && *e != '\0') {
             log_error(srv->errh, __FILE__, __LINE__,

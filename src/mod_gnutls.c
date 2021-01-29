@@ -3097,6 +3097,13 @@ mod_gnutls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *
                   "GnuTLS: ignoring cipher string after SUITEB: %s", e);
             return 1;
         }
+        else if (0 == strncmp_const(e,
+                  "EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384")) {
+            e += sizeof(
+                  "EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384")-1;
+            buffer_append_string_len(plist,
+              CONST_STR_LEN("+AES-256-GCM:+AES-128-GCM:+AES-256-CCM:+AES-256-CCM-8:+CHACHA20-POLY1305:"));
+        }
 
         if (e != b->ptr && *e != ':' && *e != '\0') {
             log_error(srv->errh, __FILE__, __LINE__,
