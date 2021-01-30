@@ -1235,6 +1235,14 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
 }
 
 #ifdef HAVE_TLS_EXTENSIONS
+
+enum {
+  MOD_OPENSSL_ALPN_HTTP11      = 1
+ ,MOD_OPENSSL_ALPN_HTTP10      = 2
+ ,MOD_OPENSSL_ALPN_H2          = 3
+ ,MOD_OPENSSL_ALPN_ACME_TLS_1  = 4
+};
+
 static int
 mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
 {
@@ -1273,6 +1281,16 @@ static int
 network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 {
     handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
+  #ifdef HAVE_ALPN
+  #ifdef TLSEXT_TYPE_application_layer_protocol_negotiation
+    /*(do not repeat if acme-tls/1 creds have been set
+     * and still in handshake (hctx->alpn not unset yet))*/
+    if (hctx->alpn == MOD_OPENSSL_ALPN_ACME_TLS_1)
+        return SSL_TLSEXT_ERR_OK; /*(wolfSSL might call twice in client hello)*/
+  #endif
+  #endif
+    if (hctx->r->conditional_is_valid & (1 << COMP_HTTP_HOST))/*(already done)*/
+        return SSL_TLSEXT_ERR_OK; /*(wolfSSL might call twice in client hello)*/
     buffer_copy_string(&hctx->r->uri.scheme, "https");
     UNUSED(al);
     UNUSED(srv);
@@ -1296,7 +1314,8 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
     return mod_openssl_SNI(hctx, servername, len);
   #endif
 }
-#endif
+
+#endif /* HAVE_TLS_EXTENSIONS */
 
 
 #ifdef HAVE_OCSP
@@ -1712,13 +1731,6 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
 
     return rc;
 }
-
-enum {
-  MOD_OPENSSL_ALPN_HTTP11      = 1
- ,MOD_OPENSSL_ALPN_HTTP10      = 2
- ,MOD_OPENSSL_ALPN_H2          = 3
- ,MOD_OPENSSL_ALPN_ACME_TLS_1  = 4
-};
 
 /* https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids */
 static int
