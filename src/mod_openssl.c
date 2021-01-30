@@ -1040,12 +1040,20 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     return !hctx->conf.ssl_verifyclient_enforce;
 }
 
+enum {
+  MOD_OPENSSL_ALPN_HTTP11      = 1
+ ,MOD_OPENSSL_ALPN_HTTP10      = 2
+ ,MOD_OPENSSL_ALPN_H2          = 3
+ ,MOD_OPENSSL_ALPN_ACME_TLS_1  = 4
+};
+
 static int
 mod_openssl_cert_cb (SSL *ssl, void *arg)
 {
     handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
     plugin_cert *pc = hctx->conf.pc;
     UNUSED(arg);
+    if (hctx->alpn == MOD_OPENSSL_ALPN_ACME_TLS_1) return 1;
 
     if (NULL == pc->ssl_pemfile_x509 || NULL == pc->ssl_pemfile_pkey) {
         /* x509/pkey available <=> pemfile was set <=> pemfile got patched:
@@ -1781,13 +1789,6 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
 
     return rc;
 }
-
-enum {
-  MOD_OPENSSL_ALPN_HTTP11      = 1
- ,MOD_OPENSSL_ALPN_HTTP10      = 2
- ,MOD_OPENSSL_ALPN_H2          = 3
- ,MOD_OPENSSL_ALPN_ACME_TLS_1  = 4
-};
 
 /* https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids */
 static int
