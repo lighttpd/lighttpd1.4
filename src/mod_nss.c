@@ -2258,6 +2258,7 @@ CONNECTION_FUNC(mod_nss_handle_con_accept)
     hctx->tmp_buf = con->srv->tmp_buf;
     hctx->errh = r->conf.errh;
     con->plugin_ctx[p->id] = hctx;
+    buffer_string_set_length(&r->uri.authority, 0);
 
     plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
     hctx->ssl_session_ticket = s->ssl_session_ticket;

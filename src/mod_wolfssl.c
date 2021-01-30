@@ -2942,6 +2942,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
     hctx->tmp_buf = con->srv->tmp_buf;
     hctx->errh = r->conf.errh;
     con->plugin_ctx[p->id] = hctx;
+    buffer_string_set_length(&r->uri.authority, 0);
 
     plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
     hctx->ssl = SSL_new(s->ssl_ctx);
