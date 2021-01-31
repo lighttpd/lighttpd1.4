@@ -793,6 +793,81 @@ mod_mbedtls_x509_crl_parse_file (mbedtls_x509_crl *chain, const char *fn)
 }
 
 
+#if MBEDTLS_VERSION_NUMBER >= 0x02170000 /* mbedtls 2.23.0 */
+
+static int
+mod_mbedtls_x509_crt_ext_cb (void *p_ctx,
+                             mbedtls_x509_crt const *crt,
+                             mbedtls_x509_buf const *oid,
+                             int critical,
+                             const unsigned char *p,
+                             const unsigned char *end)
+{
+    UNUSED(p_ctx);
+    UNUSED(crt);
+    /* id-pe-acmeIdentifier 1.3.6.1.5.5.7.1.31 */
+    static const unsigned char acmeIdentifier[] = MBEDTLS_OID_PKIX "\x01\x1f";
+    if (0 == MBEDTLS_OID_CMP(acmeIdentifier, oid)) {
+        if (!critical) /* required by RFC 8737 */
+            return MBEDTLS_ERR_X509_INVALID_EXTENSIONS
+                 + MBEDTLS_ERR_ASN1_INVALID_DATA;
+        /*(mbedtls_asn1_get_tag() should take first param as
+         * (const unsigned char **) so safe to cast away const)*/
+        unsigned char *q;
+        *(const unsigned char **)&q = p;
+        size_t len;
+        int rc = mbedtls_asn1_get_tag(&q, end, &len,
+                                      MBEDTLS_ASN1_OCTET_STRING
+                                     |MBEDTLS_ASN1_PRIMITIVE);
+        if (0 != rc)
+            return MBEDTLS_ERR_X509_INVALID_EXTENSIONS + rc;
+        if (q + len != end)
+            return MBEDTLS_ERR_X509_INVALID_EXTENSIONS
+                 + MBEDTLS_ERR_ASN1_LENGTH_MISMATCH;
+        if (len != 32) /* must be OCTET STRING (SIZE (32)) */
+            return MBEDTLS_ERR_X509_INVALID_EXTENSIONS
+                 + MBEDTLS_ERR_ASN1_INVALID_LENGTH;
+        return 0;
+    }
+    return MBEDTLS_ERR_ASN1_UNEXPECTED_TAG;
+}
+
+static int
+mod_mbedtls_x509_crt_parse_acme (mbedtls_x509_crt *chain, const char *fn)
+{
+    /* similar to mod_mbedtls_x509_crt_parse_file(), but read single cert
+     * and special case to handle id-pe-acmeIdentifier OID */
+    /* https://github.com/ARMmbed/mbedtls/issues/3241 */
+    int rc = MBEDTLS_ERR_X509_FILE_IO_ERROR;
+    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(fn, &dlen, NULL, malloc, free);
+    if (NULL == data) return rc;
+
+    mbedtls_pem_context pem;
+    mbedtls_pem_init(&pem);
+
+    size_t use_len;
+    rc = mbedtls_pem_read_buffer(&pem,
+                                 "-----BEGIN CERTIFICATE-----",
+                                 "-----END CERTIFICATE-----",
+                                 (unsigned char *)data, NULL, 0, &use_len);
+    if (0 == rc) {
+        mbedtls_x509_crt_ext_cb_t cb = mod_mbedtls_x509_crt_ext_cb;
+        rc = mbedtls_x509_crt_parse_der_with_ext_cb(chain, pem.buf, pem.buflen,
+                                                    1, cb, NULL);
+    }
+
+    mbedtls_pem_free(&pem);
+
+    if (dlen) safe_memclear(data, (size_t)dlen);
+    free(data);
+
+    return rc;
+}
+
+#endif
+
+
 static int
 mod_mbedtls_x509_crt_parse_file (mbedtls_x509_crt *chain, const char *fn)
 {
@@ -912,7 +987,11 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
         ssl_pemfile_x509 = malloc(sizeof(*ssl_pemfile_x509));
         force_assert(ssl_pemfile_x509);
         mbedtls_x509_crt_init(ssl_pemfile_x509); /* init cert structure */
+      #if MBEDTLS_VERSION_NUMBER >= 0x02170000 /* mbedtls 2.23.0 */
+        rc = mod_mbedtls_x509_crt_parse_acme(ssl_pemfile_x509, b->ptr);
+      #else /*(will fail; unable to handle id-pe-acmeIdentifier OID)*/
         rc = mod_mbedtls_x509_crt_parse_file(ssl_pemfile_x509, b->ptr);
+      #endif
         if (0 != rc) {
             elogf(errh, __FILE__, __LINE__, rc,
                   "Failed to load acme-tls/1 pemfile: %s", b->ptr);
