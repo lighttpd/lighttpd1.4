@@ -1320,14 +1320,7 @@ mod_nss_alpn_select_cb (void *arg, PRFileDesc *ssl,
                   case 3:
                     if (buffer_string_is_empty(hctx->conf.ssl_acme_tls_1))
                         continue;
-                    if (0 == mod_nss_acme_tls_1(hctx))
-                        hctx->alpn = MOD_NSS_ALPN_ACME_TLS_1;
-                    else {
-                        log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-                                  "failed to set acme-tls/1 certificate for TLS"
-                                  " server name %s",hctx->r->uri.authority.ptr);
-                        return SECFailure;
-                    }
+                    hctx->alpn = MOD_NSS_ALPN_ACME_TLS_1;
                     break;
                   default:
                     break;
@@ -1384,6 +1377,19 @@ mod_nss_SNI (PRFileDesc *ssl, const SECItem *srvNameArr, PRUint32 srvNameArrSize
     /*(done in configfile-glue.c:config_cond_cache_reset() after request hdrs read)*/
     /*config_cond_cache_reset_item(r, COMP_HTTP_HOST);*/
     /*buffer_clear(&r->uri.authority);*/
+
+    /* XXX: it appears that ALPN callback is called before SNI callback in NSS,
+     * so handle acme-tls/1 here, prior to and instead of setting cert below */
+    if (hctx->alpn == MOD_NSS_ALPN_ACME_TLS_1) {
+        if (0 == mod_nss_acme_tls_1(hctx))
+            return (PRInt32)i;
+        else {
+            log_error(hctx->r->conf.errh, __FILE__, __LINE__,
+                      "failed to set acme-tls/1 certificate for TLS"
+                      " server name %s", hctx->r->uri.authority.ptr);
+            return SSL_SNI_SEND_ALERT;
+        }
+    }
 
     if (pc == hctx->conf.pc)
         return SSL_SNI_CURRENT_CONFIG_IS_USED;
