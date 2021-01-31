@@ -460,8 +460,11 @@ ssl_tlsext_status_cb(SSL *ssl, void *arg)
 
     int len = (int)buffer_string_length(ssl_stapling);
 
-    /* WolfSSL does not require copy */
-    uint8_t *ocsp_resp = (uint8_t *)ssl_stapling->ptr;
+    /* wolfSSL caller is going to XFREE() */
+    uint8_t *ocsp_resp = XMALLOC(len, NULL, DYNAMIC_TYPE_OPENSSL);
+    if (NULL == ocsp_resp)
+        return SSL_TLSEXT_ERR_NOACK; /* ignore OCSP request if error occurs */
+    memcpy(ocsp_resp, ssl_stapling->ptr, (uint32_t)len);
 
     if (!SSL_set_tlsext_status_ocsp_resp(ssl, ocsp_resp, len)) {
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
