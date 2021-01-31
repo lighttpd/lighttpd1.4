@@ -1230,7 +1230,7 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
 
     /* check if acme-tls/1 protocol is enabled (path to dir of cert(s) is set)*/
     if (buffer_string_is_empty(hctx->conf.ssl_acme_tls_1))
-        return 0; /*(should not happen)*/
+        return 0;
 
     /* check if SNI set server name (required for acme-tls/1 protocol)
      * and perform simple path checks for no '/'
@@ -1313,6 +1313,7 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
 
     hctx->acme_tls_1_cred = ssl_cred; /*(save ptr and free later)*/
 
+    gnutls_credentials_clear(hctx->ssl);
     rc = gnutls_credentials_set(hctx->ssl, GNUTLS_CRD_CERTIFICATE, ssl_cred);
     if (rc < 0) {
         elogf(hctx->r->conf.errh, __FILE__, __LINE__, rc,
@@ -1320,6 +1321,9 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
               hctx->r->uri.authority.ptr);
         return rc;
     }
+
+    /*(acme-tls/1 is separate from certificate auth access to website)*/
+    gnutls_certificate_server_set_request(hctx->ssl, GNUTLS_CERT_IGNORE);
 
     return GNUTLS_E_SUCCESS; /* 0 */
 }
@@ -1333,67 +1337,61 @@ enum {
 };
 
 
+/* https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids */
 static int
-mod_gnutls_alpn_select_cb (gnutls_session_t ssl, handler_ctx *hctx)
+mod_gnutls_ALPN (handler_ctx * const hctx, const unsigned char * const in, const unsigned int inlen)
 {
-    const int i = 0;
-    uint8_t proto;
+    /*(skip first two bytes which should match inlen-2)*/
+    for (unsigned int i = 2, n; i < inlen; i += n) {
+        n = in[i++];
+        if (i+n > inlen || 0 == n) break;
 
-    gnutls_datum_t d = { NULL, 0 };
-    if (gnutls_alpn_get_selected_protocol(ssl, &d) < 0)
-        return 0; /* ignore GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE */
-    const char *in = (const char *)d.data;
-    const int n = (int)d.size;
-
-    switch (n) {
-      case 2:  /* "h2" */
-        if (in[i] == 'h' && in[i+1] == '2') {
-            proto = MOD_GNUTLS_ALPN_H2;
-            hctx->r->http_version = HTTP_VERSION_2;
-            break;
-        }
-        return 0;
-      case 8:  /* "http/1.1" "http/1.0" */
-        if (0 == memcmp(in+i, "http/1.", 7)) {
-            if (in[i+7] == '1') {
-                proto = MOD_GNUTLS_ALPN_HTTP11;
-                break;
+        switch (n) {
+          case 2:  /* "h2" */
+            if (in[i] == 'h' && in[i+1] == '2') {
+                if (!hctx->r->conf.h2proto) continue;
+                hctx->alpn = MOD_GNUTLS_ALPN_H2;
+                hctx->r->http_version = HTTP_VERSION_2;
+                return GNUTLS_E_SUCCESS;
             }
-            if (in[i+7] == '0') {
-                proto = MOD_GNUTLS_ALPN_HTTP10;
-                break;
+            continue;
+          case 8:  /* "http/1.1" "http/1.0" */
+            if (0 == memcmp(in+i, "http/1.", 7)) {
+                if (in[i+7] == '1') {
+                    hctx->alpn = MOD_GNUTLS_ALPN_HTTP11;
+                    return GNUTLS_E_SUCCESS;
+                }
+                if (in[i+7] == '0') {
+                    hctx->alpn = MOD_GNUTLS_ALPN_HTTP10;
+                    return GNUTLS_E_SUCCESS;
+                }
             }
-        }
-        return 0;
-      case 10: /* "acme-tls/1" */
-        if (0 == memcmp(in+i, "acme-tls/1", 10)) {
-            int rc = mod_gnutls_acme_tls_1(hctx);
-            if (0 == rc) {
-                proto = MOD_GNUTLS_ALPN_ACME_TLS_1;
-                break;
+            continue;
+          case 10: /* "acme-tls/1" */
+            if (0 == memcmp(in+i, "acme-tls/1", 10)) {
+                int rc = mod_gnutls_acme_tls_1(hctx);
+                if (0 == rc) {
+                    hctx->alpn = MOD_GNUTLS_ALPN_ACME_TLS_1;
+                    return GNUTLS_E_SUCCESS;
+                }
+                return rc;
             }
-            return rc;
+            continue;
+          default:
+            continue;
         }
-        return 0;
-      default:
-        return 0;
     }
 
-    hctx->alpn = proto;
-    return 0;
+    return GNUTLS_E_SUCCESS;
 }
 
 #endif /* GNUTLS_VERSION_NUMBER >= 0x030200 */
 
 
 static int
-mod_gnutls_SNI(void *ctx, unsigned int tls_id,
+mod_gnutls_SNI(handler_ctx * const hctx,
                const unsigned char *servername, unsigned int len)
 {
-    if (tls_id != 0) return 0;
-
-    /* server name */
-
     /* https://www.gnutls.org/manual/gnutls.html#Virtual-hosts-and-credentials
      * figure the advertized name - the following hack relies on the fact that
      * this extension only supports DNS names, and due to a protocol bug cannot
@@ -1401,7 +1399,6 @@ mod_gnutls_SNI(void *ctx, unsigned int tls_id,
     if (len < 5) return 0;
     len -= 5;
     servername += 5;
-    handler_ctx * const hctx = (handler_ctx *) ctx;
     request_st * const r = hctx->r;
     buffer_copy_string(&r->uri.scheme, "https");
 
@@ -1436,21 +1433,20 @@ mod_gnutls_SNI(void *ctx, unsigned int tls_id,
 
 
 static int
-mod_gnutls_client_hello_hook_post(gnutls_session_t ssl)
+mod_gnutls_client_hello_ext_cb(void *ctx, unsigned int tls_id,
+                               const unsigned char *data, unsigned int dlen)
 {
-  #if GNUTLS_VERSION_NUMBER >= 0x030200
-    handler_ctx * const hctx = gnutls_session_get_ptr(ssl);
-    int rc = mod_gnutls_alpn_select_cb(ssl, hctx);
-    if (rc < 0)
-        return rc;
-
-    /* check if acme-tls/1 protocol is enabled (path to dir of cert(s) is set)*/
-    if (hctx->alpn == MOD_GNUTLS_ALPN_ACME_TLS_1) {
-        /*(acme-tls/1 is separate from certificate auth access to website)*/
-        gnutls_certificate_server_set_request(ssl, GNUTLS_CERT_IGNORE);
-        return GNUTLS_E_SUCCESS; /* 0 */ /*(skip further session config below)*/
+    switch (tls_id) {
+      case 0:  /* Server Name */
+        return mod_gnutls_SNI((handler_ctx *)ctx, data, dlen);
+     #if GNUTLS_VERSION_NUMBER >= 0x030200
+      case 16: /* ALPN */
+        return mod_gnutls_ALPN((handler_ctx *)ctx, data, dlen);
+     #endif
+      /*case 35:*/ /* Session Ticket */
+      default:
+        break;
     }
-  #endif
 
     return GNUTLS_E_SUCCESS; /* 0 */
 }
@@ -1462,17 +1458,25 @@ mod_gnutls_client_hello_hook(gnutls_session_t ssl, unsigned int htype,
                              const gnutls_datum_t *msg)
 {
     /*assert(htype == GNUTLS_HANDSHAKE_CLIENT_HELLO);*/
+    /*assert(when == GNUTLS_HOOK_PRE);*/
     UNUSED(htype);
+    UNUSED(when);
     UNUSED(incoming);
 
-    if (when == GNUTLS_HOOK_POST)
-        return mod_gnutls_client_hello_hook_post(ssl);
-
     handler_ctx * const hctx = gnutls_session_get_ptr(ssl);
-  #if GNUTLS_VERSION_NUMBER < 0x030600
-    gnutls_dh_params_t dh_params = hctx->conf.dh_params;
+  #if GNUTLS_VERSION_NUMBER >= 0x030200
+    /*(do not repeat if acme-tls/1 creds have been set
+     * and still in handshake (hctx->alpn not unset yet))*/
+    if (hctx->alpn == MOD_GNUTLS_ALPN_ACME_TLS_1)
+        return GNUTLS_E_SUCCESS; /* 0 */
   #endif
-    int rc = gnutls_ext_raw_parse(hctx, mod_gnutls_SNI, msg,
+    /* ??? why might this be called more than once ??? renegotiation? */
+    void *existing_cred = NULL;
+    if (0 == gnutls_credentials_get(ssl, GNUTLS_CRD_CERTIFICATE, &existing_cred)
+        && existing_cred)
+        return GNUTLS_E_SUCCESS; /* 0 */
+
+    int rc = gnutls_ext_raw_parse(hctx, mod_gnutls_client_hello_ext_cb, msg,
                                   GNUTLS_EXT_RAW_FLAG_TLS_CLIENT_HELLO);
     if (rc < 0) {
         log_error_st *errh = hctx->r->conf.errh;
@@ -1501,17 +1505,16 @@ mod_gnutls_client_hello_hook(gnutls_session_t ssl, unsigned int htype,
         elog(errh, __FILE__, __LINE__, rc, "gnutls_alpn_set_protocols()");
         return rc;
     }
-   #if 0
-    /* XXX: might have to manually process client hello for ALPN "acme-tls/1"
-     *      and handle here (GNUTLS_HOOK_PRE) before setting certificate */
-    if (!buffer_string_is_empty(hctx->conf.ssl_acme_tls_1)) {
-    }
-   #endif
+    /*(skip below if creds already set for acme-tls/1
+     * via mod_gnutls_client_hello_ext_cb())*/
+    if (hctx->alpn == MOD_GNUTLS_ALPN_ACME_TLS_1)
+        return GNUTLS_E_SUCCESS; /* 0 */
   #endif
 
   #if 0 /* must enable before GnuTLS client hello hook */
     /* GnuTLS returns an error here if TLSv1.3 (? key already set ?) */
     /* see mod_gnutls_handle_con_accept() */
+    /* future: ? handle in mod_gnutls_client_hello_ext_cb() */
     if (hctx->ssl_session_ticket && session_ticket_key.size) {
         /* XXX: NOT done: parse client hello for session ticket extension
          *      and choose from among multiple keys */
@@ -1550,8 +1553,8 @@ mod_gnutls_client_hello_hook(gnutls_session_t ssl, unsigned int htype,
     gnutls_certificate_server_set_request(ssl, req);
 
   #if GNUTLS_VERSION_NUMBER < 0x030600
-    if (dh_params)
-        gnutls_certificate_set_dh_params(ssl_cred, dh_params);
+    if (hctx->conf.dh_params)
+        gnutls_certificate_set_dh_params(ssl_cred, hctx->conf.dh_params);
    #if GNUTLS_VERSION_NUMBER >= 0x030506
     else
         gnutls_certificate_set_known_dh_params(ssl_cred, GNUTLS_SEC_PARAM_HIGH);
@@ -2537,7 +2540,7 @@ CONNECTION_FUNC(mod_gnutls_handle_con_accept)
 
     /* generic func replaces gnutls_handshake_set_post_client_hello_function()*/
     gnutls_handshake_set_hook_function(hctx->ssl, GNUTLS_HANDSHAKE_CLIENT_HELLO,
-                                       GNUTLS_HOOK_BOTH,
+                                       GNUTLS_HOOK_PRE,
                                        mod_gnutls_client_hello_hook);
 
     gnutls_session_set_ptr(hctx->ssl, hctx);
