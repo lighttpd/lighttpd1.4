@@ -1064,6 +1064,48 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
 
 
 static int
+mod_mbedtls_alpn_selected (handler_ctx * const hctx, const char * const in)
+{
+    const int n = (int)strlen(in);
+    const int i = 0;
+    unsigned short proto;
+
+    switch (n) {
+      case 2:  /* "h2" */
+        if (in[i] == 'h' && in[i+1] == '2') {
+            proto = MOD_MBEDTLS_ALPN_H2;
+            hctx->r->http_version = HTTP_VERSION_2;
+            break;
+        }
+        return 0;
+      case 8:  /* "http/1.1" "http/1.0" */
+        if (0 == memcmp(in+i, "http/1.", 7)) {
+            if (in[i+7] == '1') {
+                proto = MOD_MBEDTLS_ALPN_HTTP11;
+                break;
+            }
+            if (in[i+7] == '0') {
+                proto = MOD_MBEDTLS_ALPN_HTTP10;
+                break;
+            }
+        }
+        return 0;
+      case 10: /* "acme-tls/1" */
+        if (0 == memcmp(in+i, "acme-tls/1", 10)) {
+            proto = MOD_MBEDTLS_ALPN_ACME_TLS_1;
+            break;
+        }
+        return 0;
+      default:
+        return 0;
+    }
+
+    hctx->alpn = proto;
+    return 0;
+}
+
+
+static int
 mod_mbedtls_alpn_select_cb (handler_ctx *hctx, const unsigned char *in, const unsigned int inlen)
 {
     /*(skip first two bytes which should match inlen-2)*/
@@ -1958,6 +2000,13 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
           #endif
             rc = mbedtls_ssl_handshake_step(&hctx->ssl);
             if (0 != rc) break;
+        }
+        if (0 == rc && hctx->ssl.state == MBEDTLS_SSL_SERVER_HELLO) {
+          #ifdef MBEDTLS_SSL_ALPN
+            const char *alpn = mbedtls_ssl_get_alpn_protocol(&hctx->ssl);
+            if (NULL != alpn)
+                rc = mod_mbedtls_alpn_selected(hctx, alpn);
+          #endif
         }
     }
 
