@@ -737,6 +737,10 @@ static void http_response_xsendfile (request_st * const r, buffer * const path, 
 	if (r->conf.force_lowercase_filenames) {
 		buffer_to_lower(path);
 	}
+	if (buffer_string_is_empty(path)) {
+		r->http_status = 502;
+		valid = 0;
+	}
 
 	/* check that path is under xdocroot(s)
 	 * - xdocroot should have trailing slash appended at config time
@@ -814,6 +818,10 @@ static void http_response_xsendfile2(request_st * const r, const buffer * const 
         buffer_path_simplify(b, b);
         if (r->conf.force_lowercase_filenames) {
             buffer_to_lower(b);
+        }
+        if (buffer_string_is_empty(b)) {
+            r->http_status = 502;
+            break;
         }
         if (xdocroot) {
             size_t i, xlen = buffer_string_length(b);
