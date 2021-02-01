@@ -12,7 +12,6 @@
  * https://tls.mbed.org/api/  (generated from mbedTLS headers and code)
  *
  * mbedTLS limitations:
- * - mbedTLS does not currently support TLSv1.3
  * - mbedTLS does not currently support OCSP
  *   https://tls.mbed.org/discussions/feature-request/ocsp-stapling
  *   TLS/DTLS: OCSP Stapling support #880
@@ -58,6 +57,7 @@
 
 #include <mbedtls/config.h>
 #include <mbedtls/ctr_drbg.h>
+#include <mbedtls/debug.h>
 #include <mbedtls/dhm.h>
 #include <mbedtls/error.h>
 #include <mbedtls/entropy.h>
@@ -671,6 +671,23 @@ mod_mbedtls_verify_cb (void *arg, mbedtls_x509_crt *crt, int depth, uint32_t *fl
 }
 
 
+enum {
+  MOD_MBEDTLS_ALPN_HTTP11      = 1
+ ,MOD_MBEDTLS_ALPN_HTTP10      = 2
+ ,MOD_MBEDTLS_ALPN_H2          = 3
+ ,MOD_MBEDTLS_ALPN_ACME_TLS_1  = 4
+};
+
+#ifdef MBEDTLS_SSL_SERVER_NAME_INDICATION
+#ifdef MBEDTLS_SSL_ALPN
+
+static int
+mod_mbedtls_acme_tls_1 (handler_ctx *hctx);
+
+#endif
+#endif
+
+
 #ifdef MBEDTLS_SSL_SERVER_NAME_INDICATION
 static int
 mod_mbedtls_SNI (void *arg, mbedtls_ssl_context *ssl, const unsigned char *servername, size_t len)
@@ -706,6 +723,12 @@ mod_mbedtls_SNI (void *arg, mbedtls_ssl_context *ssl, const unsigned char *serve
     /*(done in configfile-glue.c:config_cond_cache_reset() after request hdrs read)*/
     /*config_cond_cache_reset_item(r, COMP_HTTP_HOST);*/
     /*buffer_clear(&r->uri.authority);*/
+
+  #ifdef MBEDTLS_SSL_ALPN
+    /* TLS-ALPN-01 (ALPN "acme-tls/1") requires SNI */
+    if (hctx->alpn == MOD_MBEDTLS_ALPN_ACME_TLS_1)
+        return mod_mbedtls_acme_tls_1(hctx);
+  #endif
 
     /*(compare strings as ssl.pemfile might repeat same file in lighttpd.conf
      * and mod_mbedtls does not attempt to de-dup)*/
@@ -953,6 +976,7 @@ network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *
 
 #ifdef MBEDTLS_SSL_ALPN
 
+#ifdef MBEDTLS_SSL_SERVER_NAME_INDICATION
 static int
 mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
 {
@@ -1036,58 +1060,48 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
 
     return rc;
 }
-
-
-enum {
-  MOD_MBEDTLS_ALPN_HTTP11      = 1
- ,MOD_MBEDTLS_ALPN_HTTP10      = 2
- ,MOD_MBEDTLS_ALPN_H2          = 3
- ,MOD_MBEDTLS_ALPN_ACME_TLS_1  = 4
-};
+#endif
 
 
 static int
-mod_mbedtls_alpn_select_cb (handler_ctx *hctx, const char *in)
+mod_mbedtls_alpn_select_cb (handler_ctx *hctx, const unsigned char *in, const unsigned int inlen)
 {
-    const int n = (int)strlen(in);
-    const int i = 0;
-    unsigned short proto;
-
-    switch (n) {
-      case 2:  /* "h2" */
-        if (in[i] == 'h' && in[i+1] == '2') {
-            proto = MOD_MBEDTLS_ALPN_H2;
-            hctx->r->http_version = HTTP_VERSION_2;
-            break;
-        }
-        return 0;
-      case 8:  /* "http/1.1" "http/1.0" */
-        if (0 == memcmp(in+i, "http/1.", 7)) {
-            if (in[i+7] == '1') {
-                proto = MOD_MBEDTLS_ALPN_HTTP11;
-                break;
+    /*(skip first two bytes which should match inlen-2)*/
+    for (unsigned int i = 2, n; i < inlen; i += n) {
+        n = in[i++];
+        if (i+n > inlen || 0 == n) break;
+        switch (n) {
+          case 2:  /* "h2" */
+            if (in[i] == 'h' && in[i+1] == '2') {
+                if (!hctx->r->conf.h2proto) continue;
+                hctx->alpn = MOD_MBEDTLS_ALPN_H2;
+                hctx->r->http_version = HTTP_VERSION_2;
+                return 0;
             }
-            if (in[i+7] == '0') {
-                proto = MOD_MBEDTLS_ALPN_HTTP10;
-                break;
+            continue;
+          case 8:  /* "http/1.1" "http/1.0" */
+            if (0 == memcmp(in+i, "http/1.", 7)) {
+                if (in[i+7] == '1') {
+                    hctx->alpn = MOD_MBEDTLS_ALPN_HTTP11;
+                    return 0;
+                }
+                if (in[i+7] == '0') {
+                    hctx->alpn = MOD_MBEDTLS_ALPN_HTTP10;
+                    return 0;
+                }
             }
-        }
-        return 0;
-      case 10: /* "acme-tls/1" */
-        if (0 == memcmp(in+i, "acme-tls/1", 10)) {
-            int rc = mod_mbedtls_acme_tls_1(hctx);
-            if (0 == rc) {
-                proto = MOD_MBEDTLS_ALPN_ACME_TLS_1;
-                break;
+            continue;
+          case 10: /* "acme-tls/1" */
+            if (0 == memcmp(in+i, "acme-tls/1", 10)) {
+                hctx->alpn = MOD_MBEDTLS_ALPN_ACME_TLS_1;
+                return 0;
             }
-            return rc;
+            continue;
+          default:
+            continue;
         }
-        return 0;
-      default:
-        return 0;
     }
 
-    hctx->alpn = proto;
     return 0;
 }
 
@@ -1910,6 +1924,9 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 }
 
 
+static int ssl_parse_client_hello( mbedtls_ssl_context *ssl, handler_ctx *hctx );
+
+
 static int
 mod_mbedtls_ssl_handshake (handler_ctx *hctx)
 {
@@ -1929,15 +1946,18 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
     if (hctx->ssl.state < MBEDTLS_SSL_SERVER_HELLO) {
         while (hctx->ssl.state != MBEDTLS_SSL_SERVER_HELLO
             && hctx->ssl.state != MBEDTLS_SSL_HANDSHAKE_OVER) {
+          #ifdef MBEDTLS_SSL_SERVER_NAME_INDICATION
+          #ifdef MBEDTLS_SSL_ALPN
+            /* parse client_hello for ALPN extension prior to mbedtls handshake
+             * in order to perform certificate selection in mod_mbedtls_SNI() */
+            if (!buffer_string_is_empty(hctx->conf.ssl_acme_tls_1)) {
+                rc = ssl_parse_client_hello(&hctx->ssl, hctx);
+                if (0 != rc) break;
+            }
+          #endif
+          #endif
             rc = mbedtls_ssl_handshake_step(&hctx->ssl);
             if (0 != rc) break;
-        }
-        if (0 == rc && hctx->ssl.state == MBEDTLS_SSL_SERVER_HELLO) {
-          #ifdef MBEDTLS_SSL_ALPN
-            const char *alpn = mbedtls_ssl_get_alpn_protocol(&hctx->ssl);
-            if (NULL != alpn)
-                rc = mod_mbedtls_alpn_select_cb(hctx, alpn);
-          #endif
         }
     }
 
@@ -2130,9 +2150,13 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
     /* (mbedtls_ssl_config *) is shared across multiple connections, which may
      * overlap, and so this debug setting is not reset upon connection close.
      * Once enabled, debug hook will remain so for this mbedtls_ssl_config */
-    if (hctx->conf.ssl_log_noise)  /* volume level for debug message callback */
+    if (hctx->conf.ssl_log_noise) {/* volume level for debug message callback */
+      #if MBEDTLS_VERSION_NUMBER >= 0x02000000 /* mbedtls 2.0.0 */
+        mbedtls_debug_set_threshold(hctx->conf.ssl_log_noise);
+      #endif
         mbedtls_ssl_conf_dbg(s->ssl_ctx, mod_mbedtls_debug_cb,
                              (void *)(intptr_t)hctx->conf.ssl_log_noise);
+    }
 
     /* (mbedtls_ssl_config *) is shared across multiple connections, which may
      * overlap, and so renegotiation setting is not reset upon connection close.
@@ -3770,4 +3794,270 @@ mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *
     max
       ? mbedtls_ssl_conf_max_version(s->ssl_ctx,MBEDTLS_SSL_MAJOR_VERSION_3,v)
       : mbedtls_ssl_conf_min_version(s->ssl_ctx,MBEDTLS_SSL_MAJOR_VERSION_3,v);
+}
+
+/*
+ * XXX: forked from mbedtls
+ *
+ * ssl_parse_client_hello() is forked and modified from mbedtls
+ *   library/ssl_srv.c:ssl_parse_client_hello()
+ * due to limitations in mbedtls hooks.  Other than fetching input, ssl is not
+ * modified here so that it can be reprocessed during handshake.
+ *
+ * It would be beneficial to have a callback after parsing client hello and all
+ * extensions, and before certificate selection.  (SNI extension might occur
+ * prior to ALPN extension, and a different certificate may be needed by
+ * ALPN "acme-tls/1".)  Alternatively, mbedtls could provide an API to clear
+ * &ssl->handshake->sni_key_cert, rather than forcing ssl_append_key_cert() with
+ * no other option.
+ */
+static int ssl_parse_client_hello( mbedtls_ssl_context *ssl, handler_ctx *hctx )
+{
+    int ret;
+    size_t msg_len;
+    unsigned char *buf;
+
+    /*
+     * If renegotiating, then the input was read with mbedtls_ssl_read_record(),
+     * otherwise read it ourselves manually in order to support SSLv2
+     * ClientHello, which doesn't use the same record layer format.
+     */
+#if defined(MBEDTLS_SSL_RENEGOTIATION)
+    if( ssl->renego_status == MBEDTLS_SSL_INITIAL_HANDSHAKE )
+#endif
+    {
+        if( ( ret = mbedtls_ssl_fetch_input( ssl, 5 ) ) != 0 )
+        {
+            /* No alert on a read error. */
+            MBEDTLS_SSL_DEBUG_RET( 1, "mbedtls_ssl_fetch_input", ret );
+            return( ret );
+        }
+    }
+
+    buf = ssl->in_hdr;
+
+    /*
+     * SSLv3/TLS Client Hello
+     *
+     * Record layer:
+     *     0  .   0   message type
+     *     1  .   2   protocol version
+     *     3  .   11  DTLS: epoch + record sequence number
+     *     3  .   4   message length
+     */
+    if( buf[0] != MBEDTLS_SSL_MSG_HANDSHAKE )
+    {
+        return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+    }
+
+#if defined(MBEDTLS_SSL_PROTO_DTLS)
+    /*(not supported in lighttpd for now)*/
+    /*(mbedtls_ssl_in_hdr_len() and mbedtls_ssl_hs_hdr_len() are in
+     * mbedtls/ssl_internal.h but simple enough to repeat here) */
+    if( ssl->conf->transport == MBEDTLS_SSL_TRANSPORT_DATAGRAM )
+        return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+#endif /* MBEDTLS_SSL_PROTO_DTLS */
+
+    msg_len = ( ssl->in_len[0] << 8 ) | ssl->in_len[1];
+
+#if defined(MBEDTLS_SSL_RENEGOTIATION)
+    if( ssl->renego_status != MBEDTLS_SSL_INITIAL_HANDSHAKE )
+    {
+        /* Set by mbedtls_ssl_read_record() */
+        msg_len = ssl->in_hslen;
+    }
+    else
+#endif
+    {
+        if( msg_len > MBEDTLS_SSL_IN_CONTENT_LEN )
+        {
+            return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+        }
+
+        if( ( ret = mbedtls_ssl_fetch_input( ssl,
+                       5 /*mbedtls_ssl_in_hdr_len( ssl )*/ + msg_len ) ) != 0 )
+        {
+            MBEDTLS_SSL_DEBUG_RET( 1, "mbedtls_ssl_fetch_input", ret );
+            return( ret );
+        }
+    }
+
+    buf = ssl->in_msg;
+
+    /*
+     * Handshake layer:
+     *     0  .   0   handshake type
+     *     1  .   3   handshake length
+     *     4  .   5   DTLS only: message seqence number
+     *     6  .   8   DTLS only: fragment offset
+     *     9  .  11   DTLS only: fragment length
+     */
+    if( msg_len < 4 /*mbedtls_ssl_hs_hdr_len( ssl )*/ )
+    {
+        return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+    }
+
+    if( buf[0] != MBEDTLS_SSL_HS_CLIENT_HELLO )
+    {
+        return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+    }
+
+    /* We don't support fragmentation of ClientHello (yet?) */
+    if( buf[1] != 0 ||
+        msg_len != 4u /*mbedtls_ssl_hs_hdr_len( ssl )*/ + ( ( buf[2] << 8 ) | buf[3] ) )
+    {
+        return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+    }
+
+    buf += 4; /* mbedtls_ssl_hs_hdr_len( ssl ); */
+    msg_len -= 4; /* mbedtls_ssl_hs_hdr_len( ssl ); */
+
+    /*
+     * ClientHello layer:
+     *     0  .   1   protocol version
+     *     2  .  33   random bytes (starting with 4 bytes of Unix time)
+     *    34  .  35   session id length (1 byte)
+     *    35  . 34+x  session id
+     *   35+x . 35+x  DTLS only: cookie length (1 byte)
+     *   36+x .  ..   DTLS only: cookie
+     *    ..  .  ..   ciphersuite list length (2 bytes)
+     *    ..  .  ..   ciphersuite list
+     *    ..  .  ..   compression alg. list length (1 byte)
+     *    ..  .  ..   compression alg. list
+     *    ..  .  ..   extensions length (2 bytes, optional)
+     *    ..  .  ..   extensions (optional)
+     */
+
+    /*
+     * Minimal length (with everything empty and extensions omitted) is
+     * 2 + 32 + 1 + 2 + 1 = 38 bytes. Check that first, so that we can
+     * read at least up to session id length without worrying.
+     */
+    if( msg_len < 38 )
+    {
+        return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+    }
+
+    /*
+     * Check and save the protocol version
+     */
+    int major_ver, minor_ver;
+    mbedtls_ssl_read_version( &major_ver, &minor_ver,
+                      ssl->conf->transport, buf );
+
+    /*
+     * Check the session ID length and save session ID
+     */
+    const size_t sess_len = buf[34];
+
+    if( sess_len > sizeof( ssl->session_negotiate->id ) ||
+        sess_len + 34 + 2 > msg_len ) /* 2 for cipherlist length field */
+    {
+        return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+    }
+
+    /*
+     * Check the cookie length and content
+     */
+    const size_t ciph_offset = 35 + sess_len;
+
+    const size_t ciph_len = ( buf[ciph_offset + 0] << 8 )
+                          | ( buf[ciph_offset + 1]      );
+
+    if( ciph_len < 2 ||
+        ciph_len + 2 + ciph_offset + 1 > msg_len || /* 1 for comp. alg. len */
+        ( ciph_len % 2 ) != 0 )
+    {
+        return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+    }
+
+    /*
+     * Check the compression algorithms length and pick one
+     */
+    const size_t comp_offset = ciph_offset + 2 + ciph_len;
+
+    const size_t comp_len = buf[comp_offset];
+
+    if( comp_len < 1 ||
+        comp_len > 16 ||
+        comp_len + comp_offset + 1 > msg_len )
+    {
+        return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+    }
+
+    /* Do not parse the extensions if the protocol is SSLv3 */
+#if defined(MBEDTLS_SSL_PROTO_SSL3)
+    if( ( major_ver != 3 ) || ( minor_ver != 0 ) )
+    {
+#endif
+        /*
+         * Check the extension length
+         */
+        const size_t ext_offset = comp_offset + 1 + comp_len;
+        size_t ext_len;
+        if( msg_len > ext_offset )
+        {
+            if( msg_len < ext_offset + 2 )
+            {
+                return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+            }
+
+            ext_len = ( buf[ext_offset + 0] << 8 )
+                    | ( buf[ext_offset + 1]      );
+
+            if( ( ext_len > 0 && ext_len < 4 ) ||
+                msg_len != ext_offset + 2 + ext_len )
+            {
+                return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+            }
+        }
+        else
+            ext_len = 0;
+
+        unsigned char *ext = buf + ext_offset + 2;
+
+        while( ext_len != 0 )
+        {
+            unsigned int ext_id;
+            unsigned int ext_size;
+            if ( ext_len < 4 ) {
+                return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+            }
+            ext_id   = ( ( ext[0] <<  8 ) | ( ext[1] ) );
+            ext_size = ( ( ext[2] <<  8 ) | ( ext[3] ) );
+
+            if( ext_size + 4 > ext_len )
+            {
+                return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+            }
+            switch( ext_id )
+            {
+#if defined(MBEDTLS_SSL_ALPN)
+            case MBEDTLS_TLS_EXT_ALPN:
+                MBEDTLS_SSL_DEBUG_MSG( 3, ( "found alpn extension" ) );
+
+                /*(lighttpd-specific)*/
+                ret = mod_mbedtls_alpn_select_cb(hctx, ext + 4, ext_size);
+                if( ret != 0 )
+                    return( ret );
+                break;
+#endif /* MBEDTLS_SSL_ALPN */
+
+            default:
+                break;
+            }
+
+            ext_len -= 4 + ext_size;
+            ext += 4 + ext_size;
+
+            if( ext_len > 0 && ext_len < 4 )
+            {
+                return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
+            }
+        }
+#if defined(MBEDTLS_SSL_PROTO_SSL3)
+    }
+#endif
+
+    return( 0 );
 }
