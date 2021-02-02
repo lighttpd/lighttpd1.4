@@ -4054,8 +4054,7 @@ static int ssl_parse_client_hello( mbedtls_ssl_context *ssl, handler_ctx *hctx )
             ext_len = ( buf[ext_offset + 0] << 8 )
                     | ( buf[ext_offset + 1]      );
 
-            if( ( ext_len > 0 && ext_len < 4 ) ||
-                msg_len != ext_offset + 2 + ext_len )
+            if( msg_len != ext_offset + 2 + ext_len )
             {
                 return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
             }
@@ -4098,11 +4097,6 @@ static int ssl_parse_client_hello( mbedtls_ssl_context *ssl, handler_ctx *hctx )
 
             ext_len -= 4 + ext_size;
             ext += 4 + ext_size;
-
-            if( ext_len > 0 && ext_len < 4 )
-            {
-                return( MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO );
-            }
         }
 #if defined(MBEDTLS_SSL_PROTO_SSL3)
     }
