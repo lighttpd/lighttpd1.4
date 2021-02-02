@@ -892,10 +892,9 @@ h2_frame_cq_compact (chunkqueue * const cq, uint32_t len)
 {
     /*(marked cold since most frames not expect to cross chunk boundary)*/
 
-    /*(must be guaranteed by caller)*/
-        /*assert(chunkqueue_length(cq) >= len);*/
-        /*assert(cq->first != cq->last);*//*(multiple chunks)*/
     /* caller must guarantee that chunks in chunkqueue are all MEM_CHUNK */
+    /* caller should check (chunkqueue_length(cq) >= len) before calling,
+     * or should check that returned value >= len */
 
     chunkqueue_compact_mem(cq, len);
     return buffer_string_length(cq->first->mem) - (uint32_t)cq->first->offset;
@@ -942,6 +941,7 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
         }
         if (clen < n) {
             clen = h2_frame_cq_compact(cq, n);
+            if (clen < n) return n; /* incomplete frame; go on */
             c = cq->first; /*(reload after h2_frame_cq_compact())*/
             s = (uint8_t *)(c->mem->ptr + c->offset);
         }
@@ -995,8 +995,22 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
         cq->bytes_out += plen;
     }
 
+  #ifdef __COVERITY__
+    /* Coverity does not notice that values used in s are checked.
+     * Although silencing here, would prefer not to do so since doing so
+     * disables Coverity from reporting questionable modifications which
+     * might be made to the code in the future. */
+    __coverity_tainted_data_sink__(s);
+  #endif
+
     do {
         const uint32_t flen = (s[n+0]<<16)|(s[n+1]<<8)|s[n+2];
+      #ifdef __COVERITY__ /*flen values were checked in do {} while loop above*/
+        if (clen < n+9+flen) {
+            h2_send_goaway_e(con, H2_E_FRAME_SIZE_ERROR);
+            return 0;
+        }
+      #endif
         flags = s[n+4];
         memmove(s+m, s+n+9, flen);
         m += flen;
