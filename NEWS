@@ -3,6 +3,91 @@
 NEWS
 ====
 
+- 1.4.59 - 2021-02-02
+  * [mod_webdav] hide unused funcs depending on build
+  * [mod_mbedtls] include mbedtls/platform_util.h
+  * [mod_mbedtls] use local strncmp_const()
+  * [mod_gnutls] use local strncmp_const()
+  * [mod_dirlisting] place vars closer to where used
+  * [autotools] autoupdate; subst deprecated/obsolete
+  * [autoconf] update ax_prog_cc_for_build.m4
+  * [core] fix crash at shutdown w/ certain config
+  * [tests] use ephemeral ports in tests
+  * [mod_wolfssl] minor updates for wolfSSL v4.6.0
+  * [doc] create-mime.conf.pl improve case handling
+  * [mod_openssl] extend ssl.openssl.ssl-conf-cmd
+  * [mod_extforward] config warning for module order
+  * [mod_extforward] fix extforward.headers defaults (fixes #3051)
+  * [multiple] use HTTP_HEADER_* enum before strcmp
+  * [multiple] replace buffer_is_equal_caseless_string
+  * [mod_dirlisting] quiet coverity false positive
+  * [doc] create-mime.conf.pl improve case handling
+  * [autoconf] fix LT_INIT syntax
+  * [doc] create-mime.conf.pl -v for warnings
+  * [core] fix crash in error trace if backend is down (fixes #3052)
+  * [doc] create-mime.conf.pl -v silent for mult vnd
+  * [mod_openssl] update LIBRESSL_VERSION_NUMBER check
+  * [multiple] fix: honor CipherString for alt TLS lib
+  * [mod_openssl] set Ciphersuites once API available
+  * [mod_dirlisting] use fdopendir(), fstatat()
+  * [mod_deflate] support Accept-Encoding: zstd
+  * [mod_deflate] use zstd streaming API
+  * [mod_dirlisting] hide unused variable on MacOS
+  * [doc] add --with-zstd to INSTALL
+  * [mod_access] mark mod_access_check attribute pure
+  * [core] add decls in connections.h
+  * [build] update scripts/ci-build.sh
+  * [core] check ifdef WOLFSSL_SHA512 for SHA512 avail
+  * [build] scripts/ci-build.sh --with-nettle
+  * [mod_openssl] update LIBRESSL_VERSION_NUMBER check
+  * [build] scripts/ci-build.sh w/o --with-wolfssl
+  * [build] scripts/ci-build.sh adjustments
+  * [build] fix typo in src/CMakeLists.txt
+  * [build] adjust mbedtls vars in src/CMakeLists.txt
+  * [build] scripts/ci-build.sh adjustments
+  * [build] adjust crypto vars in src/CMakeLists.txt
+  * [core] avoid multiple definition of SHA512_CTX
+  * [build] adjust crypto vars in src/CMakeLists.txt
+  * [mod_alias] modify r->physical.path in place
+  * [build] scripts/ci-build.sh add --with-maxminddb
+  * build] scripts/ci-build.sh remove --with-maxminddb
+  * [mod_deflate] use zstd typedefs (minor cleanup)
+  * [mod_deflate] compat with zstd < v1.4.0
+  * [multiple] fix coverity warnings
+  * [multiple] fix TLS config string parsing
+  * [mod_gnutls] fix ssl.ca_dn_file data access
+  * [mod_wolfssl] wipe ssl_pemfile_pkey before free()
+  * [mod_wolfssl] fix syntax errors
+  * [multiple] fix TLS config string parsing
+  * [mod_gnutls] fix alt code for coverity
+  * [core] check more carefully after SSL_WANT_WRITE
+  * [core] fix 100% CPU spin if traffic limit hit
+  * [core] skip interest in POLLRDHUP after POLLRDHUP (#3059)
+  * [TLS] detect expired stapling file at startup (fixes #3056)
+  * [multiple] avoid duplicate parsing in trigger func (#3056)
+  * [multiple] quiet some clang-analyzer warnings
+  * [core] enable HTTP/2 by default
+  * [mod_ajp13] AJPv13 Tomcat connector for lighttpd
+  * [core] const data_unset *array_get_element_klen()
+  * [core] tighten struct data_config and related code
+  * [core] fix merging large headers across mult reads (fixes #3059)
+  * [mod_gnutls,mod_mbedtls] recog common cipherstring
+  * [build] fix typo in SConstruct (fixes #3061)
+  * [mod_wolfssl] wolfSSL might repeat SNI_Callback()
+  * [TLS] fix invalid cfg warning
+  * [mod_openssl] fix acme-tls/1 challenge bootstrap
+  * [TLS] set r->uri.authority empty str upon accept()
+  * [mod_gnutls] fix acme-tls/1 challenge bootstrap
+  * [mod_nss] fix acme-tls/1 challenge bootstrap
+  * [mod_wolfssl] copy stapling buf for OCSP resp
+  * [mod_mbedtls] fix acme-tls/1 challenge bootstrap
+  * [mod_mbedtls] fix acme-tls/1 challenge bootstrap
+  * [mod_cgi] fix assert if empty X-Sendfile path (fixes #3062)
+  * [mod_mbedtls] restore ALPN chk after client hello
+  * [core] re-validate h2 CONTINUATION frame len in cq
+  * [mod_mbedtls] remove redundant condition check
+  * [core] quiet coverity warning
+
 - 1.4.58 - 2020-12-27
   * [mod_wolfssl] use wolfSSL TLS version defines
   * [mod_wolfssl] compile with earlier wolfSSL vers
