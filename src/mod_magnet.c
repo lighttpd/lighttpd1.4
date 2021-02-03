@@ -290,7 +290,9 @@ static int magnet_print(lua_State *L) {
 
 static int magnet_stat(lua_State *L) {
 	buffer * const sb = magnet_checkbuffer(L, 1);
-	stat_cache_entry * const sce = stat_cache_get_entry(sb);
+	stat_cache_entry * const sce = (!buffer_string_is_empty(sb))
+	  ? stat_cache_get_entry(sb)
+	  : NULL;
 	buffer_free(sb);
 	if (NULL == sce) {
 		lua_pushnil(L);
