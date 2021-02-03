@@ -759,12 +759,9 @@ static int magnet_attach_content(request_st * const r, lua_State * const L, int 
 
 	lua_getfield(L, lighty_table_ndx, "content"); /* lighty.content */
 	if (lua_istable(L, -1)) {
-		int i;
 		/* content is found, and is a table */
-
 		http_response_body_clear(r, 0);
-
-		for (i = 1; ; i++) {
+		for (int i = 1, end = 0; !end; i++) {
 			lua_rawgeti(L, -1, i);
 
 			/* -1 is the value and should be the value ... aka a table */
@@ -781,42 +778,49 @@ static int magnet_attach_content(request_st * const r, lua_State * const L, int 
 					off_t off = (off_t) luaL_optinteger(L, -1, 0);
 					off_t len = (off_t) luaL_optinteger(L, -2, -1); /*(-1 to http_chunk_append_file_range() uses file size minus offset)*/
 					if (off < 0) {
-						return luaL_error(L, "offset for '%s' is negative", lua_tostring(L, -3));
-					}
-
-					if (len >= off) {
+						log_error(r->conf.errh, __FILE__, __LINE__,
+						  "offset for '%s' is negative", lua_tostring(L, -3));
+						end = 1;
+					} else if (len >= off) {
 						len -= off;
 					} else if (-1 != len) {
-						return luaL_error(L, "offset > length for '%s'", lua_tostring(L, -3));
+						log_error(r->conf.errh, __FILE__, __LINE__,
+						  "offset > length for '%s'", lua_tostring(L, -3));
+						end = 1;
 					}
 
-					if (0 != len) {
+					if (!end && 0 != len) {
 						buffer *fn = magnet_checkbuffer(L, -3);
 						int rc = http_chunk_append_file_range(r, fn, off, len);
 						buffer_free(fn);
 						if (0 != rc) {
-							return luaL_error(L, "error opening file content '%s' at offset %lld", lua_tostring(L, -3), (long long)off);
+							log_error(r->conf.errh, __FILE__, __LINE__,
+							  "error opening file content '%s' at offset %lld",
+							          lua_tostring(L, -3), (long long)off);
+							end = 1;
 						}
 					}
 				} else {
-					return luaL_error(L, "content[%d] is a table and requires the field \"filename\"", i);
+					log_error(r->conf.errh, __FILE__, __LINE__,
+					  "content[%d] is a table and field \"filename\" must be a string", i);
+					end = 1;
 				}
 
 				lua_pop(L, 3);
 			} else if (lua_isnil(L, -1)) {
 				/* end of list */
-
-				lua_pop(L, 1);
-
-				break;
+				end = 1;
 			} else {
-				return luaL_error(L, "content[%d] is neither a string nor a table: ", i);
+				log_error(r->conf.errh, __FILE__, __LINE__,
+				  "content[%d] is neither a string nor a table", i);
+				end = 1;
 			}
 
 			lua_pop(L, 1); /* pop the content[...] entry value */
 		}
 	} else {
-		return luaL_error(L, "lighty.content has to be a table");
+		log_error(r->conf.errh, __FILE__, __LINE__,
+		  "lighty.content has to be a table");
 	}
 	lua_pop(L, 1); /* pop lighty.content */
 
