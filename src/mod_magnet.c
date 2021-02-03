@@ -365,9 +365,9 @@ static int magnet_stat(lua_State *L) {
 
 
 static int magnet_atpanic(lua_State *L) {
-	const_buffer cb = magnet_checkconstbuffer(L, 1);
 	request_st * const r = magnet_get_request(L);
-	log_error(r->conf.errh, __FILE__, __LINE__, "(lua-atpanic) %s", cb.ptr);
+	log_error(r->conf.errh, __FILE__, __LINE__, "(lua-atpanic) %s",
+	          lua_isstring(L, 1) ? lua_tostring(L, 1) : "");
 	longjmp(exceptionjmp, 1);
 }
 
