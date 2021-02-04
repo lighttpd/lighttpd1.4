@@ -961,6 +961,7 @@ void http_response_upgrade_read_body_unknown(request_st * const r) {
           (FDEVENT_STREAM_RESPONSE_BUFMIN | FDEVENT_STREAM_RESPONSE);
     r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
     r->reqbody_length = -2;
+    r->resp_body_scratchpad = -1;
     r->keep_alive = 0;
 }
 
