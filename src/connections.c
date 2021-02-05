@@ -867,13 +867,13 @@ static int connection_read_cq_err(connection *con) {
   #if defined(__WIN32)
     int lastError = WSAGetLastError();
     switch (lastError) {
-    case EAGAIN:
+      case WSAEWOULDBLOCK:
         return 0;
-    case EINTR:
+      case WSAEINTR:
         /* we have been interrupted before we could read */
         con->is_readable = 1;
         return 0;
-    case ECONNRESET:
+      case WSAECONNRESET:
         /* suppress logging for this error, expected for keep-alive */
         break;
     default:

@@ -885,6 +885,18 @@ int fdevent_ioctl_fionread (int fd, int fdfmt, int *toread)
 }
 
 
+int fdevent_connect_status (int fd)
+{
+    /* try to finish the connect() */
+    /*(should be called after connect() only when fd is writable (POLLOUT))*/
+    int opt;
+    socklen_t len = sizeof(opt);
+    return (0 == getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&opt, &len))
+      ? opt
+      : WSAGetLastError();
+}
+
+
 #ifdef TEST
 int main (void)
 {

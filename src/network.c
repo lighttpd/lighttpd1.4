@@ -96,6 +96,20 @@ static handler_t network_server_handle_fdevent(void *context, int revents) {
     } while (--loops);
 
     if (loops) {
+      #ifdef _WIN32
+        const int lastError = WSAGetLastError();
+        switch (lastError) {
+          case WSAEWOULDBLOCK:
+          case WSAECONNRESET:
+          case WSAENOBUFS:
+          case WSAEINTR:
+          case WSAECONNABORTED:
+          case WSAEMFILE:
+            break;
+          default:
+            log_error(srv->errh, __FILE__, __LINE__, "accept(): %d", lastError);
+        }
+      #else
         switch (errno) {
           case EAGAIN:
          #if EWOULDBLOCK != EAGAIN
@@ -108,6 +122,7 @@ static handler_t network_server_handle_fdevent(void *context, int revents) {
           default:
             log_perror(srv->errh, __FILE__, __LINE__, "accept()");
         }
+      #endif
     }
 
     return HANDLER_GO_ON;
@@ -492,6 +507,19 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 		}
 
 		/* connect failed */
+	  #ifdef _WIN32
+		switch(WSAGetLastError()) {
+		case WSAECONNRESET:
+		case WSAECONNREFUSED:
+			/* socket might or might not exist; unlink anyway */
+			if (*host == '/') unlink(host);
+			break;
+		default:
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "testing socket failed: connect() %s", host);
+			return -1;
+		}
+	  #else
 		switch(errno) {
 		case ECONNREFUSED:
 			if (*host == '/') unlink(host);
@@ -503,6 +531,7 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 			  "testing socket failed: %s", host);
 			return -1;
 		}
+	  #endif
 
 		if (-1 == fdevent_socket_set_nb(srv_socket->fd)) {
 			log_perror(srv->errh, __FILE__, __LINE__, "fcntl()");

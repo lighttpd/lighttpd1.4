@@ -1308,8 +1308,30 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
             avail = chunk_buffer_prepare_append(b, avail);
         }
 
+      #ifdef _WIN32
+        n = recv(fd, b->ptr+buffer_clen(b), avail, 0);
+        if (n == SOCKET_ERROR) {
+            switch (WSAGetLastError()) {
+              case WSAEWOULDBLOCK:
+              case WSAEINTR:
+                if (buffer_is_blank(b))
+                    chunk_buffer_yield(b); /*(improve large buf reuse)*/
+                return HANDLER_GO_ON;
+              case WSAECONNRESET:
+                if (opts->backend == BACKEND_CGI) {
+                    /* treat as EOF if WSAECONNRESET on local socket from CGI */
+                    n = 0;
+                    break;
+                }
+                __attribute_fallthrough__
+              default:
+                log_perror(r->conf.errh, __FILE__, __LINE__,
+                  "recv() %d %d", r->con->fd, fd);
+                return HANDLER_ERROR;
+            }
+        }
+      #else
         n = read(fd, b->ptr+buffer_clen(b), avail);
-
         if (n < 0) {
             switch (errno) {
               case EAGAIN:
@@ -1328,6 +1350,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
                 return HANDLER_ERROR;
             }
         }
+      #endif
 
         buffer_commit(b, (size_t)n);
       #ifdef __COVERITY__

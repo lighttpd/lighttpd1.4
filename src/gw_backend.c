@@ -506,7 +506,15 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
 
     do {
         status = connect(gw_fd, proc->saddr, proc->saddrlen);
-    } while (-1 == status && errno == EINTR);
+    }
+  #ifdef _WIN32
+    while (-1 == status && WSAGetLastError() == WSAEINTR);
+  #else
+    while (-1 == status && errno == EINTR);
+  #endif
+
+    /* _WIN32 WSAGetLastError() WSAECONNRESET or WSAECONNREFUSED might
+     * or might not indicate presence of socket, so try to unlink unixsocket */
 
     if (-1 == status && errno != ENOENT && proc->unixsocket) {
         log_perror(errh, __FILE__, __LINE__,
@@ -990,9 +998,18 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
 
 static int gw_establish_connection(request_st * const r, gw_host *host, gw_proc *proc, pid_t pid, int gw_fd, int debug) {
     if (-1 == connect(gw_fd, proc->saddr, proc->saddrlen)) {
+      #ifdef _WIN32
+        /* MS returns WSAEWOULDBLOCK instead of WSAEINPROGRESS for connect()
+         * if socket is configured nonblocking */
+        int errnum = WSAGetLastError();
+        if (errnum == WSAEINPROGRESS || errnum == WSAEALREADY
+            || errnum == WSAEWOULDBLOCK || errnum == WSAEINTR)
+      #else
         int errnum = errno;
         if (errnum == EINPROGRESS || errnum == EALREADY || errnum == EINTR
-            || (errnum == EAGAIN && host->unixsocket)) {
+            || (errnum == EAGAIN && host->unixsocket))
+      #endif
+        {
             if (debug > 2) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "connect delayed; will continue later: %s",
@@ -2070,10 +2087,20 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
             off_t bytes_out = hctx->wb.bytes_out;
             if (r->con->srv->network_backend_write(hctx->fd, &hctx->wb,
                                                    MAX_WRITE_LIMIT, errh) < 0) {
-                switch(errno) {
+              #ifdef _WIN32
+                switch(WSAGetLastError())
+              #else
+                switch(errno)
+              #endif
+                {
+                #ifdef _WIN32
+                case WSAENOTCONN:
+                case WSAECONNRESET:
+                #else
                 case EPIPE:
                 case ENOTCONN:
                 case ECONNRESET:
+                #endif
                     /* the connection got dropped after accept()
                      * we don't care about that --
                      * if you accept() it, you have to handle it.

@@ -1328,9 +1328,17 @@ static int hap_PROXY_recv (const int fd, union hap_PROXY_hdr * const hdr, const 
 
     do {
         ret = recv(fd, hdr, sizeof(*hdr), MSG_PEEK|MSG_DONTWAIT|MSG_NOSIGNAL);
-    } while (-1 == ret && errno == EINTR);
+    }
+  #ifdef _WIN32
+    while (-1 == ret && WSAGetLastError() == WSAEINTR);
+  #else
+    while (-1 == ret && errno == EINTR);
+  #endif
 
     if (-1 == ret)
+      #ifdef _WIN32
+        return (WSAGetLastError() == WSAEWOULDBLOCK) ? 0 : -1;
+      #else
         return (errno == EAGAIN
                 #ifdef EWOULDBLOCK
                 #if EAGAIN != EWOULDBLOCK
@@ -1338,6 +1346,7 @@ static int hap_PROXY_recv (const int fd, union hap_PROXY_hdr * const hdr, const 
                 #endif
                 #endif
                ) ? 0 : -1;
+      #endif
 
     if (ret >= 16 && 0 == memcmp(&hdr->v2, v2sig, 12)
         && (hdr->v2.ver_cmd & 0xF0) == 0x20) {
