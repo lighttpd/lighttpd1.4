@@ -359,7 +359,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	sock_addr_cache.h \
 	configparser.h \
 	rand.h \
-	sys-crypto.h sys-crypto-md.h \
+	sys-crypto.h sys-crypto-md.h sys-dirent.h \
 	sys-endian.h sys-mmap.h sys-setjmp.h \
 	sys-socket.h sys-stat.h sys-strings.h \
 	sys-time.h \

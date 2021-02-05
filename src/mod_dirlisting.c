@@ -11,6 +11,7 @@
 
 #include "first.h"
 
+#include "sys-dirent.h"
 #include "sys-stat.h"
 #include "sys-time.h"
 
@@ -37,17 +38,6 @@
 #ifdef AT_FDCWD
 #ifndef _ATFILE_SOURCE
 #define _ATFILE_SOURCE
-#endif
-#endif
-
-#ifndef _WIN32
-#include <dirent.h>
-#endif
-#ifndef _D_EXACT_NAMLEN
-#ifdef _DIRENT_HAVE_D_NAMLEN
-#define _D_EXACT_NAMLEN(d) ((d)->d_namlen)
-#else
-#define _D_EXACT_NAMLEN(d) (strlen ((d)->d_name))
 #endif
 #endif
 
