@@ -3367,6 +3367,8 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
             return 1;
         }
         else if (0 == strncmp_const(e,
+                  "ECDHE+AESGCM:ECDHE+AES256:CHACHA20:!SHA1:!SHA256:!SHA384")
+              || 0 == strncmp_const(e,
                   "EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384")) {
             e += sizeof(
                   "EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384")-1;
