@@ -140,6 +140,8 @@ class Autoconf:
 		try:
 			self.conf.env.ParseConfig(*args, **kw)
 			return True
+		except OSError:
+			return False
 		except Exception as e:
 			print(e.message, file=sys.stderr)
 			return False
