@@ -58,6 +58,7 @@ request_reset (request_st * const r)
     http_response_reset(r);
 
     r->loops_per_request = 0;
+    r->keep_alive = 0;
 
     r->h2state = 0; /* H2_STATE_IDLE */
     r->h2id = 0;

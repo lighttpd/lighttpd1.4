@@ -103,9 +103,9 @@ http_response_write_header (request_st * const r)
 	if (light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)
 	    && r->http_version == HTTP_VERSION_1_1) {
 		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("upgrade"));
-	} else if (0 == r->keep_alive) {
+	} else if (r->keep_alive <= 0) {
 		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("close"));
-	} else if (r->http_version == HTTP_VERSION_1_0) {/*(&& r->keep_alive != 0)*/
+	} else if (r->http_version == HTTP_VERSION_1_0) {/*(&& r->keep_alive > 0)*/
 		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("keep-alive"));
 	}
 

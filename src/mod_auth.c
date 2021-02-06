@@ -828,7 +828,7 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "password doesn't match for %s username: %s IP: %s",
 		  r->uri.path.ptr, username->ptr, r->con->dst_addr_buf->ptr);
-		r->keep_alive = 0; /*(disable keep-alive if bad password)*/
+		r->keep_alive = -1; /*(disable keep-alive if bad password)*/
 		rc = HANDLER_UNSET;
 		break;
 	}
@@ -1461,7 +1461,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		return HANDLER_FINISHED;
 	case HANDLER_ERROR:
 	default:
-		r->keep_alive = 0; /*(disable keep-alive if unknown user)*/
+		r->keep_alive = -1; /*(disable keep-alive if unknown user)*/
 		buffer_free(b);
 		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
@@ -1482,7 +1482,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "digest: auth failed for %s: wrong password, IP: %s",
 		  username, r->con->dst_addr_buf->ptr);
-		r->keep_alive = 0; /*(disable keep-alive if bad password)*/
+		r->keep_alive = -1; /*(disable keep-alive if bad password)*/
 
 		buffer_free(b);
 		return mod_auth_send_401_unauthorized_digest(r, require, 0);

@@ -228,7 +228,7 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 		}
 	}
 
-        if (r->keep_alive) {
+        if (r->keep_alive > 0) {
 		request_reset(r);
 		config_reset_config(r);
 		con->is_readable = 1; /* potentially trigger optimistic read */
@@ -1265,6 +1265,19 @@ connection_set_fdevent_interest (request_st * const r, connection * const con)
 }
 
 
+__attribute_cold__
+static void
+connection_request_end_h2 (request_st * const h2r, connection * const con)
+{
+    if (h2r->keep_alive >= 0) {
+        h2r->keep_alive = -1;
+        h2_send_goaway(con, H2_E_NO_ERROR);
+    }
+    else /*(abort connection upon second request to close h2 connection)*/
+        h2_send_goaway(con, H2_E_ENHANCE_YOUR_CALM);
+}
+
+
 static void
 connection_state_machine_h2 (request_st * const h2r, connection * const con)
 {
@@ -1359,8 +1372,15 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
                     && !chunkqueue_is_empty(con->read_queue))
                     resched |= 1;
                 h2_send_end_stream(r, con);
+                const int alive = r->keep_alive;
                 h2_retire_stream(r, con);/*r invalidated;removed from h2c->r[]*/
                 --i;/* adjust loop i; h2c->rused was modified to retire r */
+                /*(special-case: allow *stream* to set r->keep_alive = -1 to
+                 * trigger goaway on h2 connection, e.g. after mod_auth failure
+                 * in attempt to mitigate brute force attacks by forcing a
+                 * reconnect and (somewhat) slowing down retries)*/
+                if (alive < 0)
+                    connection_request_end_h2(h2r, con);
             }
         }
     }

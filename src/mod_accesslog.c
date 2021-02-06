@@ -1108,7 +1108,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				break;
 			case FORMAT_CONNECTION_STATUS:
 				if (r->state == CON_STATE_RESPONSE_END) {
-					if (0 == r->keep_alive) {
+					if (r->keep_alive <= 0) {
 						buffer_append_string_len(b, CONST_STR_LEN("-"));
 					} else {
 						buffer_append_string_len(b, CONST_STR_LEN("+"));

@@ -175,7 +175,7 @@ struct request_st {
     char resp_header_repeated;
 
     char loops_per_request;  /* catch endless loops in a single request */
-    char keep_alive; /* only request.c can enable it, all other just disable */
+    int8_t keep_alive; /* only request.c can enable it, all other just disable */
     char async_callback;
 
     buffer *tmp_buf;                    /* shared; same as srv->tmp_buf */
