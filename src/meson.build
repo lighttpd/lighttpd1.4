@@ -786,6 +786,7 @@ common_cflags = defs + [
 
 if compiler.get_id() == 'gcc' or compiler.get_id() == 'clang'
 	common_cflags += [
+		'-pipe',
 		'-Wall',
 		'-g',
 		'-Wshadow',

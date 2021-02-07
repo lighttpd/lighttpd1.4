@@ -1114,7 +1114,7 @@ if(HAVE_XXHASH)
 endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -g -Wshadow -W -pedantic ${WARN_CFLAGS}")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -pipe -Wall -g -Wshadow -W -pedantic ${WARN_CFLAGS}")
 	set(CMAKE_C_FLAGS_RELEASE        "${CMAKE_C_FLAGS_RELEASE}     -O2")
 	set(CMAKE_C_FLAGS_DEBUG          "${CMAKE_C_FLAGS_DEBUG}       -O0")
 	set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_WITHDEBINFO} -O2")

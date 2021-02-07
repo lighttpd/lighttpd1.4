@@ -1636,7 +1636,7 @@ fi
 AC_MSG_NOTICE([----------------------------------------])
 dnl check for extra compiler options (warning options)
 if test "${GCC}" = yes; then
-  TRY_CFLAGS([-Wall -W -Wshadow -pedantic])
+  TRY_CFLAGS([-pipe -Wall -W -Wshadow -pedantic])
 fi
 
 AC_ARG_ENABLE([extra-warnings],

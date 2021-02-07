@@ -291,7 +291,7 @@ env['package'] = package
 env['version'] = version
 if env['CC'] == 'gcc':
 	## we need x-open 6 and bsd 4.3 features
-	env.Append(CCFLAGS = Split('-Wall -O2 -g -W -pedantic -Wunused -Wshadow -std=gnu99'))
+	env.Append(CCFLAGS = Split('-pipe -Wall -O2 -g -W -pedantic -Wunused -Wshadow -std=gnu99'))
 
 env.Append(CPPFLAGS = [
 	'-D_FILE_OFFSET_BITS=64',
