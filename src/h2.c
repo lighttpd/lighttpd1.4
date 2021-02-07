@@ -230,6 +230,52 @@ static const uint8_t lshpack_idx_http_header[] = {
 static request_st * h2_init_stream (request_st * const h2r, connection * const con);
 
 
+__attribute_pure__
+static inline uint32_t
+h2_u32 (const uint8_t * const s)
+{
+    return ((uint32_t)s[0] << 24)
+         | ((uint32_t)s[1] << 16)
+         | ((uint32_t)s[2] <<  8)
+         |  (uint32_t)s[3];
+}
+
+
+__attribute_pure__
+static inline uint32_t
+h2_u31 (const uint8_t * const s)
+{
+    return h2_u32(s) & ~0x80000000u;
+}
+
+
+__attribute_pure__
+static inline uint32_t
+h2_u24 (const uint8_t * const s)
+{
+  #if 1
+    /* XXX: optimization is valid only for how this is used in h2.c
+     * where we have checked that frame header received is at least
+     * 9 chars, and where s containing frame length (3-bytes) is
+     * followed by at least 1 additional char. */
+    return h2_u32(s) >> 8;
+  #else
+    return ((uint32_t)s[0] << 16)
+         | ((uint32_t)s[1] <<  8)
+         |  (uint32_t)s[2];
+  #endif
+}
+
+
+__attribute_pure__
+static inline uint16_t
+h2_u16 (const uint8_t * const s)
+{
+    return ((uint16_t)s[0] << 8)
+         |  (uint16_t)s[1];
+}
+
+
 static void
 h2_send_settings_ack (connection * const con)
 {
@@ -357,11 +403,11 @@ h2_recv_goaway (connection * const con, const uint8_t * const s, uint32_t len)
     /*(s must be entire GOAWAY frame and len the frame length field)*/
     /*assert(s[3] == H2_FTYPE_GOAWAY);*/
     UNUSED(len);
-    if ((s[5] & ~0x80) | s[6] | s[7] | s[8]) { /*(GOAWAY stream id must be 0)*/
+    if (0 != h2_u31(s+5)) { /*(GOAWAY stream id must be 0)*/
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return 0;
     }
-    const uint32_t e = (s[13]<< 24) | (s[14]<< 16) | (s[15]<< 8) | s[16];
+    const uint32_t e = h2_u32(s+13);
   #if 0
     /* XXX: debug: could log error code sent by peer */
   #endif
@@ -372,7 +418,7 @@ h2_recv_goaway (connection * const con, const uint8_t * const s, uint32_t len)
   #endif
   #if 0
     /* XXX: could validate/use Last-Stream-ID sent by peer */
-    const uint32_t last_id = (s[9] << 24) | (s[10]<< 16) | (s[11]<< 8) | s[12];
+    const uint32_t last_id = h2_u31(s+9);
   #endif
 
     /* send PROTOCOL_ERROR back to peer if peer sent an error code
@@ -393,8 +439,7 @@ h2_recv_rst_stream (connection * const con, const uint8_t * const s, const uint3
         h2_send_goaway_e(con, H2_E_FRAME_SIZE_ERROR);
         return;
     }
-    const uint32_t id =
-      ((s[5] << 24) | (s[6] << 16) | (s[7] << 8) | s[8]) & ~0x80000000u;
+    const uint32_t id = h2_u31(s+5);
     if (0 == id) {                   /*(RST_STREAM id must not be 0)*/
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return;
@@ -456,7 +501,7 @@ h2_recv_ping (connection * const con, uint8_t * const s, const uint32_t len)
         return;
     }
     s[5] &= ~0x80; /* reserved bit must be ignored */
-    if (s[5] | s[6] | s[7] | s[8]) { /*(PING stream id must be 0)*/
+    if (0 != h2_u31(s+5)) { /*(PING stream id must be 0)*/
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return;
     }
@@ -478,14 +523,12 @@ h2_recv_priority (connection * const con, const uint8_t * const s, const uint32_
         h2_send_goaway_e(con, H2_E_FRAME_SIZE_ERROR);
         return;
     }
-    const uint32_t id =
-      ((s[5] << 24) | (s[6] << 16) | (s[7] << 8) | s[8]) & ~0x80000000u;
+    const uint32_t id = h2_u31(s+5);
     if (0 == id) {                   /*(PRIORITY id must not be 0)*/
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return;
     }
-    const uint32_t prio =
-      ((s[9] << 24) | (s[10] << 16) | (s[11] << 8) | s[12]) & ~0x80000000u;
+    const uint32_t prio = h2_u31(s+9);
   #if 0
     uint32_t exclusive_dependency = (s[9] & 0x80) ? 1 : 0;
     uint32_t weight = s[13];
@@ -519,10 +562,8 @@ h2_recv_window_update (connection * const con, const uint8_t * const s, const ui
         h2_send_goaway_e(con, H2_E_FRAME_SIZE_ERROR);
         return;
     }
-    const uint32_t id =
-      ((s[5] << 24) | (s[6] << 16) | (s[7] << 8) | s[8]) & ~0x80000000u;
-    const int32_t v =
-      (int32_t)(((s[9] << 24)|(s[10] << 16)|(s[11] << 8)|s[12]) & ~0x80000000);
+    const uint32_t id = h2_u31(s+5);
+    const int32_t v = (int32_t)h2_u31(s+9);
     request_st *r = NULL;
     if (0 == id)
         r = &con->request;
@@ -602,8 +643,8 @@ h2_parse_frame_settings (connection * const con, const uint8_t *s, uint32_t len)
     /*(caller must validate frame len, frame type == 0x04, frame id == 0)*/
     h2con * const h2c = con->h2;
     for (; len >= 6; len -= 6, s += 6) {
-        uint32_t v = (s[2] << 24) | (s[3] << 16) | (s[4] << 8) | s[5];
-        switch (((s[0] << 8) | s[1])) {
+        uint32_t v = h2_u32(s+2);
+        switch (h2_u16(s)) {
           case H2_SETTINGS_HEADER_TABLE_SIZE:
             /* encoder may use any table size <= value sent by peer */
             /* For simple compliance with RFC and constrained memory use,
@@ -683,7 +724,7 @@ h2_recv_settings (connection * const con, const uint8_t * const s, const uint32_
 {
     /*(s must be entire SETTINGS frame, len must be the frame length field)*/
     /*assert(s[3] == H2_FTYPE_SETTINGS);*/
-    if ((s[5] & ~0x80) | s[6] | s[7] | s[8]) {/*(SETTINGS stream id must be 0)*/
+    if (0 != h2_u31(s+5)) {/*(SETTINGS stream id must be 0)*/
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return;
     }
@@ -739,8 +780,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
      * or try to consume entire chunk, or to split chunks with less copying */
 
     h2con * const h2c = con->h2;
-    const uint32_t id =
-      ((s[5] << 24) | (s[6] << 16) | (s[7] << 8) | s[8]) & ~0x80000000u;
+    const uint32_t id = h2_u31(s+5);
     if (0 == id || h2c->h2_cid < id) { /*(RST_STREAM id must not be 0)*/
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return 0;
@@ -911,8 +951,7 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
     uint32_t flags;
     h2con * const h2c = con->h2;
     const uint32_t fsize = h2c->s_max_frame_size;
-    const uint32_t id =
-      ((s[5] << 24) | (s[6] << 16) | (s[7] << 8) | s[8]) & ~0x80000000u;
+    const uint32_t id = h2_u31(s+5);
     do {
         if (cqlen < n+9) return n+9; /* incomplete frame; go on */
         if (clen < n+9) {
@@ -925,8 +964,8 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
             return 0;
         }
         flags = s[n+4];
-        const uint32_t flen = (s[n+0]<<16)|(s[n+1]<<8)|s[n+2];
-        if (id != (uint32_t)((s[n+5]<<24)|(s[n+6]<<16)|(s[n+7]<<8)|s[n+8])) {
+        const uint32_t flen = h2_u24(s+n);
+        if (id != h2_u32(s+n+5)) {
             h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
             return 0;
         }
@@ -976,7 +1015,7 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
     if (s[4] & H2_FLAG_PADDED) {
         const uint32_t plen = s[9];
         /* validate padding */
-        const uint32_t flen = (s[0]<<16)|(s[1]<<8)|s[2];
+        const uint32_t flen = h2_u24(s);
         if (flen < 1 + plen + ((s[n+4] & H2_FLAG_PRIORITY) ? 5 : 0)) {
             /* Padding that exceeds the size remaining for the header block
              * fragment MUST be treated as a PROTOCOL_ERROR. */
@@ -1004,7 +1043,7 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
   #endif
 
     do {
-        const uint32_t flen = (s[n+0]<<16)|(s[n+1]<<8)|s[n+2];
+        const uint32_t flen = h2_u24(s+n);
       #ifdef __COVERITY__ /*flen values were checked in do {} while loop above*/
         if (clen < n+9+flen) {
             h2_send_goaway_e(con, H2_E_FRAME_SIZE_ERROR);
@@ -1225,8 +1264,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
   #endif
     request_st *r = NULL;
     h2con * const h2c = con->h2;
-    const uint32_t id =
-      ((s[5] << 24) | (s[6] << 16) | (s[7] << 8) | s[8]) & ~0x80000000u;
+    const uint32_t id = h2_u31(s+5);
     if (0 == id) { /* HEADERS, PUSH_PROMISE stream id must != 0 */
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return 0;
@@ -1313,8 +1351,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
     }
     if (s[4] & H2_FLAG_PRIORITY) {
         /* XXX: TODO: handle PRIORITY (prio fields start at *psrc) */
-        const uint32_t prio =
-          ((psrc[0]<<24)|(psrc[1]<<16)|(psrc[2]<<8)|psrc[3]) & ~0x80000000u;
+        const uint32_t prio = h2_u31(psrc);
         if (prio == id) {
             h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
             if (!trailers)
@@ -1414,7 +1451,7 @@ h2_parse_frames (connection * const con)
             c = cq->first; /*(reload after h2_frame_cq_compact())*/
         }
         uint8_t *s = (uint8_t *)(c->mem->ptr + c->offset);
-        uint32_t flen = (s[0] << 16) | (s[1] << 8) | s[2];
+        uint32_t flen = h2_u24(s);
         if (flen > fsize) {
             h2_send_goaway_e(con, H2_E_FRAME_SIZE_ERROR);
             return 0;
@@ -1442,7 +1479,7 @@ h2_parse_frames (connection * const con)
                 s = (uint8_t *)(c->mem->ptr + c->offset);
                 /* frame size was also updated and might (legitimately)
                  * exceed SETTINGS_MAX_FRAME_SIZE, so do not test fsize again */
-                flen = (s[0]<<16)|(s[1]<<8)|s[2];
+                flen = h2_u24(s);
                 /* recalculate after CONTINUATION removed */
                 cqlen = chunkqueue_length(cq);
             }
@@ -1550,7 +1587,7 @@ h2_want_read (connection * const con)
         c = cq->first; /*(reload after h2_frame_cq_compact())*/
     }
     uint8_t *s = (uint8_t *)(c->mem->ptr + c->offset);
-    uint32_t flen = (s[0] << 16) | (s[1] << 8) | s[2];
+    uint32_t flen = h2_u24(s);
     if (clen < 9+flen) return 1;
 
     /* check if not HEADERS, or if HEADERS has END_HEADERS flag */
@@ -1564,7 +1601,7 @@ h2_want_read (connection * const con)
             c = cq->first; /*(reload after h2_frame_cq_compact())*/
             s = (uint8_t *)(c->mem->ptr + c->offset);
         }
-        flen = (s[n+0] << 16) | (s[n+1] << 8) | s[n+2];
+        flen = h2_u24(s+n);
         if (cqlen < n+9+flen) return 1; /* incomplete frame; go on */
         if (s[4] & H2_FLAG_END_HEADERS) return 0;
     }
