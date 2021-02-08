@@ -135,6 +135,47 @@ int fdevent_socket_nb_cloexec(int domain, int type, int protocol) {
 	return fd;
 }
 
+#ifndef _WIN32
+#if 0 /* not used */
+
+int fdevent_socketpair_cloexec (int domain, int typ, int protocol, int sv[2])
+{
+    sv[0] = sv[1] = -1;
+  #if defined(SOCK_CLOEXEC)
+    return socketpair(domain, typ | SOCK_CLOEXEC, protocol, sv);
+  #else
+    if (0 == socketpair(domain, typ, protocol, sv)) {
+        fdevent_setfd_cloexec(sv[0]);
+        fdevent_setfd_cloexec(sv[1]);
+        return 0;
+    }
+    return -1;
+  #endif
+}
+
+int fdevent_socketpair_nb_cloexec (int domain, int typ, int protocol, int sv[2])
+{
+    sv[0] = sv[1] = -1;
+  #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
+    return socketpair(domain, typ | SOCK_NONBLOCK | SOCK_CLOEXEC, protocol, sv);
+  #else
+    if (0 == socketpair(domain, typ, protocol, sv)) {
+        if (0 == fdevent_fcntl_set_nb_cloexec(sv[0])
+         && 0 == fdevent_fcntl_set_nb_cloexec(sv[1]))
+            return 0;
+
+        close(sv[0]);
+        close(sv[1]);
+        sv[0] = sv[1] = -1;
+    }
+    return -1;
+  #endif
+}
+
+#endif /* not used */
+
+#endif /* !_WIN32 */
+
 int fdevent_dup_cloexec (int fd) {
   #ifdef F_DUPFD_CLOEXEC
     return fcntl(fd, F_DUPFD_CLOEXEC, 3);

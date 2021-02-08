@@ -840,6 +840,9 @@ set(COMMON_SRC
 	sys-setjmp.c
 	ck.c
 )
+if(WIN32)
+	set(COMMON_SRC ${COMMON_SRC} fdevent_win32.c)
+endif()
 
   set(BUILTIN_MODS
     mod_rewrite.c

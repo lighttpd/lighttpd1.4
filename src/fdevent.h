@@ -83,6 +83,8 @@ int fdevent_fcntl_set_nb_cloexec(int fd);
 int fdevent_fcntl_set_nb_cloexec_sock(int fd);
 int fdevent_socket_cloexec(int domain, int type, int protocol);
 int fdevent_socket_nb_cloexec(int domain, int type, int protocol);
+int fdevent_socketpair_cloexec(int domain, int typ, int protocol, int sv[2]);
+int fdevent_socketpair_nb_cloexec(int domain, int typ, int protocol, int sv[2]);
 int fdevent_dup_cloexec(int fd);
 int fdevent_open_cloexec(const char *pathname, int symlinks, int flags, mode_t mode);
 int fdevent_pipe_cloexec (int *fds, unsigned int bufsz_hint);
