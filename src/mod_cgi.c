@@ -33,7 +33,7 @@ typedef struct {
 	buffer *boffsets;
 	buffer *ld_preload;
 	buffer *ld_library_path;
-      #ifdef __CYGWIN__
+      #if defined(__CYGWIN__) || defined(_WIN32)
 	buffer *systemroot;
       #endif
 } env_accum;
@@ -118,7 +118,7 @@ INIT_FUNC(mod_cgi_init) {
 	if (s) buffer_copy_string((p->env.ld_preload = buffer_init()), s);
 	s = getenv("LD_LIBRARY_PATH");
 	if (s) buffer_copy_string((p->env.ld_library_path = buffer_init()), s);
-      #ifdef __CYGWIN__
+      #if defined(__CYGWIN__) || defined(_WIN32)
 	/* CYGWIN needs SYSTEMROOT */
 	s = getenv("SYSTEMROOT");
 	if (s) buffer_copy_string((p->env.systemroot = buffer_init()), s);
@@ -132,7 +132,7 @@ FREE_FUNC(mod_cgi_free) {
 	plugin_data *p = p_d;
 	buffer_free(p->env.ld_preload);
 	buffer_free(p->env.ld_library_path);
-      #ifdef __CYGWIN__
+      #if defined(__CYGWIN__) || defined(_WIN32)
 	buffer_free(p->env.systemroot);
       #endif
 
@@ -900,8 +900,8 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		if (p->env.ld_library_path) {
 			cgi_env_add(env, CONST_STR_LEN("LD_LIBRARY_PATH"), BUF_PTR_LEN(p->env.ld_library_path));
 		}
-	      #ifdef __CYGWIN__
-		/* CYGWIN needs SYSTEMROOT */
+	      #if defined(__CYGWIN__) || defined(_WIN32)
+		/* CYGWIN and _WIN32 need SYSTEMROOT */
 		if (p->env.systemroot) {
 			cgi_env_add(env, CONST_STR_LEN("SYSTEMROOT"), BUF_PTR_LEN(p->env.systemroot));
 		}
@@ -928,6 +928,14 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		args[i  ] = NULL;
 	}
 
+  #ifdef _WIN32
+	/*(flag to chdir to script dir on _WIN32)*/
+	int dfd = !buffer_is_blank(cgi_handler) ? -3 : -2;
+	int serrh_fd = r->conf.serrh ? r->conf.serrh->fd : -1;
+	pid_t pid =
+	  fdevent_createprocess(args, envp, (intptr_t)to_cgi_fds[0],
+	                        (intptr_t)from_cgi_fds[1], serrh_fd, dfd);
+  #else
 	int dfd = fdevent_open_dirname(r->physical.path.ptr,r->conf.follow_symlink);
 	if (-1 == dfd) {
 		log_perror(r->conf.errh, __FILE__, __LINE__, "open dirname %s failed", r->physical.path.ptr);
@@ -938,6 +946,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	  ? fdevent_fork_execve(args[0], args, envp,
 	                        to_cgi_fds[0], from_cgi_fds[1], serrh_fd, dfd)
 	  : -1;
+  #endif
 
 	chunk_buffer_release(env->boffsets);
 	chunk_buffer_release(env->b);
@@ -947,7 +956,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	if (-1 == pid) {
 		/* log error with errno prior to calling close() (might change errno) */
 		log_perror(r->conf.errh, __FILE__, __LINE__, "fork failed");
-		if (-1 != dfd) close(dfd);
+		if (dfd >= 0) close(dfd);
 		close(from_cgi_fds[0]);
 		close(from_cgi_fds[1]);
 		if (0 == r->reqbody_length) {
@@ -959,7 +968,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		}
 		return -1;
 	} else {
-		if (-1 != dfd) close(dfd);
+		if (dfd >= 0) close(dfd);
 		close(from_cgi_fds[1]);
 
 		hctx->fd = from_cgi_fds[0];

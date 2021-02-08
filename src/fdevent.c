@@ -458,6 +458,8 @@ int fdevent_rename(const char *oldpath, const char *newpath) {
 }
 
 
+#ifndef _WIN32
+
 pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd) {
  #ifdef HAVE_FORK
 
@@ -528,6 +530,8 @@ int fdevent_waitpid(pid_t pid, int * const status, int nb) {
 int fdevent_waitpid_intr(pid_t pid, int * const status) {
     return waitpid(pid, status, 0);
 }
+
+#endif /* !_WIN32 */
 
 
 #ifndef MSG_DONTWAIT

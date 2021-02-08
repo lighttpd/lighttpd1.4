@@ -44,9 +44,11 @@ typedef struct sockaddr_un
 } SOCKADDR_UN, *PSOCKADDR_UN;
 #endif
 #include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
 
 #include "fdevent.h"
+#include "ck.h"         /* ck_calloc() */
 
 
 int fdevent_socketpair_cloexec (int domain, int typ, int protocol, int sv[2])
@@ -235,6 +237,417 @@ int fdevent_socketpair_nb_cloexec (int domain, int typ, int protocol, int sv[2])
     WSASetLastError(errnum);
     sv[0] = sv[1] = -1;
     return SOCKET_ERROR;
+}
+
+
+#include <windows.h>
+#include <signal.h>     /* sig_atomic_t */
+
+#ifndef INFINITE
+#define INFINITE      0xFFFFFFFF
+#endif
+
+#ifndef WAIT_OBJECT_0
+#define WAIT_OBJECT_0 0x00000000L
+#endif
+
+#ifndef WAIT_TIMEOUT
+#define WAIT_TIMEOUT  0x00000102L
+#endif
+
+static struct pilist {
+  struct pilist *next;
+  HANDLE hProcess;
+  HANDLE hWait;
+  pid_t pid;
+  int ran;
+} *pilist;
+
+static volatile sig_atomic_t *fdevent_sig_child;
+
+void fdevent_win32_init (volatile sig_atomic_t *ptr);
+void fdevent_win32_init (volatile sig_atomic_t *ptr)
+{
+    fdevent_sig_child = ptr;
+}
+
+
+void fdevent_win32_cleanup (void)
+{
+    struct pilist *pi, *next = pilist;
+    while ((pi = next)) {
+        next = pi->next;
+        if (pi->hWait != INVALID_HANDLE_VALUE)
+            /*(could block, but should not; our callback func is simple)*/
+            UnregisterWaitEx(pi->hWait, INVALID_HANDLE_VALUE);
+        if (pi->hProcess != INVALID_HANDLE_VALUE)
+            /*(could check for exit, send Ctrl-Break or TerminateProcess)*/
+            CloseHandle(pi->hProcess);
+        free(pi);
+    }
+}
+
+
+int fdevent_waitpid (pid_t pid, int * const status, int nb)
+{
+
+  #if 0
+
+    if (-1 == pid) {
+        errno = ENOTSUP;
+        return -1;
+    }
+
+    HANDLE hProcess = OpenProcess(SYNCHRONIZE, FALSE, pid);
+    if (!hProcess) {
+        errno = ECHILD;
+        return -1;
+    }
+    DWORD dw = WaitForSingleObject(hProcess, nb ? 0 : INFINITE);
+
+    if (WAIT_OBJECT_0 == dw) {
+        /*(GetExitCodeProcess() failure not expected; not handled)*/
+        if (status)
+            *status = GetExitCodeProcess(hProcess,&dw) ? ((dw & 0xff) << 8) : 0;
+    }
+    else if (WAIT_TIMEOUT == dw && nb) {
+        pid = 0;
+    }
+    else {
+        errno = ECHILD;
+        pid = (pid_t)-1;
+    }
+
+    CloseHandle(hProcess);
+    return pid;
+
+  #else
+
+    /* note: not thread-safe; not efficient with many processes (O(n)) */
+
+    struct pilist *pi;
+    struct pilist **next = &pilist;
+    if (-1 == pid) {
+        while ((pi = *next) && !pi->ran)
+            next = &pi->next;
+        if (pi)
+            pid = pi->pid;
+        else if (pilist)
+            return 0;
+        /*(else ECHILD below)*/
+    }
+    else {
+        while ((pi = *next) && pid != pi->pid)
+            next = &pi->next;
+    }
+    if (NULL == pi) {
+        errno = ECHILD;
+        return -1;
+    }
+
+    HANDLE hProcess = pi->hProcess;
+    DWORD dw = pi->ran
+      ? WAIT_OBJECT_0
+      : WaitForSingleObject(hProcess, nb ? 0 : INFINITE);
+
+    if (WAIT_OBJECT_0 == dw) {
+        /*(GetExitCodeProcess() failure not expected; not handled)*/
+        if (status)
+            *status = GetExitCodeProcess(hProcess,&dw) ? ((dw & 0xff) << 8) : 0;
+    }
+    else if (WAIT_TIMEOUT == dw && nb) {
+        return 0;
+    }
+    else {
+        errno = ECHILD;
+        pid = -1;
+    }
+
+    if (pi->hWait != INVALID_HANDLE_VALUE)
+        /*(could block, but should not; our callback func is simple)*/
+        UnregisterWaitEx(pi->hWait, INVALID_HANDLE_VALUE);
+
+    *next = pi->next;
+    free(pi);
+    CloseHandle(hProcess);
+    return pid;
+
+  #endif
+}
+
+
+int fdevent_waitpid_intr (pid_t pid, int * const status)
+{
+    return fdevent_waitpid(pid, status, 0);
+}
+
+
+static void CALLBACK fdevent_WaitOrTimerCallback (PVOID lpParameter, BOOLEAN TimerOrWaitFired)
+{
+    UNUSED(TimerOrWaitFired);
+    struct pilist *pi = lpParameter;
+  #if 0
+    /* (do not make blocking call to UnregisterWaitEx() from within callback) */
+    UnregisterWaitEx(pi->hWait, NULL);/*non-blocking with NULL CompletionEvent*/
+    /* note: safe to ignore UnregisterWaitEx() return value error with
+     * GetLastError() ERROR_IO_PENDING) since we use RegisterWaitForSingleObject
+     * with WT_EXECUTEONLYONCE, and so there can be no other possible queued
+     * events for pi->hWait, other than this currently running func */
+    pi->hWait = INVALID_HANDLE_VALUE;
+  #endif
+    pi->ran = 1;
+    if (fdevent_sig_child) *fdevent_sig_child = 1;
+}
+
+
+/* sorting the environment block
+ * https://learn.microsoft.com/en-us/windows/win32/procthread/changing-environment-variables
+ * https://learn.microsoft.com/en-us/windows/win32/procthread/creating-processes
+ *  "All strings in the environment block must be sorted alphabetically by name.
+ *   The sort is case-insensitive, Unicode order, without regard to locale."
+ * https://learn.microsoft.com/en-us/windows/win32/intl/handling-sorting-in-your-applications
+ *   (could use CompareStringOrdinal() for ordinal sort independent of locale,
+ *    but CompareStringOrdinal() takes LPCWCH params, so we use _stricmp())
+ * XXX: technically, sorting env block should be done on env var name (label)
+ *      up to the equal sign, and not beyond, but that is not done here.
+ *      To be more pedantically correct, caller could temporarily find '=',
+ *      reject strings missing '=', and set '=' to '\0' on all envp[]; then call
+ *      qsort(); and finally restore '=' on all envp[] after qsort() returns.
+ */
+static int fdevent_envcmpfunc (const void *a, const void *b)
+{
+    return _stricmp(*(const char **)a, *(const char **)b);
+}
+
+
+pid_t fdevent_createprocess (char *argv[], char *envp[], intptr_t fdin, intptr_t fdout, int fderr, int dfd)
+{
+    /*
+     * The Microsoft CreateProcess() interface is criminally broken.
+     * Forcing argument strings to be concatenated into a single string
+     * only to be re-parsed by Windows can lead to security issues.
+     *
+     * NB: callers of fdevent_createprocess() must properly escape and quote
+     *     arguments appropriately for target program (argv[0]) so that target
+     *     program can safely parse command line after calling GetCommandLine()
+     * NB: potential security exposure from mod_ssi arguments
+     *     e.g. constructed path names from user-provided info (url-path)
+     */
+
+    size_t len = 0;
+    char *dirp = NULL;
+    if (0 == strcmp(argv[0],"/bin/sh") && argv[1] && 0 == strcmp(argv[1],"-c")){
+        /* future: consider checking for SHELL variable in environment */
+      #if 1
+        *(const char **)&argv[0] = "C:\\Windows\\System32\\cmd.exe";
+        *(const char **)&argv[1] = "/c";
+      #else
+        *(const char **)&argv[0] =
+          "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+      #endif
+    }
+    else if (dfd <= -2) { /*(flag to chdir to directory containing argv[x])*/
+        /* dfd == -2 for argv[0], dfd == -3 indicates argv[1] */
+        const char *arg = (-3 == dfd) ? argv[1] : argv[0];
+        if (arg && (arg[0] == '\\' || arg[0] == '/' || arg[1] == ':')) {
+            /* step over "/cygdrive/c/..." (or other drive letter) -> "/..."
+             * (note: below code assumes script is on current volume)
+             * (to honor volume, could copy volume and replace '/' with ':') */
+            if (0 == memcmp(arg, "/cygdrive/", 10)
+                && arg[10] != '\0' && arg[11] == '/')
+                arg += 11;
+
+            char *sl = strrchr(arg, '/');
+            char *bs = strrchr(arg, '\\');
+            if (sl < bs) sl = bs;
+            if (sl && sl != arg) {
+                len = (size_t)(sl - arg);
+                dirp = malloc(len+1);
+                if (NULL == dirp)
+                    return -1;
+                memcpy(dirp, arg, len);
+                dirp[len] = '\0';
+            }
+        }
+    } /* else expecting (-1 == dfd); this code does not handle open dirfd */
+
+    char *args = NULL;
+    len = 0;
+    for (int i = 0; argv[i]; ++i)
+        len += strlen(argv[i]) + 1;
+    if (len) {
+        args = malloc(len);
+        if (NULL == args) {
+            free(dirp);
+            return -1;
+        }
+        size_t off = 0;
+        for (int i = 0; argv[i]; ++i) {
+            len = strlen(argv[i]);
+            memcpy(args+off, argv[i], len);
+            off += len;
+            args[off++] = ' ';
+        }
+        args[off-1] = '\0'; /*(remove trailing space)*/
+    }
+
+    char *envs = NULL;
+    if (envp) {
+        int i;
+        len = 0;
+        for (i = 0; envp[i]; ++i)
+            len += strlen(envp[i]) + 1;
+        if (len) { /* MS env block size limit is SHRT_MAX (32767) */
+            qsort(envp, (size_t)i, sizeof(char *), fdevent_envcmpfunc);
+            if (++len > 32767 || NULL == (envs = malloc(len))) {
+                free(dirp);
+                free(args);
+                return -1;
+            }
+            size_t off = 0;
+            for (i = 0; envp[i]; ++i) {
+                len = strlen(envp[i]) + 1; /*(include '\0')*/
+                memcpy(envs+off, envp[i], len);
+                off += len;
+            }
+            envs[off] = '\0';
+        }
+    }
+
+    STARTUPINFOEXA info;
+    memset(&info, 0, sizeof(info));
+    LPSTARTUPINFOA sinfo = &info.StartupInfo;
+    sinfo->cb = sizeof(STARTUPINFOEX);
+    sinfo->lpDesktop = NULL;
+    sinfo->lpTitle = argv[0];
+    sinfo->dwFlags = STARTF_FORCEOFFFEEDBACK | STARTF_USESTDHANDLES
+                   | STARTF_USESHOWWINDOW | EXTENDED_STARTUPINFO_PRESENT;
+    sinfo->wShowWindow = SW_HIDE;
+
+    /* limit handles inherited by new process to specified stdin,stdout,stderr
+     *
+     * Programmatically controlling which handles are inherited by new processes
+     * in Win32: https://devblogs.microsoft.com/oldnewthing/20111216-00/?p=8873
+     */
+    size_t sz = 0;
+    InitializeProcThreadAttributeList(NULL, 1, 0, &sz);
+    /* GetLastError() == ERROR_INSUFFICIENT_BUFFER */
+    LPPROC_THREAD_ATTRIBUTE_LIST attrlist = info.lpAttributeList = malloc(sz);
+    if (NULL == attrlist
+        || !InitializeProcThreadAttributeList(attrlist, 1, 0, &sz)
+           /* (reuse part of STARTUPINFOA for (HANDLE) list of three handles) */
+        || (UpdateProcThreadAttribute(attrlist, 0,
+                                      PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                                      &sinfo->hStdInput, 3*sizeof(HANDLE),
+                                      NULL, NULL)
+             ? 0 : (DeleteProcThreadAttributeList(attrlist), 1))) {
+        free(attrlist);
+        free(envs);
+        free(args);
+        free(dirp);
+        return -1;
+    }
+
+  #if 0
+    /* https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/get-osfhandle?view=msvc-170
+     * use _fileno() on standard streams with _get_osfhandle();
+     *   avoid STD*_FILENO constants here */
+    sinfo->hStdInput =(HANDLE)_get_osfhandle(fdin >=0 ? fdin  :_fileno(stdin));
+    sinfo->hStdOutput=(HANDLE)_get_osfhandle(fdout>=0 ? fdout :_fileno(stdout));
+    sinfo->hStdError =(HANDLE)_get_osfhandle(fderr>=0 ? fderr :_fileno(stderr));
+  #endif
+    if (dfd <= -2) { /* overloaded flag means _WIN32 SOCKET on fdin,fdout */
+        sinfo->hStdInput = fdin  != -1 ? (HANDLE)fdin
+                                       : GetStdHandle(STD_INPUT_HANDLE);
+        sinfo->hStdOutput= fdout != -1 ? (HANDLE)fdout
+                                       : GetStdHandle(STD_OUTPUT_HANDLE);
+    }
+    else {
+        sinfo->hStdInput = fdin  >= 0 ? (HANDLE)_get_osfhandle((int)fdin)
+                                      : GetStdHandle(STD_INPUT_HANDLE);
+        sinfo->hStdOutput= fdout >= 0 ? (HANDLE)_get_osfhandle((int)fdout)
+                                      : GetStdHandle(STD_OUTPUT_HANDLE);
+    }
+    sinfo->hStdError = fderr >= 0 ? (HANDLE)_get_osfhandle(fderr)
+                                  : GetStdHandle(STD_ERROR_HANDLE);
+
+    /* paranoia: all handles should be created NOINHERIT
+     * in case third-party code is not careful when calling CreateProcess()
+     * There is still a race condition setting these handles inheritable,
+     * but handles must be inheritable for use with STARTF_USESTDHANDLES */
+    if (sinfo->hStdInput != INVALID_HANDLE_VALUE)
+        SetHandleInformation(sinfo->hStdInput,
+                             HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+    if (sinfo->hStdOutput!= INVALID_HANDLE_VALUE)
+        SetHandleInformation(sinfo->hStdOutput,
+                             HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+    if (sinfo->hStdError != INVALID_HANDLE_VALUE)
+        SetHandleInformation(sinfo->hStdError,
+                             HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+
+    PROCESS_INFORMATION pinfo;
+    memset(&pinfo, 0, sizeof(pinfo));
+    pinfo.hProcess = INVALID_HANDLE_VALUE;
+    pinfo.hThread  = INVALID_HANDLE_VALUE;
+    BOOL bInheritHandles  = TRUE;
+    DWORD dwCreationFlags = NORMAL_PRIORITY_CLASS
+                          | CREATE_NO_WINDOW
+                          | CREATE_NEW_PROCESS_GROUP;
+  #ifdef UNICODE
+    dwCreationFlags |= CREATE_UNICODE_ENVIRONMENT;
+  #endif
+    pid_t pid = (pid_t)-1;
+    if (CreateProcessA(argv[0], args, NULL, NULL, bInheritHandles,
+                       dwCreationFlags, envs, dirp, sinfo, &pinfo)) {
+        CloseHandle(pinfo.hThread);
+        struct pilist *pi = ck_calloc(1, sizeof(*pi));
+        pi->hProcess  = pinfo.hProcess;
+        pi->pid = pid = (pid_t)pinfo.dwProcessId;
+        pi->hWait     = INVALID_HANDLE_VALUE;
+        if (!RegisterWaitForSingleObject(&pi->hWait, pi->hProcess,
+                                         fdevent_WaitOrTimerCallback, pi,
+                                         INFINITE, WT_EXECUTEONLYONCE)) {
+            /* TODO: GetLastError(); maybe hit thread pool limit (default 500)*/
+            /* failure consequence is no event received when process exits;
+             * still able to WaitForSingleObject() and signal to terminate */
+        }
+        /* note: not thread-safe */
+        pi->next = pilist;
+        pilist = pi;
+    }
+    else {
+      #if 0
+        TCHAR lpMsgBuf[1024];
+        FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+                      0, /* MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT) */
+                      (LPTSTR)lpMsgBuf, sizeof(lpMsgBuf)/sizeof(TCHAR), NULL);
+        fprintf(stderr, "CreateProcess() %s: %s", args, lpMsgBuf);
+      #endif
+        /* (quiet VS Analyzer which thinks hProcess might leak w/o this) */
+        if (pinfo.hProcess != INVALID_HANDLE_VALUE)
+            CloseHandle(pinfo.hProcess);
+        if (pinfo.hThread != INVALID_HANDLE_VALUE)
+            CloseHandle(pinfo.hThread);
+    }
+
+    /* paranoia: all handles should be created NOINHERIT
+     * in case third-party code is not careful when calling CreateProcess()
+     * There is still a race condition setting these handles inheritable,
+     * but handles must be inheritable for use with STARTF_USESTDHANDLES */
+    if (sinfo->hStdInput != INVALID_HANDLE_VALUE)
+        SetHandleInformation(sinfo->hStdInput,  HANDLE_FLAG_INHERIT, 0);
+    if (sinfo->hStdOutput!= INVALID_HANDLE_VALUE)
+        SetHandleInformation(sinfo->hStdOutput, HANDLE_FLAG_INHERIT, 0);
+    if (sinfo->hStdError != INVALID_HANDLE_VALUE)
+        SetHandleInformation(sinfo->hStdError,  HANDLE_FLAG_INHERIT, 0);
+
+    DeleteProcThreadAttributeList(attrlist);
+    free(attrlist);
+    free(envs);
+    free(args);
+    free(dirp);
+
+    return pid;
 }
 
 

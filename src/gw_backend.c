@@ -602,6 +602,12 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
             env.ptr[env.used] = NULL;
         }
 
+      #ifdef _WIN32
+        int dfd = -2; /*(flag to chdir to script dir on _WIN32)*/
+        proc->pid =
+          fdevent_createprocess(host->args.ptr,
+                                env.ptr, (intptr_t)gw_fd, -1, -1, dfd);
+      #else
         int dfd = fdevent_open_dirname(host->args.ptr[0], 1);/*permit symlinks*/
         if (-1 == dfd) {
             log_perror(errh, __FILE__, __LINE__,
@@ -613,15 +619,17 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
           ? fdevent_fork_execve(host->args.ptr[0], host->args.ptr,
                                 env.ptr, gw_fd, -1, -1, dfd)
           : -1;
+      #endif
+        if (-1 == proc->pid)
+            log_perror(errh, __FILE__, __LINE__,
+              "gw-backend failed to start: %s", host->bin_path->ptr);
 
         for (i = 0; i < env.used; ++i) free(env.ptr[i]);
         free(env.ptr);
-        if (-1 != dfd) close(dfd);
+        if (dfd >= 0) close(dfd);
         close(gw_fd);
 
         if (-1 == proc->pid) {
-            log_error(errh, __FILE__, __LINE__,
-              "gw-backend failed to start: %s", host->bin_path->ptr);
             proc->pid = 0;
             proc->disabled_until = log_monotonic_secs;
             return -1;
@@ -1448,6 +1456,22 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     break;
                   case 15:/* bin-copy-environment */
                     host->bin_env_copy = cpv->v.a;
+                   #if defined(__CYGWIN__) || defined(_WIN32)
+                    if (host->bin_env_copy->used) {
+                        uint32_t k;
+                        for (k = 0; k < cpv->v.a->used; ++k) {
+                            /* search for SYSTEMROOT */
+                            data_string *ds = (data_string *)cpv->v.a->data[k];
+                            if (0 == strcmp(ds->value.ptr, "SYSTEMROOT"))
+                                break;
+                        }
+                        if (k == cpv->v.a->used) {
+                            array *e;
+                            *(const array **)&e = cpv->v.a;
+                            array_insert_value(e, CONST_STR_LEN("SYSTEMROOT"));
+                        }
+                    }
+                   #endif
                     break;
                   case 16:/* broken-scriptfilename */
                     host->break_scriptfilename_for_php = (0 != cpv->v.u);
@@ -1605,6 +1629,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                       "and is executable by lighttpd)", host->bin_path->ptr);
                 }
 
+              #ifdef _WIN32
+                UNUSED(sh_exec); /*(no "exec " in cmd.exe; skip)*/
+              #else
                 if (sh_exec) {
                     /*(preserve prior behavior for SCGI exec of command)*/
                     /*(admin should really prefer to put
@@ -1626,6 +1653,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                            host->bin_path->ptr, buffer_clen(host->bin_path)+1);
                     host->args.ptr[3] = NULL;
                 }
+              #endif
 
                 if (host->min_procs > host->max_procs)
                     host->min_procs = host->max_procs;

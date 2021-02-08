@@ -99,10 +99,21 @@ char ** fdevent_environ(void);
 
 int fdevent_open_devnull(void);
 int fdevent_open_dirname(char *path, int symlinks);
+#ifndef _WIN32
 int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr);
 pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd);
+#endif
 int fdevent_waitpid(pid_t pid, int *status, int nb);
 int fdevent_waitpid_intr(pid_t pid, int *status);
+
+#ifdef _WIN32
+__attribute_cold__
+void fdevent_win32_cleanup (void);
+
+#define fdevent_fork_execve(name, argv, envp, fdin, fdout, fderr, dfd) \
+        fdevent_createprocess((argv),(envp),(fdin),(fdout),(fderr),(dfd))
+pid_t fdevent_createprocess(char *argv[], char *envp[], intptr_t fdin, intptr_t fdout, int fderr, int dfd);
+#endif /* _WIN32 */
 
 ssize_t fdevent_socket_read_discard (int fd, char *buf, size_t sz, int family, int so_type);
 
