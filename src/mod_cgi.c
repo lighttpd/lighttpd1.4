@@ -25,6 +25,13 @@
 #include <fcntl.h>
 #include <signal.h>
 
+/* _WIN32 custom socketpair() is used here instead of pipe() */
+#ifdef _WIN32
+#undef fdio_close_pipe
+#define fdio_close_pipe(fd) fdio_close_socket(fd)
+#define fdevent_fcntl_set_nb(fd) fdevent_socket_set_nb(fd)
+#endif
+
 typedef struct {
 	uintptr_t *offsets;
 	size_t osize;
@@ -692,14 +699,20 @@ static int cgi_env_add(void *venv, const char *key, size_t key_len, const char *
 static int cgi_write_request(handler_ctx *hctx, int fd) {
 	request_st * const r = hctx->r;
 	chunkqueue *cq = &r->reqbody_queue;
-	chunk *c;
 
 	chunkqueue_remove_finished_chunks(cq); /* unnecessary? */
 
-	/* old comment: windows doesn't support select() on pipes - wouldn't be easy to fix for all platforms.
-	 */
-
-	for (c = cq->first; c; c = cq->first) {
+  #ifdef _WIN32
+	if (0 !=
+	    r->con->srv->network_backend_write(fd,cq,MAX_WRITE_LIMIT,r->conf.errh)){
+		/* connection closed */
+		log_error(r->conf.errh, __FILE__, __LINE__,
+		  "failed to send post data to cgi, connection closed by CGI");
+		/* skip all remaining data */
+		chunkqueue_mark_written(cq, chunkqueue_length(cq));
+	}
+  #else
+	for (chunk *c = cq->first; c; c = cq->first) {
 		ssize_t wr = chunkqueue_write_chunk_to_pipe(fd, cq, r->conf.errh);
 		if (wr > 0) {
 			hctx->write_ts = log_monotonic_secs;
@@ -733,15 +746,15 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 		/*if (0 == wr) break;*/ /*(might block)*/
 		break;
 	}
+  #endif
 
 	if (cq->bytes_out == (off_t)r->reqbody_length && !hctx->conf.upgrade) {
 		/* sent all request body input */
 		/* close connection to the cgi-script */
 		if (-1 == hctx->fdtocgi) { /*(received request body sent in initial send to pipe buffer)*/
 			--r->con->srv->cur_fds;
-			if (close(fd)) {
+			if (fdio_close_pipe(fd))
 				log_perror(r->conf.errh, __FILE__, __LINE__, "cgi stdin close %d failed", fd);
-			}
 		} else {
 			cgi_connection_close_fdtocgi(hctx); /*(closes only hctx->fdtocgi)*/
 		}
@@ -789,6 +802,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	}
 
 	to_cgi_fds[0] = -1;
+	to_cgi_fds[1] = -1;
 	if (0 == r->reqbody_length) {
 		/* future: might keep fd open in p->devnull for reuse
 		 * and dup() here, or do not close() (later in this func) */
@@ -817,30 +831,49 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 				return -1;
 			}
 			to_cgi_fds[0] = c->file.fd;
-			to_cgi_fds[1] = -1;
 		}
 	}
 
-	unsigned int bufsz_hint = 16384;
   #ifdef _WIN32
-	if (r->reqbody_length <= 1048576 && r->reqbody_length > 0)
-		bufsz_hint = (unsigned int)r->reqbody_length;
-  #endif
+	if (0 != fdevent_socketpair_cloexec(AF_INET,SOCK_STREAM,0,from_cgi_fds)) {
+		log_perror(r->conf.errh, __FILE__, __LINE__, "socketpair()");
+		if (0 == r->reqbody_length)
+			fdio_close_file(to_cgi_fds[0]);
+		return -1;
+	}
+	if (-1 == to_cgi_fds[0]) {
+		if (0 != fdevent_socketpair_cloexec(AF_INET,SOCK_STREAM,0,to_cgi_fds)) {
+			log_perror(r->conf.errh, __FILE__, __LINE__, "socketpair()");
+			fdio_close_socket(from_cgi_fds[0]);
+			fdio_close_socket(from_cgi_fds[1]);
+			return -1;
+		}
+	}
+	/* fdevent_socketpair_cloexec() creates a pair of connected sockets with
+	 * one socket (sv[0]) non-overlapped, and one socket (sv[1]) overlapped.
+	 * The socket used for redirected I/O in child must be non-overlapped,
+	 * so swap sockets in from_cgi_fds[] so write socket is non-overlapped*/
+	int tmpfd = from_cgi_fds[0];
+	from_cgi_fds[0] = from_cgi_fds[1];
+	from_cgi_fds[1] = tmpfd;
+  #else
+	unsigned int bufsz_hint = 16384;
 	if (-1 == to_cgi_fds[0] && fdevent_pipe_cloexec(to_cgi_fds, bufsz_hint)) {
-		log_perror(r->conf.errh, __FILE__, __LINE__, "pipe failed");
+		log_perror(r->conf.errh, __FILE__, __LINE__, "pipe()");
 		return -1;
 	}
 	if (fdevent_pipe_cloexec(from_cgi_fds, bufsz_hint)) {
+		log_perror(r->conf.errh, __FILE__, __LINE__, "pipe()");
 		if (0 == r->reqbody_length) {
-			close(to_cgi_fds[0]);
+			fdio_close_file(to_cgi_fds[0]);
 		}
 		else if (-1 != to_cgi_fds[1]) {
-			close(to_cgi_fds[0]);
-			close(to_cgi_fds[1]);
+			fdio_close_pipe(to_cgi_fds[0]);
+			fdio_close_pipe(to_cgi_fds[1]);
 		}
-		log_perror(r->conf.errh, __FILE__, __LINE__, "pipe failed");
 		return -1;
 	}
+  #endif
 
 	env_accum * const env = &p->env;
 	env->b = chunk_buffer_acquire();
@@ -956,26 +989,26 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	if (-1 == pid) {
 		/* log error with errno prior to calling close() (might change errno) */
 		log_perror(r->conf.errh, __FILE__, __LINE__, "fork failed");
-		if (dfd >= 0) close(dfd);
-		close(from_cgi_fds[0]);
-		close(from_cgi_fds[1]);
+		if (dfd >= 0) fdio_close_dirfd(dfd);
+		fdio_close_pipe(from_cgi_fds[0]);
+		fdio_close_pipe(from_cgi_fds[1]);
 		if (0 == r->reqbody_length) {
-			close(to_cgi_fds[0]);
+			fdio_close_file(to_cgi_fds[0]);
 		}
 		else if (-1 != to_cgi_fds[1]) {
-			close(to_cgi_fds[0]);
-			close(to_cgi_fds[1]);
+			fdio_close_pipe(to_cgi_fds[0]);
+			fdio_close_pipe(to_cgi_fds[1]);
 		}
 		return -1;
 	} else {
-		if (dfd >= 0) close(dfd);
-		close(from_cgi_fds[1]);
+		if (dfd >= 0) fdio_close_dirfd(dfd);
+		fdio_close_pipe(from_cgi_fds[1]);
 
 		hctx->fd = from_cgi_fds[0];
 		hctx->cgi_pid = cgi_pid_add(p, pid, hctx);
 
 		if (0 == r->reqbody_length) {
-			close(to_cgi_fds[0]);
+			fdio_close_file(to_cgi_fds[0]);
 		}
 		else if (-1 == to_cgi_fds[1]) {
 			chunkqueue * const cq = &r->reqbody_queue;
@@ -983,15 +1016,15 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		}
 		else if (0 == fdevent_fcntl_set_nb(to_cgi_fds[1])
 		         && 0 == cgi_write_request(hctx, to_cgi_fds[1])) {
-			close(to_cgi_fds[0]);
+			fdio_close_pipe(to_cgi_fds[0]);
 			++r->con->srv->cur_fds;
 		}
 		else {
-			close(to_cgi_fds[0]);
-			close(to_cgi_fds[1]);
+			fdio_close_pipe(to_cgi_fds[0]);
+			fdio_close_pipe(to_cgi_fds[1]);
 			/*(hctx->fd not yet registered with fdevent, so manually
 			 * cleanup here; see fdevent_register() further below)*/
-			close(hctx->fd);
+			fdio_close_pipe(hctx->fd);
 			hctx->fd = -1;
 			cgi_connection_close(hctx);
 			return -1;
@@ -1082,7 +1115,11 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		    : (r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
 		      ? 16384  /* FDEVENT_STREAM_RESPONSE_BUFMIN */
 		      : 65536; /* FDEVENT_STREAM_RESPONSE */
+	  #ifdef _WIN32
+		hctx->opts.fdfmt = S_IFSOCK;
+	  #else
 		hctx->opts.fdfmt = S_IFIFO;
+	  #endif
 		hctx->opts.backend = BACKEND_CGI;
 		hctx->opts.authorizer = 0;
 		hctx->opts.local_redir = hctx->conf.local_redir;
