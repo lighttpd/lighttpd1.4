@@ -1966,7 +1966,11 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 }
 
 
+#ifdef MBEDTLS_SSL_SERVER_NAME_INDICATION
+#ifdef MBEDTLS_SSL_ALPN
 static int ssl_parse_client_hello( mbedtls_ssl_context *ssl, handler_ctx *hctx );
+#endif
+#endif
 
 
 static int
@@ -3847,6 +3851,8 @@ mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *
       : mbedtls_ssl_conf_min_version(s->ssl_ctx,MBEDTLS_SSL_MAJOR_VERSION_3,v);
 }
 
+#ifdef MBEDTLS_SSL_SERVER_NAME_INDICATION
+#ifdef MBEDTLS_SSL_ALPN
 /*
  * XXX: forked from mbedtls
  *
@@ -4106,3 +4112,5 @@ static int ssl_parse_client_hello( mbedtls_ssl_context *ssl, handler_ctx *hctx )
 
     return( 0 );
 }
+#endif /* MBEDTLS_SSL_ALPN */
+#endif /* MBEDTLS_SSL_SERVER_NAME_INDICATION */
