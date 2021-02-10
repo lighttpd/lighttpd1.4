@@ -1064,7 +1064,13 @@ AC_ARG_WITH([fam],
 )
 AC_MSG_RESULT([$WITH_FAM])
 
-if test "$HAVE_SYS_NOTIFY_H" != no; then
+dnl "$ac_cv_func_kqueue" is set further below
+case "$host_os" in
+*bsd*|*darwin* ) WITH_FAM=no ;;
+* ) ;;
+esac
+
+if test "$ac_cv_header_sys_inotify_h" != no; then
   WITH_FAM=no
 fi
 
@@ -1801,8 +1807,30 @@ lighty_track_feature "network-ipv6" "" \
 lighty_track_feature "large-files" "" \
   'test "$ENABLE_LFS" = yes'
 
+case "$host_os" in
+*linux* )
+lighty_track_feature "stat-cache-inotify" "" \
+  'test "$ac_cv_header_sys_inotify_h" != no'
+    ;;
+* ) ;;
+esac
+
+case "$host_os" in
+*bsd*|*darwin* )
+lighty_track_feature "stat-cache-kqueue" "" \
+  'test "$ac_cv_func_kqueue" != no'
+    ;;
+* ) ;;
+esac
+
+case "$host_os" in
+*bsd*|*darwin*|*linux* )
+    ;;
+* )
 lighty_track_feature "stat-cache-fam" "" \
   'test "$WITH_FAM" != no'
+    ;;
+esac
 
 lighty_track_feature "webdav-properties" "" \
   'test "$WITH_WEBDAV_PROPS" != no'
