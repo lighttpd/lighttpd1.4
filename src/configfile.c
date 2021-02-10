@@ -266,21 +266,21 @@ static void config_warn_openssl_module (server *srv) {
 #endif
 
 static void config_check_module_duplicates (server *srv) {
-    int dup = 0;
+    int dups = 0;
     data_string ** const data = (data_string **)srv->srvconf.modules->data;
     const uint32_t used = srv->srvconf.modules->used;
     for (uint32_t i = 0; i < used; ++i) {
         const buffer * const m = &data[i]->value;
         for (uint32_t j = i+1; j < used; ++j) {
             if (buffer_is_equal(m, &data[j]->value)) {
-                ++dup;
+                ++dups;
                 break;
             }
         }
     }
-    if (!dup) return;
+    if (!dups) return;
 
-    array * const modules = array_init(used - dup);
+    array * const modules = array_init(used - dups);
     for (uint32_t i = 0; i < used; ++i) {
         const buffer * const m = &data[i]->value;
         uint32_t j;
