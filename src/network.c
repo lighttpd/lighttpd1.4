@@ -120,6 +120,10 @@ static int network_host_parse_addr(server *srv, sock_addr *addr, socklen_t *addr
             return -1;
         }
     }
+    if (h[0] == '*' && h[1] == '\0') {
+        family = AF_INET;
+        ++h;
+    }
     chost = *h ? h : family == AF_INET ? "0.0.0.0" : "::";
     if (1 !=
         sock_addr_from_str_hints(addr,addr_len,chost,family,port,srv->errh)) {
