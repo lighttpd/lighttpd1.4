@@ -93,16 +93,6 @@ typedef struct {
     plugin_config conf;
 } plugin_data;
 
-static int const_time_memeq(const char *a, const char *b, size_t len) {
-	/* constant time memory compare, unless the compiler figures it out */
-	char diff = 0;
-	size_t i;
-	for (i = 0; i < len; ++i) {
-		diff |= (a[i] ^ b[i]);
-	}
-	return 0 == diff;
-}
-
 static const char* secdl_algorithm_names[] = {
 	"invalid",
 	"md5",
@@ -169,7 +159,8 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			li_MD5_Update(&Md5Ctx, ts_str, 8);
 			li_MD5_Final(HA1, &Md5Ctx);
 
-			return const_time_memeq((char *)HA1, (char *)md5bin, sizeof(md5bin));
+			return http_auth_const_time_memeq((char *)HA1,
+							  (char *)md5bin, sizeof(md5bin));
 		}
      #ifdef USE_LIB_CRYPTO
 	case SECDL_HMAC_SHA1:
@@ -187,7 +178,8 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 
 			li_to_base64_no_padding(base64_digest, 27, digest, 20, BASE64_URL);
 
-			return (27 == maclen) && const_time_memeq(mac, base64_digest, 27);
+			return (27 == maclen)
+			    && http_auth_const_time_memeq(mac, base64_digest, 27);
 		}
 		break;
 	case SECDL_HMAC_SHA256:
@@ -205,7 +197,8 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 
 			li_to_base64_no_padding(base64_digest, 43, digest, 32, BASE64_URL);
 
-			return (43 == maclen) && const_time_memeq(mac, base64_digest, 43);
+			return (43 == maclen)
+			    && http_auth_const_time_memeq(mac, base64_digest, 43);
 		}
 		break;
      #endif
