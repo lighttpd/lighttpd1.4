@@ -12,54 +12,7 @@
 #include <string.h>
 
 #include "sys-crypto-md.h"
-#ifdef USE_LIB_CRYPTO
-#if defined(USE_NETTLE_CRYPTO)
-#include <nettle/hmac.h>
-#elif defined(USE_MBEDTLS_CRYPTO)
-#include <mbedtls/md.h>
-#elif defined(USE_WOLFSSL_CRYPTO)
-#include <wolfssl/wolfcrypt/hmac.h>
-#elif defined(USE_OPENSSL_CRYPTO)
-#include <openssl/evp.h>
-#include <openssl/hmac.h>
-#elif defined(USE_GNUTLS_CRYPTO)
-#include <gnutls/crypto.h>
-#elif defined(USE_NSS_CRYPTO)
-#if 0 /*(nss/alghmac.h might not be present)*/
-#ifdef NSS_VER_INCLUDE
-#include <nss3/alghmac.h>
-#else
-#include <nss/alghmac.h>
-#endif
-#endif
-#endif
-#endif
-
-#if defined(USE_OPENSSL_CRYPTO) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-#define HMAC EVP_HMAC
-static unsigned char *
-EVP_HMAC (const EVP_MD *evp_md, const void *key,
-          int key_len, const unsigned char *d, int n,
-          unsigned char *md, size_t *md_len)
-{
-    EVP_PKEY * const pkey =
-      EVP_PKEY_new_mac_key(EVP_PKEY_HMAC, NULL, key, key_len);
-    if (NULL == pkey) return NULL;
-
-    EVP_MD_CTX * const ctx = EVP_MD_CTX_new();
-    if (NULL == ctx) {
-        EVP_PKEY_free(pkey);
-        return NULL;
-    }
-
-    int rc = (1 == EVP_DigestSignInit(ctx, NULL, evp_md, NULL, pkey))
-          && (1 == EVP_DigestSignUpdate(ctx, d, n))
-          && (1 == EVP_DigestSignFinal(ctx, md, md_len));
-    EVP_MD_CTX_free(ctx);
-    EVP_PKEY_free(pkey);
-    return (1 == rc) ? md : NULL;
-}
-#endif
+#include "algo_hmac.h"
 
 /*
  * mod_secdownload verifies a checksum associated with a timestamp
@@ -224,85 +177,13 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			unsigned char digest[20];
 			char base64_digest[27];
 
-		  #if defined(USE_NETTLE_CRYPTO)
-			struct hmac_sha1_ctx ctx;
-			hmac_sha1_set_key(&ctx, buffer_string_length(config->secret), (const uint8_t *)config->secret->ptr);
-			hmac_sha1_update(&ctx, strlen(protected_path), (const uint8_t *)protected_path);
-			hmac_sha1_digest(&ctx, sizeof(digest), (uint8_t *)digest);
-		  #elif defined(USE_MBEDTLS_CRYPTO) && defined(MBEDTLS_MD_C) && defined(MBEDTLS_SHA1_C)
-			int rc =
-			  mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA1),
-			                  (const unsigned char *)config->secret->ptr,
-			                  buffer_string_length(config->secret),
+                        if (!li_hmac_sha1(digest, CONST_BUF_LEN(config->secret),
 			                  (const unsigned char *)protected_path,
-			                  strlen(protected_path), digest);
-			if (0 != rc) {
+			                  strlen(protected_path))) {
 				log_error(errh, __FILE__, __LINE__,
 				  "hmac-sha1: HMAC() failed");
 				return 0;
 			}
-		  #elif defined(USE_WOLFSSL_CRYPTO)
-			Hmac hmac;
-			if (0 != wc_HmacInit(&hmac, NULL, INVALID_DEVID)
-			    || wc_HmacSetKey(&hmac, WC_SHA, (const byte *)config->secret->ptr,
-			                     (word32)buffer_string_length(config->secret)) < 0
-			    || wc_HmacUpdate(&hmac, (const byte *)protected_path,
-			                     (word32)strlen(protected_path)) < 0
-			    || wc_HmacFinal(&hmac, (byte *)digest) < 0) {
-				log_error(errh, __FILE__, __LINE__,
-				  "hmac-sha1: HMAC() failed");
-				return 0;
-			}
-		  #elif defined(USE_OPENSSL_CRYPTO)
-			if (NULL == HMAC(
-					EVP_sha1(),
-					(unsigned char const*) config->secret->ptr, buffer_string_length(config->secret),
-					(unsigned char const*) protected_path, strlen(protected_path),
-					digest, NULL)) {
-				log_error(errh, __FILE__, __LINE__,
-				  "hmac-sha1: HMAC() failed");
-				return 0;
-			}
-		  #elif defined(USE_GNUTLS_CRYPTO)
-			int rc =
-                          gnutls_hmac_fast(GNUTLS_MAC_SHA1,
-			                  (const unsigned char *)config->secret->ptr,
-			                  buffer_string_length(config->secret),
-			                  (const unsigned char *)protected_path,
-			                  strlen(protected_path), digest);
-			if (0 != rc) {
-				log_error(errh, __FILE__, __LINE__,
-				  "hmac-sha1: HMAC() failed");
-				return 0;
-			}
-		  #elif defined(USE_NSS_CRYPTO)
-			/*(HMAC* funcs not public export of libfreebl3.so,
-			 * even though nss3/alghmac.h is public (WTH?!))*/
-		      #if 0
-			HMACContext *hmac =
-			  HMAC_Create(HASH_GetHashObject(HASH_AlgSHA1),
-			              (const unsigned char *)config->secret->ptr,
-			              buffer_string_length(config->secret), PR_FALSE);
-			int rc;
-			if ((rc = (NULL != hmac) ? SECSuccess : SECFailure)) {
-				HMAC_Begin(hmac);
-				HMAC_Update(hmac, (const unsigned char *)protected_path,
-                                            strlen(protected_path));
-				unsigned int len;
-				rc = HMAC_Finish(hmac, digest, &len, sizeof(digest));
-				HMAC_Destroy(hmac, PR_TRUE);
-			}
-			if (SECSuccess != rc) {
-				log_error(errh, __FILE__, __LINE__,
-				  "hmac-sha1: HMAC() failed");
-				return 0;
-			}
-		      #else
-			return 0;
-		      #endif
-		  #else
-		  #error "unexpected; crypto lib not configured for use by mod_secdownload"
-		  #endif
 
 			li_to_base64_no_padding(base64_digest, 27, digest, 20, BASE64_URL);
 
@@ -314,85 +195,13 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			unsigned char digest[32];
 			char base64_digest[43];
 
-		  #if defined(USE_NETTLE_CRYPTO)
-			struct hmac_sha256_ctx ctx;
-			hmac_sha256_set_key(&ctx, buffer_string_length(config->secret), (const uint8_t *)config->secret->ptr);
-			hmac_sha256_update(&ctx, strlen(protected_path), (const uint8_t *)protected_path);
-			hmac_sha256_digest(&ctx, sizeof(digest), (uint8_t *)digest);
-		  #elif defined(USE_MBEDTLS_CRYPTO) && defined(MBEDTLS_MD_C) && defined(MBEDTLS_SHA256_C)
-			int rc =
-			  mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
-			                  (const unsigned char *)config->secret->ptr,
-			                  buffer_string_length(config->secret),
-			                  (const unsigned char *)protected_path,
-			                  strlen(protected_path), digest);
-			if (0 != rc) {
+                        if (!li_hmac_sha256(digest, CONST_BUF_LEN(config->secret),
+			                    (const unsigned char *)protected_path,
+			                    strlen(protected_path))) {
 				log_error(errh, __FILE__, __LINE__,
 				  "hmac-sha256: HMAC() failed");
 				return 0;
 			}
-		  #elif defined(USE_WOLFSSL_CRYPTO)
-			Hmac hmac;
-			if (0 != wc_HmacInit(&hmac, NULL, INVALID_DEVID)
-			    || wc_HmacSetKey(&hmac, WC_SHA256, (const byte *)config->secret->ptr,
-			                     (word32)buffer_string_length(config->secret)) < 0
-			    || wc_HmacUpdate(&hmac, (const byte *)protected_path,
-			                     (word32)strlen(protected_path)) < 0
-			    || wc_HmacFinal(&hmac, (byte *)digest) < 0) {
-				log_error(errh, __FILE__, __LINE__,
-				  "hmac-sha256: HMAC() failed");
-				return 0;
-			}
-		  #elif defined(USE_OPENSSL_CRYPTO)
-			if (NULL == HMAC(
-					EVP_sha256(),
-					(unsigned char const*) config->secret->ptr, buffer_string_length(config->secret),
-					(unsigned char const*) protected_path, strlen(protected_path),
-					digest, NULL)) {
-				log_error(errh, __FILE__, __LINE__,
-				  "hmac-sha256: HMAC() failed");
-				return 0;
-			}
-		  #elif defined(USE_GNUTLS_CRYPTO)
-			int rc =
-                          gnutls_hmac_fast(GNUTLS_MAC_SHA256,
-			                  (const unsigned char *)config->secret->ptr,
-			                  buffer_string_length(config->secret),
-			                  (const unsigned char *)protected_path,
-			                  strlen(protected_path), digest);
-			if (0 != rc) {
-				log_error(errh, __FILE__, __LINE__,
-				  "hmac-sha256: HMAC() failed");
-				return 0;
-			}
-		  #elif defined(USE_NSS_CRYPTO)
-			/*(HMAC* funcs not public export of libfreebl3.so,
-			 * even though nss3/alghmac.h is public (WTH?!))*/
-		      #if 0
-			HMACContext *hmac =
-			  HMAC_Create(HASH_GetHashObject(HASH_AlgSHA256),
-			              (const unsigned char *)config->secret->ptr,
-			              buffer_string_length(config->secret), PR_FALSE);
-			int rc;
-			if ((rc = (NULL != hmac) ? SECSuccess : SECFailure)) {
-				HMAC_Begin(hmac);
-				HMAC_Update(hmac, (const unsigned char *)protected_path,
-                                            strlen(protected_path));
-				unsigned int len;
-				rc = HMAC_Finish(hmac, digest, &len, sizeof(digest));
-				HMAC_Destroy(hmac, PR_TRUE);
-			}
-			if (SECSuccess != rc) {
-				log_error(errh, __FILE__, __LINE__,
-				  "hmac-sha256: HMAC() failed");
-				return 0;
-			}
-		      #else
-			return 0;
-		      #endif
-		  #else
-		  #error "unexpected; crypto lib not configured for use by mod_secdownload"
-		  #endif
 
 			li_to_base64_no_padding(base64_digest, 43, digest, 32, BASE64_URL);
 
