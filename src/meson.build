@@ -704,6 +704,7 @@ configure_file(
 )
 
 common_src = [
+	'algo_hmac.c',
 	'algo_md5.c',
 	'algo_sha1.c',
 	'algo_splaytree.c',

@@ -750,7 +750,7 @@ set(COMMON_SRC
 	stat_cache.c plugin.c http_etag.c array.c
 	data_string.c data_array.c
 	data_integer.c
-	algo_md5.c algo_sha1.c algo_splaytree.c
+	algo_hmac.c algo_md5.c algo_sha1.c algo_splaytree.c
 	fdevent_select.c fdevent_libev.c
 	fdevent_poll.c fdevent_linux_sysepoll.c
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c
