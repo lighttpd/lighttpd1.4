@@ -1694,6 +1694,7 @@ AC_OUTPUT
 do_build="\
   mod_access \
   mod_accesslog \
+  mod_ajp13 \
   mod_alias \
   mod_auth \
   mod_authn_file \

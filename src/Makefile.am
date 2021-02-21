@@ -495,6 +495,7 @@ lighttpd_SOURCES = \
   $(src) \
   mod_access.c \
   mod_accesslog.c \
+  mod_ajp13.c \
   mod_alias.c \
   mod_auth.c \
   mod_authn_file.c \
