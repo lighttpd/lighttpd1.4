@@ -1312,7 +1312,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "digest: (%s): invalid", algorithm);
 		buffer_free(b);
-		return mod_auth_send_400_bad_request(r);
+		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
 
 	/**
