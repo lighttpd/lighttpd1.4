@@ -1642,12 +1642,12 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	 * (This module does not aim to be a full caching proxy)
 	 * response must be complete (not streaming response)
 	 * must not have prior Vary response header (before Accept-Encoding added)
-	 * must not have Range response header
 	 * must have ETag
 	 * must be file
 	 * must be single FILE_CHUNK in chunkqueue
 	 * must not be chunkqueue temporary file
 	 * must be whole file, not partial content
+	 * must not be HTTP status 206 Partial Content
 	 * Note: small files (< 32k (see http_chunk.c)) will have been read into
 	 *       memory (if streaming HTTP/1.1 chunked response) and will end up
 	 *       getting stream-compressed rather than cached on disk as compressed
@@ -1662,7 +1662,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	    && r->write_queue.first->type == FILE_CHUNK
 	    && r->write_queue.first->offset == 0
 	    && !r->write_queue.first->file.is_temp
-	    && !light_btst(r->resp_htags, HTTP_HEADER_RANGE)) {
+	    && r->http_status != 206) {
 		tb = mod_deflate_cache_file_name(r, p->conf.cache_dir, vb);
 		/*(checked earlier and skipped if Transfer-Encoding had been set)*/
 		stat_cache_entry *sce = stat_cache_get_entry_open(tb, 1);
