@@ -467,6 +467,7 @@ ssl_tlsext_status_cb(SSL *ssl, void *arg)
   #endif
 
     handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
+    if (NULL == hctx->conf.pc) return SSL_TLSEXT_ERR_NOACK;/*should not happen*/
     buffer *ssl_stapling = hctx->conf.pc->ssl_stapling;
     if (NULL == ssl_stapling) return SSL_TLSEXT_ERR_NOACK;
     UNUSED(arg);
@@ -1055,11 +1056,12 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
     UNUSED(arg);
     if (hctx->alpn == MOD_OPENSSL_ALPN_ACME_TLS_1) return 1;
 
-    if (NULL == pc->ssl_pemfile_x509 || NULL == pc->ssl_pemfile_pkey) {
+    if (!pc || NULL == pc->ssl_pemfile_x509 || NULL == pc->ssl_pemfile_pkey) {
         /* x509/pkey available <=> pemfile was set <=> pemfile got patched:
          * so this should never happen, unless you nest $SERVER["socket"] */
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-          "SSL: no certificate/private key for TLS server name %s",
+          "SSL: no certificate/private key for TLS server name %s.  "
+          "$SERVER[\"socket\"] should not be nested in other conditions.",
           hctx->r->uri.authority.ptr);
         return 0;
     }
