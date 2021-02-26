@@ -11,6 +11,7 @@
 #include "chunk.h"
 #include "http_chunk.h"
 #include "http_date.h"
+#include "http_range.h"
 
 #include "plugin.h"
 
@@ -868,6 +869,10 @@ http_response_write_prepare(request_st * const r)
     }
 
     if (r->resp_body_finished) {
+        /* check for Range request (current impl requires resp_body_finished) */
+        if (r->conf.range_requests && http_range_rfc7233(r) >= 400)
+            http_response_static_errdoc(r); /* 416 Range Not Satisfiable */
+
         /* set content-length if length is known and not already set */
         if (!(r->resp_htags
               & (light_bshift(HTTP_HEADER_CONTENT_LENGTH)

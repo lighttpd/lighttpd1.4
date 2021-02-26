@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 53;
+use Test::More tests => 54;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -300,15 +300,14 @@ Range: bytes=0-1,97-98
 EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 206, 'HTTP-Content' => <<EOF
-\r
 --fkj49sn38dcn3\r
-Content-Range: bytes 0-1/100\r
 Content-Type: text/plain\r
+Content-Range: bytes 0-1/100\r
 \r
 12\r
 --fkj49sn38dcn3\r
-Content-Range: bytes 97-98/100\r
 Content-Type: text/plain\r
+Content-Range: bytes 97-98/100\r
 \r
 hi\r
 --fkj49sn38dcn3--\r
@@ -320,10 +319,20 @@ $t->{REQUEST}  = ( <<EOF
 GET /12345.txt HTTP/1.1
 Host: 123.example.org
 Connection: close
+Range: bytes=0-
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 206, 'Content-Range' => 'bytes 0-5/6' } ];
+ok($tf->handle_http($t) == 0, 'GET, Range 0-');
+
+$t->{REQUEST}  = ( <<EOF
+GET /12345.txt HTTP/1.1
+Host: 123.example.org
+Connection: close
 Range: bytes=0--
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 416 } ];
 ok($tf->handle_http($t) == 0, 'GET, Range 0--');
 
 $t->{REQUEST}  = ( <<EOF
@@ -333,7 +342,7 @@ Connection: close
 Range: bytes=-2-3
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 416 } ];
 ok($tf->handle_http($t) == 0, 'GET, Range -2-3');
 
 $t->{REQUEST}  = ( <<EOF
