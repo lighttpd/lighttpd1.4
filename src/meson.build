@@ -757,6 +757,7 @@ main_src = [
 	'sock_addr_cache.c',
 	'ls-hpack/lshpack.c',
 	'algo_xxhash.c',
+	'http_range.c',
 	'network_write.c',
 	'network.c',
 	'reqpool.c',

@@ -97,6 +97,7 @@ src = server.c response.c connections.c h2.c reqpool.c \
 	network_write.c \
 	ls-hpack/lshpack.c \
 	algo_xxhash.c \
+	http_range.c \
 	data_config.c \
 	vector.c \
 	configfile.c configparser.c
@@ -464,7 +465,8 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	first.h http_chunk.h \
 	algo_hmac.h \
 	algo_md.h algo_md5.h algo_sha1.h algo_splaytree.h algo_xxhash.h \
-	http_auth.h http_date.h http_header.h http_vhostdb.h stream.h \
+	http_auth.h http_date.h http_header.h http_range.h http_vhostdb.h \
+	stream.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h plugin_config.h \
 	http_etag.h array.h vector.h \

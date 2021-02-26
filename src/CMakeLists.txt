@@ -793,6 +793,7 @@ add_executable(lighttpd
 	sock_addr_cache.c
 	ls-hpack/lshpack.c
 	algo_xxhash.c
+	http_range.c
 	network.c
 	network_write.c
 	data_config.c
