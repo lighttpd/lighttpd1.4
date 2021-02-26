@@ -537,10 +537,11 @@ void chunkqueue_set_tempdirs(chunkqueue * const restrict cq, const array * const
 	cq->tempdir_idx = 0;
 }
 
-static void chunkqueue_steal_partial_file_chunk(chunkqueue * const restrict dest, const chunk * const restrict c, const off_t len) {
-    chunkqueue_append_file(dest, c->mem, c->offset, len);
+static void chunkqueue_dup_file_chunk_fd (chunk * const restrict d, const chunk * const restrict c) {
+    /*assert(d != c);*/
+    /*assert(d->type == FILE_CHUNK);*/
+    /*assert(c->type == FILE_CHUNK);*/
     if (c->file.fd >= 0) {
-        chunk * const d = dest->last;
         if (c->file.refchg) {
             d->file.fd = c->file.fd;
             d->file.ref = c->file.ref;
@@ -550,6 +551,11 @@ static void chunkqueue_steal_partial_file_chunk(chunkqueue * const restrict dest
         else
             d->file.fd = fdevent_dup_cloexec(c->file.fd);
     }
+}
+
+static void chunkqueue_steal_partial_file_chunk(chunkqueue * const restrict dest, const chunk * const restrict c, const off_t len) {
+    chunkqueue_append_file(dest, c->mem, c->offset, len);
+    chunkqueue_dup_file_chunk_fd(dest->last, c);
 }
 
 void chunkqueue_steal(chunkqueue * const restrict dest, chunkqueue * const restrict src, off_t len) {
@@ -790,6 +796,35 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue
 	}
 
 	return 0;
+}
+
+void chunkqueue_append_cq_range (chunkqueue * const dst, const chunkqueue * const src, off_t offset, off_t len) {
+    /* similar to chunkqueue_steal() but copy and append src range to dst cq */
+    /* (dst cq and src cq can be the same cq, so neither is marked restrict) */
+
+    /* copy and append range len from src to dst */
+    for (const chunk *c = src->first; len > 0 && c != NULL; c = c->next) {
+        /* scan into src to range offset (also skips empty chunks) */
+        off_t clen = chunk_remaining_length(c);
+        if (offset >= clen) {
+            offset -= clen;
+            continue;
+        }
+        clen -= offset;
+        if (len < clen) clen = len;
+        len -= clen;
+
+        if (c->type == FILE_CHUNK) {
+            chunkqueue_append_file(dst, c->mem, c->offset + offset, clen);
+            chunkqueue_dup_file_chunk_fd(dst->last, c);
+        }
+        else { /*(c->type == MEM_CHUNK)*/
+            /*(string refs would reduce copying,
+             * but this path is not expected to be hot)*/
+            chunkqueue_append_mem(dst, c->mem->ptr + c->offset + offset, clen);
+        }
+        offset = 0;
+    }
 }
 
 void chunkqueue_mark_written(chunkqueue *cq, off_t len) {
