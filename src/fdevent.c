@@ -57,6 +57,11 @@ int fdevent_config(const char **event_handler_name, log_error_st *errh) {
 	const char * event_handler = *event_handler_name;
 	fdevent_handler_t et = FDEVENT_HANDLER_UNSET;
 
+#ifndef FDEVENT_USE_LIBEV
+	if (NULL != event_handler && 0 == strcmp(event_handler, "libev"))
+		event_handler = NULL;
+#endif
+
 	if (NULL == event_handler) {
 		/* choose a good default
 		 *
