@@ -80,6 +80,7 @@
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 #include <openssl/core_names.h>
+#include <openssl/store.h>
 #endif
 
 #include "base.h"
@@ -1939,6 +1940,7 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
 }
 
 
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 #ifndef OPENSSL_NO_DH
 #if OPENSSL_VERSION_NUMBER < 0x10100000L \
  || (defined(LIBRESSL_VERSION_NUMBER) \
@@ -2001,6 +2003,7 @@ static DH *get_dh2048(void)
     return dh;
 }
 #endif
+#endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
 
 
 static int
@@ -2033,6 +2036,7 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
       #endif
     }
     if (nid) {
+      #if OPENSSL_VERSION_NUMBER < 0x30000000L
         EC_KEY *ecdh;
         ecdh = EC_KEY_new_by_curve_name(nid);
         if (ecdh == NULL) {
@@ -2041,8 +2045,17 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
             return 0;
         }
         SSL_CTX_set_tmp_ecdh(s->ssl_ctx, ecdh);
-        SSL_CTX_set_options(s->ssl_ctx, SSL_OP_SINGLE_ECDH_USE);
         EC_KEY_free(ecdh);
+      #else
+        /* SSL_CTX_set1_groups() available in openssl 1.1.1, but might
+         * not be present in alt TLS libs (libressl or boringssl) */
+        if (1 != SSL_CTX_set1_groups(s->ssl_ctx, &nid, 1)) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: Unable to config curve %s", ssl_ec_curve->ptr);
+            return 0;
+        }
+      #endif
+        SSL_CTX_set_options(s->ssl_ctx, SSL_OP_SINGLE_ECDH_USE);
     }
   #endif
   #endif
@@ -2165,6 +2178,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 
       #ifndef OPENSSL_NO_DH
       {
+       #if OPENSSL_VERSION_NUMBER < 0x30000000L
         DH *dh;
         /* Support for Diffie-Hellman key exchange */
         if (!buffer_string_is_empty(s->ssl_dh_file)) {
@@ -2196,6 +2210,37 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             SSL_CTX_set_tmp_dh(s->ssl_ctx,dh);
             DH_free(dh);
         }
+       #else
+        /* OSSL_STORE_open() available in openssl 1.1.1, but might
+         * not be present in alt TLS libs (libressl or boringssl) */
+        EVP_PKEY *dhpkey = NULL;
+        if (!buffer_string_is_empty(s->ssl_dh_file)) {
+            OSSL_STORE_CTX *ctx = NULL;
+            ctx = OSSL_STORE_open(s->ssl_dh_file->ptr, NULL, NULL, NULL, NULL);
+            if (NULL != ctx) {
+                if (OSSL_STORE_expect(ctx, OSSL_STORE_INFO_PARAMS)) {
+                    while (!OSSL_STORE_eof(ctx)) {
+                        OSSL_STORE_INFO *info = OSSL_STORE_load(ctx);
+                        if (info) {
+                            dhpkey = OSSL_STORE_INFO_get1_PARAMS(info);
+                            OSSL_STORE_INFO_free(info);
+                        }
+                        break;
+                    }
+                }
+                OSSL_STORE_close(ctx);
+            }
+            if (!dhpkey || !EVP_PKEY_is_a(dhpkey, "DH")
+                || !SSL_CTX_set0_tmp_dh_pkey(s->ssl_ctx, dhpkey)) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "Unable to load DH params from %s", s->ssl_dh_file->ptr);
+                EVP_PKEY_free(dhpkey);
+                dhpkey = NULL;
+            } /*(else dhpkey ownership transferred upon success)*/
+        }
+        if (NULL == dhpkey)
+            SSL_CTX_set_dh_auto(s->ssl_ctx, 1);
+       #endif
         SSL_CTX_set_options(s->ssl_ctx,SSL_OP_SINGLE_DH_USE);
       }
       #else
