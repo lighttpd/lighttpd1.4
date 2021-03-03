@@ -393,6 +393,9 @@ http_range_rfc7233 (request_st * const r)
         const buffer * const accept_ranges =
           http_header_response_get(r, HTTP_HEADER_ACCEPT_RANGES,
                                    CONST_STR_LEN("Accept-Ranges"));
+      #ifdef __COVERITY__
+        force_assert(accept_ranges); /*(r->resp_htags checked above)*/
+      #endif
         if (buffer_eq_slen(accept_ranges, CONST_STR_LEN("none")))
             return http_status;
     }
@@ -423,6 +426,9 @@ http_range_rfc7233 (request_st * const r)
         const buffer * const if_range =
           http_header_request_get(r, HTTP_HEADER_IF_RANGE,
                                   CONST_STR_LEN("If-Range"));
+      #ifdef __COVERITY__
+        force_assert(if_range); /*(r->rqst_htags checked above)*/
+      #endif
         /* (weak ETag W/"<etag>" will not match Last-Modified) */
         const buffer * const cmp = (if_range->ptr[0] == '"')
           ? http_header_response_get(r, HTTP_HEADER_ETAG,
