@@ -686,7 +686,7 @@ void http_response_upgrade_read_body_unknown(request_st * const r) {
 }
 
 
-static handler_t http_response_process_local_redir(request_st * const r, size_t blen) {
+static handler_t http_cgi_local_redir(request_st * const r) {
     /* [RFC3875] The Common Gateway Interface (CGI) Version 1.1
      * [RFC3875] 6.2.2 Local Redirect Response
      *
@@ -703,14 +703,11 @@ static handler_t http_response_process_local_redir(request_st * const r, size_t 
      *
      *      scheme "://" server-name ":" server-port local-pathquery
      *
-     * (Might not have begun to receive body yet, but do skip local-redir
-     *  if we already have started receiving a response body (blen > 0))
-     * (Also, while not required by the RFC, do not send local-redir back
-     *  to same URL, since CGI should have handled it internally if it
-     *  really wanted to do that internally)
+     * (While not required by the RFC, do not send local-redir back to same URL
+     *  since CGI should have handled it internally if it really wanted to do
+     *  that internally)
      */
 
-    /* r->http_status >= 300 && r->http_status < 400) */
     size_t ulen = buffer_string_length(&r->uri.path);
     const buffer *vb = http_header_response_get(r, HTTP_HEADER_LOCATION,
                                                 CONST_STR_LEN("Location"));
@@ -720,14 +717,15 @@ static handler_t http_response_process_local_redir(request_st * const r, size_t 
             || (   vb->ptr[ulen] != '\0'
                 && vb->ptr[ulen] != '/'
                 && vb->ptr[ulen] != '?'))
-        && 0 == blen      /*no "Status" or NPH response*/
         && !light_btst(r->resp_htags, HTTP_HEADER_STATUS)
-        && 1 == r->resp_headers.used) {
+        && 1 == r->resp_headers.used /*"Location"; no "Status" or NPH response*/
+        && r->http_status >= 300 && r->http_status < 400) {
         if (++r->loops_per_request > 5) {
             log_error(r->conf.errh, __FILE__, __LINE__,
               "too many internal loops while processing request: %s",
               r->target_orig.ptr);
             r->http_status = 500; /* Internal Server Error */
+            r->resp_body_started = 0;
             r->handler_module = NULL;
             return HANDLER_FINISHED;
         }
@@ -1097,11 +1095,12 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
         return HANDLER_FINISHED;
     }
 
-    if (opts->local_redir && r->http_status >= 300 && r->http_status < 400){
+    if (opts->local_redir && r->http_status >= 300 && r->http_status < 400
+        && 0 == blen) {
+        /* (Might not have begun to receive body yet, but do skip local-redir
+         *  if we already have started receiving a response body (blen > 0)) */
         /*(light_btst(r->resp_htags, HTTP_HEADER_LOCATION))*/
-        handler_t rc = http_response_process_local_redir(r, blen);
-        if (NULL == r->handler_module)
-            r->resp_body_started = 0;
+        handler_t rc = http_cgi_local_redir(r);
         if (rc != HANDLER_GO_ON) return rc;
     }
 
