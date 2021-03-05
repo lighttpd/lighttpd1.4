@@ -759,6 +759,7 @@ set(COMMON_SRC
 	configfile-glue.c
 	http-header-glue.c
 	http_auth.c
+	http_cgi.c
 	http_date.c
 	http_vhostdb.c
 	request.c

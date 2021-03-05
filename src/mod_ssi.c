@@ -4,6 +4,7 @@
 #include "fdevent.h"
 #include "log.h"
 #include "buffer.h"
+#include "http_cgi.h"
 #include "http_etag.h"
 #include "http_header.h"
 #include "stat_cache.h"

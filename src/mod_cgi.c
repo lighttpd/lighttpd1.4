@@ -6,6 +6,7 @@
 #include "log.h"
 #include "connections.h"
 #include "response.h"
+#include "http_cgi.h"
 #include "http_chunk.h"
 #include "http_header.h"
 

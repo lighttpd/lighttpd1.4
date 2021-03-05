@@ -10,13 +10,6 @@
 
 int http_response_parse(server *srv, request_st *r);
 
-typedef struct http_cgi_opts_t {
-  int authorizer;
-  int break_scriptfilename_for_php;
-  const buffer *docroot;
-  const buffer *strip_request_uri;
-} http_cgi_opts;
-
 enum {
   BACKEND_PROXY = 0
  ,BACKEND_CGI
@@ -36,9 +29,6 @@ typedef struct http_response_opts_t {
   handler_t(*parse)(request_st *, struct http_response_opts_t *, buffer *, size_t);
   handler_t(*headers)(request_st *, struct http_response_opts_t *);
 } http_response_opts;
-
-typedef int (*http_cgi_header_append_cb)(void *vdata, const char *k, size_t klen, const char *v, size_t vlen);
-int http_cgi_headers(request_st *r, http_cgi_opts *opts, http_cgi_header_append_cb cb, void *vdata);
 
 typedef int (*http_response_send_1xx_cb)(request_st *r, connection *con);
 __attribute_cold__

@@ -12,6 +12,7 @@ typedef gw_handler_ctx   handler_ctx;
 #include "base.h"
 #include "buffer.h"
 #include "fdevent.h"
+#include "http_cgi.h"
 #include "http_chunk.h"
 #include "log.h"
 #include "status_counter.h"

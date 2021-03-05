@@ -729,6 +729,7 @@ common_src = [
 	'fdevent.c',
 	'gw_backend.c',
 	'http_auth.c',
+	'http_cgi.c',
 	'http_chunk.c',
 	'http_date.c',
 	'http_header.c',
