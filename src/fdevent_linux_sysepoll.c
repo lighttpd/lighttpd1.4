@@ -63,9 +63,12 @@ int fdevent_linux_sysepoll_init(fdevents *ev) {
 	ev->poll      = fdevent_linux_sysepoll_poll;
 	ev->free      = fdevent_linux_sysepoll_free;
 
+  #ifdef EPOLL_CLOEXEC
+	if (-1 == (ev->epoll_fd = epoll_create1(EPOLL_CLOEXEC))) return -1;
+  #else
 	if (-1 == (ev->epoll_fd = epoll_create(ev->maxfds))) return -1;
-
 	fdevent_setfd_cloexec(ev->epoll_fd);
+  #endif
 
 	ev->epoll_events = malloc(ev->maxfds * sizeof(*ev->epoll_events));
 	force_assert(NULL != ev->epoll_events);
