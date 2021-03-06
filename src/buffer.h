@@ -172,9 +172,6 @@ void buffer_append_string_encoded(buffer * restrict b, const char * restrict s, 
 /* escape non-printable characters; simple escapes for \t, \r, \n; fallback to \xCC */
 void buffer_append_string_c_escaped(buffer * restrict b, const char * restrict s, size_t s_len);
 
-/* to upper case, replace non alpha-numerics with '_'; if is_http_header prefix with "HTTP_" unless s is "content-type" */
-void buffer_copy_string_encoded_cgi_varnames(buffer * restrict b, const char * restrict s, size_t s_len, int is_http_header);
-
 void buffer_urldecode_path(buffer *url);
 void buffer_urldecode_query(buffer *url);
 int buffer_is_valid_UTF8(const buffer *b);

@@ -91,6 +91,29 @@ http_cgi_local_redir (request_st * const r)
 }
 
 
+static void
+http_cgi_encode_varname (buffer * const b, const char * const restrict s, const size_t len, const int is_http_header)
+{
+    char * const restrict p = buffer_string_prepare_copy(b, len + 5);
+    size_t i, j = 0;
+
+    if (is_http_header) {
+        if (len == 12 && buffer_eq_icase_ssn(s, "Content-Type", 12)) {
+            buffer_copy_string_len(b, CONST_STR_LEN("CONTENT_TYPE"));
+            return;
+        }
+        memcpy(p, "HTTP_", 5);
+        j = 5; /* "HTTP_" */
+    }
+
+    for (i = 0; i < len; ++i) {/* uppercase alpha, pass numeric, map rest '_' */
+        const unsigned char c = s[i];
+        p[j++] = light_isalpha(c) ? c & ~0x20 : light_isdigit(c) ? c : '_';
+    }
+    buffer_string_set_length(b, j);
+}
+
+
 int
 http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_header_append_cb cb, void *vdata)
 {
@@ -308,8 +331,7 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
                 && buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy"))) {
                 continue;
             }
-            buffer_copy_string_encoded_cgi_varnames(tb,
-                                                    CONST_BUF_LEN(&ds->key), 1);
+            http_cgi_encode_varname(tb, CONST_BUF_LEN(&ds->key), 1);
             rc |= cb(vdata, CONST_BUF_LEN(tb),
                             CONST_BUF_LEN(&ds->value));
         }
@@ -320,8 +342,7 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
     for (n = 0; n < r->env.used; n++) {
         data_string *ds = (data_string *)r->env.data[n];
         if (!buffer_is_empty(&ds->value) && !buffer_is_empty(&ds->key)) {
-            buffer_copy_string_encoded_cgi_varnames(tb,
-                                                    CONST_BUF_LEN(&ds->key), 0);
+            http_cgi_encode_varname(tb, CONST_BUF_LEN(&ds->key), 0);
             rc |= cb(vdata, CONST_BUF_LEN(tb),
                             CONST_BUF_LEN(&ds->value));
         }

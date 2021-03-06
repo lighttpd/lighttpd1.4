@@ -671,37 +671,6 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 }
 
 
-void buffer_copy_string_encoded_cgi_varnames(buffer * const restrict b, const char * const restrict s, size_t s_len, int is_http_header) {
-	size_t i, j = 0;
-
-	force_assert(NULL != b);
-	force_assert(NULL != s || 0 == s_len);
-
-	buffer_string_prepare_copy(b, s_len + 5);
-
-	if (is_http_header) {
-		if (s_len == 12 && buffer_eq_icase_ssn(s, "Content-Type", 12)) {
-			buffer_copy_string_len(b, CONST_STR_LEN("CONTENT_TYPE"));
-			return;
-		}
-		buffer_copy_string_len(b, CONST_STR_LEN("HTTP_"));
-		j = 5; /* "HTTP_" */
-	}
-
-	for (i = 0; i < s_len; ++i) {
-		unsigned char cr = s[i];
-		if (light_isalpha(cr)) {
-			/* upper-case */
-			cr &= ~32;
-		} else if (!light_isdigit(cr)) {
-			cr = '_';
-		}
-		b->ptr[j++] = cr;
-	}
-	b->used = j;
-	b->ptr[b->used++] = '\0';
-}
-
 /* decodes url-special-chars inplace.
  * replaces non-printable characters with '_'
  */
