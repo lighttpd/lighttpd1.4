@@ -131,7 +131,8 @@ typedef struct server_socket {
 	sock_addr addr;
 	int       fd;
 
-	unsigned short is_ssl;
+	uint8_t is_ssl;
+	uint8_t srv_token_colon;
 	unsigned short sidx;
 
 	fdnode *fdn;

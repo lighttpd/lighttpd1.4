@@ -505,7 +505,7 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	case MAGNET_ENV_REQUEST_ORIG_URI: dest = &r->target_orig; break;
 	case MAGNET_ENV_REQUEST_PATH_INFO: dest = &r->pathinfo; break;
 	case MAGNET_ENV_REQUEST_REMOTE_IP: dest = r->con->dst_addr_buf; break;
-	case MAGNET_ENV_REQUEST_SERVER_ADDR:
+	case MAGNET_ENV_REQUEST_SERVER_ADDR: /* local IP without port */
 	    {
 		const server_socket * const srv_socket = r->con->srv_socket;
 		dest = r->tmp_buf;
@@ -519,19 +519,14 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 				const int fd = r->con->fd;
 				if (0 == getsockname(fd,(struct sockaddr *)&addrbuf,&addrlen)) {
 					char buf[INET6_ADDRSTRLEN + 1];
-					const char *s = sock_addr_inet_ntop(&addrbuf, buf, sizeof(buf)-1);
+					const char *s = sock_addr_inet_ntop(&addrbuf, buf, sizeof(buf));
 					if (NULL != s)
 						buffer_copy_string_len(dest, s, strlen(s));
 				}
 			}
-			else {
-				buffer_copy_buffer(dest, srv_socket->srv_token);
-				if (dest->ptr[0] != '[' || dest->ptr[buffer_string_length(dest)-1] != ']') {
-					char *s = strrchr(dest->ptr, ':');
-					if (s != NULL) /* local IP without port */
-						buffer_string_set_length(dest, s - dest->ptr);
-				}
-			}
+			else
+				buffer_copy_string_len(dest, srv_socket->srv_token->ptr,
+				                       srv_socket->srv_token_colon);
 			break;
 		default:
 			break;

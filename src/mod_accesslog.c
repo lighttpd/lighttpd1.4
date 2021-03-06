@@ -1062,38 +1062,25 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				break;
 			case FORMAT_LOCAL_ADDR:
 				{
-					/* (perf: not using getsockname() and inet_ntop_cache_get_ip())
+					/* (perf: not using getsockname() and
+					 *  sock_addr_cache_inet_ntop_copy_buffer())
 					 * (still useful if admin has configured explicit listen IPs) */
-					const char *colon;
-					buffer *srvtoken = con->srv_socket->srv_token;
-					if (srvtoken->ptr[0] == '[') {
-						colon = strstr(srvtoken->ptr, "]:");
-					} else {
-						colon = strchr(srvtoken->ptr, ':');
-					}
-					if (colon) {
-						buffer_append_string_len(b, srvtoken->ptr, (size_t)(colon - srvtoken->ptr));
-					} else {
-						buffer_append_string_buffer(b, srvtoken);
-					}
+					const server_socket * const srv_sock = con->srv_socket;
+					buffer_append_string_len(b, srv_sock->srv_token->ptr,
+					                         srv_sock->srv_token_colon);
 				}
 				break;
 			case FORMAT_SERVER_PORT:
 				if (f->opt & FORMAT_FLAG_PORT_REMOTE) {
 					buffer_append_int(b, sock_addr_get_port(&con->dst_addr));
 				} else { /* if (f->opt & FORMAT_FLAG_PORT_LOCAL) *//*(default)*/
-					const char *colon;
-					buffer *srvtoken = ((server_socket*)(con->srv_socket))->srv_token;
-					if (srvtoken->ptr[0] == '[') {
-						colon = strstr(srvtoken->ptr, "]:");
-					} else {
-						colon = strchr(srvtoken->ptr, ':');
-					}
-					if (colon) {
-						buffer_append_string(b, colon+1);
-					} else {
-						buffer_append_int(b, con->srv->srvconf.port);
-					}
+					const server_socket * const srv_sock = con->srv_socket;
+					const buffer * const srv_token = srv_sock->srv_token;
+					const size_t tlen = buffer_string_length(srv_token);
+					size_t colon = srv_sock->srv_token_colon;
+					if (colon < tlen) /*(colon != tlen)*/
+						buffer_append_string_len(b, srv_token->ptr+colon+1,
+						                         tlen - (colon+1));
 				}
 				break;
 			case FORMAT_QUERY_STRING:

@@ -197,6 +197,20 @@ static void network_merge_config(network_socket_config * const pconf, const conf
     } while ((++cpv)->k_id != -1);
 }
 
+__attribute_pure__
+static uint8_t network_srv_token_colon (const buffer * const b) {
+    const char *colon = NULL;
+    const char * const p = b->ptr;
+    if (*p == '[') {
+        colon = strstr(p, "]:");
+        if (colon) ++colon;
+    }
+    else if (*p != '/') {
+        colon = strchr(p, ':');
+    }
+    return colon ? (uint8_t)(colon - p) : (uint8_t)buffer_string_length(b);
+}
+
 static int network_server_init(server *srv, network_socket_config *s, buffer *host_token, size_t sidx, int stdin_fd) {
 	server_socket *srv_socket;
 	const char *host;
@@ -278,6 +292,8 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	srv_socket->is_ssl = s->ssl_enabled;
 	srv_socket->srv = srv;
 	srv_socket->srv_token = buffer_init_buffer(host_token);
+	srv_socket->srv_token_colon =
+	  network_srv_token_colon(srv_socket->srv_token);
 
 	network_srv_sockets_append(srv, srv_socket);
 
@@ -692,6 +708,8 @@ int network_init(server *srv, int stdin_fd) {
                        sizeof(server_socket));
                 srv_socket->srv_token =
                   buffer_init_buffer(srv_socket->srv_token);
+                srv_socket->srv_token_colon =
+                  network_srv_token_colon(srv_socket->srv_token);
                 network_srv_sockets_append(srv, srv_socket);
             }
         }

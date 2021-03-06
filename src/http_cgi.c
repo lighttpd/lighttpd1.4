@@ -96,16 +96,13 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
 {
     /* CGI-SPEC 6.1.2, FastCGI spec 6.3 and SCGI spec */
 
+    /* note: string ptrs passed to cb() func must not be NULL */
+
     int rc = 0;
-    const connection * const con = r->con;
-    server_socket * const srv_sock = con->srv_socket;
     buffer * const tb = r->tmp_buf;
     const char *s;
     size_t n;
-    char buf[LI_ITOSTRING_LENGTH];
-    sock_addr *addr;
-    sock_addr addrbuf;
-    char b2[INET6_ADDRSTRLEN + 1];
+    char buf[INET6_ADDRSTRLEN + 1]; /*(also larger than LI_ITOSTRING_LENGTH)*/
 
     /* (CONTENT_LENGTH must be first for SCGI) */
     if (!opts->authorizer)
@@ -237,50 +234,63 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
     if (buffer_is_equal_string(&r->uri.scheme, CONST_STR_LEN("https")))
         rc |= cb(vdata, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
 
-    addr = &srv_sock->addr;
-    rc |= cb(vdata, CONST_STR_LEN("SERVER_PORT"),
-             buf, li_utostrn(buf,sizeof(buf),sock_addr_get_port(addr)));
+    const connection * const con = r->con;
+    const server_socket * const srv_sock = con->srv_socket;
+    const size_t tlen = buffer_string_length(srv_sock->srv_token);
+    n = srv_sock->srv_token_colon;
+    if (n < tlen) { /*(n != tlen)*/
+        s = srv_sock->srv_token->ptr+n+1;
+        n = tlen - (n+1);
+    }
+    else {
+        s = "0";
+        n = 1;
+    }
+    rc |= cb(vdata, CONST_STR_LEN("SERVER_PORT"), s, n);
 
-    switch (sock_addr_get_family(addr)) {
-    case AF_INET:
-    case AF_INET6:
-        if (sock_addr_is_addr_wildcard(addr)) {
+    n = 0;
+    switch (sock_addr_get_family(&srv_sock->addr)) {
+      case AF_INET:
+      case AF_INET6:
+        if (sock_addr_is_addr_wildcard(&srv_sock->addr)) {
+            sock_addr addrbuf;
             socklen_t addrlen = sizeof(addrbuf);
             if (0 == getsockname(con->fd,(struct sockaddr *)&addrbuf,&addrlen)){
-                addr = &addrbuf;
+                /* future: might add a one- or two- element cache
+                 * or use sock_addr_cache_inet_ntop_copy_buffer() into tb */
+                s = sock_addr_inet_ntop(&addrbuf, buf, sizeof(buf));
+                if (s)
+                    n = strlen(s);
+                else
+                    s = "";
             }
-            else {
+            else
                 s = "";
-                break;
-            }
         }
-        s = sock_addr_inet_ntop(addr, b2, sizeof(b2)-1);
-        if (NULL == s) s = "";
+        else {
+            s = srv_sock->srv_token->ptr;
+            n = srv_sock->srv_token_colon;
+        }
         break;
-    default:
+      default:
         s = "";
         break;
     }
-    force_assert(s);
-    rc |= cb(vdata, CONST_STR_LEN("SERVER_ADDR"), s, strlen(s));
+    rc |= cb(vdata, CONST_STR_LEN("SERVER_ADDR"), s, n);
 
     if (!buffer_string_is_empty(r->server_name)) {
-        size_t len = buffer_string_length(r->server_name);
-
-        if (r->server_name->ptr[0] == '[') {
-            const char *colon = strstr(r->server_name->ptr, "]:");
-            if (colon) len = (colon + 1) - r->server_name->ptr;
+        n = buffer_string_length(r->server_name);
+        s = r->server_name->ptr;
+        if (s[0] == '[') {
+            const char *colon = strstr(s, "]:");
+            if (colon) n = (colon + 1) - s;
         }
         else {
-            const char *colon = strchr(r->server_name->ptr, ':');
-            if (colon) len = colon - r->server_name->ptr;
+            const char *colon = strchr(s, ':');
+            if (colon) n = colon - s;
         }
-
-        rc |= cb(vdata, CONST_STR_LEN("SERVER_NAME"),
-                        r->server_name->ptr, len);
-    }
-    else /* set to be same as SERVER_ADDR (above) */
-        rc |= cb(vdata, CONST_STR_LEN("SERVER_NAME"), s, strlen(s));
+    } /* else set to be same as SERVER_ADDR (above) */
+    rc |= cb(vdata, CONST_STR_LEN("SERVER_NAME"), s, n);
 
     rc |= cb(vdata, CONST_STR_LEN("REMOTE_ADDR"),
                     CONST_BUF_LEN(con->dst_addr_buf));
