@@ -72,6 +72,7 @@ li_hmac_md5 (unsigned char digest[MD5_DIGEST_LENGTH],
 }
 
 
+#ifdef USE_LIB_CRYPTO_SHA1
 int
 li_hmac_sha1 (unsigned char digest[SHA_DIGEST_LENGTH],
               const void * const secret, const uint32_t slen,
@@ -138,8 +139,10 @@ li_hmac_sha1 (unsigned char digest[SHA_DIGEST_LENGTH],
     return 0;
   #endif
 }
+#endif
 
 
+#ifdef USE_LIB_CRYPTO_SHA256
 int
 li_hmac_sha256 (unsigned char digest[SHA256_DIGEST_LENGTH],
                 const void * const secret, const uint32_t slen,
@@ -206,3 +209,4 @@ li_hmac_sha256 (unsigned char digest[SHA256_DIGEST_LENGTH],
     return 0;
   #endif
 }
+#endif
