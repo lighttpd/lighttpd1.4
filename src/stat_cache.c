@@ -1245,10 +1245,8 @@ void stat_cache_delete_dir(const char *name, uint32_t len)
  *  - HANDLER_ERROR on stat() failed -> see errno for problem
  */
 
-stat_cache_entry * stat_cache_get_entry(const buffer *name) {
+stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
 	stat_cache_entry *sce = NULL;
-	struct stat st;
-	int file_ndx;
 
 	/* consistency: ensure lookup name does not end in '/' unless root "/"
 	 * (but use full path given with stat(), even with trailing '/') */
@@ -1270,7 +1268,7 @@ stat_cache_entry * stat_cache_get_entry(const buffer *name) {
 
 	const time_t cur_ts = log_epoch_secs;
 
-	file_ndx = splaytree_djbhash(name->ptr, len);
+	const int file_ndx = splaytree_djbhash(name->ptr, len);
 	splay_tree *sptree = sc.files = splaytree_splay(sc.files, file_ndx);
 
 	if (sptree && (sptree->key == file_ndx)) {
@@ -1312,19 +1310,18 @@ stat_cache_entry * stat_cache_get_entry(const buffer *name) {
 		}
 	}
 
+	struct stat st;
 	if (-1 == stat(name->ptr, &st)) {
 		return NULL;
 	}
 
-	if (S_ISREG(st.st_mode)) {
+	if (NULL == sce) {
+
 		/* fix broken stat/open for symlinks to reg files with appended slash on freebsd,osx */
-		if (name->ptr[buffer_string_length(name) - 1] == '/') {
+		if (final_slash && S_ISREG(st.st_mode)) {
 			errno = ENOTDIR;
 			return NULL;
 		}
-	}
-
-	if (NULL == sce) {
 
 		sce = stat_cache_entry_init();
 		buffer_copy_string_len(&sce->name, name->ptr, len);
@@ -1345,11 +1342,8 @@ stat_cache_entry * stat_cache_get_entry(const buffer *name) {
 		buffer_clear(&sce->content_type);
 	      #endif
 
-	}
-
-	if (sce->fd >= 0) {
 		/* close fd if file changed */
-		if (!stat_cache_stat_eq(&sce->st, &st)) {
+		if (sce->fd >= 0 && !stat_cache_stat_eq(&sce->st, &st)) {
 			if (1 == sce->refcnt) {
 				close(sce->fd);
 				sce->fd = -1;
