@@ -1386,7 +1386,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		time_t ts = 0;
 		const unsigned char * const nonce_uns = (unsigned char *)nonce;
 		for (i = 0; i < 8 && light_isxdigit(nonce_uns[i]); ++i) {
-			ts =(time_t)((uint32_t)ts << 4) + hex2int(nonce_uns[i]);
+			ts =(time_t)((uint32_t)ts << 4) | hex2int(nonce_uns[i]);
 		}
 		const time_t cur_ts = log_epoch_secs;
 		if (nonce[i] != ':'

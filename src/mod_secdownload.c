@@ -444,7 +444,7 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	if (*(ts_str + 8) != '/') return HANDLER_GO_ON;
 
 	for (i = 0; i < 8; i++) {
-		ts = (time_t)((uint32_t)ts << 4) + hex2int(ts_str[i]);
+		ts = (time_t)((uint32_t)ts << 4) | hex2int(ts_str[i]);
 	}
 
 	const time_t cur_ts = log_epoch_secs;
