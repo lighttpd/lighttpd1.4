@@ -978,7 +978,8 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
 
 static int gw_establish_connection(request_st * const r, gw_host *host, gw_proc *proc, pid_t pid, int gw_fd, int debug) {
     if (-1 == connect(gw_fd, proc->saddr, proc->saddrlen)) {
-        if (errno == EINPROGRESS || errno == EALREADY || errno == EINTR) {
+        if (errno == EINPROGRESS || errno == EALREADY || errno == EINTR
+            || (errno == EAGAIN && !buffer_string_is_empty(host->unixsocket))) {
             if (debug > 2) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "connect delayed; will continue later: %s",
