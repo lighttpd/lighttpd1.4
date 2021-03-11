@@ -225,6 +225,15 @@ static int daemonize(void) {
 }
 #endif
 
+static time_t
+server_monotonic_secs (void)
+{
+    struct timespec ts;
+    return (0 == log_clock_gettime_realtime(&ts))
+      ? ts.tv_sec
+      : log_monotonic_secs;
+}
+
 __attribute_cold__
 static server *server_init(void) {
 	server *srv = calloc(1, sizeof(*srv));
@@ -241,6 +250,7 @@ static server *server_init(void) {
 	li_rand_reseed();
 
 	srv->startup_ts = log_epoch_secs = time(NULL);
+	log_monotonic_secs = server_monotonic_secs();
 
 	srv->errh = log_error_st_init();
 
@@ -921,7 +931,7 @@ static void server_graceful_shutdown_maint (server *srv) {
     if (oneshot_fd) {
         /* permit keep-alive on one-shot connections until graceful_expire_ts */
         if (!srv->graceful_expire_ts) return;
-        if (srv->graceful_expire_ts >= log_epoch_secs) return;
+        if (srv->graceful_expire_ts >= log_monotonic_secs) return;
     }
     connection_graceful_shutdown_maint(srv);
 }
@@ -936,7 +946,7 @@ static void server_graceful_state (server *srv) {
                 CONST_STR_LEN("server.graceful-shutdown-timeout"));
             srv->graceful_expire_ts = config_plugin_value_to_int32(du, 0);
             if (srv->graceful_expire_ts)
-                srv->graceful_expire_ts += log_epoch_secs;
+                srv->graceful_expire_ts += log_monotonic_secs;
         }
         server_graceful_shutdown_maint(srv);
     }
@@ -1578,6 +1588,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 				if (-1 != (pid = fdevent_waitpid(-1, &status, 0))) {
 					log_epoch_secs = time(NULL);
+					log_monotonic_secs = server_monotonic_secs();
 					if (plugins_call_handle_waitpid(srv, pid, status) != HANDLER_GO_ON) {
 						if (!timer) alarm((timer = 5));
 						continue;
@@ -1602,6 +1613,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 					switch (errno) {
 					case EINTR:
 						log_epoch_secs = time(NULL);
+						log_monotonic_secs = server_monotonic_secs();
 						/**
 						 * if we receive a SIGHUP we have to close our logs ourself as we don't 
 						 * have the mainloop who can help us here
@@ -1620,7 +1632,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 							handle_sig_alarm = 0;
 							timer = 0;
 							plugins_call_handle_trigger(srv);
-							fdevent_restart_logger_pipes(log_epoch_secs);
+							fdevent_restart_logger_pipes(log_monotonic_secs);
 						}
 						break;
 					default:
@@ -1795,14 +1807,15 @@ static void server_handle_sighup (server * const srv) {
 }
 
 __attribute_noinline__
-static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t last_active_ts) {
+static void server_handle_sigalrm (server * const srv, time_t mono_ts, time_t last_active_ts) {
 
 				plugins_call_handle_trigger(srv);
 
-				log_epoch_secs = min_ts;
+				log_monotonic_secs = mono_ts;
+				log_epoch_secs = time(NULL);
 
 				/* check idle time limit, if enabled */
-				if (idle_limit && idle_limit < min_ts - last_active_ts && !graceful_shutdown) {
+				if (idle_limit && idle_limit < mono_ts - last_active_ts && !graceful_shutdown) {
 					log_error(srv->errh, __FILE__, __LINE__,
 					  "[note] idle timeout %ds exceeded, "
 					  "initiating graceful shutdown", (int)idle_limit);
@@ -1816,19 +1829,19 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 
 			      #ifdef HAVE_GETLOADAVG
 				/* refresh loadavg data every 30 seconds */
-				if (srv->loadts + 30 < min_ts) {
+				if (srv->loadts + 30 < mono_ts) {
 					if (-1 != getloadavg(srv->loadavg, 3)) {
-						srv->loadts = min_ts;
+						srv->loadts = mono_ts;
 					}
 				}
 			      #endif
 
-				if (0 == (min_ts & 0x3f)) { /*(once every 64 secs)*/
+				if (0 == (mono_ts & 0x3f)) { /*(once every 64 secs)*/
 					/* free excess chunkqueue buffers every 64 secs */
 					chunkqueue_chunk_pool_clear();
 					/* attempt to restart dead piped loggers every 64 secs */
 					if (0 == srv->srvconf.max_worker)
-						fdevent_restart_logger_pipes(min_ts);
+						fdevent_restart_logger_pipes(mono_ts);
 				}
 				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup();
@@ -1837,7 +1850,7 @@ static void server_handle_sigalrm (server * const srv, time_t min_ts, time_t las
 				/* if graceful_shutdown, accelerate cleanup of recently completed request/responses */
 				if (graceful_shutdown && !srv_shutdown)
 					server_graceful_shutdown_maint(srv);
-				connection_periodic_maint(srv, min_ts);
+				connection_periodic_maint(srv, mono_ts);
 }
 
 __attribute_noinline__
@@ -1852,7 +1865,7 @@ static void server_handle_sigchld (server * const srv) {
 					}
 					if (0 == srv->srvconf.max_worker) {
 						/* check piped-loggers and restart, even if shutting down */
-						if (fdevent_waitpid_logger_pipe_pid(pid, log_epoch_secs)) {
+						if (fdevent_waitpid_logger_pipe_pid(pid, log_monotonic_secs)) {
 							continue;
 						}
 					}
@@ -1873,7 +1886,8 @@ static void server_run_con_queue (connections * const restrict joblist) {
 __attribute_hot__
 __attribute_noinline__
 static void server_main_loop (server * const srv) {
-	time_t last_active_ts = time(NULL);
+	time_t last_active_ts = server_monotonic_secs();
+	log_epoch_secs = time(NULL);
 
 	while (!srv_shutdown) {
 
@@ -1887,9 +1901,9 @@ static void server_main_loop (server * const srv) {
 		if (handle_sig_alarm) {
 			handle_sig_alarm = 0;
 	      #endif
-			time_t min_ts = time(NULL);
-			if (min_ts != log_epoch_secs) {
-				server_handle_sigalrm(srv, min_ts, last_active_ts);
+			time_t mono_ts = server_monotonic_secs();
+			if (mono_ts != log_monotonic_secs) {
+				server_handle_sigalrm(srv, mono_ts, last_active_ts);
 			}
 	      #ifdef USE_ALARM
 		}
@@ -1921,7 +1935,7 @@ static void server_main_loop (server * const srv) {
 		connections * const joblist = connection_joblist;
 
 		if (fdevent_poll(srv->ev, joblist->used ? 0 : 1000) > 0) {
-			last_active_ts = log_epoch_secs;
+			last_active_ts = log_monotonic_secs;
 		}
 
 		connection_joblist = (joblist == &srv->joblist_A)

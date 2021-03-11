@@ -679,7 +679,7 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
         /* directory already registered */
     }
 
-    const time_t cur_ts = log_epoch_secs;
+    const time_t cur_ts = log_monotonic_secs;
     struct stat lst;
     int ck_dir = fn_is_dir;
     if (!fn_is_dir && (NULL==fam_dir || cur_ts - fam_dir->stat_ts >= 16)) {
@@ -1112,7 +1112,7 @@ void stat_cache_update_entry(const char *name, uint32_t len,
             }
             sce->st = *st;
         }
-        sce->stat_ts = log_epoch_secs;
+        sce->stat_ts = log_monotonic_secs;
     }
 }
 
@@ -1266,7 +1266,7 @@ stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
 	 * check if the directory for this file has changed
 	 */
 
-	const time_t cur_ts = log_epoch_secs;
+	const time_t cur_ts = log_monotonic_secs;
 
 	const int file_ndx = splaytree_djbhash(name->ptr, len);
 	splay_tree *sptree = sc.files = splaytree_splay(sc.files, file_ndx);
@@ -1503,7 +1503,7 @@ void stat_cache_trigger_cleanup(void) {
 
       #ifdef HAVE_FAM_H
 	if (STAT_CACHE_ENGINE_FAM == sc.stat_cache_engine) {
-		if (log_epoch_secs & 0x1F) return;
+		if (log_monotonic_secs & 0x1F) return;
 		/* once every 32 seconds (0x1F == 31) */
 		max_age = 32;
 		fam_dir_periodic_cleanup();
@@ -1514,5 +1514,5 @@ void stat_cache_trigger_cleanup(void) {
 	}
       #endif
 
-	stat_cache_periodic_cleanup(max_age, log_epoch_secs);
+	stat_cache_periodic_cleanup(max_age, log_monotonic_secs);
 }

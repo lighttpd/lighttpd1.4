@@ -54,7 +54,7 @@ vhostdb_cache_entry_init (const buffer * const server_name, const buffer * const
     const uint32_t dlen = buffer_string_length(docroot);
     vhostdb_cache_entry * const ve =
       malloc(sizeof(vhostdb_cache_entry) + slen + dlen);
-    ve->ctime = log_epoch_secs;
+    ve->ctime = log_monotonic_secs;
     ve->slen = slen;
     ve->dlen = dlen;
     ve->server_name   = (char *)(ve + 1);
@@ -359,7 +359,7 @@ mod_vhostdb_periodic_cleanup(splay_tree **sptree_ptr, const time_t max_age, cons
 TRIGGER_FUNC(mod_vhostdb_periodic)
 {
     const plugin_data * const p = p_d;
-    const time_t cur_ts = log_epoch_secs;
+    const time_t cur_ts = log_monotonic_secs;
     if (cur_ts & 0x7) return HANDLER_GO_ON; /*(continue once each 8 sec)*/
     UNUSED(srv);
 

@@ -12,8 +12,6 @@ typedef struct {
 	buffer *etag;
 
 	lua_State *L;
-
-	time_t last_used; /* LRU */
 } script;
 
 typedef struct {

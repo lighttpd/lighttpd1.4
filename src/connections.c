@@ -151,12 +151,12 @@ static void connection_read_for_eos_plain(connection * const con) {
       #endif
 
 	/* 0 == len || (len < 0 && (errno is a non-recoverable error)) */
-		con->close_timeout_ts = log_epoch_secs - (HTTP_LINGER_TIMEOUT+1);
+		con->close_timeout_ts = log_monotonic_secs - (HTTP_LINGER_TIMEOUT+1);
 }
 
 static void connection_read_for_eos_ssl(connection * const con) {
 	if (con->network_read(con, con->read_queue, MAX_READ_LIMIT) < 0)
-		con->close_timeout_ts = log_epoch_secs - (HTTP_LINGER_TIMEOUT+1);
+		con->close_timeout_ts = log_monotonic_secs - (HTTP_LINGER_TIMEOUT+1);
 	chunkqueue_reset(con->read_queue);
 }
 
@@ -169,7 +169,7 @@ static void connection_read_for_eos(connection * const con) {
 static void connection_handle_close_state(connection *con) {
 	connection_read_for_eos(con);
 
-	if (log_epoch_secs - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
+	if (log_monotonic_secs - con->close_timeout_ts > HTTP_LINGER_TIMEOUT) {
 		connection_close(con);
 	}
 }
@@ -183,7 +183,7 @@ static void connection_handle_shutdown(connection *con) {
 	/* close the connection */
 	if (con->fd >= 0
 	    && (con->is_ssl_sock || 0 == shutdown(con->fd, SHUT_WR))) {
-		con->close_timeout_ts = log_epoch_secs;
+		con->close_timeout_ts = log_monotonic_secs;
 
 		request_st * const r = &con->request;
 		connection_set_state(r, CON_STATE_CLOSE);
@@ -236,7 +236,8 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 		r->bytes_read_ckpt = con->bytes_read;
 		r->bytes_written_ckpt = con->bytes_written;
 #if 0
-		r->start_hp.tv_sec = con->read_idle_ts = log_epoch_secs;
+		r->start_hp.tv_sec = log_epoch_secs;
+		con->read_idle_ts = log_monotonic_secs;
 #endif
 		connection_set_state(r, CON_STATE_REQUEST_START);
 	} else {
@@ -286,7 +287,7 @@ connection_write_chunkqueue (connection * const con, chunkqueue * const restrict
 {
     /*assert(!chunkqueue_is_empty(cq));*//* checked by callers */
 
-    con->write_request_ts = log_epoch_secs;
+    con->write_request_ts = log_monotonic_secs;
 
     max_bytes = connection_write_throttle(con, max_bytes);
     if (0 == max_bytes) return 1;
@@ -614,7 +615,7 @@ static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chun
      * and return from this routine with r->http_version == HTTP_VERSION_2) */
 
     if ((NULL == c || NULL == c->next) && con->is_readable > 0) {
-        con->read_idle_ts = log_epoch_secs;
+        con->read_idle_ts = log_monotonic_secs;
         if (0 != con->network_read(con, cq, MAX_READ_LIMIT)) {
             request_st * const r = &con->request;
             connection_set_state_error(r, CON_STATE_ERROR);
@@ -764,7 +765,8 @@ static int connection_handle_read_state(connection * const con)  {
             if (r->conf.high_precision_timestamps)
                 log_clock_gettime_realtime(&r->start_hp);
         }
-        if (pipelined_request_start && c) con->read_idle_ts = log_epoch_secs;
+        if (pipelined_request_start && c)
+            con->read_idle_ts = log_monotonic_secs;
     }
 
     if (NULL == c) return 0; /* incomplete request headers */
@@ -1005,7 +1007,7 @@ connection *connection_accepted(server *srv, server_socket *srv_socket, sock_add
 		request_st * const r = &con->request;
 		connection_set_state(r, CON_STATE_REQUEST_START);
 
-		con->connection_start = log_epoch_secs;
+		con->connection_start = log_monotonic_secs;
 		con->dst_addr = *cnt_addr;
 		sock_addr_cache_inet_ntop_copy_buffer(con->dst_addr_buf,&con->dst_addr);
 		con->srv_socket = srv_socket;
@@ -1065,7 +1067,8 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 		switch ((ostate = r->state)) {
 		case CON_STATE_REQUEST_START: /* transient */
 			/*(should not be reached by HTTP/2 streams)*/
-			r->start_hp.tv_sec = con->read_idle_ts = log_epoch_secs;
+			r->start_hp.tv_sec = log_epoch_secs;
+			con->read_idle_ts = log_monotonic_secs;
 			if (r->conf.high_precision_timestamps)
 				log_clock_gettime_realtime(&r->start_hp);
 
@@ -1157,7 +1160,7 @@ connection_revents_err (request_st * const r, connection * const con)
     con->revents_err = 0;
 
     if (r->state == CON_STATE_CLOSE)
-        con->close_timeout_ts = log_epoch_secs - (HTTP_LINGER_TIMEOUT+1);
+        con->close_timeout_ts = log_monotonic_secs - (HTTP_LINGER_TIMEOUT+1);
     else if (revents & FDEVENT_HUP)
         connection_set_state_error(r, CON_STATE_ERROR);
     else if (revents & FDEVENT_RDHUP) {
@@ -1258,9 +1261,9 @@ connection_set_fdevent_interest (request_st * const r, connection * const con)
 
     /* update timestamps when enabling interest in events */
     if ((n & FDEVENT_IN) && !(events & FDEVENT_IN))
-        con->read_idle_ts = log_epoch_secs;
+        con->read_idle_ts = log_monotonic_secs;
     if ((n & FDEVENT_OUT) && !(events & FDEVENT_OUT))
-        con->write_request_ts = log_epoch_secs;
+        con->write_request_ts = log_monotonic_secs;
     fdevent_fdnode_event_set(con->srv->ev, con->fdn, n);
 }
 
@@ -1625,7 +1628,7 @@ void connection_periodic_maint (server * const srv, const time_t cur_ts) {
 void connection_graceful_shutdown_maint (server *srv) {
     connections * const conns = &srv->conns;
     const int graceful_expire =
-      (srv->graceful_expire_ts && srv->graceful_expire_ts < log_epoch_secs);
+      (srv->graceful_expire_ts && srv->graceful_expire_ts < log_monotonic_secs);
     for (uint32_t ndx = 0; ndx < conns->used; ++ndx) {
         connection * const con = conns->ptr[ndx];
         int changed = 0;
@@ -1636,7 +1639,7 @@ void connection_graceful_shutdown_maint (server *srv) {
              * (from zero) *up to* one more second, but no more */
             if (HTTP_LINGER_TIMEOUT > 1)
                 con->close_timeout_ts -= (HTTP_LINGER_TIMEOUT - 1);
-            if (log_epoch_secs - con->close_timeout_ts > HTTP_LINGER_TIMEOUT)
+            if (log_monotonic_secs - con->close_timeout_ts > HTTP_LINGER_TIMEOUT)
                 changed = 1;
         }
         else if (con->h2 && r->state == CON_STATE_WRITE) {
@@ -1954,7 +1957,7 @@ connection_handle_read_post_state (request_st * const r)
             is_closed = 1;
     }
     else if (con->is_readable > 0) {
-        con->read_idle_ts = log_epoch_secs;
+        con->read_idle_ts = log_monotonic_secs;
 
         switch(con->network_read(con, cq, MAX_READ_LIMIT)) {
         case -1:

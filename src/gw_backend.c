@@ -222,7 +222,7 @@ static int gw_extension_insert(gw_exts *ext, const buffer *key, gw_host *fh) {
 
 static void gw_proc_connect_success(gw_host *host, gw_proc *proc, int debug, request_st * const r) {
     gw_proc_tag_inc(host, proc, CONST_STR_LEN(".connected"));
-    proc->last_used = log_epoch_secs;
+    proc->last_used = log_monotonic_secs;
 
     if (debug) {
         log_error(r->conf.errh, __FILE__, __LINE__,
@@ -233,7 +233,7 @@ static void gw_proc_connect_success(gw_host *host, gw_proc *proc, int debug, req
 
 __attribute_cold__
 static void gw_proc_connect_error(request_st * const r, gw_host *host, gw_proc *proc, pid_t pid, int errnum, int debug) {
-    const time_t cur_ts = log_epoch_secs;
+    const time_t cur_ts = log_monotonic_secs;
     log_error_st * const errh = r->conf.errh;
     log_error(errh, __FILE__, __LINE__,
       "establishing connection failed: socket: %s: %s",
@@ -307,7 +307,7 @@ static void gw_proc_release(gw_host *host, gw_proc *proc, int debug, log_error_s
 }
 
 static void gw_proc_check_enable(gw_host * const host, gw_proc * const proc, log_error_st * const errh) {
-    if (log_epoch_secs <= proc->disabled_until) return;
+    if (log_monotonic_secs <= proc->disabled_until) return;
     if (proc->state != PROC_STATE_OVERLOADED) return;
 
     gw_proc_set_state(host, proc, PROC_STATE_RUNNING);
@@ -360,7 +360,7 @@ static int gw_proc_waitpid(gw_host *host, gw_proc *proc, log_error_st *errh) {
 
     proc->pid = 0;
     if (proc->state != PROC_STATE_KILLED)
-        proc->disabled_until = log_epoch_secs;
+        proc->disabled_until = log_monotonic_secs;
     gw_proc_set_state(host, proc, PROC_STATE_DIED);
     return 1;
 }
@@ -586,12 +586,12 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
             log_error(errh, __FILE__, __LINE__,
               "gw-backend failed to start: %s", host->bin_path->ptr);
             proc->pid = 0;
-            proc->disabled_until = log_epoch_secs;
+            proc->disabled_until = log_monotonic_secs;
             return -1;
         }
 
         /* register process */
-        proc->last_used = log_epoch_secs;
+        proc->last_used = log_monotonic_secs;
         proc->is_local = 1;
 
         /* wait */
@@ -628,7 +628,7 @@ static void gw_proc_spawn(gw_host * const host, log_error_st * const errh, const
         /* (proc->pid <= 0 indicates PROC_STATE_DIED, not PROC_STATE_KILLED) */
         if (proc->pid > 0) continue;
         /* (do not attempt to spawn another proc if a proc just exited) */
-        if (proc->disabled_until >= log_epoch_secs) return;
+        if (proc->disabled_until >= log_monotonic_secs) return;
         break;
     }
     if (proc) {
@@ -1027,7 +1027,7 @@ static void gw_restart_dead_procs(gw_host * const host, log_error_st * const err
             /*(state should not happen in workers if server.max-worker > 0)*/
             /*(if PROC_STATE_DIED_WAIT_FOR_PID is used in future, might want
              * to save proc->disabled_until before gw_proc_waitpid() since
-             * gw_proc_waitpid will set proc->disabled_until to log_epoch_secs,
+             * gw_proc_waitpid will set proc->disabled_until=log_monotonic_secs,
              * and so process will not be restarted below until one sec later)*/
             if (0 == gw_proc_waitpid(host, proc, errh)) {
                 gw_proc_check_enable(host, proc, errh);
@@ -1046,7 +1046,7 @@ static void gw_restart_dead_procs(gw_host * const host, log_error_st * const err
                 if (proc->load != 0) break;
 
                 /* avoid spinning if child exits too quickly */
-                if (proc->disabled_until >= log_epoch_secs) break;
+                if (proc->disabled_until >= log_monotonic_secs) break;
 
                 /* restart the child */
 
@@ -1747,7 +1747,7 @@ int gw_get_defaults_balance(server *srv, const buffer *b) {
 
 static void gw_set_state(gw_handler_ctx *hctx, gw_connection_state_t state) {
     hctx->state = state;
-    /*hctx->state_timestamp = log_epoch_secs;*/
+    /*hctx->state_timestamp = log_monotonic_secs;*/
 }
 
 
@@ -1969,7 +1969,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
                 }
             }
             else if (hctx->wb.bytes_out > bytes_out) {
-                hctx->proc->last_used = log_epoch_secs;
+                hctx->proc->last_used = log_monotonic_secs;
                 if (hctx->stdin_append
                     && chunkqueue_length(&hctx->wb) < 65536 - 16384
                     && !chunkqueue_is_empty(&r->reqbody_queue)) {
@@ -2172,10 +2172,10 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
          * may not be triggered for partial collection of HTTP response headers
          * or partial packets for backend protocol (e.g. FastCGI) */
         if (r->write_queue.bytes_in > bytes_in)
-            proc->last_used = log_epoch_secs;
+            proc->last_used = log_monotonic_secs;
         return HANDLER_GO_ON;
     case HANDLER_FINISHED:
-        proc->last_used = log_epoch_secs;
+        proc->last_used = log_monotonic_secs;
         if (hctx->gw_mode == GW_AUTHORIZER
             && (200 == r->http_status || 0 == r->http_status)) {
             /*
@@ -2245,7 +2245,7 @@ static handler_t gw_recv_response_error(gw_handler_ctx * const hctx, request_st 
             /* intentionally check proc->disabed_until before gw_proc_waitpid */
             gw_host * const host = hctx->host;
             log_error_st * const errh = r->con->srv->errh;
-            if (proc->disabled_until < log_epoch_secs
+            if (proc->disabled_until < log_monotonic_secs
                 && 0 != gw_proc_waitpid(host, proc, errh)) {
                 if (hctx->conf.debug) {
                     log_error(errh, __FILE__, __LINE__,
@@ -2620,7 +2620,7 @@ static void gw_handle_trigger_host(gw_host * const host, log_error_st * const er
         gw_proc_spawn(host, errh, debug);
     }
 
-    idle_timestamp = log_epoch_secs - host->idle_timeout;
+    idle_timestamp = log_monotonic_secs - host->idle_timeout;
     for (proc = host->first; proc; proc = proc->next) {
         if (host->num_procs <= host->min_procs) break;
         if (0 != proc->load) continue;
@@ -2738,7 +2738,7 @@ handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
          *  or global scope (for convenience))
          * (unable to use p->defaults.debug since gw_plugin_config
          *  might be part of a larger plugin_config) */
-        const time_t cur_ts = log_epoch_secs;
+        const time_t cur_ts = log_monotonic_secs;
         gw_exts *exts = conf->exts;
         for (uint32_t j = 0; j < exts->used; ++j) {
             gw_extension *ex = exts->exts+j;

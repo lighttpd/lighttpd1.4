@@ -6,9 +6,11 @@
 #include "buffer.h"
 
 extern time_t log_epoch_secs;
+extern time_t log_monotonic_secs;
 
 struct timespec; /* declaration */
 int log_clock_gettime_realtime (struct timespec *ts);
+int log_clock_gettime_monotonic (struct timespec *ts);
 
 ssize_t write_all(int fd, const void* buf, size_t count);
 

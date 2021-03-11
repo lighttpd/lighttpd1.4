@@ -27,6 +27,7 @@
 #endif
 
 time_t log_epoch_secs = 0;
+time_t log_monotonic_secs = 0;
 
 int log_clock_gettime_realtime (struct timespec *ts) {
       #ifdef HAVE_CLOCK_GETTIME
@@ -39,6 +40,14 @@ int log_clock_gettime_realtime (struct timespec *ts) {
 	ts->tv_sec  = tv.tv_sec;
 	ts->tv_nsec = tv.tv_usec * 1000;
 	return 0;
+      #endif
+}
+
+int log_clock_gettime_monotonic (struct timespec *ts) {
+      #ifdef HAVE_CLOCK_GETTIME
+	return clock_gettime(CLOCK_MONOTONIC, ts);
+      #else
+	return log_clock_gettime_realtime(ts); /*(fallback)*/
       #endif
 }
 

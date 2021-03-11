@@ -1498,7 +1498,7 @@ h2_parse_frames (connection * const con)
                 chunkqueue_mark_written(cq, 9+flen);
             if (rc <= 0)
                 return 0;
-            con->read_idle_ts = log_epoch_secs;
+            con->read_idle_ts = log_monotonic_secs;
         }
         else if (s[3] == H2_FTYPE_DATA) {
             /* future: might try to stream data for incomplete frames,
@@ -1508,7 +1508,7 @@ h2_parse_frames (connection * const con)
              * frames, and try to resend if socket buffers are full, this is
              * probably not a big concern in practice. */
             if (cqlen < 9+flen) return 1; /* incomplete frame; go on */
-            con->read_idle_ts = log_epoch_secs;
+            con->read_idle_ts = log_monotonic_secs;
             /*(h2_recv_data() must consume frame from cq or else return 0)*/
             if (!h2_recv_data(con, s, flen))
                 return 0;
@@ -1659,7 +1659,7 @@ h2_read_client_connection_preface (struct connection * const con, chunkqueue * c
         con->network_read = network_read;
         *hctx = NULL;
         /*(intentionally update timestamp only after reading preface complete)*/
-        con->read_idle_ts = log_epoch_secs;
+        con->read_idle_ts = log_monotonic_secs;
     }
     return rc;
 }
@@ -1671,7 +1671,7 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
     h2con * const h2c = calloc(1, sizeof(h2con));
     force_assert(h2c);
     con->h2 = h2c;
-    con->read_idle_ts = log_epoch_secs;
+    con->read_idle_ts = log_monotonic_secs;
     con->keep_alive_idle = h2r->conf.max_keep_alive_idle;
 
     h2r->h2_rwin = 65535;                 /* h2 connection recv window */
@@ -1683,7 +1683,7 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
     h2c->s_initial_window_size   = 65535; /* SETTINGS_INITIAL_WINDOW_SIZE    */
     h2c->s_max_frame_size        = 16384; /* SETTINGS_MAX_FRAME_SIZE         */
     h2c->s_max_header_list_size  = ~0u;   /* SETTINGS_MAX_HEADER_LIST_SIZE   */
-    h2c->sent_settings           = log_epoch_secs; /*(send SETTINGS below)*/
+    h2c->sent_settings           = log_monotonic_secs;/*(send SETTINGS below)*/
 
     lshpack_dec_init(&h2c->decoder);
     lshpack_enc_init(&h2c->encoder);

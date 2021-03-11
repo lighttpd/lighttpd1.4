@@ -762,7 +762,7 @@ static void log_access_flush(plugin_data * const p) {
 
 TRIGGER_FUNC(log_access_periodic_flush) {
     /* flush buffered access logs every 4 seconds */
-    if (0 == (log_epoch_secs & 3)) log_access_flush((plugin_data *)p_d);
+    if (0 == (log_monotonic_secs & 3)) log_access_flush((plugin_data *)p_d);
     UNUSED(srv);
     return HANDLER_GO_ON;
 }

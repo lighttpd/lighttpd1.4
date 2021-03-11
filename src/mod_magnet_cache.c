@@ -61,8 +61,6 @@ lua_State *script_cache_get_script(script_cache *cache, buffer *name, int etag_f
 		sc = cache->ptr[i];
 		if (!buffer_is_equal(name, sc->name)) continue;
 
-			sc->last_used = log_epoch_secs;
-
 			/* oops, the script failed last time */
 
 			if (lua_gettop(sc->L) == 0) break;
@@ -103,8 +101,6 @@ lua_State *script_cache_get_script(script_cache *cache, buffer *name, int etag_f
 		sc->L = luaL_newstate();
 		luaL_openlibs(sc->L);
 	}
-
-	sc->last_used = log_epoch_secs;
 
 	if (0 != luaL_loadfile(sc->L, name->ptr)) {
 		/* oops, an error, return it */

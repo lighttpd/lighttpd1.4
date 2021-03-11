@@ -59,7 +59,7 @@ http_auth_cache_entry_init (const struct http_auth_require_t * const require, co
       malloc(sizeof(http_auth_cache_entry) + ulen + pwlen);
     force_assert(ae);
     ae->require = require;
-    ae->ctime = log_epoch_secs;
+    ae->ctime = log_monotonic_secs;
     ae->dalgo = dalgo;
     ae->ulen = ulen;
     ae->dlen = pwlen;
@@ -177,7 +177,7 @@ mod_auth_periodic_cleanup(splay_tree **sptree_ptr, const time_t max_age, const t
 TRIGGER_FUNC(mod_auth_periodic)
 {
     const plugin_data * const p = p_d;
-    const time_t cur_ts = log_epoch_secs;
+    const time_t cur_ts = log_monotonic_secs;
     if (cur_ts & 0x7) return HANDLER_GO_ON; /*(continue once each 8 sec)*/
     UNUSED(srv);
 
