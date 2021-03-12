@@ -302,11 +302,6 @@ size_t li_utostrn(char *buf, size_t buf_len, uintmax_t val) {
 
 #define li_ntox_lc(n) ((n) <= 9 ? (n) + '0' : (n) + 'a' - 10)
 
-char int2hex(char c) {
-	/*return li_ntox_lc(c & 0xF);*/
-	return hex_chars_lc[(c & 0x0F)];
-}
-
 /* c (char) and n (nibble) MUST be unsigned integer types */
 #define li_cton(c,n) \
   (((n) = (c) - '0') <= 9 || (((n) = ((c)&0xdf) - 'A') <= 5 ? ((n) += 10) : 0))
@@ -673,70 +668,29 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 
 /* decodes url-special-chars inplace.
  * replaces non-printable characters with '_'
+ * (If this is used on a portion of query string, then query string should be
+ *  split on '&', and '+' replaced with ' ' before calling this routine)
  */
 
-static void buffer_urldecode_internal(buffer * const url, const int is_query) {
-	unsigned char high, low;
-	char *src;
-	char *dst;
+void buffer_urldecode_path(buffer * const b) {
+    const size_t len = buffer_string_length(b);
+    char *src = len ? memchr(b->ptr, '%', len) : NULL;
+    if (NULL == src) return;
 
-	force_assert(NULL != url);
-	if (buffer_string_is_empty(url)) return;
+    char *dst = src;
+    do {
+        /* *src == '%' */
+        unsigned char high = hex2int(*(src + 1));
+        unsigned char low = hex2int(*(src + 2));
+        if (0xFF != high && 0xFF != low) {
+            high = (high << 4) | low;   /* map ctrls to '_' */
+            *dst = (high >= 32 && high != 127) ? high : '_';
+            src += 2;
+        } /* else ignore this '%'; leave as-is and move on */
 
-	force_assert('\0' == url->ptr[url->used-1]);
-
-	src = (char*) url->ptr;
-
-	if (!is_query) {
-		while ('\0' != *src && '%' != *src) ++src;
-	}
-	else {
-		for (; '\0' != *src && '%' != *src; ++src) {
-			if ('+' == *src) *src = ' ';
-		}
-	}
-
-	if ('\0' == *src) return;
-
-	dst = src;
-
-	while ('\0' != *src) {
-		if (is_query && *src == '+') {
-			*dst = ' ';
-		} else if (*src == '%') {
-			*dst = '%';
-
-			high = hex2int(*(src + 1));
-			if (0xFF != high) {
-				low = hex2int(*(src + 2));
-				if (0xFF != low) {
-					high = (high << 4) | low;
-
-					/* map control-characters out */
-					if (high < 32 || high == 127) high = '_';
-
-					*dst = high;
-					src += 2;
-				}
-			}
-		} else {
-			*dst = *src;
-		}
-
-		dst++;
-		src++;
-	}
-
-	*dst = '\0';
-	url->used = (dst - url->ptr) + 1;
-}
-
-void buffer_urldecode_path(buffer *url) {
-	buffer_urldecode_internal(url, 0);
-}
-
-void buffer_urldecode_query(buffer *url) {
-	buffer_urldecode_internal(url, 1);
+        while ((*++dst = *++src) != '%' && *src) ;
+    } while (*src);
+    b->used = (dst - b->ptr) + 1;
 }
 
 int buffer_is_valid_UTF8(const buffer *b) {

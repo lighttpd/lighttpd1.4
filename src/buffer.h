@@ -172,8 +172,7 @@ void buffer_append_string_encoded(buffer * restrict b, const char * restrict s, 
 /* escape non-printable characters; simple escapes for \t, \r, \n; fallback to \xCC */
 void buffer_append_string_c_escaped(buffer * restrict b, const char * restrict s, size_t s_len);
 
-void buffer_urldecode_path(buffer *url);
-void buffer_urldecode_query(buffer *url);
+void buffer_urldecode_path(buffer *b);
 int buffer_is_valid_UTF8(const buffer *b);
 void buffer_path_simplify(buffer *dest, buffer *src);
 
@@ -183,7 +182,6 @@ void buffer_to_upper(buffer *b);
 
 /** deprecated */
 char hex2int(unsigned char c);
-char int2hex(char i);
 
 __attribute_pure__
 static inline int light_isdigit(int c);
