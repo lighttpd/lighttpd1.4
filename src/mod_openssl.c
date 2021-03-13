@@ -104,6 +104,7 @@ typedef struct {
     time_t ssl_stapling_loadts;
     time_t ssl_stapling_nextts;
     char must_staple;
+    char self_issued;
 } plugin_cert;
 
 typedef struct {
@@ -1084,7 +1085,7 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
    #if !defined(BORINGSSL_API_VERSION) \
     && !defined(LIBRESSL_VERSION_NUMBER)
     /* (missing SSL_set1_chain_cert_store() and SSL_build_cert_chain()) */
-    else if (hctx->conf.ssl_ca_file) {
+    else if (hctx->conf.ssl_ca_file && !pc->self_issued) {
         /* preserve legacy behavior whereby openssl will reuse CAs trusted for
          * certificate verification (set by SSL_CTX_load_verify_locations() in
          * SSL_CTX) in order to build certificate chain for server certificate
@@ -1674,6 +1675,9 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
   #else
     pc->must_staple = 0;
   #endif
+    pc->self_issued =
+      (0 == X509_NAME_cmp(X509_get_subject_name(ssl_pemfile_x509),
+                          X509_get_issuer_name(ssl_pemfile_x509)));
 
     if (!buffer_string_is_empty(pc->ssl_stapling_file)) {
       #ifndef OPENSSL_NO_OCSP
