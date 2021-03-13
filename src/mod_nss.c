@@ -2317,12 +2317,16 @@ CONNECTION_FUNC(mod_nss_handle_con_accept)
         CERTCertList * const certList = hctx->conf.ssl_ca_dn_file
                                       ? hctx->conf.ssl_ca_dn_file
                                       : hctx->conf.ssl_ca_file;
-        if (NULL == certList)
+        if (NULL == certList) {
             log_error(hctx->r->conf.errh, __FILE__, __LINE__,
               "NSS: can't verify client without ssl.ca-file "
               "for TLS server name %s",
               hctx->r->uri.authority.ptr); /*(might not be set yet if no SNI)*/
-        if (certList && SSL_SetTrustAnchors(hctx->ssl, certList) < 0) {
+            return hctx->conf.ssl_verifyclient_enforce
+              ? HANDLER_ERROR
+              : HANDLER_GO_ON;
+        }
+        if (SSL_SetTrustAnchors(hctx->ssl, certList) < 0) {
             elog(r->conf.errh, __FILE__, __LINE__, "SSL_SetTrustAnchors()");
             return HANDLER_ERROR;
         }
