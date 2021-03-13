@@ -184,6 +184,12 @@ const buffer * http_response_set_last_modified(request_st * const r, const time_
 
 
 int http_response_handle_cachable(request_st * const r, const buffer * const lmod, const time_t lmtime) {
+	if (!(r->rqst_htags
+	      & (light_bshift(HTTP_HEADER_IF_NONE_MATCH)
+	        |light_bshift(HTTP_HEADER_IF_MODIFIED_SINCE)))) {
+		return HANDLER_GO_ON;
+	}
+
 	const buffer *vb;
 
 	/*
