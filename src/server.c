@@ -229,7 +229,7 @@ static time_t
 server_monotonic_secs (void)
 {
     struct timespec ts;
-    return (0 == log_clock_gettime_realtime(&ts))
+    return (0 == log_clock_gettime_monotonic(&ts))
       ? ts.tv_sec
       : log_monotonic_secs;
 }
