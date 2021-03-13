@@ -1155,9 +1155,11 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
     ssize_t rd;
     offset = 0; /*(reuse offset var for offset into mem buffer)*/
     do {
-        rd = read(fd, ptr+offset, len-offset);
+        rd = read(fd, ptr+offset, (size_t)len);
     } while (rd > 0 ? (offset += rd, len -= rd) : errno == EINTR);
     /*(contents of chunkqueue kept valid even if error reading from file)*/
+    if (len)
+        cq->bytes_in -= len;
     buffer_commit(b, offset);
     filec->offset += offset;
     chunkqueue_remove_empty_chunks(cq);
