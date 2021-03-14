@@ -18,6 +18,7 @@
 #include "buffer.h"
 #include "fdevent.h"
 #include "http_header.h"
+#include "keyvalue.h"
 
 #include "plugin.h"
 
@@ -44,10 +45,6 @@
 #endif
 #endif
 
-#ifdef HAVE_PCRE_H
-#include <pcre.h>
-#endif
-
 /**
  * this is a dirlisting for a lighttpd plugin
  */
@@ -61,11 +58,7 @@ typedef struct {
 	char encode_header;
 	char auto_layout;
 
-      #ifdef HAVE_PCRE_H
-	pcre **excludes;
-      #else
-	void *excludes;
-      #endif
+	pcre_keyvalue_buffer *excludes;
 
 	const buffer *show_readme;
 	const buffer *show_header;
@@ -83,52 +76,37 @@ typedef struct {
 	buffer tmp_buf;
 } plugin_data;
 
-#ifdef HAVE_PCRE_H
-
-static pcre ** mod_dirlisting_parse_excludes(server *srv, const array *a) {
-    pcre **regexes = calloc(a->used + 1, sizeof(pcre *));
-    force_assert(regexes);
+static pcre_keyvalue_buffer * mod_dirlisting_parse_excludes(server *srv, const array *a) {
+    const int pcre_jit =
+      !srv->srvconf.feature_flags
+      || config_plugin_value_tobool(
+          array_get_element_klen(srv->srvconf.feature_flags,
+                                 CONST_STR_LEN("server.pcre_jit")), 1);
+    pcre_keyvalue_buffer * const kvb = pcre_keyvalue_buffer_init();
+    buffer empty = { NULL, 0, 0 };
     for (uint32_t j = 0; j < a->used; ++j) {
-        const data_string *ds = (const data_string *)a->data[j];
-        const char *errptr;
-        int erroff;
-        regexes[j] = pcre_compile(ds->value.ptr, 0, &errptr, &erroff, NULL);
-        if (NULL == regexes[j]) {
+        const data_string *ds = (data_string *)a->data[j];
+        if (!pcre_keyvalue_buffer_append(srv->errh, kvb, &ds->value, &empty,
+                                         pcre_jit)) {
             log_error(srv->errh, __FILE__, __LINE__,
-              "pcre_compile failed for: %s", ds->value.ptr);
-            for (pcre **regex = regexes; *regex; ++regex) pcre_free(*regex);
-            free(regexes);
+              "pcre_compile failed for %s", ds->key.ptr);
+            pcre_keyvalue_buffer_free(kvb);
             return NULL;
         }
     }
-    return regexes;
+    return kvb;
 }
 
-static int mod_dirlisting_exclude(log_error_st *errh, pcre **regex, const char *name, size_t len) {
-    for(; *regex; ++regex) {
-        #define N 10
-        int ovec[N * 3];
-        int n;
-        if ((n = pcre_exec(*regex, NULL, name, len, 0, 0, ovec, 3 * N)) < 0) {
-            if (n == PCRE_ERROR_NOMATCH) continue;
-
-            log_error(errh, __FILE__, __LINE__,
-              "execution error while matching: %d", n);
-            /* aborting would require a lot of manual cleanup here.
-             * skip instead (to not leak names that break pcre matching)
-             */
-        }
-        return 1;
-        #undef N
-    }
-    return 0; /* no match */
+static int mod_dirlisting_exclude(pcre_keyvalue_buffer * const kvb, const char * const name, const uint32_t len) {
+    /*(re-use keyvalue.[ch] for match-only;
+     *  must have been configured with empty kvb 'value' during init)*/
+    buffer input = { NULL, len+1, 0 };
+    *(const char **)&input.ptr = name;
+    pcre_keyvalue_ctx ctx = { NULL, NULL, 0, -1 };
+    /*(fail closed (simulate match to exclude) if there is an error)*/
+    return HANDLER_ERROR == pcre_keyvalue_buffer_process(kvb,&ctx,&input,NULL)
+        || -1 != ctx.m;
 }
-
-#else
-
-#define mod_dirlisting_exclude(a, b, c, d) 0
-
-#endif
 
 
 INIT_FUNC(mod_dirlisting_init) {
@@ -144,14 +122,10 @@ FREE_FUNC(mod_dirlisting_free) {
         config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
-             #ifdef HAVE_PCRE_H
               case 2: /* dir-listing.exclude */
                 if (cpv->vtype != T_CONFIG_LOCAL) continue;
-                for (pcre **regex = cpv->v.v; *regex; ++regex)
-                    pcre_free(*regex);
-                free(cpv->v.v);
+                pcre_keyvalue_buffer_free(cpv->v.v);
                 break;
-             #endif
               default:
                 break;
             }
@@ -290,23 +264,9 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
               case 1: /* server.dir-listing *//*(historical)*/
                 break;
               case 2: /* dir-listing.exclude */
-               #ifndef HAVE_PCRE_H
-                if (cpv->v.a->used > 0) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "pcre support is missing for: %s, "
-                      "please install libpcre and the headers",
-                      cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
-               #else
                 cpv->v.v = mod_dirlisting_parse_excludes(srv, cpv->v.a);
-                if (NULL == cpv->v.v) {
-                    log_error(srv->errh, __FILE__, __LINE__,
-                      "unexpected value for %s", cpk[cpv->k_id].k);
-                    return HANDLER_ERROR;
-                }
+                if (NULL == cpv->v.v) return HANDLER_ERROR;
                 cpv->vtype = T_CONFIG_LOCAL;
-               #endif
                 break;
               case 3: /* dir-listing.hide-dotfiles */
               case 4: /* dir-listing.external-css */
@@ -854,7 +814,6 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
   #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) || !defined(_ATFILE_SOURCE)
 	char *path_file = path + dlen;
   #endif
-	log_error_st * const errh = r->conf.errh;
 
 	struct dirent *dent;
   #ifndef _ATFILE_SOURCE /*(not using fdopendir unless _ATFILE_SOURCE)*/
@@ -865,7 +824,7 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 	DIR * const dp = (dfd >= 0) ? fdopendir(dfd) : NULL;
   #endif
 	if (NULL == dp) {
-		log_perror(errh, __FILE__, __LINE__, "opendir %s", path);
+		log_perror(r->conf.errh, __FILE__, __LINE__, "opendir %s", path);
 		if (dfd >= 0) close(dfd);
 		free(path);
 		return -1;
@@ -908,7 +867,7 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 		 * elements, skipping any that match.
 		 */
 		if (p->conf.excludes
-		    && mod_dirlisting_exclude(errh, p->conf.excludes, d_name, dsz))
+		    && mod_dirlisting_exclude(p->conf.excludes, d_name, dsz))
 			continue;
 
 		/* NOTE: the manual says, d_name is never more than NAME_MAX

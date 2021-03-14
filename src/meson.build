@@ -997,7 +997,7 @@ modules = [
 	[ 'mod_auth', [ 'mod_auth.c' ], [ libcrypto ] ],
 	[ 'mod_authn_file', [ 'mod_authn_file.c' ], [ libcrypt, libcrypto ] ],
 	[ 'mod_deflate', [ 'mod_deflate.c' ], libbz2 + libz + libzstd + libbrotli ],
-	[ 'mod_dirlisting', [ 'mod_dirlisting.c' ], libpcre ],
+	[ 'mod_dirlisting', [ 'mod_dirlisting.c' ] ],
 	[ 'mod_evasive', [ 'mod_evasive.c' ] ],
 	[ 'mod_evhost', [ 'mod_evhost.c' ] ],
 	[ 'mod_expire', [ 'mod_expire.c' ] ],
@@ -1006,8 +1006,8 @@ modules = [
 	[ 'mod_flv_streaming', [ 'mod_flv_streaming.c' ] ],
 	[ 'mod_indexfile', [ 'mod_indexfile.c' ] ],
 	[ 'mod_proxy', [ 'mod_proxy.c' ], libws2_32 ],
-	[ 'mod_redirect', [ 'mod_redirect.c' ], libpcre ],
-	[ 'mod_rewrite', [ 'mod_rewrite.c' ], libpcre ],
+	[ 'mod_redirect', [ 'mod_redirect.c' ] ],
+	[ 'mod_rewrite', [ 'mod_rewrite.c' ] ],
 	[ 'mod_rrdtool', [ 'mod_rrdtool.c' ] ],
 	[ 'mod_scgi', [ 'mod_scgi.c' ], libws2_32 ],
 	[ 'mod_secdownload', [ 'mod_secdownload.c' ], libcrypto ],
@@ -1033,7 +1033,7 @@ endif
 
 if get_option('with_pcre') and (get_option('with_memcached') or get_option('with_gdbm'))
 	modules += [
-		[ 'mod_trigger_b4_dl', [ 'mod_trigger_b4_dl.c' ], libpcre + libmemcached + libgdbm ],
+		[ 'mod_trigger_b4_dl', [ 'mod_trigger_b4_dl.c' ], libmemcached + libgdbm ],
 	]
 endif
 

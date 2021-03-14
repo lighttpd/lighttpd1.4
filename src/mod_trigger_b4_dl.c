@@ -3,7 +3,6 @@
 #include "plugin.h"
 
 
-#if defined(HAVE_PCRE_H)                /* do nothing if PCRE not available */
 #if defined(HAVE_GDBM_H) || defined(USE_MEMCACHED) /* at least one required */
 
 
@@ -11,6 +10,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "http_header.h"
+#include "keyvalue.h"
 
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -19,10 +19,6 @@
 #if defined(HAVE_GDBM_H)
 #include "fdevent.h"
 # include <gdbm.h>
-#endif
-
-#if defined(HAVE_PCRE_H)
-# include <pcre.h>
 #endif
 
 #if defined(USE_MEMCACHED)
@@ -36,8 +32,8 @@
 
 typedef struct {
     const buffer *deny_url;
-    pcre *trigger_regex;
-    pcre *download_regex;
+    pcre_keyvalue_buffer *trigger_regex;
+    pcre_keyvalue_buffer *download_regex;
   #if defined(HAVE_GDBM_H)
     GDBM_FILE db;
   #endif
@@ -74,10 +70,10 @@ FREE_FUNC(mod_trigger_b4_dl_free) {
                 break;
              #endif
               case 1: /* trigger-before-download.trigger-url */
-                pcre_free(cpv->v.v);
+                pcre_keyvalue_buffer_free(cpv->v.v);
                 break;
               case 2: /* trigger-before-download.download-url */
-                pcre_free(cpv->v.v);
+                pcre_keyvalue_buffer_free(cpv->v.v);
                 break;
              #if defined(USE_MEMCACHED)
               case 5: /* trigger-before-download.memcache-hosts */
@@ -168,20 +164,30 @@ static int mod_trigger_b4_dl_init_regex(server * const srv, config_plugin_value_
         return 1;
     }
 
-    const char *errptr;
-    int erroff;
-    cpv->v.v = pcre_compile(b->ptr, 0, &errptr, &erroff, NULL);
-
-    if (cpv->v.v) {
-        cpv->vtype = T_CONFIG_LOCAL;
-        return 1;
-    }
-    else {
+    const int pcre_jit =
+      !srv->srvconf.feature_flags
+      || config_plugin_value_tobool(
+          array_get_element_klen(srv->srvconf.feature_flags,
+                                 CONST_STR_LEN("server.pcre_jit")), 1);
+    pcre_keyvalue_buffer * const kvb = pcre_keyvalue_buffer_init();
+    buffer empty = { NULL, 0, 0 };
+    if (!pcre_keyvalue_buffer_append(srv->errh, kvb, b, &empty, pcre_jit)) {
         log_error(srv->errh, __FILE__, __LINE__,
-          "compiling regex for %s failed: %s pos: %d",
-          str, b->ptr, erroff);
+          "pcre_compile failed for %s %s", str, b->ptr);
+        pcre_keyvalue_buffer_free(kvb);
         return 0;
     }
+    cpv->v.v = kvb;
+    cpv->vtype = T_CONFIG_LOCAL;
+    return 1;
+}
+
+static int mod_trigger_b4_dl_match(pcre_keyvalue_buffer * const kvb, const buffer * const input) {
+    /*(re-use keyvalue.[ch] for match-only;
+     *  must have been configured with empty kvb 'value' during init)*/
+    pcre_keyvalue_ctx ctx = { NULL, NULL, 0, -1 };
+    return HANDLER_GO_ON == pcre_keyvalue_buffer_process(kvb, &ctx, input, NULL)
+        && -1 != ctx.m;
 }
 
 static void mod_trigger_b4_dl_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -352,10 +358,6 @@ static handler_t mod_trigger_b4_dl_deny(request_st * const r, const plugin_data 
 URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	plugin_data *p = p_d;
 
-	int n;
-# define N 10
-	int ovec[N * 3];
-
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
 	mod_trigger_b4_dl_patch_config(r, p);
@@ -392,17 +394,10 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	const time_t cur_ts = log_epoch_secs;
 
 	/* check if URL is a trigger -> insert IP into DB */
-	if ((n = pcre_exec(p->conf.trigger_regex, NULL, CONST_BUF_LEN(&r->uri.path), 0, 0, ovec, 3 * N)) < 0) {
-		if (n != PCRE_ERROR_NOMATCH) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "execution error while matching: %d", n);
-
-			return HANDLER_ERROR;
-		}
-	} else {
+	if (mod_trigger_b4_dl_match(p->conf.trigger_regex, &r->uri.path)) {
+		/* the trigger matched */
 # if defined(HAVE_GDBM_H)
 		if (p->conf.db) {
-			/* the trigger matched */
 			datum key, val;
 
 			*(const char **)&key.dptr = remote_ip->ptr;
@@ -436,13 +431,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	}
 
 	/* check if URL is a download -> check IP in DB, update timestamp */
-	if ((n = pcre_exec(p->conf.download_regex, NULL, CONST_BUF_LEN(&r->uri.path), 0, 0, ovec, 3 * N)) < 0) {
-		if (n != PCRE_ERROR_NOMATCH) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "execution error while matching: %d", n);
-			return HANDLER_ERROR;
-		}
-	} else {
+	if (mod_trigger_b4_dl_match(p->conf.download_regex, &r->uri.path)) {
 		/* the download uri matched */
 # if defined(HAVE_GDBM_H)
 		if (p->conf.db) {
@@ -585,7 +574,6 @@ TRIGGER_FUNC(mod_trigger_b4_dl_handle_trigger) {
 #endif
 
 
-#endif /* defined(HAVE_PCRE_H) */
 #endif /* defined(HAVE_GDBM_H) || defined(USE_MEMCACHED) */
 
 
@@ -594,7 +582,6 @@ int mod_trigger_b4_dl_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
 	p->name        = "trigger_b4_dl";
 
-#if defined(HAVE_PCRE_H)                /* do nothing if PCRE not available */
 #if defined(HAVE_GDBM_H) || defined(USE_MEMCACHED) /* at least one required */
 
 	p->init        = mod_trigger_b4_dl_init;
@@ -605,7 +592,6 @@ int mod_trigger_b4_dl_plugin_init(plugin *p) {
 #endif
 	p->cleanup     = mod_trigger_b4_dl_free;
 
-#endif
 #endif
 
 	return 0;

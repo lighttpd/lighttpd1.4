@@ -173,7 +173,7 @@ if BUILD_MOD_TRIGGER_B4_DL
 lib_LTLIBRARIES += mod_trigger_b4_dl.la
 mod_trigger_b4_dl_la_SOURCES = mod_trigger_b4_dl.c
 mod_trigger_b4_dl_la_LDFLAGS = $(common_module_ldflags)
-mod_trigger_b4_dl_la_LIBADD = $(GDBM_LIB) $(MEMCACHED_LIB) $(PCRE_LIB) $(common_libadd)
+mod_trigger_b4_dl_la_LIBADD = $(GDBM_LIB) $(MEMCACHED_LIB) $(common_libadd)
 endif
 
 lib_LTLIBRARIES += mod_vhostdb.la
@@ -238,7 +238,7 @@ mod_staticfile_la_LIBADD = $(common_libadd)
 lib_LTLIBRARIES += mod_dirlisting.la
 mod_dirlisting_la_SOURCES = mod_dirlisting.c
 mod_dirlisting_la_LDFLAGS = $(common_module_ldflags)
-mod_dirlisting_la_LIBADD = $(common_libadd) $(PCRE_LIB)
+mod_dirlisting_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_indexfile.la
 mod_indexfile_la_SOURCES = mod_indexfile.c
@@ -433,12 +433,12 @@ endif
 lib_LTLIBRARIES += mod_rewrite.la
 mod_rewrite_la_SOURCES = mod_rewrite.c
 mod_rewrite_la_LDFLAGS = $(common_module_ldflags)
-mod_rewrite_la_LIBADD = $(PCRE_LIB) $(common_libadd)
+mod_rewrite_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_redirect.la
 mod_redirect_la_SOURCES = mod_redirect.c
 mod_redirect_la_LDFLAGS = $(common_module_ldflags)
-mod_redirect_la_LIBADD = $(PCRE_LIB) $(common_libadd)
+mod_redirect_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_status.la
 mod_status_la_SOURCES = mod_status.c
