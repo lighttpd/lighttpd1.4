@@ -94,6 +94,11 @@ static void mod_rewrite_patch_config(request_st * const r, plugin_data * const p
 }
 
 static pcre_keyvalue_buffer * mod_rewrite_parse_list(server *srv, const array *a, pcre_keyvalue_buffer *kvb, const int condidx) {
+    const int pcre_jit =
+      !srv->srvconf.feature_flags
+      || config_plugin_value_tobool(
+          array_get_element_klen(srv->srvconf.feature_flags,
+                                 CONST_STR_LEN("server.pcre_jit")), 1);
     int allocated = 0;
     if (NULL == kvb) {
         allocated = 1;
@@ -108,7 +113,8 @@ static pcre_keyvalue_buffer * mod_rewrite_parse_list(server *srv, const array *a
             pcre_keyvalue_burl_normalize_key(&ds->key, tb);
             pcre_keyvalue_burl_normalize_value(&ds->value, tb);
         }
-        if (!pcre_keyvalue_buffer_append(srv->errh, kvb, &ds->key, &ds->value)){
+        if (!pcre_keyvalue_buffer_append(srv->errh, kvb, &ds->key, &ds->value,
+                                         pcre_jit)) {
             log_error(srv->errh, __FILE__, __LINE__,
               "pcre-compile failed for %s", ds->key.ptr);
             if (allocated) pcre_keyvalue_buffer_free(kvb);

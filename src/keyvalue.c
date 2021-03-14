@@ -17,6 +17,10 @@
 
 #ifdef HAVE_PCRE_H
 #include <pcre.h>
+#ifndef PCRE_STUDY_JIT_COMPILE
+#define PCRE_STUDY_JIT_COMPILE 0
+#define pcre_free_study(x) pcre_free(x)
+#endif
 #endif
 
 typedef struct pcre_keyvalue {
@@ -36,7 +40,7 @@ pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void) {
 	return kvb;
 }
 
-int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, const buffer *key, const buffer *value) {
+int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, const buffer *key, const buffer *value, const int pcre_jit) {
 #ifdef HAVE_PCRE_H
 	const char *errptr;
 	int erroff;
@@ -62,8 +66,12 @@ int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, c
 		return 0;
 	}
 
-	if (NULL == (kv->key_extra = pcre_study(kv->key, 0, &errptr)) &&
-			errptr != NULL) {
+	const int study_options = pcre_jit ? PCRE_STUDY_JIT_COMPILE : 0;
+	if (NULL == (kv->key_extra = pcre_study(kv->key, study_options, &errptr))
+	    && errptr != NULL) {
+		log_error(errh, __FILE__, __LINE__,
+		  "studying regex failed: %s -> %s\n",
+		  key->ptr, errptr);
 		return 0;
 	}
 #else
@@ -75,6 +83,7 @@ int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, c
 	UNUSED(kvb);
 	UNUSED(key);
 	UNUSED(value);
+	UNUSED(pcre_jit);
 #endif
 
 	return 1;
@@ -85,7 +94,7 @@ void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb) {
 	for (uint32_t i = 0; i < kvb->used; ++i) {
 		pcre_keyvalue * const kv = kvb->kv+i;
 		if (kv->key) pcre_free(kv->key);
-		if (kv->key_extra) pcre_free(kv->key_extra);
+		if (kv->key_extra) pcre_free_study(kv->key_extra);
 		/*free (kv->value.ptr);*//*(see pcre_keyvalue_buffer_append)*/
 	}
 

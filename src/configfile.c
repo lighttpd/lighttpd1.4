@@ -241,11 +241,16 @@ static void config_burl_normalize_cond (server * const srv) {
 }
 
 static int config_pcre_keyvalue (server * const srv) {
+    const int pcre_jit =
+      !srv->srvconf.feature_flags
+      || config_plugin_value_tobool(
+          array_get_element_klen(srv->srvconf.feature_flags,
+                                 CONST_STR_LEN("server.pcre_jit")), 1);
     for (uint32_t i = 0; i < srv->config_context->used; ++i) {
         data_config * const dc = (data_config *)srv->config_context->data[i];
         if (dc->cond != CONFIG_COND_NOMATCH && dc->cond != CONFIG_COND_MATCH)
             continue;
-        if (!data_config_pcre_compile(dc))
+        if (!data_config_pcre_compile(dc, pcre_jit, srv->errh))
             return 0;
     }
 

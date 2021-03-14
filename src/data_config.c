@@ -9,6 +9,10 @@
 
 #ifdef HAVE_PCRE_H
 #include <pcre.h>
+#ifndef PCRE_STUDY_JIT_COMPILE
+#define PCRE_STUDY_JIT_COMPILE 0
+#define pcre_free_study(x) pcre_free(x)
+#endif
 #endif
 
 __attribute_cold__
@@ -39,7 +43,7 @@ static void data_config_free(data_unset *d) {
 	free(ds->string.ptr);
 #ifdef HAVE_PCRE_H
 	if (ds->regex) pcre_free(ds->regex);
-	if (ds->regex_study) pcre_free(ds->regex_study);
+	if (ds->regex_study) pcre_free_study(ds->regex_study);
 #endif
 
 	free(d);
@@ -145,45 +149,51 @@ data_config *data_config_init(void) {
 	return ds;
 }
 
-int data_config_pcre_compile(data_config *dc) {
+#include "log.h"
+
+int data_config_pcre_compile(data_config * const dc, const int pcre_jit, log_error_st * const errh) {
 #ifdef HAVE_PCRE_H
-    /* (use fprintf() on error, as this is called from configparser.y) */
     const char *errptr;
     int erroff, captures;
 
-    if (dc->regex) pcre_free(dc->regex);
-    if (dc->regex_study) pcre_free(dc->regex_study);
-
     dc->regex = pcre_compile(dc->string.ptr, 0, &errptr, &erroff, NULL);
     if (NULL == dc->regex) {
-        fprintf(stderr, "parsing regex failed: %s -> %s at offset %d\n",
-                dc->string.ptr, errptr, erroff);
+        log_error(errh, __FILE__, __LINE__,
+                  "parsing regex failed: %s -> %s at offset %d\n",
+                  dc->string.ptr, errptr, erroff);
         return 0;
     }
 
-    dc->regex_study = pcre_study(dc->regex, 0, &errptr);
+    const int study_options = pcre_jit ? PCRE_STUDY_JIT_COMPILE : 0;
+    dc->regex_study = pcre_study(dc->regex, study_options, &errptr);
     if (NULL == dc->regex_study && errptr != NULL) {
-        fprintf(stderr, "studying regex failed: %s -> %s\n",
-                dc->string.ptr, errptr);
+        log_error(errh, __FILE__, __LINE__,
+                  "studying regex failed: %s -> %s\n",
+                  dc->string.ptr, errptr);
         return 0;
     }
 
     erroff = pcre_fullinfo(dc->regex, dc->regex_study, PCRE_INFO_CAPTURECOUNT,
                            &captures);
     if (0 != erroff) {
-        fprintf(stderr, "getting capture count for regex failed: %s\n",
-                dc->string.ptr);
+        log_error(errh, __FILE__, __LINE__,
+                  "getting capture count for regex failed: %s\n",
+                  dc->string.ptr);
         return 0;
-    } else if (captures > 9) {
-        fprintf(stderr, "Too many captures in regex, use (?:...) instead of (...): %s\n",
-                dc->string.ptr);
+    }
+    else if (captures > 9) {
+        log_error(errh, __FILE__, __LINE__,
+                  "Too many captures in regex, use (?:...) instead of (...): %s\n",
+                  dc->string.ptr);
         return 0;
     }
     return 1;
 #else
-    fprintf(stderr, "can't handle '%s' as you compiled without pcre support. \n"
-                    "(perhaps just a missing pcre-devel package ?) \n",
-                    dc->comp_key);
+    UNUSED(pcre_jit);
+    log_error(errh, __FILE__, __LINE__,
+              "can't handle '%s' as you compiled without pcre support. \n"
+              "(perhaps just a missing pcre-devel package ?) \n",
+              dc->comp_key);
     return 0;
 #endif
 }

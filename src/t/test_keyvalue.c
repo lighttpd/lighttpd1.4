@@ -29,10 +29,10 @@ static pcre_keyvalue_buffer * test_keyvalue_test_kvb_init (void) {
       { "/?file=$1&$2",            sizeof("/?file=$1&$2"), 0 }
     };
 
-    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+0, kvstr+1));
-    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+2, kvstr+3));
-    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+4, kvstr+5));
-    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+6, kvstr+7));
+    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+0, kvstr+1, 1));
+    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+2, kvstr+3, 1));
+    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+4, kvstr+5, 1));
+    assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+6, kvstr+7, 1));
 
     log_error_st_free(errh);
 

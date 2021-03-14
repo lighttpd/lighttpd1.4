@@ -76,9 +76,13 @@ static void mod_redirect_patch_config(request_st * const r, plugin_data * const 
 }
 
 static pcre_keyvalue_buffer * mod_redirect_parse_list(server *srv, const array *a, const int condidx) {
-    pcre_keyvalue_buffer * const redirect = pcre_keyvalue_buffer_init();
-    redirect->x0 = (unsigned short)condidx;
-    log_error_st * const errh = srv->errh;
+    const int pcre_jit =
+      !srv->srvconf.feature_flags
+      || config_plugin_value_tobool(
+          array_get_element_klen(srv->srvconf.feature_flags,
+                                 CONST_STR_LEN("server.pcre_jit")), 1);
+    pcre_keyvalue_buffer * const kvb = pcre_keyvalue_buffer_init();
+    kvb->x0 = (unsigned short)condidx;
     buffer * const tb = srv->tmp_buf;
     for (uint32_t j = 0; j < a->used; ++j) {
         data_string *ds = (data_string *)a->data[j];
@@ -86,14 +90,15 @@ static pcre_keyvalue_buffer * mod_redirect_parse_list(server *srv, const array *
             pcre_keyvalue_burl_normalize_key(&ds->key, tb);
             pcre_keyvalue_burl_normalize_value(&ds->value, tb);
         }
-        if (!pcre_keyvalue_buffer_append(errh, redirect, &ds->key, &ds->value)){
-            log_error(errh, __FILE__, __LINE__,
+        if (!pcre_keyvalue_buffer_append(srv->errh, kvb, &ds->key, &ds->value,
+                                         pcre_jit)) {
+            log_error(srv->errh, __FILE__, __LINE__,
               "pcre-compile failed for %s", ds->key.ptr);
-            pcre_keyvalue_buffer_free(redirect);
+            pcre_keyvalue_buffer_free(kvb);
             return NULL;
         }
     }
-    return redirect;
+    return kvb;
 }
 
 SETDEFAULTS_FUNC(mod_redirect_set_defaults) {

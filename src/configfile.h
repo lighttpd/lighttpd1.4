@@ -49,7 +49,7 @@ __attribute_cold__
 data_config *data_config_init(void);
 
 __attribute_cold__
-int data_config_pcre_compile(data_config *dc);
+int data_config_pcre_compile(data_config *dc, int pcre_jit, log_error_st *errh);
 /*struct cond_cache_t;*/    /* declaration */ /*(moved to plugin_config.h)*/
 /*int data_config_pcre_exec(const data_config *dc, struct cond_cache_t *cache, buffer *b);*/
 

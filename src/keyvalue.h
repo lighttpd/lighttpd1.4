@@ -27,7 +27,7 @@ __attribute_cold__
 pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void);
 
 __attribute_cold__
-int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, const buffer *key, const buffer *value);
+int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, const buffer *key, const buffer *value, int pcre_jit);
 
 __attribute_cold__
 void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb);
