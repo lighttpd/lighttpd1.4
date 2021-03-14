@@ -310,23 +310,6 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
 
       buffer_copy_buffer(&dc->string, rvalue);
 
-      if (ctx->ok) switch(dc->cond) {
-      case CONFIG_COND_NE:
-      case CONFIG_COND_EQ:
-        break;
-      case CONFIG_COND_NOMATCH:
-      case CONFIG_COND_MATCH: {
-        if (!data_config_pcre_compile(dc)) {
-          ctx->ok = 0;
-        }
-        break;
-      }
-      default:
-        fprintf(stderr, "unknown condition for %s\n", dc->comp_key);
-        ctx->ok = 0;
-        break;
-      }
-
       if (ctx->ok)
         configparser_push(ctx, dc, 1);
       else

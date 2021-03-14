@@ -218,7 +218,7 @@ void config_reset_config(request_st * const r) {
     memcpy(&r->conf, &p->defaults, sizeof(request_config));
 }
 
-static int config_burl_normalize_cond (server *srv) {
+static void config_burl_normalize_cond (server * const srv) {
     buffer * const tb = srv->tmp_buf;
     for (uint32_t i = 0; i < srv->config_context->used; ++i) {
         data_config * const config =(data_config *)srv->config_context->data[i];
@@ -233,11 +233,20 @@ static int config_burl_normalize_cond (server *srv) {
         case CONFIG_COND_NOMATCH:
         case CONFIG_COND_MATCH:
             pcre_keyvalue_burl_normalize_key(&config->string, tb);
-            if (!data_config_pcre_compile(config)) return 0;
             break;
         default:
             break;
         }
+    }
+}
+
+static int config_pcre_keyvalue (server * const srv) {
+    for (uint32_t i = 0; i < srv->config_context->used; ++i) {
+        data_config * const dc = (data_config *)srv->config_context->data[i];
+        if (dc->cond != CONFIG_COND_NOMATCH && dc->cond != CONFIG_COND_MATCH)
+            continue;
+        if (!data_config_pcre_compile(dc))
+            return 0;
     }
 
     return 1;
@@ -857,7 +866,10 @@ static int config_insert_srvconf(server *srv) {
 
     config_deprecate_module_compress(srv);
 
-    if (srv->srvconf.http_url_normalize && !config_burl_normalize_cond(srv))
+    if (srv->srvconf.http_url_normalize)
+        config_burl_normalize_cond(srv);
+
+    if (!config_pcre_keyvalue(srv))
         rc = HANDLER_ERROR;
 
     free(srvplug.cvlist);
