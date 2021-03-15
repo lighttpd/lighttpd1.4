@@ -198,7 +198,6 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 	if (st) {
 		/* file exists */
 	} else {
-		char *pathinfo = NULL;
 		switch (errno) {
 		case ENOTDIR:
 			/* PATH_INFO ! :) */
@@ -221,10 +220,11 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 
 		/* not found, perhaps PATHINFO */
 
+		char *pathinfo;
 		{
 			/*(might check at startup that s->document_root does not end in '/')*/
-			size_t len = buffer_string_length(&r->physical.basedir);
-			if (len > 0 && '/' == r->physical.basedir.ptr[len-1]) --len;
+			size_t len = buffer_string_length(&r->physical.basedir)
+			           - (buffer_has_pathsep_suffix(&r->physical.basedir));
 			pathinfo = r->physical.path.ptr + len;
 			if ('/' != *pathinfo) {
 				pathinfo = NULL;
@@ -284,11 +284,8 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 		return HANDLER_GO_ON;
 
 	if (S_ISDIR(st->st_mode)) {
-		if (r->uri.path.ptr[buffer_string_length(&r->uri.path) - 1] != '/') {
-			/* redirect to .../ */
-
+		if (!buffer_has_slash_suffix(&r->uri.path)) {
 			http_response_redirect_to_directory(r, 301);
-
 			return HANDLER_FINISHED;
 		}
 	} else {

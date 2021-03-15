@@ -229,6 +229,12 @@ static inline uint32_t buffer_string_space(const buffer *b); /* maximum length o
 static inline void buffer_append_slash(buffer *b); /* append '/' no non-empty strings not ending in '/' */
 void buffer_append_path_len(buffer * restrict b, const char * restrict a, size_t alen); /* join strings with '/', if '/' not present */
 
+__attribute_pure__
+static inline int buffer_has_slash_suffix (const buffer * const b);
+
+__attribute_pure__
+static inline int buffer_has_pathsep_suffix (const buffer * const b);
+
 #define BUFFER_APPEND_STRING_CONST(x, y) \
 	buffer_append_string_len(x, y, sizeof(y) - 1)
 
@@ -289,5 +295,12 @@ static inline void buffer_reset(buffer *b) {
 	if (b->size > BUFFER_MAX_REUSE_SIZE) buffer_free_ptr(b);
 }
 
+static inline int buffer_has_slash_suffix (const buffer * const b) {
+    return (b->used > 1 && b->ptr[b->used-2] == '/');
+}
+
+static inline int buffer_has_pathsep_suffix (const buffer * const b) {
+    return (b->used > 1 && b->ptr[b->used-2] == '/');
+}
 
 #endif

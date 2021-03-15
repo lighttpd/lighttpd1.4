@@ -996,8 +996,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 	plugin_data *p = p_d;
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
-	if (buffer_string_is_empty(&r->uri.path)) return HANDLER_GO_ON;
-	if (r->uri.path.ptr[buffer_string_length(&r->uri.path) - 1] != '/') return HANDLER_GO_ON;
+	if (!buffer_has_slash_suffix(&r->uri.path)) return HANDLER_GO_ON;
 	if (!http_method_get_or_head(r->http_method)) return HANDLER_GO_ON;
 	if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;
 

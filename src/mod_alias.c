@@ -122,7 +122,7 @@ mod_alias_remap (request_st * const r, const array * const aliases)
 {
     /* do not include trailing slash on basedir */
     uint32_t basedir_len = buffer_string_length(&r->physical.basedir);
-    if ('/' == r->physical.basedir.ptr[basedir_len-1]) --basedir_len;
+    if (buffer_has_pathsep_suffix(&r->physical.basedir)) --basedir_len;
 
     const uint32_t path_len = buffer_string_length(&r->physical.path);
     if (0 == path_len || path_len < basedir_len) return HANDLER_GO_ON;

@@ -3923,7 +3923,7 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
         return HANDLER_FINISHED;
     }
     else if (S_ISDIR(pb.st.st_mode)) {
-        if (r->physical.path.ptr[r->physical.path.used - 2] != '/') {
+        if (!buffer_has_pathsep_suffix(&r->physical.path)) {
             const buffer *vb =
               http_header_request_get(r, HTTP_HEADER_USER_AGENT,
                                       CONST_STR_LEN("User-Agent"));
@@ -3947,7 +3947,7 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
             buffer_append_string_len(&r->physical.rel_path,CONST_STR_LEN("/"));
         }
     }
-    else if (r->physical.path.ptr[r->physical.path.used - 2] == '/') {
+    else if (buffer_has_pathsep_suffix(&r->physical.path)) {
         http_status_set_error(r, 403);
         return HANDLER_FINISHED;
     }
@@ -4141,7 +4141,7 @@ mod_webdav_delete (request_st * const r, const plugin_config * const pconf)
     }
 
     if (S_ISDIR(st.st_mode)) {
-        if (r->physical.path.ptr[r->physical.path.used - 2] != '/') {
+        if (!buffer_has_pathsep_suffix(&r->physical.path)) {
           #if 0 /*(issues warning for /usr/bin/litmus copymove test)*/
             http_response_redirect_to_directory(r, 308);
             return HANDLER_FINISHED; /* 308 Permanent Redirect */
@@ -4194,7 +4194,7 @@ mod_webdav_delete (request_st * const r, const plugin_config * const pconf)
         /* invalidate stat cache of src if DELETE, whether or not successful */
         stat_cache_delete_dir(CONST_BUF_LEN(&r->physical.path));
     }
-    else if (r->physical.path.ptr[r->physical.path.used - 2] == '/')
+    else if (buffer_has_pathsep_suffix(&r->physical.path))
         http_status_set_error(r, 403);
     else {
         const int status = webdav_delete_file(pconf, &r->physical);
@@ -4825,15 +4825,9 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
     else { /*(not expected; some other module mucked with path or rel_path)*/
         /* unable to perform physical path remap here;
          * assume doc_root/rel_path and no remapping */
-      #ifdef __COVERITY__
-        force_assert(2 <= r->physical.doc_root.used);
-        force_assert(2 <= dst_path->used);
-      #endif
         buffer_copy_buffer(dst_path, &r->physical.doc_root);
-        if (dst_path->ptr[dst_path->used-2] == '/')
-            --dst_path->used; /* since dst_rel_path begins with '/' */
         buffer_append_path_len(dst_path, CONST_BUF_LEN(dst_rel_path));
-        if (buffer_string_length(dst_rel_path) >= PATH_MAX) {
+        if (buffer_string_length(dst_path) >= PATH_MAX) {
             http_status_set_error(r, 403); /* Forbidden */
             return HANDLER_FINISHED;
         }
@@ -4842,7 +4836,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
     if (r->physical.path.used <= dst_path->used
         && 0 == memcmp(r->physical.path.ptr, dst_path->ptr,
                        r->physical.path.used-1)
-        && (r->physical.path.ptr[r->physical.path.used-2] == '/'
+        && (buffer_has_pathsep_suffix(&r->physical.path)
             || dst_path->ptr[r->physical.path.used-1] == '/'
             || dst_path->ptr[r->physical.path.used-1] == '\0')) {
         /* dst must not be nested under (or same as) src */
@@ -4863,7 +4857,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
     }
 
     if (S_ISDIR(st.st_mode)) {
-        if (r->physical.path.ptr[r->physical.path.used - 2] != '/') {
+        if (!buffer_has_pathsep_suffix(&r->physical.path)) {
             http_response_redirect_to_directory(r, 308);
             return HANDLER_FINISHED; /* 308 Permanent Redirect */
             /* Alternatively, could append '/' to r->physical.path
@@ -4872,10 +4866,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
         }
 
         /* ensure Destination paths end with '/' since dst is a collection */
-      #ifdef __COVERITY__
-        force_assert(2 <= dst_rel_path->used);
-      #endif
-        if (dst_rel_path->ptr[dst_rel_path->used - 2] != '/') {
+        if (!buffer_has_slash_suffix(dst_rel_path)) {
             buffer_append_slash(dst_rel_path);
             buffer_append_slash(dst_path);
         }
@@ -4923,12 +4914,6 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
             return HANDLER_FINISHED;
         }
 
-        /* ensure destination is not nested in source */
-        if (dst_rel_path->ptr[dst_rel_path->used - 2] != '/') {
-            buffer_append_slash(dst_rel_path);
-            buffer_append_slash(dst_path);
-        }
-
         buffer * const ms = chunk_buffer_acquire(); /* multi-status */
         if (0 == webdav_copymove_dir(pconf, &r->physical, dst, ms, flags)) {
             if (r->http_method == HTTP_METHOD_MOVE)
@@ -4951,7 +4936,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
             stat_cache_delete_dir(CONST_BUF_LEN(&r->physical.path));
         return HANDLER_FINISHED;
     }
-    else if (r->physical.path.ptr[r->physical.path.used - 2] == '/') {
+    else if (buffer_has_pathsep_suffix(&r->physical.path)) {
         http_status_set_error(r, 403); /* Forbidden */
         return HANDLER_FINISHED;
     }
@@ -4973,12 +4958,9 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
              * append basename to physical path
              * future: might set Content-Location if dst_path does not end '/'*/
             if (NULL != (sep = strrchr(r->physical.path.ptr, '/'))) {
-              #ifdef __COVERITY__
-                force_assert(0 != dst_path->used);
-              #endif
                 size_t len = r->physical.path.used - 1
                            - (sep - r->physical.path.ptr);
-                if (dst_path->ptr[dst_path->used-1] == '/') {
+                if (buffer_has_pathsep_suffix(dst_path)) {
                     ++sep; /*(avoid double-slash in path)*/
                     --len;
                 }
@@ -5098,7 +5080,7 @@ mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
     }
 
     if (S_ISDIR(st.st_mode)) {
-        if (r->physical.path.ptr[r->physical.path.used - 2] != '/') {
+        if (!buffer_has_pathsep_suffix(&r->physical.path)) {
             const buffer *vb =
               http_header_request_get(r, HTTP_HEADER_USER_AGENT,
                                       CONST_STR_LEN("User-Agent"));
@@ -5123,7 +5105,7 @@ mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
             buffer_append_string_len(&r->physical.rel_path,CONST_STR_LEN("/"));
         }
     }
-    else if (r->physical.path.ptr[r->physical.path.used - 2] == '/') {
+    else if (buffer_has_pathsep_suffix(&r->physical.path)) {
         http_status_set_error(r, 403);
         return HANDLER_FINISHED;
     }
@@ -5479,8 +5461,7 @@ mod_webdav_lock (request_st * const r, const plugin_config * const pconf)
              *  This is desired behavior since collection should be created
              *  with MKCOL, and not via LOCK on an unmapped resource) */
             const int fd =
-              (errno == ENOENT
-               && r->physical.path.ptr[r->physical.path.used-2] != '/')
+              (errno == ENOENT && !buffer_has_pathsep_suffix(&r->physical.path))
               ? fdevent_open_cloexec(r->physical.path.ptr, 0,
                                      O_WRONLY | O_CREAT | O_EXCL | O_TRUNC,
                                      WEBDAV_FILE_MODE)
@@ -5513,7 +5494,7 @@ mod_webdav_lock (request_st * const r, const plugin_config * const pconf)
         if (created) {
         }
         else if (S_ISDIR(st.st_mode)) {
-            if (r->physical.path.ptr[r->physical.path.used - 2] != '/') {
+            if (!buffer_has_pathsep_suffix(&r->physical.path)) {
                 /* 308 Permanent Redirect */
                 http_response_redirect_to_directory(r, 308);
                 break; /* clean up resources and return HANDLER_FINISHED */
@@ -5522,7 +5503,7 @@ mod_webdav_lock (request_st * const r, const plugin_config * const pconf)
                  * response headers, and continue to serve the request */
             }
         }
-        else if (r->physical.path.ptr[r->physical.path.used - 2] == '/') {
+        else if (buffer_has_pathsep_suffix(&r->physical.path)) {
             http_status_set_error(r, 403); /* Forbidden */
             break; /* clean up resources and return HANDLER_FINISHED */
         }
