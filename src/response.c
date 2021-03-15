@@ -234,10 +234,14 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 			}
 		}
 
-		buffer * const tb = r->tmp_buf;
+		const uint32_t pathused = r->physical.path.used;
 		for (char *pprev = pathinfo; pathinfo; pprev = pathinfo, pathinfo = strchr(pathinfo+1, '/')) {
-			buffer_copy_string_len(tb, r->physical.path.ptr, pathinfo - r->physical.path.ptr);
-			const stat_cache_st * const nst = stat_cache_path_stat(tb);
+			/*(temporarily modify r->physical.path in-place)*/
+			r->physical.path.used = pathinfo - r->physical.path.ptr + 1;
+			*pathinfo = '\0';
+			const stat_cache_st * const nst = stat_cache_path_stat(&r->physical.path);
+			*pathinfo = '/';
+			r->physical.path.used = pathused;
 			if (NULL == nst) {
 				pathinfo = pathinfo != pprev ? pprev : NULL;
 				break;
@@ -253,7 +257,7 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 
 		/* we have a PATHINFO */
 		if (pathinfo) {
-			size_t len = strlen(pathinfo), reqlen;
+			size_t len = r->physical.path.ptr+pathused-1-pathinfo, reqlen;
 			if (r->conf.force_lowercase_filenames
 			    && len <= (reqlen = buffer_string_length(&r->target))
 			    && buffer_eq_icase_ssn(r->target.ptr + reqlen - len, pathinfo, len)) {
