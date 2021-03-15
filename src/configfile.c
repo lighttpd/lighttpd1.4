@@ -309,7 +309,8 @@ static void config_check_module_duplicates (server *srv) {
     srv->srvconf.modules = modules;
 }
 
-static const char * config_has_opt_and_value (server * const srv, const char * const opt, const uint32_t olen, const char * const v, const uint32_t vlen) {
+__attribute_pure__
+static const char * config_has_opt_and_value (const server * const srv, const char * const opt, const uint32_t olen, const char * const v, const uint32_t vlen) {
     for (uint32_t i = 0; i < srv->config_context->used; ++i) {
         const data_config * const config =
             (data_config const *)srv->config_context->data[i];

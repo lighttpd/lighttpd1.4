@@ -50,6 +50,7 @@ __attribute_cold__
 int fdevent_config(const char **event_handler_name, struct log_error_st *errh);
 
 __attribute_cold__
+__attribute_const__
 const char * fdevent_show_event_handlers(void);
 
 __attribute_cold__
@@ -88,7 +89,9 @@ int fdevent_rename(const char *oldpath, const char *newpath);
 struct sockaddr;
 int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen);
 
+__attribute_pure__
 char ** fdevent_environ(void);
+
 int fdevent_open_devnull(void);
 int fdevent_open_dirname(char *path, int symlinks);
 int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr);

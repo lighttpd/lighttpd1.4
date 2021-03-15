@@ -1695,6 +1695,7 @@ connection_handle_read_post_cq_compact (chunkqueue * const cq)
 }
 
 
+__attribute_pure__
 static int
 connection_handle_read_post_chunked_crlf (chunkqueue * const cq)
 {

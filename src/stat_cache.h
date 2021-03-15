@@ -41,7 +41,9 @@ void stat_cache_entry_refchg(void *data, int mod);
 __attribute_cold__
 void stat_cache_xattrname (const char *name);
 
+__attribute_pure__
 const buffer * stat_cache_mimetype_by_ext(const array *mimetypes, const char *name, uint32_t nlen);
+
 #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
 const buffer * stat_cache_mimetype_by_xattr(const char *name);
 const buffer * stat_cache_content_type_get_by_xattr(stat_cache_entry *sce, const array *mimetypes, int use_xattr);

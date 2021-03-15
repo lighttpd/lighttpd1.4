@@ -134,6 +134,7 @@ void http_auth_require_free (http_auth_require_t * const require)
 /* (case-sensitive version of array.c:array_get_index(),
  *  and common case expects small num of allowed tokens,
  *  so it is reasonably performant to simply walk the array) */
+__attribute_pure__
 static int http_auth_array_contains (const array * const a, const char * const k, const size_t klen)
 {
     for (size_t i = 0, used = a->used; i < used; ++i) {

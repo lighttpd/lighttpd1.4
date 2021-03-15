@@ -924,6 +924,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 
 }
 
+__attribute_pure__
 static int mod_ssi_parse_ssi_stmt_value(const unsigned char * const s, const int len) {
 	int n;
 	const int c = (s[0] == '"' ? '"' : s[0] == '\'' ? '\'' : 0);

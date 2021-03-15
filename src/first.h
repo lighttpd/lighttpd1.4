@@ -140,6 +140,15 @@
 #endif
 #endif
 
+#ifndef __attribute_const__
+#if __has_attribute(const) \
+ || __GNUC_PREREQ(2,5)
+#define __attribute_const__  __attribute__((__const__))
+#else
+#define __attribute_const__
+#endif
+#endif
+
 #ifndef __attribute_pure__
 #if __has_attribute(pure) \
  || __GNUC_PREREQ(2,96)
@@ -155,6 +164,19 @@
 #define __attribute_returns_nonnull__  __attribute__((__returns_nonnull__))
 #else
 #define __attribute_returns_nonnull__
+#endif
+#endif
+
+#ifndef __attribute_malloc__
+#if __has_attribute(malloc) \
+ || __GNUC_PREREQ(2,96)
+#define __attribute_malloc__  __attribute__((__malloc__))
+#elif defined(_MSC_VER)
+#undef  restrict
+#define __attribute_malloc__  __declspec(restrict)
+#define restrict __restrict
+#else
+#define __attribute_malloc__
 #endif
 #endif
 

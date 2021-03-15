@@ -31,6 +31,7 @@
 #endif
 #endif
 
+#ifndef USE_NETTLE_CRYPTO
 #if defined(USE_OPENSSL_CRYPTO) && OPENSSL_VERSION_NUMBER >= 0x30000000L
 #define HMAC EVP_HMAC
 static unsigned char *
@@ -55,6 +56,7 @@ EVP_HMAC (const EVP_MD *evp_md, const void *key,
     EVP_PKEY_free(pkey);
     return (1 == rc) ? md : NULL;
 }
+#endif
 #endif
 
 

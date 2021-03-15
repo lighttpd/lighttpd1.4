@@ -173,7 +173,10 @@ void buffer_append_string_encoded(buffer * restrict b, const char * restrict s, 
 void buffer_append_string_c_escaped(buffer * restrict b, const char * restrict s, size_t s_len);
 
 void buffer_urldecode_path(buffer *b);
+
+__attribute_pure__
 int buffer_is_valid_UTF8(const buffer *b);
+
 void buffer_path_simplify(buffer *dest, buffer *src);
 
 void buffer_to_lower(buffer *b);
@@ -181,6 +184,7 @@ void buffer_to_upper(buffer *b);
 
 
 /** deprecated */
+__attribute_const__
 char hex2int(unsigned char c);
 
 __attribute_pure__

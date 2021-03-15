@@ -22,6 +22,7 @@ typedef struct {
 	int in_cond;
 } ssi_tokenizer_t;
 
+__attribute_malloc__
 ssi_val_t *ssi_val_init(void) {
 	ssi_val_t *s;
 
@@ -36,6 +37,7 @@ void ssi_val_free(ssi_val_t *s) {
 	free(s);
 }
 
+__attribute_pure__
 int ssi_val_tobool(ssi_val_t *B) {
 	if (B->type == SSI_TYPE_STRING) {
 		return !buffer_string_is_empty(B->str);

@@ -77,6 +77,7 @@ static int fdevent_poll_event_set(fdevents *ev, fdnode *fdn, int events) {
 	return 0;
 }
 
+__attribute_pure__
 static int fdevent_poll_next_ndx(const fdevents *ev, int ndx) {
 	for (uint32_t i = (uint32_t)(ndx+1); i < ev->used; ++i) {
 		if (ev->pollfds[i].revents) return i;

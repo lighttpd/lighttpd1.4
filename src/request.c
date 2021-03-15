@@ -347,7 +347,7 @@ int http_request_host_policy (buffer * const b, const unsigned int http_parseopt
                 && 0 != http_request_host_normalize(b, scheme_port)));
 }
 
-__attribute_pure__ /*(could be even more strict and use __attribute_const__)*/
+__attribute_const__
 static int request_uri_is_valid_char(const unsigned char c) {
 	return (c > 32 && c != 127 && c != 255);
 }

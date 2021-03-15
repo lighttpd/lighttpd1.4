@@ -702,6 +702,7 @@ static void gw_proc_kill(gw_host *host, gw_proc *proc) {
     --host->num_procs;
 }
 
+__attribute_pure__
 static gw_host * unixsocket_is_dup(gw_plugin_data *p, const buffer *unixsocket) {
     if (NULL == p->cvlist) return NULL;
     /* (init i to 0 if global context; to 1 to skip empty global context) */

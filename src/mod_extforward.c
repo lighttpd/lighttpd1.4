@@ -652,6 +652,7 @@ static handler_t mod_extforward_X_Forwarded_For(request_st * const r, plugin_dat
 	return HANDLER_GO_ON;
 }
 
+__attribute_pure__
 static int find_end_quoted_string (const char * const s, int i) {
     do {
         ++i;
@@ -659,6 +660,7 @@ static int find_end_quoted_string (const char * const s, int i) {
     return i;
 }
 
+__attribute_pure__
 static int find_next_semicolon_or_comma_or_eq (const char * const s, int i) {
     for (; s[i] != '=' && s[i] != ';' && s[i] != ',' && s[i] != '\0'; ++i) {
         if (s[i] == '"') {
@@ -669,6 +671,7 @@ static int find_next_semicolon_or_comma_or_eq (const char * const s, int i) {
     return i;
 }
 
+__attribute_pure__
 static int find_next_semicolon_or_comma (const char * const s, int i) {
     for (; s[i] != ';' && s[i] != ',' && s[i] != '\0'; ++i) {
         if (s[i] == '"') {

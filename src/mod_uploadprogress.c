@@ -83,9 +83,10 @@ static int request_map_insert(request_map *rm, request_st * const r, const char 
 	return 0;
 }
 
-static request_st * request_map_get_request(request_map *rm, const char *r_id, size_t idlen) {
+__attribute_pure__
+static request_st * request_map_get_request(const request_map * const rm, const char * const r_id,  const size_t idlen) {
 	for (uint32_t i = 0; i < rm->used; ++i) {
-		request_map_entry *rme = rm->ptr[i];
+		const request_map_entry * const rme = rm->ptr[i];
 
 		if (buffer_is_equal_string(rme->r_id, r_id, idlen)) {
 			return rme->r; /* found request */

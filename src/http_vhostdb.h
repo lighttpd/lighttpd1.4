@@ -15,6 +15,7 @@ typedef struct http_vhostdb_backend_t {
 } http_vhostdb_backend_t;
 
 __attribute_cold__
+__attribute_pure__
 const http_vhostdb_backend_t * http_vhostdb_backend_get (const buffer *name);
 
 __attribute_cold__

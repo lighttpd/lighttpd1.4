@@ -133,6 +133,7 @@ log_buffer_append_encoded (buffer * const b,
 }
 
 
+__attribute_format__((__printf__, 2, 0))
 static void
 log_buffer_vprintf (buffer * const b,
                     const char * const fmt, va_list ap)
@@ -171,6 +172,7 @@ log_buffer_vprintf (buffer * const b,
 }
 
 
+__attribute_format__((__printf__, 4, 0))
 static void
 log_error_va_list_impl (log_error_st * const errh,
                         const char * const filename,

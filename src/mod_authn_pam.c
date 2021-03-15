@@ -102,7 +102,8 @@ SETDEFAULTS_FUNC(mod_authn_pam_set_defaults) {
                 if (cpv->v.a->used) {
                     const data_string *ds = (const data_string *)
                       array_get_element_klen(cpv->v.a,CONST_STR_LEN("service"));
-                    cpv->v.v = (NULL != ds) ? ds->value.ptr : "http";
+                    *(const void **)&cpv->v.v =
+                      (NULL != ds) ? ds->value.ptr : "http";
                     cpv->vtype = T_CONFIG_LOCAL;
                 }
                 break;

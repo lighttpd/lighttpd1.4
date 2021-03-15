@@ -10,7 +10,10 @@ static inline size_t vector_align_size(size_t s) {
 }
 
 void vector_free(void *data);
+
+__attribute_malloc__
 void *vector_malloc(size_t sz);
+
 void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 
 #define DEFINE_TYPED_VECTOR(name, entry, release) \

@@ -59,11 +59,21 @@ typedef enum {
 
 typedef enum { HTTP_VERSION_UNSET = -1, HTTP_VERSION_1_0, HTTP_VERSION_1_1, HTTP_VERSION_2 } http_version_t;
 
+__attribute_pure__
 const char *get_http_status_name(int i);
+
+__attribute_pure__
 const char *get_http_version_name(int i);
+
+__attribute_pure__
 const char *get_http_method_name(http_method_t i);
+
+__attribute_pure__
 int get_http_version_key(const char *s, size_t slen);
+
+__attribute_pure__
 http_method_t get_http_method_key(const char *s, size_t slen);
+
 void http_status_append(buffer *b, int status);
 void http_method_append(buffer *b, http_method_t method);
 void http_version_append(buffer *b, http_version_t version);
