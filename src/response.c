@@ -171,6 +171,27 @@ http_response_write_header (request_st * const r)
 }
 
 
+__attribute_cold__
+static handler_t
+http_response_physical_path_error (request_st * const r, const int code, const char * const msg)
+{
+    r->http_status = code;
+    if ((code == 404 && r->conf.log_file_not_found)
+        || r->conf.log_request_handling) {
+        if (NULL == msg)
+            log_perror(r->conf.errh, __FILE__, __LINE__, "-- ");
+        else
+            log_error(r->conf.errh, __FILE__, __LINE__, "%s", msg);
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "Path         : %s", r->physical.path.ptr);
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "URI          : %s", r->uri.path.ptr);
+    }
+    buffer_reset(&r->physical.path);
+    return HANDLER_FINISHED;
+}
+
+
 static handler_t http_response_physical_path_check(request_st * const r) {
 	const stat_cache_st *st = stat_cache_path_stat(&r->physical.path);
 
@@ -179,18 +200,11 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 	} else {
 		char *pathinfo = NULL;
 		switch (errno) {
+		case ENOTDIR:
+			/* PATH_INFO ! :) */
+			break;
 		case EACCES:
-			r->http_status = 403;
-
-			if (r->conf.log_request_handling) {
-				log_error(r->conf.errh, __FILE__, __LINE__,
-				  "-- access denied");
-				log_error(r->conf.errh, __FILE__, __LINE__,
-				  "Path         : %s", r->physical.path.ptr);
-			}
-
-			buffer_reset(&r->physical.path);
-			return HANDLER_FINISHED;
+			return http_response_physical_path_error(r, 403, NULL);
 		case ENAMETOOLONG:
 			/* file name to be read was too long. return 404 */
 		case ENOENT:
@@ -199,31 +213,10 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 				r->http_status = 200;
 				return HANDLER_FINISHED;
 			}
-
-			r->http_status = 404;
-
-			if (r->conf.log_request_handling) {
-				log_error(r->conf.errh, __FILE__, __LINE__,
-				  "-- file not found");
-				log_error(r->conf.errh, __FILE__, __LINE__,
-				  "Path         : %s", r->physical.path.ptr);
-			}
-
-			buffer_reset(&r->physical.path);
-			return HANDLER_FINISHED;
-		case ENOTDIR:
-			/* PATH_INFO ! :) */
-			break;
+			return http_response_physical_path_error(r, 404, NULL);
 		default:
 			/* we have no idea what happened. let's tell the user so. */
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "file not found ... or so: %s -> %s",
-			  r->uri.path.ptr, r->physical.path.ptr);
-
-			r->http_status = 500;
-			buffer_reset(&r->physical.path);
-
-			return HANDLER_FINISHED;
+			return http_response_physical_path_error(r, 500, NULL);
 		}
 
 		/* not found, perhaps PATHINFO */
@@ -255,17 +248,7 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 
 		if (NULL == pathinfo || !S_ISREG(st->st_mode)) {
 			/* no it really doesn't exists */
-			r->http_status = 404;
-
-			if (r->conf.log_file_not_found) {
-				log_error(r->conf.errh, __FILE__, __LINE__,
-				  "file not found: %s -> %s",
-				  r->uri.path.ptr, r->physical.path.ptr);
-			}
-
-			buffer_reset(&r->physical.path);
-
-			return HANDLER_FINISHED;
+			return http_response_physical_path_error(r, 404, "-- file not found");
 		}
 
 		/* we have a PATHINFO */
@@ -294,17 +277,7 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 
 	if (!r->conf.follow_symlink
 	    && 0 != stat_cache_path_contains_symlink(&r->physical.path, r->conf.errh)) {
-		r->http_status = 403;
-
-		if (r->conf.log_request_handling) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "-- access denied due symlink restriction");
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "Path         : %s", r->physical.path.ptr);
-		}
-
-		buffer_reset(&r->physical.path);
-		return HANDLER_FINISHED;
+		return http_response_physical_path_error(r, 403, "-- access denied due to symlink restriction");
 	}
 
 	if (S_ISREG(st->st_mode)) /*(common case)*/
