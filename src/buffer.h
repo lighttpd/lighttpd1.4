@@ -62,6 +62,13 @@ char* buffer_string_prepare_copy(buffer *b, size_t size);
 __attribute_returns_nonnull__
 char* buffer_string_prepare_append(buffer *b, size_t size);
 
+/* extend and modify buffer for immediate addition of x bytes (differs from
+ * buffer_string_prepare_append() which only ensures space is available)
+ * returns pointer to which callers should immediately write x bytes
+ */
+__attribute_returns_nonnull__
+char* buffer_extend(buffer * const restrict b, size_t x);
+
 /* use after prepare_(copy,append) when you have written data to the buffer
  * to increase the buffer length by size. also sets the terminating zero.
  * requires enough space is present for the terminating zero (prepare with the
@@ -99,11 +106,11 @@ __attribute_cold__
 void buffer_free_ptr(buffer *b);
 
 void buffer_copy_string(buffer * restrict b, const char * restrict s);
-void buffer_copy_string_len(buffer * restrict b, const char * restrict s, size_t s_len);
+void buffer_copy_string_len(buffer * restrict b, const char * restrict s, size_t len);
 static inline void buffer_copy_buffer(buffer * restrict b, const buffer * restrict src);
 
 void buffer_append_string(buffer * restrict b, const char * restrict s);
-void buffer_append_string_len(buffer * restrict b, const char * restrict s, size_t s_len);
+void buffer_append_string_len(buffer * restrict b, const char * restrict s, size_t len);
 static inline void buffer_append_string_buffer(buffer * restrict b, const buffer * restrict src);
 
 #define buffer_append_uint_hex(b,len) buffer_append_uint_hex_lc((b),(len))

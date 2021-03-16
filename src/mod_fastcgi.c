@@ -137,24 +137,10 @@ SETDEFAULTS_FUNC(mod_fastcgi_set_defaults) {
 
 static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char *val, size_t val_len) {
 	buffer *env = venv;
-	size_t len;
 	char len_enc[8];
 	size_t len_enc_len = 0;
-	char *dst;
 
 	if (!key || (!val && val_len)) return -1;
-
-	len = key_len + val_len;
-
-	len += key_len > 127 ? 4 : 1;
-	len += val_len > 127 ? 4 : 1;
-
-	if (buffer_string_length(env) + len >= FCGI_MAX_LENGTH + sizeof(FCGI_BeginRequestRecord) + sizeof(FCGI_Header)) {
-		/**
-		 * we can't append more headers, ignore it
-		 */
-		return -1;
-	}
 
 	/**
 	 * field length can be 31bit max
@@ -164,35 +150,31 @@ static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char 
 	force_assert(key_len < 0x7fffffffu);
 	force_assert(val_len < 0x7fffffffu);
 
-	if (buffer_string_space(env) < len) {
-		size_t extend = env->size * 2 - buffer_string_length(env);
-		extend = extend > len ? extend : len + 4095;
-		buffer_string_prepare_append(env, extend);
-	}
-
 	if (key_len > 127) {
-		len_enc[len_enc_len++] = ((key_len >> 24) & 0xff) | 0x80;
-		len_enc[len_enc_len++] = (key_len >> 16) & 0xff;
-		len_enc[len_enc_len++] = (key_len >> 8) & 0xff;
-		len_enc[len_enc_len++] = (key_len >> 0) & 0xff;
-	} else {
-		len_enc[len_enc_len++] = (key_len >> 0) & 0xff;
+		len_enc[0] = ((key_len >> 24) & 0xff) | 0x80;
+		len_enc[1] =  (key_len >> 16) & 0xff;
+		len_enc[2] =  (key_len >>  8) & 0xff;
+		len_enc_len += 3;
 	}
+	len_enc[len_enc_len++] = key_len & 0xff;
 
 	if (val_len > 127) {
 		len_enc[len_enc_len++] = ((val_len >> 24) & 0xff) | 0x80;
 		len_enc[len_enc_len++] = (val_len >> 16) & 0xff;
 		len_enc[len_enc_len++] = (val_len >> 8) & 0xff;
-		len_enc[len_enc_len++] = (val_len >> 0) & 0xff;
-	} else {
-		len_enc[len_enc_len++] = (val_len >> 0) & 0xff;
 	}
+	len_enc[len_enc_len++] = val_len & 0xff;
 
-	dst = buffer_string_prepare_append(env, len);
+	const size_t len = len_enc_len + key_len + val_len;
+	const size_t fmax =
+	  FCGI_MAX_LENGTH + sizeof(FCGI_BeginRequestRecord) + sizeof(FCGI_Header);
+	if (buffer_string_length(env) + len >= fmax)
+		return -1; /* we can't append more headers, ignore it */
+
+	char * const dst = buffer_extend(env, len);
 	memcpy(dst, len_enc, len_enc_len);
 	memcpy(dst + len_enc_len, key, key_len);
 	if (val_len) memcpy(dst + len_enc_len + key_len, val, val_len);
-	buffer_commit(env, len);
 
 	return 0;
 }

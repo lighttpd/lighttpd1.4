@@ -16,8 +16,6 @@ typedef gw_handler_ctx   handler_ctx;
 #include "log.h"
 #include "status_counter.h"
 
-#include "sys-endian.h"
-
 enum { LI_PROTOCOL_SCGI, LI_PROTOCOL_UWSGI };
 
 static void mod_scgi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -147,62 +145,35 @@ SETDEFAULTS_FUNC(mod_scgi_set_defaults) {
 
 static int scgi_env_add_scgi(void *venv, const char *key, size_t key_len, const char *val, size_t val_len) {
 	buffer *env = venv;
-	char *dst;
 	size_t len;
 
 	if (!key || (!val && val_len)) return -1;
 
 	len = key_len + val_len + 2;
 
-	if (buffer_string_space(env) < len) {
-		size_t extend = env->size * 2 - buffer_string_length(env);
-		extend = extend > len ? extend : len + 4095;
-		buffer_string_prepare_append(env, extend);
-	}
-
-	dst = buffer_string_prepare_append(env, len);
+	char *dst = buffer_extend(env, len);
 	memcpy(dst, key, key_len);
 	dst[key_len] = '\0';
-	memcpy(dst + key_len + 1, val, val_len);
-	dst[key_len + 1 + val_len] = '\0';
-	buffer_commit(env, len);
+	dst += key_len + 1;
+	memcpy(dst, val, val_len);
+	dst[val_len] = '\0';
 
 	return 0;
 }
 
 
-#ifdef __LITTLE_ENDIAN__
-#define uwsgi_htole16(x) (x)
-#else /* __BIG_ENDIAN__ */
-#define uwsgi_htole16(x) ((uint16_t) (((x) & 0xff) << 8 | ((x) & 0xff00) >> 8))
-#endif
-
-
 static int scgi_env_add_uwsgi(void *venv, const char *key, size_t key_len, const char *val, size_t val_len) {
-	buffer *env = venv;
-	char *dst;
-	size_t len;
-	uint16_t uwlen;
-
 	if (!key || (!val && val_len)) return -1;
 	if (key_len > USHRT_MAX || val_len > USHRT_MAX) return -1;
 
-	len = 2 + key_len + 2 + val_len;
-
-	if (buffer_string_space(env) < len) {
-		size_t extend = env->size * 2 - buffer_string_length(env);
-		extend = extend > len ? extend : len + 4095;
-		buffer_string_prepare_append(env, extend);
-	}
-
-	dst = buffer_string_prepare_append(env, len);
-	uwlen = uwsgi_htole16((uint16_t)key_len);
-	memcpy(dst, (char *)&uwlen, 2);
+	char *dst = buffer_extend(venv, 2 + key_len + 2 + val_len);
+	dst[0] =  key_len       & 0xff; /* little-endian */
+	dst[1] = (key_len >> 8) & 0xff;
 	memcpy(dst + 2, key, key_len);
-	uwlen = uwsgi_htole16((uint16_t)val_len);
-	memcpy(dst + 2 + key_len, (char *)&uwlen, 2);
-	memcpy(dst + 2 + key_len + 2, val, val_len);
-	buffer_commit(env, len);
+	dst += 2+key_len;
+	dst[0] =  val_len       & 0xff; /* little-endian */
+	dst[1] = (val_len >> 8) & 0xff;
+	memcpy(dst + 2, val, val_len);
 
 	return 0;
 }
@@ -246,7 +217,6 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 	} else { /* LI_PROTOCOL_UWSGI */
 		/* http://uwsgi-docs.readthedocs.io/en/latest/Protocol.html */
 		size_t len = buffer_string_length(b)-10;
-		uint32_t uwsgi_header;
 		if (len > USHRT_MAX) {
 			r->http_status = 431; /* Request Header Fields Too Large */
 			r->handler_module = NULL;
@@ -255,8 +225,10 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 			return HANDLER_FINISHED;
 		}
 		offset = 10 - 4;
-		uwsgi_header = ((uint32_t)uwsgi_htole16((uint16_t)len)) << 8;
-		memcpy(b->ptr+offset, (char *)&uwsgi_header, 4);
+		b->ptr[offset]   = 0;
+		b->ptr[offset+1] =  len       & 0xff; /* little-endian */
+		b->ptr[offset+2] = (len >> 8) & 0xff;
+		b->ptr[offset+3] = 0;
 	}
 
 	hctx->wb_reqlen = buffer_string_length(b) - offset;

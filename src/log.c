@@ -152,8 +152,8 @@ log_buffer_vprintf (buffer * const b,
     va_end(aptry);
 
     if (n >= bsp) {
-        buffer_string_prepare_append(b, n); /*(must re-read s after realloc)*/
-        vsnprintf((s = b->ptr + blen), buffer_string_space(b)+1, fmt, ap);
+        s = buffer_extend(b, n);
+        vsnprintf(s, n+1, fmt, ap);
     }
 
     size_t i;

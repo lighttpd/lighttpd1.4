@@ -869,26 +869,24 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(&r->target), &hctx->conf.header, 1);
 
 	if (!hctx->conf.header.force_http10)
-		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.1\r\n"));
+		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.1"));
 	else
-		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0\r\n"));
+		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0"));
 
 	if (hctx->conf.replace_http_host && !buffer_string_is_empty(hctx->gw.host->id)) {
 		if (hctx->gw.conf.debug > 1) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "proxy - using \"%s\" as HTTP Host", hctx->gw.host->id->ptr);
 		}
-		buffer_append_string_len(b, CONST_STR_LEN("Host: "));
+		buffer_append_string_len(b, CONST_STR_LEN("\r\nHost: "));
 		buffer_append_string_buffer(b, hctx->gw.host->id);
-		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 	} else if (!buffer_string_is_empty(r->http_host)) {
-		buffer_append_string_len(b, CONST_STR_LEN("Host: "));
+		buffer_append_string_len(b, CONST_STR_LEN("\r\nHost: "));
 		buffer_append_string_buffer(b, r->http_host);
 		if (remap_headers) {
 			size_t alen = buffer_string_length(r->http_host);
 			http_header_remap_host(b, buffer_string_length(b) - alen, &hctx->conf.header, 1, alen);
 		}
-		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
 	}
 
 	/* "Forwarded" and legacy X- headers */
@@ -911,7 +909,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	         && (r->conf.stream_request_body
 	             & (FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN))) {
 		hctx->gw.stdin_append = proxy_stdin_append; /* stream chunked body */
-		buffer_append_string_len(b, CONST_STR_LEN("Transfer-Encoding: chunked\r\n"));
+		buffer_append_string_len(b, CONST_STR_LEN("\r\nTransfer-Encoding: chunked"));
 	}
 
 	/* request header */
@@ -957,17 +955,14 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		const uint32_t klen = buffer_string_length(&ds->key);
 		const uint32_t vlen = buffer_string_length(&ds->value);
 		if (0 == klen || 0 == vlen) continue;
-
-		if (buffer_string_space(b) < klen + vlen + 4) {
-			size_t extend = b->size * 2 - buffer_string_length(b);
-			extend = extend > klen + vlen + 4 ? extend : klen + vlen + 4 + 4095;
-			buffer_string_prepare_append(b, extend);
-		}
-
-		buffer_append_string_len(b, ds->key.ptr, klen);
-		buffer_append_string_len(b, CONST_STR_LEN(": "));
-		buffer_append_string_len(b, ds->value.ptr, vlen);
-		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
+		char * restrict s = buffer_extend(b, klen+vlen+4);
+		s[0] = '\r';
+		s[1] = '\n';
+		memcpy(s+2, ds->key.ptr, klen);
+		s += 2+klen;
+		s[0] = ':';
+		s[1] = ' ';
+		memcpy(s+2, ds->value.ptr, vlen);
 
 		if (!remap_headers) continue;
 
@@ -994,13 +989,13 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			continue;
 		}
 
-		http_header_remap_uri(b, buffer_string_length(b) - vlen - 2, &hctx->conf.header, 1);
+		http_header_remap_uri(b, buffer_string_length(b) - vlen, &hctx->conf.header, 1);
 	}
 
 	if (connhdr && !hctx->conf.header.force_http10 && r->http_version >= HTTP_VERSION_1_1
 	    && !buffer_eq_icase_slen(connhdr, CONST_STR_LEN("close"))) {
 		/* mod_proxy always sends Connection: close to backend */
-		buffer_append_string_len(b, CONST_STR_LEN("Connection: close"));
+		buffer_append_string_len(b, CONST_STR_LEN("\r\nConnection: close"));
 		/* (future: might be pedantic and also check Connection header for each
 		 * token using http_header_str_contains_token() */
 		if (!buffer_string_is_empty(te))
@@ -1010,7 +1005,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 	}
 	else    /* mod_proxy always sends Connection: close to backend */
-		buffer_append_string_len(b, CONST_STR_LEN("Connection: close\r\n\r\n"));
+		buffer_append_string_len(b, CONST_STR_LEN("\r\nConnection: close\r\n\r\n"));
 
 	hctx->gw.wb_reqlen = buffer_string_length(b);
 	chunkqueue_prepend_buffer_commit(&hctx->gw.wb);

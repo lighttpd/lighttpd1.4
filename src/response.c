@@ -118,16 +118,20 @@ http_response_write_header (request_st * const r)
 	/* add all headers */
 	for (size_t i = 0; i < r->resp_headers.used; ++i) {
 		const data_string * const ds = (data_string *)r->resp_headers.data[i];
-
-		if (buffer_string_is_empty(&ds->value)) continue;
-		if (buffer_string_is_empty(&ds->key)) continue;
+		const uint32_t klen = buffer_string_length(&ds->key);
+		const uint32_t vlen = buffer_string_length(&ds->value);
+		if (0 == klen || 0 == vlen)
+			continue;
 		if ((ds->key.ptr[0] & 0xdf) == 'X' && http_response_omit_header(r, ds))
 			continue;
-
-		buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-		buffer_append_string_buffer(b, &ds->key);
-		buffer_append_string_len(b, CONST_STR_LEN(": "));
-		buffer_append_string_buffer(b, &ds->value);
+		char * restrict s = buffer_extend(b, klen+vlen+4);
+		s[0] = '\r';
+		s[1] = '\n';
+		memcpy(s+2, ds->key.ptr, klen);
+		s += 2+klen;
+		s[0] = ':';
+		s[1] = ' ';
+		memcpy(s+2, ds->value.ptr, vlen);
 	}
 
 	if (!light_btst(r->resp_htags, HTTP_HEADER_DATE)) {

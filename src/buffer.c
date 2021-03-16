@@ -64,7 +64,9 @@ void buffer_move(buffer * restrict b, buffer * restrict src) {
 
 /* make sure buffer is at least "size" big + 1 for '\0'. keep old data */
 __attribute_cold__
-static void buffer_realloc(buffer * const b, const size_t len) {
+__attribute_noinline__
+__attribute_returns_nonnull__
+static char* buffer_realloc(buffer * const restrict b, const size_t len) {
     #define BUFFER_PIECE_SIZE 64uL  /*(must be power-of-2)*/
     const size_t sz = (len + 1 + BUFFER_PIECE_SIZE-1) & ~(BUFFER_PIECE_SIZE-1);
     force_assert(sz > len);
@@ -73,60 +75,80 @@ static void buffer_realloc(buffer * const b, const size_t len) {
     b->ptr = realloc(b->ptr, sz);
 
     force_assert(NULL != b->ptr);
-}
-
-__attribute_cold__
-__attribute_noinline__
-static void buffer_alloc_replace(buffer * const b, const size_t size) {
-    force_assert(NULL != b);
-    /*(discard old data so realloc() does not copy)*/
-    if (NULL != b->ptr) {
-        free(b->ptr);
-        b->ptr = NULL;
-    }
-    buffer_realloc(b, size);
-}
-
-char* buffer_string_prepare_copy(buffer * const b, const size_t size) {
-	if (NULL == b->ptr || size >= b->size) buffer_alloc_replace(b, size);
-
-	b->used = 0;
-	return b->ptr;
+    return b->ptr;
 }
 
 __attribute_cold__
 __attribute_noinline__
 __attribute_returns_nonnull__
-static char* buffer_string_prepare_append_resize(buffer * const b, const size_t size) {
-	force_assert(NULL !=  b);
-	if (buffer_string_is_empty(b)) {
-		return buffer_string_prepare_copy(b, size);
-	} else {
-		/* not empty, b->used already includes a terminating 0 */
-		size_t req_size = b->used + size;
+static char* buffer_alloc_replace(buffer * const restrict b, const size_t size) {
+    /*(discard old data so realloc() does not copy)*/
+    if (NULL != b->ptr) {
+        free(b->ptr);
+        b->ptr = NULL;
+    }
+    /*(note: if size larger than one lshift, use size instead of power-2)*/
+    return buffer_realloc(b, (b->size << 1) > size ? (b->size << 1)-1 : size);
+}
 
-		/* check for overflow: unsigned overflow is defined to wrap around */
-		force_assert(req_size >= b->used);
+char* buffer_string_prepare_copy(buffer * const b, const size_t size) {
+    b->used = 0;
+    return (size < b->size)
+      ? b->ptr
+      : buffer_alloc_replace(b, size);
+}
 
-		buffer_realloc(b, req_size);
+__attribute_cold__
+__attribute_noinline__
+__attribute_returns_nonnull__
+static char* buffer_string_prepare_append_resize(buffer * const restrict b, const size_t size) {
+    if (b->used < 2)  /* buffer_string_is_empty(b) */
+        return buffer_string_prepare_copy(b, size);
 
-		return b->ptr + b->used - 1;
-	}
+    /* not empty, b->used already includes a terminating 0 */
+    /*(note: if size larger than one lshift, use size instead of power-2)*/
+    const size_t req_size = ((b->size << 1) - b->used > size)
+      ? (b->size << 1)-1
+      : b->used + size;
+
+    /* check for overflow: unsigned overflow is defined to wrap around */
+    force_assert(req_size >= b->used);
+
+    return buffer_realloc(b, req_size) + b->used - 1;
 }
 
 char* buffer_string_prepare_append(buffer * const b, const size_t size) {
-    return (NULL != b->ptr && size < b->size - b->used)
-      ? b->ptr + b->used - (0 != b->used)
+    const uint32_t len = b->used ? b->used-1 : 0;
+    return (b->size - len >= size + 1)
+      ? b->ptr + len
       : buffer_string_prepare_append_resize(b, size);
 }
 
+/*(prefer smaller code than inlining buffer_extend in many places in buffer.c)*/
+__attribute_noinline__
+char*
+buffer_extend (buffer * const b, const size_t x)
+{
+    /* extend buffer to append x (reallocate by power-2 (or larger), if needed)
+     * (combine buffer_string_prepare_append() and buffer_commit())
+     * (future: might make buffer.h static inline func for HTTP/1.1 performance)
+     * pre-sets '\0' byte and b->used (unlike buffer_string_prepare_append())*/
+    const uint32_t len = b->used ? b->used-1 : 0;
+    char * const s = (b->size - len >= x + 1)
+      ? b->ptr + len
+      : buffer_string_prepare_append_resize(b, x);
+    b->used = len+x+1;
+    s[x] = '\0';
+    return s;
+}
+
 void buffer_string_set_length(buffer *b, uint32_t len) {
-	force_assert(NULL != b);
-
-	if (len >= b->size) buffer_realloc(b, len);
-
-	b->used = len + 1;
-	b->ptr[len] = '\0';
+    /*(intended for string truncate; prefer buffer_extend() to extend string)*/
+    /*(unlike others routines, this routine potentially extends string
+     * extra len + (up to) BUFFER_PIECE_SIZE without power-2 reallocation,
+     * but does not optimize realloc of empty string)*/
+    b->used = len + 1; /*(not resizing for power-2)*/
+    (len < b->size ? b->ptr : buffer_realloc(b, len))[len] = '\0';
 }
 
 void buffer_commit(buffer *b, size_t size)
@@ -151,12 +173,13 @@ void buffer_copy_string(buffer * restrict b, const char * restrict s) {
 	buffer_copy_string_len(b, s, NULL != s ? strlen(s) : 0);
 }
 
-void buffer_copy_string_len(buffer * const restrict b, const char * const restrict s, const size_t s_len) {
-	if (NULL == b->ptr || s_len >= b->size) buffer_alloc_replace(b, s_len);
-
-	b->used = s_len + 1;
-	b->ptr[s_len] = '\0';
-	if (0 != s_len) memcpy(b->ptr, s, s_len); /*(s might be NULL)*/
+void buffer_copy_string_len(buffer * const restrict b, const char * const restrict s, const size_t len) {
+    b->used = len + 1;
+    char * const restrict d = (len < b->size)
+      ? b->ptr
+      : buffer_alloc_replace(b, len);
+    d[len] = '\0';
+    memcpy(d, s, len);
 }
 
 void buffer_append_string(buffer * restrict b, const char * restrict s) {
@@ -174,28 +197,29 @@ void buffer_append_string(buffer * restrict b, const char * restrict s) {
  * @param s_len size of the string (without the terminating \0)
  */
 
-void buffer_append_string_len(buffer * const restrict b, const char * const restrict s, const size_t s_len) {
-	char * const target_buf = buffer_string_prepare_append(b, s_len);
-	b->used += s_len + (0 == b->used); /*(must include '\0' for append)*/
-	target_buf[s_len] = '\0';
-
-	/*(s might be NULL if 0 == s_len)*/
-	if (s_len) memcpy(target_buf, s, s_len);
+void buffer_append_string_len(buffer * const restrict b, const char * const restrict s, const size_t len) {
+    memcpy(buffer_extend(b, len), s, len);
 }
 
 void buffer_append_path_len(buffer * restrict b, const char * restrict a, size_t alen) {
-    size_t blen = buffer_string_length(b);
-    int aslash = (alen && a[0] == '/');
-    buffer_string_prepare_append(b, alen+2); /*(+ '/' and + '\0' if 0 == blen)*/
-    if (blen && b->ptr[blen-1] == '/') {
-        if (aslash) --b->used;
+    char * restrict s = buffer_string_prepare_append(b, alen+1);
+    const int aslash = (alen && a[0] == '/');
+    if (b->used > 1 && s[-1] == '/') {
+        if (aslash) {
+            ++a;
+            --alen;
+        }
     }
     else {
-        if (!b->used) ++b->used;
-        if (!aslash) b->ptr[++b->used - 2] = '/';
+        if (0 == b->used) b->used = 1;
+        if (!aslash) {
+            *s++ = '/';
+            ++b->used;
+        }
     }
-    memcpy(b->ptr+b->used-1, a, alen);
-    b->ptr[(b->used += alen)-1] = '\0';
+    b->used += alen;
+    s[alen] = '\0';
+    memcpy(s, a, alen);
 }
 
 void buffer_append_uint_hex_lc(buffer *b, uintmax_t value) {
@@ -210,8 +234,7 @@ void buffer_append_uint_hex_lc(buffer *b, uintmax_t value) {
 		} while (0 != copy);
 	}
 
-	buf = buffer_string_prepare_append(b, shift >> 2); /*nibbles (4 bits)*/
-	buffer_commit(b, shift >> 2); /* will fill below */
+	buf = buffer_extend(b, shift >> 2); /*nibbles (4 bits)*/
 
 	while (shift > 0) {
 		shift -= 4;
@@ -425,9 +448,7 @@ void buffer_substr_replace (buffer * const restrict b, const size_t offset,
 
 
 void buffer_append_string_encoded_hex_lc(buffer * const restrict b, const char * const restrict s, size_t len) {
-    unsigned char * const p =
-      (unsigned char*) buffer_string_prepare_append(b, len*2);
-    buffer_commit(b, len*2); /* fill below */
+    unsigned char * const p = (unsigned char *)buffer_extend(b, len*2);
     for (size_t i = 0; i < len; ++i) {
         p[(i<<1)]   = hex_chars_lc[(s[i] >> 4) & 0x0F];
         p[(i<<1)+1] = hex_chars_lc[(s[i])      & 0x0F];
@@ -435,9 +456,7 @@ void buffer_append_string_encoded_hex_lc(buffer * const restrict b, const char *
 }
 
 void buffer_append_string_encoded_hex_uc(buffer * const restrict b, const char * const restrict s, size_t len) {
-    unsigned char * const p =
-      (unsigned char*) buffer_string_prepare_append(b, len*2);
-    buffer_commit(b, len*2); /* fill below */
+    unsigned char * const p = (unsigned char *)buffer_extend(b, len*2);
     for (size_t i = 0; i < len; ++i) {
         p[(i<<1)]   = hex_chars_uc[(s[i] >> 4) & 0x0F];
         p[(i<<1)+1] = hex_chars_uc[(s[i])      & 0x0F];
@@ -581,8 +600,7 @@ void buffer_append_string_encoded(buffer * const restrict b, const char * const 
 		}
 	}
 
-	d = (unsigned char*) buffer_string_prepare_append(b, d_len);
-	buffer_commit(b, d_len); /* fill below */
+	d = (unsigned char*) buffer_extend(b, d_len);
 
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
 		if (map[*ds & 0xFF]) {
@@ -636,8 +654,7 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 		}
 	}
 
-	d = (unsigned char*) buffer_string_prepare_append(b, d_len);
-	buffer_commit(b, d_len); /* fill below */
+	d = (unsigned char*) buffer_extend(b, d_len);
 
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
 		if ((*ds < 0x20) /* control character */

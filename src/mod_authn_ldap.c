@@ -409,12 +409,10 @@ static void mod_authn_append_ldap_dn_escape(buffer * const filter, const buffer 
         else {
             /* escape NUL ('\0') (and all UTF-8 chars with high bit set) */
             char *f;
-            buffer_string_prepare_append(filter, 3);
-            f = filter->ptr + buffer_string_length(filter);
+            f = buffer_extend(filter, 3);
             f[0] = '\\';
             f[1] = "0123456789abcdef"[(((unsigned char *)b)[i] >> 4) & 0xf];
             f[2] = "0123456789abcdef"[(((unsigned char *)b)[i]     ) & 0xf];
-            buffer_commit(filter, 3);
         }
     }
 
@@ -481,12 +479,10 @@ static void mod_authn_append_ldap_filter_escape(buffer * const filter, const buf
         }
 
         /* escape * ( ) \ NUL ('\0') (and all UTF-8 chars with high bit set) */
-        buffer_string_prepare_append(filter, 3);
-        f = filter->ptr + buffer_string_length(filter);
+        f = buffer_extend(filter, 3);
         f[0] = '\\';
         f[1] = "0123456789abcdef"[(((unsigned char *)b)[i] >> 4) & 0xf];
         f[2] = "0123456789abcdef"[(((unsigned char *)b)[i]     ) & 0xf];
-        buffer_commit(filter, 3);
     }
 }
 
