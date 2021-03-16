@@ -137,40 +137,47 @@ static const keyvalue http_status[] = {
 };
 
 
-static const char *keyvalue_get_value(const keyvalue *kv, int k) {
-	int i;
-	for (i = 0; kv[i].value; i++) {
-		if (kv[i].key == k) return kv[i].value;
-	}
-	return NULL;
+__attribute_noinline__
+__attribute_pure__
+static const keyvalue * keyvalue_from_key (const keyvalue *kv, const int k)
+{
+    /*(expects sentinel to have key == -1 and value == NULL)*/
+    while (kv->key != k && kv->key != -1) ++kv;
+    return kv;
 }
 
-static int keyvalue_get_key(const keyvalue *kv, const char *s, unsigned int slen) {
-	for (int i = 0; kv[i].vlen; ++i) {
-		if (kv[i].vlen == slen && 0 == memcmp(kv[i].value, s, slen))
-			return kv[i].key;
-	}
-	return -1;
+
+__attribute_pure__
+static int keyvalue_get_key(const keyvalue *kv, const char * const s, const unsigned int slen)
+{
+    /*(expects sentinel to have key == -1 and vlen == 0)*/
+    while (kv->vlen && (kv->vlen != slen || 0 != memcmp(kv->value, s, slen)))
+        ++kv;
+    return kv->key;
 }
 
 
 const char *get_http_version_name(int i) {
-	return keyvalue_get_value(http_versions, i);
+    return keyvalue_from_key(http_versions, i)->value;
 }
 
 const char *get_http_status_name(int i) {
-	return keyvalue_get_value(http_status, i);
+    return keyvalue_from_key(http_status, i)->value;
 }
 
 const char *get_http_method_name(http_method_t i) {
-	return keyvalue_get_value(http_methods, i);
+    return keyvalue_from_key(http_methods, i)->value;
 }
 
+#if 0 /*(unused)*/
 int get_http_version_key(const char *s, size_t slen) {
     return keyvalue_get_key(http_versions, s, (unsigned int)slen);
 }
+#endif
 
-http_method_t get_http_method_key(const char *s, size_t slen) {
+http_method_t get_http_method_key(const char *s, const size_t slen) {
+    if (slen == 3 && s[0] == 'G' && s[1] == 'E' && s[2] == 'T')
+        return HTTP_METHOD_GET;
     return (http_method_t)keyvalue_get_key(http_methods, s, (unsigned int)slen);
 }
 
@@ -181,12 +188,9 @@ void http_status_append(buffer * const b, const int status) {
         return;
     }
 
-    const keyvalue * const kv = http_status;
-    int i;
-    for (i = 0; kv[i].key != status && kv[i].vlen; ++i) ;
-    if (kv[i].vlen) {
-        buffer_append_string_len(b, kv[i].value, kv[i].vlen);
-    }
+    const keyvalue * const kv = keyvalue_from_key(http_status, status);
+    if (__builtin_expect( (0 != kv->vlen), 1))
+        buffer_append_string_len(b, kv->value, kv->vlen);
     else {
         buffer_append_int(b, status);
         buffer_append_string_len(b, CONST_STR_LEN(" "));
@@ -194,19 +198,13 @@ void http_status_append(buffer * const b, const int status) {
 }
 
 void http_method_append(buffer * const b, const http_method_t method) {
-    const keyvalue * const kv = http_methods;
-    int i;
-    for (i = 0; kv[i].key != method && kv[i].vlen; ++i) ;
-    if (kv[i].vlen) {
-        buffer_append_string_len(b, kv[i].value, kv[i].vlen);
-    }
+    const keyvalue * const kv = keyvalue_from_key(http_methods, method);
+    if (__builtin_expect( (0 != kv->vlen), 1))
+        buffer_append_string_len(b, kv->value, kv->vlen);
 }
 
 void http_version_append(buffer * const b, const http_version_t version) {
-    const keyvalue * const kv = http_versions;
-    int i;
-    for (i = 0; kv[i].key != version && kv[i].vlen; ++i) ;
-    if (kv[i].vlen) {
-        buffer_append_string_len(b, kv[i].value, kv[i].vlen);
-    }
+    const keyvalue * const kv = keyvalue_from_key(http_versions, version);
+    if (__builtin_expect( (0 != kv->vlen), 1))
+        buffer_append_string_len(b, kv->value, kv->vlen);
 }

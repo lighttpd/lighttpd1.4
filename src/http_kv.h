@@ -68,8 +68,10 @@ const char *get_http_version_name(int i);
 __attribute_pure__
 const char *get_http_method_name(http_method_t i);
 
+#if 0 /*(unused)*/
 __attribute_pure__
 int get_http_version_key(const char *s, size_t slen);
+#endif
 
 __attribute_pure__
 http_method_t get_http_method_key(const char *s, size_t slen);
