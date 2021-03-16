@@ -241,7 +241,6 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 			log_error(r->conf.errh, __FILE__, __LINE__, "cache-hit");
 		}
 		/* cache-hit */
-		buffer_reset(&r->physical.path);
 		return HANDLER_FINISHED;
 	case 1:
 		/* cache miss */
@@ -282,7 +281,6 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 			log_error(r->conf.errh, __FILE__, __LINE__, "cache-hit");
 		}
 		/* cache-hit */
-		buffer_reset(&r->physical.path);
 		return HANDLER_FINISHED;
 	case 1:
 		if (r->conf.log_request_handling) {

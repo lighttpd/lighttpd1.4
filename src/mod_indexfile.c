@@ -114,7 +114,6 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 		if (NULL == stat_cache_path_stat(b)) {
 			if (errno == EACCES) {
 				r->http_status = 403;
-				buffer_reset(&r->physical.path);
 				return HANDLER_FINISHED;
 			}
 
@@ -125,7 +124,6 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 				log_perror(r->conf.errh, __FILE__, __LINE__,
 				  "file not found ... or so: %s -> %s",
 				  r->uri.path.ptr, r->physical.path.ptr);
-				buffer_reset(&r->physical.path);
 				return HANDLER_FINISHED;
 			}
 			continue;

@@ -191,7 +191,6 @@ http_response_physical_path_error (request_st * const r, const int code, const c
         log_error(r->conf.errh, __FILE__, __LINE__,
           "URI          : %s", r->uri.path.ptr);
     }
-    buffer_reset(&r->physical.path);
     return HANDLER_FINISHED;
 }
 
@@ -711,10 +710,10 @@ http_response_static_errdoc (request_st * const r)
                                          CONST_BUF_LEN(content_type));
             return;
         }
+        buffer_clear(&r->physical.path);
     }
 
     /* build default error-page */
-    buffer_reset(&r->physical.path);
     buffer * const b = r->tmp_buf;
     buffer_copy_string_len(b, CONST_STR_LEN(
       "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"

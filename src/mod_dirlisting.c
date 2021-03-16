@@ -1024,9 +1024,6 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 		r->http_status = 403;
 	}
 
-	buffer_reset(&r->physical.path);
-
-	/* not found */
 	return HANDLER_FINISHED;
 }
 

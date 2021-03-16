@@ -258,7 +258,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 
 		return HANDLER_GO_ON;
 	case HTTP_METHOD_GET:
-		buffer_reset(&r->physical.path);
+		buffer_clear(&r->physical.path);
 
 		r->resp_body_started = 1;
 		r->resp_body_finished = 1;

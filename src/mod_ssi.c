@@ -1220,9 +1220,6 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 	/* Reset the modified time of included files */
 	include_file_last_mtime = 0;
 
-	/* reset physical.path */
-	buffer_reset(&r->physical.path);
-
 	return 0;
 }
 
