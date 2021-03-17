@@ -14,6 +14,7 @@ static script *script_init() {
 	script *sc;
 
 	sc = calloc(1, sizeof(*sc));
+	force_assert(sc);
 	sc->name = buffer_init();
 	sc->etag = buffer_init();
 

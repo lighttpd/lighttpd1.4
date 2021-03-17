@@ -37,6 +37,7 @@ typedef struct {
 	buffer value;
 } data_string;
 
+__attribute_returns_nonnull__
 data_string *data_string_init(void);
 
 typedef struct {
@@ -45,6 +46,7 @@ typedef struct {
 	array value;
 } data_array;
 
+__attribute_returns_nonnull__
 data_array *data_array_init(void);
 
 typedef struct {
@@ -53,6 +55,7 @@ typedef struct {
 	int value;
 } data_integer;
 
+__attribute_returns_nonnull__
 data_integer *data_integer_init(void);
 
 __attribute_returns_nonnull__

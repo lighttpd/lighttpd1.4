@@ -51,6 +51,7 @@ int fdevent_config(const char **event_handler_name, struct log_error_st *errh);
 
 __attribute_cold__
 __attribute_const__
+__attribute_returns_nonnull__
 const char * fdevent_show_event_handlers(void);
 
 __attribute_cold__
@@ -70,7 +71,9 @@ void fdevent_fdnode_event_clr(fdevents *ev, fdnode *fdn, int event);
 
 int fdevent_poll(fdevents *ev, int timeout_ms);
 
+__attribute_returns_nonnull__
 fdnode * fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx);
+
 void fdevent_unregister(fdevents *ev, int fd);
 void fdevent_sched_close(fdevents *ev, int fd, int issock);
 

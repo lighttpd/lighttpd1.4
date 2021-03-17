@@ -8,6 +8,8 @@ void request_init_data (request_st *r, connection *con, server *srv);
 void request_reset (request_st *r);
 void request_reset_ex (request_st *r);
 void request_release (request_st *r);
+
+__attribute_returns_nonnull__
 request_st * request_acquire (connection *con);
 
 __attribute_cold__

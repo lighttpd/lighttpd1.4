@@ -46,6 +46,7 @@ struct data_config {
 };
 
 __attribute_cold__
+__attribute_returns_nonnull__
 data_config *data_config_init(void);
 
 __attribute_cold__

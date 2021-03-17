@@ -24,7 +24,11 @@ void ssiexprparserFree(void *p, void (*freeProc)(void*));
 void ssiexprparser(void *yyp, int yymajor, buffer *yyminor, ssi_ctx_t *ctx);
 
 int ssi_val_tobool(ssi_val_t *B);
+
+__attribute_malloc__
+__attribute_returns_nonnull__
 ssi_val_t *ssi_val_init(void);
+
 void ssi_val_free(ssi_val_t *s);
 
 #endif

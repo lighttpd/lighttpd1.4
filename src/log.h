@@ -22,6 +22,8 @@ struct log_error_st {
 };
 
 __attribute_cold__
+__attribute_malloc__
+__attribute_returns_nonnull__
 log_error_st * log_error_st_init (void);
 
 __attribute_cold__

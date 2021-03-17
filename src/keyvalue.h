@@ -25,6 +25,7 @@ typedef struct {
 
 __attribute_cold__
 __attribute_malloc__
+__attribute_returns_nonnull__
 pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void);
 
 __attribute_cold__
