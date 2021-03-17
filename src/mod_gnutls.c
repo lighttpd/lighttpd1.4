@@ -407,7 +407,8 @@ mod_gnutls_session_ticket_key_check (server *srv, const plugin_data *p, const ti
         if (stek->expire_ts < cur_ts)
             mod_gnutls_session_ticket_key_free();
     }
-    else if (cur_ts - 86400 >= stek_rotate_ts) {  /*(24 hours)*/
+    else if (cur_ts - 86400 >= stek_rotate_ts     /*(24 hours)*/
+             || 0 == stek_rotate_ts) {
         mod_gnutls_session_ticket_key_rotate(srv);
         stek_rotate_ts = cur_ts;
     }

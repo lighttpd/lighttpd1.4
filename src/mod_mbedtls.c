@@ -361,7 +361,9 @@ mod_mbedtls_session_ticket_key_check (plugin_data *p, const time_t cur_ts)
                                        mbedtls_cipher_get_key_bitlen(&key->ctx),
                                        MBEDTLS_ENCRYPT);
         if (0 != rc) { /* expire key immediately if error occurs */
-            key->generation_time = cur_ts - ctx->ticket_lifetime - 1;
+            key->generation_time = cur_ts > ctx->ticket_lifetime
+              ? cur_ts - ctx->ticket_lifetime - 1
+              : 0;
             ctx->active = 1 - ctx->active;
         }
         mbedtls_platform_zeroize(stek, sizeof(tlsext_ticket_key_t));

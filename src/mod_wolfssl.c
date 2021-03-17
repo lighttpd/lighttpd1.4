@@ -432,7 +432,7 @@ mod_openssl_session_ticket_key_check (const plugin_data *p, const time_t cur_ts)
             rotate = mod_openssl_session_ticket_key_file(p->ssl_stek_file);
         tlsext_ticket_wipe_expired(cur_ts);
     }
-    else if (cur_ts - 28800 >= stek_rotate_ts)     /*(8 hours)*/
+    else if (cur_ts - 28800 >= stek_rotate_ts || 0 == stek_rotate_ts)/*(8 hrs)*/
         rotate = mod_openssl_session_ticket_key_generate(cur_ts, cur_ts+86400);
 
     if (rotate) {
