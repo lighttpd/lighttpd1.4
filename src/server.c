@@ -234,6 +234,31 @@ server_monotonic_secs (void)
       : log_monotonic_secs;
 }
 
+static time_t
+server_epoch_secs (server * const srv)
+{
+    const time_t cur_ts = log_epoch_secs;
+    const time_t new_ts = time(NULL);
+    /* attempt to detect large clock jump */
+    if (new_ts < cur_ts || new_ts - cur_ts > 300) { /*(5 mins)*/
+        log_error(srv->errh, __FILE__, __LINE__,
+          "warning: clock jumped %lld secs",
+          (long long)((int64_t)new_ts - (int64_t)cur_ts));
+        data_unset * const du = (NULL != srv->srvconf.feature_flags)
+          ? array_get_data_unset(srv->srvconf.feature_flags,
+                                 CONST_STR_LEN("server.clock-jump-restart"))
+          : NULL;
+        int delta = config_plugin_value_to_int32(du, 1800);/*(30 mins default)*/
+        if (delta && (new_ts > cur_ts ? new_ts-cur_ts : cur_ts-new_ts) > delta){
+            log_error(srv->errh, __FILE__, __LINE__,
+              "attempting graceful restart in < ~5 seconds, else hard restart");
+            srv->graceful_expire_ts = log_monotonic_secs + 5;
+            raise(SIGUSR1);
+        }
+    }
+    return new_ts;
+}
+
 __attribute_cold__
 static server *server_init(void) {
 	server *srv = calloc(1, sizeof(*srv));
@@ -1587,8 +1612,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 				int status;
 
 				if (-1 != (pid = fdevent_waitpid(-1, &status, 0))) {
-					log_epoch_secs = time(NULL);
 					log_monotonic_secs = server_monotonic_secs();
+					log_epoch_secs = server_epoch_secs(srv);
 					if (plugins_call_handle_waitpid(srv, pid, status) != HANDLER_GO_ON) {
 						if (!timer) alarm((timer = 5));
 						continue;
@@ -1612,8 +1637,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 				} else {
 					switch (errno) {
 					case EINTR:
-						log_epoch_secs = time(NULL);
 						log_monotonic_secs = server_monotonic_secs();
+						log_epoch_secs = server_epoch_secs(srv);
 						/**
 						 * if we receive a SIGHUP we have to close our logs ourself as we don't 
 						 * have the mainloop who can help us here
@@ -1812,7 +1837,7 @@ static void server_handle_sigalrm (server * const srv, time_t mono_ts, time_t la
 				plugins_call_handle_trigger(srv);
 
 				log_monotonic_secs = mono_ts;
-				log_epoch_secs = time(NULL);
+				log_epoch_secs = server_epoch_secs(srv);
 
 				/* check idle time limit, if enabled */
 				if (idle_limit && idle_limit < mono_ts - last_active_ts && !graceful_shutdown) {
@@ -1887,7 +1912,7 @@ __attribute_hot__
 __attribute_noinline__
 static void server_main_loop (server * const srv) {
 	time_t last_active_ts = server_monotonic_secs();
-	log_epoch_secs = time(NULL);
+	log_epoch_secs = server_epoch_secs(srv);
 
 	while (!srv_shutdown) {
 
