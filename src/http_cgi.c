@@ -98,10 +98,12 @@ http_cgi_encode_varname (buffer * const b, const char * const restrict s, const 
     size_t i, j = 0;
 
     if (is_http_header) {
+      #if 0 /*(special-cased in caller that sets is_http_header)*/
         if (len == 12 && buffer_eq_icase_ssn(s, "Content-Type", 12)) {
             buffer_copy_string_len(b, CONST_STR_LEN("CONTENT_TYPE"));
             return;
         }
+      #endif
         memcpy(p, "HTTP_", 5);
         j = 5; /* "HTTP_" */
     }
@@ -331,7 +333,10 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
                 && buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy"))) {
                 continue;
             }
-            http_cgi_encode_varname(tb, CONST_BUF_LEN(&ds->key), 1);
+            else if (ds->ext == HTTP_HEADER_CONTENT_TYPE)
+                buffer_copy_string_len(tb, CONST_STR_LEN("CONTENT_TYPE"));
+            else
+                http_cgi_encode_varname(tb, CONST_BUF_LEN(&ds->key), 1);
             rc |= cb(vdata, CONST_BUF_LEN(tb),
                             CONST_BUF_LEN(&ds->value));
         }
