@@ -20,23 +20,18 @@ typedef struct {
 	PLUGIN_DATA;
 	plugin_config defaults;
 	plugin_config conf;
-
-	buffer *timefmt;
-
-	buffer *stat_fn;
-
 	array *ssi_vars;
 	array *ssi_cgi_env;
+	buffer stat_fn;
+	buffer timefmt;
 } plugin_data;
 
 typedef struct {
-	buffer *timefmt;
-	int sizefmt;
-
-	buffer *stat_fn;
-
 	array *ssi_vars;
 	array *ssi_cgi_env;
+	buffer *stat_fn;
+	buffer *timefmt;
+	int sizefmt;
 
 	int if_level, if_is_false_level, if_is_false, if_is_false_endif;
 	unsigned short ssi_recursion_depth;

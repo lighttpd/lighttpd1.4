@@ -43,8 +43,8 @@ static handler_ctx * handler_ctx_init(plugin_data *p, log_error_st *errh) {
 	handler_ctx *hctx = calloc(1, sizeof(*hctx));
 	force_assert(hctx);
 	hctx->errh = errh;
-	hctx->timefmt = p->timefmt;
-	hctx->stat_fn = p->stat_fn;
+	hctx->timefmt = &p->timefmt;
+	hctx->stat_fn = &p->stat_fn;
 	hctx->ssi_vars = p->ssi_vars;
 	hctx->ssi_cgi_env = p->ssi_cgi_env;
 	memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
@@ -64,9 +64,6 @@ INIT_FUNC(mod_ssi_init) {
 	p = calloc(1, sizeof(*p));
 	force_assert(p);
 
-	p->timefmt = buffer_init();
-	p->stat_fn = buffer_init();
-
 	p->ssi_vars = array_init(8);
 	p->ssi_cgi_env = array_init(32);
 
@@ -77,8 +74,8 @@ FREE_FUNC(mod_ssi_free) {
 	plugin_data *p = p_d;
 	array_free(p->ssi_vars);
 	array_free(p->ssi_cgi_env);
-	buffer_free(p->timefmt);
-	buffer_free(p->stat_fn);
+	free(p->timefmt.ptr);
+	free(p->stat_fn.ptr);
 }
 
 static void mod_ssi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -184,6 +181,12 @@ static int build_ssi_cgi_vars(request_st * const r, handler_ctx * const p) {
 	}
 
 	return 0;
+}
+
+static const char * mod_ssi_timefmt (handler_ctx * const hctx) {
+    return buffer_string_is_empty(hctx->timefmt)
+      ? "%a, %d %b %Y %H:%M:%S %Z"
+      : hctx->timefmt->ptr;
 }
 
 static int mod_ssi_process_file(request_st *r, handler_ctx *p, struct stat *st);
@@ -391,8 +394,9 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 			struct tm tm;
 			time_t t = (var == SSI_ECHO_LAST_MODIFIED)
 			  ? st->st_mtime
-			  : time(NULL);
-			uint32_t len = strftime(buf, sizeof(buf), p->timefmt->ptr,
+			  : log_epoch_secs;
+			uint32_t len = strftime(buf, sizeof(buf),
+			                        mod_ssi_timefmt(p),
 			                        (var != SSI_ECHO_DATE_GMT)
 			                        ? localtime_r(&t, &tm)
 			                        : gmtime_r(&t, &tm));
@@ -596,7 +600,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				break;
 			case SSI_FLASTMOD: {
 				struct tm tm;
-				uint32_t len = (uint32_t)strftime(buf, sizeof(buf), p->timefmt->ptr, localtime_r(&t, &tm));
+				uint32_t len = (uint32_t)strftime(buf, sizeof(buf), mod_ssi_timefmt(p), localtime_r(&t, &tm));
 				if (len)
 					chunkqueue_append_mem(cq, buf, len);
 				else
@@ -1179,9 +1183,9 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 
 	/* get a stream to the file */
 
+	buffer_clear(p->timefmt);
 	array_reset_data_strings(p->ssi_vars);
 	array_reset_data_strings(p->ssi_cgi_env);
-	buffer_copy_string_len(p->timefmt, CONST_STR_LEN("%a, %d %b %Y %H:%M:%S %Z"));
 	build_ssi_cgi_vars(r, p);
 
 	/* Reset the modified time of included files */
