@@ -90,8 +90,7 @@ static int burl_normalize_basic_unreserved_fix (buffer *b, buffer *t, int i, int
             if (li_utf8_invalid_byte(s[i])) qs = -2;
         }
     }
-    buffer_commit(t, (size_t)j);
-    buffer_copy_buffer(b, t);
+    buffer_copy_string_len(b, (char *)p, (size_t)j);
     return qs;
 }
 
@@ -166,8 +165,7 @@ static int burl_normalize_basic_required_fix (buffer *b, buffer *t, int i, int q
             if (li_utf8_invalid_byte(s[i])) qs = -2;
         }
     }
-    buffer_commit(t, (size_t)j);
-    buffer_copy_buffer(b, t);
+    buffer_copy_string_len(b, (char *)p, (size_t)j);
     return qs;
 }
 

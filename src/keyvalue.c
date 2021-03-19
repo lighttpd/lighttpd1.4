@@ -394,8 +394,7 @@ static void pcre_keyvalue_burl_percent_high_UTF8 (buffer *b, buffer *t)
             p[++j] = hex_chars_uc[s[i] & 0xF];
         }
     }
-    buffer_commit(t, j);
-    buffer_copy_buffer(b, t);
+    buffer_copy_string_len(b, (char *)p, (size_t)j);
 }
 
 static void pcre_keyvalue_burl_percent_percent_high_UTF8 (buffer *b, buffer *t)
@@ -420,8 +419,7 @@ static void pcre_keyvalue_burl_percent_percent_high_UTF8 (buffer *b, buffer *t)
             p[++j] = hex_chars_uc[s[i] & 0xF];
         }
     }
-    buffer_commit(t, j);
-    buffer_copy_buffer(b, t);
+    buffer_copy_string_len(b, (char *)p, (size_t)j);
 }
 
 /* Basic normalization of regex and regex replacement to mirror some of
