@@ -903,7 +903,7 @@ int fdevent_reaped_logger_pipe(pid_t pid) {
     for (uint32_t i = 0; i < cmd_pipes.used; ++i) {
         fdevent_cmd_pipe *fcp = cmd_pipes.ptr+i;
         if (fcp->pid == pid) {
-            time_t ts = time(NULL);
+            time_t ts = log_monotonic_secs;
             if (fcp->start + 5 < ts) { /* limit restart to once every 5 sec */
                 fcp->start = ts;
                 fcp->pid = fdevent_open_logger_pipe_spawn(fcp->cmd,fcp->fds[0]);
@@ -955,7 +955,7 @@ static void fdevent_init_logger_pipe(const char *cmd, int fds[2], pid_t pid) {
     fcp->fds[0] = fds[0];
     fcp->fds[1] = fds[1];
     fcp->pid = pid;
-    fcp->start = time(NULL);
+    fcp->start = log_monotonic_secs;
 }
 
 
