@@ -17,8 +17,10 @@
 #include "log.h"
 #include "buffer.h"
 #include "fdevent.h"
+#include "http_chunk.h"
 #include "http_header.h"
 #include "keyvalue.h"
+#include "response.h"
 
 #include "plugin.h"
 
@@ -72,8 +74,6 @@ typedef struct {
 	PLUGIN_DATA;
 	plugin_config defaults;
 	plugin_config conf;
-
-	buffer tmp_buf;
 } plugin_data;
 
 static pcre_keyvalue_buffer * mod_dirlisting_parse_excludes(server *srv, const array *a) {
@@ -115,7 +115,6 @@ INIT_FUNC(mod_dirlisting_init) {
 
 FREE_FUNC(mod_dirlisting_free) {
     plugin_data * const p = p_d;
-    free(p->tmp_buf.ptr);
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
@@ -371,24 +370,19 @@ static void http_dirls_sort(dirls_entry_t **ent, int num) {
 /* buffer must be able to hold "999.9K"
  * conversion is simple but not perfect
  */
-static int http_list_directory_sizefmt(char *buf, size_t bufsz, off_t size) {
-	const char unit[] = " KMGTPE";	/* Kilo, Mega, Giga, Tera, Peta, Exa */
-	const char *u = unit;		/* u will always increment at least once */
+static size_t http_list_directory_sizefmt(char *buf, size_t bufsz, off_t size) {
 	int remain;
+	int u = -1;  /* u will always increment at least once */
 	size_t buflen;
 
-	if (size < 100)
+	if (0 < size && size < 100)
 		size += 99;
-	if (size < 100)
-		size = 0;
 
-	while (1) {
-		remain = (int) size & 1023;
+	do {
+		remain = (int)(size & 1023);
 		size >>= 10;
-		u++;
-		if ((size & (~0 ^ 1023)) == 0)
-			break;
-	}
+		++u;
+	} while (size & ~1023);
 
 	remain /= 100;
 	if (remain > 9)
@@ -403,37 +397,76 @@ static int http_list_directory_sizefmt(char *buf, size_t bufsz, off_t size) {
 	if (buflen + 3 >= bufsz) return buflen;
 	buf[buflen+0] = '.';
 	buf[buflen+1] = remain + '0';
-	buf[buflen+2] = *u;
+	buf[buflen+2] = "KMGTPE"[u];  /* Kilo, Mega, Giga, Tera, Peta, Exa */
 	buf[buflen+3] = '\0';
 
 	return buflen + 3;
 }
 
-static void http_list_directory_include_file(buffer *out, int symlinks, const buffer *path, const char *classname, int encode) {
-	int fd = fdevent_open_cloexec(path->ptr, symlinks, O_RDONLY, 0);
-	ssize_t rd;
-	char buf[8192];
+static void http_list_directory_include_file(request_st * const r, plugin_data * const p, int is_header) {
+    const buffer *path;
+    int encode = 0;
+    if (is_header) {
+        path = p->conf.show_header;
+        encode = p->conf.encode_header;
+    }
+    else {
+        path = p->conf.show_readme;
+        encode = p->conf.encode_readme;
+    }
 
-	if (-1 == fd) return;
+    uint32_t len = 0;
+    if (path->ptr[0] != '/') { /* temporarily extend r->physical.path */
+        len = buffer_string_length(&r->physical.path);
+        buffer_append_path_len(&r->physical.path, CONST_BUF_LEN(path));
+        path = &r->physical.path;
+    }
+    stat_cache_entry * const sce =
+      stat_cache_get_entry_open(path, r->conf.follow_symlink);
+    if (len)
+        buffer_string_set_length(&r->physical.path, len);
+    if (NULL == sce || sce->fd < 0 || 0 != sce->st.st_size)
+        return;
 
-	if (encode) {
-		buffer_append_string_len(out, CONST_STR_LEN("<pre class=\""));
-		buffer_append_string(out, classname);
-		buffer_append_string_len(out, CONST_STR_LEN("\">"));
-	}
+    chunkqueue * const cq = &r->write_queue;
+    if (encode) {
+        if (is_header)
+            chunkqueue_append_mem(cq, CONST_STR_LEN("<pre class=\"header\">"));
+        else
+            chunkqueue_append_mem(cq, CONST_STR_LEN("<pre class=\"readme\">"));
 
-	while ((rd = read(fd, buf, sizeof(buf))) > 0) {
-		if (encode) {
-			buffer_append_string_encoded(out, buf, (size_t)rd, ENCODING_MINIMAL_XML);
-		} else {
-			buffer_append_string_len(out, buf, (size_t)rd);
-		}
-	}
-	close(fd);
+        /* Note: encoding a very large file may cause lighttpd to pause handling
+         * other requests while lighttpd encodes the file, especially if file is
+         * on a remote filesystem */
 
-	if (encode) {
-		buffer_append_string_len(out, CONST_STR_LEN("</pre>"));
-	}
+        /* encoding can consume 6x file size in worst case scenario,
+         * so send encoded contents of files > 32k to tempfiles) */
+        buffer * const tb = r->tmp_buf;
+        buffer * const out = sce->st.st_size <= 32768
+          ? chunkqueue_append_buffer_open(cq)
+          : tb;
+        buffer_clear(out);
+        const int fd = sce->fd;
+        ssize_t rd;
+        char buf[8192];
+        while ((rd = read(fd, buf, sizeof(buf))) > 0) {
+            buffer_append_string_encoded(out, buf, (size_t)rd, ENCODING_MINIMAL_XML);
+            if (out == tb) {
+                if (0 != chunkqueue_append_mem_to_tempfile(cq,
+                                                           CONST_BUF_LEN(out),
+                                                           r->conf.errh))
+                    break;
+                buffer_clear(out);
+            }
+        }
+        if (out != tb)
+            chunkqueue_append_buffer_commit(cq);
+
+        chunkqueue_append_mem(cq, CONST_STR_LEN("</pre>"));
+    }
+    else {
+        http_chunk_append_file_ref(r, sce);
+    }
 }
 
 /* portions copied from mod_status
@@ -643,9 +676,11 @@ static void http_dirlist_append_js_table_resort (buffer * const b, const request
 	buffer_append_string_len(b, CONST_STR_LEN(");\n\n// -->\n</script>\n\n"));
 }
 
-static void http_list_directory_header(const request_st * const r, plugin_data * const p, buffer * const out) {
+static void http_list_directory_header(request_st * const r, plugin_data * const p) {
 
+	chunkqueue * const cq = &r->write_queue;
 	if (p->conf.auto_layout) {
+		buffer * const out = chunkqueue_append_buffer_open(cq);
 		buffer_append_string_len(out, CONST_STR_LEN(
 			"<!DOCTYPE html>\n"
 			"<html>\n"
@@ -702,21 +737,14 @@ static void http_list_directory_header(const request_st * const r, plugin_data *
 		}
 
 		buffer_append_string_len(out, CONST_STR_LEN("</head>\n<body>\n"));
+		chunkqueue_append_buffer_commit(cq);
 	}
 
 	if (!buffer_string_is_empty(p->conf.show_header)) {
-		/* if we have a HEADER file, display it in <pre class="header"></pre> */
-
-		const buffer *hb = p->conf.show_header;
-		if (hb->ptr[0] != '/') {
-			hb = &p->tmp_buf;
-			buffer_copy_buffer(&p->tmp_buf, &r->physical.path);
-			buffer_append_path_len(&p->tmp_buf, CONST_BUF_LEN(p->conf.show_header));
-		}
-
-		http_list_directory_include_file(out, r->conf.follow_symlink, hb, "header", p->conf.encode_header);
+		http_list_directory_include_file(r, p, 1);/*0 for readme; 1 for header*/
 	}
 
+	buffer * const out = chunkqueue_append_buffer_open(cq);
 	buffer_append_string_len(out, CONST_STR_LEN("<h2>Index of "));
 	buffer_append_string_encoded(out, CONST_BUF_LEN(&r->uri.path), ENCODING_MINIMAL_XML);
 	buffer_append_string_len(out, CONST_STR_LEN(
@@ -743,40 +771,37 @@ static void http_list_directory_header(const request_st * const r, plugin_data *
 		"</tr>\n"
 		));
 	}
+	chunkqueue_append_buffer_commit(cq);
 }
 
-static void http_list_directory_footer(const request_st * const r, plugin_data * const p, buffer * const out) {
+static void http_list_directory_footer(request_st * const r, plugin_data * const p) {
 
-	buffer_append_string_len(out, CONST_STR_LEN(
+	chunkqueue * const cq = &r->write_queue;
+	chunkqueue_append_mem(cq, CONST_STR_LEN(
 		"</tbody>\n"
 		"</table>\n"
 		"</div>\n"
 	));
 
 	if (!buffer_string_is_empty(p->conf.show_readme)) {
-		/* if we have a README file, display it in <pre class="readme"></pre> */
-
-		const buffer *rb = p->conf.show_readme;
-		if (rb->ptr[0] != '/') {
-			rb = &p->tmp_buf;
-			buffer_copy_buffer(&p->tmp_buf, &r->physical.path);
-			buffer_append_path_len(&p->tmp_buf, CONST_BUF_LEN(p->conf.show_readme));
-		}
-
-		http_list_directory_include_file(out, r->conf.follow_symlink, rb, "readme", p->conf.encode_readme);
+		http_list_directory_include_file(r, p, 0);/*0 for readme; 1 for header*/
 	}
 
-	if(p->conf.auto_layout) {
+	if (p->conf.auto_layout) {
+		buffer * const out = chunkqueue_append_buffer_open(cq);
+		const buffer * const footer =
+		  !buffer_string_is_empty(p->conf.set_footer)
+		    ? p->conf.set_footer
+		    : !buffer_string_is_empty(r->conf.server_tag)
+		        ? r->conf.server_tag
+		        : NULL;
 
 		buffer_append_string_len(out, CONST_STR_LEN(
 			"<div class=\"foot\">"
 		));
 
-		if (!buffer_string_is_empty(p->conf.set_footer)) {
-			buffer_append_string_buffer(out, p->conf.set_footer);
-		} else {
-			buffer_append_string_buffer(out, r->conf.server_tag);
-		}
+		if (footer)
+			buffer_append_string_buffer(out, footer);
 
 		buffer_append_string_len(out, CONST_STR_LEN(
 			"</div>\n"
@@ -794,11 +819,12 @@ static void http_list_directory_footer(const request_st * const r, plugin_data *
 			"</body>\n"
 			"</html>\n"
 		));
+		chunkqueue_append_buffer_commit(cq);
 	}
 }
 
-static int http_list_directory(request_st * const r, plugin_data * const p, buffer * const dir) {
-	const uint32_t dlen = buffer_string_length(dir);
+static int http_list_directory(request_st * const r, plugin_data * const p) {
+	const uint32_t dlen = buffer_string_length(&r->physical.path);
 #if defined __WIN32
 	const uint32_t name_max = FILENAME_MAX;
 #else
@@ -810,7 +836,7 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 #endif
 	char * const path = malloc(dlen + name_max + 1);
 	force_assert(NULL != path);
-	memcpy(path, dir->ptr, dlen+1);
+	memcpy(path, r->physical.path.ptr, dlen+1);
   #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) || !defined(_ATFILE_SOURCE)
 	char *path_file = path + dlen;
   #endif
@@ -913,8 +939,18 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 	char sizebuf[sizeof("999.9K")];
 	struct tm tm;
 
-	buffer * const out = chunkqueue_append_buffer_open(&r->write_queue);
-	http_list_directory_header(r, p, out);
+	/* Note: a very large directory may cause lighttpd to pause handling other
+	 * requests while lighttpd processes directory, especially if directory is
+	 * on a remote filesystem */
+
+	/* generate large directory listings into tempfiles
+	 * (estimate approx 200-256 bytes of HTML per item; could be up to ~512) */
+	chunkqueue * const cq = &r->write_queue;
+	buffer * const tb = r->tmp_buf;
+	buffer * const out = (dirs.used + files.used <= 256)
+	  ? chunkqueue_append_buffer_open(cq)
+	  : tb;
+	buffer_clear(out);
 
 	/* directories */
 	for (uint32_t i = 0; i < dirs.used; ++i) {
@@ -929,6 +965,16 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n"));
 
 		free(tmp);
+
+		if (buffer_string_space(out) < 256) {
+			if (out == tb) {
+				if (0 != chunkqueue_append_mem_to_tempfile(cq,
+				                                           CONST_BUF_LEN(out),
+				                                           r->conf.errh))
+					break;
+				buffer_clear(out);
+			}
+		}
 	}
 
 	/* files */
@@ -967,25 +1013,32 @@ static int http_list_directory(request_st * const r, plugin_data * const p, buff
 		buffer_append_string_len(out, CONST_STR_LEN("</td></tr>\n"));
 
 		free(tmp);
+
+		if (buffer_string_space(out) < 256) {
+			if (out == tb) {
+				if (0 != chunkqueue_append_mem_to_tempfile(cq,
+				                                           CONST_BUF_LEN(out),
+				                                           r->conf.errh))
+					break;
+				buffer_clear(out);
+			}
+		}
+	}
+
+	if (out == tb) {
+		if (0 != chunkqueue_append_mem_to_tempfile(cq,
+		                                           CONST_BUF_LEN(out),
+		                                           r->conf.errh)) {
+			/* ignore */
+		}
+	}
+	else {
+		chunkqueue_append_buffer_commit(cq);
 	}
 
 	free(files.ent);
 	free(dirs.ent);
 	free(path);
-
-	http_list_directory_footer(r, p, out);
-
-	/* Insert possible charset to Content-Type */
-	if (buffer_string_is_empty(p->conf.encoding)) {
-		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
-	} else {
-		buffer_copy_string_len(&p->tmp_buf, CONST_STR_LEN("text/html; charset="));
-		buffer_append_string_buffer(&p->tmp_buf, p->conf.encoding);
-		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(&p->tmp_buf));
-	}
-
-	chunkqueue_append_buffer_commit(&r->write_queue);
-	r->resp_body_finished = 1;
 
 	return 0;
 }
@@ -1019,9 +1072,25 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 		return HANDLER_FINISHED;
 	}
 
-	if (http_list_directory(r, p, &r->physical.path)) {
+	http_list_directory_header(r, p);
+	if (http_list_directory(r, p)) {
 		/* dirlisting failed */
 		r->http_status = 403;
+		http_response_body_clear(r, 0);
+		return HANDLER_FINISHED;
+	}
+	http_list_directory_footer(r, p);
+
+	r->resp_body_finished = 1;
+
+	if (buffer_string_is_empty(p->conf.encoding)) {
+		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+		                         CONST_STR_LEN("Content-Type"),
+		                         CONST_STR_LEN("text/html"));
+	} else {
+		buffer_copy_string_len(r->tmp_buf, CONST_STR_LEN("text/html; charset="));
+		buffer_append_string_buffer(r->tmp_buf, p->conf.encoding);
+		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(r->tmp_buf));
 	}
 
 	return HANDLER_FINISHED;
