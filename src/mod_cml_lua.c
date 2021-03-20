@@ -279,7 +279,7 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 		if (ret == 0) {
 			const buffer *vb = http_header_response_get(r, HTTP_HEADER_LAST_MODIFIED, CONST_STR_LEN("Last-Modified"));
 			if (NULL == vb) { /* no Last-Modified specified */
-				if (0 == mtime) mtime = time(NULL); /* default last-modified to now */
+				if (0 == mtime) mtime = log_epoch_secs; /* default last-modified to now */
 				vb = http_response_set_last_modified(r, mtime);
 			}
 
