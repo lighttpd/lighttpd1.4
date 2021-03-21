@@ -3131,47 +3131,11 @@ CONNECTION_FUNC(mod_openssl_handle_con_close)
 
 
 static void
-https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
+https_add_ssl_client_subject (request_st * const r, X509_NAME *xn)
 {
     buffer * const tb = r->tmp_buf;
-    X509 *xs;
-    X509_NAME *xn;
-    int i, nentries;
-
-    long vr = SSL_get_verify_result(hctx->ssl);
-    if (vr != X509_V_OK) {
-        char errstr[256];
-        ERR_error_string_n(vr, errstr, sizeof(errstr));
-        buffer_copy_string_len(tb, CONST_STR_LEN("FAILED:"));
-        buffer_append_string(tb, errstr);
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_BUF_LEN(tb));
-        return;
-    } else if (!(xs = SSL_get_peer_certificate(hctx->ssl))) {
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_STR_LEN("NONE"));
-        return;
-    } else {
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_STR_LEN("SUCCESS"));
-    }
-
-    xn = X509_get_subject_name(xs);
-    {
-        char buf[256];
-        int len = safer_X509_NAME_oneline(xn, buf, sizeof(buf));
-        if (len > 0) {
-            if (len >= (int)sizeof(buf)) len = (int)sizeof(buf)-1;
-            http_header_env_set(r,
-                                CONST_STR_LEN("SSL_CLIENT_S_DN"),
-                                buf, (size_t)len);
-        }
-    }
     buffer_copy_string_len(tb, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
-    for (i = 0, nentries = X509_NAME_entry_count(xn); i < nentries; ++i) {
+    for (int i = 0, nentries = X509_NAME_entry_count(xn); i < nentries; ++i) {
         int xobjnid;
         const char * xobjsn;
         X509_NAME_ENTRY *xe;
@@ -3190,16 +3154,51 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
                                 X509_NAME_ENTRY_get_data(xe)->length);
         }
     }
+}
+
+
+static void
+https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
+{
+    X509 *xs;
+    X509_NAME *xn;
+    buffer *vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_VERIFY"));
+
+    long vr = SSL_get_verify_result(hctx->ssl);
+    if (vr != X509_V_OK) {
+        char errstr[256];
+        ERR_error_string_n(vr, errstr, sizeof(errstr));
+        buffer_copy_string_len(vb, CONST_STR_LEN("FAILED:"));
+        buffer_append_string(vb, errstr);
+        return;
+    } else if (!(xs = SSL_get_peer_certificate(hctx->ssl))) {
+        buffer_copy_string_len(vb, CONST_STR_LEN("NONE"));
+        return;
+    } else {
+        buffer_copy_string_len(vb, CONST_STR_LEN("SUCCESS"));
+    }
+
+    xn = X509_get_subject_name(xs);
+    {
+        char buf[256];
+        int len = safer_X509_NAME_oneline(xn, buf, sizeof(buf));
+        if (len > 0) {
+            if (len >= (int)sizeof(buf)) len = (int)sizeof(buf)-1;
+            http_header_env_set(r,
+                                CONST_STR_LEN("SSL_CLIENT_S_DN"),
+                                buf, (size_t)len);
+        }
+    }
+
+    https_add_ssl_client_subject(r, xn);
 
     {
         byte buf[64];
         int bsz = (int)sizeof(buf);
         if (wolfSSL_X509_get_serial_number(xs, buf, &bsz) == WOLFSSL_SUCCESS) {
-            char serialHex[128+1];
-            li_tohex_uc(serialHex, sizeof(serialHex), (char *)buf, (size_t)bsz);
-            http_header_env_set(r,
-                                CONST_STR_LEN("SSL_CLIENT_M_SERIAL"),
-                                serialHex, strlen(serialHex));
+            buffer_append_string_encoded_hex_uc(
+              http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_M_SERIAL")),
+              (char *)buf, (size_t)bsz);
         }
     }
 
@@ -3210,7 +3209,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_emailAddress"
          */
         const buffer *varname = hctx->conf.ssl_verifyclient_username;
-        const buffer *vb = http_header_env_get(r, CONST_BUF_LEN(varname));
+        vb = http_header_env_get(r, CONST_BUF_LEN(varname));
         if (vb) { /* same as http_auth.c:http_auth_setenv() */
             http_header_env_set(r,
                                 CONST_STR_LEN("REMOTE_USER"),
@@ -3226,12 +3225,11 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
         const unsigned char *der = wolfSSL_X509_get_der(xs, &dersz);
         pemsz = der ? wc_DerToPemEx(der, dersz, NULL, 0, NULL, CERT_TYPE) : 0;
         if (pemsz > 0) {
-            buffer_string_prepare_copy(tb, pemsz);
-            if (0 == wc_DerToPemEx(der, dersz, (byte *)tb->ptr, pemsz,
-                                   NULL, CERT_TYPE))
-                http_header_env_set(r,
-                                    CONST_STR_LEN("SSL_CLIENT_CERT"),
-                                    tb->ptr, (uint32_t)pemsz);
+            vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_CERT"));
+            if (0 == wc_DerToPemEx(der, dersz,
+                                   (byte *)buffer_string_prepare_copy(vb,pemsz),
+                                   pemsz, NULL, CERT_TYPE))
+                buffer_commit(vb, (uint32_t)pemsz);
         }
     }
     X509_free(xs);

@@ -2713,22 +2713,17 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
     gnutls_session_t ssl = hctx->ssl;
     unsigned int crt_size = 0;
     const gnutls_datum_t *crts;
-    gnutls_x509_crt_t crt;
-    buffer * const tb = r->tmp_buf;
-    char buf[513]; /*(512+1 for li_tohex_uc())*/
-    size_t sz;
+    buffer *vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_VERIFY"));
 
     if (hctx->verify_status != ~0u)
         crts = gnutls_certificate_get_peers(ssl, &crt_size);
     if (0 == crt_size) { /* || hctx->verify_status == ~0u) */
         /*(e.g. no cert, or verify result not available)*/
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_STR_LEN("NONE"));
+        buffer_copy_string_len(vb, CONST_STR_LEN("NONE"));
         return;
     }
     else if (0 != hctx->verify_status) {
-        buffer_copy_string_len(tb, CONST_STR_LEN("FAILED:"));
+        buffer_copy_string_len(vb, CONST_STR_LEN("FAILED:"));
       #if GNUTLS_VERSION_NUMBER >= 0x030104
         /* get failure string and translate newline to ':', removing last one */
         /* (preserving behavior from mod_openssl) */
@@ -2736,24 +2731,20 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
         if (gnutls_certificate_verification_status_print(hctx->verify_status,
                                                          GNUTLS_CRT_X509,
                                                          &msg, 0) >= 0) {
-            sz = msg.size-1; /* '\0'-terminated string */
+            size_t sz = msg.size-1; /* '\0'-terminated string */
             for (char *nl=(char *)msg.data; NULL != (nl=strchr(nl, '\n')); ++nl)
                 nl[0] = ('\0' == nl[1] ? (--sz, '\0') : ':');
-            buffer_append_string_len(tb, (char *)msg.data, sz);
+            buffer_append_string_len(vb, (char *)msg.data, sz);
         }
         if (msg.data) gnutls_free(msg.data);
       #endif
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_BUF_LEN(tb));
         return;
     }
     else {
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_STR_LEN("SUCCESS"));
+        buffer_copy_string_len(vb, CONST_STR_LEN("SUCCESS"));
     }
 
+    gnutls_x509_crt_t crt;
     if (gnutls_x509_crt_init(&crt) < 0)
         return;
     if (gnutls_x509_crt_import(crt, &crts[0], GNUTLS_X509_FMT_DER) < 0) {
@@ -2763,6 +2754,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 
     int rc;
     gnutls_datum_t d = { NULL, 0 };
+    char buf[512];
     /*rc = gnutls_x509_crt_print(cert, GNUTLS_CRT_PRINT_ONELINE, &d);*//* ??? */
   #if GNUTLS_VERSION_NUMBER < 0x030507
     d.data = buf;
@@ -2782,13 +2774,11 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
     if (rc >= 0)
         https_add_ssl_client_subject(r, dn);
 
-    sz = sizeof(buf)/2;
-    if (gnutls_x509_crt_get_serial(crt, buf+sz, &sz) >= 0) {
-        li_tohex_uc(buf, sizeof(buf), buf+(sizeof(buf)/2), sz);
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_M_SERIAL"),
-                            buf, sz*2);
-    }
+    size_t sz = sizeof(buf);
+    if (gnutls_x509_crt_get_serial(crt, buf, &sz) >= 0)
+        buffer_append_string_encoded_hex_uc(
+          http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_M_SERIAL")),
+          buf, sz);
 
     if (!buffer_string_is_empty(hctx->conf.ssl_verifyclient_username)) {
         /* pick one of the exported values as "REMOTE_USER", for example
@@ -2797,7 +2787,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_emailAddress"
          */
         const buffer *varname = hctx->conf.ssl_verifyclient_username;
-        const buffer *vb = http_header_env_get(r, CONST_BUF_LEN(varname));
+        vb = http_header_env_get(r, CONST_BUF_LEN(varname));
         if (vb) { /* same as http_auth.c:http_auth_setenv() */
             http_header_env_set(r,
                                 CONST_STR_LEN("REMOTE_USER"),

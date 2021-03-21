@@ -243,6 +243,9 @@ static handler_t mod_geoip_query (request_st * const r, plugin_data * const p) {
         http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_NAME"), gir->city, strlen(gir->city));
         http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_POSTAL_CODE"), gir->postal_code, strlen(gir->postal_code));
 
+        buffer_append_int(http_header_env_set_ptr(r, CONST_STR_LEN("GEOIP_CITY_DMA_CODE")), (intmax_t)gir->dma_code);
+        buffer_append_int(http_header_env_set_ptr(r, CONST_STR_LEN("GEOIP_CITY_AREA_CODE")), (intmax_t)gir->area_code);
+
         {
             char latitude[32];
             snprintf(latitude, sizeof(latitude), "%f", gir->latitude);
@@ -253,18 +256,6 @@ static handler_t mod_geoip_query (request_st * const r, plugin_data * const p) {
             char long_latitude[32];
             snprintf(long_latitude, sizeof(long_latitude), "%f", gir->longitude);
             http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_LONG_LATITUDE"), long_latitude, strlen(long_latitude));
-        }
-
-        {
-            char dc[LI_ITOSTRING_LENGTH];
-            http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_DMA_CODE"),
-                                dc, li_utostrn(dc, sizeof(dc), gir->dma_code));
-        }
-
-        {
-            char ac[LI_ITOSTRING_LENGTH];
-            http_header_env_set(r, CONST_STR_LEN("GEOIP_CITY_AREA_CODE"),
-                                ac, li_utostrn(ac, sizeof(ac), gir->area_code));
         }
 
         GeoIPRecord_delete(gir);

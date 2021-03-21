@@ -209,6 +209,15 @@ buffer * http_header_response_get(const request_st * const r, enum http_header_e
       : NULL;
 }
 
+buffer * http_header_response_set_ptr(request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
+    /* note: caller must not leave buffer empty
+     * or must call http_header_response_unset() */
+    light_bset(r->resp_htags, id);
+    buffer * const vb = array_get_buf_ptr_ext(&r->resp_headers, id, k, klen);
+    buffer_clear(vb);
+    return vb;
+}
+
 void http_header_response_unset(request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
     if (light_btst(r->resp_htags, id)) {
         /* (do not clear bit for HTTP_HEADER_OTHER,
@@ -269,6 +278,15 @@ buffer * http_header_request_get(const request_st * const r, enum http_header_e 
       : NULL;
 }
 
+buffer * http_header_request_set_ptr(request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
+    /* note: caller must not leave buffer empty
+     * or must call http_header_request_unset() */
+    light_bset(r->rqst_htags, id);
+    buffer * const vb = array_get_buf_ptr_ext(&r->rqst_headers, id, k, klen);
+    buffer_clear(vb);
+    return vb;
+}
+
 void http_header_request_unset(request_st * const r, enum http_header_e id, const char *k, uint32_t klen) {
     if (light_btst(r->rqst_htags, id)) {
         /* (do not clear bit for HTTP_HEADER_OTHER,
@@ -306,6 +324,12 @@ buffer * http_header_env_get(const request_st * const r, const char *k, uint32_t
     data_string * const ds =
       (data_string *)array_get_element_klen(&r->env, k, klen);
     return ds && !buffer_string_is_empty(&ds->value) ? &ds->value : NULL;
+}
+
+buffer * http_header_env_set_ptr(request_st *r, const char *k, uint32_t klen) {
+    buffer * const vb = array_get_buf_ptr(&r->env, k, klen);
+    buffer_clear(vb);
+    return vb;
 }
 
 void http_header_env_set(request_st * const r, const char *k, uint32_t klen, const char *v, uint32_t vlen) {

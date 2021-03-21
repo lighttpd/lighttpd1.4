@@ -718,19 +718,15 @@ static handler_t mod_auth_send_400_bad_request(request_st * const r) {
 }
 
 static handler_t mod_auth_send_401_unauthorized_basic(request_st * const r, const buffer * const realm) {
-	r->http_status = 401;
-	r->handler_module = NULL;
-
-	buffer * const tb = r->tmp_buf;
-	buffer_copy_string_len(tb, CONST_STR_LEN("Basic realm=\""));
-	buffer_append_string_buffer(tb, realm);
-	buffer_append_string_len(tb, CONST_STR_LEN("\", charset=\"UTF-8\""));
-
-	http_header_response_set(r, HTTP_HEADER_WWW_AUTHENTICATE,
-	                         CONST_STR_LEN("WWW-Authenticate"),
-	                         CONST_BUF_LEN(tb));
-
-	return HANDLER_FINISHED;
+    r->http_status = 401;
+    r->handler_module = NULL;
+    buffer * const vb =
+      http_header_response_set_ptr(r, HTTP_HEADER_WWW_AUTHENTICATE,
+                                   CONST_STR_LEN("WWW-Authenticate"));
+    buffer_copy_string_len(vb, CONST_STR_LEN("Basic realm=\""));
+    buffer_append_string_buffer(vb, realm);
+    buffer_append_string_len(vb, CONST_STR_LEN("\", charset=\"UTF-8\""));
+    return HANDLER_FINISHED;
 }
 
 static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend) {
@@ -1381,7 +1377,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 	 * data value (included for unique nonces) will be exposed in the nonce
 	 * along with the timestamp, and the additional secret will be used to
 	 * validate that the server generated the nonce using that secret. */
-	int send_nextnonce;
+	time_t send_nextnonce;
 	{
 		time_t ts = 0;
 		const unsigned char * const nonce_uns = (unsigned char *)nonce;
@@ -1396,7 +1392,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 			return mod_auth_send_401_unauthorized_digest(r, require, ai.dalgo);
 		}
 
-		send_nextnonce = (cur_ts - ts > 540); /*(9 mins)*/
+		send_nextnonce = (cur_ts - ts > 540) ? cur_ts : 0; /*(9 mins)*/
 
 		if (require->nonce_secret) {
 			unsigned int rnd = 0;
@@ -1495,13 +1491,11 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 	}
 
 	if (send_nextnonce) {
-			/*(send nextnonce when expiration is approaching)*/
-			buffer * const tb = r->tmp_buf;
-			const time_t cur_ts = log_epoch_secs;
-			mod_auth_digest_authentication_info(tb, cur_ts, require, ai.dalgo);
-			http_header_response_set(r, HTTP_HEADER_OTHER,
-			                         CONST_STR_LEN("Authentication-Info"),
-			                         CONST_BUF_LEN(tb));
+		/*(send nextnonce when expiration is approaching)*/
+		mod_auth_digest_authentication_info(
+		  http_header_response_set_ptr(r, HTTP_HEADER_OTHER,
+		                               CONST_STR_LEN("Authentication-Info")),
+		  send_nextnonce /*(cur_ts)*/, require, ai.dalgo);
 	}
 
 	http_auth_setenv(r, ai.username, ai.ulen, CONST_STR_LEN("Digest"));
@@ -1512,14 +1506,12 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 }
 
 static handler_t mod_auth_send_401_unauthorized_digest(request_st * const r, const struct http_auth_require_t * const require, int nonce_stale) {
-	buffer * const tb = r->tmp_buf;
-	mod_auth_digest_www_authenticate(tb, log_epoch_secs, require, nonce_stale);
-	http_header_response_set(r, HTTP_HEADER_WWW_AUTHENTICATE,
-	                         CONST_STR_LEN("WWW-Authenticate"),
-	                         CONST_BUF_LEN(tb));
-
 	r->http_status = 401;
 	r->handler_module = NULL;
+	mod_auth_digest_www_authenticate(
+	  http_header_response_set_ptr(r, HTTP_HEADER_WWW_AUTHENTICATE,
+	                               CONST_STR_LEN("WWW-Authenticate")),
+          log_epoch_secs, require, nonce_stale);
 	return HANDLER_FINISHED;
 }
 

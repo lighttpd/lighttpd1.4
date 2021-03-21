@@ -638,14 +638,8 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
     if (flags && NULL == b) {
         const buffer *xff =
           http_header_request_get(r, HTTP_HEADER_X_FORWARDED_FOR, CONST_STR_LEN("X-Forwarded-For"));
-        http_header_request_set(r, HTTP_HEADER_FORWARDED,
-                                CONST_STR_LEN("Forwarded"),
-                                CONST_STR_LEN("x")); /*(must not be blank for _get below)*/
-      #ifdef __COVERITY__
-        force_assert(NULL != b); /*(not NULL because created directly above)*/
-      #endif
-        b = http_header_request_get(r, HTTP_HEADER_FORWARDED, CONST_STR_LEN("Forwarded"));
-        buffer_clear(b);
+        b = http_header_request_set_ptr(r, HTTP_HEADER_FORWARDED,
+                                        CONST_STR_LEN("Forwarded"));
         if (NULL != xff) {
             /* use X-Forwarded-For contents to seed Forwarded */
             char *s = xff->ptr;
@@ -657,20 +651,18 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
                 do {
                     ++i;
                 } while (s[i]!=' ' && s[i]!='\t' && s[i]!=',' && s[i]!='\0');
-                buffer_append_string_len(b, CONST_STR_LEN("for="));
                 /* over-simplified test expecting only IPv4 or IPv6 addresses,
                  * (not expecting :port, so treat existence of colon as IPv6,
                  *  and not expecting unix paths, especially not containing ':')
                  * quote all strings, backslash-escape since IPs not validated*/
                 ipv6 = (NULL != memchr(s+j, ':', i-j)); /*(over-simplified) */
-                buffer_append_string_len(b, CONST_STR_LEN("\""));
-                if (ipv6)
-                    buffer_append_string_len(b, CONST_STR_LEN("["));
+                ipv6
+                  ? buffer_append_string_len(b, CONST_STR_LEN("for=\"["))
+                  : buffer_append_string_len(b, CONST_STR_LEN("for=\""));
                 buffer_append_string_backslash_escaped(b, s+j, i-j);
-                if (ipv6)
-                    buffer_append_string_len(b, CONST_STR_LEN("]"));
-                buffer_append_string_len(b, CONST_STR_LEN("\""));
-                buffer_append_string_len(b, CONST_STR_LEN(", "));
+                ipv6
+                  ? buffer_append_string_len(b, CONST_STR_LEN("]\", "))
+                  : buffer_append_string_len(b, CONST_STR_LEN("\", "));
             }
         }
     } else if (flags) { /*(NULL != b)*/
@@ -688,12 +680,13 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
              * (should be IP from original con->dst_addr_buf,
              *  so trustable and without :port) */
             int ipv6 = (NULL != strchr(efor->ptr, ':'));
-            buffer_append_string_len(b, CONST_STR_LEN("\""));
-            if (ipv6) buffer_append_string_len(b, CONST_STR_LEN("["));
-            buffer_append_string_backslash_escaped(
-              b, CONST_BUF_LEN(efor));
-            if (ipv6) buffer_append_string_len(b, CONST_STR_LEN("]"));
-            buffer_append_string_len(b, CONST_STR_LEN("\""));
+            ipv6
+              ? buffer_append_string_len(b, CONST_STR_LEN("\"["))
+              : buffer_append_string_len(b, CONST_STR_LEN("\""));
+            buffer_append_string_backslash_escaped(b, CONST_BUF_LEN(efor));
+            ipv6
+              ? buffer_append_string_len(b, CONST_STR_LEN("]\""))
+              : buffer_append_string_len(b, CONST_STR_LEN("\""));
         } else if (family == AF_INET) {
             /*(Note: if :port is added, then must be quoted-string:
              * e.g. for="...:port")*/
@@ -720,8 +713,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
          *   from con->srv_socket->srv_token for consistency */
 
         if (semicolon) buffer_append_string_len(b, CONST_STR_LEN(";"));
-        buffer_append_string_len(b, CONST_STR_LEN("by="));
-        buffer_append_string_len(b, CONST_STR_LEN("\""));
+        buffer_append_string_len(b, CONST_STR_LEN("by=\""));
       #ifdef HAVE_SYS_UN_H
         /* special-case: might need to encode unix domain socket path */
         if (family == AF_UNIX) {
@@ -745,13 +737,13 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
         /* expecting "http" or "https"
          * (not checking if quoted-string and encoding needed) */
         if (semicolon) buffer_append_string_len(b, CONST_STR_LEN(";"));
-        buffer_append_string_len(b, CONST_STR_LEN("proto="));
         if (NULL != eproto) {
+            buffer_append_string_len(b, CONST_STR_LEN("proto="));
             buffer_append_string_buffer(b, eproto);
         } else if (con->srv_socket->is_ssl) {
-            buffer_append_string_len(b, CONST_STR_LEN("https"));
+            buffer_append_string_len(b, CONST_STR_LEN("proto=https"));
         } else {
-            buffer_append_string_len(b, CONST_STR_LEN("http"));
+            buffer_append_string_len(b, CONST_STR_LEN("proto=http"));
         }
         semicolon = 1;
     }
@@ -899,9 +891,10 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		 * and not streaming to backend (request body has been fully received) */
 		const buffer *vb = http_header_request_get(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 		if (NULL == vb) {
-			char buf[LI_ITOSTRING_LENGTH];
-			http_header_request_set(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"),
-			                        buf, li_itostrn(buf, sizeof(buf), r->reqbody_length));
+			buffer_append_int(
+			  http_header_request_set_ptr(r, HTTP_HEADER_CONTENT_LENGTH,
+			                              CONST_STR_LEN("Content-Length")),
+			  r->reqbody_length);
 		}
 	}
 	else if (!hctx->conf.header.force_http10

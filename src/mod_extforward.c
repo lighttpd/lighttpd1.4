@@ -1018,8 +1018,9 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
         && !light_btst(r->rqst_htags, HTTP_HEADER_X_FORWARDED_FOR)) {
         /* create X-Forwarded-For if not present
          * (and at least original connecting IP is a trusted proxy) */
-        buffer *xff = r->tmp_buf;
-        buffer_clear(xff);
+        buffer * const xff =
+          http_header_request_set_ptr(r, HTTP_HEADER_X_FORWARDED_FOR,
+                                      CONST_STR_LEN("X-Forwarded-For"));
         for (j = 0; j < used; ) {
             if (-1 == offsets[j]) { ++j; continue; }
             if (3 == offsets[j+1]
@@ -1050,7 +1051,6 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
             }
             j += 4; /*(k, klen, v, vlen come in sets of 4)*/
         }
-        http_header_request_set(r, HTTP_HEADER_X_FORWARDED_FOR, CONST_STR_LEN("X-Forwarded-For"), CONST_BUF_LEN(xff));
     }
   #endif
 

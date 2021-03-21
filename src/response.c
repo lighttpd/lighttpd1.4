@@ -867,12 +867,10 @@ http_response_write_prepare(request_st * const r)
              * (should not reach here if 1xx (r->http_status < 200))
              */
             if (qlen > 0) {
-                buffer * const tb = r->tmp_buf;
-                buffer_clear(tb);
-                buffer_append_int(tb, qlen);
-                http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
-                                         CONST_STR_LEN("Content-Length"),
-                                         CONST_BUF_LEN(tb));
+                buffer_append_int(
+                  http_header_response_set_ptr(r, HTTP_HEADER_CONTENT_LENGTH,
+                                               CONST_STR_LEN("Content-Length")),
+                  qlen);
             }
             else if (r->http_method != HTTP_METHOD_HEAD
                      && r->http_status != 204 && r->http_status != 304) {
@@ -958,10 +956,9 @@ http_response_call_error_handler (request_st * const r, const buffer * const err
     /* set REDIRECT_STATUS to save current HTTP status code
      * for access by dynamic handlers
      * https://redmine.lighttpd.net/issues/1828 */
-    buffer * const tb = r->tmp_buf;
-    buffer_clear(tb);
-    buffer_append_int(tb, r->http_status);
-    http_header_env_set(r, CONST_STR_LEN("REDIRECT_STATUS"), CONST_BUF_LEN(tb));
+    buffer_append_int(
+      http_header_env_set_ptr(r, CONST_STR_LEN("REDIRECT_STATUS")),
+      r->http_status);
 
     if (error_handler == r->conf.error_handler) {
         plugins_call_handle_request_reset(r);

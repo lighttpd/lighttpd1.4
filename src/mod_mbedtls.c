@@ -2320,59 +2320,14 @@ https_add_ssl_client_cert (request_st * const r, const mbedtls_x509_crt * const 
 
 
 static void
-https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
+https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *name)
 {
-    /* Note: starting with mbedtls-2.17.0, peer cert is not available here if
-     * MBEDTLS_SSL_KEEP_PEER_CERTIFICATE *is not* defined at compile time,
-     * though default behavior is to have it defined.  However, since earlier
-     * versions do keep the cert, but not set this define, attempt to retrieve
-     * the peer cert and check for NULL before using it. */
-    const mbedtls_x509_crt *crt = mbedtls_ssl_get_peer_cert(&hctx->ssl);
-    buffer * const tb = r->tmp_buf;
-    char buf[512];
-    int n;
-
-    uint32_t rc = (NULL != crt)
-      ? mbedtls_ssl_get_verify_result(&hctx->ssl)
-      : 0xFFFFFFFF;
-    if (0xFFFFFFFF == rc) { /*(e.g. no cert, or verify result not available)*/
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_STR_LEN("NONE"));
-        return;
-    }
-    else if (0 != rc) {
-        /* get failure string and translate newline to ':', removing last one */
-        n = mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", rc);
-        buffer_copy_string_len(tb, CONST_STR_LEN("FAILED:"));
-        if (n > 0) {
-            for (char *nl = buf; NULL != (nl = strchr(nl, '\n')); ++nl)
-                nl[0] = ('\0' == nl[1] ? (--n, '\0') : ':');
-            buffer_append_string_len(tb, buf, n);
-        }
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_BUF_LEN(tb));
-        return;
-    }
-    else {
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_STR_LEN("SUCCESS"));
-    }
-
-    n = mbedtls_x509_dn_gets(buf, sizeof(buf), &crt->subject);
-    if (n > 0 && n < (int)sizeof(buf)) {
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_S_DN"),
-                            buf, n);
-    }
-
     /* add components of client Subject DN */
     /* code block is similar to mbedtls_x509_dn_gets() */
-    /*(reuse buf; sizeof(buf) > MBEDTLS_X509_MAX_DN_NAME_SIZE, which is 256)*/
+    buffer * const tb = r->tmp_buf;
+    char buf[MBEDTLS_X509_MAX_DN_NAME_SIZE]; /*(256)*/
+
     buffer_copy_string_len(tb, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
-    const mbedtls_x509_name *name = &crt->subject;
     while (name != NULL) {
         if (!name->oid.p) {
             name = name->next;
@@ -2386,7 +2341,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
         buffer_append_string(tb, short_name);
 
         const mbedtls_x509_name *nm = name;
-        n = 0;
+        int n = 0;
         do {
             if (nm != name && n < (int)sizeof(buf)-1)
                 buf[n++] = ',';
@@ -2404,6 +2359,52 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
                             CONST_BUF_LEN(tb),
                             buf, n);
     }
+}
+
+
+static void
+https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
+{
+    /* Note: starting with mbedtls-2.17.0, peer cert is not available here if
+     * MBEDTLS_SSL_KEEP_PEER_CERTIFICATE *is not* defined at compile time,
+     * though default behavior is to have it defined.  However, since earlier
+     * versions do keep the cert, but not set this define, attempt to retrieve
+     * the peer cert and check for NULL before using it. */
+    const mbedtls_x509_crt *crt = mbedtls_ssl_get_peer_cert(&hctx->ssl);
+    buffer *vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_VERIFY"));
+    char buf[512];
+    int n;
+
+    uint32_t rc = (NULL != crt)
+      ? mbedtls_ssl_get_verify_result(&hctx->ssl)
+      : 0xFFFFFFFF;
+    if (0xFFFFFFFF == rc) { /*(e.g. no cert, or verify result not available)*/
+        buffer_copy_string_len(vb, CONST_STR_LEN("NONE"));
+        return;
+    }
+    else if (0 != rc) {
+        /* get failure string and translate newline to ':', removing last one */
+        n = mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", rc);
+        buffer_copy_string_len(vb, CONST_STR_LEN("FAILED:"));
+        if (n > 0) {
+            for (char *nl = buf; NULL != (nl = strchr(nl, '\n')); ++nl)
+                nl[0] = ('\0' == nl[1] ? (--n, '\0') : ':');
+            buffer_append_string_len(vb, buf, n);
+        }
+        return;
+    }
+    else {
+        buffer_copy_string_len(vb, CONST_STR_LEN("SUCCESS"));
+    }
+
+    n = mbedtls_x509_dn_gets(buf, sizeof(buf), &crt->subject);
+    if (n > 0 && n < (int)sizeof(buf)) {
+        http_header_env_set(r,
+                            CONST_STR_LEN("SSL_CLIENT_S_DN"),
+                            buf, n);
+    }
+
+    https_add_ssl_client_subject(r, &crt->subject);
 
     n = mbedtls_x509_serial_gets(buf, sizeof(buf), &crt->serial);
     if (n > 0 && n < (int)sizeof(buf)) {
@@ -2419,7 +2420,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_emailAddress"
          */
         const buffer *varname = hctx->conf.ssl_verifyclient_username;
-        const buffer *vb = http_header_env_get(r, CONST_BUF_LEN(varname));
+        vb = http_header_env_get(r, CONST_BUF_LEN(varname));
         if (vb) { /* same as http_auth.c:http_auth_setenv() */
             http_header_env_set(r,
                                 CONST_STR_LEN("REMOTE_USER"),

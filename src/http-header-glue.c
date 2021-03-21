@@ -110,24 +110,24 @@ int http_response_redirect_to_directory(request_st * const r, int status) {
 			return -1;
 		}
 	}
-	buffer_append_string_encoded(o, CONST_BUF_LEN(&r->uri.path), ENCODING_REL_URI);
-	buffer_append_string_len(o, CONST_STR_LEN("/"));
+	buffer *vb;
+	if (status >= 300) {
+		r->http_status = status;
+		r->resp_body_finished = 1;
+		vb = http_header_response_set_ptr(r, HTTP_HEADER_LOCATION,
+		                                  CONST_STR_LEN("Location"));
+	}
+	else {
+		vb = http_header_response_set_ptr(r, HTTP_HEADER_CONTENT_LOCATION,
+		                                  CONST_STR_LEN("Content-Location"));
+	}
+	buffer_copy_buffer(vb, o);
+	buffer_append_string_encoded(vb, CONST_BUF_LEN(&r->uri.path),
+	                             ENCODING_REL_URI);
+	buffer_append_string_len(vb, CONST_STR_LEN("/"));
 	if (!buffer_string_is_empty(&r->uri.query)) {
 		buffer_append_string_len(o, CONST_STR_LEN("?"));
 		buffer_append_string_buffer(o, &r->uri.query);
-	}
-
-	if (status >= 300) {
-		http_header_response_set(r, HTTP_HEADER_LOCATION,
-		                         CONST_STR_LEN("Location"),
-		                         CONST_BUF_LEN(o));
-		r->http_status = status;
-		r->resp_body_finished = 1;
-	}
-	else {
-		http_header_response_set(r, HTTP_HEADER_CONTENT_LOCATION,
-		                         CONST_STR_LEN("Content-Location"),
-		                         CONST_BUF_LEN(o));
 	}
 
 	return 0;
@@ -170,16 +170,11 @@ static const buffer * strftime_cache_get(const time_t last_mod) {
 
 
 const buffer * http_response_set_last_modified(request_st * const r, const time_t lmtime) {
-    const buffer * const mtime = strftime_cache_get(lmtime);
-    http_header_response_set(r, HTTP_HEADER_LAST_MODIFIED,
-                             CONST_STR_LEN("Last-Modified"),
-                             CONST_BUF_LEN(mtime));
-  #if 0
-    return http_header_response_get(r, HTTP_HEADER_LAST_MODIFIED,
-                                    CONST_STR_LEN("Last-Modified"));
-  #else
-    return mtime;
-  #endif
+    buffer * const vb =
+      http_header_response_set_ptr(r, HTTP_HEADER_LAST_MODIFIED,
+                                   CONST_STR_LEN("Last-Modified"));
+    buffer_copy_buffer(vb, strftime_cache_get(lmtime));
+    return vb;
 }
 
 
@@ -423,12 +418,10 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 		r->http_status = 200;
 		r->resp_body_finished = 1;
 		/*(Transfer-Encoding should not have been set at this point)*/
-		buffer * const tb = r->tmp_buf;
-		buffer_clear(tb);
-		buffer_append_int(tb, sce->st.st_size);
-		http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
-		                         CONST_STR_LEN("Content-Length"),
-		                         CONST_BUF_LEN(tb));
+		buffer_append_int(
+		  http_header_response_set_ptr(r, HTTP_HEADER_CONTENT_LENGTH,
+		                               CONST_STR_LEN("Content-Length")),
+		  sce->st.st_size);
 	}
 	else {
 		r->http_status = 500;

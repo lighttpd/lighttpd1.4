@@ -309,12 +309,10 @@ http_range_process (request_st * const r, const buffer * const http_range)
         http_range_multi(r, ranges, n);
 
     /*(must either set Content-Length or unset prior value, if any)*/
-    buffer * const tb = r->tmp_buf;
-    buffer_clear(tb);
-    buffer_append_int(tb, chunkqueue_length(&r->write_queue));
-    http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
-                             CONST_STR_LEN("Content-Length"),
-                             CONST_BUF_LEN(tb));
+    buffer_append_int(
+      http_header_response_set_ptr(r, HTTP_HEADER_CONTENT_LENGTH,
+                                   CONST_STR_LEN("Content-Length")),
+      chunkqueue_length(&r->write_queue));
 
     return (r->http_status = 206);     /* 206 Partial Content */
 }

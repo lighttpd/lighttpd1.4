@@ -716,7 +716,6 @@ static int create_MD5_sum(request_st * const r) {
 
 static int create_response_ietf_00(handler_ctx *hctx) {
     request_st * const r = hctx->gw.r;
-    buffer *value = r->tmp_buf;
 
     /* "Origin" header is preferred
      * ("Sec-WebSocket-Origin" is from older drafts of websocket spec) */
@@ -757,15 +756,15 @@ static int create_response_ietf_00(handler_ctx *hctx) {
                              CONST_BUF_LEN(origin));
   #endif
 
+    buffer * const value =
+      http_header_response_set_ptr(r, HTTP_HEADER_OTHER,
+                                   CONST_STR_LEN("Sec-WebSocket-Location"));
     if (buffer_is_equal_string(&r->uri.scheme, CONST_STR_LEN("https")))
         buffer_copy_string_len(value, CONST_STR_LEN("wss://"));
     else
         buffer_copy_string_len(value, CONST_STR_LEN("ws://"));
     buffer_append_string_buffer(value, r->http_host);
     buffer_append_string_buffer(value, &r->uri.path);
-    http_header_response_set(r, HTTP_HEADER_OTHER,
-                             CONST_STR_LEN("Sec-WebSocket-Location"),
-                             CONST_BUF_LEN(value));
 
     return 0;
 }
@@ -806,12 +805,10 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
                                 CONST_STR_LEN("upgrade"));
   #endif
 
-    buffer *value = r->tmp_buf;
-    buffer_clear(value);
+    buffer * const value =
+      http_header_response_set_ptr(r, HTTP_HEADER_OTHER,
+                                   CONST_STR_LEN("Sec-WebSocket-Accept"));
     buffer_append_base64_encode(value, sha_digest, SHA_DIGEST_LENGTH, BASE64_STANDARD);
-    http_header_response_set(r, HTTP_HEADER_OTHER,
-                             CONST_STR_LEN("Sec-WebSocket-Accept"),
-                             CONST_BUF_LEN(value));
 
     if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_BIN)
         http_header_response_set(r, HTTP_HEADER_OTHER,

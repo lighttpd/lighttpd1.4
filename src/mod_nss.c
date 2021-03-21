@@ -2423,11 +2423,11 @@ https_add_ssl_client_cert (request_st * const r, CERTCertificate *peer)
     for (uint32_t i = 0; pem[i]; ++i) {
         if (pem[i] != '\r') pem[len++] = pem[i]; /*(translate \r\n to \n)*/
     }
-    buffer * const tb = r->tmp_buf;
-    buffer_copy_string_len(tb, CONST_STR_LEN(PEM_BEGIN_CERT"\n"));
-    buffer_append_string_len(tb, pem, len);
-    buffer_append_string_len(tb,CONST_STR_LEN("\n"PEM_END_CERT"\n"));
-    http_header_env_set(r, CONST_STR_LEN("SSL_CLIENT_CERT"), CONST_BUF_LEN(tb));
+    buffer * const vb =
+      http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_CERT"));
+    buffer_copy_string_len(vb, CONST_STR_LEN(PEM_BEGIN_CERT"\n"));
+    buffer_append_string_len(vb, pem, len);
+    buffer_append_string_len(vb,CONST_STR_LEN("\n"PEM_END_CERT"\n"));
     PORT_Free(pem);
 }
 
@@ -2477,35 +2477,28 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 {
     PRFileDesc *ssl = hctx->ssl;
     CERTCertificate *crt = NULL;
-    buffer * const tb = r->tmp_buf;
+    buffer *vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_VERIFY"));
 
     if (hctx->verify_status != -1)
         crt = SSL_PeerCertificate(ssl);
     if (NULL == crt) { /* || hctx->verify_status == -1) */
         /*(e.g. no cert, or verify result not available)*/
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_STR_LEN("NONE"));
+        buffer_copy_string_len(vb, CONST_STR_LEN("NONE"));
         return;
     }
     else if (0 != hctx->verify_status) {
-        buffer_copy_string_len(tb, CONST_STR_LEN("FAILED:"));
+        buffer_copy_string_len(vb, CONST_STR_LEN("FAILED:"));
         const char *s = PR_ErrorToName(hctx->verify_status);
         if (s)
-            buffer_append_string_len(tb, s, strlen(s));
-        buffer_append_string_len(tb, CONST_STR_LEN(":"));
+            buffer_append_string_len(vb, s, strlen(s));
+        buffer_append_string_len(vb, CONST_STR_LEN(":"));
         s = PR_ErrorToString(hctx->verify_status, PR_LANGUAGE_I_DEFAULT);
-        buffer_append_string_len(tb, s, strlen(s));
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_BUF_LEN(tb));
+        buffer_append_string_len(vb, s, strlen(s));
         CERT_DestroyCertificate(crt);
         return;
     }
     else {
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_VERIFY"),
-                            CONST_STR_LEN("SUCCESS"));
+        buffer_copy_string_len(vb, CONST_STR_LEN("SUCCESS"));
     }
 
     char *s = CERT_NameToAsciiInvertible(&crt->subject, CERT_N2A_STRICT);
@@ -2518,11 +2511,9 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 
     https_add_ssl_client_subject(r, &crt->subject);
 
-    buffer_string_set_length(tb, 0);
-    buffer_append_uint_hex_lc(tb, DER_GetInteger(&crt->serialNumber));
-    http_header_env_set(r,
-                        CONST_STR_LEN("SSL_CLIENT_M_SERIAL"),
-                        CONST_BUF_LEN(tb));
+    buffer_append_uint_hex_lc(
+      http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_M_SERIAL")),
+      DER_GetInteger(&crt->serialNumber));
 
     if (!buffer_string_is_empty(hctx->conf.ssl_verifyclient_username)) {
         /* pick one of the exported values as "REMOTE_USER", for example
@@ -2531,7 +2522,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_emailAddress"
          */
         const buffer *varname = hctx->conf.ssl_verifyclient_username;
-        const buffer *vb = http_header_env_get(r, CONST_BUF_LEN(varname));
+        vb = http_header_env_get(r, CONST_BUF_LEN(varname));
         if (vb) { /* same as http_auth.c:http_auth_setenv() */
             http_header_env_set(r,
                                 CONST_STR_LEN("REMOTE_USER"),

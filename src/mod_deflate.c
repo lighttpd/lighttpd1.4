@@ -1119,11 +1119,10 @@ static void mod_deflate_note_ratio(request_st * const r, const off_t bytes_out, 
      * for possible logging by mod_accesslog
      * (late in response handling, so not seen by most other modules) */
     /*(should be called only at end of successful response compression)*/
-    char ratio[LI_ITOSTRING_LENGTH];
     if (0 == bytes_in) return;
-    size_t len =
-      li_itostrn(ratio, sizeof(ratio), bytes_out * 100 / bytes_in);
-    http_header_env_set(r, CONST_STR_LEN("ratio"), ratio, len);
+    buffer_append_int(
+      http_header_env_set_ptr(r, CONST_STR_LEN("ratio")),
+      bytes_out * 100 / bytes_in);
 }
 
 static int mod_deflate_stream_end(handler_ctx *hctx) {

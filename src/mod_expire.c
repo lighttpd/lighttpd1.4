@@ -270,7 +270,7 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
 
 REQUEST_FUNC(mod_expire_handler) {
 	plugin_data *p = p_d;
-	const buffer *vb;
+	buffer *vb;
 	const data_string *ds;
 
 	/* Add caching headers only to http_status 200 OK or 206 Partial Content */
@@ -310,23 +310,21 @@ REQUEST_FUNC(mod_expire_handler) {
 		expires += st->st_mtime;
 	}
 
-			/* expires should be at least cur_ts */
-			if (expires < cur_ts) expires = cur_ts;
+	/* expires should be at least cur_ts */
+	if (expires < cur_ts) expires = cur_ts;
 
-			buffer * const tb = r->tmp_buf;
-			struct tm tm;
+	struct tm tm;
 
-			/* HTTP/1.0 */
-			buffer_clear(tb);
-			buffer_append_strftime(tb, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&expires, &tm));
-			http_header_response_set(r, HTTP_HEADER_EXPIRES,
-			                         CONST_STR_LEN("Expires"),
-			                         CONST_BUF_LEN(tb));
+	/* HTTP/1.0 */
+	vb = http_header_response_set_ptr(r, HTTP_HEADER_EXPIRES,
+	                                  CONST_STR_LEN("Expires"));
+	buffer_append_strftime(vb, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&expires,&tm));
 
-			/* HTTP/1.1 */
-			buffer_copy_string_len(tb, CONST_STR_LEN("max-age="));
-			buffer_append_int(tb, expires - cur_ts); /* as expires >= cur_ts the difference is >= 0 */
-			http_header_response_set(r, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"), CONST_BUF_LEN(tb));
+	/* HTTP/1.1 */
+	vb = http_header_response_set_ptr(r, HTTP_HEADER_CACHE_CONTROL,
+	                                  CONST_STR_LEN("Cache-Control"));
+	buffer_append_string_len(vb, CONST_STR_LEN("max-age="));
+	buffer_append_int(vb, expires - cur_ts);
 
 	return HANDLER_GO_ON;
 }

@@ -1083,14 +1083,14 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 
 	r->resp_body_finished = 1;
 
+	buffer * const vb =
+	  http_header_response_set_ptr(r, HTTP_HEADER_CONTENT_TYPE,
+	                               CONST_STR_LEN("Content-Type"));
 	if (buffer_string_is_empty(p->conf.encoding)) {
-		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
-		                         CONST_STR_LEN("Content-Type"),
-		                         CONST_STR_LEN("text/html"));
+		buffer_copy_string_len(vb, CONST_STR_LEN("text/html"));
 	} else {
-		buffer_copy_string_len(r->tmp_buf, CONST_STR_LEN("text/html; charset="));
-		buffer_append_string_buffer(r->tmp_buf, p->conf.encoding);
-		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(r->tmp_buf));
+		buffer_copy_string_len(vb, CONST_STR_LEN("text/html; charset="));
+		buffer_append_string_buffer(vb, p->conf.encoding);
 	}
 
 	return HANDLER_FINISHED;
