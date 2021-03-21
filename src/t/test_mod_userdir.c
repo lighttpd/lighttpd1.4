@@ -192,6 +192,11 @@ int http_response_redirect_to_directory(request_st *r, int status) {
     return 0;
 }
 
+int stat_cache_path_isdir(const buffer *name) {
+    UNUSED(name);
+    return 1;
+}
+
 int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname) {
     UNUSED(srv);
     UNUSED(p_d);

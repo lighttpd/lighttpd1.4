@@ -5,11 +5,11 @@
 #include "buffer.h"
 #include "log.h"
 #include "response.h"
+#include "stat_cache.h"
 
 #include "plugin.h"
 
 #include <sys/types.h>
-#include <sys/stat.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -152,10 +152,9 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
         /* XXX: future: might add cache; getpwnam() lookup is expensive */
         struct passwd *pwd = getpwnam(u);
         if (pwd) {
-            struct stat st;
             buffer_copy_string(b, pwd->pw_dir);
             buffer_append_path_len(b, CONST_BUF_LEN(p->conf.path));
-            if (0 != stat(b->ptr, &st) || !S_ISDIR(st.st_mode)) {
+            if (!stat_cache_path_isdir(b)) {
                 return HANDLER_GO_ON;
             }
         }
