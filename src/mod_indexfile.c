@@ -97,48 +97,51 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 		log_error(r->conf.errh, __FILE__, __LINE__, "URI          : %s", r->uri.path.ptr);
 	}
 
-	/* indexfile */
-	buffer * const b = r->tmp_buf;
 	for (uint32_t k = 0; k < p->conf.indexfiles->used; ++k) {
 		const data_string * const ds = (data_string *)p->conf.indexfiles->data[k];
-
-		if (ds->value.ptr[0] == '/') {
+		buffer * const b = (ds->value.ptr[0] != '/')
+		  ? &r->physical.path
+		  : &r->physical.doc_root; /* index file relative to doc_root */
 			/* if the index-file starts with a prefix as use this file as
 			 * index-generator */
-			buffer_copy_buffer(b, &r->physical.doc_root);
-		} else {
-			buffer_copy_buffer(b, &r->physical.path);
-		}
+
+		/* temporarily append to base-path buffer to check existence */
+		const uint32_t len = buffer_string_length(b);
 		buffer_append_path_len(b, CONST_BUF_LEN(&ds->value));
 
-		if (NULL == stat_cache_path_stat(b)) {
-			if (errno == EACCES) {
+		const stat_cache_st * const st = stat_cache_path_stat(b);
+
+		buffer_string_set_length(b, len);
+
+		if (NULL == st) {
+			switch (errno) {
+			case ENOENT:
+			case ENOTDIR:
+				continue;
+			case EACCES:
 				r->http_status = 403;
 				return HANDLER_FINISHED;
-			}
-
-			if (errno != ENOENT &&
-			    errno != ENOTDIR) {
+			default:
 				/* we have no idea what happened. let's tell the user so. */
 				r->http_status = 500;
 				log_perror(r->conf.errh, __FILE__, __LINE__,
-				  "file not found ... or so: %s -> %s",
+				  "index file error for request: %s -> %s",
 				  r->uri.path.ptr, r->physical.path.ptr);
 				return HANDLER_FINISHED;
 			}
-			continue;
 		}
 
+		/* found */
 		if (ds->value.ptr[0] == '/') {
 			/* replace uri.path */
 			buffer_copy_buffer(&r->uri.path, &ds->value);
 			http_header_env_set(r, CONST_STR_LEN("PATH_TRANSLATED_DIRINDEX"), CONST_BUF_LEN(&r->physical.path));
+			buffer_copy_buffer(&r->physical.path, &r->physical.doc_root);
 		} else {
 			/* append to uri.path the relative path to index file (/ -> /index.php) */
 			buffer_append_string_buffer(&r->uri.path, &ds->value);
 		}
-
-		buffer_copy_buffer(&r->physical.path, b);
+		buffer_append_string_buffer(&r->physical.path, &ds->value);
 		return HANDLER_GO_ON;
 	}
 
