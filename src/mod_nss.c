@@ -2472,6 +2472,21 @@ https_add_ssl_client_subject (request_st * const r, CERTName * const subj)
     }
 }
 
+
+__attribute_cold__
+static void
+https_add_ssl_client_verify_err (buffer * const b, unsigned int status)
+{
+    const char *s = PR_ErrorToName(status);
+    if (s)
+        buffer_append_string_len(b, s, strlen(s));
+    buffer_append_string_len(b, CONST_STR_LEN(":"));
+    s = PR_ErrorToString(status, PR_LANGUAGE_I_DEFAULT);
+    buffer_append_string_len(b, s, strlen(s));
+}
+
+
+__attribute_noinline__
 static void
 https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 {
@@ -2488,12 +2503,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
     }
     else if (0 != hctx->verify_status) {
         buffer_copy_string_len(vb, CONST_STR_LEN("FAILED:"));
-        const char *s = PR_ErrorToName(hctx->verify_status);
-        if (s)
-            buffer_append_string_len(vb, s, strlen(s));
-        buffer_append_string_len(vb, CONST_STR_LEN(":"));
-        s = PR_ErrorToString(hctx->verify_status, PR_LANGUAGE_I_DEFAULT);
-        buffer_append_string_len(vb, s, strlen(s));
+        https_add_ssl_client_verify_err(vb, hctx->verify_status);
         CERT_DestroyCertificate(crt);
         return;
     }
@@ -2511,9 +2521,13 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 
     https_add_ssl_client_subject(r, &crt->subject);
 
-    buffer_append_uint_hex_lc(
+    s = (char *)crt->serialNumber.data;
+    size_t i = 0; /* skip leading 0's per Distinguished Encoding Rules (DER) */
+    while (i < crt->serialNumber.len && s[i] == 0) ++i;
+    if (i == crt->serialNumber.len) --i;
+    buffer_append_string_encoded_hex_uc(
       http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_M_SERIAL")),
-      DER_GetInteger(&crt->serialNumber));
+      s+i, crt->serialNumber.len-i);
 
     if (!buffer_string_is_empty(hctx->conf.ssl_verifyclient_username)) {
         /* pick one of the exported values as "REMOTE_USER", for example

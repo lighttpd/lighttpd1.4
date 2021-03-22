@@ -2707,6 +2707,31 @@ https_add_ssl_client_subject (request_st * const r, gnutls_x509_dn_t dn)
              "gnutls_x509_dn_get_rdn_ava()");
 }
 
+
+__attribute_cold__
+static void
+https_add_ssl_client_verify_err (buffer * const b, unsigned int status)
+{
+  #if GNUTLS_VERSION_NUMBER >= 0x030104
+    /* get failure string and translate newline to ':', removing last one */
+    /* (preserving behavior from mod_openssl) */
+    gnutls_datum_t msg = { NULL, 0 };
+    if (gnutls_certificate_verification_status_print(status, GNUTLS_CRT_X509,
+                                                     &msg, 0) >= 0) {
+        size_t sz = msg.size-1; /* '\0'-terminated string */
+        for (char *nl=(char *)msg.data; NULL != (nl=strchr(nl, '\n')); ++nl)
+            nl[0] = ('\0' == nl[1] ? (--sz, '\0') : ':');
+        buffer_append_string_len(b, (char *)msg.data, sz);
+    }
+    if (msg.data) gnutls_free(msg.data);
+  #else
+    UNUSED(b);
+    UNUSED(status);
+  #endif
+}
+
+
+__attribute_noinline__
 static void
 https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 {
@@ -2724,20 +2749,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
     }
     else if (0 != hctx->verify_status) {
         buffer_copy_string_len(vb, CONST_STR_LEN("FAILED:"));
-      #if GNUTLS_VERSION_NUMBER >= 0x030104
-        /* get failure string and translate newline to ':', removing last one */
-        /* (preserving behavior from mod_openssl) */
-        gnutls_datum_t msg = { NULL, 0 };
-        if (gnutls_certificate_verification_status_print(hctx->verify_status,
-                                                         GNUTLS_CRT_X509,
-                                                         &msg, 0) >= 0) {
-            size_t sz = msg.size-1; /* '\0'-terminated string */
-            for (char *nl=(char *)msg.data; NULL != (nl=strchr(nl, '\n')); ++nl)
-                nl[0] = ('\0' == nl[1] ? (--sz, '\0') : ':');
-            buffer_append_string_len(vb, (char *)msg.data, sz);
-        }
-        if (msg.data) gnutls_free(msg.data);
-      #endif
+        https_add_ssl_client_verify_err(vb, hctx->verify_status);
         return;
     }
     else {

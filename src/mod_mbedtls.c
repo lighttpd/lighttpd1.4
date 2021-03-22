@@ -2362,6 +2362,22 @@ https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *nam
 }
 
 
+__attribute_cold__
+static void
+https_add_ssl_client_verify_err (buffer * const b, uint32_t status)
+{
+    /* get failure string and translate newline to ':', removing last one */
+    char buf[512];
+    int n = mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", status);
+    if (n > 0) {
+        for (char *nl = buf; NULL != (nl = strchr(nl, '\n')); ++nl)
+            nl[0] = ('\0' == nl[1] ? (--n, '\0') : ':');
+        buffer_append_string_len(b, buf, n);
+    }
+}
+
+
+__attribute_noinline__
 static void
 https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 {
@@ -2372,7 +2388,6 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
      * the peer cert and check for NULL before using it. */
     const mbedtls_x509_crt *crt = mbedtls_ssl_get_peer_cert(&hctx->ssl);
     buffer *vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_VERIFY"));
-    char buf[512];
     int n;
 
     uint32_t rc = (NULL != crt)
@@ -2383,20 +2398,15 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
         return;
     }
     else if (0 != rc) {
-        /* get failure string and translate newline to ':', removing last one */
-        n = mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", rc);
         buffer_copy_string_len(vb, CONST_STR_LEN("FAILED:"));
-        if (n > 0) {
-            for (char *nl = buf; NULL != (nl = strchr(nl, '\n')); ++nl)
-                nl[0] = ('\0' == nl[1] ? (--n, '\0') : ':');
-            buffer_append_string_len(vb, buf, n);
-        }
+        https_add_ssl_client_verify_err(vb, rc);
         return;
     }
     else {
         buffer_copy_string_len(vb, CONST_STR_LEN("SUCCESS"));
     }
 
+    char buf[512];
     n = mbedtls_x509_dn_gets(buf, sizeof(buf), &crt->subject);
     if (n > 0 && n < (int)sizeof(buf)) {
         http_header_env_set(r,
@@ -2406,12 +2416,14 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 
     https_add_ssl_client_subject(r, &crt->subject);
 
-    n = mbedtls_x509_serial_gets(buf, sizeof(buf), &crt->serial);
-    if (n > 0 && n < (int)sizeof(buf)) {
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_M_SERIAL"),
-                            buf, n);
-    }
+    /* mbedtls_x509_serial_gets() (inefficiently) formats to hex separated by
+     * colons, but would differ from behavior of other lighttpd TLS modules */
+    size_t i = 0; /* skip leading 0's per Distinguished Encoding Rules (DER) */
+    while (i < crt->serial.len && crt->serial.p[i] == 0) ++i;
+    if (i == crt->serial.len) --i;
+    buffer_append_string_encoded_hex_uc(
+      http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_M_SERIAL")),
+      (char *)crt->serial.p+i, crt->serial.len-i);
 
     if (!buffer_string_is_empty(hctx->conf.ssl_verifyclient_username)) {
         /* pick one of the exported values as "REMOTE_USER", for example

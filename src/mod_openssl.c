@@ -3374,6 +3374,17 @@ https_add_ssl_client_subject (request_st * const r, X509_NAME *xn)
 }
 
 
+__attribute_cold__
+static void
+https_add_ssl_client_verify_err (buffer * const b, long status)
+{
+    char errstr[256];
+    ERR_error_string_n(status, errstr, sizeof(errstr));
+    buffer_append_string(b, errstr);
+}
+
+
+__attribute_noinline__
 static void
 https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 {
@@ -3383,10 +3394,8 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 
     long vr = SSL_get_verify_result(hctx->ssl);
     if (vr != X509_V_OK) {
-        char errstr[256];
-        ERR_error_string_n(vr, errstr, sizeof(errstr));
         buffer_copy_string_len(vb, CONST_STR_LEN("FAILED:"));
-        buffer_append_string(vb, errstr);
+        https_add_ssl_client_verify_err(vb, vr);
         return;
     } else if (!(xs = SSL_get_peer_certificate(hctx->ssl))) {
         buffer_copy_string_len(vb, CONST_STR_LEN("NONE"));
