@@ -2667,13 +2667,13 @@ https_add_ssl_client_cert (request_st * const r, const gnutls_x509_crt_t peer)
 static void
 https_add_ssl_client_subject (request_st * const r, gnutls_x509_dn_t dn)
 {
-    buffer * const tb = r->tmp_buf;
     int irdn = 0, i, rc;
     gnutls_x509_ava_st ava;
+    const size_t prelen = sizeof("SSL_CLIENT_S_DN_")-1;
+    char key[64] = "SSL_CLIENT_S_DN_";
     char buf[512]; /*(expecting element value len <= 256)*/
 
     /* add components of client Subject DN */
-    buffer_copy_string_len(tb, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
 
     /* man gnutls_x509_dn_get_rdn_ava()
      *   The X.509 distinguished name is a sequence of sequences of strings and
@@ -2688,8 +2688,9 @@ https_add_ssl_client_subject (request_st * const r, gnutls_x509_dn_t dn)
             const char *name =
               gnutls_x509_dn_oid_name((char *)ava.oid.data,
                                       GNUTLS_X509_DN_OID_RETURN_OID);
-            buffer_string_set_length(tb, sizeof("SSL_CLIENT_S_DN_")-1);
-            buffer_append_string_len(tb, name, strlen(name));
+            const size_t len = strlen(name);
+            if (prelen+len >= sizeof(key)) continue;
+            memcpy(key+prelen, name, len); /*(not '\0'-terminated)*/
 
             unsigned int v, n = 0;
             for (v = 0; v < ava.value.size && n < sizeof(buf)-1; ++n) {
@@ -2697,7 +2698,7 @@ https_add_ssl_client_subject (request_st * const r, gnutls_x509_dn_t dn)
                 buf[n] = (c < 32 || c == 127 || (c > 128 && c < 160)) ? '?' : c;
             }
 
-            http_header_env_set(r, CONST_BUF_LEN(tb), buf, n);
+            http_header_env_set(r, key, prelen+len, buf, n);
         }
         ++irdn;
     } while (rc == GNUTLS_E_ASN1_ELEMENT_NOT_FOUND && i > 0);

@@ -3133,8 +3133,8 @@ CONNECTION_FUNC(mod_openssl_handle_con_close)
 static void
 https_add_ssl_client_subject (request_st * const r, X509_NAME *xn)
 {
-    buffer * const tb = r->tmp_buf;
-    buffer_copy_string_len(tb, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
+    const size_t prelen = sizeof("SSL_CLIENT_S_DN_")-1;
+    char key[64] = "SSL_CLIENT_S_DN_";
     for (int i = 0, nentries = X509_NAME_entry_count(xn); i < nentries; ++i) {
         int xobjnid;
         const char * xobjsn;
@@ -3146,10 +3146,10 @@ https_add_ssl_client_subject (request_st * const r, X509_NAME *xn)
         xobjnid = OBJ_obj2nid((ASN1_OBJECT*)X509_NAME_ENTRY_get_object(xe));
         xobjsn = OBJ_nid2sn(xobjnid);
         if (xobjsn) {
-            buffer_string_set_length(tb, sizeof("SSL_CLIENT_S_DN_")-1);
-            buffer_append_string(tb, xobjsn);
-            http_header_env_set(r,
-                                CONST_BUF_LEN(tb),
+            const size_t len = strlen(xobjsn);
+            if (prelen+len >= sizeof(key)) continue;
+            memcpy(key+prelen, xobjsn, len); /*(not '\0'-terminated)*/
+            http_header_env_set(r, key, prelen+len,
                                 (const char*)X509_NAME_ENTRY_get_data(xe)->data,
                                 X509_NAME_ENTRY_get_data(xe)->length);
         }

@@ -2452,8 +2452,8 @@ https_add_ssl_client_subject (request_st * const r, CERTName * const subj)
         { CONST_STR_LEN("emailAddress"), CERT_GetCertEmailAddress },
         { CONST_STR_LEN("DC"),           CERT_GetDomainComponentName },
       };
-    buffer * const tb = r->tmp_buf;
-    buffer_copy_string_len(tb, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
+    const size_t prelen = sizeof("SSL_CLIENT_S_DN_")-1;
+    char key[64] = "SSL_CLIENT_S_DN_";
     for (uint32_t i = 0; i < sizeof(comp)/sizeof(*comp); ++i) {
         char *s = comp[i].fn(subj);
         if (NULL == s) continue;
@@ -2464,9 +2464,9 @@ https_add_ssl_client_subject (request_st * const r, CERTName * const subj)
             if (c < 32 || c == 127 || (c > 128 && c < 160)) s[n] = '?';
         }
 
-        buffer_string_set_length(tb, sizeof("SSL_CLIENT_S_DN_")-1);
-        buffer_append_string_len(tb, comp[i].tag, comp[i].tlen);
-        http_header_env_set(r, CONST_BUF_LEN(tb), s, n);
+        /*if (prelen+comp[i].tlen >= sizeof(key)) continue;*//*(not possible)*/
+        memcpy(key+prelen, comp[i].tag, comp[i].tlen); /*(not '\0'-terminated)*/
+        http_header_env_set(r, key, prelen+comp[i].tlen, s, n);
 
         PR_Free(s);
     }

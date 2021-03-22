@@ -2324,10 +2324,10 @@ https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *nam
 {
     /* add components of client Subject DN */
     /* code block is similar to mbedtls_x509_dn_gets() */
-    buffer * const tb = r->tmp_buf;
+    const size_t prelen = sizeof("SSL_CLIENT_S_DN_")-1;
+    char key[64] = "SSL_CLIENT_S_DN_";
     char buf[MBEDTLS_X509_MAX_DN_NAME_SIZE]; /*(256)*/
 
-    buffer_copy_string_len(tb, CONST_STR_LEN("SSL_CLIENT_S_DN_"));
     while (name != NULL) {
         if (!name->oid.p) {
             name = name->next;
@@ -2337,8 +2337,9 @@ https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *nam
         const char *short_name = NULL;
         if (0 != mbedtls_oid_get_attr_short_name(&name->oid, &short_name))
             continue;
-        buffer_string_set_length(tb, sizeof("SSL_CLIENT_S_DN_")-1);
-        buffer_append_string(tb, short_name);
+        const size_t len = strlen(short_name);
+        if (prelen+len >= sizeof(key)) continue;
+        memcpy(key+prelen, short_name, len); /*(not '\0'-terminated)*/
 
         const mbedtls_x509_name *nm = name;
         int n = 0;
@@ -2355,9 +2356,7 @@ https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *nam
             while (nm->next_merged && nm->next) nm = nm->next;
         name = nm->next;
 
-        http_header_env_set(r,
-                            CONST_BUF_LEN(tb),
-                            buf, n);
+        http_header_env_set(r, key, prelen+len, buf, n);
     }
 }
 
