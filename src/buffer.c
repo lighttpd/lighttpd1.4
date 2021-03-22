@@ -281,27 +281,25 @@ void buffer_append_int(buffer *b, intmax_t val) {
 }
 
 void buffer_append_strftime(buffer * const restrict b, const char * const restrict format, const struct tm * const restrict tm) {
-	size_t rv;
-	char* buf;
-	force_assert(NULL != format);
-	if (NULL == tm) return;
+    force_assert(NULL != format);
+    /*(localtime_r() or gmtime_r() producing tm should not have failed)*/
+    if (__builtin_expect( (NULL == tm), 0)) return;
 
-	buf = buffer_string_prepare_append(b, 255);
-	rv = strftime(buf, buffer_string_space(b), format, tm);
+    /*(expecting typical format strings to result in < 64 bytes needed;
+     * skipping buffer_string_space() calculation and providing fixed size)*/
+    size_t rv = strftime(buffer_string_prepare_append(b, 63), 64, format, tm);
 
-	/* 0 (in some apis buffer_string_space(b)) signals the string may have
-	 * been too small; but the format could also just have lead to an empty
-	 * string
-	 */
-	if (0 == rv || rv >= buffer_string_space(b)) {
-		/* give it a second try with a larger string */
-		buf = buffer_string_prepare_append(b, 4095);
-		rv = strftime(buf, buffer_string_space(b), format, tm);
-	}
+    /* 0 (in some apis) signals the string may have been too small;
+     * but the format could also just have lead to an empty string */
+    if (__builtin_expect( (0 == rv), 0) || __builtin_expect( (rv > 63), 0)) {
+        /* unexpected; give it a second try with a larger string */
+        rv = strftime(buffer_string_prepare_append(b, 4095), 4096, format, tm);
+        if (__builtin_expect( (rv > 4095), 0))/*(input format was ridiculous)*/
+            return;
+    }
 
-	if (rv >= buffer_string_space(b)) rv = 0;
-
-	buffer_commit(b, rv);
+    /*buffer_commit(b, rv);*/
+    b->used += (uint32_t)rv + (0 == b->used);
 }
 
 
