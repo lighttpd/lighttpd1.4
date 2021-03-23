@@ -762,8 +762,7 @@ static int magnet_attach_content(request_st * const r, lua_State * const L, int 
 			/* -1 is the value and should be the value ... aka a table */
 			if (lua_isstring(L, -1)) {
 				const_buffer data = magnet_checkconstbuffer(L, -1);
-
-				chunkqueue_append_mem(&r->write_queue, data.ptr, data.len);
+				http_chunk_append_mem(r, data.ptr, data.len);
 			} else if (lua_istable(L, -1)) {
 				lua_getfield(L, -1, "filename");
 				lua_getfield(L, -2, "length"); /* (0-based) end of range (not actually "length") */
