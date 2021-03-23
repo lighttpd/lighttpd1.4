@@ -870,7 +870,6 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				} else {
 					buffer * const ts_accesslog_str = &parsed_format->ts_accesslog_str;
 					/* cache the generated timestamp (only if ! FORMAT_FLAG_TIME_BEGIN) */
-					struct tm *tmptr;
 					time_t t;
 					struct tm tm;
 
@@ -886,24 +885,19 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 						t = r->start_hp.tv_sec;
 					}
 
-				      #if defined(HAVE_STRUCT_TM_GMTOFF)
-					tmptr = localtime_r(&t, &tm);
-				      #else /* HAVE_STRUCT_TM_GMTOFF */
-					tmptr = gmtime_r(&t, &tm);
-				      #endif /* HAVE_STRUCT_TM_GMTOFF */
-
+					const char *fmt = buffer_string_is_empty(&f->string)
+					  ? NULL
+					  : f->string.ptr;
 					buffer_clear(ts_accesslog_str);
-
-					if (buffer_string_is_empty(&f->string)) {
-					      #if defined(HAVE_STRUCT_TM_GMTOFF)
-						buffer_append_strftime(ts_accesslog_str, "[%d/%b/%Y:%H:%M:%S %z]", tmptr);
-					      #else
-						buffer_append_strftime(ts_accesslog_str, "[%d/%b/%Y:%H:%M:%S +0000]", tmptr);
-					      #endif /* HAVE_STRUCT_TM_GMTOFF */
-					} else {
-						buffer_append_strftime(ts_accesslog_str, f->string.ptr, tmptr);
-					}
-
+				      #if defined(HAVE_STRUCT_TM_GMTOFF)
+					buffer_append_strftime(ts_accesslog_str,
+					                       fmt ? fmt : "[%d/%b/%Y:%H:%M:%S %z]",
+					                       localtime_r(&t, &tm));
+				      #else /* HAVE_STRUCT_TM_GMTOFF */
+					buffer_append_strftime(ts_accesslog_str,
+					                       fmt ? fmt : "[%d/%b/%Y:%H:%M:%S +0000]",
+					                       gmtime_r(&t, &tm));
+				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 					buffer_append_string_buffer(b, ts_accesslog_str);
 				}
 				break;
