@@ -896,20 +896,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 
 					if (buffer_string_is_empty(&f->string)) {
 					      #if defined(HAVE_STRUCT_TM_GMTOFF)
-						long scd, hrs, min;
-						buffer_append_strftime(ts_accesslog_str, "[%d/%b/%Y:%H:%M:%S ", tmptr);
-
-						scd = labs(tmptr->tm_gmtoff);
-						hrs = scd / 3600;
-						min = (scd % 3600) / 60;
-						char offset[6];
-						offset[0] = tmptr->tm_gmtoff >= 0 ? '+' : '-';
-						offset[1] = (char)(hrs / 10 + '0');
-						offset[2] = (char)(hrs % 10 + '0');
-						offset[3] = (char)(min / 10 + '0');
-						offset[4] = (char)(min % 10 + '0');
-						offset[5] = ']';
-						buffer_append_string_len(ts_accesslog_str, offset, 6);
+						buffer_append_strftime(ts_accesslog_str, "[%d/%b/%Y:%H:%M:%S %z]", tmptr);
 					      #else
 						buffer_append_strftime(ts_accesslog_str, "[%d/%b/%Y:%H:%M:%S +0000]", tmptr);
 					      #endif /* HAVE_STRUCT_TM_GMTOFF */
