@@ -31,10 +31,21 @@ typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
     plugin_config conf;
+    time_t cache_ts[2];
+    buffer cache_user[2];
+    buffer cache_path[2];
 } plugin_data;
 
 INIT_FUNC(mod_userdir_init) {
     return calloc(1, sizeof(plugin_data));
+}
+
+FREE_FUNC(mod_userdir_free) {
+    plugin_data * const p = p_d;
+    free(p->cache_user[0].ptr);
+    free(p->cache_user[1].ptr);
+    free(p->cache_path[0].ptr);
+    free(p->cache_path[1].ptr);
 }
 
 static void mod_userdir_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -149,14 +160,41 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
 
     if (buffer_string_is_empty(p->conf.basepath)) {
       #ifdef HAVE_PWD_H
-        /* XXX: future: might add cache; getpwnam() lookup is expensive */
-        struct passwd *pwd = getpwnam(u);
-        if (pwd) {
-            buffer_copy_string(b, pwd->pw_dir);
+        /* getpwnam() lookup is expensive; first check 2-element cache */
+        const time_t cur_ts = log_monotonic_secs;
+        int cached = -1;
+        const int cache_sz =(int)(sizeof(p->cache_user)/sizeof(*p->cache_user));
+        for (int i = 0; i < cache_sz; ++i) {
+            if (cur_ts - p->cache_ts[i] < 60 && p->cache_user[i].used
+                && buffer_eq_slen(&p->cache_user[i], u, ulen)) {
+                cached = i;
+                break;
+            }
+        }
+        struct passwd *pwd;
+        if (cached >= 0) {
+            buffer_copy_buffer(b, &p->cache_path[cached]);
+            buffer_append_path_len(b, CONST_BUF_LEN(p->conf.path));
+        }
+        else if ((pwd = getpwnam(u))) {
+            const size_t plen = strlen(pwd->pw_dir);
+            buffer_copy_string_len(b, pwd->pw_dir, plen);
             buffer_append_path_len(b, CONST_BUF_LEN(p->conf.path));
             if (!stat_cache_path_isdir(b)) {
                 return HANDLER_GO_ON;
             }
+            /* update cache, replacing oldest entry */
+            cached = 0;
+            time_t cache_ts = p->cache_ts[0];
+            for (int i = 1; i < cache_sz; ++i) {
+                if (cache_ts > p->cache_ts[i]) {
+                    cache_ts = p->cache_ts[i];
+                    cached = i;
+                }
+            }
+            p->cache_ts[cached] = cur_ts;
+            buffer_copy_string_len(&p->cache_path[cached], b->ptr, plen);
+            buffer_copy_string_len(&p->cache_user[cached], u, ulen);
         }
         else /* user not found */
       #endif
@@ -277,6 +315,7 @@ int mod_userdir_plugin_init(plugin *p) {
 	p->name        = "userdir";
 
 	p->init           = mod_userdir_init;
+	p->cleanup        = mod_userdir_free;
 	p->handle_physical = mod_userdir_docroot_handler;
 	p->set_defaults   = mod_userdir_set_defaults;
 
