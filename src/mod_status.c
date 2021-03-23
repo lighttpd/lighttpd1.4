@@ -475,7 +475,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	ts = srv->startup_ts;
 
 	struct tm tm;
-	buffer_append_strftime(b, "%Y-%m-%d %H:%M:%S", localtime_r(&ts, &tm));
+	buffer_append_strftime(b, "%F %T", localtime_r(&ts, &tm));
 	buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
 
 

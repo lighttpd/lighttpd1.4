@@ -136,7 +136,7 @@ http_response_write_header (request_st * const r)
 
 	if (!light_btst(r->resp_htags, HTTP_HEADER_DATE)) {
 		/* HTTP/1.1 and later requires a Date: header */
-		/* "\r\nDate: " 8-chars + 30-chars "%a, %d %b %Y %H:%M:%S GMT" + '\0' */
+		/* "\r\nDate: " 8-chars + 30-chars "%a, %d %b %Y %T GMT" + '\0' */
 		static time_t tlast = 0;
 		static char tstr[40] = "\r\nDate: ";
 

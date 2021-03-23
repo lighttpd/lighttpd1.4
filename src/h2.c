@@ -1963,7 +1963,7 @@ h2_send_headers (request_st * const r, connection * const con)
 
     if (!light_btst(r->resp_htags, HTTP_HEADER_DATE)) {
         /* HTTP/1.1 and later requires a Date: header */
-        /* "date: " 6-chars + 30-chars for "%a, %d %b %Y %H:%M:%S GMT" + '\0' */
+        /* "date: " 6-chars + 30-chars for "%a, %d %b %Y %T GMT" + '\0' */
         static time_t tlast = 0;
         static char tstr[36] = "date: ";
 

@@ -891,11 +891,11 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 					buffer_clear(ts_accesslog_str);
 				      #if defined(HAVE_STRUCT_TM_GMTOFF)
 					buffer_append_strftime(ts_accesslog_str,
-					                       fmt ? fmt : "[%d/%b/%Y:%H:%M:%S %z]",
+					                       fmt ? fmt : "[%d/%b/%Y:%T %z]",
 					                       localtime_r(&t, &tm));
 				      #else /* HAVE_STRUCT_TM_GMTOFF */
 					buffer_append_strftime(ts_accesslog_str,
-					                       fmt ? fmt : "[%d/%b/%Y:%H:%M:%S +0000]",
+					                       fmt ? fmt : "[%d/%b/%Y:%T +0000]",
 					                       gmtime_r(&t, &tm));
 				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 					buffer_append_string_buffer(b, ts_accesslog_str);

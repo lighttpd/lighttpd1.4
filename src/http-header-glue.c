@@ -140,7 +140,7 @@ struct mtime_cache_type {
 };
 static struct mtime_cache_type mtime_cache[MTIME_CACHE_MAX];
 static char mtime_cache_str[MTIME_CACHE_MAX][30];
-/* 30-chars for "%a, %d %b %Y %H:%M:%S GMT" */
+/* 30-chars for "%a, %d %b %Y %T GMT" */
 
 void strftime_cache_reset(void) {
     for (int i = 0; i < MTIME_CACHE_MAX; ++i) {

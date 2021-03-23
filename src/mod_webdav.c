@@ -3081,7 +3081,7 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
         if (__builtin_expect( (NULL != gmtime_r(&pb->st.st_ctime, &tm)), 1)) {
             buffer_append_string_len(b, CONST_STR_LEN(
               "<D:creationdate ns0:dt=\"dateTime.tz\">"));
-            buffer_append_strftime(b, "%Y-%m-%dT%TZ", &tm));
+            buffer_append_strftime(b, "%FT%TZ", &tm));
             buffer_append_string_len(b, CONST_STR_LEN(
               "</D:creationdate>"));
         }
@@ -3177,7 +3177,7 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
         if (__builtin_expect( (NULL != gmtime_r(&pb->st.st_mtime, &tm)), 1)) {
             buffer_append_string_len(b, CONST_STR_LEN(
               "<D:getlastmodified ns0:dt=\"dateTime.rfc1123\">"));
-            buffer_append_strftime(b, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+            buffer_append_strftime(b, "%a, %d %b %Y %T GMT", &tm);
             buffer_append_string_len(b, CONST_STR_LEN(
               "</D:getlastmodified>"));
         }

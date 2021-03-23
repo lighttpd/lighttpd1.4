@@ -185,7 +185,7 @@ static int build_ssi_cgi_vars(request_st * const r, handler_ctx * const p) {
 
 static const char * mod_ssi_timefmt (handler_ctx * const hctx) {
     return buffer_string_is_empty(hctx->timefmt)
-      ? "%a, %d %b %Y %H:%M:%S %Z"
+      ? "%a, %d %b %Y %T %Z"
       : hctx->timefmt->ptr;
 }
 

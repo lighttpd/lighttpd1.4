@@ -318,7 +318,7 @@ REQUEST_FUNC(mod_expire_handler) {
 	/* HTTP/1.0 */
 	vb = http_header_response_set_ptr(r, HTTP_HEADER_EXPIRES,
 	                                  CONST_STR_LEN("Expires"));
-	buffer_append_strftime(vb, "%a, %d %b %Y %H:%M:%S GMT", gmtime_r(&expires,&tm));
+	buffer_append_strftime(vb, "%a, %d %b %Y %T GMT", gmtime_r(&expires,&tm));
 
 	/* HTTP/1.1 */
 	vb = http_header_response_set_ptr(r, HTTP_HEADER_CACHE_CONTROL,

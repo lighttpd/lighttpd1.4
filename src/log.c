@@ -70,7 +70,7 @@ ssize_t write_all(int fd, const void * const buf, size_t count) {
 static int log_buffer_prepare(const log_error_st *errh, const char *filename, unsigned int line, buffer *b) {
 	static time_t tlast;
 	static uint32_t tlen;
-	static char tstr[24]; /* 20 "%Y-%m-%d %H:%M:%S" incl '\0' +3 ": (" */
+	static char tstr[24]; /* 20 "%F %T" incl '\0' +3 ": (" */
 	switch(errh->errorlog_mode) {
 	case ERRORLOG_PIPE:
 	case ERRORLOG_FILE:
@@ -81,7 +81,7 @@ static int log_buffer_prepare(const log_error_st *errh, const char *filename, un
 			struct tm tm;
 			tlast = log_epoch_secs;
 			tlen = (uint32_t)
-			  strftime(tstr, sizeof(tstr), "%Y-%m-%d %H:%M:%S",
+			  strftime(tstr, sizeof(tstr), "%F %T",
 			           localtime_r(&tlast, &tm));
 			tstr[  tlen] = ':';
 			tstr[++tlen] = ' ';

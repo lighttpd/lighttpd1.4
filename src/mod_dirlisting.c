@@ -961,7 +961,7 @@ static int http_list_directory(request_st * const r, plugin_data * const p) {
 		buffer_append_string_len(out, CONST_STR_LEN("/\">"));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_MINIMAL_XML);
 		buffer_append_string_len(out, CONST_STR_LEN("</a>/</td><td class=\"m\">"));
-		buffer_append_strftime(out, "%Y-%b-%d %H:%M:%S", localtime_r(&tmp->mtime, &tm));
+		buffer_append_strftime(out, "%Y-%b-%d %T", localtime_r(&tmp->mtime, &tm));
 		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n"));
 
 		free(tmp);
@@ -1005,7 +1005,7 @@ static int http_list_directory(request_st * const r, plugin_data * const p) {
 		buffer_append_string_len(out, CONST_STR_LEN("\">"));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_MINIMAL_XML);
 		buffer_append_string_len(out, CONST_STR_LEN("</a></td><td class=\"m\">"));
-		buffer_append_strftime(out, "%Y-%b-%d %H:%M:%S", localtime_r(&tmp->mtime, &tm));
+		buffer_append_strftime(out, "%Y-%b-%d %T", localtime_r(&tmp->mtime, &tm));
 		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">"));
 		buffer_append_string(out, sizebuf);
 		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"t\">"));
