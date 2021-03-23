@@ -536,7 +536,7 @@ static void mod_trigger_b4_dl_trigger_gdbm(GDBM_FILE db, const time_t cur_ts, co
 		if (okey.dptr) free(okey.dptr);
 
 		/* reorg once a day */
-		if ((cur_ts % (60 * 60 * 24) != 0)) gdbm_reorganize(db);
+		if ((cur_ts % (60 * 60 * 24) == 0)) gdbm_reorganize(db);
 }
 
 TRIGGER_FUNC(mod_trigger_b4_dl_handle_trigger) {
