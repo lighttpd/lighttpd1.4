@@ -183,10 +183,15 @@ static int build_ssi_cgi_vars(request_st * const r, handler_ctx * const p) {
 	return 0;
 }
 
-static const char * mod_ssi_timefmt (handler_ctx * const hctx) {
-    return buffer_string_is_empty(hctx->timefmt)
+static void mod_ssi_timefmt (buffer * const b, buffer *timefmtb, time_t t, int localtm) {
+    struct tm tm;
+    const char * const timefmt = buffer_string_is_empty(timefmtb)
       ? "%a, %d %b %Y %T %Z"
-      : hctx->timefmt->ptr;
+      : timefmtb->ptr;
+    buffer_append_strftime(b, timefmt,
+                           localtm ? localtime_r(&t, &tm) : gmtime_r(&t, &tm));
+    if (buffer_string_is_empty(b))
+        buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
 }
 
 static int mod_ssi_process_file(request_st *r, handler_ctx *p, struct stat *st);
@@ -253,7 +258,6 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 	 */
 
 	size_t i, ssicmd = 0;
-	char buf[255];
 	buffer *tb = NULL;
 
 	static const struct {
@@ -390,23 +394,16 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 		}
 		case SSI_ECHO_LAST_MODIFIED:
 		case SSI_ECHO_DATE_LOCAL:
-		case SSI_ECHO_DATE_GMT: {
-			struct tm tm;
-			time_t t = (var == SSI_ECHO_LAST_MODIFIED)
-			  ? st->st_mtime
-			  : log_epoch_secs;
-			uint32_t len = strftime(buf, sizeof(buf),
-			                        mod_ssi_timefmt(p),
-			                        (var != SSI_ECHO_DATE_GMT)
-			                        ? localtime_r(&t, &tm)
-			                        : gmtime_r(&t, &tm));
-
-			if (len)
-				chunkqueue_append_mem(cq, buf, len);
-			else
-				chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
+		case SSI_ECHO_DATE_GMT:
+			tb = r->tmp_buf;
+			buffer_clear(tb);
+			mod_ssi_timefmt(tb, p->timefmt,
+			                (var == SSI_ECHO_LAST_MODIFIED)
+			                  ? st->st_mtime
+			                  : log_epoch_secs,
+			                (var != SSI_ECHO_DATE_GMT));
+			chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
 			break;
-		}
 		case SSI_ECHO_DOCUMENT_NAME: {
 			char *sl;
 
@@ -598,15 +595,11 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				}
 				chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
 				break;
-			case SSI_FLASTMOD: {
-				struct tm tm;
-				uint32_t len = (uint32_t)strftime(buf, sizeof(buf), mod_ssi_timefmt(p), localtime_r(&t, &tm));
-				if (len)
-					chunkqueue_append_mem(cq, buf, len);
-				else
-					chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
+			case SSI_FLASTMOD:
+				buffer_clear(tb);
+				mod_ssi_timefmt(tb, p->timefmt, t, 1);
+				chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
 				break;
-			}
 			case SSI_INCLUDE:
 				/* Keep the newest mtime of included files */
 				if (stb.st_mtime > include_file_last_mtime)
