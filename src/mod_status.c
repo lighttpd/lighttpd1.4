@@ -3,6 +3,7 @@
 #include "base.h"
 #include "fdevent.h"
 #include "h2.h"
+#include "http_chunk.h"
 #include "http_header.h"
 #include "log.h"
 
@@ -183,15 +184,15 @@ static int mod_status_header_append(buffer *b, const char *key) {
 	return 0;
 }
 
-static int mod_status_header_append_sort(buffer *b, plugin_data *p, const char* key) {
-
+static void mod_status_header_append_sort(buffer *b, plugin_data *p, const char* k, size_t klen)
+{
 	if (p->conf.sort) {
 		buffer_append_string_len(b, CONST_STR_LEN("<th class=\"status\"><a href=\"#\" class=\"sortheader\" onclick=\"resort(this);return false;\">"));
-		buffer_append_string(b, key);
+		buffer_append_string_len(b, k, klen);
 		buffer_append_string_len(b, CONST_STR_LEN("<span class=\"sortarrow\">:</span></a></th>\n"));
 	} else {
 		buffer_append_string_len(b, CONST_STR_LEN("<th class=\"status\">"));
-		buffer_append_string(b, key);
+		buffer_append_string_len(b, k, klen);
 		buffer_append_string_len(b, CONST_STR_LEN("</th>\n"));
 	}
 
@@ -275,40 +276,40 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
     buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
 }
 
-static void mod_status_html_rtable (buffer * const b, plugin_data * const p, const server * const srv, const time_t cur_ts) {
-    buffer_append_string_len(b, CONST_STR_LEN(
-      "<table summary=\"status\" class=\"status\">\n"));
-
-    buffer_append_string_len(b, CONST_STR_LEN("<tr>"));
-    mod_status_header_append_sort(b, p, "Client IP");
-    mod_status_header_append_sort(b, p, "Read");
-    mod_status_header_append_sort(b, p, "Written");
-    mod_status_header_append_sort(b, p, "State");
-    mod_status_header_append_sort(b, p, "Time");
-    mod_status_header_append_sort(b, p, "Host");
-    mod_status_header_append_sort(b, p, "URI");
-    mod_status_header_append_sort(b, p, "File");
-    buffer_append_string_len(b, CONST_STR_LEN("</tr>\n"));
-
+static void mod_status_html_rtable (request_st * const rq, const server * const srv, const time_t cur_ts) {
+    /* connection table and URLs might be large, so double-buffer to aggregate
+     * before sending to chunkqueue, which might be temporary file
+     * (avoid write() per connection) */
+    buffer * const b = rq->tmp_buf;
+    buffer_clear(b);
     connection * const * const cptr = srv->conns.ptr;
     for (uint32_t i = 0, used = srv->conns.used; i < used; ++i) {
         const connection * const con = cptr[i];
         const request_st * const r = &con->request;
-        if (r->http_status <= HTTP_VERSION_1_1)
+        if (r->http_status <= HTTP_VERSION_1_1) {
+            if (buffer_string_space(b) < 4096) {
+                http_chunk_append_mem(rq, CONST_BUF_LEN(b));
+                buffer_clear(b);
+            }
             mod_status_html_rtable_r(b, r, con, cur_ts);
+        }
         else {
             h2con * const h2c = con->h2;
-            for (uint32_t j = 0, rused = h2c->rused; j < rused; ++j)
+            for (uint32_t j = 0, rused = h2c->rused; j < rused; ++j) {
+                if (buffer_string_space(b) < 4096) {
+                    http_chunk_append_mem(rq, CONST_BUF_LEN(b));
+                    buffer_clear(b);
+                }
                 mod_status_html_rtable_r(b, h2c->r[j], con, cur_ts);
+            }
         }
     }
-
-    buffer_append_string_len(b, CONST_STR_LEN(
-      "</table>\n"));
+    http_chunk_append_mem(rq, CONST_BUF_LEN(b));
 }
 
 static handler_t mod_status_handle_server_status_html(server *srv, request_st * const r, plugin_data *p) {
-	buffer *b = chunkqueue_append_buffer_open(&r->write_queue);
+	buffer * const b = chunkqueue_append_buffer_open(&r->write_queue);
+	buffer_string_prepare_append(b, 8192-1);/*(status page base HTML is ~5.2k)*/
 	double avg;
 	uint32_t j;
 	char multiplier = '\0';
@@ -421,7 +422,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 
 	buffer_append_string_len(b, CONST_STR_LEN(
 				 " </head>\n"
-				 " <body>\n"));
+				 "<body>\n"));
 
 
 
@@ -607,17 +608,31 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 		buffer_append_string(b, mod_status_get_state(j));
 		buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
 	}
-	buffer_append_string_len(b, CONST_STR_LEN("</table>"));
-
-	buffer_append_string_len(b, CONST_STR_LEN("\n</pre><hr />\n<h2>Connections</h2>\n"));
-	mod_status_html_rtable(b, p, srv, cur_ts);
-
 	buffer_append_string_len(b, CONST_STR_LEN(
-		      " </body>\n"
-		      "</html>\n"
-		      ));
+	  "</table>\n"
+	  "</pre><hr />\n<h2>Connections</h2>\n"
+	  "<table summary=\"status\" class=\"status\">\n"
+	  "<tr>"));
+	mod_status_header_append_sort(b, p, CONST_STR_LEN("Client IP"));
+	mod_status_header_append_sort(b, p, CONST_STR_LEN("Read"));
+	mod_status_header_append_sort(b, p, CONST_STR_LEN("Written"));
+	mod_status_header_append_sort(b, p, CONST_STR_LEN("State"));
+	mod_status_header_append_sort(b, p, CONST_STR_LEN("Time"));
+	mod_status_header_append_sort(b, p, CONST_STR_LEN("Host"));
+	mod_status_header_append_sort(b, p, CONST_STR_LEN("URI"));
+	mod_status_header_append_sort(b, p, CONST_STR_LEN("File"));
+	buffer_append_string_len(b, CONST_STR_LEN("</tr>\n"));
 
 	chunkqueue_append_buffer_commit(&r->write_queue);
+	/* connection table might be large, so buffer separately */
+
+	mod_status_html_rtable(r, srv, cur_ts);
+
+	http_chunk_append_mem(r, CONST_STR_LEN(
+		      "</table>\n"
+		      "</body>\n"
+		      "</html>\n"
+		      ));
 
 	http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 
