@@ -695,9 +695,9 @@ static int
 mod_mbedtls_SNI (void *arg, mbedtls_ssl_context *ssl, const unsigned char *servername, size_t len)
 {
     handler_ctx * const hctx = (handler_ctx *) arg;
-    buffer_copy_string(&hctx->r->uri.scheme, "https");
-
     request_st * const r = hctx->r;
+    buffer_copy_string_len(&r->uri.scheme, CONST_STR_LEN("https"));
+
     if (len >= 1024) { /*(expecting < 256; TLSEXT_MAXLEN_host_name is 255)*/
         log_error(r->conf.errh, __FILE__, __LINE__,
                   "MTLS: SNI name too long %.*s", (int)len, servername);

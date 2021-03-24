@@ -1296,7 +1296,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
   #endif
     if (hctx->r->conditional_is_valid & (1 << COMP_HTTP_HOST))/*(already done)*/
         return SSL_TLSEXT_ERR_OK; /*(wolfSSL might call twice in client hello)*/
-    buffer_copy_string(&hctx->r->uri.scheme, "https");
+    buffer_copy_string_len(&hctx->r->uri.scheme, CONST_STR_LEN("https"));
     UNUSED(al);
     UNUSED(srv);
 

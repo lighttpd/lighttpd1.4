@@ -1346,7 +1346,7 @@ mod_nss_SNI (PRFileDesc *ssl, const SECItem *srvNameArr, PRUint32 srvNameArrSize
 
     handler_ctx * const hctx = (handler_ctx *)arg;
     request_st * const r = hctx->r;
-    buffer_copy_string(&r->uri.scheme, "https");
+    buffer_copy_string_len(&r->uri.scheme, CONST_STR_LEN("https"));
     PRUint32 i = 0; /* index into srvNameArr; always take first element */
     const SECItem *sn = srvNameArr+i;
 

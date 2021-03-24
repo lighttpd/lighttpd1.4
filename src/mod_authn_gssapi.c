@@ -334,7 +334,7 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
         /* ??? Should KRB5_KTNAME be added to mod_authn_gssapi_basic(), too? */
         buffer ktname;
         memset(&ktname, 0, sizeof(ktname));
-        buffer_copy_string(&ktname, "KRB5_KTNAME=");
+        buffer_copy_string_len(&ktname, CONST_STR_LEN("KRB5_KTNAME="));
         buffer_append_string_buffer(&ktname, p->conf.auth_gssapi_keytab);
         putenv(ktname.ptr);
         /* ktname.ptr becomes part of the environment, do not free */

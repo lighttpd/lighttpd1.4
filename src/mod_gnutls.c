@@ -1401,7 +1401,7 @@ mod_gnutls_SNI(handler_ctx * const hctx,
     len -= 5;
     servername += 5;
     request_st * const r = hctx->r;
-    buffer_copy_string(&r->uri.scheme, "https");
+    buffer_copy_string_len(&r->uri.scheme, CONST_STR_LEN("https"));
 
     if (len >= 1024) { /*(expecting < 256; TLSEXT_MAXLEN_host_name is 255)*/
         log_error(r->conf.errh, __FILE__, __LINE__,

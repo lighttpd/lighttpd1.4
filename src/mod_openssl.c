@@ -1211,7 +1211,7 @@ static int
 mod_openssl_client_hello_cb (SSL *ssl, int *al, void *srv)
 {
     handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
-    buffer_copy_string(&hctx->r->uri.scheme, "https");
+    buffer_copy_string_len(&hctx->r->uri.scheme, CONST_STR_LEN("https"));
     UNUSED(srv);
 
     const unsigned char *name;
@@ -1241,7 +1241,7 @@ static int
 network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 {
     handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
-    buffer_copy_string(&hctx->r->uri.scheme, "https");
+    buffer_copy_string_len(&hctx->r->uri.scheme, CONST_STR_LEN("https"));
     UNUSED(al);
     UNUSED(srv);
 
