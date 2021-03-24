@@ -600,6 +600,11 @@ void buffer_append_string_encoded(buffer * const restrict b, const char * const 
 
 	d = (unsigned char*) buffer_extend(b, d_len);
 
+	if (d_len == s_len) { /*(short-circuit; nothing to encoded)*/
+		memcpy(d, s, s_len);
+		return;
+	}
+
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
 		if (map[*ds & 0xFF]) {
 			switch(encoding) {
@@ -653,6 +658,11 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 	}
 
 	d = (unsigned char*) buffer_extend(b, d_len);
+
+	if (d_len == s_len) { /*(short-circuit; nothing to encoded)*/
+		memcpy(d, s, s_len);
+		return;
+	}
 
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
 		if ((*ds < 0x20) /* control character */
