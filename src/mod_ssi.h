@@ -5,6 +5,7 @@
 #include "base_decls.h"
 #include "buffer.h"
 #include "array.h"
+#include "chunk.h"
 
 #include "plugin.h"
 
@@ -36,6 +37,7 @@ typedef struct {
 	int if_level, if_is_false_level, if_is_false, if_is_false_endif;
 	unsigned short ssi_recursion_depth;
 
+	chunkqueue wq;
 	log_error_st *errh;
 	plugin_config conf;
 } handler_ctx;

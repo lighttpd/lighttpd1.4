@@ -5,6 +5,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "http_cgi.h"
+#include "http_chunk.h"
 #include "http_etag.h"
 #include "http_header.h"
 #include "stat_cache.h"
@@ -52,6 +53,7 @@ static handler_ctx * handler_ctx_init(plugin_data *p, log_error_st *errh) {
 }
 
 static void handler_ctx_free(handler_ctx *hctx) {
+	chunkqueue_reset(&hctx->wq);
 	free(hctx);
 }
 
@@ -290,7 +292,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 		}
 	}
 
-	chunkqueue * const cq = &r->write_queue;
+	chunkqueue * const cq = &p->wq;
 
 	switch(ssicmd) {
 	case SSI_ECHO: {
@@ -1013,7 +1015,7 @@ static void mod_ssi_parse_ssi_stmt(request_st * const r, handler_ctx * const p, 
 		    && (s[12] == ' ' || s[12] == '\t'))
 			return;
 		/* XXX: perhaps emit error comment instead of invalid <!--#...--> code to client */
-		chunkqueue_append_mem(&r->write_queue, s, len); /* append stmt as-is */
+		chunkqueue_append_mem(&p->wq, s, len); /* append stmt as-is */
 		return;
 	}
 
@@ -1075,10 +1077,12 @@ static int mod_ssi_stmt_len(const char *s, const int len) {
 static void mod_ssi_read_fd(request_st * const r, handler_ctx * const p, struct stat * const st, int fd) {
 	ssize_t rd;
 	size_t offset, pretag;
+	/* allocate to reduce chance of stack exhaustion upon deep recursion */
+	buffer * const b = chunk_buffer_acquire();
+	chunkqueue * const cq = &p->wq;
 	const size_t bufsz = 8192;
-	char * const buf = malloc(bufsz); /* allocate to reduce chance of stack exhaustion upon deep recursion */
-	chunkqueue * const cq = &r->write_queue;
-	force_assert(buf);
+	chunk_buffer_prepare_append(b, bufsz-1);
+	char * const buf = b->ptr;
 
 	offset = 0;
 	pretag = 0;
@@ -1138,6 +1142,12 @@ static void mod_ssi_read_fd(request_st * const r, handler_ctx * const p, struct 
 			}
 			offset = pretag = 0;
 		}
+		/* flush intermediate cq to r->write_queue (and possibly to
+		 * temporary file) if last MEM_CHUNK has less than 1k-1 avail
+		 * (reduce occurrence of copying to reallocate larger chunk) */
+		if (cq->last && cq->last->type == MEM_CHUNK
+		    && buffer_string_space(cq->last->mem) < 1023)
+			http_chunk_transfer_cqlen(r, cq, chunkqueue_length(cq));
 	}
 
 	if (0 != rd) {
@@ -1152,7 +1162,8 @@ static void mod_ssi_read_fd(request_st * const r, handler_ctx * const p, struct 
 		}
 	}
 
-	free(buf);
+	chunk_buffer_release(b);
+	http_chunk_transfer_cqlen(r, cq, chunkqueue_length(cq));
 }
 
 
