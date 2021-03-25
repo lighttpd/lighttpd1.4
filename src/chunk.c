@@ -421,7 +421,7 @@ void chunkqueue_append_mem_min(chunkqueue * const restrict cq, const char * cons
 
 
 void chunkqueue_append_chunkqueue(chunkqueue * const restrict cq, chunkqueue * const restrict src) {
-	if (src == NULL || NULL == src->first) return;
+	if (NULL == src->first) return;
 
 	if (NULL == cq->first) {
 		cq->first = src->first;
