@@ -1321,7 +1321,7 @@ http_request_headers_process (request_st * const restrict r, char * const restri
 
     http_request_headers_fin(r);
 
-    if (0 != r->http_status) {
+    if (__builtin_expect( (0 != r->http_status), 0)) {
         if (r->conf.log_request_header_on_error) {
             /*(http_request_parse_headers() modifies hdrs only to
              * undo line-wrapping in-place using spaces)*/

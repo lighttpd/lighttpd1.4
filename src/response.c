@@ -311,9 +311,6 @@ static handler_t http_status_set_error_close (request_st * const r, int status) 
 }
 
 static handler_t http_response_config (request_st * const r) {
-    if (r->conf.log_condition_handling)
-        log_error(r->conf.errh, __FILE__, __LINE__, "run condition");
-
     config_cond_cache_reset(r);
     config_patch_config(r);
 
