@@ -493,10 +493,6 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 
 		if (file_path) {
 			/* current doc-root */
-			char *sl = strrchr(r->physical.path.ptr, '/');
-			if (NULL == sl) break; /*(not expected)*/
-			buffer_copy_string_len(p->stat_fn, r->physical.path.ptr, sl - r->physical.path.ptr + 1);
-
 			buffer_copy_string(tb, file_path);
 			buffer_urldecode_path(tb);
 			if (!buffer_is_valid_UTF8(tb)) {
@@ -505,7 +501,12 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				break;
 			}
 			buffer_path_simplify(tb, tb);
-			buffer_append_path_len(p->stat_fn, CONST_BUF_LEN(tb));
+			char *sl = strrchr(r->physical.path.ptr, '/');
+			if (NULL == sl) break; /*(not expected)*/
+			buffer_copy_path_len2(p->stat_fn,
+			                      r->physical.path.ptr,
+			                      sl - r->physical.path.ptr + 1,
+			                      CONST_BUF_LEN(tb));
 		} else {
 			/* virtual */
 
@@ -559,13 +560,18 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 			    ? buffer_is_equal_right_len(&r->physical.path, &r->physical.rel_path, remain)
 			    :(buffer_string_length(&r->physical.path) >= remain
 			      && buffer_eq_icase_ssn(r->physical.path.ptr+buffer_string_length(&r->physical.path)-remain, r->physical.rel_path.ptr+i, remain))) {
-				buffer_copy_string_len(p->stat_fn, r->physical.path.ptr, buffer_string_length(&r->physical.path)-remain);
-				buffer_append_path_len(p->stat_fn, tb->ptr+i, buffer_string_length(tb)-i);
+				buffer_copy_path_len2(p->stat_fn,
+				                      r->physical.path.ptr,
+				                      buffer_string_length(&r->physical.path)
+				                        - remain,
+				                      tb->ptr+i,
+				                      buffer_string_length(tb)-i);
 			} else {
 				/* unable to perform physical path remap here;
 				 * assume doc_root/rel_path and no remapping */
-				buffer_copy_buffer(p->stat_fn, &r->physical.doc_root);
-				buffer_append_path_len(p->stat_fn, CONST_BUF_LEN(tb));
+				buffer_copy_path_len2(p->stat_fn,
+				                      CONST_BUF_LEN(&r->physical.doc_root),
+				                      CONST_BUF_LEN(tb));
 			}
 		}
 

@@ -524,8 +524,9 @@ http_response_prepare (request_st * const r)
 		 */
 
 		buffer_copy_buffer(&r->physical.basedir, &r->physical.doc_root);
-		buffer_copy_buffer(&r->physical.path, &r->physical.doc_root);
-		buffer_append_path_len(&r->physical.path, CONST_BUF_LEN(&r->physical.rel_path));
+		buffer_copy_path_len2(&r->physical.path,
+		                      CONST_BUF_LEN(&r->physical.doc_root),
+		                      CONST_BUF_LEN(&r->physical.rel_path));
 
 		if (r->conf.log_request_handling) {
 			log_error(r->conf.errh, __FILE__, __LINE__,

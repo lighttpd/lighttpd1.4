@@ -2195,10 +2195,9 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
             if (!buffer_string_is_empty(host->docroot)) {
                 buffer_copy_buffer(&r->physical.doc_root, host->docroot);
                 buffer_copy_buffer(&r->physical.basedir, host->docroot);
-
-                buffer_copy_buffer(&r->physical.path, host->docroot);
-                buffer_append_path_len(&r->physical.path,
-                                       CONST_BUF_LEN(&r->uri.path));
+                buffer_copy_path_len2(&r->physical.path,
+                                      CONST_BUF_LEN(host->docroot),
+                                      CONST_BUF_LEN(&r->uri.path));
                 physpath = r->physical.path.ptr;
             }
 

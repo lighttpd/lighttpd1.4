@@ -279,6 +279,7 @@ __attribute_nonnull__
 static inline void buffer_append_slash(buffer *b); /* append '/' no non-empty strings not ending in '/' */
 
 void buffer_append_path_len(buffer * restrict b, const char * restrict a, size_t alen); /* join strings with '/', if '/' not present */
+void buffer_copy_path_len2(buffer * restrict b, const char * restrict s1, size_t len1, const char * restrict s2, size_t len2);
 
 __attribute_nonnull__
 __attribute_pure__

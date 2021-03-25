@@ -4829,11 +4829,11 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
       #ifdef __COVERITY__
         force_assert(2 <= dst_rel_path->used);
       #endif
-        buffer_copy_string_len(dst_path, r->physical.path.ptr,
-                               r->physical.path.used - 1 - remain);
-        buffer_append_path_len(dst_path,
-                               dst_rel_path->ptr+i,
-                               dst_rel_path->used - 1 - i);
+        buffer_copy_path_len2(dst_path,
+                              r->physical.path.ptr,
+                              r->physical.path.used - 1 - remain,
+                              dst_rel_path->ptr+i,
+                              dst_rel_path->used - 1 - i);
         if (buffer_string_length(dst_path) >= PATH_MAX) {
             http_status_set_error(r, 403); /* Forbidden */
             return HANDLER_FINISHED;
@@ -4842,8 +4842,8 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
     else { /*(not expected; some other module mucked with path or rel_path)*/
         /* unable to perform physical path remap here;
          * assume doc_root/rel_path and no remapping */
-        buffer_copy_buffer(dst_path, &r->physical.doc_root);
-        buffer_append_path_len(dst_path, CONST_BUF_LEN(dst_rel_path));
+        buffer_copy_path_len2(dst_path, CONST_BUF_LEN(&r->physical.doc_root),
+                                        CONST_BUF_LEN(dst_rel_path));
         if (buffer_string_length(dst_path) >= PATH_MAX) {
             http_status_set_error(r, 403); /* Forbidden */
             return HANDLER_FINISHED;

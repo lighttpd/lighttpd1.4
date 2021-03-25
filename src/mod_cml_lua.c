@@ -227,8 +227,8 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 
 				/* the file is relative, make it absolute */
 				if (s[0] != '/') {
-					buffer_copy_buffer(b, &p->basedir);
-					buffer_append_path_len(b, s, (uint32_t)slen);
+					buffer_copy_path_len2(b, CONST_BUF_LEN(&p->basedir),
+					                         s, slen);
 				} else {
 					buffer_copy_string_len(b, s, (uint32_t)slen);
 				}
@@ -299,11 +299,14 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 
 	if (ret == 1 && !buffer_string_is_empty(&p->trigger_handler)) {
 		/* cache-miss */
-		buffer_copy_buffer(&r->uri.path, &p->baseurl);
-		buffer_append_string_buffer(&r->uri.path, &p->trigger_handler);
+		buffer_clear(&r->uri.path);
+		buffer_append_str2(&r->uri.path,
+		                   CONST_BUF_LEN(&p->baseurl),
+		                   CONST_BUF_LEN(&p->trigger_handler));
 
-		buffer_copy_buffer(&r->physical.path, &p->basedir);
-		buffer_append_path_len(&r->physical.path, CONST_BUF_LEN(&p->trigger_handler));
+		buffer_copy_path_len2(&r->physical.path,
+		                      CONST_BUF_LEN(&p->basedir),
+		                      CONST_BUF_LEN(&p->trigger_handler));
 
 		chunkqueue_reset(&r->write_queue);
 	}

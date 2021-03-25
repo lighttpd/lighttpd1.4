@@ -1004,8 +1004,8 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
     if (0 != http_request_host_policy(name,hctx->r->conf.http_parseopts,443))
         return rc;
   #endif
-    buffer_copy_buffer(b, hctx->conf.ssl_acme_tls_1);
-    buffer_append_path_len(b, CONST_BUF_LEN(name));
+    buffer_copy_path_len2(b, CONST_BUF_LEN(hctx->conf.ssl_acme_tls_1),
+                             CONST_BUF_LEN(name));
     len = buffer_string_length(b);
 
     do {

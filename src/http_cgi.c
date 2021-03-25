@@ -194,11 +194,11 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
             /* PATH_TRANSLATED is only defined if PATH_INFO is set
              * Note: not implemented: re-url-encode '?' '=' ';' for
              * (RFC 3875 4.1.6) */
-            if (!buffer_string_is_empty(opts->docroot))
-                buffer_copy_buffer(tb, opts->docroot);
-            else
-                buffer_copy_buffer(tb, &r->physical.basedir);
-            buffer_append_path_len(tb, CONST_BUF_LEN(&r->pathinfo));
+            const buffer * const bd = (!buffer_string_is_empty(opts->docroot))
+              ? opts->docroot
+              : &r->physical.basedir;
+            buffer_copy_path_len2(tb, CONST_BUF_LEN(bd),
+                                      CONST_BUF_LEN(&r->pathinfo));
             rc |= cb(vdata, CONST_STR_LEN("PATH_TRANSLATED"),
                             CONST_BUF_LEN(tb));
         }
@@ -213,8 +213,8 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
 
     if (!buffer_string_is_empty(opts->docroot)) {
         /* alternate docroot, e.g. for remote FastCGI or SCGI server */
-        buffer_copy_buffer(tb, opts->docroot);
-        buffer_append_path_len(tb, CONST_BUF_LEN(&r->uri.path));
+        buffer_copy_path_len2(tb, CONST_BUF_LEN(opts->docroot),
+                                  CONST_BUF_LEN(&r->uri.path));
         rc |= cb(vdata, CONST_STR_LEN("SCRIPT_FILENAME"),
                         CONST_BUF_LEN(tb));
         rc |= cb(vdata, CONST_STR_LEN("DOCUMENT_ROOT"),
@@ -227,8 +227,8 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
              *
              * see src/sapi/cgi_main.c, init_request_info()
              */
-            buffer_copy_buffer(tb, &r->physical.path);
-            buffer_append_path_len(tb, CONST_BUF_LEN(&r->pathinfo));
+            buffer_copy_path_len2(tb, CONST_BUF_LEN(&r->physical.path),
+                                      CONST_BUF_LEN(&r->pathinfo));
             rc |= cb(vdata, CONST_STR_LEN("SCRIPT_FILENAME"),
                             CONST_BUF_LEN(tb));
         }

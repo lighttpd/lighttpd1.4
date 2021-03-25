@@ -158,8 +158,8 @@ int plugins_load(server *srv) {
 
 	for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
 		const buffer * const module = &((data_string *)srv->srvconf.modules->data[i])->value;
-		buffer_copy_buffer(tb, srv->srvconf.modules_dir);
-		buffer_append_path_len(tb, CONST_BUF_LEN(module));
+		buffer_copy_path_len2(tb, CONST_BUF_LEN(srv->srvconf.modules_dir),
+		                          CONST_BUF_LEN(module));
 #if defined(__WIN32) || defined(__CYGWIN__)
 		buffer_append_string_len(tb, CONST_STR_LEN(".dll"));
 #else

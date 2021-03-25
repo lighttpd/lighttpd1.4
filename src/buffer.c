@@ -258,6 +258,16 @@ void buffer_append_path_len(buffer * restrict b, const char * restrict a, size_t
     memcpy(s, a, alen);
 }
 
+void
+buffer_copy_path_len2 (buffer * const restrict b, const char * const restrict s1, size_t len1, const char * const restrict s2, size_t len2)
+{
+    /*(similar to buffer_copy_string_len(b, s1, len1) but combined allocation)*/
+    memcpy(buffer_string_prepare_copy(b, len1+len2+1), s1, len1);
+    b->used = len1 + 1;                    /*('\0' byte will be written below)*/
+
+    buffer_append_path_len(b, s2, len2);/*(choice: not inlined, special-cased)*/
+}
+
 void buffer_append_uint_hex_lc(buffer *b, uintmax_t value) {
 	char *buf;
 	unsigned int shift = 0;

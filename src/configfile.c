@@ -2014,7 +2014,8 @@ static int config_parse_file_stream(server *srv, config_t *context, const char *
 }
 
 int config_parse_file(server *srv, config_t *context, const char *fn) {
-	buffer *filename;
+	buffer * const filename = buffer_init();
+	const size_t fnlen = strlen(fn);
 	int ret = -1;
       #ifdef GLOB_BRACE
 	int flags = GLOB_BRACE;
@@ -2026,10 +2027,10 @@ int config_parse_file(server *srv, config_t *context, const char *fn) {
 	if ((fn[0] == '/' || fn[0] == '\\') ||
 	    (fn[0] == '.' && (fn[1] == '/' || fn[1] == '\\')) ||
 	    (fn[0] == '.' && fn[1] == '.' && (fn[2] == '/' || fn[2] == '\\'))) {
-		filename = buffer_init_string(fn);
+		buffer_copy_string_len(filename, fn, fnlen);
 	} else {
-		filename = buffer_init_buffer(context->basedir);
-		buffer_append_path_len(filename, fn, strlen(fn));
+		buffer_copy_path_len2(filename, CONST_BUF_LEN(context->basedir),
+		                                fn, fnlen);
 	}
 
 	switch (glob(filename->ptr, flags, NULL, &gl)) {

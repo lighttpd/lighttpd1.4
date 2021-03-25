@@ -615,9 +615,9 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue * const restrict cq, log
 
 		for (errno = EIO; cq->tempdir_idx < cq->tempdirs->used; ++cq->tempdir_idx) {
 			data_string *ds = (data_string *)cq->tempdirs->data[cq->tempdir_idx];
-
-			buffer_copy_buffer(template, &ds->value);
-			buffer_append_path_len(template, CONST_STR_LEN("lighttpd-upload-XXXXXX"));
+			buffer_copy_path_len2(template,
+			                      CONST_BUF_LEN(&ds->value),
+			                      CONST_STR_LEN("lighttpd-upload-XXXXXX"));
 			if (-1 != (fd = fdevent_mkstemp_append(template->ptr))) break;
 		}
 	} else {

@@ -173,13 +173,13 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
         }
         struct passwd *pwd;
         if (cached >= 0) {
-            buffer_copy_buffer(b, &p->cache_path[cached]);
-            buffer_append_path_len(b, CONST_BUF_LEN(p->conf.path));
+            buffer_copy_path_len2(b, CONST_BUF_LEN(&p->cache_path[cached]),
+                                     CONST_BUF_LEN(p->conf.path));
         }
         else if ((pwd = getpwnam(u))) {
             const size_t plen = strlen(pwd->pw_dir);
-            buffer_copy_string_len(b, pwd->pw_dir, plen);
-            buffer_append_path_len(b, CONST_BUF_LEN(p->conf.path));
+            buffer_copy_path_len2(b, pwd->pw_dir, plen,
+                                     CONST_BUF_LEN(p->conf.path));
             if (!stat_cache_path_isdir(b)) {
                 return HANDLER_GO_ON;
             }

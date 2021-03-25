@@ -294,8 +294,8 @@ static buffer * mod_deflate_cache_file_name(request_st * const r, const buffer *
      *      (matching) &r->pathinfo suffix, with result url-encoded
      *      Alternative, we could shard etag which is already our "checksum" */
     buffer * const tb = r->tmp_buf;
-    buffer_copy_buffer(tb, cache_dir);
-    buffer_append_path_len(tb, CONST_BUF_LEN(&r->physical.path));
+    buffer_copy_path_len2(tb, CONST_BUF_LEN(cache_dir),
+                              CONST_BUF_LEN(&r->physical.path));
     buffer_append_str2(tb, CONST_STR_LEN("-"), /*(strip surrounding '"')*/
                            etag->ptr+1, buffer_string_length(etag)-2);
     return tb;
