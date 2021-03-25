@@ -201,6 +201,43 @@ void buffer_append_string_len(buffer * const restrict b, const char * const rest
     memcpy(buffer_extend(b, len), s, len);
 }
 
+void buffer_append_str2(buffer * const restrict b, const char * const s1, const size_t len1, const char * const s2, const size_t len2) {
+    char * const restrict s = buffer_extend(b, len1+len2);
+  #ifdef HAVE_MEMPCPY
+    mempcpy(mempcpy(s, s1, len1), s2, len2);
+  #else
+    memcpy(s,      s1, len1);
+    memcpy(s+len1, s2, len2);
+  #endif
+}
+
+void buffer_append_str3(buffer * const restrict b, const char * const s1, const size_t len1, const char * const s2, const size_t len2, const char * const s3, const size_t len3) {
+    char * restrict s = buffer_extend(b, len1+len2+len3);
+  #ifdef HAVE_MEMPCPY
+    mempcpy(mempcpy(mempcpy(s, s1, len1), s2, len2), s3, len3);
+  #else
+    memcpy(s,         s1, len1);
+    memcpy((s+=len1), s2, len2);
+    memcpy((s+=len2), s3, len3);
+  #endif
+}
+
+void buffer_append_iovec(buffer * const restrict b, const struct const_iovec * const iov, const size_t n) {
+    size_t len = 0;
+    for (size_t i = 0; i < n; ++i)
+        len += iov[i].iov_len;
+    char *s = buffer_extend(b, len);
+    for (size_t i = 0; i < n; ++i) {
+        if (0 == iov[i].iov_len) continue;
+      #ifdef HAVE_MEMPCPY
+        s = mempcpy(s, iov[i].iov_base, iov[i].iov_len);
+      #else
+        memcpy(s, iov[i].iov_base, iov[i].iov_len);
+        s += iov[i].iov_len;
+      #endif
+    }
+}
+
 void buffer_append_path_len(buffer * restrict b, const char * restrict a, size_t alen) {
     char * restrict s = buffer_string_prepare_append(b, alen+1);
     const int aslash = (alen && a[0] == '/');

@@ -111,7 +111,16 @@ static inline void buffer_copy_buffer(buffer * restrict b, const buffer * restri
 
 void buffer_append_string(buffer * restrict b, const char * restrict s);
 void buffer_append_string_len(buffer * restrict b, const char * restrict s, size_t len);
+void buffer_append_str2(buffer * restrict b, const char *s1, size_t len1, const char *s2, size_t len2);
+void buffer_append_str3(buffer * restrict b, const char *s1, size_t len1, const char *s2, size_t len2, const char *s3, size_t len3);
 static inline void buffer_append_string_buffer(buffer * restrict b, const buffer * restrict src);
+
+struct const_iovec {
+  const void *iov_base;
+  size_t iov_len;
+};
+
+void buffer_append_iovec(buffer * restrict b, const struct const_iovec *iov, size_t n);
 
 #define buffer_append_uint_hex(b,len) buffer_append_uint_hex_lc((b),(len))
 void buffer_append_uint_hex_lc(buffer *b, uintmax_t len);
