@@ -2167,10 +2167,18 @@ static void context_free(config_t *context) {
 	buffer_free(context->basedir);
 }
 
+__attribute_noinline__
+static void config_vars_init (array *a) {
+    char dcwd[PATH_MAX];
+    if (NULL != getcwd(dcwd, sizeof(dcwd)))
+        array_set_key_value(a, CONST_STR_LEN("var.CWD"), dcwd, strlen(dcwd));
+
+    *array_get_int_ptr(a, CONST_STR_LEN("var.PID")) = getpid();
+}
+
 int config_read(server *srv, const char *fn) {
 	config_t context;
 	data_config *dc;
-	buffer *dcwd;
 	int ret;
 	char *pos;
 
@@ -2188,21 +2196,12 @@ int config_read(server *srv, const char *fn) {
 
 	dc = data_config_init();
 	buffer_copy_string_len(&dc->key, CONST_STR_LEN("global"));
+	config_vars_init(dc->value); /* default context */
 
 	force_assert(context.all_configs->used == 0);
 	dc->context_ndx = context.all_configs->used;
 	array_insert_unique(context.all_configs, (data_unset *)dc);
 	context.current = dc;
-
-	/* default context */
-	*array_get_int_ptr(dc->value, CONST_STR_LEN("var.PID")) = getpid();
-
-	dcwd = srv->tmp_buf;
-	buffer_string_prepare_copy(dcwd, PATH_MAX-1);
-	if (NULL != getcwd(dcwd->ptr, buffer_string_space(dcwd)+1)) {
-		buffer_commit(dcwd, strlen(dcwd->ptr));
-		array_set_key_value(dc->value, CONST_STR_LEN("var.CWD"), CONST_BUF_LEN(dcwd));
-	}
 
 	ret = config_parse_file_stream(srv, &context, fn);
 
