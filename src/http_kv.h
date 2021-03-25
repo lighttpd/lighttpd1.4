@@ -69,16 +69,24 @@ __attribute_pure__
 const char *get_http_method_name(http_method_t i);
 
 #if 0 /*(unused)*/
+__attribute_nonnull__
 __attribute_pure__
 int get_http_version_key(const char *s, size_t slen);
 #endif
 
+__attribute_nonnull__
 __attribute_pure__
 http_method_t get_http_method_key(const char *s, size_t slen);
 
+__attribute_nonnull__
 void http_status_append(buffer *b, int status);
+
+__attribute_nonnull__
 void http_method_append(buffer *b, http_method_t method);
+
+__attribute_nonnull__
 void http_version_append(buffer *b, http_version_t version);
+
 #define http_method_get_or_head(method)   ((method) <= HTTP_METHOD_HEAD)
 #define http_method_get_head_post(method) ((method) <= HTTP_METHOD_POST)
 
