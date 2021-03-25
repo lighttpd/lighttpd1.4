@@ -677,9 +677,6 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
     if (0 == klen)
         return http_request_header_line_invalid(r, 400,
           "invalid header key -> 400");
-    if (0 == vlen)
-        return http_request_header_line_invalid(r, 400,
-          "invalid header value -> 400");
 
     if ((hpctx->hlen += klen + vlen + 4) > hpctx->max_request_field_size) {
         /*(configurable with server.max-request-field-size; default 8k)*/
@@ -705,6 +702,9 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
             if (!hpctx->pseudo) /*(pseudo header after non-pseudo header)*/
                 return http_request_header_line_invalid(r, 400,
                   "invalid pseudo-header -> 400");
+            if (0 == vlen)
+                return http_request_header_line_invalid(r, 400,
+                  "invalid header value -> 400");
             switch (klen-1) {
               case 4:
                 if (0 == memcmp(k+1, "path", 4)) {
@@ -778,6 +778,8 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                                                    hpctx->http_parseopts);
                 if (0 != status) return status;
             }
+            if (0 == vlen)
+                return 0;
 
             const unsigned int http_header_strict =
               (hpctx->http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
@@ -835,6 +837,11 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
         /* XXX: TODO: request trailers not handled if streaming reqbody
          * XXX: must ensure that trailers are not disallowed field-names
          */
+
+      #if 0
+        if (0 == vlen)
+            return 0;
+      #endif
 
         return 0;
     }
