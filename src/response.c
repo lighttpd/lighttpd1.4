@@ -148,12 +148,10 @@ http_response_write_header (request_st * const r)
 		buffer_append_string_len(b, tstr, 37);
 	}
 
-	if (!light_btst(r->resp_htags, HTTP_HEADER_SERVER)) {
-		if (!buffer_string_is_empty(r->conf.server_tag)) {
-			buffer_append_string_len(b, CONST_STR_LEN("\r\nServer: "));
-			buffer_append_string_len(b, CONST_BUF_LEN(r->conf.server_tag));
-		}
-	}
+	if (!light_btst(r->resp_htags, HTTP_HEADER_SERVER)
+	    && !buffer_string_is_empty(r->conf.server_tag))
+		buffer_append_str2(b, CONST_STR_LEN("\r\nServer: "),
+		                      CONST_BUF_LEN(r->conf.server_tag));
 
 	buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
@@ -714,7 +712,7 @@ http_response_static_errdoc (request_st * const r)
     }
 
     /* build default error-page */
-    buffer * const b = r->tmp_buf;
+    buffer * const b = chunkqueue_append_buffer_open(&r->write_queue);
     buffer_copy_string_len(b, CONST_STR_LEN(
       "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
       "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
@@ -733,7 +731,7 @@ http_response_static_errdoc (request_st * const r)
       "</h1>\n"
       " </body>\n"
       "</html>\n"));
-    (void)http_chunk_append_mem(r, CONST_BUF_LEN(b));
+    chunkqueue_append_buffer_commit(&r->write_queue);
 
     http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
                              CONST_STR_LEN("Content-Type"),

@@ -716,34 +716,31 @@ webdav_xml_prop (buffer * const b,
                  const webdav_property_name * const prop,
                  const char * const value, const uint32_t vlen)
 {
-    buffer_append_string_len(b, CONST_STR_LEN("<"));
-    buffer_append_string_len(b, prop->name, prop->namelen);
-    buffer_append_string_len(b, CONST_STR_LEN(" xmlns=\""));
-    buffer_append_string_len(b, prop->ns, prop->nslen);
     if (0 == vlen) {
-        buffer_append_string_len(b, CONST_STR_LEN("\"/>"));
+        struct const_iovec iov[] = {
+          { CONST_STR_LEN("<") }
+         ,{ prop->name, prop->namelen }
+         ,{ CONST_STR_LEN(" xmlns=\"") }
+         ,{ prop->ns, prop->nslen }
+         ,{ CONST_STR_LEN("\"/>") }
+        };
+        buffer_append_iovec(b, iov, sizeof(iov)/sizeof(*iov));
     }
     else {
-        buffer_append_string_len(b, CONST_STR_LEN("\">"));
-        buffer_append_string_len(b, value, vlen);
-        buffer_append_string_len(b, CONST_STR_LEN("</"));
-        buffer_append_string_len(b, prop->name, prop->namelen);
-        buffer_append_string_len(b, CONST_STR_LEN(">"));
+        struct const_iovec iov[] = {
+          { CONST_STR_LEN("<") }
+         ,{ prop->name, prop->namelen }
+         ,{ CONST_STR_LEN(" xmlns=\"") }
+         ,{ prop->ns, prop->nslen }
+         ,{ CONST_STR_LEN("\">") }
+         ,{ value, vlen }
+         ,{ CONST_STR_LEN("</") }
+         ,{ prop->name, prop->namelen }
+         ,{ CONST_STR_LEN(">") }
+        };
+        buffer_append_iovec(b, iov, sizeof(iov)/sizeof(*iov));
     }
 }
-
-
-#ifdef USE_LOCKS
-static void
-webdav_xml_href_raw (buffer * const b, const buffer * const href)
-{
-    buffer_append_string_len(b, CONST_STR_LEN(
-      "<D:href>"));
-    buffer_append_string_len(b, CONST_BUF_LEN(href));
-    buffer_append_string_len(b, CONST_STR_LEN(
-      "</D:href>\n"));
-}
-#endif
 
 
 static void
@@ -774,11 +771,10 @@ static void
 webdav_xml_propstat_protected (buffer * const b, const char * const propname,
                                const uint32_t len, const int status)
 {
-    buffer_append_string_len(b, CONST_STR_LEN(
+    buffer_append_str3(b, CONST_STR_LEN(
       "<D:propstat>\n"
-      "<D:prop><DAV:"));
-    buffer_append_string_len(b, propname, len);
-    buffer_append_string_len(b, CONST_STR_LEN(
+      "<D:prop><DAV:"),
+      propname, len, CONST_STR_LEN(
       "/></D:prop>\n"
       "<D:error><DAV:cannot-modify-protected-property/></D:error>\n"));
     webdav_xml_status(b, status); /* 403 */
@@ -794,13 +790,16 @@ static void
 webdav_xml_propstat_status (buffer * const b, const char * const ns,
                             const char * const name, const int status)
 {
-    buffer_append_string_len(b, CONST_STR_LEN(
+    struct const_iovec iov[] = {
+      { CONST_STR_LEN(
       "<D:propstat>\n"
-      "<D:prop><"));
-    buffer_append_string(b, ns);
-    buffer_append_string(b, name);
-    buffer_append_string_len(b, CONST_STR_LEN(
-      "/></D:prop>\n"));
+      "<D:prop><") }
+     ,{ ns, strlen(ns) }
+     ,{ name, strlen(name) }
+     ,{ CONST_STR_LEN(
+      "/></D:prop>\n") }
+    };
+    buffer_append_iovec(b, iov, sizeof(iov)/sizeof(*iov));
     webdav_xml_status(b, status);
     buffer_append_string_len(b, CONST_STR_LEN(
       "</D:propstat>\n"));
@@ -811,11 +810,10 @@ webdav_xml_propstat_status (buffer * const b, const char * const ns,
 static void
 webdav_xml_propstat (buffer * const b, buffer * const value, const int status)
 {
-    buffer_append_string_len(b, CONST_STR_LEN(
+    buffer_append_str3(b, CONST_STR_LEN(
       "<D:propstat>\n"
-      "<D:prop>\n"));
-    buffer_append_string_buffer(b, value);
-    buffer_append_string_len(b, CONST_STR_LEN(
+      "<D:prop>\n"),
+      CONST_BUF_LEN(value), CONST_STR_LEN(
       "</D:prop>\n"));
     webdav_xml_status(b, status);
     buffer_append_string_len(b, CONST_STR_LEN(
@@ -844,46 +842,59 @@ webdav_xml_activelock (buffer * const b,
                        const webdav_lockdata * const lockdata,
                        const char * const tbuf, uint32_t tbuf_len)
 {
-    buffer_append_string_len(b, CONST_STR_LEN(
+    struct const_iovec iov[] = {
+      { CONST_STR_LEN(
       "<D:activelock>\n"
       "<D:lockscope>"
-      "<D:"));
-    buffer_append_string_buffer(b, lockdata->lockscope);
-    buffer_append_string_len(b, CONST_STR_LEN(
+      "<D:") }
+     ,{ CONST_BUF_LEN(lockdata->lockscope) }
+     ,{ CONST_STR_LEN(
       "/>"
       "</D:lockscope>\n"
       "<D:locktype>"
-      "<D:"));
-    buffer_append_string_buffer(b, lockdata->locktype);
-    buffer_append_string_len(b, CONST_STR_LEN(
+      "<D:") }
+     ,{ CONST_BUF_LEN(lockdata->locktype) }
+     ,{ CONST_STR_LEN(
       "/>"
       "</D:locktype>\n"
-      "<D:depth>"));
-    if (0 == lockdata->depth)
-        buffer_append_string_len(b, CONST_STR_LEN("0"));
-    else
-        buffer_append_string_len(b, CONST_STR_LEN("infinity"));
-    buffer_append_string_len(b, CONST_STR_LEN(
+      "<D:depth>") }
+     ,{ CONST_STR_LEN(
+      "infinity") } /*(iov[5] might be changed in below)*/
+     ,{ CONST_STR_LEN(
       "</D:depth>\n"
-      "<D:timeout>"));
+      "<D:timeout>") }
+    };
+    if (0 == lockdata->depth) {
+        iov[5].iov_base = "0";
+        iov[5].iov_len = sizeof("0")-1;
+    }
+    buffer_append_iovec(b, iov, sizeof(iov)/sizeof(*iov));
     if (0 != tbuf_len)
         buffer_append_string_len(b, tbuf, tbuf_len); /* "Second-..." */
     else {
         buffer_append_string_len(b, CONST_STR_LEN("Second-"));
         buffer_append_int(b, lockdata->timeout);
     }
-    buffer_append_string_len(b, CONST_STR_LEN(
+    struct const_iovec iovb[] = {
+      { CONST_STR_LEN(
       "</D:timeout>\n"
-      "<D:owner>"));
-    if (!buffer_string_is_empty(&lockdata->ownerinfo))
-        buffer_append_string_buffer(b, &lockdata->ownerinfo);
-    buffer_append_string_len(b, CONST_STR_LEN(
+      "<D:owner>") }
+     ,{ "", 0 } /*(iov[1] filled in below)*/
+     ,{ CONST_STR_LEN(
       "</D:owner>\n"
-      "<D:locktoken>\n"));
-    webdav_xml_href_raw(b, &lockdata->locktoken); /*(as-is; not URL-encoded)*/
-    buffer_append_string_len(b, CONST_STR_LEN(
+      "<D:locktoken>\n"
+      "<D:href>") }                           /*webdav_xml_href_raw();*/
+     ,{ CONST_BUF_LEN(&lockdata->locktoken) } /*(as-is; not URL-encoded)*/
+     ,{ CONST_STR_LEN(
+      "</D:href>\n"
       "</D:locktoken>\n"
-      "<D:lockroot>\n"));
+      "<D:lockroot>\n") }
+    };
+    if (!buffer_string_is_empty(&lockdata->ownerinfo)) {
+        iov[1].iov_base = lockdata->ownerinfo.ptr;
+        iov[1].iov_len = buffer_string_length(&lockdata->ownerinfo);
+    }
+    buffer_append_iovec(b, iovb, sizeof(iovb)/sizeof(*iovb));
     webdav_xml_href(b, &lockdata->lockroot);
     buffer_append_string_len(b, CONST_STR_LEN(
       "</D:lockroot>\n"
@@ -899,21 +910,19 @@ webdav_xml_doc_multistatus (request_st * const r,
 {
     http_status_set_fin(r, 207); /* Multi-status */
 
-    buffer * const b = /*(optimization; buf extended as needed)*/
-      chunkqueue_append_buffer_open_sz(&r->write_queue, 128 + ms->used);
-
+    chunkqueue * const cq = &r->write_queue;
+    buffer * const b = chunkqueue_prepend_buffer_open(cq);
     webdav_xml_doctype(b, r);
     buffer_append_string_len(b, CONST_STR_LEN(
       "<D:multistatus xmlns:D=\"DAV:\">\n"));
-    buffer_append_string_buffer(b, ms);
-    buffer_append_string_len(b, CONST_STR_LEN(
+    chunkqueue_prepend_buffer_commit(cq);
+    chunkqueue_append_buffer(cq, ms); /*(might move/steal/reset buffer)*/
+    chunkqueue_append_mem(cq, CONST_STR_LEN(
       "</D:multistatus>\n"));
 
     if (pconf->log_xml)
         log_error(r->conf.errh, __FILE__, __LINE__,
                   "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
-
-    chunkqueue_append_buffer_commit(&r->write_queue);
 }
 
 
@@ -925,24 +934,22 @@ webdav_xml_doc_multistatus_response (request_st * const r,
 {
     http_status_set_fin(r, 207); /* Multi-status */
 
-    buffer * const b = /*(optimization; buf extended as needed)*/
-      chunkqueue_append_buffer_open_sz(&r->write_queue, 128 + ms->used);
-
+    chunkqueue * const cq = &r->write_queue;
+    buffer * const b = chunkqueue_prepend_buffer_open(cq);
     webdav_xml_doctype(b, r);
     buffer_append_string_len(b, CONST_STR_LEN(
       "<D:multistatus xmlns:D=\"DAV:\">\n"
       "<D:response>\n"));
     webdav_xml_href(b, &r->physical.rel_path);
-    buffer_append_string_buffer(b, ms);
-    buffer_append_string_len(b, CONST_STR_LEN(
+    chunkqueue_prepend_buffer_commit(cq);
+    chunkqueue_append_buffer(cq, ms); /*(might move/steal/reset buffer)*/
+    chunkqueue_append_mem(cq, CONST_STR_LEN(
       "</D:response>\n"
       "</D:multistatus>\n"));
 
     if (pconf->log_xml)
         log_error(r->conf.errh, __FILE__, __LINE__,
                   "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
-
-    chunkqueue_append_buffer_commit(&r->write_queue);
 }
 #endif
 
@@ -975,11 +982,11 @@ webdav_xml_doc_lock_acquired (request_st * const r,
       "</D:lockdiscovery>\n"
       "</D:prop>\n"));
 
+    chunkqueue_append_buffer_commit(&r->write_queue);
+
     if (pconf->log_xml)
         log_error(r->conf.errh, __FILE__, __LINE__,
                   "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
-
-    chunkqueue_append_buffer_commit(&r->write_queue);
 }
 #endif
 
@@ -1048,19 +1055,22 @@ webdav_xml_doc_423_locked (request_st * const r, buffer * const hrefs,
       chunkqueue_append_buffer_open_sz(&r->write_queue, 256 + hrefs->used);
 
     webdav_xml_doctype(b, r);
-    buffer_append_string_len(b, CONST_STR_LEN(
+    struct const_iovec iov[] = {
+      { CONST_STR_LEN(
       "<D:error xmlns:D=\"DAV:\">\n"
-      "<D:"));
-    buffer_append_string_len(b, errtag, errtaglen);
-    buffer_append_string_len(b, CONST_STR_LEN(
-      ">\n"));
-    buffer_append_string_buffer(b, hrefs);
-    buffer_append_string_len(b, CONST_STR_LEN(
-      "</D:"));
-    buffer_append_string_len(b, errtag, errtaglen);
-    buffer_append_string_len(b, CONST_STR_LEN(
+      "<D:") }
+     ,{ errtag, errtaglen }
+     ,{ CONST_STR_LEN(
+      ">\n") }
+     ,{ CONST_BUF_LEN(hrefs) }
+     ,{ CONST_STR_LEN(
+      "</D:") }
+     ,{ errtag, errtaglen }
+     ,{ CONST_STR_LEN(
       ">\n"
-      "</D:error>\n"));
+      "</D:error>\n") }
+    };
+    buffer_append_iovec(b, iov, sizeof(iov)/sizeof(*iov));
 
     chunkqueue_append_buffer_commit(&r->write_queue);
 }
@@ -2443,8 +2453,9 @@ webdav_linktmp_rename (const plugin_config * const pconf,
     buffer * const tmpb = pconf->tmpb;
     int rc = -1; /*(not zero)*/
 
-    buffer_copy_buffer(tmpb, dst);
-    buffer_append_string_len(tmpb, CONST_STR_LEN("."));
+    buffer_clear(tmpb);
+    buffer_append_str2(tmpb, CONST_BUF_LEN(dst),
+                             CONST_STR_LEN("."));
     buffer_append_int(tmpb, (long)getpid());
     buffer_append_string_len(tmpb, CONST_STR_LEN("."));
     buffer_append_uint_hex_lc(tmpb, (uintptr_t)pconf); /*(stack/heap addr)*/
@@ -2478,8 +2489,9 @@ webdav_copytmp_rename (const plugin_config * const pconf,
                        const int overwrite)
 {
     buffer * const tmpb = pconf->tmpb;
-    buffer_copy_buffer(tmpb, &dst->path);
-    buffer_append_string_len(tmpb, CONST_STR_LEN("."));
+    buffer_clear(tmpb);
+    buffer_append_str2(tmpb, CONST_BUF_LEN(&dst->path),
+                             CONST_STR_LEN("."));
     buffer_append_int(tmpb, (long)getpid());
     buffer_append_string_len(tmpb, CONST_STR_LEN("."));
     buffer_append_uint_hex_lc(tmpb, (uintptr_t)pconf); /*(stack/heap addr)*/
@@ -3144,10 +3156,11 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
             const buffer *ct =
               stat_cache_mimetype_by_ext(mtypes, CONST_BUF_LEN(&pb->dst->path));
             if (NULL != ct) {
-                buffer_append_string_len(b, CONST_STR_LEN(
-                  "<D:getcontenttype>"));
-                buffer_append_string_buffer(b, ct);
-                buffer_append_string_len(b, CONST_STR_LEN(
+                buffer_append_str3(b,
+                  CONST_STR_LEN(
+                  "<D:getcontenttype>"),
+                  CONST_BUF_LEN(ct),
+                  CONST_STR_LEN(
                   "</D:getcontenttype>"));
             }
             else {
@@ -3161,10 +3174,11 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
         if (0 != pb->r->conf.etag_flags) {
             buffer *etagb = &pb->r->physical.etag;
             http_etag_create(etagb, &pb->st, pb->r->conf.etag_flags);
-            buffer_append_string_len(b, CONST_STR_LEN(
-              "<D:getetag>"));
-            buffer_append_string_buffer(b, etagb);
-            buffer_append_string_len(b, CONST_STR_LEN(
+            buffer_append_str3(b,
+              CONST_STR_LEN(
+              "<D:getetag>"),
+              CONST_BUF_LEN(etagb),
+              CONST_STR_LEN(
               "</D:getetag>"));
             buffer_clear(etagb);
         }
@@ -3662,11 +3676,13 @@ webdav_lock_token_submitted_cb (void * const vdata,
     for (int i = 0; i < cbdata->used; ++i) {
         const buffer * const token = &cbdata->tokens[i];
         /* locktoken match (locktoken not '\0' terminated) */
-        if (buffer_is_equal_string(token, CONST_BUF_LEN(locktoken))) {
+        if (buffer_is_equal_string(token, locktoken->ptr,/*(not CONST_BUF_LEN)*/
+                                   buffer_string_length(locktoken))) {
             /*(0 length owner if no auth required to lock; not recommended)*/
             if (buffer_string_is_empty(lockdata->owner)/*no lock owner;match*/
-                || buffer_is_equal_string(cbdata->authn_user,
-                                          CONST_BUF_LEN(lockdata->owner))) {
+                || buffer_is_equal_string( /*(not CONST_BUF_LEN())*/
+                     cbdata->authn_user, lockdata->owner->ptr,
+                     buffer_string_length(lockdata->owner))) {
                 if (shared) ++cbdata->smatch;
                 return; /* authenticated lock owner match */
             }
@@ -4590,8 +4606,9 @@ mod_webdav_put (request_st * const r, const plugin_config * const pconf)
 
     /*(similar to beginning of webdav_linktmp_rename())*/
     buffer * const tmpb = pconf->tmpb;
-    buffer_copy_buffer(tmpb, &r->physical.path);
-    buffer_append_string_len(tmpb, CONST_STR_LEN("."));
+    buffer_clear(tmpb);
+    buffer_append_str2(tmpb, CONST_BUF_LEN(&r->physical.path),
+                             CONST_STR_LEN("."));
     buffer_append_int(tmpb, (long)getpid());
     buffer_append_string_len(tmpb, CONST_STR_LEN("."));
     if (c->type == MEM_CHUNK)

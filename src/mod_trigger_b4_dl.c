@@ -131,8 +131,8 @@ static int mod_trigger_b4_dl_init_memcached(server * const srv, config_plugin_va
     buffer_clear(opts);
     for (uint32_t k = 0; k < mc_hosts->used; ++k) {
         const data_string * const ds = (const data_string *)mc_hosts->data[k];
-        buffer_append_string_len(opts, CONST_STR_LEN(" --SERVER="));
-        buffer_append_string_buffer(opts, &ds->value);
+        buffer_append_str2(opts, CONST_STR_LEN(" --SERVER="),
+                                 CONST_BUF_LEN(&ds->value));
     }
 
     cpv->v.v = memcached(opts->ptr+1, buffer_string_length(opts)-1);

@@ -325,8 +325,7 @@ int sock_addr_stringify_append_buffer(buffer * const restrict b, const sock_addr
             buffer_string_set_length(b, buffer_string_length(b)-1);
             return -1;
         }
-        buffer_append_string_len(b, CONST_STR_LEN("]"));
-        buffer_append_string_len(b, CONST_STR_LEN(":"));
+        buffer_append_string_len(b, CONST_STR_LEN("]:"));
         buffer_append_int(b, ntohs(saddr->ipv6.sin6_port));
         return 0;
      #endif

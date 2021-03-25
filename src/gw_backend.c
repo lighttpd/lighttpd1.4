@@ -375,8 +375,10 @@ static int gw_proc_sockaddr_init(gw_host * const host, gw_proc * const proc, log
             errno = EINVAL;
             return -1;
         }
-        buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("unix:"));
-        buffer_append_string_buffer(proc->connection_name, proc->unixsocket);
+        buffer_clear(proc->connection_name);
+        buffer_append_str2(proc->connection_name,
+                           CONST_STR_LEN("unix:"),
+                           CONST_BUF_LEN(proc->unixsocket));
     }
     else {
         /*(note: name resolution here is *blocking* if IP string not supplied)*/
@@ -394,9 +396,11 @@ static int gw_proc_sockaddr_init(gw_host * const host, gw_proc * const proc, log
             sock_addr_inet_ntop_copy_buffer(h, &addr);
             host->family = sock_addr_get_family(&addr);
         }
-        buffer_copy_string_len(proc->connection_name, CONST_STR_LEN("tcp:"));
-        buffer_append_string_buffer(proc->connection_name, host->host);
-        buffer_append_string_len(proc->connection_name, CONST_STR_LEN(":"));
+        buffer_clear(proc->connection_name);
+        buffer_append_str3(proc->connection_name,
+                           CONST_STR_LEN("tcp:"),
+                           CONST_BUF_LEN(host->host),
+                           CONST_STR_LEN(":"));
         buffer_append_int(proc->connection_name, proc->port);
     }
 
@@ -653,8 +657,9 @@ static void gw_proc_spawn(gw_host * const host, log_error_st * const errh, const
     if (buffer_string_is_empty(host->unixsocket)) {
         proc->port = host->port + proc->id;
     } else {
-        buffer_copy_buffer(proc->unixsocket, host->unixsocket);
-        buffer_append_string_len(proc->unixsocket, CONST_STR_LEN("-"));
+        buffer_clear(proc->unixsocket);
+        buffer_append_str2(proc->unixsocket, CONST_BUF_LEN(host->unixsocket),
+                                             CONST_STR_LEN("-"));
         buffer_append_int(proc->unixsocket, proc->id);
     }
 
@@ -1628,9 +1633,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     if (buffer_string_is_empty(host->unixsocket)) {
                         proc->port = host->port + pno;
                     } else {
-                        buffer_copy_buffer(proc->unixsocket, host->unixsocket);
-                        buffer_append_string_len(proc->unixsocket,
-                                                 CONST_STR_LEN("-"));
+                        buffer_append_str2(proc->unixsocket,
+                                           CONST_BUF_LEN(host->unixsocket),
+                                           CONST_STR_LEN("-"));
                         buffer_append_int(proc->unixsocket, pno);
                     }
 

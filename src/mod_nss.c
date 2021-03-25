@@ -2423,11 +2423,11 @@ https_add_ssl_client_cert (request_st * const r, CERTCertificate *peer)
     for (uint32_t i = 0; pem[i]; ++i) {
         if (pem[i] != '\r') pem[len++] = pem[i]; /*(translate \r\n to \n)*/
     }
-    buffer * const vb =
-      http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_CERT"));
-    buffer_copy_string_len(vb, CONST_STR_LEN(PEM_BEGIN_CERT"\n"));
-    buffer_append_string_len(vb, pem, len);
-    buffer_append_string_len(vb,CONST_STR_LEN("\n"PEM_END_CERT"\n"));
+    buffer_append_str3(
+      http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_CERT")),
+      CONST_STR_LEN(PEM_BEGIN_CERT"\n"),
+      pem, len,
+      CONST_STR_LEN("\n"PEM_END_CERT"\n"));
     PORT_Free(pem);
 }
 

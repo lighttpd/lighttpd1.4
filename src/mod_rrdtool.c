@@ -276,9 +276,11 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, rrd_config *s, ch
 
 	/* create a new one */
 	buffer * const cmd = srv->tmp_buf;
-	buffer_copy_string_len(cmd, CONST_STR_LEN("create "));
-	buffer_append_string_buffer(cmd, s->path_rrd);
-	buffer_append_string_len(cmd, CONST_STR_LEN(
+	buffer_clear(cmd);
+	buffer_append_str3(cmd,
+	  CONST_STR_LEN("create "),
+	  CONST_BUF_LEN(s->path_rrd),
+	  CONST_STR_LEN(
 		" --step 60 "
 		"DS:InOctets:ABSOLUTE:600:U:U "
 		"DS:OutOctets:ABSOLUTE:600:U:U "
@@ -330,9 +332,10 @@ static int mod_rrd_write_data(server *srv, plugin_data *p, rrd_config *s) {
         return 0;
 
     buffer * const cmd = srv->tmp_buf;
-    buffer_copy_string_len(cmd, CONST_STR_LEN("update "));
-    buffer_append_string_buffer(cmd, s->path_rrd);
-    buffer_append_string_len(cmd, CONST_STR_LEN(" N:"));
+    buffer_clear(cmd);
+    buffer_append_str3(cmd, CONST_STR_LEN("update "),
+                            CONST_BUF_LEN(s->path_rrd),
+                            CONST_STR_LEN(" N:"));
     buffer_append_int(cmd, s->bytes_read);
     buffer_append_string_len(cmd, CONST_STR_LEN(":"));
     buffer_append_int(cmd, s->bytes_written);

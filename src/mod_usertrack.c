@@ -158,9 +158,9 @@ static handler_t mod_usertrack_set_cookie(request_st * const r, plugin_data * co
 
 	/* set a cookie */
 	cookie = r->tmp_buf;
-	buffer_copy_buffer(cookie, p->conf.cookie_name);
-	buffer_append_string_len(cookie, CONST_STR_LEN("="));
-
+	buffer_clear(cookie);
+	buffer_append_str2(cookie, CONST_BUF_LEN(p->conf.cookie_name),
+                                   CONST_STR_LEN("="));
 
 	/* taken from mod_auth.c */
 
@@ -185,8 +185,7 @@ static handler_t mod_usertrack_set_cookie(request_st * const r, plugin_data * co
 		return HANDLER_GO_ON;
 	}
 
-	buffer_append_string_len(cookie, CONST_STR_LEN("; Path=/"));
-	buffer_append_string_len(cookie, CONST_STR_LEN("; Version=1"));
+	buffer_append_string_len(cookie, CONST_STR_LEN("; Path=/; Version=1"));
 
 	if (!buffer_string_is_empty(p->conf.cookie_domain)) {
 		buffer_append_string_len(cookie, CONST_STR_LEN("; Domain="));

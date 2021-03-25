@@ -641,39 +641,41 @@ static const char js_simple_table_init_sort[] = \
 "}\n";
 
 static void http_dirlist_append_js_table_resort (buffer * const b, const request_st * const r) {
-	char col = '0';
-	char ascending = '0';
+	char init_sort[] = "0,0";
 	if (!buffer_string_is_empty(&r->uri.query)) {
 		const char *qs = r->uri.query.ptr;
 		do {
 			if (qs[0] == 'C' && qs[1] == '=') {
+				const int col = 0;
 				switch (qs[2]) {
-				case 'N': col = '0'; break;
-				case 'M': col = '1'; break;
-				case 'S': col = '2'; break;
+				case 'N': init_sort[col] = '0'; break;
+				case 'M': init_sort[col] = '1'; break;
+				case 'S': init_sort[col] = '2'; break;
 				case 'T':
-				case 'D': col = '3'; break;
+				case 'D': init_sort[col] = '3'; break;
 				default:  break;
 				}
 			}
 			else if (qs[0] == 'O' && qs[1] == '=') {
+				const int order = 2;
 				switch (qs[2]) {
-				case 'A': ascending = '1'; break;
-				case 'D': ascending = '0'; break;
+				case 'A': init_sort[order] = '1'; break;
+				case 'D': init_sort[order] = '0'; break;
 				default:  break;
 				}
 			}
 		} while ((qs = strchr(qs, '&')) && *++qs);
 	}
 
-	buffer_append_string_len(b, CONST_STR_LEN("\n<script type=\"text/javascript\">\n// <!--\n\n"));
-	buffer_append_string_len(b, js_simple_table_resort, sizeof(js_simple_table_resort)-1);
-	buffer_append_string_len(b, js_simple_table_init_sort, sizeof(js_simple_table_init_sort)-1);
-	buffer_append_string_len(b, CONST_STR_LEN("\ninit_sort("));
-	buffer_append_string_len(b, &col, 1);
-	buffer_append_string_len(b, CONST_STR_LEN(", "));
-	buffer_append_string_len(b, &ascending, 1);
-	buffer_append_string_len(b, CONST_STR_LEN(");\n\n// -->\n</script>\n\n"));
+	struct const_iovec iov[] = {
+	  { CONST_STR_LEN("\n<script type=\"text/javascript\">\n// <!--\n\n") }
+	 ,{ CONST_STR_LEN(js_simple_table_resort) }
+	 ,{ CONST_STR_LEN(js_simple_table_init_sort) }
+	 ,{ CONST_STR_LEN("\ninit_sort(") }
+	 ,{ CONST_STR_LEN(init_sort) }
+	 ,{ CONST_STR_LEN(");\n\n// -->\n</script>\n\n") }
+	};
+	buffer_append_iovec(b, iov, sizeof(iov)/sizeof(*iov));
 }
 
 static void http_list_directory_header(request_st * const r, plugin_data * const p) {
@@ -687,19 +689,21 @@ static void http_list_directory_header(request_st * const r, plugin_data * const
 			"<head>\n"
 		));
 		if (!buffer_string_is_empty(p->conf.encoding)) {
-			buffer_append_string_len(out, CONST_STR_LEN("<meta charset=\""));
-			buffer_append_string_buffer(out, p->conf.encoding);
-			buffer_append_string_len(out, CONST_STR_LEN("\">\n"));
+			buffer_append_str3(out,
+			  CONST_STR_LEN("<meta charset=\""),
+			  CONST_BUF_LEN(p->conf.encoding),
+			  CONST_STR_LEN("\">\n"));
 		}
 		buffer_append_string_len(out, CONST_STR_LEN("<title>Index of "));
 		buffer_append_string_encoded(out, CONST_BUF_LEN(&r->uri.path), ENCODING_MINIMAL_XML);
 		buffer_append_string_len(out, CONST_STR_LEN("</title>\n"));
 
 		if (!buffer_string_is_empty(p->conf.external_css)) {
-			buffer_append_string_len(out, CONST_STR_LEN("<meta name=\"viewport\" content=\"initial-scale=1\">"));
-			buffer_append_string_len(out, CONST_STR_LEN("<link rel=\"stylesheet\" type=\"text/css\" href=\""));
-			buffer_append_string_buffer(out, p->conf.external_css);
-			buffer_append_string_len(out, CONST_STR_LEN("\">\n"));
+			buffer_append_str3(out,
+			  CONST_STR_LEN("<meta name=\"viewport\" content=\"initial-scale=1\">"
+			                "<link rel=\"stylesheet\" type=\"text/css\" href=\""),
+			  CONST_BUF_LEN(p->conf.external_css),
+			  CONST_STR_LEN("\">\n"));
 		} else {
 			buffer_append_string_len(out, CONST_STR_LEN(
 				"<style type=\"text/css\">\n"
@@ -795,22 +799,17 @@ static void http_list_directory_footer(request_st * const r, plugin_data * const
 		    : !buffer_string_is_empty(r->conf.server_tag)
 		        ? r->conf.server_tag
 		        : NULL;
-
-		buffer_append_string_len(out, CONST_STR_LEN(
-			"<div class=\"foot\">"
-		));
-
 		if (footer)
-			buffer_append_string_buffer(out, footer);
-
-		buffer_append_string_len(out, CONST_STR_LEN(
-			"</div>\n"
-		));
+			buffer_append_str3(out,
+			  CONST_STR_LEN("<div class=\"foot\">"),
+			  CONST_BUF_LEN(footer),
+			  CONST_STR_LEN("</div>\n"));
 
 		if (!buffer_string_is_empty(p->conf.external_js)) {
-			buffer_append_string_len(out, CONST_STR_LEN("<script type=\"text/javascript\" src=\""));
-			buffer_append_string_buffer(out, p->conf.external_js);
-			buffer_append_string_len(out, CONST_STR_LEN("\"></script>\n"));
+			buffer_append_str3(out,
+			  CONST_STR_LEN("<script type=\"text/javascript\" src=\""),
+			  CONST_BUF_LEN(p->conf.external_js),
+			  CONST_STR_LEN("\"></script>\n"));
 		} else if (buffer_is_empty(p->conf.external_js)) {
 			http_dirlist_append_js_table_resort(out, r);
 		}
@@ -998,19 +997,22 @@ static int http_list_directory(request_st * const r, plugin_data * const p) {
 			content_type = &octet_stream;
 		}
 
-		http_list_directory_sizefmt(sizebuf, sizeof(sizebuf), tmp->size);
-
 		buffer_append_string_len(out, CONST_STR_LEN("<tr><td class=\"n\"><a href=\""));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);
 		buffer_append_string_len(out, CONST_STR_LEN("\">"));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_MINIMAL_XML);
 		buffer_append_string_len(out, CONST_STR_LEN("</a></td><td class=\"m\">"));
 		buffer_append_strftime(out, "%Y-%b-%d %T", localtime_r(&tmp->mtime, &tm));
-		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">"));
-		buffer_append_string(out, sizebuf);
-		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"t\">"));
-		buffer_append_string_buffer(out, content_type);
-		buffer_append_string_len(out, CONST_STR_LEN("</td></tr>\n"));
+		size_t buflen =
+		  http_list_directory_sizefmt(sizebuf, sizeof(sizebuf), tmp->size);
+		struct const_iovec iov[] = {
+		  { CONST_STR_LEN("</td><td class=\"s\">") }
+		 ,{ sizebuf, buflen }
+		 ,{ CONST_STR_LEN("</td><td class=\"t\">") }
+		 ,{ CONST_BUF_LEN(content_type) }
+		 ,{ CONST_STR_LEN("</td></tr>\n") }
+		};
+		buffer_append_iovec(out, iov, sizeof(iov)/sizeof(*iov));
 
 		free(tmp);
 
@@ -1089,8 +1091,8 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 	if (buffer_string_is_empty(p->conf.encoding)) {
 		buffer_copy_string_len(vb, CONST_STR_LEN("text/html"));
 	} else {
-		buffer_copy_string_len(vb, CONST_STR_LEN("text/html; charset="));
-		buffer_append_string_buffer(vb, p->conf.encoding);
+		buffer_append_str2(vb, CONST_STR_LEN("text/html; charset="),
+		                       CONST_BUF_LEN(p->conf.encoding));
 	}
 
 	return HANDLER_FINISHED;

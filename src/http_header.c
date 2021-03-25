@@ -249,17 +249,15 @@ void http_header_response_append(request_st * const r, enum http_header_e id, co
 __attribute_cold__
 static void http_header_response_insert_addtl(request_st * const r, enum http_header_e id, const char *k, uint32_t klen, buffer * const vb, uint32_t vlen) {
     UNUSED(id);
-    buffer_append_string_len(vb, CONST_STR_LEN("\r\n"));
+    char *h = buffer_string_prepare_append(vb, 2 + klen + vlen + 2);
+    buffer_append_str3(vb, CONST_STR_LEN("\r\n"), k, klen, CONST_STR_LEN(": "));
     if (r->http_version >= HTTP_VERSION_2) {
         r->resp_header_repeated = 1;
-        char * const h = buffer_string_prepare_append(vb, klen + vlen + 2);
-        for (uint32_t i = 0; i < klen; ++i)
-            h[i] = !light_isupper(k[i]) ? k[i] : (k[i] | 0x20);
-        buffer_commit(vb, klen);
+        h += 2;
+        for (uint32_t i = 0; i < klen; ++i) {
+            if (light_isupper(h[i])) h[i] |= 0x20;
+        }
     }
-    else
-        buffer_append_string_len(vb, k, klen);
-    buffer_append_string_len(vb, CONST_STR_LEN(": "));
 }
 
 void http_header_response_insert(request_st * const r, enum http_header_e id, const char *k, uint32_t klen, const char *v, uint32_t vlen) {

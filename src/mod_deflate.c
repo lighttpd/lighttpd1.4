@@ -291,12 +291,13 @@ static buffer * mod_deflate_cache_file_name(request_st * const r, const buffer *
     /* XXX: future: for shorter paths into the cache, we could checksum path,
      *      and then shard it to avoid a huge single directory.
      *      Alternatively, could use &r->uri.path, minus any
-     *      (matching) &r->pathinfo suffix, with result url-encoded */
+     *      (matching) &r->pathinfo suffix, with result url-encoded
+     *      Alternative, we could shard etag which is already our "checksum" */
     buffer * const tb = r->tmp_buf;
     buffer_copy_buffer(tb, cache_dir);
-    buffer_append_string_len(tb, CONST_BUF_LEN(&r->physical.path));
-    buffer_append_string_len(tb, CONST_STR_LEN("-"));
-    buffer_append_string_len(tb, etag->ptr+1, buffer_string_length(etag)-2);
+    buffer_append_path_len(tb, CONST_BUF_LEN(&r->physical.path));
+    buffer_append_str2(tb, CONST_STR_LEN("-"), /*(strip surrounding '"')*/
+                           etag->ptr+1, buffer_string_length(etag)-2);
     return tb;
 }
 

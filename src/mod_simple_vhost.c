@@ -128,7 +128,6 @@ SETDEFAULTS_FUNC(mod_simple_vhost_set_defaults) {
 }
 
 static void build_doc_root_path(buffer *out, const buffer *sroot, const buffer *host, const buffer *droot) {
-	force_assert(!buffer_string_is_empty(sroot));
 	buffer_copy_buffer(out, sroot);
 
 	if (!buffer_string_is_empty(host)) {

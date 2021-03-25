@@ -171,11 +171,7 @@ static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char 
 	if (buffer_string_length(env) + len >= fmax)
 		return -1; /* we can't append more headers, ignore it */
 
-	char * const dst = buffer_extend(env, len);
-	memcpy(dst, len_enc, len_enc_len);
-	memcpy(dst + len_enc_len, key, key_len);
-	if (val_len) memcpy(dst + len_enc_len + key_len, val, val_len);
-
+	buffer_append_str3(env, len_enc, len_enc_len, key, key_len, val, val_len);
 	return 0;
 }
 
@@ -267,10 +263,9 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 	beginRecord.body.roleB1 = 0;
 	beginRecord.body.flags = 0;
 	memset(beginRecord.body.reserved, 0, sizeof(beginRecord.body.reserved));
-
-	buffer_copy_string_len(b, (const char *)&beginRecord, sizeof(beginRecord));
 	fcgi_header(&header, FCGI_PARAMS, request_id, 0, 0); /*(set aside space to fill in later)*/
-	buffer_append_string_len(b, (const char *)&header, sizeof(header));
+	buffer_append_str2(b, (const char *)&beginRecord, sizeof(beginRecord),
+	                      (const char *)&header,      sizeof(header));
 
 	/* send FCGI_PARAMS */
 

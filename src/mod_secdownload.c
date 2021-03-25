@@ -479,8 +479,8 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 		if (protected_path != tb->ptr) {
 			buffer_copy_string(tb, protected_path);
 		}
-		buffer_append_string_len(tb, CONST_STR_LEN("?"));
-		buffer_append_string_buffer(tb, &r->uri.query);
+		buffer_append_str2(tb, CONST_STR_LEN("?"),
+		                       CONST_BUF_LEN(&r->uri.query));
 		/* assign last in case tb->ptr is reallocated */
 		protected_path = tb->ptr;
 	}

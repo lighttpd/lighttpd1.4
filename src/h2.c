@@ -1997,8 +1997,8 @@ h2_send_headers (request_st * const r, connection * const con)
         && !buffer_string_is_empty(r->conf.server_tag)) {
         buffer * const b = chunk_buffer_acquire();
         const uint32_t vlen = buffer_string_length(r->conf.server_tag);
-        buffer_copy_string_len(b, CONST_STR_LEN("server: "));
-        buffer_append_string_len(b, CONST_BUF_LEN(r->conf.server_tag));
+        buffer_append_str2(b, CONST_STR_LEN("server: "),
+                              r->conf.server_tag->ptr, vlen);
 
         alen += 6+vlen+4;
 
@@ -2144,14 +2144,11 @@ h2_send_1xx (request_st * const r, connection * const con)
     buffer_append_int(b, r->http_status);
     for (uint32_t i = 0; i < r->resp_headers.used; ++i) {
         const data_string * const ds = (data_string *)r->resp_headers.data[i];
-
-        if (buffer_string_is_empty(&ds->value)) continue;
-        if (buffer_string_is_empty(&ds->key)) continue;
-
-        buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-        buffer_append_string_buffer(b, &ds->key);
-        buffer_append_string_len(b, CONST_STR_LEN(": "));
-        buffer_append_string_buffer(b, &ds->value);
+        const uint32_t klen = buffer_string_length(&ds->key);
+        const uint32_t vlen = buffer_string_length(&ds->value);
+        if (0 == klen || 0 == vlen) continue;
+        buffer_append_str2(b, CONST_STR_LEN("\r\n"), ds->key.ptr, klen);
+        buffer_append_str2(b, CONST_STR_LEN(": "), ds->value.ptr, vlen);
     }
     buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 

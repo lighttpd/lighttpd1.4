@@ -132,9 +132,9 @@ static int configparser_remoteip_normalize_compat(buffer *rvalue) {
   int rc;
 
   if (rvalue->ptr[0] != '[') {
-      buffer_append_string_len(b, CONST_STR_LEN("["));
-      buffer_append_string_buffer(b, rvalue);
-      buffer_append_string_len(b, CONST_STR_LEN("]"));
+      buffer_append_str3(b, CONST_STR_LEN("["),
+                            CONST_BUF_LEN(rvalue),
+                            CONST_STR_LEN("]"));
   } else {
       buffer_append_string_buffer(b, rvalue);
   }
@@ -207,19 +207,23 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
       return; /* unreachable */
     }
 
+    const uint32_t comp_offset = buffer_string_length(&ctx->current->key)+3;
     buffer * const tb = ctx->srv->tmp_buf;
-    buffer_copy_buffer(tb, &ctx->current->key);
-    buffer_append_string_len(tb, CONST_STR_LEN(" / "));
-    const uint32_t comp_offset = buffer_string_length(tb);
-    buffer_append_string_len(tb, CONST_STR_LEN("$"));
-    buffer_append_string_buffer(tb, obj_tag); /*(HTTP, REQUEST_HEADER, SERVER)*/
-    buffer_append_string_len(tb, CONST_STR_LEN("[\""));
-    buffer_append_string_buffer(tb, comp_tag);
-    buffer_append_string_len(tb, CONST_STR_LEN("\"] "));
-    buffer_append_string_len(tb, op, 2);
-    buffer_append_string_len(tb, CONST_STR_LEN(" \""));
-    buffer_append_string_buffer(tb, rvalue);
-    buffer_append_string_len(tb, CONST_STR_LEN("\""));
+    buffer_clear(tb);
+    struct const_iovec iov[] = {
+      { CONST_BUF_LEN(&ctx->current->key) }
+     ,{ CONST_STR_LEN(" / ") }   /* comp_offset */
+     ,{ CONST_STR_LEN("$") }
+     ,{ CONST_BUF_LEN(obj_tag) } /*(HTTP, REQUEST_HEADER, SERVER)*/
+     ,{ CONST_STR_LEN("[\"") }
+     ,{ CONST_BUF_LEN(comp_tag) }
+     ,{ CONST_STR_LEN("\"] ") }
+     ,{ op, 2 }
+     ,{ CONST_STR_LEN(" \"") }
+     ,{ CONST_BUF_LEN(rvalue) }
+     ,{ CONST_STR_LEN("\"") }
+    };
+    buffer_append_iovec(tb, iov, sizeof(iov)/sizeof(*iov));
 
     data_config *dc;
     if (NULL != (dc = configparser_get_data_config(ctx->all_configs,
@@ -322,9 +326,9 @@ configparser_parse_else_condition(config_t * const ctx)
 {
     data_config * const dc = data_config_init();
     dc->cond = CONFIG_COND_ELSE;
-    buffer_copy_buffer(&dc->key, &ctx->current->key);
-    buffer_append_string_len(&dc->key, CONST_STR_LEN(" / "));
-    buffer_append_string_len(&dc->key, CONST_STR_LEN("else_tmp_token"));
+    buffer_append_str2(&dc->key, CONST_BUF_LEN(&ctx->current->key),
+                                 CONST_STR_LEN(" / "
+                                               "else_tmp_token"));
     configparser_push(ctx, dc, 1);
 }
 

@@ -692,9 +692,9 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
              * e.g. for="...:port")*/
             buffer_append_string_buffer(b, con->dst_addr_buf);
         } else if (family == AF_INET6) {
-            buffer_append_string_len(b, CONST_STR_LEN("\"["));
-            buffer_append_string_buffer(b, con->dst_addr_buf);
-            buffer_append_string_len(b, CONST_STR_LEN("]\""));
+            buffer_append_str3(b, CONST_STR_LEN("\"["),
+                                  CONST_BUF_LEN(con->dst_addr_buf),
+                                  CONST_STR_LEN("]\""));
         } else {
             buffer_append_string_len(b, CONST_STR_LEN("\""));
             buffer_append_string_backslash_escaped(
@@ -738,8 +738,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
          * (not checking if quoted-string and encoding needed) */
         if (semicolon) buffer_append_string_len(b, CONST_STR_LEN(";"));
         if (NULL != eproto) {
-            buffer_append_string_len(b, CONST_STR_LEN("proto="));
-            buffer_append_string_buffer(b, eproto);
+            buffer_append_str2(b,CONST_STR_LEN("proto="),CONST_BUF_LEN(eproto));
         } else if (con->srv_socket->is_ssl) {
             buffer_append_string_len(b, CONST_STR_LEN("proto=https"));
         } else {
@@ -855,8 +854,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 
 	/* request line */
 	http_method_append(b, r->http_method);
-	buffer_append_string_len(b, CONST_STR_LEN(" "));
-	buffer_append_string_buffer(b, &r->target);
+	buffer_append_str2(b, CONST_STR_LEN(" "), CONST_BUF_LEN(&r->target));
 	if (remap_headers)
 		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(&r->target), &hctx->conf.header, 1);
 
@@ -870,11 +868,11 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "proxy - using \"%s\" as HTTP Host", hctx->gw.host->id->ptr);
 		}
-		buffer_append_string_len(b, CONST_STR_LEN("\r\nHost: "));
-		buffer_append_string_buffer(b, hctx->gw.host->id);
+		buffer_append_str2(b, CONST_STR_LEN("\r\nHost: "),
+                                      CONST_BUF_LEN(hctx->gw.host->id));
 	} else if (!buffer_string_is_empty(r->http_host)) {
-		buffer_append_string_len(b, CONST_STR_LEN("\r\nHost: "));
-		buffer_append_string_buffer(b, r->http_host);
+		buffer_append_str2(b, CONST_STR_LEN("\r\nHost: "),
+                                      CONST_BUF_LEN(r->http_host));
 		if (remap_headers) {
 			size_t alen = buffer_string_length(r->http_host);
 			http_header_remap_host(b, buffer_string_length(b) - alen, &hctx->conf.header, 1, alen);

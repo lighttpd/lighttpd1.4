@@ -322,8 +322,7 @@ int http_request_host_normalize(buffer * const b, const int scheme_port) {
             len += (size_t)(bracket - percent);
         }
         buffer_string_set_length(b, 1); /* truncate after '[' */
-        buffer_append_string_len(b, buf, len);
-        buffer_append_string_len(b, CONST_STR_LEN("]"));
+        buffer_append_str2(b, buf, len, CONST_STR_LEN("]"));
 
       #else
 
@@ -971,10 +970,7 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
     /* take initial scheme value from connection-level state
      * (request r->uri.scheme can be overwritten for later,
      *  for example by mod_extforward or mod_magnet) */
-    if (scheme_port == 443)
-        buffer_copy_string_len(&r->uri.scheme, CONST_STR_LEN("https"));
-    else
-        buffer_copy_string_len(&r->uri.scheme, CONST_STR_LEN("http"));
+    buffer_copy_string_len(&r->uri.scheme, "https", scheme_port == 443 ? 5 : 4);
 
     buffer * const target = &r->target;
     if (r->http_method == HTTP_METHOD_CONNECT

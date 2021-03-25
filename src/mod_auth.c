@@ -720,12 +720,12 @@ static handler_t mod_auth_send_400_bad_request(request_st * const r) {
 static handler_t mod_auth_send_401_unauthorized_basic(request_st * const r, const buffer * const realm) {
     r->http_status = 401;
     r->handler_module = NULL;
-    buffer * const vb =
+    buffer_append_str3(
       http_header_response_set_ptr(r, HTTP_HEADER_WWW_AUTHENTICATE,
-                                   CONST_STR_LEN("WWW-Authenticate"));
-    buffer_copy_string_len(vb, CONST_STR_LEN("Basic realm=\""));
-    buffer_append_string_buffer(vb, realm);
-    buffer_append_string_len(vb, CONST_STR_LEN("\", charset=\"UTF-8\""));
+                                   CONST_STR_LEN("WWW-Authenticate")),
+      CONST_STR_LEN("Basic realm=\""),
+      CONST_BUF_LEN(realm),
+      CONST_STR_LEN("\", charset=\"UTF-8\""));
     return HANDLER_FINISHED;
 }
 
@@ -1133,14 +1133,15 @@ static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const str
 
     buffer_clear(b);
     for (int i = 0; i < n; ++i) {
-        if (i > 0) {
-            buffer_append_string_len(b,CONST_STR_LEN("\r\nWWW-Authenticate: "));
-        }
-        buffer_append_string_len(b, CONST_STR_LEN("Digest realm=\""));
-        buffer_append_string_buffer(b, require->realm);
-        buffer_append_string_len(b, CONST_STR_LEN("\", charset=\"UTF-8\", algorithm="));
-        buffer_append_string_len(b, algoname[i], algolen[i]);
-        buffer_append_string_len(b, CONST_STR_LEN(", nonce=\""));
+        struct const_iovec iov[] = {
+          { CONST_STR_LEN("\r\nWWW-Authenticate: ") }
+         ,{ CONST_STR_LEN("Digest realm=\"") }
+         ,{ CONST_BUF_LEN(require->realm) }
+         ,{ CONST_STR_LEN("\", charset=\"UTF-8\", algorithm=") }
+         ,{ algoname[i], algolen[i] }
+         ,{ CONST_STR_LEN(", nonce=\"") }
+        };
+        buffer_append_iovec(b, iov+(0==i), sizeof(iov)/sizeof(*iov)-(0==i));
         mod_auth_append_nonce(b, cur_ts, require, algoid[i], NULL);
         buffer_append_string_len(b, CONST_STR_LEN("\", qop=\"auth\""));
         if (nonce_stale) {

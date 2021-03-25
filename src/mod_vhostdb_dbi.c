@@ -187,8 +187,7 @@ static int mod_vhostdb_dbi_query(request_st * const r, void *p_d, buffer *docroo
             /* escape the uri.authority */
             char *esc = NULL;
             size_t len = dbi_conn_escape_string_copy(dbconf->dbconn, r->uri.authority.ptr, &esc);
-            buffer_append_string_len(sqlquery, b, (size_t)(d - b));
-            buffer_append_string_len(sqlquery, esc, len);
+            buffer_append_str2(sqlquery, b, (size_t)(d - b), esc, len);
             free(esc);
             if (0 == len) return -1;
         } else {

@@ -417,14 +417,11 @@ connection_send_1xx (request_st * const r, connection * const con)
     http_status_append(b, r->http_status);
     for (uint32_t i = 0; i < r->resp_headers.used; ++i) {
         const data_string * const ds = (data_string *)r->resp_headers.data[i];
-
-        if (buffer_string_is_empty(&ds->value)) continue;
-        if (buffer_string_is_empty(&ds->key)) continue;
-
-        buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
-        buffer_append_string_buffer(b, &ds->key);
-        buffer_append_string_len(b, CONST_STR_LEN(": "));
-        buffer_append_string_buffer(b, &ds->value);
+        const uint32_t klen = buffer_string_length(&ds->key);
+        const uint32_t vlen = buffer_string_length(&ds->value);
+        if (0 == klen || 0 == vlen) continue;
+        buffer_append_str2(b, CONST_STR_LEN("\r\n"), ds->key.ptr, klen);
+        buffer_append_str2(b, CONST_STR_LEN(": "), ds->value.ptr, vlen);
     }
     buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
     chunkqueue_append_buffer_commit(cq);

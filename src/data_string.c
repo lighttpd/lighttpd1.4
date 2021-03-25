@@ -30,12 +30,11 @@ static int data_string_insert_dup(data_unset *dst, data_unset *src) {
 	data_string *ds_dst = (data_string *)dst;
 	data_string *ds_src = (data_string *)src;
 
-	if (!buffer_is_empty(&ds_dst->value)) {
-		buffer_append_string_len(&ds_dst->value, CONST_STR_LEN(", "));
-		buffer_append_string_buffer(&ds_dst->value, &ds_src->value);
-	} else {
+	if (!buffer_is_empty(&ds_dst->value))
+		buffer_append_str2(&ds_dst->value, CONST_STR_LEN(", "),
+		                                   CONST_BUF_LEN(&ds_src->value));
+	else
 		buffer_copy_buffer(&ds_dst->value, &ds_src->value);
-	}
 
 	src->fn->free(src);
 

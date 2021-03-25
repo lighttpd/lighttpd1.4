@@ -35,7 +35,6 @@
 #include "plugin.h"
 #include "safe_memclear.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -385,7 +384,7 @@ static handler_t mod_authn_mysql_query(request_st * const r, void *p_d, http_aut
     }
 
     do {
-        char q[1024], uname[512], urealm[512];
+        char uname[512], urealm[512];
         unsigned long mrc;
 
         if (ai->ulen > sizeof(uname)/2-1)
@@ -415,19 +414,25 @@ static handler_t mod_authn_mysql_query(request_st * const r, void *p_d, http_aut
         if ((unsigned long)~0 == mrc) break;
       #endif
 
-        rc = snprintf(q, sizeof(q),
-                      "SELECT %s FROM %s WHERE %s='%s' AND %s='%s'",
-                      p->conf.auth_mysql_col_pass,
-                      p->conf.auth_mysql_users_table,
-                      p->conf.auth_mysql_col_user,
-                      uname,
-                      p->conf.auth_mysql_col_realm,
-                      urealm);
-
-        if (rc >= (int)sizeof(q)) {
-            rc = -1;
-            break;
-        }
+        buffer * const tb = r->tmp_buf;
+        buffer_clear(tb);
+        struct const_iovec iov[] = {
+          { CONST_STR_LEN("SELECT ") }
+         ,{ p->conf.auth_mysql_col_pass, strlen(p->conf.auth_mysql_col_pass) }
+         ,{ CONST_STR_LEN(" FROM ") }
+         ,{ p->conf.auth_mysql_users_table, strlen(p->conf.auth_mysql_users_table) }
+         ,{ CONST_STR_LEN(" WHERE ") }
+         ,{ p->conf.auth_mysql_col_user, strlen(p->conf.auth_mysql_col_user) }
+         ,{ CONST_STR_LEN("='") }
+         ,{ uname, strlen(uname) }
+         ,{ CONST_STR_LEN("' AND ") }
+         ,{ p->conf.auth_mysql_col_realm, strlen(p->conf.auth_mysql_col_realm) }
+         ,{ CONST_STR_LEN("='") }
+         ,{ urealm, strlen(urealm) }
+         ,{ CONST_STR_LEN("'") }
+        };
+        buffer_append_iovec(tb, iov, sizeof(iov)/sizeof(*iov));
+        char * const q = tb->ptr;
 
         /* for now we stay synchronous */
         if (0 != mysql_query(p->mysql_conn, q)) {

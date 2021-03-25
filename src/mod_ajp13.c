@@ -729,9 +729,9 @@ ajp13_expand_headers (buffer * const b, handler_ctx * const hctx, uint32_t plen)
             else {
                 if (plen < len+1) break;
                 plen -= len+1;
-                buffer_append_string_len(b, CONST_STR_LEN("\n"));
-                buffer_append_string_len(b, (char *)ptr, len);
-                buffer_append_string_len(b, CONST_STR_LEN(": "));
+                buffer_append_str3(b, CONST_STR_LEN("\n"),
+                                   (char *)ptr, len,
+                                   CONST_STR_LEN(": "));
                 ptr += len+1;
             }
 

@@ -104,8 +104,8 @@ int http_response_redirect_to_directory(request_st * const r, int status) {
 	buffer_clear(o);
 	/* XXX: store flag in global at startup? */
 	if (r->con->srv->srvconf.absolute_dir_redirect) {
-		buffer_copy_buffer(o, &r->uri.scheme);
-		buffer_append_string_len(o, CONST_STR_LEN("://"));
+		buffer_append_str2(o, CONST_BUF_LEN(&r->uri.scheme),
+		                      CONST_STR_LEN("://"));
 		if (0 != http_response_buffer_append_authority(r, o)) {
 			return -1;
 		}
@@ -125,10 +125,9 @@ int http_response_redirect_to_directory(request_st * const r, int status) {
 	buffer_append_string_encoded(vb, CONST_BUF_LEN(&r->uri.path),
 	                             ENCODING_REL_URI);
 	buffer_append_string_len(vb, CONST_STR_LEN("/"));
-	if (!buffer_string_is_empty(&r->uri.query)) {
-		buffer_append_string_len(o, CONST_STR_LEN("?"));
-		buffer_append_string_buffer(o, &r->uri.query);
-	}
+	if (!buffer_string_is_empty(&r->uri.query))
+		buffer_append_str2(vb, CONST_STR_LEN("?"),
+		                       CONST_BUF_LEN(&r->uri.query));
 
 	return 0;
 }

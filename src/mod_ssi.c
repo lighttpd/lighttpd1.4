@@ -509,14 +509,13 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 		} else {
 			/* virtual */
 
-			if (virt_path[0] == '/') {
-				buffer_copy_string(tb, virt_path);
-			} else {
+			buffer_clear(tb);
+			if (virt_path[0] != '/') {
 				/* there is always a / */
 				const char * const sl = strrchr(r->uri.path.ptr, '/');
 				buffer_copy_string_len(tb, r->uri.path.ptr, sl - r->uri.path.ptr + 1);
-				buffer_append_string(tb, virt_path);
 			}
+			buffer_append_string(tb, virt_path);
 
 			buffer_urldecode_path(tb);
 			if (!buffer_is_valid_UTF8(tb)) {
@@ -591,7 +590,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 					for (j = 0; s > 1024 && abr[j+1]; s /= 1024, j++);
 
 					buffer_append_int(tb, s);
-					buffer_append_string(tb, abr[j]);
+					buffer_append_string_len(tb, abr[j], j ? 3 : 2);
 				} else {
 					buffer_append_int(tb, stb.st_size);
 				}
@@ -725,16 +724,14 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 		for (i = 0; i < p->ssi_vars->used; i++) {
 			data_string *ds = (data_string *)p->ssi_vars->sorted[i];
 
-			buffer_append_string_buffer(tb, &ds->key);
-			buffer_append_string_len(tb, CONST_STR_LEN("="));
+			buffer_append_str2(tb, CONST_BUF_LEN(&ds->key), CONST_STR_LEN("="));
 			buffer_append_string_encoded(tb, CONST_BUF_LEN(&ds->value), ENCODING_MINIMAL_XML);
 			buffer_append_string_len(tb, CONST_STR_LEN("\n"));
 		}
 		for (i = 0; i < p->ssi_cgi_env->used; i++) {
 			data_string *ds = (data_string *)p->ssi_cgi_env->sorted[i];
 
-			buffer_append_string_buffer(tb, &ds->key);
-			buffer_append_string_len(tb, CONST_STR_LEN("="));
+			buffer_append_str2(tb, CONST_BUF_LEN(&ds->key), CONST_STR_LEN("="));
 			buffer_append_string_encoded(tb, CONST_BUF_LEN(&ds->value), ENCODING_MINIMAL_XML);
 			buffer_append_string_len(tb, CONST_STR_LEN("\n"));
 		}

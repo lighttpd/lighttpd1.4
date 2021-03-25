@@ -207,8 +207,8 @@ http_range_multi (request_st * const r,
       http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE,
                                CONST_STR_LEN("Content-Type"));
     if (content_type) {
-        buffer_append_string_len(tb, CONST_STR_LEN("\r\nContent-Type: "));
-        buffer_append_string_len(tb, CONST_BUF_LEN(content_type));
+        buffer_append_str2(tb, CONST_STR_LEN("\r\nContent-Type: "),
+                               CONST_BUF_LEN(content_type));
     }
     buffer_append_string_len(tb,CONST_STR_LEN("\r\nContent-Range: bytes "));
     const uint32_t prefix_len = buffer_string_length(tb);
