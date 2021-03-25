@@ -55,9 +55,6 @@ void buffer_free_ptr(buffer *b) {
 
 void buffer_move(buffer * restrict b, buffer * restrict src) {
 	buffer tmp;
-	force_assert(NULL != b);
-	force_assert(NULL != src);
-
 	buffer_clear(b);
 	tmp = *src; *src = *b; *b = tmp;
 }
@@ -65,6 +62,7 @@ void buffer_move(buffer * restrict b, buffer * restrict src) {
 /* make sure buffer is at least "size" big + 1 for '\0'. keep old data */
 __attribute_cold__
 __attribute_noinline__
+__attribute_nonnull__
 __attribute_returns_nonnull__
 static char* buffer_realloc(buffer * const restrict b, const size_t len) {
     #define BUFFER_PIECE_SIZE 64uL  /*(must be power-of-2)*/
@@ -80,6 +78,7 @@ static char* buffer_realloc(buffer * const restrict b, const size_t len) {
 
 __attribute_cold__
 __attribute_noinline__
+__attribute_nonnull__
 __attribute_returns_nonnull__
 static char* buffer_alloc_replace(buffer * const restrict b, const size_t size) {
     /*(discard old data so realloc() does not copy)*/
@@ -100,6 +99,7 @@ char* buffer_string_prepare_copy(buffer * const b, const size_t size) {
 
 __attribute_cold__
 __attribute_noinline__
+__attribute_nonnull__
 __attribute_returns_nonnull__
 static char* buffer_string_prepare_append_resize(buffer * const restrict b, const size_t size) {
     if (b->used < 2)  /* buffer_string_is_empty(b) */
@@ -153,7 +153,6 @@ void buffer_string_set_length(buffer *b, uint32_t len) {
 
 void buffer_commit(buffer *b, size_t size)
 {
-	force_assert(NULL != b);
 	force_assert(b->size > 0);
 
 	if (0 == b->used) b->used = 1;
@@ -279,6 +278,7 @@ void buffer_append_uint_hex_lc(buffer *b, uintmax_t value) {
 	}
 }
 
+__attribute_nonnull__
 __attribute_returns_nonnull__
 static char* utostr(char * const buf_end, uintmax_t val) {
 	char *cur = buf_end;
@@ -291,6 +291,7 @@ static char* utostr(char * const buf_end, uintmax_t val) {
 	return cur;
 }
 
+__attribute_nonnull__
 __attribute_returns_nonnull__
 static char* itostr(char * const buf_end, intmax_t val) {
 	/* absolute value not defined for INTMAX_MIN, but can take absolute
@@ -308,8 +309,6 @@ void buffer_append_int(buffer *b, intmax_t val) {
 	char buf[LI_ITOSTRING_LENGTH];
 	char* const buf_end = buf + sizeof(buf);
 	char *str;
-
-	force_assert(NULL != b);
 
 	str = itostr(buf_end, val);
 	force_assert(buf_end > str && str >= buf);
@@ -411,14 +410,11 @@ int buffer_eq_slen(const buffer * const b, const char * const s, const size_t sl
  */
 
 int buffer_is_equal(const buffer *a, const buffer *b) {
-	force_assert(NULL != a && NULL != b);
-
 	/* 1 = equal; 0 = not equal */
 	return (a->used == b->used && 0 == memcmp(a->ptr, b->ptr, a->used));
 }
 
 int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len) {
-	force_assert(NULL != a && NULL != s);
 	force_assert(b_len + 1 > b_len);
 
 	/* 1 = equal; 0 = not equal */
@@ -673,8 +669,6 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 
 	if (0 == s_len) return;
 
-	force_assert(NULL != s);
-
 	/* count to-be-encoded-characters */
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
 		if ((*ds < 0x20) /* control character */
@@ -812,8 +806,6 @@ void buffer_path_simplify(buffer *dest, buffer *src)
 	/* current character, the one before, and the one before that from input */
 	char c, pre1, pre2;
 	char *start, *slash, *walk, *out;
-
-	force_assert(NULL != dest && NULL != src);
 
 	if (buffer_string_is_empty(src)) {
 		buffer_copy_string_len(dest, CONST_STR_LEN(""));
