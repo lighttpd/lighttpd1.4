@@ -167,6 +167,15 @@
 #endif
 #endif
 
+#ifndef __attribute_nonnull__
+#if __has_attribute(nonnull) \
+ || __GNUC_PREREQ(3,3)
+#define __attribute_nonnull__  __attribute__((__nonnull__))
+#else
+#define __attribute_nonnull__
+#endif
+#endif
+
 #ifndef __attribute_malloc__
 #if __has_attribute(malloc) \
  || __GNUC_PREREQ(2,96)
