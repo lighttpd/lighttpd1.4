@@ -123,6 +123,7 @@ conf_data.set('HAVE_LOCALTIME_R', compiler.has_function('localtime_r', args: def
 conf_data.set('HAVE_LSTAT', compiler.has_function('lstat', args: defs))
 conf_data.set('HAVE_MADVISE', compiler.has_function('madvise', args: defs))
 conf_data.set('HAVE_MEMCPY', compiler.has_function('memcpy', args: defs))
+conf_data.set('HAVE_MEMPCPY', compiler.has_function('mempcpy', args: defs))
 conf_data.set('HAVE_MEMSET', compiler.has_function('memset', args: defs))
 conf_data.set('HAVE_MMAP', compiler.has_function('mmap', args: defs))
 conf_data.set('HAVE_PATHCONF', compiler.has_function('pathconf', args: defs))
