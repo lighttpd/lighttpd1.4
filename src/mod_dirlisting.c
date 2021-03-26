@@ -1046,8 +1046,10 @@ static int http_list_directory(request_st * const r, plugin_data * const p) {
 }
 
 
+SUBREQUEST_FUNC(mod_dirlisting_subrequest);
 
-URIHANDLER_FUNC(mod_dirlisting_subrequest) {
+
+URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	plugin_data *p = p_d;
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
@@ -1073,6 +1075,19 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest) {
 		r->http_status = 500;
 		return HANDLER_FINISHED;
 	}
+
+	r->handler_module = p->self;
+	return HANDLER_GO_ON;
+}
+
+
+SUBREQUEST_FUNC(mod_dirlisting_subrequest) {
+	plugin_data *p = p_d;
+	if (r->handler_module != p->self) return HANDLER_GO_ON;
+
+	/*(alternatively, could save p->conf in hctx in subrequest start,
+	 * but we currently enter here only once when processing dir)*/
+	mod_dirlisting_patch_config(r, p);
 
 	http_list_directory_header(r, p);
 	if (http_list_directory(r, p)) {
@@ -1105,7 +1120,8 @@ int mod_dirlisting_plugin_init(plugin *p) {
 	p->name        = "dirlisting";
 
 	p->init        = mod_dirlisting_init;
-	p->handle_subrequest_start  = mod_dirlisting_subrequest;
+	p->handle_subrequest_start = mod_dirlisting_subrequest_start;
+	p->handle_subrequest       = mod_dirlisting_subrequest;
 	p->set_defaults  = mod_dirlisting_set_defaults;
 	p->cleanup     = mod_dirlisting_free;
 
