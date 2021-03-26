@@ -393,7 +393,7 @@ fdevent_linux_sysepoll_init (fdevents *ev)
 #ifdef FDEVENT_USE_FREEBSD_KQUEUE
 
 #include <sys/event.h>
-#include <sys/time.h>
+#include "sys-time.h"
 #include <fcntl.h>
 
 static int

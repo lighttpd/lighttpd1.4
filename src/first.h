@@ -30,8 +30,15 @@
 #ifdef _WIN32
 /* https://learn.microsoft.com/en-us/windows/win32/winprog/using-the-windows-headers */
 /* http://web.archive.org/web/20121219084749/http://support.microsoft.com/kb/166474 */
+/* _WIN32_WINNT 0x0600 or greater for GetTickCount64(); 0x0A00 for Windows 10 */
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
+#ifndef WINVER
+#define WINVER 0x0A00
+#endif
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00
+#endif
 /* https://learn.microsoft.com/en-us/windows/win32/winsock/default-state-for-a-socket-s-overlapped-attribute-2 */
 #ifndef FD_SETSIZE
 #define FD_SETSIZE 4096

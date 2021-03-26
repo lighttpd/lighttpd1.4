@@ -379,10 +379,14 @@ static int clockid_mono_coarse = 0;
 static unix_time64_t
 server_monotonic_secs (void)
 {
+  #ifdef _MSC_VER
+    return (unix_time64_t)(GetTickCount64() / 1000);
+  #else
     unix_timespec64_t ts;
     return (0 == log_clock_gettime(clockid_mono_coarse, &ts))
       ? ts.tv_sec
       : log_monotonic_secs;
+  #endif
 }
 
 static unix_time64_t

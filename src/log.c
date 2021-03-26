@@ -38,6 +38,10 @@ unix_time64_t log_monotonic_secs = 0;
 
 #if !defined(HAVE_CLOCK_GETTIME) || !HAS_TIME_BITS64
 
+#ifdef _MSC_VER
+#include <windows.h>
+#endif
+
 int log_clock_gettime (const int clockid, unix_timespec64_t * const ts) {
   #ifdef HAVE_CLOCK_GETTIME
    #if HAS_TIME_BITS64
@@ -52,6 +56,17 @@ int log_clock_gettime (const int clockid, unix_timespec64_t * const ts) {
     }
     return rc;
    #endif
+  #elif defined(_MSC_VER)
+    /* https://docs.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getsystemtimeasfiletime */
+    /* https://docs.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime */
+    /* Contains a 64-bit value representing the number of 100-nanosecond intervals since January 1, 1601 (UTC). */
+    UNUSED(clockid);
+    union { FILETIME ft; ULARGE_INTEGER u; } n; /*(alignment)*/
+    GetSystemTimeAsFileTime(&n.ft);
+    n.u.QuadPart -= 116444736000000000uLL; /* FILETIME Jan 1 1970 00:00:00 */
+    ts->tv_sec  = (unix_time64_t)(n.u.QuadPart / 10000000uL);
+    ts->tv_nsec = (unix_time64_t)(n.u.QuadPart % 10000000uL * 100uL);
+    return 0;
   #else
     /* Mac OSX before 10.12 Sierra does not provide clock_gettime()
      * e.g. defined(__APPLE__) && defined(__MACH__)
