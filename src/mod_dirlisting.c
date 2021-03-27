@@ -76,6 +76,60 @@ typedef struct {
 	plugin_config conf;
 } plugin_data;
 
+typedef struct {
+	uint32_t namelen;
+	time_t  mtime;
+	off_t   size;
+} dirls_entry_t;
+
+typedef struct {
+	dirls_entry_t **ent;
+	uint32_t used;
+	uint32_t size;
+} dirls_list_t;
+
+#define DIRLIST_ENT_NAME(ent)  ((char*)(ent) + sizeof(dirls_entry_t))
+#define DIRLIST_BLOB_SIZE      16
+
+typedef struct {
+	DIR *dp;
+	dirls_list_t dirs;
+	dirls_list_t files;
+	char *path;
+	char *path_file;
+	int dfd; /*(dirfd() owned by (DIR *))*/
+	uint32_t name_max;
+	plugin_config conf;
+} handler_ctx;
+
+
+static handler_ctx * mod_dirlisting_handler_ctx_init (plugin_data * const p) {
+    handler_ctx *hctx = calloc(1, sizeof(*hctx));
+    force_assert(hctx);
+    memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
+    return hctx;
+}
+
+static void mod_dirlisting_handler_ctx_free (handler_ctx *hctx) {
+    if (hctx->dp)
+        closedir(hctx->dp);
+    if (hctx->files.ent) {
+        dirls_entry_t ** const ent = hctx->files.ent;
+        for (uint32_t i = 0, used = hctx->files.used; i < used; ++i)
+            free(ent[i]);
+        free(ent);
+    }
+    if (hctx->dirs.ent) {
+        dirls_entry_t ** const ent = hctx->dirs.ent;
+        for (uint32_t i = 0, used = hctx->dirs.used; i < used; ++i)
+            free(ent[i]);
+        free(ent);
+    }
+    free(hctx->path);
+    free(hctx);
+}
+
+
 static pcre_keyvalue_buffer * mod_dirlisting_parse_excludes(server *srv, const array *a) {
     const int pcre_jit =
       !srv->srvconf.feature_flags
@@ -324,21 +378,6 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-typedef struct {
-	uint32_t namelen;
-	time_t  mtime;
-	off_t   size;
-} dirls_entry_t;
-
-typedef struct {
-	dirls_entry_t **ent;
-	uint32_t used;
-	uint32_t size;
-} dirls_list_t;
-
-#define DIRLIST_ENT_NAME(ent)	((char*)(ent) + sizeof(dirls_entry_t))
-#define DIRLIST_BLOB_SIZE		16
-
 /* simple combsort algorithm */
 static void http_dirls_sort(dirls_entry_t **ent, int num) {
 	int gap = num;
@@ -403,7 +442,7 @@ static size_t http_list_directory_sizefmt(char *buf, size_t bufsz, off_t size) {
 	return buflen + 3;
 }
 
-static void http_list_directory_include_file(request_st * const r, plugin_data * const p, int is_header) {
+static void http_list_directory_include_file(request_st * const r, const handler_ctx * const p, int is_header) {
     const buffer *path;
     int encode = 0;
     if (is_header) {
@@ -678,7 +717,7 @@ static void http_dirlist_append_js_table_resort (buffer * const b, const request
 	buffer_append_iovec(b, iov, sizeof(iov)/sizeof(*iov));
 }
 
-static void http_list_directory_header(request_st * const r, plugin_data * const p) {
+static void http_list_directory_header(request_st * const r, const handler_ctx * const p) {
 
 	chunkqueue * const cq = &r->write_queue;
 	if (p->conf.auto_layout) {
@@ -778,7 +817,7 @@ static void http_list_directory_header(request_st * const r, plugin_data * const
 	chunkqueue_append_buffer_commit(cq);
 }
 
-static void http_list_directory_footer(request_st * const r, plugin_data * const p) {
+static void http_list_directory_footer(request_st * const r, const handler_ctx * const p) {
 
 	chunkqueue * const cq = &r->write_queue;
 	chunkqueue_append_mem(cq, CONST_STR_LEN(
@@ -822,52 +861,62 @@ static void http_list_directory_footer(request_st * const r, plugin_data * const
 	}
 }
 
-static int http_list_directory(request_st * const r, plugin_data * const p) {
-	const uint32_t dlen = buffer_string_length(&r->physical.path);
+static int http_open_directory(request_st * const r, handler_ctx * const hctx) {
+    const uint32_t dlen = buffer_string_length(&r->physical.path);
 #if defined __WIN32
-	const uint32_t name_max = FILENAME_MAX;
+    hctx->name_max = FILENAME_MAX;
 #else
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
-	/* allocate based on PATH_MAX rather than pathconf() to get _PC_NAME_MAX */
-	const uint32_t name_max = PATH_MAX - dlen - 1;
+    /* allocate based on PATH_MAX rather than pathconf() to get _PC_NAME_MAX */
+    hctx->name_max = PATH_MAX - dlen - 1;
 #endif
-	char * const path = malloc(dlen + name_max + 1);
-	force_assert(NULL != path);
-	memcpy(path, r->physical.path.ptr, dlen+1);
+    hctx->path = malloc(dlen + hctx->name_max + 1);
+    force_assert(NULL != hctx->path);
+    memcpy(hctx->path, r->physical.path.ptr, dlen+1);
   #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) || !defined(_ATFILE_SOURCE)
-	char *path_file = path + dlen;
+    hctx->path_file = hctx->path + dlen;
   #endif
 
-	struct dirent *dent;
   #ifndef _ATFILE_SOURCE /*(not using fdopendir unless _ATFILE_SOURCE)*/
-	const int dfd = -1;
-	DIR * const dp = opendir(path);
+    hctx->dfd = -1;
+    hctx->dp = opendir(hctx->path);
   #else
-	const int dfd = fdevent_open_dirname(path, r->conf.follow_symlink);
-	DIR * const dp = (dfd >= 0) ? fdopendir(dfd) : NULL;
+    hctx->dfd = fdevent_open_dirname(hctx->path, r->conf.follow_symlink);
+    hctx->dp = (hctx->dfd >= 0) ? fdopendir(hctx->dfd) : NULL;
   #endif
-	if (NULL == dp) {
-		log_perror(r->conf.errh, __FILE__, __LINE__, "opendir %s", path);
-		if (dfd >= 0) close(dfd);
-		free(path);
-		return -1;
-	}
+    if (NULL == hctx->dp) {
+        log_perror(r->conf.errh, __FILE__, __LINE__, "opendir %s", hctx->path);
+        if (hctx->dfd >= 0) {
+            close(hctx->dfd);
+            hctx->dfd = -1;
+        }
+        return -1;
+    }
 
-	dirls_list_t dirs, files;
-	dirs.ent   = (dirls_entry_t**) malloc(sizeof(dirls_entry_t*) * DIRLIST_BLOB_SIZE);
-	force_assert(dirs.ent);
-	dirs.size  = DIRLIST_BLOB_SIZE;
-	dirs.used  = 0;
-	files.ent  = (dirls_entry_t**) malloc(sizeof(dirls_entry_t*) * DIRLIST_BLOB_SIZE);
-	force_assert(files.ent);
-	files.size = DIRLIST_BLOB_SIZE;
-	files.used = 0;
+    dirls_list_t * const dirs = &hctx->dirs;
+    dirls_list_t * const files = &hctx->files;
+    dirs->ent   =
+      (dirls_entry_t**) malloc(sizeof(dirls_entry_t*) * DIRLIST_BLOB_SIZE);
+    force_assert(dirs->ent);
+    dirs->size  = DIRLIST_BLOB_SIZE;
+    dirs->used  = 0;
+    files->ent  =
+      (dirls_entry_t**) malloc(sizeof(dirls_entry_t*) * DIRLIST_BLOB_SIZE);
+    force_assert(files->ent);
+    files->size = DIRLIST_BLOB_SIZE;
+    files->used = 0;
 
+    return 0;
+}
+
+static int http_read_directory(handler_ctx * const p) {
+	struct dirent *dent;
 	const int hide_dotfiles = p->conf.hide_dot_files;
+	const uint32_t name_max = p->name_max;
 	struct stat st;
-	while ((dent = readdir(dp)) != NULL) {
+	while ((dent = readdir(p->dp)) != NULL) {
 		const char * const d_name = dent->d_name;
 		const uint32_t dsz = (uint32_t) _D_EXACT_NAMLEN(dent);
 		if (d_name[0] == '.') {
@@ -907,16 +956,16 @@ static int http_list_directory(request_st * const r, plugin_data * const p) {
 	  #endif
 
 	  #ifndef _ATFILE_SOURCE
-		memcpy(path_file, d_name, dsz + 1);
-		if (stat(path, &st) != 0)
+		memcpy(p->path_file, d_name, dsz + 1);
+		if (stat(p->path, &st) != 0)
 			continue;
 	  #else
 		/*(XXX: follow symlinks, like stat(); not using AT_SYMLINK_NOFOLLOW) */
-		if (0 != fstatat(dfd, d_name, &st, 0))
+		if (0 != fstatat(p->dfd, d_name, &st, 0))
 			continue; /* file *just* disappeared? */
 	  #endif
 
-		dirls_list_t * const list = !S_ISDIR(st.st_mode) ? &files : &dirs;
+		dirls_list_t * const list = !S_ISDIR(st.st_mode) ? &p->files : &p->dirs;
 		if (list->used == list->size) {
 			list->size += DIRLIST_BLOB_SIZE;
 			list->ent   = (dirls_entry_t**) realloc(list->ent, sizeof(dirls_entry_t*) * list->size);
@@ -929,11 +978,18 @@ static int http_list_directory(request_st * const r, plugin_data * const p) {
 		tmp->namelen = dsz;
 		memcpy(DIRLIST_ENT_NAME(tmp), d_name, dsz + 1);
 	}
-	closedir(dp);
+	closedir(p->dp);
+	p->dp = NULL;
 
-	if (dirs.used) http_dirls_sort(dirs.ent, dirs.used);
+	return HANDLER_FINISHED;
+}
 
-	if (files.used) http_dirls_sort(files.ent, files.used);
+static void http_list_directory(request_st * const r, handler_ctx * const hctx) {
+	dirls_list_t * const dirs = &hctx->dirs;
+	dirls_list_t * const files = &hctx->files;
+	/*(note: sorting can be time consuming on large dirs (O(n log n))*/
+	if (dirs->used) http_dirls_sort(dirs->ent, dirs->used);
+	if (files->used) http_dirls_sort(files->ent, files->used);
 
 	char sizebuf[sizeof("999.9K")];
 	struct tm tm;
@@ -946,14 +1002,16 @@ static int http_list_directory(request_st * const r, plugin_data * const p) {
 	 * (estimate approx 200-256 bytes of HTML per item; could be up to ~512) */
 	chunkqueue * const cq = &r->write_queue;
 	buffer * const tb = r->tmp_buf;
-	buffer * const out = (dirs.used + files.used <= 256)
+	buffer_clear(tb);
+	buffer * const out = (dirs->used + files->used <= 256)
 	  ? chunkqueue_append_buffer_open(cq)
 	  : tb;
 	buffer_clear(out);
 
 	/* directories */
-	for (uint32_t i = 0; i < dirs.used; ++i) {
-		dirls_entry_t * const tmp = dirs.ent[i];
+	dirls_entry_t ** const dirs_ent = dirs->ent;
+	for (uint32_t i = 0, used = dirs->used; i < used; ++i) {
+		dirls_entry_t * const tmp = dirs_ent[i];
 
 		buffer_append_string_len(out, CONST_STR_LEN("<tr class=\"d\"><td class=\"n\"><a href=\""));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);
@@ -962,8 +1020,6 @@ static int http_list_directory(request_st * const r, plugin_data * const p) {
 		buffer_append_string_len(out, CONST_STR_LEN("</a>/</td><td class=\"m\">"));
 		buffer_append_strftime(out, "%Y-%b-%d %T", localtime_r(&tmp->mtime, &tm));
 		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n"));
-
-		free(tmp);
 
 		if (buffer_string_space(out) < 256) {
 			if (out == tb) {
@@ -978,14 +1034,15 @@ static int http_list_directory(request_st * const r, plugin_data * const p) {
 
 	/* files */
 	const array * const mimetypes = r->conf.mimetypes;
-	for (uint32_t i = 0; i < files.used; ++i) {
-		dirls_entry_t * const tmp = files.ent[i];
+	dirls_entry_t ** const files_ent = files->ent;
+	for (uint32_t i = 0, used = files->used; i < used; ++i) {
+		dirls_entry_t * const tmp = files_ent[i];
 		const buffer *content_type;
 	  #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) /*(pass full path)*/
 		content_type = NULL;
 		if (r->conf.use_xattr) {
-			memcpy(path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
-			content_type = stat_cache_mimetype_by_xattr(path);
+			memcpy(hctx->path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
+			content_type = stat_cache_mimetype_by_xattr(hctx->path);
 		}
 		if (NULL == content_type)
 	  #endif
@@ -1014,8 +1071,6 @@ static int http_list_directory(request_st * const r, plugin_data * const p) {
 		};
 		buffer_append_iovec(out, iov, sizeof(iov)/sizeof(*iov));
 
-		free(tmp);
-
 		if (buffer_string_space(out) < 256) {
 			if (out == tb) {
 				if (0 != chunkqueue_append_mem_to_tempfile(cq,
@@ -1037,16 +1092,33 @@ static int http_list_directory(request_st * const r, plugin_data * const p) {
 	else {
 		chunkqueue_append_buffer_commit(cq);
 	}
+}
 
-	free(files.ent);
-	free(dirs.ent);
-	free(path);
 
-	return 0;
+static void mod_dirlisting_content_type (request_st * const r, const buffer * const encoding) {
+    buffer * const vb =
+      http_header_response_set_ptr(r, HTTP_HEADER_CONTENT_TYPE,
+                                   CONST_STR_LEN("Content-Type"));
+    if (buffer_string_is_empty(encoding))
+        buffer_copy_string_len(vb, CONST_STR_LEN("text/html"));
+    else
+        buffer_append_str2(vb, CONST_STR_LEN("text/html; charset="),
+                               CONST_BUF_LEN(encoding));
+}
+
+
+static void mod_dirlisting_response (request_st * const r, handler_ctx * const hctx) {
+    http_list_directory_header(r, hctx);
+    http_list_directory(r, hctx);
+    http_list_directory_footer(r, hctx);
+    mod_dirlisting_content_type(r, hctx->conf.encoding);
+
+    r->resp_body_finished = 1;
 }
 
 
 SUBREQUEST_FUNC(mod_dirlisting_subrequest);
+REQUEST_FUNC(mod_dirlisting_reset);
 
 
 URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
@@ -1076,41 +1148,47 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 		return HANDLER_FINISHED;
 	}
 
+	handler_ctx * const hctx = mod_dirlisting_handler_ctx_init(p);
+
+	if (0 != http_open_directory(r, hctx)) {
+		/* dirlisting failed */
+		r->http_status = 403;
+	        mod_dirlisting_handler_ctx_free(hctx);
+		return HANDLER_FINISHED;
+	}
+
+	r->plugin_ctx[p->id] = hctx;
 	r->handler_module = p->self;
-	return HANDLER_GO_ON;
+	return mod_dirlisting_subrequest(r, p);
 }
 
 
 SUBREQUEST_FUNC(mod_dirlisting_subrequest) {
-	plugin_data *p = p_d;
-	if (r->handler_module != p->self) return HANDLER_GO_ON;
+    plugin_data * const p = p_d;
+    handler_ctx * const hctx = r->plugin_ctx[p->id];
+    if (NULL == hctx) return HANDLER_GO_ON; /*(should not happen)*/
 
-	/*(alternatively, could save p->conf in hctx in subrequest start,
-	 * but we currently enter here only once when processing dir)*/
-	mod_dirlisting_patch_config(r, p);
+    handler_t rc = http_read_directory(hctx);
+    switch (rc) {
+      case HANDLER_FINISHED:
+        mod_dirlisting_response(r, hctx);
+        mod_dirlisting_reset(r, p); /*(release resources, including hctx)*/
+        break;
+      default:
+        break;
+    }
 
-	http_list_directory_header(r, p);
-	if (http_list_directory(r, p)) {
-		/* dirlisting failed */
-		r->http_status = 403;
-		http_response_body_clear(r, 0);
-		return HANDLER_FINISHED;
-	}
-	http_list_directory_footer(r, p);
+    return rc;
+}
 
-	r->resp_body_finished = 1;
 
-	buffer * const vb =
-	  http_header_response_set_ptr(r, HTTP_HEADER_CONTENT_TYPE,
-	                               CONST_STR_LEN("Content-Type"));
-	if (buffer_string_is_empty(p->conf.encoding)) {
-		buffer_copy_string_len(vb, CONST_STR_LEN("text/html"));
-	} else {
-		buffer_append_str2(vb, CONST_STR_LEN("text/html; charset="),
-		                       CONST_BUF_LEN(p->conf.encoding));
-	}
-
-	return HANDLER_FINISHED;
+REQUEST_FUNC(mod_dirlisting_reset) {
+    void ** const restrict dptr = &r->plugin_ctx[((plugin_data *)p_d)->id];
+    if (*dptr) {
+        mod_dirlisting_handler_ctx_free(*dptr);
+        *dptr = NULL;
+    }
+    return HANDLER_GO_ON;
 }
 
 
@@ -1122,6 +1200,7 @@ int mod_dirlisting_plugin_init(plugin *p) {
 	p->init        = mod_dirlisting_init;
 	p->handle_subrequest_start = mod_dirlisting_subrequest_start;
 	p->handle_subrequest       = mod_dirlisting_subrequest;
+	p->handle_request_reset    = mod_dirlisting_reset;
 	p->set_defaults  = mod_dirlisting_set_defaults;
 	p->cleanup     = mod_dirlisting_free;
 
