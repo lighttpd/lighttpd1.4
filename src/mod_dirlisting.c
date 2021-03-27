@@ -16,6 +16,7 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "connections.h"/* joblist_append() */
 #include "fdevent.h"
 #include "http_chunk.h"
 #include "http_header.h"
@@ -101,6 +102,8 @@ typedef struct {
 	uint32_t name_max;
 	plugin_config conf;
 } handler_ctx;
+
+#define DIRLIST_BATCH 32
 
 
 static handler_ctx * mod_dirlisting_handler_ctx_init (plugin_data * const p) {
@@ -916,7 +919,8 @@ static int http_read_directory(handler_ctx * const p) {
 	const int hide_dotfiles = p->conf.hide_dot_files;
 	const uint32_t name_max = p->name_max;
 	struct stat st;
-	while ((dent = readdir(p->dp)) != NULL) {
+	int count = -1;
+	while (++count < DIRLIST_BATCH && (dent = readdir(p->dp)) != NULL) {
 		const char * const d_name = dent->d_name;
 		const uint32_t dsz = (uint32_t) _D_EXACT_NAMLEN(dent);
 		if (d_name[0] == '.') {
@@ -978,6 +982,8 @@ static int http_read_directory(handler_ctx * const p) {
 		tmp->namelen = dsz;
 		memcpy(DIRLIST_ENT_NAME(tmp), d_name, dsz + 1);
 	}
+	if (count == DIRLIST_BATCH)
+		return HANDLER_WAIT_FOR_EVENT;
 	closedir(p->dp);
 	p->dp = NULL;
 
@@ -993,10 +999,6 @@ static void http_list_directory(request_st * const r, handler_ctx * const hctx) 
 
 	char sizebuf[sizeof("999.9K")];
 	struct tm tm;
-
-	/* Note: a very large directory may cause lighttpd to pause handling other
-	 * requests while lighttpd processes directory, especially if directory is
-	 * on a remote filesystem */
 
 	/* generate large directory listings into tempfiles
 	 * (estimate approx 200-256 bytes of HTML per item; could be up to ~512) */
@@ -1173,6 +1175,9 @@ SUBREQUEST_FUNC(mod_dirlisting_subrequest) {
       case HANDLER_FINISHED:
         mod_dirlisting_response(r, hctx);
         mod_dirlisting_reset(r, p); /*(release resources, including hctx)*/
+        break;
+      case HANDLER_WAIT_FOR_EVENT: /*(used here to mean 'yield')*/
+        joblist_append(r->con);
         break;
       default:
         break;
