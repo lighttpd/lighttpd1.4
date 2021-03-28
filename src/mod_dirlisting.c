@@ -75,6 +75,7 @@ typedef struct {
 	PLUGIN_DATA;
 	plugin_config defaults;
 	plugin_config conf;
+	int processing;
 } plugin_data;
 
 typedef struct {
@@ -104,6 +105,7 @@ typedef struct {
 } handler_ctx;
 
 #define DIRLIST_BATCH 32
+static int dirlist_max_in_progress;
 
 
 static handler_ctx * mod_dirlisting_handler_ctx_init (plugin_data * const p) {
@@ -362,6 +364,9 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
             }
         }
     }
+
+    dirlist_max_in_progress = srv->max_conns >> 4;
+    if (0 == dirlist_max_in_progress) dirlist_max_in_progress = 1;
 
     p->defaults.dir_listing = 0;
     p->defaults.hide_dot_files = 1;
@@ -1150,6 +1155,18 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 		return HANDLER_FINISHED;
 	}
 
+	/* upper limit for dirlisting requests in progress (per lighttpd worker)
+	 * (attempt to avoid "livelock" scenarios or starvation of other requests)
+	 * (100 is still a high arbitrary limit;
+	 *  and limit applies only to directories larger than DIRLIST_BATCH-2) */
+	if (p->processing == dirlist_max_in_progress) {
+		r->http_status = 503;
+		http_header_response_set(r, HTTP_HEADER_OTHER,
+		                         CONST_STR_LEN("Retry-After"),
+		                         CONST_STR_LEN("2"));
+		return HANDLER_FINISHED;
+	}
+
 	handler_ctx * const hctx = mod_dirlisting_handler_ctx_init(p);
 
 	if (0 != http_open_directory(r, hctx)) {
@@ -1158,6 +1175,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	        mod_dirlisting_handler_ctx_free(hctx);
 		return HANDLER_FINISHED;
 	}
+	++p->processing;
 
 	r->plugin_ctx[p->id] = hctx;
 	r->handler_module = p->self;
@@ -1190,6 +1208,7 @@ SUBREQUEST_FUNC(mod_dirlisting_subrequest) {
 REQUEST_FUNC(mod_dirlisting_reset) {
     void ** const restrict dptr = &r->plugin_ctx[((plugin_data *)p_d)->id];
     if (*dptr) {
+        --((plugin_data *)p_d)->processing;
         mod_dirlisting_handler_ctx_free(*dptr);
         *dptr = NULL;
     }
