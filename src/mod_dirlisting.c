@@ -547,7 +547,7 @@ static const char js_simple_table_resort[] = \
 "  var str = \"\";\n" \
 "  var cs = el.childNodes;\n" \
 "  var l = cs.length;\n" \
-"  for (i=0;i<l;i++) {\n" \
+"  for (var i=0;i<l;i++) {\n" \
 "   if (cs[i].nodeType==1) str += get_inner_text(cs[i]);\n" \
 "   else if (cs[i].nodeType==3) str += cs[i].nodeValue;\n" \
 "  }\n" \
@@ -632,7 +632,7 @@ static const char js_simple_table_resort[] = \
 " var span = lnk.childNodes[1];\n" \
 " var table = lnk.parentNode.parentNode.parentNode.parentNode;\n" \
 " var rows = new Array();\n" \
-" for (j=1;j<table.rows.length;j++)\n" \
+" for (var j=1;j<table.rows.length;j++)\n" \
 "  rows[j-1] = table.rows[j];\n" \
 " click_column = lnk.parentNode.cellIndex;\n" \
 " rows.sort(sortfn);\n" \
@@ -646,7 +646,7 @@ static const char js_simple_table_resort[] = \
 "  span.innerHTML = '&darr;';\n" \
 "  span.setAttribute('sortdir','down');\n" \
 " }\n" \
-" for (i=0;i<rows.length;i++)\n" \
+" for (var i=0;i<rows.length;i++)\n" \
 "  table.tBodies[0].appendChild(rows[i]);\n" \
 " prev_span = span;\n" \
 "}\n";
@@ -685,42 +685,34 @@ static const char js_simple_table_init_sort[] = \
 "   resort(lnk);\n" \
 "  //}\n" \
 " }\n" \
-"}\n";
+"}\n" \
+"\n" \
+"function init_sort_from_query() {\n" \
+"  var urlParams = new URLSearchParams(location.search);\n" \
+"  var c = 0;\n" \
+"  var o = 0;\n" \
+"  switch (urlParams.get('C')) {\n" \
+"    case \"N\": c=0; break;\n" \
+"    case \"M\": c=1; break;\n" \
+"    case \"S\": c=2; break;\n" \
+"    case \"T\":\n" \
+"    case \"D\": c=3; break;\n" \
+"  }\n" \
+"  switch (urlParams.get('O')) {\n" \
+"    case \"A\": o=1; break;\n" \
+"    case \"D\": o=0; break;\n" \
+"  }\n" \
+"  init_sort(c,o);\n" \
+"}\n" \
+"init_sort_from_query();\n";
 
-static void http_dirlist_append_js_table_resort (buffer * const b, const request_st * const r) {
-	char init_sort[] = "0,0";
-	if (!buffer_string_is_empty(&r->uri.query)) {
-		const char *qs = r->uri.query.ptr;
-		do {
-			if (qs[0] == 'C' && qs[1] == '=') {
-				const int col = 0;
-				switch (qs[2]) {
-				case 'N': init_sort[col] = '0'; break;
-				case 'M': init_sort[col] = '1'; break;
-				case 'S': init_sort[col] = '2'; break;
-				case 'T':
-				case 'D': init_sort[col] = '3'; break;
-				default:  break;
-				}
-			}
-			else if (qs[0] == 'O' && qs[1] == '=') {
-				const int order = 2;
-				switch (qs[2]) {
-				case 'A': init_sort[order] = '1'; break;
-				case 'D': init_sort[order] = '0'; break;
-				default:  break;
-				}
-			}
-		} while ((qs = strchr(qs, '&')) && *++qs);
-	}
 
+static void http_dirlist_append_js_table_resort (buffer * const b) {
 	struct const_iovec iov[] = {
 	  { CONST_STR_LEN("\n<script type=\"text/javascript\">\n// <!--\n\n") }
 	 ,{ CONST_STR_LEN(js_simple_table_resort) }
 	 ,{ CONST_STR_LEN(js_simple_table_init_sort) }
-	 ,{ CONST_STR_LEN("\ninit_sort(") }
-	 ,{ CONST_STR_LEN(init_sort) }
-	 ,{ CONST_STR_LEN(");\n\n// -->\n</script>\n\n") }
+	 ,{ CONST_STR_LEN("\n// -->\n</script>\n\n") }
 	};
 	buffer_append_iovec(b, iov, sizeof(iov)/sizeof(*iov));
 }
@@ -858,7 +850,7 @@ static void http_list_directory_footer(request_st * const r, const handler_ctx *
 			  CONST_BUF_LEN(p->conf.external_js),
 			  CONST_STR_LEN("\"></script>\n"));
 		} else if (buffer_is_empty(p->conf.external_js)) {
-			http_dirlist_append_js_table_resort(out, r);
+			http_dirlist_append_js_table_resort(out);
 		}
 
 		buffer_append_string_len(out, CONST_STR_LEN(
