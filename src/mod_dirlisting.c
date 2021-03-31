@@ -50,7 +50,28 @@
 
 /**
  * this is a dirlisting for a lighttpd plugin
+ *
+ * Notes:
+ * - mod_dirlisting is a dir list implementation.  One size does not fit all.
+ *   mod_dirlisting aims to be somewhat flexible, but if special behavior
+ *   is needed, use custom CGI/FastCGI/SCGI to handle dir listing instead.
+ *   - backend daemon could implement custom caching
+ *   - backend daemon could monitor directory for changes (e.g. inotify)
+ *   - backend daemon or scripts could trigger when directory is modified
+ *     and could regenerate index.html (and mod_indexfile could be used
+ *     instead of mod_dirlisting)
+ * - basic alphabetical sorting (in C locale) is done on server side
+ *   in case client does not execute javascript
+ *   (otherwise, response could be streamed, which is not done)
+ *      (possible future dir-listing.* config option)
+ * - reading entire directory into memory for sorting large directory
+ *   can lead to large memory usage if many simultaneous requests occur
  */
+
+struct dirlist_cache {
+	int32_t max_age;
+	buffer *path;
+};
 
 typedef struct {
 	char dir_listing;
@@ -69,6 +90,7 @@ typedef struct {
 	const buffer *external_js;
 	const buffer *encoding;
 	const buffer *set_footer;
+	const struct dirlist_cache *cache;
 } plugin_config;
 
 typedef struct {
@@ -135,6 +157,52 @@ static void mod_dirlisting_handler_ctx_free (handler_ctx *hctx) {
 }
 
 
+static struct dirlist_cache * mod_dirlisting_parse_cache(server *srv, const array *a) {
+    const data_unset *du;
+
+    du = array_get_element_klen(a, CONST_STR_LEN("max-age"));
+    const int32_t max_age = config_plugin_value_to_int32(du, 15);
+
+    buffer *path = NULL;
+    du = array_get_element_klen(a, CONST_STR_LEN("path"));
+    if (NULL == du) {
+        if (0 != max_age) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "dir-listing.cache must include \"path\"");
+            return NULL;
+        }
+    }
+    else {
+        if (du->type != TYPE_STRING) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "dir-listing.cache \"path\" must have string value");
+            return NULL;
+        }
+        path = &((data_string *)du)->value;
+        if (!stat_cache_path_isdir(path)) {
+            if (errno == ENOTDIR) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "dir-listing.cache \"path\" => \"%s\" is not a dir",
+                  path->ptr);
+                return NULL;
+            }
+            if (errno == ENOENT) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "dir-listing.cache \"path\" => \"%s\" does not exist",
+                  path->ptr);
+                /*(warning; not returning NULL)*/
+            }
+        }
+    }
+
+    struct dirlist_cache * const cache = calloc(1, sizeof(struct dirlist_cache));
+    force_assert(cache);
+    cache->max_age = max_age;
+    cache->path = path;
+    return cache;
+}
+
+
 static pcre_keyvalue_buffer * mod_dirlisting_parse_excludes(server *srv, const array *a) {
     const int pcre_jit =
       !srv->srvconf.feature_flags
@@ -183,6 +251,10 @@ FREE_FUNC(mod_dirlisting_free) {
               case 2: /* dir-listing.exclude */
                 if (cpv->vtype != T_CONFIG_LOCAL) continue;
                 pcre_keyvalue_buffer_free(cpv->v.v);
+                break;
+              case 15: /* dir-listing.cache */
+                if (cpv->vtype != T_CONFIG_LOCAL) continue;
+                free(cpv->v.v);
                 break;
               default:
                 break;
@@ -236,6 +308,10 @@ static void mod_dirlisting_merge_config_cpv(plugin_config * const pconf, const c
         break;
       case 14:/* dir-listing.auto-layout */
         pconf->auto_layout = (char)cpv->v.u;
+        break;
+      case 15:/* dir-listing.cache */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->cache = cpv->v.v;
         break;
       default:/* should not happen */
         return;
@@ -303,6 +379,9 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
      ,{ CONST_STR_LEN("dir-listing.auto-layout"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.cache"),
+        T_CONFIG_ARRAY_KVANY,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -358,6 +437,11 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
               case 12:/* dir-listing.encode-readme */
               case 13:/* dir-listing.encode-header */
               case 14:/* dir-listing.auto-layout */
+                break;
+              case 15:/* dir-listing.cache */
+                cpv->v.v = mod_dirlisting_parse_cache(srv, cpv->v.a);
+                if (NULL == cpv->v.v) return HANDLER_ERROR;
+                cpv->vtype = T_CONFIG_LOCAL;
                 break;
               default:/* should not happen */
                 break;
@@ -1118,6 +1202,9 @@ static void mod_dirlisting_response (request_st * const r, handler_ctx * const h
 
 SUBREQUEST_FUNC(mod_dirlisting_subrequest);
 REQUEST_FUNC(mod_dirlisting_reset);
+static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data * const p);
+__attribute_noinline__
+static void mod_dirlisting_cache_add (request_st * const r, plugin_data * const p);
 
 
 URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
@@ -1147,6 +1234,12 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 		return HANDLER_FINISHED;
 	}
 
+	if (p->conf.cache) {
+		handler_t rc = mod_dirlisting_cache_check(r, p);
+		if (rc != HANDLER_GO_ON)
+			return rc;
+	}
+
 	/* upper limit for dirlisting requests in progress (per lighttpd worker)
 	 * (attempt to avoid "livelock" scenarios or starvation of other requests)
 	 * (100 is still a high arbitrary limit;
@@ -1160,6 +1253,19 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	}
 
 	handler_ctx * const hctx = mod_dirlisting_handler_ctx_init(p);
+
+	/* future: might implement a queue to limit max number of dirlisting
+	 * requests being serviced in parallel (increasing disk I/O), and if
+	 * caching is enabled, to avoid repeating the work on the same directory
+	 * in parallel.  Could continue serving (expired) cached entry while
+	 * updating, but burst of requests on first access to dir would still
+	 * need to be handled.
+	 *
+	 * If queueing (not implemented), defer opening dir until pulled off
+	 * queue.  Since joblist is per-connection, would need to handle single
+	 * request from queue even if multiple streams are queued on same
+	 * HTTP/2 connection.  If queueing, must check for and remove from
+	 * queue in mod_dirlisting_reset() if request is still queued. */
 
 	if (0 != http_open_directory(r, hctx)) {
 		/* dirlisting failed */
@@ -1185,6 +1291,8 @@ SUBREQUEST_FUNC(mod_dirlisting_subrequest) {
       case HANDLER_FINISHED:
         mod_dirlisting_response(r, hctx);
         mod_dirlisting_reset(r, p); /*(release resources, including hctx)*/
+        if (p->conf.cache)
+            mod_dirlisting_cache_add(r, p);
         break;
       case HANDLER_WAIT_FOR_EVENT: /*(used here to mean 'yield')*/
         joblist_append(r->con);
@@ -1205,6 +1313,115 @@ REQUEST_FUNC(mod_dirlisting_reset) {
         *dptr = NULL;
     }
     return HANDLER_GO_ON;
+}
+
+
+static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data * const p) {
+    /* optional: an external process can trigger a refresh by deleting the cache
+     * entry when the external process detects (or initiaties) changes to dir */
+    if (0 == p->conf.cache->max_age) return HANDLER_GO_ON;
+    buffer * const tb = r->tmp_buf;
+    buffer_copy_path_len2(tb, CONST_BUF_LEN(p->conf.cache->path),
+                              CONST_BUF_LEN(&r->physical.path));
+    buffer_append_string_len(tb, CONST_STR_LEN("dirlist.html"));
+    stat_cache_entry * const sce = stat_cache_get_entry_open(tb, 1);
+    if (NULL == sce || sce->fd == -1)
+        return HANDLER_GO_ON;
+    if (sce->st.st_mtime + p->conf.cache->max_age < log_epoch_secs)
+        return HANDLER_GO_ON;
+
+    /* Note: dirlist < 350 or so entries will generally trigger file
+     * read into memory for dirlist < 32k, which will not be able to use
+     * mod_deflate cache.  Still, this is much more efficient than lots of
+     * stat() calls to generate the dirlisting for each and every request */
+    if (0 != http_chunk_append_file_ref(r, sce)) {
+        http_response_body_clear(r, 0);
+        return HANDLER_GO_ON;
+    }
+
+    mod_dirlisting_content_type(r, p->conf.encoding);
+    r->resp_body_finished = 1;
+    return HANDLER_FINISHED;
+}
+
+
+static int mod_dirlisting_write_cq (const int fd, chunkqueue * const cq, log_error_st * const errh)
+{
+    chunkqueue in;
+    memset(&in, 0, sizeof(in));
+    chunkqueue_append_chunkqueue(&in, cq);
+    cq->bytes_in  -= in.bytes_in;
+    cq->bytes_out -= in.bytes_in;
+
+    /*(similar to mod_webdav.c:mod_webdav_write_cq(), but operates on two cqs)*/
+    chunkqueue_remove_finished_chunks(&in);
+    while (!chunkqueue_is_empty(&in)) {
+        ssize_t wr = chunkqueue_write_chunk(fd, &in, errh);
+        if (wr > 0)
+            chunkqueue_steal(cq, &in, wr);
+        else if (wr < 0) {
+            /*(writing to tempfile failed; transfer remaining data back to cq)*/
+            chunkqueue_append_chunkqueue(cq, &in);
+            return 0;
+        }
+    }
+    return 1;
+}
+
+
+#include <sys/stat.h>   /* mkdir() */
+#include <sys/types.h>
+/*(similar to mod_deflate.c:mkdir_recursive(), but starts mid-path)*/
+static int mkdir_recursive (char *dir, size_t off) {
+    char *p = dir+off;
+    if (*p != '/') {
+        if (off && p[-1] == '/')
+            --p;
+        else {
+            errno = ENOTDIR;
+            return -1;
+        }
+    }
+    do {
+        *p = '\0';
+        int rc = mkdir(dir, 0700);
+        *p = '/';
+        if (0 != rc && errno != EEXIST) return -1;
+    } while ((p = strchr(p+1, '/')) != NULL);
+    return 0;
+}
+
+
+#include <stdio.h>      /* rename() */
+__attribute_noinline__
+static void mod_dirlisting_cache_add (request_st * const r, plugin_data * const p) {
+  #ifndef PATH_MAX
+  #define PATH_MAX 4096
+  #endif
+    char oldpath[PATH_MAX];
+    char newpath[PATH_MAX];
+    if (0 == p->conf.cache->max_age) return;
+    buffer * const tb = r->tmp_buf;
+    buffer_copy_path_len2(tb, CONST_BUF_LEN(p->conf.cache->path),
+                              CONST_BUF_LEN(&r->physical.path));
+    if (!stat_cache_path_isdir(tb)
+        && 0 != mkdir_recursive(tb->ptr,
+                                buffer_string_length(p->conf.cache->path)))
+        return;
+    buffer_append_string_len(tb, CONST_STR_LEN("dirlist.html"));
+    const size_t len = buffer_string_length(tb);
+    if (len + 7 >= PATH_MAX) return;
+    memcpy(newpath, tb->ptr, len+1);   /*(include '\0')*/
+    buffer_append_string_len(tb, CONST_STR_LEN(".XXXXXX"));
+    memcpy(oldpath, tb->ptr, len+7+1); /*(include '\0')*/
+    const int fd = fdevent_mkstemp_append(oldpath);
+    if (fd < 0) return;
+    if (mod_dirlisting_write_cq(fd, &r->write_queue, r->conf.errh)
+        && 0 == rename(oldpath, newpath))
+        stat_cache_invalidate_entry(newpath, len);
+    else
+        unlink(oldpath);
+    close(fd);
 }
 
 
