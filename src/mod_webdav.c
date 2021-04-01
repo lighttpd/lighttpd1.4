@@ -230,6 +230,7 @@
 #include "buffer.h"
 #include "chunk.h"
 #include "fdevent.h"
+#include "http_chunk.h"
 #include "http_date.h"
 #include "http_etag.h"
 #include "http_header.h"
@@ -621,6 +622,19 @@ URIHANDLER_FUNC(mod_webdav_uri_handler)
 }
 
 
+static void
+webdav_double_buffer (request_st * const r, buffer * const b)
+{
+    /* send parts of XML to r->write_queue; surrounding XML tags added later.
+     * http_chunk_append_buffer() is safe to use here since r->resp_body_started
+     * has not been set, so r->resp_send_chunked can not be set yet */
+    if (buffer_string_length(b) > 60000) {
+        http_chunk_append_buffer(r, b); /*(might move/steal/reset buffer)*/
+        buffer_clear(b);
+    }
+}
+
+
 #ifdef USE_LOCKS
 
 typedef struct webdav_lockdata_wr {
@@ -858,16 +872,20 @@ webdav_xml_propstat (buffer * const b, buffer * const value, const int status)
 
 __attribute_cold__
 static void
-webdav_xml_response_status (buffer * const b,
+webdav_xml_response_status (request_st * const r,
                             const buffer * const href,
                             const int status)
 {
+    buffer * const b = chunk_buffer_acquire();
     buffer_append_string_len(b, CONST_STR_LEN(
       "<D:response>\n"));
     webdav_xml_href(b, href);
     webdav_xml_status(b, status);
     buffer_append_string_len(b, CONST_STR_LEN(
       "</D:response>\n"));
+    /*(under extreme error conditions, write() to tempfile for each error)*/
+    http_chunk_append_buffer(r, b); /*(might move/steal/reset buffer)*/
+    chunk_buffer_release(b);
 }
 
 
@@ -940,8 +958,7 @@ webdav_xml_activelock (buffer * const b,
 
 static void
 webdav_xml_doc_multistatus (request_st * const r,
-                            const plugin_config * const pconf,
-                            buffer * const ms)
+                            const plugin_config * const pconf)
 {
     http_status_set_fin(r, 207); /* Multi-status */
 
@@ -951,7 +968,7 @@ webdav_xml_doc_multistatus (request_st * const r,
     buffer_append_string_len(b, CONST_STR_LEN(
       "<D:multistatus xmlns:D=\"DAV:\">\n"));
     chunkqueue_prepend_buffer_commit(cq);
-    chunkqueue_append_buffer(cq, ms); /*(might move/steal/reset buffer)*/
+
     chunkqueue_append_mem(cq, CONST_STR_LEN(
       "</D:multistatus>\n"));
 
@@ -1083,28 +1100,25 @@ webdav_xml_doc_423_locked (request_st * const r, buffer * const hrefs,
     http_status_set(r, 423); /* Locked */
     r->resp_body_finished = 1;
 
-    buffer * const b = /*(optimization; buf extended as needed)*/
-      chunkqueue_append_buffer_open_sz(&r->write_queue, 256 + hrefs->used);
-
+    chunkqueue * const cq = &r->write_queue;
+    buffer * const b = chunkqueue_prepend_buffer_open(cq);
     webdav_xml_doctype(b, r);
-    struct const_iovec iov[] = {
-      { CONST_STR_LEN(
+    buffer_append_str3(b,
+      CONST_STR_LEN(
       "<D:error xmlns:D=\"DAV:\">\n"
-      "<D:") }
-     ,{ errtag, errtaglen }
-     ,{ CONST_STR_LEN(
-      ">\n") }
-     ,{ CONST_BUF_LEN(hrefs) }
-     ,{ CONST_STR_LEN(
-      "</D:") }
-     ,{ errtag, errtaglen }
-     ,{ CONST_STR_LEN(
+      "<D:"),
+      errtag, errtaglen,
+      CONST_STR_LEN(
+      ">\n"));
+    chunkqueue_prepend_buffer_commit(cq);
+    buffer_append_str3(hrefs,
+      CONST_STR_LEN(
+      "</D:"),
+      errtag, errtaglen,
+      CONST_STR_LEN(
       ">\n"
-      "</D:error>\n") }
-    };
-    buffer_append_iovec(b, iov, sizeof(iov)/sizeof(*iov));
-
-    chunkqueue_append_buffer_commit(&r->write_queue);
+      "</D:error>\n"));
+    chunkqueue_append_buffer(cq, hrefs); /*(might move/steal/reset buffer)*/
 }
 #endif
 
@@ -2367,7 +2381,7 @@ webdav_delete_file (const plugin_config * const pconf,
 static int
 webdav_delete_dir (const plugin_config * const pconf,
                    physical_st * const dst,
-                   buffer * const b,
+                   request_st * const r,
                    const int flags)
 {
     int multi_status = 0;
@@ -2380,7 +2394,7 @@ webdav_delete_dir (const plugin_config * const pconf,
   #endif
     if (NULL == dir) {
         if (dfd >= 0) close(dfd);
-        webdav_xml_response_status(b, &dst->rel_path, 403);
+        webdav_xml_response_status(r, &dst->rel_path, 403);
         return 1;
     }
 
@@ -2436,13 +2450,13 @@ webdav_delete_dir (const plugin_config * const pconf,
         if (s_isdir) {
             buffer_append_string_len(&dst->path, CONST_STR_LEN("/"));
             buffer_append_string_len(&dst->rel_path, CONST_STR_LEN("/"));
-            multi_status |= webdav_delete_dir(pconf, dst, b, flags);
+            multi_status |= webdav_delete_dir(pconf, dst, r, flags);
         }
         else {
             int status =
               webdav_unlinkat(pconf, dst, dfd, de->d_name);
             if (0 != status) {
-                webdav_xml_response_status(b, &dst->rel_path, status);
+                webdav_xml_response_status(r, &dst->rel_path, status);
                 multi_status = 1;
             }
         }
@@ -2465,7 +2479,7 @@ webdav_delete_dir (const plugin_config * const pconf,
             }
         }
         if (0 != rmdir_status) {
-            webdav_xml_response_status(b, &dst->rel_path, rmdir_status);
+            webdav_xml_response_status(r, &dst->rel_path, rmdir_status);
             multi_status = 1;
         }
     }
@@ -2739,7 +2753,7 @@ static int
 webdav_copymove_dir (const plugin_config * const pconf,
                      physical_st * const src,
                      physical_st * const dst,
-                     buffer * const b,
+                     request_st * const r,
                      int flags)
 {
     /* NOTE: merging collections is NON-CONFORMANT behavior
@@ -2795,7 +2809,7 @@ webdav_copymove_dir (const plugin_config * const pconf,
       #ifndef RENAME_NOREPLACE /*(renameat2() not well-supported yet)*/
         if (!overwrite) {
             if (0 == lstat(dst->path.ptr, &st) || errno != ENOENT) {
-                webdav_xml_response_status(b, &src->rel_path, 412);
+                webdav_xml_response_status(r, &src->rel_path, 412);
                 return 412; /* Precondition Failed */
             }
             /* TOC-TOU race between lstat() and rename(),
@@ -2818,14 +2832,14 @@ webdav_copymove_dir (const plugin_config * const pconf,
               case ENOTEMPTY:
              #endif
                 if (!overwrite) {
-                        webdav_xml_response_status(b, &src->rel_path, 412);
+                        webdav_xml_response_status(r, &src->rel_path, 412);
                         return 412; /* Precondition Failed */
                 }
                 make_destdir = 0;
                 break;
               case ENOTDIR:
                 if (!overwrite) {
-                        webdav_xml_response_status(b, &src->rel_path, 409);
+                        webdav_xml_response_status(r, &src->rel_path, 409);
                         return 409; /* Conflict */
                 }
 
@@ -2852,7 +2866,7 @@ webdav_copymove_dir (const plugin_config * const pconf,
                     dst->path.ptr[dst->path.used-2] = '/'; /*(restore slash)*/
                     dst->rel_path.ptr[dst->rel_path.used-2] = '/';
                     if (0 != status) {
-                        webdav_xml_response_status(b, &src->rel_path, status);
+                        webdav_xml_response_status(r, &src->rel_path, status);
                         return status;
                     }
 
@@ -2883,7 +2897,7 @@ webdav_copymove_dir (const plugin_config * const pconf,
 
     if (make_destdir) {
         if (0 != (status = webdav_mkdir(pconf, dst, overwrite))) {
-            webdav_xml_response_status(b, &src->rel_path, status);
+            webdav_xml_response_status(r, &src->rel_path, status);
             return status;
         }
     }
@@ -2908,7 +2922,7 @@ webdav_copymove_dir (const plugin_config * const pconf,
   #endif
     if (NULL == srcdir) {
         if (dfd >= 0) close(dfd);
-        webdav_xml_response_status(b, &src->rel_path, 403);
+        webdav_xml_response_status(r, &src->rel_path, 403);
         return 403; /* Forbidden */
     }
     mode_t d_type;
@@ -2963,14 +2977,14 @@ webdav_copymove_dir (const plugin_config * const pconf,
             buffer_append_string_len(&dst->path,     CONST_STR_LEN("/"));
             buffer_append_string_len(&src->rel_path, CONST_STR_LEN("/"));
             buffer_append_string_len(&dst->rel_path, CONST_STR_LEN("/"));
-            status = webdav_copymove_dir(pconf, src, dst, b, flags);
+            status = webdav_copymove_dir(pconf, src, dst, r, flags);
             if (0 != status)
                multi_status = 1;
         }
         else if (S_ISREG(d_type)) {
             status = webdav_copymove_file(pconf, src, dst, &flags);
             if (0 != status)
-                webdav_xml_response_status(b, &src->rel_path, status);
+                webdav_xml_response_status(r, &src->rel_path, status);
         }
       #if 0
         else if (S_ISLNK(d_type)) {
@@ -2998,9 +3012,9 @@ webdav_copymove_dir (const plugin_config * const pconf,
 
     if (0 == multi_status) {
         if (flags & (WEBDAV_FLAG_MOVE_RENAME|WEBDAV_FLAG_MOVE_XDEV)) {
-            status = webdav_delete_dir(pconf, src, b, flags); /* content */
+            status = webdav_delete_dir(pconf, src, r, flags); /* content */
             if (0 != status) {
-                webdav_xml_response_status(b, &src->rel_path, status);
+                webdav_xml_response_status(r, &src->rel_path, status);
                 multi_status = 1;
             }
         }
@@ -3383,6 +3397,8 @@ webdav_propfind_resource_403 (const webdav_propfind_bufs * const restrict pb)
     buffer_append_string_len(b, CONST_STR_LEN(
       "</D:propstat>\n"
       "</D:response>\n"));
+
+    webdav_double_buffer(pb->r, b);
 }
 
 
@@ -3423,6 +3439,8 @@ webdav_propfind_resource (const webdav_propfind_bufs * const restrict pb)
         webdav_xml_propstat(b, b_404, 404);
     buffer_append_string_len(b, CONST_STR_LEN(
       "</D:response>\n"));
+
+    webdav_double_buffer(pb->r, b);
 }
 
 
@@ -3671,6 +3689,7 @@ struct webdav_lock_token_submitted_st {
   int size;
   const buffer *authn_user;
   buffer *b;
+  request_st *r;
   int nlocks;
   int slocks;
   int smatch;
@@ -3722,8 +3741,10 @@ webdav_lock_token_submitted_cb (void * const vdata,
     }
 
     /* no match with lock tokens in request */
-    if (!shared)
+    if (!shared) {
         webdav_xml_href(cbdata->b, &lockdata->lockroot);
+        webdav_double_buffer(cbdata->r, cbdata->b);
+    }
 }
 
 
@@ -3745,6 +3766,7 @@ webdav_has_lock (request_st * const r,
 
     struct webdav_lock_token_submitted_st cbdata;
     cbdata.b = chunk_buffer_acquire();
+    cbdata.r = r;
     cbdata.tokens = NULL;
     cbdata.used  = 0;
     cbdata.size  = 0;
@@ -3874,7 +3896,7 @@ webdav_has_lock (request_st * const r,
 
     int has_lock = 1;
 
-    if (0 != cbdata.b->used)
+    if (0 != cbdata.b->used || !chunkqueue_is_empty(&r->write_queue))
         has_lock = 0;
     else if (0 == cbdata.nlocks) { /* resource is not locked at all */
         /* error if lock provided on source and no locks present on source;
@@ -4118,10 +4140,11 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
     pb.r     = r;
     pb.pconf = pconf;
     pb.dst   = &r->physical;
-    pb.b     = /*(optimization; buf extended as needed)*/
-      chunkqueue_append_buffer_open_sz(&r->write_queue, 8192);
+    pb.b     = chunk_buffer_acquire();
     pb.b_200 = chunk_buffer_acquire();
     pb.b_404 = chunk_buffer_acquire();
+    /*(optimization; buf extended as needed)*/
+    chunk_buffer_prepare_append(pb.b, 8192);
 
     webdav_xml_doctype(pb.b, r);
     buffer_append_string_len(pb.b, CONST_STR_LEN(
@@ -4135,7 +4158,8 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
     buffer_append_string_len(pb.b, CONST_STR_LEN(
       "</D:multistatus>\n"));
 
-    chunkqueue_append_buffer_commit(&r->write_queue);
+    http_chunk_append_buffer(r, pb.b); /*(might move/steal/reset buffer)*/
+    chunk_buffer_release(pb.b);
     http_status_set_fin(r, 207); /* Multi-status */
 
     chunk_buffer_release(pb.b_404);
@@ -4220,12 +4244,10 @@ mod_webdav_delete (request_st * const r, const plugin_config * const pconf)
             return HANDLER_FINISHED;
         }
 
-        buffer * const ms = chunk_buffer_acquire(); /* multi-status */
-
         const int flags = (r->conf.force_lowercase_filenames)
           ? WEBDAV_FLAG_LC_NAMES
           : 0;
-        if (0 == webdav_delete_dir(pconf, &r->physical, ms, flags)) {
+        if (0 == webdav_delete_dir(pconf, &r->physical, r, flags)) {
             /* Note: this does not destroy locks if an error occurs,
              * which is not a problem if lock is only on the collection
              * being moved, but might need finer updates if there are
@@ -4234,10 +4256,9 @@ mod_webdav_delete (request_st * const r, const plugin_config * const pconf)
             http_status_set_fin(r, 204); /* No Content */
         }
         else {
-            webdav_xml_doc_multistatus(r, pconf, ms); /* 207 Multi-status */
+            webdav_xml_doc_multistatus(r, pconf); /* 207 Multi-status */
         }
 
-        chunk_buffer_release(ms);
         /* invalidate stat cache of src if DELETE, whether or not successful */
         stat_cache_delete_dir(CONST_BUF_LEN(&r->physical.path));
     }
@@ -4962,8 +4983,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
             return HANDLER_FINISHED;
         }
 
-        buffer * const ms = chunk_buffer_acquire(); /* multi-status */
-        if (0 == webdav_copymove_dir(pconf, &r->physical, dst, ms, flags)) {
+        if (0 == webdav_copymove_dir(pconf, &r->physical, dst, r, flags)) {
             if (r->http_method == HTTP_METHOD_MOVE)
                 webdav_lock_delete_uri_col(pconf, &r->physical.rel_path);
             /*(requiring lock on destination requires MKCOL create dst first)
@@ -4976,9 +4996,8 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
              * which is not a problem if lock is only on the collection
              * being moved, but might need finer updates if there are
              * locks on internal elements that are successfully moved */
-            webdav_xml_doc_multistatus(r, pconf, ms); /* 207 Multi-status */
+            webdav_xml_doc_multistatus(r, pconf); /* 207 Multi-status */
         }
-        chunk_buffer_release(ms);
         /* invalidate stat cache of src if MOVE, whether or not successful */
         if (r->http_method == HTTP_METHOD_MOVE)
             stat_cache_delete_dir(CONST_BUF_LEN(&r->physical.path));
@@ -5212,6 +5231,7 @@ mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
                           "no namespace for: %s", prop->name);
                 if (!ms) ms = chunk_buffer_acquire(); /* Unprocessable Entity */
                 webdav_xml_propstat_status(ms, "", (char *)prop->name, 422);
+                webdav_double_buffer(r, ms);
                 continue;
             }
 
@@ -5230,6 +5250,7 @@ mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
                     if (!ms) ms = chunk_buffer_acquire();
                     webdav_xml_propstat_protected(ms, (char *)prop->name,
                                                   namelen, 403); /* Forbidden */
+                    webdav_double_buffer(r, ms);
                     continue;
                 }
             }
@@ -5264,8 +5285,8 @@ mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
                 /* workaround Microsoft-WebDAV-MiniRedir bug; 204 not handled */
                 /* 200 without response body or 204 both incorrectly interpreted
                  * as 507 Insufficient Storage by Microsoft-WebDAV-MiniRedir. */
-                ms = chunk_buffer_acquire(); /* 207 Multi-status */
-                webdav_xml_response_status(ms, &r->physical.path, 200);
+                ms = chunk_buffer_acquire(); /* 207 Multi-status */ /*(flag)*/
+                webdav_xml_response_status(r, &r->physical.path, 200);
             }
         }
         if (NULL == ms)
@@ -5289,6 +5310,7 @@ mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
 struct webdav_conflicting_lock_st {
   webdav_lockdata *lockdata;
   buffer *b;
+  request_st *r;
 };
 
 
@@ -5301,8 +5323,10 @@ webdav_conflicting_lock_cb (void * const vdata,
     struct webdav_conflicting_lock_st * const cbdata =
       (struct webdav_conflicting_lock_st *)vdata;
     if (lockdata->lockscope->used == sizeof("exclusive")
-        || cbdata->lockdata->lockscope->used == sizeof("exclusive"))
+        || cbdata->lockdata->lockscope->used == sizeof("exclusive")) {
         webdav_xml_href(cbdata->b, &lockdata->lockroot);
+        webdav_double_buffer(cbdata->r, cbdata->b);
+    }
 }
 
 
@@ -5471,10 +5495,11 @@ mod_webdav_lock (request_st * const r, const plugin_config * const pconf)
         struct webdav_conflicting_lock_st cbdata;
         cbdata.lockdata = &lockdata;
         cbdata.b = chunk_buffer_acquire();
+        cbdata.r = r;
         webdav_lock_activelocks(pconf, &lockdata.lockroot,
                                 (0 == lockdata.depth ? 1 : -1),
                                 webdav_conflicting_lock_cb, &cbdata);
-        if (0 != cbdata.b->used) {
+        if (0 != cbdata.b->used || !chunkqueue_is_empty(&r->write_queue)) {
             /* 423 Locked */
             webdav_xml_doc_error_no_conflicting_lock(r, cbdata.b);
             chunk_buffer_release(cbdata.b);
