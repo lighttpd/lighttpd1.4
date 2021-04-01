@@ -699,6 +699,41 @@ typedef struct {
 #define MOD_WEBDAV_XMLNS_NS0 "xmlns:ns0=\"urn:uuid:c2f41010-65b3-11d1-a29f-00aa00c14882/\""
 
 
+static char *
+webdav_mmap_file_chunk (chunk * const c);
+
+__attribute_cold__
+__attribute_noinline__
+static void
+webdav_xml_log_response (request_st * const r)
+{
+    chunkqueue * const cq = &r->write_queue;
+    log_error_st * const errh = r->conf.errh;
+    if (chunkqueue_length(cq) <= 65536)
+        chunkqueue_read_squash(cq, errh);
+    char *s;
+    uint32_t len;
+    for (chunk *c = cq->first; c; c = c->next) {
+        switch (c->type) {
+          case MEM_CHUNK:
+            s = c->mem->ptr + c->offset;
+            len = buffer_string_length(c->mem) - (uint32_t)c->offset;
+            break;
+          case FILE_CHUNK:
+            /*(safe to mmap tempfiles from response XML)*/
+            s = webdav_mmap_file_chunk(c);
+            len = (uint32_t)c->file.length;
+            if (s == NULL) continue;
+            break;
+          default:
+            continue;
+        }
+        log_error(errh, __FILE__, __LINE__, "XML-response-body: %.*s",
+                  (int)len, s);
+    }
+}
+
+
 static void
 webdav_xml_doctype (buffer * const b, request_st * const r)
 {
@@ -921,8 +956,7 @@ webdav_xml_doc_multistatus (request_st * const r,
       "</D:multistatus>\n"));
 
     if (pconf->log_xml)
-        log_error(r->conf.errh, __FILE__, __LINE__,
-                  "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
+        webdav_xml_log_response(r);
 }
 
 
@@ -948,8 +982,7 @@ webdav_xml_doc_multistatus_response (request_st * const r,
       "</D:multistatus>\n"));
 
     if (pconf->log_xml)
-        log_error(r->conf.errh, __FILE__, __LINE__,
-                  "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
+        webdav_xml_log_response(r);
 }
 #endif
 
@@ -985,8 +1018,7 @@ webdav_xml_doc_lock_acquired (request_st * const r,
     chunkqueue_append_buffer_commit(&r->write_queue);
 
     if (pconf->log_xml)
-        log_error(r->conf.errh, __FILE__, __LINE__,
-                  "XML-response-body: %.*s", BUFFER_INTLEN_PTR(b));
+        webdav_xml_log_response(r);
 }
 #endif
 
@@ -4103,10 +4135,6 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
     buffer_append_string_len(pb.b, CONST_STR_LEN(
       "</D:multistatus>\n"));
 
-    if (pconf->log_xml)
-        log_error(r->conf.errh, __FILE__, __LINE__, "XML-response-body: %.*s",
-                  BUFFER_INTLEN_PTR(pb.b));
-
     chunkqueue_append_buffer_commit(&r->write_queue);
     http_status_set_fin(r, 207); /* Multi-status */
 
@@ -4118,6 +4146,9 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
     if (NULL != xml)
         xmlFreeDoc(xml);
   #endif
+
+    if (pconf->log_xml)
+        webdav_xml_log_response(r);
 
     return HANDLER_FINISHED;
 }
