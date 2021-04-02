@@ -686,7 +686,7 @@ endif
 
 libzstd = []
 if get_option('with_zstd')
-	libz = dependency('zstd', required: false)
+	libzstd = dependency('zstd', required: false)
 	if libzstd.found()
 		libzstd = [ libzstd ]
 	else
