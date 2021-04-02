@@ -5,7 +5,7 @@
 #include "buffer.h"     /* force_assert() */
 
 static inline size_t vector_align_size(size_t s) {
-	size_t a = (s + 16) & ((size_t)~15);
+	size_t a = (s + 15) & ~(size_t)15uL;
 	return (a < s) ? s : a;
 }
 
@@ -27,6 +27,8 @@ void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 		v->data = NULL; \
 		v->used = v->size = 0; \
 	} \
+	__attribute_malloc__ \
+	__attribute_returns_nonnull__ \
 	static inline vector_ ## name *vector_ ## name ## _alloc() { \
 		vector_ ## name *v = vector_malloc(sizeof(*v)); \
 		force_assert(NULL != v); \
@@ -34,11 +36,9 @@ void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 		return v; \
 	} \
 	static inline void vector_ ## name ## _clear(vector_ ## name *v) { \
-		size_t ndx; \
-		vector_ ## name vcopy = *v; \
+		if (release) for (size_t i = 0; i < v->used; ++i) release(v->data[i]); \
+		vector_free(v->data); \
 		vector_ ## name ## _init(v); \
-		if (release) for (ndx = 0; ndx < vcopy.used; ++ndx) release(vcopy.data[ndx]); \
-		vector_free(vcopy.data); \
 	} \
 	static inline void vector_ ## name ## _free(vector_ ## name *v) { \
 		if (NULL != v) { \
@@ -47,8 +47,8 @@ void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 		} \
 	} \
 	static inline void vector_ ## name ## _reserve(vector_ ## name *v, size_t p) { \
-		force_assert(v->used < SIZE_MAX - p); \
-		if (v->size < v->used + p) { \
+		if (v->size - v->used < p) { \
+			force_assert(v->used < SIZE_MAX - p); \
 			v->size = vector_align_size(v->used + p); \
 			v->data = vector_realloc(v->data, sizeof(entry), v->size, v->used); \
 		} \
