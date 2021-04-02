@@ -877,6 +877,9 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			size_t alen = buffer_string_length(r->http_host);
 			http_header_remap_host(b, buffer_string_length(b) - alen, &hctx->conf.header, 1, alen);
 		}
+	} else {
+		/* no Host header available; must send HTTP/1.0 request */
+		b->ptr[b->used-2] = '0'; /*(overwrite end of request line)*/
 	}
 
 	/* "Forwarded" and legacy X- headers */
