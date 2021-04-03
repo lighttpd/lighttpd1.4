@@ -138,7 +138,7 @@ struct mtime_cache_type {
     buffer str;    /* buffer for string representation */
 };
 static struct mtime_cache_type mtime_cache[MTIME_CACHE_MAX];
-static char mtime_cache_str[MTIME_CACHE_MAX][30];
+static char mtime_cache_str[MTIME_CACHE_MAX][HTTP_DATE_SZ];
 /* 30-chars for "%a, %d %b %Y %T GMT" */
 
 void strftime_cache_reset(void) {

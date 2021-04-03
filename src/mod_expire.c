@@ -4,6 +4,7 @@
 #include "array.h"
 #include "buffer.h"
 #include "log.h"
+#include "http_date.h"
 #include "http_header.h"
 
 #include "plugin.h"
@@ -313,12 +314,12 @@ REQUEST_FUNC(mod_expire_handler) {
 	/* expires should be at least cur_ts */
 	if (expires < cur_ts) expires = cur_ts;
 
-	struct tm tm;
-
 	/* HTTP/1.0 */
 	vb = http_header_response_set_ptr(r, HTTP_HEADER_EXPIRES,
 	                                  CONST_STR_LEN("Expires"));
-	buffer_append_strftime(vb, "%a, %d %b %Y %T GMT", gmtime_r(&expires,&tm));
+	buffer_commit(vb,
+	              http_date_time_to_str(buffer_extend(vb, HTTP_DATE_SZ-1),
+	                                    HTTP_DATE_SZ, expires));
 
 	/* HTTP/1.1 */
 	vb = http_header_response_set_ptr(r, HTTP_HEADER_CACHE_CONTROL,
