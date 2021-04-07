@@ -224,12 +224,25 @@ static pcre_keyvalue_buffer * mod_dirlisting_parse_excludes(server *srv, const a
     return kvb;
 }
 
+#ifdef __COVERITY__
+#include "burl.h"
+#endif
+
 static int mod_dirlisting_exclude(pcre_keyvalue_buffer * const kvb, const char * const name, const uint32_t len) {
     /*(re-use keyvalue.[ch] for match-only;
      *  must have been configured with empty kvb 'value' during init)*/
     buffer input = { NULL, len+1, 0 };
     *(const char **)&input.ptr = name;
     pcre_keyvalue_ctx ctx = { NULL, NULL, 0, -1 };
+  #ifdef __COVERITY__
+    /*(again, must have been configured w/ empty kvb 'value' during init)*/
+    struct cond_match_t cache;
+    memset(&cache, 0, sizeof(cache));
+    struct burl_parts_t bp;
+    memset(&bp, 0, sizeof(bp));
+    ctx.cache = &cache;
+    ctx.burl = &bp;
+  #endif
     /*(fail closed (simulate match to exclude) if there is an error)*/
     return HANDLER_ERROR == pcre_keyvalue_buffer_process(kvb,&ctx,&input,NULL)
         || -1 != ctx.m;

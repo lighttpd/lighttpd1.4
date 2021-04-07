@@ -290,8 +290,8 @@ void buffer_append_uint_hex_lc(buffer *b, uintmax_t value) {
 
 __attribute_nonnull__
 __attribute_returns_nonnull__
-static char* utostr(char * const buf_end, uintmax_t val) {
-	char *cur = buf_end;
+static char* utostr(char buf[LI_ITOSTRING_LENGTH], uintmax_t val) {
+	char *cur = buf+LI_ITOSTRING_LENGTH;
 	do {
 		int mod = val % 10;
 		val /= 10;
@@ -303,13 +303,13 @@ static char* utostr(char * const buf_end, uintmax_t val) {
 
 __attribute_nonnull__
 __attribute_returns_nonnull__
-static char* itostr(char * const buf_end, intmax_t val) {
+static char* itostr(char buf[LI_ITOSTRING_LENGTH], intmax_t val) {
 	/* absolute value not defined for INTMAX_MIN, but can take absolute
 	 * value of any negative number via twos complement cast to unsigned.
 	 * negative sign is prepended after (now unsigned) value is converted
 	 * to string */
 	uintmax_t uval = val >= 0 ? (uintmax_t)val : ((uintmax_t)~val) + 1;
-	char *cur = utostr(buf_end, uval);
+	char *cur = utostr(buf, uval);
 	if (val < 0) *(--cur) = '-';
 
 	return cur;
@@ -317,13 +317,8 @@ static char* itostr(char * const buf_end, intmax_t val) {
 
 void buffer_append_int(buffer *b, intmax_t val) {
 	char buf[LI_ITOSTRING_LENGTH];
-	char* const buf_end = buf + sizeof(buf);
-	char *str;
-
-	str = itostr(buf_end, val);
-	force_assert(buf_end > str && str >= buf);
-
-	buffer_append_string_len(b, str, buf_end - str);
+	const char * const str = itostr(buf, val);
+	buffer_append_string_len(b, str, buf+sizeof(buf) - str);
 }
 
 void buffer_append_strftime(buffer * const restrict b, const char * const restrict format, const struct tm * const restrict tm) {
@@ -351,7 +346,7 @@ void buffer_append_strftime(buffer * const restrict b, const char * const restri
 
 size_t li_itostrn(char *buf, size_t buf_len, intmax_t val) {
 	char p_buf[LI_ITOSTRING_LENGTH];
-	char* const str = itostr(p_buf+sizeof(p_buf), val);
+	char* const str = itostr(p_buf, val);
 	size_t len = (size_t)(p_buf+sizeof(p_buf)-str);
 	force_assert(len <= buf_len);
 	memcpy(buf, str, len);
@@ -360,7 +355,7 @@ size_t li_itostrn(char *buf, size_t buf_len, intmax_t val) {
 
 size_t li_utostrn(char *buf, size_t buf_len, uintmax_t val) {
 	char p_buf[LI_ITOSTRING_LENGTH];
-	char* const str = utostr(p_buf+sizeof(p_buf), val);
+	char* const str = utostr(p_buf, val);
 	size_t len = (size_t)(p_buf+sizeof(p_buf)-str);
 	force_assert(len <= buf_len);
 	memcpy(buf, str, len);

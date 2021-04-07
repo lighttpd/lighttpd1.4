@@ -2476,7 +2476,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 
   #if defined(MBEDTLS_PEM_WRITE_C)
     /* if (NULL != crt) (e.g. not PSK-based ciphersuite) */
-    if (hctx->conf.ssl_verifyclient_export_cert && NULL != crt)
+    if (hctx->conf.ssl_verifyclient_export_cert)
         https_add_ssl_client_cert(r, crt);
   #endif
 }

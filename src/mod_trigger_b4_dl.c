@@ -182,10 +182,23 @@ static int mod_trigger_b4_dl_init_regex(server * const srv, config_plugin_value_
     return 1;
 }
 
+#ifdef __COVERITY__
+#include "burl.h"
+#endif
+
 static int mod_trigger_b4_dl_match(pcre_keyvalue_buffer * const kvb, const buffer * const input) {
     /*(re-use keyvalue.[ch] for match-only;
      *  must have been configured with empty kvb 'value' during init)*/
     pcre_keyvalue_ctx ctx = { NULL, NULL, 0, -1 };
+  #ifdef __COVERITY__
+    /*(again, must have been configured w/ empty kvb 'value' during init)*/
+    struct cond_match_t cache;
+    memset(&cache, 0, sizeof(cache));
+    struct burl_parts_t bp;
+    memset(&bp, 0, sizeof(bp));
+    ctx.cache = &cache;
+    ctx.burl = &bp;
+  #endif
     return HANDLER_GO_ON == pcre_keyvalue_buffer_process(kvb, &ctx, input, NULL)
         && -1 != ctx.m;
 }
