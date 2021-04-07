@@ -236,7 +236,7 @@ env.Depends(static_plugin_obj, 'plugin-static.h')
 ## includes all modules, but links dynamically against other libs
 staticbin = staticenv.Program('../static/build/lighttpd',
 	staticobj,
-	LIBS = GatherLibs(env, staticlib)
+	LIBS = GatherLibs(env, env['LIBPCRE'], staticlib)
 	)
 
 ## you might have to adjust the list of libs and the order for your setup
@@ -272,7 +272,7 @@ for libs in staticlib:
 ## glibc pthread needs to be linked completely (especially nptl-init.o)
 ## or not at all, or else pthread structures may not be initialized correctly
 import platform
-fullstatic_libs = GatherLibs(env, fullstaticlib, env['LIBPCRE'])
+fullstatic_libs = GatherLibs(env, env['LIBPCRE'], fullstaticlib)
 fullstatic_linkflags = [staticenv['LINKFLAGS'], '-static']
 if (('pthread' in fullstatic_libs) or ('pcre' in fullstatic_libs)) and (platform.system() == 'Linux'):
 	fullstatic_linkflags += ['-Wl,--whole-archive','-lpthread','-Wl,--no-whole-archive']
