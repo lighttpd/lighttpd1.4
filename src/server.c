@@ -2007,6 +2007,7 @@ int main (int argc, char **argv) {
                 server_graceful_state(srv);
             }
 
+            if (0 == srv->conns.used) rc = 0;
             if (2 == graceful_shutdown) { /* value 2 indicates idle timeout */
                 log_error(srv->errh, __FILE__, __LINE__,
                   "server stopped after idle timeout");
