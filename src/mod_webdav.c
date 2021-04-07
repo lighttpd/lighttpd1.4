@@ -3517,8 +3517,6 @@ webdav_propfind_dir (webdav_propfind_bufs * const restrict pb)
 }
 
 
-#if defined(USE_PROPPATCH) || defined(USE_LOCKS)
-
 static int
 webdav_open_chunk_file_rd (chunk * const c)
 {
@@ -3583,6 +3581,8 @@ webdav_mmap_file_chunk (chunk * const c)
     return c->file.mmap.start + c->offset - c->file.mmap.offset;
 }
 
+
+#if defined(USE_PROPPATCH) || defined(USE_LOCKS)
 
 __attribute_noinline__
 static xmlDoc *
