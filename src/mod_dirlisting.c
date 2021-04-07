@@ -596,7 +596,7 @@ static void http_list_directory_include_file(request_st * const r, const handler
         chunkqueue_append_mem(cq, CONST_STR_LEN("</pre>"));
     }
     else {
-        http_chunk_append_file_ref(r, sce);
+        (void)http_chunk_append_file_ref(r, sce);
     }
 }
 
