@@ -919,6 +919,12 @@ mod_nss_merge_config_cpv (plugin_config * const pconf, const config_plugin_value
       case 14:/* debug.log-ssl-noise */
         pconf->ssl_log_noise = (unsigned char)cpv->v.shrt;
         break;
+     #if 0    /*(cpk->k_id remapped in mod_nss_set_defaults())*/
+      case 15:/* ssl.verifyclient.ca-file */
+      case 16:/* ssl.verifyclient.ca-dn-file */
+      case 17:/* ssl.verifyclient.ca-crl-file */
+        break;
+     #endif
       default:/* should not happen */
         return;
     }
@@ -1423,7 +1429,7 @@ mod_nss_SNI (PRFileDesc *ssl, const SECItem *srvNameArr, PRUint32 srvNameArrSize
                                       : hctx->conf.ssl_ca_file;
         if (NULL == certList)
             log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-              "NSS: can't verify client without ssl.ca-file "
+              "NSS: can't verify client without ssl.verifyclient.ca-file "
               "for TLS server name %s",
               hctx->r->uri.authority.ptr); /*(might not be set yet if no SNI)*/
         if (certList && SSL_SetTrustAnchors(ssl, certList) < 0) {
@@ -1942,6 +1948,15 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
      ,{ CONST_STR_LEN("debug.log-ssl-noise"),
         T_CONFIG_SHORT,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-dn-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-crl-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -1967,6 +1982,9 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
               case 1: /* ssl.privkey */
                 if (!buffer_string_is_empty(cpv->v.b)) privkey = cpv;
                 break;
+              case 15:/* ssl.verifyclient.ca-file */
+                cpv->k_id = 2;
+                __attribute_fallthrough__
               case 2: /* ssl.ca-file */
                 if (!buffer_string_is_empty(cpv->v.b)) {
                     CERTCertList *d =
@@ -1982,6 +2000,9 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
                     }
                 }
                 break;
+              case 16:/* ssl.verifyclient.ca-dn-file */
+                cpv->k_id = 3;
+                __attribute_fallthrough__
               case 3: /* ssl.ca-dn-file */
                 if (!buffer_string_is_empty(cpv->v.b)) {
                     CERTCertList *d =
@@ -1997,6 +2018,9 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
                     }
                 }
                 break;
+              case 17:/* ssl.verifyclient.ca-crl-file */
+                cpv->k_id = 4;
+                __attribute_fallthrough__
               case 4: /* ssl.ca-crl-file */
                 if (!buffer_string_is_empty(cpv->v.b)) {
                     CERTCertificateList *d =
@@ -2033,6 +2057,11 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
                 ssl_stapling_file = cpv->v.b;
                 break;
               case 14:/* debug.log-ssl-noise */
+             #if 0    /*(handled further above)*/
+              case 15:/* ssl.verifyclient.ca-file */
+              case 16:/* ssl.verifyclient.ca-dn-file */
+              case 17:/* ssl.verifyclient.ca-crl-file */
+             #endif
                 break;
               default:/* should not happen */
                 break;
@@ -2319,7 +2348,7 @@ CONNECTION_FUNC(mod_nss_handle_con_accept)
                                       : hctx->conf.ssl_ca_file;
         if (NULL == certList) {
             log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-              "NSS: can't verify client without ssl.ca-file "
+              "NSS: can't verify client without ssl.verifyclient.ca-file "
               "for TLS server name %s",
               hctx->r->uri.authority.ptr); /*(might not be set yet if no SNI)*/
             return hctx->conf.ssl_verifyclient_enforce

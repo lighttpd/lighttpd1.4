@@ -694,6 +694,12 @@ mod_gnutls_merge_config_cpv (plugin_config * const pconf, const config_plugin_va
       case 14:/* debug.log-ssl-noise */
         pconf->ssl_log_noise = (unsigned char)cpv->v.shrt;
         break;
+     #if 0    /*(cpk->k_id remapped in mod_gnutls_set_defaults())*/
+      case 15:/* ssl.verifyclient.ca-file */
+      case 16:/* ssl.verifyclient.ca-dn-file */
+      case 17:/* ssl.verifyclient.ca-crl-file */
+        break;
+     #endif
       default:/* should not happen */
         return;
     }
@@ -749,7 +755,7 @@ mod_gnutls_verify_set_tlist (handler_ctx *hctx, int req)
       : hctx->conf.ssl_ca_file;
     if (NULL == d) {
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-          "GnuTLS: can't verify client without ssl.ca-file "
+          "GnuTLS: can't verify client without ssl.verifyclient.ca-file "
           "for TLS server name %s",
           hctx->r->uri.authority.ptr); /*(might not be set yet if no SNI)*/
         return GNUTLS_E_INTERNAL_ERROR;
@@ -2131,6 +2137,15 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
      ,{ CONST_STR_LEN("debug.log-ssl-noise"),
         T_CONFIG_SHORT,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-dn-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-crl-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -2156,6 +2171,12 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
               case 1: /* ssl.privkey */
                 if (!buffer_string_is_empty(cpv->v.b)) privkey = cpv;
                 break;
+              case 15:/* ssl.verifyclient.ca-file */
+                if (cpv->k_id == 15) cpv->k_id = 2;
+                __attribute_fallthrough__
+              case 16:/* ssl.verifyclient.ca-dn-file */
+                if (cpv->k_id == 16) cpv->k_id = 3;
+                __attribute_fallthrough__
               case 2: /* ssl.ca-file */
               case 3: /* ssl.ca-dn-file */
                 if (!buffer_string_is_empty(cpv->v.b)) {
@@ -2172,6 +2193,9 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
                     }
                 }
                 break;
+              case 17:/* ssl.verifyclient.ca-crl-file */
+                cpv->k_id = 4;
+                __attribute_fallthrough__
               case 4: /* ssl.ca-crl-file */
                 if (!buffer_string_is_empty(cpv->v.b)) {
                     gnutls_datum_t *d =
@@ -2208,6 +2232,11 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
                 ssl_stapling_file = cpv->v.b;
                 break;
               case 14:/* debug.log-ssl-noise */
+             #if 0    /*(handled further above)*/
+              case 15:/* ssl.verifyclient.ca-file */
+              case 16:/* ssl.verifyclient.ca-dn-file */
+              case 17:/* ssl.verifyclient.ca-crl-file */
+             #endif
                 break;
               default:/* should not happen */
                 break;

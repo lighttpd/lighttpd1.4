@@ -755,7 +755,7 @@ mod_openssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
 
     if (NULL == chain_store) {
         log_error(errh, __FILE__, __LINE__,
-          "SSL: ssl.ca-file is empty %s", file);
+          "SSL: ssl.verifyclient.ca-file is empty %s", file);
         return NULL;
     }
 
@@ -884,6 +884,12 @@ mod_openssl_merge_config_cpv (plugin_config * const pconf, const config_plugin_v
       case 14:/* debug.log-ssl-noise */
         pconf->ssl_log_noise = (0 != cpv->v.u);
         break;
+     #if 0    /*(cpk->k_id remapped in mod_openssl_set_defaults())*/
+      case 15:/* ssl.verifyclient.ca-file */
+      case 16:/* ssl.verifyclient.ca-dn-file */
+      case 17:/* ssl.verifyclient.ca-crl-file */
+        break;
+     #endif
       default:/* should not happen */
         return;
     }
@@ -1136,7 +1142,7 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
     if (hctx->conf.ssl_verifyclient) {
         if (NULL == hctx->conf.ssl_ca_file) {
             log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-              "SSL: can't verify client without ssl.ca-file "
+              "SSL: can't verify client without ssl.verifyclient.ca-file "
               "for TLS server name %s", hctx->r->uri.authority.ptr);
             return 0;
         }
@@ -2302,7 +2308,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             if (NULL == s->ssl_ca_file) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "SSL: You specified ssl.verifyclient.activate "
-                  "but no ssl.ca-file");
+                  "but no ssl.verifyclient.ca-file");
                 return -1;
             }
             /* WTH openssl?  SSL_CTX_set_client_CA_list() calls set0_CA_list(),
@@ -2602,6 +2608,11 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                   case 9: /* ssl.verifyclient.depth */
                     conf.ssl_verifyclient_depth = (unsigned char)cpv->v.shrt;
                     break;
+                 #if 0    /*(cpk->k_id remapped in mod_openssl_set_defaults())*/
+                  case 15:/* ssl.verifyclient.ca-file */
+                  case 16:/* ssl.verifyclient.ca-dn-file */
+                  case 17:/* ssl.verifyclient.ca-crl-file */
+                 #endif
                   default:
                     break;
                 }
@@ -2708,6 +2719,15 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
      ,{ CONST_STR_LEN("debug.log-ssl-noise"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-dn-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-crl-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -2740,6 +2760,9 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
               case 1: /* ssl.privkey */
                 if (!buffer_string_is_empty(cpv->v.b)) privkey = cpv;
                 break;
+              case 15:/* ssl.verifyclient.ca-file */
+                cpv->k_id = 2;
+                __attribute_fallthrough__
               case 2: /* ssl.ca-file */
                 if (buffer_string_is_empty(cpv->v.b)) break;
                 if (!mod_openssl_init_once_openssl(srv)) return HANDLER_ERROR;
@@ -2756,6 +2779,9 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                     return HANDLER_ERROR;
                 }
                 break;
+              case 16:/* ssl.verifyclient.ca-dn-file */
+                cpv->k_id = 3;
+                __attribute_fallthrough__
               case 3: /* ssl.ca-dn-file */
                 if (buffer_string_is_empty(cpv->v.b)) break;
                 if (!mod_openssl_init_once_openssl(srv)) return HANDLER_ERROR;
@@ -2771,6 +2797,9 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                     return HANDLER_ERROR;
                 }
                 break;
+              case 17:/* ssl.verifyclient.ca-crl-file */
+                cpv->k_id = 4;
+                __attribute_fallthrough__
               case 4: /* ssl.ca-crl-file */
                 if (buffer_string_is_empty(cpv->v.b)) break;
                 ssl_ca_crl_file = cpv->v.b;
@@ -2797,6 +2826,11 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                 ssl_stapling_file = cpv->v.b;
                 break;
               case 14:/* debug.log-ssl-noise */
+             #if 0    /*(handled further above)*/
+              case 15:/* ssl.verifyclient.ca-file */
+              case 16:/* ssl.verifyclient.ca-dn-file */
+              case 17:/* ssl.verifyclient.ca-crl-file */
+             #endif
                 break;
               default:/* should not happen */
                 break;
@@ -2817,8 +2851,8 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
       #else
         if (NULL == ca_store && ssl_ca_crl_file && i != 0) {
             log_error(srv->errh, __FILE__, __LINE__,
-              "ssl.ca-crl-file (%s) ignored unless issued with ssl.ca-file",
-              ssl_ca_crl_file->ptr);
+              "ssl.verifyclient.ca-crl-file (%s) ignored unless issued with "
+              "ssl.verifyclient.ca-file", ssl_ca_crl_file->ptr);
         }
         else if (ca_store && (ssl_ca_crl_file || default_ssl_ca_crl_file)) {
             /* prior behavior in lighttpd allowed ssl.ca-crl-file only in global

@@ -477,7 +477,7 @@ mod_mbedtls_free_config (server *srv, plugin_data * const p)
                     free(cacert);
                 }
                 break;
-              case 4: /* ssl.ca-dn-file */
+              case 4: /* ssl.ca-crl-file */
                 if (cpv->vtype == T_CONFIG_LOCAL) {
                     mbedtls_x509_crl *crl = cpv->v.v;
                     mbedtls_x509_crl_free(crl);
@@ -550,6 +550,12 @@ mod_mbedtls_merge_config_cpv (plugin_config * const pconf, const config_plugin_v
       case 13:/* debug.log-ssl-noise */
         pconf->ssl_log_noise = (unsigned char)cpv->v.shrt;
         break;
+     #if 0    /*(cpk->k_id remapped in mod_mbedtls_set_defaults())*/
+      case 14:/* ssl.verifyclient.ca-file */
+      case 15:/* ssl.verifyclient.ca-dn-file */
+      case 16:/* ssl.verifyclient.ca-crl-file */
+        break;
+     #endif
       default:/* should not happen */
         return;
     }
@@ -766,7 +772,7 @@ mod_mbedtls_conf_verify (handler_ctx *hctx, mbedtls_ssl_config *ssl_ctx)
 {
     if (NULL == hctx->conf.ssl_ca_file) {
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-          "MTLS: can't verify client without ssl.ca-file "
+          "MTLS: can't verify client without ssl.verifyclient.ca-file "
           "for TLS server name %s",
           hctx->r->uri.authority.ptr);
         return MBEDTLS_ERR_SSL_INTERNAL_ERROR;
@@ -1607,6 +1613,9 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
                   case 12:/* ssl.acme-tls-1 */
                     conf.ssl_acme_tls_1 = cpv->v.b;
                     break;
+                 #if 0    /*(cpk->k_id remapped in mod_mbedtls_set_defaults())*/
+                  case 14:/* ssl.verifyclient.ca-file */
+                 #endif
                   default:
                     break;
                 }
@@ -1721,6 +1730,15 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
      ,{ CONST_STR_LEN("debug.log-ssl-noise"),
         T_CONFIG_SHORT,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-dn-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.verifyclient.ca-crl-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -1745,6 +1763,12 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
               case 1: /* ssl.privkey */
                 if (!buffer_string_is_empty(cpv->v.b)) privkey = cpv;
                 break;
+              case 14:/* ssl.verifyclient.ca-file */
+                if (cpv->k_id == 14) cpv->k_id = 2;
+                __attribute_fallthrough__
+              case 15:/* ssl.verifyclient.ca-dn-file */
+                if (cpv->k_id == 15) cpv->k_id = 3;
+                __attribute_fallthrough__
               case 2: /* ssl.ca-file */
               case 3: /* ssl.ca-dn-file */
                #if 0 /* defer; not necessary for pemfile parsing */
@@ -1769,6 +1793,9 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
                     }
                 }
                 break;
+              case 16:/* ssl.verifyclient.ca-crl-file */
+                cpv->k_id = 4;
+                __attribute_fallthrough__
               case 4: /* ssl.ca-crl-file */
                 if (!buffer_string_is_empty(cpv->v.b)) {
                     mbedtls_x509_crl *crl = malloc(sizeof(*crl));
@@ -1805,6 +1832,11 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
               case 11:/* ssl.verifyclient.exportcert */
               case 12:/* ssl.acme-tls-1 */
               case 13:/* debug.log-ssl-noise */
+             #if 0    /*(handled further above)*/
+              case 14:/* ssl.verifyclient.ca-file */
+              case 15:/* ssl.verifyclient.ca-dn-file */
+              case 16:/* ssl.verifyclient.ca-crl-file */
+             #endif
                 break;
               default:/* should not happen */
                 break;
