@@ -12,11 +12,9 @@
 #include "sys-socket.h"
 #include "sys-stat.h"
 #include "sys-unistd.h" /* <unistd.h> */
+#include "sys-wait.h"
 #ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
-#endif
-#ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
 #endif
 
 #include <errno.h>

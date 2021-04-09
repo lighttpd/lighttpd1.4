@@ -475,9 +475,7 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
 }
 
 
-#ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
-#endif
+#include "sys-wait.h"
 
 int fdevent_waitpid(pid_t pid, int * const status, int nb) {
     const int flags = nb ? WNOHANG : 0;

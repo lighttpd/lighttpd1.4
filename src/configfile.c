@@ -2,6 +2,7 @@
 
 #include "sys-stat.h"
 #include "sys-unistd.h" /* <unistd.h> */
+#include "sys-wait.h"
 
 #include "base.h"
 #include "burl.h"
