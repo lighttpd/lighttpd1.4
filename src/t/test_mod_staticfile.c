@@ -365,18 +365,14 @@ test_mod_staticfile_process (request_st * const r, plugin_config * const pconf)
     array_free(a);
 }
 
-#include <unistd.h>     /* unlink() */
+#include "sys-unistd.h" /* unlink() */
+#include "fdevent.h"
 
 void test_mod_staticfile (void);
 void test_mod_staticfile (void)
 {
     char fn[] = "/tmp/lighttpd_mod_staticfile.XXXXXX";
-  #ifdef __COVERITY__
-    /* POSIX-2008 requires mkstemp create file with 0600 perms */
-    umask(0600);
-  #endif
-    /* coverity[secure_temp : FALSE] */
-    int fd = mkstemp(fn);
+    int fd = fdevent_mkostemp(fn, 0);
     if (fd < 0) {
         perror("mkstemp()");
         exit(1);

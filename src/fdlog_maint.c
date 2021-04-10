@@ -7,7 +7,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include "sys-unistd.h" /* <unistd.h> */
 
 #include "fdevent.h"
 #include "ck.h"

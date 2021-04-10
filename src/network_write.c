@@ -8,10 +8,10 @@
 
 #include <sys/types.h>
 #include "sys-socket.h"
+#include "sys-unistd.h" /* <unistd.h> */
 
 #include <errno.h>
 #include <string.h>
-#include <unistd.h>
 
 
 /* on linux 2.4.x you get either sendfile or LFS */

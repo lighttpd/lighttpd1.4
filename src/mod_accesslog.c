@@ -15,11 +15,11 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "sys-unistd.h" /* <unistd.h> */
 
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
-#include <unistd.h>
 
 #ifdef HAVE_SYSLOG_H
 # include <syslog.h>

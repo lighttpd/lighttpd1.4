@@ -4,8 +4,8 @@
 
 #include <sys/types.h>
 #include "sys-socket.h"
+#include "sys-unistd.h" /* <unistd.h> */
 
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>

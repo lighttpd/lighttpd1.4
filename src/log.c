@@ -9,12 +9,12 @@
 
 #include <sys/types.h>
 #include "sys-time.h"
+#include "sys-unistd.h" /* <unistd.h> */
 #include <errno.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>      /* vsnprintf() */
 #include <stdlib.h>     /* malloc() free() */
-#include <unistd.h>
 
 #ifdef HAVE_SYSLOG_H
 # include <syslog.h>

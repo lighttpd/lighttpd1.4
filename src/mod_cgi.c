@@ -14,11 +14,8 @@
 
 #include <sys/types.h>
 #include "sys-socket.h"
-#ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
-#endif
+#include "sys-unistd.h" /* <unistd.h> */
 
-#include <unistd.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>

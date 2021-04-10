@@ -16,11 +16,10 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-
-#include <stdlib.h>
-#include <unistd.h>
+#include "sys-unistd.h" /* <unistd.h> */
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 __attribute_noinline__

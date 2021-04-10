@@ -9,11 +9,11 @@
 #include <sys/types.h>
 #include "sys-stat.h"
 #include "sys-time.h"
+#include "sys-unistd.h" /* <unistd.h> */
 
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <errno.h>
 
 typedef struct {

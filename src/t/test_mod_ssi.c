@@ -5,7 +5,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
+#include "sys-unistd.h" /* unlink() */
 
 #include "mod_ssi.c"
 #include "fdlog.h"

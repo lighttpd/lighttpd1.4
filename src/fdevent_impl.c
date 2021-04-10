@@ -6,7 +6,7 @@
 #include "log.h"
 
 #include <sys/types.h>
-#include <unistd.h>
+#include "sys-unistd.h" /* <unistd.h> */
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>

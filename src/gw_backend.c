@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include "sys-socket.h"
 #include "sys-stat.h"
+#include "sys-unistd.h" /* <unistd.h> */
 #ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
 #endif
@@ -25,7 +26,6 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <string.h>
-#include <unistd.h>
 
 #ifndef SIGKILL
 #define SIGKILL 9

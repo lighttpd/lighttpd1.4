@@ -34,18 +34,14 @@ run_mod_indexfile_tryfiles (request_st * const r, const array * const indexfiles
     }
 }
 
-#include <unistd.h>     /* unlink() */
+#include "sys-unistd.h" /* unlink() */
+#include "fdevent.h"
 
 static void
 test_mod_indexfile_tryfiles (request_st * const r)
 {
     char fn[] = "/tmp/lighttpd_mod_indexfile.XXXXXX";
-  #ifdef __COVERITY__
-    /* POSIX-2008 requires mkstemp create file with 0600 perms */
-    umask(0600);
-  #endif
-    /* coverity[secure_temp : FALSE] */
-    int fd = mkstemp(fn);
+    int fd = fdevent_mkostemp(fn, 0);
     if (fd < 0) {
         perror("mkstemp()");
         exit(1);

@@ -22,7 +22,7 @@
 #include <errno.h>
 
 #include "sys-socket.h"
-#include <unistd.h>
+#include "sys-unistd.h" /* <unistd.h> */
 
 /**
  * max size of the HTTP response header from backends

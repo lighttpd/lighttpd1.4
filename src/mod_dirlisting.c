@@ -14,6 +14,7 @@
 #include "sys-dirent.h"
 #include "sys-stat.h"
 #include "sys-time.h"
+#include "sys-unistd.h" /* <unistd.h> */
 
 #include "base.h"
 #include "log.h"
@@ -33,7 +34,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
-#include <unistd.h>
 
 #ifdef AT_FDCWD
 #ifndef _ATFILE_SOURCE

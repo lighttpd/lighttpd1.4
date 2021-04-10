@@ -22,7 +22,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include "sys-unistd.h" /* <unistd.h> */
 
 #include <krb5.h>
 #include <gssapi.h>

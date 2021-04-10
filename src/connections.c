@@ -21,9 +21,9 @@
 #include "sock_addr_cache.h"
 
 #include <sys/stat.h>
+#include "sys-unistd.h" /* <unistd.h> */
 
 #include <stdlib.h>
-#include <unistd.h>
 #include <errno.h>
 #include <string.h>
 

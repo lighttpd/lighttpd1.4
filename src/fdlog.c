@@ -2,7 +2,7 @@
 #include "fdlog.h"
 
 #include <stdlib.h>
-#include <unistd.h>     /* close() STDERR_FILENO */
+#include "sys-unistd.h" /* <unistd.h> close() STDERR_FILENO */
 
 #include "ck.h"
 

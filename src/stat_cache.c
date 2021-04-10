@@ -3,6 +3,7 @@
 #include "stat_cache.h"
 
 #include "sys-stat.h"
+#include "sys-unistd.h" /* <unistd.h> */
 
 #include "log.h"
 #include "fdevent.h"
@@ -12,7 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <unistd.h>
 #include <fcntl.h>
 
 #if defined(HAVE_SYS_XATTR_H)

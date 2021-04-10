@@ -176,17 +176,18 @@
 #endif
 
 #include "first.h"      /* first */
+#include <sys/types.h>
 #include "sys-dirent.h"
 #include "sys-mmap.h"
 #include <sys/types.h>
 #include "sys-stat.h"
 #include "sys-time.h"
+#include "sys-unistd.h" /* <unistd.h> getpid() linkat() rmdir() unlinkat() */
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>      /* rename() */
 #include <stdlib.h>     /* strtol() */
 #include <string.h>
-#include <unistd.h>     /* getpid() linkat() rmdir() unlinkat() */
 
 #ifdef RENAME_NOREPLACE /*(renameat2() not well-supported yet)*/
 #ifndef __ANDROID_API__ /*(not yet Android?)*/

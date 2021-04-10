@@ -14,10 +14,10 @@
 #include <sys/stat.h>
 #include "sys-mmap.h"
 #include "sys-setjmp.h"
+#include "sys-unistd.h" /* <unistd.h> */
 
 #include <stdlib.h>
 #include <fcntl.h>
-#include <unistd.h>
 
 #include <errno.h>
 #include <string.h>

@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "sys-stat.h"
+#include "sys-unistd.h" /* <unistd.h> */
 
 #include "base.h"
 #include "burl.h"
@@ -22,7 +23,6 @@
 
 #include <stdlib.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <errno.h>
 #include <string.h>
 #include <limits.h>
