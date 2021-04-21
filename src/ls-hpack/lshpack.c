@@ -1,7 +1,7 @@
 /*
 MIT License
 
-Copyright (c) 2018 LiteSpeed Technologies Inc
+Copyright (c) 2018 - 2021 LiteSpeed Technologies Inc
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1549,6 +1549,8 @@ lshpack_dec_push_entry (struct lshpack_dec *dec,
 #endif
     memcpy(DTE_NAME(entry), lsxpack_header_get_name(xhdr), name_len);
     memcpy(DTE_VALUE(entry), lsxpack_header_get_value(xhdr), val_len);
+
+    hdec_remove_overflow_entries(dec);
     return 0;
 }
 
