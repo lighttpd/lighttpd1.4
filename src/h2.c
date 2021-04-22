@@ -318,10 +318,23 @@ h2_send_rst_stream_id (uint32_t h2id, connection * const con, const request_h2er
 
 __attribute_cold__
 static void
-h2_send_rst_stream (request_st * const r, connection * const con, const request_h2error_t e)
+h2_send_rst_stream_state (request_st * const r, h2con * const h2c)
 {
+    if (r->h2state != H2_STATE_HALF_CLOSED_REMOTE
+        && r->h2state != H2_STATE_CLOSED) {
+        /* set timestamp for comparison; not tracking individual stream ids */
+        h2c->half_closed_ts = log_monotonic_secs;
+    }
     r->state = CON_STATE_ERROR;
     r->h2state = H2_STATE_CLOSED;
+}
+
+
+__attribute_cold__
+static void
+h2_send_rst_stream (request_st * const r, connection * const con, const request_h2error_t e)
+{
+    h2_send_rst_stream_state(r, con->h2);/*(sets r->h2state = H2_STATE_CLOSED)*/
     h2_send_rst_stream_id(r->h2id, con, e);
 }
 
@@ -335,13 +348,10 @@ h2_send_goaway_rst_stream (connection * const con)
     for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
         request_st * const r = h2c->r[i];
         if (r->h2state == H2_STATE_CLOSED) continue;
+        h2_send_rst_stream_state(r, h2c);/*(sets r->h2state = H2_STATE_CLOSED)*/
         /*(XXX: might consider always sending RST_STREAM)*/
-        if (!sent_goaway) {
-            r->state = CON_STATE_ERROR;
-            r->h2state = H2_STATE_CLOSED;
-        }
-        else /*(also sets r->h2state = H2_STATE_CLOSED)*/
-            h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
+        if (sent_goaway)
+            h2_send_rst_stream_id(r->h2id, con, H2_E_PROTOCOL_ERROR);
     }
 }
 
@@ -820,14 +830,27 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     }
     chunkqueue * const cq = con->read_queue;
     if (NULL == r) {
-        /* XXX: TODO: might need to keep a list of recently retired streams
-         * for a few seconds so that if we send RST_STREAM, then we ignore
-         * further DATA and do not send connection error, though recv windows
-         * still must be updated. */
-        if (h2c->h2_cid < id || (!h2c->sent_goaway && 0 != alen))
-            h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
+        /* simplistic heuristic to discard additional DATA from recently-closed
+         * streams (or half-closed (local)), where recently-closed here is
+         * within 2-3 seconds of any (other) stream being half-closed (local)
+         * or reset before that (other) stream received END_STREAM from peer.
+         * (e.g. clients might fire off POST request followed by DATA,
+         *  and a response might be sent before processing DATA frames)
+         * (id <= h2c->h2_cid) already checked above, else H2_E_PROTOCOL_ERROR
+         * If the above conditions do not hold, then send GOAWAY to attempt to
+         * reduce the chance of becoming an infinite data sink for misbehaving
+         * clients, though remaining streams are still handled before the
+         * connection is closed. */
         chunkqueue_mark_written(cq, 9+len);
-        return 0;
+        if (h2c->half_closed_ts + 2 >= log_monotonic_secs) {
+            h2_send_window_update(con, 0, len); /*(h2r->h2_rwin)*/
+            return 1;
+        }
+        else {
+            if (!h2c->sent_goaway && 0 != alen)
+                h2_send_goaway_e(con, H2_E_NO_ERROR);
+            return 0;
+        }
     }
 
     if (r->h2state == H2_STATE_CLOSED
@@ -848,7 +871,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
         }
     }
     /*(allow h2r->h2_rwin to dip below 0 so that entire frame is processed)*/
-    /*(undeflow will not occur (with reasonable SETTINGS_MAX_FRAME_SIZE used)
+    /*(underflow will not occur (with reasonable SETTINGS_MAX_FRAME_SIZE used)
      * since windows updated elsewhere and data is streamed to temp files if
      * not FDEVENT_STREAM_REQUEST_BUFMIN)*/
     /*r->h2_rwin -= (int32_t)len;*/
@@ -2381,16 +2404,25 @@ h2_send_end_stream_data (request_st * const r, connection * const con)
     } };
 
     dataframe.u[2] = htonl(r->h2id);
-    r->h2state = H2_STATE_CLOSED;
     /*(ignore window updates when sending 0-length DATA frame with END_STREAM)*/
     chunkqueue_append_mem(con->write_queue,  /*(+3 to skip over align pad)*/
                           (const char *)dataframe.c+3, sizeof(dataframe)-3);
+
+    if (r->h2state != H2_STATE_HALF_CLOSED_REMOTE) {
+        /* set timestamp for comparison; not tracking individual stream ids */
+        h2con * const h2c = con->h2;
+        h2c->half_closed_ts = log_monotonic_secs;
+        /* indicate to peer that no more DATA should be sent from peer */
+        h2_send_rst_stream_id(r->h2id, con, H2_E_NO_ERROR);
+    }
+    r->h2state = H2_STATE_CLOSED;
 }
 
 
 void
 h2_send_end_stream (request_st * const r, connection * const con)
 {
+    if (r->h2state == H2_STATE_CLOSED) return;
     if (r->state != CON_STATE_ERROR && r->resp_body_finished) {
         /* CON_STATE_RESPONSE_END */
         if (r->gw_dechunk && r->gw_dechunk->done

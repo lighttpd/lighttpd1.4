@@ -92,6 +92,7 @@ struct h2con {
     uint32_t s_max_header_list_size;   /* SETTINGS_MAX_HEADER_LIST_SIZE   */
     struct lshpack_dec decoder;
     struct lshpack_enc encoder;
+      time_t half_closed_ts;
 };
 
 void h2_send_goaway (connection *con, request_h2error_t e);
