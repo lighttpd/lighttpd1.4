@@ -3235,9 +3235,9 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
       case WEBDAV_PROP_GETLASTMODIFIED:
         buffer_append_string_len(b, CONST_STR_LEN(
           "<D:getlastmodified ns0:dt=\"dateTime.rfc1123\">"));
-        buffer_commit(b,
-                      http_date_time_to_str(buffer_extend(b, HTTP_DATE_SZ-1),
-                                            HTTP_DATE_SZ, pb->st.st_mtime));
+        if (!http_date_time_to_str(buffer_extend(b, HTTP_DATE_SZ-1),
+                                   HTTP_DATE_SZ, pb->st.st_mtime))
+            buffer_string_set_length(b, buffer_string_length(b)+1-HTTP_DATE_SZ);
         buffer_append_string_len(b, CONST_STR_LEN(
           "</D:getlastmodified>"));
         if (pnum != WEBDAV_PROP_ALL) return 0;/* found *//*(else fall through)*/

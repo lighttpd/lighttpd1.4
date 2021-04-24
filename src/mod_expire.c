@@ -317,9 +317,9 @@ REQUEST_FUNC(mod_expire_handler) {
 	/* HTTP/1.0 */
 	vb = http_header_response_set_ptr(r, HTTP_HEADER_EXPIRES,
 	                                  CONST_STR_LEN("Expires"));
-	buffer_commit(vb,
-	              http_date_time_to_str(buffer_extend(vb, HTTP_DATE_SZ-1),
-	                                    HTTP_DATE_SZ, expires));
+	if (!http_date_time_to_str(buffer_extend(vb, HTTP_DATE_SZ-1),
+	                           HTTP_DATE_SZ, expires))
+	    buffer_string_set_length(vb, buffer_string_length(vb)+1-HTTP_DATE_SZ);
 
 	/* HTTP/1.1 */
 	vb = http_header_response_set_ptr(r, HTTP_HEADER_CACHE_CONTROL,
