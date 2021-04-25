@@ -81,7 +81,7 @@ static time_t mod_expire_get_offset(log_error_st *errh, const buffer *expire, ti
 	}
 
 	/* the rest is just <number> (years|months|weeks|days|hours|minutes|seconds) */
-	while (1) {
+	do {
 		char *space, *err;
 		int num;
 
@@ -100,66 +100,41 @@ static time_t mod_expire_get_offset(log_error_st *errh, const buffer *expire, ti
 
 		ts = space + 1;
 
-		if (NULL != (space = strchr(ts, ' '))) {
+		if (NULL == (space = strchr(ts, ' ')))
+			space = expire->ptr+buffer_string_length(expire);
+
+		{
 			int slen;
 			/* */
 
 			slen = space - ts;
+			if (ts[slen-1] == 's') --slen; /* strip plural */
 
-			if (slen == 5 &&
-			    0 == strncmp(ts, "years", slen)) {
+			if (slen == 4 && 0 == strncmp(ts, "year", slen))
 				num *= 60 * 60 * 24 * 30 * 12;
-			} else if (slen == 6 &&
-				   0 == strncmp(ts, "months", slen)) {
+			else if (slen == 5 && 0 == strncmp(ts, "month", slen))
 				num *= 60 * 60 * 24 * 30;
-			} else if (slen == 5 &&
-				   0 == strncmp(ts, "weeks", slen)) {
+			else if (slen == 4 && 0 == strncmp(ts, "week", slen))
 				num *= 60 * 60 * 24 * 7;
-			} else if (slen == 4 &&
-				   0 == strncmp(ts, "days", slen)) {
+			else if (slen == 3 && 0 == strncmp(ts, "day", slen))
 				num *= 60 * 60 * 24;
-			} else if (slen == 5 &&
-				   0 == strncmp(ts, "hours", slen)) {
+			else if (slen == 4 && 0 == strncmp(ts, "hour", slen))
 				num *= 60 * 60;
-			} else if (slen == 7 &&
-				   0 == strncmp(ts, "minutes", slen)) {
+			else if (slen == 6 && 0 == strncmp(ts, "minute", slen))
 				num *= 60;
-			} else if (slen == 7 &&
-				   0 == strncmp(ts, "seconds", slen)) {
+			else if (slen == 6 && 0 == strncmp(ts, "second", slen))
 				num *= 1;
-			} else {
+			else {
 				log_error(errh, __FILE__, __LINE__, "unknown type: %s", ts);
 				return -1;
 			}
 
 			retts += num;
 
+			if (*space == '\0') break;
 			ts = space + 1;
-		} else {
-			if (0 == strcmp(ts, "years")) {
-				num *= 60 * 60 * 24 * 30 * 12;
-			} else if (0 == strcmp(ts, "months")) {
-				num *= 60 * 60 * 24 * 30;
-			} else if (0 == strcmp(ts, "weeks")) {
-				num *= 60 * 60 * 24 * 7;
-			} else if (0 == strcmp(ts, "days")) {
-				num *= 60 * 60 * 24;
-			} else if (0 == strcmp(ts, "hours")) {
-				num *= 60 * 60;
-			} else if (0 == strcmp(ts, "minutes")) {
-				num *= 60;
-			} else if (0 == strcmp(ts, "seconds")) {
-				num *= 1;
-			} else {
-				log_error(errh, __FILE__, __LINE__, "unknown type: %s", ts);
-				return -1;
-			}
-
-			retts += num;
-
-			break;
 		}
-	}
+	} while (*ts);
 
 	*offset = retts;
 
