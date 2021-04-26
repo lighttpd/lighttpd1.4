@@ -267,10 +267,15 @@ REQUEST_FUNC(mod_expire_handler) {
 	if (NULL == ds) {
 		if (NULL == p->conf.expire_mimetypes) return HANDLER_GO_ON;
 		vb = http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"));
-		ds = (NULL != vb)
-		   ? (const data_string *)array_match_key_prefix(p->conf.expire_mimetypes, vb)
-		   : (const data_string *)array_get_element_klen(p->conf.expire_mimetypes, CONST_STR_LEN(""));
-		if (NULL == ds) return HANDLER_GO_ON;
+		if (NULL != vb)
+			ds = (const data_string *)
+			     array_match_key_prefix(p->conf.expire_mimetypes, vb);
+		if (NULL == ds) {
+			ds = (const data_string *)
+			     array_get_element_klen(p->conf.expire_mimetypes,
+			                            CONST_STR_LEN(""));
+			if (NULL == ds) return HANDLER_GO_ON;
+		}
 	}
 
 	const time_t * const off = p->toffsets + ds->value.used;
