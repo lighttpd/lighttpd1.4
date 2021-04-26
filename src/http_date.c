@@ -276,27 +276,6 @@ http_date_time_to_str (char * const s, const size_t sz, const time_t t)
 }
 
 
-#if !defined(HAVE_TIMEGM) && !defined(_WIN32)
-time_t
-http_date_timegm (const struct tm * const tm)
-{
-    int y = tm->tm_year + 1900;
-    int m = tm->tm_mon + 1;
-    int d = tm->tm_mday;
-
-    /* days_from_civil() http://howardhinnant.github.io/date_algorithms.html */
-    y -= m <= 2;
-    int era = y / 400;
-    int yoe = y - era * 400;                                   // [0, 399]
-    int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;  // [0, 365]
-    int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;           // [0, 146096]
-    int days_since_1970 = era * 146097 + doe - 719468;
-
-    return 60*(60*(24L*days_since_1970+tm->tm_hour)+tm->tm_min)+tm->tm_sec;
-}
-#endif
-
-
 int
 http_date_if_modified_since (const char * const ifmod, const uint32_t ifmodlen,
                              const time_t lmtime)
@@ -304,7 +283,7 @@ http_date_if_modified_since (const char * const ifmod, const uint32_t ifmodlen,
     struct tm ifmodtm;
     if (NULL == http_date_str_to_tm(ifmod, ifmodlen, &ifmodtm))
         return 1; /* date parse error */
-    const time_t ifmtime = http_date_timegm(&ifmodtm);
+    const time_t ifmtime = timegm(&ifmodtm);
     return (lmtime > ifmtime);
     /* returns 0 if not modified since,
      * returns 1 if modified since or date parse error */

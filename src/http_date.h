@@ -22,14 +22,6 @@ uint32_t http_date_time_to_str (char *s, size_t sz, time_t t);
 
 int http_date_if_modified_since (const char *ifmod, uint32_t ifmodlen, time_t lmtime);
 
-#ifdef HAVE_TIMEGM
-#define http_date_timegm(tm) timegm(tm)
-#elif defined(_WIN32)
-#define http_date_timegm(tm) _mkgmtime(tm)
-#else
-time_t http_date_timegm (const struct tm *tm);
-#endif
-
 
 #ifdef __cplusplus
 }

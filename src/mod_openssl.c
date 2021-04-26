@@ -30,6 +30,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "sys-time.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -1471,7 +1472,7 @@ mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
 
     x.tm_year-= 1900;
     x.tm_mon -= 1;
-    time_t t = http_date_timegm(&x);
+    time_t t = timegm(&x);
     return (t != (time_t)-1) ? t + offset : t;
 
   #else
