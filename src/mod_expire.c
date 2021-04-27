@@ -244,6 +244,53 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
     return HANDLER_GO_ON;
 }
 
+static handler_t
+mod_expire_set_header (request_st * const r, const time_t * const off)
+{
+    const time_t cur_ts = log_epoch_secs;
+    time_t expires = off[1];
+    if (0 == off[0]) { /* access */
+        expires += cur_ts;
+    }
+    else {             /* modification */
+        const stat_cache_st * const st = stat_cache_path_stat(&r->physical.path);
+        /* can't set modification-based expire if mtime is not available */
+        if (NULL == st) return HANDLER_GO_ON;
+        expires += st->st_mtime;
+    }
+
+    /* expires should be at least cur_ts */
+    if (expires < cur_ts) expires = cur_ts;
+
+    /* HTTP/1.1 dictates that Cache-Control overrides Expires if both present.
+     * Therefore, send only Cache-Control to HTTP/1.1 requests.  This means
+     * that if an intermediary upgraded the request to HTTP/1.1, and the actual
+     * client sent HTTP/1.0, then the actual client might not understand
+     * Cache-Control when it may have understood Expires.  RFC 2616 HTTP/1.1
+     * was released June 1999, almost 22 years ago (as this comment is written).
+     * If a client today is sending HTTP/1.0, chances are the client does not
+     * cache.  Avoid the overhead of formatting time for Expires to send both
+     * Cache-Control and Expires when the majority of clients are HTTP/1.1 or
+     * HTTP/2 (or later). */
+    buffer *vb;
+    if (r->http_version > HTTP_VERSION_1_0) {
+        vb = http_header_response_set_ptr(r, HTTP_HEADER_CACHE_CONTROL,
+                                          CONST_STR_LEN("Cache-Control"));
+        buffer_append_string_len(vb, CONST_STR_LEN("max-age="));
+        buffer_append_int(vb, expires - cur_ts);
+    }
+    else { /* HTTP/1.0 */
+        vb = http_header_response_set_ptr(r, HTTP_HEADER_EXPIRES,
+                                          CONST_STR_LEN("Expires"));
+        if (!http_date_time_to_str(buffer_extend(vb, HTTP_DATE_SZ-1),
+                                   HTTP_DATE_SZ, expires))
+            buffer_string_set_length(vb,
+                                     buffer_string_length(vb)+1-HTTP_DATE_SZ);
+    }
+
+    return HANDLER_GO_ON;
+}
+
 REQUEST_FUNC(mod_expire_handler) {
 	plugin_data *p = p_d;
 	buffer *vb;
@@ -278,36 +325,7 @@ REQUEST_FUNC(mod_expire_handler) {
 		}
 	}
 
-	const time_t * const off = p->toffsets + ds->value.used;
-	const time_t cur_ts = log_epoch_secs;
-	time_t expires = off[1];
-	if (0 == off[0]) { /* access */
-		expires += cur_ts;
-	}
-	else {             /* modification */
-		const stat_cache_st * const st = stat_cache_path_stat(&r->physical.path);
-		/* can't set modification-based expire if mtime is not available */
-		if (NULL == st) return HANDLER_GO_ON;
-		expires += st->st_mtime;
-	}
-
-	/* expires should be at least cur_ts */
-	if (expires < cur_ts) expires = cur_ts;
-
-	/* HTTP/1.0 */
-	vb = http_header_response_set_ptr(r, HTTP_HEADER_EXPIRES,
-	                                  CONST_STR_LEN("Expires"));
-	if (!http_date_time_to_str(buffer_extend(vb, HTTP_DATE_SZ-1),
-	                           HTTP_DATE_SZ, expires))
-	    buffer_string_set_length(vb, buffer_string_length(vb)+1-HTTP_DATE_SZ);
-
-	/* HTTP/1.1 */
-	vb = http_header_response_set_ptr(r, HTTP_HEADER_CACHE_CONTROL,
-	                                  CONST_STR_LEN("Cache-Control"));
-	buffer_append_string_len(vb, CONST_STR_LEN("max-age="));
-	buffer_append_int(vb, expires - cur_ts);
-
-	return HANDLER_GO_ON;
+	return mod_expire_set_header(r, p->toffsets + ds->value.used);
 }
 
 
