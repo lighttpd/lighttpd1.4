@@ -3117,7 +3117,7 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
     buffer * const restrict b = pb->b_200;
     switch (pnum) {
       case WEBDAV_PROP_ALL:
-        __attribute_fallthrough__
+        /*__attribute_fallthrough__*/
       /*case WEBDAV_PROP_CREATIONDATE:*/  /* (located in database, if present)*/
       #if 0
       case WEBDAV_PROP_CREATIONDATE: {
