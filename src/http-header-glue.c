@@ -684,93 +684,93 @@ void http_response_upgrade_read_body_unknown(request_st * const r) {
 }
 
 
-static int http_response_process_headers(request_st * const r, http_response_opts * const opts, buffer * const hdrs) {
-    char *ns;
-    const char *s;
-    int line = 0;
-    int status_is_set = 0;
+static int http_response_process_headers(request_st * const restrict r, http_response_opts * const restrict opts, char * const restrict s, const unsigned short hoff[8192], const int is_nph) {
+    int i = 1;
 
-    for (s = hdrs->ptr; NULL != (ns = strchr(s, '\n')); s = ns + 1, ++line) {
-        const char *key, *value;
-        int key_len;
-        enum http_header_e id;
-
-        /* strip the \n */
-        ns[0] = '\0';
-        if (ns > s && ns[-1] == '\r') ns[-1] = '\0';
-
-        if (0 == line && (ns - s) >= 12 && 0 == memcmp(s, "HTTP/", 5)) {
-            /* non-parsed headers ... we parse them anyway */
-            /* (accept HTTP/2.0 and HTTP/3.0 from naive non-proxy backends) */
-            if ((s[5] == '1' || opts->backend != BACKEND_PROXY) && s[6] == '.'
-                && (s[7] == '1' || s[7] == '0') && s[8] == ' ') {
-                /* after the space should be a status code for us */
-                int status = http_header_str_to_code(s+9);
-                if (status >= 100 && status < 1000) {
-                    status_is_set = 1;
-                    light_bset(r->resp_htags, HTTP_HEADER_STATUS);
-                    r->http_status = status;
-                } /* else we expected 3 digits and didn't get them */
-            }
-
-            if (0 == r->http_status) {
-                log_error(r->conf.errh, __FILE__, __LINE__,
-                  "invalid HTTP status line: %s", s);
-                r->http_status = 502; /* Bad Gateway */
-                r->handler_module = NULL;
-                return -1;
-            }
-
-            continue;
+    if (is_nph) {
+        /* non-parsed headers ... we parse them anyway */
+        /* (accept HTTP/2.0 and HTTP/3.0 from naive non-proxy backends) */
+        /* (http_header_str_to_code() expects certain chars after code) */
+        if (s[12] == '\r' || s[12] == '\n') s[12] = '\0';/*(caller checked 12)*/
+        if ((s[5] == '1' || opts->backend != BACKEND_PROXY) && s[6] == '.'
+            && (s[7] == '1' || s[7] == '0') && s[8] == ' ') {
+            /* after the space should be a status code for us */
+            int status = http_header_str_to_code(s+9);
+            if (status >= 100 && status < 1000) {
+                r->http_status = status;
+                opts->local_redir = 0; /*(disable; status was set)*/
+                i = 2;
+            } /* else we expected 3 digits and didn't get them */
         }
 
+        if (0 == r->http_status) {
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "invalid HTTP status line: %s", s);
+            r->http_status = 502; /* Bad Gateway */
+            r->handler_module = NULL;
+            return 0;
+        }
+    }
+    else if (__builtin_expect( (opts->backend == BACKEND_PROXY), 0)) {
+        /* invalid response Status-Line from HTTP proxy */
+        r->http_status = 502; /* Bad Gateway */
+        r->handler_module = NULL;
+        return 0;
+    }
+
+    for (; i < hoff[0]; ++i) {
+        const char *k = s+hoff[i], *value;
+        char *end = s+hoff[i+1]-1; /*('\n')*/
+
+        /* strip the \r?\n */
+        if (end > k && end[-1] == '\r') --end;
+        end[0] = '\0'; /* for http_header_str_to_code(), strstr() */
+        /*(XXX: not done; could remove trailing whitespace)*/
+
         /* parse the headers */
-        key = s;
-        if (NULL == (value = strchr(s, ':'))) {
+        if (NULL == (value = memchr(k, ':', end - k))) {
             /* we expect: "<key>: <value>\r\n" */
             continue;
         }
 
-        key_len = value - key;
-        if (0 == key_len) continue; /*(already ignored when writing response)*/
+        const uint32_t klen = (uint32_t)(value - k);
+        if (0 == klen) continue; /*(already ignored when writing response)*/
         do { ++value; } while (*value == ' ' || *value == '\t'); /* skip LWS */
-        id = http_header_hkey_get(key, key_len);
+        const enum http_header_e id = http_header_hkey_get(k, klen);
 
-        if (opts->authorizer) {
-            if (0 == r->http_status || 200 == r->http_status) {
-                if (id == HTTP_HEADER_STATUS) {
-                    int status = http_header_str_to_code(value);
-                    if (status >= 100 && status < 1000) {
-                        r->http_status = status;
-                    } else {
-                        r->http_status = 502; /* Bad Gateway */
-                        break;
-                    }
+        if (opts->authorizer && (0 == r->http_status || 200 == r->http_status)){
+            if (id == HTTP_HEADER_STATUS) {
+                int status = http_header_str_to_code(value);
+                if (status >= 100 && status < 1000) {
+                    r->http_status = status;
+                    opts->local_redir = 0; /*(disable; status was set)*/
                 }
-                else if (id == HTTP_HEADER_OTHER && key_len > 9
-                         && (key[0] & 0xdf) == 'V'
-                         && buffer_eq_icase_ssn(key,
-                                                CONST_STR_LEN("Variable-"))) {
-                    http_header_env_append(r, key + 9, key_len - 9, value, strlen(value));
+                else {
+                    r->http_status = 502; /* Bad Gateway */
+                    break; /*(do not unset r->handler_module)*/
                 }
-                continue;
             }
+            else if (id == HTTP_HEADER_OTHER && klen > 9 && (k[0] & 0xdf) == 'V'
+                     && buffer_eq_icase_ssn(k, CONST_STR_LEN("Variable-"))) {
+                http_header_env_append(r, k + 9, klen - 9, value, end - value);
+            }
+            continue;
         }
 
         switch (id) {
           case HTTP_HEADER_STATUS:
-            {
-                if (opts->backend == BACKEND_PROXY) break; /*(pass w/o parse)*/
+            if (opts->backend != BACKEND_PROXY) {
                 int status = http_header_str_to_code(value);
                 if (status >= 100 && status < 1000) {
                     r->http_status = status;
-                    status_is_set = 1;
-                } else {
+                    opts->local_redir = 0; /*(disable; status was set)*/
+                }
+                else {
                     r->http_status = 502;
                     r->handler_module = NULL;
                 }
                 continue; /* do not send Status to client */
-            }
+            } /*(else pass w/o parse for BACKEND_PROXY)*/
             break;
           case HTTP_HEADER_UPGRADE:
             /*(technically, should also verify Connection: upgrade)*/
@@ -791,8 +791,7 @@ static int http_response_process_headers(request_st * const r, http_response_opt
             if (*value == '+') ++value;
             if (!r->resp_decode_chunked
                 && !light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
-                const char *err = ns;
-                if (err[-1] == '\0') --err; /*(skip one '\0', trailing whitespace)*/
+                const char *err = end;
                 while (err > value && (err[-1] == ' ' || err[-1] == '\t')) --err;
                 if (err <= value) continue; /*(might error 502 Bad Gateway)*/
                 uint32_t vlen = (uint32_t)(err - value);
@@ -832,16 +831,23 @@ static int http_response_process_headers(request_st * const r, http_response_opt
              *   A server MUST NOT send this header field. */
             /* (not bothering to remove HTTP2-Settings from Connection) */
             continue;
+          case HTTP_HEADER_OTHER:
+            /* ignore invalid headers with whitespace between label and ':'
+             * (if less strict behavior is desired, check and correct above
+             *  this switch() statement, but not for BACKEND_PROXY) */
+            if (k[klen-1] == ' ' || k[klen-1] == '\t')
+                continue;
+            break;
           default:
             break;
         }
 
-        http_header_response_insert(r, id, key, key_len, value, strlen(value));
+        http_header_response_insert(r, id, k, klen, value, end - value);
     }
 
     /* CGI/1.1 rev 03 - 7.2.1.2 */
     /* (proxy requires Status-Line, so never true for proxy)*/
-    if (!status_is_set && light_btst(r->resp_htags, HTTP_HEADER_LOCATION)) {
+    if (0 == r->http_status && light_btst(r->resp_htags, HTTP_HEADER_LOCATION)){
         r->http_status = 302;
     }
 
@@ -902,19 +908,7 @@ http_response_check_1xx (request_st * const r, buffer * const restrict b, uint32
 }
 
 
-__attribute_hot__
-__attribute_pure__
-static const char *
-http_response_end_of_header (const char * const restrict ptr)
-{
-    /* find \n(\r)?\n sequence */
-    for (const char *n=ptr-1, *nn=NULL; NULL != (n = strchr(n+1, '\n')); nn=n) {
-        if (n - nn == 2 ? n[-1] == '\r' : n - nn == 1) return n+1;
-    }
-    return NULL;
-}
-
-
+__attribute_noinline__
 handler_t http_response_parse_headers(request_st * const r, http_response_opts * const opts, buffer * const b) {
     /**
      * possible formats of response headers:
@@ -939,78 +933,61 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
     const char *bstart;
     uint32_t blen;
 
-  do {
-
-    blen = buffer_string_length(b);
-    /*("HTTP/1.1 200 " is at least 13 chars + \r\n, but accept w/o final ' ')*/
-    const int is_nph = (blen >= 12 && 0 == memcmp(b->ptr, "HTTP/", 5));
-
-    int is_header_end = 0;
-    uint32_t i = 0;
-
-    if (b->ptr[0] == '\n' || (b->ptr[0] == '\r' && b->ptr[1] == '\n')) {
-        /* no HTTP headers */
-        i = (b->ptr[0] == '\n') ? 0 : 1;
-        is_header_end = 1;
-    } else if (is_nph || b->ptr[(i = strcspn(b->ptr, ":\n"))] == ':') {
-        /* HTTP headers */
-        const char *n = http_response_end_of_header(b->ptr+i+1);
-        if (n) {
-            i = (uint32_t)(n - b->ptr - 1);
-            is_header_end = 1;
-        }
-    } else if (i == blen) { /* (no newline yet; partial header line?) */
-    } else if (opts->backend == BACKEND_CGI) {
-        /* no HTTP headers, but a body (special-case for CGI compat) */
-        /* no colon found; does not appear to be HTTP headers */
-        if (0 != http_chunk_append_buffer(r, b)) {
-            return HANDLER_ERROR;
-        }
-        r->http_status = 200; /* OK */
-        r->resp_body_started = 1;
-        return HANDLER_GO_ON;
-    } else {
-        /* invalid response headers */
-        r->http_status = 502; /* Bad Gateway */
-        r->handler_module = NULL;
-        return HANDLER_FINISHED;
-    }
-
-    if (!is_header_end) {
-        if (blen > MAX_HTTP_RESPONSE_FIELD_SIZE) {
+    do {
+        uint32_t header_len, is_nph = 0;
+        unsigned short hoff[8192]; /* max num header lines + 3; 16k on stack */
+        hoff[0] = 1; /* number of lines */
+        hoff[1] = 0; /* base offset for all lines */
+        hoff[2] = 0; /* offset from base for 2nd line; init 0 to detect '\n' */
+        blen = buffer_string_length(b);
+        header_len = http_header_parse_hoff(b->ptr, blen, hoff);
+        if ((header_len ? header_len : blen) > MAX_HTTP_RESPONSE_FIELD_SIZE) {
             log_error(r->conf.errh, __FILE__, __LINE__,
               "response headers too large for %s", r->uri.path.ptr);
             r->http_status = 502; /* Bad Gateway */
             r->handler_module = NULL;
             return HANDLER_FINISHED;
         }
-        return HANDLER_GO_ON;
-    }
+        if (hoff[2]) { /*(at least one newline found if offset is non-zero)*/
+            /*("HTTP/1.1 200 " is at least 13 chars + \r\n; 12 w/o final ' ')*/
+            is_nph = hoff[2] >= 12 && 0 == memcmp(b->ptr, "HTTP/", 5);
+            if (!is_nph) {
+                const char * colon = memchr(b->ptr, ':', hoff[2]-1);
+                if (__builtin_expect( (NULL == colon), 0)) {
+                    if (hoff[2] <= 2 && (1 == hoff[2] || b->ptr[0] == '\r')) {
+                        /* no HTTP headers */
+                    }
+                    else if (opts->backend == BACKEND_CGI) {
+                        /* no HTTP headers, but body (special-case for CGI)*/
+                        /* no colon found; does not appear to be HTTP headers */
+                        if (0 != http_chunk_append_buffer(r, b)) {
+                            return HANDLER_ERROR;
+                        }
+                        r->http_status = 200; /* OK */
+                        r->resp_body_started = 1;
+                        return HANDLER_GO_ON;
+                    }
+                    else {
+                        /* invalid response headers */
+                        r->http_status = 502; /* Bad Gateway */
+                        r->handler_module = NULL;
+                        return HANDLER_FINISHED;
+                    }
+                }
+            }
+        } /* else no newline yet; partial header line?) */
+        if (0 == header_len) /* headers incomplete */
+            return HANDLER_GO_ON;
 
-    /* the body starts after the EOL */
-    bstart = b->ptr + (i + 1);
-    blen -= (i + 1);
+        /* the body starts after the EOL */
+        bstart = b->ptr + header_len;
+        blen -= header_len;
 
-    /* strip the last \r?\n */
-    if (i > 0 && (b->ptr[i - 1] == '\r')) {
-        i--;
-    }
+        if (0 != http_response_process_headers(r, opts, b->ptr, hoff, is_nph))
+            return HANDLER_ERROR;
 
-    buffer_string_set_length(b, i);
-
-    if (opts->backend == BACKEND_PROXY && !is_nph) {
-        /* invalid response Status-Line from HTTP proxy */
-        r->http_status = 502; /* Bad Gateway */
-        r->handler_module = NULL;
-        return HANDLER_FINISHED;
-    }
-
-    if (0 != http_response_process_headers(r, opts, b)) {
-        return HANDLER_ERROR;
-    }
-
-  } while (r->http_status < 200
-           && http_response_check_1xx(r, b, bstart - b->ptr, blen));
+    } while (r->http_status < 200
+             && http_response_check_1xx(r, b, bstart - b->ptr, blen));
 
     r->resp_body_started = 1;
 

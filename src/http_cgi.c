@@ -52,7 +52,6 @@ http_cgi_local_redir (request_st * const r)
             || (   vb->ptr[ulen] != '\0'
                 && vb->ptr[ulen] != '/'
                 && vb->ptr[ulen] != '?'))
-        && !light_btst(r->resp_htags, HTTP_HEADER_STATUS)
         && 1 == r->resp_headers.used /*"Location"; no "Status" or NPH response*/
         && r->http_status >= 300 && r->http_status < 400) {
         if (++r->loops_per_request > 5) {
