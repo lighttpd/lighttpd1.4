@@ -20,12 +20,6 @@
 # include <syslog.h>
 #endif
 
-#ifndef HAVE_CLOCK_GETTIME
-#ifdef HAVE_SYS_TIME_H
-# include <sys/time.h>  /* gettimeofday() */
-#endif
-#endif
-
 time_t log_epoch_secs = 0;
 time_t log_monotonic_secs = 0;
 

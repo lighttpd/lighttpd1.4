@@ -2,11 +2,11 @@
 #define _RESPONSE_H_
 #include "first.h"
 
+#include "sys-time.h"
+
 #include "base_decls.h"
 #include "buffer.h"
 #include "array.h"
-
-#include <time.h>
 
 int http_response_parse(server *srv, request_st *r);
 

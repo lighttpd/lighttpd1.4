@@ -17,12 +17,12 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "sys-time.h"
 
 #include <limits.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 
 int

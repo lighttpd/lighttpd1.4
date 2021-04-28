@@ -101,12 +101,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "sys-mmap.h"
+#include "sys-time.h"
 
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <time.h>
 #include <unistd.h>     /* getpid() read() unlink() write() */
 
 #include "base.h"

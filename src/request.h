@@ -2,7 +2,7 @@
 #define _REQUEST_H_
 #include "first.h"
 
-#include <time.h>       /* (struct timespec) */
+#include "sys-time.h"   /* (struct timespec) */
 
 #include "base_decls.h"
 #include "buffer.h"

@@ -4,8 +4,8 @@
 #include "log.h"
 #include "stat_cache.h"
 
+#include "sys-time.h"
 #include <stdlib.h>
-#include <time.h>
 
 #include <lualib.h>
 #include <lauxlib.h>

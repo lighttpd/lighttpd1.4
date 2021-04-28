@@ -5,7 +5,6 @@
 #include <lauxlib.h>
 
 #include <errno.h>
-#include <time.h>
 #include <string.h>
 
 #include "mod_cml_funcs.h"

@@ -4,7 +4,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>       /* strftime() */
+#include "sys-time.h"   /* strftime() */
 
 static const char hex_chars_lc[] = "0123456789abcdef";
 static const char hex_chars_uc[] = "0123456789ABCDEF";

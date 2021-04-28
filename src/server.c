@@ -29,15 +29,14 @@
 static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC)+1, 0 };
 
 #include <sys/types.h>
-#include <sys/time.h>
 #include <sys/stat.h>
+#include "sys-time.h"
 
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <time.h>
 #include <signal.h>
 #include <locale.h>
 

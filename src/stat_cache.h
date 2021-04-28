@@ -2,13 +2,12 @@
 #define _FILE_CACHE_H_
 #include "first.h"
 
+#include <sys/stat.h>
+#include "sys-time.h"
+
 #include "base_decls.h"
 #include "buffer.h"
 #include "array.h"
-
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/stat.h>
 
 typedef struct stat stat_cache_st;
 
