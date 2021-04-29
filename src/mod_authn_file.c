@@ -20,18 +20,14 @@
 
 #include "base.h"
 #include "plugin.h"
+#include "fdevent.h"
 #include "http_auth.h"
 #include "log.h"
 
 #include "base64.h"
 
-#include <sys/types.h>
-
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <fcntl.h>
-#include <unistd.h>
 
 /*
  * htdigest, htpasswd, plain auth backends
@@ -207,15 +203,21 @@ static void mod_authn_file_digest(http_auth_info_t *ai, const char *pw, size_t p
 
 
 
-static int mod_authn_file_htdigest_get_loop(FILE *fp, const buffer *auth_fn, http_auth_info_t *ai, log_error_st *errh) {
-    char f_user[1024];
+static int mod_authn_file_htdigest_get_loop(const char *data, const buffer *auth_fn, http_auth_info_t *ai, log_error_st *errh) {
+    const char *f_user = data, *n;
+    do {
+        n = strchr(f_user, '\n');
+        /* (last line might not end in '\n') */
+        if (NULL == n) n = f_user + strlen(f_user);
 
-    while (NULL != fgets(f_user, sizeof(f_user), fp)) {
         char *f_pwd, *f_realm;
         size_t u_len, r_len;
 
         /* skip blank lines and comment lines (beginning '#') */
-        if (f_user[0] == '#' || f_user[0] == '\n' || f_user[0] == '\0') continue;
+        if (f_user[0] == '\n' || f_user[0] == '\r' ||
+            f_user[0] == '#'  || f_user[0] == '\0') continue;
+        /* skip excessively long lines */
+        if (n - f_user > 1024) continue;
 
         /*
          * htdigest format
@@ -223,10 +225,10 @@ static int mod_authn_file_htdigest_get_loop(FILE *fp, const buffer *auth_fn, htt
          * user:realm:md5(user:realm:password)
          */
 
-        if (NULL == (f_realm = strchr(f_user, ':'))
-            || NULL == (f_pwd = strchr(f_realm + 1, ':'))) {
+        if (NULL == (f_realm = memchr(f_user, ':', n - f_user))
+            || NULL == (f_pwd = memchr(f_realm+1, ':', n - (f_realm+1)))) {
             log_error(errh, __FILE__, __LINE__,
-              "parsed error in %s expected 'username:realm:hashed password'",
+              "parse error in %s expected 'username:realm:hashed password'",
               auth_fn->ptr);
             continue; /* skip bad lines */
         }
@@ -242,38 +244,32 @@ static int mod_authn_file_htdigest_get_loop(FILE *fp, const buffer *auth_fn, htt
             && 0 == memcmp(ai->realm, f_realm, r_len)) {
             /* found */
 
-            size_t pwd_len = strlen(f_pwd);
-            if (f_pwd[pwd_len-1] == '\n') --pwd_len;
+            size_t pwd_len = n - f_pwd;
+            if (f_pwd[pwd_len-1] == '\r') --pwd_len;
 
             if (pwd_len != (ai->dlen << 1)) continue;
             return http_auth_digest_hex2bin(f_pwd, pwd_len,
                                             ai->digest, sizeof(ai->digest));
         }
-    }
+    } while (*n && *(f_user = n+1));
 
     return -1;
 }
 
 static int mod_authn_file_htdigest_get(request_st * const r, void *p_d, http_auth_info_t * const ai) {
     plugin_data *p = (plugin_data *)p_d;
-    const buffer *auth_fn;
-    FILE *fp;
-
     mod_authn_file_patch_config(r, p);
-    auth_fn = p->conf.auth_htdigest_userfile;
+    const buffer * const auth_fn = p->conf.auth_htdigest_userfile;
     if (buffer_string_is_empty(auth_fn)) return -1;
 
-    fp = fopen(auth_fn->ptr, "r");
-    if (NULL != fp) {
-        int rc = mod_authn_file_htdigest_get_loop(fp,auth_fn,ai,r->conf.errh);
-        fclose(fp);
-        return rc;
-    }
-    else {
-        log_perror(r->conf.errh, __FILE__, __LINE__,
-          "opening digest-userfile %s", auth_fn->ptr);
-        return -1;
-    }
+    off_t dlen = 64*1024*1024;/*(arbitrary limit: 64 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(auth_fn->ptr,&dlen,r->conf.errh,malloc,free);
+    if (NULL == data) return -1;
+
+    int rc = mod_authn_file_htdigest_get_loop(data, auth_fn, ai, r->conf.errh);
+    safe_memclear(data, (size_t)dlen);
+    free(data);
+    return rc;
 }
 
 static handler_t mod_authn_file_htdigest_digest(request_st * const r, void *p_d, http_auth_info_t * const ai) {
@@ -296,41 +292,48 @@ static handler_t mod_authn_file_htdigest_basic(request_st * const r, void *p_d, 
 
     if (mod_authn_file_htdigest_get(r, p_d, &ai)) return HANDLER_ERROR;
 
-    if (ai.dlen > sizeof(htdigest)) return HANDLER_ERROR;/*(should not happen)*/
+    if (ai.dlen > sizeof(htdigest)) {
+        safe_memclear(ai.digest, ai.dlen);
+        return HANDLER_ERROR;/*(should not happen)*/
+    }
     memcpy(htdigest, ai.digest, ai.dlen); /*(save digest before reuse of ai)*/
 
     mod_authn_file_digest(&ai, pw, strlen(pw));
 
-    return (http_auth_const_time_memeq(htdigest, ai.digest, ai.dlen)
-            && http_auth_match_rules(require, username->ptr, NULL, NULL))
-      ? HANDLER_GO_ON
-      : HANDLER_ERROR;
+    int rc = (http_auth_const_time_memeq(htdigest, ai.digest, ai.dlen)
+           && http_auth_match_rules(require, username->ptr, NULL, NULL));
+
+    safe_memclear(htdigest, ai.dlen);
+    safe_memclear(ai.digest, ai.dlen);
+    return rc ? HANDLER_GO_ON : HANDLER_ERROR;
 }
 
 
 
 
 static int mod_authn_file_htpasswd_get(const buffer *auth_fn, const char *username, size_t userlen, buffer *password, log_error_st *errh) {
-    FILE *fp;
-    char f_user[1024];
-
     if (NULL == username) return -1;
-
     if (buffer_string_is_empty(auth_fn)) return -1;
-    fp = fopen(auth_fn->ptr, "r");
-    if (NULL == fp) {
-        log_perror(errh, __FILE__, __LINE__,
-                "opening plain-userfile %s", auth_fn->ptr);
 
-        return -1;
-    }
+    off_t dlen = 64*1024*1024;/*(arbitrary limit: 64 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(auth_fn->ptr, &dlen, errh, malloc, free);
+    if (NULL == data) return -1;
 
-    while (NULL != fgets(f_user, sizeof(f_user), fp)) {
+    int rc = -1;
+    const char *f_user = data, *n;
+    do {
+        n = strchr(f_user, '\n');
+        /* (last line might not end in '\n') */
+        if (NULL == n) n = f_user + strlen(f_user);
+
         char *f_pwd;
         size_t u_len;
 
         /* skip blank lines and comment lines (beginning '#') */
-        if (f_user[0] == '#' || f_user[0] == '\n' || f_user[0] == '\0') continue;
+        if (f_user[0] == '\n' || f_user[0] == '\r' ||
+            f_user[0] == '#'  || f_user[0] == '\0') continue;
+        /* skip excessively long lines */
+        if (n - f_user > 1024) continue;
 
         /*
          * htpasswd format
@@ -338,7 +341,7 @@ static int mod_authn_file_htpasswd_get(const buffer *auth_fn, const char *userna
          * user:crypted passwd
          */
 
-        if (NULL == (f_pwd = strchr(f_user, ':'))) {
+        if (NULL == (f_pwd = memchr(f_user, ':', n - f_user))) {
             log_error(errh, __FILE__, __LINE__,
               "parsed error in %s expected 'username:hashed password'",
               auth_fn->ptr);
@@ -352,18 +355,19 @@ static int mod_authn_file_htpasswd_get(const buffer *auth_fn, const char *userna
         if (userlen == u_len && 0 == memcmp(username, f_user, u_len)) {
             /* found */
 
-            size_t pwd_len = strlen(f_pwd);
-            if (f_pwd[pwd_len-1] == '\n') --pwd_len;
+            size_t pwd_len = n - f_pwd;
+            if (f_pwd[pwd_len-1] == '\r') --pwd_len;
 
             buffer_copy_string_len(password, f_pwd, pwd_len);
 
-            fclose(fp);
-            return 0;
+            rc = 0;
+            break;
         }
-    }
+    } while (*n && *(f_user = n+1));
 
-    fclose(fp);
-    return -1;
+    safe_memclear(data, (size_t)dlen);
+    free(data);
+    return rc;
 }
 
 static handler_t mod_authn_file_plain_digest(request_st * const r, void *p_d, http_auth_info_t * const ai) {
@@ -376,6 +380,7 @@ static handler_t mod_authn_file_plain_digest(request_st * const r, void *p_d, ht
         /* generate password from plain-text */
         mod_authn_file_digest(ai, CONST_BUF_LEN(password_buf));
     }
+    safe_memclear(password_buf->ptr, password_buf->size);
     buffer_free(password_buf);
     return (0 == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }
@@ -389,6 +394,7 @@ static handler_t mod_authn_file_plain_basic(request_st * const r, void *p_d, con
     if (0 == rc) {
         rc = http_auth_const_time_memeq_pad(CONST_BUF_LEN(password_buf), pw, strlen(pw)) ? 0 : -1;
     }
+    safe_memclear(password_buf->ptr, password_buf->size);
     buffer_free(password_buf);
     return 0 == rc && http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON
@@ -702,6 +708,7 @@ static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, 
         }
       #endif
     }
+    safe_memclear(password->ptr, password->size);
     buffer_free(password);
     return 0 == rc && http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON

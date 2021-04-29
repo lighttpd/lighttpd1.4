@@ -829,6 +829,7 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 		break;
 	}
 
+	safe_memclear(pw, pwlen);
 	buffer_free(username);
 	return (HANDLER_UNSET != rc) ? rc : mod_auth_send_401_unauthorized_basic(r, require->realm);
 }
@@ -1475,6 +1476,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 	mod_auth_digest_mutate(&ai,m,uri,nonce,cnonce,nc,qop);
 
 	if (!http_auth_const_time_memeq(rdigest, ai.digest, ai.dlen)) {
+		/*safe_memclear(ai.digest, ai.dlen);*//* skip clear since mutated */
 		/* digest not ok */
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "digest: auth failed for %s: wrong password, IP: %s",
@@ -1484,6 +1486,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		buffer_free(b);
 		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
+	/*safe_memclear(ai.digest, ai.dlen);*//* skip clear since mutated */
 
 	/* value is our allow-rules */
 	if (!http_auth_match_rules(require, username, NULL, NULL)) {
