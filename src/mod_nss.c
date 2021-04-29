@@ -1277,6 +1277,36 @@ mod_nss_acme_tls_1 (handler_ctx *hctx)
 }
 
 
+static int
+mod_nss_alpn_h2_policy (handler_ctx * const hctx)
+{
+    UNUSED(hctx);
+    /*(currently called after handshake has completed)*/
+  #if 0 /* SNI omitted by client when connecting to IP instead of to name */
+    if (buffer_string_is_empty(&hctx->r->uri.authority)) {
+        log_error(hctx->errh, __FILE__, __LINE__,
+          "SSL: error ALPN h2 without SNI");
+        return -1;
+    }
+  #endif
+  #if 0
+    /* sanity check; lighttpd defaults to using TLSv1.2 or better */
+    /* modified from http_cgi_ssl_env(); expensive, so commented out */
+    /* (quite a bit of work just to get protocol version)
+     * (could not find better NSS interface) */
+    SSLChannelInfo inf;
+    if (SSL_GetChannelInfo(ssl, &inf, sizeof(inf)) < 0
+        || inf.protocolVersion < SSL_LIBRARY_VERSION_TLS_1_2) {
+        log_error(hctx->errh, __FILE__, __LINE__,
+          "SSL: error ALPN h2 requires TLSv1.2 or later");
+        return -1;
+    }
+  #endif
+
+    return 0;
+}
+
+
 enum {
   MOD_NSS_ALPN_HTTP11      = 1
  ,MOD_NSS_ALPN_HTTP10      = 2
@@ -1507,6 +1537,9 @@ mod_nss_ssl_conf_cmd (server *srv, plugin_config_socket *s)
                 switch ((int)(e-v)) {
                   case 11:
                     if (buffer_eq_icase_ssn(v, "Compression", 11)) {
+                        /* (force disabled, the default, if HTTP/2 enabled) */
+                        if (srv->srvconf.h2proto)
+                            flag = 0;
                         s->ssl_compression = flag;
                         continue;
                     }
@@ -2037,7 +2070,12 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
                 }
                 break;
               case 5: /* ssl.read-ahead */
+                break;
               case 6: /* ssl.disable-client-renegotiation */
+                /* (force disabled, the default, if HTTP/2 enabled in server) */
+                if (srv->srvconf.h2proto)
+                    cpv->v.u = 1; /* disable client renegotiation */
+                break;
               case 7: /* ssl.verifyclient.activate */
               case 8: /* ssl.verifyclient.enforce */
                 break;
@@ -2257,7 +2295,11 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
     } while (len > 0);
 
     if (hctx->alpn && hctx->handshake) {
-        if (hctx->alpn == MOD_NSS_ALPN_ACME_TLS_1) {
+        if (hctx->alpn == MOD_NSS_ALPN_H2) {
+            if (0 != mod_nss_alpn_h2_policy(hctx))
+                return -1;
+        }
+        else if (hctx->alpn == MOD_NSS_ALPN_ACME_TLS_1) {
             /* Once TLS handshake is complete, return -1 to result in
              * CON_STATE_ERROR so that socket connection is quickly closed */
             return -1;

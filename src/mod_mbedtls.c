@@ -1072,6 +1072,28 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
 
 
 static int
+mod_mbedtls_alpn_h2_policy (handler_ctx * const hctx)
+{
+    /*(currently called after handshake has completed)*/
+  #if 0 /* SNI omitted by client when connecting to IP instead of to name */
+    if (buffer_string_is_empty(&hctx->r->uri.authority)) {
+        log_error(hctx->errh, __FILE__, __LINE__,
+          "SSL: error ALPN h2 without SNI");
+        return -1;
+    }
+  #endif
+    if (hctx->ssl.major_ver == MBEDTLS_SSL_MAJOR_VERSION_3
+        && hctx->ssl.minor_ver < MBEDTLS_SSL_MINOR_VERSION_3) {
+        log_error(hctx->errh, __FILE__, __LINE__,
+          "SSL: error ALPN h2 requires TLSv1.2 or later");
+        return -1;
+    }
+
+    return 0;
+}
+
+
+static int
 mod_mbedtls_alpn_selected (handler_ctx * const hctx, const char * const in)
 {
     const int n = (int)strlen(in);
@@ -1816,7 +1838,12 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
                 }
                 break;
               case 5: /* ssl.read-ahead */
+                break;
               case 6: /* ssl.disable-client-renegotiation */
+                /* (force disabled, the default, if HTTP/2 enabled in server) */
+                if (srv->srvconf.h2proto)
+                    cpv->v.u = 1; /* disable client renegotiation */
+                break;
               case 7: /* ssl.verifyclient.activate */
               case 8: /* ssl.verifyclient.enforce */
                 break;
@@ -2090,7 +2117,11 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
       case 0:
         hctx->handshake_done = 1;
        #ifdef MBEDTLS_SSL_ALPN
-        if (hctx->alpn == MOD_MBEDTLS_ALPN_ACME_TLS_1) {
+        if (hctx->alpn == MOD_MBEDTLS_ALPN_H2) {
+            if (0 != mod_mbedtls_alpn_h2_policy(hctx))
+                return -1;
+        }
+        else if (hctx->alpn == MOD_MBEDTLS_ALPN_ACME_TLS_1) {
             /* Once TLS handshake is complete, return -1 to result in
              * CON_STATE_ERROR so that socket connection is quickly closed */
             return -1;

@@ -1743,6 +1743,26 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     return rc;
 }
 
+static int
+mod_openssl_alpn_h2_policy (handler_ctx * const hctx)
+{
+    /*(currently called after handshake has completed)*/
+  #if 0 /* SNI omitted by client when connecting to IP instead of to name */
+    if (buffer_string_is_empty(&hctx->r->uri.authority)) {
+        log_error(hctx->errh, __FILE__, __LINE__,
+          "SSL: error ALPN h2 without SNI");
+        return -1;
+    }
+  #endif
+    if (wolfSSL_version(hctx->ssl) < TLS1_2_VERSION) {
+        log_error(hctx->errh, __FILE__, __LINE__,
+          "SSL: error ALPN h2 requires TLSv1.2 or later");
+        return -1;
+    }
+
+    return 0;
+}
+
 /* https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids */
 static int
 mod_openssl_alpn_select_cb (SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in, unsigned int inlen, void *arg)
@@ -2603,7 +2623,12 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                 if (0 == i) default_ssl_ca_crl_file = cpv->v.b;
                 break;
               case 5: /* ssl.read-ahead */
+                break;
               case 6: /* ssl.disable-client-renegotiation */
+                /* (force disabled, the default, if HTTP/2 enabled in server) */
+                if (srv->srvconf.h2proto)
+                    cpv->v.u = 1; /* disable client renegotiation */
+                break;
               case 7: /* ssl.verifyclient.activate */
               case 8: /* ssl.verifyclient.enforce */
                 break;
@@ -2850,7 +2875,11 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
       #ifdef HAVE_ALPN
       #ifdef TLSEXT_TYPE_application_layer_protocol_negotiation
         if (hctx->alpn) {
-            if (hctx->alpn == MOD_OPENSSL_ALPN_ACME_TLS_1) {
+            if (hctx->alpn == MOD_OPENSSL_ALPN_H2) {
+                if (0 != mod_openssl_alpn_h2_policy(hctx))
+                    return -1;
+            }
+            else if (hctx->alpn == MOD_OPENSSL_ALPN_ACME_TLS_1) {
                 chunkqueue_reset(cq);
                 /* initiate handshake in order to send ServerHello.
                  * Once TLS handshake is complete, return -1 to result in
@@ -3478,6 +3507,9 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
                 switch ((int)(e-v)) {
                   case 11:
                     if (buffer_eq_icase_ssn(v, "Compression", 11)) {
+                        /* (force disabled, the default, if HTTP/2 enabled) */
+                        if (srv->srvconf.h2proto)
+                            flag = 0;
                         if (flag)
                             SSL_CTX_clear_options(s->ssl_ctx,
                                                   SSL_OP_NO_COMPRESSION);

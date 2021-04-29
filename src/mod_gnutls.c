@@ -1336,6 +1336,28 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
 }
 
 
+static int
+mod_gnutls_alpn_h2_policy (handler_ctx * const hctx)
+{
+    /*(currently called after handshake has completed)*/
+  #if 0 /* SNI omitted by client when connecting to IP instead of to name */
+    if (buffer_string_is_empty(&hctx->r->uri.authority)) {
+        log_error(hctx->errh, __FILE__, __LINE__,
+          "SSL: error ALPN h2 without SNI");
+        return -1;
+    }
+  #endif
+    if (gnutls_protocol_get_version(hctx->ssl) < GNUTLS_TLS1_2) {
+        /*(future: if DTLS supported by lighttpd, add DTLS condition)*/
+        log_error(hctx->errh, __FILE__, __LINE__,
+          "SSL: error ALPN h2 requires TLSv1.2 or later");
+        return -1;
+    }
+
+    return 0;
+}
+
+
 enum {
   MOD_GNUTLS_ALPN_HTTP11      = 1
  ,MOD_GNUTLS_ALPN_HTTP10      = 2
@@ -2212,7 +2234,12 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
                 }
                 break;
               case 5: /* ssl.read-ahead */
+                break;
               case 6: /* ssl.disable-client-renegotiation */
+                /* (force disabled, the default, if HTTP/2 enabled in server) */
+                if (srv->srvconf.h2proto)
+                    cpv->v.u = 1; /* disable client renegotiation */
+                break;
               case 7: /* ssl.verifyclient.activate */
               case 8: /* ssl.verifyclient.enforce */
                 break;
@@ -2471,7 +2498,11 @@ mod_gnutls_ssl_handshake (handler_ctx *hctx)
 
     hctx->handshake = 1;
   #if GNUTLS_VERSION_NUMBER >= 0x030200
-    if (hctx->alpn == MOD_GNUTLS_ALPN_ACME_TLS_1) {
+    if (hctx->alpn == MOD_GNUTLS_ALPN_H2) {
+        if (0 != mod_gnutls_alpn_h2_policy(hctx))
+            return -1;
+    }
+    else if (hctx->alpn == MOD_GNUTLS_ALPN_ACME_TLS_1) {
         /* Once TLS handshake is complete, return -1 to result in
          * CON_STATE_ERROR so that socket connection is quickly closed */
         return -1;
