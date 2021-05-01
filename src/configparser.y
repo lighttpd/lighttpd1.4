@@ -99,26 +99,37 @@ static data_unset *configparser_merge_data(data_unset *op1, const data_unset *op
     case TYPE_ARRAY: {
       array *dst = &((data_array *)op1)->value;
       array *src = &((data_array *)op2)->value;
-      data_unset *du;
+      const data_unset *du, *ddu;
       size_t i;
 
       for (i = 0; i < src->used; i ++) {
         du = (data_unset *)src->data[i];
         if (du) {
-          if (buffer_is_empty(&du->key) || !array_get_element_klen(dst, CONST_BUF_LEN(&du->key))) {
+          if (buffer_is_empty(&du->key)
+              || !(ddu = array_get_element_klen(dst, CONST_BUF_LEN(&du->key)))){
             array_insert_unique(dst, du->fn->copy(du));
           } else {
             fprintf(stderr, "Duplicate array-key '%s'\n", du->key.ptr);
+            if (ddu->type == du->type) {
+              /*(ignore if new key/value pair matches existing key/value)*/
+              if (du->type == TYPE_STRING
+                  && buffer_is_equal(&((data_string *)du)->value,
+                                     &((data_string *)ddu)->value))
+                  continue;
+              if (du->type == TYPE_INTEGER
+                  && ((data_integer*)du)->value == ((data_integer*)ddu)->value)
+                  continue;
+            }
             op1->fn->free(op1);
             return NULL;
           }
         }
       }
       break;
+    }
     default:
       force_assert(0);
       break;
-    }
   }
   return op1;
 }
