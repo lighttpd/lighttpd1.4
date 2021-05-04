@@ -52,18 +52,9 @@ static size_t li_base64_decode(unsigned char * const result, const size_t out_le
 	size_t out_pos = 0; /* current output character (position) that is decoded. can contain partial result */
 	unsigned int group = 0; /* how many base64 digits in the current group were decoded already. each group has up to 4 digits */
 	size_t i;
-	const signed char *base64_reverse_table;
-
-	switch (charset) {
-	case BASE64_STANDARD:
-		base64_reverse_table = base64_standard_reverse_table;
-		break;
-	case BASE64_URL:
-		base64_reverse_table = base64_url_reverse_table;
-		break;
-	default:
-		return 0;
-	}
+	const signed char * const base64_reverse_table = (charset)
+	  ? base64_url_reverse_table                     /* BASE64_URL */
+	  : base64_standard_reverse_table;               /* BASE64_STANDARD */
 
 	/* run through the whole string, converting as we go */
 	for (i = 0; i < in_length; i++) {
@@ -131,20 +122,11 @@ size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char
 	const size_t in_tuple_remainder = in_length % 3;
 	const size_t out_tuple_remainder = in_tuple_remainder ? 1 + in_tuple_remainder : 0;
 	const size_t require_space = 4 * full_tuples + out_tuple_remainder;
-	const char* base64_table;
 	size_t i;
 	size_t out_pos = 0;
-
-	switch (charset) {
-	case BASE64_STANDARD:
-		base64_table = base64_standard_table;
-		break;
-	case BASE64_URL:
-		base64_table = base64_url_table;
-		break;
-	default:
-		force_assert(0 && "invalid charset");
-	}
+	const char* const base64_table = (charset)
+	  ? base64_url_table             /* BASE64_URL */
+	  : base64_standard_table;       /* BASE64_STANDARD */
 
 	/* check overflows */
 	force_assert(full_tuples <= 2*full_tuples);
