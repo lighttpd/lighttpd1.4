@@ -97,34 +97,32 @@ SETDEFAULTS_FUNC(mod_staticfile_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-URIHANDLER_FUNC(mod_staticfile_subrequest) {
-    plugin_data * const p = p_d;
+__attribute_cold__
+static handler_t
+mod_staticfile_not_handled(request_st * const r, const char * const msg)
+{
+    if (r->conf.log_request_handling)
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "-- NOT handling file as static file, %s forbidden", msg);
+    return HANDLER_GO_ON;
+}
 
+URIHANDLER_FUNC(mod_staticfile_subrequest) {
     if (NULL != r->handler_module) return HANDLER_GO_ON;
     if (!http_method_get_head_post(r->http_method)) return HANDLER_GO_ON;
     /* r->physical.path is non-empty for handle_subrequest_start */
     /*if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;*/
 
+    plugin_data * const p = p_d;
     mod_staticfile_patch_config(r, p);
 
     if (p->conf.disable_pathinfo && !buffer_string_is_empty(&r->pathinfo)) {
-        if (r->conf.log_request_handling)
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "-- NOT handling file as static file, pathinfo forbidden");
-        return HANDLER_GO_ON;
+        return mod_staticfile_not_handled(r, "pathinfo");
     }
 
     if (p->conf.exclude_ext
         && array_match_value_suffix(p->conf.exclude_ext, &r->physical.path)) {
-        if (r->conf.log_request_handling)
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "-- NOT handling file as static file, extension forbidden");
-        return HANDLER_GO_ON;
-    }
-
-    if (r->conf.log_request_handling) {
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "-- handling file as static file");
+        return mod_staticfile_not_handled(r, "extension");
     }
 
     if (!p->conf.etags_used) r->conf.etag_flags = 0;
