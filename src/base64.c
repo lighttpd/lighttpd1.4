@@ -56,21 +56,19 @@ static size_t li_base64_decode(unsigned char * const result, const size_t out_le
 
 	/* run through the whole string, converting as we go */
 	for (i = 0; i < in_length; i++) {
-		unsigned char c = (unsigned char) in[i];
-		int ch;
-
-		if (c == '\0') break;
-		if (c >= 128) return 0; /* only 7-bit characters allowed */
-
-		ch = base64_reverse_table[c];
-		if (-3 == ch) {
-			/* pad character; can only come after 2 base64 digits in a group */
-			if (group < 2) return 0;
-			break;
-		} else if (-2 == ch) {
-			continue; /* skip character */
-		} else if (ch < 0) {
-			return 0; /* invalid character, abort */
+		const int c = ((unsigned char *)in)[i];
+		const int ch = (c < 128) ? base64_reverse_table[c] : -1;
+		if (__builtin_expect( (ch < 0), 0)) {
+			if (-3 == ch) {
+				/* pad character; can only come after 2 base64 digits in a group */
+				if (group < 2) return 0;
+				break;
+			} else if (-2 == ch) {
+				continue; /* skip character */
+			} else {
+				if (c == '\0') break;
+				return 0; /* invalid character, abort */
+			}
 		}
 
 		switch(group) {
