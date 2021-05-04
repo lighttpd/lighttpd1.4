@@ -37,8 +37,7 @@ static const signed char base64_url_reverse_table[] = {
 	41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1, /* 0x70 - 0x7F */
 };
 
-unsigned char* buffer_append_base64_decode(buffer *out, const char* in, size_t in_length, base64_charset charset) {
-	unsigned char *result;
+static size_t li_base64_decode(unsigned char * const result, const size_t out_length, const char * const in, const size_t in_length, const base64_charset charset) {
 	size_t out_pos = 0; /* current output character (position) that is decoded. can contain partial result */
 	unsigned int group = 0; /* how many base64 digits in the current group were decoded already. each group has up to 4 digits */
 	size_t i;
@@ -52,10 +51,8 @@ unsigned char* buffer_append_base64_decode(buffer *out, const char* in, size_t i
 		base64_reverse_table = base64_url_reverse_table;
 		break;
 	default:
-		return NULL;
+		return 0;
 	}
-
-	result = (unsigned char *) buffer_string_prepare_append(out, 3*(in_length / 4) + 3);
 
 	/* run through the whole string, converting as we go */
 	for (i = 0; i < in_length; i++) {
@@ -63,17 +60,17 @@ unsigned char* buffer_append_base64_decode(buffer *out, const char* in, size_t i
 		int ch;
 
 		if (c == '\0') break;
-		if (c >= 128) return NULL; /* only 7-bit characters allowed */
+		if (c >= 128) return 0; /* only 7-bit characters allowed */
 
 		ch = base64_reverse_table[c];
 		if (-3 == ch) {
 			/* pad character; can only come after 2 base64 digits in a group */
-			if (group < 2) return NULL;
+			if (group < 2) return 0;
 			break;
 		} else if (-2 == ch) {
 			continue; /* skip character */
 		} else if (ch < 0) {
-			return NULL; /* invalid character, abort */
+			return 0; /* invalid character, abort */
 		}
 
 		switch(group) {
@@ -104,7 +101,7 @@ unsigned char* buffer_append_base64_decode(buffer *out, const char* in, size_t i
 		break;
 	case 1:
 		/* need at least 2 base64 digits per group */
-		return NULL;
+		return 0;
 	case 2:
 		/* have 2 base64 digits in last group => one real octet, two zeroes padded */
 	case 3:
@@ -112,13 +109,12 @@ unsigned char* buffer_append_base64_decode(buffer *out, const char* in, size_t i
 
 		/* for both cases the current index already is on the first zero padded octet
 		 * - check it really is zero (overlapping bits) */
-		if (0 != result[out_pos]) return NULL;
+		if (0 != result[out_pos]) return 0;
 		break;
 	}
 
-	buffer_commit(out, out_pos);
-
-	return result;
+	force_assert(out_pos <= out_length);
+	return out_pos;
 }
 
 size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char* in, size_t in_length, base64_charset charset) {
@@ -232,4 +228,16 @@ char* buffer_append_base64_encode(buffer *out, const unsigned char* in, size_t i
 	buffer_commit(out, out_pos);
 
 	return result;
+}
+
+unsigned char* buffer_append_base64_decode(buffer *out, const char* in, size_t in_length, base64_charset charset) {
+    const size_t reserve = 3*(in_length/4) + 3;
+    unsigned char * const result = (unsigned char *)
+      buffer_string_prepare_append(out, reserve);
+    const size_t out_pos =
+      li_base64_decode(result, reserve, in, in_length, charset);
+
+    buffer_commit(out, out_pos);
+
+    return (out_pos || !in_length) ? result : NULL;
 }
