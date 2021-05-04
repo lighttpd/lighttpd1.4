@@ -253,7 +253,8 @@ URIHANDLER_FUNC(mod_cml_power_magnet) {
 URIHANDLER_FUNC(mod_cml_is_handled) {
 	plugin_data *p = p_d;
 
-	if (buffer_string_is_empty(&r->physical.path)) return HANDLER_ERROR;
+	/* r->physical.path is non-empty for handle_subrequest_start */
+	/*if (buffer_string_is_empty(&r->physical.path)) return HANDLER_ERROR;*/
 
 	mod_cml_patch_config(r, p);
 

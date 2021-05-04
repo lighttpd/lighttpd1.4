@@ -747,7 +747,8 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	data_string *ds;
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
-	if (buffer_is_empty(&r->physical.path)) return HANDLER_GO_ON;
+	/* r->physical.path is non-empty for handle_subrequest_start */
+	/*if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;*/
 
 	mod_cgi_patch_config(r, p);
 	if (NULL == p->conf.cgi) return HANDLER_GO_ON;
@@ -755,7 +756,12 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	ds = (data_string *)array_match_key_suffix(p->conf.cgi, &r->physical.path);
 	if (NULL == ds) return HANDLER_GO_ON;
 
-	st = stat_cache_path_stat(&r->physical.path);
+	/* r->tmp_sce is set in http_response_physical_path_check() and is valid
+	 * in handle_subrequest_start callback -- handle_subrequest_start callbacks
+	 * should not change r->physical.path (or should invalidate r->tmp_sce) */
+	st = r->tmp_sce && buffer_is_equal(&r->tmp_sce->name, &r->physical.path)
+	   ? &r->tmp_sce->st
+	   : stat_cache_path_stat(&r->physical.path);
 	if (NULL == st) return HANDLER_GO_ON;
 
 	/* (aside: CGI might be executable even if it is not readable) */

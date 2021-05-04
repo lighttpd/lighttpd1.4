@@ -1238,7 +1238,8 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 	plugin_data *p = p_d;
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
-	if (buffer_is_empty(&r->physical.path)) return HANDLER_GO_ON;
+	/* r->physical.path is non-empty for handle_subrequest_start */
+	/*if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;*/
 
 	mod_ssi_patch_config(r, p);
 	if (NULL == p->conf.ssi_extension) return HANDLER_GO_ON;

@@ -305,16 +305,24 @@ handler_t http_response_reqbody_read_error (request_st * const r, int http_statu
 }
 
 
-void http_response_send_file (request_st * const r, buffer * const path) {
-	stat_cache_entry * const sce = stat_cache_get_entry_open(path, r->conf.follow_symlink);
-	const buffer *mtime = NULL;
-	int allow_caching = (0 == r->http_status || 200 == r->http_status);
-
-	if (NULL == sce) {
-		r->http_status = (errno == ENOENT) ? 404 : 403;
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "not a regular file: %s -> %s", r->uri.path.ptr, path->ptr);
-		return;
+void http_response_send_file (request_st * const r, buffer * const path, stat_cache_entry *sce) {
+	if (NULL == sce
+	    || (sce->fd < 0 && 0 != sce->st.st_size)) {
+		sce = stat_cache_get_entry_open(path, r->conf.follow_symlink);
+		if (NULL == sce) {
+			r->http_status = (errno == ENOENT) ? 404 : 403;
+			log_error(r->conf.errh, __FILE__, __LINE__,
+			  "not a regular file: %s -> %s", r->uri.path.ptr, path->ptr);
+			return;
+		}
+		if (sce->fd < 0 && 0 != sce->st.st_size) {
+			r->http_status = (errno == ENOENT) ? 404 : 403;
+			if (r->conf.log_request_handling) {
+				log_perror(r->conf.errh, __FILE__, __LINE__,
+				  "file open failed: %s", path->ptr);
+			}
+			return;
+		}
 	}
 
 	if (!r->conf.follow_symlink
@@ -340,14 +348,7 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 		return;
 	}
 
-	if (sce->fd < 0 && 0 != sce->st.st_size) {
-		r->http_status = (errno == ENOENT) ? 404 : 403;
-		if (r->conf.log_request_handling) {
-			log_perror(r->conf.errh, __FILE__, __LINE__,
-			  "file open failed: %s", path->ptr);
-		}
-		return;
-	}
+	int allow_caching = (0 == r->http_status || 200 == r->http_status);
 
 	/* set response content-type, if not set already */
 
@@ -386,6 +387,7 @@ void http_response_send_file (request_st * const r, buffer * const path) {
 		}
 
 		/* prepare header */
+		const buffer *mtime;
 		mtime = http_header_response_get(r, HTTP_HEADER_LAST_MODIFIED,
 		                                 CONST_STR_LEN("Last-Modified"));
 		if (NULL == mtime) {
@@ -484,7 +486,7 @@ static void http_response_xsendfile (request_st * const r, buffer * const path, 
 		}
 	}
 
-	if (valid) http_response_send_file(r, path);
+	if (valid) http_response_send_file(r, path, NULL);
 
 	if (r->http_status >= 400 && status < 300) {
 		r->handler_module = NULL;

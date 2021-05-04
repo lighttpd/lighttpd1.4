@@ -8,6 +8,8 @@
 #include "buffer.h"
 #include "array.h"
 
+struct stat_cache_entry;/* declaration */
+
 int http_response_parse(server *srv, request_st *r);
 
 enum {
@@ -47,7 +49,7 @@ const buffer * http_response_set_last_modified(request_st *r, time_t lmtime);
 int http_response_handle_cachable(request_st *r, const buffer *lmod, time_t lmtime);
 void http_response_body_clear(request_st *r, int preserve_length);
 void http_response_reset(request_st *r);
-void http_response_send_file (request_st *r, buffer *path);
+void http_response_send_file (request_st *r, buffer *path, struct stat_cache_entry *sce);
 void http_response_backend_done (request_st *r);
 void http_response_backend_error (request_st *r);
 void http_response_upgrade_read_body_unknown(request_st *r);

@@ -194,9 +194,9 @@ http_response_physical_path_error (request_st * const r, const int code, const c
 
 
 static handler_t http_response_physical_path_check(request_st * const r) {
-	const stat_cache_st *st = stat_cache_path_stat(&r->physical.path);
+	stat_cache_entry *sce = stat_cache_get_entry(&r->physical.path);
 
-	if (st) {
+	if (__builtin_expect( (sce != NULL), 1)) {
 		/* file exists */
 	} else {
 		switch (errno) {
@@ -240,21 +240,23 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 			/*(temporarily modify r->physical.path in-place)*/
 			r->physical.path.used = pathinfo - r->physical.path.ptr + 1;
 			*pathinfo = '\0';
-			const stat_cache_st * const nst = stat_cache_path_stat(&r->physical.path);
+			stat_cache_entry * const nsce = stat_cache_get_entry(&r->physical.path);
 			*pathinfo = '/';
 			r->physical.path.used = pathused;
-			if (NULL == nst) {
+			if (NULL == nsce) {
 				pathinfo = pathinfo != pprev ? pprev : NULL;
 				break;
 			}
-			st = nst;
-			if (!S_ISDIR(st->st_mode)) break;
+			sce = nsce;
+			if (!S_ISDIR(sce->st.st_mode)) break;
 		}
 
-		if (NULL == pathinfo || !S_ISREG(st->st_mode)) {
+		if (NULL == pathinfo || !S_ISREG(sce->st.st_mode)) {
 			/* no it really doesn't exists */
 			return http_response_physical_path_error(r, 404, "-- file not found");
 		}
+		/* note: historical behavior checks S_ISREG() above, permitting
+		 * path-info only on regular files, not dirs or special files */
 
 		/* we have a PATHINFO */
 		if (pathinfo) {
@@ -285,10 +287,16 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 		return http_response_physical_path_error(r, 403, "-- access denied due to symlink restriction");
 	}
 
-	if (S_ISREG(st->st_mode)) /*(common case)*/
+	/* r->tmp_sce is valid in handle_subrequest_start callback --
+	 * handle_subrquest_start callbacks should not change r->physical.path
+	 * (or should invalidate r->tmp_sce).  r->tmp_sce is not reset between
+	 * requests and is valid only for sequential code after this func succeeds*/
+	r->tmp_sce = sce;
+
+	if (S_ISREG(sce->st.st_mode)) /*(common case)*/
 		return HANDLER_GO_ON;
 
-	if (S_ISDIR(st->st_mode)) {
+	if (S_ISDIR(sce->st.st_mode)) {
 		if (!buffer_has_slash_suffix(&r->uri.path)) {
 			http_response_redirect_to_directory(r, 301);
 			return HANDLER_FINISHED;
@@ -569,7 +577,7 @@ http_response_prepare (request_st * const r)
 	/*
 	 * No module grabbed the request yet (like mod_access)
 	 *
-	 * Go on and check of the file exists at all
+	 * Go on and check if the file exists at all
 	 */
 
 		if (r->conf.log_request_handling) {
@@ -581,6 +589,8 @@ http_response_prepare (request_st * const r)
 
 		rc = http_response_physical_path_check(r);
 		if (HANDLER_GO_ON != rc) continue;
+
+		/* r->physical.path is non-empty and exists in the filesystem */
 
 		if (r->conf.log_request_handling) {
 			log_error(r->conf.errh, __FILE__, __LINE__,

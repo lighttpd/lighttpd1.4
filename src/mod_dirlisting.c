@@ -1226,7 +1226,8 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 	if (!buffer_has_slash_suffix(&r->uri.path)) return HANDLER_GO_ON;
 	if (!http_method_get_or_head(r->http_method)) return HANDLER_GO_ON;
-	if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;
+	/* r->physical.path is non-empty for handle_subrequest_start */
+	/*if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;*/
 
 	mod_dirlisting_patch_config(r, p);
 
@@ -1239,6 +1240,10 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 		  "URI          : %s", r->uri.path.ptr);
 	}
 
+  #if 0 /* redundant check; not necessary */
+	/* r->physical.path is a dir since it ends in slash, or else
+	 * http_response_physical_path_check() would have redirected
+	 * before calling handle_subrequest_start */
 	if (!stat_cache_path_isdir(&r->physical.path)) {
 		if (errno == ENOTDIR)
 			return HANDLER_GO_ON;
@@ -1246,6 +1251,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 		r->http_status = 500;
 		return HANDLER_FINISHED;
 	}
+  #endif
 
 	if (p->conf.cache) {
 		handler_t rc = mod_dirlisting_cache_check(r, p);

@@ -14,6 +14,7 @@ struct log_error_st;    /* declaration */
 struct chunkqueue;      /* declaration */
 struct cond_cache_t;    /* declaration */
 struct cond_match_t;    /* declaration */
+struct stat_cache_entry;/* declaration */
 
 typedef struct {
     unsigned int http_parseopts;
@@ -191,6 +192,8 @@ struct request_st {
     struct chunkqueue write_queue;     /* HTTP response queue [ file, mem ] */
     struct chunkqueue read_queue;      /* HTTP request queue  [ mem ] */
     struct chunkqueue reqbody_queue; /*(might use tempfiles)*/
+
+    struct stat_cache_entry *tmp_sce; /*(value valid only in sequential code)*/
 };
 
 

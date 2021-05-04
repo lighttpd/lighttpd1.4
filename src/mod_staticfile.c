@@ -7,6 +7,7 @@
 #include "plugin.h"
 
 #include "response.h"
+#include "stat_cache.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -99,10 +100,10 @@ SETDEFAULTS_FUNC(mod_staticfile_set_defaults) {
 URIHANDLER_FUNC(mod_staticfile_subrequest) {
     plugin_data * const p = p_d;
 
-    if (r->http_status != 0) return HANDLER_GO_ON;
-    if (buffer_is_empty(&r->physical.path)) return HANDLER_GO_ON;
     if (NULL != r->handler_module) return HANDLER_GO_ON;
     if (!http_method_get_head_post(r->http_method)) return HANDLER_GO_ON;
+    /* r->physical.path is non-empty for handle_subrequest_start */
+    /*if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;*/
 
     mod_staticfile_patch_config(r, p);
 
@@ -127,7 +128,14 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
     }
 
     if (!p->conf.etags_used) r->conf.etag_flags = 0;
-    http_response_send_file(r, &r->physical.path);
+
+    /* r->tmp_sce is set in http_response_physical_path_check() and is valid
+     * in handle_subrequest_start callback -- handle_subrequest_start callbacks
+     * should not change r->physical.path (or should invalidate r->tmp_sce) */
+    if (r->tmp_sce && !buffer_is_equal(&r->tmp_sce->name, &r->physical.path))
+        r->tmp_sce = NULL;
+
+    http_response_send_file(r, &r->physical.path, r->tmp_sce);
 
     return HANDLER_FINISHED;
 }
