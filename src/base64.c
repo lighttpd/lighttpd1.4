@@ -205,25 +205,18 @@ size_t li_to_base64(char* out, size_t out_length, const unsigned char* in, size_
 }
 
 
-char* buffer_append_base64_encode_no_padding(buffer *out, const unsigned char* in, size_t in_length, base64_charset charset) {
-	size_t reserve = 4*(in_length/3) + 4;
-	char* result = buffer_string_prepare_append(out, reserve);
-	size_t out_pos = li_to_base64_no_padding(result, reserve, in, in_length, charset);
+char* buffer_append_base64_encode_opt(buffer *out, const unsigned char* in, size_t in_length, base64_charset charset, int pad) {
+    const size_t reserve = 4*(in_length/3) + 4;
+    char * const result = buffer_string_prepare_append(out, reserve);
+    const size_t out_pos = (pad)
+      ? li_to_base64(result, reserve, in, in_length, charset)
+      : li_to_base64_no_padding(result, reserve, in, in_length, charset);
 
-	buffer_commit(out, out_pos);
+    buffer_commit(out, out_pos);
 
-	return result;
+    return result;
 }
 
-char* buffer_append_base64_encode(buffer *out, const unsigned char* in, size_t in_length, base64_charset charset) {
-	size_t reserve = 4*(in_length/3) + 4;
-	char* result = buffer_string_prepare_append(out, reserve);
-	size_t out_pos = li_to_base64(result, reserve, in, in_length, charset);
-
-	buffer_commit(out, out_pos);
-
-	return result;
-}
 
 unsigned char* buffer_append_base64_decode(buffer *out, const char* in, size_t in_length, base64_charset charset) {
     const size_t reserve = 3*(in_length/4) + 3;
