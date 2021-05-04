@@ -887,7 +887,10 @@ if test "x$use_nss" = "xyes"; then
       NSS_LIBS="-L$WITH_NSS/lib -lnss3"
   else
       PKG_CHECK_MODULES([NSS],[nss])
-      CPPFLAGS="$CPPFLAGS -I/usr/include/nspr4"
+      if test "x$CRYPTO_LIB" = "x"; then
+        PKG_CHECK_MODULES([NSPR],[nspr])
+        CPPFLAGS="$CPPFLAGS $NSPR_CFLAGS"
+      fi
   fi
   AC_DEFINE([HAVE_NSS_NSS_H], [1], [nss/nss.h])
   AC_DEFINE([HAVE_NSS3_NSS_H], [1], [nss3/nss.h])
