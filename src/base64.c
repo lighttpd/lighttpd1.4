@@ -37,6 +37,17 @@ static const signed char base64_url_reverse_table[] = {
 	41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1, /* 0x70 - 0x7F */
 };
 
+__attribute_const__
+static char li_base64_padding_char (const base64_charset charset) {
+	switch (charset) {
+	default:
+	case BASE64_STANDARD:
+		return '='; /* base64_standard_table[64]; */
+	case BASE64_URL:
+		return '.'; /* base64_url_table[64]; */
+	}
+}
+
 static size_t li_base64_decode(unsigned char * const result, const size_t out_length, const char * const in, const size_t in_length, const base64_charset charset) {
 	size_t out_pos = 0; /* current output character (position) that is decoded. can contain partial result */
 	unsigned int group = 0; /* how many base64 digits in the current group were decoded already. each group has up to 4 digits */
@@ -177,34 +188,20 @@ size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char
 }
 
 size_t li_to_base64(char* out, size_t out_length, const unsigned char* in, size_t in_length, base64_charset charset) {
-	const size_t in_tuple_remainder = in_length % 3;
-	size_t padding_length = in_tuple_remainder ? 3 - in_tuple_remainder : 0;
+    size_t out_pos =
+      li_to_base64_no_padding(out, out_length, in, in_length, charset);
 
-	char padding;
-	size_t out_pos;
+    const size_t in_tuple_remainder = in_length % 3;
+    const size_t padding_length = in_tuple_remainder ? 3 - in_tuple_remainder : 0;
+    if (padding_length) { /* [0,1,2] */
+        const char padding = li_base64_padding_char(charset);
+        force_assert(padding_length <= out_length - out_pos);
+        if (padding_length > 1)
+            out[out_pos++] = padding;
+        out[out_pos++] = padding;
+    }
 
-	switch (charset) {
-	case BASE64_STANDARD:
-		padding = base64_standard_table[64];
-		break;
-	case BASE64_URL:
-		padding = base64_url_table[64];
-		break;
-	default:
-		force_assert(0 && "invalid charset");
-	}
-
-	force_assert(out_length >= padding_length);
-	out_pos = li_to_base64_no_padding(out, out_length - padding_length, in, in_length, charset);
-
-	while (padding_length > 0) {
-		out[out_pos++] = padding;
-		padding_length--;
-	}
-
-	force_assert(out_pos <= out_length);
-
-	return out_pos;
+    return out_pos;
 }
 
 
