@@ -307,7 +307,7 @@ handler_t http_response_reqbody_read_error (request_st * const r, int http_statu
 
 void http_response_send_file (request_st * const r, buffer * const path, stat_cache_entry *sce) {
 	if (NULL == sce
-	    || (sce->fd < 0 && 0 != sce->st.st_size)) {
+	    || (sce->fd < 0 && __builtin_expect( (0 != sce->st.st_size), 0))) {
 		sce = stat_cache_get_entry_open(path, r->conf.follow_symlink);
 		if (NULL == sce) {
 			r->http_status = (errno == ENOENT) ? 404 : 403;
@@ -315,7 +315,7 @@ void http_response_send_file (request_st * const r, buffer * const path, stat_ca
 			  "not a regular file: %s -> %s", r->uri.path.ptr, path->ptr);
 			return;
 		}
-		if (sce->fd < 0 && 0 != sce->st.st_size) {
+		if (sce->fd < 0 && __builtin_expect( (0 != sce->st.st_size), 0)) {
 			r->http_status = (errno == ENOENT) ? 404 : 403;
 			if (r->conf.log_request_handling) {
 				log_perror(r->conf.errh, __FILE__, __LINE__,
@@ -325,7 +325,7 @@ void http_response_send_file (request_st * const r, buffer * const path, stat_ca
 		}
 	}
 
-	if (!r->conf.follow_symlink
+	if (__builtin_expect( (!r->conf.follow_symlink), 0)
 	    && 0 != stat_cache_path_contains_symlink(path, r->conf.errh)) {
 		r->http_status = 403;
 		if (r->conf.log_request_handling) {
@@ -338,7 +338,7 @@ void http_response_send_file (request_st * const r, buffer * const path, stat_ca
 	}
 
 	/* we only handle regular files */
-	if (!S_ISREG(sce->st.st_mode)) {
+	if (__builtin_expect( (!S_ISREG(sce->st.st_mode)), 0)) {
 		r->http_status = 403;
 		if (r->conf.log_file_not_found) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
