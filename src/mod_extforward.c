@@ -701,6 +701,15 @@ static int buffer_backslash_unescape (buffer * const b) {
     return 1;
 }
 
+__attribute_cold__
+static handler_t mod_extforward_bad_request (request_st * const r, const unsigned int line, const char * const msg)
+{
+    r->http_status = 400; /* Bad Request */
+    r->handler_module = NULL;
+    log_error(r->conf.errh, __FILE__, line, "%s", msg);
+    return HANDLER_FINISHED;
+}
+
 static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * const p, const buffer * const forwarded) {
     /* HTTP list need not consist of param=value tokens,
      * but this routine expect such for HTTP Forwarded header
@@ -737,11 +746,8 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
         i = find_next_semicolon_or_comma_or_eq(s, i);
         if (i < 0) {
             /*(reject IP spoofing if attacker sets improper quoted-string)*/
-            log_error(r->conf.errh, __FILE__, __LINE__,
+            return mod_extforward_bad_request(r, __LINE__,
               "invalid quoted-string in Forwarded header");
-            r->http_status = 400; /* Bad Request */
-            r->handler_module = NULL;
-            return HANDLER_FINISHED;
         }
         if (s[i] != '=') continue;
         klen = i - k;
@@ -749,11 +755,8 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
         i = find_next_semicolon_or_comma(s, i);
         if (i < 0) {
             /*(reject IP spoofing if attacker sets improper quoted-string)*/
-            log_error(r->conf.errh, __FILE__, __LINE__,
+            return mod_extforward_bad_request(r, __LINE__,
               "invalid quoted-string in Forwarded header");
-            r->http_status = 400; /* Bad Request */
-            r->handler_module = NULL;
-            return HANDLER_FINISHED;
         }
         vlen = i - v;              /* might be 0 */
 
@@ -772,11 +775,8 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
 
     if (j >= (int)(sizeof(offsets)/sizeof(int))-4) {
         /* error processing Forwarded; too many params; fail closed */
-        log_error(r->conf.errh, __FILE__, __LINE__,
+        return mod_extforward_bad_request(r, __LINE__,
           "Too many params in Forwarded header");
-        r->http_status = 400; /* Bad Request */
-        r->handler_module = NULL;
-        return HANDLER_FINISHED;
     }
 
     if (-1 == j) return HANDLER_GO_ON;  /* make no changes */
@@ -807,11 +807,8 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
                 ++v;
                 do { --vlen; } while (vlen > v && s[vlen] != ']');
                 if (v == vlen) {
-                    log_error(r->conf.errh, __FILE__, __LINE__,
+                    return mod_extforward_bad_request(r, __LINE__,
                       "Invalid IPv6 addr in Forwarded header");
-                    r->http_status = 400; /* Bad Request */
-                    r->handler_module = NULL;
-                    return HANDLER_FINISHED;
                 }
             }
             else if (s[v] != '_' && s[v] != '/' && s[v] != 'u') {
@@ -949,11 +946,8 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
                 ++v; --vlen;
                 buffer_copy_string_len(r->http_host, s+v, vlen-v);
                 if (!buffer_backslash_unescape(r->http_host)) {
-                    log_error(r->conf.errh, __FILE__, __LINE__,
+                    return mod_extforward_bad_request(r, __LINE__,
                       "invalid host= value in Forwarded header");
-                    r->http_status = 400; /* Bad Request */
-                    r->handler_module = NULL;
-                    return HANDLER_FINISHED;
                 }
             }
             else {
@@ -964,11 +958,8 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
                                               r->conf.http_parseopts,
                                               r->con->proto_default_port)) {
                 /*(reject invalid chars in Host)*/
-                log_error(r->conf.errh, __FILE__, __LINE__,
+                return mod_extforward_bad_request(r, __LINE__,
                   "invalid host= value in Forwarded header");
-                r->http_status = 400; /* Bad Request */
-                r->handler_module = NULL;
-                return HANDLER_FINISHED;
             }
 
             config_cond_cache_reset_item(r, COMP_HTTP_HOST);
@@ -999,11 +990,8 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
                 euser = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
                 force_assert(NULL != euser);
                 if (!buffer_backslash_unescape(euser)) {
-                    log_error(r->conf.errh, __FILE__, __LINE__,
+                    return mod_extforward_bad_request(r, __LINE__,
                       "invalid remote_user= value in Forwarded header");
-                    r->http_status = 400; /* Bad Request */
-                    r->handler_module = NULL;
-                    return HANDLER_FINISHED;
                 }
             }
             else {
