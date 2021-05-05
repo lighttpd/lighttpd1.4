@@ -129,9 +129,11 @@ size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char
 	  : base64_standard_table;       /* BASE64_STANDARD */
 
 	/* check overflows */
-	force_assert(full_tuples <= 2*full_tuples);
-	force_assert(full_tuples <= 4*full_tuples);
-	force_assert(4*full_tuples <= 4*full_tuples + out_tuple_remainder);
+	/* 1073741823 is max num full_tuples to avoid overflow in uint32_t;
+	 * and (1 GB - 1) is ridiculously large for base64-encoded data */
+	force_assert(full_tuples <= 1073741823);
+	/*force_assert(full_tuples <= 4*full_tuples);*/
+	/*force_assert(4*full_tuples <= 4*full_tuples + out_tuple_remainder);*/
 	force_assert(require_space <= out_length);
 
 	for (i = 2; i < in_length; i += 3) {
