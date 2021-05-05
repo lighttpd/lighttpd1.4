@@ -1,7 +1,7 @@
 /*
  * request - HTTP request processing
  *
- * Fully-rewritten from original EXCEPT for request_check_hostname()
+ * Fully-rewritten from original
  * Copyright(c) 2018 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
  * License: BSD 3-clause (same as lighttpd)
  */
@@ -20,193 +20,80 @@
 #include <string.h>
 
 static int request_check_hostname(buffer * const host) {
-	enum { DOMAINLABEL, TOPLABEL } stage = TOPLABEL;
-	size_t i;
-	int label_len = 0;
-	size_t host_len, hostport_len;
-	char *colon;
-	int is_ip = -1; /* -1 don't know yet, 0 no, 1 yes */
-	int level = 0;
+    /*
+     *       hostport      = host [ ":" port ]
+     *       host          = hostname | IPv4address | IPv6address
+     *       hostname      = *( domainlabel "." ) toplabel [ "." ]
+     *       domainlabel   = alphanum | alphanum *( alphanum | "-" ) alphanum
+     *       toplabel      = alpha | alpha *( alphanum | "-" ) alphanum
+     *       IPv4address   = 1*digit "." 1*digit "." 1*digit "." 1*digit
+     *       IPv6address   = "[" ... "]"
+     *       port          = *digit
+     */
 
-	/*
-	 *       hostport      = host [ ":" port ]
-	 *       host          = hostname | IPv4address | IPv6address
-	 *       hostname      = *( domainlabel "." ) toplabel [ "." ]
-	 *       domainlabel   = alphanum | alphanum *( alphanum | "-" ) alphanum
-	 *       toplabel      = alpha | alpha *( alphanum | "-" ) alphanum
-	 *       IPv4address   = 1*digit "." 1*digit "." 1*digit "." 1*digit
-	 *       IPv6address   = "[" ... "]"
-	 *       port          = *digit
-	 */
+    const char *h = host->ptr;
 
-	/* IPv6 address */
-	if (host->ptr[0] == '[') {
-		char *c = host->ptr + 1;
-		int colon_cnt = 0;
+    if (*h != '[') {
+        uint32_t len = buffer_string_length(host);
+        const char * const colon = memchr(h, ':', len);
+        uint32_t hlen = colon ? (colon - h) : len;
 
-		/* check the address inside [...] */
-		for (; *c && *c != ']'; c++) {
-			if (*c == ':') {
-				if (++colon_cnt > 7) {
-					return -1;
-				}
-			} else if (!light_isxdigit(*c) && '.' != *c) {
-				return -1;
-			}
-		}
+        /* if hostname ends in ".", strip it */
+        if (__builtin_expect( (0 == hlen), 0)) return -1;
+        if (__builtin_expect( (h[hlen-1] == '.'), 0)) {
+            /* shift port info one left */
+            if (--hlen == 0) return -1;
+            --len;
+            if (NULL != colon)
+                memmove(host->ptr+hlen, colon, len - hlen);
+            buffer_string_set_length(host, len);
+        }
 
-		/* missing ] */
-		if (!*c) {
-			return -1;
-		}
+        int label_len = 0;
+        int allnumeric = 1;
+        int numeric = 1;
+        int level = 0;
+        for (uint32_t i = 0; i < hlen; ++i) {
+            const int ch = h[i];
+            ++label_len;
+            if (light_isdigit(ch))
+                continue;
+            else if ((light_isalpha(ch) || (ch == '-' && i != 0)))
+                numeric = 0;
+            else if (ch == '.' && 1 != label_len && '-' != h[i+1]) {
+                allnumeric &= numeric;
+                numeric = 1;
+                label_len = 0;
+                ++level;
+            }
+            else
+                return -1;
+        }
+        /* (if last segment numeric, then IPv4 and must have 4 numeric parts) */
+        if (0 == label_len || (numeric && (level != 3 || !allnumeric)))
+            return -1;
 
-		/* check port */
-		if (*(c+1) == ':') {
-			for (c += 2; *c; c++) {
-				if (!light_isdigit(*c)) {
-					return -1;
-				}
-			}
-		}
-		else if ('\0' != *(c+1)) {
-			/* only a port is allowed to follow [...] */
-			return -1;
-		}
-		return 0;
-	}
+        h += hlen;
+    }
+    else {  /* IPv6 address */
+        /* check the address inside [...]; note: not fully validating */
+        /* (note: not allowing scoped literals, e.g. %eth0 suffix) */
+        ++h; /* step past '[' */
+        int cnt = 0;
+        while (light_isxdigit(*h) || *h == '.' || (*h == ':' && ++cnt < 8)) ++h;
+        /*(invalid char, too many ':', missing ']', or empty "[]")*/
+        if (*h != ']' || h - host->ptr == 1) return -1;
+        ++h; /* step past ']' */
+    }
 
-	hostport_len = host_len = buffer_string_length(host);
+    /* check numerical port, if present */
+    if (*h == ':') {
+        if (__builtin_expect( (h[1] == '\0'), 0)) /*(remove trailing colon)*/
+            buffer_string_set_length(host, h - host->ptr);
+        do { ++h; } while (light_isdigit(*h));
+    }
 
-	if (NULL != (colon = memchr(host->ptr, ':', host_len))) {
-		char *c = colon + 1;
-
-		/* check portnumber */
-		for (; *c; c++) {
-			if (!light_isdigit(*c)) return -1;
-		}
-
-		/* remove the port from the host-len */
-		host_len = colon - host->ptr;
-	}
-
-	/* Host is empty */
-	if (host_len == 0) return -1;
-
-	/* if the hostname ends in a "." strip it */
-	if (host->ptr[host_len-1] == '.') {
-		/* shift port info one left */
-		if (NULL != colon) memmove(colon-1, colon, hostport_len - host_len);
-		buffer_string_set_length(host, --hostport_len);
-		if (--host_len == 0) return -1;
-	}
-
-
-	/* scan from the right and skip the \0 */
-	for (i = host_len; i-- > 0; ) {
-		const char c = host->ptr[i];
-
-		switch (stage) {
-		case TOPLABEL:
-			if (c == '.') {
-				/* only switch stage, if this is not the last character */
-				if (i != host_len - 1) {
-					if (label_len == 0) {
-						return -1;
-					}
-
-					/* check the first character at right of the dot */
-					if (is_ip == 0) {
-						if (!light_isalnum(host->ptr[i+1])) {
-							return -1;
-						}
-					} else if (!light_isdigit(host->ptr[i+1])) {
-						is_ip = 0;
-					} else if ('-' == host->ptr[i+1]) {
-						return -1;
-					} else {
-						/* just digits */
-						is_ip = 1;
-					}
-
-					stage = DOMAINLABEL;
-
-					label_len = 0;
-					level++;
-				} else if (i == 0) {
-					/* just a dot and nothing else is evil */
-					return -1;
-				}
-			} else if (i == 0) {
-				/* the first character of the hostname */
-				if (!light_isalnum(c)) {
-					return -1;
-				}
-				label_len++;
-			} else {
-				if (c != '-' && !light_isalnum(c)) {
-					return -1;
-				}
-				if (is_ip == -1) {
-					if (!light_isdigit(c)) is_ip = 0;
-				}
-				label_len++;
-			}
-
-			break;
-		case DOMAINLABEL:
-			if (is_ip == 1) {
-				if (c == '.') {
-					if (label_len == 0) {
-						return -1;
-					}
-
-					label_len = 0;
-					level++;
-				} else if (!light_isdigit(c)) {
-					return -1;
-				} else {
-					label_len++;
-				}
-			} else {
-				if (c == '.') {
-					if (label_len == 0) {
-						return -1;
-					}
-
-					/* c is either - or alphanum here */
-					if ('-' == host->ptr[i+1]) {
-						return -1;
-					}
-
-					label_len = 0;
-					level++;
-				} else if (i == 0) {
-					if (!light_isalnum(c)) {
-						return -1;
-					}
-					label_len++;
-				} else {
-					if (c != '-' && !light_isalnum(c)) {
-						return -1;
-					}
-					label_len++;
-				}
-			}
-
-			break;
-		}
-	}
-
-	/* a IP has to consist of 4 parts */
-	if (is_ip == 1 && level != 3) {
-		return -1;
-	}
-
-	if (label_len == 0) {
-		return -1;
-	}
-
-	return 0;
+    return (*h == '\0') ? 0 : -1;
 }
 
 int http_request_host_normalize(buffer * const b, const int scheme_port) {
