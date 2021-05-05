@@ -399,23 +399,13 @@ void http_response_send_file (request_st * const r, buffer * const path, stat_ca
 		}
 	}
 
-	if (0 == sce->st.st_size) {
-		r->http_status = 200;
-		r->resp_body_finished = 1;
-		/*(Transfer-Encoding should not have been set at this point)*/
-		http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
-		                         CONST_STR_LEN("Content-Length"),
-		                         CONST_STR_LEN("0"));
-		return;
-	}
-
 	/* if we are still here, prepare body */
 
 	/* we add it here for all requests
 	 * the HEAD request will drop it afterwards again
 	 */
 
-	if (0 == http_chunk_append_file_ref(r, sce)) {
+	if (0 == sce->st.st_size || 0 == http_chunk_append_file_ref(r, sce)) {
 		r->http_status = 200;
 		r->resp_body_finished = 1;
 		/*(Transfer-Encoding should not have been set at this point)*/
