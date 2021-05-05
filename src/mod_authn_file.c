@@ -7,6 +7,8 @@
 #elif defined(__linux__)
 /* linux needs _XOPEN_SOURCE */
 # define _XOPEN_SOURCE
+#elif defined(__APPLE__) && defined(__MACH__)
+#include <unistd.h>
 #endif
 
 #if defined(HAVE_LIBCRYPT) && !defined(HAVE_CRYPT)
