@@ -622,6 +622,7 @@ h2_recv_window_update (connection * const con, const uint8_t * const s, const ui
 }
 
 
+__attribute_noinline__
 static void
 h2_send_window_update (connection * const con, uint32_t h2id, const uint32_t len)
 {
@@ -862,6 +863,8 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     }
 
     if (r->h2_rwin <= 0 && 0 != alen) {/*(always proceed if 0==alen)*/
+        /* note: r->h2_rwin is not adjusted (below) if max_request_size exceeded
+         *       in order to read and discard h2_rwin amount of data (below) */
         if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN) {
             /*(connection_state_machine_h2() must ensure con is rescheduled,
              * when backends consume data if con->read_queue is not empty,
@@ -870,12 +873,12 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
             return 0;
         }
     }
-    /*(allow h2r->h2_rwin to dip below 0 so that entire frame is processed)*/
+    /*(allow r->h2_rwin to dip below 0 so that entire frame is processed)*/
     /*(underflow will not occur (with reasonable SETTINGS_MAX_FRAME_SIZE used)
      * since windows updated elsewhere and data is streamed to temp files if
      * not FDEVENT_STREAM_REQUEST_BUFMIN)*/
     /*r->h2_rwin -= (int32_t)len;*/
-    h2_send_window_update(con, r->h2id, len); /*(r->h2_rwin)*/
+    /*h2_send_window_update(con, r->h2id, len);*//*(r->h2_rwin)*//*(see below)*/
     h2_send_window_update(con, 0, len);       /*(h2r->h2_rwin)*/
 
     chunkqueue * const dst = &r->reqbody_queue;
@@ -897,24 +900,52 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     rq->bytes_in  += (off_t)alen;
     rq->bytes_out += (off_t)alen;
 
-    /* r->conf.max_request_size is in kBytes */
-    const off_t max_request_size = (off_t)r->conf.max_request_size << 10;
-    if (0 != max_request_size
-        && dst->bytes_in + (off_t)alen > max_request_size) {
-        if (0 == r->http_status) {
-            r->http_status = 413; /* Payload Too Large */
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "request-size too long: %lld -> 413",
-              (long long) (dst->bytes_in + (off_t)alen));
+    uint32_t wupd = 0;
+    if (s[4] & H2_FLAG_END_STREAM) {
+        if (!h2_recv_end_data(r, con, alen)) {
+            chunkqueue_mark_written(cq, 9+len);
+            return 1;
         }
-        chunkqueue_mark_written(cq, 9+len);
-        return 1;
+        /*(accept data if H2_FLAG_END_STREAM was just received,
+         * regardless of r->conf.max_request_size setting)*/
     }
-
-    if ((s[4] & H2_FLAG_END_STREAM) && !h2_recv_end_data(r, con, alen)) {
-        chunkqueue_mark_written(cq, 9+len);
-        return 1;
+    else if (0 == r->conf.max_request_size)
+        wupd = len;
+    else {
+        /* r->conf.max_request_size is in kBytes */
+        const off_t max_request_size = (off_t)r->conf.max_request_size << 10;
+        off_t n = max_request_size - dst->bytes_in - (off_t)alen;
+        int32_t rwin = r->h2_rwin - (int32_t)len;
+        if (rwin < 0) rwin = 0;
+        if (__builtin_expect( (n >= 0), 1)) /*(allow small overage with n+8)*/
+            wupd = n>=rwin ? (n-=rwin) > (int32_t)len ? len : (uint32_t)n+8 : 0;
+        else if (-n > 65536 || 0 == r->http_status) {
+            if (0 == r->http_status) {
+                r->http_status = 413; /* Payload Too Large */
+                r->handler_module = NULL;
+                log_error(r->conf.errh, __FILE__, __LINE__,
+                  "request-size too long: %lld -> 413",
+                  (long long) (dst->bytes_in + (off_t)alen));
+            }
+            else { /* if (-n > 65536) */
+                /* tolerate up to 64k additional data before resetting stream
+                 * (in excess to window updates sent to client)
+                 * (attempt to sink data in kernel buffers so 413 can be sent)*/
+                h2_send_rst_stream_id(id, con, H2_E_STREAM_CLOSED);
+            }
+            chunkqueue_mark_written(cq, 9+len);
+            return 1;
+        }
     }
+    /* r->h2_rwin is intentionally unmodified here so that some data in excess
+     * of max_request_size received and discarded.  If r->h2_rwin use is changed
+     * in future and might reach 0, then also need to make sure that we do not
+     * spin re-processing con while waiting for backend to consume request body.
+     * stream rwin is always updated, potentially more than max_request_size so
+     * that too much data is detected, instead of waiting for read timeout. */
+    /*r->h2_rwin -= (int32_t)len;*/
+    /*r->h2_rwin += (int32_t)wupd;*/
+    h2_send_window_update(con, r->h2id, wupd);/*(r->h2_rwin)*//*noop if wupd=0*/
 
     chunkqueue_mark_written(cq, 9 + ((s[4] & H2_FLAG_PADDED) ? 1 : 0));
 
