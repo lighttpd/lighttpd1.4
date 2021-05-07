@@ -318,6 +318,24 @@ static handler_t http_status_set_error_close (request_st * const r, int status) 
     return HANDLER_FINISHED;
 }
 
+__attribute_cold__
+static handler_t http_response_prepare_options_star (request_st * const r) {
+    r->http_status = 200;
+    r->resp_body_finished = 1;
+    http_header_response_append(r, HTTP_HEADER_ALLOW, CONST_STR_LEN("Allow"),
+                                CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
+    return HANDLER_FINISHED;
+}
+
+
+__attribute_cold__
+static handler_t http_response_prepare_connect (request_st * const r) {
+    return (r->handler_module)
+      ? HANDLER_GO_ON
+      : http_status_set_error_close(r, 405);/* 405 Method Not Allowed */
+}
+
+
 static handler_t http_response_config (request_st * const r) {
     config_cond_cache_reset(r);
     config_patch_config(r);
@@ -361,11 +379,12 @@ http_response_prepare (request_st * const r)
 	/* no decision yet, build conf->filename */
 	if (buffer_is_empty(&r->physical.path)) {
 
-		if (!r->async_callback) {
+		if (__builtin_expect( (!r->async_callback), 1)) {
 			rc = http_response_config(r);
 			if (HANDLER_GO_ON != rc) continue;
 		}
-		r->async_callback = 0; /* reset */
+		else
+			r->async_callback = 0; /* reset */
 
 		/* we only come here when we have the parse the full request again
 		 *
@@ -415,24 +434,12 @@ http_response_prepare (request_st * const r)
 		rc = plugins_call_handle_uri_clean(r);
 		if (HANDLER_GO_ON != rc) continue;
 
-		if (r->http_method == HTTP_METHOD_OPTIONS &&
-		    r->uri.path.ptr[0] == '*' && r->uri.path.ptr[1] == '\0') {
-			/* option requests are handled directly without checking of the path */
+		if (__builtin_expect( (r->http_method == HTTP_METHOD_OPTIONS), 0)
+		    && r->uri.path.ptr[0] == '*' && r->uri.path.ptr[1] == '\0')
+			return http_response_prepare_options_star(r);
 
-			http_header_response_append(r, HTTP_HEADER_ALLOW,
-			  CONST_STR_LEN("Allow"),
-			  CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
-
-			r->http_status = 200;
-			r->resp_body_finished = 1;
-
-			return HANDLER_FINISHED;
-		}
-
-		if (r->http_method == HTTP_METHOD_CONNECT && NULL == r->handler_module) {
-			return /* 405 Method Not Allowed */
-			  http_status_set_error_close(r, 405);
-		}
+		if (__builtin_expect( (r->http_method == HTTP_METHOD_CONNECT), 0))
+			return http_response_prepare_connect(r);
 
 		/***
 		 *
@@ -548,13 +555,6 @@ http_response_prepare (request_st * const r)
 			  "Path         : %s", r->physical.path.ptr);
 		}
 
-		if (r->http_method == HTTP_METHOD_CONNECT) {
-			/* do not permit CONNECT requests to hit filesystem hooks
-			 * since the CONNECT URI bypassed path normalization */
-			/* (This check is located here so that r->physical.path
-			 *  is filled in above to avoid repeating work next time
-			 *  http_response_prepare() is called while processing request) */
-		} else {
 			rc = plugins_call_handle_physical(r);
 			if (HANDLER_GO_ON != rc) continue;
 
@@ -570,7 +570,6 @@ http_response_prepare (request_st * const r)
 				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "Path         : %s", r->physical.path.ptr);
 			}
-		}
 	}
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
@@ -606,13 +605,7 @@ http_response_prepare (request_st * const r)
 
 		/* call the handlers */
 		rc = plugins_call_handle_subrequest_start(r);
-		if (HANDLER_GO_ON != rc) {
-			if (r->conf.log_request_handling) {
-				log_error(r->conf.errh, __FILE__, __LINE__,
-				  "-- subrequest finished");
-			}
-			continue;
-		}
+		if (HANDLER_GO_ON != rc) continue;
 
 		/* if we are still here, no one wanted the file, status 403 is ok I think */
 		if (NULL == r->handler_module && 0 == r->http_status) {
@@ -802,11 +795,7 @@ http_response_write_prepare(request_st * const r)
                 && !buffer_string_is_empty(&r->uri.path)
                 && r->uri.path.ptr[0] != '*') {
                 http_response_body_clear(r, 0);
-                http_header_response_append(r, HTTP_HEADER_ALLOW,
-                  CONST_STR_LEN("Allow"),
-                  CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
-                r->http_status = 200;
-                r->resp_body_finished = 1;
+		http_response_prepare_options_star(r); /*(treat like "*")*/
             }
             break;
           default:
@@ -1028,7 +1017,7 @@ http_response_handler (request_st * const r)
         if (r->error_handler_saved_status > 0)
             r->http_method = r->error_handler_saved_method;
         if (NULL == r->handler_module || r->conf.error_intercept) {
-            if (r->error_handler_saved_status) {
+            if (__builtin_expect( (r->error_handler_saved_status), 0)) {
                 const int subreq_status = r->http_status;
                 if (r->error_handler_saved_status > 0)
                     r->http_status = r->error_handler_saved_status;
@@ -1045,7 +1034,7 @@ http_response_handler (request_st * const r)
                     r->error_handler_saved_status = 65535; /* >= 1000 */
                 }
             }
-            else if (r->http_status >= 400) {
+            else if (__builtin_expect( (r->http_status >= 400), 0)) {
                 const buffer *error_handler = NULL;
                 if (!buffer_string_is_empty(r->conf.error_handler))
                     error_handler = r->conf.error_handler;
