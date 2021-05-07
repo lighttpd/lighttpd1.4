@@ -426,19 +426,6 @@ int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len) {
 	return (a->used == b_len + 1 && 0 == memcmp(a->ptr, s, b_len));
 }
 
-int buffer_is_equal_right_len(const buffer *b1, const buffer *b2, size_t len) {
-	/* no len -> equal */
-	if (len == 0) return 1;
-
-	/* len > 0, but empty buffers -> not equal */
-	if (b1->used == 0 || b2->used == 0) return 0;
-
-	/* buffers too small -> not equal */
-	if (b1->used - 1 < len || b2->used - 1 < len) return 0;
-
-	return 0 == memcmp(b1->ptr + b1->used - 1 - len, b2->ptr + b2->used - 1 - len, len);
-}
-
 
 void li_tohex_lc(char * const restrict buf, size_t buf_len, const char * const restrict s, size_t s_len) {
 	force_assert(2 * s_len > s_len);

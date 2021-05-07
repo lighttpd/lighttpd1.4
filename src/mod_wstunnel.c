@@ -430,7 +430,7 @@ static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const 
         buffer *b = &((data_string *)allowed_origins->data[i])->value;
         size_t blen = buffer_string_length(b);
         if ((olen > blen ? origin->ptr[olen-blen-1] == '.' : olen == blen)
-            && buffer_is_equal_right_len(origin, b, blen)) {
+            && 0 == memcmp(origin->ptr+olen-blen, b->ptr, blen)) {
             DEBUG_LOG_INFO("%s matches allowed origin: %s",origin->ptr,b->ptr);
             return 1;
         }

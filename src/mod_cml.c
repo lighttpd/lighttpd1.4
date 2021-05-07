@@ -258,9 +258,11 @@ URIHANDLER_FUNC(mod_cml_is_handled) {
 
 	mod_cml_patch_config(r, p);
 
-	if (buffer_string_is_empty(p->conf.ext)) return HANDLER_GO_ON;
+	const uint32_t elen = buffer_string_length(p->conf.ext);
+	if (0 == elen) return HANDLER_GO_ON;
 
-	if (!buffer_is_equal_right_len(&r->physical.path, p->conf.ext, buffer_string_length(p->conf.ext))) {
+	const uint32_t plen = buffer_string_length(&r->physical.path);
+	if (plen < elen || 0 != memcmp(r->physical.path.ptr+plen-elen, p->conf.ext->ptr, elen)) {
 		return HANDLER_GO_ON;
 	}
 

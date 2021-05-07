@@ -188,10 +188,6 @@ int buffer_is_equal(const buffer *a, const buffer *b);
 
 __attribute_nonnull__
 __attribute_pure__
-int buffer_is_equal_right_len(const buffer *a, const buffer *b, size_t len);
-
-__attribute_nonnull__
-__attribute_pure__
 int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len);
 
 __attribute_nonnull__

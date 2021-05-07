@@ -556,14 +556,14 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				buffer_to_lower(tb);
 			}
 			uint32_t remain = buffer_string_length(&r->uri.path) - i;
-			if (!r->conf.force_lowercase_filenames
-			    ? buffer_is_equal_right_len(&r->physical.path, &r->physical.rel_path, remain)
-			    :(buffer_string_length(&r->physical.path) >= remain
-			      && buffer_eq_icase_ssn(r->physical.path.ptr+buffer_string_length(&r->physical.path)-remain, r->physical.rel_path.ptr+i, remain))) {
+			uint32_t plen = buffer_string_length(&r->physical.path);
+			if (plen >= remain
+			    && (!r->conf.force_lowercase_filenames
+			        ?         0 == memcmp(r->physical.path.ptr+plen-remain, r->physical.rel_path.ptr+i, remain)
+			        : buffer_eq_icase_ssn(r->physical.path.ptr+plen-remain, r->physical.rel_path.ptr+i, remain))) {
 				buffer_copy_path_len2(p->stat_fn,
 				                      r->physical.path.ptr,
-				                      buffer_string_length(&r->physical.path)
-				                        - remain,
+				                      plen-remain,
 				                      tb->ptr+i,
 				                      buffer_string_length(tb)-i);
 			} else {
