@@ -498,7 +498,8 @@ sub has_crypto {
 	my $FH;
 	open($FH, "-|",$self->{LIGHTTPD_PATH}, "-V") || return 0;
 	while (<$FH>) {
-		return 1 if (/[+] (?i:OpenSSL|mbedTLS|GnuTLS|WolfSSL|Nettle|NSS crypto) support/);
+		#return 1 if (/[+] (?i:OpenSSL|mbedTLS|GnuTLS|WolfSSL|Nettle|NSS crypto) support/);
+		return 1 if (/[+] (?i:OpenSSL|mbedTLS|GnuTLS|WolfSSL|Nettle) support/);
 	}
 	close $FH;
 	return 0;

@@ -127,6 +127,11 @@ li_hmac_sha1 (unsigned char digest[SHA_DIGEST_LENGTH],
     HMAC_Destroy(hmac, PR_TRUE);
     return (SECSuccess == rc);
     #else
+    UNUSED(digest);
+    UNUSED(secret);
+    UNUSED(slen);
+    UNUSED(msg);
+    UNUSED(mlen);
     return 0;
     #endif
    #else
@@ -197,6 +202,11 @@ li_hmac_sha256 (unsigned char digest[SHA256_DIGEST_LENGTH],
     HMAC_Destroy(hmac, PR_TRUE);
     return (SECSuccess == rc);
     #else
+    UNUSED(digest);
+    UNUSED(secret);
+    UNUSED(slen);
+    UNUSED(msg);
+    UNUSED(mlen);
     return 0;
     #endif
    #else
