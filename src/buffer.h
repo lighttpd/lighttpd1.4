@@ -181,14 +181,11 @@ int buffer_eq_icase_slen(const buffer * const b, const char * const s, const siz
 __attribute_nonnull__
 __attribute_pure__
 int buffer_eq_slen(const buffer * const b, const char * const s, const size_t slen);
+#define buffer_is_equal_string buffer_eq_slen
 
 __attribute_nonnull__
 __attribute_pure__
 int buffer_is_equal(const buffer *a, const buffer *b);
-
-__attribute_nonnull__
-__attribute_pure__
-int buffer_is_equal_string(const buffer *a, const char *s, size_t b_len);
 
 __attribute_nonnull__
 void buffer_substr_replace (buffer * restrict b, size_t offset, size_t len, const buffer * restrict replace);
