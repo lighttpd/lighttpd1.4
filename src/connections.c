@@ -803,7 +803,8 @@ static int connection_handle_read_state(connection * const con)  {
     chunkqueue_mark_written(cq, r->rqst_header_len);
     connection_set_state(r, CON_STATE_REQUEST_END);
 
-    if (!con->is_ssl_sock && r->conf.h2proto && 0 == r->http_status
+    if (light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE)
+        && !con->is_ssl_sock && r->conf.h2proto && 0 == r->http_status
         && h2_check_con_upgrade_h2c(r)) {
         /*(Upgrade: h2c over cleartext does not have SNI; no COMP_HTTP_HOST)*/
         r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
