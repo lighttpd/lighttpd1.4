@@ -323,12 +323,13 @@ static handler_t http_response_config (request_st * const r) {
     config_patch_config(r);
 
     /* do we have to downgrade from 1.1 to 1.0 ? (ignore for HTTP/2) */
-    if (!r->conf.allow_http11 && r->http_version == HTTP_VERSION_1_1)
+    if (__builtin_expect( (!r->conf.allow_http11), 0)
+        && r->http_version == HTTP_VERSION_1_1)
         r->http_version = HTTP_VERSION_1_0;
 
-    /* r->conf.max_request_size is in kBytes */
-    if (0 != r->conf.max_request_size &&
-        (off_t)r->reqbody_length > ((off_t)r->conf.max_request_size << 10)) {
+    if (__builtin_expect( (r->reqbody_length > 0), 0)
+        && 0 != r->conf.max_request_size   /* r->conf.max_request_size in kB */
+        && (off_t)r->reqbody_length > ((off_t)r->conf.max_request_size << 10)) {
         log_error(r->conf.errh, __FILE__, __LINE__,
           "request-size too long: %lld -> 413", (long long) r->reqbody_length);
         return /* 413 Payload Too Large */
