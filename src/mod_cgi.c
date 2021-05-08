@@ -238,7 +238,7 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
                           cpk[cpv->k_id].k, ds->value.ptr);
                         return HANDLER_ERROR;
                     }
-                    buffer_path_simplify(&ds->value, &ds->value);
+                    buffer_path_simplify(&ds->value);
                     buffer_append_slash(&ds->value);
                 }
                 break;

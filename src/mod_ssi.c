@@ -500,7 +500,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				  "SSI invalid UTF-8 after url-decode: %s", tb->ptr);
 				break;
 			}
-			buffer_path_simplify(tb, tb);
+			buffer_path_simplify(tb);
 			char *sl = strrchr(r->physical.path.ptr, '/');
 			if (NULL == sl) break; /*(not expected)*/
 			buffer_copy_path_len2(p->stat_fn,
@@ -524,7 +524,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				  "SSI invalid UTF-8 after url-decode: %s", tb->ptr);
 				break;
 			}
-			buffer_path_simplify(tb, tb);
+			buffer_path_simplify(tb);
 
 			/* we have an uri */
 

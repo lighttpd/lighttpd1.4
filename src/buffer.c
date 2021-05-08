@@ -781,97 +781,83 @@ int buffer_is_valid_UTF8(const buffer *b) {
  * /blah/../foo     gets  /foo
  * /abc/./xyz       gets  /abc/xyz
  * /abc//xyz        gets  /abc/xyz
- *
- * NOTE: src and dest can point to the same buffer, in which case,
- *       the operation is performed in-place.
  */
 
-void buffer_path_simplify(buffer *dest, buffer *src)
+void buffer_path_simplify(buffer *b)
 {
-	/* current character, the one before, and the one before that from input */
-	char c, pre1, pre2;
-	char *start, *slash, *walk, *out;
+    if (__builtin_expect( (buffer_string_is_empty(b)), 0)) {
+        buffer_copy_string_len(b, CONST_STR_LEN(""));
+        return;
+    }
 
-	if (buffer_string_is_empty(src)) {
-		buffer_copy_string_len(dest, CONST_STR_LEN(""));
-		return;
-	}
+  #if defined(__WIN32) || defined(__CYGWIN__)
+    /* cygwin is treating \ and / the same, so we have to that too */
+    for (char *p = b->ptr; *p; p++) {
+        if (*p == '\\') *p = '/';
+    }
+  #endif
 
-	force_assert('\0' == src->ptr[src->used-1]);
+    char *out = b->ptr;
+    char * const end = b->ptr + b->used - 1;
+    *end = '/'; /*(end of path modified to avoid need to check '\0')*/
 
-#if defined(__WIN32) || defined(__CYGWIN__)
-	/* cygwin is treating \ and / the same, so we have to that too */
-	{
-		char *p;
-		for (p = src->ptr; *p; p++) {
-			if (*p == '\\') *p = '/';
-		}
-	}
-#endif
+    char *walk = out;
+    if (__builtin_expect( (*walk != '/'), 0)) {
+        if (walk[0] == '.' && walk[1] == '/')
+            *out = *++walk;
+        else if (walk[0] == '.' && walk[1] == '.' && walk[2] == '/')
+            *out = *(walk += 2);
+        else {
+            while (*++walk != '/') ;
+            out = walk;
+        }
+    }
+    ++walk;
 
-	walk  = src->ptr;
-	start = dest->ptr;
-	out   = dest->ptr;
-	slash = dest->ptr;
+    while (walk <= end) {
+        /* previous char is '/' at this point (or start of string w/o '/') */
+        if (__builtin_expect( (walk[0] == '/'), 0)) {
+            /* skip repeated '/' (e.g. "///" -> "/") */
+            if (++walk < end)
+                continue;
+            else {
+                ++out;
+                break;
+            }
+        }
+        else if (__builtin_expect( (walk[0] == '.'), 0)) {
+            /* handle "./" and "../" */
+            if (walk[1] == '.' && walk[2] == '/') {
+                /* handle "../" */
+                while (out > b->ptr && *--out != '/') ;
+                *out = '/'; /*(in case path had not started with '/')*/
+                if ((walk += 3) >= end) {
+                    ++out;
+                    break;
+                }
+                else
+                continue;
+            }
+            else if (walk[1] == '/') {
+                /* handle "./" */
+                if ((walk += 2) >= end) {
+                    ++out;
+                    break;
+                }
+                continue;
+            }
+            else {
+                /* accept "." if not part of "../" or "./" */
+                *++out = '.';
+                ++walk;
+            }
+        }
 
-	/* skip leading spaces */
-	while (*walk == ' ') {
-		walk++;
-	}
-	if (*walk == '.') {
-		if (walk[1] == '/' || walk[1] == '\0')
-			++walk;
-		else if (walk[1] == '.' && (walk[2] == '/' || walk[2] == '\0'))
-			walk+=2;
-	}
-
-	pre1 = 0;
-	c = *(walk++);
-
-	while (c != '\0') {
-		/* assert((src != dest || out <= walk) && slash <= out); */
-		/* the following comments about out and walk are only interesting if
-		 * src == dest; otherwise the memory areas don't overlap anyway.
-		 */
-		pre2 = pre1;
-		pre1 = c;
-
-		/* possibly: out == walk - need to read first */
-		c    = *walk;
-		*out = pre1;
-
-		out++;
-		walk++;
-		/* (out <= walk) still true; also now (slash < out) */
-
-		if (c == '/' || c == '\0') {
-			const size_t toklen = out - slash;
-			if (toklen == 3 && pre2 == '.' && pre1 == '.' && *slash == '/') {
-				/* "/../" or ("/.." at end of string) */
-				out = slash;
-				/* if there is something before "/..", there is at least one
-				 * component, which needs to be removed */
-				if (out > start) {
-					out--;
-					while (out > start && *out != '/') out--;
-				}
-
-				/* don't kill trailing '/' at end of path */
-				if (c == '\0') out++;
-				/* slash < out before, so out_new <= slash + 1 <= out_before <= walk */
-			} else if (toklen == 1 || (pre2 == '/' && pre1 == '.')) {
-				/* "//" or "/./" or (("/" or "/.") at end of string) */
-				out = slash;
-				/* don't kill trailing '/' at end of path */
-				if (c == '\0') out++;
-				/* slash < out before, so out_new <= slash + 1 <= out_before <= walk */
-			}
-
-			slash = out;
-		}
-	}
-
-	buffer_string_set_length(dest, out - start);
+        while ((*++out = *walk++) != '/') ;
+    }
+    *out = *end = '\0'; /* overwrite extra '/' added to end of path */
+    b->used = (out - b->ptr) + 1;
+    /*buffer_string_set_length(b, out - b->ptr);*/
 }
 
 void buffer_to_lower(buffer * const b) {

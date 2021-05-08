@@ -936,7 +936,7 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
      */
 
     buffer_urldecode_path(&r->uri.path);
-    buffer_path_simplify(&r->uri.path, &r->uri.path);
+    buffer_path_simplify(&r->uri.path);
     if (r->uri.path.ptr[0] != '/')
         return http_request_header_line_invalid(r, 400,
           "uri-path does not begin with '/' -> 400"); /* Bad Request */

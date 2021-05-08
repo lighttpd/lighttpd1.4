@@ -443,7 +443,7 @@ static void http_response_xsendfile (request_st * const r, buffer * const path, 
 		}
 		return;
 	}
-	buffer_path_simplify(path, path);
+	buffer_path_simplify(path);
 	if (r->conf.force_lowercase_filenames) {
 		buffer_to_lower(path);
 	}
@@ -525,7 +525,7 @@ static void http_response_xsendfile2(request_st * const r, const buffer * const 
             r->http_status = 502;
             break;
         }
-        buffer_path_simplify(b, b);
+        buffer_path_simplify(b);
         if (r->conf.force_lowercase_filenames) {
             buffer_to_lower(b);
         }

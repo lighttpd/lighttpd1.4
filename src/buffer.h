@@ -216,7 +216,7 @@ __attribute_pure__
 int buffer_is_valid_UTF8(const buffer *b);
 
 __attribute_nonnull__
-void buffer_path_simplify(buffer *dest, buffer *src);
+void buffer_path_simplify(buffer *b);
 
 __attribute_nonnull__
 void buffer_to_lower(buffer *b);

@@ -1464,7 +1464,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                                   "'/'; invalid: \"%s\"", ds->value.ptr);
                                 goto error;
                             }
-                            buffer_path_simplify(&ds->value, &ds->value);
+                            buffer_path_simplify(&ds->value);
                             buffer_append_slash(&ds->value);
                         }
                     }

@@ -4828,7 +4828,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
         http_status_set_error(r, 400);
         return HANDLER_FINISHED;
     }
-    buffer_path_simplify(dst_rel_path, dst_rel_path);
+    buffer_path_simplify(dst_rel_path);
     if (buffer_string_is_empty(dst_rel_path) || dst_rel_path->ptr[0] != '/') {
         http_status_set_error(r, 400);
         return HANDLER_FINISHED;

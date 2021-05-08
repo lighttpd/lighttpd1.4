@@ -311,7 +311,7 @@ static int burl_normalize_path (buffer *b, buffer *t, int qs, int flags)
             buffer_string_set_length(b, qs);
         }
 
-        buffer_path_simplify(b, b);
+        buffer_path_simplify(b);
 
         if (qs >= 0) {
             qs = (int)buffer_string_length(b);
