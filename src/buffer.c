@@ -153,15 +153,12 @@ void buffer_string_set_length(buffer *b, uint32_t len) {
 
 void buffer_commit(buffer *b, size_t size)
 {
-	force_assert(b->size > 0);
-
 	if (0 == b->used) b->used = 1;
 
 	if (size > 0) {
 		/* check for overflow: unsigned overflow is defined to wrap around */
 		size_t sz = b->used + size;
 		force_assert(sz > b->used);
-		force_assert(sz <= b->size);
 		b->used = sz;
 	}
 
