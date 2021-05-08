@@ -11,7 +11,7 @@ include(FindPkgConfig)
 
 include(LighttpdMacros)
 
-add_definitions(-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES)
+add_definitions(-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES -D_DEFAULT_SOURCE)
 
 # default to ON
 set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Default value for ``POSITION_INDEPENDENT_CODE`` of targets.")
@@ -149,6 +149,10 @@ set(CMAKE_EXTRA_INCLUDE_FILES linux/random.h)
 check_function_exists(getrandom HAVE_GETRANDOM)
 set(CMAKE_EXTRA_INCLUDE_FILES)
 
+set(CMAKE_EXTRA_INCLUDE_FILES time.h)
+check_function_exists(timegm HAVE_TIMEGM)
+set(CMAKE_EXTRA_INCLUDE_FILES)
+
 check_type_size(long SIZEOF_LONG)
 check_type_size(off_t SIZEOF_OFF_T)
 
@@ -190,7 +194,6 @@ check_function_exists(sigtimedwait HAVE_SIGTIMEDWAIT)
 check_function_exists(srandom HAVE_SRANDOM)
 check_function_exists(strptime HAVE_STRPTIME)
 check_function_exists(syslog HAVE_SYSLOG)
-check_function_exists(timegm HAVE_TIMEGM)
 check_function_exists(writev HAVE_WRITEV)
 check_function_exists(inet_aton HAVE_INET_ATON)
 check_function_exists(issetugid HAVE_ISSETUGID)
