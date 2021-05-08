@@ -20,7 +20,7 @@ static void run_buffer_path_simplify(buffer *psrc, buffer *pdest, const char *in
 			__LINE__,
 			in,
 			out,
-			pdest->ptr ? pdest->ptr : "");
+			pdest->ptr);
 		fflush(stderr);
 		abort();
 	} else {
@@ -33,7 +33,7 @@ static void run_buffer_path_simplify(buffer *psrc, buffer *pdest, const char *in
 				__LINE__,
 				in,
 				out,
-				pdest->ptr ? pdest->ptr : "");
+				pdest->ptr);
 			fflush(stderr);
 			abort();
 		}

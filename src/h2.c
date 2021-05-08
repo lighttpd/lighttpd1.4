@@ -2111,7 +2111,9 @@ h2_send_headers_block (request_st * const r, connection * const con, const char 
                   "oversized response-header");
         hoff[0] = 1;
         hoff[1] = 0;
-        http_header_parse_hoff(CONST_STR_LEN(":status: 500\r\n\r\n"), hoff);
+        if (http_header_parse_hoff(CONST_STR_LEN(":status: 500\r\n\r\n"),hoff)){
+            /*(ignore for coverity; static string is successfully parsed)*/
+        }
     }
 
     /*(h2_init_con() resized h2r->tmp_buf to 64k; shared with r->tmp_buf)*/
