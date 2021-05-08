@@ -7,7 +7,7 @@
 #elif defined(__linux__)
 /* linux needs _XOPEN_SOURCE */
 # define _XOPEN_SOURCE
-#elif defined(__APPLE__) && defined(__MACH__)
+#elif !defined(_MSC_VER)
 #include <unistd.h>
 #endif
 
