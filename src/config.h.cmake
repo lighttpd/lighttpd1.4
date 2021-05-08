@@ -36,6 +36,7 @@
 
 /* XATTR */
 #cmakedefine HAVE_ATTR_ATTRIBUTES_H
+#cmakedefine HAVE_SYS_XATTR_H
 #cmakedefine HAVE_XATTR
 
 /* mySQL */
@@ -126,6 +127,7 @@
 #cmakedefine  HAVE_LSTAT
 #cmakedefine  HAVE_MADVISE
 #cmakedefine  HAVE_MEMCPY
+#cmakedefine  HAVE_MEMPCPY
 #cmakedefine  HAVE_MEMSET
 #cmakedefine  HAVE_MMAP
 #cmakedefine  HAVE_PATHCONF
@@ -144,12 +146,14 @@
 #cmakedefine  HAVE_SIGTIMEDWAIT
 #cmakedefine  HAVE_STRPTIME
 #cmakedefine  HAVE_SYSLOG
+#cmakedefine  HAVE_TIMEGM
 #cmakedefine  HAVE_WRITEV
 #cmakedefine  HAVE_INET_ATON
 #cmakedefine  HAVE_ISSETUGID
 #cmakedefine  HAVE_INET_PTON
 #cmakedefine  HAVE_MEMSET_S
 #cmakedefine  HAVE_EXPLICIT_BZERO
+#cmakedefine  HAVE_COPY_FILE_RANGE
 
 /* libcrypt */
 #cmakedefine  HAVE_CRYPT_H
