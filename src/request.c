@@ -578,7 +578,7 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
       #endif
     }
 
-    if (2 == klen && k[0] == 't' && k[1] == 'e'
+    if (__builtin_expect( (2 == klen), 0) && k[0] == 't' && k[1] == 'e'
         && !buffer_eq_icase_ss(v, vlen, CONST_STR_LEN("trailers")))
         return http_request_header_line_invalid(r, 400,
           "invalid TE header value with HTTP/2 -> 400");
@@ -668,22 +668,23 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
             if (0 == vlen)
                 return 0;
 
+            uint32_t j = 0;
+            while (j < klen && (light_islower(k[j]) || k[j] == '-'))
+                ++j;
+
             const unsigned int http_header_strict =
               (hpctx->http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
-            for (uint32_t j = 0; j < klen; ++j) {
-                if (light_islower(k[j]) || k[j] == '-')
-                    continue; /*(common cases)*/
+            if (__builtin_expect( (j != klen), 0)) {
                 if (light_isupper(k[j]))
                     return 400;
                 if (0 != http_request_parse_header_other(r, k+j, klen-j,
                                                          http_header_strict))
                     return 400;
-                break;
             }
 
             if (http_header_strict) {
-                for (uint32_t j = 0; j < vlen; ++j) {
+                for (j = 0; j < vlen; ++j) {
                     if ((((uint8_t *)v)[j] < 32 && v[j] != '\t') || v[j]==127)
                         return http_request_header_char_invalid(r, v[j],
                           "invalid character in header -> 400");

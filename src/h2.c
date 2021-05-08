@@ -1191,6 +1191,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
     /*(h2_init_con() resized h2r->tmp_buf to 64k; shared with r->tmp_buf)*/
     buffer * const tb = r->tmp_buf;
     force_assert(tb->size >= 65536);/*(sanity check; remove in future)*/
+    char * const tbptr = tb->ptr;
     const lsxpack_strlen_t tbsz = (tb->size <= LSXPACK_MAX_STRLEN)
       ? tb->size
       : LSXPACK_MAX_STRLEN;
@@ -1205,7 +1206,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
     lsxpack_header_t lsx;
     while (psrc < endp) {
         memset(&lsx, 0, sizeof(lsxpack_header_t));
-        lsx.buf = tb->ptr;
+        lsx.buf = tbptr;
         lsx.val_len = tbsz;
         rc = lshpack_dec_decode(decoder, &psrc, endp, &lsx);
         if (0 == lsx.name_len)
@@ -1942,8 +1943,10 @@ h2_send_headers (request_st * const r, connection * const con)
     }
 
     /* add all headers */
+    data_string * const * const restrict hdata =
+      (data_string * const *)r->resp_headers.data;
     for (uint32_t i = 0, used = r->resp_headers.used; i < used; ++i) {
-        data_string * const restrict ds =(data_string *)r->resp_headers.data[i];
+        data_string * const ds = hdata[i];
         const uint32_t klen = buffer_string_length(&ds->key);
         const uint32_t vlen = buffer_string_length(&ds->value);
         const char * const restrict k = ds->key.ptr;
@@ -1964,7 +1967,7 @@ h2_send_headers (request_st * const r, connection * const con)
          * Since keys are typically short, append (and lowercase) key onto
          * end of value buffer */
         char * const v = buffer_string_prepare_append(&ds->value, klen);
-        if (ds->ext != HTTP_HEADER_OTHER) {
+        if (__builtin_expect( (ds->ext != HTTP_HEADER_OTHER), 1)) {
             memcpy(v, http_header_lc[ds->ext], klen);
         }
         else {
@@ -2007,7 +2010,7 @@ h2_send_headers (request_st * const r, connection * const con)
             unsigned char * const dst_in = dst;
             dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
             if (dst == dst_in) {
-                buffer_string_set_length(&ds->value, vlen); /*(restore prior value)*/
+                buffer_string_set_length(&ds->value, vlen); /*(restore prior)*/
                 h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
                 return;
             }
