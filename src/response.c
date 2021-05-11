@@ -630,8 +630,12 @@ static handler_t http_response_comeback (request_st * const r)
 
     config_reset_config(r);
 
-    buffer_copy_buffer(&r->uri.authority,r->http_host);/*copy even if NULL*/
-    buffer_to_lower(&r->uri.authority);
+    if (__builtin_expect( (r->http_host != NULL), 1)) {
+        buffer_copy_buffer(&r->uri.authority, r->http_host);
+        buffer_to_lower(&r->uri.authority);
+    }
+    else
+        buffer_copy_string_len(&r->uri.authority, CONST_STR_LEN(""));
 
     int status = http_request_parse_target(r, r->con->proto_default_port);
     if (0 == status) {

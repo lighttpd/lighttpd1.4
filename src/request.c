@@ -460,8 +460,9 @@ static const char * http_request_parse_reqline_uri(request_st * const restrict r
             return NULL;
         }
         /* Insert as host header */
-        http_header_request_set(r, HTTP_HEADER_HOST, CONST_STR_LEN("Host"), host, hostlen);
-        r->http_host = http_header_request_get(r, HTTP_HEADER_HOST, CONST_STR_LEN("Host"));
+        r->http_host = http_header_request_set_ptr(r, HTTP_HEADER_HOST,
+                                                   CONST_STR_LEN("Host"));
+        buffer_copy_string_len(r->http_host, host, hostlen);
         return nuri;
     } else if (!(http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) /*(!http_header_strict)*/
            || (HTTP_METHOD_CONNECT == r->http_method && (uri[0] == ':' || light_isdigit(uri[0])))
@@ -643,11 +644,10 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                         return http_request_header_line_invalid(r, 400,
                           "invalid pseudo-header authority too long -> 400");
                     /* insert as host header */
-                    http_header_request_set(r, HTTP_HEADER_HOST,
-                                            CONST_STR_LEN("host"), v, vlen);
                     r->http_host =
-                      http_header_request_get(r, HTTP_HEADER_HOST,
-                                              CONST_STR_LEN("Host"));
+                      http_header_request_set_ptr(r, HTTP_HEADER_HOST,
+                                                  CONST_STR_LEN("Host"));
+                    buffer_copy_string_len(r->http_host, v, vlen);
                     return 0;
                 }
                 break;
@@ -1100,20 +1100,20 @@ http_request_parse (request_st * const restrict r, const int scheme_port)
     int status = http_request_parse_target(r, scheme_port);
     if (0 != status) return status;
 
-    /*(r->http_host might not be set until after parsing request headers)*/
-    buffer_copy_buffer(&r->uri.authority, r->http_host);/*(copy even if empty)*/
-    buffer_to_lower(&r->uri.authority);
-
     /* post-processing */
     const unsigned int http_parseopts = r->conf.http_parseopts;
 
     /* check hostname field if it is set */
-    if (r->http_host) {
+    /*(r->http_host might not be set until after parsing request headers)*/
+    if (__builtin_expect( (r->http_host != NULL), 1)) {
+        buffer_copy_buffer(&r->uri.authority, r->http_host);
+        buffer_to_lower(&r->uri.authority);
         if (0 != http_request_host_policy(r->http_host,
                                           http_parseopts, scheme_port))
             return http_request_header_line_invalid(r, 400, "Invalid Hostname -> 400");
     }
     else {
+        buffer_copy_string_len(&r->uri.authority, CONST_STR_LEN(""));
         if (r->http_version >= HTTP_VERSION_1_1)
             return http_request_header_line_invalid(r, 400, "HTTP/1.1 but Host missing -> 400");
     }

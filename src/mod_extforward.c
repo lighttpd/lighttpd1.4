@@ -932,11 +932,16 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
             j += 4; /*(k, klen, v, vlen come in sets of 4)*/
         }
         if (-1 != ohost) {
-            if (extforward_check_proxy
-                && !buffer_string_is_empty(r->http_host)) {
-                http_header_env_set(r,
-                                    CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_HOST"),
-                                    CONST_BUF_LEN(r->http_host));
+            if (!buffer_string_is_empty(r->http_host)) {
+                if (extforward_check_proxy)
+                    http_header_env_set(r,
+                      CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_HOST"),
+                      CONST_BUF_LEN(r->http_host));
+            }
+            else {
+                r->http_host =
+                  http_header_request_set_ptr(r, HTTP_HEADER_HOST,
+                                              CONST_STR_LEN("Host"));
             }
             /* remove trailing spaces/tabs, and double-quotes from host */
             v = offsets[ohost+2];
