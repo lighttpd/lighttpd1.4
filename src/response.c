@@ -416,17 +416,6 @@ http_response_prepare (request_st * const r)
 		 *
 		 * call plugins
 		 *
-		 * - based on the raw URL
-		 *
-		 */
-
-		rc = plugins_call_handle_uri_raw(r);
-		if (HANDLER_GO_ON != rc) continue;
-
-		/**
-		 *
-		 * call plugins
-		 *
 		 * - based on the clean URL
 		 *
 		 */

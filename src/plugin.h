@@ -98,7 +98,6 @@ int plugins_load(server *srv);
 __attribute_cold__
 void plugins_free(server *srv);
 
-handler_t plugins_call_handle_uri_raw(request_st *r);
 handler_t plugins_call_handle_uri_clean(request_st *r);
 handler_t plugins_call_handle_subrequest_start(request_st *r);
 handler_t plugins_call_handle_response_start(request_st *r);

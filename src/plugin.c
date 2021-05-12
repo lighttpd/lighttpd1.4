@@ -29,7 +29,6 @@ array plugin_stats; /* global */
 
 typedef enum {
 	PLUGIN_FUNC_HANDLE_URI_CLEAN,
-	PLUGIN_FUNC_HANDLE_URI_RAW,
 	PLUGIN_FUNC_HANDLE_REQUEST_ENV,
 	PLUGIN_FUNC_HANDLE_REQUEST_DONE,
 	PLUGIN_FUNC_HANDLE_CONNECTION_ACCEPT,
@@ -322,7 +321,6 @@ static void plugins_call_fn_srv_data_all(server * const srv, const int e) {
     }
 
 PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_URI_CLEAN, handle_uri_clean)
-PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_URI_RAW, handle_uri_raw)
 PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_REQUEST_ENV, handle_request_env)
 PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_REQUEST_DONE, handle_request_done)
 PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_SUBREQUEST_START, handle_subrequest_start)
@@ -452,8 +450,8 @@ handler_t plugins_call_init(server *srv) {
 
 		if (p->handle_uri_clean)
 			++offsets[PLUGIN_FUNC_HANDLE_URI_CLEAN];
-		if (p->handle_uri_raw)
-			++offsets[PLUGIN_FUNC_HANDLE_URI_RAW];
+		if (p->handle_uri_raw && !p->handle_uri_clean)
+			++offsets[PLUGIN_FUNC_HANDLE_URI_CLEAN]; /*(same as above)*/
 		if (p->handle_request_env)
 			++offsets[PLUGIN_FUNC_HANDLE_REQUEST_ENV];
 		if (p->handle_request_done)
@@ -502,13 +500,19 @@ handler_t plugins_call_init(server *srv) {
 	force_assert(NULL != srv->plugin_slots);
 	memcpy(srv->plugin_slots, offsets, sizeof(offsets));
 
+	/* add handle_uri_raw before handle_uri_clean, but in same slot */
+	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
+		plugin * const p = ps[i];
+		plugins_call_init_slot(srv, p->handle_uri_raw, p->data,
+					offsets[PLUGIN_FUNC_HANDLE_URI_CLEAN]);
+	}
+
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
 		plugin * const p = ps[i];
 
-		plugins_call_init_slot(srv, p->handle_uri_clean, p->data,
-					offsets[PLUGIN_FUNC_HANDLE_URI_CLEAN]);
-		plugins_call_init_slot(srv, p->handle_uri_raw, p->data,
-					offsets[PLUGIN_FUNC_HANDLE_URI_RAW]);
+		if (!p->handle_uri_raw)
+			plugins_call_init_slot(srv, p->handle_uri_clean, p->data,
+						offsets[PLUGIN_FUNC_HANDLE_URI_CLEAN]);
 		plugins_call_init_slot(srv, p->handle_request_env, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_REQUEST_ENV]);
 		plugins_call_init_slot(srv, p->handle_request_done, p->data,
