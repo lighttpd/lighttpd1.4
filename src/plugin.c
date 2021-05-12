@@ -29,20 +29,20 @@ array plugin_stats; /* global */
 
 typedef enum {
 	PLUGIN_FUNC_HANDLE_URI_CLEAN,
-	PLUGIN_FUNC_HANDLE_REQUEST_ENV,
+	PLUGIN_FUNC_HANDLE_DOCROOT,
+	PLUGIN_FUNC_HANDLE_PHYSICAL,
+	PLUGIN_FUNC_HANDLE_SUBREQUEST_START,
+	/* PLUGIN_FUNC_HANDLE_SUBREQUEST, *//* max one handler_module per req */
+	PLUGIN_FUNC_HANDLE_RESPONSE_START,
 	PLUGIN_FUNC_HANDLE_REQUEST_DONE,
+	PLUGIN_FUNC_HANDLE_REQUEST_RESET,
+	PLUGIN_FUNC_HANDLE_REQUEST_ENV,
 	PLUGIN_FUNC_HANDLE_CONNECTION_ACCEPT,
 	PLUGIN_FUNC_HANDLE_CONNECTION_SHUT_WR,
 	PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE,
 	PLUGIN_FUNC_HANDLE_TRIGGER,
-	PLUGIN_FUNC_HANDLE_SIGHUP,
 	PLUGIN_FUNC_HANDLE_WAITPID,
-	/* PLUGIN_FUNC_HANDLE_SUBREQUEST, *//* max one handler_module per req */
-	PLUGIN_FUNC_HANDLE_SUBREQUEST_START,
-	PLUGIN_FUNC_HANDLE_RESPONSE_START,
-	PLUGIN_FUNC_HANDLE_DOCROOT,
-	PLUGIN_FUNC_HANDLE_PHYSICAL,
-	PLUGIN_FUNC_CONNECTION_RESET,
+	PLUGIN_FUNC_HANDLE_SIGHUP,
 	/* PLUGIN_FUNC_INIT, *//* handled here in plugin.c */
 	/* PLUGIN_FUNC_CLEANUP, *//* handled here in plugin.c */
 	PLUGIN_FUNC_SET_DEFAULTS,
@@ -321,13 +321,13 @@ static void plugins_call_fn_srv_data_all(server * const srv, const int e) {
     }
 
 PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_URI_CLEAN, handle_uri_clean)
-PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_REQUEST_ENV, handle_request_env)
-PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_REQUEST_DONE, handle_request_done)
-PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_SUBREQUEST_START, handle_subrequest_start)
-PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_RESPONSE_START, handle_response_start)
 PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_DOCROOT, handle_docroot)
 PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_PHYSICAL, handle_physical)
-PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_CONNECTION_RESET, handle_request_reset)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_SUBREQUEST_START, handle_subrequest_start)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_RESPONSE_START, handle_response_start)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_REQUEST_DONE, handle_request_done)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_REQUEST_RESET, handle_request_reset)
+PLUGIN_CALL_FN_REQ_DATA(PLUGIN_FUNC_HANDLE_REQUEST_ENV, handle_request_env)
 
 /**
  * plugins that use
@@ -477,7 +477,7 @@ handler_t plugins_call_init(server *srv) {
 		if (p->handle_physical)
 			++offsets[PLUGIN_FUNC_HANDLE_PHYSICAL];
 		if (p->handle_request_reset)
-			++offsets[PLUGIN_FUNC_CONNECTION_RESET];
+			++offsets[PLUGIN_FUNC_HANDLE_REQUEST_RESET];
 		if (p->set_defaults)
 			++offsets[PLUGIN_FUNC_SET_DEFAULTS];
 		if (p->worker_init)
@@ -538,7 +538,7 @@ handler_t plugins_call_init(server *srv) {
 		plugins_call_init_slot(srv, p->handle_physical, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_PHYSICAL]);
 		plugins_call_init_slot(srv, p->handle_request_reset, p->data,
-					offsets[PLUGIN_FUNC_CONNECTION_RESET]);
+					offsets[PLUGIN_FUNC_HANDLE_REQUEST_RESET]);
 		plugins_call_init_slot(srv, p->set_defaults, p->data,
 					offsets[PLUGIN_FUNC_SET_DEFAULTS]);
 		plugins_call_init_slot(srv, p->worker_init, p->data,
