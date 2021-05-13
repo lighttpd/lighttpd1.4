@@ -28,7 +28,6 @@ struct log_error_st;
 typedef struct log_error_st log_error_st;
 
 enum handler_t {
-  HANDLER_UNSET,
   HANDLER_GO_ON,
   HANDLER_FINISHED,
   HANDLER_COMEBACK,

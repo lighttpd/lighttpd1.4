@@ -733,7 +733,6 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 	const buffer *b = http_header_request_get(r, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
 	buffer *username;
 	char *pw;
-	handler_t rc = HANDLER_UNSET;
 
 	if (NULL == backend || NULL == backend->basic) {
 		if (NULL == backend)
@@ -790,6 +789,7 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 	  ? &p->conf.auth_cache->sptree
 	  : NULL;
 	http_auth_cache_entry *ae = NULL;
+	handler_t rc = HANDLER_ERROR;
 	int ndx = -1;
 	if (sptree) {
 		ndx = http_auth_cache_hash(require, CONST_BUF_LEN(username));
@@ -804,7 +804,7 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 			ae = NULL;
 	}
 
-	if (NULL == ae) /* (HANDLER_UNSET == rc) */
+	if (NULL == ae)
 		rc = backend->basic(r, backend->p_d, require, username, pw);
 
 	switch (rc) {
@@ -825,13 +825,13 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 		  "password doesn't match for %s username: %s IP: %s",
 		  r->uri.path.ptr, username->ptr, r->con->dst_addr_buf->ptr);
 		r->keep_alive = -1; /*(disable keep-alive if bad password)*/
-		rc = HANDLER_UNSET;
+		rc = mod_auth_send_401_unauthorized_basic(r, require->realm);
 		break;
 	}
 
 	safe_memclear(pw, pwlen);
 	buffer_free(username);
-	return (HANDLER_UNSET != rc) ? rc : mod_auth_send_401_unauthorized_basic(r, require->realm);
+	return rc;
 }
 
 
@@ -1422,13 +1422,12 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		}
 	}
 
-	handler_t rc = HANDLER_UNSET;
-
 	plugin_data * const p = p_d;
 	splay_tree ** sptree = p->conf.auth_cache
 	  ? &p->conf.auth_cache->sptree
 	  : NULL;
 	http_auth_cache_entry *ae = NULL;
+	handler_t rc = HANDLER_ERROR;
 	int ndx = -1;
 	if (sptree) {
 		ndx = http_auth_cache_hash(require, ai.username, ai.ulen);
@@ -1445,7 +1444,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 			ae = NULL;
 	}
 
-	if (HANDLER_UNSET == rc)
+	if (NULL == ae)
 		rc = backend->digest(r, backend->p_d, &ai);
 
 	switch (rc) {

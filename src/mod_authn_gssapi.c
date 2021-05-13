@@ -316,7 +316,7 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
     gss_name_t client_name    = GSS_C_NO_NAME;
 
     buffer *sprinc;
-    handler_t rc = HANDLER_UNSET;
+    handler_t rc = HANDLER_ERROR;
 
     buffer *t_in = buffer_init();
     if (!buffer_append_base64_decode(t_in, realm_str, strlen(realm_str), BASE64_STANDARD)) {
@@ -446,7 +446,7 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
         if (token_out.length)
             gss_release_buffer(&st_minor, &token_out);
 
-        return rc != HANDLER_UNSET ? rc : mod_authn_gssapi_send_401_unauthorized_negotiate(r);
+        return rc != HANDLER_ERROR ? rc : mod_authn_gssapi_send_401_unauthorized_negotiate(r);
 }
 
 static handler_t mod_authn_gssapi_check (request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend)
