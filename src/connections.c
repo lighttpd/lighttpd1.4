@@ -846,16 +846,6 @@ connection *connection_accept(server *srv, server_socket *srv_socket) {
 	sock_addr cnt_addr;
 	size_t cnt_len = sizeof(cnt_addr); /*(size_t intentional; not socklen_t)*/
 
-	/**
-	 * check if we can still open a new connections
-	 *
-	 * see #1216
-	 */
-
-	if (srv->conns.used >= srv->max_conns) {
-		return NULL;
-	}
-
 	cnt = fdevent_accept_listenfd(srv_socket->fd, (struct sockaddr *) &cnt_addr, &cnt_len);
 	if (-1 == cnt) {
 		switch (errno) {
