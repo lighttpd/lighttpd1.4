@@ -24,7 +24,7 @@
  *   vhostdb.dbi = ( "sql"    => "SELECT docroot FROM vhosts WHERE host='?'"
  *                   "dbtype" => "sqlite3",
  *                   "dbname" => "mydb.sqlite",
- *                   "sqlite_dbdir" => "/path/to/sqlite/dbs/" )
+ *                   "sqlite3_dbdir" => "/path/to/sqlite/dbs/" )
  */
 
 typedef struct {

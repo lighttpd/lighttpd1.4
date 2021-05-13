@@ -12,7 +12,7 @@
  *     "sql" => "SELECT passwd FROM users WHERE user='?' AND realm='?'"
  *     "dbtype" => "sqlite3",
  *     "dbname" => "mydb.sqlite",
- *     "sqlite_dbdir" => "/path/to/sqlite/dbs/"
+ *     "sqlite3_dbdir" => "/path/to/sqlite/dbs/"
  *   )
  *
  *   SQL samples (change table and column names for your database schema):
