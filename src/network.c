@@ -44,28 +44,58 @@ network_accept_tcp_nagle_disable (const int fd)
 }
 
 static handler_t network_server_handle_fdevent(void *context, int revents) {
-	server_socket * const srv_socket = (server_socket *)context;
-	server * const srv = srv_socket->srv;
-	connection *con;
-	int loops;
+    const server_socket * const srv_socket = (server_socket *)context;
+    server * const srv = srv_socket->srv;
 
-	if (0 == (revents & FDEVENT_IN)) {
-		log_error(srv->errh, __FILE__, __LINE__,
-		  "strange event for server socket %d %d", srv_socket->fd, revents);
-		return HANDLER_ERROR;
-	}
+    if (0 == (revents & FDEVENT_IN)) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "strange event for server socket %d %d", srv_socket->fd, revents);
+        return HANDLER_ERROR;
+    }
 
-	/* accept()s at most 100 connections directly
-	 *
-	 * we jump out after 100 to give the waiting connections a chance */
-	if (srv->conns.used >= srv->max_conns) return HANDLER_GO_ON;
-	loops = (int)(srv->max_conns - srv->conns.used + 1);
-	if (loops > 100) loops = 101;
+    /* accept()s at most 100 new connections before
+     * jumping out to process events on other connections */
+    int loops = (int)(srv->max_conns - srv->conns.used);
+    if (loops > 100)
+        loops = 100;
+    else if (loops <= 0)
+        return HANDLER_GO_ON;
 
-	while (--loops && NULL != (con = connection_accept(srv, srv_socket)))
-		connection_state_machine(con);
+    const int nagle_disable =
+      (sock_addr_get_family(&srv_socket->addr) != AF_UNIX);
 
-	return HANDLER_GO_ON;
+    sock_addr addr;
+    size_t addrlen; /*(size_t intentional; not socklen_t)*/
+    do {
+        addrlen = sizeof(addr);
+        int fd = fdevent_accept_listenfd(srv_socket->fd,
+                                         (struct sockaddr *)&addr, &addrlen);
+        if (-1 == fd) break;
+
+        if (nagle_disable)
+            network_accept_tcp_nagle_disable(fd);
+
+        connection *con = connection_accepted(srv, srv_socket, &addr, fd);
+        if (__builtin_expect( (!con), 0)) return HANDLER_GO_ON;
+        connection_state_machine(con);
+    } while (--loops);
+
+    if (loops) {
+        switch (errno) {
+          case EAGAIN:
+         #if EWOULDBLOCK != EAGAIN
+          case EWOULDBLOCK:
+         #endif
+          case EINTR:
+          case ECONNABORTED:
+          case EMFILE:
+            break;
+          default:
+            log_perror(srv->errh, __FILE__, __LINE__, "accept()");
+        }
+    }
+
+    return HANDLER_GO_ON;
 }
 
 static void network_host_normalize_addr_str(buffer *host, sock_addr *addr) {
