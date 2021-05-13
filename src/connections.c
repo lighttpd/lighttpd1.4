@@ -973,7 +973,7 @@ static int connection_write_cq(connection *con, chunkqueue *cq, off_t max_bytes)
 
 static handler_t connection_handle_read_post_state(request_st * const r);
 
-connection *connection_accepted(server *srv, server_socket *srv_socket, sock_addr *cnt_addr, int cnt) {
+connection *connection_accepted(server *srv, const server_socket *srv_socket, sock_addr *cnt_addr, int cnt) {
 		connection *con;
 
 		srv->cur_fds++;

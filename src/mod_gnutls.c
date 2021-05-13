@@ -2570,7 +2570,7 @@ mod_gnutls_debug_cb(int level, const char *str)
 
 CONNECTION_FUNC(mod_gnutls_handle_con_accept)
 {
-    server_socket *srv_sock = con->srv_socket;
+    const server_socket *srv_sock = con->srv_socket;
     if (!srv_sock->is_ssl) return HANDLER_GO_ON;
 
     plugin_data *p = p_d;

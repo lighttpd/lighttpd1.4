@@ -451,7 +451,7 @@ static int server_oneshot_init_pipe(server *srv, int fdin, int fdout) {
      *   NCAT_PROTO (TCP, UDP, SCTP)
      */
     connection *con;
-    server_socket *srv_socket;
+    const server_socket *srv_socket;
     sock_addr cnt_addr;
 
     /* detect if called from netcat or else fabricate localhost addrs */
@@ -524,7 +524,7 @@ static int server_oneshot_init_pipe(server *srv, int fdin, int fdout) {
 __attribute_cold__
 static int server_oneshot_init(server *srv, int fd) {
 	connection *con;
-	server_socket *srv_socket;
+	const server_socket *srv_socket;
 	sock_addr cnt_addr;
 	socklen_t cnt_len;
 

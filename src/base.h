@@ -50,7 +50,7 @@ struct connection {
 
 	sock_addr dst_addr;
 	buffer *dst_addr_buf;
-	struct server_socket *srv_socket;   /* reference to the server-socket */
+	const struct server_socket *srv_socket;   /* reference to the server-socket */
 
 	/* timestamps */
 	time_t read_idle_ts;

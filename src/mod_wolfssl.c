@@ -2999,7 +2999,7 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 
 CONNECTION_FUNC(mod_openssl_handle_con_accept)
 {
-    server_socket *srv_sock = con->srv_socket;
+    const server_socket *srv_sock = con->srv_socket;
     if (!srv_sock->is_ssl) return HANDLER_GO_ON;
 
     plugin_data *p = p_d;

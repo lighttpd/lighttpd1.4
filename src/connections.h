@@ -17,7 +17,7 @@ void connection_periodic_maint (server *srv, time_t cur_ts);
 int connection_send_1xx (request_st *r, connection *con);
 
 connection * connection_accept(server *srv, struct server_socket *srv_sock);
-connection * connection_accepted(server *srv, struct server_socket *srv_socket, sock_addr *cnt_addr, int cnt);
+connection * connection_accepted(server *srv, const struct server_socket *srv_socket, sock_addr *cnt_addr, int cnt);
 
 void connection_state_machine(connection *con);
 
