@@ -2,6 +2,7 @@
 
 #include "base.h"
 #include "burl.h"
+#include "chunk.h"
 #include "fdevent.h"
 #include "http_etag.h"
 #include "keyvalue.h"
@@ -1995,6 +1996,39 @@ static int config_parse(server *srv, config_t *context, const char *source, cons
 	return ret == -1 ? -1 : 0;
 }
 
+__attribute_cold__
+static int config_parse_stdin(server *srv, config_t *context) {
+    buffer * const b = chunk_buffer_acquire();
+    size_t dlen;
+    ssize_t n = -1;
+    do {
+        if (n > 0)
+            buffer_commit(b, n);
+        size_t avail = buffer_string_space(b);
+        dlen = buffer_string_length(b);
+        if (__builtin_expect( (avail < 1024), 0)) {
+            /*(arbitrary limit: 32 MB file; expect < 1 MB)*/
+            if (dlen >= 32*1024*1024) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "config read from stdin is way too large");
+                break;
+            }
+            avail = chunk_buffer_prepare_append(b, b->size+avail);
+        }
+        n = read(STDIN_FILENO, b->ptr+dlen, avail);
+    } while (n > 0 || (n == -1 && errno == EINTR));
+    int rc = -1;
+    if (0 == n)
+        rc = dlen ? config_parse(srv, context, "-", b->ptr, dlen) : 0;
+    else
+        log_perror(srv->errh, __FILE__, __LINE__, "config read from stdin");
+
+    if (dlen)
+        safe_memclear(b->ptr, dlen);
+    chunk_buffer_release(b);
+    return rc;
+}
+
 static int config_parse_file_stream(server *srv, config_t *context, const char *fn) {
     off_t dlen = 32*1024*1024;/*(arbitrary limit: 32 MB file; expect < 1 MB)*/
     char *data = fdevent_load_file(fn, &dlen, NULL, malloc, free);
@@ -2204,7 +2238,9 @@ int config_read(server *srv, const char *fn) {
 	array_insert_unique(context.all_configs, (data_unset *)dc);
 	context.current = dc;
 
-	ret = config_parse_file_stream(srv, &context, fn);
+	ret = (0 != strcmp(fn, "-")) /*(incompatible with one-shot mode)*/
+	  ? config_parse_file_stream(srv, &context, fn)
+	  : config_parse_stdin(srv, &context);
 
 	/* remains nothing if parser is ok */
 	force_assert(!(0 == ret && context.ok && 0 != context.configs_stack.used));
