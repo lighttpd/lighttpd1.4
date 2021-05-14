@@ -770,7 +770,7 @@ static int magnet_attach_content(request_st * const r, lua_State * const L, int 
 
 				if (lua_isstring(L, -3)) { /* filename has to be a string */
 					off_t off = (off_t) luaL_optinteger(L, -1, 0);
-					off_t len = (off_t) luaL_optinteger(L, -2, -1); /*(-1 to http_chunk_append_file_range() uses file size minus offset)*/
+					off_t len = (off_t) luaL_optinteger(L, -2, -1); /*(-1 as flag to use file size minus offset (below))*/
 					if (off < 0) {
 						log_error(r->conf.errh, __FILE__, __LINE__,
 						  "offset for '%s' is negative", lua_tostring(L, -3));
@@ -785,9 +785,15 @@ static int magnet_attach_content(request_st * const r, lua_State * const L, int 
 
 					if (!end && 0 != len) {
 						buffer *fn = magnet_checkbuffer(L, -3);
-						int rc = http_chunk_append_file_range(r, fn, off, len);
+						stat_cache_entry * const sce =
+						  stat_cache_get_entry_open(fn, r->conf.follow_symlink);
 						buffer_free(fn);
-						if (0 != rc) {
+						if (sce && (sce->fd >= 0 || sce->st.st_size == 0)) {
+							if (len == -1 || sce->st.st_size - off < len)
+								len = sce->st.st_size - off;
+							if (len > 0)
+								http_chunk_append_file_ref_range(r, sce, off, len);
+						} else {
 							log_error(r->conf.errh, __FILE__, __LINE__,
 							  "error opening file content '%s' at offset %lld",
 							          lua_tostring(L, -3), (long long)off);
