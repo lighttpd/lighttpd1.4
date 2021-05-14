@@ -92,8 +92,13 @@ static int http_chunk_append_read_fd_range(request_st * const r, const buffer * 
     return (rd >= 0) ? 0 : -1;
 }
 
-void http_chunk_append_file_ref_range(request_st * const r, stat_cache_entry * const sce, const off_t offset, const off_t len) {
+void http_chunk_append_file_ref_range(request_st * const r, stat_cache_entry * const sce, const off_t offset, off_t len) {
     chunkqueue * const cq = &r->write_queue;
+
+    if (sce->st.st_size - offset < len)
+        len = sce->st.st_size - offset;
+    if (len <= 0)
+        return;
 
     if (r->resp_send_chunked)
         http_chunk_len_append(cq, (uintmax_t)len);
