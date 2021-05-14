@@ -55,14 +55,6 @@ static int http_chunk_len_append_tempfile(chunkqueue * const cq, uintmax_t len, 
   #endif
 }
 
-static int http_chunk_append_file_open_fstat(const request_st * const r, const buffer * const fn, struct stat * const st) {
-    return
-      (r->conf.follow_symlink
-       || !stat_cache_path_contains_symlink(fn, r->conf.errh))
-        ? stat_cache_open_rdonly_fstat(fn, st, r->conf.follow_symlink)
-        : -1;
-}
-
 static int http_chunk_append_read_fd_range(request_st * const r, const buffer * const fn, const int fd, off_t offset, off_t len) {
     /* note: this routine should not be used for range requests
      * unless the total size of ranges requested is small */
@@ -127,35 +119,6 @@ void http_chunk_append_file_fd_range(request_st * const r, const buffer * const 
 
     if (r->resp_send_chunked)
         chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
-}
-
-int http_chunk_append_file_range(request_st * const r, const buffer * const fn, const off_t offset, off_t len) {
-    struct stat st;
-    const int fd = http_chunk_append_file_open_fstat(r, fn, &st);
-    if (fd < 0) return -1;
-
-    if (-1 == len) {
-        if (offset >= st.st_size) {
-            close(fd);
-            return (offset == st.st_size) ? 0 : -1;
-        }
-        len = st.st_size - offset;
-    }
-    else if (st.st_size - offset < len) {
-        close(fd);
-        return -1;
-    }
-
-    http_chunk_append_file_fd_range(r, fn, fd, offset, len);
-    return 0;
-}
-
-int http_chunk_append_file(request_st * const r, const buffer * const fn) {
-    struct stat st;
-    const int fd = http_chunk_append_file_open_fstat(r, fn, &st);
-    if (fd < 0) return -1;
-    http_chunk_append_file_fd(r, fn, fd, st.st_size);
-    return 0;
 }
 
 int http_chunk_append_file_fd(request_st * const r, const buffer * const fn, const int fd, const off_t sz) {
