@@ -123,8 +123,9 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 		r->http_status = (errno == ENOENT) ? 404 : 403;
 		return HANDLER_FINISHED;
 	}
-
-	if (0 == sce->st.st_size)
+	if (len == -1 || sce->st.st_size - start < len)
+		len = sce->st.st_size - start;
+	if (len <= 0)
 		return HANDLER_FINISHED;
 
 			/* if there is a start=[0-9]+ in the header use it as start,
