@@ -653,6 +653,44 @@ void http_response_backend_done (request_st * const r) {
 		if (!r->resp_body_finished) {
 			if (r->http_version == HTTP_VERSION_1_1)
 				http_chunk_close(r);
+		  #if 0
+			/* This is a lot of work to make it possible for an HTTP/1.0 client
+			 * to detect that response is truncated (after lighttpd made an
+			 * HTTP/1.1 request to backend, and backend gave a Transfer-Encoding
+			 * chunked response instead of sending Content-Length, and lighttpd
+			 * is streaming response to client).  An HTTP/1.0 client is probably
+			 * not checking for truncated response, or else client should really
+			 * prefer HTTP/1.1 or better.  If lighttpd were streaming response,
+			 * there would be no Content-Length and lighttpd would have sent
+			 * Connection: close.  Alternatively, since not streaming (if these
+			 * conditions are true), could send an HTTP status error instead of
+			 * sending partial content with a bogus Content-Length.  If we do
+			 * not send an HTTP error status, then response_start hooks may add
+			 * caching headers (e.g. mod_expire, mod_setenv).  If in future we
+			 * send HTTP error status, might special-case HEAD requests and
+			 * clear response body so that response headers (w/o Content-Length)
+			 * can be sent.  For now, we have chosen to send partial content,
+			 * including generating an incorrect Content-Length (later), and not
+			 * to take any of these extra steps. */
+			else if (__builtin_expect( (r->http_version == HTTP_VERSION_1_0), 0)
+			         && r->gw_dechunk && !r->gw_dechunk->done
+			         && !(r->conf.stream_response_body
+			              & (FDEVENT_STREAM_RESPONSE
+			                |FDEVENT_STREAM_RESPONSE_BUFMIN))) {
+				r->keep_alive = 0; /* disable keep-alive, send bogus length */
+				http_header_response_set(r, HTTP_HEADER_CONTENT_LENGTH,
+				                         CONST_STR_LEN("Content-Length"),
+				                         CONST_STR_LEN("9999999999999"));
+				http_header_response_unset(r, HTTP_HEADER_ETAG,
+				                           CONST_STR_LEN("ETag"));
+				http_header_response_unset(r, HTTP_HEADER_LAST_MODIFIED,
+				                           CONST_STR_LEN("Last-Modified"));
+				http_header_response_unset(r, HTTP_HEADER_CACHE_CONTROL,
+				                           CONST_STR_LEN("Cache-Control"));
+				http_header_response_unset(r, HTTP_HEADER_EXPIRES,
+				                           CONST_STR_LEN("Expires"));
+			}
+		  #endif
 			r->resp_body_finished = 1;
 		}
 	default:
