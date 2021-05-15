@@ -815,6 +815,10 @@ int fdevent_waitpid(pid_t pid, int * const status, int nb) {
     return rv;
 }
 
+int fdevent_waitpid_intr(pid_t pid, int * const status) {
+    return waitpid(pid, status, 0);
+}
+
 
 typedef struct fdevent_cmd_pipe {
     pid_t pid;

@@ -1610,7 +1610,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			} else {
 				int status;
 
-				if (-1 != (pid = fdevent_waitpid(-1, &status, 0))) {
+				if (-1 != (pid = fdevent_waitpid_intr(-1, &status))) {
 					log_monotonic_secs = server_monotonic_secs();
 					log_epoch_secs = server_epoch_secs(srv);
 					if (plugins_call_handle_waitpid(srv, pid, status) != HANDLER_GO_ON) {
