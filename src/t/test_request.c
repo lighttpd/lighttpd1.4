@@ -153,42 +153,42 @@ static void test_request_http_request_parse(request_st * const r)
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"
                     "\r\n"));
-    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("www.example.org")));
+    assert(r->http_host && buffer_eq_slen(r->http_host, CONST_STR_LEN("www.example.org")));
 
     run_http_request_parse(r, __LINE__, 0,
       "IPv4 address",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: 127.0.0.1\r\n"
                     "\r\n"));
-    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("127.0.0.1")));
+    assert(r->http_host && buffer_eq_slen(r->http_host, CONST_STR_LEN("127.0.0.1")));
 
     run_http_request_parse(r, __LINE__, 0,
       "IPv6 address",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: [::1]\r\n"
                     "\r\n"));
-    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("[::1]")));
+    assert(r->http_host && buffer_eq_slen(r->http_host, CONST_STR_LEN("[::1]")));
 
     run_http_request_parse(r, __LINE__, 0,
       "hostname + port",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: www.example.org:80\r\n"
                     "\r\n"));
-    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("www.example.org")));
+    assert(r->http_host && buffer_eq_slen(r->http_host, CONST_STR_LEN("www.example.org")));
 
     run_http_request_parse(r, __LINE__, 0,
       "IPv4 address + port",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: 127.0.0.1:80\r\n"
                     "\r\n"));
-    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("127.0.0.1")));
+    assert(r->http_host && buffer_eq_slen(r->http_host, CONST_STR_LEN("127.0.0.1")));
 
     run_http_request_parse(r, __LINE__, 0,
       "IPv6 address + port",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: [::1]:80\r\n"
                     "\r\n"));
-    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("[::1]")));
+    assert(r->http_host && buffer_eq_slen(r->http_host, CONST_STR_LEN("[::1]")));
 
     run_http_request_parse(r, __LINE__, 400,
       "directory traversal",
@@ -207,7 +207,7 @@ static void test_request_http_request_parse(request_st * const r)
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: jsdh.sfdg.sdfg.\r\n"
                     "\r\n"));
-    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("jsdh.sfdg.sdfg")));
+    assert(r->http_host && buffer_eq_slen(r->http_host, CONST_STR_LEN("jsdh.sfdg.sdfg")));
 
     run_http_request_parse(r, __LINE__, 400,
       "leading dot",
@@ -250,7 +250,7 @@ static void test_request_http_request_parse(request_st * const r)
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Host: a.b-c.d123\r\n"
                     "\r\n"));
-    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("a.b-c.d123")));
+    assert(r->http_host && buffer_eq_slen(r->http_host, CONST_STR_LEN("a.b-c.d123")));
 
     run_http_request_parse(r, __LINE__, 400,
       "leading dash",
@@ -395,7 +395,7 @@ static void test_request_http_request_parse(request_st * const r)
       "absolute URI",
       CONST_STR_LEN("GET http://www.example.org/ HTTP/1.0\r\n"
                     "\r\n"));
-    assert(buffer_eq_slen(r->http_host, CONST_STR_LEN("www.example.org")));
+    assert(r->http_host && buffer_eq_slen(r->http_host, CONST_STR_LEN("www.example.org")));
     assert(buffer_eq_slen(&r->target, CONST_STR_LEN("/")));
 
     run_http_request_parse(r, __LINE__, 400,
