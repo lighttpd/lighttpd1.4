@@ -52,9 +52,11 @@ static int * gw_status_get_counter(gw_host *host, gw_proc *proc, const char *tag
     memcpy(label, "gw.backend.", llen);
 
     len = buffer_string_length(host->id);
-    force_assert(len < sizeof(label) - llen);
-    memcpy(label+llen, host->id->ptr, len);
-    llen += len;
+    if (len) {
+        force_assert(len < sizeof(label) - llen);
+        memcpy(label+llen, host->id->ptr, len);
+        llen += len;
+    }
 
     if (proc) {
         force_assert(llen < sizeof(label) - (LI_ITOSTRING_LENGTH + 1));
@@ -75,34 +77,45 @@ static void gw_proc_tag_inc(gw_host *host, gw_proc *proc, const char *tag, size_
     ++(*gw_status_get_counter(host, proc, tag, len));
 }
 
-static void gw_proc_load_inc(gw_host *host, gw_proc *proc) {
-    *gw_status_get_counter(host, proc, CONST_STR_LEN(".load")) = ++proc->load;
+static void gw_proc_connected_inc(gw_host *host, gw_proc *proc) {
+    UNUSED(host);
+    ++(*proc->stats_connected); /* "gw.backend...connected" */
+}
 
-    status_counter_inc(CONST_STR_LEN("gw.active-requests"));
+static void gw_proc_load_inc(gw_host *host, gw_proc *proc) {
+    *proc->stats_load = ++proc->load; /* "gw.backend...load" */
+    ++(*host->stats_global_active); /* "gw.active-requests" */
 }
 
 static void gw_proc_load_dec(gw_host *host, gw_proc *proc) {
-    *gw_status_get_counter(host, proc, CONST_STR_LEN(".load")) = --proc->load;
-
-    status_counter_dec(CONST_STR_LEN("gw.active-requests"));
+    *proc->stats_load = --proc->load; /* "gw.backend...load" */
+    --(*host->stats_global_active); /* "gw.active-requests" */
 }
 
 static void gw_host_assign(gw_host *host) {
-    *gw_status_get_counter(host, NULL, CONST_STR_LEN(".load")) = ++host->load;
+    *host->stats_load = ++host->load; /* "gw.backend...load" */
 }
 
 static void gw_host_reset(gw_host *host) {
-    *gw_status_get_counter(host, NULL, CONST_STR_LEN(".load")) = --host->load;
+    *host->stats_load = --host->load; /* "gw.backend...load" */
 }
 
 static int gw_status_init(gw_host *host, gw_proc *proc) {
     *gw_status_get_counter(host, proc, CONST_STR_LEN(".disabled")) = 0;
     *gw_status_get_counter(host, proc, CONST_STR_LEN(".died")) = 0;
     *gw_status_get_counter(host, proc, CONST_STR_LEN(".overloaded")) = 0;
-    *gw_status_get_counter(host, proc, CONST_STR_LEN(".connected")) = 0;
-    *gw_status_get_counter(host, proc, CONST_STR_LEN(".load")) = 0;
+    proc->stats_connected =
+      gw_status_get_counter(host, proc, CONST_STR_LEN(".connected"));
+    *proc->stats_connected = 0;
+    proc->stats_load =
+      gw_status_get_counter(host, proc, CONST_STR_LEN(".load"));
+    *proc->stats_load = 0;
 
-    *gw_status_get_counter(host, NULL, CONST_STR_LEN(".load")) = 0;
+    host->stats_load =
+      gw_status_get_counter(host, NULL, CONST_STR_LEN(".load"));
+    *host->stats_load = 0;
+    host->stats_global_active =
+      status_counter_get_counter(CONST_STR_LEN("gw.active-requests"));
 
     return 0;
 }
@@ -221,7 +234,7 @@ static int gw_extension_insert(gw_exts *ext, const buffer *key, gw_host *fh) {
 }
 
 static void gw_proc_connect_success(gw_host *host, gw_proc *proc, int debug, request_st * const r) {
-    gw_proc_tag_inc(host, proc, CONST_STR_LEN(".connected"));
+    gw_proc_connected_inc(host, proc); /*(".connected")*/
     proc->last_used = log_monotonic_secs;
 
     if (debug) {

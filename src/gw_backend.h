@@ -44,6 +44,9 @@ typedef struct gw_proc {
         PROC_STATE_DIED,       /* marked as dead, should be restarted */
         PROC_STATE_KILLED      /* killed (signal sent to proc) */
     } state;
+
+    int *stats_load;
+    int *stats_connected;
 } gw_proc;
 
 typedef struct {
@@ -211,6 +214,9 @@ typedef struct {
     int refcount;
 
     char_array args;
+
+    int *stats_load;
+    int *stats_global_active;
 } gw_host;
 
 /*
