@@ -9,6 +9,8 @@
 
 __attribute_cold__
 static void array_extend(array * const a, uint32_t n) {
+    /* This data structure should not be used for nearly so many entries */
+    force_assert(a->size <= INT32_MAX-n);
     a->size  += n;
     a->data   = realloc(a->data,   sizeof(*a->data)   * a->size);
     a->sorted = realloc(a->sorted, sizeof(*a->sorted) * a->size);
@@ -248,15 +250,16 @@ static data_unset *array_get_unused_element(array * const a, const data_type_t t
 
 __attribute_hot__
 static void array_insert_data_at_pos(array * const a, data_unset * const entry, const uint32_t pos) {
-    /* This data structure should not be used for nearly so many entries */
-    force_assert(a->used + 1 <= INT32_MAX);
-
-    if (a->size == a->used) {
+    if (a->used < a->size) {
+        data_unset * const prev = a->data[a->used];
+        if (__builtin_expect( (prev != NULL), 0))
+            prev->fn->free(prev); /* free prior data, if any, from slot */
+    }
+    else {
         array_extend(a, 16);
     }
 
     const uint32_t ndx = a->used++;
-    data_unset * const prev = a->data[ndx];
     a->data[ndx] = entry;
 
     /* move everything one step to the right */
@@ -265,8 +268,6 @@ static void array_insert_data_at_pos(array * const a, data_unset * const entry, 
         memmove(d+1, d, (ndx - pos) * sizeof(*a->sorted));
     }
     a->sorted[pos] = entry;
-
-    if (prev) prev->fn->free(prev); /* free prior data, if any, from slot */
 }
 
 static data_integer * array_insert_integer_at_pos(array * const a, const uint32_t pos) {
