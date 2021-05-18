@@ -77,22 +77,16 @@ static int fdevent_poll_event_set(fdevents *ev, fdnode *fdn, int events) {
 	return 0;
 }
 
-__attribute_pure__
-static int fdevent_poll_next_ndx(const fdevents *ev, int ndx) {
-	for (uint32_t i = (uint32_t)(ndx+1); i < ev->used; ++i) {
-		if (ev->pollfds[i].revents) return i;
-	}
-	return -1;
-}
-
 static int fdevent_poll_poll(fdevents *ev, int timeout_ms) {
-    const int n = poll(ev->pollfds, ev->used, timeout_ms);
-    for (int ndx=-1,i=0; i<n && -1!=(ndx=fdevent_poll_next_ndx(ev,ndx)); ++i){
-        fdnode *fdn = ev->fdarray[ev->pollfds[ndx].fd];
-        int revents = ev->pollfds[ndx].revents;
-        if (0 == ((uintptr_t)fdn & 0x3)) {
-            (*fdn->handler)(fdn->ctx, revents);
-        }
+    struct pollfd * const restrict pfds = ev->pollfds;
+    fdnode ** const fdarray = ev->fdarray;
+    const int n = poll(pfds, ev->used, timeout_ms);
+    for (int i = 0, m = 0; m < n; ++i) {
+        if (0 == pfds[i].revents) continue;
+        fdnode *fdn = fdarray[pfds[i].fd];
+        if (0 == ((uintptr_t)fdn & 0x3))
+            (*fdn->handler)(fdn->ctx, pfds[i].revents);
+        ++m;
     }
     return n;
 }

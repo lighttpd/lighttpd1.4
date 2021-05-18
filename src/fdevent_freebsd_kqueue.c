@@ -72,17 +72,16 @@ static int fdevent_freebsd_kqueue_event_set(fdevents *ev, fdnode *fdn, int event
 
 static int fdevent_freebsd_kqueue_poll(fdevents * const ev, int timeout_ms) {
     struct timespec ts;
-    int n;
-
     ts.tv_sec  = timeout_ms / 1000;
     ts.tv_nsec = (timeout_ms % 1000) * 1000000;
 
-    n = kevent(ev->kq_fd, NULL, 0, ev->kq_results, ev->maxfds, &ts);
+    struct kevent * const restrict kq_results = ev->kq_results;
+    const int n = kevent(ev->kq_fd, NULL, 0, kq_results, ev->maxfds, &ts);
 
     for (int i = 0; i < n; ++i) {
-        fdnode * const fdn = (fdnode *)ev->kq_results[i].udata;
-        int filt = ev->kq_results[i].filter;
-        int e = ev->kq_results[i].flags;
+        fdnode * const fdn = (fdnode *)kq_results[i].udata;
+        int filt = kq_results[i].filter;
+        int e = kq_results[i].flags;
         if ((fdevent_handler)NULL != fdn->handler) {
             int revents = (filt == EVFILT_READ) ? FDEVENT_IN : FDEVENT_OUT;
             if (e & EV_EOF)

@@ -42,18 +42,19 @@ static int fdevent_solaris_devpoll_event_set(fdevents *ev, fdnode *fdn, int even
 }
 
 static int fdevent_solaris_devpoll_poll(fdevents *ev, int timeout_ms) {
-    int n;
+    fdnode ** const fdarray = ev->fdarray;
+    struct pollfd * const devpollfds = ev->devpollfds;
     struct dvpoll dopoll;
 
     dopoll.dp_timeout = timeout_ms;
     dopoll.dp_nfds = ev->maxfds - 1;
-    dopoll.dp_fds = ev->devpollfds;
+    dopoll.dp_fds = devpollfds;
 
-    n = ioctl(ev->devpoll_fd, DP_POLL, &dopoll);
+    const int n = ioctl(ev->devpoll_fd, DP_POLL, &dopoll);
 
     for (int i = 0; i < n; ++i) {
-        fdnode * const fdn = ev->fdarray[ev->devpollfds[i].fd];
-        int revents = ev->devpollfds[i].revents;
+        fdnode * const fdn = fdarray[devpollfds[i].fd];
+        int revents = devpollfds[i].revents;
         if (0 == ((uintptr_t)fdn & 0x3)) {
             (*fdn->handler)(fdn->ctx, revents);
         }
