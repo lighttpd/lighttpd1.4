@@ -16,6 +16,7 @@ struct epoll_event;     /* declaration */
 struct pollfd;          /* declaration */
 #endif
 
+#ifndef FDEVENT_USE_POLL
 #if defined HAVE_SELECT
 # ifdef __WIN32
 #  include <winsock2.h>
@@ -24,6 +25,7 @@ struct pollfd;          /* declaration */
 # ifdef HAVE_SYS_SELECT_H
 #  include <sys/select.h>
 # endif
+#endif
 #endif
 
 #if defined HAVE_SYS_DEVPOLL_H && defined(__sun)

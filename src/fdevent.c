@@ -61,6 +61,10 @@ int fdevent_config(const char **event_handler_name, log_error_st *errh) {
 	if (NULL != event_handler && 0 == strcmp(event_handler, "libev"))
 		event_handler = NULL;
 #endif
+#ifdef FDEVENT_USE_POLL
+	if (NULL != event_handler && 0 == strcmp(event_handler, "select"))
+		event_handler = "poll";
+#endif
 
 	if (NULL == event_handler) {
 		/* choose a good default
