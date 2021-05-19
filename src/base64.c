@@ -117,13 +117,14 @@ static size_t li_base64_decode(unsigned char * const result, const size_t out_le
 	return out_pos;
 }
 
-size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char* in, size_t in_length, base64_charset charset) {
+size_t li_base64_enc(char * const restrict out, const size_t out_length, const unsigned char * const restrict in, const size_t in_length, const base64_charset charset, const int pad) {
 	size_t i;
 	size_t out_pos = 0;
 	uint_fast32_t v;
 	const char* const base64_table = (charset)
 	  ? base64_url_table             /* BASE64_URL */
 	  : base64_standard_table;       /* BASE64_STANDARD */
+	const char padchar = li_base64_padding_char(charset);
 
 	/* check overflows */
 	/* 1073741823 is max num full_tuples to avoid overflow in uint32_t;
@@ -150,7 +151,12 @@ size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char
 			v = (in[i-2] << 4);
 			out[out_pos+0] = base64_table[(v >> 6) & 0x3f];
 			out[out_pos+1] = base64_table[(v     ) & 0x3f];
-			out_pos += 2;
+			if (pad) {
+				out[out_pos+2] = out[out_pos+3] = padchar;
+				out_pos += 4;
+			}
+			else
+				out_pos += 2;
 		}
 		break;
 	case 2:
@@ -160,37 +166,25 @@ size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char
 			out[out_pos+0] = base64_table[(v >> 12) & 0x3f];
 			out[out_pos+1] = base64_table[(v >>  6) & 0x3f];
 			out[out_pos+2] = base64_table[(v      ) & 0x3f];
-			out_pos += 3;
+			if (pad) {
+				out[out_pos+3] = padchar;
+				out_pos += 4;
+			}
+			else
+				out_pos += 3;
 		}
 		break;
 	}
+
 	return out_pos;
 }
 
-size_t li_to_base64(char* out, size_t out_length, const unsigned char* in, size_t in_length, base64_charset charset) {
-    size_t out_pos =
-      li_to_base64_no_padding(out, out_length, in, in_length, charset);
 
-    const size_t in_tuple_remainder = in_length % 3;
-    const size_t padding_length = in_tuple_remainder ? 3 - in_tuple_remainder : 0;
-    if (padding_length) { /* [0,1,2] */
-        const char padding = li_base64_padding_char(charset);
-        force_assert(padding_length <= out_length - out_pos);
-        if (padding_length > 1)
-            out[out_pos++] = padding;
-        out[out_pos++] = padding;
-    }
-
-    return out_pos;
-}
-
-
-char* buffer_append_base64_encode_opt(buffer *out, const unsigned char* in, size_t in_length, base64_charset charset, int pad) {
+char* buffer_append_base64_enc(buffer *out, const unsigned char* in, size_t in_length, base64_charset charset, int pad) {
     const size_t reserve = (in_length+2)/3*4;
     char * const result = buffer_string_prepare_append(out, reserve);
-    const size_t out_pos = (pad)
-      ? li_to_base64(result, reserve, in, in_length, charset)
-      : li_to_base64_no_padding(result, reserve, in, in_length, charset);
+    const size_t out_pos =
+      li_base64_enc(result, reserve, in, in_length, charset, pad);
 
     buffer_commit(out, out_pos);
 
