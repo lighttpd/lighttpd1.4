@@ -10,6 +10,8 @@
   operations are illustrated in the code below.  The remainder of this
   introduction is taken from top-down-splay.c.
 
+    [[ XXX: size maintenance has been removed; not used in lighttpd ]]
+
   "Splay trees", or "self-adjusting search trees" are a simple and
   efficient data structure for storing an ordered set.  The data
   structure consists of a binary tree, with no additional fields.  It
@@ -54,19 +56,16 @@
 /* This is the comparison.                                       */
 /* Returns <0 if i<j, =0 if i=j, and >0 if i>j                   */
 
-#define node_size splaytree_size
-
 /* Splay using the key i (which may or may not be in the tree.)
  * The starting root is t, and the tree used is defined by rat
- * size fields are maintained */
+ */
 splay_tree * splaytree_splay (splay_tree *t, int i) {
     splay_tree N, *l, *r, *y;
-    int comp, l_size, r_size;
+    int comp;
 
     if (t == NULL) return t;
     N.left = N.right = NULL;
     l = r = &N;
-    l_size = r_size = 0;
 
     for (;;) {
         comp = compare(i, t->key);
@@ -76,48 +75,27 @@ splay_tree * splaytree_splay (splay_tree *t, int i) {
                 y = t->left;                           /* rotate right */
                 t->left = y->right;
                 y->right = t;
-                t->size = node_size(t->left) + node_size(t->right) + 1;
                 t = y;
                 if (t->left == NULL) break;
             }
             r->left = t;                               /* link right */
             r = t;
             t = t->left;
-            r_size += 1+node_size(r->right);
         } else if (comp > 0) {
             if (t->right == NULL) break;
             if (compare(i, t->right->key) > 0) {
                 y = t->right;                          /* rotate left */
                 t->right = y->left;
                 y->left = t;
-		t->size = node_size(t->left) + node_size(t->right) + 1;
                 t = y;
                 if (t->right == NULL) break;
             }
             l->right = t;                              /* link left */
             l = t;
             t = t->right;
-            l_size += 1+node_size(l->left);
         } else {
             break;
         }
-    }
-    l_size += node_size(t->left);  /* Now l_size and r_size are the sizes of */
-    r_size += node_size(t->right); /* the left and right trees we just built.*/
-    t->size = l_size + r_size + 1;
-
-    l->right = r->left = NULL;
-
-    /* The following two loops correct the size fields of the right path  */
-    /* from the left child of the root and the right path from the left   */
-    /* child of the root.                                                 */
-    for (y = N.right; y != NULL; y = y->right) {
-        y->size = l_size;
-        l_size -= 1+node_size(y->left);
-    }
-    for (y = N.left; y != NULL; y = y->left) {
-        y->size = r_size;
-        r_size -= 1+node_size(y->right);
     }
 
     l->right = t->left;                                /* assemble */
@@ -147,16 +125,13 @@ splay_tree * splaytree_insert(splay_tree * t, int i, void *data) {
 	new->left = t->left;
 	new->right = t;
 	t->left = NULL;
-	t->size = 1+node_size(t->right);
     } else {
 	new->right = t->right;
 	new->left = t;
 	t->right = NULL;
-	t->size = 1+node_size(t->left);
     }
     new->key = i;
     new->data = data;
-    new->size = 1 + node_size(new->left) + node_size(new->right);
     return new;
 }
 
@@ -164,10 +139,7 @@ splay_tree * splaytree_delete(splay_tree *t, int i) {
 /* Deletes i from the tree if it's there.               */
 /* Return a pointer to the resulting tree.              */
     splay_tree * x;
-    int tsize;
-
     if (t==NULL) return NULL;
-    tsize = t->size;
     t = splaytree_splay(t, i);
     if (compare(i, t->key) == 0) {               /* found it */
 	if (t->left == NULL) {
@@ -177,33 +149,8 @@ splay_tree * splaytree_delete(splay_tree *t, int i) {
 	    x->right = t->right;
 	}
 	free(t);
-	if (x != NULL) {
-	    x->size = tsize-1;
-	}
 	return x;
     } else {
 	return t;                         /* It wasn't there */
     }
 }
-
-#if 0
-static splay_tree *find_rank(int r, splay_tree *t) {
-/* Returns a pointer to the node in the tree with the given rank.  */
-/* Returns NULL if there is no such node.                          */
-/* Does not change the tree.  To guarantee logarithmic behavior,   */
-/* the node found here should be splayed to the root.              */
-    int lsize;
-    if ((r < 0) || (r >= node_size(t))) return NULL;
-    for (;;) {
-	lsize = node_size(t->left);
-	if (r < lsize) {
-	    t = t->left;
-	} else if (r > lsize) {
-	    r = r - lsize -1;
-	    t = t->right;
-	} else {
-	    return t;
-	}
-    }
-}
-#endif
