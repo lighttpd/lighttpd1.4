@@ -37,17 +37,6 @@ static const signed char base64_url_reverse_table[] = {
 	41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1, /* 0x70 - 0x7F */
 };
 
-__attribute_const__
-static char li_base64_padding_char (const base64_charset charset) {
-	switch (charset) {
-	default:
-	case BASE64_STANDARD:
-		return '='; /* base64_standard_table[64]; */
-	case BASE64_URL:
-		return '.'; /* base64_url_table[64]; */
-	}
-}
-
 static size_t li_base64_dec(unsigned char * const result, const size_t out_length, const char * const in, const size_t in_length, const base64_charset charset) {
     size_t i;
     const signed char * const base64_reverse_table = (charset)
@@ -104,7 +93,7 @@ size_t li_base64_enc(char * const restrict out, const size_t out_length, const u
 	const char* const base64_table = (charset)
 	  ? base64_url_table             /* BASE64_URL */
 	  : base64_standard_table;       /* BASE64_STANDARD */
-	const char padchar = li_base64_padding_char(charset);
+	const char padchar = base64_table[64]; /* padding char */
 
 	/* check overflows */
 	/* 1073741823 is max num full_tuples to avoid overflow in uint32_t;
