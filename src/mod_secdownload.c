@@ -166,7 +166,7 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 	case SECDL_HMAC_SHA1:
 		{
 			unsigned char digest[20];
-			char base64_digest[27];
+			char base64_digest[28];
 
                         if (!li_hmac_sha1(digest, CONST_BUF_LEN(config->secret),
 			                  (const unsigned char *)protected_path,
@@ -176,7 +176,7 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 				return 0;
 			}
 
-			li_to_base64_no_padding(base64_digest, 27, digest, 20, BASE64_URL);
+			li_to_base64_no_padding(base64_digest, 28, digest, 20, BASE64_URL);
 
 			return (27 == maclen)
 			    && http_auth_const_time_memeq(mac, base64_digest, 27);
@@ -185,7 +185,7 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 	case SECDL_HMAC_SHA256:
 		{
 			unsigned char digest[32];
-			char base64_digest[43];
+			char base64_digest[44];
 
                         if (!li_hmac_sha256(digest, CONST_BUF_LEN(config->secret),
 			                    (const unsigned char *)protected_path,
@@ -195,7 +195,7 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 				return 0;
 			}
 
-			li_to_base64_no_padding(base64_digest, 43, digest, 32, BASE64_URL);
+			li_to_base64_no_padding(base64_digest, 44, digest, 32, BASE64_URL);
 
 			return (43 == maclen)
 			    && http_auth_const_time_memeq(mac, base64_digest, 43);

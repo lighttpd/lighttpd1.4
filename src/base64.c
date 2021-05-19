@@ -118,10 +118,6 @@ static size_t li_base64_decode(unsigned char * const result, const size_t out_le
 }
 
 size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char* in, size_t in_length, base64_charset charset) {
-	const size_t full_tuples = in_length / 3;
-	const size_t in_tuple_remainder = in_length % 3;
-	const size_t out_tuple_remainder = in_tuple_remainder ? 1 + in_tuple_remainder : 0;
-	const size_t require_space = 4 * full_tuples + out_tuple_remainder;
 	size_t i;
 	size_t out_pos = 0;
 	const char* const base64_table = (charset)
@@ -131,10 +127,8 @@ size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char
 	/* check overflows */
 	/* 1073741823 is max num full_tuples to avoid overflow in uint32_t;
 	 * and (1 GB - 1) is ridiculously large for base64-encoded data */
-	force_assert(full_tuples <= 1073741823);
-	/*force_assert(full_tuples <= 4*full_tuples);*/
-	/*force_assert(4*full_tuples <= 4*full_tuples + out_tuple_remainder);*/
-	force_assert(require_space <= out_length);
+	force_assert(in_length <= 3221225469); /* (3221225469+2) / 3 * 4 < UINT32_MAX */
+	force_assert((in_length+2)/3*4 <= out_length);
 
 	for (i = 2; i < in_length; i += 3) {
 		unsigned int v = (in[i-2] << 16) | (in[i-1] << 8) | in[i];
@@ -144,8 +138,10 @@ size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char
 		out[out_pos+0] = base64_table[v & 0x3f];
 		out_pos += 4;
 	}
-	switch (in_tuple_remainder) {
+
+	switch (in_length - (i-2)) {
 	case 0:
+	default:
 		break;
 	case 1:
 		{
@@ -167,7 +163,6 @@ size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char
 		}
 		break;
 	}
-	force_assert(out_pos <= out_length);
 	return out_pos;
 }
 
@@ -190,7 +185,7 @@ size_t li_to_base64(char* out, size_t out_length, const unsigned char* in, size_
 
 
 char* buffer_append_base64_encode_opt(buffer *out, const unsigned char* in, size_t in_length, base64_charset charset, int pad) {
-    const size_t reserve = 4*(in_length/3) + 4;
+    const size_t reserve = (in_length+2)/3*4;
     char * const result = buffer_string_prepare_append(out, reserve);
     const size_t out_pos = (pad)
       ? li_to_base64(result, reserve, in, in_length, charset)
