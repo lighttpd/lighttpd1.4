@@ -44,24 +44,16 @@ static int data_string_insert_dup(data_unset *dst, data_unset *src) {
 __attribute_cold__
 static void data_string_print(const data_unset *d, int depth) {
 	data_string *ds = (data_string *)d;
-	size_t i, len;
 	UNUSED(depth);
-
-	/* empty and uninitialized strings */
-	if (buffer_string_is_empty(&ds->value)) {
-		fputs("\"\"", stdout);
-		return;
-	}
 
 	/* print out the string as is, except prepend " with backslash */
 	putc('"', stdout);
-	len = buffer_string_length(&ds->value);
-	for (i = 0; i < len; i++) {
-		unsigned char c = ds->value.ptr[i];
-		if (c == '"') {
-			fputs("\\\"", stdout);
-		} else {
-			putc(c, stdout);
+	const char *p = ds->value.ptr;
+	if (p) {
+		for (; *p; ++p) {
+			if (*p == '"')
+				putc('\\', stdout);
+			putc(*p, stdout);
 		}
 	}
 	putc('"', stdout);

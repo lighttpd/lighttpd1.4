@@ -625,11 +625,6 @@ int array_print(const array * const a, int depth) {
 		array_print_indent(depth + 1);
 		if (!buffer_is_empty(&du->key)) {
 			int j;
-
-			if (i && (i % 5) == 0) {
-				fprintf(stdout, "# %u\n", i);
-				array_print_indent(depth + 1);
-			}
 			fprintf(stdout, "\"%s\"", du->key.ptr);
 			for (j = maxlen - buffer_string_length(&du->key); j > 0; j--) {
 				fprintf(stdout, " ");
@@ -638,10 +633,6 @@ int array_print(const array * const a, int depth) {
 		}
 		du->fn->print(du, depth + 1);
 		fprintf(stdout, ",\n");
-	}
-	if (!(i && (i - 1 % 5) == 0)) {
-		array_print_indent(depth + 1);
-		fprintf(stdout, "# %u\n", i);
 	}
 	array_print_indent(depth);
 	fprintf(stdout, ")");
