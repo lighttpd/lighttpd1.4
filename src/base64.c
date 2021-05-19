@@ -120,6 +120,7 @@ static size_t li_base64_decode(unsigned char * const result, const size_t out_le
 size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char* in, size_t in_length, base64_charset charset) {
 	size_t i;
 	size_t out_pos = 0;
+	uint_fast32_t v;
 	const char* const base64_table = (charset)
 	  ? base64_url_table             /* BASE64_URL */
 	  : base64_standard_table;       /* BASE64_STANDARD */
@@ -131,11 +132,11 @@ size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char
 	force_assert((in_length+2)/3*4 <= out_length);
 
 	for (i = 2; i < in_length; i += 3) {
-		unsigned int v = (in[i-2] << 16) | (in[i-1] << 8) | in[i];
-		out[out_pos+3] = base64_table[v & 0x3f]; v >>= 6;
-		out[out_pos+2] = base64_table[v & 0x3f]; v >>= 6;
-		out[out_pos+1] = base64_table[v & 0x3f]; v >>= 6;
-		out[out_pos+0] = base64_table[v & 0x3f];
+		v = (in[i-2] << 16) | (in[i-1] << 8) | in[i];
+		out[out_pos+0] = base64_table[(v >> 18) & 0x3f];
+		out[out_pos+1] = base64_table[(v >> 12) & 0x3f];
+		out[out_pos+2] = base64_table[(v >>  6) & 0x3f];
+		out[out_pos+3] = base64_table[(v      ) & 0x3f];
 		out_pos += 4;
 	}
 
@@ -146,19 +147,19 @@ size_t li_to_base64_no_padding(char* out, size_t out_length, const unsigned char
 	case 1:
 		{
 			/* pretend in[i-1] = in[i] = 0, don't write last two (out_pos+3, out_pos+2) characters */
-			unsigned int v = (in[i-2] << 4);
-			out[out_pos+1] = base64_table[v & 0x3f]; v >>= 6;
-			out[out_pos+0] = base64_table[v & 0x3f];
+			v = (in[i-2] << 4);
+			out[out_pos+0] = base64_table[(v >> 6) & 0x3f];
+			out[out_pos+1] = base64_table[(v     ) & 0x3f];
 			out_pos += 2;
 		}
 		break;
 	case 2:
 		{
 			/* pretend in[i] = 0, don't write last (out_pos+3) character */
-			unsigned int v = (in[i-2] << 10) | (in[i-1] << 2);
-			out[out_pos+2] = base64_table[v & 0x3f]; v >>= 6;
-			out[out_pos+1] = base64_table[v & 0x3f]; v >>= 6;
-			out[out_pos+0] = base64_table[v & 0x3f];
+			v = (in[i-2] << 10) | (in[i-1] << 2);
+			out[out_pos+0] = base64_table[(v >> 12) & 0x3f];
+			out[out_pos+1] = base64_table[(v >>  6) & 0x3f];
+			out[out_pos+2] = base64_table[(v      ) & 0x3f];
 			out_pos += 3;
 		}
 		break;
