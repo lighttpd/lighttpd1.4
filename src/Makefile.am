@@ -73,8 +73,6 @@ common_src=base64.c buffer.c burl.c log.c \
 	http_header.c http_kv.c keyvalue.c chunk.c  \
 	http_chunk.c fdevent.c gw_backend.c \
 	stat_cache.c plugin.c http_etag.c array.c \
-	data_string.c data_array.c \
-	data_integer.c \
 	algo_hmac.c algo_md5.c algo_sha1.c algo_splaytree.c \
 	fdevent_select.c fdevent_libev.c \
 	fdevent_poll.c fdevent_linux_sysepoll.c \
@@ -626,7 +624,7 @@ lighttpd_LDFLAGS = -export-dynamic
 
 endif
 
-t_test_array_SOURCES = t/test_array.c array.c data_array.c data_integer.c data_string.c buffer.c
+t_test_array_SOURCES = t/test_array.c array.c buffer.c
 t_test_array_LDADD = $(LIBUNWIND_LIBS)
 
 t_test_buffer_SOURCES = t/test_buffer.c buffer.c
@@ -638,25 +636,25 @@ t_test_base64_LDADD = $(LIBUNWIND_LIBS)
 t_test_burl_SOURCES = t/test_burl.c burl.c buffer.c base64.c
 t_test_burl_LDADD = $(LIBUNWIND_LIBS)
 
-t_test_configfile_SOURCES = t/test_configfile.c buffer.c array.c data_config.c data_integer.c data_string.c http_header.c http_kv.c vector.c log.c sock_addr.c
+t_test_configfile_SOURCES = t/test_configfile.c buffer.c array.c data_config.c http_header.c http_kv.c vector.c log.c sock_addr.c
 t_test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
-t_test_keyvalue_SOURCES = t/test_keyvalue.c burl.c buffer.c base64.c array.c data_integer.c data_string.c log.c
+t_test_keyvalue_SOURCES = t/test_keyvalue.c burl.c buffer.c base64.c array.c log.c
 t_test_keyvalue_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
-t_test_mod_access_SOURCES = t/test_mod_access.c buffer.c array.c data_integer.c data_string.c log.c
+t_test_mod_access_SOURCES = t/test_mod_access.c buffer.c array.c log.c
 t_test_mod_access_LDADD = $(LIBUNWIND_LIBS)
 
-t_test_mod_evhost_SOURCES = t/test_mod_evhost.c buffer.c array.c data_integer.c data_string.c log.c
+t_test_mod_evhost_SOURCES = t/test_mod_evhost.c buffer.c array.c log.c
 t_test_mod_evhost_LDADD = $(LIBUNWIND_LIBS)
 
-t_test_mod_simple_vhost_SOURCES = t/test_mod_simple_vhost.c buffer.c array.c data_integer.c data_string.c log.c
+t_test_mod_simple_vhost_SOURCES = t/test_mod_simple_vhost.c buffer.c array.c log.c
 t_test_mod_simple_vhost_LDADD = $(LIBUNWIND_LIBS)
 
-t_test_mod_userdir_SOURCES = t/test_mod_userdir.c buffer.c array.c data_integer.c data_string.c log.c
+t_test_mod_userdir_SOURCES = t/test_mod_userdir.c buffer.c array.c log.c
 t_test_mod_userdir_LDADD = $(LIBUNWIND_LIBS)
 
-t_test_request_SOURCES = t/test_request.c base64.c buffer.c burl.c array.c data_integer.c data_string.c http_header.c http_kv.c log.c sock_addr.c
+t_test_request_SOURCES = t/test_request.c base64.c buffer.c burl.c array.c http_header.c http_kv.c log.c sock_addr.c
 t_test_request_LDADD = $(LIBUNWIND_LIBS)
 
 noinst_HEADERS   = $(hdr)

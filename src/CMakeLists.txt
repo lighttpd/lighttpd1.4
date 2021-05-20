@@ -752,8 +752,6 @@ set(COMMON_SRC
 	http_header.c http_kv.c keyvalue.c chunk.c
 	http_chunk.c fdevent.c gw_backend.c
 	stat_cache.c plugin.c http_etag.c array.c
-	data_string.c data_array.c
-	data_integer.c
 	algo_hmac.c algo_md5.c algo_sha1.c algo_splaytree.c
 	fdevent_select.c fdevent_libev.c
 	fdevent_poll.c fdevent_linux_sysepoll.c
@@ -849,9 +847,6 @@ add_and_install_library(mod_wstunnel mod_wstunnel.c)
 add_executable(test_array
 	t/test_array.c
 	array.c
-	data_array.c
-	data_integer.c
-	data_string.c
 	buffer.c
 )
 add_test(NAME test_array COMMAND test_array)
@@ -882,8 +877,6 @@ add_executable(test_configfile
 	buffer.c
 	array.c
 	data_config.c
-	data_integer.c
-	data_string.c
 	http_header.c
 	http_kv.c
 	vector.c
@@ -898,8 +891,6 @@ add_executable(test_keyvalue
 	buffer.c
 	base64.c
 	array.c
-	data_integer.c
-	data_string.c
 	log.c
 )
 add_test(NAME test_keyvalue COMMAND test_keyvalue)
@@ -908,8 +899,6 @@ add_executable(test_mod_access
 	t/test_mod_access.c
 	buffer.c
 	array.c
-	data_integer.c
-	data_string.c
 	log.c
 )
 add_test(NAME test_mod_access COMMAND test_mod_access)
@@ -918,8 +907,6 @@ add_executable(test_mod_evhost
 	t/test_mod_evhost.c
 	buffer.c
 	array.c
-	data_integer.c
-	data_string.c
 	log.c
 )
 add_test(NAME test_mod_evhost COMMAND test_mod_evhost)
@@ -928,8 +915,6 @@ add_executable(test_mod_simple_vhost
 	t/test_mod_simple_vhost.c
 	buffer.c
 	array.c
-	data_integer.c
-	data_string.c
 	log.c
 )
 add_test(NAME test_mod_simple_vhost COMMAND test_mod_simple_vhost)
@@ -938,8 +923,6 @@ add_executable(test_mod_userdir
 	t/test_mod_userdir.c
 	buffer.c
 	array.c
-	data_integer.c
-	data_string.c
 	log.c
 )
 add_test(NAME test_mod_userdir COMMAND test_mod_userdir)
@@ -950,8 +933,6 @@ add_executable(test_request
 	buffer.c
 	burl.c
 	array.c
-	data_integer.c
-	data_string.c
 	http_header.c
 	http_kv.c
 	log.c

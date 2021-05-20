@@ -77,7 +77,7 @@ static data_unset *configparser_merge_data(data_unset *op1, const data_unset *op
       buffer_append_int(&ds->value, ((data_integer*)op2)->value);
       return op1;
     } else if (op1->type == TYPE_INTEGER && op2->type == TYPE_STRING) {
-      data_string *ds = data_string_init();
+      data_string *ds = array_data_string_init();
       buffer_append_int(&ds->value, ((data_integer*)op1)->value);
       buffer_append_string_buffer(&ds->value, &((data_string*)op2)->value);
       op1->fn->free(op1);
@@ -497,7 +497,7 @@ value(A) ::= key(B). {
 
       if (NULL != (env = getenv(B->ptr + 4))) {
         data_string *ds;
-        ds = data_string_init();
+        ds = array_data_string_init();
         buffer_append_string(&ds->value, env);
         A = (data_unset *)ds;
       }
@@ -515,8 +515,8 @@ value(A) ::= key(B). {
 }
 
 value(A) ::= STRING(B). {
-  A = (data_unset *)data_string_init();
-  /* assumes data_string_init() result does not require swap and buffer_free()*/
+  A = (data_unset *)array_data_string_init();
+  /* assumes array_data_string_init() result does not need swap, buffer_free()*/
   memcpy(&((data_string *)A)->value, B, sizeof(*B));
   free(B);
   B = NULL;
@@ -524,7 +524,7 @@ value(A) ::= STRING(B). {
 
 value(A) ::= INTEGER(B). {
   char *endptr;
-  A = (data_unset *)data_integer_init();
+  A = (data_unset *)array_data_integer_init();
   errno = 0;
   ((data_integer *)(A))->value = strtol(B->ptr, &endptr, 10);
   /* skip trailing whitespace */
@@ -537,8 +537,8 @@ value(A) ::= INTEGER(B). {
   B = NULL;
 }
 value(A) ::= array(B). {
-  A = (data_unset *)data_array_init();
-  /* assumes data_array_init() result does not require swap and array_free() */
+  A = (data_unset *)array_data_array_init();
+  /* assumes array_data_array_init() result does not need swap, array_free() */
   memcpy(&((data_array *)(A))->value, B, sizeof(*B));
   free(B);
   B = NULL;

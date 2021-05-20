@@ -49,12 +49,9 @@ static void data_config_free(data_unset *d) {
 }
 
 __attribute_cold__
-static int data_config_insert_dup(data_unset *dst, data_unset *src) {
+static void data_config_insert_dup(data_unset *dst, data_unset *src) {
 	UNUSED(dst);
-
 	src->fn->free(src);
-
-	return 0;
 }
 
 data_config *data_config_init(void) {

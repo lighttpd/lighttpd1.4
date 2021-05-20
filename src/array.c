@@ -7,6 +7,123 @@
 #include <stdlib.h>
 #include <limits.h>
 
+
+__attribute_cold__
+static data_unset *array_data_string_copy(const data_unset *s) {
+    data_string *src = (data_string *)s;
+    data_string *ds = array_data_string_init();
+    if (!buffer_is_empty(&src->key)) buffer_copy_buffer(&ds->key, &src->key);
+    buffer_copy_buffer(&ds->value, &src->value);
+    return (data_unset *)ds;
+}
+
+__attribute_cold__
+static void array_data_string_insert_dup(data_unset *dst, data_unset *src) {
+    data_string *ds_dst = (data_string *)dst;
+    data_string *ds_src = (data_string *)src;
+    if (!buffer_is_empty(&ds_dst->value))
+        buffer_append_str2(&ds_dst->value, CONST_STR_LEN(", "),
+                                           CONST_BUF_LEN(&ds_src->value));
+    else
+        buffer_copy_buffer(&ds_dst->value, &ds_src->value);
+    src->fn->free(src);
+}
+
+static void array_data_string_free(data_unset *du) {
+    data_string *ds = (data_string *)du;
+    free(ds->key.ptr);
+    free(ds->value.ptr);
+    free(ds);
+}
+
+__attribute_noinline__
+data_string *array_data_string_init(void) {
+    static const struct data_methods fn = {
+        array_data_string_copy,
+        array_data_string_free,
+        array_data_string_insert_dup,
+    };
+    data_string *ds = calloc(1, sizeof(*ds));
+    force_assert(NULL != ds);
+    ds->type = TYPE_STRING;
+    ds->fn = &fn;
+    return ds;
+}
+
+
+__attribute_cold__
+static data_unset *array_data_integer_copy(const data_unset *s) {
+    data_integer *src = (data_integer *)s;
+    data_integer *di = array_data_integer_init();
+    if (!buffer_is_empty(&src->key)) buffer_copy_buffer(&di->key, &src->key);
+    di->value = src->value;
+    return (data_unset *)di;
+}
+
+__attribute_cold__
+static void array_data_integer_insert_dup(data_unset *dst, data_unset *src) {
+    UNUSED(dst);
+    src->fn->free(src);
+}
+
+static void array_data_integer_free(data_unset *du) {
+    data_integer *di = (data_integer *)du;
+    free(di->key.ptr);
+    free(di);
+}
+
+__attribute_noinline__
+data_integer *array_data_integer_init(void) {
+    static const struct data_methods fn = {
+        array_data_integer_copy,
+        array_data_integer_free,
+        array_data_integer_insert_dup,
+    };
+    data_integer *di = calloc(1, sizeof(*di));
+    force_assert(NULL != di);
+    di->type = TYPE_INTEGER;
+    di->fn = &fn;
+    return di;
+}
+
+
+__attribute_cold__
+static data_unset *array_data_array_copy(const data_unset *s) {
+    data_array *src = (data_array *)s;
+    data_array *da = array_data_array_init();
+    if (!buffer_is_empty(&src->key)) buffer_copy_buffer(&da->key, &src->key);
+    array_copy_array(&da->value, &src->value);
+    return (data_unset *)da;
+}
+
+__attribute_cold__
+static void array_data_array_insert_dup(data_unset *dst, data_unset *src) {
+    UNUSED(dst);
+    src->fn->free(src);
+}
+
+static void array_data_array_free(data_unset *du) {
+    data_array *da = (data_array *)du;
+    free(da->key.ptr);
+    array_free_data(&da->value);
+    free(da);
+}
+
+__attribute_noinline__
+data_array *array_data_array_init(void) {
+    static const struct data_methods fn = {
+        array_data_array_copy,
+        array_data_array_free,
+        array_data_array_insert_dup,
+    };
+    data_array *da = calloc(1, sizeof(*da));
+    force_assert(NULL != da);
+    da->type = TYPE_ARRAY;
+    da->fn = &fn;
+    return da;
+}
+
+
 __attribute_cold__
 static void array_extend(array * const a, uint32_t n) {
     /* This data structure should not be used for nearly so many entries */
@@ -273,9 +390,9 @@ static void array_insert_data_at_pos(array * const a, data_unset * const entry, 
 static data_integer * array_insert_integer_at_pos(array * const a, const uint32_t pos) {
   #if 0 /*(not currently used by lighttpd in way that reuse would occur)*/
     data_integer *di = (data_integer *)array_get_unused_element(a,TYPE_INTEGER);
-    if (NULL == di) di = data_integer_init();
+    if (NULL == di) di = array_data_integer_init();
   #else
-    data_integer * const di = data_integer_init();
+    data_integer * const di = array_data_integer_init();
   #endif
     array_insert_data_at_pos(a, (data_unset *)di, pos);
     return di;
@@ -284,7 +401,7 @@ static data_integer * array_insert_integer_at_pos(array * const a, const uint32_
 __attribute_hot__
 static data_string * array_insert_string_at_pos(array * const a, const uint32_t pos) {
     data_string *ds = (data_string *)array_get_unused_element(a, TYPE_STRING);
-    if (NULL == ds) ds = data_string_init();
+    if (NULL == ds) ds = array_data_string_init();
     array_insert_data_at_pos(a, (data_unset *)ds, pos);
     return ds;
 }

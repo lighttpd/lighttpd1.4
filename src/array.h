@@ -9,7 +9,7 @@ struct data_unset; /* declaration */
 struct data_methods {
 	struct data_unset *(*copy)(const struct data_unset *src); \
 	void (*free)(struct data_unset *p); \
-	int (*insert_dup)(struct data_unset *dst, struct data_unset *src); \
+	void (*insert_dup)(struct data_unset *dst, struct data_unset *src);
 };
 
 typedef enum { TYPE_STRING, TYPE_ARRAY, TYPE_INTEGER, TYPE_CONFIG, TYPE_OTHER } data_type_t;
@@ -37,7 +37,7 @@ typedef struct {
 } data_string;
 
 __attribute_returns_nonnull__
-data_string *data_string_init(void);
+data_string *array_data_string_init(void);
 
 typedef struct {
 	DATA_UNSET;
@@ -46,7 +46,7 @@ typedef struct {
 } data_array;
 
 __attribute_returns_nonnull__
-data_array *data_array_init(void);
+data_array *array_data_array_init(void);
 
 typedef struct {
 	DATA_UNSET;
@@ -55,7 +55,7 @@ typedef struct {
 } data_integer;
 
 __attribute_returns_nonnull__
-data_integer *data_integer_init(void);
+data_integer *array_data_integer_init(void);
 
 __attribute_returns_nonnull__
 array *array_init(uint32_t n);
