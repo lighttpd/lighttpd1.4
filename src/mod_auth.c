@@ -265,7 +265,6 @@ static data_auth *data_auth_init(void)
       NULL, /* copy must not be called on this data */
       data_auth_free,
       NULL, /* insert_dup must not be called on this data */
-      NULL  /* print must not be called on this data */
     };
     data_auth * const dauth = calloc(1, sizeof(*dauth));
     force_assert(NULL != dauth);

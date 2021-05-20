@@ -10,7 +10,6 @@ struct data_methods {
 	struct data_unset *(*copy)(const struct data_unset *src); \
 	void (*free)(struct data_unset *p); \
 	int (*insert_dup)(struct data_unset *dst, struct data_unset *src); \
-	void (*print)(const struct data_unset *p, int depth);
 };
 
 typedef enum { TYPE_STRING, TYPE_ARRAY, TYPE_INTEGER, TYPE_CONFIG, TYPE_OTHER } data_type_t;
@@ -126,16 +125,6 @@ static inline void array_set_key_value(array * const a, const char * const k, co
 
 __attribute_cold__
 void array_replace(array *a, data_unset *entry);
-
-__attribute_cold__
-int array_print(const array *a, int depth);
-
-__attribute_cold__
-void array_print_indent(int depth);
-
-__attribute_cold__
-__attribute_pure__
-uint32_t array_get_max_key_length(const array *a);
 
 __attribute_pure__
 data_unset * array_match_key_prefix_klen (const array * const a, const char * const s, const uint32_t slen);

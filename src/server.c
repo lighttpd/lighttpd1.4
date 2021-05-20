@@ -1147,7 +1147,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 	if (print_config) {
 		config_print(srv);
-		fprintf(stdout, "\n");
+		puts(srv->tmp_buf->ptr);
 	}
 
 	if (test_config) {

@@ -1,8 +1,8 @@
 #include "first.h"
 
 #include "array.h"
+#include "buffer.h"
 
-#include <string.h>
 #include <stdlib.h>
 
 __attribute_cold__
@@ -33,19 +33,11 @@ static int data_array_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
-__attribute_cold__
-static void data_array_print(const data_unset *d, int depth) {
-	data_array *ds = (data_array *)d;
-
-	array_print(&ds->value, depth);
-}
-
 data_array *data_array_init(void) {
 	static const struct data_methods fn = {
 		data_array_copy,
 		data_array_free,
 		data_array_insert_dup,
-		data_array_print,
 	};
 	data_array *ds;
 

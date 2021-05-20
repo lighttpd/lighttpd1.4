@@ -1,9 +1,8 @@
 #include "first.h"
 
 #include "array.h"
+#include "buffer.h"
 
-#include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 __attribute_cold__
@@ -41,31 +40,11 @@ static int data_string_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
-__attribute_cold__
-static void data_string_print(const data_unset *d, int depth) {
-	data_string *ds = (data_string *)d;
-	UNUSED(depth);
-
-	/* print out the string as is, except prepend " with backslash */
-	putc('"', stdout);
-	const char *p = ds->value.ptr;
-	if (p) {
-		for (; *p; ++p) {
-			if (*p == '"')
-				putc('\\', stdout);
-			putc(*p, stdout);
-		}
-	}
-	putc('"', stdout);
-}
-
-
 data_string *data_string_init(void) {
 	static const struct data_methods fn = {
 		data_string_copy,
 		data_string_free,
 		data_string_insert_dup,
-		data_string_print,
 	};
 	data_string *ds;
 

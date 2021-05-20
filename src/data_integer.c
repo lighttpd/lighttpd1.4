@@ -1,10 +1,9 @@
 #include "first.h"
 
 #include "array.h"
+#include "buffer.h"
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 __attribute_cold__
 static data_unset *data_integer_copy(const data_unset *s) {
@@ -33,21 +32,11 @@ static int data_integer_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
-__attribute_cold__
-static void data_integer_print(const data_unset *d, int depth) {
-	data_integer *ds = (data_integer *)d;
-	UNUSED(depth);
-
-	fprintf(stdout, "%d", ds->value);
-}
-
-
 data_integer *data_integer_init(void) {
 	static const struct data_methods fn = {
 		data_integer_copy,
 		data_integer_free,
 		data_integer_insert_dup,
-		data_integer_print,
 	};
 	data_integer *ds;
 

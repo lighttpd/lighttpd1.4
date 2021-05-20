@@ -4,7 +4,6 @@
 #include "configfile.h"
 
 #include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 #ifdef HAVE_PCRE_H
@@ -58,81 +57,11 @@ static int data_config_insert_dup(data_unset *dst, data_unset *src) {
 	return 0;
 }
 
-__attribute_cold__
-static void data_config_print(const data_unset *d, int depth) {
-	data_config *ds = (data_config *)d;
-	array *a = (array *)ds->value;
-	size_t i;
-	size_t maxlen;
-
-	if (0 == ds->context_ndx) {
-		fprintf(stdout, "config {\n");
-	}
-	else {
-		if (ds->cond != CONFIG_COND_ELSE) {
-			fprintf(stdout, "%s {\n", ds->comp_key);
-		} else {
-			fprintf(stdout, "{\n");
-		}
-		array_print_indent(depth + 1);
-		fprintf(stdout, "# block %d\n", ds->context_ndx);
-	}
-	depth ++;
-
-	maxlen = array_get_max_key_length(a);
-	for (i = 0; i < a->used; i ++) {
-		data_unset *du = a->data[i];
-		size_t len = buffer_string_length(&du->key);
-		size_t j;
-
-		array_print_indent(depth);
-		fprintf(stdout, "%s", du->key.ptr);
-		for (j = maxlen - len; j > 0; j --) {
-			fprintf(stdout, " ");
-		}
-		fprintf(stdout, " = ");
-		du->fn->print(du, depth);
-		fprintf(stdout, "\n");
-	}
-
-	fprintf(stdout, "\n");
-	for (i = 0; i < ds->children.used; i ++) {
-		data_config *dc = ds->children.data[i];
-
-		/* only the 1st block of chaining */
-		if (NULL == dc->prev) {
-			fprintf(stdout, "\n");
-			array_print_indent(depth);
-			dc->fn->print((data_unset *) dc, depth);
-			fprintf(stdout, "\n");
-		}
-	}
-
-	depth --;
-	array_print_indent(depth);
-	fprintf(stdout, "}");
-	if (0 != ds->context_ndx) {
-		if (ds->cond != CONFIG_COND_ELSE) {
-			fprintf(stdout, " # end of %s", ds->comp_key);
-		} else {
-			fprintf(stdout, " # end of else");
-		}
-	}
-
-	if (ds->next) {
-		fprintf(stdout, "\n");
-		array_print_indent(depth);
-		fprintf(stdout, "else ");
-		ds->next->fn->print((data_unset *)ds->next, depth);
-	}
-}
-
 data_config *data_config_init(void) {
 	static const struct data_methods fn = {
 		data_config_copy,
 		data_config_free,
 		data_config_insert_dup,
-		data_config_print,
 	};
 	data_config *ds;
 

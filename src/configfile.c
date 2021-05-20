@@ -1179,9 +1179,177 @@ int config_finalize(server *srv, const buffer *default_server_tag) {
     return 1;
 }
 
+
+/* Save some bytes using buffer_append_string() in cold funcs to print config
+ * (instead of buffer_append_string_len() w/ CONST_STR_LEN() on constant strs)*/
+
+static void config_print_by_type(const data_unset *du, buffer *b, int depth);
+
+static void config_print_indent(buffer *b, int depth) {
+    depth <<= 2;
+    memset(buffer_extend(b, depth), ' ', depth);
+}
+
+__attribute_pure__
+static uint32_t config_print_array_max_klen(const array * const a) {
+    uint32_t maxlen = 0;
+    for (uint32_t i = 0; i < a->used; ++i) {
+        uint32_t len = buffer_string_length(&a->data[i]->key);
+        if (maxlen < len)
+            maxlen = len;
+    }
+    return maxlen;
+}
+
+static void config_print_array(const array * const a, buffer * const b, int depth) {
+    if (a->used <= 5 && (!a->used || buffer_is_empty(&a->data[0]->key))) {
+        int oneline = 1;
+        for (uint32_t i = 0; i < a->used; ++i) {
+            data_unset *du = a->data[i];
+            if (du->type != TYPE_STRING && du->type != TYPE_INTEGER) {
+                oneline = 0;
+                break;
+            }
+        }
+        if (oneline) {
+            buffer_append_string(b, "(");
+            for (uint32_t i = 0; i < a->used; ++i) {
+                if (i != 0)
+                    buffer_append_string(b, ", ");
+                config_print_by_type(a->data[i], b, depth + 1);
+            }
+            buffer_append_string(b, ")");
+            return;
+        }
+    }
+
+    const uint32_t maxlen = config_print_array_max_klen(a);
+    buffer_append_string(b, "(\n");
+    for (uint32_t i = 0; i < a->used; ++i) {
+        config_print_indent(b, depth + 1);
+        data_unset *du = a->data[i];
+        if (!buffer_is_empty(&du->key)) {
+            buffer_append_str3(b, CONST_STR_LEN("\""),
+                                  CONST_BUF_LEN(&du->key),
+                                  CONST_STR_LEN("\""));
+            int indent = (int)(maxlen - buffer_string_length(&du->key));
+            if (indent > 0)
+                memset(buffer_extend(b, indent), ' ', indent);
+            buffer_append_string(b, " => ");
+        }
+        config_print_by_type(du, b, depth + 1);
+        buffer_append_string(b, ",\n");
+    }
+    config_print_indent(b, depth);
+    buffer_append_string(b, ")");
+}
+
+static void config_print_config(const data_unset *d, buffer * const b, int depth) {
+    data_config *dc = (data_config *)d;
+    array *a = (array *)dc->value;
+
+    if (0 == dc->context_ndx) {
+        buffer_append_string(b, "config {\n");
+    }
+    else {
+        if (dc->cond != CONFIG_COND_ELSE) {
+            buffer_append_string(b, dc->comp_key);
+            buffer_append_string(b, " ");
+        }
+        buffer_append_string(b, "{\n");
+        config_print_indent(b, depth + 1);
+        buffer_append_string(b, "# block ");
+        buffer_append_int(b, dc->context_ndx);
+        buffer_append_string(b, "\n");
+    }
+    ++depth;
+
+    const uint32_t maxlen = config_print_array_max_klen(a);
+    for (uint32_t i = 0; i < a->used; ++i) {
+        config_print_indent(b, depth);
+        data_unset *du = a->data[i];
+        buffer_append_string_buffer(b, &du->key);
+        int indent = (int)(maxlen - buffer_string_length(&du->key));
+        if (indent > 0)
+            memset(buffer_extend(b, indent), ' ', indent);
+        buffer_append_string(b, " = ");
+        config_print_by_type(du, b, depth);
+        buffer_append_string(b, "\n");
+    }
+
+    buffer_append_string(b, "\n");
+    for (uint32_t i = 0; i < dc->children.used; ++i) {
+        data_config *dcc = dc->children.data[i];
+
+        /* only the 1st block of chaining */
+        if (NULL == dcc->prev) {
+            buffer_append_string(b, "\n");
+            config_print_indent(b, depth);
+            config_print_by_type((data_unset *) dcc, b, depth);
+            buffer_append_string(b, "\n");
+        }
+    }
+
+    --depth;
+    config_print_indent(b, depth);
+    buffer_append_string(b, "}");
+    if (0 != dc->context_ndx) {
+        buffer_append_string(b, " # end of ");
+        buffer_append_string(b, (dc->cond != CONFIG_COND_ELSE)
+                                ? dc->comp_key
+                                : "else");
+    }
+
+    if (dc->next) {
+        buffer_append_string(b, "\n");
+        config_print_indent(b, depth);
+        buffer_append_string(b, "else ");
+        config_print_by_type((data_unset *)dc->next, b, depth);
+    }
+}
+
+static void config_print_string(const data_unset *du, buffer * const b) {
+    /* print out the string as is, except prepend '"' with backslash */
+    const buffer * const vb = &((data_string *)du)->value;
+    char *dst = buffer_string_prepare_append(b, buffer_string_length(vb)*2);
+    uint32_t n = 0;
+    dst[n++] = '"';
+    if (vb->ptr) {
+        for (const char *p = vb->ptr; *p; ++p) {
+            if (*p == '"')
+                dst[n++] = '\\';
+            dst[n++] = *p;
+        }
+    }
+    dst[n++] = '"';
+    buffer_commit(b, n);
+}
+
+__attribute_cold__
+static void config_print_by_type(const data_unset * const du, buffer * const b, int depth) {
+    switch (du->type) {
+      case TYPE_STRING:
+        config_print_string(du, b);
+        break;
+      case TYPE_INTEGER:
+        buffer_append_int(b, ((data_integer *)du)->value);
+        break;
+      case TYPE_ARRAY:
+        config_print_array(&((data_array *)du)->value, b, depth);
+        break;
+      case TYPE_CONFIG:
+        config_print_config(du, b, depth);
+        break;
+      default:
+        /*if (du->fn->print) du->fn->print(du, b, depth);*/
+        break;
+    }
+}
+
 void config_print(server *srv) {
+    buffer_clear(srv->tmp_buf);
     data_unset *dc = srv->config_context->data[0];
-    dc->fn->print(dc, 0);
+    config_print_by_type(dc, srv->tmp_buf, 0);
 }
 
 void config_free(server *srv) {
