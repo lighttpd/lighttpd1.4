@@ -189,5 +189,14 @@
 #endif
 #endif
 
+#ifndef __attribute_unused__
+#if __has_attribute(unused) \
+ || __GNUC_PREREQ(2,95)
+#define __attribute_unused__  __attribute__((__unused__))
+#else
+#define __attribute_unused__
+#endif
+#endif
+
 
 #endif
