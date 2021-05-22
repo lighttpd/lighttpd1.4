@@ -88,7 +88,7 @@ common_src=base64.c buffer.c burl.c log.c \
 	rand.c \
 	request.c \
 	sock_addr.c \
-	safe_memclear.c
+	ck.c
 
 src = server.c response.c connections.c h2.c reqpool.c \
 	sock_addr_cache.c \

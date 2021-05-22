@@ -74,7 +74,7 @@ common_src = Split("base64.c buffer.c burl.c log.c \
 	request.c \
 	sock_addr.c \
 	rand.c \
-	safe_memclear.c \
+	ck.c \
 ")
 
 src = Split("server.c response.c connections.c h2.c reqpool.c \

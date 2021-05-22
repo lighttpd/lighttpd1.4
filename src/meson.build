@@ -142,6 +142,7 @@ conf_data.set('HAVE_SIGACTION', compiler.has_function('sigaction', args: defs))
 conf_data.set('HAVE_SIGNAL', compiler.has_function('signal', args: defs))
 conf_data.set('HAVE_SIGTIMEDWAIT', compiler.has_function('sigtimedwait', args: defs))
 conf_data.set('HAVE_SRANDOM', compiler.has_function('srandom', args: defs))
+conf_data.set('HAVE_STRERROR_R', compiler.has_function('strerror_r', args: defs))
 conf_data.set('HAVE_STRPTIME', compiler.has_function('strptime', args: defs))
 conf_data.set('HAVE_SYSLOG', compiler.has_function('syslog', args: defs))
 conf_data.set('HAVE_TIMEGM', compiler.has_function('timegm', args: defs))
@@ -739,7 +740,7 @@ common_src = [
 	'plugin.c',
 	'rand.c',
 	'request.c',
-	'safe_memclear.c',
+	'ck.c',
 	'sock_addr.c',
 	'stat_cache.c',
 	'vector.c',

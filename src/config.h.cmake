@@ -144,6 +144,7 @@
 #cmakedefine  HAVE_SIGACTION
 #cmakedefine  HAVE_SIGNAL
 #cmakedefine  HAVE_SIGTIMEDWAIT
+#cmakedefine  HAVE_STRERROR_R
 #cmakedefine  HAVE_STRPTIME
 #cmakedefine  HAVE_SYSLOG
 #cmakedefine  HAVE_TIMEGM

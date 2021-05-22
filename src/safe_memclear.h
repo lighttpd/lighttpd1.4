@@ -2,6 +2,7 @@
 #define _SAFE_MEMCLEAR_H_
 #include "first.h"
 
-void safe_memclear(void *s, size_t n);
+#include "ck.h"
+#define safe_memclear ck_memzero
 
 #endif

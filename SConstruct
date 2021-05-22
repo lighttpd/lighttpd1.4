@@ -450,6 +450,7 @@ if 1:
 		'strchr',
 		'strdup',
 		'strerror',
+		'strerror_r',
 		'strftime',
 		'strstr',
 		'strtol',

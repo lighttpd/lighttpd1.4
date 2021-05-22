@@ -1516,6 +1516,7 @@ AC_CHECK_FUNCS([\
   sigaction \
   signal \
   srandom \
+  strerror_r \
   timegm \
   writev \
 ])

@@ -192,6 +192,7 @@ check_function_exists(sigaction HAVE_SIGACTION)
 check_function_exists(signal HAVE_SIGNAL)
 check_function_exists(sigtimedwait HAVE_SIGTIMEDWAIT)
 check_function_exists(srandom HAVE_SRANDOM)
+check_function_exists(strerror_r HAVE_STRERROR_R)
 check_function_exists(strptime HAVE_STRPTIME)
 check_function_exists(syslog HAVE_SYSLOG)
 check_function_exists(writev HAVE_WRITEV)
@@ -767,7 +768,7 @@ set(COMMON_SRC
 	request.c
 	sock_addr.c
 	rand.c
-	safe_memclear.c
+	ck.c
 )
 
 if(WIN32)
