@@ -248,9 +248,8 @@ __attribute_cold__
 static void gw_proc_connect_error(request_st * const r, gw_host *host, gw_proc *proc, pid_t pid, int errnum, int debug) {
     const time_t cur_ts = log_monotonic_secs;
     log_error_st * const errh = r->conf.errh;
-    log_error(errh, __FILE__, __LINE__,
-      "establishing connection failed: socket: %s: %s",
-      proc->connection_name->ptr, strerror(errnum));
+    log_perror(errh, __FILE__, __LINE__, /*(caller should set errno = errnum)*/
+      "establishing connection failed: socket: %s", proc->connection_name->ptr);
 
     if (!proc->is_local) {
         proc->disabled_until = cur_ts + host->disable_time;
@@ -1919,6 +1918,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
         if (hctx->state == GW_STATE_CONNECT_DELAYED) { /*(not GW_STATE_INIT)*/
             int socket_error = fdevent_connect_status(hctx->fd);
             if (socket_error != 0) {
+                errno = socket_error; /*(for log_perror())*/
                 gw_proc_connect_error(r, hctx->host, hctx->proc, hctx->pid,
                                       socket_error, hctx->conf.debug);
                 return HANDLER_ERROR;

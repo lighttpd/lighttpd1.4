@@ -5,6 +5,7 @@
 
 #include "first.h"
 
+#include "ck.h"
 #include "log.h"
 
 #include <sys/types.h>
@@ -166,6 +167,16 @@ log_buffer_vprintf (buffer * const b,
 }
 
 
+__attribute_noinline__
+static void
+log_error_append_strerror (buffer * const b, const int errnum)
+{
+    char buf[1024];
+    errno_t rc = ck_strerror_s(buf, sizeof(buf), errnum);
+    if (0 == rc || rc == ERANGE)
+        buffer_append_str2(b, CONST_STR_LEN(": "), buf, strlen(buf));
+}
+
 __attribute_format__((__printf__, 4, 0))
 static void
 log_error_va_list_impl (log_error_st * const errh,
@@ -178,10 +189,8 @@ log_error_va_list_impl (log_error_st * const errh,
     buffer * const b = &errh->b;
     if (-1 == log_buffer_prepare(errh, filename, line, b)) return;
     log_buffer_vprintf(b, fmt, ap);
-    if (perr) {
-        buffer_append_string_len(b, CONST_STR_LEN(": "));
-        buffer_append_string(b, strerror(errnum));
-    }
+    if (perr)
+        log_error_append_strerror(b, errnum);
     log_write(errh, b);
     errno = errnum;
 }

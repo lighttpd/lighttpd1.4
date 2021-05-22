@@ -2944,8 +2944,9 @@ connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
                 if (0==oerrno && 0==cq->bytes_in && !hctx->conf.ssl_log_noise)
                     break;
 
-                log_error(hctx->errh, __FILE__, __LINE__,
-                  "SSL: %d %d %d %s", len, rc, oerrno, strerror(oerrno));
+                errno = oerrno; /*(for log_perror())*/
+                log_perror(hctx->errh, __FILE__, __LINE__,
+                  "SSL: %d %d %d", len, rc, oerrno);
                 break;
             }
 

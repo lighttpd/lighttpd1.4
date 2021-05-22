@@ -883,6 +883,7 @@ add_executable(test_configfile
 	vector.c
 	log.c
 	sock_addr.c
+	ck.c
 )
 add_test(NAME test_configfile COMMAND test_configfile)
 
@@ -893,6 +894,7 @@ add_executable(test_keyvalue
 	base64.c
 	array.c
 	log.c
+	ck.c
 )
 add_test(NAME test_keyvalue COMMAND test_keyvalue)
 
@@ -901,6 +903,7 @@ add_executable(test_mod_access
 	buffer.c
 	array.c
 	log.c
+	ck.c
 )
 add_test(NAME test_mod_access COMMAND test_mod_access)
 
@@ -909,6 +912,7 @@ add_executable(test_mod_evhost
 	buffer.c
 	array.c
 	log.c
+	ck.c
 )
 add_test(NAME test_mod_evhost COMMAND test_mod_evhost)
 
@@ -917,6 +921,7 @@ add_executable(test_mod_simple_vhost
 	buffer.c
 	array.c
 	log.c
+	ck.c
 )
 add_test(NAME test_mod_simple_vhost COMMAND test_mod_simple_vhost)
 
@@ -925,6 +930,7 @@ add_executable(test_mod_userdir
 	buffer.c
 	array.c
 	log.c
+	ck.c
 )
 add_test(NAME test_mod_userdir COMMAND test_mod_userdir)
 
@@ -938,6 +944,7 @@ add_executable(test_request
 	http_kv.c
 	log.c
 	sock_addr.c
+	ck.c
 )
 add_test(NAME test_request COMMAND test_request)
 
