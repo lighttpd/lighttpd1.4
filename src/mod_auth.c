@@ -6,6 +6,7 @@
 #include "sys-crypto-md.h" /* USE_LIB_CRYPTO */
 
 #include "base.h"
+#include "ck.h"
 #include "plugin.h"
 #include "plugin_config.h"
 #include "http_auth.h"
@@ -795,8 +796,7 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 		ae = http_auth_cache_query(sptree, ndx);
 		if (ae && ae->require == require
 		    && buffer_is_equal_string(username, ae->username, ae->ulen))
-			rc = http_auth_const_time_memeq_pad(ae->pwdigest, ae->dlen,
-			                                    pw, pwlen)
+			rc = ck_memeq_const_time(ae->pwdigest, ae->dlen, pw, pwlen)
 			  ? HANDLER_GO_ON
 			  : HANDLER_ERROR;
 		else /*(not found or hash collision)*/
@@ -1473,7 +1473,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 
 	mod_auth_digest_mutate(&ai,m,uri,nonce,cnonce,nc,qop);
 
-	if (!http_auth_const_time_memeq(rdigest, ai.digest, ai.dlen)) {
+	if (!ck_memeq_const_time_fixed_len(rdigest, ai.digest, ai.dlen)) {
 		/*safe_memclear(ai.digest, ai.dlen);*//* skip clear since mutated */
 		/* digest not ok */
 		log_error(r->conf.errh, __FILE__, __LINE__,

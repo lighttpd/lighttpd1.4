@@ -21,6 +21,7 @@
 #include "safe_memclear.h"
 
 #include "base.h"
+#include "ck.h"
 #include "plugin.h"
 #include "fdevent.h"
 #include "http_auth.h"
@@ -302,7 +303,7 @@ static handler_t mod_authn_file_htdigest_basic(request_st * const r, void *p_d, 
 
     mod_authn_file_digest(&ai, pw, strlen(pw));
 
-    int rc = (http_auth_const_time_memeq(htdigest, ai.digest, ai.dlen)
+    int rc = (ck_memeq_const_time_fixed_len(htdigest, ai.digest, ai.dlen)
            && http_auth_match_rules(require, username->ptr, NULL, NULL));
 
     safe_memclear(htdigest, ai.dlen);
@@ -394,7 +395,9 @@ static handler_t mod_authn_file_plain_basic(request_st * const r, void *p_d, con
     mod_authn_file_patch_config(r, p);
     rc = mod_authn_file_htpasswd_get(p->conf.auth_plain_userfile, CONST_BUF_LEN(username), password_buf, r->conf.errh);
     if (0 == rc) {
-        rc = http_auth_const_time_memeq_pad(CONST_BUF_LEN(password_buf), pw, strlen(pw)) ? 0 : -1;
+        rc = ck_memeq_const_time(CONST_BUF_LEN(password_buf), pw, strlen(pw))
+          ? 0
+          : -1;
     }
     safe_memclear(password_buf->ptr, password_buf->size);
     buffer_free(password_buf);

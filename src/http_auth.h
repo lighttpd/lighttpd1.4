@@ -88,12 +88,6 @@ const http_auth_backend_t * http_auth_backend_get (const buffer *name);
 __attribute_cold__
 void http_auth_backend_set (const http_auth_backend_t *backend);
 
-__attribute_pure__
-int http_auth_const_time_memeq (const void *a, const void *b, size_t len);
-
-__attribute_pure__
-int http_auth_const_time_memeq_pad (const void *a, size_t alen, const void *b, size_t blen);
-
 void http_auth_setenv(request_st *r, const char *username, size_t ulen, const char *auth_type, size_t alen);
 
 int http_auth_digest_hex2bin (const char *hexstr, size_t len, unsigned char *bin, size_t binlen);

@@ -4,6 +4,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "base64.h"
+#include "ck.h"
 #include "http_auth.h"
 
 #include "plugin.h"
@@ -159,8 +160,8 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			li_MD5_Update(&Md5Ctx, ts_str, 8);
 			li_MD5_Final(HA1, &Md5Ctx);
 
-			return http_auth_const_time_memeq((char *)HA1,
-							  (char *)md5bin, sizeof(md5bin));
+			return ck_memeq_const_time_fixed_len((char *)HA1,
+							     (char *)md5bin,sizeof(md5bin));
 		}
      #ifdef USE_LIB_CRYPTO
 	case SECDL_HMAC_SHA1:
@@ -179,7 +180,7 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			li_to_base64_no_padding(base64_digest, 28, digest, 20, BASE64_URL);
 
 			return (27 == maclen)
-			    && http_auth_const_time_memeq(mac, base64_digest, 27);
+			    && ck_memeq_const_time_fixed_len(mac, base64_digest, 27);
 		}
 		break;
 	case SECDL_HMAC_SHA256:
@@ -198,7 +199,7 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			li_to_base64_no_padding(base64_digest, 44, digest, 32, BASE64_URL);
 
 			return (43 == maclen)
-			    && http_auth_const_time_memeq(mac, base64_digest, 43);
+			    && ck_memeq_const_time_fixed_len(mac, base64_digest, 43);
 		}
 		break;
      #endif

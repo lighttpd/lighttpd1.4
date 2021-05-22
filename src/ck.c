@@ -254,3 +254,46 @@ ck_strerror_s (char * const s, const rsize_t maxsize, const errno_t errnum)
 
   #endif
 }
+
+
+int
+ck_memeq_const_time (const void *a, const size_t alen, const void *b, const size_t blen)
+{
+    /* constant time memory compare for equality */
+    /* rounds to next multiple of 64 to avoid potentially leaking exact
+     * string lengths when subject to high precision timing attacks
+     */
+    /* Note: some libs provide similar funcs but might not obscure length, e.g.
+     * OpenSSL:
+     *   int CRYPTO_memcmp(const void * in_a, const void * in_b, size_t len)
+     * Note: some OS provide similar funcs but might not obscure length, e.g.
+     * OpenBSD: int timingsafe_bcmp(const void *b1, const void *b2, size_t len)
+     * NetBSD: int consttime_memequal(void *b1, void *b2, size_t len)
+     */
+    const volatile unsigned char * const av = (const unsigned char *)a;
+    const volatile unsigned char * const bv = (const unsigned char *)b;
+    size_t lim = ((alen >= blen ? alen : blen) + 0x3F) & ~0x3F;
+    int diff = (alen != blen); /*(never match if string length mismatch)*/
+    for (size_t i = 0, j = 0; lim; --lim) {
+        diff |= (av[i] ^ bv[j]);
+        i += (i < alen);
+        j += (j < blen);
+    }
+    return (0 == diff);
+}
+
+
+int
+ck_memeq_const_time_fixed_len (const void *a, const void *b, const size_t len)
+{
+    /* constant time memory compare for equality for fixed len (e.g. digests)
+     * (padding not necessary for digests, which have fixed, defined lengths) */
+    /* caller should prefer ck_memeq_const_time() if not operating on digests */
+    const volatile unsigned char * const av = (const unsigned char *)a;
+    const volatile unsigned char * const bv = (const unsigned char *)b;
+    int diff = 0;
+    for (size_t i = 0; i < len; ++i) {
+        diff |= (av[i] ^ bv[i]);
+    }
+    return (0 == diff);
+}

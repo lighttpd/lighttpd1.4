@@ -41,6 +41,7 @@
 #include "sys-crypto-md.h"
 #include "safe_memclear.h"
 #include "base.h"
+#include "ck.h"
 #include "http_auth.h"
 #include "fdevent.h"
 #include "log.h"
@@ -403,7 +404,7 @@ mod_authn_dbi_password_cmp (const char *userpw, unsigned long userpwlen, http_au
         /*(compare 16-byte MD5 binary instead of converting to hex strings
          * in order to then have to do case-insensitive hex str comparison)*/
         return (0 == http_auth_digest_hex2bin(userpw, 32, md5pw, sizeof(md5pw)))
-          ? http_auth_const_time_memeq(HA1, md5pw, sizeof(md5pw)) ? 0 : 1
+          ? ck_memeq_const_time_fixed_len(HA1, md5pw, sizeof(md5pw)) ? 0 : 1
           : -1;
     }
   #ifdef USE_LIB_CRYPTO
@@ -423,7 +424,7 @@ mod_authn_dbi_password_cmp (const char *userpw, unsigned long userpwlen, http_au
         /*(compare 32-byte binary digest instead of converting to hex strings
          * in order to then have to do case-insensitive hex str comparison)*/
         return (0 == http_auth_digest_hex2bin(userpw, 64, shapw, sizeof(shapw)))
-          ? http_auth_const_time_memeq(HA1, shapw, sizeof(shapw)) ? 0 : 1
+          ? ck_memeq_const_time_fixed_len(HA1, shapw, sizeof(shapw)) ? 0 : 1
           : -1;
     }
   #endif

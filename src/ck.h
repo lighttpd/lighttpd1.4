@@ -42,6 +42,16 @@ static inline errno_t ck_memzero(void *s, rsize_t n) {
 
 errno_t ck_strerror_s (char *s, rsize_t maxsize, errno_t errnum);
 
+/*(ck_memeq_const_time() is not from C11 Annex K)
+ * constant time memory compare for equality
+ * rounds to next multiple of 64 to avoid potentially leaking exact
+ * string lengths when subject to high precision timing attacks */
+int ck_memeq_const_time (const void *a, size_t alen, const void *b, size_t blen);
+
+/*(ck_memeq_const_time_fixed_len() is not from C11 Annex K)
+ * constant time memory compare for equality for fixed len (e.g. digests)
+ * (padding not necessary for digests, which have fixed, defined lengths) */
+int ck_memeq_const_time_fixed_len (const void *a, const void *b, size_t len);
 
 __END_DECLS
 
