@@ -753,7 +753,7 @@ set(COMMON_SRC
 	http_header.c http_kv.c keyvalue.c chunk.c
 	http_chunk.c fdevent.c gw_backend.c
 	stat_cache.c plugin.c http_etag.c array.c
-	algo_hmac.c algo_md5.c algo_sha1.c algo_splaytree.c
+	algo_md5.c algo_sha1.c algo_splaytree.c
 	fdevent_select.c fdevent_libev.c
 	fdevent_poll.c fdevent_linux_sysepoll.c
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c
@@ -829,7 +829,7 @@ add_and_install_library(mod_redirect mod_redirect.c)
 add_and_install_library(mod_rewrite mod_rewrite.c)
 add_and_install_library(mod_rrdtool mod_rrdtool.c)
 add_and_install_library(mod_scgi mod_scgi.c)
-add_and_install_library(mod_secdownload mod_secdownload.c)
+add_and_install_library(mod_secdownload "mod_secdownload.c;algo_hmac.c")
 add_and_install_library(mod_setenv mod_setenv.c)
 add_and_install_library(mod_simple_vhost mod_simple_vhost.c)
 add_and_install_library(mod_sockproxy mod_sockproxy.c)

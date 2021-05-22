@@ -73,7 +73,7 @@ common_src=base64.c buffer.c burl.c log.c \
 	http_header.c http_kv.c keyvalue.c chunk.c  \
 	http_chunk.c fdevent.c gw_backend.c \
 	stat_cache.c plugin.c http_etag.c array.c \
-	algo_hmac.c algo_md5.c algo_sha1.c algo_splaytree.c \
+	algo_md5.c algo_sha1.c algo_splaytree.c \
 	fdevent_select.c fdevent_libev.c \
 	fdevent_poll.c fdevent_linux_sysepoll.c \
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c \
@@ -282,7 +282,7 @@ mod_ssi_la_LDFLAGS = $(common_module_ldflags)
 mod_ssi_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_secdownload.la
-mod_secdownload_la_SOURCES = mod_secdownload.c
+mod_secdownload_la_SOURCES = mod_secdownload.c algo_hmac.c
 mod_secdownload_la_LDFLAGS = $(common_module_ldflags)
 mod_secdownload_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
 
@@ -516,7 +516,7 @@ lighttpd_SOURCES = \
   mod_rewrite.c \
   mod_rrdtool.c \
   mod_scgi.c \
-  mod_secdownload.c \
+  mod_secdownload.c algo_hmac.c \
   mod_setenv.c \
   mod_simple_vhost.c \
   mod_ssi_exprparser.c mod_ssi_expr.c mod_ssi.c \

@@ -59,7 +59,7 @@ common_src = Split("base64.c buffer.c burl.c log.c \
 	http_header.c http_kv.c keyvalue.c chunk.c  \
 	http_chunk.c fdevent.c gw_backend.c \
 	stat_cache.c plugin.c http_etag.c array.c \
-	algo_hmac.c algo_md5.c algo_sha1.c algo_splaytree.c \
+	algo_md5.c algo_sha1.c algo_splaytree.c \
 	fdevent_select.c fdevent_libev.c \
 	fdevent_poll.c fdevent_linux_sysepoll.c \
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c \
@@ -118,7 +118,7 @@ modules = {
 	'mod_rewrite' : { 'src' : [ 'mod_rewrite.c' ] },
 	'mod_rrdtool' : { 'src' : [ 'mod_rrdtool.c' ] },
 	'mod_scgi' : { 'src' : [ 'mod_scgi.c' ] },
-	'mod_secdownload' : { 'src' : [ 'mod_secdownload.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
+	'mod_secdownload' : { 'src' : [ 'mod_secdownload.c', 'algo_hmac.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
 	'mod_setenv' : { 'src' : [ 'mod_setenv.c' ] },
 	'mod_simple_vhost' : { 'src' : [ 'mod_simple_vhost.c' ] },
 	'mod_sockproxy' : { 'src' : [ 'mod_sockproxy.c' ] },

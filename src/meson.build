@@ -706,7 +706,6 @@ configure_file(
 )
 
 common_src = [
-	'algo_hmac.c',
 	'algo_md5.c',
 	'algo_sha1.c',
 	'algo_splaytree.c',
@@ -1000,7 +999,7 @@ modules = [
 	[ 'mod_rewrite', [ 'mod_rewrite.c' ] ],
 	[ 'mod_rrdtool', [ 'mod_rrdtool.c' ] ],
 	[ 'mod_scgi', [ 'mod_scgi.c' ], libws2_32 ],
-	[ 'mod_secdownload', [ 'mod_secdownload.c' ], libcrypto ],
+	[ 'mod_secdownload', [ 'mod_secdownload.c', 'algo_hmac.c' ], libcrypto ],
 	[ 'mod_setenv', [ 'mod_setenv.c' ] ],
 	[ 'mod_simple_vhost', [ 'mod_simple_vhost.c' ] ],
 	[ 'mod_sockproxy', [ 'mod_sockproxy.c' ] ],
