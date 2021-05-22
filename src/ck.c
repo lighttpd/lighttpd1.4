@@ -149,6 +149,7 @@ ck_memclear_s (void * const s, const rsize_t smax, rsize_t n)
 }
 
 
+#if 0 /*(not currently used in lighttpd; lighttpd process env is stable)*/
 errno_t
 ck_getenv_s (size_t * const restrict len,
              char * const restrict value, const rsize_t maxsize,
@@ -198,6 +199,7 @@ ck_getenv_s (size_t * const restrict len,
 
   #endif
 }
+#endif
 
 
 errno_t
