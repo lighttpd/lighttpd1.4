@@ -7,8 +7,6 @@
 #include "rand.h"
 #include "chunk.h"
 #include "h2.h"             /* h2_send_1xx() */
-#include "http_auth.h"      /* http_auth_dumbdata_reset() */
-#include "http_vhostdb.h"   /* http_vhostdb_dumbdata_reset() */
 #include "fdevent.h"
 #include "connections.h"
 #include "sock_addr.h"
@@ -1077,8 +1075,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	handle_sig_hup = 0;
 	idle_limit = 0;
 	chunkqueue_set_tempdirs_default_reset();
-	http_auth_dumbdata_reset();
-	http_vhostdb_dumbdata_reset();
 	/*graceful_restart = 0;*//*(reset below to avoid further daemonizing)*/
 	/*(intentionally preserved)*/
 	/*memset(graceful_sockets, 0, sizeof(graceful_sockets));*/

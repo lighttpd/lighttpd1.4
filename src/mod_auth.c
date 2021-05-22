@@ -242,6 +242,8 @@ FREE_FUNC(mod_auth_free) {
             }
         }
     }
+
+    http_auth_dumbdata_reset();
 }
 
 /* data type for mod_auth structured data

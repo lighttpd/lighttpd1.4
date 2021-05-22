@@ -81,10 +81,8 @@ common_src=base64.c buffer.c burl.c log.c \
 	connections-glue.c \
 	configfile-glue.c \
 	http-header-glue.c \
-	http_auth.c \
 	http_cgi.c \
 	http_date.c \
-	http_vhostdb.c \
 	rand.c \
 	request.c \
 	sock_addr.c \
@@ -175,7 +173,7 @@ mod_trigger_b4_dl_la_LIBADD = $(GDBM_LIB) $(MEMCACHED_LIB) $(common_libadd)
 endif
 
 lib_LTLIBRARIES += mod_vhostdb.la
-mod_vhostdb_la_SOURCES = mod_vhostdb.c
+mod_vhostdb_la_SOURCES = mod_vhostdb.c http_vhostdb.c
 mod_vhostdb_la_LDFLAGS = $(common_module_ldflags)
 mod_vhostdb_la_LIBADD = $(common_libadd)
 
@@ -334,7 +332,7 @@ mod_deflate_la_LDFLAGS = $(BROTLI_CFLAGS) $(common_module_ldflags)
 mod_deflate_la_LIBADD = $(Z_LIB) $(ZSTD_LIB) $(BZ_LIB) $(BROTLI_LIBS) $(common_libadd)
 
 lib_LTLIBRARIES += mod_auth.la
-mod_auth_la_SOURCES = mod_auth.c
+mod_auth_la_SOURCES = mod_auth.c http_auth.c
 mod_auth_la_LDFLAGS = $(common_module_ldflags)
 mod_auth_la_LIBADD = $(CRYPTO_LIB) $(common_libadd)
 

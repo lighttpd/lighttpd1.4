@@ -150,6 +150,8 @@ FREE_FUNC(mod_vhostdb_free) {
             }
         }
     }
+
+    http_vhostdb_dumbdata_reset();
 }
 
 static void mod_vhostdb_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

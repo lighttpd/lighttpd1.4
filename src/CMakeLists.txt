@@ -761,10 +761,8 @@ set(COMMON_SRC
 	connections-glue.c
 	configfile-glue.c
 	http-header-glue.c
-	http_auth.c
 	http_cgi.c
 	http_date.c
-	http_vhostdb.c
 	request.c
 	sock_addr.c
 	rand.c
@@ -812,7 +810,7 @@ add_and_install_library(mod_access mod_access.c)
 add_and_install_library(mod_accesslog mod_accesslog.c)
 add_and_install_library(mod_ajp13 mod_ajp13.c)
 add_and_install_library(mod_alias mod_alias.c)
-add_and_install_library(mod_auth "mod_auth.c")
+add_and_install_library(mod_auth "mod_auth.c;http_auth.c")
 add_and_install_library(mod_authn_file "mod_authn_file.c")
 if(NOT WIN32)
 	add_and_install_library(mod_cgi mod_cgi.c)
@@ -841,7 +839,7 @@ add_and_install_library(mod_status mod_status.c)
 add_and_install_library(mod_uploadprogress mod_uploadprogress.c)
 add_and_install_library(mod_userdir mod_userdir.c)
 add_and_install_library(mod_usertrack mod_usertrack.c)
-add_and_install_library(mod_vhostdb mod_vhostdb.c)
+add_and_install_library(mod_vhostdb "mod_vhostdb.c;http_vhostdb.c")
 add_and_install_library(mod_webdav mod_webdav.c)
 add_and_install_library(mod_wstunnel mod_wstunnel.c)
 

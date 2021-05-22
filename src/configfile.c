@@ -324,6 +324,19 @@ static const char * config_has_opt_and_value (const server * const srv, const ch
     return NULL;
 }
 
+static void config_compat_module_prepend (server *srv, const char *module, uint32_t len) {
+    array *modules = array_init(srv->srvconf.modules->used+4);
+    array_insert_value(modules, module, len);
+
+    for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
+        data_string *ds = (data_string *)srv->srvconf.modules->data[i];
+        array_insert_value(modules, CONST_BUF_LEN(&ds->value));
+    }
+
+    array_free(srv->srvconf.modules);
+    srv->srvconf.modules = modules;
+}
+
 static void config_warn_authn_module (server *srv, const char *module, uint32_t len, const char *v) {
     buffer * const tb = srv->tmp_buf;
     buffer_copy_string_len(tb, CONST_STR_LEN("mod_authn_"));
@@ -346,6 +359,8 @@ static void config_compat_module_load (server *srv) {
     int append_mod_authn_mysql = 1;
     int append_mod_openssl     = 1;
     int contains_mod_auth      = 0;
+    int prepend_mod_auth       = 0;
+    int prepend_mod_vhostdb    = 0;
 
     for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
         buffer *m = &((data_string *)srv->srvconf.modules->data[i])->value;
@@ -366,24 +381,24 @@ static void config_compat_module_load (server *srv) {
             append_mod_openssl = 0;
         else if (buffer_eq_slen(m, CONST_STR_LEN("mod_wolfssl")))
             append_mod_openssl = 0;
-        else if (buffer_eq_slen(m, CONST_STR_LEN("mod_authn_file")))
-            append_mod_authn_file = 0;
-        else if (buffer_eq_slen(m, CONST_STR_LEN("mod_authn_ldap")))
-            append_mod_authn_ldap = 0;
-        else if (buffer_eq_slen(m, CONST_STR_LEN("mod_authn_mysql")))
-            append_mod_authn_mysql = 0;
-        else if (buffer_eq_slen(m, CONST_STR_LEN("mod_auth")))
-            contains_mod_auth = 1;
+        else if (0 == strncmp(m->ptr, "mod_auth", sizeof("mod_auth")-1)) {
+            if (buffer_eq_slen(m, CONST_STR_LEN("mod_auth")))
+                contains_mod_auth = 1;
+            else if (!contains_mod_auth)
+                prepend_mod_auth = 1;
 
-        if (0 == prepend_mod_indexfile &&
-            0 == append_mod_dirlisting &&
-            0 == append_mod_staticfile &&
-            0 == append_mod_openssl &&
-            0 == append_mod_authn_file &&
-            0 == append_mod_authn_ldap &&
-            0 == append_mod_authn_mysql &&
-            1 == contains_mod_auth) {
-            break;
+            if (buffer_eq_slen(m, CONST_STR_LEN("mod_authn_file")))
+                append_mod_authn_file = 0;
+            else if (buffer_eq_slen(m, CONST_STR_LEN("mod_authn_ldap")))
+                append_mod_authn_ldap = 0;
+            else if (buffer_eq_slen(m, CONST_STR_LEN("mod_authn_mysql")))
+                append_mod_authn_mysql = 0;
+        }
+        else if (0 == strncmp(m->ptr, "mod_vhostdb", sizeof("mod_vhostdb")-1)) {
+            if (buffer_eq_slen(m, CONST_STR_LEN("mod_vhostdb")))
+                prepend_mod_vhostdb |= 2;
+            else if (!(prepend_mod_vhostdb & 2))
+                prepend_mod_vhostdb |= 1;
         }
     }
 
@@ -391,16 +406,7 @@ static void config_compat_module_load (server *srv) {
 
     if (prepend_mod_indexfile) {
         /* mod_indexfile has to be loaded before mod_fastcgi and friends */
-        array *modules = array_init(srv->srvconf.modules->used+4);
-        array_insert_value(modules, CONST_STR_LEN("mod_indexfile"));
-
-        for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
-            data_string *ds = (data_string *)srv->srvconf.modules->data[i];
-            array_insert_value(modules, CONST_BUF_LEN(&ds->value));
-        }
-
-        array_free(srv->srvconf.modules);
-        srv->srvconf.modules = modules;
+        config_compat_module_prepend(srv, CONST_STR_LEN("mod_indexfile"));
     }
 
     /* append default modules */
@@ -447,6 +453,14 @@ static void config_compat_module_load (server *srv) {
                 config_warn_authn_module(srv, CONST_STR_LEN("mysql"), "mysql");
           #endif
         }
+    }
+
+    if (prepend_mod_auth) {
+        config_compat_module_prepend(srv, CONST_STR_LEN("mod_auth"));
+    }
+
+    if (prepend_mod_vhostdb & 1) {
+        config_compat_module_prepend(srv, CONST_STR_LEN("mod_vhostdb"));
     }
 }
 

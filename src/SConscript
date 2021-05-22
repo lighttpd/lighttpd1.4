@@ -67,10 +67,8 @@ common_src = Split("base64.c buffer.c burl.c log.c \
 	connections-glue.c \
 	configfile-glue.c \
 	http-header-glue.c \
-	http_auth.c \
 	http_cgi.c \
 	http_date.c \
-	http_vhostdb.c \
 	request.c \
 	sock_addr.c \
 	rand.c \
@@ -103,7 +101,7 @@ modules = {
 	'mod_accesslog' : { 'src' : [ 'mod_accesslog.c' ] },
 	'mod_ajp13' : { 'src' : [ 'mod_ajp13.c' ] },
 	'mod_alias' : { 'src' : [ 'mod_alias.c' ] },
-	'mod_auth' : { 'src' : [ 'mod_auth.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
+	'mod_auth' : { 'src' : [ 'mod_auth.c', 'http_auth.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
 	'mod_authn_file' : { 'src' : [ 'mod_authn_file.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBCRYPTO'] ] },
 	'mod_cgi' : { 'src' : [ 'mod_cgi.c' ] },
 	'mod_deflate' : { 'src' : [ 'mod_deflate.c' ], 'lib' : [ env['LIBZ'], env['LIBZSTD'], env['LIBBZ2'], env['LIBBROTLI'], 'm' ] },
@@ -130,7 +128,7 @@ modules = {
 	'mod_uploadprogress' : { 'src' : [ 'mod_uploadprogress.c' ] },
 	'mod_userdir' : { 'src' : [ 'mod_userdir.c' ] },
 	'mod_usertrack' : { 'src' : [ 'mod_usertrack.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
-	'mod_vhostdb' : { 'src' : [ 'mod_vhostdb.c' ] },
+	'mod_vhostdb' : { 'src' : [ 'mod_vhostdb.c', 'http_vhostdb.c' ] },
 	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'], env['LIBUUID'] ] },
 	'mod_wstunnel' : { 'src' : [ 'mod_wstunnel.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
 }
