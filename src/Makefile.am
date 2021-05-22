@@ -173,7 +173,7 @@ mod_trigger_b4_dl_la_LIBADD = $(GDBM_LIB) $(MEMCACHED_LIB) $(common_libadd)
 endif
 
 lib_LTLIBRARIES += mod_vhostdb.la
-mod_vhostdb_la_SOURCES = mod_vhostdb.c http_vhostdb.c
+mod_vhostdb_la_SOURCES = mod_vhostdb.c mod_vhostdb_api.c
 mod_vhostdb_la_LDFLAGS = $(common_module_ldflags)
 mod_vhostdb_la_LIBADD = $(common_libadd)
 
@@ -464,7 +464,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	algo_md.h algo_md5.h algo_sha1.h algo_splaytree.h algo_xxhash.h \
 	ck.h \
 	http_cgi.h http_date.h \
-	http_header.h http_range.h http_vhostdb.h \
+	http_header.h http_range.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h plugin_config.h \
 	http_etag.h array.h vector.h \
@@ -479,6 +479,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	sock_addr.h status_counter.h \
 	mod_auth_api.h \
 	mod_magnet_cache.h \
+	mod_vhostdb_api.h \
 	ls-hpack/lshpack.h \
 	ls-hpack/lsxpack_header.h \
 	ls-hpack/huff-tables.h \
@@ -525,6 +526,7 @@ lighttpd_SOURCES = \
   mod_userdir.c \
   mod_usertrack.c \
   mod_vhostdb.c \
+  mod_vhostdb_api.c \
   mod_webdav.c
 lighttpd_CPPFLAGS = \
   -DLIGHTTPD_STATIC \

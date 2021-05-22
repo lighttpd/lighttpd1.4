@@ -6,16 +6,16 @@
  */
 #include "first.h"
 
+#include <stdlib.h>
+#include <string.h>
+
+#include "mod_vhostdb_api.h"
 #include "base.h"
 #include "plugin.h"
 #include "plugin_config.h"
-#include "http_vhostdb.h"
 #include "log.h"
 #include "stat_cache.h"
 #include "algo_splaytree.h"
-
-#include <stdlib.h>
-#include <string.h>
 
 /**
  * vhostdb framework

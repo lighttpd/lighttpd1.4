@@ -1,5 +1,11 @@
-#ifndef _HTTP_VHOST_H_
-#define _HTTP_VHOST_H_
+/*
+ * mod_vhostdb_api - virtual hosts mapping backend registration
+ *
+ * Copyright(c) 2017 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
+#ifndef INCLUDED_MOD_VHOSTDB_API_H
+#define INCLUDED_MOD_VHOSTDB_API_H
 #include "first.h"
 
 #include "base_decls.h"

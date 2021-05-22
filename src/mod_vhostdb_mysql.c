@@ -6,13 +6,13 @@
  */
 #include "first.h"
 
-#include <mysql.h>
-
 #include <string.h>
 #include <stdlib.h>
 
+#include <mysql.h>
+
+#include "mod_vhostdb_api.h"
 #include "base.h"
-#include "http_vhostdb.h"
 #include "fdevent.h"
 #include "log.h"
 #include "plugin.h"

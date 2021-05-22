@@ -1010,7 +1010,7 @@ modules = [
 	[ 'mod_uploadprogress', [ 'mod_uploadprogress.c' ] ],
 	[ 'mod_userdir', [ 'mod_userdir.c' ] ],
 	[ 'mod_usertrack', [ 'mod_usertrack.c' ], libcrypto ],
-	[ 'mod_vhostdb', [ 'mod_vhostdb.c', 'http_vhostdb.c' ] ],
+	[ 'mod_vhostdb', [ 'mod_vhostdb.c', 'mod_vhostdb_api.c' ] ],
 	[ 'mod_webdav', [ 'mod_webdav.c' ], libsqlite3 + libuuid + libxml2 + libelftc ],
 	[ 'mod_wstunnel', [ 'mod_wstunnel.c' ], libcrypto ],
 ]

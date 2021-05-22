@@ -1,12 +1,12 @@
 /*
- * http_vhostdb - virtual hosts mapping backend registration
+ * http_vhostdb_api - virtual hosts mapping backend registration
  *
  * Copyright(c) 2017 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
  * License: BSD 3-clause (same as lighttpd)
  */
 #include "first.h"
 
-#include "http_vhostdb.h"
+#include "mod_vhostdb_api.h"
 
 #include <string.h>
 

@@ -839,7 +839,7 @@ add_and_install_library(mod_status mod_status.c)
 add_and_install_library(mod_uploadprogress mod_uploadprogress.c)
 add_and_install_library(mod_userdir mod_userdir.c)
 add_and_install_library(mod_usertrack mod_usertrack.c)
-add_and_install_library(mod_vhostdb "mod_vhostdb.c;http_vhostdb.c")
+add_and_install_library(mod_vhostdb "mod_vhostdb.c;mod_vhostdb_api.c")
 add_and_install_library(mod_webdav mod_webdav.c)
 add_and_install_library(mod_wstunnel mod_wstunnel.c)
 
