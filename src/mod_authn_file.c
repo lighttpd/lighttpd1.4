@@ -249,8 +249,7 @@ static int mod_authn_file_htdigest_get_loop(const char *data, const buffer *auth
             if (f_pwd[pwd_len-1] == '\r') --pwd_len;
 
             if (pwd_len != (ai->dlen << 1)) continue;
-            return http_auth_digest_hex2bin(f_pwd, pwd_len,
-                                            ai->digest, sizeof(ai->digest));
+            return li_hex2bin(ai->digest, sizeof(ai->digest), f_pwd, pwd_len);
         }
     } while (*n && *(f_user = n+1));
 

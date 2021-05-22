@@ -373,6 +373,25 @@ char hex2int(unsigned char hex) {
 	return li_cton(hex,n) ? (char)n : 0xFF;
 }
 
+int li_hex2bin (unsigned char * const bin, const size_t binlen, const char * const hexstr, const size_t len)
+{
+    /* validate and transform 32-byte MD5 hex string to 16-byte binary MD5,
+     * or 64-byte SHA-256 or SHA-512-256 hex string to 32-byte binary digest */
+    if (len > (binlen << 1)) return -1;
+    for (int i = 0, ilen = (int)len; i < ilen; i+=2) {
+        int hi = hexstr[i];
+        int lo = hexstr[i+1];
+        if ('0' <= hi && hi <= '9')                    hi -= '0';
+        else if ((uint32_t)(hi |= 0x20)-'a' <= 'f'-'a')hi += -'a' + 10;
+        else                                           return -1;
+        if ('0' <= lo && lo <= '9')                    lo -= '0';
+        else if ((uint32_t)(lo |= 0x20)-'a' <= 'f'-'a')lo += -'a' + 10;
+        else                                           return -1;
+        bin[(i >> 1)] = (unsigned char)((hi << 4) | lo);
+    }
+    return 0;
+}
+
 
 int buffer_eq_icase_ssn(const char * const a, const char * const b, const size_t len) {
     for (size_t i = 0; i < len; ++i) {

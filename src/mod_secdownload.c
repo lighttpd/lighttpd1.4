@@ -5,7 +5,6 @@
 #include "buffer.h"
 #include "base64.h"
 #include "ck.h"
-#include "http_auth.h"
 
 #include "plugin.h"
 
@@ -142,7 +141,7 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			unsigned char HA1[16];
 			unsigned char md5bin[16];
 
-			if (0 != http_auth_digest_hex2bin(mac, maclen, md5bin, sizeof(md5bin))) return 0;
+			if (0 != li_hex2bin(md5bin, sizeof(md5bin), mac, maclen)) return 0;
 
 			/* legacy message:
 			 *   protected_path := '/' <timestamp-hex> <rel-path>

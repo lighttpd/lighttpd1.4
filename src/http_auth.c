@@ -132,37 +132,3 @@ unsigned int http_auth_digest_len (int algo)
 
     return 0;
 }
-
-int http_auth_digest_hex2bin (const char *hexstr, size_t len, unsigned char *bin, size_t binlen)
-{
-    /* validate and transform 32-byte MD5 hex string to 16-byte binary MD5,
-     * or 64-byte SHA-256 or SHA-512-256 hex string to 32-byte binary digest */
-    if (len > (binlen << 1)) return -1;
-    for (int i = 0, ilen = (int)len; i < ilen; i+=2) {
-        int hi = hexstr[i];
-        int lo = hexstr[i+1];
-        if ('0' <= hi && hi <= '9')                    hi -= '0';
-        else if ((uint32_t)(hi |= 0x20)-'a' <= 'f'-'a')hi += -'a' + 10;
-        else                                           return -1;
-        if ('0' <= lo && lo <= '9')                    lo -= '0';
-        else if ((uint32_t)(lo |= 0x20)-'a' <= 'f'-'a')lo += -'a' + 10;
-        else                                           return -1;
-        bin[(i >> 1)] = (unsigned char)((hi << 4) | lo);
-    }
-    return 0;
-}
-
-#if 0
-int http_auth_md5_hex2lc (char *md5hex)
-{
-    /* validate and transform 32-byte MD5 hex string to lowercase */
-    int i;
-    for (i = 0; md5hex[i]; ++i) {
-        int c = md5hex[i];
-        if ('0' <= c && c <= '9')                      continue;
-        else if ((uint32_t)(c |= 0x20)-'a' <= 'f'-'a') md5hex[i] = c;
-        else                                           return -1;
-    }
-    return (32 == i) ? 0 : -1; /*(Note: char *md5hex must be a 32-char string)*/
-}
-#endif

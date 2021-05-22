@@ -228,6 +228,8 @@ void buffer_to_upper(buffer *b);
 __attribute_const__
 char hex2int(unsigned char c);
 
+int li_hex2bin (unsigned char *bin, size_t binlen, const char *hexstr, size_t len);
+
 __attribute_pure__
 static inline int light_isdigit(int c);
 static inline int light_isdigit(int c) {

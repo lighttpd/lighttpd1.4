@@ -402,7 +402,7 @@ mod_authn_dbi_password_cmp (const char *userpw, unsigned long userpwlen, http_au
 
         /*(compare 16-byte MD5 binary instead of converting to hex strings
          * in order to then have to do case-insensitive hex str comparison)*/
-        return (0 == http_auth_digest_hex2bin(userpw, 32, md5pw, sizeof(md5pw)))
+        return (0 == li_hex2bin(md5pw, sizeof(md5pw), userpw, 32))
           ? ck_memeq_const_time_fixed_len(HA1, md5pw, sizeof(md5pw)) ? 0 : 1
           : -1;
     }
@@ -422,7 +422,7 @@ mod_authn_dbi_password_cmp (const char *userpw, unsigned long userpwlen, http_au
 
         /*(compare 32-byte binary digest instead of converting to hex strings
          * in order to then have to do case-insensitive hex str comparison)*/
-        return (0 == http_auth_digest_hex2bin(userpw, 64, shapw, sizeof(shapw)))
+        return (0 == li_hex2bin(shapw, sizeof(shapw), userpw, 64))
           ? ck_memeq_const_time_fixed_len(HA1, shapw, sizeof(shapw)) ? 0 : 1
           : -1;
     }
@@ -527,8 +527,7 @@ mod_authn_dbi_query (request_st * const r, void *p_d, http_auth_info_t * const a
             else {     /* used with HTTP Digest auth */
                 /*(currently supports only single row, single digest algorithm)*/
                 if (len == (ai->dlen << 1)
-                    && 0 == http_auth_digest_hex2bin(rpw, len, ai->digest,
-                                                     sizeof(ai->digest)))
+                    && 0 == li_hex2bin(ai->digest,sizeof(ai->digest),rpw,len))
                     rc = HANDLER_GO_ON;
             }
         }

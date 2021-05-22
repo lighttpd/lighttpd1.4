@@ -90,6 +90,4 @@ void http_auth_backend_set (const http_auth_backend_t *backend);
 
 void http_auth_setenv(request_st *r, const char *username, size_t ulen, const char *auth_type, size_t alen);
 
-int http_auth_digest_hex2bin (const char *hexstr, size_t len, unsigned char *bin, size_t binlen);
-
 #endif

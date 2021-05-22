@@ -316,7 +316,7 @@ static int mod_authn_mysql_password_cmp(const char *userpw, unsigned long userpw
 
         /*(compare 16-byte MD5 binary instead of converting to hex strings
          * in order to then have to do case-insensitive hex str comparison)*/
-        return (0 == http_auth_digest_hex2bin(userpw, 32, md5pw, sizeof(md5pw)))
+        return (0 == li_hex2bin(md5pw, sizeof(md5pw), userpw, 32))
           ? ck_memeq_const_time_fixed_len(HA1, md5pw, sizeof(md5pw)) ? 0 : 1
           : -1;
     }
@@ -352,8 +352,8 @@ static int mod_authn_mysql_result(plugin_data *p, http_auth_info_t *ai, const ch
         else {          /* used with HTTP Digest auth */
             /*(currently supports only single row, single digest algorithm)*/
             if (lengths[0] == (ai->dlen << 1)) {
-                rc = http_auth_digest_hex2bin(row[0], lengths[0],
-                                              ai->digest, sizeof(ai->digest));
+                rc = li_hex2bin(ai->digest, sizeof(ai->digest),
+                                row[0], lengths[0]);
             }
         }
     }

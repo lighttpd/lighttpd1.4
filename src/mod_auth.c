@@ -1324,8 +1324,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 
 	{
 		size_t resplen = strlen(respons);
-		if (0 != http_auth_digest_hex2bin(respons, resplen,
-						  rdigest, sizeof(rdigest))
+		if (0 != li_hex2bin(rdigest, sizeof(rdigest), respons, resplen)
 		    || resplen != (ai.dlen << 1)) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "digest: (%s): invalid format", respons);
