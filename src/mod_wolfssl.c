@@ -93,7 +93,7 @@ WOLFSSL_API WOLFSSL_X509_NAME_ENTRY *wolfSSL_X509_NAME_get_entry(WOLFSSL_X509_NA
 #endif
 
 #if LIBWOLFSSL_VERSION_HEX < 0x04006000 || defined(WOLFSSL_NO_FORCE_ZERO)
-#define wolfSSL_OPENSSL_cleanse(x,sz) safe_memclear((x),(sz))
+#define wolfSSL_OPENSSL_cleanse(x,sz) ck_memzero((x),(sz))
 #endif
 
 #if LIBWOLFSSL_VERSION_HEX < 0x04002000 /*(exact version needed not checked)*/
@@ -103,12 +103,12 @@ WOLFSSL_API WOLFSSL_X509_NAME_ENTRY *wolfSSL_X509_NAME_get_entry(WOLFSSL_X509_NA
 #endif
 
 #include "base.h"
+#include "ck.h"
 #include "fdevent.h"
 #include "http_header.h"
 #include "http_kv.h"
 #include "log.h"
 #include "plugin.h"
-#include "safe_memclear.h"
 
 typedef struct {
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
@@ -692,7 +692,7 @@ mod_wolfssl_load_pem_file (const char *fn, log_error_st *errh, buffer ***chain)
             errno = EIO;
     } while (0);
 
-    if (dlen) safe_memclear(data, dlen);
+    if (dlen) ck_memzero(data, dlen);
     free(data);
 
     if (rc < 0) {
@@ -745,7 +745,7 @@ mod_wolfssl_evp_pkey_load_pem_file (const char *fn, log_error_st *errh)
         rc = 0;
     } while (0);
 
-    if (dlen) safe_memclear(data, dlen);
+    if (dlen) ck_memzero(data, dlen);
     free(data);
 
     if (rc < 0) {
@@ -775,7 +775,7 @@ mod_wolfssl_CTX_use_certificate_chain_file (WOLFSSL_CTX *ssl_ctx, const char *fn
                                                       (unsigned char *)data,
                                                       (long)dlen);
 
-    if (dlen) safe_memclear(data, dlen);
+    if (dlen) ck_memzero(data, dlen);
     free(data);
 
     if (rc == WOLFSSL_SUCCESS)
@@ -912,7 +912,7 @@ mod_wolfssl_load_cacrls (WOLFSSL_CTX *ssl_ctx, const buffer *ssl_ca_crl_file, se
     rc = wolfSSL_CTX_LoadCRLBuffer(ssl_ctx, (byte *)data, (long)dlen,
                                    WOLFSSL_FILETYPE_PEM);
 
-    if (dlen) safe_memclear(data, dlen);
+    if (dlen) ck_memzero(data, dlen);
     free(data);
 
     if (rc == WOLFSSL_SUCCESS)
@@ -941,7 +941,7 @@ mod_wolfssl_load_verify_locn (SSL_CTX *ssl_ctx, const buffer *b, server *srv)
     int rc = wolfSSL_CTX_load_verify_buffer(ssl_ctx, (unsigned char *)data,
                                             (long)dlen, WOLFSSL_FILETYPE_PEM);
 
-    if (dlen) safe_memclear(data, dlen);
+    if (dlen) ck_memzero(data, dlen);
     free(data);
 
     if (rc == WOLFSSL_SUCCESS)
@@ -2043,7 +2043,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             if (0 == rc)
                   wolfSSL_CTX_SetTmpDH_buffer(s->ssl_ctx, (unsigned char *)data,
                                               (long)dlen, WOLFSSL_FILETYPE_PEM);
-            if (dlen) safe_memclear(data, dlen);
+            if (dlen) ck_memzero(data, dlen);
             free(data);
             if (rc < 0) {
                 log_error(srv->errh, __FILE__, __LINE__,

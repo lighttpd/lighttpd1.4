@@ -8,8 +8,8 @@
 
 #include "rand.h"
 #include "buffer.h"
+#include "ck.h"
 #include "fdevent.h"
-#include "safe_memclear.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -496,5 +496,5 @@ void li_rand_cleanup (void)
     mbedtls_entropy_free(&entropy);
   #endif
   #endif
-    safe_memclear(xsubi, sizeof(xsubi));
+    ck_memzero(xsubi, sizeof(xsubi));
 }

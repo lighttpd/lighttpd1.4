@@ -85,12 +85,12 @@
 #endif
 
 #include "base.h"
+#include "ck.h"
 #include "fdevent.h"
 #include "http_header.h"
 #include "http_kv.h"
 #include "log.h"
 #include "plugin.h"
-#include "safe_memclear.h"
 
 typedef struct {
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
@@ -817,7 +817,7 @@ mod_mbedtls_x509_crl_parse_file (mbedtls_x509_crl *chain, const char *fn)
 
     rc = mbedtls_x509_crl_parse(chain, (unsigned char *)data, (size_t)dlen+1);
 
-    if (dlen) safe_memclear(data, (size_t)dlen);
+    if (dlen) ck_memzero(data, (size_t)dlen);
     free(data);
 
     return rc;
@@ -890,7 +890,7 @@ mod_mbedtls_x509_crt_parse_acme (mbedtls_x509_crt *chain, const char *fn)
 
     mbedtls_pem_free(&pem);
 
-    if (dlen) safe_memclear(data, (size_t)dlen);
+    if (dlen) ck_memzero(data, (size_t)dlen);
     free(data);
 
     return rc;
@@ -909,7 +909,7 @@ mod_mbedtls_x509_crt_parse_file (mbedtls_x509_crt *chain, const char *fn)
 
     rc = mbedtls_x509_crt_parse(chain, (unsigned char *)data, (size_t)dlen+1);
 
-    if (dlen) safe_memclear(data, (size_t)dlen);
+    if (dlen) ck_memzero(data, (size_t)dlen);
     free(data);
 
     return rc;
@@ -928,7 +928,7 @@ mod_mbedtls_pk_parse_keyfile (mbedtls_pk_context *ctx, const char *fn, const cha
                               (const unsigned char *)pwd,
                               pwd ? strlen(pwd) : 0);
 
-    if (dlen) safe_memclear(data, (size_t)dlen);
+    if (dlen) ck_memzero(data, (size_t)dlen);
     free(data);
 
     return rc;

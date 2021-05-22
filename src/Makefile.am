@@ -464,6 +464,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	first.h http_chunk.h \
 	algo_hmac.h \
 	algo_md.h algo_md5.h algo_sha1.h algo_splaytree.h algo_xxhash.h \
+	ck.h \
 	http_auth.h http_cgi.h http_date.h \
 	http_header.h http_range.h http_vhostdb.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
@@ -477,7 +478,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	sys-crypto.h sys-crypto-md.h \
 	sys-endian.h sys-mmap.h sys-socket.h sys-strings.h sys-time.h \
 	mod_cml.h mod_cml_funcs.h \
-	safe_memclear.h sock_addr.h status_counter.h \
+	sock_addr.h status_counter.h \
 	mod_magnet_cache.h \
 	ls-hpack/lshpack.h \
 	ls-hpack/lsxpack_header.h \

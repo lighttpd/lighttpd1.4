@@ -3,6 +3,7 @@
 #include "base.h"
 #include "burl.h"
 #include "chunk.h"
+#include "ck.h"
 #include "fdevent.h"
 #include "http_etag.h"
 #include "keyvalue.h"
@@ -11,7 +12,6 @@
 #include "configparser.h"
 #include "configfile.h"
 #include "plugin.h"
-#include "safe_memclear.h"
 #include "stat_cache.h"
 #include "sys-crypto.h"
 
@@ -2192,7 +2192,7 @@ static int config_parse_stdin(server *srv, config_t *context) {
         log_perror(srv->errh, __FILE__, __LINE__, "config read from stdin");
 
     if (dlen)
-        safe_memclear(b->ptr, dlen);
+        ck_memzero(b->ptr, dlen);
     chunk_buffer_release(b);
     return rc;
 }
@@ -2209,7 +2209,7 @@ static int config_parse_file_stream(server *srv, config_t *context, const char *
     int rc = 0;
     if (dlen) {
         rc = config_parse(srv, context, fn, data, (size_t)dlen);
-        safe_memclear(data, (size_t)dlen);
+        ck_memzero(data, (size_t)dlen);
     }
     free(data);
     return rc;

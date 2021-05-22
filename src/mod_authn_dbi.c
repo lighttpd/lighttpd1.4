@@ -39,7 +39,6 @@
 #include <stdlib.h>
 
 #include "sys-crypto-md.h"
-#include "safe_memclear.h"
 #include "base.h"
 #include "ck.h"
 #include "http_auth.h"
@@ -337,7 +336,7 @@ mod_authn_crypt_cmp (const char *reqpw, const char *userpw, unsigned long userpw
     char *crypted = crypt(reqpw, userpw);
     size_t crypwlen = (NULL != crypted) ? strlen(crypted) : 0;
     int rc = (crypwlen == userpwlen) ? memcmp(crypted, userpw, crypwlen) : -1;
-    if (crypwlen) safe_memclear(crypted, crypwlen);
+    if (crypwlen) ck_memzero(crypted, crypwlen);
     return rc;
 
  #else
@@ -365,7 +364,7 @@ mod_authn_crypt_cmp (const char *reqpw, const char *userpw, unsigned long userpw
     size_t crypwlen = (NULL != crypted) ? strlen(crypted) : 0;
     int rc = (crypwlen == userpwlen) ? memcmp(crypted, userpw, crypwlen) : -1;
 
-    safe_memclear(crypted, crypwlen);
+    ck_memzero(crypted, crypwlen);
   #if defined(HAVE_CRYPT_R)
    #if 1 /* (must free() if allocated above) */
     free(crypt_tmp_data);

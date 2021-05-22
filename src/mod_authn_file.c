@@ -18,8 +18,6 @@
 
 #include "sys-crypto-md.h" /* USE_LIB_CRYPTO */
 
-#include "safe_memclear.h"
-
 #include "base.h"
 #include "ck.h"
 #include "plugin.h"
@@ -270,7 +268,7 @@ static int mod_authn_file_htdigest_get(request_st * const r, void *p_d, http_aut
     if (NULL == data) return -1;
 
     int rc = mod_authn_file_htdigest_get_loop(data, auth_fn, ai, r->conf.errh);
-    safe_memclear(data, (size_t)dlen);
+    ck_memzero(data, (size_t)dlen);
     free(data);
     return rc;
 }
@@ -296,7 +294,7 @@ static handler_t mod_authn_file_htdigest_basic(request_st * const r, void *p_d, 
     if (mod_authn_file_htdigest_get(r, p_d, &ai)) return HANDLER_ERROR;
 
     if (ai.dlen > sizeof(htdigest)) {
-        safe_memclear(ai.digest, ai.dlen);
+        ck_memzero(ai.digest, ai.dlen);
         return HANDLER_ERROR;/*(should not happen)*/
     }
     memcpy(htdigest, ai.digest, ai.dlen); /*(save digest before reuse of ai)*/
@@ -306,8 +304,8 @@ static handler_t mod_authn_file_htdigest_basic(request_st * const r, void *p_d, 
     int rc = (ck_memeq_const_time_fixed_len(htdigest, ai.digest, ai.dlen)
            && http_auth_match_rules(require, username->ptr, NULL, NULL));
 
-    safe_memclear(htdigest, ai.dlen);
-    safe_memclear(ai.digest, ai.dlen);
+    ck_memzero(htdigest, ai.dlen);
+    ck_memzero(ai.digest, ai.dlen);
     return rc ? HANDLER_GO_ON : HANDLER_ERROR;
 }
 
@@ -368,7 +366,7 @@ static int mod_authn_file_htpasswd_get(const buffer *auth_fn, const char *userna
         }
     } while (*n && *(f_user = n+1));
 
-    safe_memclear(data, (size_t)dlen);
+    ck_memzero(data, (size_t)dlen);
     free(data);
     return rc;
 }
@@ -383,7 +381,7 @@ static handler_t mod_authn_file_plain_digest(request_st * const r, void *p_d, ht
         /* generate password from plain-text */
         mod_authn_file_digest(ai, CONST_BUF_LEN(password_buf));
     }
-    safe_memclear(password_buf->ptr, password_buf->size);
+    ck_memzero(password_buf->ptr, password_buf->size);
     buffer_free(password_buf);
     return (0 == rc) ? HANDLER_GO_ON : HANDLER_ERROR;
 }
@@ -399,7 +397,7 @@ static handler_t mod_authn_file_plain_basic(request_st * const r, void *p_d, con
           ? 0
           : -1;
     }
-    safe_memclear(password_buf->ptr, password_buf->size);
+    ck_memzero(password_buf->ptr, password_buf->size);
     buffer_free(password_buf);
     return 0 == rc && http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON
@@ -587,7 +585,7 @@ static void apr_md5_encode(const char *pw, const char *salt, char *result, size_
     /*
      * Don't leave anything around in vm they could use.
      */
-    safe_memclear(final, sizeof(final));
+    ck_memzero(final, sizeof(final));
 
     /* FIXME
      */
@@ -713,7 +711,7 @@ static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, 
         }
       #endif
     }
-    safe_memclear(password->ptr, password->size);
+    ck_memzero(password->ptr, password->size);
     buffer_free(password);
     return 0 == rc && http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON

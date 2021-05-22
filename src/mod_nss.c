@@ -110,12 +110,12 @@
 #endif
 
 #include "base.h"
+#include "ck.h"
 #include "fdevent.h"
 #include "http_header.h"
 #include "http_kv.h"
 #include "log.h"
 #include "plugin.h"
-#include "safe_memclear.h"
 
 typedef struct {
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
@@ -358,8 +358,8 @@ mod_nss_secitem_wipe (SECItem * const d)
     /* safer than SECITEM_ZfreeItem() */
     if (NULL == d) return;
     if (d->data) {
-        if (d->len) safe_memclear(d->data, d->len); /*safer than PORT_Memset()*/
-        PORT_Free(d->data); /* safe_memclear() is safer than PORT_ZFree() */
+        if (d->len) ck_memzero(d->data, d->len); /*safer than PORT_Memset()*/
+        PORT_Free(d->data); /* ck_memzero() is safer than PORT_ZFree() */
         d->data = NULL;
     }
     d->len = 0;

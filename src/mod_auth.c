@@ -12,7 +12,6 @@
 #include "http_auth.h"
 #include "http_header.h"
 #include "log.h"
-#include "safe_memclear.h"
 #include "algo_splaytree.h"
 
 /**
@@ -75,7 +74,7 @@ static void
 http_auth_cache_entry_free (void *data)
 {
     http_auth_cache_entry * const ae = data;
-    safe_memclear(ae->pwdigest, ae->dlen);
+    ck_memzero(ae->pwdigest, ae->dlen);
     free(ae);
 }
 
@@ -828,7 +827,7 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 		break;
 	}
 
-	safe_memclear(pw, pwlen);
+	ck_memzero(pw, pwlen);
 	buffer_free(username);
 	return rc;
 }
@@ -1474,7 +1473,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 	mod_auth_digest_mutate(&ai,m,uri,nonce,cnonce,nc,qop);
 
 	if (!ck_memeq_const_time_fixed_len(rdigest, ai.digest, ai.dlen)) {
-		/*safe_memclear(ai.digest, ai.dlen);*//* skip clear since mutated */
+		/*ck_memzero(ai.digest, ai.dlen);*//*skip clear since mutated*/
 		/* digest not ok */
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "digest: auth failed for %s: wrong password, IP: %s",
@@ -1484,7 +1483,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		buffer_free(b);
 		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
-	/*safe_memclear(ai.digest, ai.dlen);*//* skip clear since mutated */
+	/*ck_memzero(ai.digest, ai.dlen);*//* skip clear since mutated */
 
 	/* value is our allow-rules */
 	if (!http_auth_match_rules(require, username, NULL, NULL)) {

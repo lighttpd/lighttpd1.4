@@ -85,13 +85,13 @@
 #endif
 
 #include "base.h"
+#include "ck.h"
 #include "fdevent.h"
 #include "http_date.h"
 #include "http_header.h"
 #include "http_kv.h"
 #include "log.h"
 #include "plugin.h"
-#include "safe_memclear.h"
 
 typedef struct {
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
@@ -1279,7 +1279,7 @@ mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) 
     if (NULL == in) {
         log_error(errh, __FILE__, __LINE__,
           "SSL: BIO_new/BIO_read_filename('%s') failed", file);
-        if (dlen) safe_memclear(data, dlen);
+        if (dlen) ck_memzero(data, dlen);
         free(data);
         return NULL;
     }
@@ -1295,7 +1295,7 @@ mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) 
     }
 
     BIO_free(in);
-    if (dlen) safe_memclear(data, dlen);
+    if (dlen) ck_memzero(data, dlen);
     free(data);
     return x;
 }
@@ -1313,7 +1313,7 @@ mod_openssl_evp_pkey_load_pem_file (const char *file, log_error_st *errh)
         x = PEM_read_bio_PrivateKey(in, NULL, NULL, NULL);
         BIO_free(in);
     }
-    if (dlen) safe_memclear(data, dlen);
+    if (dlen) ck_memzero(data, dlen);
     free(data);
 
     if (NULL == in)

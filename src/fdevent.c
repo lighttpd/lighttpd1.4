@@ -1117,7 +1117,7 @@ int fdevent_set_so_reuseaddr (const int fd, const int opt)
 
 
 #include <sys/stat.h>
-#include "safe_memclear.h"
+#include "ck.h"
 __attribute_cold__ /*(convenience routine for use at config at startup)*/
 char *
 fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *(malloc_fn)(size_t), void(free_fn)(void *))
@@ -1163,7 +1163,7 @@ fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *
         log_perror(errh, __FILE__, __LINE__, "%s() %s", __func__, fn);
     if (fd >= 0) close(fd);
     if (buf) {
-        safe_memclear(buf, (size_t)sz);
+        ck_memzero(buf, (size_t)sz);
         free_fn(buf);
     }
     *lim = 0;
@@ -1199,7 +1199,7 @@ fdevent_load_file_bytes (char * const buf, const off_t sz, off_t off, const char
     if (errh)
         log_perror(errh, __FILE__, __LINE__, "%s() %s", __func__, fn);
     if (fd >= 0) close(fd);
-    safe_memclear(buf, (size_t)sz);
+    ck_memzero(buf, (size_t)sz);
     errno = errnum;
     return -1;
 }
