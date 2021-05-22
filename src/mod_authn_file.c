@@ -16,19 +16,18 @@
 # define HAVE_CRYPT
 #endif
 
+#include <stdlib.h>
+#include <string.h>
+
+#include "mod_auth_api.h"
 #include "sys-crypto-md.h" /* USE_LIB_CRYPTO */
 
 #include "base.h"
-#include "ck.h"
-#include "plugin.h"
-#include "fdevent.h"
-#include "http_auth.h"
-#include "log.h"
-
 #include "base64.h"
-
-#include <stdlib.h>
-#include <string.h>
+#include "ck.h"
+#include "fdevent.h"
+#include "log.h"
+#include "plugin.h"
 
 /*
  * htdigest, htpasswd, plain auth backends

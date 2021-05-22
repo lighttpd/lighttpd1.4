@@ -33,15 +33,15 @@
 #include <crypt.h>
 #endif
 
-#include <dbi/dbi.h>
-
 #include <string.h>
 #include <stdlib.h>
 
+#include <dbi/dbi.h>
+
+#include "mod_auth_api.h"
 #include "sys-crypto-md.h"
 #include "base.h"
 #include "ck.h"
-#include "http_auth.h"
 #include "fdevent.h"
 #include "log.h"
 #include "plugin.h"

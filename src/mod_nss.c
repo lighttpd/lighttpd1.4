@@ -2608,7 +2608,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
          */
         const buffer *varname = hctx->conf.ssl_verifyclient_username;
         vb = http_header_env_get(r, CONST_BUF_LEN(varname));
-        if (vb) { /* same as http_auth.c:http_auth_setenv() */
+        if (vb) { /* same as mod_auth_api.c:http_auth_setenv() */
             http_header_env_set(r,
                                 CONST_STR_LEN("REMOTE_USER"),
                                 CONST_BUF_LEN(vb));

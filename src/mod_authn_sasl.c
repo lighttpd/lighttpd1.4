@@ -17,16 +17,16 @@
  * - database query is synchronous and blocks waiting for response
  */
 
-#include <sasl/sasl.h>
-
-#include "base.h"
-#include "http_auth.h"
-#include "log.h"
-#include "plugin.h"
-
 #include <sys/utsname.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <sasl/sasl.h>
+
+#include "mod_auth_api.h"
+#include "base.h"
+#include "log.h"
+#include "plugin.h"
 
 typedef struct {
     const char *service;

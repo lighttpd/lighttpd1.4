@@ -1,5 +1,5 @@
 /*
- * http_auth - HTTP Auth backend registration, low-level shared funcs
+ * mod_auth_api - HTTP Auth backend registration, low-level shared funcs
  *
  * Fully-rewritten from original
  * Copyright(c) 2016 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
@@ -7,7 +7,7 @@
  */
 #include "first.h"
 
-#include "http_auth.h"
+#include "mod_auth_api.h"
 #include "http_header.h"
 
 #include <stdlib.h>

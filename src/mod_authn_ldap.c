@@ -7,15 +7,15 @@
  */
 #include "first.h"
 
-#include <ldap.h>
-
-#include "base.h"
-#include "http_auth.h"
-#include "log.h"
-#include "plugin.h"
-
 #include <stdlib.h>
 #include <string.h>
+
+#include <ldap.h>
+
+#include "mod_auth_api.h"
+#include "base.h"
+#include "log.h"
+#include "plugin.h"
 
 typedef struct {
     LDAP *ldap;

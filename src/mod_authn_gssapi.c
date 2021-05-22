@@ -20,21 +20,20 @@
  *   TODO: attempt async?
  */
 
-#include "plugin.h"
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include <krb5.h>
 #include <gssapi.h>
 #include <gssapi/gssapi_krb5.h>
 
-#include "http_auth.h"
-#include "http_header.h"
+#include "mod_auth_api.h"
 #include "base.h"
-#include "log.h"
 #include "base64.h"
-
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include "http_header.h"
+#include "log.h"
+#include "plugin.h"
 
 typedef struct {
     const buffer *auth_gssapi_keytab;

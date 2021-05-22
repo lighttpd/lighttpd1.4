@@ -1,5 +1,12 @@
-#ifndef _HTTP_AUTH_H_
-#define _HTTP_AUTH_H_
+/*
+ * mod_auth_api - HTTP auth backend registration, low-level shared funcs
+ *
+ * Fully-rewritten from original
+ * Copyright(c) 2016 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
+#ifndef INCLUDED_MOD_AUTH_API_H
+#define INCLUDED_MOD_AUTH_API_H
 #include "first.h"
 
 #include "base_decls.h"

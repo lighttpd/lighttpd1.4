@@ -425,7 +425,7 @@ static void config_compat_module_load (server *srv) {
       #endif
     }
 
-    /* mod_auth.c,http_auth.c auth backends were split into separate modules
+    /* mod_auth.c,mod_auth_api.c auth backends were split into separate modules
      * Automatically load auth backend modules for compatibility with
      * existing lighttpd 1.4.x configs */
     if (contains_mod_auth) {

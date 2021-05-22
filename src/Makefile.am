@@ -332,7 +332,7 @@ mod_deflate_la_LDFLAGS = $(BROTLI_CFLAGS) $(common_module_ldflags)
 mod_deflate_la_LIBADD = $(Z_LIB) $(ZSTD_LIB) $(BZ_LIB) $(BROTLI_LIBS) $(common_libadd)
 
 lib_LTLIBRARIES += mod_auth.la
-mod_auth_la_SOURCES = mod_auth.c http_auth.c
+mod_auth_la_SOURCES = mod_auth.c mod_auth_api.c
 mod_auth_la_LDFLAGS = $(common_module_ldflags)
 mod_auth_la_LIBADD = $(CRYPTO_LIB) $(common_libadd)
 
@@ -463,7 +463,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	algo_hmac.h \
 	algo_md.h algo_md5.h algo_sha1.h algo_splaytree.h algo_xxhash.h \
 	ck.h \
-	http_auth.h http_cgi.h http_date.h \
+	http_cgi.h http_date.h \
 	http_header.h http_range.h http_vhostdb.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h plugin_config.h \
@@ -477,6 +477,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	sys-endian.h sys-mmap.h sys-socket.h sys-strings.h sys-time.h \
 	mod_cml.h mod_cml_funcs.h \
 	sock_addr.h status_counter.h \
+	mod_auth_api.h \
 	mod_magnet_cache.h \
 	ls-hpack/lshpack.h \
 	ls-hpack/lsxpack_header.h \
@@ -498,6 +499,7 @@ lighttpd_SOURCES = \
   mod_ajp13.c \
   mod_alias.c \
   mod_auth.c \
+  mod_auth_api.c \
   mod_authn_file.c \
   mod_cgi.c \
   mod_deflate.c \

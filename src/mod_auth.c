@@ -1,18 +1,25 @@
+/*
+ * http_auth - HTTP authentication and authorization
+ *
+ * Largely-rewritten from original
+ * Copyright(c) 2016,2021 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 #include <stdlib.h>
 #include <string.h>
 
+#include "mod_auth_api.h"
 #include "sys-crypto-md.h" /* USE_LIB_CRYPTO */
 
 #include "base.h"
 #include "ck.h"
-#include "plugin.h"
-#include "plugin_config.h"
-#include "http_auth.h"
 #include "http_header.h"
 #include "log.h"
 #include "algo_splaytree.h"
+#include "plugin.h"
+#include "plugin_config.h"
 
 /**
  * auth framework

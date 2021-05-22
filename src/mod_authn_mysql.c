@@ -27,18 +27,18 @@
 #include <crypt.h>
 #endif
 
-#include <mysql.h>
-
-#include "base.h"
-#include "ck.h"
-#include "http_auth.h"
-#include "log.h"
-#include "plugin.h"
-
 #include <stdlib.h>
 #include <string.h>
 
+#include <mysql.h>
+
+#include "mod_auth_api.h"
 #include "sys-crypto-md.h"
+
+#include "base.h"
+#include "ck.h"
+#include "log.h"
+#include "plugin.h"
 
 typedef struct {
     int auth_mysql_port;
