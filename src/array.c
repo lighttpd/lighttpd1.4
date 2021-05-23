@@ -353,7 +353,7 @@ static data_unset *array_get_unused_element(array * const a, const data_type_t t
 }
 
 __attribute_hot__
-static void array_insert_data_at_pos(array * const a, data_unset * const entry, const uint32_t pos) {
+static data_unset * array_insert_data_at_pos(array * const a, data_unset * const entry, const uint_fast32_t pos) {
     if (a->used < a->size) {
         data_unset * const prev = a->data[a->used];
         if (__builtin_expect( (prev != NULL), 0))
@@ -363,34 +363,33 @@ static void array_insert_data_at_pos(array * const a, data_unset * const entry, 
         array_extend(a, 16);
     }
 
-    const uint32_t ndx = a->used++;
+    uint_fast32_t ndx = a->used++;
     a->data[ndx] = entry;
 
     /* move everything one step to the right */
-    if (pos != ndx) {
-        data_unset ** const d = a->sorted + pos;
-        memmove(d+1, d, (ndx - pos) * sizeof(*a->sorted));
-    }
-    a->sorted[pos] = entry;
+    ndx -= pos;
+    data_unset ** const d = a->sorted + pos;
+    if (__builtin_expect( (ndx), 1))
+        memmove(d+1, d, ndx * sizeof(*a->sorted));
+    *d = entry;
+    return entry;
 }
 
-static data_integer * array_insert_integer_at_pos(array * const a, const uint32_t pos) {
+static data_integer * array_insert_integer_at_pos(array * const a, const uint_fast32_t pos) {
   #if 0 /*(not currently used by lighttpd in way that reuse would occur)*/
     data_integer *di = (data_integer *)array_get_unused_element(a,TYPE_INTEGER);
     if (NULL == di) di = array_data_integer_init();
   #else
     data_integer * const di = array_data_integer_init();
   #endif
-    array_insert_data_at_pos(a, (data_unset *)di, pos);
-    return di;
+    return (data_integer *)array_insert_data_at_pos(a, (data_unset *)di, pos);
 }
 
 __attribute_hot__
-static data_string * array_insert_string_at_pos(array * const a, const uint32_t pos) {
+static data_string * array_insert_string_at_pos(array * const a, const uint_fast32_t pos) {
     data_string *ds = (data_string *)array_get_unused_element(a, TYPE_STRING);
     if (NULL == ds) ds = array_data_string_init();
-    array_insert_data_at_pos(a, (data_unset *)ds, pos);
-    return ds;
+    return (data_string *)array_insert_data_at_pos(a, (data_unset *)ds, pos);
 }
 
 __attribute_hot__
