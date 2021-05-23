@@ -48,17 +48,11 @@ static void data_config_free(data_unset *d) {
 	free(d);
 }
 
-__attribute_cold__
-static void data_config_insert_dup(data_unset *dst, data_unset *src) {
-	UNUSED(dst);
-	src->fn->free(src);
-}
-
 data_config *data_config_init(void) {
 	static const struct data_methods fn = {
 		data_config_copy,
 		data_config_free,
-		data_config_insert_dup,
+		NULL
 	};
 	data_config *ds;
 

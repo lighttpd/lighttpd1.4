@@ -26,7 +26,6 @@ static void array_data_string_insert_dup(data_unset *dst, data_unset *src) {
                                            CONST_BUF_LEN(&ds_src->value));
     else
         buffer_copy_buffer(&ds_dst->value, &ds_src->value);
-    src->fn->free(src);
 }
 
 static void array_data_string_free(data_unset *du) {
@@ -60,12 +59,6 @@ static data_unset *array_data_integer_copy(const data_unset *s) {
     return (data_unset *)di;
 }
 
-__attribute_cold__
-static void array_data_integer_insert_dup(data_unset *dst, data_unset *src) {
-    UNUSED(dst);
-    src->fn->free(src);
-}
-
 static void array_data_integer_free(data_unset *du) {
     data_integer *di = (data_integer *)du;
     free(di->key.ptr);
@@ -77,7 +70,7 @@ data_integer *array_data_integer_init(void) {
     static const struct data_methods fn = {
         array_data_integer_copy,
         array_data_integer_free,
-        array_data_integer_insert_dup,
+        NULL
     };
     data_integer *di = calloc(1, sizeof(*di));
     force_assert(NULL != di);
@@ -96,12 +89,6 @@ static data_unset *array_data_array_copy(const data_unset *s) {
     return (data_unset *)da;
 }
 
-__attribute_cold__
-static void array_data_array_insert_dup(data_unset *dst, data_unset *src) {
-    UNUSED(dst);
-    src->fn->free(src);
-}
-
 static void array_data_array_free(data_unset *du) {
     data_array *da = (data_array *)du;
     free(da->key.ptr);
@@ -114,7 +101,7 @@ data_array *array_data_array_init(void) {
     static const struct data_methods fn = {
         array_data_array_copy,
         array_data_array_free,
-        array_data_array_insert_dup,
+        NULL
     };
     data_array *da = calloc(1, sizeof(*da));
     force_assert(NULL != da);
@@ -486,8 +473,11 @@ void array_insert_unique(array * const a, data_unset * const entry) {
 	data_unset **old;
 
 	if (NULL != (old = array_find_or_insert(a, entry))) {
-		force_assert((*old)->type == entry->type);
-		entry->fn->insert_dup(*old, entry);
+		if (entry->fn->insert_dup) {
+			force_assert((*old)->type == entry->type);
+			entry->fn->insert_dup(*old, entry);
+		}
+		entry->fn->free(entry);
 	}
 }
 
