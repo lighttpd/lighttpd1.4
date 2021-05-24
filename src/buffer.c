@@ -153,16 +153,17 @@ void buffer_string_set_length(buffer *b, uint32_t len) {
 
 void buffer_commit(buffer *b, size_t size)
 {
-	if (0 == b->used) b->used = 1;
+	size_t sz = b->used;
+	if (0 == sz) sz = 1;
 
 	if (size > 0) {
 		/* check for overflow: unsigned overflow is defined to wrap around */
-		size_t sz = b->used + size;
-		force_assert(sz > b->used);
-		b->used = sz;
+		sz += size;
+		force_assert(sz > size);
 	}
 
-	b->ptr[b->used - 1] = '\0';
+	b->used = sz;
+	b->ptr[sz - 1] = '\0';
 }
 
 void buffer_copy_string(buffer * restrict b, const char * restrict s) {
