@@ -131,6 +131,7 @@ static int network_write_accounting(const int fd, chunkqueue * const cq, off_t *
 /* write next chunk(s); finished chunks are removed afterwards after successful writes.
  * return values: similar as backends (0 success, -1 error, -2 remote close, -3 try again later (EINTR/EAGAIN)) */
 /* next chunk must be MEM_CHUNK. use write()/send() */
+#if !defined(NETWORK_WRITE_USE_WRITEV)
 static int network_write_mem_chunk(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
     chunk* const c = cq->first;
     off_t c_len = (off_t)buffer_string_length(c->mem) - c->offset;
@@ -140,6 +141,7 @@ static int network_write_mem_chunk(const int fd, chunkqueue * const cq, off_t * 
     ssize_t wr = network_write_data_len(fd, c->mem->ptr + c->offset, c_len);
     return network_write_accounting(fd, cq, p_max_bytes, errh, wr, c_len);
 }
+#endif
 
 
 
@@ -498,30 +500,6 @@ static int network_write_file_chunk_sendfile(const int fd, chunkqueue * const cq
  *   -2 : remote close
  */
 
-static int network_write_chunkqueue_write(const int fd, chunkqueue * const cq, off_t max_bytes, log_error_st * const errh) {
-    while (NULL != cq->first) {
-        int rc = -1;
-
-        switch (cq->first->type) {
-        case MEM_CHUNK:
-            rc = network_write_mem_chunk(fd, cq, &max_bytes, errh);
-            break;
-        case FILE_CHUNK:
-          #ifdef NETWORK_WRITE_USE_MMAP
-            rc = network_write_file_chunk_mmap(fd, cq, &max_bytes, errh);
-          #else
-            rc = network_write_file_chunk_no_mmap(fd, cq, &max_bytes, errh);
-          #endif
-            break;
-        }
-
-        if (__builtin_expect( (0 != rc), 0)) return (-3 == rc) ? 0 : rc;
-    }
-
-    return 0;
-}
-
-#if defined(NETWORK_WRITE_USE_WRITEV)
 static int network_write_chunkqueue_writev(const int fd, chunkqueue * const cq, off_t max_bytes, log_error_st * const errh) {
     while (NULL != cq->first) {
         int rc = -1;
@@ -548,7 +526,6 @@ static int network_write_chunkqueue_writev(const int fd, chunkqueue * const cq, 
 
     return 0;
 }
-#endif
 
 #if defined(NETWORK_WRITE_USE_SENDFILE)
 static int network_write_chunkqueue_sendfile(const int fd, chunkqueue * const cq, off_t max_bytes, log_error_st * const errh) {
@@ -631,12 +608,8 @@ int network_write_init(server *srv) {
         break;
       #endif
     case NETWORK_BACKEND_WRITEV:
-      #if defined(NETWORK_WRITE_USE_WRITEV)
-        srv->network_backend_write = network_write_chunkqueue_writev;
-        break;
-      #endif
     case NETWORK_BACKEND_WRITE:
-        srv->network_backend_write = network_write_chunkqueue_write;
+        srv->network_backend_write = network_write_chunkqueue_writev;
         break;
     default:
         return -1;
