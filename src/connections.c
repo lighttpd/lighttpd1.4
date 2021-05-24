@@ -702,7 +702,7 @@ static int connection_handle_read_state(connection * const con)  {
         if (NULL == c) continue;
         clen = buffer_string_length(c->mem) - c->offset;
         if (0 == clen) continue;
-        if (c->offset > USHRT_MAX) /*(highly unlikely)*/
+        if (__builtin_expect( (c->offset > USHRT_MAX), 0)) /*(highly unlikely)*/
             chunkqueue_compact_mem_offset(cq);
 
         hoff[0] = 1;                         /* number of lines */
@@ -714,7 +714,7 @@ static int connection_handle_read_state(connection * const con)  {
         /* casting to (unsigned short) might truncate, and the hoff[]
          * addition might overflow, but max_request_field_size is USHRT_MAX,
          * so failure will be detected below */
-        const uint32_t max_request_field_size=r->conf.max_request_field_size;
+        const uint32_t max_request_field_size = r->conf.max_request_field_size;
         if ((header_len ? header_len : clen) > max_request_field_size
             || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1) {
             log_error(r->conf.errh, __FILE__, __LINE__, "%s",
@@ -725,8 +725,9 @@ static int connection_handle_read_state(connection * const con)  {
             return 1;
         }
 
-        if (0 != header_len) {
-            if (hoff[0] > 1) break; /* common case; request headers complete */
+        if (__builtin_expect( (0 != header_len), 1)) {
+            if (__builtin_expect( (hoff[0] > 1), 1))
+                break; /* common case; request headers complete */
 
             if (discard_blank) { /* skip one blank line e.g. following POST */
                 if (header_len == clen) continue;
