@@ -67,6 +67,7 @@
 #endif
 
 
+__attribute_cold__
 static int network_write_error(int fd, log_error_st *errh) {
   #if defined(__WIN32)
     int lastError = WSAGetLastError();
@@ -88,13 +89,20 @@ static int network_write_error(int fd, log_error_st *errh) {
       case EINTR:
         return -3;
       case EPIPE:
-        case ECONNRESET:
+      case ECONNRESET:
         return -2;
       default:
         log_perror(errh,__FILE__,__LINE__,"write failed: %d",fd);
         return -1;
     }
   #endif /* __WIN32 */
+}
+
+__attribute_cold__
+static int network_remove_finished_chunks(chunkqueue * const cq, const off_t len) {
+    force_assert(len >= 0);
+    chunkqueue_remove_finished_chunks(cq);
+    return 0;
 }
 
 inline
@@ -106,33 +114,31 @@ static ssize_t network_write_data_len(int fd, const char *data, off_t len) {
   #endif /* __WIN32 */
 }
 
+static int network_write_accounting(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh, const ssize_t wr, const off_t toSend) {
+    if (wr >= 0) {
+        *p_max_bytes -= wr;/*(toSend > 0 if we reach this func)*/
+        const int rc = (wr == toSend && *p_max_bytes > 0) ? 0 : -3;
+        chunkqueue_mark_written(cq, wr);
+        return rc;
+    }
+    else
+        return network_write_error(fd, errh);
+}
+
 
 
 
 /* write next chunk(s); finished chunks are removed afterwards after successful writes.
  * return values: similar as backends (0 success, -1 error, -2 remote close, -3 try again later (EINTR/EAGAIN)) */
 /* next chunk must be MEM_CHUNK. use write()/send() */
-static int network_write_mem_chunk(int fd, chunkqueue *cq, off_t *p_max_bytes, log_error_st *errh) {
+static int network_write_mem_chunk(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
     chunk* const c = cq->first;
-    ssize_t wr;
-    off_t c_len = (off_t)buffer_string_length(c->mem);
-    force_assert(c->offset >= 0 && c->offset <= c_len);
-    c_len -= c->offset;
+    off_t c_len = (off_t)buffer_string_length(c->mem) - c->offset;
     if (c_len > *p_max_bytes) c_len = *p_max_bytes;
+    if (c_len <= 0) return network_remove_finished_chunks(cq, c_len);
 
-    if (0 == c_len) {
-        chunkqueue_remove_finished_chunks(cq);
-        return 0;
-    }
-
-    wr = network_write_data_len(fd, c->mem->ptr + c->offset, c_len);
-    if (wr >= 0) {
-        *p_max_bytes -= wr;
-        chunkqueue_mark_written(cq, wr);
-        return (wr > 0 && wr == c_len) ? 0 : -3;
-    } else {
-        return network_write_error(fd, errh);
-    }
+    ssize_t wr = network_write_data_len(fd, c->mem->ptr + c->offset, c_len);
+    return network_write_accounting(fd, cq, p_max_bytes, errh, wr, c_len);
 }
 
 
@@ -140,22 +146,15 @@ static int network_write_mem_chunk(int fd, chunkqueue *cq, off_t *p_max_bytes, l
 
 #if !defined(NETWORK_WRITE_USE_MMAP)
 
-static int network_write_file_chunk_no_mmap(int fd, chunkqueue *cq, off_t *p_max_bytes, log_error_st *errh) {
+static int network_write_file_chunk_no_mmap(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
     chunk* const c = cq->first;
     off_t offset, toSend;
-    ssize_t wr;
     char buf[16384]; /* max read 16kb in one step */
-
-    force_assert(c->offset >= 0 && c->offset <= c->file.length);
 
     offset = c->offset;
     toSend = c->file.length - c->offset;
     if (toSend > *p_max_bytes) toSend = *p_max_bytes;
-
-    if (0 == toSend) {
-        chunkqueue_remove_finished_chunks(cq);
-        return 0;
-    }
+    if (toSend <= 0) return network_remove_finished_chunks(cq, toSend);
 
     if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
 
@@ -170,14 +169,8 @@ static int network_write_file_chunk_no_mmap(int fd, chunkqueue *cq, off_t *p_max
         return -1;
     }
 
-    wr = network_write_data_len(fd, buf, toSend);
-    if (wr >= 0) {
-        *p_max_bytes -= wr;
-        chunkqueue_mark_written(cq, wr);
-        return (wr > 0 && wr == toSend) ? 0 : -3;
-    } else {
-        return network_write_error(fd, errh);
-    }
+    ssize_t wr = network_write_data_len(fd, buf, toSend);
+    return network_write_accounting(fd, cq, p_max_bytes, errh, wr, toSend);
 }
 
 #endif
@@ -214,24 +207,17 @@ static void sigbus_handler(int sig) {
 }
 
 /* next chunk must be FILE_CHUNK. send mmap()ed file with write() */
-static int network_write_file_chunk_mmap(int fd, chunkqueue *cq, off_t *p_max_bytes, log_error_st *errh) {
+static int network_write_file_chunk_mmap(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
     chunk* const c = cq->first;
     off_t offset, toSend, file_end;
-    ssize_t wr;
     size_t mmap_offset, mmap_avail;
     const char *data;
 
-    force_assert(c->offset >= 0 && c->offset <= c->file.length);
-
+    file_end = c->file.length; /*file end offset in this chunk*/
     offset = c->offset;
     toSend = c->file.length - c->offset;
     if (toSend > *p_max_bytes) toSend = *p_max_bytes;
-    file_end = c->file.length; /*file end offset in this chunk*/
-
-    if (0 == toSend) {
-        chunkqueue_remove_finished_chunks(cq);
-        return 0;
-    }
+    if (toSend <= 0) return network_remove_finished_chunks(cq, toSend);
 
     if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
 
@@ -309,8 +295,9 @@ static int network_write_file_chunk_mmap(int fd, chunkqueue *cq, off_t *p_max_by
         signal(SIGBUS, sigbus_handler);
 
         sigbus_jmp_valid = 1;
-        wr = network_write_data_len(fd, data, toSend);
+        ssize_t wr = network_write_data_len(fd, data, toSend);
         sigbus_jmp_valid = 0;
+        return network_write_accounting(fd, cq, p_max_bytes, errh, wr, toSend);
     } else {
         sigbus_jmp_valid = 0;
 
@@ -322,13 +309,6 @@ static int network_write_file_chunk_mmap(int fd, chunkqueue *cq, off_t *p_max_by
         return -1;
     }
 
-    if (wr >= 0) {
-        *p_max_bytes -= wr;
-        chunkqueue_mark_written(cq, wr);
-        return (wr > 0 && wr == toSend) ? 0 : -3;
-    } else {
-        return network_write_error(fd, errh);
-    }
 }
 
 #endif /* NETWORK_WRITE_USE_MMAP */
@@ -366,55 +346,28 @@ static int network_write_file_chunk_mmap(int fd, chunkqueue *cq, off_t *p_max_by
 #endif
 
 /* next chunk must be MEM_CHUNK. send multiple mem chunks using writev() */
-static int network_writev_mem_chunks(int fd, chunkqueue *cq, off_t *p_max_bytes, log_error_st *errh) {
-    struct iovec chunks[MAX_CHUNKS];
+static int network_writev_mem_chunks(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
     size_t num_chunks = 0;
-    off_t max_bytes = *p_max_bytes;
     off_t toSend = 0;
-    ssize_t wr;
+    struct iovec chunks[MAX_CHUNKS];
 
-    for (const chunk *c = cq->first;
-         NULL != c && MEM_CHUNK == c->type
-           && num_chunks < MAX_CHUNKS && toSend < max_bytes;
-         c = c->next) {
-        size_t c_len = buffer_string_length(c->mem);
-        force_assert(c->offset >= 0 && c->offset <= (off_t)c_len);
-        c_len -= c->offset;
+    for (const chunk *c = cq->first; c && MEM_CHUNK == c->type; c = c->next) {
+        const off_t c_len = (off_t)buffer_string_length(c->mem) - c->offset;
         if (c_len > 0) {
             toSend += c_len;
 
             chunks[num_chunks].iov_base = c->mem->ptr + c->offset;
-            chunks[num_chunks].iov_len = c_len;
+            chunks[num_chunks].iov_len = (size_t)c_len;
 
-            ++num_chunks;
+            if (++num_chunks == MAX_CHUNKS || toSend >= *p_max_bytes) break;
         }
+        else if (c_len < 0) /*(should not happen; trigger assert)*/
+            return network_remove_finished_chunks(cq, c_len);
     }
+    if (0 == num_chunks) return network_remove_finished_chunks(cq, 0);
 
-    if (0 == num_chunks) {
-        chunkqueue_remove_finished_chunks(cq);
-        return 0;
-    }
-
-    wr = writev(fd, chunks, num_chunks);
-
-    if (wr < 0) switch (errno) {
-      case EAGAIN:
-      case EINTR:
-        break;
-      case EPIPE:
-      case ECONNRESET:
-        return -2;
-      default:
-        log_perror(errh, __FILE__, __LINE__, "writev failed: %d", fd);
-        return -1;
-    }
-
-    if (wr >= 0) {
-        *p_max_bytes -= wr;
-        chunkqueue_mark_written(cq, wr);
-    }
-
-    return (wr > 0 && wr == toSend) ? 0 : -3;
+    ssize_t wr = writev(fd, chunks, num_chunks);
+    return network_write_accounting(fd, cq, p_max_bytes, errh, wr, toSend);
 }
 
 #endif /* NETWORK_WRITE_USE_WRITEV */
@@ -434,23 +387,17 @@ static int network_writev_mem_chunks(int fd, chunkqueue *cq, off_t *p_max_bytes,
 #include <sys/uio.h>
 #endif
 
-static int network_write_file_chunk_sendfile(int fd, chunkqueue *cq, off_t *p_max_bytes, log_error_st *errh) {
+static int network_write_file_chunk_sendfile(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
     chunk * const c = cq->first;
     ssize_t wr;
     off_t offset;
     off_t toSend;
     off_t written = 0;
 
-    force_assert(c->offset >= 0 && c->offset <= c->file.length);
-
     offset = c->offset;
     toSend = c->file.length - c->offset;
     if (toSend > *p_max_bytes) toSend = *p_max_bytes;
-
-    if (0 == toSend) {
-        chunkqueue_remove_finished_chunks(cq);
-        return 0;
-    }
+    if (toSend <= 0) return network_remove_finished_chunks(cq, toSend);
 
     if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
 
@@ -529,6 +476,7 @@ static int network_write_file_chunk_sendfile(int fd, chunkqueue *cq, off_t *p_ma
     if (written > 0) {
         chunkqueue_mark_written(cq, written);
         *p_max_bytes -= written;
+        if (__builtin_expect( (*p_max_bytes <= 0), 0)) return -3;
     }
     else if (0 == wr) { /*(-1 != wr && 0 == written)*/
         log_error(errh, __FILE__, __LINE__,
@@ -550,8 +498,8 @@ static int network_write_file_chunk_sendfile(int fd, chunkqueue *cq, off_t *p_ma
  *   -2 : remote close
  */
 
-static int network_write_chunkqueue_write(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh) {
-    while (max_bytes > 0 && NULL != cq->first) {
+static int network_write_chunkqueue_write(const int fd, chunkqueue * const cq, off_t max_bytes, log_error_st * const errh) {
+    while (NULL != cq->first) {
         int rc = -1;
 
         switch (cq->first->type) {
@@ -567,16 +515,15 @@ static int network_write_chunkqueue_write(int fd, chunkqueue *cq, off_t max_byte
             break;
         }
 
-        if (-3 == rc) return 0;
-        if (0 != rc) return rc;
+        if (__builtin_expect( (0 != rc), 0)) return (-3 == rc) ? 0 : rc;
     }
 
     return 0;
 }
 
 #if defined(NETWORK_WRITE_USE_WRITEV)
-static int network_write_chunkqueue_writev(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh) {
-    while (max_bytes > 0 && NULL != cq->first) {
+static int network_write_chunkqueue_writev(const int fd, chunkqueue * const cq, off_t max_bytes, log_error_st * const errh) {
+    while (NULL != cq->first) {
         int rc = -1;
 
         switch (cq->first->type) {
@@ -596,8 +543,7 @@ static int network_write_chunkqueue_writev(int fd, chunkqueue *cq, off_t max_byt
             break;
         }
 
-        if (-3 == rc) return 0;
-        if (0 != rc) return rc;
+        if (__builtin_expect( (0 != rc), 0)) return (-3 == rc) ? 0 : rc;
     }
 
     return 0;
@@ -605,8 +551,8 @@ static int network_write_chunkqueue_writev(int fd, chunkqueue *cq, off_t max_byt
 #endif
 
 #if defined(NETWORK_WRITE_USE_SENDFILE)
-static int network_write_chunkqueue_sendfile(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh) {
-    while (max_bytes > 0 && NULL != cq->first) {
+static int network_write_chunkqueue_sendfile(const int fd, chunkqueue * const cq, off_t max_bytes, log_error_st * const errh) {
+    while (NULL != cq->first) {
         int rc = -1;
 
         switch (cq->first->type) {
@@ -628,8 +574,7 @@ static int network_write_chunkqueue_sendfile(int fd, chunkqueue *cq, off_t max_b
             break;
         }
 
-        if (-3 == rc) return 0;
-        if (0 != rc) return rc;
+        if (__builtin_expect( (0 != rc), 0)) return (-3 == rc) ? 0 : rc;
     }
 
     return 0;
