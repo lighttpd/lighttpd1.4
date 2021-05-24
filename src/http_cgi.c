@@ -123,6 +123,7 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
     /* note: string ptrs passed to cb() func must not be NULL */
 
     int rc = 0;
+    uint32_t len;
     buffer * const tb = r->tmp_buf;
     const char *s;
     size_t n;
@@ -133,41 +134,22 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
         rc |= cb(vdata, CONST_STR_LEN("CONTENT_LENGTH"),
                  buf, li_itostrn(buf,sizeof(buf),r->reqbody_length));
 
-    if (!buffer_string_is_empty(&r->uri.query))
-        rc |= cb(vdata, CONST_STR_LEN("QUERY_STRING"),
-                        CONST_BUF_LEN(&r->uri.query));
-    else
-        rc |= cb(vdata, CONST_STR_LEN("QUERY_STRING"),
-                        CONST_STR_LEN(""));
+    n = buffer_string_length(&r->uri.query);
+    rc |= cb(vdata, CONST_STR_LEN("QUERY_STRING"),
+                    n ? r->uri.query.ptr : "", n);
 
-    if (!buffer_string_is_empty(opts->strip_request_uri)) {
-        /**
-         * /app1/index/list
-         *
-         * stripping /app1 or /app1/ should lead to
-         *
-         * /index/list
-         *
-         */
-        size_t len = buffer_string_length(opts->strip_request_uri);
-        if ('/' == opts->strip_request_uri->ptr[len-1])
-            --len;
-
-        if (buffer_string_length(&r->target_orig) >= len
-            && 0 == memcmp(r->target_orig.ptr,
-                           opts->strip_request_uri->ptr, len)
-            && r->target_orig.ptr[len] == '/') {
-            rc |= cb(vdata, CONST_STR_LEN("REQUEST_URI"),
-                            r->target_orig.ptr+len,
-                            buffer_string_length(&r->target_orig)-len);
-        }
-        else
-            rc |= cb(vdata, CONST_STR_LEN("REQUEST_URI"),
-                            CONST_BUF_LEN(&r->target_orig));
+    s = r->target_orig.ptr;
+    n = buffer_string_length(&r->target_orig);
+    len = buffer_string_length(opts->strip_request_uri);
+    if (len) {
+        /* e.g. /app1/index/list
+         *      stripping /app1 or /app1/ should lead to /index/list
+         *      (trailing slash removed from strip_request_uri at config time)*/
+        if (n < len || 0 != memcmp(s, opts->strip_request_uri->ptr, len)
+            || s[len] != '/')
+            len = 0;
     }
-    else
-        rc |= cb(vdata, CONST_STR_LEN("REQUEST_URI"),
-                        CONST_BUF_LEN(&r->target_orig));
+    rc |= cb(vdata, CONST_STR_LEN("REQUEST_URI"), s+len, n-len);
 
     if (!buffer_is_equal(&r->target, &r->target_orig))
         rc |= cb(vdata, CONST_STR_LEN("REDIRECT_URI"),
@@ -302,8 +284,8 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
     }
     rc |= cb(vdata, CONST_STR_LEN("SERVER_ADDR"), s, n);
 
-    if (!buffer_string_is_empty(r->server_name)) {
-        n = buffer_string_length(r->server_name);
+    n = buffer_string_length(r->server_name);
+    if (n) {
         s = r->server_name->ptr;
         if (s[0] == '[') {
             const char *colon = strstr(s, "]:");

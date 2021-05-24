@@ -1448,6 +1448,11 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     break;
                   case 17:/* strip-request-uri */
                     host->strip_request_uri = cpv->v.b;
+                    if (buffer_has_slash_suffix(host->strip_request_uri)) {
+                        buffer *b; /*(remove trailing slash; see http_cgi.c)*/
+                        *(const buffer **)&b = host->strip_request_uri;
+                        buffer_string_set_length(b, buffer_string_length(b)-1);
+                    }
                     break;
                   case 18:/* fix-root-scriptname */
                     host->fix_root_path_name = (0 != cpv->v.u);
