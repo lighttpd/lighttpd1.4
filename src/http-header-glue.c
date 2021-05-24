@@ -456,19 +456,11 @@ static void http_response_xsendfile (request_st * const r, buffer * const path, 
 	 * - xdocroot should have trailing slash appended at config time
 	 * - r->conf.force_lowercase_filenames is not a server-wide setting,
 	 *   and so can not be definitively applied to xdocroot at config time*/
-	if (xdocroot) {
-		size_t i, xlen = buffer_string_length(path);
-		for (i = 0; i < xdocroot->used; ++i) {
-			data_string *ds = (data_string *)xdocroot->data[i];
-			size_t dlen = buffer_string_length(&ds->value);
-			if (dlen <= xlen
-			    && (!r->conf.force_lowercase_filenames
-				? 0 == memcmp(path->ptr, ds->value.ptr, dlen)
-				: buffer_eq_icase_ssn(path->ptr, ds->value.ptr, dlen))) {
-				break;
-			}
-		}
-		if (i == xdocroot->used && 0 != i) {
+	if (xdocroot && xdocroot->used) {
+		const buffer * const xval = !r->conf.force_lowercase_filenames
+		  ? array_match_value_prefix(xdocroot, path)
+		  : array_match_value_prefix_nc(xdocroot, path);
+		if (NULL == xval) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "X-Sendfile (%s) not under configured x-sendfile-docroot(s)", path->ptr);
 			r->http_status = 403;
@@ -533,19 +525,11 @@ static void http_response_xsendfile2(request_st * const r, const buffer * const 
             r->http_status = 502;
             break;
         }
-        if (xdocroot) {
-            size_t i, xlen = buffer_string_length(b);
-            for (i = 0; i < xdocroot->used; ++i) {
-                data_string *ds = (data_string *)xdocroot->data[i];
-                size_t dlen = buffer_string_length(&ds->value);
-                if (dlen <= xlen
-                    && (!r->conf.force_lowercase_filenames
-                    ? 0 == memcmp(b->ptr, ds->value.ptr, dlen)
-                    : buffer_eq_icase_ssn(b->ptr, ds->value.ptr, dlen))) {
-                    break;
-                }
-            }
-            if (i == xdocroot->used && 0 != i) {
+        if (xdocroot && xdocroot->used) {
+            const buffer * const xval = !r->conf.force_lowercase_filenames
+              ? array_match_value_prefix(xdocroot, b)
+              : array_match_value_prefix_nc(xdocroot, b);
+            if (NULL == xval) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "X-Sendfile2 (%s) not under configured x-sendfile-docroot(s)",
                   b->ptr);
