@@ -2413,10 +2413,10 @@ mod_gnutls_close_notify(handler_ctx *hctx);
 
 
 static int
-connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
+connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
-    gnutls_session_t ssl = hctx->ssl;
+    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    gnutls_session_t const ssl = hctx->ssl;
     if (!hctx->handshake) return 0;
 
     if (hctx->pending_write) {
@@ -2428,9 +2428,8 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         chunkqueue_mark_written(cq, wr);
     }
 
-    if (0 != hctx->close_notify) return mod_gnutls_close_notify(hctx);
-
-    chunkqueue_remove_finished_chunks(cq);
+    if (__builtin_expect( (0 != hctx->close_notify), 0))
+        return mod_gnutls_close_notify(hctx);
 
     const size_t lim = gnutls_record_get_max_size(ssl);
 
@@ -2453,6 +2452,10 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         int wr;
 
         if (0 != chunkqueue_peek_data(cq, &data, &data_len, errh)) return -1;
+        if (__builtin_expect( (0 == data_len), 0)) {
+            chunkqueue_remove_finished_chunks(cq);
+            continue;
+        }
 
         /* gnutls_record_send() copies the data, up to max record size, but if
          * (temporarily) unable to write the entire record, it is documented
@@ -2514,13 +2517,14 @@ mod_gnutls_ssl_handshake (handler_ctx *hctx)
 
 
 static int
-connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
+connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
 
     UNUSED(max_bytes);
 
-    if (0 != hctx->close_notify) return mod_gnutls_close_notify(hctx);
+    if (__builtin_expect( (0 != hctx->close_notify), 0))
+        return mod_gnutls_close_notify(hctx);
 
     if (!hctx->handshake) {
         int rc = mod_gnutls_ssl_handshake(hctx);

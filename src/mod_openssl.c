@@ -2978,15 +2978,14 @@ mod_openssl_close_notify(handler_ctx *hctx);
 
 
 static int
-connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
+connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
-    SSL *ssl = hctx->ssl;
+    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    SSL * const ssl = hctx->ssl;
     log_error_st * const errh = hctx->errh;
 
-    if (0 != hctx->close_notify) return mod_openssl_close_notify(hctx);
-
-    chunkqueue_remove_finished_chunks(cq);
+    if (__builtin_expect( (0 != hctx->close_notify), 0))
+        return mod_openssl_close_notify(hctx);
 
     while (max_bytes > 0 && !chunkqueue_is_empty(cq)) {
         char *data = local_send_buffer;
@@ -2996,6 +2995,10 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         int wr;
 
         if (0 != chunkqueue_peek_data(cq, &data, &data_len, errh)) return -1;
+        if (__builtin_expect( (0 == data_len), 0)) {
+            chunkqueue_remove_finished_chunks(cq);
+            continue;
+        }
 
         /**
          * SSL_write man-page
@@ -3009,7 +3012,7 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         ERR_clear_error();
         wr = SSL_write(ssl, data, data_len);
 
-        if (hctx->renegotiations > 1
+        if (__builtin_expect( (hctx->renegotiations > 1), 0)
             && hctx->conf.ssl_disable_client_renegotiation) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: renegotiation initiated by client, killing connection");
@@ -3079,16 +3082,17 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
 
 
 static int
-connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
+connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
     int len;
     char *mem = NULL;
     size_t mem_len = 0;
 
     UNUSED(max_bytes);
 
-    if (0 != hctx->close_notify) return mod_openssl_close_notify(hctx);
+    if (__builtin_expect( (0 != hctx->close_notify), 0))
+        return mod_openssl_close_notify(hctx);
 
     ERR_clear_error();
     do {

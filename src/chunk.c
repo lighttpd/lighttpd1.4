@@ -1198,6 +1198,8 @@ chunkqueue_peek_data (chunkqueue * const cq,
                 off_t len = c->file.length - c->offset;
                 if (len > (off_t)space)
                     len = (off_t)space;
+                if (0 == len)
+                    break;
 
                 if (-1 == lseek(c->file.fd, offset, SEEK_SET)) {
                     log_perror(errh, __FILE__, __LINE__, "lseek(\"%s\")",

@@ -1952,9 +1952,9 @@ mod_mbedtls_close_notify(handler_ctx *hctx);
 
 
 static int
-connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
+connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
     mbedtls_ssl_context * const ssl = &hctx->ssl;
 
     if (hctx->pending_write) {
@@ -1971,9 +1971,8 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         chunkqueue_mark_written(cq, wr);
     }
 
-    if (0 != hctx->close_notify) return mod_mbedtls_close_notify(hctx);
-
-    chunkqueue_remove_finished_chunks(cq);
+    if (__builtin_expect( (0 != hctx->close_notify), 0))
+        return mod_mbedtls_close_notify(hctx);
 
     const int lim = mbedtls_ssl_get_max_out_record_payload(ssl);
     if (lim < 0) return mod_mbedtls_ssl_write_err(con, hctx, lim, 0);
@@ -1987,6 +1986,10 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         int wr;
 
         if (0 != chunkqueue_peek_data(cq, &data, &data_len, errh)) return -1;
+        if (__builtin_expect( (0 == data_len), 0)) {
+            chunkqueue_remove_finished_chunks(cq);
+            continue;
+        }
 
         /* mbedtls_ssl_write() copies the data, up to max record size, but if
          * (temporarily) unable to write the entire record, it is documented
@@ -2152,16 +2155,17 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
 
 
 static int
-connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
+connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
     int len;
     char *mem = NULL;
     size_t mem_len = 0;
 
     UNUSED(max_bytes);
 
-    if (0 != hctx->close_notify) return mod_mbedtls_close_notify(hctx);
+    if (__builtin_expect( (0 != hctx->close_notify), 0))
+        return mod_mbedtls_close_notify(hctx);
 
     if (!hctx->handshake_done) {
         int rc = mod_mbedtls_ssl_handshake(hctx);

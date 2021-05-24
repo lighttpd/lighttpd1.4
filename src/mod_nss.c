@@ -2200,15 +2200,14 @@ mod_nss_close_notify(handler_ctx *hctx);
 
 
 static int
-connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
+connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
-    PRFileDesc *ssl = hctx->ssl;
+    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    PRFileDesc * const ssl = hctx->ssl;
     log_error_st * const errh = hctx->errh;
 
-    if (0 != hctx->close_notify) return mod_nss_close_notify(hctx);
-
-    chunkqueue_remove_finished_chunks(cq);
+    if (__builtin_expect( (0 != hctx->close_notify), 0))
+        return mod_nss_close_notify(hctx);
 
     /* future: for efficiency/performance might consider using NSS
      *   PR_Writev() PR_TransmitFile() PR_SendFile()
@@ -2222,6 +2221,10 @@ connection_write_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
         int wr;
 
         if (0 != chunkqueue_peek_data(cq, &data, &data_len, errh)) return -1;
+        if (__builtin_expect( (0 == data_len), 0)) {
+            chunkqueue_remove_finished_chunks(cq);
+            continue;
+        }
 
         /*(if partial write occurred, expect that subsequent writes will have
          * at least that much data available from chunkqueue_peek_data(), which
@@ -2263,15 +2266,16 @@ mod_nss_SSLHandshakeCallback (PRFileDesc *fd, void *arg)
 
 
 static int
-connection_read_cq_ssl (connection *con, chunkqueue *cq, off_t max_bytes)
+connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
 
     UNUSED(max_bytes);
 
-    if (0 != hctx->close_notify) return mod_nss_close_notify(hctx);
+    if (__builtin_expect( (0 != hctx->close_notify), 0))
+        return mod_nss_close_notify(hctx);
 
-    PRFileDesc *ssl = hctx->ssl;
+    PRFileDesc * const ssl = hctx->ssl;
     ssize_t len;
     char *mem = NULL;
     size_t mem_len = 0;
