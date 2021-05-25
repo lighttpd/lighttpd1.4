@@ -88,9 +88,9 @@ enum http_header_e {
 };
 
 __attribute_pure__
-enum http_header_e http_header_hkey_get(const char *s, uint32_t slen);
+enum http_header_e http_header_hkey_get(const char *s, size_t slen);
 __attribute_pure__
-enum http_header_e http_header_hkey_get_lc(const char *s, uint32_t slen);
+enum http_header_e http_header_hkey_get_lc(const char *s, size_t slen);
 
 __attribute_pure__
 int http_header_str_to_code (const char * const s);
