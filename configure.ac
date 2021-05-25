@@ -14,9 +14,9 @@ dnl - if an argument uses more than one line and is not a single
 dnl   function call, the argument should be on different lines than the
 dnl   wrapping braces
 AC_PREREQ([2.60])
-AC_INIT([lighttpd], [1.4.60], [https://redmine.lighttpd.net/projects/lighttpd/boards/2], [lighttpd], [https://www.lighttpd.net/])
+AC_INIT([lighttpd],[1.4.60],[https://redmine.lighttpd.net/projects/lighttpd/boards/2],[lighttpd],[https://www.lighttpd.net/])
 AC_CONFIG_SRCDIR([src/server.c])
-AC_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
 AC_CANONICAL_HOST
@@ -61,7 +61,6 @@ AC_DEFUN([TRY_LDFLAGS],
 
 dnl Checks for programs.
 AC_PROG_CC
-AC_PROG_CC_STDC
 AX_PROG_CC_FOR_BUILD
 LT_PATH_LD
 AC_PROG_INSTALL
@@ -70,6 +69,8 @@ AC_PROG_MAKE_SET
 
 AC_USE_SYSTEM_EXTENSIONS
 AM_PROG_AR
+AC_C_INLINE
+AC_C_RESTRICT
 
 dnl AC_CANONICAL_HOST
 case "$host_os" in
@@ -90,19 +91,16 @@ CPPFLAGS="${CPPFLAGS} -D_REENTRANT"
 
 dnl Checks for header files.
 
-dnl check for:
-dnl   inttypes.h => HAVE_INTTYPES_H
-dnl   stdint.h => HAVE_STDINT_H
-dnl and maybe more (which shouldn't be relied on)
-AC_HEADER_STDC
 dnl checks for sys/wait.h => HAVE_SYS_WAIT_H
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([\
   getopt.h \
+  inttypes.h \
   poll.h \
   port.h \
   pwd.h \
   stdlib.h \
+  stdint.h \
   strings.h \
   sys/devpoll.h \
   sys/epoll.h \
