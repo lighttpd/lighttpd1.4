@@ -112,6 +112,9 @@ liblightcomp_la_CFLAGS=$(AM_CFLAGS) $(LIBEV_CFLAGS)
 liblightcomp_la_LDFLAGS = $(common_ldflags)
 liblightcomp_la_LIBADD = $(PCRE_LIB) $(CRYPTO_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(ATTR_LIB)
 common_libadd = liblightcomp.la
+if !LIGHTTPD_STATIC
+common_src += mod_auth_api.c mod_vhostdb_api.c
+endif
 else
 src += $(common_src)
 common_ldflags = -avoid-version
@@ -173,7 +176,10 @@ mod_trigger_b4_dl_la_LIBADD = $(GDBM_LIB) $(MEMCACHED_LIB) $(common_libadd)
 endif
 
 lib_LTLIBRARIES += mod_vhostdb.la
-mod_vhostdb_la_SOURCES = mod_vhostdb.c mod_vhostdb_api.c
+mod_vhostdb_la_SOURCES = mod_vhostdb.c
+if !NO_RDYNAMIC
+mod_vhostdb_la_SOURCES += mod_vhostdb_api.c
+endif
 mod_vhostdb_la_LDFLAGS = $(common_module_ldflags)
 mod_vhostdb_la_LIBADD = $(common_libadd)
 
@@ -332,7 +338,10 @@ mod_deflate_la_LDFLAGS = $(BROTLI_CFLAGS) $(common_module_ldflags)
 mod_deflate_la_LIBADD = $(Z_LIB) $(ZSTD_LIB) $(BZ_LIB) $(BROTLI_LIBS) $(common_libadd)
 
 lib_LTLIBRARIES += mod_auth.la
-mod_auth_la_SOURCES = mod_auth.c mod_auth_api.c
+mod_auth_la_SOURCES = mod_auth.c
+if !NO_RDYNAMIC
+mod_auth_la_SOURCES += mod_auth_api.c
+endif
 mod_auth_la_LDFLAGS = $(common_module_ldflags)
 mod_auth_la_LIBADD = $(CRYPTO_LIB) $(common_libadd)
 
