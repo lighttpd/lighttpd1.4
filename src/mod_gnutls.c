@@ -371,6 +371,11 @@ mod_gnutls_session_ticket_key_file (const char *fn)
 static void
 mod_gnutls_session_ticket_key_check (server *srv, const plugin_data *p, const time_t cur_ts)
 {
+    static time_t detect_retrograde_ts;
+    if (detect_retrograde_ts > cur_ts && detect_retrograde_ts - cur_ts > 28800)
+        stek_rotate_ts = 0;
+    detect_retrograde_ts = cur_ts;
+
     if (p->ssl_stek_file) {
         struct stat st;
         if (0 == stat(p->ssl_stek_file, &st) && st.st_mtime > stek_rotate_ts

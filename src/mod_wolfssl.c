@@ -425,6 +425,11 @@ mod_openssl_session_ticket_key_file (const char *fn)
 static void
 mod_openssl_session_ticket_key_check (const plugin_data *p, const time_t cur_ts)
 {
+    static time_t detect_retrograde_ts;
+    if (detect_retrograde_ts > cur_ts && detect_retrograde_ts - cur_ts > 28800)
+        stek_rotate_ts = 0;
+    detect_retrograde_ts = cur_ts;
+
     int rotate = 0;
     if (p->ssl_stek_file) {
         struct stat st;
