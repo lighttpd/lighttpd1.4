@@ -652,6 +652,7 @@ int sock_addr_from_str_numeric(sock_addr * const restrict saddr, const char * co
 }
 
 
+#if 0 /* unused */
 int sock_addr_from_buffer_hints_numeric(sock_addr * const restrict saddr, socklen_t * const restrict len, const buffer * const restrict b, int family, unsigned short port, log_error_st * const restrict errh)
 {
     /*(this routine originates from mod_fastcgi.c and mod_scgi.c)*/
@@ -711,3 +712,4 @@ int sock_addr_from_buffer_hints_numeric(sock_addr * const restrict saddr, sockle
 
     return 0;
 }
+#endif
