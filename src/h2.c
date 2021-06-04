@@ -1949,8 +1949,8 @@ h2_send_headers (request_st * const r, connection * const con)
         data_string * const ds = hdata[i];
         const uint32_t klen = buffer_string_length(&ds->key);
         const uint32_t vlen = buffer_string_length(&ds->value);
-        const char * const restrict k = ds->key.ptr;
-        if (0 == vlen || 0 == klen) continue;
+        if (__builtin_expect( (0 == klen), 0)) continue;
+        if (__builtin_expect( (0 == vlen), 0)) continue;
         alen += klen + vlen + 4;
 
         if (alen > LSXPACK_MAX_STRLEN) {
@@ -1971,6 +1971,7 @@ h2_send_headers (request_st * const r, connection * const con)
             memcpy(v, http_header_lc[ds->ext], klen);
         }
         else {
+            const char * const restrict k = ds->key.ptr;
             if ((k[0] & 0xdf) == 'X' && http_response_omit_header(r, ds)) {
                 alen -= klen + vlen + 4;
                 continue;

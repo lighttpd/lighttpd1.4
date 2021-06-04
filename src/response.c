@@ -76,19 +76,11 @@ http_response_write_header_partial_1xx (request_st * const r, buffer * const b)
 void
 http_response_write_header (request_st * const r)
 {
-	chunkqueue * const cq = &r->write_queue;
-	buffer * const b = chunkqueue_prepend_buffer_open(cq);
-
-        if (cq != r->con->write_queue)
-            http_response_write_header_partial_1xx(r, b);
-
-	const char * const httpv = (r->http_version == HTTP_VERSION_1_1) ? "HTTP/1.1 " : "HTTP/1.0 ";
-	buffer_append_string_len(b, httpv, sizeof("HTTP/1.1 ")-1);
-	http_status_append(b, r->http_status);
-
 	/* disable keep-alive if requested */
 
-	if (r->con->request_count > r->conf.max_keep_alive_requests || 0 == r->conf.max_keep_alive_idle) {
+	r->con->keep_alive_idle = r->conf.max_keep_alive_idle;
+	if (__builtin_expect( (0 == r->conf.max_keep_alive_idle), 0)
+	    || r->con->request_count > r->conf.max_keep_alive_requests) {
 		r->keep_alive = 0;
 	} else if (0 != r->reqbody_length
 		   && r->reqbody_length != r->reqbody_queue.bytes_in
@@ -97,8 +89,6 @@ http_response_write_header (request_st * const r)
 		                & (FDEVENT_STREAM_REQUEST
 		                   | FDEVENT_STREAM_REQUEST_BUFMIN)))) {
 		r->keep_alive = 0;
-	} else {
-		r->con->keep_alive_idle = r->conf.max_keep_alive_idle;
 	}
 
 	if (light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)
@@ -115,13 +105,26 @@ http_response_write_header (request_st * const r)
 		http_header_response_unset(r, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
 	}
 
+	chunkqueue * const cq = &r->write_queue;
+	buffer * const b = chunkqueue_prepend_buffer_open(cq);
+
+	if (cq != r->con->write_queue)
+		http_response_write_header_partial_1xx(r, b);
+
+	buffer_append_string_len(b,
+	                         (r->http_version == HTTP_VERSION_1_1)
+	                           ? "HTTP/1.1 "
+	                           : "HTTP/1.0 ",
+	                         sizeof("HTTP/1.1 ")-1);
+	http_status_append(b, r->http_status);
+
 	/* add all headers */
-	for (size_t i = 0; i < r->resp_headers.used; ++i) {
+	for (size_t i = 0, used = r->resp_headers.used; i < used; ++i) {
 		const data_string * const ds = (data_string *)r->resp_headers.data[i];
 		const uint32_t klen = buffer_string_length(&ds->key);
 		const uint32_t vlen = buffer_string_length(&ds->value);
-		if (0 == klen || 0 == vlen)
-			continue;
+		if (__builtin_expect( (0 == klen), 0)) continue;
+		if (__builtin_expect( (0 == vlen), 0)) continue;
 		if ((ds->key.ptr[0] & 0xdf) == 'X' && http_response_omit_header(r, ds))
 			continue;
 		char * restrict s = buffer_extend(b, klen+vlen+4);
