@@ -1965,8 +1965,9 @@ h2_send_headers (request_st * const r, connection * const con)
         /* HTTP/2 requires lowercase keys
          * ls-hpack requires key and value be in same buffer
          * Since keys are typically short, append (and lowercase) key onto
-         * end of value buffer */
-        char * const v = buffer_string_prepare_append(&ds->value, klen);
+         * end of value buffer, following '\0' after end of value, and
+         * without modifying ds->value.used or overwriting '\0' */
+        char * const v = buffer_string_prepare_append(&ds->value, klen)+1;
         if (__builtin_expect( (ds->ext != HTTP_HEADER_OTHER), 1)) {
             memcpy(v, http_header_lc[ds->ext], klen);
         }
@@ -1979,7 +1980,6 @@ h2_send_headers (request_st * const r, connection * const con)
             for (uint32_t j = 0; j < klen; ++j)
                 v[j] = !light_isupper(k[j]) ? k[j] : (k[j] | 0x20);
         }
-        /*buffer_commit(&ds->value, klen);*//*(not necessary; truncated below)*/
 
         uint32_t voff = 0;
         const char *n;
@@ -1992,7 +1992,7 @@ h2_send_headers (request_st * const r, connection * const con)
             memset(&lsx, 0, sizeof(lsxpack_header_t));
             lsx.hpack_index = http_header_lshpack_idx[ds->ext];
             lsx.buf = ds->value.ptr;
-            lsx.name_offset = vlen;
+            lsx.name_offset = vlen+1;
             lsx.name_len = klen;
             lsx.val_offset = voff;
             if (NULL == n)
@@ -2011,12 +2011,10 @@ h2_send_headers (request_st * const r, connection * const con)
             unsigned char * const dst_in = dst;
             dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
             if (dst == dst_in) {
-                buffer_string_set_length(&ds->value, vlen); /*(restore prior)*/
                 h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
                 return;
             }
         } while (n);
-        buffer_string_set_length(&ds->value, vlen); /*(restore prior value)*/
     }
 
     if (!light_btst(r->resp_htags, HTTP_HEADER_DATE)) {
