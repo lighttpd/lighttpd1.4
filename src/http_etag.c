@@ -47,11 +47,15 @@ static void
 http_etag_remix (buffer * const etag, const char * const str, const uint32_t len)
 {
     uint32_t h = dekhash(str, len, len); /*(pass len as initial hash value)*/
+  #if 0 /*(currently never elen > 2; always cleared in http_etag_create())*/
     uint32_t elen = buffer_string_length(etag);
     if (elen > 2) /*(expect "..." if set)*/
         h = dekhash(etag->ptr+1, elen-2, h);
     buffer_string_set_length(etag, 1);
     etag->ptr[0] = '\"';
+  #else
+    buffer_copy_string_len(etag, CONST_STR_LEN("\""));
+  #endif
     buffer_append_int(etag, h);
     buffer_append_string_len(etag, CONST_STR_LEN("\""));
 }
