@@ -212,7 +212,7 @@ typedef enum FAMCodes { /*(copied from fam.h to define arbitrary enum values)*/
 #endif
 
 typedef struct fam_dir_entry {
-	buffer *name;
+	buffer name;
 	int refcnt;
 	FAMRequest req;
 	time_t stat_ts;
@@ -240,8 +240,7 @@ static fam_dir_entry * fam_dir_entry_init(const char *name, size_t len)
     fam_dir_entry * const fam_dir = calloc(1, sizeof(*fam_dir));
     force_assert(NULL != fam_dir);
 
-    fam_dir->name = buffer_init();
-    buffer_copy_string_len(fam_dir->name, name, len);
+    buffer_copy_string_len(&fam_dir->name, name, len);
     fam_dir->refcnt = 0;
   #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
     fam_dir->req = -1;
@@ -253,8 +252,8 @@ static fam_dir_entry * fam_dir_entry_init(const char *name, size_t len)
 static void fam_dir_entry_free(fam_dir_entry *fam_dir)
 {
     if (!fam_dir) return;
-    /*(fam_dir->parent might be invalid pointer here; ignore)*/
-    buffer_free(fam_dir->name);
+    /*(fam_dir->fam_parent might be invalid pointer here; ignore)*/
+    free(fam_dir->name.ptr);
   #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
     if (-1 != fam_dir->req)
         close(fam_dir->req);
@@ -343,7 +342,7 @@ static void fam_dir_invalidate_tree(splay_tree *t, const char *name, size_t len)
   #ifdef __clang_analyzer__
     force_assert(fam_dir);
   #endif
-    buffer *b = fam_dir->name;
+    const buffer * const b = &fam_dir->name;
     size_t blen = buffer_string_length(b);
     if (blen > len && b->ptr[len] == '/' && 0 == memcmp(b->ptr, name, len))
         fam_dir_invalidate_node(fam_dir);
@@ -475,7 +474,7 @@ static void stat_cache_handle_fdevent_in(stat_cache_fam *scf)
 static void stat_cache_handle_fdevent_fn(stat_cache_fam * const scf, fam_dir_entry *fam_dir, const char * const fn, const uint32_t fnlen, int code)
 {
         if (fnlen) {
-            buffer * const n = fam_dir->name;
+            buffer * const n = &fam_dir->name;
             fam_dir_entry *fam_link;
             uint32_t len;
             switch (code) {
@@ -504,14 +503,14 @@ static void stat_cache_handle_fdevent_fn(stat_cache_fam * const scf, fam_dir_ent
 
                 fam_link = /*(check if might be symlink to monitored dir)*/
                   stat_cache_sptree_find(&scf->dirs, CONST_BUF_LEN(n));
-                if (fam_link && !buffer_is_equal(fam_link->name, n))
+                if (fam_link && !buffer_is_equal(&fam_link->name, n))
                     fam_link = NULL;
 
                 buffer_string_set_length(n, len);
 
                 if (fam_link) {
                     /* replaced symlink changes containing dir */
-                    stat_cache_invalidate_entry(CONST_BUF_LEN(n));
+                    stat_cache_invalidate_entry(n->ptr, len);
                     /* handle symlink to dir as deleted dir below */
                     code = FAMDeleted;
                     fam_dir = fam_link;
@@ -525,14 +524,15 @@ static void stat_cache_handle_fdevent_fn(stat_cache_fam * const scf, fam_dir_ent
 
         switch(code) {
         case FAMChanged:
-            stat_cache_invalidate_entry(CONST_BUF_LEN(fam_dir->name));
+            stat_cache_invalidate_entry(CONST_BUF_LEN(&fam_dir->name));
             break;
         case FAMDeleted:
         case FAMMoved:
-            stat_cache_delete_tree(CONST_BUF_LEN(fam_dir->name));
+            stat_cache_delete_tree(CONST_BUF_LEN(&fam_dir->name));
             fam_dir_invalidate_node(fam_dir);
             if (scf->dirs)
-                fam_dir_invalidate_tree(scf->dirs,CONST_BUF_LEN(fam_dir->name));
+                fam_dir_invalidate_tree(scf->dirs,
+                                        CONST_BUF_LEN(&fam_dir->name));
             fam_dir_periodic_cleanup();
             break;
         default:
@@ -671,7 +671,7 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
     scf->dirs = splaytree_splay(scf->dirs, dir_ndx);
     if (NULL != scf->dirs && scf->dirs->key == dir_ndx) {
         fam_dir = scf->dirs->data;
-        if (!buffer_is_equal_string(fam_dir->name, fn, dirlen)) {
+        if (!buffer_eq_slen(&fam_dir->name, fn, dirlen)) {
             /* hash collision; preserve existing
              * do not monitor new to avoid cache thrashing */
             return NULL;
@@ -717,7 +717,7 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
             scf->wds = splaytree_delete(scf->wds, fam_dir->req);
           #endif
             if (0 != FAMCancelMonitor(&scf->fam, &fam_dir->req)
-                || 0 != FAMMonitorDirectory(&scf->fam, fam_dir->name->ptr,
+                || 0 != FAMMonitorDirectory(&scf->fam, fam_dir->name.ptr,
                                             &fam_dir->req,
                                             (void *)(intptr_t)dir_ndx)) {
                 fam_dir->stat_ts = 0; /* invalidate */
@@ -735,17 +735,17 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
     if (NULL == fam_dir) {
         fam_dir = fam_dir_entry_init(fn, dirlen);
 
-        if (0 != FAMMonitorDirectory(&scf->fam,fam_dir->name->ptr,&fam_dir->req,
+        if (0 != FAMMonitorDirectory(&scf->fam,fam_dir->name.ptr,&fam_dir->req,
                                      (void *)(intptr_t)dir_ndx)) {
           #if defined(HAVE_SYS_INOTIFY_H) \
            || (defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE)
             log_perror(scf->errh, __FILE__, __LINE__,
               "monitoring dir failed: %s file: %s",
-              fam_dir->name->ptr, fn);
+              fam_dir->name.ptr, fn);
           #else
             log_error(scf->errh, __FILE__, __LINE__,
               "monitoring dir failed: %s file: %s %s",
-              fam_dir->name->ptr, fn, FamErrlist[FAMErrno]);
+              fam_dir->name.ptr, fn, FamErrlist[FAMErrno]);
           #endif
             fam_dir_entry_free(fam_dir);
             return NULL;
@@ -1228,7 +1228,7 @@ void stat_cache_delete_dir(const char *name, uint32_t len)
     if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
         splay_tree **sptree = &sc.scf->dirs;
         fam_dir_entry *fam_dir = stat_cache_sptree_find(sptree, name, len);
-        if (fam_dir && buffer_is_equal_string(fam_dir->name, name, len))
+        if (fam_dir && buffer_eq_slen(&fam_dir->name, name, len))
             fam_dir_invalidate_node(fam_dir);
         if (*sptree) fam_dir_invalidate_tree(*sptree, name, len);
         fam_dir_periodic_cleanup();
