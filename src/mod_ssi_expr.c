@@ -40,7 +40,7 @@ void ssi_val_free(ssi_val_t *s) {
 __attribute_pure__
 int ssi_val_tobool(ssi_val_t *B) {
 	if (B->type == SSI_TYPE_STRING) {
-		return !buffer_string_is_empty(B->str);
+		return !buffer_is_blank(B->str);
 	} else {
 		return B->bo;
 	}
@@ -212,9 +212,9 @@ static int ssi_expr_tokenizer(handler_ctx *p,
 
 			tid = TK_VALUE;
 
-			if (NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_cgi_env, CONST_BUF_LEN(token)))) {
+			if (NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_cgi_env, BUF_PTR_LEN(token)))) {
 				buffer_copy_buffer(token, &ds->value);
-			} else if (NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_vars, CONST_BUF_LEN(token)))) {
+			} else if (NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_vars, BUF_PTR_LEN(token)))) {
 				buffer_copy_buffer(token, &ds->value);
 			} else {
 				buffer_copy_string_len(token, CONST_STR_LEN(""));

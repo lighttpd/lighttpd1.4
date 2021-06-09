@@ -32,6 +32,7 @@ request_init_data (request_st * const r, connection * const con, server * const 
     r->con = con;
     r->tmp_buf = srv->tmp_buf;
     r->resp_body_scratchpad = -1;
+    r->server_name = &r->uri.authority;
 
     /* init plugin-specific per-request structures */
     r->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
@@ -156,6 +157,7 @@ request_reset_ex (request_st * const r)
     }
   #endif
 
+    r->server_name = &r->uri.authority;
     buffer_clear(&r->uri.authority);
     buffer_reset(&r->uri.path);
     buffer_reset(&r->uri.query);

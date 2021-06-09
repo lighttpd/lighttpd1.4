@@ -89,7 +89,7 @@ static void mod_setenv_prep_ext (const array * const ac) {
     *(const array **)&a = ac;
     for (uint32_t i = 0; i < a->used; ++i) {
         data_string * const ds = (data_string *)a->data[i];
-        ds->ext = http_header_hkey_get(CONST_BUF_LEN(&ds->key));
+        ds->ext = http_header_hkey_get(BUF_PTR_LEN(&ds->key));
     }
 }
 
@@ -173,18 +173,18 @@ URIHANDLER_FUNC(mod_setenv_uri_handler) {
     if (aa) {
         for (uint32_t k = 0; k < aa->used; ++k) {
             const data_string * const ds = (const data_string *)aa->data[k];
-            http_header_request_append(r, ds->ext, CONST_BUF_LEN(&ds->key),
-                                                   CONST_BUF_LEN(&ds->value));
+            http_header_request_append(r, ds->ext, BUF_PTR_LEN(&ds->key),
+                                                   BUF_PTR_LEN(&ds->value));
         }
     }
 
     if (as) {
         for (uint32_t k = 0; k < as->used; ++k) {
             const data_string * const ds = (const data_string *)as->data[k];
-            !buffer_string_is_empty(&ds->value)
-              ? http_header_request_set(r, ds->ext, CONST_BUF_LEN(&ds->key),
-                                                    CONST_BUF_LEN(&ds->value))
-              : http_header_request_unset(r, ds->ext, CONST_BUF_LEN(&ds->key));
+            !buffer_is_blank(&ds->value)
+              ? http_header_request_set(r, ds->ext, BUF_PTR_LEN(&ds->key),
+                                                    BUF_PTR_LEN(&ds->value))
+              : http_header_request_unset(r, ds->ext, BUF_PTR_LEN(&ds->key));
         }
     }
 
@@ -204,16 +204,16 @@ REQUEST_FUNC(mod_setenv_handle_request_env) {
     if (aa) {
         for (uint32_t k = 0; k < hctx->conf.environment->used; ++k) {
             const data_string * const ds = (const data_string *)aa->data[k];
-            http_header_env_append(r, CONST_BUF_LEN(&ds->key),
-                                      CONST_BUF_LEN(&ds->value));
+            http_header_env_append(r, BUF_PTR_LEN(&ds->key),
+                                      BUF_PTR_LEN(&ds->value));
         }
     }
 
     if (as) {
         for (uint32_t k = 0; k < as->used; ++k) {
             const data_string * const ds = (const data_string *)as->data[k];
-            http_header_env_set(r, CONST_BUF_LEN(&ds->key),
-                                   CONST_BUF_LEN(&ds->value));
+            http_header_env_set(r, BUF_PTR_LEN(&ds->key),
+                                   BUF_PTR_LEN(&ds->value));
         }
     }
 
@@ -231,18 +231,18 @@ REQUEST_FUNC(mod_setenv_handle_response_start) {
     if (aa) {
         for (uint32_t k = 0; k < aa->used; ++k) {
             const data_string * const ds = (const data_string *)aa->data[k];
-            http_header_response_insert(r, ds->ext, CONST_BUF_LEN(&ds->key),
-                                                    CONST_BUF_LEN(&ds->value));
+            http_header_response_insert(r, ds->ext, BUF_PTR_LEN(&ds->key),
+                                                    BUF_PTR_LEN(&ds->value));
         }
     }
 
     if (as) {
         for (uint32_t k = 0; k < as->used; ++k) {
             const data_string * const ds = (const data_string *)as->data[k];
-            !buffer_string_is_empty(&ds->value)
-              ? http_header_response_set(r, ds->ext, CONST_BUF_LEN(&ds->key),
-                                                     CONST_BUF_LEN(&ds->value))
-              : http_header_response_unset(r, ds->ext, CONST_BUF_LEN(&ds->key));
+            !buffer_is_blank(&ds->value)
+              ? http_header_response_set(r, ds->ext, BUF_PTR_LEN(&ds->key),
+                                                     BUF_PTR_LEN(&ds->value))
+              : http_header_response_unset(r, ds->ext, BUF_PTR_LEN(&ds->key));
         }
     }
 

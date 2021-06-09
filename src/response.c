@@ -28,7 +28,7 @@
 int
 http_response_omit_header (request_st * const r, const data_string * const ds)
 {
-    const size_t klen = buffer_string_length(&ds->key);
+    const size_t klen = buffer_clen(&ds->key);
     if (klen == sizeof("X-Sendfile")-1
         && buffer_eq_icase_ssn(ds->key.ptr, CONST_STR_LEN("X-Sendfile")))
         return 1;
@@ -62,13 +62,13 @@ http_response_write_header_partial_1xx (request_st * const r, buffer * const b)
     chunkqueue * const cq = con->write_queue;
     con->write_queue = &r->write_queue;
 
-    /*assert(0 == buffer_string_length(b));*//*expect empty buffer from caller*/
+    /*assert(0 == buffer_clen(b));*//*expect empty buffer from caller*/
     uint32_t len = (uint32_t)chunkqueue_length(cq);
     /*(expecting MEM_CHUNK(s), so not expecting error reading files)*/
     if (chunkqueue_read_data(cq, buffer_string_prepare_append(b, len),
                              len, r->conf.errh) < 0)
         len = 0;
-    buffer_string_set_length(b, len);/*expect initial empty buffer from caller*/
+    buffer_truncate(b, len);/*expect initial empty buffer from caller*/
     chunkqueue_free(cq);
 }
 
@@ -121,8 +121,8 @@ http_response_write_header (request_st * const r)
 	/* add all headers */
 	for (size_t i = 0, used = r->resp_headers.used; i < used; ++i) {
 		const data_string * const ds = (data_string *)r->resp_headers.data[i];
-		const uint32_t klen = buffer_string_length(&ds->key);
-		const uint32_t vlen = buffer_string_length(&ds->value);
+		const uint32_t klen = buffer_clen(&ds->key);
+		const uint32_t vlen = buffer_clen(&ds->value);
 		if (__builtin_expect( (0 == klen), 0)) continue;
 		if (__builtin_expect( (0 == vlen), 0)) continue;
 		if ((ds->key.ptr[0] & 0xdf) == 'X' && http_response_omit_header(r, ds))
@@ -151,14 +151,13 @@ http_response_write_header (request_st * const r)
 		buffer_append_string_len(b, tstr, 37);
 	}
 
-	if (!light_btst(r->resp_htags, HTTP_HEADER_SERVER)
-	    && !buffer_string_is_empty(r->conf.server_tag))
+	if (!light_btst(r->resp_htags, HTTP_HEADER_SERVER) && r->conf.server_tag)
 		buffer_append_str2(b, CONST_STR_LEN("\r\nServer: "),
-		                      CONST_BUF_LEN(r->conf.server_tag));
+		                      BUF_PTR_LEN(r->conf.server_tag));
 
 	buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
-	r->resp_header_len = buffer_string_length(b);
+	r->resp_header_len = buffer_clen(b);
 
 	if (r->conf.log_response_header) {
 		log_error(r->conf.errh,__FILE__,__LINE__,"Response-Header:\n%s",b->ptr);
@@ -227,7 +226,7 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 		char *pathinfo;
 		{
 			/*(might check at startup that s->document_root does not end in '/')*/
-			size_t len = buffer_string_length(&r->physical.basedir)
+			size_t len = buffer_clen(&r->physical.basedir)
 			           - (buffer_has_pathsep_suffix(&r->physical.basedir));
 			pathinfo = r->physical.path.ptr + len;
 			if ('/' != *pathinfo) {
@@ -265,7 +264,7 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 		if (pathinfo) {
 			size_t len = r->physical.path.ptr+pathused-1-pathinfo, reqlen;
 			if (r->conf.force_lowercase_filenames
-			    && len <= (reqlen = buffer_string_length(&r->target))
+			    && len <= (reqlen = buffer_clen(&r->target))
 			    && buffer_eq_icase_ssn(r->target.ptr + reqlen - len, pathinfo, len)) {
 				/* attempt to preserve case-insensitive PATH_INFO
 				 * (works in common case where mod_alias, mod_magnet, and other modules
@@ -280,8 +279,8 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 			 * shorten uri.path
 			 */
 
-			buffer_string_set_length(&r->uri.path, buffer_string_length(&r->uri.path) - len);
-			buffer_string_set_length(&r->physical.path, (size_t)(pathinfo - r->physical.path.ptr));
+			buffer_truncate(&r->uri.path, buffer_clen(&r->uri.path) - len);
+			buffer_truncate(&r->physical.path, (size_t)(pathinfo - r->physical.path.ptr));
 		}
 	}
 
@@ -343,6 +342,10 @@ static handler_t http_response_config (request_st * const r) {
     config_cond_cache_reset(r);
     config_patch_config(r);
 
+    r->server_name = r->conf.server_name
+                   ? r->conf.server_name
+                   : &r->uri.authority;
+
     /* do we have to downgrade from 1.1 to 1.0 ? (ignore for HTTP/2) */
     if (__builtin_expect( (!r->conf.allow_http11), 0)
         && r->http_version == HTTP_VERSION_1_1)
@@ -380,7 +383,7 @@ http_response_prepare (request_st * const r)
 	}
 
 	/* no decision yet, build conf->filename */
-	if (buffer_is_empty(&r->physical.path)) {
+	if (buffer_is_unset(&r->physical.path)) {
 
 		if (__builtin_expect( (!r->async_callback), 1)) {
 			rc = http_response_config(r);
@@ -480,9 +483,9 @@ http_response_prepare (request_st * const r)
 		 *
 		 * */
 
-		if (!buffer_string_is_empty(&r->physical.rel_path)) {
+		if (!buffer_is_blank(&r->physical.rel_path)) {
 			buffer *b = &r->physical.rel_path;
-			size_t len = buffer_string_length(b);
+			size_t len = buffer_clen(b);
 
 			/* strip trailing " /" or "./" once */
 			if (len > 1 &&
@@ -492,7 +495,7 @@ http_response_prepare (request_st * const r)
 			}
 			/* strip all trailing " " and "." */
 			while (len > 0 &&  ( ' ' == b->ptr[len-1] || '.' == b->ptr[len-1] ) ) --len;
-			buffer_string_set_length(b, len);
+			buffer_truncate(b, len);
 		}
 #endif
 
@@ -508,7 +511,8 @@ http_response_prepare (request_st * const r)
 		}
 		/* the docroot plugin should set the doc_root and might also set the physical.path
 		 * for us (all vhost-plugins are supposed to set the doc_root)
-		 * */
+		 * (might also set r->server_name)
+		 */
 		rc = plugins_call_handle_docroot(r);
 		if (HANDLER_GO_ON != rc) continue;
 
@@ -520,11 +524,6 @@ http_response_prepare (request_st * const r)
 			buffer_to_lower(&r->physical.rel_path);
 		}
 
-		/* the docroot plugins might set the servername, if they don't we take http-host */
-		if (buffer_string_is_empty(r->server_name)) {
-			r->server_name = &r->uri.authority;
-		}
-
 		/**
 		 * create physical filename
 		 * -> physical.path = docroot + rel_path
@@ -533,8 +532,8 @@ http_response_prepare (request_st * const r)
 
 		buffer_copy_buffer(&r->physical.basedir, &r->physical.doc_root);
 		buffer_copy_path_len2(&r->physical.path,
-		                      CONST_BUF_LEN(&r->physical.doc_root),
-		                      CONST_BUF_LEN(&r->physical.rel_path));
+		                      BUF_PTR_LEN(&r->physical.doc_root),
+		                      BUF_PTR_LEN(&r->physical.rel_path));
 
 		if (r->conf.log_request_handling) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
@@ -617,7 +616,7 @@ http_response_prepare (request_st * const r)
 __attribute_cold__
 static handler_t http_response_comeback (request_st * const r)
 {
-    if (NULL != r->handler_module || !buffer_is_empty(&r->physical.path))
+    if (NULL != r->handler_module || !buffer_is_unset(&r->physical.path))
         return HANDLER_GO_ON;
 
     config_reset_config(r);
@@ -626,7 +625,7 @@ static handler_t http_response_comeback (request_st * const r)
         buffer_copy_buffer(&r->uri.authority, r->http_host);
         buffer_to_lower(&r->uri.authority);
     }
-    else
+    else /*(buffer_blank(&r->uri.authority) w/o code inline)*/
         buffer_copy_string_len(&r->uri.authority, CONST_STR_LEN(""));
 
     int status = http_request_parse_target(r, r->con->proto_default_port);
@@ -673,7 +672,7 @@ http_response_errdoc_init (request_st * const r)
     if (NULL != www_auth) {
         http_header_response_set(r, HTTP_HEADER_WWW_AUTHENTICATE,
                                  CONST_STR_LEN("WWW-Authenticate"),
-                                 CONST_BUF_LEN(www_auth));
+                                 BUF_PTR_LEN(www_auth));
         buffer_free(www_auth);
     }
 }
@@ -692,7 +691,7 @@ http_response_static_errdoc (request_st * const r)
     r->resp_body_finished = 1;
 
     /* try to send static errorfile */
-    if (!buffer_string_is_empty(r->conf.errorfile_prefix)) {
+    if (r->conf.errorfile_prefix) {
         buffer_copy_buffer(&r->physical.path, r->conf.errorfile_prefix);
         buffer_append_int(&r->physical.path, r->http_status);
         buffer_append_string_len(&r->physical.path, CONST_STR_LEN(".html"));
@@ -703,7 +702,7 @@ http_response_static_errdoc (request_st * const r)
             if (content_type)
                 http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
                                          CONST_STR_LEN("Content-Type"),
-                                         CONST_BUF_LEN(content_type));
+                                         BUF_PTR_LEN(content_type));
             return;
         }
         buffer_clear(&r->physical.path);
@@ -742,7 +741,7 @@ static void
 http_response_merge_trailers (request_st * const r)
 {
     /* attempt to merge trailers into headers; header not yet sent by caller */
-    if (buffer_string_is_empty(&r->gw_dechunk->b)) return;
+    if (buffer_is_blank(&r->gw_dechunk->b)) return;
     const int done = r->gw_dechunk->done;
     if (!done) return; /* XXX: !done; could scan for '\n' and send only those */
 
@@ -788,7 +787,7 @@ http_response_write_prepare(request_st * const r)
             break;
           case HTTP_METHOD_OPTIONS:
             if ((!r->http_status || r->http_status == 200)
-                && !buffer_string_is_empty(&r->uri.path)
+                && !buffer_is_blank(&r->uri.path)
                 && r->uri.path.ptr[0] != '*') {
                 http_response_body_clear(r, 0);
 		http_response_prepare_options_star(r); /*(treat like "*")*/
@@ -1032,10 +1031,10 @@ http_response_handler (request_st * const r)
             }
             else if (__builtin_expect( (r->http_status >= 400), 0)) {
                 const buffer *error_handler = NULL;
-                if (!buffer_string_is_empty(r->conf.error_handler))
+                if (r->conf.error_handler)
                     error_handler = r->conf.error_handler;
                 else if ((r->http_status == 404 || r->http_status == 403)
-                       && !buffer_string_is_empty(r->conf.error_handler_404))
+                       && r->conf.error_handler_404)
                     error_handler = r->conf.error_handler_404;
 
                 if (error_handler)

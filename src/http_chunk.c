@@ -207,7 +207,7 @@ static int http_chunk_uses_tempfile(const request_st * const r, const chunkqueue
 }
 
 int http_chunk_append_buffer(request_st * const r, buffer * const mem) {
-    size_t len = buffer_string_length(mem);
+    size_t len = mem ? buffer_clen(mem) : 0;
     if (0 == len) return 0;
 
     chunkqueue * const cq = &r->write_queue;
@@ -289,7 +289,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
             const char *p;
             unsigned char *s = (unsigned char *)mem;
             off_t hsz;
-            if (buffer_string_is_empty(h)) {
+            if (buffer_is_blank(h)) {
                 /*(short-circuit common case: complete chunked header line)*/
                 p = memchr(mem, '\n', (size_t)len);
                 if (p)
@@ -305,7 +305,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 }
             }
             else {
-                uint32_t hlen = buffer_string_length(h);
+                uint32_t hlen = buffer_clen(h);
                 p = strchr(h->ptr, '\n');
                 if (p)
                     hsz = (off_t)(++p - h->ptr);
@@ -351,7 +351,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                     if (len - hsz > 2) return -1; /*(excess data)*/
                     /* common case with no trailers; final \r\n received */
                   #if 0 /*(avoid allocation for common case; users must check)*/
-                    if (buffer_is_empty(h))
+                    if (buffer_is_unset(h))
                         buffer_copy_string_len(h, CONST_STR_LEN("0\r\n\r\n"));
                   #else
                     buffer_clear(h);
@@ -363,7 +363,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 /* accumulate trailers and check for end of trailers */
                 /* XXX: reuse r->conf.max_request_field_size
                  *      or have separate limit? */
-                uint32_t mlen = buffer_string_length(h);
+                uint32_t mlen = buffer_clen(h);
                 mlen = (r->conf.max_request_field_size > mlen)
                      ?  r->conf.max_request_field_size - mlen
                      :  0;
@@ -375,7 +375,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                     buffer_append_string_len(h, mem, mlen);
                     p = strrchr(h->ptr, '\n');
                     if (NULL != p) {
-                        buffer_string_set_length(h, p + 1 - h->ptr);
+                        buffer_truncate(h, p + 1 - h->ptr);
                         if (p[-1] != '\r')
                             buffer_append_string_len(h, CONST_STR_LEN("\r\n"));
                     }
@@ -390,7 +390,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 if ((p = strstr(h->ptr, "\r\n\r\n"))) {
                     r->gw_dechunk->done = r->http_status;
                     if (p[4] != '\0') return -1; /*(excess data)*/
-                        /*buffer_string_set_length(h, (uint32_t)(p+4-h->ptr));*/
+                        /*buffer_truncate(h, (uint32_t)(p+4-h->ptr));*/
                 }
                 break;
             }
@@ -446,13 +446,13 @@ int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
 {
     /* Note: this routine is separate from http_chunk_decode_append_mem() to
      * potentially avoid copying in http_chunk_append_buffer().  Otherwise this
-     * would be: return http_chunk_decode_append_mem(r, CONST_BUF_LEN(mem)); */
+     * would be: return http_chunk_decode_append_mem(r, BUF_PTR_LEN(mem)); */
 
     /*(called by funcs receiving data from backends, which might be chunked)*/
     /*(separate from http_chunk_append_buffer() called by numerous others)*/
     if (!r->resp_decode_chunked) {
         if (r->resp_body_scratchpad > 0) {
-            off_t len = (off_t)buffer_string_length(mem);
+            off_t len = (off_t)buffer_clen(mem);
             r->resp_body_scratchpad -= len;
             if (r->resp_body_scratchpad <= 0) {
                 r->resp_body_finished = 1;
@@ -460,7 +460,7 @@ int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
                     /*(silently truncate if data exceeds Content-Length)*/
                     len += r->resp_body_scratchpad;
                     r->resp_body_scratchpad = 0;
-                    buffer_string_set_length(mem, (uint32_t)len);
+                    buffer_truncate(mem, (uint32_t)len);
                 }
             }
         }
@@ -473,7 +473,7 @@ int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
 
     /* might avoid copy by transferring buffer if buffer is all data that is
      * part of large chunked block, but choosing to *not* expand that out here*/
-    if (0 != http_chunk_decode_append_data(r, CONST_BUF_LEN(mem)))
+    if (0 != http_chunk_decode_append_data(r, BUF_PTR_LEN(mem)))
         return -1;
 
     /* no need to decode chunked to immediately re-encode chunked;

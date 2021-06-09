@@ -172,7 +172,7 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     burl.port      = sock_addr_get_port(&r->con->srv_socket->addr);
     burl.path      = &r->target; /*(uri-encoded and includes query-part)*/
     burl.query     = &r->uri.query;
-    if (buffer_string_is_empty(burl.authority))
+    if (buffer_is_blank(burl.authority))
         burl.authority = r->server_name;
 
     /* redirect URL on match
@@ -184,7 +184,7 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     if (HANDLER_FINISHED == rc) {
         http_header_response_set(r, HTTP_HEADER_LOCATION,
                                  CONST_STR_LEN("Location"),
-                                 CONST_BUF_LEN(tb));
+                                 BUF_PTR_LEN(tb));
         r->http_status = p->conf.redirect_code;
         r->handler_module = NULL;
         r->resp_body_finished = 1;

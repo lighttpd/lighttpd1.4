@@ -52,7 +52,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
 
     for (size_t i = 0; i < opts->used; ++i) {
         const data_string *ds = (data_string *)opts->data[i];
-        if (ds->type == TYPE_STRING && !buffer_string_is_empty(&ds->value)) {
+        if (ds->type == TYPE_STRING && !buffer_is_blank(&ds->value)) {
             if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("sql"))) {
                 sqlquery = &ds->value;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("dbname"))) {
@@ -83,7 +83,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
      * - port, default: 3306
      */
 
-    if (!buffer_string_is_empty(sqlquery)
+    if (NULL != sqlquery && !buffer_is_blank(sqlquery)
         && dbname && *dbname && user && *user) {
         vhostdb_config *dbconf;
         MYSQL *dbconn = mysql_init(NULL);
@@ -148,20 +148,21 @@ static int mod_vhostdb_mysql_query(request_st * const r, void *p_d, buffer *docr
             /* escape the uri.authority */
             unsigned long len;
             buffer_append_string_len(sqlquery, b, (size_t)(d - b));
-            buffer_string_prepare_append(sqlquery, buffer_string_length(&r->uri.authority) * 2);
+            buffer_string_prepare_append(sqlquery,
+                                         buffer_clen(&r->uri.authority) * 2);
             len = mysql_real_escape_string(dbconf->dbconn,
-                    sqlquery->ptr + buffer_string_length(sqlquery),
-                    CONST_BUF_LEN(&r->uri.authority));
+                    sqlquery->ptr + buffer_clen(sqlquery),
+                    BUF_PTR_LEN(&r->uri.authority));
             if ((unsigned long)~0 == len) return -1;
             buffer_commit(sqlquery, len);
         } else {
-            d = dbconf->sqlquery->ptr + buffer_string_length(dbconf->sqlquery);
+            d = dbconf->sqlquery->ptr + buffer_clen(dbconf->sqlquery);
             buffer_append_string_len(sqlquery, b, (size_t)(d - b));
             break;
         }
     }
 
-    if (mysql_real_query(dbconf->dbconn, CONST_BUF_LEN(sqlquery))) {
+    if (mysql_real_query(dbconf->dbconn, BUF_PTR_LEN(sqlquery))) {
         log_error(r->conf.errh, __FILE__, __LINE__, "%s",
           mysql_error(dbconf->dbconn));
         buffer_clear(docroot); /*(reset buffer; no result)*/

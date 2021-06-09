@@ -332,7 +332,7 @@ static void server_free(server *srv) {
 __attribute_cold__
 static void remove_pid_file(server *srv) {
 	if (pid_fd <= -2) return;
-	if (!buffer_string_is_empty(srv->srvconf.pid_file) && 0 <= pid_fd) {
+	if (srv->srvconf.pid_file && 0 <= pid_fd) {
 		if (0 != ftruncate(pid_fd, 0)) {
 			log_perror(srv->errh, __FILE__, __LINE__,
 			  "ftruncate failed for: %s", srv->srvconf.pid_file->ptr);
@@ -342,8 +342,7 @@ static void remove_pid_file(server *srv) {
 		close(pid_fd);
 		pid_fd = -1;
 	}
-	if (!buffer_string_is_empty(srv->srvconf.pid_file) &&
-	    buffer_string_is_empty(srv->srvconf.changeroot)) {
+	if (srv->srvconf.pid_file && !srv->srvconf.changeroot) {
 		if (0 != unlink(srv->srvconf.pid_file->ptr)) {
 			if (errno != EACCES && errno != EPERM) {
 				log_perror(srv->errh, __FILE__, __LINE__,
@@ -981,8 +980,7 @@ static void server_graceful_state (server *srv) {
     log_error(srv->errh,__FILE__,__LINE__,"[note] graceful shutdown started");
 
     /* no graceful restart if chroot()ed, if oneshot mode, or if idle timeout */
-    if (!buffer_string_is_empty(srv->srvconf.changeroot)
-        || oneshot_fd || 2 == graceful_shutdown)
+    if (srv->srvconf.changeroot || oneshot_fd || 2 == graceful_shutdown)
         graceful_restart = 0;
 
     if (graceful_restart) {
@@ -1292,7 +1290,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 	/* open pid file BEFORE chroot */
 	if (-2 == pid_fd) pid_fd = -1; /*(initial startup state)*/
-	if (-1 == pid_fd && !buffer_string_is_empty(srv->srvconf.pid_file)) {
+	if (-1 == pid_fd && srv->srvconf.pid_file) {
 		const char *pidfile = srv->srvconf.pid_file->ptr;
 		if (-1 == (pid_fd = fdevent_open_cloexec(pidfile, 0, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
 			struct stat st;
@@ -1376,7 +1374,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		struct group *grp = NULL;
 		struct passwd *pwd = NULL;
 
-		if (!buffer_string_is_empty(srv->srvconf.groupname)) {
+		if (srv->srvconf.groupname) {
 			if (NULL == (grp = getgrnam(srv->srvconf.groupname->ptr))) {
 				log_error(srv->errh, __FILE__, __LINE__,
 				  "can't find groupname %s", srv->srvconf.groupname->ptr);
@@ -1384,7 +1382,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			}
 		}
 
-		if (!buffer_string_is_empty(srv->srvconf.username)) {
+		if (srv->srvconf.username) {
 			if (NULL == (pwd = getpwnam(srv->srvconf.username->ptr))) {
 				log_error(srv->errh, __FILE__, __LINE__,
 				  "can't find username %s", srv->srvconf.username->ptr);
@@ -1425,13 +1423,13 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 				log_perror(srv->errh, __FILE__, __LINE__, "setgroups()");
 				return -1;
 			}
-			if (!buffer_string_is_empty(srv->srvconf.username)) {
+			if (srv->srvconf.username) {
 				initgroups(srv->srvconf.username->ptr, grp->gr_gid);
 			}
 		}
 #endif
 #ifdef HAVE_CHROOT
-		if (!buffer_string_is_empty(srv->srvconf.changeroot)) {
+		if (srv->srvconf.changeroot) {
 			tzset();
 
 			if (-1 == chroot(srv->srvconf.changeroot->ptr)) {
@@ -1522,7 +1520,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		buffer_clear(tb);
 		buffer_append_int(tb, srv->pid);
 		buffer_append_string_len(tb, CONST_STR_LEN("\n"));
-		if (-1 == write_all(pid_fd, CONST_BUF_LEN(tb))) {
+		if (-1 == write_all(pid_fd, BUF_PTR_LEN(tb))) {
 			log_perror(srv->errh, __FILE__, __LINE__, "Couldn't write pid file");
 			close(pid_fd);
 			pid_fd = -1;

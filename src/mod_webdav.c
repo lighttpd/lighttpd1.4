@@ -506,7 +506,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* webdav.sqlite-db-name */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     if (!mod_webdav_sqlite3_init(cpv->v.b->ptr, srv->errh))
                         return HANDLER_ERROR;
                 }
@@ -520,19 +520,19 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
                     unsigned short opts = 0;
                     for (uint32_t j = 0, used = cpv->v.a->used; j < used; ++j) {
                         data_string *ds = (data_string *)cpv->v.a->data[j];
-                        if (buffer_is_equal_string(&ds->key,
+                        if (buffer_eq_slen(&ds->key,
                               CONST_STR_LEN("deprecated-unsafe-partial-put"))
                             && config_plugin_value_tobool((data_unset *)ds,0)) {
                             opts |= MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT;
                             continue;
                         }
-                        if (buffer_is_equal_string(&ds->key,
+                        if (buffer_eq_slen(&ds->key,
                               CONST_STR_LEN("propfind-depth-infinity"))
                             && config_plugin_value_tobool((data_unset *)ds,0)) {
                             opts |= MOD_WEBDAV_PROPFIND_DEPTH_INFINITY;
                             continue;
                         }
-                        if (buffer_is_equal_string(&ds->key,
+                        if (buffer_eq_slen(&ds->key,
                               CONST_STR_LEN("unsafe-propfind-follow-symlink"))
                             && config_plugin_value_tobool((data_unset *)ds,0)) {
                             opts |= MOD_WEBDAV_UNSAFE_PROPFIND_FOLLOW_SYMLINK;
@@ -628,7 +628,7 @@ webdav_double_buffer (request_st * const r, buffer * const b)
     /* send parts of XML to r->write_queue; surrounding XML tags added later.
      * http_chunk_append_buffer() is safe to use here since r->resp_body_started
      * has not been set, so r->resp_send_chunked can not be set yet */
-    if (buffer_string_length(b) > 60000) {
+    if (buffer_clen(b) > 60000) {
         http_chunk_append_buffer(r, b); /*(might move/steal/reset buffer)*/
         buffer_clear(b);
     }
@@ -731,7 +731,7 @@ webdav_xml_log_response (request_st * const r)
         switch (c->type) {
           case MEM_CHUNK:
             s = c->mem->ptr + c->offset;
-            len = buffer_string_length(c->mem) - (uint32_t)c->offset;
+            len = buffer_clen(c->mem) - (uint32_t)c->offset;
             break;
           case FILE_CHUNK:
             /*(safe to mmap tempfiles from response XML)*/
@@ -797,7 +797,7 @@ webdav_xml_href (buffer * const b, const buffer * const href)
 {
     buffer_append_string_len(b, CONST_STR_LEN(
       "<D:href>"));
-    buffer_append_string_encoded(b, CONST_BUF_LEN(href), ENCODING_REL_URI);
+    buffer_append_string_encoded(b, BUF_PTR_LEN(href), ENCODING_REL_URI);
     buffer_append_string_len(b, CONST_STR_LEN(
       "</D:href>\n"));
 }
@@ -862,7 +862,7 @@ webdav_xml_propstat (buffer * const b, buffer * const value, const int status)
     buffer_append_str3(b, CONST_STR_LEN(
       "<D:propstat>\n"
       "<D:prop>\n"),
-      CONST_BUF_LEN(value), CONST_STR_LEN(
+      BUF_PTR_LEN(value), CONST_STR_LEN(
       "</D:prop>\n"));
     webdav_xml_status(b, status);
     buffer_append_string_len(b, CONST_STR_LEN(
@@ -900,13 +900,13 @@ webdav_xml_activelock (buffer * const b,
       "<D:activelock>\n"
       "<D:lockscope>"
       "<D:") }
-     ,{ CONST_BUF_LEN(lockdata->lockscope) }
+     ,{ BUF_PTR_LEN(lockdata->lockscope) }
      ,{ CONST_STR_LEN(
       "/>"
       "</D:lockscope>\n"
       "<D:locktype>"
       "<D:") }
-     ,{ CONST_BUF_LEN(lockdata->locktype) }
+     ,{ BUF_PTR_LEN(lockdata->locktype) }
      ,{ CONST_STR_LEN(
       "/>"
       "</D:locktype>\n"
@@ -937,15 +937,15 @@ webdav_xml_activelock (buffer * const b,
       "</D:owner>\n"
       "<D:locktoken>\n"
       "<D:href>") }                           /*webdav_xml_href_raw();*/
-     ,{ CONST_BUF_LEN(&lockdata->locktoken) } /*(as-is; not URL-encoded)*/
+     ,{ BUF_PTR_LEN(&lockdata->locktoken) }   /*(as-is; not URL-encoded)*/
      ,{ CONST_STR_LEN(
       "</D:href>\n"
       "</D:locktoken>\n"
       "<D:lockroot>\n") }
     };
-    if (!buffer_string_is_empty(&lockdata->ownerinfo)) {
+    if (!buffer_is_blank(&lockdata->ownerinfo)) {
         iov[1].iov_base = lockdata->ownerinfo.ptr;
-        iov[1].iov_len = buffer_string_length(&lockdata->ownerinfo);
+        iov[1].iov_len = buffer_clen(&lockdata->ownerinfo);
     }
     buffer_append_iovec(b, iovb, sizeof(iovb)/sizeof(*iovb));
     webdav_xml_href(b, &lockdata->lockroot);
@@ -1407,7 +1407,7 @@ SERVER_FUNC(mod_webdav_worker_init)
             switch (cpv->k_id) {
              #ifdef USE_PROPPATCH
               case 0: /* webdav.sqlite-db-name */
-                if (!buffer_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     const char * const dbname = cpv->v.b->ptr;
                     cpv->v.v = calloc(1, sizeof(sql_config));
                     cpv->vtype = T_CONFIG_LOCAL;
@@ -1486,7 +1486,7 @@ webdav_lock_match (const plugin_config * const pconf,
         return 0;
 
     sqlite3_bind_text(
-      stmt, 1, CONST_BUF_LEN(&lockdata->locktoken), SQLITE_STATIC);
+      stmt, 1, BUF_PTR_LEN(&lockdata->locktoken), SQLITE_STATIC);
 
     int status = -1; /* if lock does not exist */
     if (SQLITE_ROW == sqlite3_step(stmt)) {
@@ -1499,7 +1499,7 @@ webdav_lock_match (const plugin_config * const pconf,
             text = (char *)sqlite3_column_text(stmt, 1); /* owner */
             text_len = (uint32_t)sqlite3_column_bytes(stmt, 1);
             if (0 == text_len /*(if no auth required to lock; not recommended)*/
-                || buffer_is_equal_string(lockdata->owner, text, text_len))
+                || buffer_eq_slen(lockdata->owner, text, text_len))
                 status = 0; /* success; lock match */
             else {
                 /*(future: might check if owner is a privileged admin user)*/
@@ -1578,7 +1578,7 @@ webdav_lock_activelocks (const plugin_config * const pconf,
               || !pconf->sql->stmt_locks_read_uri_members)
         return;
 
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(uri), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(uri), SQLITE_STATIC);
 
     while (SQLITE_ROW == sqlite3_step(stmt)) {
         /* (avoid duplication with query below if infinity lock on collection)
@@ -1600,7 +1600,7 @@ webdav_lock_activelocks (const plugin_config * const pconf,
      * (i.e. collections: self (if collection) or containing collections) */
     stmt = pconf->sql->stmt_locks_read_uri_infinity;
 
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(uri), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(uri), SQLITE_STATIC);
 
     while (SQLITE_ROW == sqlite3_step(stmt)) {
         webdav_lock_activelocks_lockdata(stmt, (webdav_lockdata_wr *)&lockdata);
@@ -1621,7 +1621,7 @@ webdav_lock_activelocks (const plugin_config * const pconf,
     stmt = pconf->sql->stmt_locks_read_uri_members;
 
     sqlite3_bind_int( stmt, 1, (int)uri->used-1);
-    sqlite3_bind_text(stmt, 2, CONST_BUF_LEN(uri), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, BUF_PTR_LEN(uri), SQLITE_STATIC);
 
     while (SQLITE_ROW == sqlite3_step(stmt)) {
         /* (avoid duplication with query above for exact resource match) */
@@ -1650,7 +1650,7 @@ webdav_lock_delete_uri (const plugin_config * const pconf,
     if (!stmt)
         return 0;
 
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(uri), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(uri), SQLITE_STATIC);
 
     int status = 1;
     while (SQLITE_DONE != sqlite3_step(stmt)) {
@@ -1691,7 +1691,7 @@ webdav_lock_delete_uri_col (const plugin_config * const pconf,
   #endif
 
     sqlite3_bind_int( stmt, 1, (int)uri->used-1);
-    sqlite3_bind_text(stmt, 2, CONST_BUF_LEN(uri), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, BUF_PTR_LEN(uri), SQLITE_STATIC);
 
     int status = 1;
     while (SQLITE_DONE != sqlite3_step(stmt)) {
@@ -1734,25 +1734,25 @@ webdav_lock_acquire (const plugin_config * const pconf,
         return 0;
 
     sqlite3_bind_text(
-      stmt, 1, CONST_BUF_LEN(&lockdata->locktoken),     SQLITE_STATIC);
+      stmt, 1, BUF_PTR_LEN(&lockdata->locktoken),     SQLITE_STATIC);
     sqlite3_bind_text(
-      stmt, 2, CONST_BUF_LEN(&lockdata->lockroot),      SQLITE_STATIC);
+      stmt, 2, BUF_PTR_LEN(&lockdata->lockroot),      SQLITE_STATIC);
     sqlite3_bind_text(
-      stmt, 3, CONST_BUF_LEN(lockdata->lockscope),      SQLITE_STATIC);
+      stmt, 3, BUF_PTR_LEN(lockdata->lockscope),      SQLITE_STATIC);
     sqlite3_bind_text(
-      stmt, 4, CONST_BUF_LEN(lockdata->locktype),       SQLITE_STATIC);
+      stmt, 4, BUF_PTR_LEN(lockdata->locktype),       SQLITE_STATIC);
     if (lockdata->owner->used)
         sqlite3_bind_text(
-          stmt, 5, CONST_BUF_LEN(lockdata->owner),      SQLITE_STATIC);
+          stmt, 5, BUF_PTR_LEN(lockdata->owner),      SQLITE_STATIC);
     else
         sqlite3_bind_text(
-          stmt, 5, CONST_STR_LEN(""),                   SQLITE_STATIC);
+          stmt, 5, CONST_STR_LEN(""),                 SQLITE_STATIC);
     if (lockdata->ownerinfo.used)
         sqlite3_bind_text(
-          stmt, 6, CONST_BUF_LEN(&lockdata->ownerinfo), SQLITE_STATIC);
+          stmt, 6, BUF_PTR_LEN(&lockdata->ownerinfo), SQLITE_STATIC);
     else
         sqlite3_bind_text(
-          stmt, 6, CONST_STR_LEN(""),                   SQLITE_STATIC);
+          stmt, 6, CONST_STR_LEN(""),                 SQLITE_STATIC);
     sqlite3_bind_int(
       stmt, 7, lockdata->depth);
     sqlite3_bind_int(
@@ -1787,7 +1787,7 @@ webdav_lock_refresh (const plugin_config * const pconf,
         return 0;
 
     const buffer * const locktoken = &lockdata->locktoken;
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(locktoken),  SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(locktoken),  SQLITE_STATIC);
     sqlite3_bind_int( stmt, 2, lockdata->timeout);
 
     int status = 1;
@@ -1821,7 +1821,7 @@ webdav_lock_release (const plugin_config * const pconf,
         return 0;
 
     sqlite3_bind_text(
-      stmt, 1, CONST_BUF_LEN(&lockdata->locktoken), SQLITE_STATIC);
+      stmt, 1, BUF_PTR_LEN(&lockdata->locktoken), SQLITE_STATIC);
 
     int status = 0;
     if (SQLITE_DONE == sqlite3_step(stmt))
@@ -1853,8 +1853,8 @@ webdav_prop_move_uri (const plugin_config * const pconf,
     if (!stmt)
         return 0;
 
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(dst), SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, CONST_BUF_LEN(src), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(dst), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, BUF_PTR_LEN(src), SQLITE_STATIC);
 
     if (SQLITE_DONE != sqlite3_step(stmt)) {
       #if 0
@@ -1892,10 +1892,10 @@ webdav_prop_move_uri_col (const plugin_config * const pconf,
     force_assert(0 != src->used);
   #endif
 
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(dst), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(dst), SQLITE_STATIC);
     sqlite3_bind_int( stmt, 2, (int)src->used);
     sqlite3_bind_int( stmt, 3, (int)src->used-1);
-    sqlite3_bind_text(stmt, 4, CONST_BUF_LEN(src), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, BUF_PTR_LEN(src), SQLITE_STATIC);
 
     if (SQLITE_DONE != sqlite3_step(stmt)) {
       #if 0
@@ -1928,7 +1928,7 @@ webdav_prop_delete_uri (const plugin_config * const pconf,
     if (!stmt)
         return 0;
 
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(uri), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(uri), SQLITE_STATIC);
 
     if (SQLITE_DONE != sqlite3_step(stmt)) {
       #if 0
@@ -1961,8 +1961,8 @@ webdav_prop_copy_uri (const plugin_config * const pconf,
     if (!stmt)
         return 0;
 
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(dst), SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, CONST_BUF_LEN(src), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(dst), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, BUF_PTR_LEN(src), SQLITE_STATIC);
 
     if (SQLITE_DONE != sqlite3_step(stmt)) {
       #if 0
@@ -1997,7 +1997,7 @@ webdav_prop_delete (const plugin_config * const pconf,
     if (!stmt)
         return 0;
 
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(uri),           SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(uri),             SQLITE_STATIC);
     sqlite3_bind_text(stmt, 2, prop_name, strlen(prop_name), SQLITE_STATIC);
     sqlite3_bind_text(stmt, 3, prop_ns,   strlen(prop_ns),   SQLITE_STATIC);
 
@@ -2030,7 +2030,7 @@ webdav_prop_update (const plugin_config * const pconf,
     if (!stmt)
         return 0;
 
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(uri),             SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(uri),               SQLITE_STATIC);
     sqlite3_bind_text(stmt, 2, prop_name,  strlen(prop_name),  SQLITE_STATIC);
     sqlite3_bind_text(stmt, 3, prop_ns,    strlen(prop_ns),    SQLITE_STATIC);
     sqlite3_bind_text(stmt, 4, prop_value, strlen(prop_value), SQLITE_STATIC);
@@ -2063,7 +2063,7 @@ webdav_prop_select_prop (const plugin_config * const pconf,
     if (!stmt)
         return -1; /* not found */
 
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(uri),        SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(uri),          SQLITE_STATIC);
     sqlite3_bind_text(stmt, 2, prop->name, prop->namelen, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 3, prop->ns,   prop->nslen,   SQLITE_STATIC);
 
@@ -2096,7 +2096,7 @@ webdav_prop_select_props (const plugin_config * const pconf,
     if (!stmt)
         return;
 
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(uri), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(uri), SQLITE_STATIC);
 
     while (SQLITE_ROW == sqlite3_step(stmt)) {
         webdav_property_name prop;
@@ -2130,7 +2130,7 @@ webdav_prop_select_propnames (const plugin_config * const pconf,
         return 0;
 
     /* get all property names (EMPTY) */
-    sqlite3_bind_text(stmt, 1, CONST_BUF_LEN(uri), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, BUF_PTR_LEN(uri), SQLITE_STATIC);
 
     while (SQLITE_ROW == sqlite3_step(stmt)) {
         webdav_property_name prop;
@@ -2269,7 +2269,7 @@ webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
 
     if (NULL != inm) {
         if (NULL == st
-            ? !buffer_is_equal_string(inm,CONST_STR_LEN("*"))
+            ? !buffer_eq_slen(inm, CONST_STR_LEN("*"))
               || (errno != ENOENT && errno != ENOTDIR)
             : http_etag_matches(etagb, inm->ptr, 1))
             return 412; /* Precondition Failed */
@@ -2278,7 +2278,7 @@ webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
     if (NULL != ius) {
         if (NULL == st)
             return 412; /* Precondition Failed */
-        if (http_date_if_modified_since(CONST_BUF_LEN(ius), st->st_mtime))
+        if (http_date_if_modified_since(BUF_PTR_LEN(ius), st->st_mtime))
             return 412; /* Precondition Failed */
     }
 
@@ -2292,13 +2292,13 @@ webdav_response_etag (request_st * const r, struct stat *st)
     if (0 != r->conf.etag_flags) {
         buffer *etagb = &r->physical.etag;
         http_etag_create(etagb, st, r->conf.etag_flags);
-        stat_cache_update_entry(CONST_BUF_LEN(&r->physical.path), st, etagb);
+        stat_cache_update_entry(BUF_PTR_LEN(&r->physical.path), st, etagb);
         http_header_response_set(r, HTTP_HEADER_ETAG,
                                  CONST_STR_LEN("ETag"),
-                                 CONST_BUF_LEN(etagb));
+                                 BUF_PTR_LEN(etagb));
     }
     else {
-        stat_cache_update_entry(CONST_BUF_LEN(&r->physical.path), st, NULL);
+        stat_cache_update_entry(BUF_PTR_LEN(&r->physical.path), st, NULL);
     }
 }
 
@@ -2306,7 +2306,7 @@ webdav_response_etag (request_st * const r, struct stat *st)
 static void
 webdav_parent_modified (const buffer *path)
 {
-    uint32_t dirlen = buffer_string_length(path);
+    uint32_t dirlen = buffer_clen(path);
     const char *fn = path->ptr;
     /*force_assert(0 != dirlen);*/
     /*force_assert(fn[0] == '/');*/
@@ -2348,7 +2348,7 @@ webdav_unlinkat (const plugin_config * const pconf,
                  const int dfd, const char * const d_name)
 {
     if (0 == unlinkat(dfd, d_name, 0)) {
-        stat_cache_delete_entry(CONST_BUF_LEN(&dst->path));
+        stat_cache_delete_entry(BUF_PTR_LEN(&dst->path));
         return webdav_prop_delete_uri(pconf, &dst->rel_path);
     }
 
@@ -2366,7 +2366,7 @@ webdav_delete_file (const plugin_config * const pconf,
                     const physical_st * const dst)
 {
     if (0 == unlink(dst->path.ptr)) {
-        stat_cache_delete_entry(CONST_BUF_LEN(&dst->path));
+        stat_cache_delete_entry(BUF_PTR_LEN(&dst->path));
         return webdav_prop_delete_uri(pconf, &dst->rel_path);
     }
 
@@ -2500,13 +2500,13 @@ webdav_linktmp_rename (const plugin_config * const pconf,
     int rc = -1; /*(not zero)*/
 
     buffer_clear(tmpb);
-    buffer_append_str2(tmpb, CONST_BUF_LEN(dst),
+    buffer_append_str2(tmpb, BUF_PTR_LEN(dst),
                              CONST_STR_LEN("."));
     buffer_append_int(tmpb, (long)getpid());
     buffer_append_string_len(tmpb, CONST_STR_LEN("."));
     buffer_append_uint_hex_lc(tmpb, (uintptr_t)pconf); /*(stack/heap addr)*/
     buffer_append_string_len(tmpb, CONST_STR_LEN("~"));
-    if (buffer_string_length(tmpb) < PATH_MAX
+    if (buffer_clen(tmpb) < PATH_MAX
         && 0 == linkat(AT_FDCWD, src->ptr, AT_FDCWD, tmpb->ptr, 0)) {
 
         rc = rename(tmpb->ptr, dst->ptr);
@@ -2536,13 +2536,13 @@ webdav_copytmp_rename (const plugin_config * const pconf,
 {
     buffer * const tmpb = pconf->tmpb;
     buffer_clear(tmpb);
-    buffer_append_str2(tmpb, CONST_BUF_LEN(&dst->path),
+    buffer_append_str2(tmpb, BUF_PTR_LEN(&dst->path),
                              CONST_STR_LEN("."));
     buffer_append_int(tmpb, (long)getpid());
     buffer_append_string_len(tmpb, CONST_STR_LEN("."));
     buffer_append_uint_hex_lc(tmpb, (uintptr_t)pconf); /*(stack/heap addr)*/
     buffer_append_string_len(tmpb, CONST_STR_LEN("~"));
-    if (buffer_string_length(tmpb) >= PATH_MAX)
+    if (buffer_clen(tmpb) >= PATH_MAX)
         return 414; /* URI Too Long */
 
     /* code does not currently support symlinks in webdav collections;
@@ -2596,7 +2596,7 @@ webdav_copytmp_rename (const plugin_config * const pconf,
     {
         /* unconditional stat cache deletion
          * (not worth extra syscall/race to detect overwritten or not) */
-        stat_cache_delete_entry(CONST_BUF_LEN(&dst->path));
+        stat_cache_delete_entry(BUF_PTR_LEN(&dst->path));
         return 0;
     }
     else {
@@ -2649,8 +2649,8 @@ webdav_copymove_file (const plugin_config * const pconf,
             if (overwrite) unlink(src->path.ptr);
             /* unconditional stat cache deletion
              * (not worth extra syscall/race to detect overwritten or not) */
-            stat_cache_delete_entry(CONST_BUF_LEN(&dst->path));
-            stat_cache_delete_entry(CONST_BUF_LEN(&src->path));
+            stat_cache_delete_entry(BUF_PTR_LEN(&dst->path));
+            stat_cache_delete_entry(BUF_PTR_LEN(&src->path));
             webdav_prop_move_uri(pconf, &src->rel_path, &dst->rel_path);
             return 0;
         }
@@ -3200,12 +3200,12 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
              * Note: not currently supporting filesystem xattr */
             const array * const mtypes = pb->r->conf.mimetypes;
             const buffer *ct =
-              stat_cache_mimetype_by_ext(mtypes, CONST_BUF_LEN(&pb->dst->path));
+              stat_cache_mimetype_by_ext(mtypes, BUF_PTR_LEN(&pb->dst->path));
             if (NULL != ct) {
                 buffer_append_str3(b,
                   CONST_STR_LEN(
                   "<D:getcontenttype>"),
-                  CONST_BUF_LEN(ct),
+                  BUF_PTR_LEN(ct),
                   CONST_STR_LEN(
                   "</D:getcontenttype>"));
             }
@@ -3223,7 +3223,7 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
             buffer_append_str3(b,
               CONST_STR_LEN(
               "<D:getetag>"),
-              CONST_BUF_LEN(etagb),
+              BUF_PTR_LEN(etagb),
               CONST_STR_LEN(
               "</D:getetag>"));
             buffer_clear(etagb);
@@ -3237,7 +3237,7 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
           "<D:getlastmodified ns0:dt=\"dateTime.rfc1123\">"));
         if (!http_date_time_to_str(buffer_extend(b, HTTP_DATE_SZ-1),
                                    HTTP_DATE_SZ, pb->st.st_mtime))
-            buffer_string_set_length(b, buffer_string_length(b)+1-HTTP_DATE_SZ);
+            buffer_truncate(b, buffer_clen(b)+1-HTTP_DATE_SZ);
         buffer_append_string_len(b, CONST_STR_LEN(
           "</D:getlastmodified>"));
         if (pnum != WEBDAV_PROP_ALL) return 0;/* found *//*(else fall through)*/
@@ -3431,9 +3431,9 @@ webdav_propfind_resource (const webdav_propfind_bufs * const restrict pb)
     buffer_append_string_len(b, CONST_STR_LEN(
       "<D:response>\n"));
     webdav_xml_href(b, &pb->dst->rel_path);
-    if (b_200->used > 1)  /* !unset and !blank */
+    if (!buffer_is_blank(b_200))
         webdav_xml_propstat(b, b_200, 200);
-    if (b_404->used > 1)  /* !unset and !blank */
+    if (!buffer_is_blank(b_404))
         webdav_xml_propstat(b, b_404, 404);
     buffer_append_string_len(b, CONST_STR_LEN(
       "</D:response>\n"));
@@ -3609,7 +3609,7 @@ webdav_parse_chunkqueue (request_st * const r,
 
         if (c->type == MEM_CHUNK) {
             xmlstr = c->mem->ptr + c->offset;
-            weHave = buffer_string_length(c->mem) - c->offset;
+            weHave = buffer_clen(c->mem) - c->offset;
         }
         else if (c->type == FILE_CHUNK) {
             xmlstr = webdav_mmap_file_chunk(c);
@@ -3725,13 +3725,11 @@ webdav_lock_token_submitted_cb (void * const vdata,
     for (int i = 0; i < cbdata->used; ++i) {
         const buffer * const token = &cbdata->tokens[i];
         /* locktoken match (locktoken not '\0' terminated) */
-        if (buffer_is_equal_string(token, locktoken->ptr,/*(not CONST_BUF_LEN)*/
-                                   buffer_string_length(locktoken))) {
+        if (buffer_eq_slen(token, BUF_PTR_LEN(locktoken))) {
             /*(0 length owner if no auth required to lock; not recommended)*/
-            if (buffer_string_is_empty(lockdata->owner)/*no lock owner;match*/
-                || buffer_is_equal_string( /*(not CONST_BUF_LEN())*/
-                     cbdata->authn_user, lockdata->owner->ptr,
-                     buffer_string_length(lockdata->owner))) {
+            if (buffer_is_blank(lockdata->owner)/*no lock owner;match*/
+                || buffer_eq_slen(cbdata->authn_user,
+                                  BUF_PTR_LEN(lockdata->owner))) {
                 if (shared) ++cbdata->smatch;
                 return; /* authenticated lock owner match */
             }
@@ -3781,7 +3779,7 @@ webdav_has_lock (request_st * const r,
     const buffer * const h =
       http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("If"));
 
-    if (!buffer_is_empty(h)) {
+    if (h) {
         /* parse "If" request header for submitted lock tokens
          * While the below not a pedantic, validating parse, if the header
          * is non-conformant or contains unencoded characters, the result
@@ -4226,7 +4224,7 @@ mod_webdav_delete (request_st * const r, const plugin_config * const pconf)
             buffer_append_string_len(&r->target, CONST_STR_LEN("/"));
             http_header_response_set(r, HTTP_HEADER_CONTENT_LOCATION,
                                      CONST_STR_LEN("Content-Location"),
-                                     CONST_BUF_LEN(&r->target));
+                                     BUF_PTR_LEN(&r->target));
            #endif
           #endif
         }
@@ -4258,7 +4256,7 @@ mod_webdav_delete (request_st * const r, const plugin_config * const pconf)
         }
 
         /* invalidate stat cache of src if DELETE, whether or not successful */
-        stat_cache_delete_dir(CONST_BUF_LEN(&r->physical.path));
+        stat_cache_delete_dir(BUF_PTR_LEN(&r->physical.path));
     }
     else if (buffer_has_pathsep_suffix(&r->physical.path))
         http_status_set_error(r, 403);
@@ -4409,7 +4407,7 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
      * While being received, temporary file is not part of directory listings.
      * While this might result in extra copying, it is simple and robust. */
     int fd;
-    size_t len = buffer_string_length(&r->physical.path);
+    size_t len = buffer_clen(&r->physical.path);
   #if (defined(__linux__) || defined(__CYGWIN__)) && defined(O_TMPFILE)
     slash = memrchr(r->physical.path.ptr, '/', len);
     if (slash == r->physical.path.ptr) slash = NULL;
@@ -4423,7 +4421,7 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
         buffer_append_string_len(&r->physical.path, CONST_STR_LEN("-XXXXXX"));
         fd = fdevent_mkstemp_append(r->physical.path.ptr);
         if (fd >= 0) unlink(r->physical.path.ptr);
-        buffer_string_set_length(&r->physical.path, len);
+        buffer_truncate(&r->physical.path, len);
     }
     if (fd < 0) {
         http_status_set_error(r, 500); /* Internal Server Error */
@@ -4657,7 +4655,7 @@ mod_webdav_put (request_st * const r, const plugin_config * const pconf)
     /*(similar to beginning of webdav_linktmp_rename())*/
     buffer * const tmpb = pconf->tmpb;
     buffer_clear(tmpb);
-    buffer_append_str2(tmpb, CONST_BUF_LEN(&r->physical.path),
+    buffer_append_str2(tmpb, BUF_PTR_LEN(&r->physical.path),
                              CONST_STR_LEN("."));
     buffer_append_int(tmpb, (long)getpid());
     buffer_append_string_len(tmpb, CONST_STR_LEN("."));
@@ -4667,7 +4665,7 @@ mod_webdav_put (request_st * const r, const plugin_config * const pconf)
         buffer_append_int(tmpb, (long)c->file.fd);
     buffer_append_string_len(tmpb, CONST_STR_LEN("~"));
 
-    if (buffer_string_length(tmpb) >= PATH_MAX) { /*(temp file path too long)*/
+    if (buffer_clen(tmpb) >= PATH_MAX) { /*(temp file path too long)*/
         http_status_set_error(r, 500); /* Internal Server Error */
         return HANDLER_FINISHED;
     }
@@ -4788,7 +4786,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
     const char *sep = destination->ptr, *start;
     if (*sep != '/') { /* path-absolute or absolute-URI form */
         start = sep;
-        sep = start + buffer_string_length(&r->uri.scheme);
+        sep = start + buffer_clen(&r->uri.scheme);
         if (0 != strncmp(start, r->uri.scheme.ptr, sep - start)
             || sep[0] != ':' || sep[1] != '/' || sep[2] != '/') {
             http_status_set_error(r, 400); /* Bad Request */
@@ -4800,11 +4798,11 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
             http_status_set_error(r, 400); /* Bad Request */
             return HANDLER_FINISHED;
         }
-        if (!buffer_is_equal_string(&r->uri.authority, start, sep - start)
+        if (!buffer_eq_slen(&r->uri.authority, start, sep - start)
                /* skip login info (even though it should not be present) */
             && (NULL == (start = (char *)memchr(start, '@', sep - start))
-                || (++start, !buffer_is_equal_string(&r->uri.authority,
-                                                     start, sep - start)))) {
+                || (++start, !buffer_eq_slen(&r->uri.authority,
+                                             start, sep - start)))) {
             /* not the same host */
             http_status_set_error(r, 502); /* Bad Gateway */
             return HANDLER_FINISHED;
@@ -4818,7 +4816,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
                            NULL == (sep = strchr(start, '?'))
                              ? destination->ptr + destination->used-1 - start
                              : sep - start);
-    if (buffer_string_length(dst_rel_path) >= PATH_MAX) {
+    if (buffer_clen(dst_rel_path) >= PATH_MAX) {
         http_status_set_error(r, 403); /* Forbidden */
         return HANDLER_FINISHED;
     }
@@ -4829,7 +4827,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
         return HANDLER_FINISHED;
     }
     buffer_path_simplify(dst_rel_path);
-    if (buffer_string_is_empty(dst_rel_path) || dst_rel_path->ptr[0] != '/') {
+    if (buffer_is_blank(dst_rel_path) || dst_rel_path->ptr[0] != '/') {
         http_status_set_error(r, 400);
         return HANDLER_FINISHED;
     }
@@ -4884,7 +4882,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
                               r->physical.path.used - 1 - remain,
                               dst_rel_path->ptr+i,
                               dst_rel_path->used - 1 - i);
-        if (buffer_string_length(dst_path) >= PATH_MAX) {
+        if (buffer_clen(dst_path) >= PATH_MAX) {
             http_status_set_error(r, 403); /* Forbidden */
             return HANDLER_FINISHED;
         }
@@ -4892,9 +4890,9 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
     else { /*(not expected; some other module mucked with path or rel_path)*/
         /* unable to perform physical path remap here;
          * assume doc_root/rel_path and no remapping */
-        buffer_copy_path_len2(dst_path, CONST_BUF_LEN(&r->physical.doc_root),
-                                        CONST_BUF_LEN(dst_rel_path));
-        if (buffer_string_length(dst_path) >= PATH_MAX) {
+        buffer_copy_path_len2(dst_path, BUF_PTR_LEN(&r->physical.doc_root),
+                                        BUF_PTR_LEN(dst_rel_path));
+        if (buffer_clen(dst_path) >= PATH_MAX) {
             http_status_set_error(r, 403); /* Forbidden */
             return HANDLER_FINISHED;
         }
@@ -4998,7 +4996,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
         }
         /* invalidate stat cache of src if MOVE, whether or not successful */
         if (r->http_method == HTTP_METHOD_MOVE)
-            stat_cache_delete_dir(CONST_BUF_LEN(&r->physical.path));
+            stat_cache_delete_dir(BUF_PTR_LEN(&r->physical.path));
         return HANDLER_FINISHED;
     }
     else if (buffer_has_pathsep_suffix(&r->physical.path)) {
@@ -5031,7 +5029,7 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
                 }
                 buffer_append_string_len(dst_path, sep, len);
                 buffer_append_string_len(dst_rel_path, sep, len);
-                if (buffer_string_length(dst_path) >= PATH_MAX) {
+                if (buffer_clen(dst_path) >= PATH_MAX) {
                     http_status_set_error(r, 403); /* Forbidden */
                     return HANDLER_FINISHED;
                 }
@@ -5388,7 +5386,7 @@ mod_webdav_lock (request_st * const r, const plugin_config * const pconf)
 
     const buffer *h =
       http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Timeout"));
-    if (!buffer_is_empty(h)) {
+    if (h) {
         /* loosely parse Timeout request header and ignore "infinity" timeout */
         /* future: might implement config param for upper limit for timeout */
         const char *p = h->ptr;

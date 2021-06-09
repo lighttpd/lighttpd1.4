@@ -312,7 +312,7 @@ SETDEFAULTS_FUNC(mod_wstunnel_set_defaults) {
               case 5: /* wstunnel.origins */
                 for (uint32_t j = 0; j < cpv->v.a->used; ++j) {
                     buffer *origin = &((data_string *)cpv->v.a->data[j])->value;
-                    if (buffer_string_is_empty(origin)) {
+                    if (buffer_is_blank(origin)) {
                         log_error(srv->errh, __FILE__, __LINE__,
                           "unexpected empty string in %s", cpk[cpv->k_id].k);
                         return HANDLER_ERROR;
@@ -419,7 +419,7 @@ static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const 
         origin =
           http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Origin"));
     }
-    olen = buffer_string_length(origin);
+    olen = origin ? buffer_clen(origin) : 0;
     if (0 == olen) {
         DEBUG_LOG_ERR("%s", "Origin header is invalid");
         r->http_status = 400; /* Bad Request */
@@ -428,7 +428,7 @@ static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const 
 
     for (size_t i = 0; i < allowed_origins->used; ++i) {
         buffer *b = &((data_string *)allowed_origins->data[i])->value;
-        size_t blen = buffer_string_length(b);
+        size_t blen = buffer_clen(b);
         if ((olen > blen ? origin->ptr[olen-blen-1] == '.' : olen == blen)
             && 0 == memcmp(origin->ptr+olen-blen, b->ptr, blen)) {
             DEBUG_LOG_INFO("%s matches allowed origin: %s",origin->ptr,b->ptr);
@@ -453,7 +453,7 @@ static int wstunnel_check_request(request_st * const r, handler_ctx * const hctx
     }
 
     /*(redundant since HTTP/1.1 required in mod_wstunnel_check_extension())*/
-    if (buffer_is_empty(r->http_host)) {
+    if (!r->http_host || buffer_is_blank(r->http_host)) {
         DEBUG_LOG_ERR("%s", "Host header does not exist");
         r->http_status = 400; /* Bad Request */
         return -1;
@@ -570,11 +570,11 @@ static handler_t mod_wstunnel_check_extension(request_st * const r, void *p_d) {
      */
     vb = http_header_request_get(r, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade"));
     if (NULL == vb
-        || !http_header_str_contains_token(CONST_BUF_LEN(vb), CONST_STR_LEN("websocket")))
+        || !http_header_str_contains_token(BUF_PTR_LEN(vb), CONST_STR_LEN("websocket")))
         return HANDLER_GO_ON;
     vb = http_header_request_get(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"));
     if (NULL == vb
-        || !http_header_str_contains_token(CONST_BUF_LEN(vb), CONST_STR_LEN("upgrade")))
+        || !http_header_str_contains_token(BUF_PTR_LEN(vb), CONST_STR_LEN("upgrade")))
         return HANDLER_GO_ON;
 
     mod_wstunnel_patch_config(r, p);
@@ -670,7 +670,7 @@ static int get_key_number(uint32_t *ret, const buffer *b) {
     uint32_t sp = 0;
     char tmp[10 + 1]; /* #define UINT32_MAX_STRLEN 10 */
 
-    for (size_t i = 0, used = buffer_string_length(b); i < used; ++i) {
+    for (size_t i = 0, used = buffer_clen(b); i < used; ++i) {
         if (light_isdigit(s[i])) {
             tmp[j] = s[i];
             if (++j >= sizeof(tmp)) return -1;
@@ -728,7 +728,7 @@ static int create_response_ietf_00(handler_ctx *hctx) {
         DEBUG_LOG_ERR("%s", "Origin header is invalid");
         return -1;
     }
-    if (buffer_is_empty(r->http_host)) {
+    if (!r->http_host || buffer_is_blank(r->http_host)) {
         DEBUG_LOG_ERR("%s", "Host header does not exist");
         return -1;
     }
@@ -753,7 +753,7 @@ static int create_response_ietf_00(handler_ctx *hctx) {
      * (see wstunnel_check_request()) */
     http_header_response_set(r, HTTP_HEADER_OTHER,
                              CONST_STR_LEN("Sec-WebSocket-Origin"),
-                             CONST_BUF_LEN(origin));
+                             BUF_PTR_LEN(origin));
   #endif
 
     buffer * const value =
@@ -763,9 +763,8 @@ static int create_response_ietf_00(handler_ctx *hctx) {
         buffer_copy_string_len(value, CONST_STR_LEN("wss://"));
     else
         buffer_copy_string_len(value, CONST_STR_LEN("ws://"));
-    buffer_append_string_buffer(value, r->http_host);
-    buffer_append_string_buffer(value, &r->uri.path);
-
+    buffer_append_str2(value, BUF_PTR_LEN(r->http_host),
+                              BUF_PTR_LEN(&r->uri.path));
     return 0;
 }
 
@@ -792,7 +791,7 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
     /* get SHA1 hash of key */
     /* refer: RFC-6455 Sec.1.3 Opening Handshake */
     SHA1_Init(&sha);
-    SHA1_Update(&sha, (const unsigned char *)CONST_BUF_LEN(value_wskey));
+    SHA1_Update(&sha, (const unsigned char *)BUF_PTR_LEN(value_wskey));
     SHA1_Update(&sha, (const unsigned char *)CONST_STR_LEN("258EAFA5-E914-47DA-95CA-C5AB0DC85B11"));
     SHA1_Final(sha_digest, &sha);
 
@@ -929,7 +928,7 @@ static int recv_ietf_00(handler_ctx *hctx) {
     for (chunk *c = cq->first; c; c = c->next) {
         char *frame = c->mem->ptr+c->offset;
         /*(chunk_remaining_length() on MEM_CHUNK)*/
-        size_t flen = (size_t)(buffer_string_length(c->mem) - c->offset);
+        size_t flen = (size_t)(buffer_clen(c->mem) - c->offset);
         /*(FILE_CHUNK not handled, but might need to add support)*/
         force_assert(c->type == MEM_CHUNK);
         for (size_t i = 0; i < flen; ) {
@@ -977,29 +976,31 @@ static int recv_ietf_00(handler_ctx *hctx) {
                 }
                 i++;
                 if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_TEXT
-                    && !buffer_is_empty(payload)) {
+                    && !buffer_is_unset(payload)) { /*XXX: buffer_is_blank?*/
                     hctx->frame.ctl.siz = 0;
                     chunkqueue_append_buffer(&hctx->gw.wb, payload);
                     buffer_clear(payload);
                 }
                 else {
                     if (hctx->frame.state == MOD_WEBSOCKET_FRAME_STATE_INIT
-                        && !buffer_is_empty(payload)) {
+                        && !buffer_is_unset(payload)) {/*XXX: buffer_is_blank?*/
                         buffer *b;
-                        size_t len = buffer_string_length(payload);
+                        size_t len = buffer_clen(payload);
                         len = (len+3)/4*3+1;
                         chunkqueue_get_memory(&hctx->gw.wb, &len);
                         b = hctx->gw.wb.last->mem;
-                        len = buffer_string_length(b);
+                        len = buffer_clen(b);
                         DEBUG_LOG_DEBUG("try to base64 decode: %s",
                                         payload->ptr);
-                        if (NULL == buffer_append_base64_decode(b, CONST_BUF_LEN(payload), BASE64_STANDARD)) {
+                        if (NULL ==
+                            buffer_append_base64_decode(b, BUF_PTR_LEN(payload),
+                                                        BASE64_STANDARD)) {
                             DEBUG_LOG_ERR("%s", "fail to base64-decode");
                             return -1;
                         }
                         buffer_clear(payload);
                         /*chunkqueue_use_memory()*/
-                        hctx->gw.wb.bytes_in += buffer_string_length(b)-len;
+                        hctx->gw.wb.bytes_in += buffer_clen(b)-len;
                     }
                 }
                 break;
@@ -1099,7 +1100,7 @@ static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, cons
 
 static void unmask_payload(handler_ctx *hctx) {
     buffer * const b = hctx->frame.payload;
-    for (size_t i = 0, used = buffer_string_length(b); i < used; ++i) {
+    for (size_t i = 0, used = buffer_clen(b); i < used; ++i) {
         b->ptr[i] ^= hctx->frame.ctl.mask[hctx->frame.ctl.mask_cnt];
         hctx->frame.ctl.mask_cnt = (hctx->frame.ctl.mask_cnt + 1) % 4;
     }
@@ -1114,7 +1115,7 @@ static int recv_rfc_6455(handler_ctx *hctx) {
     for (chunk *c = cq->first; c; c = c->next) {
         char *frame = c->mem->ptr+c->offset;
         /*(chunk_remaining_length() on MEM_CHUNK)*/
-        size_t flen = (size_t)(buffer_string_length(c->mem) - c->offset);
+        size_t flen = (size_t)(buffer_clen(c->mem) - c->offset);
         /*(FILE_CHUNK not handled, but might need to add support)*/
         force_assert(c->type == MEM_CHUNK);
         for (size_t i = 0; i < flen; ) {
@@ -1260,7 +1261,7 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                         unmask_payload(hctx);
                         mod_wstunnel_frame_send(hctx,
                           MOD_WEBSOCKET_FRAME_TYPE_PONG,
-                          payload->ptr, buffer_string_length(payload));
+                          payload->ptr, buffer_clen(payload));
                         buffer_clear(payload);
                     }
                     break;

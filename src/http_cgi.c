@@ -43,7 +43,7 @@ http_cgi_local_redir (request_st * const r)
      *  that internally)
      */
 
-    size_t ulen = buffer_string_length(&r->uri.path);
+    size_t ulen = buffer_clen(&r->uri.path);
     const buffer *vb = http_header_response_get(r, HTTP_HEADER_LOCATION,
                                                 CONST_STR_LEN("Location"));
     if (NULL != vb
@@ -111,7 +111,7 @@ http_cgi_encode_varname (buffer * const b, const char * const restrict s, const 
         const unsigned char c = s[i];
         p[j++] = light_isalpha(c) ? c & ~0x20 : light_isdigit(c) ? c : '_';
     }
-    buffer_string_set_length(b, j);
+    buffer_truncate(b, j);
 }
 
 
@@ -134,13 +134,13 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
         rc |= cb(vdata, CONST_STR_LEN("CONTENT_LENGTH"),
                  buf, li_itostrn(buf,sizeof(buf),r->reqbody_length));
 
-    n = buffer_string_length(&r->uri.query);
+    n = buffer_clen(&r->uri.query);
     rc |= cb(vdata, CONST_STR_LEN("QUERY_STRING"),
                     n ? r->uri.query.ptr : "", n);
 
     s = r->target_orig.ptr;
-    n = buffer_string_length(&r->target_orig);
-    len = buffer_string_length(opts->strip_request_uri);
+    n = buffer_clen(&r->target_orig);
+    len = opts->strip_request_uri ? buffer_clen(opts->strip_request_uri) : 0;
     if (len) {
         /* e.g. /app1/index/list
          *      stripping /app1 or /app1/ should lead to /index/list
@@ -153,7 +153,7 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
 
     if (!buffer_is_equal(&r->target, &r->target_orig))
         rc |= cb(vdata, CONST_STR_LEN("REDIRECT_URI"),
-                        CONST_BUF_LEN(&r->target));
+                        BUF_PTR_LEN(&r->target));
 
     /* set REDIRECT_STATUS for php compiled with --force-redirect
      * (if REDIRECT_STATUS has not already been set by error handler) */
@@ -168,20 +168,20 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
      */
     if (!opts->authorizer) {
         rc |= cb(vdata, CONST_STR_LEN("SCRIPT_NAME"),
-                        CONST_BUF_LEN(&r->uri.path));
-        if (!buffer_string_is_empty(&r->pathinfo)) {
+                        BUF_PTR_LEN(&r->uri.path));
+        if (!buffer_is_blank(&r->pathinfo)) {
             rc |= cb(vdata, CONST_STR_LEN("PATH_INFO"),
-                            CONST_BUF_LEN(&r->pathinfo));
+                            BUF_PTR_LEN(&r->pathinfo));
             /* PATH_TRANSLATED is only defined if PATH_INFO is set
              * Note: not implemented: re-url-encode '?' '=' ';' for
              * (RFC 3875 4.1.6) */
-            const buffer * const bd = (!buffer_string_is_empty(opts->docroot))
+            const buffer * const bd = (opts->docroot)
               ? opts->docroot
               : &r->physical.basedir;
-            buffer_copy_path_len2(tb, CONST_BUF_LEN(bd),
-                                      CONST_BUF_LEN(&r->pathinfo));
+            buffer_copy_path_len2(tb, BUF_PTR_LEN(bd),
+                                      BUF_PTR_LEN(&r->pathinfo));
             rc |= cb(vdata, CONST_STR_LEN("PATH_TRANSLATED"),
-                            CONST_BUF_LEN(tb));
+                            BUF_PTR_LEN(tb));
         }
     }
 
@@ -192,14 +192,14 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
     * (see php.ini cgi.fix_pathinfo = 1 config parameter)
     */
 
-    if (!buffer_string_is_empty(opts->docroot)) {
+    if (opts->docroot) {
         /* alternate docroot, e.g. for remote FastCGI or SCGI server */
-        buffer_copy_path_len2(tb, CONST_BUF_LEN(opts->docroot),
-                                  CONST_BUF_LEN(&r->uri.path));
+        buffer_copy_path_len2(tb, BUF_PTR_LEN(opts->docroot),
+                                  BUF_PTR_LEN(&r->uri.path));
         rc |= cb(vdata, CONST_STR_LEN("SCRIPT_FILENAME"),
-                        CONST_BUF_LEN(tb));
+                        BUF_PTR_LEN(tb));
         rc |= cb(vdata, CONST_STR_LEN("DOCUMENT_ROOT"),
-                        CONST_BUF_LEN(opts->docroot));
+                        BUF_PTR_LEN(opts->docroot));
     }
     else {
         if (opts->break_scriptfilename_for_php) {
@@ -208,16 +208,16 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
              *
              * see src/sapi/cgi_main.c, init_request_info()
              */
-            buffer_copy_path_len2(tb, CONST_BUF_LEN(&r->physical.path),
-                                      CONST_BUF_LEN(&r->pathinfo));
+            buffer_copy_path_len2(tb, BUF_PTR_LEN(&r->physical.path),
+                                      BUF_PTR_LEN(&r->pathinfo));
             rc |= cb(vdata, CONST_STR_LEN("SCRIPT_FILENAME"),
-                            CONST_BUF_LEN(tb));
+                            BUF_PTR_LEN(tb));
         }
         else
             rc |= cb(vdata, CONST_STR_LEN("SCRIPT_FILENAME"),
-                            CONST_BUF_LEN(&r->physical.path));
+                            BUF_PTR_LEN(&r->physical.path));
         rc |= cb(vdata, CONST_STR_LEN("DOCUMENT_ROOT"),
-                        CONST_BUF_LEN(&r->physical.basedir));
+                        BUF_PTR_LEN(&r->physical.basedir));
     }
 
     s = get_http_method_name(r->http_method);
@@ -228,21 +228,28 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
     force_assert(s);
     rc |= cb(vdata, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s));
 
-    rc |= cb(vdata, CONST_STR_LEN("SERVER_SOFTWARE"),
-                    CONST_BUF_LEN(r->conf.server_tag));
+    if (r->conf.server_tag) {
+        s = r->conf.server_tag->ptr;
+        n = buffer_clen(r->conf.server_tag);
+    }
+    else {
+        s = "";
+        n = 0;
+    }
+    rc |= cb(vdata, CONST_STR_LEN("SERVER_SOFTWARE"), s, n);
 
     rc |= cb(vdata, CONST_STR_LEN("GATEWAY_INTERFACE"),
                     CONST_STR_LEN("CGI/1.1"));
 
     rc |= cb(vdata, CONST_STR_LEN("REQUEST_SCHEME"),
-                    CONST_BUF_LEN(&r->uri.scheme));
+                    BUF_PTR_LEN(&r->uri.scheme));
 
     if (buffer_is_equal_string(&r->uri.scheme, CONST_STR_LEN("https")))
         rc |= cb(vdata, CONST_STR_LEN("HTTPS"), CONST_STR_LEN("on"));
 
     const connection * const con = r->con;
     const server_socket * const srv_sock = con->srv_socket;
-    const size_t tlen = buffer_string_length(srv_sock->srv_token);
+    const size_t tlen = buffer_clen(srv_sock->srv_token);
     n = srv_sock->srv_token_colon;
     if (n < tlen) { /*(n != tlen)*/
         s = srv_sock->srv_token->ptr+n+1;
@@ -284,7 +291,7 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
     }
     rc |= cb(vdata, CONST_STR_LEN("SERVER_ADDR"), s, n);
 
-    n = buffer_string_length(r->server_name);
+    n = buffer_clen(r->server_name);
     if (n) {
         s = r->server_name->ptr;
         if (s[0] == '[') {
@@ -299,14 +306,14 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
     rc |= cb(vdata, CONST_STR_LEN("SERVER_NAME"), s, n);
 
     rc |= cb(vdata, CONST_STR_LEN("REMOTE_ADDR"),
-                    CONST_BUF_LEN(con->dst_addr_buf));
+                    BUF_PTR_LEN(con->dst_addr_buf));
 
     rc |= cb(vdata, CONST_STR_LEN("REMOTE_PORT"), buf,
              li_utostrn(buf,sizeof(buf),sock_addr_get_port(&con->dst_addr)));
 
     for (n = 0; n < r->rqst_headers.used; n++) {
         data_string *ds = (data_string *)r->rqst_headers.data[n];
-        if (!buffer_string_is_empty(&ds->value) && !buffer_is_empty(&ds->key)) {
+        if (!buffer_is_blank(&ds->value) && !buffer_is_unset(&ds->key)) {
             /* Security: Do not emit HTTP_PROXY in environment.
              * Some executables use HTTP_PROXY to configure
              * outgoing proxy.  See also https://httpoxy.org/ */
@@ -317,9 +324,9 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
             else if (ds->ext == HTTP_HEADER_CONTENT_TYPE)
                 buffer_copy_string_len(tb, CONST_STR_LEN("CONTENT_TYPE"));
             else
-                http_cgi_encode_varname(tb, CONST_BUF_LEN(&ds->key), 1);
-            rc |= cb(vdata, CONST_BUF_LEN(tb),
-                            CONST_BUF_LEN(&ds->value));
+                http_cgi_encode_varname(tb, BUF_PTR_LEN(&ds->key), 1);
+            rc |= cb(vdata, BUF_PTR_LEN(tb),
+                            BUF_PTR_LEN(&ds->value));
         }
     }
 
@@ -327,10 +334,10 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
 
     for (n = 0; n < r->env.used; n++) {
         data_string *ds = (data_string *)r->env.data[n];
-        if (!buffer_is_empty(&ds->value) && !buffer_is_empty(&ds->key)) {
-            http_cgi_encode_varname(tb, CONST_BUF_LEN(&ds->key), 0);
-            rc |= cb(vdata, CONST_BUF_LEN(tb),
-                            CONST_BUF_LEN(&ds->value));
+        if (!buffer_is_unset(&ds->value) && !buffer_is_unset(&ds->key)) {
+            http_cgi_encode_varname(tb, BUF_PTR_LEN(&ds->key), 0);
+            rc |= cb(vdata, BUF_PTR_LEN(tb),
+                            BUF_PTR_LEN(&ds->value));
         }
     }
 

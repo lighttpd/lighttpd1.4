@@ -80,7 +80,7 @@ SETDEFAULTS_FUNC(mod_flv_streaming_set_defaults) {
 
 static off_t get_param_value(buffer *qb, const char *m, size_t mlen) {
     const char * const q = qb->ptr;
-    size_t len = buffer_string_length(qb);
+    size_t len = buffer_clen(qb);
     if (len < mlen+2) return -1;
     len -= (mlen+2);
     for (size_t i = 0; i <= len; ++i) {
@@ -98,7 +98,7 @@ URIHANDLER_FUNC(mod_flv_streaming_path_handler) {
 	plugin_data *p = p_d;
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
-	if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;
+	if (buffer_is_blank(&r->physical.path)) return HANDLER_GO_ON;
 
 	mod_flv_streaming_patch_config(r, p);
 	if (NULL == p->conf.extensions) return HANDLER_GO_ON;

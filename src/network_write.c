@@ -134,7 +134,7 @@ static int network_write_accounting(const int fd, chunkqueue * const cq, off_t *
 #if !defined(NETWORK_WRITE_USE_WRITEV)
 static int network_write_mem_chunk(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
     chunk* const c = cq->first;
-    off_t c_len = (off_t)buffer_string_length(c->mem) - c->offset;
+    off_t c_len = (off_t)buffer_clen(c->mem) - c->offset;
     if (c_len > *p_max_bytes) c_len = *p_max_bytes;
     if (c_len <= 0) return network_remove_finished_chunks(cq, c_len);
 
@@ -354,7 +354,7 @@ static int network_writev_mem_chunks(const int fd, chunkqueue * const cq, off_t 
     struct iovec chunks[MAX_CHUNKS];
 
     for (const chunk *c = cq->first; c && MEM_CHUNK == c->type; c = c->next) {
-        const off_t c_len = (off_t)buffer_string_length(c->mem) - c->offset;
+        const off_t c_len = (off_t)buffer_clen(c->mem) - c->offset;
         if (c_len > 0) {
             toSend += c_len;
 
@@ -586,7 +586,7 @@ int network_write_init(server *srv) {
     backend = network_backends[0].nb;
 
     /* match name against known types */
-    if (!buffer_string_is_empty(srv->srvconf.network_backend)) {
+    if (srv->srvconf.network_backend) {
         const char *name, *confname = srv->srvconf.network_backend->ptr;
         for (size_t i = 0; NULL != (name = network_backends[i].name); ++i) {
             if (0 == strcmp(confname, name)) {

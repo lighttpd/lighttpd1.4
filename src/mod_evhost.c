@@ -180,7 +180,7 @@ SETDEFAULTS_FUNC(mod_evhost_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* evhost.path-pattern */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     const char * const ptr = cpv->v.b->ptr;
                     cpv->v.v = mod_evhost_parse_pattern(ptr);
                     if (NULL == cpv->v.v) {
@@ -217,7 +217,7 @@ SETDEFAULTS_FUNC(mod_evhost_set_defaults) {
  */
 
 static void mod_evhost_parse_host(buffer *key, array *host, buffer *authority) {
-	char *ptr = authority->ptr + buffer_string_length(authority);
+	char *ptr = authority->ptr + buffer_clen(authority);
 	char *colon = ptr; /* needed to filter out the colon (if exists) */
 	int first = 1;
 	int i;
@@ -260,7 +260,7 @@ static void mod_evhost_parse_host(buffer *key, array *host, buffer *authority) {
 					/* is something between the dots */
 					buffer_copy_string_len(key, CONST_STR_LEN("%"));
 					buffer_append_int(key, i++);
-					array_set_key_value(host, CONST_BUF_LEN(key), ptr+1, colon-ptr-1);
+					array_set_key_value(host, BUF_PTR_LEN(key), ptr+1, colon-ptr-1);
 				}
 				colon = ptr;
 			}
@@ -270,7 +270,7 @@ static void mod_evhost_parse_host(buffer *key, array *host, buffer *authority) {
 		if (colon != ptr) {
 			buffer_copy_string_len(key, CONST_STR_LEN("%"));
 			buffer_append_int(key, i /* ++ */);
-			array_set_key_value(host, CONST_BUF_LEN(key), ptr, colon-ptr);
+			array_set_key_value(host, BUF_PTR_LEN(key), ptr, colon-ptr);
 		}
 	}
 }
@@ -304,14 +304,14 @@ static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, buffer
 					if (ptr[3] != '.' || ptr[4] == '0') {
 						buffer_append_string_buffer(b, &ds->value);
 					} else {
-						if ((size_t)(ptr[4]-'0') <= buffer_string_length(&ds->value)) {
+						if ((size_t)(ptr[4]-'0') <= buffer_clen(&ds->value)) {
 							buffer_append_string_len(b, ds->value.ptr+(ptr[4]-'0')-1, 1);
 						}
 					}
 				} else {
 					/* unhandled %-sequence */
 				}
-			} else if (NULL != (ds = (data_string *)array_get_element_klen(parsed_host, CONST_BUF_LEN(path_pieces)))) {
+			} else if (NULL != (ds = (data_string *)array_get_element_klen(parsed_host, BUF_PTR_LEN(path_pieces)))) {
 				buffer_append_string_buffer(b, &ds->value);
 			} else {
 				/* unhandled %-sequence */
@@ -328,7 +328,7 @@ static handler_t mod_evhost_uri_handler(request_st * const r, void *p_d) {
 	plugin_data *p = p_d;
 
 	/* not authority set */
-	if (buffer_string_is_empty(&r->uri.authority)) return HANDLER_GO_ON;
+	if (buffer_is_blank(&r->uri.authority)) return HANDLER_GO_ON;
 
 	mod_evhost_patch_config(r, p);
 

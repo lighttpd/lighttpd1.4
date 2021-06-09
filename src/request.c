@@ -34,7 +34,7 @@ static int request_check_hostname(buffer * const host) {
     const char *h = host->ptr;
 
     if (*h != '[') {
-        uint32_t len = buffer_string_length(host);
+        uint32_t len = buffer_clen(host);
         const char * const colon = memchr(h, ':', len);
         uint32_t hlen = colon ? (colon - h) : len;
 
@@ -46,7 +46,7 @@ static int request_check_hostname(buffer * const host) {
             --len;
             if (NULL != colon)
                 memmove(host->ptr+hlen, colon, len - hlen);
-            buffer_string_set_length(host, len);
+            buffer_truncate(host, len);
         }
 
         int label_len = 0;
@@ -89,7 +89,7 @@ static int request_check_hostname(buffer * const host) {
     /* check numerical port, if present */
     if (*h == ':') {
         if (__builtin_expect( (h[1] == '\0'), 0)) /*(remove trailing colon)*/
-            buffer_string_set_length(host, h - host->ptr);
+            buffer_truncate(host, h - host->ptr);
         do { ++h; } while (light_isdigit(*h));
     }
 
@@ -125,7 +125,7 @@ int http_request_host_normalize(buffer * const b, const int scheme_port) {
      * Not using inet_pton() (when available) on IPv4 for similar reasons. */
 
     const char * const p = b->ptr;
-    const size_t blen = buffer_string_length(b);
+    const size_t blen = buffer_clen(b);
     long port = 0;
 
     if (*p != '[') {
@@ -141,7 +141,7 @@ int http_request_host_normalize(buffer * const b, const int scheme_port) {
                     return -1;
                 }
             } /*(else ignore stray colon at string end)*/
-            buffer_string_set_length(b, (size_t)(colon - p)); /*(remove port str)*/
+            buffer_truncate(b, (size_t)(colon - p)); /*(remove port str)*/
         }
 
         if (light_isdigit(*p)) do {
@@ -153,7 +153,7 @@ int http_request_host_normalize(buffer * const b, const int scheme_port) {
             if (n == laddr.n && 0 == memcmp(p, laddr.s, n)) break;
             if (1 == sock_addr_inet_pton(&addr, p, AF_INET, 0)) {
                 sock_addr_inet_ntop_copy_buffer(b, &addr);
-                n = buffer_string_length(b);
+                n = buffer_clen(b);
                 if (n < sizeof(laddr.s)) memcpy(laddr.s, b->ptr, (laddr.n = n));
             }
         } while (0);
@@ -188,7 +188,7 @@ int http_request_host_normalize(buffer * const b, const int scheme_port) {
         len = (size_t)((percent ? percent : bracket) - (b->ptr+1));
         if (laddr.n == len && 0 == memcmp(laddr.s, b->ptr+1, len)) {
             /* truncate after ']' and re-add normalized port, if needed */
-            buffer_string_set_length(b, (size_t)(bracket - b->ptr + 1));
+            buffer_truncate(b, (size_t)(bracket - b->ptr + 1));
             break;
         }
 
@@ -208,7 +208,7 @@ int http_request_host_normalize(buffer * const b, const int scheme_port) {
             memcpy(buf+len, percent, (size_t)(bracket - percent));
             len += (size_t)(bracket - percent);
         }
-        buffer_string_set_length(b, 1); /* truncate after '[' */
+        buffer_truncate(b, 1); /* truncate after '[' */
         buffer_append_str2(b, buf, len, CONST_STR_LEN("]"));
 
       #else
@@ -497,7 +497,7 @@ http_request_validate_pseudohdrs (request_st * const restrict r, const int schem
             return http_request_header_line_invalid(r, 400,
               "missing pseudo-header scheme -> 400");
 
-        if (buffer_string_is_empty(&r->target))
+        if (buffer_is_blank(&r->target))
             return http_request_header_line_invalid(r, 400,
               "missing pseudo-header path -> 400");
 
@@ -513,7 +513,7 @@ http_request_validate_pseudohdrs (request_st * const restrict r, const int schem
         if (NULL == r->http_host)
             return http_request_header_line_invalid(r, 400,
               "missing pseudo-header authority -> 400");
-        if (!buffer_string_is_empty(&r->target) || scheme)
+        if (!buffer_is_blank(&r->target) || scheme)
             return http_request_header_line_invalid(r, 400,
               "invalid pseudo-header with CONNECT -> 400");
         /*(reuse uri and ulen to assign to r->target)*/
@@ -529,13 +529,11 @@ http_request_validate_pseudohdrs (request_st * const restrict r, const int schem
     /* check uri for invalid characters */
     const unsigned int http_header_strict =
       (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
-    if (http_header_strict
-        && (http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT))
-        return 0; /* URI will be checked in http_request_parse_target() */
-
-    const uint32_t ulen = buffer_string_length(&r->target);
+    const uint32_t ulen = buffer_clen(&r->target);
     const uint8_t * const uri = (uint8_t *)r->target.ptr;
     if (http_header_strict) {
+        if (http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)
+            return 0; /* URI will be checked in http_request_parse_target() */
         for (uint32_t i = 0; i < ulen; ++i) {
             if (!request_uri_is_valid_char(uri[i]))
                 return http_request_header_char_invalid(r, uri[i],
@@ -596,7 +594,7 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
             switch (klen-1) {
               case 4:
                 if (0 == memcmp(k+1, "path", 4)) {
-                    if (!buffer_string_is_empty(&r->target))
+                    if (!buffer_is_blank(&r->target))
                         return http_request_header_line_invalid(r, 400,
                           "repeated pseudo-header -> 400");
                     buffer_copy_string_len(&r->target, v, vlen);
@@ -880,7 +878,7 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
 
     char *qstr;
     if (r->conf.http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE) {
-        /*uint32_t len = (uint32_t)buffer_string_length(target);*/
+        /*uint32_t len = buffer_clen(target);*/
         int qs = burl_normalize(target, r->tmp_buf, r->conf.http_parseopts);
         if (-2 == qs)
             return http_request_header_line_invalid(r, 400,
@@ -892,7 +890,7 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
          * (If (0 != r->loops_per_request), then the generated
          *  request is too large.  Should a different error be returned?) */
         r->rqst_header_len -= len;
-        len = buffer_string_length(target);
+        len = buffer_clen(target);
         r->rqst_header_len += len;
         if (len > MAX_HTTP_REQUEST_URI) {
             return 414; /* 414 URI Too Long */
@@ -906,18 +904,18 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
       #endif
     }
     else {
-        size_t rlen = buffer_string_length(target);
+        size_t rlen = buffer_clen(target);
         qstr = memchr(target->ptr, '#', rlen);/* discard fragment */
         if (qstr) {
             rlen = (size_t)(qstr - target->ptr);
-            buffer_string_set_length(target, rlen);
+            buffer_truncate(target, rlen);
         }
         qstr = memchr(target->ptr, '?', rlen);
     }
 
     /** extract query string from target */
     const char * const pstr = target->ptr;
-    const uint32_t rlen = buffer_string_length(target);
+    const uint32_t rlen = buffer_clen(target);
     uint32_t plen;
     if (NULL != qstr) {
         plen = (uint32_t)(qstr - pstr);
@@ -1250,7 +1248,7 @@ http_request_headers_process_h2 (request_st * const restrict r, const int scheme
               (HTTP_METHOD_UNSET != r->http_method)
                 ? get_http_method_name(r->http_method)
                 : "",
-              !buffer_string_is_empty(&r->target) ? r->target.ptr : "");
+              !buffer_is_blank(&r->target) ? r->target.ptr : "");
         }
     }
 

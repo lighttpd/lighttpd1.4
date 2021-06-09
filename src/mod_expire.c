@@ -53,7 +53,7 @@ static time_t mod_expire_get_offset(log_error_st *errh, const buffer *expire, ti
 	 * e.g. 'access 1 years'
 	 */
 
-	if (buffer_string_is_empty(expire)) {
+	if (buffer_is_blank(expire)) {
 		log_error(errh, __FILE__, __LINE__, "mod_expire empty string");
 		return -1;
 	}
@@ -101,7 +101,7 @@ static time_t mod_expire_get_offset(log_error_st *errh, const buffer *expire, ti
 		ts = space + 1;
 
 		if (NULL == (space = strchr(ts, ' ')))
-			space = expire->ptr+buffer_string_length(expire);
+			space = expire->ptr + buffer_clen(expire);
 
 		{
 			int slen;
@@ -203,9 +203,9 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
                     /*(not usually a good idea to modify array keys
                      * since doing so might break array_get_element_klen()
                      * search; config should be consistent in using * or not)*/
-                    size_t klen = buffer_string_length(&ds->key);
+                    size_t klen = buffer_clen(&ds->key);
                     if (klen && ds->key.ptr[klen-1] == '*')
-                        buffer_string_set_length(&ds->key, klen-1);
+                        buffer_truncate(&ds->key, klen-1);
                 }
                 a = cpv->v.a;
                 break;
@@ -284,8 +284,7 @@ mod_expire_set_header (request_st * const r, const time_t * const off)
                                           CONST_STR_LEN("Expires"));
         if (!http_date_time_to_str(buffer_extend(vb, HTTP_DATE_SZ-1),
                                    HTTP_DATE_SZ, expires))
-            buffer_string_set_length(vb,
-                                     buffer_string_length(vb)+1-HTTP_DATE_SZ);
+            buffer_truncate(vb, buffer_clen(vb)+1-HTTP_DATE_SZ);
     }
 
     return HANDLER_GO_ON;

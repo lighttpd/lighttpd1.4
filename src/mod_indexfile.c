@@ -106,12 +106,12 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 			 * index-generator */
 
 		/* temporarily append to base-path buffer to check existence */
-		const uint32_t len = buffer_string_length(b);
-		buffer_append_path_len(b, CONST_BUF_LEN(&ds->value));
+		const uint32_t len = buffer_clen(b);
+		buffer_append_path_len(b, BUF_PTR_LEN(&ds->value));
 
 		const stat_cache_st * const st = stat_cache_path_stat(b);
 
-		buffer_string_set_length(b, len);
+		buffer_truncate(b, len);
 
 		if (NULL == st) {
 			switch (errno) {
@@ -135,7 +135,8 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 		if (ds->value.ptr[0] == '/') {
 			/* replace uri.path */
 			buffer_copy_buffer(&r->uri.path, &ds->value);
-			http_header_env_set(r, CONST_STR_LEN("PATH_TRANSLATED_DIRINDEX"), CONST_BUF_LEN(&r->physical.path));
+			http_header_env_set(r, CONST_STR_LEN("PATH_TRANSLATED_DIRINDEX"),
+			                       BUF_PTR_LEN(&r->physical.path));
 			buffer_copy_buffer(&r->physical.path, &r->physical.doc_root);
 		} else {
 			/* append to uri.path the relative path to index file (/ -> /index.php) */

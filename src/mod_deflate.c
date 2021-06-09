@@ -294,10 +294,10 @@ static buffer * mod_deflate_cache_file_name(request_st * const r, const buffer *
      *      (matching) &r->pathinfo suffix, with result url-encoded
      *      Alternative, we could shard etag which is already our "checksum" */
     buffer * const tb = r->tmp_buf;
-    buffer_copy_path_len2(tb, CONST_BUF_LEN(cache_dir),
-                              CONST_BUF_LEN(&r->physical.path));
+    buffer_copy_path_len2(tb, BUF_PTR_LEN(cache_dir),
+                              BUF_PTR_LEN(&r->physical.path));
     buffer_append_str2(tb, CONST_STR_LEN("-"), /*(strip surrounding '"')*/
-                           etag->ptr+1, buffer_string_length(etag)-2);
+                           etag->ptr+1, buffer_clen(etag)-2);
     return tb;
 }
 
@@ -305,7 +305,7 @@ static void mod_deflate_cache_file_open (handler_ctx * const hctx, const buffer 
     /* race exists whereby up to # workers might attempt to compress same
      * file at same time if requested at same time, but this is unlikely
      * and resolves itself by atomic rename into place when done */
-    const uint32_t fnlen = buffer_string_length(fn);
+    const uint32_t fnlen = buffer_clen(fn);
     hctx->cache_fn = malloc(fnlen+1+LI_ITOSTRING_LENGTH+1);
     force_assert(hctx->cache_fn);
     memcpy(hctx->cache_fn, fn->ptr, fnlen);
@@ -518,9 +518,9 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                  * in specifying trailing wildcard to grouping of mimetypes */
                 for (uint32_t m = 0; m < cpv->v.a->used; ++m) {
                     buffer *mimetype=&((data_string *)cpv->v.a->data[m])->value;
-                    size_t len = buffer_string_length(mimetype);
+                    size_t len = buffer_clen(mimetype);
                     if (len > 2 && mimetype->ptr[len-1] == '*')
-                        buffer_string_set_length(mimetype, len-1);
+                        buffer_truncate(mimetype, len-1);
                 }
                 if (0 == cpv->v.a->used) cpv->v.a = NULL;
                 break;
@@ -545,17 +545,17 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
               case 6: /* deflate.work-block-size */
                 break;
               case 7: /* deflate.max-loadavg */
-                cpv->v.d = (!buffer_string_is_empty(cpv->v.b))
+                cpv->v.d = (!buffer_is_blank(cpv->v.b))
                   ? strtod(cpv->v.b->ptr, NULL)
                   : 0.0;
                 break;
               case 8: /* deflate.cache-dir */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     buffer *b;
                     *(const buffer **)&b = cpv->v.b;
-                    const uint32_t len = buffer_string_length(b);
+                    const uint32_t len = buffer_clen(b);
                     if (len > 0 && '/' == b->ptr[len-1])
-                        buffer_string_set_length(b, len-1); /*remove end slash*/
+                        buffer_truncate(b, len-1); /*remove end slash*/
                     struct stat st;
                     if (0 != stat(b->ptr,&st) && 0 != mkdir_recursive(b->ptr)) {
                         log_perror(srv->errh, __FILE__, __LINE__,
@@ -563,6 +563,8 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                         return HANDLER_ERROR;
                     }
                 }
+                else
+                    cpv->v.b = NULL;
                 break;
               case 9: /* compress.filetype */
                 log_error(srv->errh, __FILE__, __LINE__,
@@ -581,12 +583,12 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "DEPRECATED: %s replaced with deflate.cache-dir",
                   cpk[cpv->k_id].k);
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     buffer *b;
                     *(const buffer **)&b = cpv->v.b;
-                    const uint32_t len = buffer_string_length(b);
+                    const uint32_t len = buffer_clen(b);
                     if (len > 0 && '/' == b->ptr[len-1])
-                        buffer_string_set_length(b, len-1); /*remove end slash*/
+                        buffer_truncate(b, len-1); /*remove end slash*/
                     struct stat st;
                     if (0 != stat(b->ptr,&st) && 0 != mkdir_recursive(b->ptr)) {
                         log_perror(srv->errh, __FILE__, __LINE__,
@@ -604,7 +606,7 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "DEPRECATED: %s replaced with deflate.max-loadavg",
                   cpk[cpv->k_id].k);
-                cpv->v.d = (!buffer_string_is_empty(cpv->v.b))
+                cpv->v.d = (!buffer_is_blank(cpv->v.b))
                   ? strtod(cpv->v.b->ptr, NULL)
                   : 0.0;
                 break;
@@ -1344,7 +1346,7 @@ static handler_t deflate_compress_response(request_st * const r, handler_ctx * c
 
 		switch(c->type) {
 		case MEM_CHUNK:
-			len = buffer_string_length(c->mem) - c->offset;
+			len = buffer_clen(c->mem) - c->offset;
 			if (len > max) len = max;
 			if (mod_deflate_compress(hctx, (unsigned char *)c->mem->ptr+c->offset, len) < 0) {
 				log_error(r->conf.errh, __FILE__, __LINE__, "compress failed.");
@@ -1560,7 +1562,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	} else {
 		/* If no Content-Type set, compress only if first p->conf.mimetypes value is "" */
 		data_string *mimetype = (data_string *)p->conf.mimetypes->data[0];
-		if (!buffer_string_is_empty(&mimetype->value)) return HANDLER_GO_ON;
+		if (!buffer_is_blank(&mimetype->value)) return HANDLER_GO_ON;
 	}
 
 	/* Vary: Accept-Encoding (response might change according to request Accept-Encoding) */
@@ -1578,11 +1580,10 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	/* check ETag as is done in http_response_handle_cachable()
 	 * (slightly imperfect (close enough?) match of ETag "000000" to "000000-gzip") */
 	vb = http_header_response_get(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"));
-	etaglen = (NULL != vb) ? buffer_string_length(vb) : 0;
-	if (NULL != vb && light_btst(r->rqst_htags, HTTP_HEADER_IF_NONE_MATCH)) {
+	etaglen = vb ? buffer_clen(vb) : 0;
+	if (etaglen && light_btst(r->rqst_htags, HTTP_HEADER_IF_NONE_MATCH)) {
 		const buffer *if_none_match = http_header_response_get(r, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
-		if (etaglen
-		    && r->http_status < 300 /*(want 2xx only)*/
+		if (   r->http_status < 300 /*(want 2xx only)*/
 		    && NULL != if_none_match
 		    && 0 == strncmp(if_none_match->ptr, vb->ptr, etaglen-1)
 		    && if_none_match->ptr[etaglen-1] == '-'
@@ -1654,7 +1655,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	 *       file
 	 */
 	buffer *tb = NULL;
-	if (!buffer_is_empty(p->conf.cache_dir)
+	if (p->conf.cache_dir
 	    && !had_vary
 	    && etaglen > 2
 	    && r->resp_body_finished
@@ -1707,7 +1708,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		/* restore prior Etag and unset Content-Encoding */
 		if (etaglen) {
 			vb->ptr[etaglen-1] = '"'; /*(overwrite '-')*/
-			buffer_string_set_length(vb, etaglen);
+			buffer_truncate(vb, etaglen);
 		}
 		http_header_response_unset(r, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
 		return HANDLER_GO_ON;

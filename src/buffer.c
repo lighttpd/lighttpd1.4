@@ -14,27 +14,21 @@ static const char hex_chars_uc[] = "0123456789ABCDEF";
  *
  */
 
+__attribute_noinline__
 buffer* buffer_init(void) {
-	buffer *b;
-
-	b = malloc(sizeof(*b));
+	buffer * const b = calloc(1, sizeof(*b));
 	force_assert(b);
-
-	b->ptr = NULL;
-	b->size = 0;
-	b->used = 0;
-
 	return b;
 }
 
 buffer *buffer_init_buffer(const buffer *src) {
-	buffer *b = buffer_init();
-	buffer_copy_buffer(b, src);
+	buffer * const b = buffer_init();
+	buffer_copy_string_len(b, BUF_PTR_LEN(src));
 	return b;
 }
 
 buffer *buffer_init_string(const char *str) {
-	buffer *b = buffer_init();
+	buffer * const b = buffer_init();
 	buffer_copy_string(b, str);
 	return b;
 }
@@ -102,8 +96,11 @@ __attribute_noinline__
 __attribute_nonnull__
 __attribute_returns_nonnull__
 static char* buffer_string_prepare_append_resize(buffer * const restrict b, const size_t size) {
-    if (b->used < 2)  /* buffer_string_is_empty(b) */
-        return buffer_string_prepare_copy(b, size);
+    if (b->used < 2) {  /* buffer_is_blank(b) */
+        char * const s = buffer_string_prepare_copy(b, size);
+        *s = '\0'; /*(for case (1 == b->used))*/
+        return s;
+    }
 
     /* not empty, b->used already includes a terminating 0 */
     /*(note: if size larger than one lshift, use size instead of power-2)*/
@@ -133,22 +130,18 @@ buffer_extend (buffer * const b, const size_t x)
      * (combine buffer_string_prepare_append() and buffer_commit())
      * (future: might make buffer.h static inline func for HTTP/1.1 performance)
      * pre-sets '\0' byte and b->used (unlike buffer_string_prepare_append())*/
+  #if 0
+    char * const s = buffer_string_prepare_append(b, x);
+    b->used += x + (0 == b->used);
+  #else
     const uint32_t len = b->used ? b->used-1 : 0;
     char * const s = (b->size - len >= x + 1)
       ? b->ptr + len
       : buffer_string_prepare_append_resize(b, x);
     b->used = len+x+1;
+  #endif
     s[x] = '\0';
     return s;
-}
-
-void buffer_string_set_length(buffer *b, uint32_t len) {
-    /*(intended for string truncate; prefer buffer_extend() to extend string)*/
-    /*(unlike others routines, this routine potentially extends string
-     * extra len + (up to) BUFFER_PIECE_SIZE without power-2 reallocation,
-     * but does not optimize realloc of empty string)*/
-    b->used = len + 1; /*(not resizing for power-2)*/
-    (len < b->size ? b->ptr : buffer_realloc(b, len))[len] = '\0';
 }
 
 void buffer_commit(buffer *b, size_t size)
@@ -463,11 +456,11 @@ void li_tohex_uc(char * const restrict buf, size_t buf_len, const char * const r
 void buffer_substr_replace (buffer * const restrict b, const size_t offset,
                             const size_t len, const buffer * const restrict replace)
 {
-    const size_t blen = buffer_string_length(b);
-    const size_t rlen = buffer_string_length(replace);
+    const size_t blen = buffer_clen(b);
+    const size_t rlen = buffer_clen(replace);
 
     if (rlen > len) {
-        buffer_string_set_length(b, blen-len+rlen);
+        buffer_extend(b, blen-len+rlen);
         memmove(b->ptr+offset+rlen, b->ptr+offset+len, blen-offset-len);
     }
 
@@ -475,7 +468,7 @@ void buffer_substr_replace (buffer * const restrict b, const size_t offset,
 
     if (rlen < len) {
         memmove(b->ptr+offset+rlen, b->ptr+offset+len, blen-offset-len);
-        buffer_string_set_length(b, blen-len+rlen);
+        buffer_truncate(b, blen-len+rlen);
     }
 }
 
@@ -731,7 +724,7 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
  */
 
 void buffer_urldecode_path(buffer * const b) {
-    const size_t len = buffer_string_length(b);
+    const size_t len = buffer_clen(b);
     char *src = len ? memchr(b->ptr, '%', len) : NULL;
     if (NULL == src) return;
 
@@ -802,8 +795,11 @@ int buffer_is_valid_UTF8(const buffer *b) {
 
 void buffer_path_simplify(buffer *b)
 {
-    if (__builtin_expect( (buffer_string_is_empty(b)), 0)) {
-        buffer_copy_string_len(b, CONST_STR_LEN(""));
+    char *out = b->ptr;
+    char * const end = b->ptr + b->used - 1;
+
+    if (__builtin_expect( (buffer_is_blank(b)), 0)) {
+        buffer_blank(b);
         return;
     }
 
@@ -814,8 +810,6 @@ void buffer_path_simplify(buffer *b)
     }
   #endif
 
-    char *out = b->ptr;
-    char * const end = b->ptr + b->used - 1;
     *end = '/'; /*(end of path modified to avoid need to check '\0')*/
 
     char *walk = out;
@@ -874,7 +868,7 @@ void buffer_path_simplify(buffer *b)
     }
     *out = *end = '\0'; /* overwrite extra '/' added to end of path */
     b->used = (out - b->ptr) + 1;
-    /*buffer_string_set_length(b, out - b->ptr);*/
+    /*buffer_truncate(b, out - b->ptr);*/
 }
 
 void buffer_to_lower(buffer * const b) {

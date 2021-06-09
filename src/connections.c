@@ -417,8 +417,8 @@ connection_send_1xx (request_st * const r, connection * const con)
     http_status_append(b, r->http_status);
     for (uint32_t i = 0; i < r->resp_headers.used; ++i) {
         const data_string * const ds = (data_string *)r->resp_headers.data[i];
-        const uint32_t klen = buffer_string_length(&ds->key);
-        const uint32_t vlen = buffer_string_length(&ds->value);
+        const uint32_t klen = buffer_clen(&ds->key);
+        const uint32_t vlen = buffer_clen(&ds->value);
         if (0 == klen || 0 == vlen) continue;
         buffer_append_str2(b, CONST_STR_LEN("\r\n"), ds->key.ptr, klen);
         buffer_append_str2(b, CONST_STR_LEN(": "), ds->value.ptr, vlen);
@@ -631,7 +631,7 @@ static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chun
 
     /* detect if data is added to chunk */
     c = cq->first;
-    return (c && (size_t)c->offset + olen < buffer_string_length(c->mem))
+    return (c && (size_t)c->offset + olen < buffer_clen(c->mem))
       ? c
       : NULL;
 }
@@ -700,7 +700,7 @@ static int connection_handle_read_state(connection * const con)  {
 
     do {
         if (NULL == c) continue;
-        clen = buffer_string_length(c->mem) - c->offset;
+        clen = buffer_clen(c->mem) - c->offset;
         if (0 == clen) continue;
         if (__builtin_expect( (c->offset > USHRT_MAX), 0)) /*(highly unlikely)*/
             chunkqueue_compact_mem_offset(cq);
@@ -770,7 +770,7 @@ static int connection_handle_read_state(connection * const con)  {
     if (NULL == c) return 0; /* incomplete request headers */
 
   #ifdef __COVERITY__
-    if (buffer_string_length(c->mem) < hoff[1]) {
+    if (buffer_clen(c->mem) < hoff[1]) {
         return 1;
     }
   #endif
@@ -1640,9 +1640,9 @@ connection_handle_read_post_cq_compact (chunkqueue * const cq)
      * (loop if next chunk is empty) */
     chunk *c = cq->first;
     if (NULL == c) return 0;
-    const uint32_t mlen = buffer_string_length(c->mem) - (size_t)c->offset;
+    const uint32_t mlen = buffer_clen(c->mem) - (size_t)c->offset;
     while ((c = c->next)) {
-        const uint32_t blen = buffer_string_length(c->mem) - (size_t)c->offset;
+        const uint32_t blen = buffer_clen(c->mem) - (size_t)c->offset;
         if (0 == blen) continue;
         chunkqueue_compact_mem(cq, mlen + blen);
         return 1;
@@ -1671,12 +1671,12 @@ connection_handle_read_post_chunked_crlf (chunkqueue * const cq)
     p = b->ptr+c->offset;
     if (p[0] != '\r') return -1; /* error */
     if (p[1] == '\n') return 1;
-    len = buffer_string_length(b) - (size_t)c->offset;
+    len = buffer_clen(b) - (size_t)c->offset;
     if (1 != len) return -1; /* error */
 
     while (NULL != (c = c->next)) {
         b = c->mem;
-        len = buffer_string_length(b) - (size_t)c->offset;
+        len = buffer_clen(b) - (size_t)c->offset;
         if (0 == len) continue;
         p = b->ptr+c->offset;
         return (p[0] == '\n') ? 1 : -1; /* error if not '\n' */
@@ -1756,7 +1756,7 @@ connection_handle_read_post_chunked (request_st * const r, chunkqueue * const cq
                             /*(effectively doubles max request field size
                              * potentially received by backend, if in the future
                              * these trailers are added to request headers)*/
-                            if ((off_t)buffer_string_length(c->mem) - c->offset
+                            if ((off_t)buffer_clen(c->mem) - c->offset
                                 < (off_t)r->conf.max_request_field_size) {
                                 break;
                             }
@@ -1764,7 +1764,7 @@ connection_handle_read_post_chunked (request_st * const r, chunkqueue * const cq
                                 /* ignore excessively long trailers;
                                  * disable keep-alive on connection */
                                 r->keep_alive = 0;
-                                p = c->mem->ptr + buffer_string_length(c->mem)
+                                p = c->mem->ptr + buffer_clen(c->mem)
                                   - 4;
                             }
                         }
@@ -1802,7 +1802,7 @@ connection_handle_read_post_chunked (request_st * const r, chunkqueue * const cq
 
             /*(likely better ways to handle chunked header crossing chunkqueue
              * chunks, but this situation is not expected to occur frequently)*/
-            if ((off_t)buffer_string_length(c->mem) - c->offset >= 1024) {
+            if ((off_t)buffer_clen(c->mem) - c->offset >= 1024) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "chunked header line too long -> 400");
                 /* 400 Bad Request */

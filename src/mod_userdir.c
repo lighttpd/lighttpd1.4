@@ -116,6 +116,29 @@ SETDEFAULTS_FUNC(mod_userdir_set_defaults) {
     if (!config_plugin_values_init(srv, p, cpk, "mod_userdir"))
         return HANDLER_ERROR;
 
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* userdir.path */
+              case 1: /* userdir.exclude-user */
+              case 2: /* userdir.include-user */
+                break;
+              case 3: /* userdir.basepath */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
+                break;
+              case 4: /* userdir.letterhomes */
+              case 5: /* userdir.active */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
+
     /* enabled by default for backward compatibility;
      * if userdir.path isn't set userdir is disabled too,
      * but you can't disable it by setting it to an empty string. */
@@ -158,7 +181,7 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
     /* we build the physical path */
     buffer * const b = r->tmp_buf;
 
-    if (buffer_string_is_empty(p->conf.basepath)) {
+    if (!p->conf.basepath) {
       #ifdef HAVE_PWD_H
         /* getpwnam() lookup is expensive; first check 2-element cache */
         const time_t cur_ts = log_monotonic_secs;
@@ -173,13 +196,13 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
         }
         struct passwd *pwd;
         if (cached >= 0) {
-            buffer_copy_path_len2(b, CONST_BUF_LEN(&p->cache_path[cached]),
-                                     CONST_BUF_LEN(p->conf.path));
+            buffer_copy_path_len2(b, BUF_PTR_LEN(&p->cache_path[cached]),
+                                     BUF_PTR_LEN(p->conf.path));
         }
         else if ((pwd = getpwnam(u))) {
             const size_t plen = strlen(pwd->pw_dir);
             buffer_copy_path_len2(b, pwd->pw_dir, plen,
-                                     CONST_BUF_LEN(p->conf.path));
+                                     BUF_PTR_LEN(p->conf.path));
             if (!stat_cache_path_isdir(b)) {
                 return HANDLER_GO_ON;
             }
@@ -226,7 +249,7 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
             buffer_append_path_len(b, u, 1);
         }
         buffer_append_path_len(b, u, ulen);
-        buffer_append_path_len(b, CONST_BUF_LEN(p->conf.path));
+        buffer_append_path_len(b, BUF_PTR_LEN(p->conf.path));
     }
 
     buffer_copy_buffer(&r->physical.basedir, b);
@@ -260,7 +283,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
     /* /~user/foo.html -> /home/user/public_html/foo.html */
 
   #ifdef __COVERITY__
-    if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
+    if (buffer_is_blank(&r->uri.path)) return HANDLER_GO_ON;
   #endif
 
     if (r->uri.path.ptr[0] != '/' ||
@@ -272,7 +295,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
     /* enforce the userdir.path to be set in the config, ugly fix for #1587;
      * should be replaced with a clean .enabled option in 1.5
      */
-    if (!p->conf.active || buffer_is_empty(p->conf.path)) return HANDLER_GO_ON;
+    if (!p->conf.active || !p->conf.path) return HANDLER_GO_ON;
 
     const char * const uptr = r->uri.path.ptr + 2;
     const char * const rel_url = strchr(uptr, '/');

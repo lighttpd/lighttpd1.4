@@ -168,7 +168,7 @@ static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char 
 	const size_t len = len_enc_len + key_len + val_len;
 	const size_t fmax =
 	  FCGI_MAX_LENGTH + sizeof(FCGI_BeginRequestRecord) + sizeof(FCGI_Header);
-	if (buffer_string_length(env) + len >= fmax)
+	if (len > fmax - buffer_clen(env))
 		return -1; /* we can't append more headers, ignore it */
 
 	buffer_append_str3(env, len_enc, len_enc_len, key, key_len, val, val_len);
@@ -277,13 +277,13 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 		return HANDLER_FINISHED;
 	} else {
 		fcgi_header(&(header), FCGI_PARAMS, request_id,
-			    buffer_string_length(b) - sizeof(FCGI_BeginRequestRecord) - sizeof(FCGI_Header), 0);
+			    buffer_clen(b) - sizeof(FCGI_BeginRequestRecord) - sizeof(FCGI_Header), 0);
 		memcpy(b->ptr+sizeof(FCGI_BeginRequestRecord), (const char *)&header, sizeof(header));
 
 		fcgi_header(&(header), FCGI_PARAMS, request_id, 0, 0);
 		buffer_append_string_len(b, (const char *)&header, sizeof(header));
 
-		hctx->wb_reqlen = buffer_string_length(b);
+		hctx->wb_reqlen = buffer_clen(b);
 		chunkqueue_prepend_buffer_commit(&hctx->wb);
 	}
 
@@ -345,12 +345,12 @@ static int fastcgi_get_packet(handler_ctx *hctx, fastcgi_response_packet *packet
 static void fastcgi_get_packet_body(buffer * const b, handler_ctx * const hctx, const fastcgi_response_packet * const packet) {
     /* copy content; hctx->rb must contain at least packet->len content */
     /* (read entire packet and then truncate padding, if present) */
-    const uint32_t blen = buffer_string_length(b);
+    const uint32_t blen = buffer_clen(b);
     if (chunkqueue_read_data(hctx->rb,
                              buffer_string_prepare_append(b, packet->len),
                              packet->len, hctx->r->conf.errh) < 0)
         return; /*(should not happen; should all be in memory)*/
-    buffer_string_set_length(b, blen + packet->len - packet->padding);
+    buffer_truncate(b, blen + packet->len - packet->padding);
 }
 
 __attribute_cold__
@@ -368,7 +368,7 @@ mod_fastcgi_chunk_decode_transfer_cqlen (request_st * const r, chunkqueue * cons
     uint32_t remain = len, wr;
     for (const chunk *c = src->first; c && remain; c = c->next, remain -= wr) {
         /*assert(c->type == MEM_CHUNK);*/
-        wr = buffer_string_length(c->mem) - c->offset;
+        wr = buffer_clen(c->mem) - c->offset;
         if (wr > remain) wr = remain;
         if (0 != http_chunk_decode_append_mem(r, c->mem->ptr+c->offset, wr))
             return -1;

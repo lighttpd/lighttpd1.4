@@ -18,9 +18,9 @@ int
 http_etag_matches (const buffer * const etag, const char *s, const int weak_ok)
 {
     if ('*' == s[0] && '\0' == s[1]) return 1;
-    if (buffer_string_is_empty(etag)) return 0;
+    if (buffer_is_blank(etag)) return 0;
 
-    uint32_t etag_sz = buffer_string_length(etag);
+    uint32_t etag_sz = buffer_clen(etag);
     const char *etag_ptr = etag->ptr;
 
     if (etag_ptr[0] == 'W' && etag_ptr[1] == '/') {
@@ -48,11 +48,13 @@ http_etag_remix (buffer * const etag, const char * const str, const uint32_t len
 {
     uint32_t h = dekhash(str, len, len); /*(pass len as initial hash value)*/
   #if 0 /*(currently never elen > 2; always cleared in http_etag_create())*/
-    uint32_t elen = buffer_string_length(etag);
-    if (elen > 2) /*(expect "..." if set)*/
+    uint32_t elen = buffer_clen(etag);
+    if (elen > 2) {/*(expect "..." if set)*/
         h = dekhash(etag->ptr+1, elen-2, h);
-    buffer_string_set_length(etag, 1);
-    etag->ptr[0] = '\"';
+        buffer_truncate(etag, 1);
+    }
+    else
+        buffer_copy_string_len(etag, CONST_STR_LEN("\""));
   #else
     buffer_copy_string_len(etag, CONST_STR_LEN("\""));
   #endif

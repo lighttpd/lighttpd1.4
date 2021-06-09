@@ -93,6 +93,25 @@ SETDEFAULTS_FUNC(mod_evasive_set_defaults) {
     if (!config_plugin_values_init(srv, p, cpk, "mod_evasive"))
         return HANDLER_ERROR;
 
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* evasive.max-conns-per-ip */
+              case 1: /* evasive.silent */
+                break;
+              case 2: /* evasive.location */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
+
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
         const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
@@ -131,8 +150,10 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 				  r->con->dst_addr_buf->ptr);
 			}
 
-			if (!buffer_is_empty(p->conf.location)) {
-				http_header_response_set(r, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"), CONST_BUF_LEN(p->conf.location));
+			if (p->conf.location) {
+				http_header_response_set(r, HTTP_HEADER_LOCATION,
+				                         CONST_STR_LEN("Location"),
+				                         BUF_PTR_LEN(p->conf.location));
 				r->http_status = 302;
 				r->resp_body_finished = 1;
 			} else {

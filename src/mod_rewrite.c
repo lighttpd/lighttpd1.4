@@ -291,12 +291,12 @@ static handler_t process_rewrite_rules(request_st * const r, plugin_data *p, con
 	burl.port      = sock_addr_get_port(&r->con->srv_socket->addr);
 	burl.path      = &r->target; /*(uri-encoded and includes query-part)*/
 	burl.query     = &r->uri.query;
-	if (buffer_string_is_empty(burl.authority))
+	if (buffer_is_blank(burl.authority))
 		burl.authority = r->server_name;
 
 	buffer * const tb = r->tmp_buf;
 	rc = pcre_keyvalue_buffer_process(kvb, &ctx, &r->target, tb);
-	if (HANDLER_FINISHED == rc && !buffer_is_empty(tb) && tb->ptr[0] == '/') {
+	if (HANDLER_FINISHED == rc && !buffer_is_blank(tb) && tb->ptr[0] == '/') {
 		buffer_copy_buffer(&r->target, tb);
 		uintptr_t * const hctx = (uintptr_t *)(r->plugin_ctx + p->id);
 		*hctx |= REWRITE_STATE_REWRITTEN;

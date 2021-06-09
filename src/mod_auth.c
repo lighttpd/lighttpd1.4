@@ -491,7 +491,7 @@ static handler_t mod_auth_require_parse_array(const array *value, array * const 
 				}
 			}
 
-			if (buffer_string_is_empty(method)) {
+			if (!method || buffer_is_blank(method)) {
 				log_error(errh, __FILE__, __LINE__,
 				  "the method field is missing or blank in: "
 				  "auth.require = ( \"...\" => ( ..., \"method\" => \"...\" ) )");
@@ -506,21 +506,21 @@ static handler_t mod_auth_require_parse_array(const array *value, array * const 
 				}
 			}
 
-			if (buffer_is_empty(realm)) {
+			if (!realm) {
 				log_error(errh, __FILE__, __LINE__,
 				  "the realm field is missing in: "
 				  "auth.require = ( \"...\" => ( ..., \"realm\" => \"...\" ) )");
 				return HANDLER_ERROR;
 			}
 
-			if (buffer_string_is_empty(require)) {
+			if (!require || buffer_is_blank(require)) {
 				log_error(errh, __FILE__, __LINE__,
 				  "the require field is missing or blank in: "
 				  "auth.require = ( \"...\" => ( ..., \"require\" => \"...\" ) )");
 				return HANDLER_ERROR;
 			}
 
-			if (buffer_string_is_empty(algos)) {
+			if (!algos || buffer_is_blank(algos)) {
 				algorithm |= HTTP_AUTH_DIGEST_MD5;
 			} else if (!mod_auth_algorithms_parse(&algorithm, algos)) {
 				log_error(errh, __FILE__, __LINE__,
@@ -614,7 +614,7 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* auth.backend */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     const http_auth_backend_t * const auth_backend =
                       http_auth_backend_get(cpv->v.b);
                     if (NULL == auth_backend) {
@@ -732,7 +732,7 @@ static handler_t mod_auth_send_401_unauthorized_basic(request_st * const r, cons
       http_header_response_set_ptr(r, HTTP_HEADER_WWW_AUTHENTICATE,
                                    CONST_STR_LEN("WWW-Authenticate")),
       CONST_STR_LEN("Basic realm=\""),
-      CONST_BUF_LEN(realm),
+      BUF_PTR_LEN(realm),
       CONST_STR_LEN("\", charset=\"UTF-8\""));
     return HANDLER_FINISHED;
 }
@@ -764,7 +764,7 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 		return mod_auth_send_401_unauthorized_basic(r, require->realm);
 	}
       #ifdef __COVERITY__
-	if (buffer_string_length(b) < sizeof("Basic ")-1) {
+	if (buffer_clen(b) < sizeof("Basic ")-1) {
 		return mod_auth_send_400_bad_request(r);
 	}
       #endif
@@ -772,7 +772,7 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 	username = buffer_init();
 
 	/* coverity[overflow_sink : FALSE] */
-	if (!buffer_append_base64_decode(username, b->ptr+sizeof("Basic ")-1, buffer_string_length(b)-(sizeof("Basic ")-1), BASE64_STANDARD)) {
+	if (!buffer_append_base64_decode(username, b->ptr+sizeof("Basic ")-1, buffer_clen(b)-(sizeof("Basic ")-1), BASE64_STANDARD)) {
 		log_error(r->conf.errh, __FILE__, __LINE__, "decoding base64-string failed %s", b->ptr+sizeof("Basic ")-1);
 
 		buffer_free(username);
@@ -787,8 +787,8 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 		return mod_auth_send_400_bad_request(r);
 	}
 
-	uint32_t pwlen = buffer_string_length(username);
-	buffer_string_set_length(username, pw - username->ptr);
+	uint32_t pwlen = buffer_clen(username);
+	buffer_truncate(username, pw - username->ptr);
 	pw++;
 	pwlen -= (pw - username->ptr);
 
@@ -800,7 +800,7 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 	handler_t rc = HANDLER_ERROR;
 	int ndx = -1;
 	if (sptree) {
-		ndx = http_auth_cache_hash(require, CONST_BUF_LEN(username));
+		ndx = http_auth_cache_hash(require, BUF_PTR_LEN(username));
 		ae = http_auth_cache_query(sptree, ndx);
 		if (ae && ae->require == require
 		    && buffer_is_equal_string(username, ae->username, ae->ulen))
@@ -816,9 +816,9 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 
 	switch (rc) {
 	case HANDLER_GO_ON:
-		http_auth_setenv(r, CONST_BUF_LEN(username), CONST_STR_LEN("Basic"));
+		http_auth_setenv(r, BUF_PTR_LEN(username), CONST_STR_LEN("Basic"));
 		if (sptree && NULL == ae) { /*(cache (new) successful result)*/
-			ae = http_auth_cache_entry_init(require, 0, CONST_BUF_LEN(username),
+			ae = http_auth_cache_entry_init(require, 0, BUF_PTR_LEN(username),
 			                                pw, pwlen);
 			http_auth_cache_insert(sptree, ndx, ae, http_auth_cache_entry_free);
 		}
@@ -907,7 +907,7 @@ static void mod_auth_digest_nonce_sha256(buffer *b, time_t cur_ts, int rnd, cons
     len = li_itostrn(hh, sizeof(hh), rnd);
     SHA256_Update(&ctx, (unsigned char *)hh, len);
     if (secret) {
-        len = buffer_string_length(secret);
+        len = buffer_clen(secret);
         SHA256_Update(&ctx, (unsigned char *)secret->ptr, len);
     }
     SHA256_Final(h, &ctx);
@@ -980,7 +980,7 @@ static void mod_auth_digest_nonce_sha512_256(buffer *b, time_t cur_ts, int rnd, 
     len = li_itostrn(hh, sizeof(hh), rnd);
     SHA512_256_Update(&ctx, (unsigned char *)hh, len);
     if (secret) {
-        len = buffer_string_length(secret);
+        len = buffer_clen(secret);
         SHA512_256_Update(&ctx, (unsigned char *)secret->ptr, len);
     }
     SHA512_256_Final(h, &ctx);
@@ -1057,7 +1057,7 @@ static void mod_auth_digest_nonce_md5(buffer *b, time_t cur_ts, int rnd, const b
     len = li_itostrn(hh, sizeof(hh), rnd);
     li_MD5_Update(&ctx, (unsigned char *)hh, len);
     if (secret) {
-        len = buffer_string_length(secret);
+        len = buffer_clen(secret);
         li_MD5_Update(&ctx, (unsigned char *)secret->ptr, len);
     }
     li_MD5_Final(h, &ctx);
@@ -1144,7 +1144,7 @@ static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const str
         struct const_iovec iov[] = {
           { CONST_STR_LEN("\r\nWWW-Authenticate: ") }
          ,{ CONST_STR_LEN("Digest realm=\"") }
-         ,{ CONST_BUF_LEN(require->realm) }
+         ,{ BUF_PTR_LEN(require->realm) }
          ,{ CONST_STR_LEN("\", charset=\"UTF-8\", algorithm=") }
          ,{ algoname[i], algolen[i] }
          ,{ CONST_STR_LEN(", nonce=\"") }
@@ -1242,7 +1242,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 	if (!buffer_eq_icase_ssn(vb->ptr, CONST_STR_LEN("Digest "))) {
 		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	} else {
-		size_t n = buffer_string_length(vb);
+		size_t n = buffer_clen(vb);
 	      #ifdef __COVERITY__
 		if (n < sizeof("Digest ")-1) {
 			return mod_auth_send_400_bad_request(r);

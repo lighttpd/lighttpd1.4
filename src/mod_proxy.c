@@ -403,7 +403,7 @@ static const buffer * http_header_remap_host_match (buffer *b, size_t off, http_
         for (size_t i = 0, used = hosts->used; i < used; ++i) {
             const data_string * const ds = (data_string *)hosts->data[i];
             const buffer *k = &ds->key;
-            size_t mlen = buffer_string_length(k);
+            size_t mlen = buffer_clen(k);
             if (1 == mlen && k->ptr[0] == '-') {
                 /* match with authority provided in Host (if is_req)
                  * (If no Host in client request, then matching against empty
@@ -413,13 +413,13 @@ static const buffer * http_header_remap_host_match (buffer *b, size_t off, http_
                   ? remap_hdrs->http_host
                   : remap_hdrs->forwarded_host;
                 if (NULL == k) continue;
-                mlen = buffer_string_length(k);
+                mlen = buffer_clen(k);
             }
             if (buffer_eq_icase_ss(s, alen, k->ptr, mlen)) {
                 if (buffer_is_equal_string(&ds->value, CONST_STR_LEN("-"))) {
                     return remap_hdrs->http_host;
                 }
-                else if (!buffer_string_is_empty(&ds->value)) {
+                else if (!buffer_is_blank(&ds->value)) {
                     /*(save first matched request host for response match)*/
                     if (is_req && NULL == remap_hdrs->forwarded_host)
                         remap_hdrs->forwarded_host = &ds->value;
@@ -441,7 +441,7 @@ static size_t http_header_remap_host (buffer *b, size_t off, http_header_remap_o
     if (NULL == m) return alen; /*(no match; return original authority length)*/
 
     buffer_substr_replace(b, off, alen, m);
-    return buffer_string_length(m); /*(length of replacement authority)*/
+    return buffer_clen(m); /*(length of replacement authority)*/
 }
 
 
@@ -451,34 +451,34 @@ static size_t http_header_remap_urlpath (buffer *b, size_t off, http_header_rema
     const array *urlpaths = remap_hdrs->urlpaths;
     if (urlpaths) {
         const char * const s = b->ptr+off;
-        const size_t plen = buffer_string_length(b) - off; /*(urlpath len)*/
+        const size_t plen = buffer_clen(b) - off; /*(urlpath len)*/
         if (is_req) { /* request */
             for (size_t i = 0, used = urlpaths->used; i < used; ++i) {
                 const data_string * const ds = (data_string *)urlpaths->data[i];
-                const size_t mlen = buffer_string_length(&ds->key);
+                const size_t mlen = buffer_clen(&ds->key);
                 if (mlen <= plen && 0 == memcmp(s, ds->key.ptr, mlen)) {
                     if (NULL == remap_hdrs->forwarded_urlpath)
                         remap_hdrs->forwarded_urlpath = ds;
                     buffer_substr_replace(b, off, mlen, &ds->value);
-                    return buffer_string_length(&ds->value);/*(replacement len)*/
+                    return buffer_clen(&ds->value);/*(replacement len)*/
                 }
             }
         }
         else {        /* response; perform reverse map */
             if (NULL != remap_hdrs->forwarded_urlpath) {
                 const data_string * const ds = remap_hdrs->forwarded_urlpath;
-                const size_t mlen = buffer_string_length(&ds->value);
+                const size_t mlen = buffer_clen(&ds->value);
                 if (mlen <= plen && 0 == memcmp(s, ds->value.ptr, mlen)) {
                     buffer_substr_replace(b, off, mlen, &ds->key);
-                    return buffer_string_length(&ds->key); /*(replacement len)*/
+                    return buffer_clen(&ds->key); /*(replacement len)*/
                 }
             }
             for (size_t i = 0, used = urlpaths->used; i < used; ++i) {
                 const data_string * const ds = (data_string *)urlpaths->data[i];
-                const size_t mlen = buffer_string_length(&ds->value);
+                const size_t mlen = buffer_clen(&ds->value);
                 if (mlen <= plen && 0 == memcmp(s, ds->value.ptr, mlen)) {
                     buffer_substr_replace(b, off, mlen, &ds->key);
-                    return buffer_string_length(&ds->key); /*(replacement len)*/
+                    return buffer_clen(&ds->key); /*(replacement len)*/
                 }
             }
         }
@@ -508,7 +508,7 @@ static void http_header_remap_uri (buffer *b, size_t off, http_header_remap_opts
             if (0 == alen) return; /*(empty authority, e.g. "http:///")*/
         }
         else {
-            alen = buffer_string_length(b) - off;
+            alen = buffer_clen(b) - off;
             if (0 == alen) return; /*(empty authority, e.g. "http:///")*/
             buffer_append_string_len(b, CONST_STR_LEN("/"));
         }
@@ -531,7 +531,7 @@ static void http_header_remap_uri (buffer *b, size_t off, http_header_remap_opts
                 }
             }
             buffer_substr_replace(b, off, alen, m);
-            alen = buffer_string_length(m);/*(length of replacement authority)*/
+            alen = buffer_clen(m);/*(length of replacement authority)*/
         }
         off += alen;
     }
@@ -602,10 +602,7 @@ static void http_header_remap_setcookie (buffer *b, size_t off, http_header_rema
 static void buffer_append_string_backslash_escaped(buffer *b, const char *s, size_t len) {
     /* (future: might move to buffer.c) */
     size_t j = 0;
-    char *p;
-
-    buffer_string_prepare_append(b, len*2 + 4);
-    p = b->ptr + buffer_string_length(b);
+    char * const p = buffer_string_prepare_append(b, len*2 + 4);
 
     for (size_t i = 0; i < len; ++i) {
         int c = s[i];
@@ -643,7 +640,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
         if (NULL != xff) {
             /* use X-Forwarded-For contents to seed Forwarded */
             char *s = xff->ptr;
-            size_t used = buffer_string_length(xff);
+            size_t used = buffer_clen(xff);
             for (size_t i=0, j, ipv6; i < used; ++i) {
                 while (s[i] == ' ' || s[i] == '\t' || s[i] == ',') ++i;
                 if (s[i] == '\0') break;
@@ -683,7 +680,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
             ipv6
               ? buffer_append_string_len(b, CONST_STR_LEN("\"["))
               : buffer_append_string_len(b, CONST_STR_LEN("\""));
-            buffer_append_string_backslash_escaped(b, CONST_BUF_LEN(efor));
+            buffer_append_string_backslash_escaped(b, BUF_PTR_LEN(efor));
             ipv6
               ? buffer_append_string_len(b, CONST_STR_LEN("]\""))
               : buffer_append_string_len(b, CONST_STR_LEN("\""));
@@ -693,12 +690,12 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
             buffer_append_string_buffer(b, con->dst_addr_buf);
         } else if (family == AF_INET6) {
             buffer_append_str3(b, CONST_STR_LEN("\"["),
-                                  CONST_BUF_LEN(con->dst_addr_buf),
+                                  BUF_PTR_LEN(con->dst_addr_buf),
                                   CONST_STR_LEN("]\""));
         } else {
             buffer_append_string_len(b, CONST_STR_LEN("\""));
             buffer_append_string_backslash_escaped(
-              b, CONST_BUF_LEN(con->dst_addr_buf));
+              b, BUF_PTR_LEN(con->dst_addr_buf));
             buffer_append_string_len(b, CONST_STR_LEN("\""));
         }
         semicolon = 1;
@@ -718,7 +715,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
         /* special-case: might need to encode unix domain socket path */
         if (family == AF_UNIX) {
             buffer_append_string_backslash_escaped(
-              b, CONST_BUF_LEN(con->srv_socket->srv_token));
+              b, BUF_PTR_LEN(con->srv_socket->srv_token));
         }
         else
       #endif
@@ -738,7 +735,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
          * (not checking if quoted-string and encoding needed) */
         if (semicolon) buffer_append_string_len(b, CONST_STR_LEN(";"));
         if (NULL != eproto) {
-            buffer_append_str2(b,CONST_STR_LEN("proto="),CONST_BUF_LEN(eproto));
+            buffer_append_str2(b, CONST_STR_LEN("proto="), BUF_PTR_LEN(eproto));
         } else if (con->srv_socket->is_ssl) {
             buffer_append_string_len(b, CONST_STR_LEN("proto=https"));
         } else {
@@ -753,15 +750,15 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
                 buffer_append_string_len(b, CONST_STR_LEN(";"));
             buffer_append_string_len(b, CONST_STR_LEN("host=\""));
             buffer_append_string_backslash_escaped(
-              b, CONST_BUF_LEN(ehost));
+              b, BUF_PTR_LEN(ehost));
             buffer_append_string_len(b, CONST_STR_LEN("\""));
             semicolon = 1;
-        } else if (!buffer_string_is_empty(r->http_host)) {
+        } else if (r->http_host && !buffer_is_blank(r->http_host)) {
             if (semicolon)
                 buffer_append_string_len(b, CONST_STR_LEN(";"));
             buffer_append_string_len(b, CONST_STR_LEN("host=\""));
             buffer_append_string_backslash_escaped(
-              b, CONST_BUF_LEN(r->http_host));
+              b, BUF_PTR_LEN(r->http_host));
             buffer_append_string_len(b, CONST_STR_LEN("\""));
             semicolon = 1;
         }
@@ -775,7 +772,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
                 buffer_append_string_len(b, CONST_STR_LEN(";"));
             buffer_append_string_len(b, CONST_STR_LEN("remote_user=\""));
             buffer_append_string_backslash_escaped(
-              b, CONST_BUF_LEN(remote_user));
+              b, BUF_PTR_LEN(remote_user));
             buffer_append_string_len(b, CONST_STR_LEN("\""));
             /*semicolon = 1;*/
         }
@@ -786,22 +783,22 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
     b = (NULL != efor) ? efor : con->dst_addr_buf;
     http_header_request_set(r, HTTP_HEADER_X_FORWARDED_FOR,
                             CONST_STR_LEN("X-Forwarded-For"),
-                            CONST_BUF_LEN(b));
+                            BUF_PTR_LEN(b));
 
     b = (NULL != ehost) ? ehost : r->http_host;
-    if (!buffer_string_is_empty(b)) {
+    if (b && !buffer_is_blank(b)) {
         http_header_request_set(r, HTTP_HEADER_OTHER,
                                 CONST_STR_LEN("X-Host"),
-                                CONST_BUF_LEN(b));
+                                BUF_PTR_LEN(b));
         http_header_request_set(r, HTTP_HEADER_OTHER,
                                 CONST_STR_LEN("X-Forwarded-Host"),
-                                CONST_BUF_LEN(b));
+                                BUF_PTR_LEN(b));
     }
 
     b = (NULL != eproto) ? eproto : &r->uri.scheme;
     http_header_request_set(r, HTTP_HEADER_X_FORWARDED_PROTO,
                             CONST_STR_LEN("X-Forwarded-Proto"),
-                            CONST_BUF_LEN(b));
+                            BUF_PTR_LEN(b));
 }
 
 
@@ -816,7 +813,7 @@ static handler_t proxy_stdin_append(gw_handler_ctx *hctx) {
         buffer_append_uint_hex_lc(tb, (uintmax_t)req_cqlen);
         buffer_append_string_len(tb, CONST_STR_LEN("\r\n"));
 
-        const off_t len = (off_t)buffer_string_length(tb)
+        const off_t len = (off_t)buffer_clen(tb)
                         + 2 /*(+2 end chunk "\r\n")*/
                         + req_cqlen;
         if (-1 != hctx->wb_reqlen)
@@ -824,8 +821,8 @@ static handler_t proxy_stdin_append(gw_handler_ctx *hctx) {
 
         (chunkqueue_is_empty(&hctx->wb) || hctx->wb.first->type == MEM_CHUNK)
                                           /* else FILE_CHUNK for temp file */
-          ? chunkqueue_append_mem(&hctx->wb, CONST_BUF_LEN(tb))
-          : chunkqueue_append_mem_min(&hctx->wb, CONST_BUF_LEN(tb));
+          ? chunkqueue_append_mem(&hctx->wb, BUF_PTR_LEN(tb))
+          : chunkqueue_append_mem_min(&hctx->wb, BUF_PTR_LEN(tb));
         chunkqueue_steal(&hctx->wb, req_cq, req_cqlen);
 
         chunkqueue_append_mem_min(&hctx->wb, CONST_STR_LEN("\r\n"));
@@ -854,28 +851,28 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 
 	/* request line */
 	http_method_append(b, r->http_method);
-	buffer_append_str2(b, CONST_STR_LEN(" "), CONST_BUF_LEN(&r->target));
+	buffer_append_str2(b, CONST_STR_LEN(" "), BUF_PTR_LEN(&r->target));
 	if (remap_headers)
-		http_header_remap_uri(b, buffer_string_length(b) - buffer_string_length(&r->target), &hctx->conf.header, 1);
+		http_header_remap_uri(b, buffer_clen(b) - buffer_clen(&r->target),
+		                      &hctx->conf.header, 1);
 
-	if (!hctx->conf.header.force_http10)
-		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.1"));
-	else
-		buffer_append_string_len(b, CONST_STR_LEN(" HTTP/1.0"));
+	buffer_append_string_len(b, !hctx->conf.header.force_http10
+	                            ? " HTTP/1.1" : " HTTP/1.0",
+	                            sizeof(" HTTP/1.1")-1);
 
-	if (hctx->conf.replace_http_host && !buffer_string_is_empty(hctx->gw.host->id)) {
+	if (hctx->conf.replace_http_host && !buffer_is_blank(hctx->gw.host->id)) {
 		if (hctx->gw.conf.debug > 1) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "proxy - using \"%s\" as HTTP Host", hctx->gw.host->id->ptr);
 		}
 		buffer_append_str2(b, CONST_STR_LEN("\r\nHost: "),
-                                      CONST_BUF_LEN(hctx->gw.host->id));
-	} else if (!buffer_string_is_empty(r->http_host)) {
+		                      BUF_PTR_LEN(hctx->gw.host->id));
+	} else if (r->http_host && !buffer_is_unset(r->http_host)) {
 		buffer_append_str2(b, CONST_STR_LEN("\r\nHost: "),
-                                      CONST_BUF_LEN(r->http_host));
+		                      BUF_PTR_LEN(r->http_host));
 		if (remap_headers) {
-			size_t alen = buffer_string_length(r->http_host);
-			http_header_remap_host(b, buffer_string_length(b) - alen, &hctx->conf.header, 1, alen);
+			size_t alen = buffer_clen(r->http_host);
+			http_header_remap_host(b, buffer_clen(b) - alen, &hctx->conf.header, 1, alen);
 		}
 	} else {
 		/* no Host header available; must send HTTP/1.0 request */
@@ -919,14 +916,15 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			if (hctx->conf.header.force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
 			/* ignore if not exactly "trailers" */
 			if (!buffer_eq_icase_slen(&ds->value, CONST_STR_LEN("trailers"))) continue;
-			te = &ds->value;
+			/*if (!buffer_is_blank(&ds->value)) te = &ds->value;*/
+			te = &ds->value; /*("trailers")*/
 			break;
 		case HTTP_HEADER_HOST:
 			continue; /*(handled further above)*/
 		case HTTP_HEADER_UPGRADE:
 			if (hctx->conf.header.force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
 			if (!hctx->conf.header.upgrade) continue;
-			upgrade = &ds->value;
+			if (!buffer_is_blank(&ds->value)) upgrade = &ds->value;
 			break;
 		case HTTP_HEADER_CONNECTION:
 			connhdr = &ds->value;
@@ -946,8 +944,8 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			continue;
 		}
 
-		const uint32_t klen = buffer_string_length(&ds->key);
-		const uint32_t vlen = buffer_string_length(&ds->value);
+		const uint32_t klen = buffer_clen(&ds->key);
+		const uint32_t vlen = buffer_clen(&ds->value);
 		if (0 == klen || 0 == vlen) continue;
 		char * restrict s = buffer_extend(b, klen+vlen+4);
 		s[0] = '\r';
@@ -983,7 +981,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			continue;
 		}
 
-		http_header_remap_uri(b, buffer_string_length(b) - vlen, &hctx->conf.header, 1);
+		http_header_remap_uri(b, buffer_clen(b) - vlen, &hctx->conf.header, 1);
 	}
 
 	if (connhdr && !hctx->conf.header.force_http10 && r->http_version >= HTTP_VERSION_1_1
@@ -992,16 +990,16 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		buffer_append_string_len(b, CONST_STR_LEN("\r\nConnection: close"));
 		/* (future: might be pedantic and also check Connection header for each
 		 * token using http_header_str_contains_token() */
-		if (!buffer_string_is_empty(te))
+		if (te)
 			buffer_append_string_len(b, CONST_STR_LEN(", te"));
-		if (!buffer_string_is_empty(upgrade))
+		if (upgrade)
 			buffer_append_string_len(b, CONST_STR_LEN(", upgrade"));
 		buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 	}
 	else    /* mod_proxy always sends Connection: close to backend */
 		buffer_append_string_len(b, CONST_STR_LEN("\r\nConnection: close\r\n\r\n"));
 
-	hctx->gw.wb_reqlen = buffer_string_length(b);
+	hctx->gw.wb_reqlen = buffer_clen(b);
 	chunkqueue_prepend_buffer_commit(&hctx->gw.wb);
 
 	if (r->reqbody_length) {

@@ -66,7 +66,6 @@ lua_State *script_cache_get_script(script_cache *cache, buffer *name, int etag_f
 
 			if (lua_gettop(sc->L) == 0) break;
 			force_assert(lua_gettop(sc->L) == 1);
-
 			sce = stat_cache_get_entry(sc->name);
 			if (NULL == sce) {
 				lua_pop(sc->L, 1); /* pop the old function */
@@ -102,6 +101,7 @@ lua_State *script_cache_get_script(script_cache *cache, buffer *name, int etag_f
 		sc->L = luaL_newstate();
 		luaL_openlibs(sc->L);
 	}
+	buffer_clear(sc->etag);
 
 	if (0 != luaL_loadfile(sc->L, name->ptr)) {
 		/* oops, an error, return it */
@@ -110,7 +110,9 @@ lua_State *script_cache_get_script(script_cache *cache, buffer *name, int etag_f
 
 	sce = stat_cache_get_entry(sc->name);
 	if (sce) {
-		buffer_copy_buffer(sc->etag, stat_cache_etag_get(sce, etag_flags));
+		const buffer *etag = stat_cache_etag_get(sce, etag_flags);
+		if (etag)
+			buffer_copy_buffer(sc->etag, etag);
 	}
 
 	force_assert(lua_isfunction(sc->L, -1));

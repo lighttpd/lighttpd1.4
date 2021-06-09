@@ -186,7 +186,7 @@ SETDEFAULTS_FUNC(mod_rrd_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* rrdtool.db-name */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     rrd_config *rrd = calloc(1, sizeof(rrd_config));
                     force_assert(rrd);
                     rrd->path_rrd = cpv->v.b;
@@ -196,7 +196,7 @@ SETDEFAULTS_FUNC(mod_rrd_set_defaults) {
                 }
                 break;
               case 1: /* rrdtool.binary */ /* T_CONFIG_SCOPE_SERVER */
-                if (!buffer_string_is_empty(cpv->v.b))
+                if (!buffer_is_blank(cpv->v.b))
                     p->path_rrdtool_bin = cpv->v.b; /*(store directly in p)*/
                 break;
               default:/* should not happen */
@@ -279,7 +279,7 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, rrd_config *s, ch
 	buffer_clear(cmd);
 	buffer_append_str3(cmd,
 	  CONST_STR_LEN("create "),
-	  CONST_BUF_LEN(s->path_rrd),
+	  BUF_PTR_LEN(s->path_rrd),
 	  CONST_STR_LEN(
 		" --step 60 "
 		"DS:InOctets:ABSOLUTE:600:U:U "
@@ -298,7 +298,7 @@ static int mod_rrdtool_create_rrd(server *srv, plugin_data *p, rrd_config *s, ch
 		"RRA:MIN:0.5:24:775 "
 		"RRA:MIN:0.5:288:797\n"));
 
-	if (-1 == (safe_write(p->write_fd, CONST_BUF_LEN(cmd)))) {
+	if (-1 == (safe_write(p->write_fd, BUF_PTR_LEN(cmd)))) {
 		log_perror(srv->errh, __FILE__, __LINE__, "rrdtool-write: failed");
 		return HANDLER_ERROR;
 	}
@@ -334,7 +334,7 @@ static int mod_rrd_write_data(server *srv, plugin_data *p, rrd_config *s) {
     buffer * const cmd = srv->tmp_buf;
     buffer_clear(cmd);
     buffer_append_str3(cmd, CONST_STR_LEN("update "),
-                            CONST_BUF_LEN(s->path_rrd),
+                            BUF_PTR_LEN(s->path_rrd),
                             CONST_STR_LEN(" N:"));
     buffer_append_int(cmd, s->bytes_read);
     buffer_append_string_len(cmd, CONST_STR_LEN(":"));
@@ -343,7 +343,7 @@ static int mod_rrd_write_data(server *srv, plugin_data *p, rrd_config *s) {
     buffer_append_int(cmd, s->requests);
     buffer_append_string_len(cmd, CONST_STR_LEN("\n"));
 
-    if (-1 == safe_write(p->write_fd, CONST_BUF_LEN(cmd))) {
+    if (-1 == safe_write(p->write_fd, BUF_PTR_LEN(cmd))) {
         log_error(srv->errh, __FILE__, __LINE__, "rrdtool-write: failed");
         return mod_rrd_fatal_error(p);
     }

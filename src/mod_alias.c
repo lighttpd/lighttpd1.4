@@ -52,10 +52,10 @@ static void mod_alias_patch_config(request_st * const r, plugin_data * const p) 
 static int mod_alias_check_order(server * const srv, const array * const a) {
     for (uint32_t j = 0; j < a->used; ++j) {
         const buffer * const prefix = &a->data[j]->key;
-        const size_t plen = buffer_string_length(prefix);
+        const size_t plen = buffer_clen(prefix);
         for (uint32_t k = j + 1; k < a->used; ++k) {
             const buffer * const key = &a->data[k]->key;
-            if (buffer_string_length(key) < plen) {
+            if (buffer_clen(key) < plen) {
                 break;
             }
             if (memcmp(key->ptr, prefix->ptr, plen) != 0) {
@@ -121,10 +121,10 @@ static handler_t
 mod_alias_remap (request_st * const r, const array * const aliases)
 {
     /* do not include trailing slash on basedir */
-    uint32_t basedir_len = buffer_string_length(&r->physical.basedir);
+    uint32_t basedir_len = buffer_clen(&r->physical.basedir);
     if (buffer_has_pathsep_suffix(&r->physical.basedir)) --basedir_len;
 
-    const uint32_t path_len = buffer_string_length(&r->physical.path);
+    const uint32_t path_len = buffer_clen(&r->physical.path);
     if (0 == path_len || path_len < basedir_len) return HANDLER_GO_ON;
 
     const uint32_t uri_len = path_len - basedir_len;
@@ -137,8 +137,8 @@ mod_alias_remap (request_st * const r, const array * const aliases)
 
     /* matched */
 
-    const uint32_t alias_len = buffer_string_length(&ds->key);
-    const uint32_t vlen = buffer_string_length(&ds->value);
+    const uint32_t alias_len = buffer_clen(&ds->key);
+    const uint32_t vlen = buffer_clen(&ds->value);
 
     /* check for path traversal in url-path following alias if key
      * does not end in slash, but replacement value ends in slash */
@@ -163,7 +163,7 @@ mod_alias_remap (request_st * const r, const array * const aliases)
             buffer_string_prepare_append(&r->physical.path, nlen - path_len);
         memmove(r->physical.path.ptr + vlen,
                 uri_ptr + alias_len, uri_len - alias_len);
-        buffer_string_set_length(&r->physical.path, nlen);
+        buffer_truncate(&r->physical.path, nlen);
     }
     memcpy(r->physical.path.ptr, ds->value.ptr, vlen);
 

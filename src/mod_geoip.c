@@ -95,7 +95,7 @@ FREE_FUNC(mod_geoip_free) {
 
 static int mod_geoip_open_db(server *srv, config_plugin_value_t * const cpv, int mem_cache) {
     /* country db filename is required! */
-    if (buffer_is_empty(cpv->v.b)) {
+    if (buffer_is_blank(cpv->v.b)) {
         cpv->v.v = NULL;
         return 1;
     }

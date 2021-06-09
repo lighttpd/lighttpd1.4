@@ -406,9 +406,9 @@ ajp13_enc_request_headers (uint8_t * const x, uint32_t n, const request_st * con
 
         n = (code)
           ? ajp13_enc_uint16(x, n, 0xA000 | code)
-          : ajp13_enc_string(x, n, CONST_BUF_LEN(&ds->key));
+          : ajp13_enc_string(x, n, BUF_PTR_LEN(&ds->key));
         if (0 == n) return n;
-        n = ajp13_enc_string(x, n, CONST_BUF_LEN(&ds->value));
+        n = ajp13_enc_string(x, n, BUF_PTR_LEN(&ds->value));
         if (0 == n) return n;
     }
     return n;
@@ -434,7 +434,7 @@ ajp13_enc_attribute (uint8_t * const x, uint32_t n, const buffer * const b, uint
     if (NULL == b) return n;
     n = ajp13_enc_byte(x, n, code);
     if (0 == n) return n;
-    return ajp13_enc_string(x, n, CONST_BUF_LEN(b));
+    return ajp13_enc_string(x, n, BUF_PTR_LEN(b));
 }
 
 
@@ -450,7 +450,7 @@ ajp13_enc_attributes (uint8_t * const x, uint32_t n, request_st * const r)
     n = ajp13_enc_attribute(x, n, vb, 0x04);
     if (0 == n) return n;
 
-    if (!buffer_string_is_empty(&r->uri.query)) {
+    if (!buffer_is_blank(&r->uri.query)) {
         n = ajp13_enc_attribute(x, n, &r->uri.query, 0x05);
         if (0 == n) return n;
     }
@@ -474,11 +474,11 @@ ajp13_enc_attributes (uint8_t * const x, uint32_t n, request_st * const r)
   #if 0
     /* req_attribute */ /*(what is often included by convention?)*/
     n = ajp13_enc_req_attribute(x, n, CONST_STR_LEN("REDIRECT_URI"),
-                                      CONST_BUF_LEN(&r->target_orig));
+                                      BUF_PTR_LEN(&r->target_orig));
     if (0 == n) return n;
     if (!buffer_is_equal(&r->target, &r->target_orig)) {
         n = ajp13_enc_req_attribute(x, n, CONST_STR_LEN("REDIRECT_URI"),
-                                          CONST_BUF_LEN(&r->target));
+                                          BUF_PTR_LEN(&r->target));
         if (0 == n) return n;
     }
     /* Note: if this is extended to pass all env; must not pass HTTP_PROXY */
@@ -502,12 +502,12 @@ ajp13_enc_server_name (uint8_t * const x, const uint32_t n, const request_st * c
     const data_string * const ds =
       array_get_element_klen(cgienv, CONST_STR_LEN("SERVER_NAME"));
     return (ds)
-      ? ajp13_enc_string(x, n, CONST_BUF_LEN(&ds->value))
+      ? ajp13_enc_string(x, n, BUF_PTR_LEN(&ds->value))
       : ajp13_enc_string(x, n, NULL, 0);
   #else
-    /* copied and modified from http-header-glue.c:http_cgi_headers() */
-    if (!buffer_string_is_empty(r->server_name)) {
-        uint32_t len = buffer_string_length(r->server_name);
+    /* copied and modified from http_cgi.c:http_cgi_headers() */
+    uint32_t len = buffer_clen(r->server_name);
+    if (len) {
         const char * const ptr = r->server_name->ptr;
         if (ptr[0] == '[') {
             const char *colon = strstr(ptr, "]:");
@@ -589,10 +589,10 @@ ajp13_create_env (handler_ctx * const hctx)
         n = ajp13_enc_string(x, n, proto, strlen(proto));
         if (0 == n) break;
         /* req_uri */
-        n = ajp13_enc_string(x, n, CONST_BUF_LEN(&r->uri.path));
+        n = ajp13_enc_string(x, n, BUF_PTR_LEN(&r->uri.path));
         if (0 == n) break;
         /* remote_addr */
-        n = ajp13_enc_string(x, n, CONST_BUF_LEN(r->con->dst_addr_buf));
+        n = ajp13_enc_string(x, n, BUF_PTR_LEN(r->con->dst_addr_buf));
         if (0 == n) break;
         /* remote_host *//*(skip DNS lookup)*/
         n = ajp13_enc_string(x, n, NULL, 0);
@@ -625,8 +625,9 @@ ajp13_create_env (handler_ctx * const hctx)
         array_free(cgienv);
       #endif
 
+        /* (buffer is reallocated only if n is exactly AJP13_MAX_PACKET_SIZE) */
         /* (could check for one-off; limit to 8k-1 to avoid resizing buffer) */
-        buffer_string_set_length(b, n);
+        buffer_extend(b, n);/*(buffer_commit but extend +1 for '\0' as needed)*/
         chunkqueue_prepend_buffer_commit(&hctx->wb);
         hctx->wb_reqlen = (off_t)n;
 

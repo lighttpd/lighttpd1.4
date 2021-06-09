@@ -66,11 +66,11 @@ static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 	size_t i, len, klen = 0;
 	char *key = NULL, *val = NULL;
 
-	if (buffer_string_is_empty(qrystr)) return 0;
+	if (buffer_is_blank(qrystr)) return 0;
 	key = qrystr->ptr;
 
 	/* we need the \0 */
-	len = buffer_string_length(qrystr);
+	len = buffer_clen(qrystr);
 	for (i = 0; i <= len; i++) {
 		switch(qrystr->ptr[i]) {
 		case '=':
@@ -136,16 +136,16 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 	{
 		int header_tbl = lua_gettop(L);
 
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("REQUEST_URI"), CONST_BUF_LEN(&r->target_orig));
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_NAME"), CONST_BUF_LEN(&r->uri.path));
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_FILENAME"), CONST_BUF_LEN(&r->physical.path));
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("DOCUMENT_ROOT"), CONST_BUF_LEN(&r->physical.basedir));
-		if (!buffer_string_is_empty(&r->pathinfo)) {
-			c_to_lua_push(L, header_tbl, CONST_STR_LEN("PATH_INFO"), CONST_BUF_LEN(&r->pathinfo));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("REQUEST_URI"), BUF_PTR_LEN(&r->target_orig));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_NAME"), BUF_PTR_LEN(&r->uri.path));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("SCRIPT_FILENAME"), BUF_PTR_LEN(&r->physical.path));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("DOCUMENT_ROOT"), BUF_PTR_LEN(&r->physical.basedir));
+		if (!buffer_is_blank(&r->pathinfo)) {
+			c_to_lua_push(L, header_tbl, CONST_STR_LEN("PATH_INFO"), BUF_PTR_LEN(&r->pathinfo));
 		}
 
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("CWD"), CONST_BUF_LEN(&p->basedir));
-		c_to_lua_push(L, header_tbl, CONST_STR_LEN("BASEURL"), CONST_BUF_LEN(&p->baseurl));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("CWD"), BUF_PTR_LEN(&p->basedir));
+		c_to_lua_push(L, header_tbl, CONST_STR_LEN("BASEURL"), BUF_PTR_LEN(&p->baseurl));
 	}
 	lua_setglobal(L, "request");
 
@@ -185,7 +185,7 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 	lua_to_c_get_string(L, "trigger_handler", &p->trigger_handler);
 
 	if (0 == lua_to_c_get_string(L, "output_contenttype", b)) {
-		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(b));
+		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), BUF_PTR_LEN(b));
 	}
 
 	if (ret == 0) {
@@ -226,7 +226,7 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 
 				/* the file is relative, make it absolute */
 				if (s[0] != '/') {
-					buffer_copy_path_len2(b, CONST_BUF_LEN(&p->basedir),
+					buffer_copy_path_len2(b, BUF_PTR_LEN(&p->basedir),
 					                         s, slen);
 				} else {
 					buffer_copy_string_len(b, s, (uint32_t)slen);
@@ -239,7 +239,7 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 					switch(errno) {
 					case ENOENT:
 						/* a file is missing, call the handler to generate it */
-						if (!buffer_string_is_empty(&p->trigger_handler)) {
+						if (!buffer_is_blank(&p->trigger_handler)) {
 							ret = 1; /* cache-miss */
 
 							log_error(r->conf.errh, __FILE__, __LINE__,
@@ -296,16 +296,16 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 		}
 	}
 
-	if (ret == 1 && !buffer_string_is_empty(&p->trigger_handler)) {
+	if (ret == 1 && !buffer_is_blank(&p->trigger_handler)) {
 		/* cache-miss */
 		buffer_clear(&r->uri.path);
 		buffer_append_str2(&r->uri.path,
-		                   CONST_BUF_LEN(&p->baseurl),
-		                   CONST_BUF_LEN(&p->trigger_handler));
+		                   BUF_PTR_LEN(&p->baseurl),
+		                   BUF_PTR_LEN(&p->trigger_handler));
 
 		buffer_copy_path_len2(&r->physical.path,
-		                      CONST_BUF_LEN(&p->basedir),
-		                      CONST_BUF_LEN(&p->trigger_handler));
+		                      BUF_PTR_LEN(&p->basedir),
+		                      BUF_PTR_LEN(&p->trigger_handler));
 
 		chunkqueue_reset(&r->write_queue);
 	}

@@ -57,7 +57,7 @@ static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
     fprintf(stderr, "get var on block: %s\n", dc->key.ptr);
     array_print(dc->value, 0);
 #endif
-    if (NULL != (du = array_get_element_klen(dc->value, CONST_BUF_LEN(key)))) {
+    if (NULL != (du = array_get_element_klen(dc->value, BUF_PTR_LEN(key)))) {
       data_unset *du_copy = du->fn->copy(du);
       buffer_clear(&du_copy->key);
       return du_copy;
@@ -105,8 +105,8 @@ static data_unset *configparser_merge_data(data_unset *op1, const data_unset *op
       for (i = 0; i < src->used; i ++) {
         du = (data_unset *)src->data[i];
         if (du) {
-          if (buffer_is_empty(&du->key)
-              || !(ddu = array_get_element_klen(dst, CONST_BUF_LEN(&du->key)))){
+          if (buffer_is_unset(&du->key)
+              || !(ddu = array_get_element_klen(dst, BUF_PTR_LEN(&du->key)))){
             array_insert_unique(dst, du->fn->copy(du));
           } else {
             fprintf(stderr, "Duplicate array-key '%s'\n", du->key.ptr);
@@ -144,7 +144,7 @@ static int configparser_remoteip_normalize_compat(buffer *rvalue) {
 
   if (rvalue->ptr[0] != '[') {
       buffer_append_str3(b, CONST_STR_LEN("["),
-                            CONST_BUF_LEN(rvalue),
+                            BUF_PTR_LEN(rvalue),
                             CONST_STR_LEN("]"));
   } else {
       buffer_append_string_buffer(b, rvalue);
@@ -154,7 +154,7 @@ static int configparser_remoteip_normalize_compat(buffer *rvalue) {
 
   if (0 == rc) {
     /* remove surrounding '[]' */
-    size_t blen = buffer_string_length(b);
+    size_t blen = buffer_clen(b);
     if (blen > 1) buffer_copy_string_len(rvalue, b->ptr+1, blen-2);
   }
 
@@ -218,27 +218,27 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
       return; /* unreachable */
     }
 
-    const uint32_t comp_offset = buffer_string_length(&ctx->current->key)+3;
+    const uint32_t comp_offset = buffer_clen(&ctx->current->key)+3;
     buffer * const tb = ctx->srv->tmp_buf;
     buffer_clear(tb);
     struct const_iovec iov[] = {
-      { CONST_BUF_LEN(&ctx->current->key) }
+      { BUF_PTR_LEN(&ctx->current->key) }
      ,{ CONST_STR_LEN(" / ") }   /* comp_offset */
      ,{ CONST_STR_LEN("$") }
-     ,{ CONST_BUF_LEN(obj_tag) } /*(HTTP, REQUEST_HEADER, SERVER)*/
+     ,{ BUF_PTR_LEN(obj_tag) } /*(HTTP, REQUEST_HEADER, SERVER)*/
      ,{ CONST_STR_LEN("[\"") }
-     ,{ CONST_BUF_LEN(comp_tag) }
+     ,{ BUF_PTR_LEN(comp_tag) }
      ,{ CONST_STR_LEN("\"] ") }
      ,{ op, 2 }
      ,{ CONST_STR_LEN(" \"") }
-     ,{ CONST_BUF_LEN(rvalue) }
+     ,{ BUF_PTR_LEN(rvalue) }
      ,{ CONST_STR_LEN("\"") }
     };
     buffer_append_iovec(tb, iov, sizeof(iov)/sizeof(*iov));
 
     data_config *dc;
     if (NULL != (dc = configparser_get_data_config(ctx->all_configs,
-                                                   CONST_BUF_LEN(tb)))) {
+                                                   BUF_PTR_LEN(tb)))) {
       configparser_push(ctx, dc, 0);
     }
     else {
@@ -278,7 +278,7 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
           }
           else {
             int rc;
-            buffer_string_set_length(rvalue, (size_t)(slash - rvalue->ptr)); /*(truncate)*/
+            buffer_truncate(rvalue, (size_t)(slash - rvalue->ptr));
             rc = (NULL == colon)
               ? http_request_host_normalize(rvalue, 0)
               : configparser_remoteip_normalize_compat(rvalue);
@@ -320,7 +320,7 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
       }
 
       if (COMP_HTTP_REQUEST_HEADER == dc->comp) {
-        dc->ext = http_header_hkey_get(CONST_BUF_LEN(&dc->comp_tag));
+        dc->ext = http_header_hkey_get(BUF_PTR_LEN(&dc->comp_tag));
       }
 
       buffer_copy_buffer(&dc->string, rvalue);
@@ -337,7 +337,7 @@ configparser_parse_else_condition(config_t * const ctx)
 {
     data_config * const dc = data_config_init();
     dc->cond = CONFIG_COND_ELSE;
-    buffer_append_str2(&dc->key, CONST_BUF_LEN(&ctx->current->key),
+    buffer_append_str2(&dc->key, BUF_PTR_LEN(&ctx->current->key),
                                  CONST_STR_LEN(" / "
                                                "else_tmp_token"));
     configparser_push(ctx, dc, 1);
@@ -391,7 +391,7 @@ varline ::= key(A) ASSIGN expression(B). {
           ctx->current->context_ndx,
           ctx->current->key.ptr, A->ptr);
       ctx->ok = 0;
-    } else if (NULL == array_get_element_klen(ctx->current->value, CONST_BUF_LEN(&B->key))) {
+    } else if (NULL == array_get_element_klen(ctx->current->value, BUF_PTR_LEN(&B->key))) {
       array_insert_unique(ctx->current->value, B);
       B = NULL;
     } else {
@@ -436,7 +436,7 @@ varline ::= key(A) APPEND expression(B). {
           ctx->current->context_ndx,
           ctx->current->key.ptr, A->ptr);
       ctx->ok = 0;
-    } else if (NULL != (du = array_extract_element_klen(vars, CONST_BUF_LEN(A))) || NULL != (du = configparser_get_variable(ctx, A))) {
+    } else if (NULL != (du = array_extract_element_klen(vars, BUF_PTR_LEN(A))) || NULL != (du = configparser_get_variable(ctx, A))) {
       du = configparser_merge_data(du, B);
       if (NULL == du) {
         ctx->ok = 0;
@@ -554,8 +554,8 @@ array(A) ::= LPARAN aelements(B) RPARAN. {
 aelements(A) ::= aelements(C) COMMA aelement(B). {
   A = NULL;
   if (ctx->ok) {
-    if (buffer_is_empty(&B->key) ||
-        NULL == array_get_element_klen(C, CONST_BUF_LEN(&B->key))) {
+    if (buffer_is_unset(&B->key) ||
+        NULL == array_get_element_klen(C, BUF_PTR_LEN(&B->key))) {
       array_insert_unique(C, B);
       B = NULL;
     } else {
@@ -657,14 +657,14 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
   if (ctx->ok) {
     size_t pos;
     data_config *dc;
-    dc = (data_config *)array_extract_element_klen(ctx->all_configs, CONST_BUF_LEN(&C->key));
+    dc = (data_config *)array_extract_element_klen(ctx->all_configs, BUF_PTR_LEN(&C->key));
     force_assert(C == dc);
     buffer_copy_buffer(&C->key, &B->key);
     C->comp_key = C->key.ptr + (B->comp_key - B->key.ptr);
     C->comp = B->comp;
     /*buffer_copy_buffer(&C->string, &B->string);*/
     /* -2 for "==" and minus 3 for spaces and quotes around string (in key) */
-    pos = buffer_string_length(&C->key)-buffer_string_length(&B->string)-5;
+    pos = buffer_clen(&C->key) - buffer_clen(&B->string) - 5;
     switch(B->cond) {
     case CONFIG_COND_NE:
       C->key.ptr[pos] = '='; /* opposite cond */
@@ -686,7 +686,7 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
       force_assert(0);
     }
 
-    if (NULL == (dc = configparser_get_data_config(ctx->all_configs, CONST_BUF_LEN(&C->key)))) {
+    if (NULL == (dc = configparser_get_data_config(ctx->all_configs, BUF_PTR_LEN(&C->key)))) {
       /* re-insert into ctx->all_configs with new C->key */
       array_insert_unique(ctx->all_configs, (data_unset *)C);
       C->prev = B;

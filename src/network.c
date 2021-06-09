@@ -109,7 +109,7 @@ static int network_host_parse_addr(server *srv, sock_addr *addr, socklen_t *addr
     const char *chost;
     sa_family_t family = use_ipv6 ? AF_INET6 : AF_INET;
     unsigned int port = srv->srvconf.port;
-    if (buffer_string_is_empty(host)) {
+    if (buffer_is_blank(host)) {
         log_error(srv->errh, __FILE__, __LINE__,
           "value of $SERVER[\"socket\"] must not be empty");
         return -1;
@@ -238,7 +238,7 @@ static uint8_t network_srv_token_colon (const buffer * const b) {
     else if (*p != '/') {
         colon = strchr(p, ':');
     }
-    return colon ? (uint8_t)(colon - p) : (uint8_t)buffer_string_length(b);
+    return colon ? (uint8_t)(colon - p) : (uint8_t)buffer_clen(b);
 }
 
 static int network_server_init(server *srv, network_socket_config *s, buffer *host_token, size_t sidx, int stdin_fd) {
@@ -249,7 +249,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	int family = 0;
 	int set_v6only = 0;
 
-	if (buffer_string_is_empty(host_token)) {
+	if (buffer_is_blank(host_token)) {
 		log_error(srv->errh, __FILE__, __LINE__,
 		  "value of $SERVER[\"socket\"] must not be empty");
 		return -1;
@@ -422,7 +422,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	}
 
 	if (-1 != stdin_fd) { } else
-	if (AF_UNIX == family && !buffer_string_is_empty(s->socket_perms)) {
+	if (AF_UNIX == family && s->socket_perms) {
 		mode_t m = 0;
 		for (char *str = s->socket_perms->ptr; *str; ++str) {
 			m <<= 3;
@@ -451,7 +451,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__) \
  || defined(__OpenBSD__) || defined(__DragonFly__)
-	} else if (!buffer_is_empty(s->bsd_accept_filter)
+	} else if (s->bsd_accept_filter
 		   && (buffer_is_equal_string(s->bsd_accept_filter, CONST_STR_LEN("httpready"))
 			|| buffer_is_equal_string(s->bsd_accept_filter, CONST_STR_LEN("dataready")))) {
 #ifdef SO_ACCEPTFILTER
@@ -674,11 +674,12 @@ int network_init(server *srv, int stdin_fd) {
         /* process srv->srvconf.bindhost
          * (skip if systemd socket activation is enabled and bindhost is empty;
          *  do not additionally listen on "*") */
-        if (!srv->srvconf.systemd_socket_activation
-            || !buffer_string_is_empty(srv->srvconf.bindhost)) {
+        if (!srv->srvconf.systemd_socket_activation || srv->srvconf.bindhost) {
             buffer *b = buffer_init();
-            buffer_copy_buffer(b, srv->srvconf.bindhost);
-            if (b->ptr[0] != '/') { /*(skip adding port if unix socket path)*/
+            if (srv->srvconf.bindhost)
+                buffer_copy_buffer(b, srv->srvconf.bindhost);
+            /*(skip adding port if unix socket path)*/
+            if (!b->ptr || b->ptr[0] != '/') {
                 buffer_append_string_len(b, CONST_STR_LEN(":"));
                 buffer_append_int(b, srv->srvconf.port);
             }

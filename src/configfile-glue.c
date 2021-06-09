@@ -516,7 +516,7 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 
 		l = &r->uri.authority;
 
-		if (buffer_string_is_empty(l)) {
+		if (buffer_is_blank(l)) {
 			l = (buffer *)&empty_string;
 			break;
 		}
@@ -592,7 +592,7 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 
 	case COMP_HTTP_REQUEST_HEADER:
 		*((const buffer **)&l) =
-		  http_header_request_get(r, dc->ext, CONST_BUF_LEN(&dc->comp_tag));
+		  http_header_request_get(r, dc->ext, BUF_PTR_LEN(&dc->comp_tag));
 		if (NULL == l) l = (buffer *)&empty_string;
 		break;
 	case COMP_HTTP_REQUEST_METHOD:
@@ -720,7 +720,7 @@ static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, con
     #define elementsof(x) (sizeof(x) / sizeof(x[0]))
     #endif
     cache->patterncount =
-      pcre_exec(dc->regex, dc->regex_study, CONST_BUF_LEN(b), 0, 0,
+      pcre_exec(dc->regex, dc->regex_study, BUF_PTR_LEN(b), 0, 0,
                 cond_match->matches, elementsof(cond_match->matches));
     if (cache->patterncount > 0)
         cond_match->comp_value = b; /*holds pointer to b (!) for pattern subst*/

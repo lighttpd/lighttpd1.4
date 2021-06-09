@@ -78,7 +78,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
      * - port, default: 5432
      */
 
-    if (!buffer_string_is_empty(sqlquery) && NULL != dbname) {
+    if (NULL != sqlquery && !buffer_is_blank(sqlquery) && NULL != dbname) {
         vhostdb_config *dbconf;
         PGconn *dbconn = PQsetdbLogin(host,port,NULL,NULL,dbname,user,pass);
         if (NULL == dbconn) {
@@ -128,14 +128,15 @@ static int mod_vhostdb_pgsql_query(request_st * const r, void *p_d, buffer *docr
             size_t len;
             int err;
             buffer_append_string_len(sqlquery, b, (size_t)(d - b));
-            buffer_string_prepare_append(sqlquery, buffer_string_length(&r->uri.authority) * 2);
+            buffer_string_prepare_append(sqlquery,
+                                         buffer_clen(&r->uri.authority) * 2);
             len = PQescapeStringConn(dbconf->dbconn,
-                    sqlquery->ptr + buffer_string_length(sqlquery),
-                    CONST_BUF_LEN(&r->uri.authority), &err);
+                    sqlquery->ptr + buffer_clen(sqlquery),
+                    BUF_PTR_LEN(&r->uri.authority), &err);
             buffer_commit(sqlquery, len);
             if (0 != err) return -1;
         } else {
-            d = dbconf->sqlquery->ptr + buffer_string_length(dbconf->sqlquery);
+            d = dbconf->sqlquery->ptr + buffer_clen(dbconf->sqlquery);
             buffer_append_string_len(sqlquery, b, (size_t)(d - b));
             break;
         }

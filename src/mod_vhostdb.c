@@ -50,8 +50,8 @@ typedef struct {
 static vhostdb_cache_entry *
 vhostdb_cache_entry_init (const buffer * const server_name, const buffer * const docroot)
 {
-    const uint32_t slen = buffer_string_length(server_name);
-    const uint32_t dlen = buffer_string_length(docroot);
+    const uint32_t slen = buffer_clen(server_name);
+    const uint32_t dlen = buffer_clen(docroot);
     vhostdb_cache_entry * const ve =
       malloc(sizeof(vhostdb_cache_entry) + slen + dlen);
     ve->ctime = log_monotonic_secs;
@@ -99,7 +99,7 @@ vhostdb_cache_init (const array *opts)
 static vhostdb_cache_entry *
 mod_vhostdb_cache_query (request_st * const r, plugin_data * const p)
 {
-    const int ndx = splaytree_djbhash(CONST_BUF_LEN(&r->uri.authority));
+    const int ndx = splaytree_djbhash(BUF_PTR_LEN(&r->uri.authority));
     splay_tree ** const sptree = &p->conf.vhostdb_cache->sptree;
     *sptree = splaytree_splay(*sptree, ndx);
     vhostdb_cache_entry * const ve =
@@ -114,7 +114,7 @@ mod_vhostdb_cache_query (request_st * const r, plugin_data * const p)
 static void
 mod_vhostdb_cache_insert (request_st * const r, plugin_data * const p, vhostdb_cache_entry * const ve)
 {
-    const int ndx = splaytree_djbhash(CONST_BUF_LEN(&r->uri.authority));
+    const int ndx = splaytree_djbhash(BUF_PTR_LEN(&r->uri.authority));
     splay_tree ** const sptree = &p->conf.vhostdb_cache->sptree;
     /*(not necessary to re-splay (with current usage) since single-threaded
      * and splaytree has not been modified since mod_vhostdb_cache_query())*/
@@ -207,7 +207,7 @@ SETDEFAULTS_FUNC(mod_vhostdb_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* vhostdb.backend */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     const buffer * const b = cpv->v.b;
                     *(const void **)&cpv->v.v = http_vhostdb_backend_get(b);
                     if (NULL == cpv->v.v) {
@@ -261,8 +261,10 @@ static handler_t mod_vhostdb_error_500 (request_st * const r)
 static handler_t mod_vhostdb_found (request_st * const r, vhostdb_cache_entry * const ve)
 {
     /* fix virtual server and docroot */
-    r->server_name = &r->server_name_buf;
-    buffer_copy_string_len(&r->server_name_buf, ve->server_name, ve->slen);
+    if (ve->slen) {
+        r->server_name = &r->server_name_buf;
+        buffer_copy_string_len(&r->server_name_buf, ve->server_name, ve->slen);
+    }
     buffer_copy_string_len(&r->physical.doc_root, ve->document_root, ve->dlen);
     return HANDLER_GO_ON;
 }
@@ -274,7 +276,7 @@ REQUEST_FUNC(mod_vhostdb_handle_docroot) {
     buffer *b;
 
     /* no host specified? */
-    if (buffer_string_is_empty(&r->uri.authority)) return HANDLER_GO_ON;
+    if (buffer_is_blank(&r->uri.authority)) return HANDLER_GO_ON;
 
     /* check if cached this connection */
     ve = r->plugin_ctx[p->id];
@@ -294,7 +296,7 @@ REQUEST_FUNC(mod_vhostdb_handle_docroot) {
         return mod_vhostdb_error_500(r); /* HANDLER_FINISHED */
     }
 
-    if (buffer_string_is_empty(b)) {
+    if (buffer_is_blank(b)) {
         /* no such virtual host */
         return HANDLER_GO_ON;
     }

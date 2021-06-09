@@ -148,10 +148,14 @@ static plugin_config * mod_authn_sasl_parse_opts(server *srv, const array * cons
             buffer_copy_string_len(b, CONST_STR_LEN("auxprop"));
         }
     }
+    else {
+        static const buffer saslauthd = { "saslauthd", sizeof("saslauthd"), 0 };
+        pwcheck_method = &saslauthd;
+    }
 
     ds = (const data_string *)
       array_get_element_klen(opts, CONST_STR_LEN("sasldb_path"));
-    if (NULL != ds) sasldb_path = &ds->value;
+    if (NULL != ds && !buffer_is_blank(&ds->value)) sasldb_path = &ds->value;
 
     plugin_config *pconf = malloc(sizeof(plugin_config));
     force_assert(pconf);
@@ -210,19 +214,12 @@ static int mod_authn_sasl_cb_getopt(void *p_d, const char *plugin_name, const ch
     size_t sz;
 
     if (0 == strcmp(opt, "pwcheck_method")) {
-        if (!buffer_string_is_empty(p->conf.pwcheck_method)) {
-            *res = p->conf.pwcheck_method->ptr;
-            sz = buffer_string_length(p->conf.pwcheck_method);
-        }
-        else { /* default */
-            *res = "saslauthd";
-            sz = sizeof("saslauthd")-1;
-        }
+        *res = p->conf.pwcheck_method->ptr;
+        sz = buffer_clen(p->conf.pwcheck_method);
     }
-    else if (0 == strcmp(opt, "sasldb_path")
-             && !buffer_string_is_empty(p->conf.sasldb_path)) {
+    else if (0 == strcmp(opt, "sasldb_path") && p->conf.sasldb_path) {
         *res = p->conf.sasldb_path->ptr;
-        sz = buffer_string_length(p->conf.sasldb_path);
+        sz = buffer_clen(p->conf.sasldb_path);
     }
     else if (0 == strcmp(opt, "auxprop_plugin")) {
         *res = "sasldb";
@@ -280,7 +277,7 @@ static handler_t mod_authn_sasl_query(request_st * const r, void *p_d, const buf
     rc = sasl_server_new(p->conf.service, p->conf.fqdn,
                          realm, NULL, NULL, cb, 0, &sc);
     if (SASL_OK == rc) {
-        rc = sasl_checkpass(sc, CONST_BUF_LEN(username), pw, strlen(pw));
+        rc = sasl_checkpass(sc, BUF_PTR_LEN(username), pw, strlen(pw));
         sasl_dispose(&sc);
     }
 

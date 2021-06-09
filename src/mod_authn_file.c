@@ -134,6 +134,25 @@ SETDEFAULTS_FUNC(mod_authn_file_set_defaults) {
     if (!config_plugin_values_init(srv, p, cpk, "mod_authn_file"))
         return HANDLER_ERROR;
 
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* auth.backend.plain.groupfile */
+              case 1: /* auth.backend.plain.userfile */
+              case 2: /* auth.backend.htdigest.userfile */
+              case 3: /* auth.backend.htpasswd.userfile */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
+
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
         const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
@@ -259,7 +278,7 @@ static int mod_authn_file_htdigest_get(request_st * const r, void *p_d, http_aut
     plugin_data *p = (plugin_data *)p_d;
     mod_authn_file_patch_config(r, p);
     const buffer * const auth_fn = p->conf.auth_htdigest_userfile;
-    if (buffer_string_is_empty(auth_fn)) return -1;
+    if (!auth_fn) return -1;
 
     off_t dlen = 64*1024*1024;/*(arbitrary limit: 64 MB file; expect < 1 MB)*/
     char *data = fdevent_load_file(auth_fn->ptr,&dlen,r->conf.errh,malloc,free);
@@ -285,9 +304,9 @@ static handler_t mod_authn_file_htdigest_basic(request_st * const r, void *p_d, 
     ai.dalgo    = (require->algorithm & ~HTTP_AUTH_DIGEST_SESS);
     ai.dlen     = http_auth_digest_len(ai.dalgo);
     ai.username = username->ptr;
-    ai.ulen     = buffer_string_length(username);
+    ai.ulen     = buffer_clen(username);
     ai.realm    = require->realm->ptr;
-    ai.rlen     = buffer_string_length(require->realm);
+    ai.rlen     = buffer_clen(require->realm);
 
     if (mod_authn_file_htdigest_get(r, p_d, &ai)) return HANDLER_ERROR;
 
@@ -312,7 +331,7 @@ static handler_t mod_authn_file_htdigest_basic(request_st * const r, void *p_d, 
 
 static int mod_authn_file_htpasswd_get(const buffer *auth_fn, const char *username, size_t userlen, buffer *password, log_error_st *errh) {
     if (NULL == username) return -1;
-    if (buffer_string_is_empty(auth_fn)) return -1;
+    if (!auth_fn) return -1;
 
     off_t dlen = 64*1024*1024;/*(arbitrary limit: 64 MB file; expect < 1 MB)*/
     char *data = fdevent_load_file(auth_fn->ptr, &dlen, errh, malloc, free);
@@ -377,7 +396,7 @@ static handler_t mod_authn_file_plain_digest(request_st * const r, void *p_d, ht
     rc = mod_authn_file_htpasswd_get(p->conf.auth_plain_userfile, ai->username, ai->ulen, password_buf, r->conf.errh);
     if (0 == rc) {
         /* generate password from plain-text */
-        mod_authn_file_digest(ai, CONST_BUF_LEN(password_buf));
+        mod_authn_file_digest(ai, BUF_PTR_LEN(password_buf));
     }
     ck_memzero(password_buf->ptr, password_buf->size);
     buffer_free(password_buf);
@@ -389,9 +408,9 @@ static handler_t mod_authn_file_plain_basic(request_st * const r, void *p_d, con
     buffer *password_buf = buffer_init();/* password-string from auth-backend */
     int rc;
     mod_authn_file_patch_config(r, p);
-    rc = mod_authn_file_htpasswd_get(p->conf.auth_plain_userfile, CONST_BUF_LEN(username), password_buf, r->conf.errh);
+    rc = mod_authn_file_htpasswd_get(p->conf.auth_plain_userfile, BUF_PTR_LEN(username), password_buf, r->conf.errh);
     if (0 == rc) {
-        rc = ck_memeq_const_time(CONST_BUF_LEN(password_buf), pw, strlen(pw))
+        rc = ck_memeq_const_time(BUF_PTR_LEN(password_buf), pw, strlen(pw))
           ? 0
           : -1;
     }
@@ -616,7 +635,7 @@ static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, 
     buffer *password = buffer_init();/* password-string from auth-backend */
     int rc;
     mod_authn_file_patch_config(r, p);
-    rc = mod_authn_file_htpasswd_get(p->conf.auth_htpasswd_userfile, CONST_BUF_LEN(username), password, r->conf.errh);
+    rc = mod_authn_file_htpasswd_get(p->conf.auth_htpasswd_userfile, BUF_PTR_LEN(username), password, r->conf.errh);
     if (0 == rc) {
         char sample[256];
         rc = -1;
@@ -633,7 +652,7 @@ static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, 
         }
       #if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
         /* a simple DES password is 2 + 11 characters. everything else should be longer. */
-        else if (buffer_string_length(password) >= 13) {
+        else if (buffer_clen(password) >= 13) {
             char *crypted;
            #if 0 && defined(HAVE_CRYPT_R)
             struct crypt_data crypt_tmp_data;

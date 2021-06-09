@@ -103,7 +103,7 @@ static const char* secdl_algorithm_names[] = {
 static secdl_algorithm algorithm_from_string(const buffer *name) {
 	size_t ndx;
 
-	if (buffer_string_is_empty(name)) return SECDL_INVALID;
+	if (buffer_is_blank(name)) return SECDL_INVALID;
 
 	for (ndx = 1; ndx < sizeof(secdl_algorithm_names)/sizeof(secdl_algorithm_names[0]); ++ndx) {
 		if (0 == strcmp(secdl_algorithm_names[ndx], name->ptr)) return (secdl_algorithm)ndx;
@@ -154,7 +154,7 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			rel_uri = ts_str + 8;
 
 			li_MD5_Init(&Md5Ctx);
-			li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(config->secret));
+			li_MD5_Update(&Md5Ctx, BUF_PTR_LEN(config->secret));
 			li_MD5_Update(&Md5Ctx, rel_uri, strlen(rel_uri));
 			li_MD5_Update(&Md5Ctx, ts_str, 8);
 			li_MD5_Final(HA1, &Md5Ctx);
@@ -168,7 +168,7 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			unsigned char digest[20];
 			char base64_digest[28];
 
-                        if (!li_hmac_sha1(digest, CONST_BUF_LEN(config->secret),
+                        if (!li_hmac_sha1(digest, BUF_PTR_LEN(config->secret),
 			                  (const unsigned char *)protected_path,
 			                  strlen(protected_path))) {
 				log_error(errh, __FILE__, __LINE__,
@@ -187,7 +187,7 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			unsigned char digest[32];
 			char base64_digest[44];
 
-                        if (!li_hmac_sha256(digest, CONST_BUF_LEN(config->secret),
+                        if (!li_hmac_sha256(digest, BUF_PTR_LEN(config->secret),
 			                    (const unsigned char *)protected_path,
 			                    strlen(protected_path))) {
 				log_error(errh, __FILE__, __LINE__,
@@ -322,6 +322,9 @@ SETDEFAULTS_FUNC(mod_secdownload_set_defaults) {
               case 0: /* secdownload.secret */
               case 1: /* secdownload.document-root */
               case 2: /* secdownload.uri-prefix */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
+                break;
               case 3: /* secdownload.timeout */
                 break;
               case 4: /* secdownload.algorithm */
@@ -400,21 +403,21 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
   #ifdef __COVERITY__
-	if (buffer_is_empty(&r->uri.path)) return HANDLER_GO_ON;
+	if (buffer_is_blank(&r->uri.path)) return HANDLER_GO_ON;
   #endif
 
 	mod_secdownload_patch_config(r, p);
 
-	if (buffer_string_is_empty(p->conf.uri_prefix)) return HANDLER_GO_ON;
+	if (!p->conf.uri_prefix) return HANDLER_GO_ON;
 
-	if (buffer_string_is_empty(p->conf.secret)) {
+	if (!p->conf.secret) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "secdownload.secret has to be set");
 		r->http_status = 500;
 		return HANDLER_FINISHED;
 	}
 
-	if (buffer_string_is_empty(p->conf.doc_root)) {
+	if (!p->conf.doc_root) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "secdownload.document-root has to be set");
 		r->http_status = 500;
@@ -430,9 +433,9 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 
 	mac_len = secdl_algorithm_mac_length(p->conf.algorithm);
 
-	if (0 != strncmp(r->uri.path.ptr, p->conf.uri_prefix->ptr, buffer_string_length(p->conf.uri_prefix))) return HANDLER_GO_ON;
+	if (0 != strncmp(r->uri.path.ptr, p->conf.uri_prefix->ptr, buffer_clen(p->conf.uri_prefix))) return HANDLER_GO_ON;
 
-	mac_str = r->uri.path.ptr + buffer_string_length(p->conf.uri_prefix);
+	mac_str = r->uri.path.ptr + buffer_clen(p->conf.uri_prefix);
 
 	if (!is_base64_len(mac_str, mac_len)) return HANDLER_GO_ON;
 
@@ -475,12 +478,12 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 		}
 	}
 
-	if (p->conf.hash_querystr && !buffer_is_empty(&r->uri.query)) {
+	if (p->conf.hash_querystr && !buffer_is_blank(&r->uri.query)) {
 		if (protected_path != tb->ptr) {
 			buffer_copy_string(tb, protected_path);
 		}
 		buffer_append_str2(tb, CONST_STR_LEN("?"),
-		                       CONST_BUF_LEN(&r->uri.query));
+		                       BUF_PTR_LEN(&r->uri.query));
 		/* assign last in case tb->ptr is reallocated */
 		protected_path = tb->ptr;
 	}
@@ -504,8 +507,8 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	buffer_copy_buffer(&r->physical.basedir, p->conf.doc_root);
 	buffer_copy_string(&r->physical.rel_path, rel_uri);
 	buffer_copy_path_len2(&r->physical.path,
-	                      CONST_BUF_LEN(&r->physical.doc_root),
-	                      CONST_BUF_LEN(&r->physical.rel_path));
+	                      BUF_PTR_LEN(&r->physical.doc_root),
+	                      BUF_PTR_LEN(&r->physical.rel_path));
 
 	return HANDLER_GO_ON;
 }

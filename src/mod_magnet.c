@@ -115,7 +115,7 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
               case 2: /* magnet.attract-response-start-to */
                 for (uint32_t j = 0; j < cpv->v.a->used; ++j) {
                     data_string *ds = (data_string *)cpv->v.a->data[j];
-                    if (buffer_string_is_empty(&ds->value)) {
+                    if (buffer_is_blank(&ds->value)) {
                         log_error(srv->errh, __FILE__, __LINE__,
                           "unexpected (blank) value for %s; "
                           "expected list of \"scriptpath\"", cpk[cpv->k_id].k);
@@ -191,8 +191,8 @@ static int magnet_pairs(lua_State *L) {
 #endif
 
 static void magnet_push_buffer(lua_State *L, const buffer *b) {
-    if (!buffer_is_empty(b))
-        lua_pushlstring(L, CONST_BUF_LEN(b));
+    if (b && !buffer_is_unset(b))
+        lua_pushlstring(L, BUF_PTR_LEN(b));
     else
         lua_pushnil(L);
 }
@@ -222,7 +222,7 @@ static int magnet_array_next(lua_State *L) {
 
 	if (pos >= a->used) return 0;
 	if (NULL != (du = a->data[pos])) {
-		lua_pushlstring(L, CONST_BUF_LEN(&du->key));
+		lua_pushlstring(L, BUF_PTR_LEN(&du->key));
 		switch (du->type) {
 			case TYPE_STRING:
 				ds = (data_string *)du;
@@ -274,10 +274,13 @@ static const_buffer magnet_checkconstbuffer(lua_State *L, int idx) {
 	return cb;
 }
 
-static buffer* magnet_checkbuffer(lua_State *L, int idx) {
+static const buffer* magnet_checkbuffer(lua_State *L, int idx, buffer *b) {
 	const_buffer cb = magnet_checkconstbuffer(L, idx);
-	buffer *b = buffer_init();
-	buffer_copy_string_len(b, cb.ptr, cb.len);
+	/* assign result into (buffer *), and return (const buffer *)
+	 * (note: caller must not free result) */
+	*(const char **)&b->ptr = cb.ptr;
+	b->used = cb.len+1;
+	b->size = 0;
 	return b;
 }
 
@@ -289,11 +292,11 @@ static int magnet_print(lua_State *L) {
 }
 
 static int magnet_stat(lua_State *L) {
-	buffer * const sb = magnet_checkbuffer(L, 1);
-	stat_cache_entry * const sce = (!buffer_string_is_empty(sb))
+	buffer stor; /*(note: do not free magnet_checkbuffer() result)*/
+	const buffer * const sb = magnet_checkbuffer(L, 1, &stor);
+	stat_cache_entry * const sce = (!buffer_is_blank(sb))
 	  ? stat_cache_get_entry(sb)
 	  : NULL;
-	buffer_free(sb);
 	if (NULL == sce) {
 		lua_pushnil(L);
 		return 1;
@@ -345,16 +348,16 @@ static int magnet_stat(lua_State *L) {
 
 	request_st * const r = magnet_get_request(L);
 	const buffer *etag = stat_cache_etag_get(sce, r->conf.etag_flags);
-	if (!buffer_string_is_empty(etag)) {
-		lua_pushlstring(L, CONST_BUF_LEN(etag));
+	if (etag && !buffer_is_blank(etag)) {
+		lua_pushlstring(L, BUF_PTR_LEN(etag));
 	} else {
 		lua_pushnil(L);
 	}
 	lua_setfield(L, -2, "etag");
 
 	const buffer *content_type = stat_cache_content_type_get(sce, r);
-	if (!buffer_string_is_empty(content_type)) {
-		lua_pushlstring(L, CONST_BUF_LEN(content_type));
+	if (content_type && !buffer_is_blank(content_type)) {
+		lua_pushlstring(L, BUF_PTR_LEN(content_type));
 	} else {
 		lua_pushnil(L);
 	}
@@ -487,7 +490,7 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	    {
 		dest = r->tmp_buf;
 		buffer_clear(dest);
-		uint32_t len = buffer_string_length(&r->target);
+		uint32_t len = buffer_clen(&r->target);
 		char *qmark = memchr(r->target.ptr, '?', len);
 		buffer_copy_string_len(dest, r->target.ptr, qmark ? (uint32_t)(qmark - r->target.ptr) : len);
 		break;
@@ -610,7 +613,7 @@ static int magnet_env_set(lua_State *L) {
       {
         /* modify uri-path of r->target; preserve query-part, if present */
         /* XXX: should we require that resulting path begin with '/' or %2F ? */
-        const uint32_t len = buffer_string_length(&r->target);
+        const uint32_t len = buffer_clen(&r->target);
         const char * const qmark = memchr(r->target.ptr, '?', len);
         const_buffer val = { NULL, 0 };
         if (!lua_isnil(L, 3))
@@ -637,7 +640,7 @@ static int magnet_env_set(lua_State *L) {
         if (env_id==MAGNET_ENV_URI_QUERY || env_id==MAGNET_ENV_PHYSICAL_PATH)
             buffer_clear(dest);
         else
-            buffer_string_set_length(dest, 0);
+            buffer_blank(dest);
     }
     else {
         const_buffer val = magnet_checkconstbuffer(L, 3);
@@ -784,10 +787,11 @@ static int magnet_attach_content(request_st * const r, lua_State * const L, int 
 					}
 
 					if (!end && 0 != len) {
-						buffer *fn = magnet_checkbuffer(L, -3);
-						stat_cache_entry * const sce =
-						  stat_cache_get_entry_open(fn, r->conf.follow_symlink);
-						buffer_free(fn);
+						buffer stor; /*(note: do not free magnet_checkbuffer() result)*/
+						const buffer * const fn = magnet_checkbuffer(L, -3, &stor);
+						stat_cache_entry * const sce = (!buffer_is_blank(fn))
+						  ? stat_cache_get_entry_open(fn, r->conf.follow_symlink)
+						  : NULL;
 						if (sce && (sce->fd >= 0 || sce->st.st_size == 0)) {
 							if (len == -1 || sce->st.st_size - off < len)
 								len = sce->st.st_size - off;

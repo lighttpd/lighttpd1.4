@@ -480,7 +480,7 @@ ssl_tlsext_status_cb(SSL *ssl, void *arg)
     if (NULL == ssl_stapling) return SSL_TLSEXT_ERR_NOACK;
     UNUSED(arg);
 
-    int len = (int)buffer_string_length(ssl_stapling);
+    int len = (int)buffer_clen(ssl_stapling);
 
     /* OpenSSL and LibreSSL require copy (BoringSSL, too, if using compat API)*/
     uint8_t *ocsp_resp = OPENSSL_malloc(len);
@@ -1136,7 +1136,7 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
     /* BoringSSL suggests API different than SSL_CTX_set_tlsext_status_cb() */
     buffer *ocsp_resp = pc->ssl_stapling;
     if (NULL != ocsp_resp
-        && !SSL_set_ocsp_response(ssl, (uint8_t *)CONST_BUF_LEN(ocsp_resp))) {
+        && !SSL_set_ocsp_response(ssl, (uint8_t *)BUF_PTR_LEN(ocsp_resp))) {
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
           "SSL: failed to set OCSP response for TLS server name %s: %s",
           hctx->r->uri.authority.ptr, ERR_error_string(ERR_get_error(), NULL));
@@ -1502,7 +1502,7 @@ mod_openssl_ocsp_next_update (plugin_cert *pc)
   #else
     buffer *der = pc->ssl_stapling;
     const unsigned char *p = (unsigned char *)der->ptr; /*(p gets modified)*/
-    OCSP_RESPONSE *ocsp = d2i_OCSP_RESPONSE(NULL,&p,buffer_string_length(der));
+    OCSP_RESPONSE *ocsp = d2i_OCSP_RESPONSE(NULL, &p, buffer_clen(der));
     if (NULL == ocsp) return (time_t)-1;
     OCSP_BASICRESP *bs = OCSP_response_get1_basic(ocsp);
     if (NULL == bs) {
@@ -1600,7 +1600,7 @@ mod_openssl_refresh_stapling_files (server *srv, const plugin_data *p, const tim
             if (cpv->k_id != 0) continue; /* k_id == 0 for ssl.pemfile */
             if (cpv->vtype != T_CONFIG_LOCAL) continue;
             plugin_cert *pc = cpv->v.v;
-            if (!buffer_string_is_empty(pc->ssl_stapling_file))
+            if (pc->ssl_stapling_file)
                 mod_openssl_refresh_stapling_file(srv, pc, cur_ts);
         }
     }
@@ -1691,7 +1691,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
       (0 == X509_NAME_cmp(X509_get_subject_name(ssl_pemfile_x509),
                           X509_get_issuer_name(ssl_pemfile_x509)));
 
-    if (!buffer_string_is_empty(pc->ssl_stapling_file)) {
+    if (pc->ssl_stapling_file) {
       #ifndef OPENSSL_NO_OCSP
         if (!mod_openssl_reload_stapling_file(srv, pc, log_epoch_secs)) {
             /* continue without OCSP response if there is an error */
@@ -1729,22 +1729,22 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     int rc = SSL_TLSEXT_ERR_ALERT_FATAL;
 
     /* check if acme-tls/1 protocol is enabled (path to dir of cert(s) is set)*/
-    if (buffer_string_is_empty(hctx->conf.ssl_acme_tls_1))
+    if (!hctx->conf.ssl_acme_tls_1)
         return SSL_TLSEXT_ERR_NOACK; /*(reuse value here for not-configured)*/
 
     /* check if SNI set server name (required for acme-tls/1 protocol)
      * and perform simple path checks for no '/'
      * and no leading '.' (e.g. ignore "." or ".." or anything beginning '.') */
-    if (buffer_string_is_empty(name))   return rc;
+    if (buffer_is_blank(name))          return rc;
     if (NULL != strchr(name->ptr, '/')) return rc;
     if (name->ptr[0] == '.')            return rc;
   #if 0
     if (0 != http_request_host_policy(name,hctx->r->conf.http_parseopts,443))
         return rc;
   #endif
-    buffer_copy_path_len2(b, CONST_BUF_LEN(hctx->conf.ssl_acme_tls_1),
-                             CONST_BUF_LEN(name));
-    len = buffer_string_length(b);
+    buffer_copy_path_len2(b, BUF_PTR_LEN(hctx->conf.ssl_acme_tls_1),
+                             BUF_PTR_LEN(name));
+    len = buffer_clen(b);
 
     do {
         buffer_append_string_len(b, CONST_STR_LEN(".crt.pem"));
@@ -1756,7 +1756,7 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
             break;
         }
 
-        buffer_string_set_length(b, len); /*(remove ".crt.pem")*/
+        buffer_truncate(b, len); /*(remove ".crt.pem")*/
         buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
         ssl_pemfile_pkey = mod_openssl_evp_pkey_load_pem_file(b->ptr, errh);
         if (NULL == ssl_pemfile_pkey) {
@@ -1814,7 +1814,7 @@ mod_openssl_alpn_h2_policy (handler_ctx * const hctx)
 {
     /*(currently called after handshake has completed)*/
   #if 0 /* SNI omitted by client when connecting to IP instead of to name */
-    if (buffer_string_is_empty(&hctx->r->uri.authority)) {
+    if (buffer_is_blank(&hctx->r->uri.authority)) {
         log_error(hctx->errh, __FILE__, __LINE__,
           "SSL: error ALPN h2 without SNI");
         return -1;
@@ -1923,7 +1923,7 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
     if (NULL != ds) {
         buffer *cipher_string =
           array_get_buf_ptr(s->ssl_conf_cmd, CONST_STR_LEN("CipherString"));
-        if (buffer_string_is_empty(cipher_string))
+        if (buffer_is_blank(cipher_string))
             buffer_append_string_len(cipher_string, CONST_STR_LEN("HIGH"));
         buffer_append_string_len(cipher_string,
                                  CONST_STR_LEN(":!aNULL:!eNULL:!EXP"));
@@ -2047,15 +2047,17 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
 {
   #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
   #ifndef OPENSSL_NO_ECDH
-    int nid = 0;
     /* Support for Elliptic-Curve Diffie-Hellman key exchange */
-    if (!buffer_string_is_empty(ssl_ec_curve)) {
+    /* OpenSSL only supports the "named curves" from RFC 4492, section 5.1.1. */
+    const char *curve = ssl_ec_curve ? ssl_ec_curve->ptr : "prime256v1";
+    int nid = 0;
+    if (ssl_ec_curve) {
         /* OpenSSL only supports the "named curves"
          * from RFC 4492, section 5.1.1. */
-        nid = OBJ_sn2nid((char *) ssl_ec_curve->ptr);
+        nid = OBJ_sn2nid((char *) curve);
         if (nid == 0) {
             log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: Unknown curve name %s", ssl_ec_curve->ptr);
+              "SSL: Unknown curve name %s", curve);
             return 0;
         }
     }
@@ -2077,7 +2079,7 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
         ecdh = EC_KEY_new_by_curve_name(nid);
         if (ecdh == NULL) {
             log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: Unable to create curve %s", ssl_ec_curve->ptr);
+              "SSL: Unable to create curve %s", curve);
             return 0;
         }
         SSL_CTX_set_tmp_ecdh(s->ssl_ctx, ecdh);
@@ -2087,7 +2089,7 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
          * not be present in alt TLS libs (libressl or boringssl) */
         if (1 != SSL_CTX_set1_groups(s->ssl_ctx, &nid, 1)) {
             log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: Unable to config curve %s", ssl_ec_curve->ptr);
+              "SSL: Unable to config curve %s", curve);
             return 0;
         }
       #endif
@@ -2194,7 +2196,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             }
         }
 
-        if (!buffer_string_is_empty(s->ssl_cipher_list)) {
+        if (s->ssl_cipher_list) {
             /* Disable support for low encryption ciphers */
             if (SSL_CTX_set_cipher_list(s->ssl_ctx,s->ssl_cipher_list->ptr)!=1){
                 log_error(srv->errh, __FILE__, __LINE__,
@@ -2217,7 +2219,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
        #if OPENSSL_VERSION_NUMBER < 0x30000000L
         DH *dh;
         /* Support for Diffie-Hellman key exchange */
-        if (!buffer_string_is_empty(s->ssl_dh_file)) {
+        if (s->ssl_dh_file) {
             /* DH parameters from file */
             BIO *bio;
             bio = BIO_new_file((char *) s->ssl_dh_file->ptr, "r");
@@ -2250,7 +2252,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         /* OSSL_STORE_open() available in openssl 1.1.1, but might
          * not be present in alt TLS libs (libressl or boringssl) */
         EVP_PKEY *dhpkey = NULL;
-        if (!buffer_string_is_empty(s->ssl_dh_file)) {
+        if (s->ssl_dh_file) {
             OSSL_STORE_CTX *ctx = NULL;
             ctx = OSSL_STORE_open(s->ssl_dh_file->ptr, NULL, NULL, NULL, NULL);
             if (NULL != ctx) {
@@ -2280,7 +2282,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         SSL_CTX_set_options(s->ssl_ctx,SSL_OP_SINGLE_DH_USE);
       }
       #else
-        if (!buffer_string_is_empty(s->ssl_dh_file)) {
+        if (s->ssl_dh_file) {
             log_error(srv->errh, __FILE__, __LINE__,
               "SSL: openssl compiled without DH support, "
               "can't load parameters from %s", s->ssl_dh_file->ptr);
@@ -2353,7 +2355,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             }
             SSL_CTX_set_verify(s->ssl_ctx, mode, verify_callback);
             SSL_CTX_set_verify_depth(s->ssl_ctx, s->ssl_verifyclient_depth + 1);
-            if (!buffer_string_is_empty(s->ssl_ca_crl_file)) {
+            if (s->ssl_ca_crl_file && !buffer_is_blank(s->ssl_ca_crl_file)) {
                 X509_STORE *store = SSL_CTX_get_cert_store(s->ssl_ctx);
                 if (!mod_openssl_load_cacrls(store, s->ssl_ca_crl_file, srv))
                     return -1;
@@ -2523,16 +2525,19 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                 --count_not_engine;
                 break;
               case 1: /* ssl.cipher-list */
-                conf.ssl_cipher_list = cpv->v.b;
+                if (!buffer_is_blank(cpv->v.b))
+                    conf.ssl_cipher_list = cpv->v.b;
                 break;
               case 2: /* ssl.honor-cipher-order */
                 conf.ssl_honor_cipher_order = (0 != cpv->v.u);
                 break;
               case 3: /* ssl.dh-file */
-                conf.ssl_dh_file = cpv->v.b;
+                if (!buffer_is_blank(cpv->v.b))
+                    conf.ssl_dh_file = cpv->v.b;
                 break;
               case 4: /* ssl.ec-curve */
-                conf.ssl_ec_curve = cpv->v.b;
+                if (!buffer_is_blank(cpv->v.b))
+                    conf.ssl_ec_curve = cpv->v.b;
                 break;
               case 5: /* ssl.openssl.ssl-conf-cmd */
                 *(const array **)&conf.ssl_conf_cmd = cpv->v.a;
@@ -2575,7 +2580,7 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                       "(\"MinProtocol\" => \"SSLv3\")");
                 break;
               case 10:/* ssl.stek-file */
-                if (!buffer_is_empty(cpv->v.b))
+                if (!buffer_is_blank(cpv->v.b))
                     p->ssl_stek_file = cpv->v.b->ptr;
                 break;
               default:/* should not happen */
@@ -2784,16 +2789,16 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* ssl.pemfile */
-                if (!buffer_string_is_empty(cpv->v.b)) pemfile = cpv;
+                if (!buffer_is_blank(cpv->v.b)) pemfile = cpv;
                 break;
               case 1: /* ssl.privkey */
-                if (!buffer_string_is_empty(cpv->v.b)) privkey = cpv;
+                if (!buffer_is_blank(cpv->v.b)) privkey = cpv;
                 break;
               case 15:/* ssl.verifyclient.ca-file */
                 cpv->k_id = 2;
                 __attribute_fallthrough__
               case 2: /* ssl.ca-file */
-                if (buffer_string_is_empty(cpv->v.b)) break;
+                if (buffer_is_blank(cpv->v.b)) break;
                 if (!mod_openssl_init_once_openssl(srv)) return HANDLER_ERROR;
                 ssl_ca_file = cpv->v.b;
                 cpv->v.v = mod_openssl_load_cacerts(ssl_ca_file, srv->errh);
@@ -2812,7 +2817,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                 cpv->k_id = 3;
                 __attribute_fallthrough__
               case 3: /* ssl.ca-dn-file */
-                if (buffer_string_is_empty(cpv->v.b)) break;
+                if (buffer_is_blank(cpv->v.b)) break;
                 if (!mod_openssl_init_once_openssl(srv)) return HANDLER_ERROR;
                 ssl_ca_dn_file = cpv->v.b;
                 cpv->v.v = SSL_load_client_CA_file(ssl_ca_dn_file->ptr);
@@ -2830,7 +2835,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                 cpv->k_id = 4;
                 __attribute_fallthrough__
               case 4: /* ssl.ca-crl-file */
-                if (buffer_string_is_empty(cpv->v.b)) break;
+                if (buffer_is_blank(cpv->v.b)) break;
                 ssl_ca_crl_file = cpv->v.b;
                 if (0 == i) default_ssl_ca_crl_file = cpv->v.b;
                 break;
@@ -2853,11 +2858,18 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                 }
                 break;
               case 10:/* ssl.verifyclient.username */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
+                break;
               case 11:/* ssl.verifyclient.exportcert */
+                break;
               case 12:/* ssl.acme-tls-1 */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
                 break;
               case 13:/* ssl.stapling-file */
-                ssl_stapling_file = cpv->v.b;
+                if (!buffer_is_blank(cpv->v.b))
+                    ssl_stapling_file = cpv->v.b;
                 break;
               case 14:/* debug.log-ssl-noise */
              #if 0    /*(handled further above)*/
@@ -2876,9 +2888,9 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         /* load all ssl.ca-files into a single chain */
         /*(certificate load order might matter)*/
         if (ssl_ca_dn_file)
-            array_insert_value(p->cafiles, CONST_BUF_LEN(ssl_ca_dn_file));
+            array_insert_value(p->cafiles, BUF_PTR_LEN(ssl_ca_dn_file));
         if (ssl_ca_file)
-            array_insert_value(p->cafiles, CONST_BUF_LEN(ssl_ca_file));
+            array_insert_value(p->cafiles, BUF_PTR_LEN(ssl_ca_file));
         UNUSED(ca_store);
         UNUSED(ssl_ca_crl_file);
         UNUSED(default_ssl_ca_crl_file);
@@ -3258,7 +3270,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
     hctx->tmp_buf = con->srv->tmp_buf;
     hctx->errh = r->conf.errh;
     con->plugin_ctx[p->id] = hctx;
-    buffer_string_set_length(&r->uri.authority, 0);
+    buffer_blank(&r->uri.authority);
 
     plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
     hctx->ssl = SSL_new(s->ssl_ctx);
@@ -3514,18 +3526,18 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
         BN_free(serialBN);
     }
 
-    if (!buffer_string_is_empty(hctx->conf.ssl_verifyclient_username)) {
+    if (hctx->conf.ssl_verifyclient_username) {
         /* pick one of the exported values as "REMOTE_USER", for example
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_UID"
          * or
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_emailAddress"
          */
         const buffer *varname = hctx->conf.ssl_verifyclient_username;
-        vb = http_header_env_get(r, CONST_BUF_LEN(varname));
+        vb = http_header_env_get(r, BUF_PTR_LEN(varname));
         if (vb) { /* same as mod_auth_api.c:http_auth_setenv() */
             http_header_env_set(r,
                                 CONST_STR_LEN("REMOTE_USER"),
-                                CONST_BUF_LEN(vb));
+                                BUF_PTR_LEN(vb));
             http_header_env_set(r,
                                 CONST_STR_LEN("AUTH_TYPE"),
                                 CONST_STR_LEN("SSL_CLIENT_VERIFY"));
@@ -3826,7 +3838,7 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
             rc = -1;
     }
 
-    if (!buffer_string_is_empty(ciphersuites)) {
+    if (ciphersuites && !buffer_is_blank(ciphersuites)) {
       #if defined(LIBRESSL_VERSION_NUMBER) && defined(LIBRESSL_HAS_TLS1_3)
         if (SSL_CTX_set_ciphersuites(s->ssl_ctx, ciphersuites->ptr) != 1) {
             log_error(srv->errh, __FILE__, __LINE__,
@@ -3836,7 +3848,7 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
       #endif
     }
 
-    if (!buffer_string_is_empty(cipherstring)) {
+    if (cipherstring && !buffer_is_blank(cipherstring)) {
         /* Disable support for low encryption ciphers */
         buffer_append_string_len(cipherstring,
                                  CONST_STR_LEN(":!aNULL:!eNULL:!EXP"));
@@ -3850,7 +3862,7 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
             SSL_CTX_set_options(s->ssl_ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
     }
 
-    if (curves) {
+    if (curves && !buffer_is_blank(curves)) {
         if (!mod_openssl_ssl_conf_curves(srv, s, curves))
             rc = -1;
     }

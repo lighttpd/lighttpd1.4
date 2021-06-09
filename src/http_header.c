@@ -181,7 +181,7 @@ int http_header_remove_token (buffer * const b, const char * const m, const uint
                 }
                 else {
                     for (s -= mlen; *s != ',' && s != b->ptr; --s) ;
-                    buffer_string_set_length(b, (size_t)(s - b->ptr));
+                    buffer_truncate(b, (size_t)(s - b->ptr));
                     break;
                 }
             }
@@ -193,7 +193,7 @@ int http_header_remove_token (buffer * const b, const char * const m, const uint
 
 
 static inline void http_header_token_append(buffer * const vb, const char * const v, const uint32_t vlen) {
-    if (!buffer_string_is_empty(vb))
+    if (!buffer_is_blank(vb))
         buffer_append_string_len(vb, CONST_STR_LEN(", "));
     buffer_append_string_len(vb, v, vlen);
 }
@@ -202,7 +202,7 @@ __attribute_cold__
 static inline void http_header_token_append_cookie(buffer * const vb, const char * const v, const uint32_t vlen) {
     /* Cookie request header must be special-cased to use ';' separator
      * instead of ',' to combine multiple headers (if present) */
-    if (!buffer_string_is_empty(vb))
+    if (!buffer_is_blank(vb))
         buffer_append_string_len(vb, CONST_STR_LEN("; "));
     buffer_append_string_len(vb, v, vlen);
 }
@@ -211,7 +211,7 @@ __attribute_pure__
 static inline buffer * http_header_generic_get_ifnotempty(const array * const a, const enum http_header_e id, const char * const k, const uint32_t klen) {
     data_string * const ds =
       (data_string *)array_get_element_klen_ext(a, id, k, klen);
-    return ds && !buffer_string_is_empty(&ds->value) ? &ds->value : NULL;
+    return ds && !buffer_is_blank(&ds->value) ? &ds->value : NULL;
 }
 
 static inline void http_header_set_key_value(array * const a, enum http_header_e id, const char * const k, const size_t klen, const char * const v, const size_t vlen) {
@@ -280,7 +280,7 @@ void http_header_response_insert(request_st * const r, enum http_header_e id, co
     if (0 == vlen) return;
     light_bset(r->resp_htags, id);
     buffer * const vb = array_get_buf_ptr_ext(&r->resp_headers, id, k, klen);
-    if (!buffer_string_is_empty(vb)) /*append repeated field-name on new line*/
+    if (!buffer_is_blank(vb)) /*append repeated field-name on new line*/
         http_header_response_insert_addtl(r, id, k, klen, vb, vlen);
     buffer_append_string_len(vb, v, vlen);
 }
@@ -337,7 +337,7 @@ buffer * http_header_env_get(const request_st * const r, const char *k, uint32_t
     /* similar to http_header_generic_get_ifnotempty() but without id */
     data_string * const ds =
       (data_string *)array_get_element_klen(&r->env, k, klen);
-    return ds && !buffer_string_is_empty(&ds->value) ? &ds->value : NULL;
+    return ds && !buffer_is_blank(&ds->value) ? &ds->value : NULL;
 }
 
 buffer * http_header_env_set_ptr(request_st *r, const char *k, uint32_t klen) {

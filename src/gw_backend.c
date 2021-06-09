@@ -51,7 +51,7 @@ static int * gw_status_get_counter(gw_host *host, gw_proc *proc, const char *tag
     size_t llen = sizeof("gw.backend.")-1, len;
     memcpy(label, "gw.backend.", llen);
 
-    len = buffer_string_length(host->id);
+    len = buffer_clen(host->id);
     if (len) {
         force_assert(len < sizeof(label) - llen);
         memcpy(label+llen, host->id->ptr, len);
@@ -138,7 +138,7 @@ static gw_proc *gw_proc_init(void) {
     gw_proc *f = calloc(1, sizeof(*f));
     force_assert(f);
 
-    f->unixsocket = buffer_init();
+    /*f->unixsocket = buffer_init();*//*(init on demand)*/
     f->connection_name = buffer_init();
 
     f->prev = NULL;
@@ -328,7 +328,7 @@ static void gw_proc_check_enable(gw_host * const host, gw_proc * const proc, log
       "gw-server re-enabled: %s %s %hu %s",
       proc->connection_name->ptr,
       host->host ? host->host->ptr : "", host->port,
-      host->unixsocket && host->unixsocket->ptr ? host->unixsocket->ptr : "");
+      host->unixsocket ? host->unixsocket->ptr : "");
 }
 
 static void gw_proc_waitpid_log(const gw_host * const host, const gw_proc * const proc, log_error_st * const errh, const int status) {
@@ -381,7 +381,7 @@ static int gw_proc_sockaddr_init(gw_host * const host, gw_proc * const proc, log
     sock_addr addr;
     socklen_t addrlen;
 
-    if (!buffer_string_is_empty(proc->unixsocket)) {
+    if (proc->unixsocket) {
         if (1 != sock_addr_from_str_hints(&addr,&addrlen,proc->unixsocket->ptr,
                                           AF_UNIX, 0, errh)) {
             errno = EINVAL;
@@ -390,7 +390,7 @@ static int gw_proc_sockaddr_init(gw_host * const host, gw_proc * const proc, log
         buffer_clear(proc->connection_name);
         buffer_append_str2(proc->connection_name,
                            CONST_STR_LEN("unix:"),
-                           CONST_BUF_LEN(proc->unixsocket));
+                           BUF_PTR_LEN(proc->unixsocket));
     }
     else {
         /*(note: name resolution here is *blocking* if IP string not supplied)*/
@@ -411,7 +411,7 @@ static int gw_proc_sockaddr_init(gw_host * const host, gw_proc * const proc, log
         buffer_clear(proc->connection_name);
         buffer_append_str3(proc->connection_name,
                            CONST_STR_LEN("tcp:"),
-                           CONST_BUF_LEN(host->host),
+                           BUF_PTR_LEN(host->host),
                            CONST_STR_LEN(":"));
         buffer_append_int(proc->connection_name, proc->port);
     }
@@ -473,7 +473,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
     if (debug) {
         log_error(errh, __FILE__, __LINE__,
           "new proc, socket: %hu %s",
-          proc->port, proc->unixsocket->ptr ? proc->unixsocket->ptr : "");
+          proc->port, proc->unixsocket ? proc->unixsocket->ptr : "");
     }
 
     gw_fd = fdevent_socket_cloexec(proc->saddr->sa_family, SOCK_STREAM, 0);
@@ -486,8 +486,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
         status = connect(gw_fd, proc->saddr, proc->saddrlen);
     } while (-1 == status && errno == EINTR);
 
-    if (-1 == status && errno != ENOENT
-        && !buffer_string_is_empty(proc->unixsocket)) {
+    if (-1 == status && errno != ENOENT && proc->unixsocket) {
         log_perror(errh, __FILE__, __LINE__,
           "unlink %s after connect failed", proc->unixsocket->ptr);
         unlink(proc->unixsocket->ptr);
@@ -541,7 +540,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
                     char *ge;
 
                     if (NULL != (ge = getenv(ds->value.ptr))) {
-                        env_add(&env,CONST_BUF_LEN(&ds->value),ge,strlen(ge));
+                        env_add(&env, BUF_PTR_LEN(&ds->value), ge, strlen(ge));
                     }
                 }
             } else {
@@ -559,8 +558,8 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
             if (host->bin_env) {
                 for (i = 0; i < host->bin_env->used; ++i) {
                     data_string *ds = (data_string *)host->bin_env->data[i];
-                    env_add(&env, CONST_BUF_LEN(&ds->key),
-                                  CONST_BUF_LEN(&ds->value));
+                    env_add(&env, BUF_PTR_LEN(&ds->key),
+                                  BUF_PTR_LEN(&ds->value));
                 }
             }
 
@@ -662,15 +661,17 @@ static void gw_proc_spawn(gw_host * const host, log_error_st * const errh, const
     } else {
         proc = gw_proc_init();
         proc->id = host->max_id++;
+        if (host->unixsocket)
+            proc->unixsocket = buffer_init();
     }
 
     ++host->num_procs;
 
-    if (buffer_string_is_empty(host->unixsocket)) {
+    if (!host->unixsocket) {
         proc->port = host->port + proc->id;
     } else {
         buffer_clear(proc->unixsocket);
-        buffer_append_str2(proc->unixsocket, CONST_BUF_LEN(host->unixsocket),
+        buffer_append_str2(proc->unixsocket, BUF_PTR_LEN(host->unixsocket),
                                              CONST_STR_LEN("-"));
         buffer_append_int(proc->unixsocket, proc->id);
     }
@@ -743,9 +744,9 @@ static gw_host * unixsocket_is_dup(gw_plugin_data *p, const buffer *unixsocket) 
             gw_extension *ex = exts->exts+j;
             for (uint32_t n = 0; n < ex->used; ++n) {
                 gw_host *host = ex->hosts[n];
-                if (!buffer_string_is_empty(host->unixsocket)
+                if (host->unixsocket
                     && buffer_is_equal(host->unixsocket, unixsocket)
-                    && !buffer_string_is_empty(host->bin_path))
+                    && host->bin_path)
                     return host;
             }
         }
@@ -758,7 +759,7 @@ static int parse_binpath(char_array *env, const buffer *b) {
     char *start = b->ptr;
     char c;
     /* search for spaces */
-    for (size_t i = 0; i < buffer_string_length(b); ++i) {
+    for (size_t i = 0, used = buffer_clen(b); i < used; ++i) {
         switch(b->ptr[i]) {
         case ' ':
         case '\t':
@@ -836,8 +837,8 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
               "proxy - used hash balancing, hosts: %u", extension->used);
         }
 
-        base_hash = gw_hash(CONST_BUF_LEN(&r->uri.path), base_hash);
-        base_hash = gw_hash(CONST_BUF_LEN(&r->uri.authority), base_hash);
+        base_hash = gw_hash(BUF_PTR_LEN(&r->uri.path), base_hash);
+        base_hash = gw_hash(BUF_PTR_LEN(&r->uri.authority), base_hash);
 
         for (k = 0, ndx = -1, last_max = UINT32_MAX; k < extension->used; ++k) {
             uint32_t cur_max;
@@ -845,7 +846,9 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
             if (0 == host->active_procs) continue;
 
             /* future: hash of host->host could be cached separately, mixed in*/
-            cur_max = gw_hash(CONST_BUF_LEN(host->host), base_hash);
+            cur_max = host->host
+              ? gw_hash(BUF_PTR_LEN(host->host), base_hash)
+              : base_hash;
 
             if (debug) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
@@ -924,7 +927,7 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
               "proxy - used sticky balancing, hosts: %u", extension->used);
         }
 
-        base_hash = gw_hash(CONST_BUF_LEN(dst_addr_buf), base_hash);
+        base_hash = gw_hash(BUF_PTR_LEN(dst_addr_buf), base_hash);
 
         for (k = 0, ndx = -1, last_max = UINT32_MAX; k < extension->used; ++k) {
             unsigned long cur_max;
@@ -933,8 +936,10 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
             if (0 == host->active_procs) continue;
 
             /* future: hash of host->host could be cached separately, mixed in*/
-            cur_max = gw_hash(CONST_BUF_LEN(host->host), base_hash)
-                    + host->port;
+            cur_max = host->host
+              ? gw_hash(BUF_PTR_LEN(host->host), base_hash)
+              : base_hash;
+            cur_max += host->port;
 
             if (debug) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
@@ -969,8 +974,7 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
         /* special-case adaptive spawning and 0 == host->min_procs */
         for (k = 0; k < extension->used; ++k) {
             host = extension->hosts[k];
-            if (0 == host->min_procs && 0 == host->num_procs
-                && !buffer_string_is_empty(host->bin_path)) {
+            if (0 == host->min_procs && 0 == host->num_procs && host->bin_path){
                 gw_proc_spawn(host, r->con->srv->errh, debug);
                 if (host->num_procs) return host;
             }
@@ -997,7 +1001,7 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
 static int gw_establish_connection(request_st * const r, gw_host *host, gw_proc *proc, pid_t pid, int gw_fd, int debug) {
     if (-1 == connect(gw_fd, proc->saddr, proc->saddrlen)) {
         if (errno == EINPROGRESS || errno == EALREADY || errno == EINTR
-            || (errno == EAGAIN && !buffer_string_is_empty(host->unixsocket))) {
+            || (errno == EAGAIN && host->unixsocket)) {
             if (debug > 2) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "connect delayed; will continue later: %s",
@@ -1058,7 +1062,7 @@ static void gw_restart_dead_procs(gw_host * const host, log_error_st * const err
             /* local procs get restarted by us,
              * remote ones hopefully by the admin */
 
-            if (!buffer_string_is_empty(host->bin_path)) {
+            if (host->bin_path) {
                 /* we still have connections bound to this proc,
                  * let them terminate first */
                 if (proc->load != 0) break;
@@ -1183,8 +1187,7 @@ void gw_plugin_config_free(gw_plugin_config *s) {
                         kill(proc->pid, host->kill_signal);
                     }
 
-                    if (proc->is_local &&
-                        !buffer_string_is_empty(proc->unixsocket)) {
+                    if (proc->is_local && proc->unixsocket) {
                         unlink(proc->unixsocket->ptr);
                     }
                 }
@@ -1193,8 +1196,7 @@ void gw_plugin_config_free(gw_plugin_config *s) {
                     if (proc->pid > 0) {
                         kill(proc->pid, host->kill_signal);
                     }
-                    if (proc->is_local &&
-                        !buffer_string_is_empty(proc->unixsocket)) {
+                    if (proc->is_local && proc->unixsocket) {
                         unlink(proc->unixsocket->ptr);
                     }
                 }
@@ -1386,19 +1388,22 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
             for (; -1 != cpv->k_id; ++cpv) {
                 switch (cpv->k_id) {
                   case 0: /* host */
-                    host->host = cpv->v.b;
+                    if (!buffer_is_blank(cpv->v.b))
+                        host->host = cpv->v.b;
                     break;
                   case 1: /* port */
                     host->port = cpv->v.shrt;
                     break;
                   case 2: /* socket */
-                    host->unixsocket = cpv->v.b;
+                    if (!buffer_is_blank(cpv->v.b))
+                        host->unixsocket = cpv->v.b;
                     break;
                   case 3: /* listen-backlog */
                     host->listen_backlog = cpv->v.u;
                     break;
                   case 4: /* bin-path */
-                    host->bin_path = cpv->v.b;
+                    if (!buffer_is_blank(cpv->v.b))
+                        host->bin_path = cpv->v.b;
                     break;
                   case 5: /* kill-signal */
                     host->kill_signal = cpv->v.shrt;
@@ -1407,7 +1412,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     host->check_local = (0 != cpv->v.u);
                     break;
                   case 7: /* mode */
-                    if (!buffer_string_is_empty(cpv->v.b)) {
+                    if (!buffer_is_blank(cpv->v.b)) {
                         const buffer *b = cpv->v.b;
                         if (buffer_eq_slen(b, CONST_STR_LEN("responder")))
                             host_mode = GW_RESPONDER;
@@ -1420,7 +1425,8 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     }
                     break;
                   case 8: /* docroot */
-                    host->docroot = cpv->v.b;
+                    if (!buffer_is_blank(cpv->v.b))
+                        host->docroot = cpv->v.b;
                     break;
                   case 9: /* min-procs */
                     host->min_procs = cpv->v.shrt;
@@ -1451,7 +1457,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     if (buffer_has_slash_suffix(host->strip_request_uri)) {
                         buffer *b; /*(remove trailing slash; see http_cgi.c)*/
                         *(const buffer **)&b = host->strip_request_uri;
-                        buffer_string_set_length(b, buffer_string_length(b)-1);
+                        buffer_truncate(b, buffer_clen(b)-1);
                     }
                     break;
                   case 18:/* fix-root-scriptname */
@@ -1502,8 +1508,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                 }
             }
 
-            if ((!buffer_string_is_empty(host->host) || host->port)
-                && !buffer_string_is_empty(host->unixsocket)) {
+            if ((host->host || host->port) && host->unixsocket) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "either host/port or socket have to be set in: "
                   "%s = (%s => (%s ( ...", cpkkey, da_ext->key.ptr,
@@ -1512,16 +1517,15 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                 goto error;
             }
 
-            if (!buffer_string_is_empty(host->host) && *host->host->ptr == '/'
-                && buffer_string_is_empty(host->unixsocket)) {
+            if (host->host && *host->host->ptr == '/' && !host->unixsocket) {
                 host->unixsocket = host->host;
             }
 
-            if (!buffer_string_is_empty(host->unixsocket)) {
+            if (host->unixsocket) {
                 /* unix domain socket */
                 struct sockaddr_un un;
 
-                if (buffer_string_length(host->unixsocket) + 1 > sizeof(un.sun_path) - 2) {
+                if (buffer_clen(host->unixsocket) + 1 > sizeof(un.sun_path) - 2) {
                     log_error(srv->errh, __FILE__, __LINE__,
                       "unixsocket is too long in: %s = (%s => (%s ( ...",
                       cpkkey, da_ext->key.ptr, da_host->key.ptr);
@@ -1529,7 +1533,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     goto error;
                 }
 
-                if (!buffer_string_is_empty(host->bin_path)) {
+                if (host->bin_path) {
                     gw_host *duplicate = unixsocket_is_dup(p, host->unixsocket);
                     if (NULL != duplicate) {
                         if (!buffer_is_equal(host->bin_path, duplicate->bin_path)) {
@@ -1548,8 +1552,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
             } else {
                 /* tcp/ip */
 
-                if (buffer_string_is_empty(host->host) &&
-                    buffer_string_is_empty(host->bin_path)) {
+                if (!host->host && !host->bin_path) {
                     log_error(srv->errh, __FILE__, __LINE__,
                       "host or bin-path have to be set in: "
                       "%s = (%s => (%s ( ...", cpkkey, da_ext->key.ptr,
@@ -1560,7 +1563,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     host->port = 80;
                 }
 
-                if (buffer_string_is_empty(host->host)) {
+                if (!host->host) {
                     static const buffer lhost ={CONST_STR_LEN("127.0.0.1")+1,0};
                     host->host = &lhost;
                 }
@@ -1572,7 +1575,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
 
             if (host->refcount) {
                 /* already init'd; skip spawning */
-            } else if (!buffer_string_is_empty(host->bin_path)) {
+            } else if (host->bin_path) {
                 /* a local socket + self spawning */
                 struct stat st;
                 parse_binpath(&host->args, host->bin_path);
@@ -1603,13 +1606,11 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     force_assert(host->args.ptr[1]);
                     memcpy(host->args.ptr[1], "-c", sizeof("-c"));
                     host->args.ptr[2] =
-                      malloc(sizeof("exec ")-1
-                             + buffer_string_length(host->bin_path) + 1);
+                      malloc(sizeof("exec ")-1+buffer_clen(host->bin_path)+1);
                     force_assert(host->args.ptr[2]);
                     memcpy(host->args.ptr[2], "exec ", sizeof("exec ")-1);
                     memcpy(host->args.ptr[2]+sizeof("exec ")-1,
-                           host->bin_path->ptr,
-                           buffer_string_length(host->bin_path)+1);
+                           host->bin_path->ptr, buffer_clen(host->bin_path)+1);
                     host->args.ptr[3] = NULL;
                 }
 
@@ -1635,9 +1636,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                       "\n\tmax-procs: %d",
                       host->bin_path->ptr,
                       host->port,
-                      host->unixsocket && host->unixsocket->ptr
-                        ? host->unixsocket->ptr
-                        : "",
+                      host->unixsocket ? host->unixsocket->ptr : "",
                       host->min_procs,
                       host->max_procs);
                 }
@@ -1647,11 +1646,12 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     proc->id = host->num_procs++;
                     host->max_id++;
 
-                    if (buffer_string_is_empty(host->unixsocket)) {
+                    if (!host->unixsocket) {
                         proc->port = host->port + pno;
                     } else {
+                        proc->unixsocket = buffer_init();
                         buffer_append_str2(proc->unixsocket,
-                                           CONST_BUF_LEN(host->unixsocket),
+                                           BUF_PTR_LEN(host->unixsocket),
                                            CONST_STR_LEN("-"));
                         buffer_append_int(proc->unixsocket, pno);
                     }
@@ -1663,9 +1663,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                           "\n\tsocket %s"
                           "\n\tcurrent: %u / %u",
                           host->port,
-                          host->unixsocket && host->unixsocket->ptr
-                            ? host->unixsocket->ptr
-                            : "",
+                          host->unixsocket ? host->unixsocket->ptr : "",
                           pno, host->max_procs);
                     }
 
@@ -1697,9 +1695,10 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                 host->max_id++;
                 gw_proc_set_state(host, proc, PROC_STATE_RUNNING);
 
-                if (buffer_string_is_empty(host->unixsocket)) {
+                if (!host->unixsocket) {
                     proc->port = host->port;
                 } else {
+                    proc->unixsocket = buffer_init();
                     buffer_copy_buffer(proc->unixsocket, host->unixsocket);
                 }
 
@@ -1748,7 +1747,7 @@ error:
 }
 
 int gw_get_defaults_balance(server *srv, const buffer *b) {
-    if (buffer_string_is_empty(b))
+    if (!b || buffer_is_blank(b))
         return GW_BALANCE_LEAST_CONNECTION;
     if (buffer_eq_slen(b, CONST_STR_LEN("fair")))
         return GW_BALANCE_LEAST_CONNECTION;
@@ -2210,12 +2209,12 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
             char *physpath = NULL;
 
             gw_host * const host = hctx->host;
-            if (!buffer_string_is_empty(host->docroot)) {
+            if (host->docroot) {
                 buffer_copy_buffer(&r->physical.doc_root, host->docroot);
                 buffer_copy_buffer(&r->physical.basedir, host->docroot);
                 buffer_copy_path_len2(&r->physical.path,
-                                      CONST_BUF_LEN(host->docroot),
-                                      CONST_BUF_LEN(&r->uri.path));
+                                      BUF_PTR_LEN(host->docroot),
+                                      BUF_PTR_LEN(&r->uri.path));
                 physpath = r->physical.path.ptr;
             }
 
@@ -2389,7 +2388,7 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
   #endif
 
     buffer *fn = uri_path_handler ? &r->uri.path : &r->physical.path;
-    size_t s_len = buffer_string_length(fn);
+    const size_t s_len = buffer_clen(fn);
     gw_extension *extension = NULL;
     gw_host *host = NULL;
     gw_handler_ctx *hctx;
@@ -2451,7 +2450,7 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
         }
 
         if (extension == NULL) {
-            size_t uri_path_len = buffer_string_length(&r->uri.path);
+            size_t uri_path_len = buffer_clen(&r->uri.path);
 
             /* check if extension matches */
             for (uint32_t k = 0; k < exts->used; ++k) {
@@ -2459,7 +2458,7 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
               #ifdef __clang_analyzer__
                 force_assert(ext); /*(unnecessary; quiet clang analyzer)*/
               #endif
-                size_t ct_len = buffer_string_length(&ext->key);
+                size_t ct_len = buffer_clen(&ext->key);
 
                 /* check _url_ in the form "/gw_pattern" */
                 if (ext->key.ptr[0] == '/') {
@@ -2501,11 +2500,12 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
 
     /* init handler-context */
     if (uri_path_handler) {
-        if (host->check_local != 0) {
+        if (host->check_local)
             return HANDLER_GO_ON;
-        } else {
-            /* do not split path info for authorizer */
-            if (gw_mode != GW_AUTHORIZER) {
+
+        /* path info rewrite is done only for /prefix/? matches */
+        /* do not split path info for authorizer */
+        if (extension->key.ptr[0] == '/' && gw_mode != GW_AUTHORIZER) {
                 /* the prefix is the SCRIPT_NAME,
                 * everything from start to the next slash
                 * this is important for check-local = "disable"
@@ -2532,28 +2532,19 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
                 * PATH_INFO   = /bar
                 *
                 */
-                char *pathinfo;
-
-                /* the rewrite is only done for /prefix/? matches */
-                if (host->fix_root_path_name && extension->key.ptr[0] == '/'
-                                             && extension->key.ptr[1] == '\0') {
-                    buffer_copy_buffer(&r->pathinfo, &r->uri.path);
-                    buffer_string_set_length(&r->uri.path, 0);
-                } else if (extension->key.ptr[0] == '/'
-                           && buffer_string_length(&r->uri.path)
-                              > buffer_string_length(&extension->key)
-                           && (pathinfo =
-                                 strchr(r->uri.path.ptr
-                                        + buffer_string_length(&extension->key),
-                                        '/')) != NULL) {
-                    /* rewrite uri.path and pathinfo */
-
-                    buffer_copy_string(&r->pathinfo, pathinfo);
-                    buffer_string_set_length(
-                      &r->uri.path,
-                      buffer_string_length(&r->uri.path)
-                      - buffer_string_length(&r->pathinfo));
-                }
+            /* (s_len is buffer_clen(&r->uri.path) if (uri_path_handler) */
+            uint32_t elen = buffer_clen(&extension->key);
+            const char *pathinfo;
+            if (1 == elen && host->fix_root_path_name) {
+                buffer_copy_buffer(&r->pathinfo, &r->uri.path);
+                buffer_truncate(&r->uri.path, 0);
+            }
+            else if (s_len > elen
+                     && (pathinfo = strchr(r->uri.path.ptr+elen, '/'))) {
+                /* rewrite uri.path and pathinfo */
+                const uint32_t plen = r->uri.path.ptr + s_len - pathinfo;
+                buffer_copy_string_len(&r->pathinfo, pathinfo, plen);
+                buffer_truncate(&r->uri.path, s_len - plen);
             }
         }
     }
@@ -2624,7 +2615,7 @@ static void gw_handle_trigger_host(gw_host * const host, log_error_st * const er
 
     /* check if adaptive spawning enabled */
     if (host->min_procs == host->max_procs) return;
-    if (buffer_string_is_empty(host->bin_path)) return;
+    if (!host->bin_path) return;
 
     for (proc = host->first; proc; proc = proc->next) {
         if (proc->load <= host->max_load_per_proc) {

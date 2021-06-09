@@ -33,7 +33,7 @@
 
 __attribute_cold__
 int http_response_buffer_append_authority(request_st * const r, buffer * const o) {
-	if (!buffer_string_is_empty(&r->uri.authority)) {
+	if (!buffer_is_blank(&r->uri.authority)) {
 		buffer_append_string_buffer(o, &r->uri.authority);
 	} else {
 		/* get the name of the currently connected socket */
@@ -58,9 +58,9 @@ int http_response_buffer_append_authority(request_st * const r, buffer * const o
 				buffer_append_string_len(o, lhost, lhost_len);
 			}
 			else {
-				size_t olen = buffer_string_length(o);
+				size_t olen = buffer_clen(o);
 				if (0 == sock_addr_nameinfo_append_buffer(o, &our_addr, r->conf.errh)) {
-					lhost_len = buffer_string_length(o) - olen;
+					lhost_len = buffer_clen(o) - olen;
 					if (lhost_len < sizeof(lhost)) {
 						memcpy(lhost, o->ptr+olen, lhost_len+1); /*(+1 for '\0')*/
 					}
@@ -74,7 +74,7 @@ int http_response_buffer_append_authority(request_st * const r, buffer * const o
 					buffer_append_string_len(o, lhost, lhost_len);
 				}
 			}
-		} else if (!buffer_string_is_empty(r->server_name)) {
+		} else if (!buffer_is_blank(r->server_name)) {
 			buffer_append_string_buffer(o, r->server_name);
 		} else
 		/* Lookup name: secondly try to get hostname for bind address */
@@ -104,7 +104,7 @@ int http_response_redirect_to_directory(request_st * const r, int status) {
 	buffer_clear(o);
 	/* XXX: store flag in global at startup? */
 	if (r->con->srv->srvconf.absolute_dir_redirect) {
-		buffer_append_str2(o, CONST_BUF_LEN(&r->uri.scheme),
+		buffer_append_str2(o, BUF_PTR_LEN(&r->uri.scheme),
 		                      CONST_STR_LEN("://"));
 		if (0 != http_response_buffer_append_authority(r, o)) {
 			return -1;
@@ -122,12 +122,12 @@ int http_response_redirect_to_directory(request_st * const r, int status) {
 		                                  CONST_STR_LEN("Content-Location"));
 	}
 	buffer_copy_buffer(vb, o);
-	buffer_append_string_encoded(vb, CONST_BUF_LEN(&r->uri.path),
+	buffer_append_string_encoded(vb, BUF_PTR_LEN(&r->uri.path),
 	                             ENCODING_REL_URI);
 	buffer_append_string_len(vb, CONST_STR_LEN("/"));
-	if (!buffer_string_is_empty(&r->uri.query))
+	if (!buffer_is_blank(&r->uri.query))
 		buffer_append_str2(vb, CONST_STR_LEN("?"),
-		                       CONST_BUF_LEN(&r->uri.query));
+		                       BUF_PTR_LEN(&r->uri.query));
 
 	return 0;
 }
@@ -215,7 +215,7 @@ int http_response_handle_cachable(request_st * const r, const buffer * const lmo
 		                                    CONST_STR_LEN("If-Modified-Since")))) {
 		/* last-modified handling */
 		if (buffer_is_equal(lmod, vb)
-		    || !http_date_if_modified_since(CONST_BUF_LEN(vb), lmtime)) {
+		    || !http_date_if_modified_since(BUF_PTR_LEN(vb), lmtime)) {
 			r->http_status = 304;
 			return HANDLER_FINISHED;
 		}
@@ -354,7 +354,11 @@ void http_response_send_file (request_st * const r, buffer * const path, stat_ca
 
 	if (!light_btst(r->resp_htags, HTTP_HEADER_CONTENT_TYPE)) {
 		const buffer *content_type = stat_cache_content_type_get(sce, r);
-		if (buffer_string_is_empty(content_type)) {
+		if (content_type && !buffer_is_blank(content_type)) {
+			http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+			                         CONST_STR_LEN("Content-Type"),
+			                         BUF_PTR_LEN(content_type));
+		} else {
 			/* we are setting application/octet-stream, but also announce that
 			 * this header field might change in the seconds few requests
 			 *
@@ -366,10 +370,6 @@ void http_response_send_file (request_st * const r, buffer * const path, stat_ca
 			                         CONST_STR_LEN("application/octet-stream"));
 
 			allow_caching = 0;
-		} else {
-			http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
-			                         CONST_STR_LEN("Content-Type"),
-			                         CONST_BUF_LEN(content_type));
 		}
 	}
 
@@ -378,11 +378,11 @@ void http_response_send_file (request_st * const r, buffer * const path, stat_ca
 		    && 0 != r->conf.etag_flags) {
 			const buffer *etag =
 			  stat_cache_etag_get(sce, r->conf.etag_flags);
-			if (!buffer_string_is_empty(etag)) {
+			if (etag && !buffer_is_blank(etag)) {
 				buffer_copy_buffer(&r->physical.etag, etag);
 				http_header_response_set(r, HTTP_HEADER_ETAG,
 				                         CONST_STR_LEN("ETag"),
-				                         CONST_BUF_LEN(&r->physical.etag));
+				                         BUF_PTR_LEN(&r->physical.etag));
 			}
 		}
 
@@ -447,7 +447,7 @@ static void http_response_xsendfile (request_st * const r, buffer * const path, 
 	if (r->conf.force_lowercase_filenames) {
 		buffer_to_lower(path);
 	}
-	if (buffer_string_is_empty(path)) {
+	if (buffer_is_blank(path)) {
 		r->http_status = 502;
 		valid = 0;
 	}
@@ -521,7 +521,7 @@ static void http_response_xsendfile2(request_st * const r, const buffer * const 
         if (r->conf.force_lowercase_filenames) {
             buffer_to_lower(b);
         }
-        if (buffer_string_is_empty(b)) {
+        if (buffer_is_blank(b)) {
             r->http_status = 502;
             break;
         }
@@ -912,7 +912,7 @@ http_response_check_1xx (request_st * const r, buffer * const restrict b, uint32
      * (but further response might follow in b, so preserve addtl data) */
     if (dlen)
         memmove(b->ptr, b->ptr+hlen, dlen);
-    buffer_string_set_length(b, dlen);
+    buffer_truncate(b, dlen);
 
     /* Note: while GW_AUTHORIZER mode is not expected to return 1xx, as a
      * feature, 1xx responses from authorizer are passed back to client */
@@ -953,7 +953,7 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
         hoff[0] = 1; /* number of lines */
         hoff[1] = 0; /* base offset for all lines */
         hoff[2] = 0; /* offset from base for 2nd line; init 0 to detect '\n' */
-        blen = buffer_string_length(b);
+        blen = buffer_clen(b);
         header_len = http_header_parse_hoff(b->ptr, blen, hoff);
         if ((header_len ? header_len : blen) > MAX_HTTP_RESPONSE_FIELD_SIZE) {
             log_error(r->conf.errh, __FILE__, __LINE__,
@@ -1068,7 +1068,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
 
         if (0 == fdevent_ioctl_fionread(fd, opts->fdfmt, (int *)&toread)) {
             if (avail < toread) {
-                size_t blen = buffer_string_length(b);
+                uint32_t blen = buffer_clen(b);
                 if (toread + blen < 4096)
                     toread = 4095 - blen;
                 else if (toread > MAX_READ_LIMIT)
@@ -1121,7 +1121,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
             avail = chunk_buffer_prepare_append(b, avail);
         }
 
-        n = read(fd, b->ptr+buffer_string_length(b), avail);
+        n = read(fd, b->ptr+buffer_clen(b), avail);
 
         if (n < 0) {
             switch (errno) {
@@ -1143,7 +1143,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
         buffer_commit(b, (size_t)n);
       #ifdef __COVERITY__
         /* Coverity Scan overlooks the effect of buffer_commit() */
-        b->ptr[buffer_string_length(b)+n] = '\0';
+        b->ptr[buffer_clen(b)+n] = '\0';
       #endif
 
         if (NULL != opts->parse) {

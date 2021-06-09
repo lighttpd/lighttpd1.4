@@ -111,12 +111,12 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
     if (NULL != r->handler_module) return HANDLER_GO_ON;
     if (!http_method_get_head_post(r->http_method)) return HANDLER_GO_ON;
     /* r->physical.path is non-empty for handle_subrequest_start */
-    /*if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;*/
+    /*if (buffer_is_blank(&r->physical.path)) return HANDLER_GO_ON;*/
 
     plugin_data * const p = p_d;
     mod_staticfile_patch_config(r, p);
 
-    if (p->conf.disable_pathinfo && !buffer_string_is_empty(&r->pathinfo)) {
+    if (p->conf.disable_pathinfo && !buffer_is_blank(&r->pathinfo)) {
         return mod_staticfile_not_handled(r, "pathinfo");
     }
 

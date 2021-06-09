@@ -266,7 +266,7 @@ SETDEFAULTS_FUNC(mod_authn_mysql_set_defaults) {
               case 7: /* auth.backend.mysql.col_user */
               case 8: /* auth.backend.mysql.col_pass */
               case 9: /* auth.backend.mysql.col_realm */
-                if (buffer_string_is_empty(cpv->v.b)) {
+                if (buffer_is_blank(cpv->v.b)) {
                     log_error(srv->errh, __FILE__, __LINE__,
                       "%s must not be blank", cpk[cpv->k_id].k);
                     return HANDLER_ERROR;
@@ -472,9 +472,9 @@ static handler_t mod_authn_mysql_basic(request_st * const r, void *p_d, const ht
     ai.dalgo    = HTTP_AUTH_DIGEST_NONE;
     ai.dlen     = 0;
     ai.username = username->ptr;
-    ai.ulen     = buffer_string_length(username);
+    ai.ulen     = buffer_clen(username);
     ai.realm    = require->realm->ptr;
-    ai.rlen     = buffer_string_length(require->realm);
+    ai.rlen     = buffer_clen(require->realm);
     rc = mod_authn_mysql_query(r, p_d, &ai, pw);
     if (HANDLER_GO_ON != rc) return rc;
     return http_auth_match_rules(require, username->ptr, NULL, NULL)

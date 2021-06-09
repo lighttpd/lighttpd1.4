@@ -991,7 +991,7 @@ h2_frame_cq_compact (chunkqueue * const cq, uint32_t len)
      * or should check that returned value >= len */
 
     chunkqueue_compact_mem(cq, len);
-    return buffer_string_length(cq->first->mem) - (uint32_t)cq->first->offset;
+    return buffer_clen(cq->first->mem) - (uint32_t)cq->first->offset;
 }
 
 
@@ -1124,7 +1124,7 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
     }
     else
         n = m;
-    buffer_string_set_length(c->mem, n + (uint32_t)c->offset);
+    buffer_truncate(c->mem, n + (uint32_t)c->offset);
 
     return m;
 }
@@ -1500,7 +1500,7 @@ h2_parse_frames (connection * const con)
         /*assert(c->type == MEM_CHUNK);*/
         /* copy data if frame header crosses chunk boundary
          * future: be more efficient than blind full chunk copy */
-        uint32_t clen = buffer_string_length(c->mem) - c->offset;
+        uint32_t clen = buffer_clen(c->mem) - c->offset;
         if (clen < 9) {
             clen = h2_frame_cq_compact(cq, 9);
             c = cq->first; /*(reload after h2_frame_cq_compact())*/
@@ -1636,7 +1636,7 @@ h2_want_read (connection * const con)
     const off_t cqlen = chunkqueue_length(cq);
     if (cqlen < 9) return 1;
     chunk *c = cq->first;
-    uint32_t clen = buffer_string_length(c->mem) - c->offset;
+    uint32_t clen = buffer_clen(c->mem) - c->offset;
     if (clen < 9) {
         clen = h2_frame_cq_compact(cq, 9);
         c = cq->first; /*(reload after h2_frame_cq_compact())*/
@@ -1673,7 +1673,7 @@ h2_recv_client_connection_preface (connection * const con)
     chunkqueue * const cq = con->read_queue;
     if (chunkqueue_length(cq) < 24) {
         chunk * const c = cq->first;
-        if (c && buffer_string_length(c->mem) - c->offset >= 4) {
+        if (c && buffer_clen(c->mem) - c->offset >= 4) {
             const char * const s = c->mem->ptr + c->offset;
             if (s[0]!='P'||s[1]!='R'||s[2]!='I'||s[3]!=' ') {
                 h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
@@ -1685,7 +1685,7 @@ h2_recv_client_connection_preface (connection * const con)
 
     static const char h2preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
     chunk *c = cq->first;
-    const uint32_t clen = buffer_string_length(c->mem) - c->offset;
+    const uint32_t clen = buffer_clen(c->mem) - c->offset;
     if (clen < 24) h2_frame_cq_compact(cq, 24);
     c = cq->first; /*(reload after h2_frame_cq_compact())*/
     const uint8_t * const s = (uint8_t *)(c->mem->ptr + c->offset);
@@ -1745,7 +1745,7 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
     lshpack_enc_use_hist(&h2c->encoder, 1);
 
     if (http2_settings) /*(if Upgrade: h2c)*/
-        h2_parse_frame_settings(con, (uint8_t *)CONST_BUF_LEN(http2_settings));
+        h2_parse_frame_settings(con, (uint8_t *)BUF_PTR_LEN(http2_settings));
 
     static const uint8_t h2settings[] = { /*(big-endian numbers)*/
       /* SETTINGS */
@@ -1857,7 +1857,7 @@ h2_send_hpack (request_st * const r, connection * const con, const char *data, u
         headers.c[6] = H2_FTYPE_CONTINUATION; /*(if additional frames needed)*/
         headers.c[7] = 0x00; /*(off +3 to skip over align pad)*/
     } while (dlen);
-    buffer_string_set_length(b, (uint32_t)(ptr - b->ptr));
+    buffer_truncate(b, (uint32_t)(ptr - b->ptr));
     chunkqueue_append_buffer_commit(con->write_queue);
 }
 
@@ -1947,8 +1947,8 @@ h2_send_headers (request_st * const r, connection * const con)
       (data_string * const *)r->resp_headers.data;
     for (uint32_t i = 0, used = r->resp_headers.used; i < used; ++i) {
         data_string * const ds = hdata[i];
-        const uint32_t klen = buffer_string_length(&ds->key);
-        const uint32_t vlen = buffer_string_length(&ds->value);
+        const uint32_t klen = buffer_clen(&ds->key);
+        const uint32_t vlen = buffer_clen(&ds->value);
         if (__builtin_expect( (0 == klen), 0)) continue;
         if (__builtin_expect( (0 == vlen), 0)) continue;
         alen += klen + vlen + 4;
@@ -1967,7 +1967,10 @@ h2_send_headers (request_st * const r, connection * const con)
          * Since keys are typically short, append (and lowercase) key onto
          * end of value buffer, following '\0' after end of value, and
          * without modifying ds->value.used or overwriting '\0' */
-        char * const v = buffer_string_prepare_append(&ds->value, klen)+1;
+        char * const v =
+          __builtin_expect( (buffer_string_space(&ds->value) >= klen), 1)
+          ? ds->value.ptr+vlen+1 /*perf: inline check before call*/
+          : buffer_string_prepare_append(&ds->value, klen)+1;
         if (__builtin_expect( (ds->ext != HTTP_HEADER_OTHER), 1)) {
             memcpy(v, http_header_lc[ds->ext], klen);
         }
@@ -2049,10 +2052,9 @@ h2_send_headers (request_st * const r, connection * const con)
         }
     }
 
-    if (!light_btst(r->resp_htags, HTTP_HEADER_SERVER)
-        && !buffer_string_is_empty(r->conf.server_tag)) {
+    if (!light_btst(r->resp_htags, HTTP_HEADER_SERVER) && r->conf.server_tag) {
         buffer * const b = chunk_buffer_acquire();
-        const uint32_t vlen = buffer_string_length(r->conf.server_tag);
+        const uint32_t vlen = buffer_clen(r->conf.server_tag);
         buffer_append_str2(b, CONST_STR_LEN("server: "),
                               r->conf.server_tag->ptr, vlen);
 
@@ -2202,15 +2204,15 @@ h2_send_1xx (request_st * const r, connection * const con)
     buffer_append_int(b, r->http_status);
     for (uint32_t i = 0; i < r->resp_headers.used; ++i) {
         const data_string * const ds = (data_string *)r->resp_headers.data[i];
-        const uint32_t klen = buffer_string_length(&ds->key);
-        const uint32_t vlen = buffer_string_length(&ds->value);
+        const uint32_t klen = buffer_clen(&ds->key);
+        const uint32_t vlen = buffer_clen(&ds->value);
         if (0 == klen || 0 == vlen) continue;
         buffer_append_str2(b, CONST_STR_LEN("\r\n"), ds->key.ptr, klen);
         buffer_append_str2(b, CONST_STR_LEN(": "), ds->value.ptr, vlen);
     }
     buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
-    h2_send_1xx_block(r, con, CONST_BUF_LEN(b));
+    h2_send_1xx_block(r, con, BUF_PTR_LEN(b));
 
     chunk_buffer_release(b);
     return 1; /* for http_response_send_1xx_cb */
@@ -2252,7 +2254,7 @@ h2_send_end_stream_trailers (request_st * const r, connection * const con, const
     hoff[0] = 1;                         /* number of lines */
     hoff[1] = 0;                         /* base offset for all lines */
     /*hoff[2] = ...;*/                   /* offset from base for 2nd line */
-    uint32_t rc = http_header_parse_hoff(CONST_BUF_LEN(trailers), hoff);
+    uint32_t rc = http_header_parse_hoff(BUF_PTR_LEN(trailers), hoff);
     if (0 == rc || rc > USHRT_MAX || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1
         || 1 == hoff[0]) { /*(initial blank line)*/
         /* skip trailers if incomplete, too many fields, or too long (> 64k-1)*/
@@ -2275,7 +2277,7 @@ h2_send_end_stream_trailers (request_st * const r, connection * const con, const
         } while (++k != colon);
     }
 
-    h2_send_headers_block(r, con, CONST_BUF_LEN(trailers), H2_FLAG_END_STREAM);
+    h2_send_headers_block(r, con, BUF_PTR_LEN(trailers), H2_FLAG_END_STREAM);
 }
 
 
@@ -2288,7 +2290,7 @@ h2_send_cqheaders (request_st * const r, connection * const con)
      * r->write_queue bytes counts (bytes_in, bytes_out) with header len)*/
     /* note: expects field-names are lowercased (http_response_write_header())*/
     chunk * const c = r->write_queue.first;
-    const uint32_t len = buffer_string_length(c->mem) - (uint32_t)c->offset;
+    const uint32_t len = buffer_clen(c->mem) - (uint32_t)c->offset;
     uint32_t flags = (r->resp_body_finished && NULL == c->next)
       ? H2_FLAG_END_STREAM
       : 0;
@@ -2364,7 +2366,7 @@ h2_send_data (request_st * const r, connection * const con, const char *data, ui
         data += len;
         dlen -= len;
     } while (dlen);
-    buffer_string_set_length(b, (uint32_t)(ptr - b->ptr));
+    buffer_truncate(b, (uint32_t)(ptr - b->ptr));
     chunkqueue_append_buffer_commit(con->write_queue);
 }
 
@@ -2461,7 +2463,7 @@ h2_send_end_stream (request_st * const r, connection * const con)
     if (r->state != CON_STATE_ERROR && r->resp_body_finished) {
         /* CON_STATE_RESPONSE_END */
         if (r->gw_dechunk && r->gw_dechunk->done
-            && !buffer_is_empty(&r->gw_dechunk->b))
+            && !buffer_is_unset(&r->gw_dechunk->b))
             h2_send_end_stream_trailers(r, con, &r->gw_dechunk->b);
         else
             h2_send_end_stream_data(r, con);
@@ -2506,7 +2508,7 @@ h2_init_stream (request_st * const h2r, connection * const con)
     if (used > 1) /*(save 128b per con if no conditions)*/
         memcpy(r->cond_match, h2r->cond_match, used * sizeof(cond_match_t));
   #endif
-    /*(see config_reset_config())*/
+    /*(see config_reset_config() and request_reset_ex())*/
     r->server_name = h2r->server_name;
     memcpy(&r->conf, &h2r->conf, sizeof(request_config));
 
@@ -2680,7 +2682,7 @@ h2_con_upgrade_h2c (request_st * const h2r, const buffer * const http2_settings)
     h2r->http_host = NULL;
   #if 0
     r->server_name = h2r->server_name;
-    h2r->server_name = NULL;
+    h2r->server_name = &h2r->uri.authority;     /*(is not null)*/
   #endif
     r->target = h2r->target;                    /* copy struct */
     r->target_orig = h2r->target_orig;          /* copy struct */
@@ -2739,7 +2741,7 @@ h2_check_con_upgrade_h2c (request_st * const r)
         return 0;
     }
 
-    if (!http_header_str_contains_token(CONST_BUF_LEN(upgrade),
+    if (!http_header_str_contains_token(BUF_PTR_LEN(upgrade),
                                         CONST_STR_LEN("h2c")))
         return 0;
 
@@ -2751,9 +2753,9 @@ h2_check_con_upgrade_h2c (request_st * const r)
             buffer_clear(b);
             if (r->conf.h2proto > 1/*(must be enabled with server.h2c feature)*/
                 &&
-                http_header_str_contains_token(CONST_BUF_LEN(http_connection),
+                http_header_str_contains_token(BUF_PTR_LEN(http_connection),
                                                CONST_STR_LEN("HTTP2-Settings"))
-                && buffer_append_base64_decode(b, CONST_BUF_LEN(http2_settings),
+                && buffer_append_base64_decode(b, BUF_PTR_LEN(http2_settings),
                                                BASE64_URL)) {
                 h2_con_upgrade_h2c(r, b);
                 r->http_version = HTTP_VERSION_2;

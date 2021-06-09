@@ -90,13 +90,13 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
     /* process and validate config directives
      * (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
-        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* usertrack.cookie-name */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     const char * const ptr = cpv->v.b->ptr;
-                    const size_t len = buffer_string_length(cpv->v.b);
+                    const size_t len = buffer_clen(cpv->v.b);
                     for (size_t j = 0; j < len; ++j) {
                         if (!light_isalpha(ptr[j])) {
                             log_error(srv->errh, __FILE__, __LINE__,
@@ -106,13 +106,15 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
                         }
                     }
                 }
+                else
+                    cpv->v.b = NULL;
                 break;
               case 1: /* usertrack.cookie-max-age */
                 break;
               case 2: /* usertrack.cookie-domain */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     const char * const ptr = cpv->v.b->ptr;
-                    const size_t len = buffer_string_length(cpv->v.b);
+                    const size_t len = buffer_clen(cpv->v.b);
                     for (size_t j = 0; j < len; ++j) {
                         const char c = ptr[j];
                         if (c <= 32 || c >= 127 || c == '"' || c == '\\') {
@@ -123,8 +125,12 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
                         }
                     }
                 }
+                else
+                    cpv->v.b = NULL;
                 break;
               case 3: /* usertrack.cookie-attrs */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
                 break;
               default:/* should not happen */
                 break;
@@ -138,7 +144,7 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
         if (-1 != cpv->k_id)
             mod_usertrack_merge_config(&p->defaults, cpv);
     }
-    if (buffer_string_is_empty(p->defaults.cookie_name)) {
+    if (NULL == p->defaults.cookie_name) {
         static const struct { const char *ptr; uint32_t used; uint32_t size; }
           default_cookie_name = { "TRACKID", sizeof("TRACKID"), 0 };
         *((const buffer **)&p->defaults.cookie_name) =
@@ -159,14 +165,14 @@ static handler_t mod_usertrack_set_cookie(request_st * const r, plugin_data * co
 	/* set a cookie */
 	cookie = r->tmp_buf;
 	buffer_clear(cookie);
-	buffer_append_str2(cookie, CONST_BUF_LEN(p->conf.cookie_name),
+	buffer_append_str2(cookie, BUF_PTR_LEN(p->conf.cookie_name),
                                    CONST_STR_LEN("="));
 
 	/* taken from mod_auth.c */
 
 	/* generate shared-secret */
 	li_MD5_Init(&Md5Ctx);
-	li_MD5_Update(&Md5Ctx, CONST_BUF_LEN(&r->uri.path));
+	li_MD5_Update(&Md5Ctx, BUF_PTR_LEN(&r->uri.path));
 	li_MD5_Update(&Md5Ctx, CONST_STR_LEN("+"));
 
 	len = li_itostrn(hh, sizeof(hh), log_epoch_secs);
@@ -179,17 +185,17 @@ static handler_t mod_usertrack_set_cookie(request_st * const r, plugin_data * co
 	buffer_append_string_encoded_hex_lc(cookie, (char *)h, 16);
 
 	/* usertrack.cookie-attrs, if set, replaces all other attrs */
-	if (!buffer_string_is_empty(p->conf.cookie_attrs)) {
+	if (p->conf.cookie_attrs) {
 		buffer_append_string_buffer(cookie, p->conf.cookie_attrs);
-		http_header_response_insert(r, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"), CONST_BUF_LEN(cookie));
+		http_header_response_insert(r, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"), BUF_PTR_LEN(cookie));
 		return HANDLER_GO_ON;
 	}
 
 	buffer_append_string_len(cookie, CONST_STR_LEN("; Path=/; Version=1"));
 
-	if (!buffer_string_is_empty(p->conf.cookie_domain)) {
+	if (p->conf.cookie_domain) {
 		buffer_append_string_len(cookie, CONST_STR_LEN("; Domain="));
-		buffer_append_string_encoded(cookie, CONST_BUF_LEN(p->conf.cookie_domain), ENCODING_REL_URI);
+		buffer_append_string_encoded(cookie, BUF_PTR_LEN(p->conf.cookie_domain), ENCODING_REL_URI);
 	}
 
 	if (p->conf.cookie_max_age) {
@@ -197,7 +203,7 @@ static handler_t mod_usertrack_set_cookie(request_st * const r, plugin_data * co
 		buffer_append_int(cookie, p->conf.cookie_max_age);
 	}
 
-	http_header_response_insert(r, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"), CONST_BUF_LEN(cookie));
+	http_header_response_insert(r, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"), BUF_PTR_LEN(cookie));
 
 	return HANDLER_GO_ON;
 }
@@ -206,6 +212,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
     plugin_data * const p = p_d;
 
     mod_usertrack_patch_config(r, p);
+    if (!p->conf.cookie_name) return HANDLER_GO_ON;
 
     const buffer * const b =
       http_header_request_get(r, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie"));
@@ -215,7 +222,7 @@ URIHANDLER_FUNC(mod_usertrack_uri_handler) {
          */
         const char * const g = strstr(b->ptr, p->conf.cookie_name->ptr);
         if (NULL != g) {
-            const char *nc = g+buffer_string_length(p->conf.cookie_name);
+            const char *nc = g+buffer_clen(p->conf.cookie_name);
             while (*nc == ' ' || *nc == '\t') ++nc; /* skip WS */
             if (*nc == '=') { /* ok, found the key of our own cookie */
                 if (strlen(nc) > 32) {

@@ -208,10 +208,10 @@ http_range_multi (request_st * const r,
                                CONST_STR_LEN("Content-Type"));
     if (content_type) {
         buffer_append_str2(tb, CONST_STR_LEN("\r\nContent-Type: "),
-                               CONST_BUF_LEN(content_type));
+                               BUF_PTR_LEN(content_type));
     }
     buffer_append_string_len(tb,CONST_STR_LEN("\r\nContent-Range: bytes "));
-    const uint32_t prefix_len = buffer_string_length(tb);
+    const uint32_t prefix_len = buffer_clen(tb);
 
     http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
                              CONST_STR_LEN("Content-Type"),
@@ -237,7 +237,7 @@ http_range_multi (request_st * const r,
       : NULL;
     for (int i = 0; i < n; i += 2) {
         /* generate boundary-header including Content-Type and Content-Range */
-        buffer_string_set_length(tb, prefix_len);
+        buffer_truncate(tb, prefix_len);
         buffer_append_int(tb, ranges[i]);
         buffer_append_string_len(tb, CONST_STR_LEN("-"));
         buffer_append_int(tb, ranges[i+1]);
@@ -245,9 +245,9 @@ http_range_multi (request_st * const r,
         buffer_append_int(tb, complete_length);
         buffer_append_string_len(tb, CONST_STR_LEN("\r\n\r\n"));
         if (c) /* single MEM_CHUNK in original cq; not using mem_min */
-            chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
+            chunkqueue_append_mem(cq, BUF_PTR_LEN(tb));
         else
-            chunkqueue_append_mem_min(cq, CONST_BUF_LEN(tb));
+            chunkqueue_append_mem_min(cq, BUF_PTR_LEN(tb));
 
         chunkqueue_append_cq_range(cq, cq, ranges[i],
                                    ranges[i+1] - ranges[i] + 1);

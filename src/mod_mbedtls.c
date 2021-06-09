@@ -997,22 +997,22 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
     int rc = MBEDTLS_ERR_SSL_BAD_HS_CLIENT_HELLO;
 
     /* check if acme-tls/1 protocol is enabled (path to dir of cert(s) is set)*/
-    if (buffer_string_is_empty(hctx->conf.ssl_acme_tls_1))
+    if (!hctx->conf.ssl_acme_tls_1)
         return 0; /*(should not happen)*/
 
     /* check if SNI set server name (required for acme-tls/1 protocol)
      * and perform simple path checks for no '/'
      * and no leading '.' (e.g. ignore "." or ".." or anything beginning '.') */
-    if (buffer_string_is_empty(name))   return rc;
+    if (buffer_is_blank(name))          return rc;
     if (NULL != strchr(name->ptr, '/')) return rc;
     if (name->ptr[0] == '.')            return rc;
   #if 0
     if (0 != http_request_host_policy(name,hctx->r->conf.http_parseopts,443))
         return rc;
   #endif
-    buffer_copy_path_len2(b, CONST_BUF_LEN(hctx->conf.ssl_acme_tls_1),
-                             CONST_BUF_LEN(name));
-    len = buffer_string_length(b);
+    buffer_copy_path_len2(b, BUF_PTR_LEN(hctx->conf.ssl_acme_tls_1),
+                             BUF_PTR_LEN(name));
+    len = buffer_clen(b);
 
     do {
         buffer_append_string_len(b, CONST_STR_LEN(".crt.pem"));
@@ -1030,7 +1030,7 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
             break;
         }
 
-        buffer_string_set_length(b, len); /*(remove ".crt.pem")*/
+        buffer_truncate(b, len); /*(remove ".crt.pem")*/
         buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
         ssl_pemfile_pkey = malloc(sizeof(*ssl_pemfile_pkey));
         force_assert(ssl_pemfile_pkey);
@@ -1076,7 +1076,7 @@ mod_mbedtls_alpn_h2_policy (handler_ctx * const hctx)
 {
     /*(currently called after handshake has completed)*/
   #if 0 /* SNI omitted by client when connecting to IP instead of to name */
-    if (buffer_string_is_empty(&hctx->r->uri.authority)) {
+    if (buffer_is_blank(&hctx->r->uri.authority)) {
         log_error(hctx->errh, __FILE__, __LINE__,
           "SSL: error ALPN h2 without SNI");
         return -1;
@@ -1320,12 +1320,12 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         mbedtls_ssl_conf_min_version(s->ssl_ctx, MBEDTLS_SSL_MAJOR_VERSION_3,
                                                  MBEDTLS_SSL_MINOR_VERSION_0);
 
-    if (!buffer_string_is_empty(s->ssl_cipher_list)) {
+    if (s->ssl_cipher_list) {
         if (!mod_mbedtls_ssl_conf_ciphersuites(srv,s,NULL,s->ssl_cipher_list))
             return -1;
     }
 
-    if (!buffer_string_is_empty(s->ssl_dh_file)) {
+    if (s->ssl_dh_file) {
         mbedtls_dhm_context dhm;
         mbedtls_dhm_init(&dhm);
         rc = mbedtls_dhm_parse_dhmfile(&dhm, s->ssl_dh_file->ptr);
@@ -1343,7 +1343,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             return -1;
     }
 
-    if (!buffer_string_is_empty(s->ssl_ec_curve)) {
+    if (s->ssl_ec_curve) {
         if (!mod_mbedtls_ssl_conf_curves(srv, s, s->ssl_ec_curve))
             return -1;
     }
@@ -1380,7 +1380,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
      ,"http/1.0"
      ,NULL
     };
-    const char **alpn_protos = (!buffer_string_is_empty(s->ssl_acme_tls_1))
+    const char **alpn_protos = (s->ssl_acme_tls_1)
       ? alpn_protos_http_acme
       : alpn_protos_http;
     if (!srv->srvconf.h2proto) ++alpn_protos;
@@ -1532,16 +1532,19 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
                 --count_not_engine;
                 break;
               case 1: /* ssl.cipher-list */
-                conf.ssl_cipher_list = cpv->v.b;
+                if (!buffer_is_blank(cpv->v.b))
+                    conf.ssl_cipher_list = cpv->v.b;
                 break;
               case 2: /* ssl.honor-cipher-order */
                 conf.ssl_honor_cipher_order = (0 != cpv->v.u);
                 break;
               case 3: /* ssl.dh-file */
-                conf.ssl_dh_file = cpv->v.b;
+                if (!buffer_is_blank(cpv->v.b))
+                    conf.ssl_dh_file = cpv->v.b;
                 break;
               case 4: /* ssl.ec-curve */
-                conf.ssl_ec_curve = cpv->v.b;
+                if (!buffer_is_blank(cpv->v.b))
+                    conf.ssl_ec_curve = cpv->v.b;
                 break;
               case 5: /* ssl.openssl.ssl-conf-cmd */
                 *(const array **)&conf.ssl_conf_cmd = cpv->v.a;
@@ -1574,7 +1577,7 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
                 break;
               case 10:/* ssl.stek-file */
                #ifdef MBEDTLS_SSL_SESSION_TICKETS
-                if (!buffer_is_empty(cpv->v.b))
+                if (!buffer_is_blank(cpv->v.b))
                     p->ssl_stek_file = cpv->v.b->ptr;
                #else
                 log_error(srv->errh, __FILE__, __LINE__, "MTLS: "
@@ -1780,10 +1783,10 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* ssl.pemfile */
-                if (!buffer_string_is_empty(cpv->v.b)) pemfile = cpv;
+                if (!buffer_is_blank(cpv->v.b)) pemfile = cpv;
                 break;
               case 1: /* ssl.privkey */
-                if (!buffer_string_is_empty(cpv->v.b)) privkey = cpv;
+                if (!buffer_is_blank(cpv->v.b)) privkey = cpv;
                 break;
               case 14:/* ssl.verifyclient.ca-file */
                 if (cpv->k_id == 14) cpv->k_id = 2;
@@ -1796,7 +1799,7 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
                #if 0 /* defer; not necessary for pemfile parsing */
                 if (!mod_mbedtls_init_once_mbedtls(srv)) return HANDLER_ERROR;
                #endif
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     mbedtls_x509_crt *cacert = calloc(1, sizeof(*cacert));
                     force_assert(cacert);
                     mbedtls_x509_crt_init(cacert);
@@ -1819,7 +1822,7 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
                 cpv->k_id = 4;
                 __attribute_fallthrough__
               case 4: /* ssl.ca-crl-file */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     mbedtls_x509_crl *crl = malloc(sizeof(*crl));
                     force_assert(crl);
                     mbedtls_x509_crl_init(crl);
@@ -1856,8 +1859,15 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
                 }
                 break;
               case 10:/* ssl.verifyclient.username */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
+                break;
               case 11:/* ssl.verifyclient.exportcert */
+                break;
               case 12:/* ssl.acme-tls-1 */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
+                break;
               case 13:/* debug.log-ssl-noise */
              #if 0    /*(handled further above)*/
               case 14:/* ssl.verifyclient.ca-file */
@@ -2060,7 +2070,7 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
           #ifdef MBEDTLS_SSL_ALPN
             /* parse client_hello for ALPN extension prior to mbedtls handshake
              * in order to perform certificate selection in mod_mbedtls_SNI() */
-            if (!buffer_string_is_empty(hctx->conf.ssl_acme_tls_1)) {
+            if (hctx->conf.ssl_acme_tls_1) {
                 rc = ssl_parse_client_hello(&hctx->ssl, hctx);
                 if (0 != rc) break;
             }
@@ -2250,7 +2260,7 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
     hctx->tmp_buf = con->srv->tmp_buf;
     hctx->errh = r->conf.errh;
     con->plugin_ctx[p->id] = hctx;
-    buffer_string_set_length(&r->uri.authority, 0);
+    buffer_blank(&r->uri.authority);
 
     plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
     mbedtls_ssl_init(&hctx->ssl);
@@ -2491,18 +2501,18 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
       http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_M_SERIAL")),
       (char *)crt->serial.p+i, crt->serial.len-i);
 
-    if (!buffer_string_is_empty(hctx->conf.ssl_verifyclient_username)) {
+    if (hctx->conf.ssl_verifyclient_username) {
         /* pick one of the exported values as "REMOTE_USER", for example
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_UID"
          * or
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_emailAddress"
          */
         const buffer *varname = hctx->conf.ssl_verifyclient_username;
-        vb = http_header_env_get(r, CONST_BUF_LEN(varname));
+        vb = http_header_env_get(r, BUF_PTR_LEN(varname));
         if (vb) { /* same as mod_auth_api.c:http_auth_setenv() */
             http_header_env_set(r,
                                 CONST_STR_LEN("REMOTE_USER"),
-                                CONST_BUF_LEN(vb));
+                                BUF_PTR_LEN(vb));
             http_header_env_set(r,
                                 CONST_STR_LEN("AUTH_TYPE"),
                                 CONST_STR_LEN("SSL_CLIENT_VERIFY"));
@@ -3394,7 +3404,7 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
      *
      * XXX: not done: could make a list of ciphers with bitflag of attributes
      *      to make future combining easier */
-    if (!buffer_string_is_empty(cipherstring)) {
+    if (cipherstring && !buffer_is_blank(cipherstring)) {
         const buffer *b = cipherstring;
         const char *e = b->ptr;
 
@@ -3779,8 +3789,7 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
     if (-1 == nids) {
         /* Do not set a default if ssl.cipher-list was set (and we are
          * are processing ssl.openssl.ssl-conf-cmd, not ssl.cipher-list) */
-        if (cipherstring != s->ssl_cipher_list
-            && !buffer_string_is_empty(s->ssl_cipher_list))
+        if (cipherstring != s->ssl_cipher_list && s->ssl_cipher_list)
             return 1;
 
         /* obtain default ciphersuite list and filter out RC4, weak, and NULL */

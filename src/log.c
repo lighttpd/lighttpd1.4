@@ -106,7 +106,7 @@ static void log_write(const log_error_st *errh, buffer *b) {
 	case ERRORLOG_FILE:
 	case ERRORLOG_FD:
 		buffer_append_string_len(b, CONST_STR_LEN("\n"));
-		write_all(errh->errorlog_fd, CONST_BUF_LEN(b));
+		write_all(errh->errorlog_fd, BUF_PTR_LEN(b));
 		break;
 	case ERRORLOG_SYSLOG:
 		syslog(LOG_ERR, "%s", b->ptr);
@@ -136,7 +136,7 @@ log_buffer_vprintf (buffer * const b,
     /* NOTE: log_buffer_prepare() ensures 0 != b->used */
     /*assert(0 != b->used);*//*(only because code calcs below assume this)*/
     /*assert(0 != b->size);*//*(errh->b should not have 0 size here)*/
-    size_t blen = buffer_string_length(b);
+    size_t blen = buffer_clen(b);
     size_t bsp  = buffer_string_space(b)+1;
     char *s = b->ptr + blen;
     size_t n;
@@ -146,22 +146,22 @@ log_buffer_vprintf (buffer * const b,
     n = (size_t)vsnprintf(s, bsp, fmt, aptry);
     va_end(aptry);
 
-    if (n >= bsp) {
+    if (n < bsp)
+        buffer_truncate(b, blen+n); /*buffer_commit(b, n);*/
+    else {
         s = buffer_extend(b, n);
         vsnprintf(s, n+1, fmt, ap);
     }
 
     size_t i;
     for (i = 0; i < n && ' ' <= s[i] && s[i] <= '~'; ++i) ;/*(ASCII isprint())*/
-    if (i == n) {
-        buffer_string_set_length(b, blen + n);
-        return; /* common case; nothing to encode */
-    }
+    if (i == n) return; /* common case; nothing to encode */
 
     /* need to encode log line
      * copy original line fragment, append encoded line to buffer, free copy */
     char * const src = (char *)malloc(n);
     memcpy(src, s, n); /*(note: not '\0'-terminated)*/
+    buffer_truncate(b, blen);
     buffer_append_string_c_escaped(b, src, n);
     free(src);
 }
@@ -238,14 +238,14 @@ log_error_multiline_buffer (log_error_st * const restrict errh,
     log_buffer_vprintf(b, fmt, ap);
     va_end(ap);
 
-    const size_t prefix_len = buffer_string_length(b);
+    const size_t prefix_len = buffer_clen(b);
     const char * const end = multiline->ptr + multiline->used - 2;
     const char *pos = multiline->ptr-1, *current_line;
     do {
         pos = strchr(current_line = pos+1, '\n');
         if (!pos)
             pos = end;
-        buffer_string_set_length(b, prefix_len); /* truncate to prefix */
+        buffer_truncate(b, prefix_len);
         log_buffer_append_encoded(b, current_line, pos - current_line);
         log_write(errh, b);
     } while (pos < end);

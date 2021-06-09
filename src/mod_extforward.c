@@ -250,7 +250,7 @@ static void * mod_extforward_parse_forwarder(server *srv, const array *forwarder
         data_string * const ds = (data_string *)forwarder->data[j];
         char * const nm_slash = strchr(ds->key.ptr, '/');
         if (NULL == nm_slash) continue;
-        if (buffer_string_is_empty(&ds->value)) continue; /* ignored */
+        if (buffer_is_blank(&ds->value)) continue; /* ignored */
 
         char *err;
         const int nm_bits = strtol(nm_slash + 1, &err, 10);
@@ -368,7 +368,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
                     for (uint32_t j = 0; j < a->used; ++j) {
                         data_string * const ds = (data_string *)a->data[j];
                         ds->ext =
-                          http_header_hkey_get(CONST_BUF_LEN(&ds->value));
+                          http_header_hkey_get(BUF_PTR_LEN(&ds->value));
                     }
                 }
                 break;
@@ -407,7 +407,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
         array_insert_value(p->default_headers,CONST_STR_LEN("Forwarded-For"));
         for (uint32_t i = 0; i < p->default_headers->used; ++i) {
             data_string * const ds = (data_string *)p->default_headers->data[i];
-            ds->ext = http_header_hkey_get(CONST_BUF_LEN(&ds->value));
+            ds->ext = http_header_hkey_get(BUF_PTR_LEN(&ds->value));
         }
     }
 
@@ -459,7 +459,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
 static array *extract_forward_array(const buffer *pbuffer)
 {
 	array *result = array_init(8);
-	if (!buffer_string_is_empty(pbuffer)) {
+	if (!buffer_is_blank(pbuffer)) {
 		const char *base, *curr;
 		/* state variable, 0 means not in string, 1 means in string */
 		int in_str = 0;
@@ -495,7 +495,7 @@ static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
 {
     const data_string *ds =
       (const data_string *)array_get_element_klen(p->conf.forwarder, ip, iplen);
-    if (NULL != ds) return !buffer_string_is_empty(&ds->value);
+    if (NULL != ds) return !buffer_is_blank(&ds->value);
 
     if (p->conf.forward_masks_used) {
         const struct sock_addr_mask * const addrs = p->conf.forward_masks;
@@ -522,7 +522,7 @@ static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
 static int is_connection_trusted(connection * const con, plugin_data *p)
 {
     if (p->conf.forward_all) return (1 == p->conf.forward_all);
-    return is_proxy_trusted(p, CONST_BUF_LEN(con->dst_addr_buf));
+    return is_proxy_trusted(p, BUF_PTR_LEN(con->dst_addr_buf));
 }
 
 /*
@@ -535,7 +535,7 @@ static const char *last_not_in_array(array *a, plugin_data *p)
 
 	for (i = a->used - 1; i >= 0; i--) {
 		data_string *ds = (data_string *)a->data[i];
-		if (!is_proxy_trusted(p, CONST_BUF_LEN(&ds->value))) {
+		if (!is_proxy_trusted(p, BUF_PTR_LEN(&ds->value))) {
 			return ds->value.ptr;
 		}
 	}
@@ -553,7 +553,7 @@ static int mod_extforward_set_addr(request_st * const r, plugin_data *p, const c
 	    && r->http_version > HTTP_VERSION_1_1) { /*(e.g. HTTP_VERSION_2)*/
 		if (extforward_check_proxy) /* save old address */
 			http_header_env_set(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"),
-			                    CONST_BUF_LEN(hctx->saved_remote_addr_buf));
+			                    BUF_PTR_LEN(hctx->saved_remote_addr_buf));
 		return 1;
 	}
 
@@ -582,7 +582,7 @@ static int mod_extforward_set_addr(request_st * const r, plugin_data *p, const c
 	}
 	/* save old address */
 	if (extforward_check_proxy) {
-		http_header_env_set(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"), CONST_BUF_LEN(con->dst_addr_buf));
+		http_header_env_set(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"), BUF_PTR_LEN(con->dst_addr_buf));
 	}
 	hctx->request_count = con->request_count;
 	hctx->saved_remote_addr = con->dst_addr;
@@ -616,7 +616,7 @@ static void mod_extforward_set_proto(request_st * const r, const char * const pr
 		 *   (probably) or the original value.
 		 */
 		if (extforward_check_proxy) {
-			http_header_env_set(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_PROTO"), CONST_BUF_LEN(&r->uri.scheme));
+			http_header_env_set(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_PROTO"), BUF_PTR_LEN(&r->uri.scheme));
 		}
 		if (buffer_eq_icase_ss(proto, protolen, CONST_STR_LEN("https"))) {
 	                r->con->proto_default_port = 443; /* "https" */
@@ -645,7 +645,7 @@ static handler_t mod_extforward_X_Forwarded_For(request_st * const r, plugin_dat
 		 */
 		const buffer *x_forwarded_proto = http_header_request_get(r, HTTP_HEADER_X_FORWARDED_PROTO, CONST_STR_LEN("X-Forwarded-Proto"));
 		if (mod_extforward_set_addr(r, p, real_remote_addr) && NULL != x_forwarded_proto) {
-			mod_extforward_set_proto(r, CONST_BUF_LEN(x_forwarded_proto));
+			mod_extforward_set_proto(r, BUF_PTR_LEN(x_forwarded_proto));
 		}
 	}
 	array_free(forward_array);
@@ -685,7 +685,7 @@ static int find_next_semicolon_or_comma (const char * const s, int i) {
 static int buffer_backslash_unescape (buffer * const b) {
     /* (future: might move to buffer.c) */
     size_t j = 0;
-    size_t len = buffer_string_length(b);
+    size_t len = buffer_clen(b);
     char *p = memchr(b->ptr, '\\', len);
 
     if (NULL == p) return 1; /*(nothing to do)*/
@@ -697,7 +697,7 @@ static int buffer_backslash_unescape (buffer * const b) {
         }
         p[j++] = p[i];
     }
-    buffer_string_set_length(b, (size_t)(p+j - b->ptr));
+    buffer_truncate(b, (size_t)(p+j - b->ptr));
     return 1;
 }
 
@@ -728,7 +728,7 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
      */
     char * const s = forwarded->ptr;
     int i = 0, j = -1, v, vlen, k, klen;
-    int used = (int)buffer_string_length(forwarded);
+    int used = (int)buffer_clen(forwarded);
     int ofor = -1, oproto, ohost, oby, oremote_user;
     int offsets[256];/*(~50 params is more than reasonably expected to handle)*/
     while (i < used) {
@@ -932,11 +932,11 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
             j += 4; /*(k, klen, v, vlen come in sets of 4)*/
         }
         if (-1 != ohost) {
-            if (!buffer_string_is_empty(r->http_host)) {
+            if (r->http_host && !buffer_is_blank(r->http_host)) {
                 if (extforward_check_proxy)
                     http_header_env_set(r,
                       CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_HOST"),
-                      CONST_BUF_LEN(r->http_host));
+                      BUF_PTR_LEN(r->http_host));
             }
             else {
                 r->http_host =
@@ -1018,7 +1018,7 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
             if (-1 == offsets[j]) { ++j; continue; }
             if (3 == offsets[j+1]
                 && buffer_eq_icase_ssn(s+offsets[j], "for", 3)) {
-                if (!buffer_string_is_empty(xff))
+                if (!buffer_is_blank(xff))
                     buffer_append_string_len(xff, CONST_STR_LEN(", "));
                 /* quoted-string, IPv6 brackets, and :port already removed */
                 v = offsets[j+2];
@@ -1026,14 +1026,14 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
                 buffer_append_string_len(xff, s+v, vlen);
                 if (s[v-1] != '=') { /*(must have been quoted-string)*/
                     char *x =
-                      memchr(xff->ptr+buffer_string_length(xff)-vlen,'\\',vlen);
+                      memchr(xff->ptr + buffer_clen(xff) - vlen, '\\', vlen);
                     if (NULL != x) { /* backslash unescape in-place */
                         for (v = 0; x[v]; ++x) {
                             if (x[v] == '\\' && x[++v] == '\0')
                                 break; /*(invalid trailing backslash)*/
                             *x = x[v];
                         }
-                        buffer_string_set_length(xff, x - xff->ptr);
+                        buffer_truncate(xff, x - xff->ptr);
                     }
                 }
                 /* skip to next group; take first "for=..." in group
@@ -1073,7 +1073,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 					    CONST_STR_LEN("SUCCESS"));
 			http_header_env_set(r,
 					    CONST_STR_LEN("REMOTE_USER"),
-					    CONST_BUF_LEN(&ds->value));
+					    BUF_PTR_LEN(&ds->value));
 			http_header_env_set(r,
 					    CONST_STR_LEN("AUTH_TYPE"),
 					    CONST_STR_LEN("SSL_CLIENT_VERIFY"));
@@ -1104,7 +1104,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	for (uint32_t k = 0; k < p->conf.headers->used; ++k) {
 		const data_string * const ds = (data_string *)p->conf.headers->data[k];
 		const buffer * const hdr = &ds->value;
-		forwarded = http_header_request_get(r, ds->ext, CONST_BUF_LEN(hdr));
+		forwarded = http_header_request_get(r, ds->ext, BUF_PTR_LEN(hdr));
 		if (forwarded) {
 			is_forwarded_header = (ds->ext == HTTP_HEADER_FORWARDED);
 			break;
@@ -1146,8 +1146,7 @@ REQUEST_FUNC(mod_extforward_handle_request_env) {
         /* note: replaces values which may have been set by mod_openssl
          * (when mod_extforward is listed after mod_openssl in server.modules)*/
         data_string *ds = (data_string *)hctx->env->data[i];
-        http_header_env_set(r,
-                            CONST_BUF_LEN(&ds->key), CONST_BUF_LEN(&ds->value));
+        http_header_env_set(r, BUF_PTR_LEN(&ds->key), BUF_PTR_LEN(&ds->value));
     }
     return HANDLER_GO_ON;
 }

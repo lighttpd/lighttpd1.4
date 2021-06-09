@@ -478,7 +478,7 @@ static handler_t cgi_handle_fdevent(void *ctx, int revents) {
 			} while (rc == HANDLER_GO_ON);           /*(unless HANDLER_GO_ON)*/
 			r->conf.stream_response_body = flags;
 			return rc; /* HANDLER_FINISHED or HANDLER_COMEBACK or HANDLER_ERROR */
-		} else if (!buffer_string_is_empty(hctx->response)) {
+		} else if (!buffer_is_blank(hctx->response)) {
 			/* unfinished header package which is a body in reality */
 			r->resp_body_started = 1;
 			if (0 != http_chunk_append_buffer(r, hctx->response)) {
@@ -619,7 +619,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	int dfd = -1;
 	UNUSED(p);
 
-	if (!buffer_string_is_empty(cgi_handler)) {
+	if (!buffer_is_blank(cgi_handler)) {
 		if (NULL == stat_cache_path_stat(cgi_handler)) {
 			log_perror(r->conf.errh, __FILE__, __LINE__,
 			  "stat for cgi-handler %s", cgi_handler->ptr);
@@ -651,15 +651,15 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 
 		/* for valgrind */
 		if (p->env.ld_preload) {
-			cgi_env_add(env, CONST_STR_LEN("LD_PRELOAD"), CONST_BUF_LEN(p->env.ld_preload));
+			cgi_env_add(env, CONST_STR_LEN("LD_PRELOAD"), BUF_PTR_LEN(p->env.ld_preload));
 		}
 		if (p->env.ld_library_path) {
-			cgi_env_add(env, CONST_STR_LEN("LD_LIBRARY_PATH"), CONST_BUF_LEN(p->env.ld_library_path));
+			cgi_env_add(env, CONST_STR_LEN("LD_LIBRARY_PATH"), BUF_PTR_LEN(p->env.ld_library_path));
 		}
 	      #ifdef __CYGWIN__
 		/* CYGWIN needs SYSTEMROOT */
 		if (p->env.systemroot) {
-			cgi_env_add(env, CONST_STR_LEN("SYSTEMROOT"), CONST_BUF_LEN(p->env.systemroot));
+			cgi_env_add(env, CONST_STR_LEN("SYSTEMROOT"), BUF_PTR_LEN(p->env.systemroot));
 		}
 	      #endif
 
@@ -676,7 +676,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		/* set up args */
 		i = 0;
 
-		if (!buffer_string_is_empty(cgi_handler)) {
+		if (!buffer_is_blank(cgi_handler)) {
 			args[i++] = cgi_handler->ptr;
 		}
 		args[i++] = r->physical.path.ptr;
@@ -748,7 +748,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 	/* r->physical.path is non-empty for handle_subrequest_start */
-	/*if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;*/
+	/*if (buffer_is_blank(&r->physical.path)) return HANDLER_GO_ON;*/
 
 	mod_cgi_patch_config(r, p);
 	if (NULL == p->conf.cgi) return HANDLER_GO_ON;

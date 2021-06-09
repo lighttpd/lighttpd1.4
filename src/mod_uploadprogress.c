@@ -169,6 +169,22 @@ SETDEFAULTS_FUNC(mod_uploadprogress_set_defaults) {
     if (!config_plugin_values_init(srv, p, cpk, "mod_uploadprogress"))
         return HANDLER_ERROR;
 
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* upload-progress.progress-url */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
+
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
         const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
@@ -205,7 +221,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	request_st *post_r;
 	int pathinfo = 0;
 
-	if (buffer_string_is_empty(&r->uri.path)) return HANDLER_GO_ON;
+	if (buffer_is_blank(&r->uri.path)) return HANDLER_GO_ON;
 	switch(r->http_method) {
 	case HTTP_METHOD_GET:
 	case HTTP_METHOD_POST: break;
@@ -213,7 +229,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	}
 
 	mod_uploadprogress_patch_config(r, p);
-	if (buffer_string_is_empty(p->conf.progress_url)) return HANDLER_GO_ON;
+	if (!p->conf.progress_url) return HANDLER_GO_ON;
 
 	if (r->http_method == HTTP_METHOD_GET) {
 		if (!buffer_is_equal(&r->uri.path, p->conf.progress_url)) {
@@ -224,14 +240,14 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	const buffer *h = http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Progress-ID"));
 	if (NULL != h) {
 		id = h->ptr;
-	} else if (!buffer_string_is_empty(&r->uri.query)
+	} else if (!buffer_is_blank(&r->uri.query)
 		   && (id = strstr(r->uri.query.ptr, "X-Progress-ID="))) {
 		/* perhaps the POST request is using the query-string to pass the X-Progress-ID */
 		id += sizeof("X-Progress-ID=")-1;
 	} else {
 		/*(path-info is not known at this point in request)*/
 		id = r->uri.path.ptr;
-		len = buffer_string_length(&r->uri.path);
+		len = buffer_clen(&r->uri.path);
 		if (len >= 33 && id[len-33] == '/') {
 			id += len - 32;
 			pathinfo = 1;
@@ -296,7 +312,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		buffer_append_string_len(b, CONST_STR_LEN(
 			"</received>"
 			"</upload>"));
-		chunkqueue_append_mem(&r->write_queue, CONST_BUF_LEN(b));
+		chunkqueue_append_mem(&r->write_queue, BUF_PTR_LEN(b));
 		return HANDLER_FINISHED;
 	default:
 		break;
@@ -309,7 +325,7 @@ REQUESTDONE_FUNC(mod_uploadprogress_request_done) {
 	plugin_data *p = p_d;
 
 	if (r->http_method != HTTP_METHOD_POST) return HANDLER_GO_ON;
-	if (buffer_string_is_empty(&r->uri.path)) return HANDLER_GO_ON;
+	if (buffer_is_blank(&r->uri.path)) return HANDLER_GO_ON;
 
 	if (request_map_remove_request(&p->request_map, r)) {
 		/* removed */

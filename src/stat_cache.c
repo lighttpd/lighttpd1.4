@@ -343,7 +343,7 @@ static void fam_dir_invalidate_tree(splay_tree *t, const char *name, size_t len)
     force_assert(fam_dir);
   #endif
     const buffer * const b = &fam_dir->name;
-    size_t blen = buffer_string_length(b);
+    size_t blen = buffer_clen(b);
     if (blen > len && b->ptr[len] == '/' && 0 == memcmp(b->ptr, name, len))
         fam_dir_invalidate_node(fam_dir);
 }
@@ -496,17 +496,17 @@ static void stat_cache_handle_fdevent_fn(stat_cache_fam * const scf, fam_dir_ent
 
                 /* temporarily append filename to dir in fam_dir->name to
                  * construct path, then delete stat_cache entry (if any)*/
-                len = buffer_string_length(n);
+                len = buffer_clen(n);
                 buffer_append_path_len(n, fn, fnlen);
                 /* (alternatively, could chose to stat() and update)*/
-                stat_cache_invalidate_entry(CONST_BUF_LEN(n));
+                stat_cache_invalidate_entry(BUF_PTR_LEN(n));
 
                 fam_link = /*(check if might be symlink to monitored dir)*/
-                  stat_cache_sptree_find(&scf->dirs, CONST_BUF_LEN(n));
+                stat_cache_sptree_find(&scf->dirs, BUF_PTR_LEN(n));
                 if (fam_link && !buffer_is_equal(&fam_link->name, n))
                     fam_link = NULL;
 
-                buffer_string_set_length(n, len);
+                buffer_truncate(n, len);
 
                 if (fam_link) {
                     /* replaced symlink changes containing dir */
@@ -524,15 +524,15 @@ static void stat_cache_handle_fdevent_fn(stat_cache_fam * const scf, fam_dir_ent
 
         switch(code) {
         case FAMChanged:
-            stat_cache_invalidate_entry(CONST_BUF_LEN(&fam_dir->name));
+            stat_cache_invalidate_entry(BUF_PTR_LEN(&fam_dir->name));
             break;
         case FAMDeleted:
         case FAMMoved:
-            stat_cache_delete_tree(CONST_BUF_LEN(&fam_dir->name));
+            stat_cache_delete_tree(BUF_PTR_LEN(&fam_dir->name));
             fam_dir_invalidate_node(fam_dir);
             if (scf->dirs)
                 fam_dir_invalidate_tree(scf->dirs,
-                                        CONST_BUF_LEN(&fam_dir->name));
+                                        BUF_PTR_LEN(&fam_dir->name));
             fam_dir_periodic_cleanup();
             break;
         default:
@@ -898,7 +898,7 @@ void stat_cache_xattrname (const char *name) {
 }
 
 int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *errh) {
-    if (buffer_string_is_empty(stat_cache_string))
+    if (buffer_is_blank(stat_cache_string))
         sc.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("simple")))
         sc.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
@@ -943,7 +943,7 @@ const buffer * stat_cache_mimetype_by_ext(const array * const mimetypes, const c
         for (uint32_t i = 0; i < used; ++i) {
             /* suffix match */
             const data_string *ds = (data_string *)mimetypes->data[i];
-            const size_t klen = buffer_string_length(&ds->key);
+            const size_t klen = buffer_clen(&ds->key);
             if (klen <= nlen && buffer_eq_icase_ssn(end-klen, ds->key.ptr, klen))
                 return &ds->value;
         }
@@ -994,7 +994,7 @@ const buffer * stat_cache_content_type_get_by_xattr(stat_cache_entry *sce, const
 {
     /*(invalid caching if user config has multiple, different
      * r->conf.mimetypes for same extension (not expected))*/
-    if (!buffer_string_is_empty(&sce->content_type)) return &sce->content_type;
+    if (!buffer_is_blank(&sce->content_type)) return &sce->content_type;
 
     if (!S_ISREG(sce->st.st_mode)) return NULL;
 
@@ -1002,7 +1002,7 @@ const buffer * stat_cache_content_type_get_by_xattr(stat_cache_entry *sce, const
     const buffer *mtype =
       (use_xattr) ? stat_cache_mimetype_by_xattr(sce->name.ptr) : NULL;
     if (NULL == mtype)
-        mtype = stat_cache_mimetype_by_ext(mimetypes,CONST_BUF_LEN(&sce->name));
+        mtype = stat_cache_mimetype_by_ext(mimetypes, BUF_PTR_LEN(&sce->name));
     if (NULL != mtype) {
         if (sce->content_type.size) {
             buffer_copy_buffer(&sce->content_type, mtype);
@@ -1030,13 +1030,13 @@ const buffer * stat_cache_content_type_get_by_ext(stat_cache_entry *sce, const a
 {
     /*(invalid caching if user config has multiple, different
      * r->conf.mimetypes for same extension (not expected))*/
-    if (!buffer_string_is_empty(&sce->content_type)) return &sce->content_type;
+    if (!buffer_is_blank(&sce->content_type)) return &sce->content_type;
 
     if (!S_ISREG(sce->st.st_mode)) return NULL;
 
     /* cache mimetype */
     const buffer * const mtype =
-      stat_cache_mimetype_by_ext(mimetypes, CONST_BUF_LEN(&sce->name));
+      stat_cache_mimetype_by_ext(mimetypes, BUF_PTR_LEN(&sce->name));
     if (NULL != mtype) {
         /*(copy pointers from mimetypes array; avoid allocation)*/
         sce->content_type.ptr = mtype->ptr;
@@ -1054,7 +1054,7 @@ const buffer * stat_cache_content_type_get_by_ext(stat_cache_entry *sce, const a
 const buffer * stat_cache_etag_get(stat_cache_entry *sce, int flags) {
     /*(invalid caching if user cfg has multiple, different r->conf.etag_flags
      * for same path (not expected, since etag flags should be by filesystem))*/
-    if (!buffer_string_is_empty(&sce->etag)) return &sce->etag;
+    if (!buffer_is_blank(&sce->etag)) return &sce->etag;
 
     if (S_ISREG(sce->st.st_mode) || S_ISDIR(sce->st.st_mode)) {
         if (0 == flags) return NULL;
@@ -1095,7 +1095,9 @@ void stat_cache_update_entry(const char *name, uint32_t len,
     if (sce && buffer_is_equal_string(&sce->name, name, len)) {
         if (!stat_cache_stat_eq(&sce->st, st)) {
             /* etagb might be NULL to clear etag (invalidate) */
-            buffer_copy_string_len(&sce->etag, CONST_BUF_LEN(etagb));
+            buffer_clear(&sce->etag);
+            if (etagb)
+                buffer_copy_string_len(&sce->etag, BUF_PTR_LEN(etagb));
           #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
             buffer_clear(&sce->content_type);
           #endif
@@ -1152,8 +1154,8 @@ static void stat_cache_invalidate_dir_tree_walk(splay_tree *t,
     if (t->left)  stat_cache_invalidate_dir_tree_walk(t->left,  name, len);
     if (t->right) stat_cache_invalidate_dir_tree_walk(t->right, name, len);
 
-    buffer *b = &((stat_cache_entry *)t->data)->name;
-    size_t blen = buffer_string_length(b);
+    const buffer * const b = &((stat_cache_entry *)t->data)->name;
+    const size_t blen = buffer_clen(b);
     if (blen > len && b->ptr[len] == '/' && 0 == memcmp(b->ptr, name, len)) {
         stat_cache_entry *sce = t->data;
         sce->stat_ts = 0;
@@ -1185,8 +1187,8 @@ static void stat_cache_tag_dir_tree(splay_tree *t, const char *name, size_t len,
     if (t->right) stat_cache_tag_dir_tree(t->right, name, len, keys, ndx);
     if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
 
-    buffer *b = &((stat_cache_entry *)t->data)->name;
-    size_t blen = buffer_string_length(b);
+    const buffer * const b = &((stat_cache_entry *)t->data)->name;
+    const size_t blen = buffer_clen(b);
     if (blen > len && b->ptr[len] == '/' && 0 == memcmp(b->ptr, name, len))
         keys[(*ndx)++] = t->key;
 }
@@ -1251,7 +1253,7 @@ stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
 	/* consistency: ensure lookup name does not end in '/' unless root "/"
 	 * (but use full path given with stat(), even with trailing '/') */
 	int final_slash = 0;
-	size_t len = buffer_string_length(name);
+	size_t len = buffer_clen(name);
 	force_assert(0 != len);
 	if (name->ptr[len-1] == '/') { final_slash = 1; if (0 == --len) len = 1; }
 	/* Note: paths are expected to be normalized before calling stat_cache,
@@ -1362,7 +1364,7 @@ stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
 	if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
 		if (sce->fam_dir) --((fam_dir_entry *)sce->fam_dir)->refcnt;
 		sce->fam_dir =
-		  fam_dir_monitor(sc.scf, CONST_BUF_LEN(name), &st);
+		  fam_dir_monitor(sc.scf, name->ptr, len, &st);
 	      #if 0 /*(performed below)*/
 		if (NULL != sce->fam_dir) {
 			/*(may have been invalidated by dir change)*/
@@ -1412,7 +1414,7 @@ int stat_cache_path_contains_symlink(const buffer *name, log_error_st *errh) {
   #ifdef HAVE_LSTAT
     /* we assume "/" can not be symlink,
      * so skip the symlink stuff if path is "/" */
-    size_t len = buffer_string_length(name);
+    size_t len = buffer_clen(name);
     force_assert(0 != len);
     force_assert(name->ptr[0] == '/');
     if (1 == len) return 0;

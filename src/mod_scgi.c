@@ -208,15 +208,15 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 		size_t len;
 		scgi_env_add(b, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
 		buffer_clear(tb);
-		buffer_append_int(tb, buffer_string_length(b)-10);
+		buffer_append_int(tb, buffer_clen(b)-10);
 		buffer_append_string_len(tb, CONST_STR_LEN(":"));
-		len = buffer_string_length(tb);
+		len = buffer_clen(tb);
 		offset = 10 - len;
 		memcpy(b->ptr+offset, tb->ptr, len);
 		buffer_append_string_len(b, CONST_STR_LEN(","));
 	} else { /* LI_PROTOCOL_UWSGI */
 		/* http://uwsgi-docs.readthedocs.io/en/latest/Protocol.html */
-		size_t len = buffer_string_length(b)-10;
+		size_t len = buffer_clen(b)-10;
 		if (len > USHRT_MAX) {
 			r->http_status = 431; /* Request Header Fields Too Large */
 			r->handler_module = NULL;
@@ -231,7 +231,7 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 		b->ptr[offset+3] = 0;
 	}
 
-	hctx->wb_reqlen = buffer_string_length(b) - offset;
+	hctx->wb_reqlen = buffer_clen(b) - offset;
 	chunkqueue_prepend_buffer_commit(&hctx->wb);
 	chunkqueue_mark_written(&hctx->wb, offset);
 	hctx->wb.bytes_in  -= (off_t)offset;

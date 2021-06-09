@@ -149,7 +149,7 @@ static void mod_authn_ldap_patch_config(request_st * const r, plugin_data * cons
 /*(copied from mod_vhostdb_ldap.c)*/
 static void mod_authn_add_scheme (server *srv, buffer *host)
 {
-    if (!buffer_string_is_empty(host)) {
+    if (!buffer_is_blank(host)) {
         /* reformat hostname(s) as LDAP URIs (scheme://host:port) */
         static const char *schemes[] = {
           "ldap://", "ldaps://", "ldapi://", "cldap://"
@@ -164,7 +164,7 @@ static void mod_authn_add_scheme (server *srv, buffer *host)
             e = b;
             while (*e!=' '&&*e!='\t'&&*e!='\r'&&*e!='\n'&&*e!=','&&*e!='\0')
                 ++e;
-            if (!buffer_string_is_empty(tb))
+            if (!buffer_is_blank(tb))
                 buffer_append_string_len(tb, CONST_STR_LEN(","));
             for (j = 0; j < sizeof(schemes)/sizeof(char *); ++j) {
                 if (buffer_eq_icase_ssn(b, schemes[j], strlen(schemes[j]))) {
@@ -234,7 +234,7 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* auth.backend.ldap.hostname */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     buffer *b;
                     *(const buffer **)&b = cpv->v.b;
                     mod_authn_add_scheme(srv, b);
@@ -251,12 +251,12 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
                 break;
               case 1: /* auth.backend.ldap.base-dn */
                 cpv->vtype = T_CONFIG_LOCAL;
-                cpv->v.v = !buffer_string_is_empty(cpv->v.b)
+                cpv->v.v = !buffer_is_blank(cpv->v.b)
                   ? cpv->v.b->ptr
                   : NULL;
                 break;
               case 2: /* auth.backend.ldap.filter */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     buffer *b;
                     *(const buffer **)&b = cpv->v.b;
                     if (*b->ptr != ',') {
@@ -278,7 +278,7 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
                 cpv->vtype = T_CONFIG_LOCAL;
                 break;
               case 3: /* auth.backend.ldap.ca-file */
-                cafile = !buffer_string_is_empty(cpv->v.b)
+                cafile = !buffer_is_blank(cpv->v.b)
                   ? cpv->v.b->ptr
                   : NULL;
                 cpv->vtype = T_CONFIG_LOCAL;
@@ -288,7 +288,7 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
                 starttls = (int)cpv->v.u;
                 break;
               case 5: /* auth.backend.ldap.bind-dn */
-                binddn = !buffer_string_is_empty(cpv->v.b)
+                binddn = !buffer_is_blank(cpv->v.b)
                   ? cpv->v.b->ptr
                   : NULL;
                 cpv->vtype = T_CONFIG_LOCAL;
@@ -299,7 +299,10 @@ SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults) {
                 cpv->v.v = bindpw = cpv->v.b->ptr;
                 break;
               case 7: /* auth.backend.ldap.allow-empty-pw */
+                break;
               case 8: /* auth.backend.ldap.groupmember */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
                 break;
               case 9: /* auth.backend.ldap.timeout */
                 timeout = strtol(cpv->v.b->ptr, NULL, 10);
@@ -366,7 +369,7 @@ static void mod_authn_append_ldap_dn_escape(buffer * const filter, const buffer 
      * http://social.technet.microsoft.com/wiki/contents/articles/5312.active-directory-characters-to-escape.aspx
      */
     const char * const b = raw->ptr;
-    const size_t rlen = buffer_string_length(raw);
+    const size_t rlen = buffer_clen(raw);
     if (0 == rlen) return;
 
     if (b[0] == ' ') { /* || b[0] == '#' handled below for MS Active Directory*/
@@ -418,7 +421,7 @@ static void mod_authn_append_ldap_dn_escape(buffer * const filter, const buffer 
 
     if (rlen > 1 && b[rlen-1] == ' ') {
         /* escape trailing ' ' */
-        filter->ptr[buffer_string_length(filter)-1] = '\\';
+        filter->ptr[buffer_clen(filter)-1] = '\\';
         buffer_append_string_len(filter, CONST_STR_LEN(" "));
     }
 }
@@ -454,7 +457,7 @@ static void mod_authn_append_ldap_filter_escape(buffer * const filter, const buf
      * the UTF-8 encoding of the character to escape with a backslash character.
      */
     const char * const b = raw->ptr;
-    const size_t rlen = buffer_string_length(raw);
+    const size_t rlen = buffer_clen(raw);
     for (size_t i = 0; i < rlen; ++i) {
         size_t len = i;
         char *f;
@@ -673,6 +676,7 @@ static char * mod_authn_ldap_get_dn(log_error_st *errh, plugin_config_ldap *s, c
 }
 
 static handler_t mod_authn_ldap_memberOf(log_error_st *errh, plugin_config *s, const http_auth_require_t *require, const buffer *username, const char *userdn) {
+    if (!s->auth_ldap_groupmember) return HANDLER_ERROR;
     const array *groups = &require->group;
     buffer *filter = buffer_init();
     handler_t rc = HANDLER_ERROR;
@@ -739,7 +743,7 @@ static handler_t mod_authn_ldap_basic(request_st * const r, void *p_d, const htt
                 mod_authn_append_ldap_filter_escape(ldap_filter, username);
             }
             else {
-                d = template->ptr + buffer_string_length(template);
+                d = template->ptr + buffer_clen(template);
                 buffer_append_string_len(ldap_filter, b, (size_t)(d - b));
                 break;
             }

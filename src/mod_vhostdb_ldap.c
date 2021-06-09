@@ -58,7 +58,7 @@ static void mod_vhostdb_dbconf_free (void *vdata)
 /*(copied from mod_authn_ldap.c)*/
 static void mod_vhostdb_dbconf_add_scheme (server *srv, buffer *host)
 {
-    if (!buffer_string_is_empty(host)) {
+    if (!buffer_is_blank(host)) {
         /* reformat hostname(s) as LDAP URIs (scheme://host:port) */
         static const char *schemes[] = {
           "ldap://", "ldaps://", "ldapi://", "cldap://"
@@ -73,7 +73,7 @@ static void mod_vhostdb_dbconf_add_scheme (server *srv, buffer *host)
             e = b;
             while (*e!=' '&&*e!='\t'&&*e!='\r'&&*e!='\n'&&*e!=','&&*e!='\0')
                 ++e;
-            if (!buffer_string_is_empty(tb))
+            if (!buffer_is_blank(tb))
                 buffer_append_string_len(tb, CONST_STR_LEN(","));
             for (j = 0; j < sizeof(schemes)/sizeof(char *); ++j) {
                 if (buffer_eq_icase_ssn(b, schemes[j], strlen(schemes[j]))) {
@@ -102,18 +102,18 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
             if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("filter"))) {
                 filter = &ds->value;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("attr"))) {
-                if (!buffer_string_is_empty(&ds->value)) attr   = ds->value.ptr;
+                if (!buffer_is_blank(&ds->value)) attr   = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("host"))) {
                 mod_vhostdb_dbconf_add_scheme(srv, &ds->value);
                 host   = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("base-dn"))) {
-                if (!buffer_string_is_empty(&ds->value)) basedn = ds->value.ptr;
+                if (!buffer_is_blank(&ds->value)) basedn = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("bind-dn"))) {
-                if (!buffer_string_is_empty(&ds->value)) binddn = ds->value.ptr;
+                if (!buffer_is_blank(&ds->value)) binddn = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("bind-pw"))) {
                 bindpw = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("ca-file"))) {
-                if (!buffer_string_is_empty(&ds->value)) cafile = ds->value.ptr;
+                if (!buffer_is_blank(&ds->value)) cafile = ds->value.ptr;
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("starttls"))) {
                 starttls = config_plugin_value_tobool((data_unset *)ds, 1);
             } else if (buffer_is_equal_caseless_string(&ds->key, CONST_STR_LEN("timeout"))) {
@@ -135,7 +135,8 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
      * - starttls
      */
 
-    if (!buffer_string_is_empty(filter) && NULL != host && NULL != basedn) {
+    if (NULL != filter && !buffer_is_blank(filter)
+        && NULL != host && NULL != basedn) {
         vhostdb_config *dbconf;
 
         if (NULL == strchr(filter->ptr, '?')) {
@@ -217,7 +218,7 @@ static void mod_authn_append_ldap_filter_escape(buffer * const filter, const buf
      * the UTF-8 encoding of the character to escape with a backslash character.
      */
     const char * const b = raw->ptr;
-    const size_t rlen = buffer_string_length(raw);
+    const size_t rlen = buffer_clen(raw);
     for (size_t i = 0; i < rlen; ++i) {
         size_t len = i;
         char *f;
@@ -417,7 +418,7 @@ static int mod_vhostdb_ldap_query(request_st * const r, void *p_d, buffer *docro
             buffer_append_string_len(filter, b, (size_t)(d - b));
             mod_authn_append_ldap_filter_escape(filter, &r->uri.authority);
         } else {
-            d = template->ptr + buffer_string_length(template);
+            d = template->ptr + buffer_clen(template);
             buffer_append_string_len(filter, b, (size_t)(d - b));
             break;
         }

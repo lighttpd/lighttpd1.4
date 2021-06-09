@@ -216,27 +216,29 @@ SETDEFAULTS_FUNC(mod_mysql_vhost_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* mysql_vhost.sql */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
                 break;
               case 1: /* mysql_vhost.db */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     db = cpv;
                     dbname = cpv->v.b->ptr;
                 }
                 break;
               case 2: /* mysql_vhost.user */
-                if (!buffer_string_is_empty(cpv->v.b))
+                if (!buffer_is_blank(cpv->v.b))
                     user = cpv->v.b->ptr;
                 break;
               case 3: /* mysql_vhost.pass */
-                if (!buffer_string_is_empty(cpv->v.b))
+                if (!buffer_is_blank(cpv->v.b))
                     pass = cpv->v.b->ptr;
                 break;
               case 4: /* mysql_vhost.sock */
-                if (!buffer_string_is_empty(cpv->v.b))
+                if (!buffer_is_blank(cpv->v.b))
                     sock = cpv->v.b->ptr;
                 break;
               case 5: /* mysql_vhost.hostname */
-                if (!buffer_string_is_empty(cpv->v.b))
+                if (!buffer_is_blank(cpv->v.b))
                     host = cpv->v.b->ptr;
                 break;
               case 6: /* mysql_vhost.port */
@@ -275,12 +277,12 @@ REQUEST_FUNC(mod_mysql_vhost_handle_docroot) {
 	MYSQL_RES *result = NULL;
 
 	/* no host specified? */
-	if (buffer_string_is_empty(&r->uri.authority)) return HANDLER_GO_ON;
+	if (buffer_is_blank(&r->uri.authority)) return HANDLER_GO_ON;
 
 	mod_mysql_vhost_patch_config(r, p);
 
 	if (!p->conf.mysql) return HANDLER_GO_ON;
-	if (buffer_string_is_empty(p->conf.mysql_query)) return HANDLER_GO_ON;
+	if (!p->conf.mysql_query) return HANDLER_GO_ON;
 
 	/* sets up connection data if not done yet */
 	c = mod_mysql_vhost_connection_data(r, p_d);
@@ -296,19 +298,19 @@ REQUEST_FUNC(mod_mysql_vhost_handle_docroot) {
 			/* escape the uri.authority */
 			unsigned long to_len;
 			buffer_append_string_len(b, ptr, (size_t)(d - ptr));
-			buffer_string_prepare_append(b, buffer_string_length(&r->uri.authority) * 2);
+			buffer_string_prepare_append(b, buffer_clen(&r->uri.authority) * 2);
 			to_len = mysql_real_escape_string(p->conf.mysql,
-					b->ptr + buffer_string_length(b),
-					CONST_BUF_LEN(&r->uri.authority));
+					b->ptr + buffer_clen(b),
+					BUF_PTR_LEN(&r->uri.authority));
 			if ((unsigned long)~0 == to_len) goto ERR500;
 			buffer_commit(b, to_len);
 		} else {
-			d = p->conf.mysql_query->ptr + buffer_string_length(p->conf.mysql_query);
+			d = p->conf.mysql_query->ptr + buffer_clen(p->conf.mysql_query);
 			buffer_append_string_len(b, ptr, (size_t)(d - ptr));
 			break;
 		}
 	}
-	if (mysql_real_query(p->conf.mysql, CONST_BUF_LEN(b))) {
+	if (mysql_real_query(p->conf.mysql, BUF_PTR_LEN(b))) {
 		log_error(r->conf.errh, __FILE__, __LINE__, "%s", mysql_error(p->conf.mysql));
 		goto ERR500;
 	}
@@ -344,8 +346,10 @@ REQUEST_FUNC(mod_mysql_vhost_handle_docroot) {
 
 	/* fix virtual server and docroot */
 GO_ON:
-	r->server_name = &r->server_name_buf;
-	buffer_copy_buffer(&r->server_name_buf, c->server_name);
+	if (!buffer_is_blank(c->server_name)) {
+		r->server_name = &r->server_name_buf;
+		buffer_copy_buffer(&r->server_name_buf, c->server_name);
+	}
 	buffer_copy_buffer(&r->physical.doc_root, c->document_root);
 
 	return HANDLER_GO_ON;

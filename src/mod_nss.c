@@ -1115,7 +1115,7 @@ mod_nss_refresh_stapling_files (server *srv, const plugin_data *p, const time_t 
             if (cpv->k_id != 0) continue; /* k_id == 0 for ssl.pemfile */
             if (cpv->vtype != T_CONFIG_LOCAL) continue;
             plugin_cert *pc = cpv->v.v;
-            if (!buffer_string_is_empty(pc->ssl_stapling_file))
+            if (pc->ssl_stapling_file)
                 mod_nss_refresh_stapling_file(srv, pc, cur_ts);
         }
     }
@@ -1180,7 +1180,7 @@ network_nss_load_pemfile (server *srv, const buffer *pemfile, const buffer *priv
     pc->OCSPResponses.len   = 0;
     pc->must_staple = mod_nss_crt_must_staple(ssl_pemfile_x509);
 
-    if (!buffer_string_is_empty(pc->ssl_stapling_file)) {
+    if (pc->ssl_stapling_file) {
         if (mod_nss_reload_stapling_file(srv, pc, log_epoch_secs) < 0) {
             /* continue without OCSP response if there is an error */
         }
@@ -1203,25 +1203,25 @@ mod_nss_acme_tls_1 (handler_ctx *hctx)
     log_error_st * const errh = hctx->r->conf.errh;
 
     /* check if acme-tls/1 protocol is enabled (path to dir of cert(s) is set)*/
-    if (buffer_string_is_empty(hctx->conf.ssl_acme_tls_1))
+    if (!hctx->conf.ssl_acme_tls_1)
         return SECFailure; /*(should not happen)*/
 
     /* check if SNI set server name (required for acme-tls/1 protocol)
      * and perform simple path checks for no '/'
      * and no leading '.' (e.g. ignore "." or ".." or anything beginning '.') */
-    if (buffer_string_is_empty(name))   return SECFailure;
+    if (buffer_is_blank(name))          return SECFailure;
     if (NULL != strchr(name->ptr, '/')) return SECFailure;
     if (name->ptr[0] == '.')            return SECFailure;
   #if 0
     if (0 != http_request_host_policy(name, hctx->r->conf.http_parseopts, 443))
         return SECFailure;
   #endif
-    buffer_copy_path_len2(b, CONST_BUF_LEN(hctx->conf.ssl_acme_tls_1),
-                             CONST_BUF_LEN(name));
+    buffer_copy_path_len2(b, BUF_PTR_LEN(hctx->conf.ssl_acme_tls_1),
+                             BUF_PTR_LEN(name));
 
     /* cert and key load is similar to network_nss_load_pemfile() */
 
-    uint32_t len = buffer_string_length(b);
+    uint32_t len = buffer_clen(b);
     buffer_append_string_len(b, CONST_STR_LEN(".crt.pem"));
 
     CERTCertificateList *ssl_pemfile_chain;
@@ -1230,7 +1230,7 @@ mod_nss_acme_tls_1 (handler_ctx *hctx)
     if (NULL == ssl_pemfile_x509)
         return SECFailure;
 
-    buffer_string_set_length(b, len);
+    buffer_truncate(b, len);
     buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
 
     SECKEYPrivateKey *pkey =
@@ -1283,7 +1283,7 @@ mod_nss_alpn_h2_policy (handler_ctx * const hctx)
     UNUSED(hctx);
     /*(currently called after handshake has completed)*/
   #if 0 /* SNI omitted by client when connecting to IP instead of to name */
-    if (buffer_string_is_empty(&hctx->r->uri.authority)) {
+    if (buffer_is_blank(&hctx->r->uri.authority)) {
         log_error(hctx->errh, __FILE__, __LINE__,
           "SSL: error ALPN h2 without SNI");
         return -1;
@@ -1354,7 +1354,7 @@ mod_nss_alpn_select_cb (void *arg, PRFileDesc *ssl,
                     hctx->alpn = MOD_NSS_ALPN_HTTP10;
                     break;
                   case 3:
-                    if (buffer_string_is_empty(hctx->conf.ssl_acme_tls_1))
+                    if (!hctx->conf.ssl_acme_tls_1)
                         continue;
                     hctx->alpn = MOD_NSS_ALPN_ACME_TLS_1;
                     break;
@@ -1586,7 +1586,7 @@ mod_nss_ssl_conf_cmd (server *srv, plugin_config_socket *s)
     if (!mod_nss_ssl_conf_ciphersuites(srv, s, ciphersuites, cipherstring))
         rc = -1;
 
-    if (curves) {
+    if (curves && !buffer_is_blank(curves)) {
         if (!mod_nss_ssl_conf_curves(srv, s, curves))
             rc = -1;
     }
@@ -1618,12 +1618,12 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     if (NULL == model) return -1;
     s->model = model;
 
-    if (!buffer_string_is_empty(s->ssl_cipher_list)) {
+    if (s->ssl_cipher_list) {
         if (!mod_nss_ssl_conf_ciphersuites(srv,s,NULL,s->ssl_cipher_list))
             return -1;
     }
 
-    if (!buffer_string_is_empty(s->ssl_ec_curve)) {
+    if (s->ssl_ec_curve) {
         if (!mod_nss_ssl_conf_curves(srv, s, s->ssl_ec_curve))
             return -1;
     }
@@ -1786,7 +1786,8 @@ mod_nss_set_defaults_sockets(server *srv, plugin_data *p)
                 --count_not_engine;
                 break;
               case 1: /* ssl.cipher-list */
-                conf.ssl_cipher_list = cpv->v.b;
+                if (!buffer_is_blank(cpv->v.b))
+                    conf.ssl_cipher_list = cpv->v.b;
                 break;
               case 2: /* ssl.honor-cipher-order */
                 conf.ssl_honor_cipher_order = (0 != cpv->v.u);
@@ -1797,7 +1798,8 @@ mod_nss_set_defaults_sockets(server *srv, plugin_data *p)
                   "obsoleted by RFC7919");
                 break;
               case 4: /* ssl.ec-curve */
-                conf.ssl_ec_curve = cpv->v.b;
+                if (!buffer_is_blank(cpv->v.b))
+                    conf.ssl_ec_curve = cpv->v.b;
                 break;
               case 5: /* ssl.openssl.ssl-conf-cmd */
                 *(const array **)&conf.ssl_conf_cmd = cpv->v.a;
@@ -2010,16 +2012,16 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* ssl.pemfile */
-                if (!buffer_string_is_empty(cpv->v.b)) pemfile = cpv;
+                if (!buffer_is_blank(cpv->v.b)) pemfile = cpv;
                 break;
               case 1: /* ssl.privkey */
-                if (!buffer_string_is_empty(cpv->v.b)) privkey = cpv;
+                if (!buffer_is_blank(cpv->v.b)) privkey = cpv;
                 break;
               case 15:/* ssl.verifyclient.ca-file */
                 cpv->k_id = 2;
                 __attribute_fallthrough__
               case 2: /* ssl.ca-file */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     CERTCertList *d =
                       mod_nss_load_config_crts(cpv->v.b->ptr, srv->errh);
                     if (d != NULL) {
@@ -2037,7 +2039,7 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
                 cpv->k_id = 3;
                 __attribute_fallthrough__
               case 3: /* ssl.ca-dn-file */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     CERTCertList *d =
                       mod_nss_load_config_dncrts(cpv->v.b->ptr, srv->errh);
                     if (d != NULL) {
@@ -2055,7 +2057,7 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
                 cpv->k_id = 4;
                 __attribute_fallthrough__
               case 4: /* ssl.ca-crl-file */
-                if (!buffer_string_is_empty(cpv->v.b)) {
+                if (!buffer_is_blank(cpv->v.b)) {
                     CERTCertificateList *d =
                       mod_nss_load_config_crls(cpv->v.b->ptr, srv->errh);
                     if (d != NULL) {
@@ -2088,11 +2090,18 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
                 }
                 break;
               case 10:/* ssl.verifyclient.username */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
+                break;
               case 11:/* ssl.verifyclient.exportcert */
+                break;
               case 12:/* ssl.acme-tls-1 */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
                 break;
               case 13:/* ssl.stapling-file */
-                ssl_stapling_file = cpv->v.b;
+                if (!buffer_is_blank(cpv->v.b))
+                    ssl_stapling_file = cpv->v.b;
                 break;
               case 14:/* debug.log-ssl-noise */
              #if 0    /*(handled further above)*/
@@ -2339,7 +2348,7 @@ CONNECTION_FUNC(mod_nss_handle_con_accept)
     hctx->tmp_buf = con->srv->tmp_buf;
     hctx->errh = r->conf.errh;
     con->plugin_ctx[p->id] = hctx;
-    buffer_string_set_length(&r->uri.authority, 0);
+    buffer_blank(&r->uri.authority);
 
     plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
     hctx->ssl_session_ticket = s->ssl_session_ticket;
@@ -2604,18 +2613,18 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
       http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_M_SERIAL")),
       s+i, crt->serialNumber.len-i);
 
-    if (!buffer_string_is_empty(hctx->conf.ssl_verifyclient_username)) {
+    if (hctx->conf.ssl_verifyclient_username) {
         /* pick one of the exported values as "REMOTE_USER", for example
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_UID"
          * or
          *   ssl.verifyclient.username = "SSL_CLIENT_S_DN_emailAddress"
          */
         const buffer *varname = hctx->conf.ssl_verifyclient_username;
-        vb = http_header_env_get(r, CONST_BUF_LEN(varname));
+        vb = http_header_env_get(r, BUF_PTR_LEN(varname));
         if (vb) { /* same as mod_auth_api.c:http_auth_setenv() */
             http_header_env_set(r,
                                 CONST_STR_LEN("REMOTE_USER"),
-                                CONST_BUF_LEN(vb));
+                                BUF_PTR_LEN(vb));
             http_header_env_set(r,
                                 CONST_STR_LEN("AUTH_TYPE"),
                                 CONST_STR_LEN("SSL_CLIENT_VERIFY"));
@@ -3564,7 +3573,7 @@ mod_nss_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *cip
                   "Ciphersuite support not implemented for %s",
                   ciphersuites->ptr);
 
-    if (buffer_string_is_empty(cipherstring))
+    if (!cipherstring || buffer_is_blank(cipherstring))
         return 1; /* nothing to do */
 
     /*

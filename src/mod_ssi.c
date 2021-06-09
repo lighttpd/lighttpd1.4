@@ -142,6 +142,28 @@ SETDEFAULTS_FUNC(mod_ssi_set_defaults) {
     if (!config_plugin_values_init(srv, p, cpk, "mod_ssi"))
         return HANDLER_ERROR;
 
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* ssi.extension */
+                break;
+              case 1: /* ssi.content-type */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
+                break;
+              case 2: /* ssi.conditional-requests */
+              case 3: /* ssi.exec */
+              case 4: /* ssi.recursion-max */
+                break;
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
+
     p->defaults.ssi_exec = 1;
 
     /* initialize p->defaults from global config context */
@@ -187,12 +209,12 @@ static int build_ssi_cgi_vars(request_st * const r, handler_ctx * const p) {
 
 static void mod_ssi_timefmt (buffer * const b, buffer *timefmtb, time_t t, int localtm) {
     struct tm tm;
-    const char * const timefmt = buffer_string_is_empty(timefmtb)
+    const char * const timefmt = buffer_is_blank(timefmtb)
       ? "%a, %d %b %Y %T %Z"
       : timefmtb->ptr;
     buffer_append_strftime(b, timefmt,
                            localtm ? localtime_r(&t, &tm) : gmtime_r(&t, &tm));
-    if (buffer_string_is_empty(b))
+    if (buffer_is_blank(b))
         buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
 }
 
@@ -391,7 +413,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 #else
 			buffer_append_int(tb, st->st_uid);
 #endif
-			chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
+			chunkqueue_append_mem(cq, BUF_PTR_LEN(tb));
 			break;
 		}
 		case SSI_ECHO_LAST_MODIFIED:
@@ -404,40 +426,40 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 			                  ? st->st_mtime
 			                  : log_epoch_secs,
 			                (var != SSI_ECHO_DATE_GMT));
-			chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
+			chunkqueue_append_mem(cq, BUF_PTR_LEN(tb));
 			break;
 		case SSI_ECHO_DOCUMENT_NAME: {
 			char *sl;
 
 			if (NULL == (sl = strrchr(r->physical.path.ptr, '/'))) {
-				chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->physical.path));
+				chunkqueue_append_mem(cq, BUF_PTR_LEN(&r->physical.path));
 			} else {
 				chunkqueue_append_mem(cq, sl + 1, strlen(sl + 1));
 			}
 			break;
 		}
 		case SSI_ECHO_DOCUMENT_URI: {
-			chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->uri.path));
+			chunkqueue_append_mem(cq, BUF_PTR_LEN(&r->uri.path));
 			break;
 		}
 		case SSI_ECHO_SCRIPT_URI: {
-			if (!buffer_string_is_empty(&r->uri.scheme) && !buffer_string_is_empty(&r->uri.authority)) {
-				chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->uri.scheme));
+			if (!buffer_is_blank(&r->uri.scheme) && !buffer_is_blank(&r->uri.authority)) {
+				chunkqueue_append_mem(cq, BUF_PTR_LEN(&r->uri.scheme));
 				chunkqueue_append_mem(cq, CONST_STR_LEN("://"));
-				chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->uri.authority));
-				chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->target));
-				if (!buffer_string_is_empty(&r->uri.query)) {
+				chunkqueue_append_mem(cq, BUF_PTR_LEN(&r->uri.authority));
+				chunkqueue_append_mem(cq, BUF_PTR_LEN(&r->target));
+				if (!buffer_is_blank(&r->uri.query)) {
 					chunkqueue_append_mem(cq, CONST_STR_LEN("?"));
-					chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->uri.query));
+					chunkqueue_append_mem(cq, BUF_PTR_LEN(&r->uri.query));
 				}
 			}
 			break;
 		}
 		case SSI_ECHO_SCRIPT_URL: {
-			chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->target));
-			if (!buffer_string_is_empty(&r->uri.query)) {
+			chunkqueue_append_mem(cq, BUF_PTR_LEN(&r->target));
+			if (!buffer_is_blank(&r->uri.query)) {
 				chunkqueue_append_mem(cq, CONST_STR_LEN("?"));
-				chunkqueue_append_mem(cq, CONST_BUF_LEN(&r->uri.query));
+				chunkqueue_append_mem(cq, BUF_PTR_LEN(&r->uri.query));
 			}
 			break;
 		}
@@ -447,7 +469,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 
 			if (NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_cgi_env, var_val, strlen(var_val))) ||
 			    NULL != (ds = (const data_string *)array_get_element_klen(p->ssi_vars, var_val, strlen(var_val)))) {
-				chunkqueue_append_mem(cq, CONST_BUF_LEN(&ds->value));
+				chunkqueue_append_mem(cq, BUF_PTR_LEN(&ds->value));
 			} else {
 				chunkqueue_append_mem(cq, CONST_STR_LEN("(none)"));
 			}
@@ -506,7 +528,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 			buffer_copy_path_len2(p->stat_fn,
 			                      r->physical.path.ptr,
 			                      sl - r->physical.path.ptr + 1,
-			                      CONST_BUF_LEN(tb));
+			                      BUF_PTR_LEN(tb));
 		} else {
 			/* virtual */
 
@@ -555,8 +577,8 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 			if (r->conf.force_lowercase_filenames) {
 				buffer_to_lower(tb);
 			}
-			uint32_t remain = buffer_string_length(&r->uri.path) - i;
-			uint32_t plen = buffer_string_length(&r->physical.path);
+			uint32_t remain = buffer_clen(&r->uri.path) - i;
+			uint32_t plen = buffer_clen(&r->physical.path);
 			if (plen >= remain
 			    && (!r->conf.force_lowercase_filenames
 			        ?         0 == memcmp(r->physical.path.ptr+plen-remain, r->physical.rel_path.ptr+i, remain)
@@ -565,13 +587,13 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				                      r->physical.path.ptr,
 				                      plen-remain,
 				                      tb->ptr+i,
-				                      buffer_string_length(tb)-i);
+				                      buffer_clen(tb)-i);
 			} else {
 				/* unable to perform physical path remap here;
 				 * assume doc_root/rel_path and no remapping */
 				buffer_copy_path_len2(p->stat_fn,
-				                      CONST_BUF_LEN(&r->physical.doc_root),
-				                      CONST_BUF_LEN(tb));
+				                      BUF_PTR_LEN(&r->physical.doc_root),
+				                      BUF_PTR_LEN(tb));
 			}
 		}
 
@@ -600,12 +622,12 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				} else {
 					buffer_append_int(tb, stb.st_size);
 				}
-				chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
+				chunkqueue_append_mem(cq, BUF_PTR_LEN(tb));
 				break;
 			case SSI_FLASTMOD:
 				buffer_clear(tb);
 				mod_ssi_timefmt(tb, p->timefmt, t, 1);
-				chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
+				chunkqueue_append_mem(cq, BUF_PTR_LEN(tb));
 				break;
 			case SSI_INCLUDE:
 				/* Keep the newest mtime of included files */
@@ -730,18 +752,18 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 		for (i = 0; i < p->ssi_vars->used; i++) {
 			data_string *ds = (data_string *)p->ssi_vars->sorted[i];
 
-			buffer_append_str2(tb, CONST_BUF_LEN(&ds->key), CONST_STR_LEN("="));
-			buffer_append_string_encoded(tb, CONST_BUF_LEN(&ds->value), ENCODING_MINIMAL_XML);
+			buffer_append_str2(tb, BUF_PTR_LEN(&ds->key), CONST_STR_LEN("="));
+			buffer_append_string_encoded(tb, BUF_PTR_LEN(&ds->value), ENCODING_MINIMAL_XML);
 			buffer_append_string_len(tb, CONST_STR_LEN("\n"));
 		}
 		for (i = 0; i < p->ssi_cgi_env->used; i++) {
 			data_string *ds = (data_string *)p->ssi_cgi_env->sorted[i];
 
-			buffer_append_str2(tb, CONST_BUF_LEN(&ds->key), CONST_STR_LEN("="));
-			buffer_append_string_encoded(tb, CONST_BUF_LEN(&ds->value), ENCODING_MINIMAL_XML);
+			buffer_append_str2(tb, BUF_PTR_LEN(&ds->key), CONST_STR_LEN("="));
+			buffer_append_string_encoded(tb, BUF_PTR_LEN(&ds->value), ENCODING_MINIMAL_XML);
 			buffer_append_string_len(tb, CONST_STR_LEN("\n"));
 		}
-		chunkqueue_append_mem(cq, CONST_BUF_LEN(tb));
+		chunkqueue_append_mem(cq, BUF_PTR_LEN(tb));
 		break;
 	case SSI_EXEC: {
 		const char *cmd = NULL;
@@ -1203,10 +1225,10 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 	r->resp_body_started  = 1;
 	r->resp_body_finished = 1;
 
-	if (buffer_string_is_empty(p->conf.content_type)) {
+	if (!p->conf.content_type) {
 		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 	} else {
-		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_BUF_LEN(p->conf.content_type));
+		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), BUF_PTR_LEN(p->conf.content_type));
 	}
 
 	if (p->conf.conditional_requests) {
@@ -1217,7 +1239,7 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 			st.st_mtime = include_file_last_mtime;
 
 		http_etag_create(&r->physical.etag, &st, r->conf.etag_flags);
-		http_header_response_set(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), CONST_BUF_LEN(&r->physical.etag));
+		http_header_response_set(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), BUF_PTR_LEN(&r->physical.etag));
 
 		const buffer * const mtime = http_response_set_last_modified(r, st.st_mtime);
 		if (HANDLER_FINISHED == http_response_handle_cachable(r, mtime, st.st_mtime)) {
@@ -1239,7 +1261,7 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 	/* r->physical.path is non-empty for handle_subrequest_start */
-	/*if (buffer_string_is_empty(&r->physical.path)) return HANDLER_GO_ON;*/
+	/*if (buffer_is_blank(&r->physical.path)) return HANDLER_GO_ON;*/
 
 	mod_ssi_patch_config(r, p);
 	if (NULL == p->conf.ssi_extension) return HANDLER_GO_ON;

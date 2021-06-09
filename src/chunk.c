@@ -46,20 +46,6 @@ void chunkqueue_set_tempdirs_default_reset (void)
     chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
 }
 
-/* chunk buffer (c->mem) is never NULL; specialize routines from buffer.h */
-__attribute_pure__
-static inline size_t chunk_buffer_string_length(const buffer *b) {
-    return 0 != b->used ? b->used - 1 : 0;
-}
-__attribute_pure__
-static inline int chunk_buffer_string_is_empty(const buffer *b) {
-    return b->used < 2;
-}
-__attribute_pure__
-static inline size_t chunk_buffer_string_space(const buffer *b) {
-    return b->size ? b->size - (b->used | (0 == b->used)) : 0;
-}
-
 chunkqueue *chunkqueue_init(chunkqueue *cq) {
 	/* (if caller passes non-NULL cq, it must be 0-init) */
 	if (NULL == cq) {
@@ -101,7 +87,7 @@ static chunk *chunk_init(size_t sz) {
 static void chunk_reset_file_chunk(chunk *c) {
 	if (c->file.is_temp) {
 		c->file.is_temp = 0;
-		if (!chunk_buffer_string_is_empty(c->mem))
+		if (!buffer_is_blank(c->mem))
 			unlink(c->mem->ptr);
 	}
 	if (c->file.refchg) {
@@ -213,7 +199,7 @@ void chunk_buffer_release(buffer *b) {
 }
 
 size_t chunk_buffer_prepare_append(buffer * const b, size_t sz) {
-    if (sz > chunk_buffer_string_space(b)) {
+    if (sz > buffer_string_space(b)) {
         sz += b->used ? b->used : 1;
         buffer * const cb = chunk_buffer_acquire_sz(sz);
         /* swap buffer contents and copy original b->ptr into larger b->ptr */
@@ -225,7 +211,7 @@ size_t chunk_buffer_prepare_append(buffer * const b, size_t sz) {
             memcpy(b->ptr, tb.ptr, tb.used);
         chunk_buffer_release(cb);
     }
-    return chunk_buffer_string_space(b);
+    return buffer_string_space(b);
 }
 
 __attribute_returns_nonnull__
@@ -294,7 +280,7 @@ __attribute_pure__
 static off_t chunk_remaining_length(const chunk *c) {
     /* MEM_CHUNK or FILE_CHUNK */
     return (c->type == MEM_CHUNK
-              ? (off_t)chunk_buffer_string_length(c->mem)
+              ? (off_t)buffer_clen(c->mem)
               : c->file.length)
            - c->offset;
 }
@@ -340,13 +326,13 @@ static chunk * chunkqueue_append_mem_chunk(chunkqueue *cq, size_t sz) {
 
 __attribute_returns_nonnull__
 static chunk * chunkqueue_append_file_chunk(chunkqueue * const restrict cq, const buffer * const restrict fn, off_t offset, off_t len) {
-    chunk *c = chunk_acquire(buffer_string_length(fn)+1);
+    chunk *c = chunk_acquire((fn ? buffer_clen(fn) : 0)+1);
     chunkqueue_append_chunk(cq, c);
     c->type = FILE_CHUNK;
     c->offset = offset;
     c->file.length = offset + len;
     cq->bytes_in += len;
-    buffer_copy_buffer(c->mem, fn);
+    if (fn) buffer_copy_buffer(c->mem, fn);
     return c;
 }
 
@@ -377,7 +363,7 @@ static int chunkqueue_append_mem_extend_chunk(chunkqueue * const restrict cq, co
 	chunk *c = cq->last;
 	if (0 == len) return 1;
 	if (c != NULL && c->type == MEM_CHUNK
-	    && chunk_buffer_string_space(c->mem) >= len) {
+	    && buffer_string_space(c->mem) >= len) {
 		buffer_append_string_len(c->mem, mem, len);
 		cq->bytes_in += len;
 		return 1;
@@ -388,7 +374,7 @@ static int chunkqueue_append_mem_extend_chunk(chunkqueue * const restrict cq, co
 
 void chunkqueue_append_buffer(chunkqueue * const restrict cq, buffer * const restrict mem) {
 	chunk *c;
-	size_t len = buffer_string_length(mem);
+	size_t len = mem ? buffer_clen(mem) : 0;
 	if (len < 256 && chunkqueue_append_mem_extend_chunk(cq, mem->ptr, len)) return;
 
 	c = chunkqueue_append_mem_chunk(cq, chunk_buf_sz);
@@ -449,7 +435,7 @@ buffer * chunkqueue_prepend_buffer_open(chunkqueue *cq) {
 
 
 void chunkqueue_prepend_buffer_commit(chunkqueue *cq) {
-	cq->bytes_in += chunk_buffer_string_length(cq->first->mem);
+	cq->bytes_in += buffer_clen(cq->first->mem);
 }
 
 
@@ -465,7 +451,7 @@ buffer * chunkqueue_append_buffer_open(chunkqueue *cq) {
 
 
 void chunkqueue_append_buffer_commit(chunkqueue *cq) {
-	cq->bytes_in += chunk_buffer_string_length(cq->last->mem);
+	cq->bytes_in += buffer_clen(cq->last->mem);
 }
 
 
@@ -478,17 +464,17 @@ char * chunkqueue_get_memory(chunkqueue * const restrict cq, size_t * const rest
 	chunk *c = cq->last;
 	if (NULL != c && MEM_CHUNK == c->type) {
 		/* return pointer into existing buffer if large enough */
-		size_t avail = chunk_buffer_string_space(c->mem);
+		size_t avail = buffer_string_space(c->mem);
 		if (avail >= sz) {
 			*len = avail;
 			b = c->mem;
-			return b->ptr + chunk_buffer_string_length(b);
+			return b->ptr + buffer_clen(b);
 		}
 	}
 
 	/* allocate new chunk */
 	b = chunkqueue_append_buffer_open_sz(cq, sz);
-	*len = chunk_buffer_string_space(b);
+	*len = buffer_string_space(b);
 	return b->ptr;
 }
 
@@ -499,11 +485,11 @@ void chunkqueue_use_memory(chunkqueue * const restrict cq, chunk *ckpt, size_t l
         buffer_commit(b, len);
         cq->bytes_in += len;
         if (cq->last == ckpt || NULL == ckpt || MEM_CHUNK != ckpt->type
-            || len > chunk_buffer_string_space(ckpt->mem)) return;
+            || len > buffer_string_space(ckpt->mem)) return;
 
         buffer_append_string_buffer(ckpt->mem, b);
     }
-    else if (!chunk_buffer_string_is_empty(b)) { /*(cq->last == ckpt)*/
+    else if (!buffer_is_blank(b)) { /*(cq->last == ckpt)*/
         return; /* last chunk is not empty */
     }
 
@@ -616,7 +602,7 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue * const restrict cq, log
 		for (errno = EIO; cq->tempdir_idx < cq->tempdirs->used; ++cq->tempdir_idx) {
 			data_string *ds = (data_string *)cq->tempdirs->data[cq->tempdir_idx];
 			buffer_copy_path_len2(template,
-			                      CONST_BUF_LEN(&ds->value),
+			                      BUF_PTR_LEN(&ds->value),
 			                      CONST_STR_LEN("lighttpd-upload-XXXXXX"));
 			if (-1 != (fd = fdevent_mkstemp_append(template->ptr))) break;
 		}
@@ -877,10 +863,10 @@ void chunkqueue_compact_mem_offset(chunkqueue * const cq) {
     if (c->type != MEM_CHUNK) return; /*(should not happen)*/
 
     buffer * const restrict b = c->mem;
-    size_t len = chunk_buffer_string_length(b) - c->offset;
+    size_t len = buffer_clen(b) - c->offset;
     memmove(b->ptr, b->ptr+c->offset, len);
     c->offset = 0;
-    buffer_string_set_length(b, len);
+    buffer_truncate(b, len);
 }
 
 void chunkqueue_compact_mem(chunkqueue *cq, size_t clen) {
@@ -888,10 +874,10 @@ void chunkqueue_compact_mem(chunkqueue *cq, size_t clen) {
      * which is currently always true when reading input from client */
     chunk *c = cq->first;
     buffer *b = c->mem;
-    size_t len = chunk_buffer_string_length(b) - c->offset;
+    size_t len = buffer_clen(b) - c->offset;
     if (len >= clen) return;
     if (b->size > clen) {
-        if (chunk_buffer_string_space(b) < clen - len)
+        if (buffer_string_space(b) < clen - len)
             chunkqueue_compact_mem_offset(cq);
     }
     else {
@@ -904,7 +890,7 @@ void chunkqueue_compact_mem(chunkqueue *cq, size_t clen) {
     }
 
     for (chunk *fc = c; ((clen -= len) && (c = fc->next)); ) {
-        len = chunk_buffer_string_length(c->mem) - c->offset;
+        len = buffer_clen(c->mem) - c->offset;
         if (len > clen) {
             buffer_append_string_len(b, c->mem->ptr + c->offset, clen);
             c->offset += clen;
@@ -1076,7 +1062,7 @@ static ssize_t
 chunkqueue_write_chunk_mem (const int fd, const chunk * const restrict c)
 {
     const void * const buf = c->mem->ptr + c->offset;
-    const size_t count = chunk_buffer_string_length(c->mem) - (size_t)c->offset;
+    const size_t count = buffer_clen(c->mem) - (size_t)c->offset;
     ssize_t wr;
     do { wr = write(fd, buf, count); } while (-1 == wr && errno == EINTR);
     return wr;
@@ -1144,14 +1130,14 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
 
     buffer *b = c->mem;
     off_t len = filec->file.length - filec->offset;
-    if ((size_t)len > chunk_buffer_string_space(b)) {
+    if ((size_t)len > buffer_string_space(b)) {
         chunk * const nc = chunk_acquire((size_t)len+1);
         c->next = nc;
         nc->next = filec;
         b = nc->mem;
     }
 
-    char * const ptr = b->ptr + chunk_buffer_string_length(b);
+    char * const ptr = b->ptr + buffer_clen(b);
     ssize_t rd;
     offset = 0; /*(reuse offset var for offset into mem buffer)*/
     do {
@@ -1180,8 +1166,7 @@ chunkqueue_peek_data (chunkqueue * const cq,
         switch (c->type) {
           case MEM_CHUNK:
             {
-                uint32_t have =
-                  chunk_buffer_string_length(c->mem) - (uint32_t)c->offset;
+                uint32_t have = buffer_clen(c->mem) - (uint32_t)c->offset;
                 if (have > space)
                     have = space;
                 if (*dlen)
@@ -1277,7 +1262,7 @@ chunkqueue_read_squash (chunkqueue * const restrict cq, log_error_st * const res
         chunk_release(c);
         return NULL;
     }
-    buffer_string_set_length(c->mem, dlen);
+    buffer_truncate(c->mem, dlen);
 
     chunkqueue_release_chunks(cq);
     chunkqueue_append_chunk(cq, c);

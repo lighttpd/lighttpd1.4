@@ -20,7 +20,7 @@ static data_unset *data_config_copy(const data_unset *s) {
 	data_config *ds = data_config_init();
 
 	ds->comp = src->comp;
-	if (!buffer_is_empty(&src->key)) {
+	if (!buffer_is_unset(&src->key)) {
 		buffer_copy_buffer(&ds->key, &src->key);
 		ds->comp_key = ds->key.ptr + (src->comp_key - src->key.ptr);
 	}

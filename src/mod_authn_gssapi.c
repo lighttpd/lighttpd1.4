@@ -118,6 +118,24 @@ SETDEFAULTS_FUNC(mod_authn_gssapi_set_defaults) {
     if (!config_plugin_values_init(srv, p, cpk, "mod_authn_gssapi"))
         return HANDLER_ERROR;
 
+    /* process and validate config directives
+     * (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 0: /* auth.backend.gssapi.keytab */
+                if (buffer_is_blank(cpv->v.b))
+                    cpv->v.b = NULL;
+                break;
+              case 1: /* auth.backend.gssapi.principal */
+              case 2: /* auth.backend.gssapi.store-creds */
+              default:/* should not happen */
+                break;
+            }
+        }
+    }
+
     /* default enabled for backwards compatibility; disable in future */
     p->defaults.auth_gssapi_store_creds = 1;
 
@@ -187,7 +205,7 @@ static int mod_authn_gssapi_create_krb5_ccache(request_st * const r, plugin_data
 {
     buffer * const kccname = buffer_init_string("FILE:/tmp/krb5cc_gssapi_XXXXXX");
     char * const ccname    = kccname->ptr + sizeof("FILE:")-1;
-    const size_t ccnamelen = buffer_string_length(kccname)-(sizeof("FILE:")-1);
+    const size_t ccnamelen = buffer_clen(kccname)-(sizeof("FILE:")-1);
     /*(future: might consider using server.upload-dirs instead of /tmp)*/
   #ifdef __COVERITY__
     /* POSIX-2008 requires mkstemp create file with 0600 perms */
@@ -326,7 +344,7 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
 
     mod_authn_gssapi_patch_config(r, p);
 
-    {
+    if (p->conf.auth_gssapi_keytab) {
         /* ??? Should code = krb5_kt_resolve(kcontext, p->conf.auth_gssapi_keytab->ptr, &keytab);
          *     be used, instead of putenv() of KRB5_KTNAME=...?  See mod_authn_gssapi_basic() */
         /* ??? Should KRB5_KTNAME go into r->env instead ??? */
@@ -339,27 +357,28 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
         /* ktname.ptr becomes part of the environment, do not free */
     }
 
-    sprinc = buffer_init_buffer(p->conf.auth_gssapi_principal);
+    sprinc = buffer_init();
+    if (p->conf.auth_gssapi_principal)
+        buffer_copy_buffer(sprinc, p->conf.auth_gssapi_principal);
     if (strchr(sprinc->ptr, '/') == NULL) {
         /*(copy HTTP Host, omitting port if port is present)*/
         /* ??? Should r->server_name be used if http_host not present?
          * ??? What if r->server_name is not set?
          * ??? Will this work below if IPv6 provided in Host?  probably not */
-        if (!buffer_is_empty(r->http_host)) {
-            buffer_append_string_len(sprinc, CONST_STR_LEN("/"));
-            buffer_append_string_len(sprinc, r->http_host->ptr, strcspn(r->http_host->ptr, ":"));
-        }
+        if (r->http_host && !buffer_is_blank(r->http_host))
+            buffer_append_str2(sprinc, CONST_STR_LEN("/"),
+                                       r->http_host->ptr,
+                                       strcspn(r->http_host->ptr, ":"));
     }
-    if (strchr(sprinc->ptr, '@') == NULL) {
-        buffer_append_string_len(sprinc, CONST_STR_LEN("@"));
-        buffer_append_string_buffer(sprinc, require->realm);
-    }
+    if (strchr(sprinc->ptr, '@') == NULL)
+        buffer_append_str2(sprinc, CONST_STR_LEN("@"),
+                                   BUF_PTR_LEN(require->realm));
     /*#define GSS_C_NT_USER_NAME gss_nt_user_name*/
     /*#define GSS_C_NT_HOSTBASED_SERVICE gss_nt_service_name*/
     #define GSS_KRB5_NT_PRINCIPAL_NAME gss_nt_krb5_name
 
     token_s.value = sprinc->ptr;
-    token_s.length = buffer_string_length(sprinc);
+    token_s.length = buffer_clen(sprinc);
     st_major = gss_import_name(&st_minor, &token_s, (gss_OID) GSS_KRB5_NT_PRINCIPAL_NAME, &server_name);
     if (GSS_ERROR(st_major)) {
         mod_authn_gssapi_log_gss_error(r->conf.errh, __FILE__, __LINE__, "gss_import_name", NULL, st_major, st_minor);
@@ -381,7 +400,7 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
     }
 
     /* accept the user's context */
-    token_in.length = buffer_string_length(t_in);
+    token_in.length = buffer_clen(t_in);
     token_in.value = t_in->ptr;
     st_major = gss_accept_sec_context(&st_minor, &context, server_cred, &token_in, GSS_C_NO_CHANNEL_BINDINGS,
                                       &client_name, NULL, &token_out, &acc_flags, NULL, &client_cred);
@@ -638,7 +657,7 @@ static handler_t mod_authn_gssapi_basic(request_st * const r, void *p_d, const h
         return mod_authn_gssapi_send_401_unauthorized_basic(r); /*(well, should be 500)*/
     }
 
-    if (buffer_string_is_empty(p->conf.auth_gssapi_keytab)) {
+    if (!p->conf.auth_gssapi_keytab) {
         log_error(r->conf.errh, __FILE__, __LINE__, "auth.backend.gssapi.keytab not configured");
         return mod_authn_gssapi_send_401_unauthorized_basic(r); /*(well, should be 500)*/
     }
@@ -649,16 +668,18 @@ static handler_t mod_authn_gssapi_basic(request_st * const r, void *p_d, const h
         return mod_authn_gssapi_send_401_unauthorized_basic(r); /*(well, should be 500)*/
     }
 
-    sprinc = buffer_init_buffer(p->conf.auth_gssapi_principal);
+    sprinc = buffer_init();
+    if (p->conf.auth_gssapi_principal)
+        buffer_copy_buffer(sprinc, p->conf.auth_gssapi_principal);
     if (strchr(sprinc->ptr, '/') == NULL) {
         /*(copy HTTP Host, omitting port if port is present)*/
         /* ??? Should r->server_name be used if http_host not present?
          * ??? What if r->server_name is not set?
          * ??? Will this work below if IPv6 provided in Host?  probably not */
-        if (!buffer_is_empty(r->http_host)) {
-            buffer_append_string_len(sprinc, CONST_STR_LEN("/"));
-            buffer_append_string_len(sprinc, r->http_host->ptr, strcspn(r->http_host->ptr, ":"));
-        }
+        if (r->http_host && !buffer_is_blank(r->http_host))
+            buffer_append_str2(sprinc, CONST_STR_LEN("/"),
+                                       r->http_host->ptr,
+                                       strcspn(r->http_host->ptr, ":"));
     }
 
     /*(init c_creds before anything which might krb5_free_cred_contents())*/
@@ -673,8 +694,8 @@ static handler_t mod_authn_gssapi_basic(request_st * const r, void *p_d, const h
 
     if (strchr(username->ptr, '@') == NULL) {
         user_at_realm = buffer_init_buffer(username);
-        BUFFER_APPEND_STRING_CONST(user_at_realm, "@");
-        buffer_append_string_buffer(user_at_realm, require->realm);
+        buffer_append_str2(user_at_realm, CONST_STR_LEN("@"),
+                                          BUF_PTR_LEN(require->realm));
     }
 
     ret = krb5_parse_name(kcontext, (user_at_realm ? user_at_realm->ptr : username->ptr), &c_princ);

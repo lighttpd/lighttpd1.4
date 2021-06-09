@@ -104,8 +104,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
      * - encoding, default: database default
      */
 
-    if (!buffer_string_is_empty(sqlquery)
-        && !buffer_is_empty(dbname) && !buffer_is_empty(dbtype)) {
+    if (sqlquery && !buffer_is_blank(sqlquery) && dbname && dbtype) {
         /* create/initialise database */
         vhostdb_config *dbconf;
         dbi_inst dbinst = NULL;
@@ -129,7 +128,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
         for (size_t j = 0; j < opts->used; ++j) {
             data_unset *du = opts->data[j];
             const buffer *opt = &du->key;
-            if (!buffer_string_is_empty(opt)) {
+            if (!buffer_is_blank(opt)) {
                 if (du->type == TYPE_INTEGER) {
                     data_integer *di = (data_integer *)du;
                     dbi_conn_set_option_numeric(dbconn, opt->ptr, di->value);
@@ -186,12 +185,13 @@ static int mod_vhostdb_dbi_query(request_st * const r, void *p_d, buffer *docroo
         if (NULL != (d = strchr(b, '?'))) {
             /* escape the uri.authority */
             char *esc = NULL;
-            size_t len = dbi_conn_escape_string_copy(dbconf->dbconn, r->uri.authority.ptr, &esc);
+            size_t len = dbi_conn_escape_string_copy(dbconf->dbconn,
+                                                     r->uri.authority.ptr,&esc);
             buffer_append_str2(sqlquery, b, (size_t)(d - b), esc, len);
             free(esc);
             if (0 == len) return -1;
         } else {
-            d = dbconf->sqlquery->ptr + buffer_string_length(dbconf->sqlquery);
+            d = dbconf->sqlquery->ptr + buffer_clen(dbconf->sqlquery);
             buffer_append_string_len(sqlquery, b, (size_t)(d - b));
             break;
         }

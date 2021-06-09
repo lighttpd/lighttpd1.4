@@ -88,7 +88,7 @@ FREE_FUNC(mod_trigger_b4_dl_free) {
 }
 
 static int mod_trigger_b4_dl_init_gdbm(server * const srv, config_plugin_value_t * const cpv) {
-    if (buffer_string_is_empty(cpv->v.b)) {
+    if (buffer_is_blank(cpv->v.b)) {
         cpv->v.v = NULL;
         return 1;
     }
@@ -132,10 +132,10 @@ static int mod_trigger_b4_dl_init_memcached(server * const srv, config_plugin_va
     for (uint32_t k = 0; k < mc_hosts->used; ++k) {
         const data_string * const ds = (const data_string *)mc_hosts->data[k];
         buffer_append_str2(opts, CONST_STR_LEN(" --SERVER="),
-                                 CONST_BUF_LEN(&ds->value));
+                                 BUF_PTR_LEN(&ds->value));
     }
 
-    cpv->v.v = memcached(opts->ptr+1, buffer_string_length(opts)-1);
+    cpv->v.v = memcached(opts->ptr+1, buffer_clen(opts)-1);
 
     if (cpv->v.v) {
         cpv->vtype = T_CONFIG_LOCAL;
@@ -159,7 +159,7 @@ static int mod_trigger_b4_dl_init_memcached(server * const srv, config_plugin_va
 
 static int mod_trigger_b4_dl_init_regex(server * const srv, config_plugin_value_t * const cpv, const char * const str) {
     const buffer * const b = cpv->v.b;
-    if (buffer_string_is_empty(b)) {
+    if (buffer_is_blank(b)) {
         cpv->v.v = NULL;
         return 1;
     }
@@ -346,7 +346,7 @@ static void mod_trigger_b4_dl_memcached_key(buffer * const b, const plugin_data 
     buffer_append_string_buffer(b, remote_ip);
 
     /* memcached can't handle spaces */
-    for (size_t i = 0, len = buffer_string_length(b); i < len; ++i) {
+    for (size_t i = 0, len = buffer_clen(b); i < len; ++i) {
         if (b->ptr[i] == ' ') b->ptr[i] = '-';
     }
 }
@@ -356,7 +356,7 @@ static handler_t mod_trigger_b4_dl_deny(request_st * const r, const plugin_data 
     if (p->conf.deny_url) {
         http_header_response_set(r, HTTP_HEADER_LOCATION,
                                  CONST_STR_LEN("Location"),
-                                 CONST_BUF_LEN(p->conf.deny_url));
+                                 BUF_PTR_LEN(p->conf.deny_url));
         r->http_status = 307;
     }
     else {
@@ -414,7 +414,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			datum key, val;
 
 			*(const char **)&key.dptr = remote_ip->ptr;
-			key.dsize = buffer_string_length(remote_ip);
+			key.dsize = buffer_clen(remote_ip);
 
 			val.dptr = (char *)&cur_ts;
 			val.dsize = sizeof(cur_ts);
@@ -434,7 +434,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			}
 
 			if (MEMCACHED_SUCCESS != memcached_set(p->conf.memc,
-					CONST_BUF_LEN(b),
+					BUF_PTR_LEN(b),
 					(const char *)&cur_ts, sizeof(cur_ts),
 					p->conf.trigger_timeout, 0)) {
 				log_error(r->conf.errh, __FILE__, __LINE__, "insert failed");
@@ -452,7 +452,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			time_t last_hit;
 
 			*(const char **)&key.dptr = remote_ip->ptr;
-			key.dsize = buffer_string_length(remote_ip);
+			key.dsize = buffer_clen(remote_ip);
 
 			val = gdbm_fetch(p->conf.db, key);
 
@@ -500,13 +500,13 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 			 * and the timestamp is updated
 			 *
 			 */
-			if (MEMCACHED_SUCCESS != memcached_exist(p->conf.memc, CONST_BUF_LEN(b))) {
+			if (MEMCACHED_SUCCESS != memcached_exist(p->conf.memc, BUF_PTR_LEN(b))) {
 				return mod_trigger_b4_dl_deny(r, p);
 			}
 
 			/* set a new timeout */
 			if (MEMCACHED_SUCCESS != memcached_set(p->conf.memc,
-					CONST_BUF_LEN(b),
+					BUF_PTR_LEN(b),
 					(const char *)&cur_ts, sizeof(cur_ts),
 					p->conf.trigger_timeout, 0)) {
 				log_error(r->conf.errh, __FILE__, __LINE__, "insert failed");

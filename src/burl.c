@@ -58,7 +58,7 @@ static int burl_is_unreserved (const int c)
 static int burl_normalize_basic_unreserved_fix (buffer *b, buffer *t, int i, int qs)
 {
     int j = i;
-    const int used = (int)buffer_string_length(b);
+    const int used = (int)buffer_clen(b);
     const unsigned char * const s = (unsigned char *)b->ptr;
     unsigned char * const p =
       (unsigned char *)buffer_string_prepare_copy(t,i+(used-i)*3+1);
@@ -98,7 +98,7 @@ static int burl_normalize_basic_unreserved_fix (buffer *b, buffer *t, int i, int
 static int burl_normalize_basic_unreserved (buffer *b, buffer *t)
 {
     const unsigned char * const s = (unsigned char *)b->ptr;
-    const int used = (int)buffer_string_length(b);
+    const int used = (int)buffer_clen(b);
     unsigned int n1, n2, x;
     int qs = -1;
 
@@ -114,7 +114,7 @@ static int burl_normalize_basic_unreserved (buffer *b, buffer *t)
             i+=2;
         }
         else if (s[i] == '#') { /* ignore fragment */
-            buffer_string_set_length(b, (size_t)i);
+            buffer_truncate(b, (size_t)i);
             break;
         }
         else {
@@ -130,7 +130,7 @@ static int burl_normalize_basic_unreserved (buffer *b, buffer *t)
 static int burl_normalize_basic_required_fix (buffer *b, buffer *t, int i, int qs)
 {
     int j = i;
-    const int used = (int)buffer_string_length(b);
+    const int used = (int)buffer_clen(b);
     const unsigned char * const s = (unsigned char *)b->ptr;
     unsigned char * const p =
       (unsigned char *)buffer_string_prepare_copy(t,i+(used-i)*3+1);
@@ -173,7 +173,7 @@ static int burl_normalize_basic_required_fix (buffer *b, buffer *t, int i, int q
 static int burl_normalize_basic_required (buffer *b, buffer *t)
 {
     const unsigned char * const s = (unsigned char *)b->ptr;
-    const int used = (int)buffer_string_length(b);
+    const int used = (int)buffer_clen(b);
     unsigned int n1, n2, x;
     int qs = -1;
 
@@ -192,7 +192,7 @@ static int burl_normalize_basic_required (buffer *b, buffer *t)
             i+=2;
         }
         else if (s[i] == '#') { /* ignore fragment */
-            buffer_string_set_length(b, (size_t)i);
+            buffer_truncate(b, (size_t)i);
             break;
         }
         else {
@@ -208,7 +208,7 @@ static int burl_normalize_basic_required (buffer *b, buffer *t)
 static int burl_contains_ctrls (const buffer *b)
 {
     const char * const s = b->ptr;
-    const int used = (int)buffer_string_length(b);
+    const int used = (int)buffer_clen(b);
     for (int i = 0; i < used; ++i) {
         if (s[i] == '%' && (s[i+1] < '2' || (s[i+1] == '7' && s[i+2] == 'F')))
             return 1;
@@ -220,7 +220,7 @@ static int burl_contains_ctrls (const buffer *b)
 static void burl_normalize_qs20_to_plus_fix (buffer *b, int i)
 {
     char * const s = b->ptr;
-    const int used = (int)buffer_string_length(b);
+    const int used = (int)buffer_clen(b);
     int j = i;
     for (; i < used; ++i, ++j) {
         s[j] = s[i];
@@ -229,14 +229,14 @@ static void burl_normalize_qs20_to_plus_fix (buffer *b, int i)
             i+=2;
         }
     }
-    buffer_string_set_length(b, j);
+    buffer_truncate(b, j);
 }
 
 
 static void burl_normalize_qs20_to_plus (buffer *b, int qs)
 {
     const char * const s = b->ptr;
-    const int used = qs < 0 ? 0 : (int)buffer_string_length(b);
+    const int used = qs < 0 ? 0 : (int)buffer_clen(b);
     int i;
     if (qs < 0) return;
     for (i = qs+1; i < used; ++i) {
@@ -249,7 +249,7 @@ static void burl_normalize_qs20_to_plus (buffer *b, int qs)
 static int burl_normalize_2F_to_slash_fix (buffer *b, int qs, int i)
 {
     char * const s = b->ptr;
-    const int blen = (int)buffer_string_length(b);
+    const int blen = (int)buffer_clen(b);
     const int used = qs < 0 ? blen : qs;
     int j = i;
     for (; i < used; ++i, ++j) {
@@ -265,7 +265,7 @@ static int burl_normalize_2F_to_slash_fix (buffer *b, int qs, int i)
         qs = j;
         j += qslen;
     }
-    buffer_string_set_length(b, j);
+    buffer_truncate(b, j);
     return qs;
 }
 
@@ -274,7 +274,7 @@ static int burl_normalize_2F_to_slash (buffer *b, int qs, int flags)
 {
     /*("%2F" must already have been uppercased during normalization)*/
     const char * const s = b->ptr;
-    const int used = qs < 0 ? (int)buffer_string_length(b) : qs;
+    const int used = qs < 0 ? (int)buffer_clen(b) : qs;
     for (int i = 0; i < used; ++i) {
         if (s[i] == '%' && s[i+1] == '2' && s[i+2] == 'F') {
             return (flags & HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE)
@@ -289,7 +289,7 @@ static int burl_normalize_2F_to_slash (buffer *b, int qs, int flags)
 static int burl_normalize_path (buffer *b, buffer *t, int qs, int flags)
 {
     const unsigned char * const s = (unsigned char *)b->ptr;
-    const int used = (int)buffer_string_length(b);
+    const int used = (int)buffer_clen(b);
     int path_simplify = 0;
     for (int i = 0, len = qs < 0 ? used : qs; i < len; ++i) {
         if (s[i] == '.' && (s[i+1] != '.' || ++i)
@@ -308,14 +308,14 @@ static int burl_normalize_path (buffer *b, buffer *t, int qs, int flags)
         if (flags & HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT) return -2;
         if (qs >= 0) {
             buffer_copy_string_len(t, b->ptr+qs, used - qs);
-            buffer_string_set_length(b, qs);
+            buffer_truncate(b, qs);
         }
 
         buffer_path_simplify(b);
 
         if (qs >= 0) {
-            qs = (int)buffer_string_length(b);
-            buffer_append_string_len(b, CONST_BUF_LEN(t));
+            qs = (int)buffer_clen(b);
+            buffer_append_string_len(b, BUF_PTR_LEN(t));
         }
     }
 
@@ -490,7 +490,7 @@ void burl_append (buffer * const b, const char * const str, const size_t len, co
         return;
     }
 
-    if (flags & (BURL_TOUPPER|BURL_TOLOWER)) off = buffer_string_length(b);
+    if (flags & (BURL_TOUPPER|BURL_TOLOWER)) off = buffer_clen(b);
 
     if (flags & BURL_ENCODE_NONE) {
         buffer_append_string_len(b, str, len);

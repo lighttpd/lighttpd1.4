@@ -110,7 +110,7 @@ static void pcre_keyvalue_buffer_append_match(buffer *b, const char **list, int 
     }
 }
 
-static void pcre_keyvalue_buffer_append_ctxmatch(buffer *b, pcre_keyvalue_ctx *ctx, unsigned int num, int flags) {
+static void pcre_keyvalue_buffer_append_ctxmatch(buffer *b, const pcre_keyvalue_ctx *ctx, unsigned int num, int flags) {
     const struct cond_match_t * const cache = ctx->cache;
     if (!cache) return; /* no enclosing match context */
     if ((int)num < ctx->cond_match_count) {
@@ -120,7 +120,7 @@ static void pcre_keyvalue_buffer_append_ctxmatch(buffer *b, pcre_keyvalue_ctx *c
     }
 }
 
-static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const char **list, int n, pcre_keyvalue_ctx *ctx) {
+static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const char **list, int n, const pcre_keyvalue_ctx *ctx) {
     const unsigned char *p = (unsigned char *)pattern+2;/* +2 past ${} or %{} */
     int flags = 0;
     while (!light_isdigit(*p) && *p != '}' && *p != '\0') {
@@ -183,29 +183,33 @@ static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const 
             }
         }
         else if (p[0] == 'u' && p[1] == 'r' && p[2] == 'l' && p[3] == '.') {
+            const struct burl_parts_t * const burl = ctx->burl;
             p+=4;
             if (0 == strncmp((const char *)p, "scheme}", 7)) {
-                burl_append(b, CONST_BUF_LEN(ctx->burl->scheme), flags);
+                if (burl->scheme)
+                    burl_append(b, BUF_PTR_LEN(burl->scheme), flags);
                 p+=6;
             }
             else if (0 == strncmp((const char *)p, "authority}", 10)) {
-                burl_append(b, CONST_BUF_LEN(ctx->burl->authority), flags);
+                if (burl->authority)
+                    burl_append(b, BUF_PTR_LEN(burl->authority), flags);
                 p+=9;
             }
             else if (0 == strncmp((const char *)p, "port}", 5)) {
-                buffer_append_int(b, (int)ctx->burl->port);
+                buffer_append_int(b, (int)burl->port);
                 p+=4;
             }
             else if (0 == strncmp((const char *)p, "path}", 5)) {
-                const buffer * const target = ctx->burl->path;
-                const uint32_t len = buffer_string_length(target);
+                const buffer * const target = burl->path;
+                const uint32_t len = buffer_clen(target);
                 const char * const ptr = target->ptr;
                 const char * const qmark = memchr(ptr, '?', len);
                 burl_append(b, ptr, qmark ? (uint32_t)(qmark-ptr) : len, flags);
                 p+=4;
             }
             else if (0 == strncmp((const char *)p, "query}", 6)) {
-                burl_append(b, CONST_BUF_LEN(ctx->burl->query), flags);
+                if (burl->query)
+                    burl_append(b, BUF_PTR_LEN(burl->query), flags);
                 p+=5;
             }
             else { /* skip unrecognized url.* */
@@ -216,15 +220,15 @@ static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const 
         }
         else if (p[0] == 'q' && p[1] == 's' && p[2] == 'a' && p[3] == '}') {
             const buffer *qs = ctx->burl->query;
-            if (!buffer_is_empty(qs)) {
+            if (qs && !buffer_is_unset(qs)) {
                 if (NULL != strchr(b->ptr, '?')) {
-                    if (!buffer_string_is_empty(qs))
+                    if (!buffer_is_blank(qs))
                         buffer_append_string_len(b, CONST_STR_LEN("&"));
                 }
                 else {
                     buffer_append_string_len(b, CONST_STR_LEN("?"));
                 }
-                burl_append(b, CONST_BUF_LEN(qs), flags);
+                burl_append(b, BUF_PTR_LEN(qs), flags);
             }
             p+=3;
             break;
@@ -258,9 +262,9 @@ static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const 
     return (int)(p + 1 - (unsigned char *)pattern - 2);
 }
 
-static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const char **list, int n, pcre_keyvalue_ctx *ctx) {
+static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const char **list, int n, const pcre_keyvalue_ctx *ctx) {
 	const char *pattern = patternb->ptr;
-	const size_t pattern_len = buffer_string_length(patternb);
+	const size_t pattern_len = buffer_clen(patternb);
 	size_t start = 0;
 
 	/* search for $... or %... pattern substitutions */
@@ -300,14 +304,14 @@ handler_t pcre_keyvalue_buffer_process(const pcre_keyvalue_buffer *kvb, pcre_key
         #define N 20
         int ovec[N * 3];
         #undef N
-        int n = pcre_exec(kv->key, kv->key_extra, CONST_BUF_LEN(input),
+        int n = pcre_exec(kv->key, kv->key_extra, BUF_PTR_LEN(input),
                           0, 0, ovec, sizeof(ovec)/sizeof(int));
         if (n < 0) {
             if (n != PCRE_ERROR_NOMATCH) {
                 return HANDLER_ERROR;
             }
         }
-        else if (buffer_string_is_empty(&kv->value)) {
+        else if (buffer_is_blank(&kv->value)) {
             /* short-circuit if blank replacement pattern
              * (do not attempt to match against remaining kvb rules) */
             ctx->m = i;
@@ -345,7 +349,7 @@ handler_t pcre_keyvalue_buffer_process(const pcre_keyvalue_buffer *kvb, pcre_key
 static void pcre_keyvalue_burl_percent_toupper (buffer *b)
 {
     const unsigned char * const s = (unsigned char *)b->ptr;
-    const int used = (int)buffer_string_length(b);
+    const int used = (int)buffer_clen(b);
     unsigned int n1, n2;
     for (int i = 0; i < used; ++i) {
         if (s[i]=='%' && li_cton(s[i+1],n1) && li_cton(s[i+2],n2)) {
@@ -359,7 +363,7 @@ static void pcre_keyvalue_burl_percent_toupper (buffer *b)
 static void pcre_keyvalue_burl_percent_percent_toupper (buffer *b)
 {
     const unsigned char * const s = (unsigned char *)b->ptr;
-    const int used = (int)buffer_string_length(b);
+    const int used = (int)buffer_clen(b);
     unsigned int n1, n2;
     for (int i = 0; i < used; ++i) {
         if (s[i] == '%' && s[i+1]=='%'
@@ -377,7 +381,7 @@ static void pcre_keyvalue_burl_percent_high_UTF8 (buffer *b, buffer *t)
 {
     const unsigned char * const s = (unsigned char *)b->ptr;
     unsigned char *p;
-    const int used = (int)buffer_string_length(b);
+    const int used = (int)buffer_clen(b);
     unsigned int count = 0, j = 0;
     for (int i = 0; i < used; ++i) {
         if (s[i] > 0x7F) ++count;
@@ -401,7 +405,7 @@ static void pcre_keyvalue_burl_percent_percent_high_UTF8 (buffer *b, buffer *t)
 {
     const unsigned char * const s = (unsigned char *)b->ptr;
     unsigned char *p;
-    const int used = (int)buffer_string_length(b);
+    const int used = (int)buffer_clen(b);
     unsigned int count = 0, j = 0;
     for (int i = 0; i < used; ++i) {
         if (s[i] > 0x7F) ++count;
