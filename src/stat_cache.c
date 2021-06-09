@@ -1382,8 +1382,10 @@ stat_cache_entry * stat_cache_get_entry_open(const buffer * const name, const in
     stat_cache_entry * const sce = stat_cache_get_entry(name);
     if (NULL == sce) return NULL;
     if (sce->fd >= 0) return sce;
-    if (sce->st.st_size > 0)
+    if (sce->st.st_size > 0) {
         sce->fd = stat_cache_open_rdonly_fstat(name, &sce->st, symlinks);
+        buffer_clear(&sce->etag);
+    }
     return sce; /* (note: sce->fd might still be -1 if open() failed) */
 }
 
