@@ -841,14 +841,9 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
         base_hash = gw_hash(BUF_PTR_LEN(&r->uri.authority), base_hash);
 
         for (k = 0, ndx = -1, last_max = UINT32_MAX; k < extension->used; ++k) {
-            uint32_t cur_max;
             host = extension->hosts[k];
             if (0 == host->active_procs) continue;
-
-            /* future: hash of host->host could be cached separately, mixed in*/
-            cur_max = host->host
-              ? gw_hash(BUF_PTR_LEN(host->host), base_hash)
-              : base_hash;
+            const uint32_t cur_max = base_hash ^ host->gw_hash;
 
             if (debug) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
@@ -930,16 +925,9 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
         base_hash = gw_hash(BUF_PTR_LEN(dst_addr_buf), base_hash);
 
         for (k = 0, ndx = -1, last_max = UINT32_MAX; k < extension->used; ++k) {
-            unsigned long cur_max;
             host = extension->hosts[k];
-
             if (0 == host->active_procs) continue;
-
-            /* future: hash of host->host could be cached separately, mixed in*/
-            cur_max = host->host
-              ? gw_hash(BUF_PTR_LEN(host->host), base_hash)
-              : base_hash;
-            cur_max += host->port;
+            const uint32_t cur_max = base_hash ^ host->gw_hash ^ host->port;
 
             if (debug) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
@@ -1711,6 +1699,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
 
                 if (0 != gw_proc_sockaddr_init(host, proc, srv->errh)) goto error;
             }
+
+            const buffer * const h = host->host ? host->host : host->unixsocket;
+            host->gw_hash = gw_hash(BUF_PTR_LEN(h), DJBHASH_INIT);
 
             /* s->exts is list of exts -> hosts
              * s->exts now used as combined list

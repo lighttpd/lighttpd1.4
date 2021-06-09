@@ -122,6 +122,7 @@ typedef struct {
     const buffer *host;
     unsigned short port;
     unsigned short family; /* sa_family_t */
+    uint32_t gw_hash;
 
     /*
      * Unix Domain Socket
