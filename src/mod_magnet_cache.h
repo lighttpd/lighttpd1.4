@@ -8,8 +8,8 @@
 #include <lua.h>
 
 typedef struct {
-	buffer *name;
-	buffer *etag;
+	buffer name;
+	buffer etag;
 
 	lua_State *L;
 } script;
@@ -21,13 +21,15 @@ typedef struct {
 } script_cache;
 
 #if 0
+__attribute_cold__
 __attribute_malloc__
 __attribute_returns_nonnull__
 script_cache *script_cache_init(void);
 #endif
 
+__attribute_cold__
 void script_cache_free_data(script_cache *cache);
 
-lua_State *script_cache_get_script(script_cache *cache, buffer *name, int etag_flags);
+lua_State *script_cache_get_script(script_cache *cache, const buffer *name, int etag_flags);
 
 #endif

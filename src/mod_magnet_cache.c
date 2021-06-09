@@ -10,70 +10,61 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
-static script *script_init() {
-	script *sc;
-
-	sc = calloc(1, sizeof(*sc));
-	force_assert(sc);
-	sc->name = buffer_init();
-	sc->etag = buffer_init();
-
-	return sc;
+__attribute_cold__
+static script *script_init(void)
+{
+    script *const sc = calloc(1, sizeof(*sc));
+    force_assert(sc);
+    return sc;
 }
 
-static void script_free(script *sc) {
-	if (!sc) return;
-
-	lua_pop(sc->L, 1); /* the function copy */
-
-	buffer_free(sc->name);
-	buffer_free(sc->etag);
-
-	lua_close(sc->L);
-
-	free(sc);
+__attribute_cold__
+static void script_free(script *sc)
+{
+    if (!sc) return;
+    lua_pop(sc->L, 1); /* the function copy */
+    lua_close(sc->L);
+    free(sc->name.ptr);
+    free(sc->etag.ptr);
+    free(sc);
 }
 
 #if 0
-script_cache *script_cache_init() {
-	script_cache *p = calloc(1, sizeof(script_cache));
-	force_assert(p);
-	return p;
+script_cache *script_cache_init(void)
+{
+    script_cache *p = calloc(1, sizeof(script_cache));
+    force_assert(p);
+    return p;
 }
 #endif
 
-void script_cache_free_data(script_cache *p) {
-	size_t i;
-
-	if (!p) return;
-
-	for (i = 0; i < p->used; i++) {
-		script_free(p->ptr[i]);
-	}
-
-	free(p->ptr);
+void script_cache_free_data(script_cache *p)
+{
+    if (!p) return;
+    for (uint32_t i = 0; i < p->used; ++i)
+        script_free(p->ptr[i]);
+    free(p->ptr);
 }
 
-lua_State *script_cache_get_script(script_cache *cache, buffer *name, int etag_flags) {
+lua_State *script_cache_get_script(script_cache *cache, const buffer *name, int etag_flags)
+{
 	script *sc = NULL;
 	stat_cache_entry *sce;
 
 	for (uint32_t i = 0; i < cache->used; ++i, sc = NULL) {
 		sc = cache->ptr[i];
-		if (!buffer_is_equal(name, sc->name)) continue;
-
-			/* oops, the script failed last time */
+		if (!buffer_is_equal(name, &sc->name)) continue;
 
 			if (lua_gettop(sc->L) == 0) break;
 			force_assert(lua_gettop(sc->L) == 1);
-			sce = stat_cache_get_entry(sc->name);
+			sce = stat_cache_get_entry(&sc->name);
 			if (NULL == sce) {
 				lua_pop(sc->L, 1); /* pop the old function */
 				break;
 			}
 
 			const buffer *etag = stat_cache_etag_get(sce, etag_flags);
-			if (NULL == etag || !buffer_is_equal(sc->etag, etag)) {
+			if (NULL == etag || !buffer_is_equal(&sc->etag, etag)) {
 				/* the etag is outdated, reload the function */
 				lua_pop(sc->L, 1);
 				break;
@@ -96,23 +87,23 @@ lua_State *script_cache_get_script(script_cache *cache, buffer *name, int etag_f
 
 		cache->ptr[cache->used++] = sc;
 
-		buffer_copy_buffer(sc->name, name);
+		buffer_copy_buffer(&sc->name, name);
 
 		sc->L = luaL_newstate();
 		luaL_openlibs(sc->L);
 	}
-	buffer_clear(sc->etag);
+	buffer_clear(&sc->etag);
 
 	if (0 != luaL_loadfile(sc->L, name->ptr)) {
 		/* oops, an error, return it */
 		return sc->L;
 	}
 
-	sce = stat_cache_get_entry(sc->name);
+	sce = stat_cache_get_entry(&sc->name);
 	if (sce) {
 		const buffer *etag = stat_cache_etag_get(sce, etag_flags);
 		if (etag)
-			buffer_copy_buffer(sc->etag, etag);
+			buffer_copy_buffer(&sc->etag, etag);
 	}
 
 	force_assert(lua_isfunction(sc->L, -1));
