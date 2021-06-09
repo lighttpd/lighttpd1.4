@@ -12,6 +12,7 @@
 #include "configparser.h"
 #include "configfile.h"
 #include "plugin.h"
+#include "reqpool.h"
 #include "stat_cache.h"
 #include "sys-crypto.h"
 
@@ -203,7 +204,7 @@ static void config_merge_config(request_config * const pconf, const config_plugi
 void config_patch_config(request_st * const r) {
     config_data_base * const p = r->con->config_data_base;
 
-    /* performed by config_reset_config() */
+    /* performed by request_config_reset() */
     /*memcpy(&r->conf, &p->defaults, sizeof(request_config));*/
 
     for (int i = 1, used = p->nconfig; i < used; ++i) {
@@ -212,11 +213,13 @@ void config_patch_config(request_st * const r) {
     }
 }
 
+#if 0 /*(moved to reqpool.c:request_config_reset())*/
 void config_reset_config(request_st * const r) {
     /* initialize request_config (r->conf) from top-level request_config */
     config_data_base * const p = r->con->config_data_base;
     memcpy(&r->conf, &p->defaults, sizeof(request_config));
 }
+#endif
 
 static void config_burl_normalize_cond (server * const srv) {
     buffer * const tb = srv->tmp_buf;
@@ -1156,6 +1159,8 @@ static int config_insert(server *srv) {
     if (p->defaults.log_request_handling || p->defaults.log_request_header)
         p->defaults.log_request_header_on_error = 1;
 
+    request_config_set_defaults(&p->defaults);
+
     return rc;
 }
 
@@ -1382,6 +1387,7 @@ void config_print(server *srv) {
 }
 
 void config_free(server *srv) {
+    /*request_config_set_defaults(NULL);*//*(not necessary)*/
     config_free_config(srv->config_data_base);
 
     array_free(srv->config_context);

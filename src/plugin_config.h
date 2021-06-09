@@ -78,7 +78,7 @@ void config_log_error_close(server *srv);
 
 void config_reset_config_bytes_sec(void *p);
 
-void config_reset_config(request_st *r);
+/*void config_reset_config(request_st *r);*//* moved to request_config_reset()*/
 void config_patch_config(request_st *r);
 
 void config_cond_cache_reset(request_st *r);

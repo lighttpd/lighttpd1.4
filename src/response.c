@@ -2,6 +2,7 @@
 
 #include "response.h"
 #include "request.h"
+#include "reqpool.h"
 #include "base.h"
 #include "fdevent.h"
 #include "http_header.h"
@@ -619,7 +620,7 @@ static handler_t http_response_comeback (request_st * const r)
     if (NULL != r->handler_module || !buffer_is_unset(&r->physical.path))
         return HANDLER_GO_ON;
 
-    config_reset_config(r);
+    request_config_reset(r);
 
     if (__builtin_expect( (r->http_host != NULL), 1)) {
         buffer_copy_buffer(&r->uri.authority, r->http_host);

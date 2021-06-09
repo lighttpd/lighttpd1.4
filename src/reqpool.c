@@ -8,6 +8,7 @@
 #include "reqpool.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "base.h"
 #include "buffer.h"
@@ -16,6 +17,24 @@
 #include "plugin_config.h"
 #include "request.h"
 #include "response.h"
+
+
+static const request_config *request_config_defaults;
+
+
+void
+request_config_set_defaults (const request_config *config_defaults)
+{
+    request_config_defaults = config_defaults;
+}
+
+
+__attribute_noinline__
+void
+request_config_reset (request_st * const r)
+{
+    memcpy(&r->conf, request_config_defaults, sizeof(request_config));
+}
 
 
 void
@@ -48,6 +67,8 @@ request_init_data (request_st * const r, connection * const con, server * const 
         force_assert(NULL != r->cond_match);
     }
   #endif
+
+    request_config_reset(r);
 }
 
 
@@ -120,6 +141,8 @@ request_reset (request_st * const r)
 
     /* The cond_cache gets reset in response.c */
     /* config_cond_cache_reset(r); */
+
+    request_config_reset(r);
 }
 
 

@@ -16,7 +16,7 @@ struct cond_cache_t;    /* declaration */
 struct cond_match_t;    /* declaration */
 struct stat_cache_entry;/* declaration */
 
-typedef struct {
+typedef struct request_config {
     unsigned int http_parseopts;
     uint32_t max_request_field_size;
     const array *mimetypes;

@@ -2508,7 +2508,7 @@ h2_init_stream (request_st * const h2r, connection * const con)
     if (used > 1) /*(save 128b per con if no conditions)*/
         memcpy(r->cond_match, h2r->cond_match, used * sizeof(cond_match_t));
   #endif
-    /*(see config_reset_config() and request_reset_ex())*/
+    /*(see request_config_reset() and request_reset_ex())*/
     r->server_name = h2r->server_name;
     memcpy(&r->conf, &h2r->conf, sizeof(request_config));
 

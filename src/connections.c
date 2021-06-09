@@ -230,7 +230,6 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 
         if (r->keep_alive > 0) {
 		request_reset(r);
-		config_reset_config(r);
 		con->is_readable = 1; /* potentially trigger optimistic read */
 		/*(accounting used by mod_accesslog for HTTP/1.0 and HTTP/1.1)*/
 		r->bytes_read_ckpt = con->bytes_read;
@@ -545,7 +544,6 @@ static connection *connection_init(server *srv) {
 
 	request_st * const r = &con->request;
 	request_init_data(r, con, srv);
-	config_reset_config(r);
 	con->write_queue = &r->write_queue;
 	con->read_queue = &r->read_queue;
 
@@ -584,7 +582,6 @@ void connections_free(server *srv) {
 static void connection_reset(connection *con) {
 	request_st * const r = &con->request;
 	request_reset(r);
-	config_reset_config(r);
 	r->bytes_read_ckpt = 0;
 	r->bytes_written_ckpt = 0;
 	con->is_readable = 1;
