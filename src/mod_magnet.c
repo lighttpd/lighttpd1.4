@@ -870,6 +870,18 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, buf
 	/* get the script-context */
 	L = script_cache_get_script(&p->cache, name, r->conf.etag_flags);
 
+	if (NULL == L) {
+		log_perror(r->conf.errh, __FILE__, __LINE__,
+		  "loading script %s failed", name->ptr);
+
+		if (p->conf.stage != -1) { /* skip for response-start */
+			r->http_status = 500;
+			r->handler_module = NULL;
+		}
+
+		return HANDLER_FINISHED;
+	}
+
 	if (lua_isstring(L, -1)) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "loading script %s failed: %s", name->ptr, lua_tostring(L, -1));
