@@ -716,6 +716,7 @@ int mod_auth_plugin_init(plugin *p) {
 #include "http_header.h"
 
 __attribute_cold__
+__attribute_noinline__
 static handler_t mod_auth_send_400_bad_request(request_st * const r) {
 
 	/* a field was missing or invalid */
@@ -725,6 +726,7 @@ static handler_t mod_auth_send_400_bad_request(request_st * const r) {
 	return HANDLER_FINISHED;
 }
 
+__attribute_noinline__
 static handler_t mod_auth_send_401_unauthorized_basic(request_st * const r, const buffer * const realm) {
     r->http_status = 401;
     r->handler_module = NULL;
@@ -738,7 +740,6 @@ static handler_t mod_auth_send_401_unauthorized_basic(request_st * const r, cons
 }
 
 static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend) {
-	const buffer *b = http_header_request_get(r, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
 	buffer *username;
 	char *pw;
 
@@ -756,11 +757,11 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 		return HANDLER_FINISHED;
 	}
 
-	if (NULL == b) {
-		return mod_auth_send_401_unauthorized_basic(r, require->realm);
-	}
+	const buffer * const b =
+	  http_header_request_get(r, HTTP_HEADER_AUTHORIZATION,
+	                          CONST_STR_LEN("Authorization"));
 
-	if (!buffer_eq_icase_ssn(b->ptr, CONST_STR_LEN("Basic "))) {
+	if (NULL == b || !buffer_eq_icase_ssn(b->ptr, CONST_STR_LEN("Basic "))) {
 		return mod_auth_send_401_unauthorized_basic(r, require->realm);
 	}
       #ifdef __COVERITY__
@@ -1171,11 +1172,10 @@ typedef struct {
 	char **ptr;
 } digest_kv;
 
+__attribute_noinline__
 static handler_t mod_auth_send_401_unauthorized_digest(request_st *r, const struct http_auth_require_t *require, int nonce_stale);
 
 static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend) {
-	const buffer *vb = http_header_request_get(r, HTTP_HEADER_AUTHORIZATION, CONST_STR_LEN("Authorization"));
-
 	char *username = NULL;
 	char *realm = NULL;
 	char *nonce = NULL;
@@ -1235,11 +1235,11 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		return HANDLER_FINISHED;
 	}
 
-	if (NULL == vb) {
-		return mod_auth_send_401_unauthorized_digest(r, require, 0);
-	}
+	const buffer * const vb =
+	  http_header_request_get(r, HTTP_HEADER_AUTHORIZATION,
+	                          CONST_STR_LEN("Authorization"));
 
-	if (!buffer_eq_icase_ssn(vb->ptr, CONST_STR_LEN("Digest "))) {
+	if (NULL == vb || !buffer_eq_icase_ssn(vb->ptr, CONST_STR_LEN("Digest "))) {
 		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	} else {
 		size_t n = buffer_clen(vb);
