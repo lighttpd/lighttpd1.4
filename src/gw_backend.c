@@ -816,89 +816,69 @@ gw_hash(const char *str, const uint32_t len, uint32_t hash)
 }
 
 static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int balance, int debug) {
-    gw_host *host;
-    buffer *dst_addr_buf;
-    uint32_t last_max = UINT32_MAX;
-    uint32_t base_hash = DJBHASH_INIT;
-    int max_usage = INT_MAX;
     int ndx = -1;
-    uint32_t k;
+    const int ext_used = (int)extension->used;
 
-    if (extension->used <= 1) {
-        if (1 == extension->used && extension->hosts[0]->active_procs > 0) {
+    if (ext_used <= 1) {
+        if (1 == ext_used && extension->hosts[0]->active_procs > 0)
             ndx = 0;
-        }
-    } else switch(balance) {
-    case GW_BALANCE_HASH:
-        /* hash balancing */
-
-        if (debug) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "proxy - used hash balancing, hosts: %u", extension->used);
-        }
-
-        base_hash = gw_hash(BUF_PTR_LEN(&r->uri.path), base_hash);
-        base_hash = gw_hash(BUF_PTR_LEN(&r->uri.authority), base_hash);
-
-        for (k = 0, ndx = -1, last_max = UINT32_MAX; k < extension->used; ++k) {
-            host = extension->hosts[k];
+    }
+    else {
+     /*const char *balancing = "";*/
+     switch(balance) {
+      case GW_BALANCE_HASH:
+       { /* hash balancing */
+        const uint32_t base_hash =
+          gw_hash(BUF_PTR_LEN(&r->uri.authority),
+                  gw_hash(BUF_PTR_LEN(&r->uri.path), DJBHASH_INIT));
+        uint32_t last_max = UINT32_MAX;
+        for (int k = 0; k < ext_used; ++k) {
+            const gw_host * const host = extension->hosts[k];
             if (0 == host->active_procs) continue;
             const uint32_t cur_max = base_hash ^ host->gw_hash;
-
+          #if 0
             if (debug) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "proxy - election: %s %s %s %u", r->uri.path.ptr,
                   host->host ? host->host->ptr : "",
                   r->uri.authority.ptr, cur_max);
             }
-
+          #endif
             if (last_max < cur_max || last_max == UINT32_MAX) {
                 last_max = cur_max;
                 ndx = k;
             }
         }
-
+        /*balancing = "hash";*/
         break;
-    case GW_BALANCE_LEAST_CONNECTION:
-        /* fair balancing */
-        if (debug) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "proxy - used least connection");
-        }
-
-        for (k = 0, ndx = -1, max_usage = INT_MAX; k < extension->used; ++k) {
-            host = extension->hosts[k];
+       }
+      case GW_BALANCE_LEAST_CONNECTION:
+       { /* fair balancing */
+        for (int k = 0, max_usage = INT_MAX; k < ext_used; ++k) {
+            const gw_host * const host = extension->hosts[k];
             if (0 == host->active_procs) continue;
-
             if (host->load < max_usage) {
                 max_usage = host->load;
                 ndx = k;
             }
         }
-
+        /*balancing = "least connection";*/
         break;
-    case GW_BALANCE_RR:
-        /* round robin */
-        if (debug) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "proxy - used round-robin balancing");
-        }
-
-        /* just to be sure */
-        force_assert(extension->used < INT_MAX);
-
-        host = extension->hosts[0];
+       }
+      case GW_BALANCE_RR:
+       { /* round robin */
+        const gw_host *host = extension->hosts[0];
 
         /* Use last_used_ndx from first host in list */
-        k = extension->last_used_ndx;
+        int k = extension->last_used_ndx;
         ndx = k + 1; /* use next host after the last one */
         if (ndx < 0) ndx = 0;
 
         /* Search first active host after last_used_ndx */
-        while (ndx < (int) extension->used
+        while (ndx < ext_used
                && 0 == (host = extension->hosts[ndx])->active_procs) ++ndx;
 
-        if (ndx >= (int) extension->used) {
+        if (ndx >= ext_used) {
             /* didn't find a higher id, wrap to the start */
             for (ndx = 0; ndx <= (int) k; ++ndx) {
                 host = extension->hosts[ndx];
@@ -912,56 +892,62 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
         /* Save new index for next round */
         extension->last_used_ndx = ndx;
 
+        /*balancing = "round-robin";*/
         break;
-    case GW_BALANCE_STICKY:
-        /* source sticky balancing */
-        dst_addr_buf = r->con->dst_addr_buf;
-
-        if (debug) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "proxy - used sticky balancing, hosts: %u", extension->used);
-        }
-
-        base_hash = gw_hash(BUF_PTR_LEN(dst_addr_buf), base_hash);
-
-        for (k = 0, ndx = -1, last_max = UINT32_MAX; k < extension->used; ++k) {
-            host = extension->hosts[k];
+       }
+      case GW_BALANCE_STICKY:
+       { /* source sticky balancing */
+        const buffer * const dst_addr_buf = r->con->dst_addr_buf;
+        const uint32_t base_hash =
+          gw_hash(BUF_PTR_LEN(dst_addr_buf), DJBHASH_INIT);
+        uint32_t last_max = UINT32_MAX;
+        for (int k = 0; k < ext_used; ++k) {
+            const gw_host * const host = extension->hosts[k];
             if (0 == host->active_procs) continue;
             const uint32_t cur_max = base_hash ^ host->gw_hash ^ host->port;
-
+          #if 0
             if (debug) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
-                  "proxy - election: %s %s %hu %ld", dst_addr_buf->ptr,
+                  "proxy - election: %s %s %hu %u", dst_addr_buf->ptr,
                   host->host ? host->host->ptr : "",
                   host->port, cur_max);
             }
-
+          #endif
             if (last_max < cur_max || last_max == UINT32_MAX) {
                 last_max = cur_max;
                 ndx = k;
             }
         }
-
+        /*balancing = "sticky";*/
         break;
-    default:
+       }
+      default:
         break;
+     }
+     #if 0
+     if (debug) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "gw - balancing: %s, hosts: %d", balancing, ext_used);
+     }
+     #endif
     }
 
-    if (-1 != ndx) {
+    if (__builtin_expect( (-1 != ndx), 1)) {
         /* found a server */
-        host = extension->hosts[ndx];
 
         if (debug) {
+            gw_host * const host = extension->hosts[ndx];
             log_error(r->conf.errh, __FILE__, __LINE__,
               "gw - found a host %s %hu",
               host->host ? host->host->ptr : "", host->port);
+            return host;
         }
 
-        return host;
+        return extension->hosts[ndx];
     } else if (0 == r->con->srv->srvconf.max_worker) {
         /* special-case adaptive spawning and 0 == host->min_procs */
-        for (k = 0; k < extension->used; ++k) {
-            host = extension->hosts[k];
+        for (int k = 0; k < ext_used; ++k) {
+            gw_host * const host = extension->hosts[k];
             if (0 == host->min_procs && 0 == host->num_procs && host->bin_path){
                 gw_proc_spawn(host, r->con->srv->errh, debug);
                 if (host->num_procs) return host;
