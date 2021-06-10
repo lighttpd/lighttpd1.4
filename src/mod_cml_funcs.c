@@ -18,15 +18,7 @@
 #include "log.h"
 #include "plugin.h"
 
-#define HASHLEN 16
-typedef unsigned char HASH[HASHLEN];
-#define HASHHEXLEN 32
-typedef char HASHHEX[HASHHEXLEN+1];
-
 int f_crypto_md5(lua_State *L) {
-	li_MD5_CTX Md5Ctx;
-	HASH HA1;
-	char hex[33];
 	int n = lua_gettop(L);
 	size_t s_len;
 	const char *s;
@@ -43,11 +35,11 @@ int f_crypto_md5(lua_State *L) {
 
 	s = lua_tolstring(L, 1, &s_len);
 
-	li_MD5_Init(&Md5Ctx);
-	li_MD5_Update(&Md5Ctx, (unsigned char *) s, (unsigned int) s_len);
-	li_MD5_Final(HA1, &Md5Ctx);
+	char HA1[MD5_DIGEST_LENGTH];
+	MD5_once((unsigned char *)HA1, s, s_len);
 
-	li_tohex(hex, sizeof(hex), (const char*) HA1, 16);
+	char hex[MD5_DIGEST_LENGTH*2+1];
+	li_tohex(hex, sizeof(hex), HA1, sizeof(HA1));
 
 	lua_pushstring(L, hex);
 

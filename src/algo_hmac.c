@@ -65,11 +65,8 @@ li_hmac_md5 (unsigned char digest[MD5_DIGEST_LENGTH],
              const void * const secret, const uint32_t slen,
              const unsigned char * const msg, const uint32_t mlen)
 {
-    li_MD5_CTX Md5Ctx;
-    li_MD5_Init(&Md5Ctx);
-    li_MD5_Update(&Md5Ctx, secret, slen);
-    li_MD5_Update(&Md5Ctx, msg, mlen);
-    li_MD5_Final(digest, &Md5Ctx);
+    struct const_iovec iov[] = { { secret, slen }, { msg, mlen } };
+    MD5_iov(digest, iov, sizeof(iov)/sizeof(*iov));
     return 1;
 }
 

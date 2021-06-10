@@ -135,11 +135,10 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 		break;
 	case SECDL_MD5:
 		{
-			li_MD5_CTX Md5Ctx;
 			const char *ts_str;
 			const char *rel_uri;
-			unsigned char HA1[16];
-			unsigned char md5bin[16];
+			unsigned char HA1[MD5_DIGEST_LENGTH];
+			unsigned char md5bin[MD5_DIGEST_LENGTH];
 
 			if (0 != li_hex2bin(md5bin, sizeof(md5bin), mac, maclen)) return 0;
 
@@ -153,11 +152,12 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 			ts_str = protected_path + 1;
 			rel_uri = ts_str + 8;
 
-			li_MD5_Init(&Md5Ctx);
-			li_MD5_Update(&Md5Ctx, BUF_PTR_LEN(config->secret));
-			li_MD5_Update(&Md5Ctx, rel_uri, strlen(rel_uri));
-			li_MD5_Update(&Md5Ctx, ts_str, 8);
-			li_MD5_Final(HA1, &Md5Ctx);
+			struct const_iovec iov[] = {
+			  { BUF_PTR_LEN(config->secret) }
+			 ,{ rel_uri, strlen(rel_uri) }
+			 ,{ ts_str, 8 }
+			};
+			MD5_iov(HA1, iov, sizeof(iov)/sizeof(*iov));
 
 			return ck_memeq_const_time_fixed_len((char *)HA1,
 							     (char *)md5bin,sizeof(md5bin));

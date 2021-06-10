@@ -843,240 +843,90 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 }
 
 
-#ifdef USE_LIB_CRYPTO
-
-static void mod_auth_digest_mutate_sha256(http_auth_info_t *ai, const char *m, const char *uri, const char *nonce, const char *cnonce, const char *nc, const char *qop) {
-    SHA256_CTX ctx;
-    char a1[HTTP_AUTH_DIGEST_SHA256_BINLEN*2+1];
-    char a2[HTTP_AUTH_DIGEST_SHA256_BINLEN*2+1];
-
-    if (ai->dalgo & HTTP_AUTH_DIGEST_SESS) {
-        SHA256_Init(&ctx);
-        li_tohex(a1, sizeof(a1), (const char *)ai->digest, ai->dlen);
-        SHA256_Update(&ctx, (unsigned char *)a1, sizeof(a1)-1);
-        SHA256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA256_Update(&ctx, (unsigned char *)nonce, strlen(nonce));
-        SHA256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA256_Update(&ctx, (unsigned char *)cnonce, strlen(cnonce));
-        SHA256_Final(ai->digest, &ctx);
-    }
-
-    li_tohex(a1, sizeof(a1), (const char *)ai->digest, ai->dlen);
-
-    /* calculate H(A2) */
-    SHA256_Init(&ctx);
-    SHA256_Update(&ctx, (unsigned char *)m, strlen(m));
-    SHA256_Update(&ctx, CONST_STR_LEN(":"));
-    SHA256_Update(&ctx, (unsigned char *)uri, strlen(uri));
-  #if 0
-    /* qop=auth-int not supported, already checked in caller */
-    if (qop && buffer_eq_icase_ss(qop, strlen(qop), CONST_STR_LEN("auth-int"))){
-        SHA256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA256_Update(&ctx, (unsigned char *) [body checksum], ai->dlen*2);
-    }
-  #endif
-    SHA256_Final(ai->digest, &ctx);
-    li_tohex(a2, sizeof(a2), (const char *)ai->digest, ai->dlen);
-
-    /* calculate response */
-    SHA256_Init(&ctx);
-    SHA256_Update(&ctx, (unsigned char *)a1, sizeof(a1)-1);
-    SHA256_Update(&ctx, CONST_STR_LEN(":"));
-    SHA256_Update(&ctx, (unsigned char *)nonce, strlen(nonce));
-    SHA256_Update(&ctx, CONST_STR_LEN(":"));
-    if (qop && *qop) {
-        SHA256_Update(&ctx, (unsigned char *)nc, strlen(nc));
-        SHA256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA256_Update(&ctx, (unsigned char *)cnonce, strlen(cnonce));
-        SHA256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA256_Update(&ctx, (unsigned char *)qop, strlen(qop));
-        SHA256_Update(&ctx, CONST_STR_LEN(":"));
-    }
-    SHA256_Update(&ctx, (unsigned char *)a2, sizeof(a2)-1);
-    SHA256_Final(ai->digest, &ctx);
-}
-
-static void mod_auth_digest_nonce_sha256(buffer *b, time_t cur_ts, int rnd, const buffer *secret) {
-    SHA256_CTX ctx;
-    size_t len;
-    unsigned char h[HTTP_AUTH_DIGEST_SHA256_BINLEN];
-    char hh[HTTP_AUTH_DIGEST_SHA256_BINLEN*2+1];
-    force_assert(sizeof(hh) >= LI_ITOSTRING_LENGTH);
-    SHA256_Init(&ctx);
-    len = li_itostrn(hh, sizeof(hh), cur_ts);
-    SHA256_Update(&ctx, (unsigned char *)hh, len);
-    len = li_itostrn(hh, sizeof(hh), rnd);
-    SHA256_Update(&ctx, (unsigned char *)hh, len);
-    if (secret) {
-        len = buffer_clen(secret);
-        SHA256_Update(&ctx, (unsigned char *)secret->ptr, len);
-    }
-    SHA256_Final(h, &ctx);
-    li_tohex(hh, sizeof(hh), (const char *)h, sizeof(h));
-    buffer_append_string_len(b, hh, sizeof(hh)-1);
-}
-
-#ifdef USE_LIB_CRYPTO_SHA512_256
-
-static void mod_auth_digest_mutate_sha512_256(http_auth_info_t *ai, const char *m, const char *uri, const char *nonce, const char *cnonce, const char *nc, const char *qop) {
-    SHA512_CTX ctx;
-    char a1[HTTP_AUTH_DIGEST_SHA512_256_BINLEN*2+1];
-    char a2[HTTP_AUTH_DIGEST_SHA512_256_BINLEN*2+1];
-
-    if (ai->dalgo & HTTP_AUTH_DIGEST_SESS) {
-        SHA512_256_Init(&ctx);
-        li_tohex(a1, sizeof(a1), (const char *)ai->digest, ai->dlen);
-        SHA512_256_Update(&ctx, (unsigned char *)a1, sizeof(a1)-1);
-        SHA512_256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA512_256_Update(&ctx, (unsigned char *)nonce, strlen(nonce));
-        SHA512_256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA512_256_Update(&ctx, (unsigned char *)cnonce, strlen(cnonce));
-        SHA512_256_Final(ai->digest, &ctx);
-    }
-
-    li_tohex(a1, sizeof(a1), (const char *)ai->digest, ai->dlen);
-
-    /* calculate H(A2) */
-    SHA512_256_Init(&ctx);
-    SHA512_256_Update(&ctx, (unsigned char *)m, strlen(m));
-    SHA512_256_Update(&ctx, CONST_STR_LEN(":"));
-    SHA512_256_Update(&ctx, (unsigned char *)uri, strlen(uri));
-  #if 0
-    /* qop=auth-int not supported, already checked in caller */
-    if (qop && buffer_eq_icase_ss(qop, strlen(qop), CONST_STR_LEN("auth-int"))){
-        SHA512_256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA512_256_Update(&ctx, (unsigned char *)[body checksum], ai->dlen*2);
-    }
-  #endif
-    SHA512_256_Final(ai->digest, &ctx);
-    li_tohex(a2, sizeof(a2), (const char *)ai->digest, ai->dlen);
-
-    /* calculate response */
-    SHA512_256_Init(&ctx);
-    SHA512_256_Update(&ctx, (unsigned char *)a1, sizeof(a1)-1);
-    SHA512_256_Update(&ctx, CONST_STR_LEN(":"));
-    SHA512_256_Update(&ctx, (unsigned char *)nonce, strlen(nonce));
-    SHA512_256_Update(&ctx, CONST_STR_LEN(":"));
-    if (qop && *qop) {
-        SHA512_256_Update(&ctx, (unsigned char *)nc, strlen(nc));
-        SHA512_256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA512_256_Update(&ctx, (unsigned char *)cnonce, strlen(cnonce));
-        SHA512_256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA512_256_Update(&ctx, (unsigned char *)qop, strlen(qop));
-        SHA512_256_Update(&ctx, CONST_STR_LEN(":"));
-    }
-    SHA512_256_Update(&ctx, (unsigned char *)a2, sizeof(a2)-1);
-    SHA512_256_Final(ai->digest, &ctx);
-}
-
-static void mod_auth_digest_nonce_sha512_256(buffer *b, time_t cur_ts, int rnd, const buffer *secret) {
-    SHA512_CTX ctx;
-    size_t len;
-    unsigned char h[HTTP_AUTH_DIGEST_SHA512_256_BINLEN];
-    char hh[HTTP_AUTH_DIGEST_SHA512_256_BINLEN*2+1];
-    force_assert(sizeof(hh) >= LI_ITOSTRING_LENGTH);
-    SHA512_256_Init(&ctx);
-    len = li_itostrn(hh, sizeof(hh), cur_ts);
-    SHA512_256_Update(&ctx, (unsigned char *)hh, len);
-    len = li_itostrn(hh, sizeof(hh), rnd);
-    SHA512_256_Update(&ctx, (unsigned char *)hh, len);
-    if (secret) {
-        len = buffer_clen(secret);
-        SHA512_256_Update(&ctx, (unsigned char *)secret->ptr, len);
-    }
-    SHA512_256_Final(h, &ctx);
-    li_tohex(hh, sizeof(hh), (const char *)h, sizeof(h));
-    buffer_append_string_len(b, hh, sizeof(hh)-1);
-}
-
-#endif /* USE_LIB_CRYPTO_SHA512_256 */
-
-#endif /* USE_LIB_CRYPTO */
-
-static void mod_auth_digest_mutate_md5(http_auth_info_t *ai, const char *m, const char *uri, const char *nonce, const char *cnonce, const char *nc, const char *qop) {
-    li_MD5_CTX ctx;
-    char a1[HTTP_AUTH_DIGEST_MD5_BINLEN*2+1];
-    char a2[HTTP_AUTH_DIGEST_MD5_BINLEN*2+1];
-
-    if (ai->dalgo & HTTP_AUTH_DIGEST_SESS) {
-        li_MD5_Init(&ctx);
-        /* http://www.rfc-editor.org/errata_search.php?rfc=2617
-         * Errata ID: 1649 */
-        li_tohex(a1, sizeof(a1), (const char *)ai->digest, ai->dlen);
-        li_MD5_Update(&ctx, (unsigned char *)a1, sizeof(a1)-1);
-        li_MD5_Update(&ctx, CONST_STR_LEN(":"));
-        li_MD5_Update(&ctx, (unsigned char *)nonce, strlen(nonce));
-        li_MD5_Update(&ctx, CONST_STR_LEN(":"));
-        li_MD5_Update(&ctx, (unsigned char *)cnonce, strlen(cnonce));
-        li_MD5_Final(ai->digest, &ctx);
-    }
-
-    li_tohex(a1, sizeof(a1), (const char *)ai->digest, ai->dlen);
-
-    /* calculate H(A2) */
-    li_MD5_Init(&ctx);
-    li_MD5_Update(&ctx, (unsigned char *)m, strlen(m));
-    li_MD5_Update(&ctx, CONST_STR_LEN(":"));
-    li_MD5_Update(&ctx, (unsigned char *)uri, strlen(uri));
-  #if 0
-    /* qop=auth-int not supported, already checked in caller */
-    if (qop && buffer_eq_icase_ss(qop, strlen(qop), CONST_STR_LEN("auth-int"))){
-        li_MD5_Update(&ctx, CONST_STR_LEN(":"));
-        li_MD5_Update(&ctx, (unsigned char *) [body checksum], ai->dlen*2);
-    }
-  #endif
-    li_MD5_Final(ai->digest, &ctx);
-    li_tohex(a2, sizeof(a2), (const char *)ai->digest, ai->dlen);
-
-    /* calculate response */
-    li_MD5_Init(&ctx);
-    li_MD5_Update(&ctx, (unsigned char *)a1, sizeof(a1)-1);
-    li_MD5_Update(&ctx, CONST_STR_LEN(":"));
-    li_MD5_Update(&ctx, (unsigned char *)nonce, strlen(nonce));
-    li_MD5_Update(&ctx, CONST_STR_LEN(":"));
-    if (qop && *qop) {
-        li_MD5_Update(&ctx, (unsigned char *)nc, strlen(nc));
-        li_MD5_Update(&ctx, CONST_STR_LEN(":"));
-        li_MD5_Update(&ctx, (unsigned char *)cnonce, strlen(cnonce));
-        li_MD5_Update(&ctx, CONST_STR_LEN(":"));
-        li_MD5_Update(&ctx, (unsigned char *)qop, strlen(qop));
-        li_MD5_Update(&ctx, CONST_STR_LEN(":"));
-    }
-    li_MD5_Update(&ctx, (unsigned char *)a2, sizeof(a2)-1);
-    li_MD5_Final(ai->digest, &ctx);
-}
-
-static void mod_auth_digest_nonce_md5(buffer *b, time_t cur_ts, int rnd, const buffer *secret) {
-    li_MD5_CTX ctx;
-    size_t len;
-    unsigned char h[HTTP_AUTH_DIGEST_MD5_BINLEN];
-    char hh[HTTP_AUTH_DIGEST_MD5_BINLEN*2+1];
-    force_assert(sizeof(hh) >= LI_ITOSTRING_LENGTH);
-    li_MD5_Init(&ctx);
-    len = li_itostrn(hh, sizeof(hh), cur_ts);
-    li_MD5_Update(&ctx, (unsigned char *)hh, len);
-    len = li_itostrn(hh, sizeof(hh), rnd);
-    li_MD5_Update(&ctx, (unsigned char *)hh, len);
-    if (secret) {
-        len = buffer_clen(secret);
-        li_MD5_Update(&ctx, (unsigned char *)secret->ptr, len);
-    }
-    li_MD5_Final(h, &ctx);
-    li_tohex(hh, sizeof(hh), (const char *)h, sizeof(h));
-    buffer_append_string_len(b, hh, sizeof(hh)-1);
-}
-
 static void mod_auth_digest_mutate(http_auth_info_t *ai, const char *m, const char *uri, const char *nonce, const char *cnonce, const char *nc, const char *qop) {
-    if (ai->dalgo & HTTP_AUTH_DIGEST_MD5)
-        mod_auth_digest_mutate_md5(ai, m, uri, nonce, cnonce, nc, qop);
+    li_md_iov_fn digest_iov = MD5_iov;
+    /* (ai->dalgo & HTTP_AUTH_DIGEST_MD5) default */
   #ifdef USE_LIB_CRYPTO
-    else if (ai->dalgo & HTTP_AUTH_DIGEST_SHA256)
-        mod_auth_digest_mutate_sha256(ai, m, uri, nonce, cnonce, nc, qop);
+    if (ai->dalgo & HTTP_AUTH_DIGEST_SHA256)
+        digest_iov = SHA256_iov;
    #ifdef USE_LIB_CRYPTO_SHA512_256
     else if (ai->dalgo & HTTP_AUTH_DIGEST_SHA512_256)
-        mod_auth_digest_mutate_sha512_256(ai, m, uri, nonce, cnonce, nc, qop);
+        digest_iov = SHA512_256_iov;
    #endif
   #endif
+    size_t n;
+    struct const_iovec iov[11];
+    char a1[MD_DIGEST_LENGTH_MAX*2+8]; /*(+1 for li_tohex(); +8 for align)*/
+    char a2[MD_DIGEST_LENGTH_MAX*2+8]; /*(+1 for li_tohex(); +8 for align)*/
+
+    li_tohex(a1, sizeof(a1), (const char *)ai->digest, ai->dlen);
+
+    if (ai->dalgo & HTTP_AUTH_DIGEST_SESS) {
+        /* http://www.rfc-editor.org/errata_search.php?rfc=2617
+         * Errata ID: 1649 */
+        iov[0].iov_base = a1;
+        iov[0].iov_len  = ai->dlen*2;
+        iov[1].iov_base = ":";
+        iov[1].iov_len  = 1;
+        iov[2].iov_base = nonce;
+        iov[2].iov_len  = strlen(nonce);
+        iov[3].iov_base = ":";
+        iov[3].iov_len  = 1;
+        iov[4].iov_base = cnonce;
+        iov[4].iov_len  = strlen(cnonce);
+        digest_iov(ai->digest, iov, 5);
+        li_tohex(a1, sizeof(a1), (const char *)ai->digest, ai->dlen);
+    }
+
+    /* calculate H(A2) */
+    iov[0].iov_base = m;
+    iov[0].iov_len  = strlen(m);
+    iov[1].iov_base = ":";
+    iov[1].iov_len  = 1;
+    iov[2].iov_base = uri;
+    iov[2].iov_len  = strlen(uri);
+    n = 3;
+  #if 0
+    /* qop=auth-int not supported, already checked in caller */
+    if (qop && buffer_eq_icase_ss(qop, strlen(qop), CONST_STR_LEN("auth-int"))){
+        iov[3].iov_base = ":";
+        iov[3].iov_len  = 1;
+        iov[4].iov_base = [body checksum];
+        iov[4].iov_len  = ai->dlen*2;
+        n = 5;
+    }
+  #endif
+    digest_iov(ai->digest, iov, n);
+    li_tohex(a2, sizeof(a2), (const char *)ai->digest, ai->dlen);
+
+    /* calculate response */
+    iov[0].iov_base = a1;
+    iov[0].iov_len  = ai->dlen*2;
+    iov[1].iov_base = ":";
+    iov[1].iov_len  = 1;
+    iov[2].iov_base = nonce;
+    iov[2].iov_len  = strlen(nonce);
+    iov[3].iov_base = ":";
+    iov[3].iov_len  = 1;
+    n = 4;
+    if (qop && *qop) {
+        iov[4].iov_base = nc;
+        iov[4].iov_len  = strlen(nc);
+        iov[5].iov_base = ":";
+        iov[5].iov_len  = 1;
+        iov[6].iov_base = cnonce;
+        iov[6].iov_len  = strlen(cnonce);
+        iov[7].iov_base = ":";
+        iov[7].iov_len  = 1;
+        iov[8].iov_base = qop;
+        iov[8].iov_len  = strlen(qop);
+        iov[9].iov_base = ":";
+        iov[9].iov_len  = 1;
+        n = 10;
+    }
+    iov[n].iov_base = a2;
+    iov[n].iov_len  = ai->dlen*2;
+    digest_iov(ai->digest, iov, n+1);
 }
 
 static void mod_auth_append_nonce(buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int dalgo, int *rndptr) {
@@ -1093,22 +943,51 @@ static void mod_auth_append_nonce(buffer *b, time_t cur_ts, const struct http_au
         buffer_append_uint_hex(b, (uintmax_t)rnd);
         buffer_append_string_len(b, CONST_STR_LEN(":"));
     }
+
+    size_t n;
+    struct const_iovec iov[3];
+
+  #if 0
+    char a1[LI_ITOSTRING_LENGTH];
+    char a2[LI_ITOSTRING_LENGTH];
+    iov[0].iov_base = a1;
+    iov[0].iov_len  = li_itostrn(a1, sizeof(a1), cur_ts);
+    iov[1].iov_base = a2;
+    iov[1].iov_len  = li_itostrn(a2, sizeof(a2), rnd);
+  #else
+    iov[0].iov_base = &cur_ts;
+    iov[0].iov_len  = sizeof(cur_ts);
+    iov[1].iov_base = &rnd;
+    iov[1].iov_len  = sizeof(rnd);
+  #endif
+    n = 2;
+    if (nonce_secret) {
+        iov[2].iov_base = nonce_secret->ptr;
+        iov[2].iov_len  = buffer_clen(nonce_secret);
+        n = 3;
+    }
+
+    unsigned char h[MD_DIGEST_LENGTH_MAX];
     switch (dalgo) {
      #ifdef USE_LIB_CRYPTO
       #ifdef USE_LIB_CRYPTO_SHA512_256
       case HTTP_AUTH_DIGEST_SHA512_256:
-        mod_auth_digest_nonce_sha512_256(b, cur_ts, rnd, nonce_secret);
+        SHA512_256_iov(h, iov, n);
+        n = HTTP_AUTH_DIGEST_SHA512_256_BINLEN;
         break;
       #endif
       case HTTP_AUTH_DIGEST_SHA256:
-        mod_auth_digest_nonce_sha256(b, cur_ts, rnd, nonce_secret);
+        SHA256_iov(h, iov, n);
+        n = HTTP_AUTH_DIGEST_SHA256_BINLEN;
         break;
      #endif
       /*case HTTP_AUTH_DIGEST_MD5:*/
       default:
-        mod_auth_digest_nonce_md5(b, cur_ts, rnd, nonce_secret);
+        MD5_iov(h, iov, n);
+        n = HTTP_AUTH_DIGEST_MD5_BINLEN;
         break;
     }
+    li_tohex(buffer_extend(b, n*2), n*2+1, (const char *)h, n);
 }
 
 static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int nonce_stale) {
@@ -1190,7 +1069,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 	int i;
 	buffer *b;
 	http_auth_info_t ai;
-	unsigned char rdigest[HTTP_AUTH_DIGEST_SHA256_BINLEN];
+	unsigned char rdigest[MD_DIGEST_LENGTH_MAX];
 
 
 	/* init pointers */

@@ -383,51 +383,33 @@ mod_authn_dbi_password_cmp (const char *userpw, unsigned long userpwlen, http_au
   #if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
     if (userpwlen >= 3 && userpw[0] == '$')
         return mod_authn_crypt_cmp(reqpw, userpw, userpwlen);
-    else
   #endif
-    if (32 == userpwlen) {
-        /* plain md5 */
-        MD5_CTX ctx;
-        unsigned char HA1[16];
-        unsigned char md5pw[16];
 
-        MD5_Init(&ctx);
-        MD5_Update(&ctx, (unsigned char *)ai->username, ai->ulen);
-        MD5_Update(&ctx, CONST_STR_LEN(":"));
-        MD5_Update(&ctx, (unsigned char *)ai->realm, ai->rlen);
-        MD5_Update(&ctx, CONST_STR_LEN(":"));
-        MD5_Update(&ctx, (unsigned char *)reqpw, strlen(reqpw));
-        MD5_Final(HA1, &ctx);
+    const struct const_iovec iov[] = {
+      { ai->username, ai->ulen }
+     ,{ ":", 1 }
+     ,{ ai->realm, ai->rlen }
+     ,{ ":", 1 }
+     ,{ reqpw, strlen(reqpw) }
+    };
 
-        /*(compare 16-byte MD5 binary instead of converting to hex strings
-         * in order to then have to do case-insensitive hex str comparison)*/
-        return (0 == li_hex2bin(md5pw, sizeof(md5pw), userpw, 32))
-          ? ck_memeq_const_time_fixed_len(HA1, md5pw, sizeof(md5pw)) ? 0 : 1
-          : -1;
-    }
+    unsigned char HA1[MD_DIGEST_LENGTH_MAX];
+    unsigned char pwbin[MD_DIGEST_LENGTH_MAX];
+
+    if (32 == userpwlen)
+        MD5_iov(HA1, iov, sizeof(iov)/sizeof(*iov));
   #ifdef USE_LIB_CRYPTO
-    else if (64 == userpwlen) {
-        SHA256_CTX ctx;
-        unsigned char HA1[32];
-        unsigned char shapw[32];
-
-        SHA256_Init(&ctx);
-        SHA256_Update(&ctx, (unsigned char *)ai->username, ai->ulen);
-        SHA256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA256_Update(&ctx, (unsigned char *)ai->realm, ai->rlen);
-        SHA256_Update(&ctx, CONST_STR_LEN(":"));
-        SHA256_Update(&ctx, (unsigned char *)reqpw, strlen(reqpw));
-        SHA256_Final(HA1, &ctx);
-
-        /*(compare 32-byte binary digest instead of converting to hex strings
-         * in order to then have to do case-insensitive hex str comparison)*/
-        return (0 == li_hex2bin(shapw, sizeof(shapw), userpw, 64))
-          ? ck_memeq_const_time_fixed_len(HA1, shapw, sizeof(shapw)) ? 0 : 1
-          : -1;
-    }
+    else if (64 == userpwlen)
+        SHA256_iov(HA1, iov, sizeof(iov)/sizeof(*iov));
   #endif
+    else
+        return -1;
 
-    return -1;
+    /*(compare 32-byte binary digest instead of converting to hex strings
+     * in order to then have to do case-insensitive hex str comparison)*/
+    return (0 == li_hex2bin(pwbin, sizeof(pwbin), userpw, userpwlen))
+      ? ck_memeq_const_time_fixed_len(HA1, pwbin, userpwlen>>1) ? 0 : 1
+      : -1;
 }
 
 

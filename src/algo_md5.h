@@ -35,15 +35,15 @@ typedef struct {
   uint32_t state[4];                                /* state (ABCD) */
   uint32_t count[2];     /* number of bits, modulo 2^64 (lsb first) */
   unsigned char buffer[64];                         /* input buffer */
-} li_MD5_CTX;
+} MD5_CTX;
 
 #ifndef MD5_DIGEST_LENGTH
 #define MD5_DIGEST_LENGTH 16
 #endif
 
-void li_MD5_Init (li_MD5_CTX *);
-void li_MD5_Update (li_MD5_CTX *, const void *, unsigned int);
-void li_MD5_Final (unsigned char [MD5_DIGEST_LENGTH], li_MD5_CTX *);
+void MD5_Init (MD5_CTX *);
+void MD5_Update (MD5_CTX *, const void *, unsigned int);
+void MD5_Final (unsigned char [MD5_DIGEST_LENGTH], MD5_CTX *);
 
 #else  /* USE_LIB_CRYPTO_MD5 */
 

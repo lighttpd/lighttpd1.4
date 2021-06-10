@@ -306,13 +306,9 @@ static int mod_authn_mysql_password_cmp(const char *userpw, unsigned long userpw
   #endif
     if (32 == userpwlen) {
         /* plain md5 */
-        li_MD5_CTX Md5Ctx;
-        unsigned char HA1[16];
-        unsigned char md5pw[16];
-
-        li_MD5_Init(&Md5Ctx);
-        li_MD5_Update(&Md5Ctx, (unsigned char *)reqpw, strlen(reqpw));
-        li_MD5_Final(HA1, &Md5Ctx);
+        unsigned char HA1[MD5_DIGEST_LENGTH];
+        unsigned char md5pw[MD5_DIGEST_LENGTH];
+        MD5_once(HA1, reqpw, strlen(reqpw));
 
         /*(compare 16-byte MD5 binary instead of converting to hex strings
          * in order to then have to do case-insensitive hex str comparison)*/

@@ -686,7 +686,6 @@ static int get_key_number(uint32_t *ret, const buffer *b) {
 
 static int create_MD5_sum(request_st * const r) {
     uint32_t buf[4]; /* MD5 binary hash len */
-    li_MD5_CTX ctx;
 
     const buffer *key1 =
       http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Key1"));
@@ -707,9 +706,8 @@ static int create_MD5_sum(request_st * const r) {
     ws_htole32((unsigned char *)(buf+0), buf[0]);
     ws_htole32((unsigned char *)(buf+1), buf[1]);
   #endif
-    li_MD5_Init(&ctx);
-    li_MD5_Update(&ctx, buf, sizeof(buf));
-    li_MD5_Final((unsigned char *)buf, &ctx); /*(overwrite buf[] with result)*/
+    /*(overwrite buf[] with result)*/
+    MD5_once((unsigned char *)buf, buf, sizeof(buf));
     chunkqueue_append_mem(&r->write_queue, (char *)buf, sizeof(buf));
     return 0;
 }

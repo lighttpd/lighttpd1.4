@@ -156,33 +156,25 @@ SETDEFAULTS_FUNC(mod_usertrack_set_defaults) {
 
 __attribute_noinline__
 static handler_t mod_usertrack_set_cookie(request_st * const r, plugin_data * const p) {
-	buffer *cookie;
-	size_t len;
-	unsigned char h[16];
-	li_MD5_CTX Md5Ctx;
-	char hh[LI_ITOSTRING_LENGTH];
+
+	/* generate shared-secret */
+	/* (reference mod_auth.c) */
+	int rnd = li_rand_pseudo();
+	struct const_iovec iov[] = {
+	  { BUF_PTR_LEN(&r->uri.path) }
+	 ,{ "+", 1 }
+	 ,{ &log_epoch_secs, sizeof(log_epoch_secs) }
+	 ,{ &rnd, sizeof(rnd) }
+	};
+	unsigned char h[MD5_DIGEST_LENGTH];
+	MD5_iov(h, iov, sizeof(iov)/sizeof(*iov));
 
 	/* set a cookie */
-	cookie = r->tmp_buf;
+	buffer * const cookie = r->tmp_buf;
 	buffer_clear(cookie);
 	buffer_append_str2(cookie, BUF_PTR_LEN(p->conf.cookie_name),
                                    CONST_STR_LEN("="));
-
-	/* taken from mod_auth.c */
-
-	/* generate shared-secret */
-	li_MD5_Init(&Md5Ctx);
-	li_MD5_Update(&Md5Ctx, BUF_PTR_LEN(&r->uri.path));
-	li_MD5_Update(&Md5Ctx, CONST_STR_LEN("+"));
-
-	len = li_itostrn(hh, sizeof(hh), log_epoch_secs);
-	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, len);
-	len = li_itostrn(hh, sizeof(hh), li_rand_pseudo());
-	li_MD5_Update(&Md5Ctx, (unsigned char *)hh, len);
-
-	li_MD5_Final(h, &Md5Ctx);
-
-	buffer_append_string_encoded_hex_lc(cookie, (char *)h, 16);
+	buffer_append_string_encoded_hex_lc(cookie, (char *)h, sizeof(h));
 
 	/* usertrack.cookie-attrs, if set, replaces all other attrs */
 	if (p->conf.cookie_attrs) {

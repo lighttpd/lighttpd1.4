@@ -30,6 +30,10 @@ documentation and/or software.
 
 
 #include "algo_md5.h"
+#define li_MD5_CTX    MD5_CTX
+#define li_MD5_Init   MD5_Init
+#define li_MD5_Update MD5_Update
+#define li_MD5_Final  MD5_Final
 
 #define UINT4 uint32_t
 #define UINT2 uint16_t
