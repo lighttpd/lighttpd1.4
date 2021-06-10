@@ -104,6 +104,7 @@ SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 }
 
 #define USE_LIB_CRYPTO_SHA512_256
+#define SHA512_256_CTX SHA512_CTX
 /*(nettle/sha2.h: #define sha512_256_ctx sha512_ctx)*/
 /*typedef struct sha512_256_ctx SHA512_CTX;*/    /*(yes, SHA512_CTX)*/
 typedef struct sha512_ctx SHA512_CTX;
@@ -790,29 +791,49 @@ NSS_gen_hashfuncs(SHA512, HASH_AlgSHA512);
 #endif /* USE_LIB_CRYPTO */
 
 
+#ifdef USE_LIB_CRYPTO_MD4
+#ifndef MD4_DIGEST_LENGTH
+#define MD4_DIGEST_LENGTH 16
+#endif
+#undef  MD_DIGEST_LENGTH_MAX
+#define MD_DIGEST_LENGTH_MAX MD4_DIGEST_LENGTH
+#endif
+
+
 #ifdef USE_LIB_CRYPTO_MD5
 #ifndef MD5_DIGEST_LENGTH
 #define MD5_DIGEST_LENGTH 16
 #endif
 #include "algo_md5.h" /*(for legacy li_MD5_*() name mangling)*/
 #else
-#include "algo_md5.h"
+#include "algo_md5.h" /* MD5 implementation included with lighttpd */
 #endif
+#undef  MD_DIGEST_LENGTH_MAX
+#define MD_DIGEST_LENGTH_MAX MD5_DIGEST_LENGTH
 
 
 #ifdef USE_LIB_CRYPTO_SHA1
+typedef SHA_CTX SHA1_CTX;  /*(naming consistency with other algos)*/
 #ifndef SHA_DIGEST_LENGTH
 #define SHA_DIGEST_LENGTH 20
 #endif
-#else
-#include "algo_sha1.h"
+#ifndef SHA1_DIGEST_LENGTH /*(naming consistency with other algos)*/
+#define SHA1_DIGEST_LENGTH SHA_DIGEST_LENGTH
 #endif
+#else
+#include "algo_sha1.h"  /* SHA1 implementation included with lighttpd */
+typedef SHA_CTX SHA1_CTX;  /*(naming consistency with other algos)*/
+#endif
+#undef  MD_DIGEST_LENGTH_MAX
+#define MD_DIGEST_LENGTH_MAX SHA_DIGEST_LENGTH
 
 
 #ifdef USE_LIB_CRYPTO_SHA256
 #ifndef SHA256_DIGEST_LENGTH
 #define SHA256_DIGEST_LENGTH 32
 #endif
+#undef  MD_DIGEST_LENGTH_MAX
+#define MD_DIGEST_LENGTH_MAX SHA256_DIGEST_LENGTH
 #endif
 
 
@@ -820,6 +841,8 @@ NSS_gen_hashfuncs(SHA512, HASH_AlgSHA512);
 #ifndef SHA512_256_DIGEST_LENGTH
 #define SHA512_256_DIGEST_LENGTH 32
 #endif
+#undef  MD_DIGEST_LENGTH_MAX
+#define MD_DIGEST_LENGTH_MAX SHA512_256_DIGEST_LENGTH
 #endif
 
 
@@ -827,7 +850,81 @@ NSS_gen_hashfuncs(SHA512, HASH_AlgSHA512);
 #ifndef SHA512_DIGEST_LENGTH
 #define SHA512_DIGEST_LENGTH 64
 #endif
+#undef  MD_DIGEST_LENGTH_MAX
+#define MD_DIGEST_LENGTH_MAX SHA512_DIGEST_LENGTH
 #endif
+
+
+/* message digest wrappers operating on single ptr, and on const_iovec */
+
+
+typedef void(*li_md_once_fn)(unsigned char *digest, const void *data, size_t n);
+
+#define li_md_once(algo)                                            \
+  static inline void                                                \
+  algo##_once (unsigned char * const digest,                        \
+               const void * const data, const size_t n)             \
+  {                                                                 \
+      algo##_CTX ctx;                                               \
+      algo##_Init(&ctx);                                            \
+      algo##_Update(&ctx, data, n);                                 \
+      algo##_Final(digest, &ctx);                                   \
+  }
+
+#ifndef LI_CONST_IOVEC
+#define LI_CONST_IOVEC
+struct const_iovec {
+  const void *iov_base;
+  size_t iov_len;
+};
+#endif
+
+typedef void(*li_md_iov_fn)(unsigned char *digest,
+                            const struct const_iovec *iov, size_t n);
+
+#define li_md_iov(algo)                                             \
+  static inline void                                                \
+  algo##_iov (unsigned char * const digest,                         \
+              const struct const_iovec * const iov, const size_t n) \
+  {                                                                 \
+      algo##_CTX ctx;                                               \
+      algo##_Init(&ctx);                                            \
+      for (size_t i = 0; i < n; ++i) {                              \
+          if (iov[i].iov_len)                                       \
+              algo##_Update(&ctx, iov[i].iov_base, iov[i].iov_len); \
+      }                                                             \
+      algo##_Final(digest, &ctx);                                   \
+  }
+
+#ifdef USE_LIB_CRYPTO_MD4
+li_md_once(MD4)
+li_md_iov(MD4)
+#endif /* MD4_once() MD4_iov() */
+
+/*#ifdef USE_LIB_CRYPTO_MD5*/
+li_md_once(MD5)
+li_md_iov(MD5)
+/*#endif*/ /* MD5_once() MD5_iov() */
+
+/*#ifdef USE_LIB_CRYPTO_SHA1*/
+li_md_once(SHA1)
+li_md_iov(SHA1)
+/*#endif*/ /* SHA1_once() SHA1_iov() */
+
+#ifdef USE_LIB_CRYPTO_SHA256
+li_md_once(SHA256)
+li_md_iov(SHA256)
+#endif /* SHA256_once() SHA256_iov() */
+
+#ifdef USE_LIB_CRYPTO_SHA512_256
+li_md_once(SHA512_256)
+li_md_iov(SHA512_256)
+#endif /* SHA512_256_once() SHA512_256_iov() */
+
+#ifdef USE_LIB_CRYPTO_SHA512
+li_md_once(SHA512)
+li_md_iov(SHA512)
+#endif /* SHA512_once() SHA512_iov() */
 
 
 #endif /* LI_SYS_CRYPTO_MD_H */

@@ -113,10 +113,13 @@ void buffer_append_string_len(buffer * restrict b, const char * restrict s, size
 void buffer_append_str2(buffer * restrict b, const char *s1, size_t len1, const char *s2, size_t len2);
 void buffer_append_str3(buffer * restrict b, const char *s1, size_t len1, const char *s2, size_t len2, const char *s3, size_t len3);
 
+#ifndef LI_CONST_IOVEC
+#define LI_CONST_IOVEC
 struct const_iovec {
   const void *iov_base;
   size_t iov_len;
 };
+#endif
 
 __attribute_nonnull__
 void buffer_append_iovec(buffer * restrict b, const struct const_iovec *iov, size_t n);
