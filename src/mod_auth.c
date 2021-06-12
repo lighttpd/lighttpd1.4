@@ -285,15 +285,13 @@ static data_auth *data_auth_init(void)
     return dauth;
 }
 
-static int mod_auth_algorithm_parse(http_auth_info_t *ai, const char *s) {
-    size_t len;
-    if (NULL == s) {
+static int mod_auth_algorithm_parse(http_auth_info_t *ai, const char *s, size_t len) {
+    if (0 == len) {
         ai->dalgo = HTTP_AUTH_DIGEST_MD5;
         ai->dlen  = HTTP_AUTH_DIGEST_MD5_BINLEN;
         return 1;
     }
 
-    len = strlen(s);
     if (len > 5
         && (s[len-5]       ) == '-'
         && (s[len-4] | 0x20) == 's'
@@ -339,14 +337,11 @@ static int mod_auth_algorithm_parse(http_auth_info_t *ai, const char *s) {
 }
 
 static int mod_auth_algorithms_parse(int *algorithm, buffer *algos) {
-    for (char *s = algos->ptr, *p; s; s = p ? p+1 : NULL) {
+    for (const char *s = algos->ptr, *p; s; s = p ? p+1 : NULL) {
         http_auth_info_t ai;
-        int rc;
         p = strchr(s, '|');
-        if (p) *p = '\0';
-        rc = mod_auth_algorithm_parse(&ai, s);
-        if (p) *p = '|';
-        if (!rc) return 0;
+        if (!mod_auth_algorithm_parse(&ai, s, p ? (size_t)(p - s) : strlen(s)))
+            return 0;
         *algorithm |= ai.dalgo;
     }
     return 1;
@@ -1240,7 +1235,7 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		return mod_auth_send_401_unauthorized_digest(r, require, 0);
 	}
 
-	if (!mod_auth_algorithm_parse(&ai, algorithm)
+	if (!mod_auth_algorithm_parse(&ai, algorithm, strlen(algorithm))
 	    || !(require->algorithm & ai.dalgo & ~HTTP_AUTH_DIGEST_SESS)) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "digest: (%s): invalid", algorithm);
