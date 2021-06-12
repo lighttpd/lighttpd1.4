@@ -9,6 +9,8 @@ typedef enum {
 	BASE64_URL,
 } base64_charset;
 
+size_t li_base64_dec(unsigned char *result, size_t out_length, const char *in, size_t in_length, base64_charset charset);
+
 unsigned char* buffer_append_base64_decode(buffer *out, const char* in, size_t in_length, base64_charset charset);
 
 size_t li_base64_enc(char* restrict out, size_t out_length, const unsigned char* restrict in, size_t in_length, base64_charset charset, int pad);

@@ -37,7 +37,7 @@ static const signed char base64_url_reverse_table[] = {
 	41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1, /* 0x70 - 0x7F */
 };
 
-static size_t li_base64_dec(unsigned char * const result, const size_t out_length, const char * const in, const size_t in_length, const base64_charset charset) {
+size_t li_base64_dec(unsigned char * const result, const size_t out_length, const char * const in, const size_t in_length, const base64_charset charset) {
     size_t i;
     const signed char * const base64_reverse_table = (charset)
       ? base64_url_reverse_table                     /* BASE64_URL */
