@@ -721,6 +721,8 @@ static handler_t mod_auth_send_400_bad_request(request_st * const r) {
 	return HANDLER_FINISHED;
 }
 
+
+
 __attribute_noinline__
 static handler_t mod_auth_send_401_unauthorized_basic(request_st * const r, const buffer * const realm) {
     r->http_status = 401;
@@ -838,7 +840,32 @@ static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const str
 }
 
 
-static void mod_auth_digest_mutate(http_auth_info_t *ai, const char *m, const char *uri, const char *nonce, const char *cnonce, const char *nc, const char *qop) {
+
+enum http_auth_digest_params_e {
+  e_username = 0
+ ,e_realm
+ ,e_nonce
+ ,e_uri
+ ,e_algorithm
+ ,e_qop
+ ,e_cnonce
+ ,e_nc
+ ,e_response
+ ,http_auth_digest_params_sz /*(last item)*/
+};
+
+typedef struct http_auth_digest_params_t {
+    const char *ptr[http_auth_digest_params_sz];
+    uint16_t len[http_auth_digest_params_sz];
+    time_t send_nextnonce_ts;
+    unsigned char rdigest[MD_DIGEST_LENGTH_MAX]; /*(last member)*/
+} http_auth_digest_params_t;
+
+
+static void
+mod_auth_digest_mutate (http_auth_info_t * const ai, const http_auth_digest_params_t * const dp, const char * const method)
+{
+    force_assert(method);
     li_md_iov_fn digest_iov = MD5_iov;
     /* (ai->dalgo & HTTP_AUTH_DIGEST_MD5) default */
   #ifdef USE_LIB_CRYPTO
@@ -863,27 +890,28 @@ static void mod_auth_digest_mutate(http_auth_info_t *ai, const char *m, const ch
         iov[0].iov_len  = ai->dlen*2;
         iov[1].iov_base = ":";
         iov[1].iov_len  = 1;
-        iov[2].iov_base = nonce;
-        iov[2].iov_len  = strlen(nonce);
+        iov[2].iov_base = dp->ptr[e_nonce];
+        iov[2].iov_len  = dp->len[e_nonce];
         iov[3].iov_base = ":";
         iov[3].iov_len  = 1;
-        iov[4].iov_base = cnonce;
-        iov[4].iov_len  = strlen(cnonce);
+        iov[4].iov_base = dp->ptr[e_cnonce];
+        iov[4].iov_len  = dp->len[e_cnonce];
         digest_iov(ai->digest, iov, 5);
         li_tohex(a1, sizeof(a1), (const char *)ai->digest, ai->dlen);
     }
 
     /* calculate H(A2) */
-    iov[0].iov_base = m;
-    iov[0].iov_len  = strlen(m);
+    iov[0].iov_base = method;
+    iov[0].iov_len  = strlen(method);
     iov[1].iov_base = ":";
     iov[1].iov_len  = 1;
-    iov[2].iov_base = uri;
-    iov[2].iov_len  = strlen(uri);
+    iov[2].iov_base = dp->ptr[e_uri];
+    iov[2].iov_len  = dp->len[e_uri];
     n = 3;
   #if 0
     /* qop=auth-int not supported, already checked in caller */
-    if (qop && buffer_eq_icase_ss(qop, strlen(qop), CONST_STR_LEN("auth-int"))){
+    if (dp->ptr[e_qop] && buffer_eq_icase_ss(dp->ptr[e_qop], dp->len[e_qop],
+                                             CONST_STR_LEN("auth-int"))) {
         iov[3].iov_base = ":";
         iov[3].iov_len  = 1;
         iov[4].iov_base = [body checksum];
@@ -899,22 +927,22 @@ static void mod_auth_digest_mutate(http_auth_info_t *ai, const char *m, const ch
     iov[0].iov_len  = ai->dlen*2;
     iov[1].iov_base = ":";
     iov[1].iov_len  = 1;
-    iov[2].iov_base = nonce;
-    iov[2].iov_len  = strlen(nonce);
+    iov[2].iov_base = dp->ptr[e_nonce];
+    iov[2].iov_len  = dp->len[e_nonce];
     iov[3].iov_base = ":";
     iov[3].iov_len  = 1;
     n = 4;
-    if (qop && *qop) {
-        iov[4].iov_base = nc;
-        iov[4].iov_len  = strlen(nc);
+    if (dp->len[e_qop]) {
+        iov[4].iov_base = dp->ptr[e_nc];
+        iov[4].iov_len  = dp->len[e_nc];
         iov[5].iov_base = ":";
         iov[5].iov_len  = 1;
-        iov[6].iov_base = cnonce;
-        iov[6].iov_len  = strlen(cnonce);
+        iov[6].iov_base = dp->ptr[e_cnonce];
+        iov[6].iov_len  = dp->len[e_cnonce];
         iov[7].iov_base = ":";
         iov[7].iov_len  = 1;
-        iov[8].iov_base = qop;
-        iov[8].iov_len  = strlen(qop);
+        iov[8].iov_base = dp->ptr[e_qop];
+        iov[8].iov_len  = dp->len[e_qop];
         iov[9].iov_base = ":";
         iov[9].iov_len  = 1;
         n = 10;
@@ -924,7 +952,10 @@ static void mod_auth_digest_mutate(http_auth_info_t *ai, const char *m, const ch
     digest_iov(ai->digest, iov, n+1);
 }
 
-static void mod_auth_append_nonce(buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int dalgo, int *rndptr) {
+
+static void
+mod_auth_append_nonce (buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int dalgo, int *rndptr)
+{
     buffer_append_uint_hex(b, (uintmax_t)cur_ts);
     buffer_append_string_len(b, CONST_STR_LEN(":"));
     const buffer * const nonce_secret = require->nonce_secret;
@@ -985,7 +1016,10 @@ static void mod_auth_append_nonce(buffer *b, time_t cur_ts, const struct http_au
     li_tohex(buffer_extend(b, n*2), n*2+1, (const char *)h, n);
 }
 
-static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int nonce_stale) {
+
+static void
+mod_auth_digest_www_authenticate (buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int nonce_stale)
+{
     int algos = nonce_stale ? nonce_stale : require->algorithm;
     int n = 0;
     int algoid[3];
@@ -1033,15 +1067,30 @@ static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const str
     }
 }
 
-__attribute_noinline__
-static handler_t mod_auth_send_401_unauthorized_digest(request_st *r, const struct http_auth_require_t *require, int nonce_stale);
 
-static void mod_auth_digest_authentication_info(buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int dalgo) {
+__attribute_noinline__
+static handler_t
+mod_auth_send_401_unauthorized_digest(request_st * const r, const struct http_auth_require_t * const require, int nonce_stale)
+{
+    r->http_status = 401;
+    r->handler_module = NULL;
+    mod_auth_digest_www_authenticate(
+      http_header_response_set_ptr(r, HTTP_HEADER_WWW_AUTHENTICATE,
+                                   CONST_STR_LEN("WWW-Authenticate")),
+      log_epoch_secs, require, nonce_stale);
+    return HANDLER_FINISHED;
+}
+
+
+static void
+mod_auth_digest_authentication_info (buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int dalgo)
+{
     buffer_clear(b);
     buffer_append_string_len(b, CONST_STR_LEN("nextnonce=\""));
     mod_auth_append_nonce(b, cur_ts, require, dalgo, NULL);
     buffer_append_string_len(b, CONST_STR_LEN("\""));
 }
+
 
 static handler_t
 mod_auth_digest_get (request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend, http_auth_info_t * const ai)
@@ -1092,320 +1141,297 @@ mod_auth_digest_get (request_st * const r, void *p_d, const struct http_auth_req
     return rc;
 }
 
-typedef struct {
-	const char *key;
-	int key_len;
-	char **ptr;
-} digest_kv;
 
-static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend) {
-	char *username = NULL;
-	char *realm = NULL;
-	char *nonce = NULL;
-	char *uri = NULL;
-	char *algorithm = NULL;
-	char *qop = NULL;
-	char *cnonce = NULL;
-	char *nc = NULL;
-	char *respons = NULL;
+__attribute_cold__
+static handler_t
+mod_auth_digest_misconfigured (request_st * const r, const struct http_auth_backend_t * const backend)
+{
+    if (NULL == backend)
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "auth.backend not configured for %s", r->uri.path.ptr);
+    else
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "auth.require \"method\" => \"digest\" invalid "
+          "(try \"basic\"?) for %s", r->uri.path.ptr);
 
-	char *e, *c;
-	int i;
-	buffer *b;
-	http_auth_info_t ai;
-	unsigned char rdigest[MD_DIGEST_LENGTH_MAX];
-
-
-	/* init pointers */
-#define S(x) \
-	x, sizeof(x)-1, NULL
-	digest_kv dkv[10] = {
-		{ S("username=") },
-		{ S("realm=") },
-		{ S("nonce=") },
-		{ S("uri=") },
-		{ S("algorithm=") },
-		{ S("qop=") },
-		{ S("cnonce=") },
-		{ S("nc=") },
-		{ S("response=") },
-
-		{ NULL, 0, NULL }
-	};
-#undef S
-
-	dkv[0].ptr = &username;
-	dkv[1].ptr = &realm;
-	dkv[2].ptr = &nonce;
-	dkv[3].ptr = &uri;
-	dkv[4].ptr = &algorithm;
-	dkv[5].ptr = &qop;
-	dkv[6].ptr = &cnonce;
-	dkv[7].ptr = &nc;
-	dkv[8].ptr = &respons;
-
-	if (NULL == backend || NULL == backend->digest) {
-		if (NULL == backend)
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "auth.backend not configured for %s", r->uri.path.ptr);
-		else
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "auth.require \"method\" => \"digest\" invalid "
-			  "(try \"basic\"?) for %s",
-			  r->uri.path.ptr);
-		r->http_status = 500;
-		r->handler_module = NULL;
-		return HANDLER_FINISHED;
-	}
-
-	const buffer * const vb =
-	  http_header_request_get(r, HTTP_HEADER_AUTHORIZATION,
-	                          CONST_STR_LEN("Authorization"));
-
-	if (NULL == vb || !buffer_eq_icase_ssn(vb->ptr, CONST_STR_LEN("Digest "))) {
-		return mod_auth_send_401_unauthorized_digest(r, require, 0);
-	} else {
-		size_t n = buffer_clen(vb);
-	      #ifdef __COVERITY__
-		if (n < sizeof("Digest ")-1) {
-			return mod_auth_send_400_bad_request(r);
-		}
-	      #endif
-		n -= (sizeof("Digest ")-1);
-		b = buffer_init();
-		buffer_copy_string_len(b,vb->ptr+sizeof("Digest ")-1,n);
-	}
-
-	/* parse credentials from client */
-	for (c = b->ptr; *c; c++) {
-		/* skip whitespaces */
-		while (*c == ' ' || *c == '\t') c++;
-		if (!*c) break;
-
-		for (i = 0; dkv[i].key; i++) {
-			if ((0 == strncmp(c, dkv[i].key, dkv[i].key_len))) {
-				if ((c[dkv[i].key_len] == '"') &&
-				    (NULL != (e = strchr(c + dkv[i].key_len + 1, '"')))) {
-					/* value with "..." */
-					*(dkv[i].ptr) = c + dkv[i].key_len + 1;
-					c = e;
-
-					*e = '\0';
-				} else if (NULL != (e = strchr(c + dkv[i].key_len, ','))) {
-					/* value without "...", terminated by ',' */
-					*(dkv[i].ptr) = c + dkv[i].key_len;
-					c = e;
-
-					*e = '\0';
-				} else {
-					/* value without "...", terminated by EOL */
-					*(dkv[i].ptr) = c + dkv[i].key_len;
-					c += strlen(c) - 1;
-				}
-				break;
-			}
-		}
-	}
-
-	/* check if everything is transmitted */
-	if (!username ||
-	    !realm ||
-	    !nonce ||
-	    !uri ||
-	    (qop && (!nc || !cnonce)) ||
-	    !respons ) {
-		/* missing field */
-
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "digest: missing field");
-
-		buffer_free(b);
-		return mod_auth_send_400_bad_request(r);
-	}
-
-	ai.username = username;
-	ai.ulen     = strlen(username);
-	ai.realm    = realm;
-	ai.rlen     = strlen(realm);
-
-	if (!buffer_is_equal_string(require->realm, ai.realm, ai.rlen)) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "digest: realm mismatch");
-		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(r, require, 0);
-	}
-
-	if (!mod_auth_algorithm_parse(&ai, algorithm, strlen(algorithm))
-	    || !(require->algorithm & ai.dalgo & ~HTTP_AUTH_DIGEST_SESS)) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "digest: (%s): invalid", algorithm);
-		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(r, require, 0);
-	}
-
-	/**
-	 * protect the md5-sess against missing cnonce and nonce
-	 */
-	if ((ai.dalgo & HTTP_AUTH_DIGEST_SESS) && (!nonce || !cnonce)) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "digest: (%s): missing field", algorithm);
-
-		buffer_free(b);
-		return mod_auth_send_400_bad_request(r);
-	}
-
-	{
-		size_t resplen = strlen(respons);
-		if (0 != li_hex2bin(rdigest, sizeof(rdigest), respons, resplen)
-		    || resplen != (ai.dlen << 1)) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "digest: (%s): invalid format", respons);
-			buffer_free(b);
-			return mod_auth_send_400_bad_request(r);
-		}
-	}
-
-	if (qop && buffer_eq_icase_ss(qop, strlen(qop), CONST_STR_LEN("auth-int"))){
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "digest: qop=auth-int not supported");
-
-		buffer_free(b);
-		return mod_auth_send_400_bad_request(r);
-	}
-
-	/* detect if attacker is attempting to reuse valid digest for one uri
-	 * on a different request uri.  Might also happen if intermediate proxy
-	 * altered client request line.  (Altered request would not result in
-	 * the same digest as that calculated by the client.)
-	 * Internal redirects such as with mod_rewrite will modify request uri.
-	 * Reauthentication is done to detect crossing auth realms, but this
-	 * uri validation step is bypassed.  r->target_orig is
-	 * original request-target sent in client request. */
-	{
-		const size_t ulen = strlen(uri);
-		if (!buffer_is_equal_string(&r->target_orig, uri, ulen)) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "digest: auth failed: uri mismatch (%s != %s), IP: %s",
-			  r->target_orig.ptr, uri, r->con->dst_addr_buf->ptr);
-			buffer_free(b);
-			return mod_auth_send_400_bad_request(r);
-		}
-	}
-
-	/* check age of nonce.  Note, random data is used in nonce generation
-	 * in mod_auth_send_401_unauthorized_digest().  If that were replaced
-	 * with nanosecond time, then nonce secret would remain unique enough
-	 * for the purposes of Digest auth, and would be reproducible (and
-	 * verifiable) if nanoseconds were included with seconds as part of the
-	 * nonce "timestamp:secret".  However, doing so would expose a high
-	 * precision timestamp of the system to attackers.  timestamp in nonce
-	 * could theoretically be modified and still produce same md5sum, but
-	 * that is highly unlikely within a 10 min (moving) window of valid
-	 * time relative to current time (now).
-	 * If it is desired to validate that nonces were generated by server,
-	 * then specify auth.require = ( ... => ( "secret" => "..." ) )
-	 * When secret is specified, then instead of nanoseconds, the random
-	 * data value (included for unique nonces) will be exposed in the nonce
-	 * along with the timestamp, and the additional secret will be used to
-	 * validate that the server generated the nonce using that secret. */
-	time_t send_nextnonce;
-	{
-		time_t ts = 0;
-		const unsigned char * const nonce_uns = (unsigned char *)nonce;
-		for (i = 0; i < 8 && light_isxdigit(nonce_uns[i]); ++i) {
-			ts =(time_t)((uint32_t)ts << 4) | hex2int(nonce_uns[i]);
-		}
-		const time_t cur_ts = log_epoch_secs;
-		if (nonce[i] != ':'
-		    || ts > cur_ts || cur_ts - ts > 600) { /*(10 mins)*/
-			/* nonce is stale; have client regenerate digest */
-			buffer_free(b);
-			return mod_auth_send_401_unauthorized_digest(r, require, ai.dalgo);
-		}
-
-		send_nextnonce = (cur_ts - ts > 540) ? cur_ts : 0; /*(9 mins)*/
-
-		if (require->nonce_secret) {
-			unsigned int rnd = 0;
-			for (int j = i+8; i < j && light_isxdigit(nonce_uns[i]); ++i) {
-				rnd = (rnd << 4) + hex2int(nonce_uns[i]);
-			}
-			if (nonce[i] != ':') {
-				/* nonce is invalid;
-				 * expect extra field w/ require->nonce_secret */
-				log_error(r->conf.errh, __FILE__, __LINE__,
-				  "digest: nonce invalid");
-				buffer_free(b);
-				return mod_auth_send_400_bad_request(r);
-			}
-			buffer * const tb = r->tmp_buf;
-			buffer_clear(tb);
-			mod_auth_append_nonce(tb, cur_ts, require, ai.dalgo, (int *)&rnd);
-			if (!buffer_eq_slen(tb, nonce, strlen(nonce))) {
-				/* nonce not generated using current require->nonce_secret */
-				log_error(r->conf.errh, __FILE__, __LINE__,
-				  "digest: nonce mismatch");
-				buffer_free(b);
-				return mod_auth_send_401_unauthorized_digest(r, require, 0);
-			}
-		}
-	}
-
-	handler_t rc;
-	rc = mod_auth_digest_get(r, p_d, require, backend, &ai);
-	if (__builtin_expect( (HANDLER_GO_ON != rc), 0)) {
-		buffer_free(b);
-		return rc;
-	}
-
-	const char *m = get_http_method_name(r->http_method);
-	force_assert(m);
-
-	mod_auth_digest_mutate(&ai,m,uri,nonce,cnonce,nc,qop);
-
-	if (!ck_memeq_const_time_fixed_len(rdigest, ai.digest, ai.dlen)) {
-		/*ck_memzero(ai.digest, ai.dlen);*//*skip clear since mutated*/
-		/* digest not ok */
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "digest: auth failed for %s: wrong password, IP: %s",
-		  username, r->con->dst_addr_buf->ptr);
-		r->keep_alive = -1; /*(disable keep-alive if bad password)*/
-
-		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(r, require, 0);
-	}
-	/*ck_memzero(ai.digest, ai.dlen);*//* skip clear since mutated */
-
-	/* value is our allow-rules */
-	if (!http_auth_match_rules(require, username, NULL, NULL)) {
-		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(r, require, 0);
-	}
-
-	if (send_nextnonce) {
-		/*(send nextnonce when expiration is approaching)*/
-		mod_auth_digest_authentication_info(
-		  http_header_response_set_ptr(r, HTTP_HEADER_OTHER,
-		                               CONST_STR_LEN("Authentication-Info")),
-		  send_nextnonce /*(cur_ts)*/, require, ai.dalgo);
-	}
-
-	http_auth_setenv(r, ai.username, ai.ulen, CONST_STR_LEN("Digest"));
-
-	buffer_free(b);
-
-	return HANDLER_GO_ON;
+    r->http_status = 500;
+    r->handler_module = NULL;
+    return HANDLER_FINISHED;
 }
 
-static handler_t mod_auth_send_401_unauthorized_digest(request_st * const r, const struct http_auth_require_t * const require, int nonce_stale) {
-	r->http_status = 401;
-	r->handler_module = NULL;
-	mod_auth_digest_www_authenticate(
-	  http_header_response_set_ptr(r, HTTP_HEADER_WWW_AUTHENTICATE,
-	                               CONST_STR_LEN("WWW-Authenticate")),
-          log_epoch_secs, require, nonce_stale);
-	return HANDLER_FINISHED;
+
+static void
+mod_auth_digest_parse_authorization (http_auth_digest_params_t * const dp, const buffer * const vb)
+{
+    struct digest_kv {
+        const char *key;
+        uint32_t klen;
+        enum http_auth_digest_params_e id;
+    };
+
+    static const struct digest_kv dkv[] = {
+        { CONST_STR_LEN("username="),  e_username },
+        { CONST_STR_LEN("realm="),     e_realm },
+        { CONST_STR_LEN("nonce="),     e_nonce },
+        { CONST_STR_LEN("uri="),       e_uri },
+        { CONST_STR_LEN("algorithm="), e_algorithm },
+        { CONST_STR_LEN("qop="),       e_qop },
+        { CONST_STR_LEN("cnonce="),    e_cnonce },
+        { CONST_STR_LEN("nc="),        e_nc },
+        { CONST_STR_LEN("response="),  e_response },
+
+        { NULL, 0, http_auth_digest_params_sz }
+    };
+
+    /* parse credentials from client */
+    /* note: parsing does not recognize and handle BWS (bad whitespace) */
+    /* XXX: might find end of token and strncmp() only when len matches */
+    /* (caller already checked that vb->ptr begins with "Digest ") */
+    /* coverity[overflow_sink : FALSE] */
+    for (const char *c = vb->ptr+sizeof("Digest ")-1, *e; *c; c++) {
+        /* skip whitespaces */
+        while (*c == ' ' || *c == '\t') c++;
+        if (!*c) break;
+
+        for (int i = 0; dkv[i].key; ++i) {
+            if (0 != strncmp(c, dkv[i].key, dkv[i].klen))
+                continue;
+
+            if ((c[dkv[i].klen] == '"') &&
+                (NULL != (e = strchr(c + dkv[i].klen + 1, '"')))) {
+                /* value with "..." */
+                c += dkv[i].klen + 1;
+                dp->ptr[dkv[i].id] = c;
+                dp->len[dkv[i].id] = (uint16_t)(e - c);
+                c = e;
+            }
+            else if (NULL != (e = strchr(c + dkv[i].klen, ','))) {
+                /* value without "...", terminated by ',' */
+                c += dkv[i].klen;
+                dp->ptr[dkv[i].id] = c;
+                dp->len[dkv[i].id] = (uint16_t)(e - c);
+                c = e;
+            }
+            else {
+                /* value without "...", terminated by EOL */
+                c += dkv[i].klen;
+                dp->ptr[dkv[i].id] = c;
+                c += (dp->len[dkv[i].id] = (uint16_t)strlen(c)) - 1;
+            }
+            break;
+        }
+    }
 }
+
+
+static handler_t
+mod_auth_digest_validate_params (request_st * const r, const struct http_auth_require_t * const require, http_auth_digest_params_t * const dp, http_auth_info_t * const ai)
+{
+    /* check for required parameters */
+    if ((!dp->ptr[e_qop] || (dp->ptr[e_nc] && dp->ptr[e_cnonce]))
+        && dp->ptr[e_username]
+        && dp->ptr[e_realm]
+        && dp->ptr[e_nonce]
+        && dp->ptr[e_uri]
+        && dp->ptr[e_response]) {
+        ai->username = dp->ptr[e_username];
+        ai->ulen     = dp->len[e_username];
+        ai->realm    = dp->ptr[e_realm];
+        ai->rlen     = dp->len[e_realm];
+    }
+    else {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: missing field");
+        return mod_auth_send_400_bad_request(r);
+    }
+
+    if (!buffer_eq_slen(require->realm, ai->realm, ai->rlen)) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: realm mismatch");
+        return mod_auth_send_401_unauthorized_digest(r, require, 0);
+    }
+
+    if (!mod_auth_algorithm_parse(ai,dp->ptr[e_algorithm],dp->len[e_algorithm])
+        || !(require->algorithm & ai->dalgo & ~HTTP_AUTH_DIGEST_SESS)) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: (%.*s): invalid",
+          (int)dp->len[e_algorithm], dp->ptr[e_algorithm]);
+        return mod_auth_send_401_unauthorized_digest(r, require, 0);
+    }
+
+    /* *-sess requires nonce and cnonce */
+    if ((ai->dalgo & HTTP_AUTH_DIGEST_SESS)
+        && (!dp->ptr[e_nonce] || !dp->ptr[e_cnonce])) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: (%.*s): missing field",
+          (int)dp->len[e_algorithm], dp->ptr[e_algorithm]);
+        return mod_auth_send_400_bad_request(r);
+    }
+
+    if (0 != li_hex2bin(dp->rdigest, sizeof(dp->rdigest),
+                        dp->ptr[e_response], dp->len[e_response])
+        || dp->len[e_response] != (ai->dlen << 1)) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: (%s): invalid format", dp->ptr[e_response]);
+        return mod_auth_send_400_bad_request(r);
+    }
+
+    if (dp->ptr[e_qop]&& buffer_eq_icase_ss(dp->ptr[e_qop], dp->len[e_qop],
+                                            CONST_STR_LEN("auth-int"))) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: qop=auth-int not supported");
+        return mod_auth_send_400_bad_request(r);
+    }
+
+    /* detect if attacker is attempting to reuse valid digest for one uri
+     * on a different request uri.  Might also happen if intermediate proxy
+     * altered client request line.  (Altered request would not result in
+     * the same digest as that calculated by the client.)
+     * Internal redirects such as with mod_rewrite will modify request uri.
+     * Reauthentication is done to detect crossing auth realms, but this
+     * uri validation step is bypassed.  r->target_orig is
+     * original request-target sent in client request. */
+    if (!buffer_eq_slen(&r->target_orig, dp->ptr[e_uri], dp->len[e_uri])) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: auth failed: uri mismatch (%s != %.*s), IP: %s",
+          r->target_orig.ptr, (int)dp->len[e_uri], dp->ptr[e_uri],
+          r->con->dst_addr_buf->ptr);
+        return mod_auth_send_400_bad_request(r);
+    }
+
+    return HANDLER_GO_ON;
+}
+
+
+static handler_t
+mod_auth_digest_validate_nonce (request_st * const r, const struct http_auth_require_t * const require, http_auth_digest_params_t * const dp, http_auth_info_t * const ai)
+{
+    /* check age of nonce.  Note, random data is used in nonce generation
+     * in mod_auth_send_401_unauthorized_digest().  If that were replaced
+     * with nanosecond time, then nonce secret would remain unique enough
+     * for the purposes of Digest auth, and would be reproducible (and
+     * verifiable) if nanoseconds were included with seconds as part of the
+     * nonce "timestamp:secret".  However, doing so would expose a high
+     * precision timestamp of the system to attackers.  timestamp in nonce
+     * could theoretically be modified and still produce same md5sum, but
+     * that is highly unlikely within a 10 min (moving) window of valid
+     * time relative to current time (now).
+     * If it is desired to validate that nonces were generated by server,
+     * then specify auth.require = ( ... => ( "secret" => "..." ) )
+     * When secret is specified, then instead of nanoseconds, the random
+     * data value (included for unique nonces) will be exposed in the nonce
+     * along with the timestamp, and the additional secret will be used to
+     * validate that the server generated the nonce using that secret. */
+    time_t ts = 0;
+    const unsigned char * const nonce = (unsigned char *)dp->ptr[e_nonce];
+    int i;
+    for (i = 0; i < 8 && light_isxdigit(nonce[i]); ++i)
+        ts =(time_t)((uint32_t)ts << 4) | hex2int(nonce[i]);
+
+    const time_t cur_ts = log_epoch_secs;
+    if (nonce[i] != ':' || ts > cur_ts || cur_ts - ts > 600) { /*(10 mins)*/
+        /* nonce is stale; have client regenerate digest */
+        return mod_auth_send_401_unauthorized_digest(r, require, ai->dalgo);
+    }
+
+    if (cur_ts - ts > 540)  /*(9 mins)*/
+        dp->send_nextnonce_ts = cur_ts;
+
+    if (require->nonce_secret) {
+        unsigned int rnd = 0;
+        for (int j = i+8; i < j && light_isxdigit(nonce[i]); ++i) {
+            rnd = (rnd << 4) + hex2int(nonce[i]);
+        }
+        if (nonce[i] != ':') {
+            /* nonce is invalid;
+             * expect extra field w/ require->nonce_secret */
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "digest: nonce invalid");
+            return mod_auth_send_400_bad_request(r);
+        }
+        buffer * const tb = r->tmp_buf;
+        buffer_clear(tb);
+        mod_auth_append_nonce(tb, cur_ts, require, ai->dalgo, (int *)&rnd);
+        if (!buffer_eq_slen(tb, dp->ptr[e_nonce], dp->len[e_nonce])) {
+            /* nonce not generated using current require->nonce_secret */
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "digest: nonce mismatch");
+            return mod_auth_send_401_unauthorized_digest(r, require, 0);
+        }
+    }
+
+    return HANDLER_GO_ON;
+}
+
+
+static handler_t
+mod_auth_check_digest (request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend)
+{
+    if (NULL == backend || NULL == backend->digest)
+        return mod_auth_digest_misconfigured(r, backend);
+
+    const buffer * const vb =
+      http_header_request_get(r, HTTP_HEADER_AUTHORIZATION,
+                              CONST_STR_LEN("Authorization"));
+    if (NULL == vb || !buffer_eq_icase_ssn(vb->ptr, CONST_STR_LEN("Digest ")))
+        return mod_auth_send_401_unauthorized_digest(r, require, 0);
+  #ifdef __COVERITY__
+    if (buffer_clen(vb) < sizeof("Digest ")-1)
+        return mod_auth_send_400_bad_request(r);
+  #endif
+
+    http_auth_digest_params_t dp;
+    http_auth_info_t ai;
+    handler_t rc;
+
+    memset(&dp, 0, sizeof(dp) - sizeof(dp.rdigest));
+
+    mod_auth_digest_parse_authorization(&dp, vb);
+
+    rc = mod_auth_digest_validate_params(r, require, &dp, &ai);
+    if (__builtin_expect( (HANDLER_GO_ON != rc), 0))
+        return rc;
+
+    rc = mod_auth_digest_validate_nonce(r, require, &dp, &ai);
+    if (__builtin_expect( (HANDLER_GO_ON != rc), 0))
+        return rc;
+
+    rc = mod_auth_digest_get(r, p_d, require, backend, &ai);
+    if (__builtin_expect( (HANDLER_GO_ON != rc), 0))
+        return rc;
+
+    mod_auth_digest_mutate(&ai, &dp, get_http_method_name(r->http_method));
+
+    if (!ck_memeq_const_time_fixed_len(dp.rdigest, ai.digest, ai.dlen)) {
+        /*ck_memzero(ai.digest, ai.dlen);*//*skip clear since mutated*/
+        /* digest not ok */
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: auth failed for %.*s: wrong password, IP: %s",
+          (int)ai.ulen, ai.username, r->con->dst_addr_buf->ptr);
+        r->keep_alive = -1; /*(disable keep-alive if bad password)*/
+        return mod_auth_send_401_unauthorized_digest(r, require, 0);
+    }
+    /*ck_memzero(ai.digest, ai.dlen);*//* skip clear since mutated */
+
+    /* check authorization (authz); string args must be '\0'-terminated) */
+    buffer * const tb = r->tmp_buf;
+    buffer_copy_string_len(tb, ai.username, ai.ulen);
+    if (!http_auth_match_rules(require, tb->ptr, NULL, NULL))
+        return mod_auth_send_401_unauthorized_digest(r, require, 0);
+
+    if (dp.send_nextnonce_ts) {
+        /*(send nextnonce when expiration is approaching)*/
+        mod_auth_digest_authentication_info(
+          http_header_response_set_ptr(r, HTTP_HEADER_OTHER,
+                                       CONST_STR_LEN("Authentication-Info")),
+          dp.send_nextnonce_ts /*(cur_ts)*/, require, ai.dalgo);
+    }
+
+    http_auth_setenv(r, ai.username, ai.ulen, CONST_STR_LEN("Digest"));
+    return HANDLER_GO_ON;
+}
+
+
 
 static handler_t mod_auth_check_extern(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend) {
 	/* require REMOTE_USER already set */
