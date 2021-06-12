@@ -1038,6 +1038,9 @@ static void mod_auth_digest_www_authenticate(buffer *b, time_t cur_ts, const str
     }
 }
 
+__attribute_noinline__
+static handler_t mod_auth_send_401_unauthorized_digest(request_st *r, const struct http_auth_require_t *require, int nonce_stale);
+
 static void mod_auth_digest_authentication_info(buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int dalgo) {
     buffer_clear(b);
     buffer_append_string_len(b, CONST_STR_LEN("nextnonce=\""));
@@ -1045,14 +1048,60 @@ static void mod_auth_digest_authentication_info(buffer *b, time_t cur_ts, const 
     buffer_append_string_len(b, CONST_STR_LEN("\""));
 }
 
+static handler_t
+mod_auth_digest_get (request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend, http_auth_info_t * const ai)
+{
+    plugin_data * const p = p_d;
+    splay_tree **sptree = p->conf.auth_cache
+      ? &p->conf.auth_cache->sptree
+      : NULL;
+    http_auth_cache_entry *ae = NULL;
+    handler_t rc = HANDLER_GO_ON;
+    int ndx = -1;
+    if (sptree) {
+        ndx = http_auth_cache_hash(require, ai->username, ai->ulen);
+        ae = http_auth_cache_query(sptree, ndx);
+        if (ae && ae->require == require
+            && ae->dalgo == ai->dalgo
+            && ae->dlen == ai->dlen
+            && ae->ulen == ai->ulen
+            && 0 == memcmp(ae->username, ai->username, ai->ulen)) {
+            memcpy(ai->digest, ae->pwdigest, ai->dlen);
+        }
+        else /*(not found or hash collision)*/
+            ae = NULL;
+    }
+
+    if (NULL == ae)
+        rc = backend->digest(r, backend->p_d, ai);
+
+    switch (rc) {
+    case HANDLER_GO_ON:
+        break;
+    case HANDLER_WAIT_FOR_EVENT:
+        return HANDLER_WAIT_FOR_EVENT;
+    case HANDLER_FINISHED:
+        return HANDLER_FINISHED;
+    case HANDLER_ERROR:
+    default:
+        r->keep_alive = -1; /*(disable keep-alive if unknown user)*/
+        return mod_auth_send_401_unauthorized_digest(r, require, 0);
+    }
+
+    if (sptree && NULL == ae) { /*(cache digest from backend)*/
+        ae = http_auth_cache_entry_init(require, ai->dalgo, ai->username,
+                                        ai->ulen, (char *)ai->digest, ai->dlen);
+        http_auth_cache_insert(sptree, ndx, ae, http_auth_cache_entry_free);
+    }
+
+    return rc;
+}
+
 typedef struct {
 	const char *key;
 	int key_len;
 	char **ptr;
 } digest_kv;
-
-__attribute_noinline__
-static handler_t mod_auth_send_401_unauthorized_digest(request_st *r, const struct http_auth_require_t *require, int nonce_stale);
 
 static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend) {
 	char *username = NULL;
@@ -1307,51 +1356,11 @@ static handler_t mod_auth_check_digest(request_st * const r, void *p_d, const st
 		}
 	}
 
-	plugin_data * const p = p_d;
-	splay_tree ** sptree = p->conf.auth_cache
-	  ? &p->conf.auth_cache->sptree
-	  : NULL;
-	http_auth_cache_entry *ae = NULL;
-	handler_t rc = HANDLER_ERROR;
-	int ndx = -1;
-	if (sptree) {
-		ndx = http_auth_cache_hash(require, ai.username, ai.ulen);
-		ae = http_auth_cache_query(sptree, ndx);
-		if (ae && ae->require == require
-		    && ae->dalgo == ai.dalgo
-		    && ae->dlen == ai.dlen
-		    && ae->ulen == ai.ulen
-		    && 0 == memcmp(ae->username, ai.username, ai.ulen)) {
-			rc = HANDLER_GO_ON;
-			memcpy(ai.digest, ae->pwdigest, ai.dlen);
-		}
-		else /*(not found or hash collision)*/
-			ae = NULL;
-	}
-
-	if (NULL == ae)
-		rc = backend->digest(r, backend->p_d, &ai);
-
-	switch (rc) {
-	case HANDLER_GO_ON:
-		break;
-	case HANDLER_WAIT_FOR_EVENT:
+	handler_t rc;
+	rc = mod_auth_digest_get(r, p_d, require, backend, &ai);
+	if (__builtin_expect( (HANDLER_GO_ON != rc), 0)) {
 		buffer_free(b);
-		return HANDLER_WAIT_FOR_EVENT;
-	case HANDLER_FINISHED:
-		buffer_free(b);
-		return HANDLER_FINISHED;
-	case HANDLER_ERROR:
-	default:
-		r->keep_alive = -1; /*(disable keep-alive if unknown user)*/
-		buffer_free(b);
-		return mod_auth_send_401_unauthorized_digest(r, require, 0);
-	}
-
-	if (sptree && NULL == ae) { /*(cache digest from backend)*/
-		ae = http_auth_cache_entry_init(require, ai.dalgo, ai.username, ai.ulen,
-		                                (char *)ai.digest, ai.dlen);
-		http_auth_cache_insert(sptree, ndx, ae, http_auth_cache_entry_free);
+		return rc;
 	}
 
 	const char *m = get_http_method_name(r->http_method);
