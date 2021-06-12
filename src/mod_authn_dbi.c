@@ -416,6 +416,7 @@ mod_authn_dbi_password_cmp (const char *userpw, unsigned long userpwlen, http_au
 static buffer *
 mod_authn_dbi_query_build (buffer * const sqlquery, dbi_config * const dbconf, http_auth_info_t * const ai)
 {
+    char buf[1024];
     buffer_clear(sqlquery);
     int qcount = 0;
     for (char *b = dbconf->sqlquery->ptr, *d; *b; b = d+1) {
@@ -427,10 +428,22 @@ mod_authn_dbi_query_build (buffer * const sqlquery, dbi_config * const dbconf, h
             const char *v;
             switch (++qcount) {
               case 1:
-                v = ai->username;
+                if (ai->ulen < sizeof(buf)) {
+                    memcpy(buf, ai->username, ai->ulen);
+                    buf[ai->ulen] = '\0';
+                    v = buf;
+                }
+                else
+                    return NULL;
                 break;
               case 2:
-                v = ai->realm;
+                if (ai->rlen < sizeof(buf)) {
+                    memcpy(buf, ai->realm, ai->rlen);
+                    buf[ai->rlen] = '\0';
+                    v = buf;
+                }
+                else
+                    return NULL;
                 break;
               case 3:
                 if (ai->dalgo & HTTP_AUTH_DIGEST_SHA256)
