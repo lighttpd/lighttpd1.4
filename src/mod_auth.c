@@ -712,19 +712,21 @@ int mod_auth_plugin_init(plugin *p) {
 
 __attribute_cold__
 __attribute_noinline__
-static handler_t mod_auth_send_400_bad_request(request_st * const r) {
-
-	/* a field was missing or invalid */
-	r->http_status = 400; /* Bad Request */
-	r->handler_module = NULL;
-
-	return HANDLER_FINISHED;
+static handler_t
+mod_auth_send_400_bad_request (request_st * const r)
+{
+    /* a field was missing or invalid */
+    r->http_status = 400; /* Bad Request */
+    r->handler_module = NULL;
+    return HANDLER_FINISHED;
 }
 
 
 
 __attribute_noinline__
-static handler_t mod_auth_send_401_unauthorized_basic(request_st * const r, const buffer * const realm) {
+static handler_t
+mod_auth_send_401_unauthorized_basic (request_st * const r, const buffer * const realm)
+{
     r->http_status = 401;
     r->handler_module = NULL;
     buffer_append_str3(
@@ -736,107 +738,115 @@ static handler_t mod_auth_send_401_unauthorized_basic(request_st * const r, cons
     return HANDLER_FINISHED;
 }
 
-static handler_t mod_auth_check_basic(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend) {
-	buffer *username;
-	char *pw;
 
-	if (NULL == backend || NULL == backend->basic) {
-		if (NULL == backend)
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "auth.backend not configured for %s", r->uri.path.ptr);
-		else
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "auth.require \"method\" => \"basic\" invalid "
-			  "(try \"digest\"?) for %s",
-			  r->uri.path.ptr);
-		r->http_status = 500;
-		r->handler_module = NULL;
-		return HANDLER_FINISHED;
-	}
+__attribute_cold__
+static handler_t
+mod_auth_basic_misconfigured (request_st * const r, const struct http_auth_backend_t * const backend)
+{
+    if (NULL == backend)
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "auth.backend not configured for %s", r->uri.path.ptr);
+    else
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "auth.require \"method\" => \"basic\" invalid "
+          "(try \"digest\"?) for %s", r->uri.path.ptr);
 
-	const buffer * const b =
-	  http_header_request_get(r, HTTP_HEADER_AUTHORIZATION,
-	                          CONST_STR_LEN("Authorization"));
+    r->http_status = 500;
+    r->handler_module = NULL;
+    return HANDLER_FINISHED;
+}
 
-	if (NULL == b || !buffer_eq_icase_ssn(b->ptr, CONST_STR_LEN("Basic "))) {
-		return mod_auth_send_401_unauthorized_basic(r, require->realm);
-	}
-      #ifdef __COVERITY__
-	if (buffer_clen(b) < sizeof("Basic ")-1) {
-		return mod_auth_send_400_bad_request(r);
-	}
-      #endif
 
-	username = buffer_init();
+static handler_t
+mod_auth_check_basic(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend)
+{
+    if (NULL == backend || NULL == backend->basic)
+        return mod_auth_basic_misconfigured(r, backend);
 
-	/* coverity[overflow_sink : FALSE] */
-	if (!buffer_append_base64_decode(username, b->ptr+sizeof("Basic ")-1, buffer_clen(b)-(sizeof("Basic ")-1), BASE64_STANDARD)) {
-		log_error(r->conf.errh, __FILE__, __LINE__, "decoding base64-string failed %s", b->ptr+sizeof("Basic ")-1);
+    const buffer * const vb =
+      http_header_request_get(r, HTTP_HEADER_AUTHORIZATION,
+                              CONST_STR_LEN("Authorization"));
+    if (NULL == vb || !buffer_eq_icase_ssn(vb->ptr, CONST_STR_LEN("Basic ")))
+        return mod_auth_send_401_unauthorized_basic(r, require->realm);
+  #ifdef __COVERITY__
+    if (buffer_clen(vb) < sizeof("Basic ")-1)
+        return mod_auth_send_400_bad_request(r);
+  #endif
 
-		buffer_free(username);
-		return mod_auth_send_400_bad_request(r);
-	}
+    size_t ulen = buffer_clen(vb) - (sizeof("Basic ")-1);
+    size_t pwlen;
+    char *pw;
+    char user[1024];
 
-	/* r2 == user:password */
-	if (NULL == (pw = strchr(username->ptr, ':'))) {
-		log_error(r->conf.errh, __FILE__, __LINE__, "missing ':' in %s", username->ptr);
+    /* base64-decode Authorization into username:password string;
+     * limit base64-decoded username:password string to fit into 1k buf */
+    if (ulen > 1363) /*(1363/4*3+3 = 1023)*/
+        return mod_auth_send_401_unauthorized_basic(r, require->realm);
+    /* coverity[overflow_sink : FALSE] */
+    ulen = li_base64_dec((unsigned char *)user, sizeof(user),
+                         vb->ptr+sizeof("Basic ")-1, ulen, BASE64_STANDARD);
+    if (0 == ulen) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "decoding base64-string failed %s", vb->ptr+sizeof("Basic ")-1);
+        return mod_auth_send_400_bad_request(r);
+    }
+    user[ulen] = '\0';
+    pw = memchr(user, ':', ulen);
+    if (NULL == pw) {
+        log_error(r->conf.errh, __FILE__, __LINE__, "missing ':' in %s", user);
+        return mod_auth_send_400_bad_request(r);
+    }
+    *pw++ = '\0';
+    pwlen = (size_t)(user + ulen - pw);
+    ulen  = (size_t)(pw - 1 - user);
 
-		buffer_free(username);
-		return mod_auth_send_400_bad_request(r);
-	}
+    plugin_data * const p = p_d;
+    splay_tree ** sptree = p->conf.auth_cache
+      ? &p->conf.auth_cache->sptree
+      : NULL;
+    http_auth_cache_entry *ae = NULL;
+    handler_t rc = HANDLER_ERROR;
+    int ndx = -1;
+    if (sptree) {
+        ndx = http_auth_cache_hash(require, user, ulen);
+        ae = http_auth_cache_query(sptree, ndx);
+        if (ae && ae->require == require
+            && ulen == ae->ulen && 0 == memcmp(user, ae->username, ulen))
+            rc = ck_memeq_const_time(ae->pwdigest, ae->dlen, pw, pwlen)
+              ? HANDLER_GO_ON
+              : HANDLER_ERROR;
+        else /*(not found or hash collision)*/
+            ae = NULL;
+    }
 
-	uint32_t pwlen = buffer_clen(username);
-	buffer_truncate(username, pw - username->ptr);
-	pw++;
-	pwlen -= (pw - username->ptr);
+    if (NULL == ae) {
+        const buffer userb = { user, ulen+1, 0 };
+        rc = backend->basic(r, backend->p_d, require, &userb, pw);
+    }
 
-	plugin_data * const p = p_d;
-	splay_tree ** sptree = p->conf.auth_cache
-	  ? &p->conf.auth_cache->sptree
-	  : NULL;
-	http_auth_cache_entry *ae = NULL;
-	handler_t rc = HANDLER_ERROR;
-	int ndx = -1;
-	if (sptree) {
-		ndx = http_auth_cache_hash(require, BUF_PTR_LEN(username));
-		ae = http_auth_cache_query(sptree, ndx);
-		if (ae && ae->require == require
-		    && buffer_is_equal_string(username, ae->username, ae->ulen))
-			rc = ck_memeq_const_time(ae->pwdigest, ae->dlen, pw, pwlen)
-			  ? HANDLER_GO_ON
-			  : HANDLER_ERROR;
-		else /*(not found or hash collision)*/
-			ae = NULL;
-	}
+    switch (rc) {
+    case HANDLER_GO_ON:
+        http_auth_setenv(r, user, ulen, CONST_STR_LEN("Basic"));
+        if (sptree && NULL == ae) { /*(cache (new) successful result)*/
+            ae = http_auth_cache_entry_init(require, 0, user, ulen, pw, pwlen);
+            http_auth_cache_insert(sptree, ndx, ae, http_auth_cache_entry_free);
+        }
+        break;
+    case HANDLER_WAIT_FOR_EVENT:
+    case HANDLER_FINISHED:
+        break;
+    case HANDLER_ERROR:
+    default:
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "password doesn't match for %s username: %s IP: %s",
+          r->uri.path.ptr, user, r->con->dst_addr_buf->ptr);
+        r->keep_alive = -1; /*(disable keep-alive if bad password)*/
+        rc = mod_auth_send_401_unauthorized_basic(r, require->realm);
+        break;
+    }
 
-	if (NULL == ae)
-		rc = backend->basic(r, backend->p_d, require, username, pw);
-
-	switch (rc) {
-	case HANDLER_GO_ON:
-		http_auth_setenv(r, BUF_PTR_LEN(username), CONST_STR_LEN("Basic"));
-		if (sptree && NULL == ae) { /*(cache (new) successful result)*/
-			ae = http_auth_cache_entry_init(require, 0, BUF_PTR_LEN(username),
-			                                pw, pwlen);
-			http_auth_cache_insert(sptree, ndx, ae, http_auth_cache_entry_free);
-		}
-		break;
-	case HANDLER_WAIT_FOR_EVENT:
-	case HANDLER_FINISHED:
-		break;
-	case HANDLER_ERROR:
-	default:
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "password doesn't match for %s username: %s IP: %s",
-		  r->uri.path.ptr, username->ptr, r->con->dst_addr_buf->ptr);
-		r->keep_alive = -1; /*(disable keep-alive if bad password)*/
-		rc = mod_auth_send_401_unauthorized_basic(r, require->realm);
-		break;
-	}
-
-	ck_memzero(pw, pwlen);
-	buffer_free(username);
-	return rc;
+    ck_memzero(pw, pwlen);
+    return rc;
 }
 
 
@@ -1434,15 +1444,15 @@ mod_auth_check_digest (request_st * const r, void *p_d, const struct http_auth_r
 
 
 static handler_t mod_auth_check_extern(request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend) {
-	/* require REMOTE_USER already set */
-	const buffer *vb = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
-	UNUSED(p_d);
-	UNUSED(backend);
-	if (NULL != vb && http_auth_match_rules(require, vb->ptr, NULL, NULL)) {
-		return HANDLER_GO_ON;
-	} else {
-		r->http_status = 401;
-		r->handler_module = NULL;
-		return HANDLER_FINISHED;
-	}
+    /* require REMOTE_USER already set */
+    const buffer *vb = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
+    UNUSED(p_d);
+    UNUSED(backend);
+    if (NULL != vb && http_auth_match_rules(require, vb->ptr, NULL, NULL)) {
+        return HANDLER_GO_ON;
+    } else {
+        r->http_status = 401;
+        r->handler_module = NULL;
+        return HANDLER_FINISHED;
+    }
 }
