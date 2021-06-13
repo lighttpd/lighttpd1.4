@@ -813,7 +813,22 @@ void buffer_path_simplify(buffer *b)
     *end = '/'; /*(end of path modified to avoid need to check '\0')*/
 
     char *walk = out;
-    if (__builtin_expect( (*walk != '/'), 0)) {
+    if (__builtin_expect( (*walk == '/'), 1)) {
+        /* scan to detect (potential) need for path simplification
+         * (repeated '/' or "/.") */
+        do {
+            if (*++walk == '.' || *walk == '/')
+                break;
+            do { ++walk; } while (*walk != '/');
+        } while (walk != end);
+        if (__builtin_expect( (walk == end), 1)) {
+            /* common case: no repeated '/' or "/." */
+            *end = '\0'; /* overwrite extra '/' added to end of path */
+            return;
+        }
+        out = walk-1;
+    }
+    else {
         if (walk[0] == '.' && walk[1] == '/')
             *out = *++walk;
         else if (walk[0] == '.' && walk[1] == '.' && walk[2] == '/')
@@ -822,8 +837,8 @@ void buffer_path_simplify(buffer *b)
             while (*++walk != '/') ;
             out = walk;
         }
+        ++walk;
     }
-    ++walk;
 
     while (walk <= end) {
         /* previous char is '/' at this point (or start of string w/o '/') */
