@@ -1499,6 +1499,7 @@ AC_CHECK_FUNCS([\
   localtime_r \
   lstat \
   madvise \
+  memcpy \
   mempcpy \
   memset \
   memset_s \

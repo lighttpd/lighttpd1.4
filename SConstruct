@@ -427,6 +427,7 @@ if 1:
 		'localtime_r',
 		'lstat',
 		'madvise',
+		'memcpy',
 		'mempcpy',
 		'memset_s',
 		'memset',
