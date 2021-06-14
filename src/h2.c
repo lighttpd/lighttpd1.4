@@ -161,22 +161,22 @@ static const uint8_t http_header_lshpack_idx[] = {
 
 
 /* Note: must be kept in sync with ls-hpack/lshpack.h:lshpack_static_hdr_idx[]*/
-static const uint8_t lshpack_idx_http_header[] = {
-  [LSHPACK_HDR_UNKNOWN]                   = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_AUTHORITY]                 = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_METHOD_GET]                = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_METHOD_POST]               = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_PATH]                      = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_PATH_INDEX_HTML]           = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_SCHEME_HTTP]               = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_SCHEME_HTTPS]              = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_STATUS_200]                = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_STATUS_204]                = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_STATUS_206]                = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_STATUS_304]                = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_STATUS_400]                = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_STATUS_404]                = HTTP_HEADER_OTHER
- ,[LSHPACK_HDR_STATUS_500]                = HTTP_HEADER_OTHER
+static const int8_t lshpack_idx_http_header[] = {
+  [LSHPACK_HDR_UNKNOWN]                   = HTTP_HEADER_H2_UNKNOWN
+ ,[LSHPACK_HDR_AUTHORITY]                 = HTTP_HEADER_H2_AUTHORITY
+ ,[LSHPACK_HDR_METHOD_GET]                = HTTP_HEADER_H2_METHOD_GET
+ ,[LSHPACK_HDR_METHOD_POST]               = HTTP_HEADER_H2_METHOD_POST
+ ,[LSHPACK_HDR_PATH]                      = HTTP_HEADER_H2_PATH
+ ,[LSHPACK_HDR_PATH_INDEX_HTML]           = HTTP_HEADER_H2_PATH_INDEX_HTML
+ ,[LSHPACK_HDR_SCHEME_HTTP]               = HTTP_HEADER_H2_SCHEME_HTTP
+ ,[LSHPACK_HDR_SCHEME_HTTPS]              = HTTP_HEADER_H2_SCHEME_HTTPS
+ ,[LSHPACK_HDR_STATUS_200]                = HTTP_HEADER_H2_UNKNOWN
+ ,[LSHPACK_HDR_STATUS_204]                = HTTP_HEADER_H2_UNKNOWN
+ ,[LSHPACK_HDR_STATUS_206]                = HTTP_HEADER_H2_UNKNOWN
+ ,[LSHPACK_HDR_STATUS_304]                = HTTP_HEADER_H2_UNKNOWN
+ ,[LSHPACK_HDR_STATUS_400]                = HTTP_HEADER_H2_UNKNOWN
+ ,[LSHPACK_HDR_STATUS_404]                = HTTP_HEADER_H2_UNKNOWN
+ ,[LSHPACK_HDR_STATUS_500]                = HTTP_HEADER_H2_UNKNOWN
  ,[LSHPACK_HDR_ACCEPT_CHARSET]            = HTTP_HEADER_OTHER
  ,[LSHPACK_HDR_ACCEPT_ENCODING]           = HTTP_HEADER_ACCEPT_ENCODING
  ,[LSHPACK_HDR_ACCEPT_LANGUAGE]           = HTTP_HEADER_ACCEPT_LANGUAGE
@@ -1223,24 +1223,6 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "fd:%d id:%u rqst: %.*s: %.*s", r->con->fd, r->h2id,
                   (int)hpctx.klen, hpctx.k, (int)hpctx.vlen, hpctx.v);
-
-          #if 0
-            /* might not be worth special-casing pseudo headers here and
-             * repeating the code in http_request_parse_header() to avoid
-             * memcmp() for pseudo headers (request.c does not know ls-hpack)*/
-            if (hpctx.pseudo && lsx.hpack_index
-                && lsx.hpack_index < LSHPACK_HDR_STATUS_200 && !trailers) {
-                /* lsx.hpack_index:
-                 *   LSHPACK_HDR_AUTHORITY
-                 *   LSHPACK_HDR_METHOD_GET
-                 *   LSHPACK_HDR_METHOD_POST
-                 *   LSHPACK_HDR_PATH
-                 *   LSHPACK_HDR_PATH_INDEX_HTML
-                 *   LSHPACK_HDR_SCHEME_HTTP
-                 *   LSHPACK_HDR_SCHEME_HTTPS
-                 */
-            }
-          #endif
 
             r->http_status = http_request_parse_header(r, &hpctx);
             if (0 != r->http_status)

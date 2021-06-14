@@ -577,11 +577,6 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
       #endif
     }
 
-    if (__builtin_expect( (2 == klen), 0) && k[0] == 't' && k[1] == 'e'
-        && !buffer_eq_icase_ss(v, vlen, CONST_STR_LEN("trailers")))
-        return http_request_header_line_invalid(r, 400,
-          "invalid TE header value with HTTP/2 -> 400");
-
     if (!hpctx->trailers) {
         if (*k == ':') {
             /* HTTP/2 request pseudo-header fields */
@@ -591,69 +586,93 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
             if (0 == vlen)
                 return http_request_header_line_invalid(r, 400,
                   "invalid header value -> 400");
-            switch (klen-1) {
-              case 4:
-                if (0 == memcmp(k+1, "path", 4)) {
-                    if (!buffer_is_blank(&r->target))
-                        return http_request_header_line_invalid(r, 400,
-                          "repeated pseudo-header -> 400");
-                    buffer_copy_string_len(&r->target, v, vlen);
-                    return 0;
+
+            /* (note: relies on implementation details using ls-hpack in h2.c)
+             * (hpctx->id mapped from lsxpack_header_t hpack_index, which only
+             *  matches key, not also value, if lsxpack_header_t flags does not
+             *  have LSXPACK_HPACK_VAL_MATCHED set, so HTTP_HEADER_H2_METHOD_GET
+             *  below indicates any method, not only "GET") */
+            if (__builtin_expect( (hpctx->id == HTTP_HEADER_H2_UNKNOWN), 0)) {
+                switch (klen-1) {
+                  case 4:
+                    if (0 == memcmp(k+1, "path", 4))
+                        hpctx->id = HTTP_HEADER_H2_PATH;
+                    break;
+                  case 6:
+                    if (0 == memcmp(k+1, "method", 6))
+                        hpctx->id = HTTP_HEADER_H2_METHOD_GET;
+                    else if (0 == memcmp(k+1, "scheme", 6))
+                        hpctx->id = HTTP_HEADER_H2_SCHEME_HTTP;
+                    break;
+                  case 9:
+                    if (0 == memcmp(k+1, "authority", 9))
+                        hpctx->id = HTTP_HEADER_H2_AUTHORITY;
+                    break;
+                  default:
+                    break;
                 }
-                break;
-              case 6:
-                if (0 == memcmp(k+1, "method", 6)) {
-                    if (HTTP_METHOD_UNSET != r->http_method)
-                        return http_request_header_line_invalid(r, 400,
-                          "repeated pseudo-header -> 400");
-                    r->http_method = get_http_method_key(v, vlen);
-                    if (HTTP_METHOD_UNSET >= r->http_method)
-                        return http_request_header_line_invalid(r, 501,
-                          "unknown http-method -> 501");
-                    return 0;
-                }
-                else if (0 == memcmp(k+1, "scheme", 6)) {
-                    if (hpctx->scheme)
-                        return http_request_header_line_invalid(r, 400,
-                          "repeated pseudo-header -> 400");
-                    switch (vlen) {/*(validated, but then ignored)*/
-                      case 5: /* "https" */
-                        if (v[4]!='s') break;
-                        __attribute_fallthrough__
-                      case 4: /* "http" */
-                        if (v[0]=='h' && v[1]=='t' && v[2]=='t' && v[3]=='p') {
-                            hpctx->scheme = 1;
-                            return 0;
-                        }
-                        break;
-                      default:
-                        break;
-                    }
+                if (hpctx->id >= HTTP_HEADER_H2_UNKNOWN)
                     return http_request_header_line_invalid(r, 400,
-                      "unknown pseudo-header scheme -> 400");
+                      "invalid pseudo-header -> 400");
+            }
+
+            switch (hpctx->id) {
+              case HTTP_HEADER_H2_AUTHORITY:
+                if (__builtin_expect( (r->http_host != NULL), 0))
+                    break;
+                if (vlen >= 1024) /*(expecting < 256)*/
+                    return http_request_header_line_invalid(r, 400,
+                      "invalid pseudo-header authority too long -> 400");
+                /* insert as host header */
+                r->http_host =
+                  http_header_request_set_ptr(r, HTTP_HEADER_HOST,
+                                              CONST_STR_LEN("Host"));
+                buffer_copy_string_len(r->http_host, v, vlen);
+                return 0;
+              case HTTP_HEADER_H2_METHOD_GET:  /*(any method, not only "GET")*/
+              case HTTP_HEADER_H2_METHOD_POST:
+                if (__builtin_expect( (HTTP_METHOD_UNSET != r->http_method), 0))
+                    break;
+                r->http_method = get_http_method_key(v, vlen);
+                if (HTTP_METHOD_UNSET >= r->http_method)
+                    return http_request_header_line_invalid(r, 501,
+                      "unknown http-method -> 501");
+                return 0;
+              case HTTP_HEADER_H2_PATH:            /*(any path, not only "/")*/
+              case HTTP_HEADER_H2_PATH_INDEX_HTML:
+                if (__builtin_expect( (!buffer_is_blank(&r->target)), 0))
+                    break;
+                buffer_copy_string_len(&r->target, v, vlen);
+                return 0;
+              case HTTP_HEADER_H2_SCHEME_HTTP: /*(any scheme, not only "http")*/
+              case HTTP_HEADER_H2_SCHEME_HTTPS:
+                if (__builtin_expect( (hpctx->scheme), 0))
+                    break;
+                hpctx->scheme = 1; /*(marked present, but otherwise ignored)*/
+                return 0;
+               #if 0
+                switch (vlen) {/*(validated, but then ignored)*/
+                  case 5: /* "https" */
+                    if (v[4]!='s') break;
+                    __attribute_fallthrough__
+                  case 4: /* "http" */
+                    if (v[0]=='h' && v[1]=='t' && v[2]=='t' && v[3]=='p') {
+                        hpctx->scheme = 1;
+                        return 0;
+                    }
+                    break;
+                  default:
+                    break;
                 }
-                break;
-              case 9:
-                if (0 == memcmp(k+1, "authority", 9)) {
-                    if (r->http_host)
-                        return http_request_header_line_invalid(r, 400,
-                          "repeated pseudo-header -> 400");
-                    if (vlen >= 1024) /*(expecting < 256)*/
-                        return http_request_header_line_invalid(r, 400,
-                          "invalid pseudo-header authority too long -> 400");
-                    /* insert as host header */
-                    r->http_host =
-                      http_header_request_set_ptr(r, HTTP_HEADER_HOST,
-                                                  CONST_STR_LEN("Host"));
-                    buffer_copy_string_len(r->http_host, v, vlen);
-                    return 0;
-                }
-                break;
+                return http_request_header_line_invalid(r, 400,
+                  "unknown pseudo-header scheme -> 400");
+               #endif
               default:
-                break;
+                return http_request_header_line_invalid(r, 400,
+                  "invalid pseudo-header -> 400");
             }
             return http_request_header_line_invalid(r, 400,
-              "invalid pseudo-header -> 400");
+              "repeated pseudo-header -> 400");
         }
         else { /*(non-pseudo headers)*/
             if (hpctx->pseudo) { /*(transition to non-pseudo headers)*/
@@ -666,23 +685,11 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
             if (0 == vlen)
                 return 0;
 
-            uint32_t j = 0;
-            while (j < klen && (light_islower(k[j]) || k[j] == '-'))
-                ++j;
-
             const unsigned int http_header_strict =
               (hpctx->http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
-            if (__builtin_expect( (j != klen), 0)) {
-                if (light_isupper(k[j]))
-                    return 400;
-                if (0 != http_request_parse_header_other(r, k+j, klen-j,
-                                                         http_header_strict))
-                    return 400;
-            }
-
             if (http_header_strict) {
-                for (j = 0; j < vlen; ++j) {
+                for (uint32_t j = 0; j < vlen; ++j) {
                     if ((((uint8_t *)v)[j] < 32 && v[j] != '\t') || v[j]==127)
                         return http_request_header_char_invalid(r, v[j],
                           "invalid character in header -> 400");
@@ -694,8 +701,29 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                       "invalid character in header -> 400");
             }
 
-            const enum http_header_e id =
-              hpctx->id ? hpctx->id : http_header_hkey_get_lc(k, klen);
+            if (__builtin_expect( (hpctx->id == HTTP_HEADER_H2_UNKNOWN), 0)) {
+                uint32_t j = 0;
+                while (j < klen && (light_islower(k[j]) || k[j] == '-'))
+                    ++j;
+
+                if (__builtin_expect( (j != klen), 0)) {
+                    if (light_isupper(k[j]))
+                        return 400;
+                    if (0 != http_request_parse_header_other(r, k+j, klen-j,
+                                                            http_header_strict))
+                        return 400;
+                }
+
+                hpctx->id = http_header_hkey_get_lc(k, klen);
+            }
+
+            const enum http_header_e id = (enum http_header_e)hpctx->id;
+
+            if (__builtin_expect( (id == HTTP_HEADER_TE), 0)
+                && !buffer_eq_icase_ss(v, vlen, CONST_STR_LEN("trailers")))
+                return http_request_header_line_invalid(r, 400,
+                  "invalid TE header value with HTTP/2 -> 400");
+
             return http_request_parse_single_header(r, id, k, klen, v, vlen);
         }
     }
