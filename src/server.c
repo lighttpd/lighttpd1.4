@@ -65,6 +65,15 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC)+1, 0 };
 # include <sys/prctl.h>
 #endif
 
+#ifdef HAVE_MALLOC_H
+#ifndef LIGHTTPD_STATIC
+#ifdef HAVE_DLFCN_H
+#include <dlfcn.h>
+#endif
+#endif
+#include <malloc.h>
+#endif
+
 #include "sys-crypto.h"
 #if defined(USE_OPENSSL_CRYPTO) \
  || defined(USE_MBEDTLS_CRYPTO) \
@@ -1976,6 +1985,18 @@ int main (int argc, char **argv) {
                 "Are you nuts ? Don't apply a SUID bit to this binary\n");
         return -1;
     }
+  #endif
+
+  #if defined(HAVE_MALLOPT) && defined(M_ARENA_MAX)
+  #ifdef LIGHTTPD_STATIC
+    mallopt(M_ARENA_MAX, 2); /*(ignore error, if any)*/
+  #else
+    {
+        int (*mallopt_fn)(int, int);
+        mallopt_fn = (int (*)(int, int))(intptr_t)dlsym(RTLD_DEFAULT,"mallopt");
+        if (mallopt_fn) mallopt_fn(M_ARENA_MAX, 2); /*(ignore error, if any)*/
+    }
+  #endif
   #endif
 
     /* for nice %b handling in strftime() */
