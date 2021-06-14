@@ -958,6 +958,7 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
             else {
                 buffer_copy_string_len(r->http_host, s+v, vlen-v);
             }
+            buffer_to_lower(r->http_host);
 
             if (0 != http_request_host_policy(r->http_host,
                                               r->conf.http_parseopts,

@@ -227,6 +227,9 @@ int http_request_host_normalize(buffer * const b, const int scheme_port) {
 }
 
 int http_request_host_policy (buffer * const b, const unsigned int http_parseopts, const int scheme_port) {
+    /* caller should lowercase, as is done in http_request_header_set_Host(),
+     * for consistency in case the value is used prior to calling policy func */
+    /*buffer_to_lower(b);*/
     return (((http_parseopts & HTTP_PARSEOPT_HOST_STRICT)
              && 0 != request_check_hostname(b))
             || ((http_parseopts & HTTP_PARSEOPT_HOST_NORMALIZE)
@@ -262,6 +265,16 @@ static int http_request_header_char_invalid(request_st * const restrict r, const
 }
 
 
+__attribute_noinline__
+static void http_request_header_set_Host(request_st * const restrict r, const char * const h, size_t hlen)
+{
+    r->http_host = http_header_request_set_ptr(r, HTTP_HEADER_HOST,
+                                               CONST_STR_LEN("Host"));
+    buffer_copy_string_len(r->http_host, h, hlen);
+    buffer_to_lower(r->http_host);
+}
+
+
 int64_t
 li_restricted_strtoint64 (const char *v, const uint32_t vlen, const char ** const err)
 {
@@ -291,8 +304,6 @@ li_restricted_strtoint64 (const char *v, const uint32_t vlen, const char ** cons
  * returns 0 on success, HTTP status on error
  */
 static int http_request_parse_single_header(request_st * const restrict r, const enum http_header_e id, const char * const restrict k, const size_t klen, const char * const restrict v, const size_t vlen) {
-    buffer **saveb = NULL;
-
     /*
      * Note: k might not be '\0'-terminated
      * Note: v is not '\0'-terminated
@@ -309,14 +320,18 @@ static int http_request_parse_single_header(request_st * const restrict r, const
         break;
       case HTTP_HEADER_HOST:
         if (!light_btst(r->rqst_htags, HTTP_HEADER_HOST)) {
-            saveb = &r->http_host;
             if (vlen >= 1024) { /*(expecting < 256)*/
                 return http_request_header_line_invalid(r, 400, "uri-authority too long -> 400");
             }
+            /*(http_request_header_append() plus sets r->http_host)*/
+            http_request_header_set_Host(r, v, vlen);
+            return 0;
         }
         else if (NULL != r->http_host
-                 && buffer_is_equal_string(r->http_host, v, vlen)) {
+                 && (__builtin_expect( buffer_eq_slen(r->http_host, v, vlen), 1)
+                     || buffer_eq_icase_slen(r->http_host, v, vlen))) {
             /* ignore all Host: headers if match authority in request line */
+            /* (expect Host to match case in :authority of HTTP/2 request) */
             return 0; /* ignore header */
         }
         else {
@@ -407,11 +422,6 @@ static int http_request_parse_single_header(request_st * const restrict r, const
     }
 
     http_header_request_append(r, id, k, klen, v, vlen);
-
-    if (saveb) {
-        *saveb = http_header_request_get(r, id, k, klen);
-    }
-
     return 0;
 }
 
@@ -459,10 +469,8 @@ static const char * http_request_parse_reqline_uri(request_st * const restrict r
             http_request_header_line_invalid(r, 400, "uri-authority empty or too long -> 400");
             return NULL;
         }
-        /* Insert as host header */
-        r->http_host = http_header_request_set_ptr(r, HTTP_HEADER_HOST,
-                                                   CONST_STR_LEN("Host"));
-        buffer_copy_string_len(r->http_host, host, hostlen);
+        /* Insert as "Host" header */
+        http_request_header_set_Host(r, host, hostlen);
         return nuri;
     } else if (!(http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) /*(!http_header_strict)*/
            || (HTTP_METHOD_CONNECT == r->http_method && (uri[0] == ':' || light_isdigit(uri[0])))
@@ -492,7 +500,7 @@ http_request_validate_pseudohdrs (request_st * const restrict r, const int schem
         return http_request_header_line_invalid(r, 400,
           "missing pseudo-header method -> 400");
 
-    if (HTTP_METHOD_CONNECT != r->http_method) {
+    if (__builtin_expect( (HTTP_METHOD_CONNECT != r->http_method), 1)) {
         if (!scheme)
             return http_request_header_line_invalid(r, 400,
               "missing pseudo-header scheme -> 400");
@@ -516,7 +524,9 @@ http_request_validate_pseudohdrs (request_st * const restrict r, const int schem
         if (!buffer_is_blank(&r->target) || scheme)
             return http_request_header_line_invalid(r, 400,
               "invalid pseudo-header with CONNECT -> 400");
-        /*(reuse uri and ulen to assign to r->target)*/
+        /* note: this copy occurs prior to http_request_host_policy()
+         * so any consumer handling CONNECT should normalize r->target
+         * as appropriate */
         buffer_copy_buffer(&r->target, r->http_host);
     }
     buffer_copy_buffer(&r->target_orig, &r->target);
@@ -623,11 +633,8 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                 if (vlen >= 1024) /*(expecting < 256)*/
                     return http_request_header_line_invalid(r, 400,
                       "invalid pseudo-header authority too long -> 400");
-                /* insert as host header */
-                r->http_host =
-                  http_header_request_set_ptr(r, HTTP_HEADER_HOST,
-                                              CONST_STR_LEN("Host"));
-                buffer_copy_string_len(r->http_host, v, vlen);
+                /* insert as "Host" header */
+                http_request_header_set_Host(r, v, vlen);
                 return 0;
               case HTTP_HEADER_H2_METHOD_GET:  /*(any method, not only "GET")*/
               case HTTP_HEADER_H2_METHOD_POST:
@@ -1132,11 +1139,10 @@ http_request_parse (request_st * const restrict r, const int scheme_port)
     /* check hostname field if it is set */
     /*(r->http_host might not be set until after parsing request headers)*/
     if (__builtin_expect( (r->http_host != NULL), 1)) {
-        buffer_copy_buffer(&r->uri.authority, r->http_host);
-        buffer_to_lower(&r->uri.authority);
         if (0 != http_request_host_policy(r->http_host,
                                           http_parseopts, scheme_port))
             return http_request_header_line_invalid(r, 400, "Invalid Hostname -> 400");
+        buffer_copy_buffer(&r->uri.authority, r->http_host);
     }
     else {
         buffer_copy_string_len(&r->uri.authority, CONST_STR_LEN(""));
