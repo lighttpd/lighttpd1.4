@@ -96,6 +96,7 @@ AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([\
   getopt.h \
   inttypes.h \
+  malloc.h \
   poll.h \
   port.h \
   pwd.h \
@@ -1499,6 +1500,7 @@ AC_CHECK_FUNCS([\
   localtime_r \
   lstat \
   madvise \
+  mallopt \
   memcpy \
   mempcpy \
   memset \

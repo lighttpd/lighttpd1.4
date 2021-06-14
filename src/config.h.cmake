@@ -75,6 +75,7 @@
 #cmakedefine  HAVE_PCRE_H
 #cmakedefine  HAVE_LIBPCRE
 
+#cmakedefine  HAVE_MALLOC_H
 #cmakedefine  HAVE_POLL_H
 #cmakedefine  HAVE_PWD_H
 
@@ -126,6 +127,7 @@
 #cmakedefine  HAVE_LOCALTIME_R
 #cmakedefine  HAVE_LSTAT
 #cmakedefine  HAVE_MADVISE
+#cmakedefine  HAVE_MALLOPT
 #cmakedefine  HAVE_MEMCPY
 #cmakedefine  HAVE_MEMPCPY
 #cmakedefine  HAVE_MEMSET
