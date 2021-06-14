@@ -60,8 +60,13 @@ __attribute_nonnull__
 __attribute_returns_nonnull__
 static char* buffer_realloc(buffer * const restrict b, const size_t len) {
     #define BUFFER_PIECE_SIZE 64uL  /*(must be power-of-2)*/
-    const size_t sz = (len + 1 + BUFFER_PIECE_SIZE-1) & ~(BUFFER_PIECE_SIZE-1);
+    size_t sz = (len + 1 + BUFFER_PIECE_SIZE-1) & ~(BUFFER_PIECE_SIZE-1);
     force_assert(sz > len);
+    if ((sz & (sz-1)) && sz < INT_MAX) {/* not power-2; huge val not expected */
+        /*(optimizer should recognize this and use ffs or clz or equivalent)*/
+        const size_t psz = sz;
+        for (sz = 256; sz < psz; sz <<= 1) ;
+    }
 
     b->size = sz;
     b->ptr = realloc(b->ptr, sz);
