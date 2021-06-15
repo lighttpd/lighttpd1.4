@@ -20,7 +20,7 @@
 
 #include "ck.h"
 
-#include <stdlib.h>     /* getenv() getenv_s() */
+#include <stdlib.h>     /* abort() getenv() getenv_s() */
 #include <string.h>     /* memcpy() memset() memset_s() explicit_bzero()
                          * strerror() strerror_r() strerror_s() strlen() */
 
@@ -298,4 +298,103 @@ ck_memeq_const_time_fixed_len (const void *a, const void *b, const size_t len)
         diff |= (av[i] ^ bv[i]);
     }
     return (0 == diff);
+}
+
+
+
+
+#include <stdio.h>      /* fflush() fprintf() snprintf() */
+
+#ifdef HAVE_LIBUNWIND
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
+__attribute_cold__
+__attribute_noinline__
+static void
+ck_backtrace (FILE *fp)
+{
+    int rc;
+    unsigned int frame = 0;
+    unw_word_t ip;
+    unw_word_t offset;
+    unw_cursor_t cursor;
+    unw_context_t context;
+    unw_proc_info_t procinfo;
+    char name[256];
+
+    rc = unw_getcontext(&context);
+    if (0 != rc) goto error;
+    rc = unw_init_local(&cursor, &context);
+    if (0 != rc) goto error;
+
+    fprintf(fp, "Backtrace:\n");
+    while (0 < (rc = unw_step(&cursor))) {
+        ++frame;
+        ip = 0;
+        rc = unw_get_reg(&cursor, UNW_REG_IP, &ip);
+        if (0 != rc) break;
+        if (0 == ip) {
+            /* without an IP the other functions are useless;
+             * unw_get_proc_name would return UNW_EUNSPEC */
+            fprintf(fp, "%u: (nil)\n", frame);
+            continue;
+        }
+
+        rc = unw_get_proc_info(&cursor, &procinfo);
+        if (0 != rc) break;
+
+        offset = 0;
+        rc = unw_get_proc_name(&cursor, name, sizeof(name), &offset);
+        if (0 != rc) {
+            switch (-rc) {
+              case UNW_ENOMEM:
+                memcpy(name + sizeof(name) - 4, "...", 4);
+                break;
+              case UNW_ENOINFO:
+                name[0] = '?';
+                name[1] = '\0';
+                break;
+              default:
+                snprintf(name, sizeof(name),
+                         "?? (unw_get_proc_name error %d)", -rc);
+                break;
+            }
+        }
+
+        fprintf(fp, "%u: %s (+0x%x) [%p]\n",
+                frame, name, (unsigned int)offset, (void *)(uintptr_t)ip);
+    }
+    if (0 == rc)
+        return;
+
+error:
+    fprintf(fp, "Error while generating backtrace: unwind error %i\n",(int)-rc);
+}
+#endif
+
+
+__attribute_noreturn__
+void
+ck_bt_abort (const char *filename, unsigned int line, const char *msg)
+{
+    fprintf(stderr, "%s.%u: %s\n", filename, line, msg);
+  #ifdef HAVE_LIBUNWIND
+    ck_backtrace(stderr);
+  #endif
+    fflush(stderr);
+    abort();
+}
+
+
+__attribute_noreturn__
+void ck_assert_failed(const char *filename, unsigned int line, const char *msg)
+{
+    /* same as ck_bt_abort() but add "assertion failed: " prefix here
+     * to avoid bloating string tables in callers */
+    fprintf(stderr, "%s.%u: assertion failed: %s\n", filename, line, msg);
+  #ifdef HAVE_LIBUNWIND
+    ck_backtrace(stderr);
+  #endif
+    fflush(stderr);
+    abort();
 }

@@ -847,12 +847,14 @@ add_executable(test_array
 	t/test_array.c
 	array.c
 	buffer.c
+	ck.c
 )
 add_test(NAME test_array COMMAND test_array)
 
 add_executable(test_buffer
 	t/test_buffer.c
 	buffer.c
+	ck.c
 )
 add_test(NAME test_buffer COMMAND test_buffer)
 
@@ -861,6 +863,7 @@ add_executable(test_burl
 	burl.c
 	buffer.c
 	base64.c
+	ck.c
 )
 add_test(NAME test_burl COMMAND test_burl)
 
@@ -868,6 +871,7 @@ add_executable(test_base64
 	t/test_base64.c
 	buffer.c
 	base64.c
+	ck.c
 )
 add_test(NAME test_base64 COMMAND test_base64)
 

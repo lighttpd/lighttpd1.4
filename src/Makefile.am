@@ -636,16 +636,16 @@ lighttpd_LDFLAGS = -export-dynamic
 
 endif
 
-t_test_array_SOURCES = t/test_array.c array.c buffer.c
+t_test_array_SOURCES = t/test_array.c array.c buffer.c ck.c
 t_test_array_LDADD = $(LIBUNWIND_LIBS)
 
-t_test_buffer_SOURCES = t/test_buffer.c buffer.c
+t_test_buffer_SOURCES = t/test_buffer.c buffer.c ck.c
 t_test_buffer_LDADD = $(LIBUNWIND_LIBS)
 
-t_test_base64_SOURCES = t/test_base64.c base64.c buffer.c
+t_test_base64_SOURCES = t/test_base64.c base64.c buffer.c ck.c
 t_test_base64_LDADD = $(LIBUNWIND_LIBS)
 
-t_test_burl_SOURCES = t/test_burl.c burl.c buffer.c base64.c
+t_test_burl_SOURCES = t/test_burl.c burl.c buffer.c base64.c ck.c
 t_test_burl_LDADD = $(LIBUNWIND_LIBS)
 
 t_test_configfile_SOURCES = t/test_configfile.c buffer.c array.c data_config.c http_header.c http_kv.c vector.c log.c sock_addr.c ck.c

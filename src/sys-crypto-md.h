@@ -612,7 +612,7 @@ EVP_SHA512_Update(EVP_SHA512_CTX *ctx, const void *data, size_t length)
 #elif defined(USE_GNUTLS_CRYPTO)
 
 #include <gnutls/crypto.h>
-#include "buffer.h"     /* SEGFAULT() */
+#include "ck.h"
 
 #define USE_LIB_CRYPTO_MD5
 typedef gnutls_hash_hd_t MD5_CTX;
@@ -620,7 +620,7 @@ static inline int
 MD5_Init(MD5_CTX *ctx)
 {
     if (gnutls_hash_init(ctx, GNUTLS_DIG_MD5) < 0)
-        SEGFAULT();
+        ck_bt_abort(__FILE__, __LINE__, "aborted");
     return 1;
 }
 static inline int
@@ -642,7 +642,7 @@ static inline int
 SHA1_Init(SHA_CTX *ctx)
 {
     if (gnutls_hash_init(ctx, GNUTLS_DIG_SHA1) < 0)
-        SEGFAULT();
+        ck_bt_abort(__FILE__, __LINE__, "aborted");
     return 1;
 }
 static inline int
@@ -664,7 +664,7 @@ static inline int
 SHA256_Init(SHA256_CTX *ctx)
 {
     if (gnutls_hash_init(ctx, GNUTLS_DIG_SHA256) < 0)
-        SEGFAULT();
+        ck_bt_abort(__FILE__, __LINE__, "aborted");
     return 1;
 }
 static inline int
@@ -686,7 +686,7 @@ static inline int
 SHA512_Init(SHA512_CTX *ctx)
 {
     if (gnutls_hash_init(ctx, GNUTLS_DIG_SHA512) < 0)
-        SEGFAULT();
+        ck_bt_abort(__FILE__, __LINE__, "aborted");
     return 1;
 }
 static inline int

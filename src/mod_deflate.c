@@ -110,6 +110,7 @@
 #include <unistd.h>     /* getpid() read() unlink() write() */
 
 #include "base.h"
+#include "ck.h"
 #include "fdevent.h"
 #include "log.h"
 #include "buffer.h"
@@ -162,7 +163,7 @@ static sigjmp_buf sigbus_jmp;
 static void sigbus_handler(int sig) {
 	UNUSED(sig);
 	if (sigbus_jmp_valid) siglongjmp(sigbus_jmp, 1);
-	log_failed_assert(__FILE__, __LINE__, "SIGBUS");
+	ck_bt_abort(__FILE__, __LINE__, "SIGBUS");
 }
 #endif
 

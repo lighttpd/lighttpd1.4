@@ -7,7 +7,6 @@
 #include "first.h"
 
 #include "rand.h"
-#include "buffer.h"
 #include "ck.h"
 #include "fdevent.h"
 
@@ -206,8 +205,8 @@ li_arcfour_init_random_key_hashed(struct arcfour_ctx *ctx)
     uint8_t key[ARCFOUR_KEY_SIZE];
     const size_t length = sizeof(key);
     if (1 != li_rand_device_bytes(key, (int)sizeof(key))) {
-        log_failed_assert(__FILE__, __LINE__,
-                          "gathering entropy for arcfour seed failed");
+        ck_bt_abort(__FILE__, __LINE__,
+                    "gathering entropy for arcfour seed failed");
     }
     memset(ctx, 0, sizeof(*ctx));
 
@@ -270,8 +269,7 @@ static void li_rand_init (void)
     /* xsubi[] is small, so use wc_InitRng() instead of wc_InitRngNonce()
      * to get default behavior of a larger internally-generated nonce */
     if (0 != wolfCrypt_Init() || 0 != wc_InitRng(&wolf_globalRNG))
-        log_failed_assert(__FILE__, __LINE__,
-                          "wolfCrypt_Init or wc_InitRng() failed");
+        ck_bt_abort(__FILE__,__LINE__,"wolfCrypt_Init or wc_InitRng() failed");
   #endif
   #ifdef USE_OPENSSL_CRYPTO
     RAND_poll();
@@ -286,13 +284,13 @@ static void li_rand_init (void)
       mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
                             (unsigned char *)xsubi, sizeof(xsubi));
     if (0 != rc) /*(not expecting built-in entropy function to fail)*/
-        log_failed_assert(__FILE__, __LINE__, "mbedtls_ctr_drbg_seed() failed");
+        ck_bt_abort(__FILE__, __LINE__, "mbedtls_ctr_drbg_seed() failed");
   #endif
   #endif
   #endif
   #ifdef USE_NSS_CRYPTO
     if (!NSS_IsInitialized() && NSS_NoDB_Init(NULL) < 0)
-        SEGFAULT();
+        ck_bt_abort(__FILE__, __LINE__, "aborted");
     PK11_RandomUpdate(xsubi, sizeof(xsubi));
   #endif
 }
@@ -314,13 +312,12 @@ void li_rand_reseed (void)
                                         (const byte *)xsubi,
                                         (word32)sizeof(xsubi)))
                 /*(not expecting this to fail)*/
-                log_failed_assert(__FILE__, __LINE__,
-                                  "wc_RNG_DRBG_Reseed() failed");
+                ck_bt_abort(__FILE__, __LINE__, "wc_RNG_DRBG_Reseed() failed");
         }
       #else
         wc_FreeRng(&wolf_globalRNG);
         if (0 != wc_InitRng(&wolf_globalRNG))
-            log_failed_assert(__FILE__, __LINE__, "wc_InitRng() failed");
+            ck_bt_abort(__FILE__, __LINE__, "wc_InitRng() failed");
       #endif
         return;
     }

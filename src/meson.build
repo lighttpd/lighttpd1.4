@@ -859,25 +859,25 @@ executable('lighttpd', configparser,
 )
 
 test('test_array', executable('test_array',
-	sources: ['t/test_array.c', 'array.c', 'buffer.c'],
+	sources: ['t/test_array.c', 'array.c', 'buffer.c', 'ck.c'],
 	dependencies: common_flags + libunwind,
 	build_by_default: false,
 ))
 
 test('test_buffer', executable('test_buffer',
-	sources: ['t/test_buffer.c', 'buffer.c'],
+	sources: ['t/test_buffer.c', 'buffer.c', 'ck.c'],
 	dependencies: common_flags + libunwind,
 	build_by_default: false,
 ))
 
 test('test_burl', executable('test_burl',
-	sources: ['t/test_burl.c', 'burl.c', 'buffer.c', 'base64.c'],
+	sources: ['t/test_burl.c', 'burl.c', 'buffer.c', 'base64.c', 'ck.c'],
 	dependencies: common_flags + libunwind,
 	build_by_default: false,
 ))
 
 test('test_base64', executable('test_base64',
-	sources: ['t/test_base64.c', 'buffer.c', 'base64.c'],
+	sources: ['t/test_base64.c', 'buffer.c', 'base64.c', 'ck.c'],
 	dependencies: common_flags + libunwind,
 	build_by_default: false,
 ))

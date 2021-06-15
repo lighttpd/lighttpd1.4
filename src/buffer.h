@@ -262,14 +262,6 @@ static inline int buffer_has_pathsep_suffix (const buffer * const b);
 #define CONST_STR_LEN(x) x, (uint32_t)sizeof(x) - 1
 
 
-#define LI_NORETURN __attribute_noreturn__
-
-__attribute_cold__
-void log_failed_assert(const char *filename, unsigned int line, const char *msg) LI_NORETURN;
-#define force_assert(x) do { if (!(x)) log_failed_assert(__FILE__, __LINE__, "assertion failed: " #x); } while(0)
-#define SEGFAULT() log_failed_assert(__FILE__, __LINE__, "aborted");
-
-
 /* inline implementations */
 
 __attribute_nonnull__
@@ -406,6 +398,12 @@ static inline void buffer_string_set_length(buffer *b, uint32_t len) {
     else
         buffer_extend(b, len - buffer_clen(b));
 }
+
+
+#include "ck.h"
+#define force_assert(x) ck_assert(x)
+#define log_failed_assert(file,line,msg) ck_bt_abort((file),(line),(msg))
+#define SEGFAULT() ck_bt_abort(__FILE__, __LINE__, "aborted")
 
 
 #endif
