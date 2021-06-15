@@ -92,7 +92,9 @@ static lua_State *script_cache_load_script(script * const sc, int etag_flags)
 }
 
 __attribute_cold__
-static lua_State *script_cache_new_script(script_cache * const cache, const buffer * const name, int etag_flags)
+__attribute_nonnull__
+__attribute_returns_nonnull__
+static script *script_cache_new_script(script_cache * const cache, const buffer * const name)
 {
     script * const sc = script_init();
 
@@ -105,10 +107,20 @@ static lua_State *script_cache_new_script(script_cache * const cache, const buff
     buffer_copy_buffer(&sc->name, name);
     sc->L = luaL_newstate();
     luaL_openlibs(sc->L);
-    return script_cache_load_script(sc, etag_flags);
+    return sc;
 }
 
-static lua_State *script_cache_check_script(script * const sc, int etag_flags)
+script *script_cache_get_script(script_cache *cache, const buffer *name)
+{
+    for (uint32_t i = 0; i < cache->used; ++i) {
+        script * const sc = cache->ptr[i];
+        if (buffer_is_equal(&sc->name, name))
+            return sc;
+    }
+    return script_cache_new_script(cache, name);
+}
+
+lua_State *script_cache_check_script(script * const sc, int etag_flags)
 {
     if (lua_gettop(sc->L) == 0)
         return script_cache_load_script(sc, etag_flags);
@@ -132,14 +144,4 @@ static lua_State *script_cache_check_script(script * const sc, int etag_flags)
     }
 
     return sc->L;
-}
-
-lua_State *script_cache_get_script(script_cache *cache, const buffer *name, int etag_flags)
-{
-    for (uint32_t i = 0; i < cache->used; ++i) {
-        script * const sc = cache->ptr[i];
-        if (buffer_is_equal(&sc->name, name))
-            return script_cache_check_script(sc, etag_flags);
-    }
-    return script_cache_new_script(cache, name, etag_flags);
 }

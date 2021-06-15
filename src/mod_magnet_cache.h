@@ -30,6 +30,12 @@ script_cache *script_cache_init(void);
 __attribute_cold__
 void script_cache_free_data(script_cache *cache);
 
-lua_State *script_cache_get_script(script_cache *cache, const buffer *name, int etag_flags);
+__attribute_cold__
+__attribute_nonnull__
+__attribute_returns_nonnull__
+script *script_cache_get_script(script_cache *cache, const buffer *name);
+
+__attribute_nonnull__
+lua_State *script_cache_check_script(script * const sc, int etag_flags);
 
 #endif

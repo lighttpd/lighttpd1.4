@@ -4,6 +4,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "http_chunk.h"
+#include "http_etag.h"
 #include "http_header.h"
 #include "response.h"   /* http_response_send_1xx() */
 
@@ -30,9 +31,9 @@
 static jmp_buf exceptionjmp;
 
 typedef struct {
-    const array *url_raw;
-    const array *physical_path;
-    const array *response_start;
+    script * const *url_raw;
+    script * const *physical_path;
+    script * const *response_start;
     int stage;
 } plugin_config;
 
@@ -49,20 +50,39 @@ INIT_FUNC(mod_magnet_init) {
 }
 
 FREE_FUNC(mod_magnet_free) {
-    plugin_data *p = p_d;
+    plugin_data * const p = p_d;
     script_cache_free_data(&p->cache);
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
+            switch (cpv->k_id) {
+              case 0: /* magnet.attract-raw-url-to */
+              case 1: /* magnet.attract-physical-path-to */
+              case 2: /* magnet.attract-response-start-to */
+                free(cpv->v.v);
+                break;
+              default:
+                break;
+            }
+        }
+    }
 }
 
 static void mod_magnet_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
+    if (cpv->vtype != T_CONFIG_LOCAL)
+        return;
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* magnet.attract-raw-url-to */
-        pconf->url_raw = cpv->v.a;
+        pconf->url_raw = cpv->v.v;
         break;
       case 1: /* magnet.attract-physical-path-to */
-        pconf->physical_path = cpv->v.a;
+        pconf->physical_path = cpv->v.v;
         break;
       case 2: /* magnet.attract-response-start-to */
-        pconf->response_start = cpv->v.a;
+        pconf->response_start = cpv->v.v;
         break;
       default:/* should not happen */
         return;
@@ -107,20 +127,34 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
     /* process and validate config directives
      * (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
-        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* magnet.attract-raw-url-to */
               case 1: /* magnet.attract-physical-path-to */
               case 2: /* magnet.attract-response-start-to */
-                for (uint32_t j = 0; j < cpv->v.a->used; ++j) {
-                    data_string *ds = (data_string *)cpv->v.a->data[j];
-                    if (buffer_is_blank(&ds->value)) {
-                        log_error(srv->errh, __FILE__, __LINE__,
-                          "unexpected (blank) value for %s; "
-                          "expected list of \"scriptpath\"", cpk[cpv->k_id].k);
-                        return HANDLER_ERROR;
+                if (0 == cpv->v.a->used) {
+                    cpv->v.v = NULL;
+                    cpv->vtype = T_CONFIG_LOCAL;
+                }
+                else {
+                    script ** const a =
+                      malloc(sizeof(script *)*(cpv->v.a->used+1));
+                    force_assert(a);
+                    for (uint32_t j = 0; j < cpv->v.a->used; ++j) {
+                        data_string *ds = (data_string *)cpv->v.a->data[j];
+                        if (buffer_is_blank(&ds->value)) {
+                            log_error(srv->errh, __FILE__, __LINE__,
+                              "unexpected (blank) value for %s; "
+                              "expected list of \"scriptpath\"", cpk[cpv->k_id].k);
+                            free(a);
+                            return HANDLER_ERROR;
+                        }
+                        a[j] = script_cache_get_script(&p->cache, &ds->value);
                     }
+                    a[cpv->v.a->used] = NULL;
+                    cpv->v.v = a;
+                    cpv->vtype = T_CONFIG_LOCAL;
                 }
                 break;
               default:/* should not happen */
@@ -861,18 +895,17 @@ static int push_traceback(lua_State *L, int narg) {
 	return base;
 }
 
-static handler_t magnet_attract(request_st * const r, plugin_data * const p, buffer * const name) {
-	lua_State *L;
+static handler_t magnet_attract(request_st * const r, plugin_data * const p, script * const sc) {
+	/*(always check at least mtime and size to trigger script reload)*/
+	int etag_flags = r->conf.etag_flags | ETAG_USE_MTIME | ETAG_USE_SIZE;
+	lua_State * const L = script_cache_check_script(sc, etag_flags);
 	int lua_return_value;
 	const int func_ndx = 1;
 	const int lighty_table_ndx = 2;
 
-	/* get the script-context */
-	L = script_cache_get_script(&p->cache, name, r->conf.etag_flags);
-
 	if (NULL == L) {
 		log_perror(r->conf.errh, __FILE__, __LINE__,
-		  "loading script %s failed", name->ptr);
+		  "loading script %s failed", sc->name.ptr);
 
 		if (p->conf.stage != -1) { /* skip for response-start */
 			r->http_status = 500;
@@ -884,7 +917,7 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, buf
 
 	if (lua_isstring(L, -1)) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "loading script %s failed: %s", name->ptr, lua_tostring(L, -1));
+		  "loading script %s failed: %s", sc->name.ptr, lua_tostring(L, -1));
 
 		lua_pop(L, 1);
 
@@ -1099,27 +1132,22 @@ static handler_t magnet_attract_array(request_st * const r, plugin_data * const 
 	mod_magnet_patch_config(r, p);
 	p->conf.stage = stage;
 
-	const array *files;
+	script * const *scripts;
 	switch (stage) {
-	  case  1: files = p->conf.url_raw; break;
-	  case  0: files = p->conf.physical_path; break;
-	  case -1: files = p->conf.response_start; break;
-	  default: files = NULL; break;
+	  case  1: scripts = p->conf.url_raw; break;
+	  case  0: scripts = p->conf.physical_path; break;
+	  case -1: scripts = p->conf.response_start; break;
+	  default: scripts = NULL; break;
 	}
-
-	/* no filename set */
-	if (NULL == files || files->used == 0) return HANDLER_GO_ON;
+	if (NULL == scripts) return HANDLER_GO_ON; /* no scripts set */
 
 	r->con->srv->request_env(r);
 
-	/**
-	 * execute all files and jump out on the first !HANDLER_GO_ON
-	 */
-	handler_t ret = HANDLER_GO_ON;
-	for (uint32_t i = 0; i < files->used && ret == HANDLER_GO_ON; ++i) {
-		data_string *ds = (data_string *)files->data[i];
-		ret = magnet_attract(r, p, &ds->value);
-	}
+	/* execute scripts sequentially while HANDLER_GO_ON */
+	handler_t rc = HANDLER_GO_ON;
+	do {
+		rc = magnet_attract(r, p, *scripts);
+	} while (rc == HANDLER_GO_ON && *++scripts);
 
 	if (r->error_handler_saved_status) {
 		/* retrieve (possibly modified) REDIRECT_STATUS and store as number */
@@ -1130,7 +1158,7 @@ static handler_t magnet_attract_array(request_st * const r, plugin_data * const 
 			  r->error_handler_saved_status > 0 ? (int)x : -(int)x;
 	}
 
-	return ret;
+	return rc;
 }
 
 URIHANDLER_FUNC(mod_magnet_uri_handler) {
