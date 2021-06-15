@@ -1393,8 +1393,7 @@ mod_nss_SNI (PRFileDesc *ssl, const SECItem *srvNameArr, PRUint32 srvNameArrSize
     }
 
     /* use SNI to patch mod_nss config and then reset COMP_HTTP_HOST */
-    buffer_copy_string_len(&r->uri.authority, (const char *)sn->data, sn->len);
-    buffer_to_lower(&r->uri.authority);
+    buffer_copy_string_len_lc(&r->uri.authority,(const char *)sn->data,sn->len);
   #if 0
     /*(r->uri.authority used below for configuration before request read;
      * revisit for h2)*/

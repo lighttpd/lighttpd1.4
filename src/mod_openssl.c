@@ -1190,8 +1190,7 @@ mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
     }
 
     /* use SNI to patch mod_openssl config and then reset COMP_HTTP_HOST */
-    buffer_copy_string_len(&r->uri.authority, servername, len);
-    buffer_to_lower(&r->uri.authority);
+    buffer_copy_string_len_lc(&r->uri.authority, servername, len);
   #if 0
     /*(r->uri.authority used below for configuration before request read;
      * revisit for h2)*/

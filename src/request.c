@@ -270,8 +270,7 @@ static void http_request_header_set_Host(request_st * const restrict r, const ch
 {
     r->http_host = http_header_request_set_ptr(r, HTTP_HEADER_HOST,
                                                CONST_STR_LEN("Host"));
-    buffer_copy_string_len(r->http_host, h, hlen);
-    buffer_to_lower(r->http_host);
+    buffer_copy_string_len_lc(r->http_host, h, hlen);
 }
 
 

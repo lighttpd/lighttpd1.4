@@ -622,10 +622,8 @@ static handler_t http_response_comeback (request_st * const r)
 
     request_config_reset(r);
 
-    if (__builtin_expect( (r->http_host != NULL), 1)) {
-        buffer_copy_buffer(&r->uri.authority, r->http_host);
-        buffer_to_lower(&r->uri.authority);
-    }
+    if (__builtin_expect( (r->http_host != NULL), 1))
+        buffer_copy_string_len_lc(&r->uri.authority, BUF_PTR_LEN(r->http_host));
     else /*(buffer_blank(&r->uri.authority) w/o code inline)*/
         buffer_copy_string_len(&r->uri.authority, CONST_STR_LEN(""));
 

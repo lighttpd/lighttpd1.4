@@ -711,8 +711,7 @@ mod_mbedtls_SNI (void *arg, mbedtls_ssl_context *ssl, const unsigned char *serve
     }
 
     /* use SNI to patch mod_mbedtls config and then reset COMP_HTTP_HOST */
-    buffer_copy_string_len(&r->uri.authority, (const char *)servername, len);
-    buffer_to_lower(&r->uri.authority);
+    buffer_copy_string_len_lc(&r->uri.authority, (const char *)servername, len);
   #if 0
     /*(r->uri.authority used below for configuration before request read;
      * revisit for h2)*/

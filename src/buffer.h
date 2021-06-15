@@ -107,6 +107,7 @@ void buffer_free_ptr(buffer *b);
 
 void buffer_copy_string(buffer * restrict b, const char * restrict s);
 void buffer_copy_string_len(buffer * restrict b, const char * restrict s, size_t len);
+void buffer_copy_string_len_lc(buffer * restrict b, const char * restrict s, size_t len);
 
 void buffer_append_string(buffer * restrict b, const char * restrict s);
 void buffer_append_string_len(buffer * restrict b, const char * restrict s, size_t len);

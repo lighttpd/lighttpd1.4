@@ -949,16 +949,15 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
             while (vlen > v && (s[vlen-1] == ' ' || s[vlen-1] == '\t')) --vlen;
             if (vlen > v+1 && s[v] == '"' && s[vlen-1] == '"') {
                 ++v; --vlen;
-                buffer_copy_string_len(r->http_host, s+v, vlen-v);
+                buffer_copy_string_len_lc(r->http_host, s+v, vlen-v);
                 if (!buffer_backslash_unescape(r->http_host)) {
                     return mod_extforward_bad_request(r, __LINE__,
                       "invalid host= value in Forwarded header");
                 }
             }
             else {
-                buffer_copy_string_len(r->http_host, s+v, vlen-v);
+                buffer_copy_string_len_lc(r->http_host, s+v, vlen-v);
             }
-            buffer_to_lower(r->http_host);
 
             if (0 != http_request_host_policy(r->http_host,
                                               r->conf.http_parseopts,

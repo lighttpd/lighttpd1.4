@@ -2553,9 +2553,7 @@ int config_set_defaults(server *srv) {
 		s->force_lowercase_filenames = 0; /* default to 0 */
 
 		buffer * const tb = srv->tmp_buf;
-		buffer_copy_buffer(tb, s->document_root);
-
-		buffer_to_lower(tb);
+		buffer_copy_string_len_lc(tb, BUF_PTR_LEN(s->document_root));
 
 		if (0 == stat(tb->ptr, &st1)) {
 			int is_lower = 0;

@@ -1443,8 +1443,7 @@ mod_gnutls_SNI(handler_ctx * const hctx,
     }
 
     /* use SNI to patch mod_gnutls config and then reset COMP_HTTP_HOST */
-    buffer_copy_string_len(&r->uri.authority, (const char *)servername, len);
-    buffer_to_lower(&r->uri.authority);
+    buffer_copy_string_len_lc(&r->uri.authority, (const char *)servername, len);
   #if 0
     /*(r->uri.authority used below for configuration before request read;
      * revisit for h2)*/

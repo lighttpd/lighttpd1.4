@@ -264,6 +264,16 @@ buffer_copy_path_len2 (buffer * const restrict b, const char * const restrict s1
     buffer_append_path_len(b, s2, len2);/*(choice: not inlined, special-cased)*/
 }
 
+void
+buffer_copy_string_len_lc (buffer * const restrict b, const char * const restrict s, const size_t len)
+{
+    char * const restrict d = buffer_string_prepare_copy(b, len);
+    b->used = len+1;
+    d[len] = '\0';
+    for (size_t i = 0; i < len; ++i)
+        d[i] = (!light_isupper(s[i])) ? s[i] : s[i] | 0x20;
+}
+
 void buffer_append_uint_hex_lc(buffer *b, uintmax_t value) {
 	char *buf;
 	unsigned int shift = 0;
