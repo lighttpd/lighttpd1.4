@@ -1731,8 +1731,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		srv->max_conns = srv->max_fds/3;
 	}
 
-	request_pool_init(srv->max_conns);
-
 	/* libev backend overwrites our SIGCHLD handler and calls waitpid on SIGCHLD; we want our own SIGCHLD handling. */
 #ifdef HAVE_SIGACTION
 	sigaction(SIGCHLD, &act, NULL);

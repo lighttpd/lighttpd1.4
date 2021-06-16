@@ -47,21 +47,30 @@ static connection *connection_init(server *srv);
 
 static void connection_reset(connection *con);
 
+__attribute_cold__
+__attribute_noinline__
+static void connections_extend(server * const srv, connections * const conns) {
+    const uint32_t n = (srv->max_conns >= 128 && conns->size >= 16)
+      ? (0 != conns->size)    ? 128 : 128 - 16
+      : (srv->max_conns > 16) ? 16  : srv->max_conns;
+    if (conns->size < 128 && srv->srvconf.h2proto)
+        request_pool_extend(srv, n * 8);
+
+    conns->size += n;
+    conns->ptr = realloc(conns->ptr, sizeof(*conns->ptr) * conns->size);
+    force_assert(NULL != conns->ptr);
+
+    for (uint32_t i = conns->used; i < conns->size; ++i) {
+        conns->ptr[i] = connection_init(srv);
+        connection_reset(conns->ptr[i]);
+    }
+}
 
 static connection *connections_get_new_connection(server *srv) {
 	connections * const conns = &srv->conns;
-	size_t i;
 
-	if (conns->size == conns->used) {
-		conns->size += srv->max_conns >= 128 ? 128 : srv->max_conns > 16 ? 16 : srv->max_conns;
-		conns->ptr = realloc(conns->ptr, sizeof(*conns->ptr) * conns->size);
-		force_assert(NULL != conns->ptr);
-
-		for (i = conns->used; i < conns->size; i++) {
-			conns->ptr[i] = connection_init(srv);
-			connection_reset(conns->ptr[i]);
-		}
-	}
+	if (conns->size == conns->used)
+		connections_extend(srv, conns);
 
 	conns->ptr[conns->used]->ndx = conns->used;
 	return conns->ptr[conns->used++];

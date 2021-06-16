@@ -235,9 +235,15 @@ static uint32_t reqspace;
 
 
 void
-request_pool_init (uint32_t sz)
+request_pool_extend (server *srv, const uint32_t sz)
 {
-    reqspace = sz;
+    for (uint32_t i = 0; i < sz; ++i) {
+        request_st * const x = calloc(1, sizeof(request_st));
+        force_assert(x);
+        request_init_data(x, NULL, srv);
+        x->con = (connection *)reqpool; /*(reuse r->con as next ptr)*/
+        reqpool = x;
+    }
 }
 
 
