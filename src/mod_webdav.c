@@ -539,8 +539,7 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
                             continue;
                         }
                         log_error(srv->errh, __FILE__, __LINE__,
-                                  "unrecognized webdav.opts: %.*s",
-                                  BUFFER_INTLEN_PTR(&ds->key));
+                                  "unrecognized webdav.opts: %s", ds->key.ptr);
                         return HANDLER_ERROR;
                     }
                     cpv->v.u = opts;

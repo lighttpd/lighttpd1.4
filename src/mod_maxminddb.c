@@ -156,8 +156,8 @@ mod_maxminddb_open_db (server *srv, const buffer *db_name)
         || 0 != memcmp(db_name->ptr+db_name->used-sizeof(".mmdb"),
                        CONST_STR_LEN(".mmdb"))) {
         log_error(srv->errh, __FILE__, __LINE__,
-          "GeoIP database is of unsupported type %.*s)",
-          BUFFER_INTLEN_PTR(db_name));
+          "GeoIP database is of unsupported type %s)",
+          db_name->ptr);
         return NULL;
     }
 
@@ -168,12 +168,12 @@ mod_maxminddb_open_db (server *srv, const buffer *db_name)
 
     if (MMDB_IO_ERROR == rc)
         log_perror(srv->errh, __FILE__, __LINE__,
-          "failed to open GeoIP2 database (%.*s)",
-          BUFFER_INTLEN_PTR(db_name));
+          "failed to open GeoIP2 database (%s)",
+          db_name->ptr);
     else
         log_error(srv->errh, __FILE__, __LINE__,
-          "failed to open GeoIP2 database (%.*s): %s",
-          BUFFER_INTLEN_PTR(db_name), MMDB_strerror(rc));
+          "failed to open GeoIP2 database (%s): %s",
+          db_name->ptr, MMDB_strerror(rc));
     free(mmdb);
     return NULL;
 }

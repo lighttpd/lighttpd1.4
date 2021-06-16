@@ -1470,11 +1470,11 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
                         /* time - out */
                         if (r->conf.log_timeouts) {
                             log_error(r->conf.errh, __FILE__, __LINE__,
-                              "NOTE: a request from %.*s for %.*s timed out "
+                              "NOTE: a request from %s for %.*s timed out "
                               "after writing %lld bytes. We waited %d seconds. "
                               "If this is a problem, increase "
                               "server.max-write-idle",
-                              BUFFER_INTLEN_PTR(con->dst_addr_buf),
+                              con->dst_addr_buf->ptr,
                               BUFFER_INTLEN_PTR(&r->target),
                               (long long)r->write_queue.bytes_out,
                               (int)r->conf.max_write_idle);
@@ -1545,10 +1545,10 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
             /* time - out */
             if (r->conf.log_timeouts) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
-                  "NOTE: a request from %.*s for %.*s timed out after writing "
-                  "%lld bytes. We waited %d seconds.  If this is a problem, "
+                  "NOTE: a request from %s for %.*s timed out after writing "
+                  "%lld bytes. We waited %d seconds. If this is a problem, "
                   "increase server.max-write-idle",
-                  BUFFER_INTLEN_PTR(con->dst_addr_buf),
+                  con->dst_addr_buf->ptr,
                   BUFFER_INTLEN_PTR(&r->target),
                   (long long)con->bytes_written, (int)r->conf.max_write_idle);
             }
