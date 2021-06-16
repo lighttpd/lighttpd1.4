@@ -118,9 +118,7 @@ static int mod_access_check (const array * const allow, const array * const deny
 }
 
 /**
- * URI handler
- *
- * we will get called twice:
+ * handler is called twice:
  * - after the clean up of the URL and 
  * - after the pathinfo checks are done
  *
@@ -128,17 +126,9 @@ static int mod_access_check (const array * const allow, const array * const deny
  */
 URIHANDLER_FUNC(mod_access_uri_handler) {
     plugin_data *p = p_d;
-
     mod_access_patch_config(r, p);
-
-    if (NULL == p->conf.access_allow && NULL == p->conf.access_deny) {
+    if (NULL == p->conf.access_allow && NULL == p->conf.access_deny)
         return HANDLER_GO_ON; /* access allowed; nothing to match */
-    }
-
-    if (r->conf.log_request_handling) {
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "-- mod_access_uri_handler called");
-    }
 
     return mod_access_check(p->conf.access_allow, p->conf.access_deny,
                             &r->uri.path, r->conf.force_lowercase_filenames)
