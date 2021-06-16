@@ -234,7 +234,7 @@ static void mod_status_get_multiplier(buffer *b, double avg, int size) {
 
 static void mod_status_html_rtable_r (buffer * const b, const request_st * const r, const connection * const con, const time_t cur_ts) {
     buffer_append_str3(b, CONST_STR_LEN("<tr><td class=\"string\">"),
-                          BUF_PTR_LEN(con->dst_addr_buf),
+                          BUF_PTR_LEN(&con->dst_addr_buf),
                           CONST_STR_LEN("</td><td class=\"int\">"));
 
     if (r->reqbody_length) {

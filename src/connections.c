@@ -546,7 +546,6 @@ static connection *connection_init(server *srv) {
 	con->bytes_written = 0;
 	con->bytes_read = 0;
 
-	con->dst_addr_buf = buffer_init();
 	con->srv  = srv;
 	con->plugin_slots = srv->plugin_slots;
 	con->config_data_base = srv->config_data_base;
@@ -578,8 +577,7 @@ void connections_free(server *srv) {
 		request_free_data(r);
 
 		free(con->plugin_ctx);
-		buffer_free(con->dst_addr_buf);
-
+		free(con->dst_addr_buf.ptr);
 		free(con);
 	}
 
@@ -971,7 +969,8 @@ connection *connection_accepted(server *srv, const server_socket *srv_socket, so
 
 		con->connection_start = log_monotonic_secs;
 		con->dst_addr = *cnt_addr;
-		sock_addr_cache_inet_ntop_copy_buffer(con->dst_addr_buf,&con->dst_addr);
+		sock_addr_cache_inet_ntop_copy_buffer(&con->dst_addr_buf,
+		                                      &con->dst_addr);
 		con->srv_socket = srv_socket;
 		con->is_ssl_sock = srv_socket->is_ssl;
 		con->proto_default_port = 80; /* "http" */
@@ -1474,7 +1473,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
                               "after writing %lld bytes. We waited %d seconds. "
                               "If this is a problem, increase "
                               "server.max-write-idle",
-                              con->dst_addr_buf->ptr,
+                              con->dst_addr_buf.ptr,
                               BUFFER_INTLEN_PTR(&r->target),
                               (long long)r->write_queue.bytes_out,
                               (int)r->conf.max_write_idle);
@@ -1548,7 +1547,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
                   "NOTE: a request from %s for %.*s timed out after writing "
                   "%lld bytes. We waited %d seconds. If this is a problem, "
                   "increase server.max-write-idle",
-                  con->dst_addr_buf->ptr,
+                  con->dst_addr_buf.ptr,
                   BUFFER_INTLEN_PTR(&r->target),
                   (long long)con->bytes_written, (int)r->conf.max_write_idle);
             }

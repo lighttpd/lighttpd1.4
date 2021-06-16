@@ -208,7 +208,7 @@ SETDEFAULTS_FUNC(mod_geoip_set_defaults) {
 
 static handler_t mod_geoip_query (request_st * const r, plugin_data * const p) {
     GeoIPRecord *gir;
-    const char *remote_ip = r->con->dst_addr_buf->ptr;
+    const char *remote_ip = r->con->dst_addr_buf.ptr;
 
     if (NULL != http_header_env_get(r, CONST_STR_LEN("GEOIP_COUNTRY_CODE"))) {
         return HANDLER_GO_ON;

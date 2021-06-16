@@ -914,7 +914,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				break;
 			case FORMAT_REMOTE_ADDR:
 			case FORMAT_REMOTE_HOST:
-				buffer_append_string_buffer(b, con->dst_addr_buf);
+				buffer_append_string_buffer(b, &con->dst_addr_buf);
 				break;
 			case FORMAT_REMOTE_IDENT:
 				/* ident */

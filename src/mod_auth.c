@@ -839,7 +839,7 @@ mod_auth_check_basic(request_st * const r, void *p_d, const struct http_auth_req
     default:
         log_error(r->conf.errh, __FILE__, __LINE__,
           "password doesn't match for %s username: %s IP: %s",
-          r->uri.path.ptr, user, r->con->dst_addr_buf->ptr);
+          r->uri.path.ptr, user, r->con->dst_addr_buf.ptr);
         r->keep_alive = -1; /*(disable keep-alive if bad password)*/
         rc = mod_auth_send_401_unauthorized_basic(r, require->realm);
         break;
@@ -1305,7 +1305,7 @@ mod_auth_digest_validate_params (request_st * const r, const struct http_auth_re
         log_error(r->conf.errh, __FILE__, __LINE__,
           "digest: auth failed: uri mismatch (%s != %.*s), IP: %s",
           r->target_orig.ptr, (int)dp->len[e_uri], dp->ptr[e_uri],
-          r->con->dst_addr_buf->ptr);
+          r->con->dst_addr_buf.ptr);
         return mod_auth_send_400_bad_request(r);
     }
 
@@ -1417,7 +1417,7 @@ mod_auth_check_digest (request_st * const r, void *p_d, const struct http_auth_r
         /* digest not ok */
         log_error(r->conf.errh, __FILE__, __LINE__,
           "digest: auth failed for %.*s: wrong password, IP: %s",
-          (int)ai.ulen, ai.username, r->con->dst_addr_buf->ptr);
+          (int)ai.ulen, ai.username, r->con->dst_addr_buf.ptr);
         r->keep_alive = -1; /*(disable keep-alive if bad password)*/
         return mod_auth_send_401_unauthorized_digest(r, require, 0);
     }

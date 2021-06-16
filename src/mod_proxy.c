@@ -687,15 +687,15 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
         } else if (family == AF_INET) {
             /*(Note: if :port is added, then must be quoted-string:
              * e.g. for="...:port")*/
-            buffer_append_string_buffer(b, con->dst_addr_buf);
+            buffer_append_string_buffer(b, &con->dst_addr_buf);
         } else if (family == AF_INET6) {
             buffer_append_str3(b, CONST_STR_LEN("\"["),
-                                  BUF_PTR_LEN(con->dst_addr_buf),
+                                  BUF_PTR_LEN(&con->dst_addr_buf),
                                   CONST_STR_LEN("]\""));
         } else {
             buffer_append_string_len(b, CONST_STR_LEN("\""));
             buffer_append_string_backslash_escaped(
-              b, BUF_PTR_LEN(con->dst_addr_buf));
+              b, BUF_PTR_LEN(&con->dst_addr_buf));
             buffer_append_string_len(b, CONST_STR_LEN("\""));
         }
         semicolon = 1;
@@ -780,7 +780,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
 
     /* legacy X-* headers, including X-Forwarded-For */
 
-    b = (NULL != efor) ? efor : con->dst_addr_buf;
+    b = (NULL != efor) ? efor : &con->dst_addr_buf;
     http_header_request_set(r, HTTP_HEADER_X_FORWARDED_FOR,
                             CONST_STR_LEN("X-Forwarded-For"),
                             BUF_PTR_LEN(b));

@@ -306,7 +306,7 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
     rc |= cb(vdata, CONST_STR_LEN("SERVER_NAME"), s, n);
 
     rc |= cb(vdata, CONST_STR_LEN("REMOTE_ADDR"),
-                    BUF_PTR_LEN(con->dst_addr_buf));
+                    BUF_PTR_LEN(&con->dst_addr_buf));
 
     rc |= cb(vdata, CONST_STR_LEN("REMOTE_PORT"), buf,
              li_utostrn(buf,sizeof(buf),sock_addr_get_port(&con->dst_addr)));

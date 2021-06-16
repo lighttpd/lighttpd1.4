@@ -49,7 +49,7 @@ struct connection {
 	void *config_data_base;
 
 	sock_addr dst_addr;
-	buffer *dst_addr_buf;
+	buffer dst_addr_buf;
 	const struct server_socket *srv_socket;   /* reference to the server-socket */
 
 	/* timestamps */

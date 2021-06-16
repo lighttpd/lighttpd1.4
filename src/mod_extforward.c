@@ -522,7 +522,7 @@ static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
 static int is_connection_trusted(connection * const con, plugin_data *p)
 {
     if (p->conf.forward_all) return (1 == p->conf.forward_all);
-    return is_proxy_trusted(p, BUF_PTR_LEN(con->dst_addr_buf));
+    return is_proxy_trusted(p, BUF_PTR_LEN(&con->dst_addr_buf));
 }
 
 /*
@@ -573,21 +573,22 @@ static int mod_extforward_set_addr(request_st * const r, plugin_data *p, const c
 				  "-- mod_extforward_uri_handler already patched this connection, resetting state");
 			}
 			con->dst_addr = hctx->saved_remote_addr;
-			buffer_move(con->dst_addr_buf, &hctx->saved_remote_addr_buf);
+			buffer_move(&con->dst_addr_buf, &hctx->saved_remote_addr_buf);
 		}
 	} else {
 		con->plugin_ctx[p->id] = hctx = handler_ctx_init();
 	}
 	/* save old address */
 	if (extforward_check_proxy) {
-		http_header_env_set(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"), BUF_PTR_LEN(con->dst_addr_buf));
+		http_header_env_set(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"),
+		                    BUF_PTR_LEN(&con->dst_addr_buf));
 	}
 	hctx->request_count = con->request_count;
 	hctx->saved_remote_addr = con->dst_addr;
-	buffer_move(&hctx->saved_remote_addr_buf, con->dst_addr_buf);
+	buffer_move(&hctx->saved_remote_addr_buf, &con->dst_addr_buf);
 	/* patch connection address */
 	con->dst_addr = sock;
-	buffer_copy_string_len(con->dst_addr_buf, addr, addrlen);
+	buffer_copy_string_len(&con->dst_addr_buf, addr, addrlen);
 
 	/* Now, clean the conf_cond cache, because we may have changed the results of tests */
 	config_cond_cache_reset_item(r, COMP_HTTP_REMOTE_IP);
@@ -1109,7 +1110,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "no forward header found or "
 			  "remote address %s is NOT a trusted proxy, skipping",
-			  r->con->dst_addr_buf->ptr);
+			  r->con->dst_addr_buf.ptr);
 		}
 		return HANDLER_GO_ON;
 	}
@@ -1145,7 +1146,7 @@ REQUEST_FUNC(mod_extforward_restore) {
 
 	if (!buffer_is_unset(&hctx->saved_remote_addr_buf)) {
 		con->dst_addr = hctx->saved_remote_addr;
-		buffer_move(con->dst_addr_buf, &hctx->saved_remote_addr_buf);
+		buffer_move(&con->dst_addr_buf, &hctx->saved_remote_addr_buf);
 		/* Now, clean the conf_cond cache, because we may have changed the results of tests */
 		config_cond_cache_reset_item(r, COMP_HTTP_REMOTE_IP);
 	}
@@ -1169,7 +1170,7 @@ CONNECTION_FUNC(mod_extforward_handle_con_close)
         }
         if (!buffer_is_unset(&hctx->saved_remote_addr_buf)) {
             con->dst_addr = hctx->saved_remote_addr;
-            buffer_move(con->dst_addr_buf, &hctx->saved_remote_addr_buf);
+            buffer_move(&con->dst_addr_buf, &hctx->saved_remote_addr_buf);
         }
         if (NULL != hctx->env) {
             array_free(hctx->env);
@@ -1201,7 +1202,7 @@ CONNECTION_FUNC(mod_extforward_handle_con_accept)
         if (r->conf.log_request_handling) {
             log_error(r->conf.errh, __FILE__, __LINE__,
               "remote address %s is NOT a trusted proxy, skipping",
-              con->dst_addr_buf->ptr);
+              con->dst_addr_buf.ptr);
         }
     }
     return HANDLER_GO_ON;
@@ -1485,7 +1486,7 @@ static int mod_extforward_hap_PROXY_v1 (connection * const con,
     /* re-parse addr to string to normalize
      * (instead of trusting PROXY to provide canonicalized src_addr string)
      * (should prefer PROXY v2 protocol if concerned about performance) */
-    sock_addr_inet_ntop_copy_buffer(con->dst_addr_buf, &con->dst_addr);
+    sock_addr_inet_ntop_copy_buffer(&con->dst_addr_buf, &con->dst_addr);
 
     return 0;
 }
@@ -1545,7 +1546,7 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
       case 0x11:  /* TCPv4 */
         sock_addr_assign(&con->dst_addr, AF_INET, hdr->v2.addr.ip4.src_port,
                                                  &hdr->v2.addr.ip4.src_addr);
-        sock_addr_inet_ntop_copy_buffer(con->dst_addr_buf, &con->dst_addr);
+        sock_addr_inet_ntop_copy_buffer(&con->dst_addr_buf, &con->dst_addr);
        #if 0
         ((struct sockaddr_in *)&by)->sin_family = AF_INET;
         ((struct sockaddr_in *)&by)->sin_addr.s_addr =
@@ -1559,7 +1560,7 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
       case 0x21:  /* TCPv6 */
         sock_addr_assign(&con->dst_addr, AF_INET6, hdr->v2.addr.ip6.src_port,
                                                   &hdr->v2.addr.ip6.src_addr);
-        sock_addr_inet_ntop_copy_buffer(con->dst_addr_buf, &con->dst_addr);
+        sock_addr_inet_ntop_copy_buffer(&con->dst_addr_buf, &con->dst_addr);
        #if 0
         ((struct sockaddr_in6 *)&by)->sin6_family = AF_INET6;
         memcpy(&((struct sockaddr_in6 *)&by)->sin6_addr,
@@ -1578,7 +1579,7 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
             if (NULL == z) return -1; /* invalid addr; too long */
             len = (uint32_t)(z - src_addr + 1); /*(+1 for '\0')*/
             sock_addr_assign(&con->dst_addr, AF_UNIX, 0, src_addr);
-            buffer_copy_string_len(con->dst_addr_buf, src_addr, len);
+            buffer_copy_string_len(&con->dst_addr_buf, src_addr, len);
         }
        #if 0 /*(dst_addr should be identical to src_addr for AF_UNIX)*/
         ((struct sockaddr_un *)&by)->sun_family = AF_UNIX;

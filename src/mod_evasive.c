@@ -147,7 +147,7 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 			if (!p->conf.silent) {
 				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "%s turned away. Too many connections.",
-				  r->con->dst_addr_buf->ptr);
+				  r->con->dst_addr_buf.ptr);
 			}
 
 			if (p->conf.location) {

@@ -541,7 +541,7 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	case MAGNET_ENV_REQUEST_URI:      dest = &r->target; break;
 	case MAGNET_ENV_REQUEST_ORIG_URI: dest = &r->target_orig; break;
 	case MAGNET_ENV_REQUEST_PATH_INFO: dest = &r->pathinfo; break;
-	case MAGNET_ENV_REQUEST_REMOTE_IP: dest = r->con->dst_addr_buf; break;
+	case MAGNET_ENV_REQUEST_REMOTE_IP: dest = &r->con->dst_addr_buf; break;
 	case MAGNET_ENV_REQUEST_SERVER_ADDR: /* local IP without port */
 	    {
 		const server_socket * const srv_socket = r->con->srv_socket;

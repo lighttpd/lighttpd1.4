@@ -397,7 +397,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 	  http_header_request_get(r, HTTP_HEADER_X_FORWARDED_FOR,
 	                          CONST_STR_LEN("X-Forwarded-For"));
 	if (NULL == remote_ip) {
-		remote_ip = r->con->dst_addr_buf;
+		remote_ip = &r->con->dst_addr_buf;
 	}
 
 	if (p->conf.debug) {

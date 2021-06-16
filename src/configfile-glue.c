@@ -570,7 +570,7 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 			case -1: return COND_RESULT_FALSE; /*(error parsing configfile entry)*/
 			}
 		}
-		l = r->con->dst_addr_buf;
+		l = &r->con->dst_addr_buf;
 		break;
 	}
 	case COMP_HTTP_SCHEME:
