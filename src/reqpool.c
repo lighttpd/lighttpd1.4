@@ -184,6 +184,8 @@ request_reset_ex (request_st * const r)
     buffer_clear(&r->uri.authority);
     buffer_reset(&r->uri.path);
     buffer_reset(&r->uri.query);
+    buffer_reset(&r->physical.path);
+    buffer_reset(&r->physical.rel_path);
     buffer_reset(&r->target_orig);
     buffer_reset(&r->target);       /*(see comments in request_reset())*/
     buffer_reset(&r->pathinfo);     /*(see comments in request_reset())*/
