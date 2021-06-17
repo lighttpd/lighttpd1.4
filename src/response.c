@@ -419,14 +419,6 @@ http_response_prepare (request_st * const r)
 		}
 
 
-		/**
-		 *
-		 * call plugins
-		 *
-		 * - based on the clean URL
-		 *
-		 */
-
 		rc = plugins_call_handle_uri_clean(r);
 		if (HANDLER_GO_ON != rc) continue;
 
@@ -437,39 +429,22 @@ http_response_prepare (request_st * const r)
 		if (__builtin_expect( (r->http_method == HTTP_METHOD_CONNECT), 0))
 			return http_response_prepare_connect(r);
 
-		/***
-		 *
-		 * border
-		 *
-		 * logical filename (URI) becomes a physical filename here
-		 *
-		 *
-		 *
-		 */
-
-
-
-
-		/* 1. stat()
-		 * ... ISREG() -> ok, go on
-		 * ... ISDIR() -> index-file -> redirect
-		 *
-		 * 2. pathinfo()
-		 * ... ISREG()
-		 *
-		 * 3. -> 404
-		 *
-		 */
 
 		/*
-		 * SEARCH DOCUMENT ROOT
+		 * border between logical and physical
+		 * logical path (URI) becomes a physical filename
 		 */
 
-		/* set a default */
 
-		buffer_copy_buffer(&r->physical.doc_root, r->conf.document_root);
+		/* docroot: set r->physical.doc_root and might set r->server_name */
+		buffer_clear(&r->physical.doc_root);
+
+		rc = plugins_call_handle_docroot(r);
+		if (HANDLER_GO_ON != rc) continue;
+
+
+		/* transform r->uri.path to r->physical.rel_path (relative file path) */
 		buffer_copy_buffer(&r->physical.rel_path, &r->uri.path);
-
 #if defined(__WIN32) || defined(__CYGWIN__)
 		/* strip dots from the end and spaces
 		 *
@@ -483,8 +458,7 @@ http_response_prepare (request_st * const r)
 		 * this behaviour. I have no idea how to push this through cygwin
 		 *
 		 * */
-
-		if (!buffer_is_blank(&r->physical.rel_path)) {
+		{
 			buffer *b = &r->physical.rel_path;
 			size_t len = buffer_clen(b);
 
@@ -499,53 +473,19 @@ http_response_prepare (request_st * const r)
 			buffer_truncate(b, len);
 		}
 #endif
-
-		if (r->conf.log_request_handling) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "-- before doc_root");
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "Doc-Root     : %s", r->physical.doc_root.ptr);
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "Rel-Path     : %s", r->physical.rel_path.ptr);
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "Path         : %s", r->physical.path.ptr);
-		}
-		/* the docroot plugin should set the doc_root and might also set the physical.path
-		 * for us (all vhost-plugins are supposed to set the doc_root)
-		 * (might also set r->server_name)
-		 */
-		rc = plugins_call_handle_docroot(r);
-		if (HANDLER_GO_ON != rc) continue;
-
-		/* MacOS X and Windows can't distinguish between upper and lower-case
-		 *
-		 * convert to lower-case
-		 */
+		/* MacOS X and Windows (typically) case-insensitive filesystems */
 		if (r->conf.force_lowercase_filenames) {
 			buffer_to_lower(&r->physical.rel_path);
 		}
 
-		/**
-		 * create physical filename
-		 * -> physical.path = docroot + rel_path
-		 *
-		 */
 
+		/* compose physical filename: physical.path = doc_root + rel_path */
+		if (buffer_is_unset(&r->physical.doc_root))
+			buffer_copy_buffer(&r->physical.doc_root, r->conf.document_root);
 		buffer_copy_buffer(&r->physical.basedir, &r->physical.doc_root);
 		buffer_copy_path_len2(&r->physical.path,
 		                      BUF_PTR_LEN(&r->physical.doc_root),
 		                      BUF_PTR_LEN(&r->physical.rel_path));
-
-		if (r->conf.log_request_handling) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "-- after doc_root");
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "Doc-Root     : %s", r->physical.doc_root.ptr);
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "Rel-Path     : %s", r->physical.rel_path.ptr);
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "Path         : %s", r->physical.path.ptr);
-		}
 
 			rc = plugins_call_handle_physical(r);
 			if (HANDLER_GO_ON != rc) continue;
@@ -572,13 +512,6 @@ http_response_prepare (request_st * const r)
 	 * Go on and check if the file exists at all
 	 */
 
-		if (r->conf.log_request_handling) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "-- handling physical path");
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "Path         : %s", r->physical.path.ptr);
-		}
-
 		rc = http_response_physical_path_check(r);
 		if (HANDLER_GO_ON != rc) continue;
 
@@ -592,7 +525,9 @@ http_response_prepare (request_st * const r)
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "URI          : %s", r->uri.path.ptr);
 			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "Pathinfo     : %s", r->pathinfo.ptr);
+			  "Pathinfo     : %s", r->pathinfo.ptr
+			                     ? r->pathinfo.ptr
+			                     : "");
 		}
 
 		/* call the handlers */
