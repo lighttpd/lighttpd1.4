@@ -45,9 +45,6 @@ typedef struct gw_proc {
 } gw_proc;
 
 typedef struct {
-    /* the key that is used to reference this value */
-    const buffer *id;
-
     /* list of processes handling this extension
      * sorted by lowest load
      *
@@ -56,6 +53,30 @@ typedef struct {
      * job is started
      */
     gw_proc *first;
+
+    uint32_t active_procs; /* how many procs in state PROC_STATE_RUNNING */
+    uint32_t gw_hash;
+
+    int32_t load;
+    int *stats_load;
+    int *stats_global_active;
+
+    /*
+     * host:port
+     *
+     * if host is one of the local IP addresses the
+     * whole connection is local
+     *
+     * if port is not 0, and host is not specified,
+     * "localhost" (INADDR_LOOPBACK) is assumed.
+     *
+     */
+    unsigned short port;
+    unsigned short family; /* sa_family_t */
+    const buffer *host;
+
+    /* the key that is used to reference this value */
+    const buffer *id;
     gw_proc *unused_procs;
 
     /*
@@ -71,7 +92,6 @@ typedef struct {
     unsigned short min_procs;
     unsigned short max_procs;
     uint32_t num_procs;    /* how many procs are started */
-    uint32_t active_procs; /* how many procs in state PROC_STATE_RUNNING */
 
     unsigned short max_load_per_proc;
 
@@ -103,21 +123,6 @@ typedef struct {
 
 
     /* config */
-
-    /*
-     * host:port
-     *
-     * if host is one of the local IP addresses the
-     * whole connection is local
-     *
-     * if port is not 0, and host is not specified,
-     * "localhost" (INADDR_LOOPBACK) is assumed.
-     *
-     */
-    const buffer *host;
-    unsigned short port;
-    unsigned short family; /* sa_family_t */
-    uint32_t gw_hash;
 
     /*
      * Unix Domain Socket
@@ -159,15 +164,6 @@ typedef struct {
     const buffer *docroot;
 
     /*
-     * check_local tells you if the phys file is stat()ed
-     * or not. FastCGI doesn't care if the service is
-     * remote. If the web-server side doesn't contain
-     * the FastCGI-files we should not stat() for them
-     * and say '404 not found'.
-     */
-    unsigned short check_local;
-
-    /*
      * append PATH_INFO to SCRIPT_FILENAME
      *
      * php needs this if cgi.fix_pathinfo is provided
@@ -175,6 +171,15 @@ typedef struct {
      */
 
     unsigned short break_scriptfilename_for_php;
+
+    /*
+     * check_local tells you if the phys file is stat()ed
+     * or not. FastCGI doesn't care if the service is
+     * remote. If the web-server side doesn't contain
+     * the FastCGI-files we should not stat() for them
+     * and say '404 not found'.
+     */
+    unsigned short check_local;
 
     /*
      * workaround for program when prefix="/"
@@ -194,8 +199,6 @@ typedef struct {
     unsigned short xsendfile_allow;
     const array *xsendfile_docroot;
 
-    int32_t load;
-
     uint32_t max_id; /* corresponds most of the time to num_procs */
 
     const buffer *strip_request_uri;
@@ -210,9 +213,6 @@ typedef struct {
     int refcount;
 
     char_array args;
-
-    int *stats_load;
-    int *stats_global_active;
 } gw_host;
 
 /*
