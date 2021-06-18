@@ -17,26 +17,7 @@ typedef struct {
 } char_array;
 
 typedef struct gw_proc {
-    uint32_t id; /* id will be between 1 and max_procs */
-    unsigned short port;  /* config.port + pno */
-    buffer *unixsocket; /* config.socket + "-" + id */
-    socklen_t saddrlen;
-    struct sockaddr *saddr;
-
-    /* either tcp:<host>:<port> or unix:<socket> for debugging purposes */
-    buffer *connection_name;
-
-    pid_t pid;   /* PID of the spawned process (0 if not spawned locally) */
-
-    uint32_t load; /* number of requests waiting on this process */
-
-    struct gw_proc *prev, *next; /* see first */
-
-    time_t last_used; /* see idle_timeout */
-    time_t disabled_until; /* proc disabled until given time */
-
-    int is_local;
-
+    struct gw_proc *next; /* see first */
     enum {
         PROC_STATE_RUNNING,    /* alive */
         PROC_STATE_OVERLOADED, /* listen-queue is full */
@@ -44,9 +25,23 @@ typedef struct gw_proc {
         PROC_STATE_DIED,       /* marked as dead, should be restarted */
         PROC_STATE_KILLED      /* killed (signal sent to proc) */
     } state;
-
+    uint32_t load; /* number of requests waiting on this process */
+    time_t last_used; /* see idle_timeout */
     int *stats_load;
     int *stats_connected;
+    pid_t pid;   /* PID of the spawned process (0 if not spawned locally) */
+    int is_local;
+    uint32_t id; /* id will be between 1 and max_procs */
+    socklen_t saddrlen;
+    struct sockaddr *saddr;
+
+    time_t disabled_until; /* proc disabled until given time */
+    struct gw_proc *prev; /* see first */
+
+    /* either tcp:<host>:<port> or unix:<socket> for debugging purposes */
+    buffer *connection_name;
+    buffer *unixsocket; /* config.socket + "-" + id */
+    unsigned short port;  /* config.port + pno */
 } gw_proc;
 
 typedef struct {
