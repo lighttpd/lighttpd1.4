@@ -402,6 +402,7 @@ int li_hex2bin (unsigned char * const bin, const size_t binlen, const char * con
 }
 
 
+__attribute_noinline__
 int buffer_eq_icase_ssn(const char * const a, const char * const b, const size_t len) {
     for (size_t i = 0; i < len; ++i) {
         unsigned int ca = ((unsigned char *)a)[i];
@@ -419,13 +420,13 @@ int buffer_eq_icase_ssn(const char * const a, const char * const b, const size_t
 
 int buffer_eq_icase_ss(const char * const a, const size_t alen, const char * const b, const size_t blen) {
     /* 1 = equal; 0 = not equal */ /* short string sizes expected (< INT_MAX) */
-    return (alen == blen && buffer_eq_icase_ssn(a, b, blen));
+    return (alen == blen) ? buffer_eq_icase_ssn(a, b, blen) : 0;
 }
 
 int buffer_eq_icase_slen(const buffer * const b, const char * const s, const size_t slen) {
     /* Note: b must be initialized, i.e. 0 != b->used; uninitialized is not eq*/
     /* 1 = equal; 0 = not equal */ /* short string sizes expected (< INT_MAX) */
-    return (b->used == slen + 1 && buffer_eq_icase_ssn(b->ptr, s, slen));
+    return (b->used == slen + 1) ? buffer_eq_icase_ssn(b->ptr, s, slen) : 0;
 }
 
 int buffer_eq_slen(const buffer * const b, const char * const s, const size_t slen) {
