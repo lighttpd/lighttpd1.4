@@ -49,17 +49,18 @@ int log_clock_gettime_monotonic (struct timespec *ts) {
 /* retry write on EINTR or when not all data was written */
 ssize_t write_all(int fd, const void * const buf, size_t count) {
     ssize_t written = 0;
+    ssize_t wr;
 
-    for (ssize_t wr; count > 0; count -= wr, written += wr) {
+    do {
         wr = write(fd, (const char *)buf + written, count);
-        if (wr > 0) continue;
+    } while (wr > 0 ? (written += wr, count -= wr) : wr < 0 && errno == EINTR);
 
-        if (wr < 0 && errno == EINTR) { wr = 0; continue; } /* try again */
+    if (__builtin_expect( (0 == count), 1))
+        return written;
+    else {
         if (0 == wr) errno = EIO; /* really shouldn't happen... */
         return -1; /* fail - repeating probably won't help */
     }
-
-    return written;
 }
 
 static int log_buffer_prepare(const log_error_st *errh, const char *filename, unsigned int line, buffer *b) {
