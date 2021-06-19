@@ -1034,9 +1034,10 @@ static handler_t proxy_create_env_connect(gw_handler_ctx *gwhctx) {
 static handler_t proxy_response_headers(request_st * const r, struct http_response_opts_t *opts) {
     /* response headers just completed */
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
+    http_header_remap_opts * const remap_hdrs = &hctx->conf.header;
 
     if (light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) {
-        if (hctx->conf.header.upgrade && r->http_status == 101) {
+        if (remap_hdrs->upgrade && r->http_status == 101) {
             /* 101 Switching Protocols; transition to transparent proxy */
             gw_set_transparent(&hctx->gw);
             http_response_upgrade_read_body_unknown(r);
@@ -1055,21 +1056,24 @@ static handler_t proxy_response_headers(request_st * const r, struct http_respon
 
     /* rewrite paths, if needed */
 
-    if (NULL == hctx->conf.header.urlpaths
-        && NULL == hctx->conf.header.hosts_response)
+    if (NULL == remap_hdrs->urlpaths && NULL == remap_hdrs->hosts_response)
         return HANDLER_GO_ON;
 
+    buffer *vb;
     if (light_btst(r->resp_htags, HTTP_HEADER_LOCATION)) {
-        buffer *vb = http_header_response_get(r, HTTP_HEADER_LOCATION, CONST_STR_LEN("Location"));
-        if (vb) http_header_remap_uri(vb, 0, &hctx->conf.header, 0);
+        vb = http_header_response_get(r, HTTP_HEADER_LOCATION,
+                                         CONST_STR_LEN("Location"));
+        if (vb) http_header_remap_uri(vb, 0, remap_hdrs, 0);
     }
     if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LOCATION)) {
-        buffer *vb = http_header_response_get(r, HTTP_HEADER_CONTENT_LOCATION, CONST_STR_LEN("Content-Location"));
-        if (vb) http_header_remap_uri(vb, 0, &hctx->conf.header, 0);
+        vb = http_header_response_get(r, HTTP_HEADER_CONTENT_LOCATION,
+                                         CONST_STR_LEN("Content-Location"));
+        if (vb) http_header_remap_uri(vb, 0, remap_hdrs, 0);
     }
     if (light_btst(r->resp_htags, HTTP_HEADER_SET_COOKIE)) {
-        buffer *vb = http_header_response_get(r, HTTP_HEADER_SET_COOKIE, CONST_STR_LEN("Set-Cookie"));
-        if (vb) http_header_remap_setcookie(vb, 0, &hctx->conf.header);
+        vb = http_header_response_get(r, HTTP_HEADER_SET_COOKIE,
+                                         CONST_STR_LEN("Set-Cookie"));
+        if (vb) http_header_remap_setcookie(vb, 0, remap_hdrs);
     }
 
     return HANDLER_GO_ON;
