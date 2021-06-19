@@ -879,9 +879,6 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		b->ptr[b->used-2] = '0'; /*(overwrite end of request line)*/
 	}
 
-	/* "Forwarded" and legacy X- headers */
-	proxy_set_Forwarded(r->con, r, hctx->conf.forwarded);
-
 	if (r->reqbody_length > 0
 	    || (0 == r->reqbody_length
 		&& !http_method_get_or_head(r->http_method))) {
@@ -903,6 +900,9 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		buffer_append_string_len(b, CONST_STR_LEN("\r\nTransfer-Encoding: chunked"));
 	}
 
+	/* "Forwarded" and legacy X- headers */
+	proxy_set_Forwarded(r->con, r, hctx->conf.forwarded);
+
 	/* request header */
 	const buffer *connhdr = NULL;
 	const buffer *te = NULL;
@@ -912,6 +912,17 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		switch (ds->ext) {
 		default:
 			break;
+		case HTTP_HEADER_HOST:
+			continue; /*(handled further above)*/
+		case HTTP_HEADER_OTHER:
+			if (__builtin_expect( ('p' == (ds->key.ptr[0] | 0x20)), 0)) {
+				if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
+				/* Do not emit HTTP_PROXY in environment.
+				 * Some executables use HTTP_PROXY to configure
+				 * outgoing proxy.  See also https://httpoxy.org/ */
+				if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy"))) continue;
+			}
+			break;
 		case HTTP_HEADER_TE:
 			if (hctx->conf.header.force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
 			/* ignore if not exactly "trailers" */
@@ -919,8 +930,6 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			/*if (!buffer_is_blank(&ds->value)) te = &ds->value;*/
 			te = &ds->value; /*("trailers")*/
 			break;
-		case HTTP_HEADER_HOST:
-			continue; /*(handled further above)*/
 		case HTTP_HEADER_UPGRADE:
 			if (hctx->conf.header.force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
 			if (!hctx->conf.header.upgrade) continue;
@@ -931,17 +940,6 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			continue;
 		case HTTP_HEADER_SET_COOKIE:
 			continue; /*(response header only; avoid accidental reflection)*/
-		case HTTP_HEADER_OTHER:
-			if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
-			/* Do not emit HTTP_PROXY in environment.
-			 * Some executables use HTTP_PROXY to configure
-			 * outgoing proxy.  See also https://httpoxy.org/ */
-			if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy"))) continue;
-			break;
-		case HTTP_HEADER_EXPECT:
-			/* Do not forward Expect: 100-continue
-			 * since we do not handle "HTTP/1.1 100 Continue" response */
-			continue;
 		}
 
 		const uint32_t klen = buffer_clen(&ds->key);
