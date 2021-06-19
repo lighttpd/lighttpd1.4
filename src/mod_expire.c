@@ -282,9 +282,7 @@ mod_expire_set_header (request_st * const r, const time_t * const off)
     else { /* HTTP/1.0 */
         vb = http_header_response_set_ptr(r, HTTP_HEADER_EXPIRES,
                                           CONST_STR_LEN("Expires"));
-        if (!http_date_time_to_str(buffer_extend(vb, HTTP_DATE_SZ-1),
-                                   HTTP_DATE_SZ, expires))
-            buffer_truncate(vb, buffer_clen(vb)+1-HTTP_DATE_SZ);
+        http_date_time_append(vb, expires);
     }
 
     return HANDLER_GO_ON;

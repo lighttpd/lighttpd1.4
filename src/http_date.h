@@ -22,6 +22,13 @@ uint32_t http_date_time_to_str (char *s, size_t sz, time_t t);
 
 int http_date_if_modified_since (const char *ifmod, uint32_t ifmodlen, time_t lmtime);
 
+/*(convenience macro to append IMF-fixdate to (buffer *))*/
+#define http_date_time_append(b, t)                                           \
+  do {                                                                        \
+    if (!http_date_time_to_str(buffer_extend((b), HTTP_DATE_SZ-1),            \
+                               HTTP_DATE_SZ, (t)))                            \
+        buffer_truncate((b), (b)->used - HTTP_DATE_SZ); /*(truncate if err)*/ \
+  } while (0)
 
 #ifdef __cplusplus
 }
