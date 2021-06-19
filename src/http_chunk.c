@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <string.h>
 
+__attribute_noinline__
 static void http_chunk_len_append(chunkqueue * const cq, uintmax_t len) {
     char buf[24]; /* 64-bit (8 bytes) is 16 hex chars (+2 \r\n, +1 \0 = 19) */
   #if 0
@@ -39,6 +40,7 @@ static void http_chunk_len_append(chunkqueue * const cq, uintmax_t len) {
   #endif
 }
 
+__attribute_noinline__
 static int http_chunk_len_append_tempfile(chunkqueue * const cq, uintmax_t len, log_error_st * const errh) {
     char buf[24]; /* 64-bit (8 bytes) is 16 hex chars (+2 \r\n, +1 \0 = 19) */
   #if 0
@@ -55,6 +57,7 @@ static int http_chunk_len_append_tempfile(chunkqueue * const cq, uintmax_t len, 
   #endif
 }
 
+__attribute_noinline__
 static int http_chunk_append_read_fd_range(request_st * const r, const buffer * const fn, const int fd, off_t offset, off_t len) {
     /* note: this routine should not be used for range requests
      * unless the total size of ranges requested is small */
@@ -84,6 +87,7 @@ static int http_chunk_append_read_fd_range(request_st * const r, const buffer * 
     return (rd >= 0) ? 0 : -1;
 }
 
+__attribute_noinline__
 void http_chunk_append_file_ref_range(request_st * const r, stat_cache_entry * const sce, const off_t offset, off_t len) {
     chunkqueue * const cq = &r->write_queue;
 
@@ -109,6 +113,7 @@ void http_chunk_append_file_ref_range(request_st * const r, stat_cache_entry * c
         chunkqueue_append_mem(cq, CONST_STR_LEN("\r\n"));
 }
 
+__attribute_noinline__
 void http_chunk_append_file_fd_range(request_st * const r, const buffer * const fn, const int fd, const off_t offset, const off_t len) {
     chunkqueue * const cq = &r->write_queue;
 
@@ -147,6 +152,7 @@ int http_chunk_append_file_ref(request_st * const r, stat_cache_entry * const sc
     return rc;
 }
 
+__attribute_noinline__
 static int http_chunk_append_to_tempfile(request_st * const r, const char * const mem, const size_t len) {
     chunkqueue * const cq = &r->write_queue;
     log_error_st * const errh = r->conf.errh;
@@ -166,6 +172,7 @@ static int http_chunk_append_to_tempfile(request_st * const r, const char * cons
     return 0;
 }
 
+__attribute_noinline__
 static int http_chunk_append_cq_to_tempfile(request_st * const r, chunkqueue * const src, const size_t len) {
     chunkqueue * const cq = &r->write_queue;
     log_error_st * const errh = r->conf.errh;
@@ -185,6 +192,7 @@ static int http_chunk_append_cq_to_tempfile(request_st * const r, chunkqueue * c
     return 0;
 }
 
+/*(inlined by compiler optimizer)*/
 __attribute_pure__
 static int http_chunk_uses_tempfile(const request_st * const r, const chunkqueue * const cq, const size_t len) {
 
@@ -206,6 +214,7 @@ static int http_chunk_uses_tempfile(const request_st * const r, const chunkqueue
              :  64*1024));
 }
 
+__attribute_noinline__
 int http_chunk_append_buffer(request_st * const r, buffer * const mem) {
     size_t len = mem ? buffer_clen(mem) : 0;
     if (0 == len) return 0;
@@ -227,6 +236,7 @@ int http_chunk_append_buffer(request_st * const r, buffer * const mem) {
     return 0;
 }
 
+__attribute_noinline__
 int http_chunk_append_mem(request_st * const r, const char * const mem, const size_t len) {
     if (0 == len) return 0;
     force_assert(NULL != mem);
