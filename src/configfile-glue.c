@@ -462,42 +462,33 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 	const buffer *l;
 	switch (dc->comp) {
 	case COMP_HTTP_HOST:
-
 		l = &r->uri.authority;
-
-		if (buffer_is_blank(l)) {
+		if (__builtin_expect( (buffer_is_blank(l)), 0)) {
 			l = (buffer *)&empty_string;
 			break;
 		}
-
-		switch(dc->cond) {
-		case CONFIG_COND_NE:
-		case CONFIG_COND_EQ: {
-			unsigned short port = sock_addr_get_port(&r->con->srv_socket->addr);
-			if (0 == port) break;
-			const char *ck_colon = strchr(dc->string.ptr, ':');
-			const char *val_colon = strchr(l->ptr, ':');
-
-			/* append server-port if necessary */
-			if (NULL != ck_colon && NULL == val_colon) {
-				/* condition "host:port" but client send "host" */
-				buffer *tb = r->tmp_buf;
-				buffer_copy_buffer(tb, l);
-				buffer_append_string_len(tb, CONST_STR_LEN(":"));
-				buffer_append_int(tb, port);
-				l = tb;
-			} else if (NULL != val_colon && NULL == ck_colon) {
-				/* condition "host" but client send "host:port" */
-				buffer *tb = r->tmp_buf;
-				buffer_copy_string_len(tb, l->ptr, val_colon - l->ptr);
-				l = tb;
-			}
-			break;
+		if ((dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE)
+		    && dc->string.ptr[0] != '/') { /*(AF_UNIX addr is string)*/
+			uint_fast32_t llen = buffer_clen(l);
+			uint_fast32_t dlen = buffer_clen(&dc->string);
+			if (llen == dlen)
+				break;
+			/* check names match, whether or not :port suffix present */
+			/*(not strictly checking for port match for alt-svc flexibility,
+			 * though if strings are same length, port is checked for match)*/
+			/*(r->uri.authority not strictly checked here for excess ':')*/
+			/*(r->uri.authority lowercased during request parsing)*/
+			if (debug_cond)
+				log_error(r->conf.errh, __FILE__, __LINE__,
+				  "%s compare to %s", dc->comp_key, l->ptr);
+			int match = ((llen > dlen)
+			             ? l->ptr[dlen] == ':' && llen - dlen <= 5
+			             : dc->string.ptr[(dlen = llen)] == ':')
+			         && 0 == memcmp(l->ptr, dc->string.ptr, dlen);
+			return match ^ (dc->cond == CONFIG_COND_EQ)
+			  ? COND_RESULT_FALSE
+			  : COND_RESULT_TRUE;
 		}
-		default:
-			break;
-		}
-
 		break;
 	case COMP_HTTP_REMOTE_IP: {
 		/* handle remoteip limitations
