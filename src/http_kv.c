@@ -25,48 +25,48 @@ static const keyvalue http_versions[] = {
 	{ HTTP_VERSION_UNSET, 0, NULL }
 };
 
-static const keyvalue http_methods[] = {
-	{ HTTP_METHOD_GET,                 CONST_LEN_STR("GET") },
-	{ HTTP_METHOD_HEAD,                CONST_LEN_STR("HEAD") },
-	{ HTTP_METHOD_POST,                CONST_LEN_STR("POST") },
-	{ HTTP_METHOD_PUT,                 CONST_LEN_STR("PUT") },
-	{ HTTP_METHOD_DELETE,              CONST_LEN_STR("DELETE") },
-	{ HTTP_METHOD_CONNECT,             CONST_LEN_STR("CONNECT") },
-	{ HTTP_METHOD_OPTIONS,             CONST_LEN_STR("OPTIONS") },
-	{ HTTP_METHOD_TRACE,               CONST_LEN_STR("TRACE") },
-	{ HTTP_METHOD_ACL,                 CONST_LEN_STR("ACL") },
-	{ HTTP_METHOD_BASELINE_CONTROL,    CONST_LEN_STR("BASELINE-CONTROL") },
-	{ HTTP_METHOD_BIND,                CONST_LEN_STR("BIND") },
-	{ HTTP_METHOD_CHECKIN,             CONST_LEN_STR("CHECKIN") },
-	{ HTTP_METHOD_CHECKOUT,            CONST_LEN_STR("CHECKOUT") },
-	{ HTTP_METHOD_COPY,                CONST_LEN_STR("COPY") },
-	{ HTTP_METHOD_LABEL,               CONST_LEN_STR("LABEL") },
-	{ HTTP_METHOD_LINK,                CONST_LEN_STR("LINK") },
-	{ HTTP_METHOD_LOCK,                CONST_LEN_STR("LOCK") },
-	{ HTTP_METHOD_MERGE,               CONST_LEN_STR("MERGE") },
-	{ HTTP_METHOD_MKACTIVITY,          CONST_LEN_STR("MKACTIVITY") },
-	{ HTTP_METHOD_MKCALENDAR,          CONST_LEN_STR("MKCALENDAR") },
-	{ HTTP_METHOD_MKCOL,               CONST_LEN_STR("MKCOL") },
-	{ HTTP_METHOD_MKREDIRECTREF,       CONST_LEN_STR("MKREDIRECTREF") },
-	{ HTTP_METHOD_MKWORKSPACE,         CONST_LEN_STR("MKWORKSPACE") },
-	{ HTTP_METHOD_MOVE,                CONST_LEN_STR("MOVE") },
-	{ HTTP_METHOD_ORDERPATCH,          CONST_LEN_STR("ORDERPATCH") },
-	{ HTTP_METHOD_PATCH,               CONST_LEN_STR("PATCH") },
-	{ HTTP_METHOD_PROPFIND,            CONST_LEN_STR("PROPFIND") },
-	{ HTTP_METHOD_PROPPATCH,           CONST_LEN_STR("PROPPATCH") },
-	{ HTTP_METHOD_REBIND,              CONST_LEN_STR("REBIND") },
-	{ HTTP_METHOD_REPORT,              CONST_LEN_STR("REPORT") },
-	{ HTTP_METHOD_SEARCH,              CONST_LEN_STR("SEARCH") },
-	{ HTTP_METHOD_UNBIND,              CONST_LEN_STR("UNBIND") },
-	{ HTTP_METHOD_UNCHECKOUT,          CONST_LEN_STR("UNCHECKOUT") },
-	{ HTTP_METHOD_UNLINK,              CONST_LEN_STR("UNLINK") },
-	{ HTTP_METHOD_UNLOCK,              CONST_LEN_STR("UNLOCK") },
-	{ HTTP_METHOD_UPDATE,              CONST_LEN_STR("UPDATE") },
-	{ HTTP_METHOD_UPDATEREDIRECTREF,   CONST_LEN_STR("UPDATEREDIRECTREF") },
-	{ HTTP_METHOD_VERSION_CONTROL,     CONST_LEN_STR("VERSION-CONTROL") },
+static const buffer http_methods[] = {
+	{ CONST_STR_LEN("GET")+1, 0 },
+	{ CONST_STR_LEN("HEAD")+1, 0 },
+	{ CONST_STR_LEN("POST")+1, 0 },
+	{ CONST_STR_LEN("PUT")+1, 0 },
+	{ CONST_STR_LEN("DELETE")+1, 0 },
+	{ CONST_STR_LEN("CONNECT")+1, 0 },
+	{ CONST_STR_LEN("OPTIONS")+1, 0 },
+	{ CONST_STR_LEN("TRACE")+1, 0 },
+	{ CONST_STR_LEN("ACL")+1, 0 },
+	{ CONST_STR_LEN("BASELINE-CONTROL")+1, 0 },
+	{ CONST_STR_LEN("BIND")+1, 0 },
+	{ CONST_STR_LEN("CHECKIN")+1, 0 },
+	{ CONST_STR_LEN("CHECKOUT")+1, 0 },
+	{ CONST_STR_LEN("COPY")+1, 0 },
+	{ CONST_STR_LEN("LABEL")+1, 0 },
+	{ CONST_STR_LEN("LINK")+1, 0 },
+	{ CONST_STR_LEN("LOCK")+1, 0 },
+	{ CONST_STR_LEN("MERGE")+1, 0 },
+	{ CONST_STR_LEN("MKACTIVITY")+1, 0 },
+	{ CONST_STR_LEN("MKCALENDAR")+1, 0 },
+	{ CONST_STR_LEN("MKCOL")+1, 0 },
+	{ CONST_STR_LEN("MKREDIRECTREF")+1, 0 },
+	{ CONST_STR_LEN("MKWORKSPACE")+1, 0 },
+	{ CONST_STR_LEN("MOVE")+1, 0 },
+	{ CONST_STR_LEN("ORDERPATCH")+1, 0 },
+	{ CONST_STR_LEN("PATCH")+1, 0 },
+	{ CONST_STR_LEN("PROPFIND")+1, 0 },
+	{ CONST_STR_LEN("PROPPATCH")+1, 0 },
+	{ CONST_STR_LEN("REBIND")+1, 0 },
+	{ CONST_STR_LEN("REPORT")+1, 0 },
+	{ CONST_STR_LEN("SEARCH")+1, 0 },
+	{ CONST_STR_LEN("UNBIND")+1, 0 },
+	{ CONST_STR_LEN("UNCHECKOUT")+1, 0 },
+	{ CONST_STR_LEN("UNLINK")+1, 0 },
+	{ CONST_STR_LEN("UNLOCK")+1, 0 },
+	{ CONST_STR_LEN("UPDATE")+1, 0 },
+	{ CONST_STR_LEN("UPDATEREDIRECTREF")+1, 0 },
+	{ CONST_STR_LEN("VERSION-CONTROL")+1, 0 },
 
-	{ HTTP_METHOD_PRI,                 CONST_LEN_STR("PRI") },
-	{ HTTP_METHOD_UNSET, 0, NULL }
+	{ CONST_STR_LEN("PRI")+1, 0 },
+	{ "", 0, 0 }
 };
 
 /* https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml */
@@ -137,6 +137,15 @@ static const keyvalue http_status[] = {
 };
 
 
+const buffer *http_method_buf (http_method_t i)
+{
+    return ((unsigned int)i < sizeof(http_methods)/sizeof(*http_methods)-2)
+      ? http_methods+i
+      : http_methods+i+sizeof(http_methods)/sizeof(*http_methods);
+        /* HTTP_METHOD_PRI is -2, HTTP_METHOD_UNSET is -1 */
+}
+
+
 __attribute_noinline__
 __attribute_pure__
 static const keyvalue * keyvalue_from_key (const keyvalue *kv, const int k)
@@ -147,6 +156,7 @@ static const keyvalue * keyvalue_from_key (const keyvalue *kv, const int k)
 }
 
 
+#if 0 /*(unused)*/
 __attribute_pure__
 static int keyvalue_get_key(const keyvalue *kv, const char * const s, const unsigned int slen)
 {
@@ -155,19 +165,18 @@ static int keyvalue_get_key(const keyvalue *kv, const char * const s, const unsi
         ++kv;
     return kv->key;
 }
+#endif
 
 
 const char *get_http_version_name(int i) {
     return keyvalue_from_key(http_versions, i)->value;
 }
 
+#if 0 /*(unused)*/
 const char *get_http_status_name(int i) {
     return keyvalue_from_key(http_status, i)->value;
 }
-
-const char *get_http_method_name(http_method_t i) {
-    return keyvalue_from_key(http_methods, i)->value;
-}
+#endif
 
 #if 0 /*(unused)*/
 int get_http_version_key(const char *s, size_t slen) {
@@ -178,7 +187,16 @@ int get_http_version_key(const char *s, size_t slen) {
 http_method_t get_http_method_key(const char *s, const size_t slen) {
     if (slen == 3 && s[0] == 'G' && s[1] == 'E' && s[2] == 'T')
         return HTTP_METHOD_GET;
-    return (http_method_t)keyvalue_get_key(http_methods, s, (unsigned int)slen);
+    const buffer *kv = http_methods;
+    while (kv->used && (kv->used-1 != slen || 0 != memcmp(kv->ptr, s, slen)))
+        ++kv;
+    const uint_fast32_t i = kv - http_methods;
+    /*(not done: could overload kv->size and store enum in kv->size)*/
+    return (i < sizeof(http_methods)/sizeof(*http_methods)-2)
+      ? (http_method_t)i
+      : i == sizeof(http_methods)/sizeof(*http_methods)-2
+        ? HTTP_METHOD_PRI
+        : HTTP_METHOD_UNSET;
 }
 
 
@@ -195,12 +213,6 @@ void http_status_append(buffer * const b, const int status) {
         buffer_append_int(b, status);
         buffer_append_string_len(b, CONST_STR_LEN(" "));
     }
-}
-
-void http_method_append(buffer * const b, const http_method_t method) {
-    const keyvalue * const kv = keyvalue_from_key(http_methods, method);
-    if (__builtin_expect( (0 != kv->vlen), 1))
-        buffer_append_string_len(b, kv->value, kv->vlen);
 }
 
 void http_version_append(buffer * const b, const http_version_t version) {

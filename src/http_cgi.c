@@ -220,9 +220,8 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
                         BUF_PTR_LEN(&r->physical.basedir));
     }
 
-    s = get_http_method_name(r->http_method);
-    force_assert(s);
-    rc |= cb(vdata, CONST_STR_LEN("REQUEST_METHOD"), s, strlen(s));
+    const buffer * const m = http_method_buf(r->http_method);
+    rc |= cb(vdata, CONST_STR_LEN("REQUEST_METHOD"), BUF_PTR_LEN(m));
 
     s = get_http_version_name(r->http_version);
     force_assert(s);

@@ -1278,9 +1278,7 @@ http_request_headers_process_h2 (request_st * const restrict r, const int scheme
             log_error(r->conf.errh, __FILE__, __LINE__,
               "request-header:\n:authority: %s\n:method: %s\n:path: %s",
               r->http_host ? r->http_host->ptr : "",
-              (HTTP_METHOD_UNSET != r->http_method)
-                ? get_http_method_name(r->http_method)
-                : "",
+              http_method_buf(r->http_method)->ptr,
               !buffer_is_blank(&r->target) ? r->target.ptr : "");
         }
     }

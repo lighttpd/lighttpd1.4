@@ -850,8 +850,11 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	/* build header */
 
 	/* request line */
-	http_method_append(b, r->http_method);
-	buffer_append_str2(b, CONST_STR_LEN(" "), BUF_PTR_LEN(&r->target));
+	const buffer * const m = http_method_buf(r->http_method);
+	buffer_append_str3(b,
+	                   BUF_PTR_LEN(m),
+	                   CONST_STR_LEN(" "),
+	                   BUF_PTR_LEN(&r->target));
 	if (remap_headers)
 		http_header_remap_uri(b, buffer_clen(b) - buffer_clen(&r->target),
 		                      &hctx->conf.header, 1);

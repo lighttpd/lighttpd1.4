@@ -541,12 +541,7 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		if (NULL == l) l = (buffer *)&empty_string;
 		break;
 	case COMP_HTTP_REQUEST_METHOD:
-		{
-			buffer * const tb = r->tmp_buf;
-			l = tb;
-			buffer_clear(tb);
-			http_method_append(tb, r->http_method);
-		}
+		l = http_method_buf(r->http_method);
 		break;
 	default:
 		return COND_RESULT_FALSE;

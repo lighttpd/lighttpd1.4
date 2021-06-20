@@ -59,20 +59,25 @@ typedef enum {
 
 typedef enum { HTTP_VERSION_UNSET = -1, HTTP_VERSION_1_0, HTTP_VERSION_1_1, HTTP_VERSION_2 } http_version_t;
 
+#if 0 /*(unused)*/
 __attribute_pure__
 const char *get_http_status_name(int i);
+#endif
 
 __attribute_pure__
 const char *get_http_version_name(int i);
 
-__attribute_pure__
-const char *get_http_method_name(http_method_t i);
+/*(deprecated)*/
+#define get_http_method_name(i) http_method_buf(i)->ptr
 
 #if 0 /*(unused)*/
 __attribute_nonnull__
 __attribute_pure__
 int get_http_version_key(const char *s, size_t slen);
 #endif
+
+__attribute_pure__
+const buffer *http_method_buf (http_method_t i);
 
 __attribute_nonnull__
 __attribute_pure__
@@ -82,12 +87,17 @@ __attribute_nonnull__
 void http_status_append(buffer *b, int status);
 
 __attribute_nonnull__
-void http_method_append(buffer *b, http_method_t method);
-
-__attribute_nonnull__
 void http_version_append(buffer *b, http_version_t version);
 
 #define http_method_get_or_head(method)   ((method) <= HTTP_METHOD_HEAD)
 #define http_method_get_head_post(method) ((method) <= HTTP_METHOD_POST)
+
+__attribute_nonnull__
+static inline void http_method_append (buffer * const b, const http_method_t method);
+static inline void http_method_append (buffer * const b, const http_method_t method) {
+    const buffer * const kv = http_method_buf(method);
+    buffer_append_string_len(b, BUF_PTR_LEN(kv));
+}
+
 
 #endif

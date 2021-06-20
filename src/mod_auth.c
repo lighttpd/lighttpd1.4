@@ -873,7 +873,7 @@ typedef struct http_auth_digest_params_t {
 
 
 static void
-mod_auth_digest_mutate (http_auth_info_t * const ai, const http_auth_digest_params_t * const dp, const char * const method)
+mod_auth_digest_mutate (http_auth_info_t * const ai, const http_auth_digest_params_t * const dp, const buffer * const method)
 {
     force_assert(method);
     li_md_iov_fn digest_iov = MD5_iov;
@@ -911,8 +911,8 @@ mod_auth_digest_mutate (http_auth_info_t * const ai, const http_auth_digest_para
     }
 
     /* calculate H(A2) */
-    iov[0].iov_base = method;
-    iov[0].iov_len  = strlen(method);
+    iov[0].iov_base = method->ptr;
+    iov[0].iov_len  = buffer_clen(method);
     iov[1].iov_base = ":";
     iov[1].iov_len  = 1;
     iov[2].iov_base = dp->ptr[e_uri];
@@ -1410,7 +1410,7 @@ mod_auth_check_digest (request_st * const r, void *p_d, const struct http_auth_r
     if (__builtin_expect( (HANDLER_GO_ON != rc), 0))
         return rc;
 
-    mod_auth_digest_mutate(&ai, &dp, get_http_method_name(r->http_method));
+    mod_auth_digest_mutate(&ai, &dp, http_method_buf(r->http_method));
 
     if (!ck_memeq_const_time_fixed_len(dp.rdigest, ai.digest, ai.dlen)) {
         /*ck_memzero(ai.digest, ai.dlen);*//*skip clear since mutated*/
