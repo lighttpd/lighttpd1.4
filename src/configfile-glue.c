@@ -551,30 +551,24 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		log_error(r->conf.errh, __FILE__, __LINE__,
 			"%s compare to %s", dc->comp_key, l->ptr);
 
+	int match;
 	switch(dc->cond) {
 	case CONFIG_COND_NE:
 	case CONFIG_COND_EQ:
-		if (buffer_is_equal(l, &dc->string)) {
-			return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
-		} else {
-			return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_FALSE : COND_RESULT_TRUE;
-		}
+		match = (dc->cond == CONFIG_COND_EQ);
+		match ^= (buffer_is_equal(l, &dc->string));
+		break;
 	case CONFIG_COND_NOMATCH:
 	case CONFIG_COND_MATCH: {
 		cond_match_t *cond_match = r->cond_match + dc->context_ndx;
-		if (data_config_pcre_exec(dc, cache, l, cond_match) > 0) {
-			return (dc->cond == CONFIG_COND_MATCH) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
-		} else {
-			/* cache is already cleared */
-			return (dc->cond == CONFIG_COND_MATCH) ? COND_RESULT_FALSE : COND_RESULT_TRUE;
-		}
-	}
-	default:
-		/* no way */
+		match = (dc->cond == CONFIG_COND_MATCH);
+		match ^= (data_config_pcre_exec(dc, cache, l, cond_match) > 0);
 		break;
 	}
-
-	return COND_RESULT_FALSE;
+	default:
+		return COND_RESULT_FALSE;
+	}
+	return match ? COND_RESULT_FALSE : COND_RESULT_TRUE;
 }
 
 __attribute_noinline__
