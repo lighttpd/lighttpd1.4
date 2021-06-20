@@ -49,16 +49,36 @@ static void test_configfile_addrbuf_eq_remote_ip_mask (void) {
 	r.conf.errh              = log_error_st_init();
 	r.conf.errh->errorlog_fd = -1; /* (disable) */
 
-	int i, m;
-	buffer * const s = buffer_init();
-	char *slash;
+	buffer * const b = buffer_init();
+	buffer * const tb = buffer_init();
 	sock_addr rmt;
 
-	for (i = 0; i < (int)(sizeof(rmtmask)/sizeof(rmtmask[0])); ++i) {
+	for (int i = 0; i < (int)(sizeof(rmtmask)/sizeof(rmtmask[0])); ++i) {
 		if (1 != sock_addr_inet_pton(&rmt, rmtmask[i].rmtstr, rmtmask[i].rmtfamily, 0)) exit(-1); /*(bad test)*/
-		buffer_copy_string(s, rmtmask[i].string);
-		slash = strchr(s->ptr,'/'); assert(slash);
-		m = config_addrbuf_eq_remote_ip_mask(&r, s, slash, &rmt);
+		buffer_copy_string(b, rmtmask[i].string);
+	  #if 0
+		if (!config_remoteip_normalize(b, tb)) exit(-1); /*(bad test)*/
+	  #else
+		/* modified from configfile.c:config_remoteip_normalize()
+		 * to avoid pulling in configfile.c and all dependencies */
+		char *slash = strchr(b->ptr, '/');
+		if (NULL == slash) exit(-1); /*(bad test)*/
+		unsigned long nm_bits = strtoul(slash+1, NULL, 10);
+		uint32_t len = slash - b->ptr;
+		int family = strchr(b->ptr, ':') ? AF_INET6 : AF_INET;
+		char *after = buffer_string_prepare_append(b, 1 + 7 + 28);
+		++after; /*(increment to pos after string end '\0')*/
+		*(unsigned char *)after = (unsigned char)nm_bits;
+		sock_addr * const saddr = (sock_addr *)(((uintptr_t)after+1+7) & ~7);
+		if (nm_bits) b->ptr[len]='\0'; /*(sock_addr_inet_pton() w/o CIDR mask)*/
+		int rc = sock_addr_inet_pton(saddr, b->ptr, family, 0);
+		if (nm_bits) b->ptr[len]='/';
+		if (1 != rc) exit(-1); /*(bad test)*/
+	  #endif
+		const sock_addr * const addr = (sock_addr *)
+		  (((uintptr_t)b->ptr + b->used + 1 + 7) & ~7);
+		int bits = ((unsigned char *)b->ptr)[b->used];
+		int m = sock_addr_is_addr_eq_bits(addr, &rmt, bits);
 		if (m != rmtmask[i].expect) {
 			fprintf(stderr, "failed assertion: %s %s %s\n",
 				rmtmask[i].string,
@@ -68,7 +88,8 @@ static void test_configfile_addrbuf_eq_remote_ip_mask (void) {
 		}
 	}
 
-	buffer_free(s);
+	buffer_free(tb);
+	buffer_free(b);
 	log_error_st_free(r.conf.errh);
 }
 

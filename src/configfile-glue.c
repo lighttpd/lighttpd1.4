@@ -379,57 +379,6 @@ static cond_result_t config_check_cond_cached(request_st * const r, const data_c
     return config_check_cond_nocache_calc(r, dc, debug_cond, cache);
 }
 
-static int config_addrstr_eq_remote_ip_mask(request_st * const r, const char * const addrstr, const int nm_bits, sock_addr * const rmt) {
-	/* special-case 0 == nm_bits to mean "all bits of the address" in addrstr */
-	sock_addr addr;
-	if (1 == sock_addr_inet_pton(&addr, addrstr, AF_INET, 0)) {
-		if (nm_bits > 32) {
-			log_error(r->conf.errh, __FILE__, __LINE__, "ERROR: ipv4 netmask too large: %d", nm_bits);
-			return -1;
-		}
-	} else if (1 == sock_addr_inet_pton(&addr, addrstr, AF_INET6, 0)) {
-		if (nm_bits > 128) {
-			log_error(r->conf.errh, __FILE__, __LINE__, "ERROR: ipv6 netmask too large: %d", nm_bits);
-			return -1;
-		}
-	} else {
-		log_error(r->conf.errh, __FILE__, __LINE__, "ERROR: ip addr is invalid: %s", addrstr);
-		return -1;
-	}
-	return sock_addr_is_addr_eq_bits(&addr, rmt, nm_bits);
-}
-
-static int config_addrbuf_eq_remote_ip_mask(request_st * const r, const buffer * const string, char * const nm_slash, sock_addr * const rmt) {
-	char *err;
-	int nm_bits = strtol(nm_slash + 1, &err, 10);
-	size_t addrstrlen = (size_t)(nm_slash - string->ptr);
-	char addrstr[64]; /*(larger than INET_ADDRSTRLEN and INET6_ADDRSTRLEN)*/
-
-	if (*err) {
-		log_error(r->conf.errh, __FILE__, __LINE__, "ERROR: non-digit found in netmask: %s %s", string->ptr, err);
-		return -1;
-	}
-
-	if (nm_bits <= 0) {
-		if (*(nm_slash+1) == '\0') {
-			log_error(r->conf.errh, __FILE__, __LINE__, "ERROR: no number after / %s", string->ptr);
-		} else {
-			log_error(r->conf.errh, __FILE__, __LINE__, "ERROR: invalid netmask <= 0: %s %s", string->ptr, err);
-		}
-		return -1;
-	}
-
-	if (addrstrlen >= sizeof(addrstr)) {
-		log_error(r->conf.errh, __FILE__, __LINE__, "ERROR: address string too long: %s", string->ptr);
-		return -1;
-	}
-
-	memcpy(addrstr, string->ptr, addrstrlen);
-	addrstr[addrstrlen] = '\0';
-
-	return config_addrstr_eq_remote_ip_mask(r, addrstr, nm_bits, rmt);
-}
-
 static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, const buffer *b, cond_match_t *cond_match);
 
 static cond_result_t config_check_cond_nocache(request_st * const r, const data_config * const dc, const int debug_cond, cond_cache_t * const cache) {
@@ -551,7 +500,6 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 
 		break;
 	case COMP_HTTP_REMOTE_IP: {
-		char *nm_slash;
 		/* handle remoteip limitations
 		 *
 		 * "10.0.0.1" is provided for all comparisons
@@ -560,15 +508,22 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		 *
 		 * "10.0.0.1/24"
 		 */
-
-		if ((dc->cond == CONFIG_COND_EQ ||
-		     dc->cond == CONFIG_COND_NE) &&
-		    (NULL != (nm_slash = strchr(dc->string.ptr, '/')))) {
-			switch (config_addrbuf_eq_remote_ip_mask(r, &dc->string, nm_slash, &r->con->dst_addr)) {
-			case  1: return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_TRUE : COND_RESULT_FALSE;
-			case  0: return (dc->cond == CONFIG_COND_EQ) ? COND_RESULT_FALSE : COND_RESULT_TRUE;
-			case -1: return COND_RESULT_FALSE; /*(error parsing configfile entry)*/
-			}
+		if ((dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE)
+		    && dc->string.ptr[0] != '/') { /*(AF_UNIX addr is string)*/
+			/* compare using structure data at end of string
+			 * (generated at startup when parsing config) */
+			if (debug_cond)
+				log_error(r->conf.errh, __FILE__, __LINE__,
+				  "%s compare to %s", dc->comp_key, r->con->dst_addr_buf.ptr);
+			const sock_addr * const addr = (sock_addr *)
+			  (((uintptr_t)dc->string.ptr + dc->string.used + 1 + 7) & ~7);
+			int bits = ((unsigned char *)dc->string.ptr)[dc->string.used];
+			int match = bits
+			  ? sock_addr_is_addr_eq_bits(addr, &r->con->dst_addr, bits)
+			  : sock_addr_is_addr_eq(addr, &r->con->dst_addr);
+			return match ^ (dc->cond == CONFIG_COND_EQ)
+			  ? COND_RESULT_FALSE
+			  : COND_RESULT_TRUE;
 		}
 		l = &r->con->dst_addr_buf;
 		break;

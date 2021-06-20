@@ -78,4 +78,7 @@ int config_parse_file(server *srv, config_t *context, const char *fn);
 __attribute_cold__
 int config_parse_cmd(server *srv, config_t *context, const char *cmd);
 
+__attribute_cold__
+int config_remoteip_normalize(buffer *b, buffer *tb);
+
 #endif

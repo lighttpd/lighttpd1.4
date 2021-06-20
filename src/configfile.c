@@ -13,6 +13,7 @@
 #include "configfile.h"
 #include "plugin.h"
 #include "reqpool.h"
+#include "sock_addr.h"
 #include "stat_cache.h"
 #include "sys-crypto.h"
 
@@ -2392,6 +2393,74 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 	}
 	return ret;
 }
+
+static int config_remoteip_normalize_ipv6(buffer * const b, buffer * const tb) {
+    /* $HTTP["remote-ip"] IPv6 accepted with or without '[]' for config compat
+     * http_request_host_normalize() expects IPv6 with '[]',
+     * and config processing at runtime expects COMP_HTTP_REMOTE_IP
+     * compared without '[]', so strip '[]' after normalization */
+    buffer_clear(tb);
+    if (b->ptr[0] != '[')
+        buffer_append_str3(tb,
+                           CONST_STR_LEN("["),
+                           BUF_PTR_LEN(b),
+                           CONST_STR_LEN("]"));
+    else
+        buffer_append_string_buffer(tb, b);
+
+    int rc = http_request_host_normalize(tb, 0);
+    if (0 == rc) {
+        /* remove surrounding '[]' */
+        size_t blen = buffer_clen(tb);
+        if (blen > 1) buffer_copy_string_len(b, tb->ptr+1, blen-2);
+    }
+    return rc;
+}
+
+int config_remoteip_normalize(buffer * const b, buffer * const tb) {
+    if (b->ptr[0] == '/') return 1; /*(skip AF_UNIX /path/file)*/
+
+    const char * const slash = strchr(b->ptr, '/'); /* CIDR mask */
+    const char * const colon = strchr(b->ptr, ':'); /* IPv6 */
+    unsigned long nm_bits = 0;
+
+    if (NULL != slash) {
+        char *nptr;
+        nm_bits = strtoul(slash + 1, &nptr, 10);
+        if (*nptr || 0 == nm_bits || nm_bits > (NULL != colon ? 128 : 32)) {
+            /*(also rejects (slash+1 == nptr) which results in nm_bits = 0)*/
+            return -1;
+        }
+        buffer_truncate(b, (size_t)(slash - b->ptr));
+    }
+
+    int family = colon ? AF_INET6 : AF_INET;
+    int rc = (family == AF_INET)
+        ? http_request_host_normalize(b, 0)
+        : config_remoteip_normalize_ipv6(b, tb);
+
+    uint32_t len = buffer_clen(b); /*(save len before adding CIDR mask)*/
+    if (nm_bits) {
+        buffer_append_string_len(b, CONST_STR_LEN("/"));
+        buffer_append_int(b, (int)nm_bits);
+    }
+
+    if (0 != rc) {
+        return -1;
+    }
+
+    /* extend b to hold structured data after end of string:
+     * nm_bits and memory-aligned sock_addr for AF_INET or AF_INET6 (28 bytes)*/
+    char *after = buffer_string_prepare_append(b, 1 + 7 + 28);
+    ++after; /*(increment to pos after string end '\0')*/
+    *(unsigned char *)after = (unsigned char)nm_bits;
+    sock_addr * const addr = (sock_addr *)(((uintptr_t)after+1+7) & ~7);
+    if (nm_bits) b->ptr[len] = '\0'; /*(sock_addr_inet_pton() w/o CIDR mask)*/
+    rc = sock_addr_inet_pton(addr, b->ptr, family, 0);
+    if (nm_bits) b->ptr[len] = '/';
+    return (1 == rc);
+}
+
 
 static void context_init(server *srv, config_t *context) {
 	context->srv = srv;
