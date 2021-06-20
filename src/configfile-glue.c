@@ -357,15 +357,6 @@ static cond_result_t config_check_cond_nocache(request_st *r, const data_config 
 
 static cond_result_t config_check_cond_nocache_calc(request_st * const r, const data_config * const dc, const int debug_cond, cond_cache_t * const cache) {
     cache->result = config_check_cond_nocache(r, dc, debug_cond, cache);
-    switch (cache->result) {
-      case COND_RESULT_FALSE:
-      case COND_RESULT_TRUE:
-        /* remember result of local condition for a partial reset */
-        cache->local_result = cache->result;
-        break;
-      default:
-        break;
-    }
     if (debug_cond) config_cond_result_trace(r, dc, 0);
     return cache->result;
 }
@@ -382,12 +373,6 @@ static cond_result_t config_check_cond_cached(request_st * const r, const data_c
 static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, const buffer *b, cond_match_t *cond_match);
 
 static cond_result_t config_check_cond_nocache(request_st * const r, const data_config * const dc, const int debug_cond, cond_cache_t * const cache) {
-	static struct const_char_buffer {
-	  const char *ptr;
-	  uint32_t used;
-	  uint32_t size;
-	} empty_string = { "", 1, 0 };
-
 	/* check parent first */
 	if (dc->parent && dc->parent->context_ndx) {
 		/**
@@ -455,87 +440,38 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		break;
 	}
 
-	if (CONFIG_COND_ELSE == dc->cond) return COND_RESULT_TRUE;
+	if (CONFIG_COND_ELSE == dc->cond)
+		return (cache->local_result = COND_RESULT_TRUE);
+		/* remember result of local condition for a partial reset */
 
 	/* pass the rules */
+
+	static struct const_char_buffer {
+	  const char *ptr;
+	  uint32_t used;
+	  uint32_t size;
+	} empty_string = { "", 1, 0 };
 
 	const buffer *l;
 	switch (dc->comp) {
 	case COMP_HTTP_HOST:
 		l = &r->uri.authority;
-		if (__builtin_expect( (buffer_is_blank(l)), 0)) {
-			l = (buffer *)&empty_string;
-			break;
-		}
-		if ((dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE)
-		    && dc->string.ptr[0] != '/') { /*(AF_UNIX addr is string)*/
-			uint_fast32_t llen = buffer_clen(l);
-			uint_fast32_t dlen = buffer_clen(&dc->string);
-			if (llen == dlen)
-				break;
-			/* check names match, whether or not :port suffix present */
-			/*(not strictly checking for port match for alt-svc flexibility,
-			 * though if strings are same length, port is checked for match)*/
-			/*(r->uri.authority not strictly checked here for excess ':')*/
-			/*(r->uri.authority lowercased during request parsing)*/
-			if (debug_cond)
-				log_error(r->conf.errh, __FILE__, __LINE__,
-				  "%s compare to %s", dc->comp_key, l->ptr);
-			int match = ((llen > dlen)
-			             ? l->ptr[dlen] == ':' && llen - dlen <= 5
-			             : dc->string.ptr[(dlen = llen)] == ':')
-			         && 0 == memcmp(l->ptr, dc->string.ptr, dlen);
-			return match ^ (dc->cond == CONFIG_COND_EQ)
-			  ? COND_RESULT_FALSE
-			  : COND_RESULT_TRUE;
-		}
 		break;
-	case COMP_HTTP_REMOTE_IP: {
-		/* handle remoteip limitations
-		 *
-		 * "10.0.0.1" is provided for all comparisons
-		 *
-		 * only for == and != we support
-		 *
-		 * "10.0.0.1/24"
-		 */
-		if ((dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE)
-		    && dc->string.ptr[0] != '/') { /*(AF_UNIX addr is string)*/
-			/* compare using structure data at end of string
-			 * (generated at startup when parsing config) */
-			if (debug_cond)
-				log_error(r->conf.errh, __FILE__, __LINE__,
-				  "%s compare to %s", dc->comp_key, r->con->dst_addr_buf.ptr);
-			const sock_addr * const addr = (sock_addr *)
-			  (((uintptr_t)dc->string.ptr + dc->string.used + 1 + 7) & ~7);
-			int bits = ((unsigned char *)dc->string.ptr)[dc->string.used];
-			int match = bits
-			  ? sock_addr_is_addr_eq_bits(addr, &r->con->dst_addr, bits)
-			  : sock_addr_is_addr_eq(addr, &r->con->dst_addr);
-			return match ^ (dc->cond == CONFIG_COND_EQ)
-			  ? COND_RESULT_FALSE
-			  : COND_RESULT_TRUE;
-		}
+	case COMP_HTTP_REMOTE_IP:
 		l = &r->con->dst_addr_buf;
 		break;
-	}
 	case COMP_HTTP_SCHEME:
 		l = &r->uri.scheme;
 		break;
-
 	case COMP_HTTP_URL:
 		l = &r->uri.path;
 		break;
-
 	case COMP_HTTP_QUERY_STRING:
 		l = &r->uri.query;
-		if (NULL == l->ptr) l = (buffer *)&empty_string;
 		break;
-
 	case COMP_SERVER_SOCKET:
 		l = r->con->srv_socket->srv_token;
 		break;
-
 	case COMP_HTTP_REQUEST_HEADER:
 		l = http_header_request_get(r, dc->ext, BUF_PTR_LEN(&dc->comp_tag));
 		if (NULL == l) l = (buffer *)&empty_string;
@@ -544,8 +480,11 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		l = http_method_buf(r->http_method);
 		break;
 	default:
-		return COND_RESULT_FALSE;
+		return (cache->local_result = COND_RESULT_FALSE);
 	}
+
+	if (__builtin_expect( (buffer_is_blank(l)), 0))
+		l = (buffer *)&empty_string;
 
 	if (debug_cond)
 		log_error(r->conf.errh, __FILE__, __LINE__,
@@ -556,6 +495,34 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 	case CONFIG_COND_NE:
 	case CONFIG_COND_EQ:
 		match = (dc->cond == CONFIG_COND_EQ);
+		if (dc->comp == COMP_HTTP_HOST && dc->string.ptr[0] != '/') {
+			uint_fast32_t llen = buffer_clen(l);
+			uint_fast32_t dlen = buffer_clen(&dc->string);
+			/* check names match, whether or not :port suffix present */
+			/*(not strictly checking for port match for alt-svc flexibility,
+			 * though if strings are same length, port is checked for match)*/
+			/*(r->uri.authority not strictly checked here for excess ':')*/
+			/*(r->uri.authority lowercased during request parsing)*/
+			if (llen && llen != dlen) {
+				match ^= ((llen > dlen)
+				             ? l->ptr[dlen] == ':' && llen - dlen <= 5
+				             : dc->string.ptr[(dlen = llen)] == ':')
+				         && 0 == memcmp(l->ptr, dc->string.ptr, dlen);
+				break;
+			}
+		}
+		else if (dc->comp == COMP_HTTP_REMOTE_IP && dc->string.ptr[0] != '/') {
+			/* CIDR mask comparisons only supported for COND_EQ, COND_NE */
+			/* compare using structure data after end of string
+			 * (generated at startup when parsing config) */
+			const sock_addr * const addr = (sock_addr *)
+			  (((uintptr_t)dc->string.ptr + dc->string.used + 1 + 7) & ~7);
+			int bits = ((unsigned char *)dc->string.ptr)[dc->string.used];
+			match ^= (bits)
+			  ? sock_addr_is_addr_eq_bits(addr, &r->con->dst_addr, bits)
+			  : sock_addr_is_addr_eq(addr, &r->con->dst_addr);
+			break;
+		}
 		match ^= (buffer_is_equal(l, &dc->string));
 		break;
 	case CONFIG_COND_NOMATCH:
@@ -566,9 +533,11 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		break;
 	}
 	default:
-		return COND_RESULT_FALSE;
+		match = 1; /* return (cache->local_result = COND_RESULT_FALSE); below */
 	}
-	return match ? COND_RESULT_FALSE : COND_RESULT_TRUE;
+	/* remember result of local condition for a partial reset */
+	cache->local_result = match ? COND_RESULT_FALSE : COND_RESULT_TRUE;
+	return cache->local_result;
 }
 
 __attribute_noinline__
