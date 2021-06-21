@@ -187,7 +187,7 @@ typedef struct {
 	unsigned short	work_block_size;
 	unsigned short	sync_flush;
 	short		compression_level;
-	short		allowed_encodings;
+	uint16_t *	allowed_encodings;
 	double		max_loadavg;
 } plugin_config;
 
@@ -265,6 +265,21 @@ INIT_FUNC(mod_deflate_init) {
 FREE_FUNC(mod_deflate_free) {
     plugin_data *p = p_d;
     free(p->tmp_buf.ptr);
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
+            switch (cpv->k_id) {
+              case 1: /* deflate.allowed-encodings */
+                free(cpv->v.v);
+                break;
+              default:
+                break;
+            }
+        }
+    }
 }
 
 #if defined(_WIN32) && !defined(__CYGWIN__)
@@ -338,7 +353,8 @@ static void mod_deflate_merge_config_cpv(plugin_config * const pconf, const conf
         pconf->mimetypes = cpv->v.a;
         break;
       case 1: /* deflate.allowed-encodings */
-        pconf->allowed_encodings = (short)cpv->v.shrt;
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->allowed_encodings = cpv->v.v;
         break;
       case 2: /* deflate.max-compress-size */
         pconf->max_compress_size = cpv->v.u;
@@ -365,7 +381,8 @@ static void mod_deflate_merge_config_cpv(plugin_config * const pconf, const conf
         pconf->mimetypes = cpv->v.a;
         break;
       case 10:/* compress.allowed-encodings */
-        pconf->allowed_encodings = (short)cpv->v.shrt;
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->allowed_encodings = cpv->v.v;
         break;
       case 11:/* compress.cache-dir */
         pconf->cache_dir = cpv->v.b;
@@ -395,63 +412,65 @@ static void mod_deflate_patch_config(request_st * const r, plugin_data * const p
     }
 }
 
-static short mod_deflate_encodings_to_flags(const array *encodings) {
-    short allowed_encodings = 0;
+static uint16_t * mod_deflate_encodings_to_flags(const array *encodings) {
     if (encodings->used) {
+        uint16_t * const x = calloc(encodings->used+1, sizeof(short));
+        int i = 0;
         for (uint32_t j = 0; j < encodings->used; ++j) {
           #if defined(USE_ZLIB) || defined(USE_BZ2LIB) || defined(USE_BROTLI) \
            || defined(USE_ZSTD)
             data_string *ds = (data_string *)encodings->data[j];
           #endif
-          #ifdef USE_ZLIB
+          #ifdef USE_ZLIB /* "gzip", "x-gzip" */
             if (NULL != strstr(ds->value.ptr, "gzip"))
-                allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP
-                                  |  HTTP_ACCEPT_ENCODING_X_GZIP;
-            if (NULL != strstr(ds->value.ptr, "x-gzip"))
-                allowed_encodings |= HTTP_ACCEPT_ENCODING_X_GZIP;
+                x[i++] = HTTP_ACCEPT_ENCODING_GZIP
+                       | HTTP_ACCEPT_ENCODING_X_GZIP;
             if (NULL != strstr(ds->value.ptr, "deflate"))
-                allowed_encodings |= HTTP_ACCEPT_ENCODING_DEFLATE;
+                x[i++] = HTTP_ACCEPT_ENCODING_DEFLATE;
             /*
             if (NULL != strstr(ds->value.ptr, "compress"))
-                allowed_encodings |= HTTP_ACCEPT_ENCODING_COMPRESS;
+                x[i++] = HTTP_ACCEPT_ENCODING_COMPRESS;
             */
           #endif
-          #ifdef USE_BZ2LIB
+          #ifdef USE_BZ2LIB /* "bzip2", "x-bzip2" */
             if (NULL != strstr(ds->value.ptr, "bzip2"))
-                allowed_encodings |= HTTP_ACCEPT_ENCODING_BZIP2
-                                  |  HTTP_ACCEPT_ENCODING_X_BZIP2;
-            if (NULL != strstr(ds->value.ptr, "x-bzip2"))
-                allowed_encodings |= HTTP_ACCEPT_ENCODING_X_BZIP2;
+                x[i++] = HTTP_ACCEPT_ENCODING_BZIP2
+                       | HTTP_ACCEPT_ENCODING_X_BZIP2;
           #endif
-          #ifdef USE_BROTLI
+          #ifdef USE_BROTLI /* "br" (also accepts "brotli") */
             if (NULL != strstr(ds->value.ptr, "br"))
-                allowed_encodings |= HTTP_ACCEPT_ENCODING_BR;
+                x[i++] = HTTP_ACCEPT_ENCODING_BR;
           #endif
           #ifdef USE_ZSTD
             if (NULL != strstr(ds->value.ptr, "zstd"))
-                allowed_encodings |= HTTP_ACCEPT_ENCODING_ZSTD;
+                x[i++] = HTTP_ACCEPT_ENCODING_ZSTD;
           #endif
         }
+        x[i] = 0; /* end of list */
+        return x;
     }
     else {
         /* default encodings */
-      #ifdef USE_ZLIB
-        allowed_encodings |= HTTP_ACCEPT_ENCODING_GZIP
-                          |  HTTP_ACCEPT_ENCODING_X_GZIP
-                          |  HTTP_ACCEPT_ENCODING_DEFLATE;
-      #endif
-      #ifdef USE_BZ2LIB
-        allowed_encodings |= HTTP_ACCEPT_ENCODING_BZIP2
-                          |  HTTP_ACCEPT_ENCODING_X_BZIP2;
+        uint16_t * const x = calloc(4+1, sizeof(short));
+        int i = 0;
+      #ifdef USE_ZSTD
+        x[i++] = HTTP_ACCEPT_ENCODING_ZSTD;
       #endif
       #ifdef USE_BROTLI
-        allowed_encodings |= HTTP_ACCEPT_ENCODING_BR;
+        x[i++] = HTTP_ACCEPT_ENCODING_BR;
       #endif
-      #ifdef USE_ZSTD
-        allowed_encodings |= HTTP_ACCEPT_ENCODING_ZSTD;
+      #ifdef USE_BZ2LIB
+        x[i++] = HTTP_ACCEPT_ENCODING_BZIP2
+               | HTTP_ACCEPT_ENCODING_X_BZIP2;
       #endif
+      #ifdef USE_ZLIB
+        x[i++] = HTTP_ACCEPT_ENCODING_GZIP
+               | HTTP_ACCEPT_ENCODING_X_GZIP
+               | HTTP_ACCEPT_ENCODING_DEFLATE;
+      #endif
+        x[i] = 0; /* end of list */
+        return x;
     }
-    return allowed_encodings;
 }
 
 SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
@@ -526,9 +545,8 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                 if (0 == cpv->v.a->used) cpv->v.a = NULL;
                 break;
               case 1: /* deflate.allowed-encodings */
-                cpv->v.shrt = (unsigned short)
-                  mod_deflate_encodings_to_flags(cpv->v.a);
-                cpv->vtype = T_CONFIG_SHORT;
+                cpv->v.v = mod_deflate_encodings_to_flags(cpv->v.a);
+                cpv->vtype = T_CONFIG_LOCAL;
                 break;
               case 2: /* deflate.max-compress-size */
               case 3: /* deflate.min-compress-size */
@@ -576,9 +594,8 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "DEPRECATED: %s replaced with deflate.allowed-encodings",
                   cpk[cpv->k_id].k);
-                cpv->v.shrt = (unsigned short)
-                  mod_deflate_encodings_to_flags(cpv->v.a);
-                cpv->vtype = T_CONFIG_SHORT;
+                cpv->v.v = mod_deflate_encodings_to_flags(cpv->v.a);
+                cpv->vtype = T_CONFIG_LOCAL;
                 break;
               case 11:/* compress.cache-dir */
                 log_error(srv->errh, __FILE__, __LINE__,
@@ -617,7 +634,6 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
         }
     }
 
-    p->defaults.allowed_encodings = 0;
     p->defaults.max_compress_size = 128*1024; /*(128 MB measured as num KB)*/
     p->defaults.min_compress_size = 256;
     p->defaults.compression_level = -1;
@@ -1458,10 +1474,11 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
         }
       #endif
 
-	/* mask to limit to allowed_encodings */
-	accept_encoding &= p->conf.allowed_encodings;
-
 	/* select best matching encoding */
+	const uint16_t *x = p->conf.allowed_encodings;
+	if (NULL == x) return 0;
+	while (*x && !(*x & accept_encoding)) ++x;
+	accept_encoding &= *x;
 #ifdef USE_ZSTD
 	if (accept_encoding & HTTP_ACCEPT_ENCODING_ZSTD) {
 		*label = "zstd";
