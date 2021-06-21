@@ -989,7 +989,7 @@ static int stream_zstd_init(handler_ctx *hctx) {
     if (p->conf.compression_level >= 0) { /* -1 is lighttpd default for "unset" */
         int level = p->conf.compression_level;
       #if ZSTD_VERSION_NUMBER >= 10000+400+0 /* v1.4.0 */
-        ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, level);
+        ZSTD_CCtx_setParameter(cctx, ZSTD_c_strategy, level);
       #else
         ZSTD_initCStream(cctx, level);
       #endif
