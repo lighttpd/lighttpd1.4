@@ -179,6 +179,28 @@ static void sigbus_handler(int sig) {
 #define HTTP_ACCEPT_ENCODING_ZSTD     BV(8)
 
 typedef struct {
+	struct {
+		int clevel;       /*(compression level)*/
+		int windowBits;
+		int memLevel;
+		int strategy;
+	} gzip;
+	struct {
+		uint32_t quality; /*(compression level)*/
+		uint32_t window;
+		uint32_t mode;
+	} brotli;
+	struct {
+		int clevel;       /*(compression level)*/
+		int strategy;
+		int windowLog;
+	} zstd;
+	struct {
+		int clevel;       /*(compression level)*/
+	} bzip2;
+} encparms;
+
+typedef struct {
 	const array	*mimetypes;
 	const buffer    *cache_dir;
 	unsigned int	max_compress_size;
@@ -189,6 +211,7 @@ typedef struct {
 	short		compression_level;
 	uint16_t *	allowed_encodings;
 	double		max_loadavg;
+	const encparms *params;
 } plugin_config;
 
 typedef struct {
@@ -273,6 +296,7 @@ FREE_FUNC(mod_deflate_free) {
             if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
             switch (cpv->k_id) {
               case 1: /* deflate.allowed-encodings */
+              case 14:/* deflate.params */
                 free(cpv->v.v);
                 break;
               default:
@@ -393,6 +417,10 @@ static void mod_deflate_merge_config_cpv(plugin_config * const pconf, const conf
       case 13:/* compress.max-loadavg */
         pconf->max_loadavg = cpv->v.d;
         break;
+      case 14:/* deflate.params */
+        if (cpv->vtype == T_CONFIG_LOCAL)
+            pconf->params = cpv->v.v;
+        break;
       default:/* should not happen */
         return;
     }
@@ -410,6 +438,184 @@ static void mod_deflate_patch_config(request_st * const r, plugin_data * const p
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_deflate_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
+}
+
+static encparms * mod_deflate_parse_params(const array * const a, log_error_st * const errh) {
+    encparms * params = calloc(1, sizeof(encparms));
+    force_assert(params);
+
+    /* set defaults */
+  #ifdef USE_ZLIB
+    params->gzip.clevel = 0; /*(unset)*/
+    params->gzip.windowBits = MAX_WBITS;
+    params->gzip.memLevel = 8;
+    params->gzip.strategy = Z_DEFAULT_STRATEGY;
+  #endif
+  #ifdef USE_BROTLI
+    params->brotli.quality = BROTLI_DEFAULT_QUALITY;
+    params->brotli.window = BROTLI_DEFAULT_WINDOW;
+    params->brotli.mode = BROTLI_MODE_GENERIC;
+  #endif
+  #ifdef USE_ZSTD
+    params->zstd.clevel = ZSTD_CLEVEL_DEFAULT;
+    params->zstd.strategy = 0; /*(use default strategy)*/
+    params->zstd.windowLog = 0;/*(use default windowLog)*/
+  #endif
+  #ifdef USE_BZ2LIB
+    params->bzip2.clevel = 0; /*(unset)*/
+  #endif
+
+    for (uint32_t i = 0; i < a->used; ++i) {
+        const data_unset * const du = a->data[i];
+      #if defined(USE_ZLIB) || defined(USE_BZ2LIB) || defined(USE_BROTLI) \
+       || defined(USE_ZSTD)
+        int32_t v = config_plugin_value_to_int32(du, -1);
+      #endif
+      #ifdef USE_BROTLI
+        if (buffer_eq_icase_slen(&du->key,
+                                 CONST_STR_LEN("BROTLI_PARAM_QUALITY"))) {
+            /*(future: could check for string and then look for and translate
+             * BROTLI_DEFAULT_QUALITY BROTLI_MIN_QUALITY BROTLI_MAX_QUALITY)*/
+            if (BROTLI_MIN_QUALITY <= v && v <= BROTLI_MAX_QUALITY)
+                params->brotli.quality = (uint32_t)v; /* 0 .. 11 */
+            else
+                log_error(errh, __FILE__, __LINE__,
+                          "invalid value for BROTLI_PARAM_QUALITY");
+            continue;
+        }
+        if (buffer_eq_icase_slen(&du->key,
+                                 CONST_STR_LEN("BROTLI_PARAM_LGWIN"))) {
+            /*(future: could check for string and then look for and translate
+             * BROTLI_DEFAULT_WINDOW
+             * BROTLI_MIN_WINDOW_BITS BROTLI_MAX_WINDOW_BITS)*/
+            if (BROTLI_MIN_WINDOW_BITS <= v && v <= BROTLI_MAX_WINDOW_BITS)
+                params->brotli.window = (uint32_t)v; /* 10 .. 24 */
+            else
+                log_error(errh, __FILE__, __LINE__,
+                          "invalid value for BROTLI_PARAM_LGWIN");
+            continue;
+        }
+        if (buffer_eq_icase_slen(&du->key,
+                                 CONST_STR_LEN("BROTLI_PARAM_MODE"))) {
+            /*(future: could check for string and then look for and translate
+             * BROTLI_MODE_GENERIC BROTLI_MODE_TEXT BROTLI_MODE_FONT)*/
+            if (0 <= v && v <= 2)
+                params->brotli.mode = (uint32_t)v; /* 0 .. 2 */
+            else
+                log_error(errh, __FILE__, __LINE__,
+                          "invalid value for BROTLI_PARAM_MODE");
+            continue;
+        }
+      #endif
+      #ifdef USE_ZSTD
+        if (buffer_eq_icase_slen(&du->key,
+                                 CONST_STR_LEN("ZSTD_c_compressionLevel"))) {
+            params->zstd.clevel = v;
+            /*(not warning if number parse error.  future: to detect, could
+             * use absurd default to config_plugin_value_to_int32 to detect)*/
+            continue;
+        }
+       #if ZSTD_VERSION_NUMBER >= 10000+400+0 /* v1.4.0 */
+        /*(XXX: (selected) experimental API params in zstd v1.4.0)*/
+        if (buffer_eq_icase_slen(&du->key,
+                                 CONST_STR_LEN("ZSTD_c_strategy"))) {
+            /*(future: could check for string and then look for and translate
+             * enum ZSTD_strategy ZSTD_STRATEGY_MIN ZSTD_STRATEGY_MAX)*/
+            #ifndef ZSTD_STRATEGY_MIN
+            #define ZSTD_STRATEGY_MIN 1
+            #endif
+            #ifndef ZSTD_STRATEGY_MAX
+            #define ZSTD_STRATEGY_MAX 9
+            #endif
+            if (ZSTD_STRATEGY_MIN <= v && v <= ZSTD_STRATEGY_MAX)
+                params->zstd.strategy = v; /* 1 .. 9 */
+            else
+                log_error(errh, __FILE__, __LINE__,
+                          "invalid value for ZSTD_c_strategy");
+            continue;
+        }
+        if (buffer_eq_icase_slen(&du->key,
+                                 CONST_STR_LEN("ZSTD_c_windowLog"))) {
+            /*(future: could check for string and then look for and translate
+             * ZSTD_WINDOWLOG_MIN ZSTD_WINDOWLOG_MAX)*/
+            #ifndef ZSTD_WINDOWLOG_MIN
+            #define ZSTD_WINDOWLOG_MIN 10
+            #endif
+            #ifndef ZSTD_WINDOWLOG_MAX_32
+            #define ZSTD_WINDOWLOG_MAX_32 30
+            #endif
+            #ifndef ZSTD_WINDOWLOG_MAX_64
+            #define ZSTD_WINDOWLOG_MAX_64 31
+            #endif
+            #ifndef ZSTD_WINDOWLOG_MAX
+            #define ZSTD_WINDOWLOG_MAX \
+             (sizeof(size_t)==4 ? ZSTD_WINDOWLOG_MAX_32 : ZSTD_WINDOWLOG_MAX_64)
+            #endif
+            if (ZSTD_WINDOWLOG_MIN <= v && v <= ZSTD_WINDOWLOG_MAX)
+                params->zstd.windowLog = v;/* 10 .. 31 *//*(30 max for 32-bit)*/
+            else
+                log_error(errh, __FILE__, __LINE__,
+                          "invalid value for ZSTD_c_windowLog");
+            continue;
+        }
+       #endif
+      #endif
+      #ifdef USE_ZLIB
+        if (buffer_eq_icase_slen(&du->key,
+                                 CONST_STR_LEN("gzip.level"))) {
+            if (1 <= v && v <= 9)
+                params->gzip.clevel = v; /* 1 .. 9 */
+            else
+                log_error(errh, __FILE__, __LINE__,
+                          "invalid value for gzip.level");
+            continue;
+        }
+        if (buffer_eq_icase_slen(&du->key,
+                                 CONST_STR_LEN("gzip.windowBits"))) {
+            if (9 <= v && v <= 15)
+                params->gzip.windowBits = v; /* 9 .. 15 */
+            else
+                log_error(errh, __FILE__, __LINE__,
+                          "invalid value for gzip.windowBits");
+            continue;
+        }
+        if (buffer_eq_icase_slen(&du->key,
+                                 CONST_STR_LEN("gzip.memLevel"))) {
+            if (1 <= v && v <= 9)
+                params->gzip.memLevel = v; /* 1 .. 9 */
+            else
+                log_error(errh, __FILE__, __LINE__,
+                          "invalid value for gzip.memLevel");
+            continue;
+        }
+        if (buffer_eq_icase_slen(&du->key,
+                                 CONST_STR_LEN("gzip.strategy"))) {
+            /*(future: could check for string and then look for and translate
+             * Z_DEFAULT_STRATEGY Z_FILTERED Z_HUFFMAN_ONLY Z_RLE Z_FIXED)*/
+            if (0 <= v && v <= 4)
+                params->gzip.strategy = v; /* 0 .. 4 */
+            else
+                log_error(errh, __FILE__, __LINE__,
+                          "invalid value for gzip.strategy");
+            continue;
+        }
+      #endif
+      #ifdef USE_BZ2LIB
+        if (buffer_eq_icase_slen(&du->key,
+                                 CONST_STR_LEN("bzip2.blockSize100k"))) {
+            if (1 <= v && v <= 9) /*(bzip2 blockSize100k param)*/
+                params->bzip2.clevel = v; /* 1 .. 9 */
+            else
+                log_error(errh, __FILE__, __LINE__,
+                          "invalid value for bzip2.blockSize100k");
+            continue;
+        }
+      #endif
+        log_error(errh, __FILE__, __LINE__,
+                  "unrecognized param: %s", du->key.ptr);
+    }
+
+    return params;
 }
 
 static uint16_t * mod_deflate_encodings_to_flags(const array *encodings) {
@@ -516,6 +722,9 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("compress.max-loadavg"),
         T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("deflate.params"),
+        T_CONFIG_ARRAY_KVANY,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -628,6 +837,10 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                   ? strtod(cpv->v.b->ptr, NULL)
                   : 0.0;
                 break;
+              case 14:/* deflate.params */
+                cpv->v.v = mod_deflate_parse_params(cpv->v.a, srv->errh);
+                cpv->vtype = T_CONFIG_LOCAL;
+                break;
               default:/* should not happen */
                 break;
             }
@@ -676,7 +889,6 @@ static int stream_http_chunk_append_mem(handler_ctx * const hctx, const char * c
 
 static int stream_deflate_init(handler_ctx *hctx) {
 	z_stream * const z = &hctx->u.z;
-	const plugin_data * const p = hctx->plugin_data;
 	z->zalloc = Z_NULL;
 	z->zfree = Z_NULL;
 	z->opaque = Z_NULL;
@@ -685,16 +897,23 @@ static int stream_deflate_init(handler_ctx *hctx) {
 	z->next_out = (unsigned char *)hctx->output->ptr;
 	z->avail_out = hctx->output->size;
 
+	const plugin_data * const p = hctx->plugin_data;
+	const encparms * const params = p->conf.params;
+	const int clevel = (NULL != params)
+	  ? params->gzip.clevel
+	  : p->conf.compression_level;
+	const int wbits = (NULL != params)
+	  ? params->gzip.windowBits
+	  : MAX_WBITS;
+
 	if (Z_OK != deflateInit2(z,
-				 p->conf.compression_level > 0
-				  ? p->conf.compression_level
-				  : Z_DEFAULT_COMPRESSION,
+				 clevel > 0 ? clevel : Z_DEFAULT_COMPRESSION,
 				 Z_DEFLATED,
 				 (hctx->compression_type == HTTP_ACCEPT_ENCODING_GZIP)
-				  ? (MAX_WBITS | 16) /*(0x10 flags gzip header, trailer)*/
-				  : -MAX_WBITS,      /*(negate to suppress zlib header)*/
-				 8, /* default memLevel */
-				 Z_DEFAULT_STRATEGY)) {
+				  ? (wbits | 16) /*(0x10 flags gzip header, trailer)*/
+				  : -wbits,      /*(negate to suppress zlib header)*/
+				 params ? params->gzip.memLevel : 8,/*default memLevel*/
+				 params ? params->gzip.strategy : Z_DEFAULT_STRATEGY)) {
 		return -1;
 	}
 
@@ -788,7 +1007,6 @@ static int stream_deflate_end(handler_ctx *hctx) {
 
 static int stream_bzip2_init(handler_ctx *hctx) {
 	bz_stream * const bz = &hctx->u.bz;
-	const plugin_data * const p = hctx->plugin_data;
 	bz->bzalloc = NULL;
 	bz->bzfree = NULL;
 	bz->opaque = NULL;
@@ -799,8 +1017,14 @@ static int stream_bzip2_init(handler_ctx *hctx) {
 	bz->next_out = hctx->output->ptr;
 	bz->avail_out = hctx->output->size;
 
+	const plugin_data * const p = hctx->plugin_data;
+	const encparms * const params = p->conf.params;
+	const int clevel = (NULL != params)
+	  ? params->bzip2.clevel
+	  : p->conf.compression_level;
+
 	if (BZ_OK != BZ2_bzCompressInit(bz,
-					p->conf.compression_level > 0
+					clevel > 0
 					 ? p->conf.compression_level
 					 : 9, /* blocksize = 900k */
 					0,    /* verbosity */
@@ -896,28 +1120,35 @@ static int stream_br_init(handler_ctx *hctx) {
       BrotliEncoderCreateInstance(NULL, NULL, NULL);
     if (NULL == br) return -1;
 
-    /* future: consider allowing tunables by encoder algorithm,
-     * (i.e. not generic "compression_level") */
     /*(note: we ignore any errors while tuning parameters here)*/
     const plugin_data * const p = hctx->plugin_data;
-    if (p->conf.compression_level >= 0) /* 0 .. 11 are valid values */
-        BrotliEncoderSetParameter(br, BROTLI_PARAM_QUALITY,
-                                  p->conf.compression_level);
+    const encparms * const params = p->conf.params;
+    const uint32_t quality = (NULL != params)
+      ? params->brotli.quality
+      : (p->conf.compression_level >= 0) /* 0 .. 11 are valid values */
+        ? (uint32_t)p->conf.compression_level
+        : BROTLI_DEFAULT_QUALITY;
+    if (quality != BROTLI_DEFAULT_QUALITY)
+        BrotliEncoderSetParameter(br, BROTLI_PARAM_QUALITY, quality);
 
-    /* XXX: is this worth checking?
-     * BROTLI_MODE_GENERIC vs BROTLI_MODE_TEXT or BROTLI_MODE_FONT */
-    const buffer *vb =
-      http_header_response_get(hctx->r, HTTP_HEADER_CONTENT_TYPE,
-                               CONST_STR_LEN("Content-Type"));
-    if (NULL != vb) {
+    if (params && params->brotli.window != BROTLI_DEFAULT_WINDOW)
+        BrotliEncoderSetParameter(br, BROTLI_PARAM_LGWIN,params->brotli.window);
+
+    const buffer *vb;
+    if (params && params->brotli.mode != BROTLI_MODE_GENERIC)
+        BrotliEncoderSetParameter(br, BROTLI_PARAM_MODE, params->brotli.mode);
+    else if ((vb = http_header_response_get(hctx->r, HTTP_HEADER_CONTENT_TYPE,
+                                            CONST_STR_LEN("Content-Type")))) {
+        /* BROTLI_MODE_GENERIC vs BROTLI_MODE_TEXT or BROTLI_MODE_FONT */
+        const uint32_t len = buffer_clen(vb);
         if (0 == strncmp(vb->ptr, "text/", sizeof("text/")-1)
             || (0 == strncmp(vb->ptr, "application/", sizeof("application/")-1)
                 && (0 == strncmp(vb->ptr+12,"javascript",sizeof("javascript")-1)
-                 || 0 == strncmp(vb->ptr+12,"ld+json",   sizeof("ld+json")-1)
                  || 0 == strncmp(vb->ptr+12,"json",      sizeof("json")-1)
-                 || 0 == strncmp(vb->ptr+12,"xhtml+xml", sizeof("xhtml+xml")-1)
                  || 0 == strncmp(vb->ptr+12,"xml",       sizeof("xml")-1)))
-            || 0 == strncmp(vb->ptr, "image/svg+xml", sizeof("image/svg+xml")-1))
+            || (len > 4
+                && (0 == strncmp(vb->ptr+len-5, "+json", sizeof("+json")-1)
+                 || 0 == strncmp(vb->ptr+len-4, "+xml",  sizeof("+xml")-1))))
             BrotliEncoderSetParameter(br, BROTLI_PARAM_MODE, BROTLI_MODE_TEXT);
         else if (0 == strncmp(vb->ptr, "font/", sizeof("font/")-1))
             BrotliEncoderSetParameter(br, BROTLI_PARAM_MODE, BROTLI_MODE_FONT);
@@ -982,11 +1213,28 @@ static int stream_zstd_init(handler_ctx *hctx) {
     if (NULL == cctx) return -1;
     hctx->output->used = 0;
 
-    /* future: consider allowing tunables by encoder algorithm,
-     * (i.e. not generic "compression_level" across all compression algos) */
     /*(note: we ignore any errors while tuning parameters here)*/
     const plugin_data * const p = hctx->plugin_data;
-    if (p->conf.compression_level >= 0) { /* -1 is lighttpd default for "unset" */
+    const encparms * const params = p->conf.params;
+    if (params) {
+        if (params->zstd.clevel && params->zstd.clevel != ZSTD_CLEVEL_DEFAULT) {
+            const int level = params->zstd.clevel;
+          #if ZSTD_VERSION_NUMBER >= 10000+400+0 /* v1.4.0 */
+            ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, level);
+          #else
+            ZSTD_initCStream(cctx, level);
+          #endif
+        }
+      #if ZSTD_VERSION_NUMBER >= 10000+400+0 /* v1.4.0 */
+        if (params->zstd.strategy)
+            ZSTD_CCtx_setParameter(cctx, ZSTD_c_strategy,
+                                   params->zstd.strategy);
+        if (params->zstd.windowLog)
+            ZSTD_CCtx_setParameter(cctx, ZSTD_c_windowLog,
+                                   params->zstd.windowLog);
+      #endif
+    }
+    else if (p->conf.compression_level >= 0) { /* -1 here is "unset" */
         int level = p->conf.compression_level;
       #if ZSTD_VERSION_NUMBER >= 10000+400+0 /* v1.4.0 */
         ZSTD_CCtx_setParameter(cctx, ZSTD_c_strategy, level);
