@@ -401,6 +401,7 @@ static void mod_deflate_merge_config_cpv(plugin_config * const pconf, const conf
       case 8: /* deflate.cache-dir */
         pconf->cache_dir = cpv->v.b;
         break;
+    #if 0 /*(cpv->k_id remapped in mod_deflate_set_defaults())*/
       case 9: /* compress.filetype */
         pconf->mimetypes = cpv->v.a;
         break;
@@ -417,6 +418,7 @@ static void mod_deflate_merge_config_cpv(plugin_config * const pconf, const conf
       case 13:/* compress.max-loadavg */
         pconf->max_loadavg = cpv->v.d;
         break;
+    #endif
       case 14:/* deflate.params */
         if (cpv->vtype == T_CONFIG_LOCAL)
             pconf->params = cpv->v.v;
@@ -742,6 +744,12 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
         config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
+              case 9: /* compress.filetype */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "DEPRECATED: %s replaced with deflate.mimetypes",
+                  cpk[cpv->k_id].k);
+                cpv->k_id = 0; /* deflate.mimetypes */
+                __attribute_fallthrough__
               case 0: /* deflate.mimetypes */
                 /* mod_deflate matches mimetype as prefix of Content-Type
                  * so ignore '*' at end of mimetype for end-user flexibility
@@ -754,10 +762,22 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                 }
                 if (0 == cpv->v.a->used) cpv->v.a = NULL;
                 break;
+              case 10:/* compress.allowed-encodings */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "DEPRECATED: %s replaced with deflate.allowed-encodings",
+                  cpk[cpv->k_id].k);
+                cpv->k_id = 1; /* deflate.allowed-encodings */
+                __attribute_fallthrough__
               case 1: /* deflate.allowed-encodings */
                 cpv->v.v = mod_deflate_encodings_to_flags(cpv->v.a);
                 cpv->vtype = T_CONFIG_LOCAL;
                 break;
+              case 12:/* compress.max-filesize */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "DEPRECATED: %s replaced with deflate.max-compress-size",
+                  cpk[cpv->k_id].k);
+                cpv->k_id = 2; /* deflate.max-compress-size */
+                __attribute_fallthrough__
               case 2: /* deflate.max-compress-size */
               case 3: /* deflate.min-compress-size */
                 break;
@@ -773,11 +793,23 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
               case 5: /* deflate.output-buffer-size */
               case 6: /* deflate.work-block-size */
                 break;
+              case 13:/* compress.max-loadavg */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "DEPRECATED: %s replaced with deflate.max-loadavg",
+                  cpk[cpv->k_id].k);
+                cpv->k_id = 7; /* deflate.max-loadavg */
+                __attribute_fallthrough__
               case 7: /* deflate.max-loadavg */
                 cpv->v.d = (!buffer_is_blank(cpv->v.b))
                   ? strtod(cpv->v.b->ptr, NULL)
                   : 0.0;
                 break;
+              case 11:/* compress.cache-dir */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "DEPRECATED: %s replaced with deflate.cache-dir",
+                  cpk[cpv->k_id].k);
+                cpv->k_id = 8; /* deflate.cache-dir */
+                __attribute_fallthrough__
               case 8: /* deflate.cache-dir */
                 if (!buffer_is_blank(cpv->v.b)) {
                     buffer *b;
@@ -795,49 +827,14 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                 else
                     cpv->v.b = NULL;
                 break;
+             #if 0    /*(handled further above)*/
               case 9: /* compress.filetype */
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "DEPRECATED: %s replaced with deflate.mimetypes",
-                  cpk[cpv->k_id].k);
-                break;
               case 10:/* compress.allowed-encodings */
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "DEPRECATED: %s replaced with deflate.allowed-encodings",
-                  cpk[cpv->k_id].k);
-                cpv->v.v = mod_deflate_encodings_to_flags(cpv->v.a);
-                cpv->vtype = T_CONFIG_LOCAL;
-                break;
               case 11:/* compress.cache-dir */
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "DEPRECATED: %s replaced with deflate.cache-dir",
-                  cpk[cpv->k_id].k);
-                if (!buffer_is_blank(cpv->v.b)) {
-                    buffer *b;
-                    *(const buffer **)&b = cpv->v.b;
-                    const uint32_t len = buffer_clen(b);
-                    if (len > 0 && '/' == b->ptr[len-1])
-                        buffer_truncate(b, len-1); /*remove end slash*/
-                    struct stat st;
-                    if (0 != stat(b->ptr,&st) && 0 != mkdir_recursive(b->ptr)) {
-                        log_perror(srv->errh, __FILE__, __LINE__,
-                          "can't stat %s %s", cpk[cpv->k_id].k, b->ptr);
-                        return HANDLER_ERROR;
-                    }
-                }
-                break;
               case 12:/* compress.max-filesize */
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "DEPRECATED: %s replaced with deflate.max-compress-size",
-                  cpk[cpv->k_id].k);
-                break;
               case 13:/* compress.max-loadavg */
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "DEPRECATED: %s replaced with deflate.max-loadavg",
-                  cpk[cpv->k_id].k);
-                cpv->v.d = (!buffer_is_blank(cpv->v.b))
-                  ? strtod(cpv->v.b->ptr, NULL)
-                  : 0.0;
                 break;
+             #endif
               case 14:/* deflate.params */
                 cpv->v.v = mod_deflate_parse_params(cpv->v.a, srv->errh);
                 cpv->vtype = T_CONFIG_LOCAL;
