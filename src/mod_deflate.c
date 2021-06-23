@@ -452,7 +452,8 @@ static encparms * mod_deflate_parse_params(const array * const a, log_error_st *
     params->gzip.strategy = Z_DEFAULT_STRATEGY;
   #endif
   #ifdef USE_BROTLI
-    params->brotli.quality = BROTLI_DEFAULT_QUALITY;
+    /* BROTLI_DEFAULT_QUALITY is 11 and can be *very* time-consuming */
+    params->brotli.quality = 5;
     params->brotli.window = BROTLI_DEFAULT_WINDOW;
     params->brotli.mode = BROTLI_MODE_GENERIC;
   #endif
@@ -1127,7 +1128,8 @@ static int stream_br_init(handler_ctx *hctx) {
       ? params->brotli.quality
       : (p->conf.compression_level >= 0) /* 0 .. 11 are valid values */
         ? (uint32_t)p->conf.compression_level
-        : BROTLI_DEFAULT_QUALITY;
+        : 5;
+        /* BROTLI_DEFAULT_QUALITY is 11 and can be *very* time-consuming */
     if (quality != BROTLI_DEFAULT_QUALITY)
         BrotliEncoderSetParameter(br, BROTLI_PARAM_QUALITY, quality);
 
