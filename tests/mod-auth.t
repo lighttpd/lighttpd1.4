@@ -187,14 +187,14 @@ ok($tf->handle_http($t) == 0, 'Digest-Auth: stale nonce');
 
 $t->{REQUEST}  = ( <<EOF
 GET /server-status HTTP/1.0
-Authorization: Digest username="jan", realm="download archiv",
-	nonce="b3b26457000000003a9b34a3cd56d26e48a52a498ac9765d4b",
-	uri="/server-status", qop=auth, nc=00000001, cnonce="65ee1b37",
-	algorithm="md5", response="049b000fb00ab51dddea6f093a96aa2e"     
+Authorization: Digest username = "jan", realm = "download archiv",
+	nonce = "b3b26457000000003a9b34a3cd56d26e48a52a498ac9765d4b",
+	uri = "/server-status", qop = auth, nc = 00000001, cnonce = "65ee1b37",
+	algorithm = "md5", response = "049b000fb00ab51dddea6f093a96aa2e"     
 EOF
  ); # note: trailing whitespace at end of request line above is intentional
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401, 'WWW-Authenticate' => '/, stale=true$/' } ];
-ok($tf->handle_http($t) == 0, 'Digest-Auth: trailing WS, stale nonce');
+ok($tf->handle_http($t) == 0, 'Digest-Auth: BWS, trailing WS, stale nonce');
 
 
 

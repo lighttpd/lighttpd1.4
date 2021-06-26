@@ -1171,7 +1171,7 @@ mod_auth_digest_misconfigured (request_st * const r, const struct http_auth_back
 
 
 static void
-mod_auth_digest_parse_authorization (http_auth_digest_params_t * const dp, const buffer * const vb)
+mod_auth_digest_parse_authorization (http_auth_digest_params_t * const dp, const char *c)
 {
     struct digest_kv {
         const char *key;
@@ -1180,53 +1180,57 @@ mod_auth_digest_parse_authorization (http_auth_digest_params_t * const dp, const
     };
 
     static const struct digest_kv dkv[] = {
-        { CONST_STR_LEN("username="),  e_username },
-        { CONST_STR_LEN("realm="),     e_realm },
-        { CONST_STR_LEN("nonce="),     e_nonce },
-        { CONST_STR_LEN("uri="),       e_uri },
-        { CONST_STR_LEN("algorithm="), e_algorithm },
-        { CONST_STR_LEN("qop="),       e_qop },
-        { CONST_STR_LEN("cnonce="),    e_cnonce },
-        { CONST_STR_LEN("nc="),        e_nc },
-        { CONST_STR_LEN("response="),  e_response },
+        { CONST_STR_LEN("username"),  e_username },
+        { CONST_STR_LEN("realm"),     e_realm },
+        { CONST_STR_LEN("nonce"),     e_nonce },
+        { CONST_STR_LEN("uri"),       e_uri },
+        { CONST_STR_LEN("algorithm"), e_algorithm },
+        { CONST_STR_LEN("qop"),       e_qop },
+        { CONST_STR_LEN("cnonce"),    e_cnonce },
+        { CONST_STR_LEN("nc"),        e_nc },
+        { CONST_STR_LEN("response"),  e_response },
 
         { NULL, 0, http_auth_digest_params_sz }
     };
 
     /* parse credentials from client */
-    /* note: parsing does not recognize and handle BWS (bad whitespace) */
-    /* XXX: might find end of token and strncmp() only when len matches */
-    /* (caller already checked that vb->ptr begins with "Digest ") */
-    /* coverity[overflow_sink : FALSE] */
-    for (const char *c = vb->ptr+sizeof("Digest ")-1, *e; *c; c++) {
+    /* (caller must pass c pointing to string after "Digest ") */
+    for (const char *e; *c; c++) {
         /* skip whitespaces */
-        while (*c == ' ' || *c == '\t') c++;
+        while (*c == ' ' || *c == '\t' || *c == ',') ++c;
         if (!*c) break;
+        for (e = c; *e!='=' && *e!=' ' && *e!='\t' && *e!='\0'; ++e) ;
+        const uint32_t tlen = (uint32_t)(e - c);
 
         for (int i = 0; dkv[i].key; ++i) {
-            if (0 != strncmp(c, dkv[i].key, dkv[i].klen))
+            if (tlen != dkv[i].klen || 0 != memcmp(c, dkv[i].key, tlen))
                 continue;
-
-            if ((c[dkv[i].klen] == '"') &&
-                (NULL != (e = strchr(c + dkv[i].klen + 1, '"')))) {
-                /* value with "..." */
-                c += dkv[i].klen + 1;
-                dp->ptr[dkv[i].id] = c;
-                dp->len[dkv[i].id] = (uint16_t)(e - c);
-                c = e;
+            c += tlen;
+            /* detect and step over '='; ignore BWS (bad whitespace) */
+            if (__builtin_expect( (*c != '='), 0)) {
+                while (*c == ' ' || *c == '\t') ++c;
+                if (*c != '=') return; /*(including '\0')*/
             }
-            else if (NULL != (e = strchr(c + dkv[i].klen, ','))) {
-                /* value without "...", terminated by ',' */
-                c += dkv[i].klen;
-                dp->ptr[dkv[i].id] = c;
-                dp->len[dkv[i].id] = (uint16_t)(e - c);
-                c = e;
+            do { ++c; } while (*c == ' ' || *c == '\t');
+
+            if (*c == '"') {
+                for (e = ++c; *e != '"' && *e != '\0'; ++e) {
+                    if (*e == '\\' && *++e == '\0') return;
+                }
+                if (*e != '"') return;
+                /* value with "..." *//*(XXX: quoted value not unescaped)*/
             }
             else {
-                /* value without "...", terminated by EOL */
-                c += dkv[i].klen;
-                dp->ptr[dkv[i].id] = c;
-                c += (dp->len[dkv[i].id] = (uint16_t)strlen(c)) - 1;
+                for (e = c; *e!=',' && *e!=' ' && *e!='\t' && *e!='\0'; ++e) ;
+                /* value without "..." */
+            }
+            dp->ptr[dkv[i].id] = c;
+            dp->len[dkv[i].id] = (uint16_t)(e - c);
+            c = e;
+            if (*c != ',') {
+                /*(could more strictly check for linear whitespace)*/
+                c = strchr(c, ',');
+                if (!c) return;
             }
             break;
         }
@@ -1396,7 +1400,7 @@ mod_auth_check_digest (request_st * const r, void *p_d, const struct http_auth_r
 
     memset(&dp, 0, sizeof(dp) - sizeof(dp.rdigest));
 
-    mod_auth_digest_parse_authorization(&dp, vb);
+    mod_auth_digest_parse_authorization(&dp, vb->ptr + sizeof("Digest ")-1);
 
     rc = mod_auth_digest_validate_params(r, require, &dp, &ai);
     if (__builtin_expect( (HANDLER_GO_ON != rc), 0))
