@@ -751,7 +751,9 @@ static int connection_handle_read_state(connection * const con)  {
              * or HTTP/2 pseudo-header beginning with ':' */
             /*(TLS handshake begins with SYN 0x16 (decimal 22))*/
             log_error(r->conf.errh, __FILE__, __LINE__, "%s",
-                      "invalid request-line -> sending Status 400");
+                      c->mem->ptr[c->offset] == 0x16
+                      ? "unexpected TLS ClientHello on clear port"
+                      : "invalid request-line -> sending Status 400");
             r->http_status = 400; /* Bad Request */
             r->keep_alive = 0;
             connection_set_state(r, CON_STATE_REQUEST_END);
