@@ -25,7 +25,12 @@ fdnode_free (fdnode *fdn)
 fdnode *
 fdevent_register (fdevents *ev, int fd, fdevent_handler handler, void *ctx)
 {
+  #ifdef _WIN32
+    fdnode *fdn  = fdnode_init();
+    ev->fdarray[(fdn->fda_ndx = ev->count++)] = fdn;
+  #else
     fdnode *fdn  = ev->fdarray[fd] = fdnode_init();
+  #endif
     fdn->handler = handler;
     fdn->fd      = fd;
     fdn->ctx     = ctx;
@@ -34,11 +39,26 @@ fdevent_register (fdevents *ev, int fd, fdevent_handler handler, void *ctx)
     return fdn;
 }
 
+#ifdef _WIN32
+#define fdevent_fdarray_slot(ev,fdn) &(ev)->fdarray[(fdn)->fda_ndx]
+#else
+#define fdevent_fdarray_slot(ev,fdn) &(ev)->fdarray[(fdn)->fd]
+#endif
+
 void
 fdevent_unregister (fdevents *ev, fdnode *fdn)
 {
-    fdnode **fdn_slot = &ev->fdarray[fdn->fd];
+    fdnode **fdn_slot = fdevent_fdarray_slot(ev, fdn);
     if ((uintptr_t)*fdn_slot & 0x3) return; /*(should not happen)*/
+  #ifdef _WIN32
+    if (--ev->count != fdn->fda_ndx) {
+        /* compact fdarray; move element in last slot */
+        fdnode **fdn_last = &ev->fdarray[ev->count];
+        *fdn_slot = *fdn_last;
+        ((fdnode *)((uintptr_t)*fdn_slot & ~0x3))->fda_ndx = fdn->fda_ndx;
+        fdn_slot = fdn_last;
+    }
+  #endif
     *fdn_slot = NULL;
     fdnode_free(fdn);
 }
@@ -46,7 +66,7 @@ fdevent_unregister (fdevents *ev, fdnode *fdn)
 void
 fdevent_sched_close (fdevents *ev, fdnode *fdn)
 {
-    fdnode **fdn_slot = &ev->fdarray[fdn->fd];
+    fdnode **fdn_slot = fdevent_fdarray_slot(ev, fdn);
     if ((uintptr_t)*fdn_slot & 0x3) return;
     *fdn_slot = (fdnode *)((uintptr_t)fdn | 0x3);
     fdn->handler = (fdevent_handler)NULL;

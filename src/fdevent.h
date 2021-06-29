@@ -15,10 +15,22 @@ struct fdnode_st {
     int fd;
     int events;
     int fde_ndx;
+  #ifdef _WIN32
+    int fda_ndx;
+  #endif
 };
 
 /* These must match POLL* values from operating system headers */
 
+#ifdef _WIN32 /* MS is different; definitely not better */
+#define FDEVENT_IN     (0x0100 | 0x0200)
+#define FDEVENT_PRI    (0x0400)
+#define FDEVENT_OUT    (0x0010)
+#define FDEVENT_ERR    (0x0001)
+#define FDEVENT_HUP    (0x0002)
+#define FDEVENT_NVAL   (0x0004)
+#define FDEVENT_RDHUP  0x2000
+#else
 #define FDEVENT_IN     0x0001
 #define FDEVENT_PRI    0x0002
 #define FDEVENT_OUT    0x0004
@@ -29,6 +41,7 @@ struct fdnode_st {
 #define FDEVENT_RDHUP  0x4000
 #else
 #define FDEVENT_RDHUP  0x2000
+#endif
 #endif
 
 #define FDEVENT_STREAM_REQUEST                  BV(0)

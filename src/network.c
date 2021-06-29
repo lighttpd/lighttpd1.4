@@ -556,8 +556,11 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 #endif
 	}
 
-	/* */
+  #ifdef _WIN32
+	++srv->cur_fds;
+  #else
 	srv->cur_fds = srv_socket->fd;
+  #endif
 
 	if (fdevent_set_so_reuseaddr(srv_socket->fd, 1) < 0) {
 		log_perror(srv->errh, __FILE__, __LINE__, "setsockopt(SO_REUSEADDR)");

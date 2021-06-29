@@ -1660,6 +1660,12 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			rlim.rlim_cur = rlim.rlim_max;
 			setrlimit(RLIMIT_CORE, &rlim);
 		}
+#else
+	  #ifdef _WIN32
+		/*(default upper limit of 4k if server.max-fds not specified)*/
+		if (0 == srv->srvconf.max_fds)
+			srv->srvconf.max_fds = 4096;
+	  #endif
 #endif
 	}
 
@@ -1920,6 +1926,9 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 #endif
 
 	/* get the current number of FDs */
+  #ifdef _WIN32
+	srv->cur_fds = 3; /*(estimate on _WIN32)*/
+  #else
 	{
 		int fd = fdevent_open_devnull();
 		if (fd >= 0) {
@@ -1927,6 +1936,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			close(fd);
 		}
 	}
+  #endif
 
 	if (0 != server_sockets_set_nb_cloexec(srv)) {
 		return -1;

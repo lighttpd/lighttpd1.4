@@ -16,6 +16,13 @@ struct epoll_event;     /* declaration */
 struct pollfd;          /* declaration */
 #endif
 
+#if 0 /*(disabled; needs further development for stability of results)*/
+#ifdef _WIN32
+# define FDEVENT_USE_POLL
+struct pollfd;          /* declaration */
+#endif
+#endif
+
 #ifndef FDEVENT_USE_POLL
 #if defined HAVE_SELECT
 # ifdef __WIN32
@@ -83,6 +90,9 @@ struct fdevents {
     log_error_st *errh;
     int *cur_fds;
     uint32_t maxfds;
+  #ifdef _WIN32
+    int count;
+  #endif
   #ifdef FDEVENT_USE_LINUX_EPOLL
     int epoll_fd;
     struct epoll_event *epoll_events;
@@ -108,6 +118,9 @@ struct fdevents {
     buffer_int unused;
   #endif
   #ifdef FDEVENT_USE_SELECT
+   #ifndef _WIN32
+    int select_max_fd;
+   #endif
     fd_set select_read;
     fd_set select_write;
     fd_set select_error;
@@ -115,8 +128,6 @@ struct fdevents {
     fd_set select_set_read;
     fd_set select_set_write;
     fd_set select_set_error;
-
-    int select_max_fd;
   #endif
 
     int (*reset)(struct fdevents *ev);

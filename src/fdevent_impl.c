@@ -12,7 +12,10 @@
 #include <string.h>
 
 #ifdef _WIN32
-#include <winsock2.h>   /* closesocket */
+#ifdef _MSC_VER
+#pragma comment(lib, "ws2_32.lib")
+#endif
+#include <winsock2.h>   /* closesocket(), WSAPoll() */
 #endif
 
 #ifdef FDEVENT_USE_LINUX_EPOLL
@@ -290,9 +293,15 @@ fdevent_sched_run (fdevents * const ev)
 
         fdnode * const fdn_tmp = fdn;
         fdn = (fdnode *)fdn->ctx; /* next */
+      #ifdef _WIN32
+        /*(remove 0x3 flags from fdarray fdn before call to unregister below)*/
+        ev->fdarray[fdn_tmp->fda_ndx] = fdn_tmp;
+        fdevent_unregister(ev, fdn_tmp);
+      #else
         /*(fdevent_unregister)*/
         ev->fdarray[fd] = NULL;
         free(fdn_tmp); /*fdnode_free(fdn_tmp);*/
+      #endif
     }
     ev->pendclose = NULL;
 }
@@ -723,6 +732,8 @@ fdevent_solaris_devpoll_init (fdevents *ev)
 
 #ifdef HAVE_POLL_H
 #include <poll.h>
+#elif defined(_WIN32)
+#define poll(fdArray,fds,timeout) WSAPoll((fdArray),(fds),(timeout))
 #else
 #include <sys/poll.h>
 #endif
@@ -732,7 +743,7 @@ fdevent_poll_event_del (fdevents *ev, fdnode *fdn)
 {
     int fd = fdn->fd;
     int k = fdn->fde_ndx;
-    if ((uint32_t)k >= ev->used || ev->pollfds[k].fd != fd)
+    if ((uint32_t)k >= ev->used || (int)ev->pollfds[k].fd != fd)
         return (errno = EINVAL, -1);
 
     ev->pollfds[k].fd = -1;
@@ -761,7 +772,7 @@ fdevent_poll_event_set (fdevents *ev, fdnode *fdn, int events)
   #endif
 
     if (k >= 0) {
-        if ((uint32_t)k >= ev->used || ev->pollfds[k].fd != fd)
+        if ((uint32_t)k >= ev->used || (int)ev->pollfds[k].fd != fd)
             return (errno = EINVAL, -1);
         ev->pollfds[k].events = events;
         return 0;
@@ -792,6 +803,26 @@ fdevent_poll_poll (fdevents *ev, int timeout_ms)
 {
     const int n = poll(ev->pollfds, ev->used, timeout_ms);
     fdnode ** const fdarray = ev->fdarray;
+  #ifdef _WIN32
+    /* XXX: O(m x n) search through fdarray; improve later for many fds
+     * Since number of ready events is typically going to be small,
+     * walk fdarray and for each fdn, scan ready pollfds (rather than
+     * walking ready pollfds and then scanning fdarray for matching fd) */
+    const int nfds = (int)ev->used;
+    const int count = ev->count;
+    for (int m = 0, a = 0; m < n && a < count; ++a) {
+        struct pollfd * const restrict pfds = ev->pollfds;
+        const fdnode * const fdn = fdarray[a];
+        SOCKET fd = (SOCKET)((fdnode *)((uintptr_t)fdn & ~0x3))->fd;
+        for (int i = 0; i < nfds; ++i) {
+            if (0 == pfds[i].revents || fd != pfds[i].fd) continue;
+            if (0 == ((uintptr_t)fdn & 0x3))
+                (*fdn->handler)(fdn->ctx, pfds[i].revents);
+            ++m;
+            break;
+        }
+    }
+  #else
     for (int i = 0, m = 0; m < n; ++i, ++m) {
         struct pollfd * const restrict pfds = ev->pollfds;
         while (0 == pfds[i].revents) ++i;
@@ -799,6 +830,7 @@ fdevent_poll_poll (fdevents *ev, int timeout_ms)
         if (0 == ((uintptr_t)fdn & 0x3))
             (*fdn->handler)(fdn->ctx, pfds[i].revents);
     }
+  #endif
     return n;
 }
 
@@ -846,7 +878,9 @@ fdevent_select_reset (fdevents *ev)
     FD_ZERO(&(ev->select_set_read));
     FD_ZERO(&(ev->select_set_write));
     FD_ZERO(&(ev->select_set_error));
+  #ifndef _WIN32
     ev->select_max_fd = -1;
+  #endif
     return 0;
 }
 
@@ -866,7 +900,12 @@ fdevent_select_event_set (fdevents *ev, fdnode *fdn, int events)
     int fd = fdn->fde_ndx = fdn->fd;
 
     /* we should be protected by max-fds, but you never know */
+  #ifdef _WIN32
+    force_assert(ev->count < ((int)FD_SETSIZE));
+  #else
     force_assert(fd < ((int)FD_SETSIZE));
+    if (fd > ev->select_max_fd) ev->select_max_fd = fd;
+  #endif
 
     if (events & FDEVENT_IN)
         FD_SET(fd, &(ev->select_set_read));
@@ -879,8 +918,6 @@ fdevent_select_event_set (fdevents *ev, fdnode *fdn, int events)
         FD_CLR(fd, &(ev->select_set_write));
 
     FD_SET(fd, &(ev->select_set_error));
-
-    if (fd > ev->select_max_fd) ev->select_max_fd = fd;
 
     return 0;
 }
@@ -895,6 +932,30 @@ fdevent_select_poll (fdevents *ev, int timeout_ms)
     ev->select_read  = ev->select_set_read;
     ev->select_write = ev->select_set_write;
     ev->select_error = ev->select_set_error;
+
+  #ifdef _WIN32
+
+    const int nfds = ev->count;
+    const int n =
+      select(nfds, &ev->select_read, &ev->select_write, &ev->select_error, &tv);
+    if (n <= 0) return n;
+    fdnode **fda = ev->fdarray;
+    for (int ndx = -1, i = n; ++ndx < nfds; ) {
+        const fdnode *fdn = *fda++;
+        int fd = ((fdnode *)((uintptr_t)fdn & ~0x3))->fd;
+        int revents = 0;
+        if (FD_ISSET(fd, &ev->select_read))  revents |= FDEVENT_IN;
+        if (FD_ISSET(fd, &ev->select_write)) revents |= FDEVENT_OUT;
+        if (FD_ISSET(fd, &ev->select_error)) revents |= FDEVENT_ERR;
+        if (revents) {
+            if (0 == ((uintptr_t)fdn & 0x3))
+                (*fdn->handler)(fdn->ctx, revents);
+            if (0 == --i)
+                break;
+        }
+    }
+
+  #else
 
     const int nfds = ev->select_max_fd + 1;
     const int n =
@@ -913,6 +974,9 @@ fdevent_select_poll (fdevents *ev, int timeout_ms)
                 break;
         }
     }
+
+  #endif
+
     return n;
 }
 
