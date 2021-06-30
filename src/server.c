@@ -46,6 +46,68 @@ static const buffer default_server_tag =
 
 #ifdef HAVE_GETOPT_H
 # include <getopt.h>
+#else
+/* basic (very limited) getopt() implementation */
+extern char *optarg;
+extern int optind, opterr, optopt;
+char *optarg = NULL;
+int optind = 1, opterr = 1, optopt = 0;
+int getopt (int argc, char * const argv[], const char *optstring);
+int getopt (int argc, char * const argv[], const char *optstring)
+{
+    static char *nextchar;
+    optarg = NULL;
+    if (optind >= argc || argc < 1)
+        return -1;
+    if (optind <= 1)
+        nextchar = argv[(optind = 1)];
+    else if (nextchar == NULL)
+        nextchar = argv[optind];
+
+    if (nextchar == argv[optind]) {
+        if (*nextchar++ != '-'
+            || nextchar[0] == '\0' /* "-" */
+            || (nextchar[0] == '-' && nextchar[1] == '\0')) { /* "--" */
+            return -1;
+        }
+        ++optind;
+    }
+
+    const char *o = optstring;
+    if (*o == '+' || *o == '-') ++o; /*(ignore; behave as if '+' is set)*/
+    if (*o == ':') ++o;              /*(ignore; behave as if ':' is set)*/
+    for (; *o; ++o) {
+        if (*o == *nextchar)
+            break;
+        if (o[1] == ':') ++o;
+        if (o[1] == ':') ++o;
+    }
+    if (!*o) {
+        /* if (opterr) fprintf(stderr, "..."); */
+        optopt = *nextchar;
+        return '?';
+    }
+
+    if (!*++nextchar)
+        nextchar = NULL;
+
+    if (o[1] == ':') {
+        if (nextchar) {
+            optarg = nextchar;
+            nextchar = NULL;
+        }
+        else if (optind < argc)
+            optarg = argv[optind++];
+        else if (o[2] != ':') {
+            /* if (opterr) fprintf(stderr, "..."); */
+              /*(fprintf if ':' not at beginning of optstring)*/
+            optopt = *o;
+            return ':';
+        }
+    }
+
+    return *o;
+}
 #endif
 
 #ifdef HAVE_VALGRIND_VALGRIND_H
@@ -1398,7 +1460,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		}
 	}
 
-      #ifdef __CYGWIN__
+      #if defined(__CYGWIN__) || defined(_WIN32)
 	if (!srv->config_data_base && NULL != getenv("NSSM_SERVICE_NAME")) {
 		char *dir = getenv("NSSM_SERVICE_DIR");
 		if (NULL != dir && 0 != chdir(dir)) {
