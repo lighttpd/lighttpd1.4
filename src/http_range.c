@@ -9,7 +9,6 @@
 #include <limits.h>
 #include <stdlib.h>   /* strtol(), strtoll() */
 #include <string.h>   /* memmove() */
-#include <strings.h>  /* strcasecmp(), strncasecmp() */
 
 #include "buffer.h"
 #include "chunk.h"
@@ -290,7 +289,8 @@ http_range_process (request_st * const r, const buffer * const http_range)
 
     /* An origin server MUST ignore a Range header field that contains a
      * range unit it does not understand. */
-    if (0 != strncasecmp(http_range->ptr, "bytes=", sizeof("bytes=")-1))
+    if (buffer_clen(http_range) < sizeof("bytes=")-1
+        || !buffer_eq_icase_ssn(http_range->ptr, "bytes=", sizeof("bytes=")-1))
         return r->http_status;         /* 200 OK */
 
     /* arbitrary limit: support up to RMAX ranges in request Range field
@@ -371,9 +371,9 @@ http_range_rfc7233 (request_st * const r)
       http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE,
                                CONST_STR_LEN("Content-Type"));
     if (content_type
-        && 0 == strncasecmp(content_type->ptr,
-                            "multipart/byteranges",
-                            sizeof("multipart/byteranges")-1))
+        && buffer_clen(content_type) >= sizeof("multipart/byteranges")-1
+        && buffer_eq_icase_ssn(content_type->ptr, "multipart/byteranges",
+                               sizeof("multipart/byteranges")-1))
         return http_status;
   #endif
 
