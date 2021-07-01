@@ -4,9 +4,10 @@
  * - listens on FCGI_LISTENSOCK_FILENO
  *   (socket on FCGI_LISTENSOCK_FILENO must be set up by invoker)
  *   expects to be started w/ listening socket already on FCGI_LISTENSOCK_FILENO
- * - expect recv data for request headers every 10ms or less
+ * - expect recv data for request headers every 25ms or less (or fail test)
  * - no read timeouts for request body; might block reading request body
  * - no write timeouts; might block writing response
+ * - no retry if partial send
  *
  * Copyright(c) 2020 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
  * License: BSD 3-clause (same as lighttpd)
@@ -14,23 +15,48 @@
 #if defined(__sun)
 #define __EXTENSIONS__
 #endif
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define VC_EXTRALEAN
+#define _CRT_SECURE_NO_WARNINGS
+#ifdef _MSC_VER
+#pragma comment(lib, "ws2_32.lib")
+#pragma warning(disable:4267)
+#pragma warning(disable:5105) /* warning in winbase.h; good job MS */
+#endif
+#endif
 
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <assert.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <limits.h>
-#include <poll.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <unistd.h>
 
+#ifndef _WIN32
+#include <stdio.h>
+#include <sys/socket.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <unistd.h>
 #ifdef HAVE_SIGNAL      /* XXX: must be defined; config.h not included here */
 #include <signal.h>
 #endif
+#else /* _WIN32 */
+#include <io.h>
+#include <winsock2.h>
+#include <basetsd.h> /* SSIZE_T */
+#define ssize_t SSIZE_T
+#define poll WSAPoll
+/* fdopen() is not valid on _WIN32 SOCKET type; emulate fwrite(),
+ * though note that the following does not handle partial send() */
+typedef uintptr_t FILE;
+#define fwrite(ptr,sz,n,stream) \
+       (send((SOCKET)(stream), (const char *)(ptr), (int)((sz)*(n)), 0) \
+        == (int)((sz)*(n)) ? (n) : 0)
+#define fflush(x) do { } while (0)
+#endif /* _WIN32 */
 
 #ifndef MSG_DONTWAIT
 #define MSG_DONTWAIT 0
@@ -40,6 +66,26 @@
 
 static int finished;
 static unsigned char buf[65536];
+
+
+#ifdef _WIN32
+static int
+sock_nb_set (SOCKET fd, unsigned int nb)
+{
+    u_long l = nb;
+    return ioctlsocket(fd, FIONBIO, &l);
+}
+#else
+#if 0 /*(unused)*/
+static int
+sock_nb_set (int fd, unsigned int nb)
+{
+    return nb
+      ? fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) |  O_NONBLOCK)
+      : fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) & ~O_NONBLOCK);
+}
+#endif
+#endif
 
 
 static void
@@ -91,7 +137,7 @@ fcgi_puts (const int req_id, const char * const str, size_t len, FILE * const st
 
     for (size_t offset = 0, part; offset != len; offset += part) {
         part = len - offset > FCGI_MAX_LENGTH ? FCGI_MAX_LENGTH : len - offset;
-        fcgi_header(&header, FCGI_STDOUT, req_id, part, 0);
+        fcgi_header(&header, FCGI_STDOUT, req_id, (int)part, 0);
         if (1 != fwrite(&header, sizeof(header), 1, stream))
             return -1;
         if (part != fwrite(str+offset, 1, part, stream))
@@ -137,7 +183,7 @@ fcgi_getenv(const unsigned char * const r, const uint32_t rlen, const char * con
     memcpy(s, name, nlen);
     s[nlen] = '\0';
     char *e = getenv(s);
-    if (e) *len = strlen(e);
+    if (e) *len = (int)strlen(e);
     return e;
 }
 
@@ -308,17 +354,22 @@ fcgi_recv_packet (FILE * const stream, ssize_t sz)
 }
 
 
+#ifdef _WIN32
+static int
+fcgi_recv (const SOCKET fd, FILE * const stream)
+#else
 static int
 fcgi_recv (const int fd, FILE * const stream)
+#endif
 {
     ssize_t rd = 0, offset = 0;
 
     /* XXX: remain blocking */
-    /*fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);*/
+    /*sock_nb_set(fd, 1);*/
 
     do {
         struct pollfd pfd = { fd, POLLIN, 0 };
-        switch (poll(&pfd, 1, 10)) { /* 10ms timeout */
+        switch (poll(&pfd, 1, 25)) { /* 25ms timeout */
           default: /* 1; the only pfd has revents */
             break;
           case -1: /* error */
@@ -330,8 +381,13 @@ fcgi_recv (const int fd, FILE * const stream)
             break;
 
         do {
-            rd = recv(fd, buf+offset, sizeof(buf)-offset, MSG_DONTWAIT);
-        } while (rd < 0 && errno == EINTR);
+            rd = recv(fd, (char *)buf+offset, sizeof(buf)-offset, MSG_DONTWAIT);
+        }
+      #ifdef _WIN32
+        while (rd < 0 && WSAGetLastError() == WSAEINTR);
+      #else
+        while (rd < 0 && errno == EINTR);
+      #endif
 
         if (rd > 0) {
             offset += rd;
@@ -344,7 +400,11 @@ fcgi_recv (const int fd, FILE * const stream)
                     memmove(buf, buf+rd, offset);
             }
         }
+      #ifdef _WIN32
+        else if (0 == rd || WSAGetLastError() != WSAEWOULDBLOCK)
+      #else
         else if (0 == rd || (errno != EAGAIN && errno != EWOULDBLOCK))
+      #endif
             break;
     } while (offset < (ssize_t)sizeof(buf));
 
@@ -355,6 +415,35 @@ fcgi_recv (const int fd, FILE * const stream)
 int
 main (void)
 {
+  #ifdef _WIN32
+
+    WSADATA wsaData;
+    WORD wVersionRequested = MAKEWORD(2, 2);
+    if (0 != WSAStartup(wVersionRequested, &wsaData))
+        return -1;
+
+    /* FCGI_LISTENSOCK_FILENO == STDIN_FILENO == 0 */
+    SOCKET lfd = (SOCKET)GetStdHandle(STD_INPUT_HANDLE);
+    sock_nb_set(lfd, 0);
+
+    SOCKET fd;
+    do {
+        fd = accept(lfd, NULL, NULL);
+        if (fd == INVALID_SOCKET)
+            continue;
+        /* XXX: skip checking FCGI_WEB_SERVER_ADDRS; not implemented */
+
+        /* fdopen() is not valid on _WIN32 SOCKET; pass (FILE *)fd through */
+        fcgi_recv(fd, (FILE *)(uintptr_t)fd);
+    } while (fd != INVALID_SOCKET
+             ? 0 == closesocket(fd) && !finished
+             : WSAGetLastError() == WSAEINTR);
+
+    WSACleanup();
+    return 0;
+
+  #else
+
     int fd;
     fcntl(FCGI_LISTENSOCK_FILENO, F_SETFL,
           fcntl(FCGI_LISTENSOCK_FILENO, F_GETFL) & ~O_NONBLOCK);
@@ -383,4 +472,6 @@ main (void)
     } while (fd > 0 ? !finished : errno == EINTR);
 
     return 0;
+
+  #endif
 }
