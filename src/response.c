@@ -460,7 +460,7 @@ http_response_prepare (request_st * const r)
 
 		/* transform r->uri.path to r->physical.rel_path (relative file path) */
 		buffer_copy_buffer(&r->physical.rel_path, &r->uri.path);
-#if defined(__WIN32) || defined(__CYGWIN__)
+#if defined(_WIN32) || defined(__CYGWIN__)
 		/* strip dots from the end and spaces
 		 *
 		 * windows/dos handle those filenames as the same file

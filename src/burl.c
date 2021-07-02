@@ -338,7 +338,7 @@ int burl_normalize (buffer *b, buffer *t, int flags)
 {
     int qs;
 
-  #if defined(__WIN32) || defined(__CYGWIN__)
+  #if defined(_WIN32) || defined(__CYGWIN__)
     /* Windows and Cygwin treat '\\' as '/' if '\\' is present in path;
      * convert to '/' for consistency before percent-encoding
      * normalization which will convert '\\' to "%5C" in the URL.

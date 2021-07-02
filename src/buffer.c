@@ -900,7 +900,7 @@ void buffer_path_simplify(buffer *b)
         return;
     }
 
-  #if defined(__WIN32) || defined(__CYGWIN__)
+  #if defined(_WIN32) || defined(__CYGWIN__)
     /* cygwin is treating \ and / the same, so we have to that too */
     for (char *p = b->ptr; *p; p++) {
         if (*p == '\\') *p = '/';

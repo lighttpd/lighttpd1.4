@@ -864,7 +864,7 @@ static handler_t connection_handle_fdevent(void * const context, const int reven
 __attribute_cold__
 static int connection_read_cq_err(connection *con) {
     request_st * const r = &con->request;
-  #if defined(__WIN32)
+  #ifdef _WIN32
     int lastError = WSAGetLastError();
     switch (lastError) {
       case WSAEWOULDBLOCK:
@@ -881,7 +881,7 @@ static int connection_read_cq_err(connection *con) {
           "connection closed - recv failed: %d", lastError);
         break;
     }
-  #else /* __WIN32 */
+  #else
     switch (errno) {
     case EAGAIN:
         return 0;
@@ -897,7 +897,7 @@ static int connection_read_cq_err(connection *con) {
           "connection closed - read failed");
         break;
     }
-  #endif /* __WIN32 */
+  #endif
 
     connection_set_state_error(r, CON_STATE_ERROR);
     return -1;
@@ -918,7 +918,7 @@ static int connection_read_cq(connection *con, chunkqueue *cq, off_t max_bytes) 
         char * const mem = chunkqueue_get_memory(cq, &mem_len);
         if (mem_len > (size_t)max_bytes) mem_len = (size_t)max_bytes;
 
-      #if defined(__WIN32)
+      #ifdef _WIN32
         len = recv(con->fd, mem, mem_len, 0);
       #else
         len = read(con->fd, mem, mem_len);

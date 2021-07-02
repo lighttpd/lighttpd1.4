@@ -83,7 +83,7 @@
 
 __attribute_cold__
 static int network_write_error(int fd, log_error_st *errh) {
-  #if defined(__WIN32)
+  #ifdef _WIN32
     int lastError = WSAGetLastError();
     switch (lastError) {
       case WSAEINTR:
@@ -97,7 +97,7 @@ static int network_write_error(int fd, log_error_st *errh) {
         log_error(errh,__FILE__,__LINE__,"send failed: %d %d",lastError,fd);
         return -1;
     }
-  #else /* __WIN32 */
+  #else
     switch (errno) {
       case EAGAIN:
       case EINTR:
@@ -109,7 +109,7 @@ static int network_write_error(int fd, log_error_st *errh) {
         log_perror(errh,__FILE__,__LINE__,"write failed: %d",fd);
         return -1;
     }
-  #endif /* __WIN32 */
+  #endif
 }
 
 __attribute_cold__
@@ -121,11 +121,11 @@ static int network_remove_finished_chunks(chunkqueue * const cq, const off_t len
 
 inline
 static ssize_t network_write_data_len(int fd, const char *data, off_t len) {
-  #if defined(__WIN32)
+  #ifdef _WIN32
     return send(fd, data, len, 0);
-  #else /* __WIN32 */
+  #else
     return write(fd, data, len);
-  #endif /* __WIN32 */
+  #endif
 }
 
 static int network_write_accounting(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh, const ssize_t wr, const off_t toSend) {

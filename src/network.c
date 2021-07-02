@@ -789,7 +789,7 @@ int network_init(server *srv, int stdin_fd) {
         T_CONFIG_SCOPE_UNSET }
     };
 
-  #ifdef __WIN32
+  #ifdef _WIN32
     WSADATA wsaData;
     WORD wVersionRequested = MAKEWORD(2, 2);
     if (0 != WSAStartup(wVersionRequested, &wsaData)) {

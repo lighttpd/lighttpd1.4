@@ -25,7 +25,7 @@ struct pollfd;          /* declaration */
 
 #ifndef FDEVENT_USE_POLL
 #if defined HAVE_SELECT
-# ifdef __WIN32
+# ifdef _WIN32
 #  include <winsock2.h>
 # endif
 # define FDEVENT_USE_SELECT

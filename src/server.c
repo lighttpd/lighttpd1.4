@@ -737,7 +737,7 @@ static int server_oneshot_init_pipe(server *srv, int fdin, int fdout) {
 
     /* note: existing routines assume socket, not pipe
      * connections.c:connection_read_cq()
-     *   uses recv() ifdef __WIN32
+     *   uses recv() ifdef _WIN32
      *   passes S_IFSOCK to fdevent_ioctl_fionread()
      *   (The routine could be copied and modified, if required)
      * This is unlikely to work if TLS is used over pipe since the SSL_CTX
