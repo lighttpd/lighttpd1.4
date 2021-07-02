@@ -2516,7 +2516,7 @@ int config_remoteip_normalize(buffer * const b, buffer * const tb) {
     if (NULL != slash) {
         char *nptr;
         nm_bits = strtoul(slash + 1, &nptr, 10);
-        if (*nptr || 0 == nm_bits || nm_bits > (NULL != colon ? 128 : 32)) {
+        if (*nptr || 0 == nm_bits || nm_bits > (NULL != colon ? 128u : 32u)) {
             /*(also rejects (slash+1 == nptr) which results in nm_bits = 0)*/
             return -1;
         }
