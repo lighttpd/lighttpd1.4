@@ -312,6 +312,12 @@ static void test_request_http_request_parse(request_st * const r)
                     "\r\n"));
 
     run_http_request_parse(r, __LINE__, 0,
+      "URL-decode request-URI",
+      CONST_STR_LEN("GET /index%2ehtml HTTP/1.0\r\n"
+                    "\r\n"));
+    assert(buffer_eq_slen(&r->uri.path, CONST_STR_LEN("/index.html")));
+
+    run_http_request_parse(r, __LINE__, 0,
       "#1232 - duplicate headers with line-wrapping",
       CONST_STR_LEN("GET / HTTP/1.0\r\n"
                     "Location: foo\r\n"
@@ -542,6 +548,42 @@ static void test_request_http_request_parse(request_st * const r)
       CONST_STR_LEN("GET http://zzz.example.org/ HTTP/1.1\r\n"
                     "Host: aaa.example.org\r\n"
                     "Connection: close\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(r, __LINE__, 0,
+      "ignore duplicated If-Modified-Since if matching",
+      CONST_STR_LEN("GET / HTTP/1.1\r\n"
+                    "Host: zzz.example.org\r\n"
+                    "If-Modified-Since: Sun, 01 Jan 2036 00:00:02 GMT\r\n"
+                    "If-Modified-Since: Sun, 01 Jan 2036 00:00:02 GMT\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"));
+    b = http_header_request_get(r, HTTP_HEADER_IF_MODIFIED_SINCE,
+                                CONST_STR_LEN("If-Modified-Since"));
+    assert(b && buffer_eq_slen(b,
+                               CONST_STR_LEN("Sun, 01 Jan 2036 00:00:02 GMT")));
+
+    run_http_request_parse(r, __LINE__, 400,
+      "reject duplicated If-Modified-Since if not matching",
+      CONST_STR_LEN("GET / HTTP/1.1\r\n"
+                    "Host: zzz.example.org\r\n"
+                    "If-Modified-Since: Sun, 01 Jan 2036 00:00:02 GMT\r\n"
+                    "If-Modified-Since: Sun, 01 Jan 2036 00:00:03 GMT\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"));
+
+    run_http_request_parse(r, __LINE__, 0,
+      "large headers", /*(copied from tests/request.t)*/
+      CONST_STR_LEN("GET / HTTP/1.0\r\n"
+                    "Hsgfsdjf: asdfhdf\r\n"
+                    "hdhd: shdfhfdasd\r\n"
+                    "hfhr: jfghsdfg\r\n"
+                    "jfuuehdmn: sfdgjfdg\r\n"
+                    "jvcbzufdg: sgfdfg\r\n"
+                    "hrnvcnd: jfjdfg\r\n"
+                    "jfusfdngmd: gfjgfdusdfg\r\n"
+                    "nfj: jgfdjdfg\r\n"
+                    "jfue: jfdfdg\r\n"
                     "\r\n"));
 
     /* (quick check that none of above tests were left in a state

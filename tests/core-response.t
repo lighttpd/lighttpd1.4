@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 14;
+use Test::More tests => 13;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -26,13 +26,6 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, '+Date' => '' } ];
 ok($tf->handle_http($t) == 0, 'Date header');
-
-$t->{REQUEST}  = ( <<EOF
-GET / HTTP/1.1
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400, 'Connection' => 'close' } ];
-ok($tf->handle_http($t) == 0, 'Host missing');
 
 $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0

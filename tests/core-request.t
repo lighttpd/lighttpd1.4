@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 12;
+use Test::More tests => 11;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -42,13 +42,6 @@ ok($tf->handle_http($t) == 0, 'OPTIONS');
 
 
 ## Low-Level Request-Header Parsing - URI
-
-$t->{REQUEST}  = ( <<EOF
-GET /index%2ehtml HTTP/1.0
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-ok($tf->handle_http($t) == 0, 'URL-encoding');
 
 $t->{REQUEST}  = ( <<EOF
 GET /index.html%00 HTTP/1.0

@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 54;
+use Test::More tests => 52;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -394,23 +394,6 @@ ok($tf->handle_http($t) == 0, 'GET, Range start out of range');
 
 
 $t->{REQUEST}  = ( <<EOF
-GET / HTTP/1.0
-Hsgfsdjf: asdfhdf
-hdhd: shdfhfdasd
-hfhr: jfghsdfg
-jfuuehdmn: sfdgjfdg
-jvcbzufdg: sgfdfg
-hrnvcnd: jfjdfg
-jfusfdngmd: gfjgfdusdfg
-nfj: jgfdjdfg
-jfue: jfdfdg
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-ok($tf->handle_http($t) == 0, 'larger headers');
-
-
-$t->{REQUEST}  = ( <<EOF
 GET /range.pdf HTTP/1.1
 Host: 123.example.org
 Range: bytes=0-
@@ -461,15 +444,6 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'OPTIONS for RTSP');
 
 my $nextyr = (gmtime(time()))[5] + 1900 + 1;
-
-$t->{REQUEST}  = ( <<EOF
-GET /index.html HTTP/1.0
-If-Modified-Since: Sun, 01 Jan $nextyr 00:00:02 GMT
-If-Modified-Since: Sun, 01 Jan $nextyr 00:00:02 GMT
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304 } ];
-ok($tf->handle_http($t) == 0, 'Duplicate If-Mod-Since, with equal timestamps');
 
 $t->{REQUEST}  = ( "GET / HTTP/1.0\r\nIf-Modified-Since: \r\n\r\n" );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
