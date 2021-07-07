@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 13;
+use Test::More tests => 11;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -26,21 +26,6 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, '+Date' => '' } ];
 ok($tf->handle_http($t) == 0, 'Date header');
-
-$t->{REQUEST}  = ( <<EOF
-GET / HTTP/1.0
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+ETag' => '' } ];
-ok($tf->handle_http($t) == 0, 'ETag is set');
-
-$t->{REQUEST}  = ( <<EOF
-GET / HTTP/1.0
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'ETag' => '/^".+"$/' } ];
-ok($tf->handle_http($t) == 0, 'ETag has quotes');
-
 
 
 ## Low-Level Response-Header Parsing - Content-Length

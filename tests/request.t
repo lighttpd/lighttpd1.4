@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 52;
+use Test::More tests => 44;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -17,13 +17,6 @@ my $t;
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
 ## Basic Request-Handling
-
-$t->{REQUEST}  = ( <<EOF
-GET /foobar HTTP/1.0
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404 } ];
-ok($tf->handle_http($t) == 0, 'file not found');
 
 $t->{REQUEST}  = ( <<EOF
 GET /foobar?foobar HTTP/1.0
@@ -47,14 +40,6 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '12345'."\n", 'Content-Type' => 'text/html' } ];
 ok($tf->handle_http($t) == 0, 'GET, content == 12345, mimetype text/html');
-
-$t->{REQUEST}  = ( <<EOF
-GET /dummyfile.bla HTTP/1.0
-Host: 123.example.org
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '12345'."\n", 'Content-Type' => 'application/octet-stream' } ];
-ok($tf->handle_http($t) == 0, 'GET, content == 12345, mimetype application/octet-stream');
 
 
 $t->{REQUEST}  = ( <<EOF
@@ -445,19 +430,6 @@ ok($tf->handle_http($t) == 0, 'OPTIONS for RTSP');
 
 my $nextyr = (gmtime(time()))[5] + 1900 + 1;
 
-$t->{REQUEST}  = ( "GET / HTTP/1.0\r\nIf-Modified-Since: \r\n\r\n" );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-ok($tf->handle_http($t) == 0, 'empty If-Modified-Since');
-
-$t->{REQUEST}  = ( "GET / HTTP/1.0\r\nIf-Modified-Since: foobar\r\n\r\n" );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-ok($tf->handle_http($t) == 0, 'broken If-Modified-Since');
-
-$t->{REQUEST}  = ( "GET / HTTP/1.0\r\nIf-Modified-Since: this string is too long to be a valid timestamp\r\n\r\n" );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
-ok($tf->handle_http($t) == 0, 'broken If-Modified-Since');
-
-
 $t->{REQUEST}  = ( <<EOF
 GET /index.html HTTP/1.0
 If-Modified-Since2: Sun, 01 Jan $nextyr 00:00:03 GMT
@@ -472,15 +444,7 @@ GET /index.html HTTP/1.0
 If-Modified-Since: Sun, 01 Jan $nextyr 00:00:02 GMT
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304, 'Content-Type' => 'text/html' } ];
-ok($tf->handle_http($t) == 0, 'If-Modified-Since');
-
-$t->{REQUEST}  = ( <<EOF
-GET /index.html HTTP/1.0
-If-Modified-Since: Sun, 01 Jan $nextyr 00:00:02 GMT
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304, '-Content-Length' => '' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 304, '-Content-Length' => '', 'Content-Type' => 'text/html' } ];
 ok($tf->handle_http($t) == 0, 'Status 304 has no Content-Length (#1002)');
 
 $t->{REQUEST}  = ( <<EOF
@@ -492,22 +456,6 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-
 $t->{SLOWREQUEST} = 1;
 ok($tf->handle_http($t) == 0, 'GET, slow \\r\\n\\r\\n (#2105)');
 undef $t->{SLOWREQUEST};
-
-print "\nPathinfo for static files\n";
-$t->{REQUEST}  = ( <<EOF
-GET /image.jpg/index.php HTTP/1.0
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Type' => 'image/jpeg' } ];
-ok($tf->handle_http($t) == 0, 'static file accepting pathinfo by default');
-
-$t->{REQUEST}  = ( <<EOF
-GET /image.jpg/index.php HTTP/1.0
-Host: zzz.example.org
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 403 } ];
-ok($tf->handle_http($t) == 0, 'static file with forbidden pathinfo');
 
 $t->{REQUEST}  = ( <<EOF
 GET /www/abc/def HTTP/1.0

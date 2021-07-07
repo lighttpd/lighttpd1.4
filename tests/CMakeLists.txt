@@ -3,7 +3,6 @@ add_executable(scgi-responder scgi-responder.c)
 
 set(T_FILES
 	prepare.sh
-	cachable.t
 	core-404-handler.t
 	core-condition.t
 	core-keepalive.t

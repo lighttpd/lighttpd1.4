@@ -107,25 +107,19 @@ mod_staticfile_not_handled(request_st * const r, const char * const msg)
     return HANDLER_GO_ON;
 }
 
-URIHANDLER_FUNC(mod_staticfile_subrequest) {
-    if (NULL != r->handler_module) return HANDLER_GO_ON;
-    if (!http_method_get_head_post(r->http_method)) return HANDLER_GO_ON;
-    /* r->physical.path is non-empty for handle_subrequest_start */
-    /*if (buffer_is_blank(&r->physical.path)) return HANDLER_GO_ON;*/
-
-    plugin_data * const p = p_d;
-    mod_staticfile_patch_config(r, p);
-
-    if (p->conf.disable_pathinfo && !buffer_is_blank(&r->pathinfo)) {
+static handler_t
+mod_staticfile_process (request_st * const r, plugin_config * const pconf)
+{
+    if (pconf->disable_pathinfo && !buffer_is_blank(&r->pathinfo)) {
         return mod_staticfile_not_handled(r, "pathinfo");
     }
 
-    if (p->conf.exclude_ext
-        && array_match_value_suffix(p->conf.exclude_ext, &r->physical.path)) {
+    if (pconf->exclude_ext
+        && array_match_value_suffix(pconf->exclude_ext, &r->physical.path)) {
         return mod_staticfile_not_handled(r, "extension");
     }
 
-    if (!p->conf.etags_used) r->conf.etag_flags = 0;
+    if (!pconf->etags_used) r->conf.etag_flags = 0;
 
     /* r->tmp_sce is set in http_response_physical_path_check() and is valid
      * in handle_subrequest_start callback -- handle_subrequest_start callbacks
@@ -136,6 +130,18 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
     http_response_send_file(r, &r->physical.path, r->tmp_sce);
 
     return HANDLER_FINISHED;
+}
+
+URIHANDLER_FUNC(mod_staticfile_subrequest) {
+    if (NULL != r->handler_module) return HANDLER_GO_ON;
+    if (!http_method_get_head_post(r->http_method)) return HANDLER_GO_ON;
+    /* r->physical.path is non-empty for handle_subrequest_start */
+    /*if (buffer_is_blank(&r->physical.path)) return HANDLER_GO_ON;*/
+
+    plugin_data * const p = p_d;
+    mod_staticfile_patch_config(r, p);
+
+    return mod_staticfile_process(r, &p->conf);
 }
 
 

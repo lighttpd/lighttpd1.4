@@ -895,7 +895,11 @@ test('test_configfile', executable('test_configfile',
 		'sock_addr.c',
 		'ck.c',
 	],
-	dependencies: common_flags + libpcre + libunwind,
+	dependencies: [ common_flags
+		, libpcre
+		, libunwind
+		, libws2_32
+	],
 	build_by_default: false,
 ))
 
@@ -949,6 +953,38 @@ test('test_mod_simple_vhost', executable('test_mod_simple_vhost',
 	build_by_default: false,
 ))
 
+test('test_mod_staticfile', executable('test_mod_staticfile',
+	sources: [
+		't/test_mod_staticfile.c',
+		'request.c',
+		'base64.c',
+		'buffer.c',
+		'burl.c',
+		'array.c',
+		'chunk.c',
+		'fdevent.c',
+		'http-header-glue.c',
+		'http_cgi.c',
+		'http_chunk.c',
+		'http_date.c',
+		'http_etag.c',
+		'http_header.c',
+		'http_kv.c',
+		'log.c',
+		'sock_addr.c',
+		'stat_cache.c',
+		'algo_splaytree.c',
+		'ck.c'
+	],
+	dependencies: [ common_flags
+		, libfam
+		, libpcre
+		, libunwind
+		, libws2_32
+	],
+	build_by_default: false,
+))
+
 test('test_mod_userdir', executable('test_mod_userdir',
 	sources: [
 		't/test_mod_userdir.c',
@@ -974,7 +1010,11 @@ test('test_request', executable('test_request',
 		'sock_addr.c',
 		'ck.c',
 	],
-	dependencies: common_flags + libunwind,
+	dependencies: [ common_flags
+		, libpcre
+		, libunwind
+		, libws2_32
+	],
 	build_by_default: false,
 ))
 

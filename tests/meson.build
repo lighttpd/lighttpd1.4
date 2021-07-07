@@ -13,7 +13,6 @@ env.set('srcdir', meson.current_source_dir())
 env.set('top_builddir', meson.build_root())
 
 tests = [
-	'cachable.t',
 	'core-404-handler.t',
 	'core-condition.t',
 	'core-keepalive.t',

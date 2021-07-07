@@ -927,6 +927,30 @@ add_executable(test_mod_simple_vhost
 )
 add_test(NAME test_mod_simple_vhost COMMAND test_mod_simple_vhost)
 
+add_executable(test_mod_staticfile
+	t/test_mod_staticfile.c
+	request.c
+	base64.c
+	buffer.c
+	burl.c
+	array.c
+	chunk.c
+	fdevent.c
+	http-header-glue.c
+	http_cgi.c
+	http_chunk.c
+	http_date.c
+	http_etag.c
+	http_header.c
+	http_kv.c
+	log.c
+	sock_addr.c
+	stat_cache.c
+	algo_splaytree.c
+	ck.c
+)
+add_test(NAME test_mod_staticfile COMMAND test_mod_staticfile)
+
 add_executable(test_mod_userdir
 	t/test_mod_userdir.c
 	buffer.c
@@ -1084,6 +1108,7 @@ endif()
 
 if(HAVE_LIBFAM)
 	target_link_libraries(lighttpd fam)
+	target_link_libraries(test_mod_staticfile fam)
 endif()
 
 if(HAVE_GDBM_H)
@@ -1204,6 +1229,8 @@ if(WITH_LIBUNWIND)
 	add_target_properties(test_mod_evhost COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_mod_simple_vhost ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_mod_simple_vhost COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
+	target_link_libraries(test_mod_staticfile ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_mod_staticfile COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_mod_userdir ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_mod_userdir COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_request ${LIBUNWIND_LDFLAGS})

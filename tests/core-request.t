@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 11;
+use Test::More tests => 10;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -74,13 +74,6 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Type' => 'image/jpeg' } ];
 ok($tf->handle_http($t) == 0, 'Content-Type - image/jpeg (upper case)');
-
-$t->{REQUEST}  = ( <<EOF
-GET /a HTTP/1.0
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'Content-Type' => 'application/octet-stream' } ];
-ok($tf->handle_http($t) == 0, 'Content-Type - unknown');
 
 $t->{REQUEST}  = ( <<EOF
 GET /Foo.txt HTTP/1.0

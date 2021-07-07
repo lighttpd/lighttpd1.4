@@ -13,7 +13,6 @@ TESTS=\
 
 CONFS=\
 	404-handler.conf \
-	cachable.t \
 	condition.conf \
 	core-404-handler.t \
 	core-condition.t \
