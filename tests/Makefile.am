@@ -12,35 +12,16 @@ TESTS=\
 	cleanup.sh
 
 CONFS=\
-	404-handler.conf \
 	condition.conf \
-	core-404-handler.t \
 	core-condition.t \
-	core-keepalive.t \
-	core-request.t \
-	core-response.t \
 	core-var-include.t \
 	fastcgi-responder.conf \
 	LightyTest.pm \
-	lowercase.conf \
-	lowercase.t \
-	mod-auth.conf \
-	mod-auth.t \
-	mod-cgi.t \
-	mod-deflate.conf \
-	mod-deflate.t \
-	mod-extforward.conf \
-	mod-extforward.t \
 	mod-fastcgi.t \
-	mod-proxy.t \
-	mod-secdownload.conf \
-	mod-secdownload.t \
-	mod-setenv.t \
-	mod-ssi.t \
+	mod-scgi.t \
 	proxy.conf \
 	request.t \
 	scgi-responder.conf \
-	symlink.t \
 	var-include-sub.conf \
 	var-include.conf
 

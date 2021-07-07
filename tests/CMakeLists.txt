@@ -3,24 +3,11 @@ add_executable(scgi-responder scgi-responder.c)
 
 set(T_FILES
 	prepare.sh
-	core-404-handler.t
-	core-condition.t
-	core-keepalive.t
-	core-request.t
-	core-response.t
-	core-var-include.t
-	lowercase.t
-	mod-auth.t
-	mod-cgi.t
-	mod-deflate.t
-	mod-extforward.t
-	mod-fastcgi.t
-	mod-proxy.t
-	mod-secdownload.t
-	mod-setenv.t
-	mod-ssi.t
 	request.t
-	symlink.t
+	core-condition.t
+	core-var-include.t
+	mod-fastcgi.t
+	mod-scgi.t
 	cleanup.sh
 )
 
