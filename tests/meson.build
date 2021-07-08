@@ -15,7 +15,6 @@ env.set('top_builddir', meson.build_root())
 tests = [
 	'request.t',
 	'core-condition.t',
-	'core-var-include.t',
 	'mod-fastcgi.t',
 	'mod-scgi.t',
 ]

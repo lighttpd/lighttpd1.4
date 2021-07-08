@@ -14,7 +14,6 @@ TESTS=\
 CONFS=\
 	condition.conf \
 	core-condition.t \
-	core-var-include.t \
 	fastcgi-responder.conf \
 	LightyTest.pm \
 	mod-fastcgi.t \
@@ -22,8 +21,7 @@ CONFS=\
 	proxy.conf \
 	request.t \
 	scgi-responder.conf \
-	var-include-sub.conf \
-	var-include.conf
+	var-include-sub.conf
 
 TESTS_ENVIRONMENT=$(srcdir)/wrapper.sh $(srcdir) $(top_builddir)
 

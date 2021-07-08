@@ -8,11 +8,13 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 10;
+use Test::More tests => 25;
 use LightyTest;
 
 my $tf = LightyTest->new();
 my $t;
+
+$ENV{"env_test"} = "good_env";
 
 $tf->{CONFIGFILE} = 'condition.conf';
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
@@ -69,7 +71,7 @@ $t->{REQUEST}  = ( <<EOF
 GET / HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Server' => 'Apache 1.3.29' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Server' => 'lighttpd-1.4.x' } ];
 ok($tf->handle_http($t) == 0, 'condition: handle if before else branches');
 
 $t->{REQUEST}  = ( <<EOF
@@ -78,5 +80,46 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Server' => 'special tag' } ];
 ok($tf->handle_http($t) == 0, 'condition: handle if before else branches #2');
+
+
+## config includes
+
+$t->{REQUEST}  = ( "GET /index.html HTTP/1.0\r\nHost: www.example.org\r\n" );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_1" } ];
+ok($tf->handle_http($t) == 0, 'basic test');
+
+my $myvar = "good";
+my $server_name = "test.example.org";
+my $mystr = "string";
+$mystr .= "_append";
+my $tests = {
+    "include"        => "/good_include",
+      "concat"         => "/good_" . "concat",
+      "servername1"    => "/good_" . $server_name,
+      "servername2"    => $server_name . "/good_",
+      "servername3"    => "/good_" . $server_name . "/",
+      "var.myvar"      => "/good_var_myvar" . $myvar,
+      "myvar"          => "/good_myvar" . $myvar,
+      "env"            => "/" . $ENV{"env_test"},
+
+    "number1"        => "/good_number" . "1",
+      "number2"        => "1" . "/good_number",
+      "array_append"   => "/good_array_append",
+      "string_append"  => "/good_" . $mystr,
+      "number_append"  => "/good_" . "2",
+
+    "include_shell"  => "/good_include_shell_" . "456"
+};
+
+foreach my $test (keys %{ $tests }) {
+	my $expect = $tests->{$test};
+	$t->{REQUEST}  = ( <<EOF
+GET /$test HTTP/1.0
+Host: $server_name
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => $expect } ];
+	ok($tf->handle_http($t) == 0, $test);
+}
 
 ok($tf->stop_proc == 0, "Stopping lighttpd");

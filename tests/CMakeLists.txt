@@ -5,7 +5,6 @@ set(T_FILES
 	prepare.sh
 	request.t
 	core-condition.t
-	core-var-include.t
 	mod-fastcgi.t
 	mod-scgi.t
 	cleanup.sh
