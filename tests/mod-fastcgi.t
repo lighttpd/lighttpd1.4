@@ -198,8 +198,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'killing fastcgi and wait for restart');
 
 	# (might take lighttpd 1 sec to detect backend exit)
-	select(undef, undef, undef, .5);
-	for (my $c = 2*20; $c && 0 == $tf->listening_on($ephemeral_port); --$c) {
+	for (my $c = 2*30; $c && 0 == $tf->listening_on($ephemeral_port); --$c) {
 		select(undef, undef, undef, 0.05);
 	}
 	$t->{REQUEST}  = ( <<EOF
