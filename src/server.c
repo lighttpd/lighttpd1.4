@@ -703,7 +703,13 @@ static void show_features (void) {
 #endif
       ;
   show_version();
-  printf("%s%s%s\n", fdevent_show_event_handlers(), network_write_show_handlers(), features);
+  printf("%s%s%s%s\n",
+         fdevent_show_event_handlers(),
+         network_write_show_handlers(),
+         features,
+         sizeof(time_t) > 4 || (sizeof(time_t) == 4 && (time_t)-1 > (time_t)1)
+           ? "\t+ Y2038 support\n"
+           : "\t- Y2038 support (unsafe 32-bit signed time_t)\n");
 }
 
 __attribute_cold__
