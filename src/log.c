@@ -24,6 +24,8 @@
 unix_time64_t log_epoch_secs = 0;
 unix_time64_t log_monotonic_secs = 0;
 
+#if !defined(HAVE_CLOCK_GETTIME) || !HAS_TIME_BITS64
+
 int log_clock_gettime (const int clockid, unix_timespec64_t * const ts) {
   #ifdef HAVE_CLOCK_GETTIME
    #if HAS_TIME_BITS64
@@ -62,6 +64,9 @@ int log_clock_gettime_realtime (unix_timespec64_t *ts) {
     return log_clock_gettime(0, ts);
   #endif
 }
+
+#endif /* !defined(HAVE_CLOCK_GETTIME) || !HAS_TIME_BITS64 */
+
 
 /* retry write on EINTR or when not all data was written */
 ssize_t write_all(int fd, const void * const buf, size_t count) {
