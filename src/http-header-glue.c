@@ -739,11 +739,6 @@ static int http_response_process_headers(request_st * const restrict r, http_res
         const char *k = s+hoff[i], *value;
         char *end = s+hoff[i+1]-1; /*('\n')*/
 
-        /* strip the \r?\n */
-        if (end > k && end[-1] == '\r') --end;
-        end[0] = '\0'; /* for http_header_str_to_code(), strstr() */
-        /*(XXX: not done; could remove trailing whitespace)*/
-
         /* parse the headers */
         if (NULL == (value = memchr(k, ':', end - k))) {
             /* we expect: "<key>: <value>\r\n" */
@@ -752,11 +747,16 @@ static int http_response_process_headers(request_st * const restrict r, http_res
 
         const uint32_t klen = (uint32_t)(value - k);
         if (0 == klen) continue; /*(already ignored when writing response)*/
-        do { ++value; } while (*value == ' ' || *value == '\t'); /* skip LWS */
         const enum http_header_e id = http_header_hkey_get(k, klen);
+
+        do { ++value; } while (*value == ' ' || *value == '\t'); /* skip LWS */
+        /* strip the \r?\n */
+        if (end > value && end[-1] == '\r') --end;
+        /*(XXX: not done; could remove trailing whitespace)*/
 
         if (opts->authorizer && (0 == r->http_status || 200 == r->http_status)){
             if (id == HTTP_HEADER_STATUS) {
+                end[0] = '\0';
                 int status = http_header_str_to_code(value);
                 if (status >= 100 && status < 1000) {
                     r->http_status = status;
@@ -777,6 +777,7 @@ static int http_response_process_headers(request_st * const restrict r, http_res
         switch (id) {
           case HTTP_HEADER_STATUS:
             if (opts->backend != BACKEND_PROXY) {
+                end[0] = '\0';
                 int status = http_header_str_to_code(value);
                 if (status >= 100 && status < 1000) {
                     r->http_status = status;
@@ -798,10 +799,10 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             break;
           case HTTP_HEADER_CONNECTION:
             if (opts->backend == BACKEND_PROXY) continue;
-            /*(should parse for tokens and do case-insensitive match for "close"
-             * but this is an imperfect though simplistic attempt to honor
-             * backend request to close)*/
-            if (NULL != strstr(value, "lose")) r->keep_alive = 0;
+            /*(simplistic attempt to honor backend request to close)*/
+            if (http_header_str_contains_token(value, end - value,
+                                               CONST_STR_LEN("close")))
+                r->keep_alive = 0;
             if (r->http_version >= HTTP_VERSION_2) continue;
             break;
           case HTTP_HEADER_CONTENT_LENGTH:
@@ -859,7 +860,8 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             break;
         }
 
-        http_header_response_insert(r, id, k, klen, value, end - value);
+        if (end - value)
+            http_header_response_insert(r, id, k, klen, value, end - value);
     }
 
     /* CGI/1.1 rev 03 - 7.2.1.2 */
