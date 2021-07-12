@@ -246,7 +246,7 @@ static void gw_proc_connect_success(gw_host *host, gw_proc *proc, int debug, req
 
 __attribute_cold__
 static void gw_proc_connect_error(request_st * const r, gw_host *host, gw_proc *proc, pid_t pid, int errnum, int debug) {
-    const time_t cur_ts = log_monotonic_secs;
+    const unix_time64_t cur_ts = log_monotonic_secs;
     log_error_st * const errh = r->conf.errh;
     log_perror(errh, __FILE__, __LINE__, /*(caller should set errno = errnum)*/
       "establishing connection failed: socket: %s", proc->connection_name->ptr);
@@ -2581,7 +2581,7 @@ static void gw_handle_trigger_host(gw_host * const host, log_error_st * const er
     /* check each child proc to detect if proc exited */
 
     gw_proc *proc;
-    time_t idle_timestamp;
+    unix_time64_t idle_timestamp;
     int overload = 1;
 
     for (proc = host->first; proc; proc = proc->next) {
@@ -2729,7 +2729,7 @@ handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
          *  or global scope (for convenience))
          * (unable to use p->defaults.debug since gw_plugin_config
          *  might be part of a larger plugin_config) */
-        const time_t cur_ts = log_monotonic_secs;
+        const unix_time64_t cur_ts = log_monotonic_secs;
         gw_exts *exts = conf->exts;
         for (uint32_t j = 0; j < exts->used; ++j) {
             gw_extension *ex = exts->exts+j;

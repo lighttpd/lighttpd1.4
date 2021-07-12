@@ -12,7 +12,7 @@ void connections_free(server *srv);
 __attribute_cold__
 void connection_graceful_shutdown_maint (server *srv);
 
-void connection_periodic_maint (server *srv, time_t cur_ts);
+void connection_periodic_maint (server *srv, unix_time64_t cur_ts);
 
 int connection_send_1xx (request_st *r, connection *con);
 

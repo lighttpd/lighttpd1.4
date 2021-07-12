@@ -2005,7 +2005,7 @@ h2_send_headers (request_st * const r, connection * const con)
     if (!light_btst(r->resp_htags, HTTP_HEADER_DATE)) {
         /* HTTP/1.1 and later requires a Date: header */
         /* "date: " 6-chars + 30-chars for "%a, %d %b %Y %T GMT" + '\0' */
-        static time_t tlast = 0;
+        static unix_time64_t tlast = 0;
         static char tstr[36] = "date: ";
 
         memset(&lsx, 0, sizeof(lsxpack_header_t));
@@ -2017,7 +2017,7 @@ h2_send_headers (request_st * const r, connection * const con)
         lsx.hpack_index = LSHPACK_HDR_DATE;
 
         /* cache the generated timestamp */
-        const time_t cur_ts = log_epoch_secs;
+        const unix_time64_t cur_ts = log_epoch_secs;
         if (__builtin_expect ( (tlast != cur_ts), 0))
             http_date_time_to_str(tstr+6, sizeof(tstr)-6, (tlast = cur_ts));
 

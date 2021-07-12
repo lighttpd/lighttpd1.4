@@ -75,7 +75,7 @@ struct h2con {
     uint32_t h2_cid;
     uint32_t h2_sid;
      int32_t sent_goaway;
-      time_t sent_settings;
+    unix_time64_t sent_settings;
     uint32_t s_header_table_size;      /* SETTINGS_HEADER_TABLE_SIZE      */
     uint32_t s_enable_push;            /* SETTINGS_ENABLE_PUSH            */
     uint32_t s_max_concurrent_streams; /* SETTINGS_MAX_CONCURRENT_STREAMS */
@@ -84,7 +84,7 @@ struct h2con {
     uint32_t s_max_header_list_size;   /* SETTINGS_MAX_HEADER_LIST_SIZE   */
     struct lshpack_dec decoder;
     struct lshpack_enc encoder;
-      time_t half_closed_ts;
+    unix_time64_t half_closed_ts;
 };
 
 void h2_send_goaway (connection *con, request_h2error_t e);

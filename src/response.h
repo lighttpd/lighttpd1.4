@@ -45,8 +45,8 @@ handler_t http_response_reqbody_read_error(request_st *r, int http_status);
 
 int http_response_buffer_append_authority(request_st *r, buffer *o);
 int http_response_redirect_to_directory(request_st *r, int status);
-const buffer * http_response_set_last_modified(request_st *r, time_t lmtime);
-int http_response_handle_cachable(request_st *r, const buffer *lmod, time_t lmtime);
+const buffer * http_response_set_last_modified(request_st *r, unix_time64_t lmtime);
+int http_response_handle_cachable(request_st *r, const buffer *lmod, unix_time64_t lmtime);
 void http_response_body_clear(request_st *r, int preserve_length);
 void http_response_reset(request_st *r);
 void http_response_send_file (request_st *r, buffer *path, struct stat_cache_entry *sce);

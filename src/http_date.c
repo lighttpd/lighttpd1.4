@@ -47,14 +47,14 @@ http_date_parse_RFC_850 (const char *s, struct tm * const tm)
      *   than 50 years in the future as representing the most recent year in
      *   the past that had the same last two digits.
      */
-    static time_t tm_year_last_check;
+    static unix_time64_t tm_year_last_check;
     static int tm_year_cur;
     static int tm_year_base;
     /* (log_epoch_secs is a global variable, maintained elsewhere) */
     /* (optimization: check for year change no more than once per min) */
     if (log_epoch_secs >= tm_year_last_check + 60) {
         struct tm tm_cur;
-        if (NULL != gmtime_r(&log_epoch_secs, &tm_cur)) {
+        if (NULL != gmtime64_r(&log_epoch_secs, &tm_cur)) {
             tm_year_last_check = log_epoch_secs;
             if (tm_cur.tm_year != tm_year_cur) {
                 tm_year_cur = tm_cur.tm_year;
@@ -265,12 +265,12 @@ http_date_str_to_tm (const char * const s, const uint32_t len,
 
 
 uint32_t
-http_date_time_to_str (char * const s, const size_t sz, const time_t t)
+http_date_time_to_str (char * const s, const size_t sz, const unix_time64_t t)
 {
     /*('max' is expected to be >= 30 (IMF-fixdate is 29 chars + '\0'))*/
     struct tm tm;
     const char fmt[] = "%a, %d %b %Y %T GMT";       /*IMF-fixdate fmt*/
-    return (__builtin_expect( (NULL != gmtime_r(&t, &tm)), 1))
+    return (__builtin_expect( (NULL != gmtime64_r(&t, &tm)), 1))
       ? (uint32_t)strftime(s, sz, fmt, &tm)
       : 0;
 }
@@ -278,13 +278,17 @@ http_date_time_to_str (char * const s, const size_t sz, const time_t t)
 
 int
 http_date_if_modified_since (const char * const ifmod, const uint32_t ifmodlen,
-                             const time_t lmtime)
+                             const unix_time64_t lmtime)
 {
     struct tm ifmodtm;
     if (NULL == http_date_str_to_tm(ifmod, ifmodlen, &ifmodtm))
         return 1; /* date parse error */
     const time_t ifmtime = timegm(&ifmodtm);
+  #if HAS_TIME_BITS64
     return (lmtime > ifmtime);
+  #else
+    return (TIME64_CAST(lmtime) > TIME64_CAST(ifmtime) || ifmtime==(time_t)-1);
+  #endif
     /* returns 0 if not modified since,
      * returns 1 if modified since or date parse error */
 }

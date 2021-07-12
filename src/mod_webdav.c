@@ -3135,7 +3135,7 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
          *  i.e. wherever the status is 201 Created)
          */
         struct tm tm;
-        if (__builtin_expect( (NULL != gmtime_r(&pb->st.st_ctime, &tm)), 1)) {
+        if (__builtin_expect( (NULL != gmtime64_r(&pb->st.st_ctime, &tm)), 1)) {
             buffer_append_string_len(b, CONST_STR_LEN(
               "<D:creationdate ns0:dt=\"dateTime.tz\">"));
             buffer_append_strftime(b, "%FT%TZ", &tm));

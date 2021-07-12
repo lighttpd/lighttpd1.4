@@ -172,7 +172,7 @@ typedef struct {
     mod_wstunnel_frame_t frame;
 
     int hybivers;
-    time_t ping_ts;
+    unix_time64_t ping_ts;
     int subproto;
 
     log_error_st *errh; /*(for mod_wstunnel module-specific DEBUG_*() macros)*/
@@ -588,7 +588,7 @@ static handler_t mod_wstunnel_check_extension(request_st * const r, void *p_d) {
 
 TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
     const plugin_data * const p = p_d;
-    const time_t cur_ts = log_monotonic_secs + 1;
+    const unix_time64_t cur_ts = log_monotonic_secs + 1;
 
     gw_handle_trigger(srv, p_d);
 
@@ -615,7 +615,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
 
         if (0 != hctx->hybivers
             && hctx->conf.ping_interval > 0
-            && (time_t)hctx->conf.ping_interval + hctx->ping_ts < cur_ts) {
+            && (int32_t)hctx->conf.ping_interval + hctx->ping_ts < cur_ts) {
             hctx->ping_ts = cur_ts;
             mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_PING, CONST_STR_LEN("ping"));
             joblist_append(con);

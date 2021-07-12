@@ -828,7 +828,7 @@ typedef struct fdevent_cmd_pipe {
     pid_t pid;
     int fds[2];
     const char *cmd;
-    time_t start;
+    unix_time64_t start;
 } fdevent_cmd_pipe;
 
 typedef struct fdevent_cmd_pipes {
@@ -868,7 +868,7 @@ static pid_t fdevent_open_logger_pipe_spawn(const char *logger, int rfd) {
 }
 
 
-static void fdevent_restart_logger_pipe(fdevent_cmd_pipe *fcp, time_t ts) {
+static void fdevent_restart_logger_pipe(fdevent_cmd_pipe *fcp, unix_time64_t ts) {
     if (fcp->pid > 0) return;  /* assert */
     if (fcp->start + 5 < ts) { /* limit restart to once every 5 sec */
         /* restart child process using existing pipe fds */
@@ -878,7 +878,7 @@ static void fdevent_restart_logger_pipe(fdevent_cmd_pipe *fcp, time_t ts) {
 }
 
 
-void fdevent_restart_logger_pipes(time_t ts) {
+void fdevent_restart_logger_pipes(unix_time64_t ts) {
     for (uint32_t i = 0; i < cmd_pipes.used; ++i) {
         fdevent_cmd_pipe * const fcp = cmd_pipes.ptr+i;
         if (fcp->pid > 0) continue;
@@ -887,7 +887,7 @@ void fdevent_restart_logger_pipes(time_t ts) {
 }
 
 
-int fdevent_waitpid_logger_pipe_pid(pid_t pid, time_t ts) {
+int fdevent_waitpid_logger_pipe_pid(pid_t pid, unix_time64_t ts) {
     for (uint32_t i = 0; i < cmd_pipes.used; ++i) {
         fdevent_cmd_pipe * const fcp = cmd_pipes.ptr+i;
         if (pid != fcp->pid) continue;
@@ -911,7 +911,7 @@ int fdevent_reaped_logger_pipe(pid_t pid) {
     for (uint32_t i = 0; i < cmd_pipes.used; ++i) {
         fdevent_cmd_pipe *fcp = cmd_pipes.ptr+i;
         if (fcp->pid == pid) {
-            time_t ts = log_monotonic_secs;
+            unix_time64_t ts = log_monotonic_secs;
             if (fcp->start + 5 < ts) { /* limit restart to once every 5 sec */
                 fcp->start = ts;
                 fcp->pid = fdevent_open_logger_pipe_spawn(fcp->cmd,fcp->fds[0]);

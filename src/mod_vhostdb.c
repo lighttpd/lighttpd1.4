@@ -44,7 +44,7 @@ typedef struct {
     char *document_root;
     uint32_t slen;
     uint32_t dlen;
-    time_t ctime;
+    unix_time64_t ctime;
 } vhostdb_cache_entry;
 
 static vhostdb_cache_entry *
@@ -323,7 +323,7 @@ REQUEST_FUNC(mod_vhostdb_handle_docroot) {
 
 /* walk though cache, collect expired ids, and remove them in a second loop */
 static void
-mod_vhostdb_tag_old_entries (splay_tree * const t, int * const keys, int * const ndx, const time_t max_age, const time_t cur_ts)
+mod_vhostdb_tag_old_entries (splay_tree * const t, int * const keys, int * const ndx, const time_t max_age, const unix_time64_t cur_ts)
 {
     if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
     if (t->left)
@@ -339,7 +339,7 @@ mod_vhostdb_tag_old_entries (splay_tree * const t, int * const keys, int * const
 
 __attribute_noinline__
 static void
-mod_vhostdb_periodic_cleanup(splay_tree **sptree_ptr, const time_t max_age, const time_t cur_ts)
+mod_vhostdb_periodic_cleanup(splay_tree **sptree_ptr, const time_t max_age, const unix_time64_t cur_ts)
 {
     splay_tree *sptree = *sptree_ptr;
     int max_ndx, i;
@@ -363,7 +363,7 @@ mod_vhostdb_periodic_cleanup(splay_tree **sptree_ptr, const time_t max_age, cons
 TRIGGER_FUNC(mod_vhostdb_periodic)
 {
     const plugin_data * const p = p_d;
-    const time_t cur_ts = log_monotonic_secs;
+    const unix_time64_t cur_ts = log_monotonic_secs;
     if (cur_ts & 0x7) return HANDLER_GO_ON; /*(continue once each 8 sec)*/
     UNUSED(srv);
 

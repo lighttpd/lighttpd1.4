@@ -68,8 +68,8 @@ typedef struct {
     gnutls_datum_t *ssl_pemfile_x509;
     gnutls_privkey_t ssl_pemfile_pkey;
     const buffer *ssl_stapling_file;
-    time_t ssl_stapling_loadts;
-    time_t ssl_stapling_nextts;
+    unix_time64_t ssl_stapling_loadts;
+    unix_time64_t ssl_stapling_nextts;
 } plugin_cert;
 
 typedef struct {
@@ -273,15 +273,15 @@ mod_gnutls_datum_wipe (gnutls_datum_t * const d)
  * to store keys that are not yet active
  * (mirror from mod_openssl, even though not all bits are used here) */
 typedef struct tlsext_ticket_key_st {
-    time_t active_ts; /* tickets not issued w/ key until activation timestamp */
-    time_t expire_ts; /* key not valid after expiration timestamp */
+    unix_time64_t active_ts; /* tickets not issued w/ key until activation ts*/
+    unix_time64_t expire_ts; /* key not valid after expiration timestamp */
     unsigned char tick_key_name[TLSEXT_KEYNAME_LENGTH];
     unsigned char tick_hmac_key[TLSEXT_TICK_KEY_LENGTH];
     unsigned char tick_aes_key[TLSEXT_TICK_KEY_LENGTH];
 } tlsext_ticket_key_t;
 
 static tlsext_ticket_key_t session_ticket_keys[1]; /* temp store until active */
-static time_t stek_rotate_ts;
+static unix_time64_t stek_rotate_ts;
 
 static gnutls_datum_t session_ticket_key;
 
@@ -348,8 +348,8 @@ mod_gnutls_session_ticket_key_file (const char *fn)
     if (0 != fdevent_load_file_bytes((char *)buf,(off_t)sizeof(buf),0,fn,NULL))
         return rc;
     if (buf[0] == 0) { /*(format version 0)*/
-        session_ticket_keys[0].active_ts = buf[1];
-        session_ticket_keys[0].expire_ts = buf[2];
+        session_ticket_keys[0].active_ts = TIME64_CAST(buf[1]);
+        session_ticket_keys[0].expire_ts = TIME64_CAST(buf[2]);
       #ifndef __COVERITY__
         memcpy(&session_ticket_keys[0].tick_key_name, buf+3, 80);
       #else
@@ -369,16 +369,17 @@ mod_gnutls_session_ticket_key_file (const char *fn)
 
 
 static void
-mod_gnutls_session_ticket_key_check (server *srv, const plugin_data *p, const time_t cur_ts)
+mod_gnutls_session_ticket_key_check (server *srv, const plugin_data *p, const unix_time64_t cur_ts)
 {
-    static time_t detect_retrograde_ts;
+    static unix_time64_t detect_retrograde_ts;
     if (detect_retrograde_ts > cur_ts && detect_retrograde_ts - cur_ts > 28800)
         stek_rotate_ts = 0;
     detect_retrograde_ts = cur_ts;
 
     if (p->ssl_stek_file) {
         struct stat st;
-        if (0 == stat(p->ssl_stek_file, &st) && st.st_mtime > stek_rotate_ts
+        if (0 == stat(p->ssl_stek_file, &st)
+            && TIME64_CAST(st.st_mtime) > stek_rotate_ts
             && mod_gnutls_session_ticket_key_file(p->ssl_stek_file)) {
             stek_rotate_ts = cur_ts;
         }
@@ -923,7 +924,7 @@ mod_gnutls_expire_stapling_file (server *srv, plugin_cert *pc)
 
 
 static int
-mod_gnutls_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
+mod_gnutls_reload_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t cur_ts)
 {
   #if GNUTLS_VERSION_NUMBER < 0x030603
     /* load file into gnutls_ocsp_resp_t before loading into
@@ -970,7 +971,7 @@ mod_gnutls_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_
 
     pc->ssl_stapling_loadts = cur_ts;
     pc->ssl_stapling_nextts = nextupd;
-    if (pc->ssl_stapling_nextts == (time_t)-1) {
+    if (pc->ssl_stapling_nextts == -1) {
         /* "Next Update" might not be provided by OCSP responder
          * Use 3600 sec (1 hour) in that case. */
         /* retry in 1 hour if unable to determine Next Update */
@@ -985,13 +986,13 @@ mod_gnutls_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_
 
 
 static int
-mod_gnutls_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
+mod_gnutls_refresh_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t cur_ts)
 {
     if (pc->ssl_stapling_nextts > cur_ts + 256)
         return 0; /* skip check for refresh unless close to expire */
     struct stat st;
     if (0 != stat(pc->ssl_stapling_file->ptr, &st)
-        || st.st_mtime <= pc->ssl_stapling_loadts) {
+        || TIME64_CAST(st.st_mtime) <= pc->ssl_stapling_loadts) {
         if (pc->ssl_stapling_nextts < cur_ts)
             mod_gnutls_expire_stapling_file(srv, pc);
         return 0;
@@ -1001,7 +1002,7 @@ mod_gnutls_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cur
 
 
 static void
-mod_gnutls_refresh_stapling_files (server *srv, const plugin_data *p, const time_t cur_ts)
+mod_gnutls_refresh_stapling_files (server *srv, const plugin_data *p, const unix_time64_t cur_ts)
 {
     /* future: might construct array of (plugin_cert *) at startup
      *         to avoid the need to search for them here */
@@ -2979,7 +2980,7 @@ REQUEST_FUNC(mod_gnutls_handle_request_reset)
 
 TRIGGER_FUNC(mod_gnutls_handle_trigger) {
     const plugin_data * const p = p_d;
-    const time_t cur_ts = log_epoch_secs;
+    const unix_time64_t cur_ts = log_epoch_secs;
     if (cur_ts & 0x3f) return HANDLER_GO_ON; /*(continue once each 64 sec)*/
 
     mod_gnutls_session_ticket_key_check(srv, p, cur_ts);

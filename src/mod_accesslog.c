@@ -137,7 +137,7 @@ typedef struct {
 } format_field;
 
 typedef struct {
-    time_t last_generated_accesslog_ts;
+    unix_time64_t last_generated_accesslog_ts;
     buffer ts_accesslog_str;
   #if defined(__STDC_VERSION__) && __STDC_VERSION__-0 >= 199901L /* C99 */
     format_field ptr[];  /* C99 VLA */
@@ -793,7 +793,7 @@ SIGHUP_FUNC(log_access_cycle) {
 static int log_access_record (const request_st * const r, buffer * const b, format_fields * const parsed_format) {
 	const connection * const con = r->con;
 	const buffer *vb;
-	struct timespec ts = { 0, 0 };
+	unix_timespec64_t ts = { 0, 0 };
 	int flush = 0;
 
 	for (const format_field *f = parsed_format->ptr; f->type != FIELD_UNSET; ++f) {
@@ -807,17 +807,17 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 
 				if (f->opt & ~(FORMAT_FLAG_TIME_BEGIN|FORMAT_FLAG_TIME_END)) {
 					if (f->opt & FORMAT_FLAG_TIME_SEC) {
-						time_t t = (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) ? log_epoch_secs : r->start_hp.tv_sec;
+						unix_time64_t t = (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) ? log_epoch_secs : r->start_hp.tv_sec;
 						buffer_append_int(b, (intmax_t)t);
 					} else if (f->opt & (FORMAT_FLAG_TIME_MSEC|FORMAT_FLAG_TIME_USEC|FORMAT_FLAG_TIME_NSEC)) {
-						off_t t; /*(expected to be 64-bit since large file support enabled)*/
+						unix_time64_t t;
 						long ns;
 						if (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) {
 							if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
-							t = (off_t)ts.tv_sec;
+							t = ts.tv_sec;
 							ns = ts.tv_nsec;
 						} else {
-							t = (off_t)r->start_hp.tv_sec;
+							t = r->start_hp.tv_sec;
 							ns = r->start_hp.tv_nsec;
 						}
 						if (f->opt & FORMAT_FLAG_TIME_MSEC) {
@@ -858,11 +858,11 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				} else {
 					buffer * const ts_accesslog_str = &parsed_format->ts_accesslog_str;
 					/* cache the generated timestamp (only if ! FORMAT_FLAG_TIME_BEGIN) */
-					time_t t;
+					unix_time64_t t;
 					struct tm tm;
 
 					if (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) {
-						const time_t cur_ts = log_epoch_secs;
+						const unix_time64_t cur_ts = log_epoch_secs;
 						if (parsed_format->last_generated_accesslog_ts == cur_ts) {
 							buffer_append_string_buffer(b, ts_accesslog_str);
 							break;
@@ -880,11 +880,11 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				      #if defined(HAVE_STRUCT_TM_GMTOFF)
 					buffer_append_strftime(ts_accesslog_str,
 					                       fmt ? fmt : "[%d/%b/%Y:%T %z]",
-					                       localtime_r(&t, &tm));
+					                       localtime64_r(&t, &tm));
 				      #else /* HAVE_STRUCT_TM_GMTOFF */
 					buffer_append_strftime(ts_accesslog_str,
 					                       fmt ? fmt : "[%d/%b/%Y:%T +0000]",
-					                       gmtime_r(&t, &tm));
+					                       gmtime64_r(&t, &tm));
 				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 					buffer_append_string_buffer(b, ts_accesslog_str);
 				}
@@ -894,7 +894,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				if (f->opt & FORMAT_FLAG_TIME_SEC) {
 					buffer_append_int(b, log_epoch_secs - r->start_hp.tv_sec);
 				} else {
-					const struct timespec * const bs = &r->start_hp;
+					const unix_timespec64_t * const bs = &r->start_hp;
 					off_t tdiff; /*(expected to be 64-bit since large file support enabled)*/
 					if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
 					tdiff = (off_t)(ts.tv_sec - bs->tv_sec)*1000000000 + (ts.tv_nsec - bs->tv_nsec);

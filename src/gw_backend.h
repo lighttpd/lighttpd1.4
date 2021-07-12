@@ -26,7 +26,7 @@ typedef struct gw_proc {
         PROC_STATE_KILLED      /* killed (signal sent to proc) */
     } state;
     uint32_t load; /* number of requests waiting on this process */
-    time_t last_used; /* see idle_timeout */
+    unix_time64_t last_used; /* see idle_timeout */
     int *stats_load;
     int *stats_connected;
     pid_t pid;   /* PID of the spawned process (0 if not spawned locally) */
@@ -35,7 +35,7 @@ typedef struct gw_proc {
     socklen_t saddrlen;
     struct sockaddr *saddr;
 
-    time_t disabled_until; /* proc disabled until given time */
+    unix_time64_t disabled_until; /* proc disabled until given time */
     struct gw_proc *prev; /* see first */
 
     /* either tcp:<host>:<port> or unix:<socket> for debugging purposes */
@@ -301,7 +301,7 @@ typedef struct gw_handler_ctx {
     unsigned short gw_mode; /* mode: GW_AUTHORIZER or GW_RESPONDER */
 
     gw_connection_state_t state;
-    time_t   state_timestamp;
+    /*unix_time64_t state_timestamp;*//*(unused)*/
 
     chunkqueue *rb; /* read queue */
     off_t     wb_reqlen;

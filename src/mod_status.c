@@ -232,7 +232,7 @@ static void mod_status_get_multiplier(buffer *b, double avg, int size) {
     buffer_append_string_len(b, unit, 2);
 }
 
-static void mod_status_html_rtable_r (buffer * const b, const request_st * const r, const connection * const con, const time_t cur_ts) {
+static void mod_status_html_rtable_r (buffer * const b, const request_st * const r, const connection * const con, const unix_time64_t cur_ts) {
     buffer_append_str3(b, CONST_STR_LEN("<tr><td class=\"string\">"),
                           BUF_PTR_LEN(&con->dst_addr_buf),
                           CONST_STR_LEN("</td><td class=\"int\">"));
@@ -292,7 +292,7 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
     buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
 }
 
-static void mod_status_html_rtable (request_st * const rq, const server * const srv, const time_t cur_ts) {
+static void mod_status_html_rtable (request_st * const rq, const server * const srv, const unix_time64_t cur_ts) {
     /* connection table and URLs might be large, so double-buffer to aggregate
      * before sending to chunkqueue, which might be temporary file
      * (avoid write() per connection) */
@@ -328,8 +328,8 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	buffer_string_prepare_append(b, 8192-1);/*(status page base HTML is ~5.2k)*/
 	double avg;
 	uint32_t j;
-	time_t ts;
-	const time_t cur_ts = log_epoch_secs;
+	unix_time64_t ts;
+	const unix_time64_t cur_ts = log_epoch_secs;
 
 	int days, hours, mins, seconds;
 
@@ -498,7 +498,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	ts = srv->startup_ts;
 
 	struct tm tm;
-	buffer_append_strftime(b, "%F %T", localtime_r(&ts, &tm));
+	buffer_append_strftime(b, "%F %T", localtime64_r(&ts, &tm));
 	buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"
 	                                          "<tr><th colspan=\"2\">absolute (since start)</th></tr>\n"
 	                                          "<tr><td>Requests</td><td class=\"string\">"));

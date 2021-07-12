@@ -124,8 +124,8 @@ typedef struct {
     SECKEYPrivateKey *ssl_pemfile_pkey;
     SSLExtraServerCertData ssl_credex;
     const buffer *ssl_stapling_file;
-    time_t ssl_stapling_loadts;
-    time_t ssl_stapling_nextts;
+    unix_time64_t ssl_stapling_loadts;
+    unix_time64_t ssl_stapling_nextts;
     SECItemArray OCSPResponses;
     SECItem OCSPResponse;
 } plugin_cert;
@@ -1035,7 +1035,7 @@ mod_nss_expire_stapling_file (server *srv, plugin_cert *pc)
 
 
 static int
-mod_nss_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
+mod_nss_reload_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t cur_ts)
 {
     SECItem f;
     int rc = mod_nss_load_file(pc->ssl_stapling_file->ptr, &f, srv->errh);
@@ -1068,11 +1068,11 @@ mod_nss_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
      * XXX: *not* implementing our own ASN.1 DER decoder for OCSP response
      * ssl.stapling-file will be reloaded hourly
      */
-    time_t nextupd = (time_t)-1;
+    unix_time64_t nextupd = -1;
 
     pc->ssl_stapling_loadts = cur_ts;
     pc->ssl_stapling_nextts = nextupd;
-    if (pc->ssl_stapling_nextts == (time_t)-1) {
+    if (pc->ssl_stapling_nextts == -1) {
         /* "Next Update" might not be provided by OCSP responder
          * Use 3600 sec (1 hour) in that case. */
         /* retry in 1 hour if unable to determine Next Update */
@@ -1087,13 +1087,13 @@ mod_nss_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
 
 
 static int
-mod_nss_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
+mod_nss_refresh_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t cur_ts)
 {
     if (pc->ssl_stapling_nextts > cur_ts + 256)
         return 0; /* skip check for refresh unless close to expire */
     struct stat st;
     if (0 != stat(pc->ssl_stapling_file->ptr, &st)
-        || st.st_mtime <= pc->ssl_stapling_loadts) {
+        || TIME64_CAST(st.st_mtime) <= pc->ssl_stapling_loadts) {
         if (pc->ssl_stapling_nextts < cur_ts)
             mod_nss_expire_stapling_file(srv, pc);
         return 0;
@@ -1103,7 +1103,7 @@ mod_nss_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts
 
 
 static void
-mod_nss_refresh_stapling_files (server *srv, const plugin_data *p, const time_t cur_ts)
+mod_nss_refresh_stapling_files (server *srv, const plugin_data *p, const unix_time64_t cur_ts)
 {
     /* future: might construct array of (plugin_cert *) at startup
      *         to avoid the need to search for them here */
@@ -2734,7 +2734,7 @@ REQUEST_FUNC(mod_nss_handle_request_reset)
 
 TRIGGER_FUNC(mod_nss_handle_trigger) {
     const plugin_data * const p = p_d;
-    const time_t cur_ts = log_epoch_secs;
+    const unix_time64_t cur_ts = log_epoch_secs;
     if (cur_ts & 0x3f) return HANDLER_GO_ON; /*(continue once each 64 sec)*/
 
     mod_nss_refresh_stapling_files(srv, p, cur_ts);

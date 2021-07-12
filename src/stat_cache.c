@@ -215,7 +215,7 @@ typedef struct fam_dir_entry {
 	buffer name;
 	int refcnt;
 	FAMRequest req;
-	time_t stat_ts;
+	unix_time64_t stat_ts;
 	dev_t st_dev;
 	ino_t st_ino;
 	struct fam_dir_entry *fam_parent;
@@ -679,7 +679,7 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
         /* directory already registered */
     }
 
-    const time_t cur_ts = log_monotonic_secs;
+    const unix_time64_t cur_ts = log_monotonic_secs;
     struct stat lst;
     int ck_dir = fn_is_dir;
     if (!fn_is_dir && (NULL==fam_dir || cur_ts - fam_dir->stat_ts >= 16)) {
@@ -1268,7 +1268,7 @@ stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
 	 * check if the directory for this file has changed
 	 */
 
-	const time_t cur_ts = log_monotonic_secs;
+	const unix_time64_t cur_ts = log_monotonic_secs;
 
 	const int file_ndx = splaytree_djbhash(name->ptr, len);
 	splay_tree *sptree = sc.files = splaytree_splay(sc.files, file_ndx);
@@ -1469,7 +1469,7 @@ int stat_cache_open_rdonly_fstat (const buffer *name, struct stat *st, int symli
  * and remove them in a second loop
  */
 
-static void stat_cache_tag_old_entries(splay_tree * const t, int * const keys, int * const ndx, const time_t max_age, const time_t cur_ts) {
+static void stat_cache_tag_old_entries(splay_tree * const t, int * const keys, int * const ndx, const time_t max_age, const unix_time64_t cur_ts) {
     if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
     if (t->left)
         stat_cache_tag_old_entries(t->left, keys, ndx, max_age, cur_ts);
@@ -1482,7 +1482,7 @@ static void stat_cache_tag_old_entries(splay_tree * const t, int * const keys, i
         keys[(*ndx)++] = t->key;
 }
 
-static void stat_cache_periodic_cleanup(const time_t max_age, const time_t cur_ts) {
+static void stat_cache_periodic_cleanup(const time_t max_age, const unix_time64_t cur_ts) {
     splay_tree *sptree = sc.files;
     int max_ndx, i;
     int keys[8192]; /* 32k size on stack */

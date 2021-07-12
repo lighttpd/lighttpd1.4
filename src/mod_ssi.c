@@ -58,7 +58,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 }
 
 /* The newest modified time of included files for include statement */
-static volatile time_t include_file_last_mtime = 0;
+static volatile unix_time64_t include_file_last_mtime = 0;
 
 INIT_FUNC(mod_ssi_init) {
 	plugin_data *p;
@@ -207,13 +207,14 @@ static int build_ssi_cgi_vars(request_st * const r, handler_ctx * const p) {
 	return 0;
 }
 
-static void mod_ssi_timefmt (buffer * const b, buffer *timefmtb, time_t t, int localtm) {
+static void mod_ssi_timefmt (buffer * const b, buffer *timefmtb, unix_time64_t t, int localtm) {
     struct tm tm;
     const char * const timefmt = buffer_is_blank(timefmtb)
       ? "%a, %d %b %Y %T %Z"
       : timefmtb->ptr;
-    buffer_append_strftime(b, timefmt,
-                           localtm ? localtime_r(&t, &tm) : gmtime_r(&t, &tm));
+    buffer_append_strftime(b, timefmt, localtm
+                                       ? localtime64_r(&t, &tm)
+                                       : gmtime64_r(&t, &tm));
     if (buffer_is_blank(b))
         buffer_copy_string_len(b, CONST_STR_LEN("(none)"));
 }
@@ -604,8 +605,6 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 
 		int fd = stat_cache_open_rdonly_fstat(p->stat_fn, &stb, r->conf.follow_symlink);
 		if (fd >= 0) {
-			time_t t = stb.st_mtime;
-
 			switch (ssicmd) {
 			case SSI_FSIZE:
 				buffer_clear(tb);
@@ -626,13 +625,13 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 				break;
 			case SSI_FLASTMOD:
 				buffer_clear(tb);
-				mod_ssi_timefmt(tb, p->timefmt, t, 1);
+				mod_ssi_timefmt(tb, p->timefmt, stb.st_mtime, 1);
 				chunkqueue_append_mem(cq, BUF_PTR_LEN(tb));
 				break;
 			case SSI_INCLUDE:
 				/* Keep the newest mtime of included files */
-				if (stb.st_mtime > include_file_last_mtime)
-					include_file_last_mtime = stb.st_mtime;
+				if (include_file_last_mtime < TIME64_CAST(stb.st_mtime))
+					include_file_last_mtime = TIME64_CAST(stb.st_mtime);
 
 				if (file_path || 0 == p->conf.ssi_recursion_max) {
 					/* don't process if #include file="..." is used */
@@ -1235,7 +1234,7 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 		/* Generate "ETag" & "Last-Modified" headers */
 
 		/* use most recently modified include file for ETag and Last-Modified */
-		if (st.st_mtime < include_file_last_mtime)
+		if (TIME64_CAST(st.st_mtime) < include_file_last_mtime)
 			st.st_mtime = include_file_last_mtime;
 
 		http_etag_create(&r->physical.etag, &st, r->conf.etag_flags);

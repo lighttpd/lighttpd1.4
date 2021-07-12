@@ -141,11 +141,11 @@ http_response_write_header (request_st * const r)
 	if (!light_btst(r->resp_htags, HTTP_HEADER_DATE)) {
 		/* HTTP/1.1 and later requires a Date: header */
 		/* "\r\nDate: " 8-chars + 30-chars "%a, %d %b %Y %T GMT" + '\0' */
-		static time_t tlast = 0;
+		static unix_time64_t tlast = 0;
 		static char tstr[40] = "\r\nDate: ";
 
 		/* cache the generated timestamp */
-		const time_t cur_ts = log_epoch_secs;
+		const unix_time64_t cur_ts = log_epoch_secs;
 		if (__builtin_expect ( (tlast != cur_ts), 0))
 			http_date_time_to_str(tstr+8, sizeof(tstr)-8, (tlast = cur_ts));
 

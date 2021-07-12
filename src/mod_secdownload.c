@@ -23,7 +23,7 @@
  *   uri-prefix := '/' any*         # whatever was configured: must start with a '/')
  *   mac := [a-zA-Z0-9_-]{mac_len}  # mac length depends on selected algorithm
  *   protected-path := '/' <timestamp> <rel-path>
- *   timestamp := [a-f0-9]{8}       # timestamp when the checksum was calculated
+ *   timestamp := [a-f0-9]{1,16}    # timestamp when the checksum was calculated
  *                                  # to prevent access after timeout (active requests
  *                                  # will finish successfully even after the timeout)
  *   rel-path := '/' any*           # the protected path; changing the path breaks the
@@ -41,7 +41,7 @@
     use Digest::MD5 qw(md5_hex);
     my $secret = "verysecret";
     my $rel_path = "/index.html"
-    my $xtime = sprintf("%08x", time);
+    my $xtime = sprintf("%x", time);
     my $url = '/'. md5_hex($secret . $rel_path . $xtime) . '/' . $xtime . $rel_path;
  *
  * # hmac-sha1
@@ -52,7 +52,7 @@
     use MIME::Base64 qw(encode_base64url);
     my $secret = "verysecret";
     my $rel_path = "/index.html"
-    my $protected_path = '/' . sprintf("%08x", time) . $rel_path;
+    my $protected_path = '/' . sprintf("%x", time) . $rel_path;
     my $url = '/'. encode_base64url(hmac_sha1($protected_path, $secret)) . $protected_path;
  *
  * # hmac-sha256
@@ -62,7 +62,7 @@
     use MIME::Base64 qw(encode_base64url);
     my $secret = "verysecret";
     my $rel_path = "/index.html"
-    my $protected_path = '/' . sprintf("%08x", time) . $rel_path;
+    my $protected_path = '/' . sprintf("%x", time) . $rel_path;
     my $url = '/'. encode_base64url(hmac_sha256($protected_path, $secret)) . $protected_path;
  *
  */
@@ -144,18 +144,19 @@ static int secdl_verify_mac(plugin_config *config, const char* protected_path, c
 
 			/* legacy message:
 			 *   protected_path := '/' <timestamp-hex> <rel-path>
-			 *   timestamp-hex := [0-9a-f]{8}
+			 *   timestamp-hex := [0-9a-f]{1,16}
 			 *   rel-path := '/' any*
 			 *   (the protected path was already verified)
 			 * message = <secret><rel-path><timestamp-hex>
 			 */
 			ts_str = protected_path + 1;
-			rel_uri = ts_str + 8;
+			rel_uri = ts_str;
+			do { ++rel_uri; } while (*rel_uri != '/');
 
 			struct const_iovec iov[] = {
 			  { BUF_PTR_LEN(config->secret) }
 			 ,{ rel_uri, strlen(rel_uri) }
-			 ,{ ts_str, 8 }
+			 ,{ ts_str, (size_t)(rel_uri - ts_str) }
 			};
 			MD5_iov(HA1, iov, sizeof(iov)/sizeof(*iov));
 
@@ -353,27 +354,6 @@ SETDEFAULTS_FUNC(mod_secdownload_set_defaults) {
 }
 
 /**
- * checks if the supplied string is a hex string
- *
- * @param str a possible hex string
- * @return if the supplied string is a valid hex string 1 is returned otherwise 0
- */
-
-static int is_hex_len(const char *str, size_t len) {
-	size_t i;
-
-	if (NULL == str) return 0;
-
-	for (i = 0; i < len && *str; i++, str++) {
-		/* illegal characters */
-		if (!light_isxdigit(*str))
-			return 0;
-	}
-
-	return i == len;
-}
-
-/**
  * checks if the supplied string is a base64 (modified URL) string
  *
  * @param str a possible base64 (modified URL) string
@@ -397,7 +377,6 @@ static int is_base64_len(const char *str, size_t len) {
 URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	plugin_data *p = p_d;
 	const char *rel_uri, *ts_str, *mac_str, *protected_path;
-	time_t ts = 0;
 	size_t i, mac_len;
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
@@ -443,25 +422,21 @@ URIHANDLER_FUNC(mod_secdownload_uri_handler) {
 	if (*protected_path != '/') return HANDLER_GO_ON;
 
 	ts_str = protected_path + 1;
-	if (!is_hex_len(ts_str, 8)) return HANDLER_GO_ON;
-	if (*(ts_str + 8) != '/') return HANDLER_GO_ON;
-
-	for (i = 0; i < 8; i++) {
-		ts = (time_t)((uint32_t)ts << 4) | hex2int(ts_str[i]);
+	uint64_t ts = 0;
+	for (i = 0; i < 16 && light_isxdigit(ts_str[i]); ++i) {
+		ts = (ts << 4) | hex2int(ts_str[i]);
 	}
-
-	const time_t cur_ts = log_epoch_secs;
+	rel_uri = ts_str + i;
+	if (i == 0 || *rel_uri != '/') return HANDLER_GO_ON;
 
 	/* timed-out */
-	if ( (cur_ts > ts && (unsigned int) (cur_ts - ts) > p->conf.timeout) ||
-	     (cur_ts < ts && (unsigned int) (ts - cur_ts) > p->conf.timeout) ) {
+	const uint64_t cur_ts = (uint64_t)log_epoch_secs;
+	if ((cur_ts > ts ? cur_ts - ts : ts - cur_ts) > p->conf.timeout) {
 		/* "Gone" as the url will never be valid again instead of "408 - Timeout" where the request may be repeated */
 		r->http_status = 410;
 
 		return HANDLER_FINISHED;
 	}
-
-	rel_uri = ts_str + 8;
 
 	buffer * const tb = r->tmp_buf;
 

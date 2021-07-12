@@ -134,7 +134,7 @@ int http_response_redirect_to_directory(request_st * const r, int status) {
 
 #define MTIME_CACHE_MAX 16
 struct mtime_cache_type {
-    time_t mtime;  /* key */
+    unix_time64_t mtime;  /* key */
     buffer str;    /* buffer for string representation */
 };
 static struct mtime_cache_type mtime_cache[MTIME_CACHE_MAX];
@@ -143,14 +143,17 @@ static char mtime_cache_str[MTIME_CACHE_MAX][HTTP_DATE_SZ];
 
 void strftime_cache_reset(void) {
     for (int i = 0; i < MTIME_CACHE_MAX; ++i) {
-        mtime_cache[i].mtime = (time_t)-1;
+        mtime_cache[i].mtime = -1;
         mtime_cache[i].str.ptr = mtime_cache_str[i];
         mtime_cache[i].str.used = sizeof(mtime_cache_str[0]);
         mtime_cache[i].str.size = sizeof(mtime_cache_str[0]);
     }
 }
 
-static const buffer * strftime_cache_get(const time_t last_mod) {
+static const buffer * strftime_cache_get(const unix_time64_t last_mod) {
+    /*(note: not bothering to convert *here* if last_mod < 0 (for cache key);
+     * last_mod < 0 handled in http_date_time_to_str() call to gmtime64_r())*/
+
     static int mtime_cache_idx;
 
     for (int j = 0; j < MTIME_CACHE_MAX; ++j) {
@@ -168,7 +171,7 @@ static const buffer * strftime_cache_get(const time_t last_mod) {
 }
 
 
-const buffer * http_response_set_last_modified(request_st * const r, const time_t lmtime) {
+const buffer * http_response_set_last_modified(request_st * const r, const unix_time64_t lmtime) {
     buffer * const vb =
       http_header_response_set_ptr(r, HTTP_HEADER_LAST_MODIFIED,
                                    CONST_STR_LEN("Last-Modified"));
@@ -177,7 +180,7 @@ const buffer * http_response_set_last_modified(request_st * const r, const time_
 }
 
 
-int http_response_handle_cachable(request_st * const r, const buffer * const lmod, const time_t lmtime) {
+int http_response_handle_cachable(request_st * const r, const buffer * const lmod, const unix_time64_t lmtime) {
 	if (!(r->rqst_htags
 	      & (light_bshift(HTTP_HEADER_IF_NONE_MATCH)
 	        |light_bshift(HTTP_HEADER_IF_MODIFIED_SINCE)))) {

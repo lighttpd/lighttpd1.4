@@ -53,11 +53,11 @@ struct connection {
 	const struct server_socket *srv_socket;   /* reference to the server-socket */
 
 	/* timestamps */
-	time_t read_idle_ts;
-	time_t close_timeout_ts;
-	time_t write_request_ts;
+	unix_time64_t read_idle_ts;
+	unix_time64_t close_timeout_ts;
+	unix_time64_t write_request_ts;
+	unix_time64_t connection_start;
 
-	time_t connection_start;
 	uint32_t request_count;      /* number of requests handled in this connection */
 	int keep_alive_idle;         /* remember max_keep_alive_idle from config */
 };
@@ -172,7 +172,7 @@ struct server {
 
 	log_error_st *errh;
 
-	time_t loadts;
+	unix_time64_t loadts;
 	double loadavg[3];
 
 	/* members used at start-up or rarely used */
@@ -184,8 +184,8 @@ struct server {
 	server_socket_array srv_sockets_inherited;
 	buffer_plugin plugins;
 
-	time_t startup_ts;
-	time_t graceful_expire_ts;
+	unix_time64_t startup_ts;
+	unix_time64_t graceful_expire_ts;
 
 	uid_t uid;
 	gid_t gid;

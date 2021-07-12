@@ -102,8 +102,8 @@ typedef struct {
 
 typedef struct {
 	uint32_t namelen;
-	time_t  mtime;
-	off_t   size;
+	unix_time64_t mtime;
+	off_t    size;
 } dirls_entry_t;
 
 typedef struct {
@@ -1125,7 +1125,7 @@ static void http_list_directory(request_st * const r, handler_ctx * const hctx) 
 		buffer_append_string_len(out, CONST_STR_LEN("/\">"));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_MINIMAL_XML);
 		buffer_append_string_len(out, CONST_STR_LEN("</a>/</td><td class=\"m\">"));
-		buffer_append_strftime(out, "%Y-%b-%d %T", localtime_r(&tmp->mtime, &tm));
+		buffer_append_strftime(out, "%Y-%b-%d %T", localtime64_r(&tmp->mtime, &tm));
 		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n"));
 
 		if (buffer_string_space(out) < 256) {
@@ -1166,7 +1166,7 @@ static void http_list_directory(request_st * const r, handler_ctx * const hctx) 
 		buffer_append_string_len(out, CONST_STR_LEN("\">"));
 		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_MINIMAL_XML);
 		buffer_append_string_len(out, CONST_STR_LEN("</a></td><td class=\"m\">"));
-		buffer_append_strftime(out, "%Y-%b-%d %T", localtime_r(&tmp->mtime, &tm));
+		buffer_append_strftime(out, "%Y-%b-%d %T", localtime64_r(&tmp->mtime, &tm));
 		size_t buflen =
 		  http_list_directory_sizefmt(sizebuf, sizeof(sizebuf), tmp->size);
 		struct const_iovec iov[] = {
@@ -1357,7 +1357,7 @@ static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data *
     stat_cache_entry * const sce = stat_cache_get_entry_open(tb, 1);
     if (NULL == sce || sce->fd == -1)
         return HANDLER_GO_ON;
-    if (sce->st.st_mtime + p->conf.cache->max_age < log_epoch_secs)
+    if (TIME64_CAST(sce->st.st_mtime) + p->conf.cache->max_age < log_epoch_secs)
         return HANDLER_GO_ON;
 
     /* Note: dirlist < 350 or so entries will generally trigger file

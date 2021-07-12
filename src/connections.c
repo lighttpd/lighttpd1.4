@@ -1423,7 +1423,7 @@ connection_state_machine (connection * const con)
 }
 
 
-static void connection_check_timeout (connection * const con, const time_t cur_ts) {
+static void connection_check_timeout (connection * const con, const unix_time64_t cur_ts) {
     const int waitevents = fdevent_fdnode_interest(con->fdn);
     int changed = 0;
     int t_diff;
@@ -1580,7 +1580,7 @@ static void connection_check_timeout (connection * const con, const time_t cur_t
     }
 }
 
-void connection_periodic_maint (server * const srv, const time_t cur_ts) {
+void connection_periodic_maint (server * const srv, const unix_time64_t cur_ts) {
     /* check all connections for timeouts */
     connections * const conns = &srv->conns;
     for (size_t ndx = 0; ndx < conns->used; ++ndx) {

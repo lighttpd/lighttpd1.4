@@ -404,7 +404,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 		log_error(r->conf.errh, __FILE__, __LINE__, "(debug) remote-ip: %s", remote_ip->ptr);
 	}
 
-	const time_t cur_ts = log_epoch_secs;
+	const unix_time64_t cur_ts = log_epoch_secs;
 
 	/* check if URL is a trigger -> insert IP into DB */
 	if (mod_trigger_b4_dl_match(p->conf.trigger_regex, &r->uri.path)) {
@@ -449,7 +449,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 # if defined(HAVE_GDBM_H)
 		if (p->conf.db) {
 			datum key, val;
-			time_t last_hit;
+			unix_time64_t last_hit = 0;
 
 			*(const char **)&key.dptr = remote_ip->ptr;
 			key.dsize = buffer_clen(remote_ip);
@@ -461,7 +461,13 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 				return mod_trigger_b4_dl_deny(r, p);
 			}
 
-			memcpy(&last_hit, val.dptr, sizeof(time_t));
+			if (val.dsize == sizeof(last_hit))
+				memcpy(&last_hit, val.dptr, val.dsize);
+			else if (val.dsize == 4) {
+				int32_t t;
+				memcpy(&t, val.dptr, val.dsize);
+				last_hit = t;
+			}
 
 			free(val.dptr);
 
@@ -519,7 +525,7 @@ URIHANDLER_FUNC(mod_trigger_b4_dl_uri_handler) {
 }
 
 #if defined(HAVE_GDBM_H)
-static void mod_trigger_b4_dl_trigger_gdbm(GDBM_FILE db, const time_t cur_ts, const int trigger_timeout) {
+static void mod_trigger_b4_dl_trigger_gdbm(GDBM_FILE db, const unix_time64_t cur_ts, const int trigger_timeout) {
 		datum key, val, okey;
 		okey.dptr = NULL;
 
@@ -528,7 +534,7 @@ static void mod_trigger_b4_dl_trigger_gdbm(GDBM_FILE db, const time_t cur_ts, co
 		 * we don't care as the next round will remove them. We don't have to perfect here.
 		 */
 		for (key = gdbm_firstkey(db); key.dptr; key = gdbm_nextkey(db, okey)) {
-			time_t last_hit;
+			unix_time64_t last_hit = 0;
 			if (okey.dptr) {
 				free(okey.dptr);
 				okey.dptr = NULL;
@@ -536,7 +542,13 @@ static void mod_trigger_b4_dl_trigger_gdbm(GDBM_FILE db, const time_t cur_ts, co
 
 			val = gdbm_fetch(db, key);
 
-			memcpy(&last_hit, val.dptr, sizeof(time_t));
+			if (val.dsize == sizeof(last_hit))
+				memcpy(&last_hit, val.dptr, val.dsize);
+			else if (val.dsize == 4) {
+				int32_t t;
+				memcpy(&t, val.dptr, val.dsize);
+				last_hit = t;
+			}
 
 			free(val.dptr);
 
@@ -554,7 +566,7 @@ static void mod_trigger_b4_dl_trigger_gdbm(GDBM_FILE db, const time_t cur_ts, co
 
 TRIGGER_FUNC(mod_trigger_b4_dl_handle_trigger) {
     /* check DB each minute */
-    const time_t cur_ts = log_epoch_secs;
+    const unix_time64_t cur_ts = log_epoch_secs;
     if (cur_ts % 60 != 0) return HANDLER_GO_ON;
     UNUSED(srv);
 

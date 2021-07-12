@@ -247,8 +247,8 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
 static handler_t
 mod_expire_set_header (request_st * const r, const time_t * const off)
 {
-    const time_t cur_ts = log_epoch_secs;
-    time_t expires = off[1];
+    const unix_time64_t cur_ts = log_epoch_secs;
+    unix_time64_t expires = off[1];
     if (0 == off[0]) { /* access */
         expires += cur_ts;
     }
@@ -256,7 +256,7 @@ mod_expire_set_header (request_st * const r, const time_t * const off)
         const stat_cache_st * const st = stat_cache_path_stat(&r->physical.path);
         /* can't set modification-based expire if mtime is not available */
         if (NULL == st) return HANDLER_GO_ON;
-        expires += st->st_mtime;
+        expires += TIME64_CAST(st->st_mtime);
     }
 
     /* expires should be at least cur_ts */

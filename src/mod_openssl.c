@@ -102,8 +102,8 @@ typedef struct {
     const buffer *ssl_pemfile;
     const buffer *ssl_privkey;
     const buffer *ssl_stapling_file;
-    time_t ssl_stapling_loadts;
-    time_t ssl_stapling_nextts;
+    unix_time64_t ssl_stapling_loadts;
+    unix_time64_t ssl_stapling_nextts;
     char must_staple;
     char self_issued;
 } plugin_cert;
@@ -215,19 +215,19 @@ handler_ctx_free (handler_ctx *hctx)
 /* openssl has a huge number of interfaces, but not the most useful;
  * construct our own session ticket encryption key structure */
 typedef struct tlsext_ticket_key_st {
-    time_t active_ts; /* tickets not issued w/ key until activation timestamp */
-    time_t expire_ts; /* key not valid after expiration timestamp */
+    unix_time64_t active_ts; /* tickets not issued w/ key until activation ts*/
+    unix_time64_t expire_ts; /* key not valid after expiration timestamp */
     unsigned char tick_key_name[TLSEXT_KEYNAME_LENGTH];
     unsigned char tick_hmac_key[TLSEXT_TICK_KEY_LENGTH];
     unsigned char tick_aes_key[TLSEXT_TICK_KEY_LENGTH];
 } tlsext_ticket_key_t;
 
 static tlsext_ticket_key_t session_ticket_keys[4];
-static time_t stek_rotate_ts;
+static unix_time64_t stek_rotate_ts;
 
 
 static int
-mod_openssl_session_ticket_key_generate (time_t active_ts, time_t expire_ts)
+mod_openssl_session_ticket_key_generate (unix_time64_t active_ts, unix_time64_t expire_ts)
 {
     /* openssl RAND_*bytes() functions are called multiple times since the
      * funcs might have a 32-byte limit on number of bytes returned each call
@@ -275,7 +275,7 @@ mod_openssl_session_ticket_key_rotate (void)
 static tlsext_ticket_key_t *
 tlsext_ticket_key_get (void)
 {
-    const time_t cur_ts = log_epoch_secs;
+    const unix_time64_t cur_ts = log_epoch_secs;
     const int e = sizeof(session_ticket_keys)/sizeof(*session_ticket_keys) - 1;
     for (int i = 0; i < e; ++i) {
         if (session_ticket_keys[i].active_ts > cur_ts) continue;
@@ -290,7 +290,7 @@ static tlsext_ticket_key_t *
 tlsext_ticket_key_find (unsigned char key_name[16], int *refresh)
 {
     *refresh = 0;
-    const time_t cur_ts = log_epoch_secs;
+    const unix_time64_t cur_ts = log_epoch_secs;
     const int e = sizeof(session_ticket_keys)/sizeof(*session_ticket_keys) - 1;
     for (int i = 0; i < e; ++i) {
         if (session_ticket_keys[i].expire_ts < cur_ts) continue;
@@ -304,7 +304,7 @@ tlsext_ticket_key_find (unsigned char key_name[16], int *refresh)
 
 
 static void
-tlsext_ticket_wipe_expired (const time_t cur_ts)
+tlsext_ticket_wipe_expired (const unix_time64_t cur_ts)
 {
     const int e = sizeof(session_ticket_keys)/sizeof(*session_ticket_keys) - 1;
     for (int i = 0; i < e; ++i) {
@@ -422,8 +422,8 @@ mod_openssl_session_ticket_key_file (const char *fn)
     if (0 != fdevent_load_file_bytes((char *)buf,(off_t)sizeof(buf),0,fn,NULL))
         return rc;
     if (buf[0] == 0) { /*(format version 0)*/
-        session_ticket_keys[3].active_ts = buf[1];
-        session_ticket_keys[3].expire_ts = buf[2];
+        session_ticket_keys[3].active_ts = TIME64_CAST(buf[1]);
+        session_ticket_keys[3].expire_ts = TIME64_CAST(buf[2]);
       #ifndef __COVERITY__ /* intentional; hide from Coverity Scan */
         /* intentionally copy 80 bytes into consecutive arrays
          * tick_key_name[], tick_hmac_key[], tick_aes_key[] */
@@ -438,9 +438,9 @@ mod_openssl_session_ticket_key_file (const char *fn)
 
 
 static void
-mod_openssl_session_ticket_key_check (const plugin_data *p, const time_t cur_ts)
+mod_openssl_session_ticket_key_check (const plugin_data *p, const unix_time64_t cur_ts)
 {
-    static time_t detect_retrograde_ts;
+    static unix_time64_t detect_retrograde_ts;
     if (detect_retrograde_ts > cur_ts && detect_retrograde_ts - cur_ts > 28800)
         stek_rotate_ts = 0;
     detect_retrograde_ts = cur_ts;
@@ -448,7 +448,8 @@ mod_openssl_session_ticket_key_check (const plugin_data *p, const time_t cur_ts)
     int rotate = 0;
     if (p->ssl_stek_file) {
         struct stat st;
-        if (0 == stat(p->ssl_stek_file, &st) && st.st_mtime > stek_rotate_ts)
+        if (0 == stat(p->ssl_stek_file, &st)
+            && TIME64_CAST(st.st_mtime) > stek_rotate_ts)
             rotate = mod_openssl_session_ticket_key_file(p->ssl_stek_file);
         tlsext_ticket_wipe_expired(cur_ts);
     }
@@ -1405,7 +1406,7 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
 
 
 #if !defined(BORINGSSL_API_VERSION)
-static time_t
+static unix_time64_t
 mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
 {
   #ifdef LIBRESSL_VERSION_NUMBER
@@ -1416,7 +1417,7 @@ mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
     /*(Note: incorrectly assumes GMT if 'Z' or offset not provided)*/
     /*(Note: incorrectly ignores if local timezone might be in DST)*/
 
-    if (NULL == asn1time || NULL == asn1time->data) return (time_t)-1;
+    if (NULL == asn1time || NULL == asn1time->data) return -1;
     const char *s = (const char *)asn1time->data;
     size_t len = strlen(s);
     struct tm x;
@@ -1425,20 +1426,20 @@ mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
     x.tm_wday = 0;
     switch (asn1time->type) {
       case V_ASN1_UTCTIME:         /* 2-digit year */
-        if (len < 8) return (time_t)-1;
+        if (len < 8) return -1;
         len -= 8;
         x.tm_year = (s[0]-'0')*10 + (s[1]-'0');
         x.tm_year += (x.tm_year < 50 ? 2000 : 1900);
         s += 2;
         break;
       case V_ASN1_GENERALIZEDTIME: /* 4-digit year */
-        if (len < 10) return (time_t)-1;
+        if (len < 10) return -1;
         len -= 10;
         x.tm_year = (s[0]-'0')*1000+(s[1]-'0')*100+(s[2]-'0')*10+(s[3]-'0');
         s += 4;
         break;
       default:
-        return (time_t)-1;
+        return -1;
     }
     x.tm_mon  = (s[0]-'0')*10 + (s[1]-'0');
     x.tm_mday = (s[2]-'0')*10 + (s[3]-'0');
@@ -1468,16 +1469,16 @@ mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
         if (*s == '-') offset = -offset;
     }
     else if (s[0] != '\0' && (s[0] != 'Z' || s[1] != '\0'))
-        return (time_t)-1;
+        return -1;
 
     if (x.tm_year == 9999 && x.tm_mon == 12 && x.tm_mday == 31
         && x.tm_hour == 23 && x.tm_min == 59 && x.tm_sec == 59 && s[0] == 'Z')
-        return (time_t)-1; // 99991231235959Z RFC 5280
+        return -1; // 99991231235959Z RFC 5280
 
     x.tm_year-= 1900;
     x.tm_mon -= 1;
     time_t t = timegm(&x);
-    return (t != (time_t)-1) ? t + offset : t;
+    return (t != -1) ? TIME64_CAST(t) + offset : t;
 
   #else
 
@@ -1485,34 +1486,34 @@ mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
     int day, sec;
     return ASN1_TIME_diff(&day, &sec, NULL, asn1time)
       ? log_epoch_secs + day*86400 + sec
-      : (time_t)-1;
+      : -1;
 
   #endif
 }
 #endif
 
 
-static time_t
+static unix_time64_t
 mod_openssl_ocsp_next_update (plugin_cert *pc)
 {
   #if defined(BORINGSSL_API_VERSION)
     UNUSED(pc);
-    return (time_t)-1; /*(not implemented)*/
+    return -1; /*(not implemented)*/
   #else
     buffer *der = pc->ssl_stapling;
     const unsigned char *p = (unsigned char *)der->ptr; /*(p gets modified)*/
     OCSP_RESPONSE *ocsp = d2i_OCSP_RESPONSE(NULL, &p, buffer_clen(der));
-    if (NULL == ocsp) return (time_t)-1;
+    if (NULL == ocsp) return -1;
     OCSP_BASICRESP *bs = OCSP_response_get1_basic(ocsp);
     if (NULL == bs) {
         OCSP_RESPONSE_free(ocsp);
-        return (time_t)-1;
+        return -1;
     }
 
     /* XXX: should save and evaluate cert status returned by these calls */
     ASN1_TIME *nextupd = NULL;
     OCSP_single_get0_status(OCSP_resp_get0(bs, 0), NULL, NULL, NULL, &nextupd);
-    time_t t = nextupd ? mod_openssl_asn1_time_to_posix(nextupd) : (time_t)-1;
+    unix_time64_t t = nextupd ? mod_openssl_asn1_time_to_posix(nextupd) : -1;
 
     /* Note: trust external process which creates ssl.stapling-file to verify
      *       (as well as to validate certificate status)
@@ -1545,7 +1546,7 @@ mod_openssl_expire_stapling_file (server *srv, plugin_cert *pc)
 
 
 static int
-mod_openssl_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
+mod_openssl_reload_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t cur_ts)
 {
     buffer *b = mod_openssl_load_stapling_file(pc->ssl_stapling_file->ptr,
                                                srv->errh, pc->ssl_stapling);
@@ -1554,7 +1555,7 @@ mod_openssl_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur
     pc->ssl_stapling = b; /*(unchanged unless orig was NULL)*/
     pc->ssl_stapling_loadts = cur_ts;
     pc->ssl_stapling_nextts = mod_openssl_ocsp_next_update(pc);
-    if (pc->ssl_stapling_nextts == (time_t)-1) {
+    if (pc->ssl_stapling_nextts == -1) {
         /* "Next Update" might not be provided by OCSP responder
          * Use 3600 sec (1 hour) in that case. */
         /* retry in 1 hour if unable to determine Next Update */
@@ -1571,13 +1572,13 @@ mod_openssl_reload_stapling_file (server *srv, plugin_cert *pc, const time_t cur
 
 
 static int
-mod_openssl_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cur_ts)
+mod_openssl_refresh_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t cur_ts)
 {
     if (pc->ssl_stapling && pc->ssl_stapling_nextts > cur_ts + 256)
         return 1; /* skip check for refresh unless close to expire */
     struct stat st;
     if (0 != stat(pc->ssl_stapling_file->ptr, &st)
-        || st.st_mtime <= pc->ssl_stapling_loadts) {
+        || TIME64_CAST(st.st_mtime) <= pc->ssl_stapling_loadts) {
         if (pc->ssl_stapling && pc->ssl_stapling_nextts < cur_ts)
             mod_openssl_expire_stapling_file(srv, pc);
         return 1;
@@ -1587,7 +1588,7 @@ mod_openssl_refresh_stapling_file (server *srv, plugin_cert *pc, const time_t cu
 
 
 static void
-mod_openssl_refresh_stapling_files (server *srv, const plugin_data *p, const time_t cur_ts)
+mod_openssl_refresh_stapling_files (server *srv, const plugin_data *p, const unix_time64_t cur_ts)
 {
     /* future: might construct array of (plugin_cert *) at startup
      *         to avoid the need to search for them here */
@@ -3633,7 +3634,7 @@ REQUEST_FUNC(mod_openssl_handle_request_reset)
 
 TRIGGER_FUNC(mod_openssl_handle_trigger) {
     const plugin_data * const p = p_d;
-    const time_t cur_ts = log_epoch_secs;
+    const unix_time64_t cur_ts = log_epoch_secs;
     if (cur_ts & 0x3f) return HANDLER_GO_ON; /*(continue once each 64 sec)*/
     UNUSED(srv);
     UNUSED(p);

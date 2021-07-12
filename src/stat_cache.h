@@ -13,7 +13,7 @@ typedef struct stat stat_cache_st;
 
 typedef struct stat_cache_entry {
     buffer name;
-    time_t stat_ts;
+    unix_time64_t stat_ts;
     int fd;
     int refcnt;
   #if defined(HAVE_FAM_H) || defined(HAVE_SYS_INOTIFY_H) || defined(HAVE_SYS_EVENT_H)

@@ -45,7 +45,7 @@ typedef struct {
 
 typedef struct {
     const struct http_auth_require_t *require;
-    time_t ctime;
+    unix_time64_t ctime;
     int dalgo;
     uint32_t dlen;
     uint32_t ulen;
@@ -144,7 +144,7 @@ http_auth_cache_insert (splay_tree ** const sptree, const int ndx, void * const 
 
 /* walk though cache, collect expired ids, and remove them in a second loop */
 static void
-mod_auth_tag_old_entries (splay_tree * const t, int * const keys, int * const ndx, const time_t max_age, const time_t cur_ts)
+mod_auth_tag_old_entries (splay_tree * const t, int * const keys, int * const ndx, const time_t max_age, const unix_time64_t cur_ts)
 {
     if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
     if (t->left)
@@ -160,7 +160,7 @@ mod_auth_tag_old_entries (splay_tree * const t, int * const keys, int * const nd
 
 __attribute_noinline__
 static void
-mod_auth_periodic_cleanup(splay_tree **sptree_ptr, const time_t max_age, const time_t cur_ts)
+mod_auth_periodic_cleanup(splay_tree **sptree_ptr, const time_t max_age, const unix_time64_t cur_ts)
 {
     splay_tree *sptree = *sptree_ptr;
     int max_ndx, i;
@@ -184,7 +184,7 @@ mod_auth_periodic_cleanup(splay_tree **sptree_ptr, const time_t max_age, const t
 TRIGGER_FUNC(mod_auth_periodic)
 {
     const plugin_data * const p = p_d;
-    const time_t cur_ts = log_monotonic_secs;
+    const unix_time64_t cur_ts = log_monotonic_secs;
     if (cur_ts & 0x7) return HANDLER_GO_ON; /*(continue once each 8 sec)*/
     UNUSED(srv);
 
@@ -867,7 +867,7 @@ enum http_auth_digest_params_e {
 typedef struct http_auth_digest_params_t {
     const char *ptr[http_auth_digest_params_sz];
     uint16_t len[http_auth_digest_params_sz];
-    time_t send_nextnonce_ts;
+    unix_time64_t send_nextnonce_ts;
     unsigned char rdigest[MD_DIGEST_LENGTH_MAX]; /*(last member)*/
 } http_auth_digest_params_t;
 
@@ -964,7 +964,7 @@ mod_auth_digest_mutate (http_auth_info_t * const ai, const http_auth_digest_para
 
 
 static void
-mod_auth_append_nonce (buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int dalgo, int *rndptr)
+mod_auth_append_nonce (buffer *b, unix_time64_t cur_ts, const struct http_auth_require_t *require, int dalgo, int *rndptr)
 {
     buffer_append_uint_hex(b, (uintmax_t)cur_ts);
     buffer_append_string_len(b, CONST_STR_LEN(":"));
@@ -1028,7 +1028,7 @@ mod_auth_append_nonce (buffer *b, time_t cur_ts, const struct http_auth_require_
 
 
 static void
-mod_auth_digest_www_authenticate (buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int nonce_stale)
+mod_auth_digest_www_authenticate (buffer *b, unix_time64_t cur_ts, const struct http_auth_require_t *require, int nonce_stale)
 {
     int algos = nonce_stale ? nonce_stale : require->algorithm;
     int n = 0;
@@ -1093,7 +1093,7 @@ mod_auth_send_401_unauthorized_digest(request_st * const r, const struct http_au
 
 
 static void
-mod_auth_digest_authentication_info (buffer *b, time_t cur_ts, const struct http_auth_require_t *require, int dalgo)
+mod_auth_digest_authentication_info (buffer *b, unix_time64_t cur_ts, const struct http_auth_require_t *require, int dalgo)
 {
     buffer_clear(b);
     buffer_append_string_len(b, CONST_STR_LEN("nextnonce=\""));
@@ -1336,13 +1336,13 @@ mod_auth_digest_validate_nonce (request_st * const r, const struct http_auth_req
      * data value (included for unique nonces) will be exposed in the nonce
      * along with the timestamp, and the additional secret will be used to
      * validate that the server generated the nonce using that secret. */
-    time_t ts = 0;
+    unix_time64_t ts = 0;
     const unsigned char * const nonce = (unsigned char *)dp->ptr[e_nonce];
     int i;
-    for (i = 0; i < 8 && light_isxdigit(nonce[i]); ++i)
-        ts =(time_t)((uint32_t)ts << 4) | hex2int(nonce[i]);
+    for (i = 0; i < 16 && light_isxdigit(nonce[i]); ++i)
+        ts = (unix_time64_t)((uint64_t)ts << 4) | hex2int(nonce[i]);
 
-    const time_t cur_ts = log_epoch_secs;
+    const unix_time64_t cur_ts = log_epoch_secs;
     if (nonce[i] != ':' || ts > cur_ts || cur_ts - ts > 600) { /*(10 mins)*/
         /* nonce is stale; have client regenerate digest */
         return mod_auth_send_401_unauthorized_digest(r, require, ai->dalgo);

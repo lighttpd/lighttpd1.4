@@ -94,7 +94,7 @@ static volatile sig_atomic_t srv_shutdown = 0;
 static volatile sig_atomic_t handle_sig_child = 0;
 static volatile sig_atomic_t handle_sig_alarm = 1;
 static volatile sig_atomic_t handle_sig_hup = 0;
-static time_t idle_limit = 0;
+static int idle_limit = 0;
 
 #if defined(HAVE_SIGACTION) && defined(SA_SIGINFO)
 static volatile siginfo_t last_sigterm_info;
@@ -222,20 +222,20 @@ static int daemonize(void) {
 }
 #endif
 
-static time_t
+static unix_time64_t
 server_monotonic_secs (void)
 {
-    struct timespec ts;
+    unix_timespec64_t ts;
     return (0 == log_clock_gettime_monotonic(&ts))
       ? ts.tv_sec
       : log_monotonic_secs;
 }
 
-static time_t
+static unix_time64_t
 server_epoch_secs (server * const srv)
 {
-    const time_t cur_ts = log_epoch_secs;
-    const time_t new_ts = time(NULL);
+    const unix_time64_t cur_ts = log_epoch_secs;
+    const unix_time64_t new_ts = TIME64_CAST(time(NULL));
     /* attempt to detect large clock jump */
     if (new_ts < cur_ts || new_ts - cur_ts > 300) { /*(5 mins)*/
         log_error(srv->errh, __FILE__, __LINE__,
@@ -271,7 +271,7 @@ static server *server_init(void) {
 
 	li_rand_reseed();
 
-	srv->startup_ts = log_epoch_secs = time(NULL);
+	srv->startup_ts = log_epoch_secs = TIME64_CAST(time(NULL));
 	log_monotonic_secs = server_monotonic_secs();
 
 	srv->errh = log_error_st_init();
@@ -1109,7 +1109,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 				  "Invalid idle timeout value: %s", optarg);
 				return -1;
 			}
-			idle_limit = (time_t)timeout;
+			idle_limit = (int)timeout;
 			break;
 		}
 		case 'p': print_config = 1; break;
@@ -1829,7 +1829,7 @@ static void server_handle_sighup (server * const srv) {
 }
 
 __attribute_noinline__
-static void server_handle_sigalrm (server * const srv, time_t mono_ts, time_t last_active_ts) {
+static void server_handle_sigalrm (server * const srv, unix_time64_t mono_ts, unix_time64_t last_active_ts) {
 
 				plugins_call_handle_trigger(srv);
 
@@ -1908,7 +1908,7 @@ static void server_run_con_queue (connections * const restrict joblist) {
 __attribute_hot__
 __attribute_noinline__
 static void server_main_loop (server * const srv) {
-	time_t last_active_ts = server_monotonic_secs();
+	unix_time64_t last_active_ts = server_monotonic_secs();
 	log_epoch_secs = server_epoch_secs(srv);
 
 	while (!srv_shutdown) {
@@ -1923,7 +1923,7 @@ static void server_main_loop (server * const srv) {
 		if (handle_sig_alarm) {
 			handle_sig_alarm = 0;
 	      #endif
-			time_t mono_ts = server_monotonic_secs();
+			unix_time64_t mono_ts = server_monotonic_secs();
 			if (mono_ts != log_monotonic_secs) {
 				server_handle_sigalrm(srv, mono_ts, last_active_ts);
 			}

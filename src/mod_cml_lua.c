@@ -192,7 +192,7 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 		/* up to now it is a cache-hit, check if all files exist */
 
 		int curelem;
-		time_t mtime = 0;
+		unix_time64_t mtime = 0;
 
 		if (!lua_to_c_is_table(L, "output_include")) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
@@ -261,7 +261,8 @@ int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * 
 					}
 				} else {
 					chunkqueue_append_file_fd(&r->write_queue, b, fd, 0, st.st_size);
-					if (st.st_mtime > mtime) mtime = st.st_mtime;
+					if (mtime < TIME64_CAST(st.st_mtime))
+						mtime = TIME64_CAST(st.st_mtime);
 				}
 			} else {
 				/* not a string */

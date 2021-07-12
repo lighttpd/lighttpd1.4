@@ -53,6 +53,49 @@
 #endif
 
 
+/* TODO: would be more accurate to create build-system test for sizeof(time_t)*/
+#ifndef HAS_TIME_BITS64
+ #if defined(_LP64) || defined(__LP64__) || defined(_WIN64)
+  #define HAS_TIME_BITS64 1
+ #elif defined(__TIMESIZE)
+  #if __TIMESIZE == 64
+   #define HAS_TIME_BITS64 1
+  #else
+   #define HAS_TIME_BITS64 0
+  #endif
+ #elif defined(_WIN32)
+  #ifndef _USE_32BIT_TIME_T
+   #define HAS_TIME_BITS64 1
+  #else
+   #define HAS_TIME_BITS64 0
+  #endif
+ #elif defined(_ILP32) \
+   && !defined(__NetBSD__) && !defined(__OpenBSD__) \
+   && (!defined(__FreeBSD__) || !defined(__i386__)) \
+   && !(defined(__APPLE__) && defined(__MACH__))
+  #define HAS_TIME_BITS64 0
+ #else
+  #define HAS_TIME_BITS64 1
+ #endif
+#endif
+
+/* non-standard types created for lighttpd for Y2038 problem
+ * reference: https://en.wikipedia.org/wiki/Year_2038_problem */
+#if HAS_TIME_BITS64
+typedef time_t unix_time64_t;
+typedef struct timespec unix_timespec64_t;
+#define TIME64_CAST(t)  (t)
+#else  /* !HAS_TIME_BITS64 */
+typedef int64_t unix_time64_t;
+struct unix_timespec64 {
+  unix_time64_t tv_sec;        /* seconds */
+  long          tv_nsec;       /* nanoseconds */
+};
+typedef struct unix_timespec64 unix_timespec64_t;
+#define TIME64_CAST(t)  ((unix_time64_t)(uint32_t)(t))
+#endif /* !HAS_TIME_BITS64 */
+
+
 #define UNUSED(x) ( (void)(x) )
 
 

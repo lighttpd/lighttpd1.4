@@ -31,7 +31,7 @@ typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
     plugin_config conf;
-    time_t cache_ts[2];
+    unix_time64_t cache_ts[2];
     buffer cache_user[2];
     buffer cache_path[2];
 } plugin_data;
@@ -184,7 +184,7 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
     if (!p->conf.basepath) {
       #ifdef HAVE_PWD_H
         /* getpwnam() lookup is expensive; first check 2-element cache */
-        const time_t cur_ts = log_monotonic_secs;
+        const unix_time64_t cur_ts = log_monotonic_secs;
         int cached = -1;
         const int cache_sz =(int)(sizeof(p->cache_user)/sizeof(*p->cache_user));
         for (int i = 0; i < cache_sz; ++i) {
@@ -208,7 +208,7 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
             }
             /* update cache, replacing oldest entry */
             cached = 0;
-            time_t cache_ts = p->cache_ts[0];
+            unix_time64_t cache_ts = p->cache_ts[0];
             for (int i = 1; i < cache_sz; ++i) {
                 if (cache_ts > p->cache_ts[i]) {
                     cache_ts = p->cache_ts[i];
