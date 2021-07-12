@@ -8,8 +8,8 @@
 extern unix_time64_t log_epoch_secs;
 extern unix_time64_t log_monotonic_secs;
 
+int log_clock_gettime(int clockid, unix_timespec64_t *ts);
 int log_clock_gettime_realtime (unix_timespec64_t *ts);
-int log_clock_gettime_monotonic (unix_timespec64_t *ts);
 
 ssize_t write_all(int fd, const void* buf, size_t count);
 

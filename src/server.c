@@ -222,11 +222,13 @@ static int daemonize(void) {
 }
 #endif
 
+static int clockid_mono_coarse = 0;
+
 static unix_time64_t
 server_monotonic_secs (void)
 {
     unix_timespec64_t ts;
-    return (0 == log_clock_gettime_monotonic(&ts))
+    return (0 == log_clock_gettime(clockid_mono_coarse, &ts))
       ? ts.tv_sec
       : log_monotonic_secs;
 }
@@ -272,6 +274,26 @@ static server *server_init(void) {
 	li_rand_reseed();
 
 	srv->startup_ts = log_epoch_secs = TIME64_CAST(time(NULL));
+  #ifdef HAVE_CLOCK_GETTIME
+	unix_timespec64_t ts;
+	UNUSED(&ts);
+   #ifdef CLOCK_MONOTONIC_COARSE
+	if (0 == log_clock_gettime(CLOCK_MONOTONIC_COARSE, &ts))
+		clockid_mono_coarse = CLOCK_MONOTONIC_COARSE;
+	else
+   #endif
+   #ifdef CLOCK_MONOTONIC_RAW_APPROX
+	if (0 == log_clock_gettime(CLOCK_MONOTONIC_RAW_APPROX, &ts))
+		clockid_mono_coarse = CLOCK_MONOTONIC_RAW_APPROX;
+	else
+   #endif
+   #ifdef CLOCK_MONOTONIC_RAW
+	if (0 == log_clock_gettime(CLOCK_MONOTONIC_RAW, &ts))
+		clockid_mono_coarse = CLOCK_MONOTONIC_RAW;
+	else
+   #endif
+		clockid_mono_coarse = CLOCK_MONOTONIC;
+  #endif
 	log_monotonic_secs = server_monotonic_secs();
 
 	srv->errh = log_error_st_init();

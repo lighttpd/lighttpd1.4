@@ -24,13 +24,13 @@
 unix_time64_t log_epoch_secs = 0;
 unix_time64_t log_monotonic_secs = 0;
 
-int log_clock_gettime_realtime (unix_timespec64_t *ts) {
+int log_clock_gettime (const int clockid, unix_timespec64_t * const ts) {
   #ifdef HAVE_CLOCK_GETTIME
    #if HAS_TIME_BITS64
-    return clock_gettime(CLOCK_REALTIME, ts);
+    return clock_gettime(clockid, ts);
    #else
     struct timespec ts32;
-    int rc = clock_gettime(CLOCK_REALTIME, &ts32);
+    int rc = clock_gettime(clockid, &ts32);
     if (0 == rc) {
         /*(treat negative 32-bit tv.tv_sec as unsigned)*/
         ts->tv_sec  = TIME64_CAST(ts32.tv_sec);
@@ -44,6 +44,7 @@ int log_clock_gettime_realtime (unix_timespec64_t *ts) {
      *      && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 101200 */
     struct timeval tv;
     gettimeofday(&tv, NULL);
+    UNUSED(clockid);
    #if HAS_TIME_BITS64
     ts->tv_sec = tv.tv_sec;
    #else /*(treat negative 32-bit tv.tv_sec as unsigned)*/
@@ -54,24 +55,11 @@ int log_clock_gettime_realtime (unix_timespec64_t *ts) {
   #endif
 }
 
-int log_clock_gettime_monotonic (unix_timespec64_t *ts) {
+int log_clock_gettime_realtime (unix_timespec64_t *ts) {
   #ifdef HAVE_CLOCK_GETTIME
-   #if HAS_TIME_BITS64
-    return clock_gettime(CLOCK_MONOTONIC, ts);
-   #else
-    struct timespec ts32;
-    int rc = clock_gettime(CLOCK_MONOTONIC, &ts32);
-    if (0 == rc) {
-        /*(treat negative 32-bit tv.tv_sec as unsigned)*/
-        /*(negative 32-bit should not happen on monotonic clock
-         * unless system running continously for > 68 years)*/
-        ts->tv_sec  = TIME64_CAST(ts32.tv_sec);
-        ts->tv_nsec = ts32.tv_nsec;
-    }
-    return rc;
-   #endif
+    return log_clock_gettime(CLOCK_REALTIME, ts);
   #else
-    return log_clock_gettime_realtime(ts); /*(fallback)*/
+    return log_clock_gettime(0, ts);
   #endif
 }
 
