@@ -1833,9 +1833,9 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	/* Vary: Accept-Encoding (response might change according to request Accept-Encoding) */
 	if (NULL != (vb = http_header_response_get(r, HTTP_HEADER_VARY, CONST_STR_LEN("Vary")))) {
 		had_vary = 1;
-		if (NULL == strstr(vb->ptr, "Accept-Encoding")) {
+		if (!http_header_str_contains_token(BUF_PTR_LEN(vb),
+		                                    CONST_STR_LEN("Accept-Encoding")))
 			buffer_append_string_len(vb, CONST_STR_LEN(",Accept-Encoding"));
-		}
 	} else {
 		http_header_response_append(r, HTTP_HEADER_VARY,
 					    CONST_STR_LEN("Vary"),
@@ -1897,7 +1897,8 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 
 	/* clear Content-Length and r->write_queue if HTTP HEAD request
 	 * (alternatively, could return original Content-Length with HEAD
-	 *  request if ETag not modified and Content-Encoding not added) */
+	 *  request if ETag not modified and Content-Encoding not added)
+	 * (see top of this func where short-circuit is done on HTTP HEAD) */
 	if (HTTP_METHOD_HEAD == r->http_method) {
 		/* ensure that uncompressed Content-Length is not sent in HEAD response */
 		http_response_body_clear(r, 0);
