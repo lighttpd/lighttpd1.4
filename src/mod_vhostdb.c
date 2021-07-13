@@ -54,6 +54,7 @@ vhostdb_cache_entry_init (const buffer * const server_name, const buffer * const
     const uint32_t dlen = buffer_clen(docroot);
     vhostdb_cache_entry * const ve =
       malloc(sizeof(vhostdb_cache_entry) + slen + dlen);
+    force_assert(ve);
     ve->ctime = log_monotonic_secs;
     ve->slen = slen;
     ve->dlen = dlen;

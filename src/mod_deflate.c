@@ -624,6 +624,7 @@ static encparms * mod_deflate_parse_params(const array * const a, log_error_st *
 static uint16_t * mod_deflate_encodings_to_flags(const array *encodings) {
     if (encodings->used) {
         uint16_t * const x = calloc(encodings->used+1, sizeof(short));
+        force_assert(x);
         int i = 0;
         for (uint32_t j = 0; j < encodings->used; ++j) {
           #if defined(USE_ZLIB) || defined(USE_BZ2LIB) || defined(USE_BROTLI) \
@@ -661,6 +662,7 @@ static uint16_t * mod_deflate_encodings_to_flags(const array *encodings) {
     else {
         /* default encodings */
         uint16_t * const x = calloc(4+1, sizeof(short));
+        force_assert(x);
         int i = 0;
       #ifdef USE_ZSTD
         x[i++] = HTTP_ACCEPT_ENCODING_ZSTD;

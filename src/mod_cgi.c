@@ -616,7 +616,6 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	char *args[3];
 	int to_cgi_fds[2];
 	int from_cgi_fds[2];
-	int dfd = -1;
 	UNUSED(p);
 
 	if (!buffer_is_blank(cgi_handler)) {
@@ -683,7 +682,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		args[i  ] = NULL;
 	}
 
-	dfd = fdevent_open_dirname(r->physical.path.ptr, r->conf.follow_symlink);
+	int dfd = fdevent_open_dirname(r->physical.path.ptr,r->conf.follow_symlink);
 	if (-1 == dfd) {
 		log_perror(r->conf.errh, __FILE__, __LINE__, "open dirname %s failed", r->physical.path.ptr);
 	}

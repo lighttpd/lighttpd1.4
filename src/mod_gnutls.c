@@ -2817,7 +2817,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 {
     gnutls_session_t ssl = hctx->ssl;
     unsigned int crt_size = 0;
-    const gnutls_datum_t *crts;
+    const gnutls_datum_t *crts = NULL;
     buffer *vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_VERIFY"));
 
     if (hctx->verify_status != ~0u)
@@ -2839,7 +2839,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
     gnutls_x509_crt_t crt;
     if (gnutls_x509_crt_init(&crt) < 0)
         return;
-    if (gnutls_x509_crt_import(crt, &crts[0], GNUTLS_X509_FMT_DER) < 0) {
+    if (crts && gnutls_x509_crt_import(crt, &crts[0], GNUTLS_X509_FMT_DER) < 0){
         gnutls_x509_crt_deinit(crt);
         return;
     }

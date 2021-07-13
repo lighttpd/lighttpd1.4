@@ -36,7 +36,7 @@ static int request_check_hostname(buffer * const host) {
     if (*h != '[') {
         uint32_t len = buffer_clen(host);
         const char * const colon = memchr(h, ':', len);
-        uint32_t hlen = colon ? (colon - h) : len;
+        uint32_t hlen = colon ? (uint32_t)(colon - h) : len;
 
         /* if hostname ends in ".", strip it */
         if (__builtin_expect( (0 == hlen), 0)) return -1;

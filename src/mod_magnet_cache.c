@@ -101,6 +101,7 @@ static script *script_cache_new_script(script_cache * const cache, const buffer 
     if (cache->used == cache->size) {
         cache->size += 16;
         cache->ptr = realloc(cache->ptr, cache->size * sizeof(*(cache->ptr)));
+        force_assert(cache->ptr);
     }
     cache->ptr[cache->used++] = sc;
 

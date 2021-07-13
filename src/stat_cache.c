@@ -1334,7 +1334,7 @@ stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
 			stat_cache_entry_free(sptree->data);
 			sptree->data = sce;
 		} else {
-			sptree = sc.files = splaytree_insert(sptree, file_ndx, sce);
+			/*sptree =*/ sc.files = splaytree_insert(sptree, file_ndx, sce);
 		}
 
 	} else {

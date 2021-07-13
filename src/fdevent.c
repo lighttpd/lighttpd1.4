@@ -1122,7 +1122,7 @@ __attribute_cold__ /*(convenience routine for use at config at startup)*/
 char *
 fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *(malloc_fn)(size_t), void(free_fn)(void *))
 {
-    int fd = -1;
+    int fd;
     off_t sz = 0;
     char *buf = NULL;
     do {
@@ -1175,7 +1175,7 @@ fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *
 int
 fdevent_load_file_bytes (char * const buf, const off_t sz, off_t off, const char * const fn, log_error_st *errh)
 {
-    int fd = -1;
+    int fd;
     do {
         fd = fdevent_open_cloexec(fn, 1, O_RDONLY, 0); /*(1: follows symlinks)*/
         if (fd < 0) break;

@@ -42,7 +42,7 @@ FREE_FUNC(mod_expire_free) {
 
 static time_t mod_expire_get_offset(log_error_st *errh, const buffer *expire, time_t *offset) {
 	char *ts;
-	time_t type = -1;
+	time_t type;
 	time_t retts = 0;
 
 	/*

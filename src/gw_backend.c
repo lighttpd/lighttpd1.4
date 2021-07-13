@@ -498,7 +498,6 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
         /* server is not up, spawn it  */
         char_array env;
         uint32_t i;
-        int dfd = -1;
 
         /* reopen socket */
         gw_fd = fdevent_socket_cloexec(proc->saddr->sa_family, SOCK_STREAM, 0);
@@ -580,7 +579,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
             env.ptr[env.used] = NULL;
         }
 
-        dfd = fdevent_open_dirname(host->args.ptr[0], 1); /* permit symlinks */
+        int dfd = fdevent_open_dirname(host->args.ptr[0], 1);/*permit symlinks*/
         if (-1 == dfd) {
             log_perror(errh, __FILE__, __LINE__,
               "open dirname failed: %s", host->args.ptr[0]);
@@ -768,6 +767,7 @@ static int parse_binpath(char_array *env, const buffer *b) {
             if (env->size == env->used) {
                 env->size += 16;
                 env->ptr = realloc(env->ptr, env->size * sizeof(*env->ptr));
+                force_assert(env->ptr);
             }
 
             c = b->ptr[i];

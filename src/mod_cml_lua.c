@@ -102,7 +102,7 @@ static int cache_export_get_params(lua_State *L, int tbl, buffer *qrystr) {
 
 int cache_parse_lua(request_st * const r, plugin_data * const p, const buffer * const fn) {
 	lua_State *L;
-	int ret = -1;
+	int ret;
 	buffer *b;
 
 	b = buffer_init();

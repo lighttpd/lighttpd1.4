@@ -889,7 +889,7 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
             break;
         }
     }
-    i = ++j;
+    i = j+1;
 
     if (-1 != oproto) {
         /* remove trailing spaces/tabs, and double-quotes from proto

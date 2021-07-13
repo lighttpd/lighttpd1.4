@@ -65,6 +65,7 @@ static int request_map_insert(request_map *rm, request_st * const r, const char 
 		rm->size = rm->size ? (rm->size << 1) : 16;
 		force_assert(rm->size);
 		rm->ptr = realloc(rm->ptr, rm->size * sizeof(*(rm->ptr)));
+		force_assert(rm->ptr);
 		memset(rm->ptr+rm->used, 0, (rm->size - rm->used)*sizeof(*(rm->ptr)));
 	}
 
@@ -73,6 +74,7 @@ static int request_map_insert(request_map *rm, request_st * const r, const char 
 		rme = rm->ptr[rm->used];
 	} else {
 		rme = malloc(sizeof(*rme));
+		force_assert(rme);
 		rme->r_id = buffer_init();
 	}
 	buffer_copy_string_len(rme->r_id, r_id, idlen);
