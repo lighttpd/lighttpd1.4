@@ -294,6 +294,7 @@ if env['CC'] == 'gcc':
 	env.Append(CCFLAGS = Split('-pipe -Wall -O2 -g -W -pedantic -Wunused -Wshadow -std=gnu99'))
 
 env.Append(CPPFLAGS = [
+	'-D_TIME_BITS=64',
 	'-D_FILE_OFFSET_BITS=64',
 	'-D_LARGEFILE_SOURCE',
 	'-D_LARGE_FILES',

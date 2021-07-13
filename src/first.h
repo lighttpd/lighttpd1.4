@@ -21,6 +21,16 @@
 #define _Float32  float
 #endif
 
+/* enable glibc Y2038 64-bit time_t (where available on 32-bit systems) */
+#ifdef _ILP32
+#ifndef _TIME_BITS
+#define _TIME_BITS 64
+#endif
+#ifndef _FILE_OFFSET_BITS
+#define _FILE_OFFSET_BITS 64
+#endif
+#endif
+
 
 #include <sys/types.h>
 #include <stddef.h>
@@ -60,6 +70,8 @@
  #elif defined(__TIMESIZE)
   #if __TIMESIZE == 64
    #define HAS_TIME_BITS64 1
+  #elif defined(__USE_TIME_BITS64)
+   #define HAS_TIME_BITS64 1
   #else
    #define HAS_TIME_BITS64 0
   #endif
@@ -70,6 +82,7 @@
    #define HAS_TIME_BITS64 0
   #endif
  #elif defined(_ILP32) \
+   && !defined(__USE_TIME_BITS64) \
    && !defined(__NetBSD__) && !defined(__OpenBSD__) \
    && (!defined(__FreeBSD__) || !defined(__i386__)) \
    && !(defined(__APPLE__) && defined(__MACH__))
