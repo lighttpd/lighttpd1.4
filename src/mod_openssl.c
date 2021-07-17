@@ -1886,7 +1886,9 @@ mod_openssl_alpn_select_cb (SSL *ssl, const unsigned char **out, unsigned char *
   #if OPENSSL_VERSION_NUMBER < 0x10100000L
     return SSL_TLSEXT_ERR_NOACK;
   #else
-    return SSL_TLSEXT_ERR_ALERT_FATAL;
+    return hctx->r->handler_module /*(e.g. mod_sockproxy)*/
+      ? SSL_TLSEXT_ERR_NOACK
+      : SSL_TLSEXT_ERR_ALERT_FATAL;
   #endif
 }
 
