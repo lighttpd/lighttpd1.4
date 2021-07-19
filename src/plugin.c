@@ -143,6 +143,10 @@ int plugins_load(server *srv) {
 		}
 		if (!load_functions[j].name) {
 			log_error(srv->errh, __FILE__, __LINE__, "%s plugin not found", module);
+			if (srv->srvconf.compat_module_load) {
+				if (buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_deflate")))
+					continue;
+			}
 			return -1;
 		}
 	}
@@ -183,6 +187,10 @@ int plugins_load(server *srv) {
 
 			plugin_free(p);
 
+			if (srv->srvconf.compat_module_load) {
+				if (buffer_eq_slen(module, CONST_STR_LEN("mod_deflate")))
+					continue;
+			}
 			return -1;
 
 		}
@@ -193,6 +201,10 @@ int plugins_load(server *srv) {
 
 			plugin_free(p);
 
+			if (srv->srvconf.compat_module_load) {
+				if (buffer_eq_slen(module, CONST_STR_LEN("mod_deflate")))
+					continue;
+			}
 			return -1;
 		}
 
