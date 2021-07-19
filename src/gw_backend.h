@@ -301,7 +301,6 @@ typedef struct gw_handler_ctx {
     unsigned short gw_mode; /* mode: GW_AUTHORIZER or GW_RESPONDER */
 
     gw_connection_state_t state;
-    /*unix_time64_t state_timestamp;*//*(unused)*/
 
     chunkqueue *rb; /* read queue */
     off_t     wb_reqlen;
@@ -324,6 +323,8 @@ typedef struct gw_handler_ctx {
 
     request_st *r;               /* dumb pointer */
     gw_plugin_data *plugin_data; /* dumb pointer */
+    unix_time64_t read_ts;
+    unix_time64_t write_ts;
     handler_t(*stdin_append)(struct gw_handler_ctx *hctx);
     handler_t(*create_env)(struct gw_handler_ctx *hctx);
     void(*backend_error)(struct gw_handler_ctx *hctx);

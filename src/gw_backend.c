@@ -1882,6 +1882,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
             hctx->pid = hctx->proc->pid;
         }
 
+        hctx->write_ts = log_monotonic_secs;
         switch (gw_establish_connection(r, hctx->host, hctx->proc, hctx->pid,
                                         hctx->fd, hctx->conf.debug)) {
         case 1: /* connection is in progress */
@@ -1905,6 +1906,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
                 return HANDLER_ERROR;
             }
             /* go on with preparing the request */
+            hctx->write_ts = log_monotonic_secs;
         }
 
         gw_proc_connect_success(hctx->host, hctx->proc, hctx->conf.debug, r);
@@ -1932,6 +1934,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
             }
         }
 
+        hctx->read_ts = log_monotonic_secs;
         fdevent_fdnode_event_add(hctx->ev, hctx->fdn, FDEVENT_IN|FDEVENT_RDHUP);
         gw_set_state(hctx, GW_STATE_WRITE);
         __attribute_fallthrough__
@@ -1969,7 +1972,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
                 }
             }
             else if (hctx->wb.bytes_out > bytes_out) {
-                hctx->proc->last_used = log_monotonic_secs;
+                hctx->write_ts = hctx->proc->last_used = log_monotonic_secs;
                 if (hctx->stdin_append
                     && chunkqueue_length(&hctx->wb) < 65536 - 16384
                     && !chunkqueue_is_empty(&r->reqbody_queue)) {
@@ -1996,7 +1999,9 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
             }
             if (0 == wblen) {
                 fdevent_fdnode_event_clr(hctx->ev, hctx->fdn, FDEVENT_OUT);
-            } else {
+            }
+            else if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_OUT)) {
+                hctx->write_ts = log_monotonic_secs;
                 fdevent_fdnode_event_add(hctx->ev, hctx->fdn, FDEVENT_OUT);
             }
         }
@@ -2068,6 +2073,7 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
             handler_t rc;
             rc = gw_recv_response(hctx, r);          /*(might invalidate hctx)*/
             if (rc != HANDLER_GO_ON) return rc;      /*(unless HANDLER_GO_ON)*/
+            hctx->read_ts = log_monotonic_secs;
             fdevent_fdnode_event_add(hctx->ev, hctx->fdn, FDEVENT_IN);
         }
     }
@@ -2172,10 +2178,10 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
          * may not be triggered for partial collection of HTTP response headers
          * or partial packets for backend protocol (e.g. FastCGI) */
         if (r->write_queue.bytes_in > bytes_in)
-            proc->last_used = log_monotonic_secs;
+            hctx->read_ts = proc->last_used = log_monotonic_secs;
         return HANDLER_GO_ON;
     case HANDLER_FINISHED:
-        proc->last_used = log_monotonic_secs;
+        /*hctx->read_ts =*/ proc->last_used = log_monotonic_secs;
         if (hctx->gw_mode == GW_AUTHORIZER
             && (200 == r->http_status || 0 == r->http_status)) {
             /*
