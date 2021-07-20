@@ -631,7 +631,8 @@ void http_response_backend_done (request_st * const r) {
 	case CON_STATE_READ_POST:
 		if (!r->resp_body_started) {
 			/* Send an error if we haven't sent any data yet */
-			r->http_status = 500;
+			if (r->http_status < 500 && r->http_status != 400)
+				r->http_status = 500;
 			r->handler_module = NULL;
 			break;
 		}

@@ -248,7 +248,8 @@ __attribute_cold__
 static void gw_proc_connect_error(request_st * const r, gw_host *host, gw_proc *proc, pid_t pid, int errnum, int debug) {
     const unix_time64_t cur_ts = log_monotonic_secs;
     log_error_st * const errh = r->conf.errh;
-    log_perror(errh, __FILE__, __LINE__, /*(caller should set errno = errnum)*/
+    errno = errnum; /*(for log_perror())*/
+    log_perror(errh, __FILE__, __LINE__,
       "establishing connection failed: socket: %s", proc->connection_name->ptr);
 
     if (!proc->is_local) {
@@ -974,8 +975,9 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
 
 static int gw_establish_connection(request_st * const r, gw_host *host, gw_proc *proc, pid_t pid, int gw_fd, int debug) {
     if (-1 == connect(gw_fd, proc->saddr, proc->saddrlen)) {
-        if (errno == EINPROGRESS || errno == EALREADY || errno == EINTR
-            || (errno == EAGAIN && host->unixsocket)) {
+        int errnum = errno;
+        if (errnum == EINPROGRESS || errnum == EALREADY || errnum == EINTR
+            || (errnum == EAGAIN && host->unixsocket)) {
             if (debug > 2) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "connect delayed; will continue later: %s",
@@ -984,7 +986,7 @@ static int gw_establish_connection(request_st * const r, gw_host *host, gw_proc 
 
             return 1;
         } else {
-            gw_proc_connect_error(r, host, proc, pid, errno, debug);
+            gw_proc_connect_error(r, host, proc, pid, errnum, debug);
             return -1;
         }
     }
@@ -1900,7 +1902,6 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
         if (hctx->state == GW_STATE_CONNECT_DELAYED) { /*(not GW_STATE_INIT)*/
             int socket_error = fdevent_connect_status(hctx->fd);
             if (socket_error != 0) {
-                errno = socket_error; /*(for log_perror())*/
                 gw_proc_connect_error(r, hctx->host, hctx->proc, hctx->pid,
                                       socket_error, hctx->conf.debug);
                 return HANDLER_ERROR;
@@ -2021,9 +2022,23 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
     }
 }
 
+
+__attribute_cold__
+__attribute_noinline__
+static handler_t gw_backend_error(gw_handler_ctx * const hctx, request_st * const r)
+{
+    if (hctx->backend_error) hctx->backend_error(hctx);
+    http_response_backend_error(r);
+    gw_connection_close(hctx, r);
+    return HANDLER_FINISHED;
+}
+
+
+static handler_t gw_recv_response(gw_handler_ctx *hctx, request_st *r);
+
+
 __attribute_cold__
 static handler_t gw_write_error(gw_handler_ctx * const hctx, request_st * const r) {
-    int status = r->http_status;
 
     if (hctx->state == GW_STATE_INIT ||
         hctx->state == GW_STATE_CONNECT_DELAYED) {
@@ -2037,20 +2052,34 @@ static handler_t gw_write_error(gw_handler_ctx * const hctx, request_st * const 
         /* cleanup this request and let request handler start request again */
         if (hctx->reconnects++ < 5) return gw_reconnect(hctx, r);
     }
+    else {
+        /* backend might not read request body (even though backend should)
+         * before sending response, so it is possible to get EPIPE trying to
+         * write request body to the backend when backend has already sent a
+         * response.  If called from gw_handle_fdevent(), response should have
+         * been read prior to getting here.  However, if reqbody arrived on
+         * client side, and called gw_handle_subrequest() and we tried to write
+         * in gw_send_request() in state GW_STATE_WRITE, then it is possible to
+         * get EPIPE and error out here when response is waiting to be read from
+         * kernel socket buffers.  Since we did not actually receive FDEVENT_HUP
+         * or FDEVENT_RDHUP, calling gw_handle_fdevent() and fabricating
+         * FDEVENT_RDHUP would cause an infinite loop trying to read().
+         * Instead, try once to read (small) response in this theoretical race*/
+        handler_t rc = gw_recv_response(hctx, r);   /*(might invalidate hctx)*/
+        if (rc != HANDLER_GO_ON) return rc;         /*(unless HANDLER_GO_ON)*/
+    }
 
-    if (hctx->backend_error) hctx->backend_error(hctx);
-    gw_connection_close(hctx, r);
-    r->http_status = (status == 400) ? 400 : 503;
-    return HANDLER_FINISHED;
+    /*(r->status == 400 if hctx->create_env() failed)*/
+    if (!r->resp_body_started && r->http_status < 500 && r->http_status != 400)
+        r->http_status = 503; /* Service Unavailable */
+
+    return gw_backend_error(hctx, r); /* HANDLER_FINISHED */
 }
 
 static handler_t gw_send_request(gw_handler_ctx * const hctx, request_st * const r) {
     handler_t rc = gw_write_request(hctx, r);
     return (HANDLER_ERROR != rc) ? rc : gw_write_error(hctx, r);
 }
-
-
-static handler_t gw_recv_response(gw_handler_ctx *hctx, request_st *r);
 
 
 handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
@@ -2291,10 +2320,7 @@ static handler_t gw_recv_response_error(gw_handler_ctx * const hctx, request_st 
               r->uri.path.ptr, BUFFER_INTLEN_PTR(&r->uri.query));
         }
 
-        if (hctx->backend_error) hctx->backend_error(hctx);
-        http_response_backend_error(r);
-        gw_connection_close(hctx, r);
-        return HANDLER_FINISHED;
+        return gw_backend_error(hctx, r); /* HANDLER_FINISHED */
 }
 
 
@@ -2354,10 +2380,7 @@ static handler_t gw_handle_fdevent(void *ctx, int revents) {
     } else if (revents & FDEVENT_ERR) {
         log_error(r->conf.errh, __FILE__, __LINE__,
           "gw: got a FDEVENT_ERR. Don't know why.");
-
-        if (hctx->backend_error) hctx->backend_error(hctx);
-        http_response_backend_error(r);
-        gw_connection_close(hctx, r);
+        return gw_backend_error(hctx, r); /* HANDLER_FINISHED */
     }
 
     return HANDLER_FINISHED;
