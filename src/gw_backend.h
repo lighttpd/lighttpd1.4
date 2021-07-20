@@ -44,6 +44,8 @@ typedef struct gw_proc {
     unsigned short port;  /* config.port + pno */
 } gw_proc;
 
+struct gw_handler_ctx;  /* declaration */
+
 typedef struct {
     /* list of processes handling this extension
      * sorted by lowest load
@@ -113,13 +115,18 @@ typedef struct {
 
     unsigned short disable_time;
 
+    unsigned short read_timeout;
+    unsigned short write_timeout;
+    unsigned short connect_timeout;
+    struct gw_handler_ctx *hctxs;
+
     /*
      * some gw processes get a little bit larger
      * than wanted. max_requests_per_proc kills a
      * process after a number of handled requests.
      *
      */
-    uint32_t max_requests_per_proc;
+    /*uint32_t max_requests_per_proc;*//* not implemented */
 
 
     /* config */
@@ -327,6 +334,8 @@ typedef struct gw_handler_ctx {
     unix_time64_t write_ts;
     handler_t(*stdin_append)(struct gw_handler_ctx *hctx);
     handler_t(*create_env)(struct gw_handler_ctx *hctx);
+    struct gw_handler_ctx *prev;
+    struct gw_handler_ctx *next;
     void(*backend_error)(struct gw_handler_ctx *hctx);
     void(*handler_ctx_free)(void *hctx);
 } gw_handler_ctx;

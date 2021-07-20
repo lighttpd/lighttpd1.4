@@ -1289,6 +1289,15 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
      ,{ CONST_STR_LEN("tcp-fin-propagate"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("connect-timeout"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("write-timeout"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("read-timeout"),
+        T_CONFIG_INT,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -1470,6 +1479,15 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     break;
                   case 22:/* tcp-fin-propagate */
                     host->tcp_fin_propagate = (0 != cpv->v.u);
+                    break;
+                  case 23:/* connect-timeout */
+                    host->connect_timeout = cpv->v.u;
+                    break;
+                  case 24:/* write-timeout */
+                    host->write_timeout = cpv->v.u;
+                    break;
+                  case 25:/* read-timeout */
+                    host->read_timeout = cpv->v.u;
                     break;
                   default:
                     break;
@@ -1763,6 +1781,34 @@ void gw_set_transparent(gw_handler_ctx *hctx) {
 }
 
 
+static void gw_host_hctx_enq(gw_handler_ctx * const hctx) {
+    gw_host * const host = hctx->host;
+    /*if (__builtin_expect( (host == NULL), 0)) return;*/
+
+    hctx->prev = NULL;
+    hctx->next = host->hctxs;
+    if (hctx->next)
+        hctx->next->prev = hctx;
+    host->hctxs = hctx;
+}
+
+
+static void gw_host_hctx_deq(gw_handler_ctx * const hctx) {
+    /*if (__builtin_expect( (hctx->host == NULL), 0)) return;*/
+
+    if (hctx->prev)
+        hctx->prev->next = hctx->next;
+    else
+        hctx->host->hctxs= hctx->next;
+
+    if (hctx->next)
+        hctx->next->prev = hctx->prev;
+
+    hctx->next = NULL;
+    hctx->prev = NULL;
+}
+
+
 static void gw_backend_close(gw_handler_ctx * const hctx, request_st * const r) {
     if (hctx->fd >= 0) {
         fdevent_fdnode_event_del(hctx->ev, hctx->fdn);
@@ -1770,6 +1816,7 @@ static void gw_backend_close(gw_handler_ctx * const hctx, request_st * const r) 
         fdevent_sched_close(hctx->ev, hctx->fd, 1);
         hctx->fdn = NULL;
         hctx->fd = -1;
+        gw_host_hctx_deq(hctx);
     }
 
     if (hctx->host) {
@@ -1885,6 +1932,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
         }
 
         hctx->write_ts = log_monotonic_secs;
+        gw_host_hctx_enq(hctx);
         switch (gw_establish_connection(r, hctx->host, hctx->proc, hctx->pid,
                                         hctx->fd, hctx->conf.debug)) {
         case 1: /* connection is in progress */
@@ -2595,17 +2643,86 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
     return HANDLER_GO_ON;
 }
 
+__attribute_cold__
+__attribute_noinline__
+static void gw_handle_trigger_hctx_timeout(gw_handler_ctx * const hctx, const char * const msg) {
+
+    request_st * const r = hctx->r;
+    joblist_append(r->con);
+
+    if (*msg == 'c') { /* "connect" */
+        /* temporarily disable backend proc */
+        gw_proc_connect_error(r, hctx->host, hctx->proc, hctx->pid,
+                              ETIMEDOUT, hctx->conf.debug);
+        /* cleanup this request and let request handler start request again */
+        /* retry only once since request already waited write_timeout secs */
+        if (hctx->reconnects++ < 1) {
+            gw_reconnect(hctx, r);
+            return;
+        }
+        r->http_status = 503; /* Service Unavailable */
+    }
+    else { /* "read" or "write" */
+        /* blocked waiting to send (more) data to or to receive response
+         * (neither are a definite indication that the proc is no longer
+         *  responsive on other socket connections; not marking proc overloaded)
+         * (If connect() to backend succeeded, then we began sending
+         *  request and filled kernel socket buffers, so request is
+         *  in progress and it is not safe or possible to retry) */
+        /*if (hctx->conf.debug)*/
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "%s timeout on socket: %s (fd: %d)",
+              msg, hctx->proc->connection_name->ptr, hctx->fd);
+
+        if (*msg == 'w') { /* "write" */
+            gw_write_error(hctx, r); /*(calls gw_backend_error())*/
+            if (r->http_status == 503) r->http_status = 504; /*Gateway Timeout*/
+            return;
+        } /* else "read" */
+    }
+    gw_backend_error(hctx, r);
+    if (r->http_status == 500 && !r->resp_body_started && !r->handler_module)
+        r->http_status = 504; /*Gateway Timeout*/
+}
+
+__attribute_noinline__
+static void gw_handle_trigger_host_timeouts(gw_host * const host) {
+
+    if (NULL == host->hctxs) return;
+    const unix_time64_t rsecs = (unix_time64_t)host->read_timeout;
+    const unix_time64_t wsecs = (unix_time64_t)host->write_timeout;
+    const unix_time64_t csecs = (unix_time64_t)host->connect_timeout;
+    if (!rsecs && !wsecs && !csecs)
+        return; /*(no timeout policy (default))*/
+
+    const unix_time64_t mono = log_monotonic_secs; /*(could have callers pass)*/
+    for (gw_handler_ctx *hctx = host->hctxs, *next; hctx; hctx = next) {
+        /* if timeout occurs, hctx might be invalidated and removed from list,
+         * so next element must be store before checking for timeout */
+        next = hctx->next;
+
+        if (hctx->state == GW_STATE_CONNECT_DELAYED) {
+            if (mono - hctx->write_ts > csecs && csecs) /*(waiting for write)*/
+                gw_handle_trigger_hctx_timeout(hctx, "connect");
+            continue; /*(do not apply wsecs below to GW_STATE_CONNECT_DELAYED)*/
+        }
+
+        const int events = fdevent_fdnode_interest(hctx->fdn);
+        if ((events & FDEVENT_IN) && mono - hctx->read_ts > rsecs && rsecs) {
+            gw_handle_trigger_hctx_timeout(hctx, "read");
+            continue;
+        }
+        if ((events & FDEVENT_OUT) && mono - hctx->write_ts > wsecs && wsecs) {
+            gw_handle_trigger_hctx_timeout(hctx, "write");
+            continue;
+        }
+    }
+}
+
 static void gw_handle_trigger_host(gw_host * const host, log_error_st * const errh, const int debug) {
-    /*
-     * TODO:
-     *
-     * - add timeout for a connect to a non-gw process
-     *   (use state_timestamp + state)
-     *
-     * perhaps we should kill a connect attempt after 10-15 seconds
-     *
-     * currently we wait for the TCP timeout which is 180 seconds on Linux
-     */
+
+    /* check for socket timeouts on active requests to backend host */
+    gw_handle_trigger_host_timeouts(host);
 
     /* check each child proc to detect if proc exited */
 
@@ -2679,6 +2796,7 @@ static void gw_handle_trigger_exts_wkr(gw_exts *exts, log_error_st *errh) {
         gw_extension * const ex = exts->exts+j;
         for (uint32_t n = 0; n < ex->used; ++n) {
             gw_host * const host = ex->hosts[n];
+            gw_handle_trigger_host_timeouts(host);
             for (gw_proc *proc = host->first; proc; proc = proc->next) {
                 if (proc->state == PROC_STATE_OVERLOADED)
                     gw_proc_check_enable(host, proc, errh);
