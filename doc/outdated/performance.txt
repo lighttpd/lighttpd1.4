@@ -1,190 +1,221 @@
-========================
-Performance Improvements
-========================
+==================
+Performance Tuning
+==================
 
-------------
-Module: core
-------------
+[[ Note: latest version is found at https://wiki.lighttpd.net/Docs_Performance ]]
+[[ Note: see version with links at https://wiki.lighttpd.net/Docs_Performance ]]
 
-:Author: Jan Kneschke
-:Date: $Date: 2004/11/03 22:26:05 $
-:Revision: $Revision: 1.3 $
+important performance tuning rules
 
-:abstract:
-  handling performance issues in lighttpd
+* Prefer lighttpd defaults unless you have a reason to change a setting,
+  and unless you test that changing the setting is beneficial to you.
+* Proper functionality is more important than marginal increases in performance;
+  a web server that does not function as intended is not useful.
+  Do not sacrifice security or desired operational functioning for marginal
+  performance improvements.
+* Performance tuning is not magic. The recommended approach is that one change
+  be made at a time, that the change be tested and benchmarked, and that if the
+  change does not have a measurable and positive impact in real-world scenarios,
+  that the change be reverted.
 
-.. meta::
-  :keywords: lighttpd, performance
-
-.. contents:: Table of Contents
-
-Description
-===========
-
-Performance Issues
-------------------
-
-lighttpd is optimized into varying directions. The most important direction is
-performance. The operation system has two major facilities to help lighttpd
-a deliver its best performance.
-
-HTTP Keep-Alive
----------------
-
-Disabling keep-alive might help your server if you suffer from a large
-number of open file descriptors.
-
-The defaults for the server are: ::
-
-  server.max-keep-alive-requests = 128
-  server.max-keep-alive-idle = 30
-  server.max-read-idle = 60
-  server.max-write-idle = 360
-
-handling 128 keep-alive requests in a row on a single connection, waiting 30 seconds
-before an unused keep-alive connection gets dropped by lighttpd.
-
-If you handle several connections at once under a high load (let's assume 500 connections
-in parallel for 24h) you might run into the out-of-fd problem described below. ::
-
-  server.max-keep-alive-requests = 4
-  server.max-keep-alive-idle = 4
-
-would release the connections earlier and would free file descriptors without a
-detrimental performance loss.
-
-Disabling keep-alive completely is the last resort if you are still short on file descriptors: ::
-
-  server.max-keep-alive-requests = 0
-
-Event Handlers
---------------
-
-The first one is the Event Handler which takes care of notifying the server
-that one of the connections is ready to send or receive. As you can see,
-every OS has at least the select() call which has some limitations.
-
-============ ========== ===============
-OS           Method     Config Value
-============ ========== ===============
-all          select     select
-Unix         poll       poll
-Linux 2.6+   epoll      linux-sysepoll
-Solaris      /dev/poll  solaris-devpoll
-FreeBSD, ... kqueue     freebsd-kqueue
-============ ========== ===============
+lighttpd is generally pretty snappy.
+Most of the following are micro-optimizations.
+No changes are required unless you have a specific performance issue that you
+must address.
 
 
-For more information on this topic take a look at http://www.kegel.com/c10k.html
+lighttpd configuration performance tuning (technical guidelines)
+-----------------------------------------
 
-Configuration
-`````````````
+* less is more (and is often simpler, too)
+  - rely on defaults where possible to reduce unnecessary (duplicative) config
+    processing (at runtime) to process configuration directives which were
+    already set to the default values
+  - set config options in the global scope rather than repeating in sub-scopes.
+    lighttpd optimizes configuration settings in the global scope and makes
+    those settings the defaults
+  - TLS configuration can be set in the global scope and inherited by multiple
+    $SERVER["socket"]
+      ssl.pemfile = "..."
+      ssl.privkey = "..."
+      $SERVER["socket"] == ":443" { ssl.engine = "enable" }
+      $SERVER["socket"] == "[::]:443" { ssl.engine = "enable" }
+  - list only the modules actually used and enabled in server.modules;
+    comment out the others
+    - each loaded module registers itself into lighttpd hooks and gets a chance
+      to handle each request, which is is unnecessary if a module is loaded but
+      not otherwise configured to be used
+    - server.compat-module-load = "disable" skips loading the default modules
+      (mod_indexfile, mod_dirlisting, mod_staticfile), and you can then
+      explicitly add one or more to server.modules to use them
+  - tweaks to remove optional functionality
+    - server.tag = "" skips sending "Server: lighttpd/1.4.xx" in responses;
+      alternatively, use: server.tag = "lighttpd" to hide the lighttpd version
+    - server.range-requests = "disable" can be used if all server responses are
+      small files, but otherwise it is recommended to be left enabled
+  - review the default lighttpd config provided by your distro
+    - configs provided by distros aim to be newbie friendly but can introduce
+      complexity of yet another config framework
+    - configs provided by distros are often out-dated and then kept for historic
+      compatibility, rather than current best practices
+    - example: ~20 years ago some widely used versions of Adobe Acrobat reader
+      plugin PDF clients misbehaved with range requests.  Unfortunately, the
+      config setting to disable range requests for PDFs has been cargo-culted
+      into configs since then.  Prefer to comment out or remove:
+        $HTTP["url"] =~ "\.pdf$" { server.range-requests = "disable" }
+  - server.max-connections limits the maximum number of simultaneous connections
+    to handle and also affects memory usage for the connection cache
+    - default is (about) 1365 which is oversized for all but the largest
+      systems. Embedded systems might set server.max-connections = 16 or lower
+  - server.max-worker = 0 should generally be left unset (or "0"), as
+    CPU bottlenecks are usually elsewhere
+  - server.follow-symlink = "enable" (default) should be left enabled.  If such
+    restrictions are required, prefer to run a separate lighttp instance under a
+    separate user account, and enforce more restrictive file access permissions.
+  - ssl.read-ahead = "disable" (default) is strongly recommended for slower,
+    embedded systems which process TLS packets more slowly than network
+    wire-speed.  For faster systems, test if ssl.read-ahead = "enable" improves
+    performance (or not)
+  - prefer to configure mod_extforward extforward.hap-PROXY for lighttpd
+    instances behind HAProxy or load balancers supporting the HAProxy PROXY
+    protocol
+* minimize conditional processing (but not at the cost of proper functionality)
+  - more conditions means more config processing at runtime
+  - more conditions means more memory used by config per request
+  - avoid repeating conditions and its opposite by joining them into if/else
+      <condition> { ... } else { ... }
+      <condition> { ... } else <condition> { ... } else { ... }
+  - sometimes it may take fewer config lines to set a config option once in the
+    global scope and then, where necessary, to unset the option in a small
+    number of conditions rather than leaving the default in the global scope
+    and enabling the config option in many more conditions
+  - having no config conditions will be among the fastest configs to be
+    processed, but config processing at runtime is fast and is not typically
+    a bottleneck
+* dynamic backends (mod_proxy, mod_fastcgi, mod_scgi, mod_ajp13, ...)
+  - prefer to use unix domain sockets (instead of TCP sockets) for connections
+    from lighttpd to backends running on the same host
+  - lighttpd can listen on a unix domain socket
+      (server.bind = "/path/to/lighttpd.sock")
+    and lighttpd mod_proxy can act as a reverse-proxy to a backend lighttpd
+    server.  Use with mod_extforward to preserve client remote address for the
+    backend.
+* mod_fastcgi
+  - Recommended: use PHP-FPM (FastCGI Process Manager),
+    which is available as a package in many OS distros
+  - If not using PHP-FPM, then see Docs_PerformanceFastCGI
+    - lighttpd provides mechanisms for lighttpd to start up PHP backends, and
+      that works well, but PHP-FPM is the modern and recommended mechanism to
+      manage PHP backends
+* mod_rewrite and mod_redirect: short-circuiting
+  (when using a sequence of regexes)
+  - consider putting static file matches (passed through unmodified) first,
+    and using a blank target to indicate no modification
+  - consider using a blank match as a catch-all, rather than "^(.*)",
+    which will still match all, but without the regex
+      url.rewrite-once = (
+        "^/static/|\.(?:css|jpg)$" => "",
+        "" => "/index.php${url.path}${qsa}"
+      )
+* mod_indexfile: reduce the number of entries in index-file.names,
+  if mod_indexfile is enabled
+  - index-file.names = ("index.html") as a list of one or two entries rather
+    than a list of, say, 10 differenent file extensions
+* cache tuning
+  - stat_cache: default server.stat_cache-engine = "simple" works well for
+    typical usage and caches stat() results for 1-2 seconds.  Test with
+    server.stat-cache-engine = "inotify" or server.stat-cache-engine = "kqueue"
+    for stat() results to be cached longer (16 seconds)
+  - mod_auth: set auth.cache = ("max-age" => "600") to cache passwords (default
+    disabled), but acknowledge changes to your security posture if enabling the
+    cache. (since lighttpd 1.4.56)
+  - mod_deflate: set deflate.cache-dir to cache (and reuse) compressed static
+    assets based on ETag (since lighttpd 1.4.56)
+  - mod_dirlisting: set dir-listing.cache = ( ... ) to configure caching of
+    generated directory listings (since lighttpd 1.4.60)
+* do not sacrifice security to save a few CPU cycles
+  - server.http-parseopts* option defaults are recommended, and are very fast
+  - disabling server.http-parseopts* might save a few CPU cycles, but is an
+    anti-pattern for secure configurations
+  - server.http-parseopts* options should be modified only when the
+    functionality needs to be tuned for proper site operation
+  - ETag response headers are used in HTTP/1.1 conditional caching.
+    ETag response headers are also required for mod_deflate and strongly
+    recommended with mod_webdav.  While lighttpd ETag generation for
+    static content can be disabled for micro-benchmarking purposes,
+    ETag generation (default enabled) is recommended for production use
+    (etag.use-inode, etag.use-mtime, etag.use-size)
+* compile lighttpd with mmap support (./configure --enable-mmap) to improve
+  mod_deflate performance
 
-The event handler can be set by specifying the 'Config Value' from above
-in the ``server.event-handler`` variable
 
-e.g.: ::
+lighttpd configuration for use of operating system (OS) features
+----------------------------------------------------------------
 
-  server.event-handler = "linux-sysepoll"
+lighttpd generally chooses optimal defaults for the OS on which it is running.
+Prefer lighttpd defaults unless something is not functioning correctly.
+(Please report bugs and include your platform information if the lighttpd OS
+ defaults are not working correctly.)
 
-Network Handlers
-----------------
-
-The basic network interface for all platforms at the syscalls read() and
-write(). Every modern OS provides its own syscall to help network servers
-transfer files as fast as possible.
-
-If you want to send out a file from the webserver, it doesn't make any sense
-to copy the file into the webserver just to write() it back into a socket
-in the next step.
-
-sendfile() minimizes the work in the application and pushes a file directly
-into the network card (ideally).
-
-lighttpd supports all major platform-specific calls:
-
-========== ==========
-OS         Method
-========== ==========
-all        write
-Unix       writev
-Linux 2.4+ sendfile
-Linux 2.6+ sendfile64
-Solaris    sendfilev
-FreeBSD    sendfile
-========== ==========
-
-The best backend is selected at compile time. In case you want to use
-another backend set: ::
-
-  server.network-backend = "writev"
-
-You can find more information about network backend in:
-
-  https://blog.lighttpd.net/articles/2005/11/11/optimizing-lighty-for-high-concurrent-large-file-downloads
+* server.event-handler (e.g. epoll, kqueue, event ports, devpoll, poll, ...)
+* server.network-backend (e.g. sendfile, writev, write)
 
 
-Max Connections
----------------
+lighttpd configuration tuning for high-traffic sites with a large number of connections
+---------------------------------------------------------------------------------------
 
-As lighttpd is a single-threaded server, its main resource limit is the
-number of file descriptors, which is set to 1024 by default (on most systems).
+* test with server.max-fds = 16384 (or higher) and OS system and/or per-user
+  ulimit -Hn might need to be adjusted to allow this or higher values.
+  For each 4k increase in server.max-fds, lighttpd uses an additional ~100 kb
+  of memory for internal structures, not including memory used by each active
+  connection.  (In other words, there is a marginal cost for using very high
+  values when there are not nearly so many simultaneous open connections).
+  server.max-connections is calculated to be 1/3 of server.max-fds if
+  server.max-connections is not configured.
 
-If you are running a high-traffic site you might want to increase this limit
-by setting ::
 
-  server.max-fds = 2048
+lighttpd configuration tuning for low-memory systems
+----------------------------------------------------
 
-This only works if lighttpd is started as root.
+* test with server.max-fds = 128 (or lower)
+* test with server.max-connections = 16 (or lower)
+* test with server.listen-backlog = 16 (or lower)
+* (default) server.stat_cache-engine = "simple"
+* (default) ssl.read-ahead = "disable"
+* support for the HTTP/2 protocol (enabled by default in lighttpd 1.4.59) uses
+  more memory than HTTP/1.1; low-memory systems might choose to disable HTTP/2
+  protocol support: server.feature-flags += ("server.h2proto" => "disable")
 
-Out-of-fd condition
--------------------
 
-Since file descriptors are used for TCP/IP sockets, files and directories,
-a simple request for a PHP page might result in using 3 file descriptors:
+lighttpd configuration tuning for traffic shapping (download rate-limiting)
+--------------------------------------------------
 
-1. the TCP/IP socket to the client
-2. the TCP/IP and Unix domain socket to the FastCGI process
-3. the filehandle to the file in the document root to check if it exists
+connection.kbytes-per-second
+server.kbytes-per-second
 
-If lighttpd runs out of file descriptors, it will stop accepting new
-connections for awhile to use the existing file descriptors to handle the
-currently-running requests.
 
-If more than 90% of the file descriptors are used then the handling of new
-connections is disabled. If it drops below 80% again new connections will
-be accepted again.
+lighttpd configuration tuning for timeouts
+------------------------------------------
 
-Under some circumstances you will see ::
-
-  ... accept() failed: Too many open files
-
-in the error log. This tells you there were too many new requests at once
-and lighttpd could not disable the incoming connections soon enough. The
-connection was dropped and the client received an error message like 'connection
-failed'. This is very rare and might only occur in test setups.
-
-Increasing the ``server.max-fds`` limit will reduce the probability of this
-problem.
-
-stat() cache
-============
-
-A stat(2) can be expensive; caching it saves time and context switches.
-
-Instead of using stat() every time to check for the existence of a file
-you can stat() it once and monitor the directory the file is in for
-modifications. As long as the directory doesn't change, the files in it
-must all still be the same.
-
-With the help of FAM or gamin you can use kernel events to assure that
-your stat cache is up to date. ::
-
-  server.stat-cache-engine = "fam"   # either fam, simple or disabled
+To free up connections more quickly, tune down the idle timeouts for how long
+lighttpd waits to read or write to the client (when lighttpd is trying to read
+or write), or how long lighttpd waits for the next keep-alive request, and for
+how many keep-alive requests, before lighttpd closes the connection.  A value
+of 0 disables an idle timeout and is not recommended.
+* server.max-read-idle = 60
+* server.max-write-idle = 360
+* server.max-keep-alive-idle = 5
+* server.max-keep-alive-requests = 100
+Generally, server.max-keep-alive-requests should not be set to 0 since setting
+up a new TCP connection takes more resources than keeping an open idle fd,
+especially if the connection is over TLS.
 
 
 Platform-Specific Notes
 =======================
+
+Note: The following is old and possibly out-dated.
+      Please consider only as a starting point for further testing.
 
 Linux
 -----
