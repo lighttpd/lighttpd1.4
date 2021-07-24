@@ -221,8 +221,11 @@ int http_chunk_append_buffer(request_st * const r, buffer * const mem) {
 
     chunkqueue * const cq = &r->write_queue;
 
-    if (http_chunk_uses_tempfile(r, cq, len))
-        return http_chunk_append_to_tempfile(r, mem->ptr, len);
+    if (http_chunk_uses_tempfile(r, cq, len)) {
+        int rc = http_chunk_append_to_tempfile(r, mem->ptr, len);
+        buffer_clear(mem);
+        return rc;
+    }
 
     if (r->resp_send_chunked)
         http_chunk_len_append(cq, len);
@@ -458,28 +461,8 @@ int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
      * potentially avoid copying in http_chunk_append_buffer().  Otherwise this
      * would be: return http_chunk_decode_append_mem(r, BUF_PTR_LEN(mem)); */
 
-    /*(called by funcs receiving data from backends, which might be chunked)*/
+    /*(called by funcs receiving chunked data from backends)*/
     /*(separate from http_chunk_append_buffer() called by numerous others)*/
-    if (!r->resp_decode_chunked) {
-        if (r->resp_body_scratchpad > 0) {
-            off_t len = (off_t)buffer_clen(mem);
-            r->resp_body_scratchpad -= len;
-            if (r->resp_body_scratchpad <= 0) {
-                r->resp_body_finished = 1;
-                if (r->resp_body_scratchpad < 0) {
-                    /*(silently truncate if data exceeds Content-Length)*/
-                    len += r->resp_body_scratchpad;
-                    r->resp_body_scratchpad = 0;
-                    buffer_truncate(mem, (uint32_t)len);
-                }
-            }
-        }
-        else if (0 == r->resp_body_scratchpad) {
-            /*(silently truncate if data exceeds Content-Length)*/
-            return 0;
-        }
-        return http_chunk_append_buffer(r, mem);
-    }
 
     /* might avoid copy by transferring buffer if buffer is all data that is
      * part of large chunked block, but choosing to *not* expand that out here*/
@@ -505,26 +488,8 @@ int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
 
 int http_chunk_decode_append_mem(request_st * const r, const char * const mem, size_t len)
 {
-    /*(called by funcs receiving data from backends, which might be chunked)*/
+    /*(called by funcs receiving chunked data from backends)*/
     /*(separate from http_chunk_append_mem() called by numerous others)*/
-    if (!r->resp_decode_chunked) {
-        if (r->resp_body_scratchpad > 0) {
-            r->resp_body_scratchpad -= (off_t)len;
-            if (r->resp_body_scratchpad <= 0) {
-                r->resp_body_finished = 1;
-                if (r->resp_body_scratchpad < 0) {
-                    /*(silently truncate if data exceeds Content-Length)*/
-                    len = (size_t)(r->resp_body_scratchpad + (off_t)len);
-                    r->resp_body_scratchpad = 0;
-                }
-            }
-        }
-        else if (0 == r->resp_body_scratchpad) {
-            /*(silently truncate if data exceeds Content-Length)*/
-            return 0;
-        }
-        return http_chunk_append_mem(r, mem, len);
-    }
 
     if (0 != http_chunk_decode_append_data(r, mem, (off_t)len))
         return -1;

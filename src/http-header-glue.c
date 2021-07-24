@@ -702,6 +702,58 @@ void http_response_upgrade_read_body_unknown(request_st * const r) {
 }
 
 
+static int http_response_append_buffer(request_st * const r, buffer * const mem) {
+    /* Note: this routine is separate from http_response_append_mem() to
+     * potentially avoid copying in http_chunk_append_buffer().  Otherwise this
+     * would be: return http_response_append_mem(r, BUF_PTR_LEN(mem)); */
+
+    if (r->resp_decode_chunked)
+        return http_chunk_decode_append_buffer(r, mem);
+
+    if (r->resp_body_scratchpad > 0) {
+        off_t len = (off_t)buffer_clen(mem);
+        r->resp_body_scratchpad -= len;
+        if (r->resp_body_scratchpad <= 0) {
+            r->resp_body_finished = 1;
+            if (r->resp_body_scratchpad < 0) {
+                /*(silently truncate if data exceeds Content-Length)*/
+                len += r->resp_body_scratchpad;
+                r->resp_body_scratchpad = 0;
+                buffer_truncate(mem, (uint32_t)len);
+            }
+        }
+    }
+    else if (0 == r->resp_body_scratchpad) {
+        /*(silently truncate if data exceeds Content-Length)*/
+        return 0;
+    }
+    return http_chunk_append_buffer(r, mem);
+}
+
+
+static int http_response_append_mem(request_st * const r, const char * const mem, size_t len) {
+    if (r->resp_decode_chunked)
+        return http_chunk_decode_append_mem(r, mem, len);
+
+    if (r->resp_body_scratchpad > 0) {
+        r->resp_body_scratchpad -= (off_t)len;
+        if (r->resp_body_scratchpad <= 0) {
+            r->resp_body_finished = 1;
+            if (r->resp_body_scratchpad < 0) {
+                /*(silently truncate if data exceeds Content-Length)*/
+                len = (size_t)(r->resp_body_scratchpad + (off_t)len);
+                r->resp_body_scratchpad = 0;
+            }
+        }
+    }
+    else if (0 == r->resp_body_scratchpad) {
+        /*(silently truncate if data exceeds Content-Length)*/
+        return 0;
+    }
+    return http_chunk_append_mem(r, mem, len);
+}
+
+
 static int http_response_process_headers(request_st * const restrict r, http_response_opts * const restrict opts, char * const restrict s, const unsigned short hoff[8192], const int is_nph) {
     int i = 1;
 
@@ -1056,7 +1108,11 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
     }
 
     if (blen > 0) {
-        if (0 != http_chunk_decode_append_mem(r, bstart, blen))
+        /* modules which set opts->parse() (e.g. mod_ajp13, mod_fastcgi) must
+         * not pass buffer with excess data to this routine (and do not do so
+         * due to framing of response headers separately from response body) */
+        int rc = http_response_append_mem(r, bstart, blen);
+        if (__builtin_expect( (0 != rc), 0))
             return HANDLER_ERROR;
     }
 
@@ -1168,7 +1224,8 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
             /* accumulate response in b until headers completed (or error) */
             if (r->resp_body_started) buffer_clear(b);
         } else {
-            if (0 != http_chunk_decode_append_buffer(r, b)) {
+            int rc = http_response_append_buffer(r, b);
+            if (__builtin_expect( (0 != rc), 0)) {
                 /* error writing to tempfile;
                  * truncate response or send 500 if nothing sent yet */
                 return HANDLER_ERROR;
