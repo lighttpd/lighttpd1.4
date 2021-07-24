@@ -977,7 +977,7 @@ static int recv_ietf_00(handler_ctx *hctx) {
                     && !buffer_is_unset(payload)) { /*XXX: buffer_is_blank?*/
                     hctx->frame.ctl.siz = 0;
                     chunkqueue_append_buffer(&hctx->gw.wb, payload);
-                    buffer_clear(payload);
+                    /*buffer_clear(payload);*//*chunkqueue_append_buffer clear*/
                 }
                 else {
                     if (hctx->frame.state == MOD_WEBSOCKET_FRAME_STATE_INIT
@@ -1251,7 +1251,7 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                   {
                     unmask_payload(hctx);
                     chunkqueue_append_buffer(&hctx->gw.wb, payload);
-                    buffer_clear(payload);
+                    /*buffer_clear(payload);*//*chunkqueue_append_buffer clear*/
                     break;
                   }
                 case MOD_WEBSOCKET_FRAME_TYPE_PING:

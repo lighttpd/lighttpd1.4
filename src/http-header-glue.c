@@ -1173,7 +1173,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
                  * truncate response or send 500 if nothing sent yet */
                 return HANDLER_ERROR;
             }
-            buffer_clear(b);
+            /*buffer_clear(b);*//*http_response_append_buffer() clears*/
         }
 
         if (r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN) {

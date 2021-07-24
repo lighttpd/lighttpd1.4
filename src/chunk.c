@@ -375,8 +375,10 @@ static int chunkqueue_append_mem_extend_chunk(chunkqueue * const restrict cq, co
 void chunkqueue_append_buffer(chunkqueue * const restrict cq, buffer * const restrict mem) {
 	chunk *c;
 	size_t len = mem ? buffer_clen(mem) : 0;
-	if (len < 1024 && chunkqueue_append_mem_extend_chunk(cq, mem->ptr, len))
-	    return;
+	if (len < 1024 && chunkqueue_append_mem_extend_chunk(cq, mem->ptr, len)) {
+		buffer_clear(mem);
+		return;
+	}
 
 	c = chunkqueue_append_mem_chunk(cq, chunk_buf_sz);
 	cq->bytes_in += len;

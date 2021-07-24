@@ -629,7 +629,7 @@ webdav_double_buffer (request_st * const r, buffer * const b)
      * has not been set, so r->resp_send_chunked can not be set yet */
     if (buffer_clen(b) > 60000) {
         http_chunk_append_buffer(r, b); /*(might move/steal/reset buffer)*/
-        buffer_clear(b);
+        /*buffer_clear(b);*//*http_chunk_append_buffer() clears*/
     }
 }
 
