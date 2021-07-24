@@ -702,10 +702,17 @@ void http_response_upgrade_read_body_unknown(request_st * const r) {
 }
 
 
-static int http_response_append_buffer(request_st * const r, buffer * const mem) {
+__attribute_pure__
+static int http_response_append_buffer_simple_accum(const request_st * const r, const off_t len) {
+    /*(check to accumulate small reads in buffer before flushing to temp file)*/
+    return
+      len < 32768 && r->write_queue.last && r->write_queue.last->file.is_temp;
+}
+
+
+static int http_response_append_buffer(request_st * const r, buffer * const mem, const int simple_accum) {
     /* Note: this routine is separate from http_response_append_mem() to
-     * potentially avoid copying in http_chunk_append_buffer().  Otherwise this
-     * would be: return http_response_append_mem(r, BUF_PTR_LEN(mem)); */
+     * potentially avoid copying buffer by using http_chunk_append_buffer(). */
 
     if (r->resp_decode_chunked)
         return http_chunk_decode_append_buffer(r, mem);
@@ -713,7 +720,14 @@ static int http_response_append_buffer(request_st * const r, buffer * const mem)
     if (r->resp_body_scratchpad > 0) {
         off_t len = (off_t)buffer_clen(mem);
         r->resp_body_scratchpad -= len;
-        if (r->resp_body_scratchpad <= 0) {
+        if (r->resp_body_scratchpad > 0) {
+            if (simple_accum
+                && http_response_append_buffer_simple_accum(r, len)) {
+                r->resp_body_scratchpad += len;
+                return 0; /*(accumulate small reads in buffer)*/
+            }
+        }
+        else { /* (r->resp_body_scratchpad <= 0) */
             r->resp_body_finished = 1;
             if (r->resp_body_scratchpad < 0) {
                 /*(silently truncate if data exceeds Content-Length)*/
@@ -726,6 +740,10 @@ static int http_response_append_buffer(request_st * const r, buffer * const mem)
     else if (0 == r->resp_body_scratchpad) {
         /*(silently truncate if data exceeds Content-Length)*/
         return 0;
+    }
+    else if (simple_accum
+             && http_response_append_buffer_simple_accum(r, buffer_clen(mem))) {
+        return 0; /*(accumulate small reads in buffer)*/
     }
     return http_chunk_append_buffer(r, mem);
 }
@@ -1212,6 +1230,15 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
             handler_t rc = opts->parse(r, opts, b, (size_t)n);
             if (rc != HANDLER_GO_ON) return rc;
         } else if (0 == n) {
+            if (!buffer_is_blank(b) && opts->simple_accum) {
+                /*(flush small reads previously accumulated in b)*/
+                int rc = http_response_append_buffer(r, b, 0); /*(0 to flush)*/
+                if (__builtin_expect( (0 != rc), 0)) {
+                    /* error writing to tempfile;
+                     * truncate response or send 500 if nothing sent yet */
+                    return HANDLER_ERROR;
+                }
+            }
             /* note: no further data is sent to backend after read EOF on socket
              * (not checking for half-closed TCP socket)
              * (backend should read all data desired prior to closing socket,
@@ -1221,16 +1248,38 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
             /* split header from body */
             handler_t rc = http_response_parse_headers(r, opts, b);
             if (rc != HANDLER_GO_ON) return rc;
-            /* accumulate response in b until headers completed (or error) */
-            if (r->resp_body_started) buffer_clear(b);
+            /* accumulate response in b until headers completed (or error)*/
+            if (r->resp_body_started) {
+                buffer_clear(b);
+                /* enable simple accumulation of small reads in some situations
+                 * no Content-Length (will read to EOF)
+                 * Content-Length (will read until r->resp_body_scratchpad == 0)
+                 * not chunked-encoding
+                 * not bufmin streaming
+                 * (no custom parse routine set for opts->parse()) */
+                if (!r->resp_decode_chunked /* && NULL == opts->parse */
+                    && !(r->conf.stream_response_body
+                         & FDEVENT_STREAM_RESPONSE_BUFMIN))
+                    opts->simple_accum = 1;
+            }
         } else {
-            int rc = http_response_append_buffer(r, b);
+            /* flush b (do not accumulate small reads) if streaming and might
+             * write to client since there is a chance that r->write_queue is
+             * fully written to client (no more temp files) and then we do not
+             * want to hold onto buffered data in b for an indeterminate time
+             * until next read of data from backend */
+            int simple_accum = opts->simple_accum
+                            && (!(r->conf.stream_response_body
+                                  & FDEVENT_STREAM_RESPONSE)
+                                || !r->con->is_writable);
+            int rc = http_response_append_buffer(r, b, simple_accum);
             if (__builtin_expect( (0 != rc), 0)) {
                 /* error writing to tempfile;
                  * truncate response or send 500 if nothing sent yet */
                 return HANDLER_ERROR;
             }
             /*buffer_clear(b);*//*http_response_append_buffer() clears*/
+            /* small reads might accumulate in b; not necessarily cleared */
         }
 
         if (r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN) {

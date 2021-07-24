@@ -23,9 +23,10 @@ enum {
 typedef struct http_response_opts_t {
   int fdfmt;
   int backend;
-  int authorizer;
-  unsigned short local_redir;
-  unsigned short xsendfile_allow;
+  int authorizer; /* bool */
+  uint8_t simple_accum; /* bool */
+  uint8_t local_redir; /* 0,1,2 */
+  uint8_t xsendfile_allow; /* bool */
   const array *xsendfile_docroot;
   void *pdata;
   handler_t(*parse)(request_st *, struct http_response_opts_t *, buffer *, size_t);
