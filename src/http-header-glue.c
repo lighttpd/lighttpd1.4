@@ -1141,10 +1141,11 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
 
 handler_t http_response_read(request_st * const r, http_response_opts * const opts, buffer * const b, fdnode * const fdn) {
     const int fd = fdn->fd;
-    while (1) {
-        ssize_t n;
-        size_t avail = buffer_string_space(b);
+    ssize_t n;
+    size_t avail;
+    do {
         unsigned int toread = 0;
+        avail = buffer_string_space(b);
 
         if (0 == fdevent_ioctl_fionread(fd, opts->fdfmt, (int *)&toread)) {
             if (avail < toread) {
@@ -1294,10 +1295,8 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
                 break;
             }
         }
+    } while ((size_t)n == avail);
+    /* else emptied kernel read buffer or partial read */
 
-        if ((size_t)n < avail)
-            break; /* emptied kernel read buffer or partial read */
-    }
-
-    return HANDLER_GO_ON;
+    return (!r->resp_body_finished ? HANDLER_GO_ON : HANDLER_FINISHED);
 }
