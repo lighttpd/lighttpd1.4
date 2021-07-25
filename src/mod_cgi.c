@@ -63,7 +63,13 @@ typedef struct {
 } buffer_pid_t;
 
 typedef struct {
+	unix_time64_t read_timeout;
+	unix_time64_t write_timeout;
+} cgi_limits;
+
+typedef struct {
 	const array *cgi;
+	const cgi_limits *limits;
 	unsigned short execute_x_only;
 	unsigned short local_redir;
 	unsigned short xsendfile_allow;
@@ -91,6 +97,8 @@ typedef struct {
 	plugin_data *plugin_data; /* dumb pointer */
 
 	buffer *response;
+	unix_time64_t read_ts;
+	unix_time64_t write_ts;
 	buffer *cgi_handler;      /* dumb pointer */
 	http_response_opts opts;
 	plugin_config conf;
@@ -148,6 +156,22 @@ FREE_FUNC(mod_cgi_free) {
       #ifdef __CYGWIN__
 	buffer_free(p->env.systemroot);
       #endif
+
+    if (NULL == p->cvlist) return;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
+            switch (cpv->k_id) {
+              case 6: /* cgi.limits */
+                free(cpv->v.v);
+                break;
+              default:
+                break;
+            }
+        }
+    }
 }
 
 static void mod_cgi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -170,6 +194,10 @@ static void mod_cgi_merge_config_cpv(plugin_config * const pconf, const config_p
       case 5: /* cgi.upgrade */
         pconf->upgrade = (unsigned short)cpv->v.u;
         break;
+      case 6: /* cgi.limits */
+        if (cpv->vtype != T_CONFIG_LOCAL) break;
+        pconf->limits = cpv->v.v;
+        break;
       default:/* should not happen */
         return;
     }
@@ -188,6 +216,26 @@ static void mod_cgi_patch_config(request_st * const r, plugin_data * const p) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
             mod_cgi_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
+}
+
+static cgi_limits * mod_cgi_parse_limits(const array * const a, log_error_st * const errh) {
+    cgi_limits * const limits = calloc(1, sizeof(cgi_limits));
+    force_assert(limits);
+    for (uint32_t i = 0; i < a->used; ++i) {
+        const data_unset * const du = a->data[i];
+        int32_t v = config_plugin_value_to_int32(du, -1);
+        if (buffer_eq_icase_slen(&du->key, CONST_STR_LEN("read-timeout"))) {
+            limits->read_timeout = (unix_time64_t)v;
+            continue;
+        }
+        if (buffer_eq_icase_slen(&du->key, CONST_STR_LEN("write-timeout"))) {
+            limits->write_timeout = (unix_time64_t)v;
+            continue;
+        }
+        log_error(errh, __FILE__, __LINE__,
+                  "unrecognized cgi.limits param: %s", du->key.ptr);
+    }
+    return limits;
 }
 
 SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
@@ -210,6 +258,9 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
      ,{ CONST_STR_LEN("cgi.upgrade"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("cgi.limits"),
+        T_CONFIG_ARRAY_KVANY,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -222,7 +273,7 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
     /* process and validate config directives
      * (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
-        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* cgi.assign */
@@ -244,6 +295,11 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
                 break;
               case 4: /* cgi.local-redir */
               case 5: /* cgi.upgrade */
+                break;
+              case 6: /* cgi.limits */
+                cpv->v.v = mod_cgi_parse_limits(cpv->v.a, srv->errh);
+                if (NULL == cpv->v.v) return HANDLER_ERROR;
+                cpv->vtype = T_CONFIG_LOCAL;
                 break;
               default:/* should not happen */
                 break;
@@ -431,9 +487,12 @@ static handler_t cgi_response_headers(request_st * const r, struct http_response
 
 
 static int cgi_recv_response(request_st * const r, handler_ctx * const hctx) {
+		const off_t bytes_in = r->write_queue.bytes_in;
 		switch (http_response_read(r, &hctx->opts,
 					   hctx->response, hctx->fdn)) {
 		default:
+			if (r->write_queue.bytes_in > bytes_in)
+				hctx->read_ts = log_monotonic_secs;
 			return HANDLER_GO_ON;
 		case HANDLER_ERROR:
 			http_response_backend_error(r);
@@ -543,6 +602,7 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 	for (c = cq->first; c; c = cq->first) {
 		ssize_t wr = chunkqueue_write_chunk_to_pipe(fd, cq, r->conf.errh);
 		if (wr > 0) {
+			hctx->write_ts = log_monotonic_secs;
 			chunkqueue_mark_written(cq, wr);
 			/* continue if wrote whole chunk or wrote 16k block
 			 * (see chunkqueue_write_chunk_file_intermed()) */
@@ -605,6 +665,7 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 			}
 		} else {
 			/* more request body remains to be sent to CGI so register for fdevents */
+			hctx->write_ts = log_monotonic_secs;
 			fdevent_fdnode_event_set(ev, hctx->fdntocgi, FDEVENT_OUT);
 		}
 	}
@@ -734,6 +795,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 			cgi_connection_close(hctx);
 			return -1;
 		}
+		hctx->read_ts = log_monotonic_secs;
 		fdevent_fdnode_event_set(ev, hctx->fdn, FDEVENT_IN | FDEVENT_RDHUP);
 
 		return 0;
@@ -825,6 +887,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			handler_t rc = cgi_recv_response(r, hctx);  /*(might invalidate hctx)*/
 			if (rc == HANDLER_COMEBACK) mod_cgi_local_redir(r);
 			if (rc != HANDLER_GO_ON) return rc;          /*(unless HANDLER_GO_ON)*/
+			hctx->read_ts = log_monotonic_secs;
 			fdevent_fdnode_event_add(hctx->ev, hctx->fdn, FDEVENT_IN);
 		}
 	}
@@ -878,6 +941,57 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 }
 
 
+__attribute_cold__
+__attribute_noinline__
+static void cgi_trigger_hctx_timeout(handler_ctx * const hctx, const char * const msg) {
+    request_st * const r = hctx->r;
+    joblist_append(r->con);
+
+    log_error(r->conf.errh, __FILE__, __LINE__,
+      "%s timeout on CGI: %s (pid: %lld)",
+      msg, r->physical.path.ptr, (long long)hctx->pid);
+
+    if (*msg == 'w') { /* "write" */
+        /* theoretically, response might be waiting on hctx->fdn pipe
+         * if it arrived since we last checked for event, and if CGI
+         * timeout out while reading (or did not read) request body */
+        handler_t rc = cgi_recv_response(r, hctx); /*(might invalidate hctx)*/
+        if (rc != HANDLER_GO_ON) return;            /*(unless HANDLER_GO_ON)*/
+    }
+
+    if (0 == r->http_status) r->http_status = 504; /* Gateway Timeout */
+    cgi_connection_close(hctx);
+}
+
+
+static handler_t cgi_trigger_cb(server *srv, void *p_d) {
+    UNUSED(srv);
+    const unix_time64_t mono = log_monotonic_secs;
+    const buffer_pid_t * const cgi_pid = &((plugin_data *)p_d)->cgi_pid;
+    for (size_t i = 0, used = cgi_pid->used; i < used; ++i) {
+        /*(hctx stays in cgi_pid list until process pid is reaped,
+         * so p->cgi_pid[] is not modified during this loop)*/
+        handler_ctx * const hctx = (handler_ctx *)cgi_pid->ptr[i].ctx;
+        if (!hctx) continue; /*(already called cgi_pid_kill())*/
+        const cgi_limits * const limits = hctx->conf.limits;
+        if (NULL == limits) continue;
+        if (limits->read_timeout && hctx->fdn
+            && (fdevent_fdnode_interest(hctx->fdn) & FDEVENT_IN)
+            && mono - hctx->read_ts > limits->read_timeout) {
+            cgi_trigger_hctx_timeout(hctx, "read");
+            continue;
+        }
+        if (limits->write_timeout && hctx->fdntocgi
+            && (fdevent_fdnode_interest(hctx->fdntocgi) & FDEVENT_OUT)
+            && mono - hctx->write_ts > limits->write_timeout) {
+            cgi_trigger_hctx_timeout(hctx, "write");
+            continue;
+        }
+    }
+    return HANDLER_GO_ON;
+}
+
+
 static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
     plugin_data *p = (plugin_data *)p_d;
     for (size_t i = 0; i < p->cgi_pid.used; ++i) {
@@ -920,6 +1034,7 @@ int mod_cgi_plugin_init(plugin *p) {
 	p->handle_request_reset = cgi_connection_close_callback;
 	p->handle_subrequest_start = cgi_is_handled;
 	p->handle_subrequest = mod_cgi_handle_subrequest;
+	p->handle_trigger = cgi_trigger_cb;
 	p->handle_waitpid = cgi_waitpid_cb;
 	p->init           = mod_cgi_init;
 	p->cleanup        = mod_cgi_free;
