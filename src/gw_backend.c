@@ -489,7 +489,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
 
     if (-1 == status && errno != ENOENT && proc->unixsocket) {
         log_perror(errh, __FILE__, __LINE__,
-          "unlink %s after connect failed", proc->unixsocket->ptr);
+          "connect %s", proc->unixsocket->ptr);
         unlink(proc->unixsocket->ptr);
     }
 
