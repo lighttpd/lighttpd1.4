@@ -47,60 +47,29 @@ static connection *connection_init(server *srv);
 
 static void connection_reset(connection *con);
 
-__attribute_cold__
-__attribute_noinline__
-static void connections_extend(server * const srv, connections * const conns) {
-    const uint32_t n = (srv->srvconf.max_conns >= 128 && conns->size >= 16)
-      ? (0 != conns->size)            ? 128 : 128 - 16
-      : (srv->srvconf.max_conns > 16) ? 16  : srv->srvconf.max_conns;
-    if (conns->size < 128 && srv->srvconf.h2proto)
-        request_pool_extend(srv, n * 8);
-
-    conns->size += n;
-    conns->ptr = realloc(conns->ptr, sizeof(*conns->ptr) * conns->size);
-    force_assert(NULL != conns->ptr);
-
-    for (uint32_t i = conns->used; i < conns->size; ++i) {
-        conns->ptr[i] = connection_init(srv);
-        connection_reset(conns->ptr[i]);
-    }
-}
-
 static connection *connections_get_new_connection(server *srv) {
-	connections * const conns = &srv->conns;
-
-	if (conns->size == conns->used)
-		connections_extend(srv, conns);
-
-	conns->ptr[conns->used]->ndx = conns->used;
-	return conns->ptr[conns->used++];
+    connections * const conns = &srv->conns;
+    connection *con;
+    if (srv->conns_pool) {
+        con = srv->conns_pool;
+        srv->conns_pool = con->next;
+    }
+    else {
+        con = connection_init(srv);
+        connection_reset(con);
+        if (srv->srvconf.h2proto)
+            request_pool_extend(srv, 8);
+    }
+    con->next = NULL;
+    return (conns->ptr[(con->ndx = conns->used++)] = con);
 }
 
 static void connection_del(server *srv, connection *con) {
-	connections * const conns = &srv->conns;
-
-	if (-1 == con->ndx) return;
-	uint32_t i = (uint32_t)con->ndx;
-
-	/* not last element */
-
-	if (i != --conns->used) {
-		connection * const temp = conns->ptr[i];
-		conns->ptr[i] = conns->ptr[conns->used];
-		conns->ptr[conns->used] = temp;
-
-		conns->ptr[i]->ndx = i;
-		conns->ptr[conns->used]->ndx = -1;
-	}
-
-	con->ndx = -1;
-#if 0
-	fprintf(stderr, "%s.%d: del: (%d)", __FILE__, __LINE__, conns->used);
-	for (i = 0; i < conns->used; i++) {
-		fprintf(stderr, "%d ", conns->ptr[i]->fd);
-	}
-	fprintf(stderr, "\n");
-#endif
+    con->next = srv->conns_pool;
+    srv->conns_pool = con;
+    connections * const conns = &srv->conns;
+    if (con->ndx != --conns->used) /* not last element */
+        (conns->ptr[con->ndx] = conns->ptr[conns->used])->ndx = con->ndx;
 }
 
 static void connection_close(connection *con) {
@@ -541,12 +510,7 @@ static connection *connection_init(server *srv) {
 	connection * const con = calloc(1, sizeof(*con));
 	force_assert(NULL != con);
 
-	con->fd = 0;
-	con->ndx = -1;
-	con->bytes_written = 0;
-	con->bytes_read = 0;
-
-	con->srv  = srv;
+	con->srv = srv;
 	con->plugin_slots = srv->plugin_slots;
 	con->config_data_base = srv->config_data_base;
 
@@ -563,26 +527,44 @@ static connection *connection_init(server *srv) {
 }
 
 
+static void connection_free(connection * const con) {
+    request_st * const r = &con->request;
+
+    connection_reset(con);
+    if (con->write_queue != &r->write_queue)
+        chunkqueue_free(con->write_queue);
+    if (con->read_queue != &r->read_queue)
+        chunkqueue_free(con->read_queue);
+    request_free_data(r);
+
+    free(con->plugin_ctx);
+    free(con->dst_addr_buf.ptr);
+    free(con);
+}
+
+void connections_pool_clear(server * const srv) {
+    connection *con;
+    while ((con = srv->conns_pool)) {
+        srv->conns_pool = con->next;
+        connection_free(con);
+    }
+}
+
 void connections_free(server *srv) {
-	connections * const conns = &srv->conns;
-	for (uint32_t i = 0; i < conns->size; ++i) {
-		connection *con = conns->ptr[i];
-		request_st * const r = &con->request;
+    connections_pool_clear(srv);
 
-		connection_reset(con);
-		if (con->write_queue != &r->write_queue)
-			chunkqueue_free(con->write_queue);
-		if (con->read_queue != &r->read_queue)
-			chunkqueue_free(con->read_queue);
-		request_free_data(r);
+    connections * const conns = &srv->conns;
+    for (uint32_t i = 0; i < conns->used; ++i)
+        connection_free(conns->ptr[i]);
+    free(conns->ptr);
+    conns->ptr = NULL;
+}
 
-		free(con->plugin_ctx);
-		free(con->dst_addr_buf.ptr);
-		free(con);
-	}
-
-	free(conns->ptr);
-	conns->ptr = NULL;
+void connections_init(server *srv) {
+    connections * const conns = &srv->conns;
+    conns->size = srv->srvconf.max_conns;
+    conns->ptr = calloc(conns->size, sizeof(*conns->ptr));
+    force_assert(NULL != conns->ptr);
 }
 
 

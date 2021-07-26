@@ -21,7 +21,7 @@ struct connection {
 	h2con *h2;
 
 	int fd;                      /* the FD for this connection */
-	int ndx;                     /* reverse mapping to server->connection[ndx] */
+	uint32_t ndx;                /* reverse mapping to server->connection[ndx] */
 	fdnode *fdn;                 /* fdevent (fdnode *) object */
 
 	/* fd states */
@@ -60,6 +60,8 @@ struct connection {
 
 	uint32_t request_count;      /* number of requests handled in this connection */
 	int keep_alive_idle;         /* remember max_keep_alive_idle from config */
+
+	connection *next;
 };
 
 typedef struct {
@@ -169,6 +171,7 @@ struct server {
 	int sockets_disabled;
 
 	uint32_t max_conns;
+	connection *conns_pool;
 
 	log_error_st *errh;
 

@@ -1766,6 +1766,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		/* or use the default: we really don't want to hit max-fds */
 		srv->max_conns = srv->srvconf.max_conns = srv->max_fds/3;
 	}
+	connections_init(srv);
 
 	/* libev backend overwrites our SIGCHLD handler and calls waitpid on SIGCHLD; we want our own SIGCHLD handling. */
 #ifdef HAVE_SIGACTION
