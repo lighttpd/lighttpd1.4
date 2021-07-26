@@ -1735,6 +1735,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 #endif
 
 	srv->max_fds = (int)srv->srvconf.max_fds;
+        if (srv->max_fds < 32) /*(sanity check; not expected)*/
+            srv->max_fds = 32; /*(server load checks will fail if too low)*/
 	srv->ev = fdevent_init(srv->srvconf.event_handler, &srv->max_fds, &srv->cur_fds, srv->errh);
 	if (NULL == srv->ev) {
 		log_error(srv->errh, __FILE__, __LINE__, "fdevent_init failed");
