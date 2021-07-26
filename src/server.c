@@ -1065,8 +1065,14 @@ static void server_process_fdwaitqueue (server *srv) {
         if (i == fdwaitqueue->used) break;
         connection_state_machine(fdwaitqueue->ptr[i++]);
     }
-    if (i > 0 && 0 != (fdwaitqueue->used -= i)) {
-	memmove(fdwaitqueue->ptr, fdwaitqueue->ptr+i, fdwaitqueue->used * sizeof(*(fdwaitqueue->ptr)));
+    if (0 == (fdwaitqueue->used -= i)) {
+        free(fdwaitqueue->ptr);
+        fdwaitqueue->ptr = NULL;
+        fdwaitqueue->size = 0;
+    }
+    else if (i > 0) {
+        memmove(fdwaitqueue->ptr, fdwaitqueue->ptr+i,
+                fdwaitqueue->used * sizeof(*(fdwaitqueue->ptr)));
     }
 }
 
