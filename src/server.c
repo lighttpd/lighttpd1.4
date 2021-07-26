@@ -1758,13 +1758,13 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		log_error(srv->errh, __FILE__, __LINE__,
 		  "can't have more connections than fds/2: %hu %d",
 		  srv->srvconf.max_conns, srv->max_fds);
-		srv->max_conns = srv->max_fds/2;
+		srv->max_conns = srv->srvconf.max_conns = srv->max_fds/2;
 	} else if (srv->srvconf.max_conns) {
 		/* otherwise respect the wishes of the user */
 		srv->max_conns = srv->srvconf.max_conns;
 	} else {
 		/* or use the default: we really don't want to hit max-fds */
-		srv->max_conns = srv->max_fds/3;
+		srv->max_conns = srv->srvconf.max_conns = srv->max_fds/3;
 	}
 
 	/* libev backend overwrites our SIGCHLD handler and calls waitpid on SIGCHLD; we want our own SIGCHLD handling. */

@@ -473,7 +473,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
         }
     }
 
-    dirlist_max_in_progress = srv->max_conns >> 4;
+    dirlist_max_in_progress = srv->srvconf.max_conns >> 4;
     if (0 == dirlist_max_in_progress) dirlist_max_in_progress = 1;
 
     p->defaults.dir_listing = 0;

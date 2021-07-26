@@ -50,9 +50,9 @@ static void connection_reset(connection *con);
 __attribute_cold__
 __attribute_noinline__
 static void connections_extend(server * const srv, connections * const conns) {
-    const uint32_t n = (srv->max_conns >= 128 && conns->size >= 16)
-      ? (0 != conns->size)    ? 128 : 128 - 16
-      : (srv->max_conns > 16) ? 16  : srv->max_conns;
+    const uint32_t n = (srv->srvconf.max_conns >= 128 && conns->size >= 16)
+      ? (0 != conns->size)            ? 128 : 128 - 16
+      : (srv->srvconf.max_conns > 16) ? 16  : srv->srvconf.max_conns;
     if (conns->size < 128 && srv->srvconf.h2proto)
         request_pool_extend(srv, n * 8);
 
