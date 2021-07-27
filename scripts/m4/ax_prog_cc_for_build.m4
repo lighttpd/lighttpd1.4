@@ -32,7 +32,7 @@
 #   and this notice are preserved. This file is offered as-is, without any
 #   warranty.
 
-#serial 18
+#serial 20
 
 AU_ALIAS([AC_PROG_CC_FOR_BUILD], [AX_PROG_CC_FOR_BUILD])
 AC_DEFUN([AX_PROG_CC_FOR_BUILD], [dnl
@@ -44,6 +44,8 @@ dnl Use the standard macros, but make them use other variable names
 dnl
 pushdef([ac_cv_prog_CPP], ac_cv_build_prog_CPP)dnl
 pushdef([ac_cv_prog_cc_c89], ac_cv_build_prog_cc_c89)dnl
+pushdef([ac_cv_prog_cc_c99], ac_cv_build_prog_cc_c99)dnl
+pushdef([ac_cv_prog_cc_c11], ac_cv_build_prog_cc_c11)dnl
 pushdef([ac_cv_prog_gcc], ac_cv_build_prog_gcc)dnl
 pushdef([ac_cv_prog_cc_works], ac_cv_build_prog_cc_works)dnl
 pushdef([ac_cv_prog_cc_cross], ac_cv_build_prog_cc_cross)dnl
@@ -83,7 +85,21 @@ AS_IF([test -n "$build"],      [ac_build_tool_prefix="$build-"],
       [test -n "$build_alias"],[ac_build_tool_prefix="$build_alias-"])
 
 AC_LANG_PUSH([C])
+
+dnl The pushdef([ac_cv_c_compiler_gnu], ...) currently does not cover
+dnl the use of this variable in _AC_LANG_COMPILER_GNU called by
+dnl AC_PROG_CC. Unset this cache variable temporarily as a workaround.
+was_set_ac_cv_c_compiler_gnu=${[ac_cv_c_compiler_gnu]+y}
+AS_IF([test ${was_set_ac_cv_c_compiler_gnu}],
+    [saved_ac_cv_c_compiler_gnu=$[ac_cv_c_compiler_gnu]
+    AS_UNSET([[ac_cv_c_compiler_gnu]])])
+
 AC_PROG_CC
+
+dnl Restore ac_cv_c_compiler_gnu
+AS_IF([test ${was_set_ac_cv_c_compiler_gnu}],
+  [[ac_cv_c_compiler_gnu]=saved_ac_cv_c_compiler_gnu])
+
 _AC_COMPILER_EXEEXT
 _AC_COMPILER_OBJEXT
 AC_PROG_CPP
