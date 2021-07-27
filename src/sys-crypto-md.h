@@ -287,6 +287,8 @@ SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
 #undef SIZEOF_LONG_LONG
 #endif
 
+#include <wolfssl/options.h> /* wolfssl NO_* macros */
+
 #ifndef NO_MD4
 #include <wolfssl/wolfcrypt/md4.h>
 #include <wolfssl/openssl/md4.h>
