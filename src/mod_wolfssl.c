@@ -790,6 +790,10 @@ mod_wolfssl_CTX_use_certificate_chain_file (WOLFSSL_CTX *ssl_ctx, const char *fn
 static STACK_OF(X509_NAME) *
 mod_wolfssl_load_client_CA_file (const buffer *ssl_ca_file, log_error_st *errh)
 {
+    /* wolfSSL_sk_X509_NAME_push prior to version 4.8.0 returned 0
+     * on success. This was changed to WOLFSSL_SUCCESS from 4.8.0. */
+    int wolf_success_rc = wolfSSL_lib_version_hex() < 0x04008000
+                            ? 0 : WOLFSSL_SUCCESS;
     /* similar to wolfSSL_load_client_CA_file(), plus some processing */
     buffer **certs = NULL;
     if (NULL == mod_wolfssl_load_pem_file(ssl_ca_file->ptr, errh, &certs)) {
@@ -814,7 +818,7 @@ mod_wolfssl_load_client_CA_file (const buffer *ssl_ca_file, log_error_st *errh)
         WOLFSSL_X509_NAME *subj = NULL;
         if (NULL == ca
             || NULL == (subj = wolfSSL_X509_get_subject_name(ca))
-            || 0 != wolfSSL_sk_X509_NAME_push(canames,
+            || wolf_success_rc != wolfSSL_sk_X509_NAME_push(canames,
                                               wolfSSL_X509_NAME_dup(subj))) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: couldn't read X509 certificates from '%s'",
@@ -837,6 +841,10 @@ mod_wolfssl_load_client_CA_file (const buffer *ssl_ca_file, log_error_st *errh)
 static plugin_cacerts *
 mod_wolfssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
 {
+    /* wolfSSL_sk_X509_NAME_push prior to version 4.8.0 returned 0
+     * on success. This was changed to WOLFSSL_SUCCESS from 4.8.0. */
+    int wolf_success_rc = wolfSSL_lib_version_hex() < 0x04008000
+                            ? 0 : WOLFSSL_SUCCESS;
     /* similar to mod_wolfSSL_load_client_CA_file(), plus some processing */
     /* similar to wolfSSL_load_client_CA_file(), plus some processing */
     buffer **certs = NULL;
@@ -869,7 +877,7 @@ mod_wolfssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
         WOLFSSL_X509_NAME *subj = NULL;
         if (NULL == ca || !wolfSSL_X509_STORE_add_cert(castore, ca)
             || NULL == (subj = wolfSSL_X509_get_subject_name(ca))
-            || 0 != wolfSSL_sk_X509_NAME_push(canames,
+            || wolf_success_rc != wolfSSL_sk_X509_NAME_push(canames,
                                               wolfSSL_X509_NAME_dup(subj))) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: couldn't read X509 certificates from '%s'",

@@ -280,6 +280,8 @@ SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
  * (undef of OPENSSL_EXTRA and NO_OLD_WC_NAMES not sufficient, and not friendly
  *  to do in a header when others might rely on them) */
 
+#include <wolfssl/options.h>
+
 /* workaround fragile code in wolfssl/wolfcrypto/types.h */
 #if !defined(SIZEOF_LONG) || !defined(SIZEOF_LONG_LONG)
 #undef SIZEOF_LONG
