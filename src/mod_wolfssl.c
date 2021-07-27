@@ -811,6 +811,9 @@ mod_wolfssl_load_client_CA_file (const buffer *ssl_ca_file, log_error_st *errh)
         return NULL;
     }
 
+    /* wolfSSL_sk_X509_NAME_push prior to version 4.8.0 returned 0 on success.
+     * The return value was changed to WOLFSSL_SUCCESS (not 0) from 4.8.0. */
+    const int x = wolfSSL_lib_version_hex() < 0x04008000 ? 0 : WOLFSSL_SUCCESS;
     for (int i = 0; NULL != certs[i]; ++i) {
         WOLFSSL_X509 *ca =
           wolfSSL_X509_load_certificate_buffer((unsigned char *)certs[i]->ptr,
@@ -819,7 +822,7 @@ mod_wolfssl_load_client_CA_file (const buffer *ssl_ca_file, log_error_st *errh)
         WOLFSSL_X509_NAME *subj = NULL;
         if (NULL == ca
             || NULL == (subj = wolfSSL_X509_get_subject_name(ca))
-            || 0 != wolfSSL_sk_X509_NAME_push(canames,
+            || x != wolfSSL_sk_X509_NAME_push(canames,
                                               wolfSSL_X509_NAME_dup(subj))) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: couldn't read X509 certificates from '%s'",
@@ -865,6 +868,9 @@ mod_wolfssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
         return NULL;
     }
 
+    /* wolfSSL_sk_X509_NAME_push prior to version 4.8.0 returned 0 on success.
+     * The return value was changed to WOLFSSL_SUCCESS (not 0) from 4.8.0. */
+    const int x = wolfSSL_lib_version_hex() < 0x04008000 ? 0 : WOLFSSL_SUCCESS;
     for (int i = 0; NULL != certs[i]; ++i) {
         WOLFSSL_X509 *ca =
           wolfSSL_X509_load_certificate_buffer((unsigned char *)certs[i]->ptr,
@@ -873,7 +879,7 @@ mod_wolfssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
         WOLFSSL_X509_NAME *subj = NULL;
         if (NULL == ca || !wolfSSL_X509_STORE_add_cert(castore, ca)
             || NULL == (subj = wolfSSL_X509_get_subject_name(ca))
-            || 0 != wolfSSL_sk_X509_NAME_push(canames,
+            || x != wolfSSL_sk_X509_NAME_push(canames,
                                               wolfSSL_X509_NAME_dup(subj))) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: couldn't read X509 certificates from '%s'",
