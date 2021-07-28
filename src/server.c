@@ -262,12 +262,8 @@ __attribute_cold__
 static server *server_init(void) {
 	server *srv = calloc(1, sizeof(*srv));
 	force_assert(srv);
-#define CLEAN(x) \
-	srv->x = buffer_init();
 
-	CLEAN(tmp_buf);
-#undef CLEAN
-	connection_joblist = &srv->joblist_A;
+	srv->tmp_buf = buffer_init();
 
 	strftime_cache_reset();
 
@@ -307,6 +303,8 @@ static server *server_init(void) {
 	srv->loadavg[2] = 0.0;
 	srv->stdin_fd = -1;
 
+	log_con_jqueue = (connection *)(uintptr_t)&log_con_jqueue;/*(sentinel)*/
+
 	return srv;
 }
 
@@ -327,19 +325,12 @@ static void server_free(server *srv) {
 		close(srv->stdin_fd);
 	}
 
-#define CLEAN(x) \
-	buffer_free(srv->x);
-
-	CLEAN(tmp_buf);
-
-#undef CLEAN
+	buffer_free(srv->tmp_buf);
 
 	fdevent_free(srv->ev);
 
 	config_free(srv);
 
-	free(srv->joblist_A.ptr);
-	free(srv->joblist_B.ptr);
 	free(srv->fdwaitqueue.ptr);
 
 	stat_cache_free();
@@ -1926,12 +1917,12 @@ static void server_handle_sigchld (server * const srv) {
 }
 
 __attribute_hot__
-static void server_run_con_queue (connections * const restrict joblist) {
-    connection * const * const restrict conlist = joblist->ptr;
-    const uint32_t used = joblist->used;
-    joblist->used = 0;
-    for (uint32_t i = 0; i < used; ++i) {
-        connection_state_machine(conlist[i]);
+__attribute_nonnull__
+static void server_run_con_queue (connection * const restrict joblist, const connection * const sentinel) {
+    for (connection *con = joblist, *jqnext; con != sentinel; con = jqnext) {
+        jqnext = con->jqnext;
+        con->jqnext = NULL;
+        connection_state_machine(con);
     }
 }
 
@@ -1984,17 +1975,14 @@ static void server_main_loop (server * const srv) {
 			server_process_fdwaitqueue(srv);
 		}
 
-		connections * const joblist = connection_joblist;
+		static connection * const sentinel =
+		  (connection *)(uintptr_t)&log_con_jqueue;
+		connection * const joblist = log_con_jqueue;
+		log_con_jqueue = sentinel;
+		server_run_con_queue(joblist, sentinel);
 
-		if (fdevent_poll(srv->ev, joblist->used ? 0 : 1000) > 0) {
+		if (fdevent_poll(srv->ev, log_con_jqueue != sentinel ? 0 : 1000) > 0)
 			last_active_ts = log_monotonic_secs;
-		}
-
-		connection_joblist = (joblist == &srv->joblist_A)
-		  ? &srv->joblist_B
-		  : &srv->joblist_A;
-
-		server_run_con_queue(joblist);
 	}
 }
 

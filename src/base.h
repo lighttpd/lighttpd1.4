@@ -22,6 +22,7 @@ struct connection {
 
 	int fd;                      /* the FD for this connection */
 	fdnode *fdn;                 /* fdevent (fdnode *) object */
+	connection *jqnext;
 
 	/* fd states */
 	signed char is_readable;
@@ -63,6 +64,18 @@ struct connection {
 	connection *next;
 	connection *prev;
 };
+
+/* log_con_jqueue is in log.c to be defined in shared object */
+#define joblist_append(con) connection_jq_append(con)
+extern connection *log_con_jqueue;
+static inline void connection_jq_append(connection * const restrict con);
+static inline void connection_jq_append(connection * const restrict con)
+{
+    if (!con->jqnext) {
+        con->jqnext = log_con_jqueue;
+        log_con_jqueue = con;
+    }
+}
 
 typedef struct {
 	connection **ptr;
@@ -153,10 +166,6 @@ struct server {
 	/* buffers */
 	buffer *tmp_buf;
 
-	connections joblist_A;
-	connections joblist_B;
-	connections fdwaitqueue;
-
 	/* counters */
 	int con_opened;
 	int con_read;
@@ -172,6 +181,7 @@ struct server {
 	uint32_t lim_conns;
 	connection *conns;
 	connection *conns_pool;
+	connections fdwaitqueue;
 
 	log_error_st *errh;
 

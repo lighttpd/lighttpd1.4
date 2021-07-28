@@ -21,6 +21,9 @@
 # include <syslog.h>
 #endif
 
+/* log_con_jqueue instance here to be defined in shared object (see base.h) */
+connection *log_con_jqueue;
+
 unix_time64_t log_epoch_secs = 0;
 unix_time64_t log_monotonic_secs = 0;
 
