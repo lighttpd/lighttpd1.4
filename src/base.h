@@ -21,7 +21,6 @@ struct connection {
 	h2con *h2;
 
 	int fd;                      /* the FD for this connection */
-	uint32_t ndx;                /* reverse mapping to server->connection[ndx] */
 	fdnode *fdn;                 /* fdevent (fdnode *) object */
 
 	/* fd states */
@@ -62,6 +61,7 @@ struct connection {
 	int keep_alive_idle;         /* remember max_keep_alive_idle from config */
 
 	connection *next;
+	connection *prev;
 };
 
 typedef struct {
@@ -153,7 +153,6 @@ struct server {
 	/* buffers */
 	buffer *tmp_buf;
 
-	connections conns;
 	connections joblist_A;
 	connections joblist_B;
 	connections fdwaitqueue;
@@ -171,6 +170,7 @@ struct server {
 	int sockets_disabled;
 
 	uint32_t lim_conns;
+	connection *conns;
 	connection *conns_pool;
 
 	log_error_st *errh;

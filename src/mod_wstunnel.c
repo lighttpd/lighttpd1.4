@@ -592,8 +592,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
 
     gw_handle_trigger(srv, p_d);
 
-    for (uint32_t i = 0; i < srv->conns.used; ++i) {
-        connection *con = srv->conns.ptr[i];
+    for (connection *con = srv->conns; con; con = con->next) {
         request_st * const r = &con->request;
         handler_ctx *hctx = r->plugin_ctx[p->id];
         if (NULL == hctx || r->handler_module != p->self)

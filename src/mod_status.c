@@ -298,9 +298,7 @@ static void mod_status_html_rtable (request_st * const rq, const server * const 
      * (avoid write() per connection) */
     buffer * const b = rq->tmp_buf;
     buffer_clear(b);
-    connection * const * const cptr = srv->conns.ptr;
-    for (uint32_t i = 0, used = srv->conns.used; i < used; ++i) {
-        const connection * const con = cptr[i];
+    for (const connection *con = srv->conns; con; con = con->next) {
         const request_st * const r = &con->request;
         if (r->http_status <= HTTP_VERSION_1_1) {
             if (buffer_string_space(b) < 4096) {
@@ -547,8 +545,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	buffer_append_string_len(b, CONST_STR_LEN(" connections</b>\n"));
 
 	int per_line = 50;
-	for (j = 0; j < srv->conns.used; ++j) {
-		connection *c = srv->conns.ptr[j];
+	for (const connection *c = srv->conns; c; c = c->next) {
 		const request_st * const cr = &c->request;
 		const char *state;
 
@@ -635,8 +632,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, request_st * 
 	buffer_append_int(b, srv->lim_conns); /*(could omit)*/
 
 	buffer_append_string_len(b, CONST_STR_LEN("\nScoreboard: "));
-	for (uint32_t i = 0; i < srv->conns.used; ++i) {
-		connection *c = srv->conns.ptr[i];
+	for (const connection *c = srv->conns; c; c = c->next) {
 		const request_st * const cr = &c->request;
 		const char *state =
 		  ((c->h2 && 0 == c->h2->rused)
@@ -894,11 +890,8 @@ TRIGGER_FUNC(mod_status_trigger) {
 	plugin_data *p = p_d;
 
 	/* check all connections */
-	for (uint32_t i = 0; i < srv->conns.used; ++i) {
-		connection *c = srv->conns.ptr[i];
-
+	for (const connection *c = srv->conns; c; c = c->next)
 		p->bytes_written += c->bytes_written_cur_second;
-	}
 
 	/* a sliding average */
 	p->mod_5s_traffic_out[p->mod_5s_ndx] = p->bytes_written;

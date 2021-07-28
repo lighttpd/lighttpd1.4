@@ -131,13 +131,11 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 	if (p->conf.max_conns == 0) return HANDLER_GO_ON;
 
 	sock_addr * const dst_addr = &r->con->dst_addr;
-	const connections * const conns = &r->con->srv->conns;
-	for (uint32_t i = 0, conns_by_ip = 0; i < conns->used; ++i) {
-		connection *c = conns->ptr[i];
-
+	uint32_t conns_by_ip = 0;
+	for (const connection *c = r->con->srv->conns; c; c = c->next) {
 		/* check if other connections are already actively serving data for the same IP
 		 * we can only ban connections which are already behind the 'read request' state
-		 * */
+		 */
 		if (c->request.state <= CON_STATE_REQUEST_END) continue;
 
 		if (!sock_addr_is_addr_eq(&c->dst_addr, dst_addr)) continue;

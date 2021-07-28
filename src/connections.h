@@ -9,8 +9,6 @@ struct server_socket;   /* declaration */
 void connections_pool_clear(server *srv);
 
 __attribute_cold__
-void connections_init(server *srv);
-__attribute_cold__
 void connections_free(server *srv);
 
 __attribute_cold__

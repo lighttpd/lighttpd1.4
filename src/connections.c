@@ -48,7 +48,6 @@ static connection *connection_init(server *srv);
 static void connection_reset(connection *con);
 
 static connection *connections_get_new_connection(server *srv) {
-    connections * const conns = &srv->conns;
     connection *con;
     --srv->lim_conns;
     if (srv->conns_pool) {
@@ -61,16 +60,22 @@ static connection *connections_get_new_connection(server *srv) {
         if (srv->srvconf.h2proto)
             request_pool_extend(srv, 8);
     }
-    con->next = NULL;
-    return (conns->ptr[(con->ndx = conns->used++)] = con);
+    /*con->prev = NULL;*//*(already set)*/
+    if ((con->next = srv->conns))
+        con->next->prev = con;
+    return (srv->conns = con);
 }
 
 static void connection_del(server *srv, connection *con) {
+    if (con->next)
+        con->next->prev = con->prev;
+    if (con->prev)
+        con->prev->next = con->next;
+    else
+        srv->conns = con->next;
+    con->prev = NULL;
     con->next = srv->conns_pool;
     srv->conns_pool = con;
-    connections * const conns = &srv->conns;
-    if (con->ndx != --conns->used) /* not last element */
-        (conns->ptr[con->ndx] = conns->ptr[conns->used])->ndx = con->ndx;
     ++srv->lim_conns;
 }
 
@@ -555,18 +560,11 @@ void connections_pool_clear(server * const srv) {
 void connections_free(server *srv) {
     connections_pool_clear(srv);
 
-    connections * const conns = &srv->conns;
-    for (uint32_t i = 0; i < conns->used; ++i)
-        connection_free(conns->ptr[i]);
-    free(conns->ptr);
-    conns->ptr = NULL;
-}
-
-void connections_init(server *srv) {
-    connections * const conns = &srv->conns;
-    conns->size = srv->srvconf.max_conns;
-    conns->ptr = calloc(conns->size, sizeof(*conns->ptr));
-    force_assert(NULL != conns->ptr);
+    connection *con;
+    while ((con = srv->conns)) {
+        srv->conns = con->next;
+        connection_free(con);
+    }
 }
 
 
@@ -1566,18 +1564,17 @@ static void connection_check_timeout (connection * const con, const unix_time64_
 
 void connection_periodic_maint (server * const srv, const unix_time64_t cur_ts) {
     /* check all connections for timeouts */
-    connections * const conns = &srv->conns;
-    for (size_t ndx = 0; ndx < conns->used; ++ndx) {
-        connection_check_timeout(conns->ptr[ndx], cur_ts);
+    for (connection *con = srv->conns, *tc; con; con = tc) {
+        tc = con->next;
+        connection_check_timeout(con, cur_ts);
     }
 }
 
 void connection_graceful_shutdown_maint (server *srv) {
-    connections * const conns = &srv->conns;
     const int graceful_expire =
       (srv->graceful_expire_ts && srv->graceful_expire_ts < log_monotonic_secs);
-    for (uint32_t ndx = 0; ndx < conns->used; ++ndx) {
-        connection * const con = conns->ptr[ndx];
+    for (connection *con = srv->conns, *tc; con; con = tc) {
+        tc = con->next;
         int changed = 0;
 
         request_st * const r = &con->request;

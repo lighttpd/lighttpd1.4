@@ -1766,7 +1766,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		/* or use the default: we really don't want to hit max-fds */
 		srv->lim_conns = srv->srvconf.max_conns = srv->max_fds/3;
 	}
-	connections_init(srv);
 
 	/* libev backend overwrites our SIGCHLD handler and calls waitpid on SIGCHLD; we want our own SIGCHLD handling. */
 #ifdef HAVE_SIGACTION
@@ -1969,7 +1968,7 @@ static void server_main_loop (server * const srv) {
 
 		if (graceful_shutdown) {
 			server_graceful_state(srv);
-			if (0 == srv->conns.used && graceful_shutdown) {
+			if (NULL == srv->conns && graceful_shutdown) {
 				/* we are in graceful shutdown phase and all connections are closed
 				 * we are ready to terminate without harming anyone */
 				srv_shutdown = 1;
@@ -2035,7 +2034,7 @@ int main (int argc, char **argv) {
                 server_graceful_state(srv);
             }
 
-            if (0 == srv->conns.used) rc = 0;
+            if (NULL == srv->conns) rc = 0;
             if (2 == graceful_shutdown) { /* value 2 indicates idle timeout */
                 log_error(srv->errh, __FILE__, __LINE__,
                   "server stopped after idle timeout");
