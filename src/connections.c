@@ -181,9 +181,20 @@ static void connection_handle_shutdown(connection *con) {
 	}
 }
 
+
 __attribute_cold__
+static void connection_list_resize(connections *conns) {
+    conns->size += 16;
+    conns->ptr   = realloc(conns->ptr, sizeof(*conns->ptr) * conns->size);
+    force_assert(NULL != conns->ptr);
+}
+
+__attribute_cold__
+__attribute_noinline__
 static void connection_fdwaitqueue_append(connection *con) {
-    connection_list_append(&con->srv->fdwaitqueue, con);
+    connections * const conns = &con->srv->fdwaitqueue;
+    if (conns->used == conns->size) connection_list_resize(conns);
+    conns->ptr[conns->used++] = con;
 }
 
 

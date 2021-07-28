@@ -16,7 +16,6 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
-#include "connections.h"/* joblist_append() */
 #include "fdevent.h"
 #include "http_chunk.h"
 #include "http_header.h"

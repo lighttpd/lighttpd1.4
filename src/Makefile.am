@@ -80,7 +80,6 @@ common_src=base64.c buffer.c burl.c log.c \
 	fdevent_poll.c fdevent_linux_sysepoll.c \
 	fdevent_solaris_devpoll.c fdevent_solaris_port.c \
 	fdevent_freebsd_kqueue.c \
-	connections-glue.c \
 	configfile-glue.c \
 	http-header-glue.c \
 	http_cgi.c \

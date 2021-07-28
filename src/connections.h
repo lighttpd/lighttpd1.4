@@ -22,6 +22,4 @@ connection * connection_accepted(server *srv, const struct server_socket *srv_so
 
 void connection_state_machine(connection *con);
 
-void connection_list_append(connections *conns, connection *con);
-
 #endif

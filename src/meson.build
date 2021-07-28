@@ -717,7 +717,6 @@ common_src = [
 	'burl.c',
 	'chunk.c',
 	'configfile-glue.c',
-	'connections-glue.c',
 	'http_etag.c',
 	'fdevent_freebsd_kqueue.c',
 	'fdevent_libev.c',

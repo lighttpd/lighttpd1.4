@@ -90,7 +90,6 @@
 #include "fdevent.h"
 #include "http_header.h"
 #include "log.h"
-#include "connections.h"
 
 #define MOD_WEBSOCKET_LOG_NONE  0
 #define MOD_WEBSOCKET_LOG_ERR   1

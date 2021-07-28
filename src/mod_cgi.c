@@ -4,7 +4,6 @@
 #include "stat_cache.h"
 #include "http_kv.h"
 #include "log.h"
-#include "connections.h"
 #include "response.h"
 #include "http_cgi.h"
 #include "http_chunk.h"

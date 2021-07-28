@@ -1072,7 +1072,6 @@ static void gw_restart_dead_procs(gw_host * const host, log_error_st * const err
 
 
 #include "base.h"
-#include "connections.h"
 #include "response.h"
 
 
