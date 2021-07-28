@@ -50,6 +50,7 @@ static void connection_reset(connection *con);
 static connection *connections_get_new_connection(server *srv) {
     connections * const conns = &srv->conns;
     connection *con;
+    --srv->lim_conns;
     if (srv->conns_pool) {
         con = srv->conns_pool;
         srv->conns_pool = con->next;
@@ -70,6 +71,7 @@ static void connection_del(server *srv, connection *con) {
     connections * const conns = &srv->conns;
     if (con->ndx != --conns->used) /* not last element */
         (conns->ptr[con->ndx] = conns->ptr[conns->used])->ndx = con->ndx;
+    ++srv->lim_conns;
 }
 
 static void connection_close(connection *con) {

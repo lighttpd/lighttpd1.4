@@ -55,7 +55,7 @@ static handler_t network_server_handle_fdevent(void *context, int revents) {
 
     /* accept()s at most 100 new connections before
      * jumping out to process events on other connections */
-    int loops = (int)(srv->max_conns - srv->conns.used);
+    int loops = (int)srv->lim_conns;
     if (loops > 100)
         loops = 100;
     else if (loops <= 0)

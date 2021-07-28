@@ -170,7 +170,7 @@ struct server {
 	int cur_fds;    /* currently used fds */
 	int sockets_disabled;
 
-	uint32_t max_conns;
+	uint32_t lim_conns;
 	connection *conns_pool;
 
 	log_error_st *errh;

@@ -543,7 +543,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	                                          "</table>\n"
 	                                          "<hr />\n<pre>\n"
 	                                          "<b>"));
-	buffer_append_int(b, srv->conns.used);
+	buffer_append_int(b, srv->srvconf.max_conns - srv->lim_conns);
 	buffer_append_string_len(b, CONST_STR_LEN(" connections</b>\n"));
 
 	int per_line = 50;
@@ -629,10 +629,10 @@ static handler_t mod_status_handle_server_status_text(server *srv, request_st * 
 	buffer_append_int(b, log_epoch_secs - srv->startup_ts);
 
 	buffer_append_string_len(b, CONST_STR_LEN("\nBusyServers: "));
-	buffer_append_int(b, srv->conns.used);
+	buffer_append_int(b, srv->srvconf.max_conns - srv->lim_conns);
 
 	buffer_append_string_len(b, CONST_STR_LEN("\nIdleServers: "));
-	buffer_append_int(b, srv->conns.size - srv->conns.used);
+	buffer_append_int(b, srv->lim_conns); /*(could omit)*/
 
 	buffer_append_string_len(b, CONST_STR_LEN("\nScoreboard: "));
 	for (uint32_t i = 0; i < srv->conns.used; ++i) {
@@ -645,7 +645,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, request_st * 
 		    : mod_status_get_short_state(cr->state);
 		buffer_append_string_len(b, state, 1);
 	}
-	for (uint32_t i = 0; i < srv->conns.size - srv->conns.used; ++i) {
+	for (uint32_t i = 0; i < srv->lim_conns; ++i) { /*(could omit)*/
 		buffer_append_string_len(b, CONST_STR_LEN("_"));
 	}
 	buffer_append_string_len(b, CONST_STR_LEN("\n"));
@@ -689,10 +689,10 @@ static handler_t mod_status_handle_server_status_json(server *srv, request_st * 
 	buffer_append_int(b, log_epoch_secs - srv->startup_ts);
 
 	buffer_append_string_len(b, CONST_STR_LEN(",\n\t\"BusyServers\": "));
-	buffer_append_int(b, srv->conns.used);
+	buffer_append_int(b, srv->srvconf.max_conns - srv->lim_conns);
 
 	buffer_append_string_len(b, CONST_STR_LEN(",\n\t\"IdleServers\": "));
-	buffer_append_int(b, srv->conns.size - srv->conns.used);
+	buffer_append_int(b, srv->lim_conns); /*(could omit)*/
 	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
 
 	for (j = 0, avg = 0; j < 5; j++) {

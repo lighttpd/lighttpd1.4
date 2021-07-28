@@ -963,7 +963,7 @@ static int server_graceful_state_bg (server *srv) {
      *  to allow graceful shutdown tasks to be run by server and by modules) */
     log_error(srv->errh, __FILE__, __LINE__,
       "[note] pid %lld continuing to handle %u connection(s) in progress",
-      (long long)getpid(), srv->conns.used);
+      (long long)getpid(), srv->srvconf.max_conns - srv->lim_conns);
 
     if (0 == srv->srvconf.max_worker) {
         /* reset graceful_shutdown; wait for signal from restarted server */
@@ -1036,7 +1036,7 @@ static void server_sockets_disable (server *srv) {
     server_sockets_set_event(srv, 0);
     srv->sockets_disabled = 1;
     log_error(srv->errh, __FILE__, __LINE__,
-      (srv->conns.used >= srv->max_conns)
+      (0 == srv->lim_conns)
         ? "[note] sockets disabled, connection limit reached"
         : "[note] sockets disabled, out-of-fds");
 }
@@ -1046,13 +1046,13 @@ static void server_overload_check (server *srv) {
     if (srv->fdwaitqueue.used)
         return;
 
-    if (srv->cur_fds < srv->max_fds_lowat && srv->conns.used < srv->max_conns)
+    if (srv->cur_fds < srv->max_fds_lowat && 0 != srv->lim_conns)
         server_sockets_enable(srv);
 }
 
 static void server_load_check (server *srv) {
     /* check if hit limits for num fds used or num connections */
-    if (srv->cur_fds > srv->max_fds_hiwat || srv->conns.used >= srv->max_conns)
+    if (srv->cur_fds > srv->max_fds_hiwat || 0 == srv->lim_conns)
         server_sockets_disable(srv);
 }
 
@@ -1758,13 +1758,13 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		log_error(srv->errh, __FILE__, __LINE__,
 		  "can't have more connections than fds/2: %hu %d",
 		  srv->srvconf.max_conns, srv->max_fds);
-		srv->max_conns = srv->srvconf.max_conns = srv->max_fds/2;
+		srv->lim_conns = srv->srvconf.max_conns = srv->max_fds/2;
 	} else if (srv->srvconf.max_conns) {
 		/* otherwise respect the wishes of the user */
-		srv->max_conns = srv->srvconf.max_conns;
+		srv->lim_conns = srv->srvconf.max_conns;
 	} else {
 		/* or use the default: we really don't want to hit max-fds */
-		srv->max_conns = srv->srvconf.max_conns = srv->max_fds/3;
+		srv->lim_conns = srv->srvconf.max_conns = srv->max_fds/3;
 	}
 	connections_init(srv);
 
