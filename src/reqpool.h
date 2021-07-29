@@ -23,9 +23,6 @@ __attribute_cold__
 void request_free_data (request_st *r);
 
 __attribute_cold__
-void request_pool_extend (server *srv, uint32_t sz);
-
-__attribute_cold__
 void request_pool_free (void);
 
 #endif

@@ -1882,6 +1882,9 @@ static void server_handle_sigalrm (server * const srv, unix_time64_t mono_ts, un
 				if (0 == (mono_ts & 0x3f)) { /*(once every 64 secs)*/
 					/* free excess chunkqueue buffers every 64 secs */
 					chunkqueue_chunk_pool_clear();
+					/* clear request and connection pools every 64 secs */
+					request_pool_free();
+					connections_pool_clear(srv);
 					/* attempt to restart dead piped loggers every 64 secs */
 					if (0 == srv->srvconf.max_worker)
 						fdevent_restart_logger_pipes(mono_ts);

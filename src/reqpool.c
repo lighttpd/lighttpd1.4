@@ -232,21 +232,6 @@ request_free_data (request_st * const r)
 
 /* linked list of (request_st *) cached for reuse */
 static request_st *reqpool;
-/* max num of (request_st *) to cache */
-static uint32_t reqspace;
-
-
-void
-request_pool_extend (server *srv, const uint32_t sz)
-{
-    for (uint32_t i = 0; i < sz; ++i) {
-        request_st * const x = calloc(1, sizeof(request_st));
-        force_assert(x);
-        request_init_data(x, NULL, srv);
-        x->con = (connection *)reqpool; /*(reuse r->con as next ptr)*/
-        reqpool = x;
-    }
-}
 
 
 void
@@ -257,7 +242,6 @@ request_pool_free (void)
         reqpool = (request_st *)r->con; /*(reuse r->con as next ptr)*/
         request_free_data(r);
         free(r);
-        ++reqspace;
     }
 }
 
@@ -279,15 +263,8 @@ request_release (request_st * const r)
     request_reset_ex(r);
     r->state = CON_STATE_CONNECT;
 
-    if (reqspace) {
-        --reqspace;
-        r->con = (connection *)reqpool; /*(reuse r->con as next ptr)*/
-        reqpool = r;
-    }
-    else {
-        request_free_data(r);
-        free(r);
-    }
+    r->con = (connection *)reqpool; /*(reuse r->con as next ptr)*/
+    reqpool = r;
 }
 
 
@@ -297,7 +274,6 @@ request_acquire (connection * const con)
     request_st *r = reqpool;
     if (r) {
         reqpool = (request_st *)r->con; /*(reuse r->con as next ptr)*/
-        ++reqspace;
     }
     else {
         r = calloc(1, sizeof(request_st));

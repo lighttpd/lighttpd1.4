@@ -57,8 +57,6 @@ static connection *connections_get_new_connection(server *srv) {
     else {
         con = connection_init(srv);
         connection_reset(con);
-        if (srv->srvconf.h2proto)
-            request_pool_extend(srv, 8);
     }
     /*con->prev = NULL;*//*(already set)*/
     if ((con->next = srv->conns))
