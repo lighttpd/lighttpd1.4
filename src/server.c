@@ -977,6 +977,7 @@ static void server_graceful_shutdown_maint (server *srv) {
 }
 
 __attribute_cold__
+__attribute_noinline__
 static void server_graceful_state (server *srv) {
 
     if (!srv_shutdown) {
@@ -1016,6 +1017,7 @@ static void server_graceful_state (server *srv) {
 }
 
 __attribute_cold__
+__attribute_noinline__
 static void server_sockets_enable (server *srv) {
     server_sockets_set_event(srv, FDEVENT_IN);
     srv->sockets_disabled = 0;
@@ -1023,6 +1025,7 @@ static void server_sockets_enable (server *srv) {
 }
 
 __attribute_cold__
+__attribute_noinline__
 static void server_sockets_disable (server *srv) {
     server_sockets_set_event(srv, 0);
     srv->sockets_disabled = 1;
