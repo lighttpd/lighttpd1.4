@@ -2614,7 +2614,7 @@ int config_set_defaults(server *srv) {
 		srv->srvconf.upload_temp_file_size);
 
 	if (!s->document_root || buffer_is_blank(s->document_root)) {
-		log_error(srv->errh, __FILE__, __LINE__, "document-root is not set");
+		log_error(srv->errh, __FILE__, __LINE__, "server.document-root is not set");
 		return -1;
 	}
 
