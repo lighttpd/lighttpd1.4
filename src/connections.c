@@ -180,22 +180,6 @@ static void connection_handle_shutdown(connection *con) {
 }
 
 
-__attribute_cold__
-static void connection_list_resize(connections *conns) {
-    conns->size += 16;
-    conns->ptr   = realloc(conns->ptr, sizeof(*conns->ptr) * conns->size);
-    force_assert(NULL != conns->ptr);
-}
-
-__attribute_cold__
-__attribute_noinline__
-static void connection_fdwaitqueue_append(connection *con) {
-    connections * const conns = &con->srv->fdwaitqueue;
-    if (conns->used == conns->size) connection_list_resize(conns);
-    conns->ptr[conns->used++] = con;
-}
-
-
 static void connection_handle_response_end_state(request_st * const r, connection * const con) {
 	if (r->http_version > HTTP_VERSION_1_1) {
 		h2_retire_con(r, con);
@@ -494,12 +478,6 @@ static int connection_handle_write_state(request_st * const r, connection * cons
             case HANDLER_WAIT_FOR_EVENT:
             case HANDLER_FINISHED:
             case HANDLER_GO_ON:
-                break;
-            case HANDLER_WAIT_FOR_FD:
-                /* (In addition to waiting for dispatch from fdwaitqueue,
-                 *  HTTP/2 connections may retry more frequently after any
-                 *  activity occurs on connection or on other streams) */
-                connection_fdwaitqueue_append(con);
                 break;
             case HANDLER_COMEBACK:
             default:
@@ -1061,9 +1039,6 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 				/* redo loop; will not match r->state */
 				ostate = CON_STATE_CONNECT;
 				continue;
-			  case HANDLER_WAIT_FOR_FD:
-		                connection_fdwaitqueue_append(con);
-				return;
 			  /*case HANDLER_ERROR:*/
 			  default:
 				connection_set_state_error(r, CON_STATE_ERROR);

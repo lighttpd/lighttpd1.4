@@ -181,7 +181,6 @@ struct server {
 	uint32_t lim_conns;
 	connection *conns;
 	connection *conns_pool;
-	connections fdwaitqueue;
 
 	log_error_st *errh;
 

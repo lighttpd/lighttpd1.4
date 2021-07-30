@@ -1910,15 +1910,9 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
 
         hctx->fd = fdevent_socket_nb_cloexec(hctx->host->family,SOCK_STREAM,0);
         if (-1 == hctx->fd) {
-            log_error_st * const errh = r->conf.errh;
-            if (errno == EMFILE || errno == EINTR) {
-                log_error(errh, __FILE__, __LINE__,
-                  "wait for fd at connection: %d", r->con->fd);
-                return HANDLER_WAIT_FOR_FD;
-            }
-
-            log_perror(errh, __FILE__, __LINE__,
-              "socket failed %d %d",r->con->srv->cur_fds,r->con->srv->max_fds);
+            log_perror(r->conf.errh, __FILE__, __LINE__,
+              "socket() failed (cur_fds:%d) (max_fds:%d)",
+              r->con->srv->cur_fds, r->con->srv->max_fds);
             return HANDLER_ERROR;
         }
 

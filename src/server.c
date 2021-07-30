@@ -331,8 +331,6 @@ static void server_free(server *srv) {
 
 	config_free(srv);
 
-	free(srv->fdwaitqueue.ptr);
-
 	stat_cache_free();
 
 	li_rand_cleanup();
@@ -1037,9 +1035,6 @@ static void server_sockets_disable (server *srv) {
 
 __attribute_cold__
 static void server_overload_check (server *srv) {
-    if (srv->fdwaitqueue.used)
-        return;
-
     if (srv->cur_fds < srv->max_fds_lowat && 0 != srv->lim_conns)
         server_sockets_enable(srv);
 }
@@ -1048,26 +1043,6 @@ static void server_load_check (server *srv) {
     /* check if hit limits for num fds used or num connections */
     if (srv->cur_fds > srv->max_fds_hiwat || 0 == srv->lim_conns)
         server_sockets_disable(srv);
-}
-
-__attribute_cold__
-__attribute_noinline__
-static void server_process_fdwaitqueue (server *srv) {
-    connections * const fdwaitqueue = &srv->fdwaitqueue;
-    uint32_t i = 0;
-    for (int n = srv->max_fds - srv->cur_fds - 16; n > 0; --n) {
-        if (i == fdwaitqueue->used) break;
-        connection_state_machine(fdwaitqueue->ptr[i++]);
-    }
-    if (0 == (fdwaitqueue->used -= i)) {
-        free(fdwaitqueue->ptr);
-        fdwaitqueue->ptr = NULL;
-        fdwaitqueue->size = 0;
-    }
-    else if (i > 0) {
-        memmove(fdwaitqueue->ptr, fdwaitqueue->ptr+i,
-                fdwaitqueue->used * sizeof(*(fdwaitqueue->ptr)));
-    }
 }
 
 __attribute_cold__
@@ -1975,10 +1950,6 @@ static void server_main_loop (server * const srv) {
 			server_overload_check(srv);
 		} else {
 			server_load_check(srv);
-		}
-
-		if (srv->fdwaitqueue.used) {
-			server_process_fdwaitqueue(srv);
 		}
 
 		static connection * const sentinel =

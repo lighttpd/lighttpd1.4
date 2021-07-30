@@ -32,8 +32,7 @@ enum handler_t {
   HANDLER_FINISHED,
   HANDLER_COMEBACK,
   HANDLER_WAIT_FOR_EVENT,
-  HANDLER_ERROR,
-  HANDLER_WAIT_FOR_FD
+  HANDLER_ERROR
 };
 typedef enum handler_t handler_t;
 

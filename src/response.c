@@ -979,8 +979,6 @@ http_response_handler (request_st * const r)
         /* we have something to send; go on */
         /*(CON_STATE_RESPONSE_START; transient state)*/
         return http_response_write_prepare(r);
-      case HANDLER_WAIT_FOR_FD:
-        return HANDLER_WAIT_FOR_FD;
       case HANDLER_COMEBACK:
         http_response_comeback(r);
         return HANDLER_COMEBACK;
