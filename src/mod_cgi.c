@@ -40,14 +40,11 @@ static int pipe_cloexec(int pipefd[2]) {
 }
 
 typedef struct {
-	char *ptr;
-	size_t used;
-	size_t size;
-	size_t *offsets;
+	uintptr_t *offsets;
 	size_t osize;
 	size_t oused;
-	char **eptr;
-	size_t esize;
+	buffer *b;
+	buffer *boffsets;
 	buffer *ld_preload;
 	buffer *ld_library_path;
       #ifdef __CYGWIN__
@@ -147,9 +144,6 @@ FREE_FUNC(mod_cgi_free) {
 	plugin_data *p = p_d;
 	buffer_pid_t *bp = &(p->cgi_pid);
 	if (bp->ptr) free(bp->ptr);
-	free(p->env.ptr);
-	free(p->env.offsets);
-	free(p->env.eptr);
 	buffer_free(p->env.ld_preload);
 	buffer_free(p->env.ld_library_path);
       #ifdef __CYGWIN__
@@ -556,32 +550,28 @@ static handler_t cgi_handle_fdevent(void *ctx, int revents) {
 }
 
 
+__attribute_cold__
+__attribute_noinline__
+static void cgi_env_offset_resize(env_accum *env) {
+    chunk_buffer_prepare_append(env->boffsets, env->boffsets->size*2);
+    env->offsets = (uintptr_t *)(void *)env->boffsets->ptr;
+    env->osize = env->boffsets->size/sizeof(*env->offsets);
+}
+
 static int cgi_env_add(void *venv, const char *key, size_t key_len, const char *val, size_t val_len) {
 	env_accum *env = venv;
-	char *dst;
 
 	if (!key || (!val && val_len)) return -1;
 
-	if (env->size - env->used < key_len + val_len + 2) {
-		if (0 == env->size) env->size = 4096;
-		do { env->size *= 2; } while (env->size - env->used < key_len + val_len + 2);
-		env->ptr = realloc(env->ptr, env->size);
-		force_assert(env->ptr);
-	}
+	if (__builtin_expect( (env->osize == env->oused), 0))
+		cgi_env_offset_resize(env);
+	env->offsets[env->oused++] = env->b->used-1;
 
-	dst = env->ptr + env->used;
+	char * const dst = buffer_extend(env->b, key_len + val_len + 2);
 	memcpy(dst, key, key_len);
 	dst[key_len] = '=';
 	if (val_len) memcpy(dst + key_len + 1, val, val_len);
 	dst[key_len + 1 + val_len] = '\0';
-
-	if (env->osize == env->oused) {
-		env->osize += 16;
-		env->offsets = realloc(env->offsets, env->osize * sizeof(*env->offsets));
-		force_assert(env->offsets);
-	}
-	env->offsets[env->oused++] = env->used;
-	env->used += key_len + val_len + 2;
 
 	return 0;
 }
@@ -697,11 +687,16 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		return -1;
 	}
 
+	env_accum * const env = &p->env;
+	env->b = chunk_buffer_acquire();
+	env->boffsets = chunk_buffer_acquire();
+	buffer_truncate(env->b, 0);
+	char **envp;
 	{
 		size_t i = 0;
 		http_cgi_opts opts = { 0, 0, NULL, NULL };
-		env_accum *env = &p->env;
-		env->used = 0;
+		env->offsets = (uintptr_t *)(void *)env->boffsets->ptr;
+		env->osize = env->boffsets->size/sizeof(*env->offsets);
 		env->oused = 0;
 
 		/* create environment */
@@ -722,15 +717,16 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		}
 	      #endif
 
-		if (env->esize <= env->oused) {
-			env->esize = (env->oused + 1 + 0xf) & ~(0xfuL);
-			env->eptr = realloc(env->eptr, env->esize * sizeof(*env->eptr));
-			force_assert(env->eptr);
-		}
-		for (i = 0; i < env->oused; ++i) {
-			env->eptr[i] = env->ptr + env->offsets[i];
-		}
-		env->eptr[env->oused] = NULL;
+		/* adjust (uintptr_t) offsets to (char *) ptr
+		 * (stored as offsets while accumulating in buffer,
+		 *  in case buffer is reallocated during env creation) */
+		if (__builtin_expect( (env->osize == env->oused), 0))
+			cgi_env_offset_resize(env);
+		envp = (char **)env->offsets;
+		envp[env->oused] = NULL;
+		const uintptr_t baseptr = (uintptr_t)env->b->ptr;
+		for (i = 0; i < env->oused; ++i)
+			envp[i] += baseptr;
 
 		/* set up args */
 		i = 0;
@@ -748,7 +744,15 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	}
 
 	int serrh_fd = r->conf.serrh ? r->conf.serrh->errorlog_fd : -1;
-	hctx->pid = (dfd >= 0) ? fdevent_fork_execve(args[0], args, p->env.eptr, to_cgi_fds[0], from_cgi_fds[1], serrh_fd, dfd) : -1;
+	hctx->pid = (dfd >= 0)
+	  ? fdevent_fork_execve(args[0], args, envp,
+	                        to_cgi_fds[0], from_cgi_fds[1], serrh_fd, dfd)
+	  : -1;
+
+	chunk_buffer_release(env->boffsets);
+	chunk_buffer_release(env->b);
+	env->boffsets = NULL;
+	env->b = NULL;
 
 	if (-1 == hctx->pid) {
 		/* log error with errno prior to calling close() (might change errno) */
