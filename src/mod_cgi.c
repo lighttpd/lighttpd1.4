@@ -53,12 +53,6 @@ typedef struct {
 } env_accum;
 
 typedef struct {
-	struct { pid_t pid; void *ctx; } *ptr;
-	size_t used;
-	size_t size;
-} buffer_pid_t;
-
-typedef struct {
 	unix_time64_t read_timeout;
 	unix_time64_t write_timeout;
 } cgi_limits;
@@ -73,16 +67,18 @@ typedef struct {
 	const array *xsendfile_docroot;
 } plugin_config;
 
+struct cgi_pid_t;
+
 typedef struct {
 	PLUGIN_DATA;
 	plugin_config defaults;
 	plugin_config conf;
-	buffer_pid_t cgi_pid;
+	struct cgi_pid_t *cgi_pid;
 	env_accum env;
 } plugin_data;
 
 typedef struct {
-	pid_t pid;
+	struct cgi_pid_t *cgi_pid;
 	int fd;
 	int fdtocgi;
 	fdnode *fdn;
@@ -99,6 +95,13 @@ typedef struct {
 	http_response_opts opts;
 	plugin_config conf;
 } handler_ctx;
+
+typedef struct cgi_pid_t {
+	pid_t pid;
+	handler_ctx *hctx;
+	struct cgi_pid_t *next;
+	struct cgi_pid_t *prev;
+} cgi_pid_t;
 
 static handler_ctx * cgi_handler_ctx_init(void) {
 	handler_ctx *hctx = calloc(1, sizeof(*hctx));
@@ -142,13 +145,16 @@ INIT_FUNC(mod_cgi_init) {
 
 FREE_FUNC(mod_cgi_free) {
 	plugin_data *p = p_d;
-	buffer_pid_t *bp = &(p->cgi_pid);
-	if (bp->ptr) free(bp->ptr);
 	buffer_free(p->env.ld_preload);
 	buffer_free(p->env.ld_library_path);
       #ifdef __CYGWIN__
 	buffer_free(p->env.systemroot);
       #endif
+
+    for (cgi_pid_t *cgi_pid = p->cgi_pid, *next; cgi_pid; cgi_pid = next) {
+        next = cgi_pid->next;
+        free(cgi_pid);
+    }
 
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
@@ -311,38 +317,32 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
 }
 
 
-static void cgi_pid_add(plugin_data *p, pid_t pid, void *ctx) {
-    buffer_pid_t *bp = &(p->cgi_pid);
-
-    if (bp->used == bp->size) {
-        bp->size += 16;
-        bp->ptr = realloc(bp->ptr, sizeof(*bp->ptr) * bp->size);
-        force_assert(bp->ptr);
-    }
-
-    bp->ptr[bp->used].pid = pid;
-    bp->ptr[bp->used].ctx = ctx;
-    ++bp->used;
+static cgi_pid_t * cgi_pid_add(plugin_data *p, pid_t pid, handler_ctx *hctx) {
+    cgi_pid_t *cgi_pid = malloc(sizeof(cgi_pid_t));
+    force_assert(cgi_pid);
+    cgi_pid->pid = pid;
+    cgi_pid->hctx = hctx;
+    cgi_pid->prev = NULL;
+    cgi_pid->next = p->cgi_pid;
+    p->cgi_pid = cgi_pid;
+    return cgi_pid;
 }
 
-static void cgi_pid_kill(plugin_data *p, pid_t pid) {
-    buffer_pid_t *bp = &(p->cgi_pid);
-    for (size_t i = 0; i < bp->used; ++i) {
-        if (bp->ptr[i].pid == pid) {
-            bp->ptr[i].ctx = NULL;
-            kill(pid, SIGTERM);
-            return;
-        }
-    }
+static void cgi_pid_kill(cgi_pid_t *cgi_pid) {
+    cgi_pid->hctx = NULL;
+    kill(cgi_pid->pid, SIGTERM);
 }
 
-static void cgi_pid_del(plugin_data *p, size_t i) {
-    buffer_pid_t *bp = &(p->cgi_pid);
+static void cgi_pid_del(plugin_data *p, cgi_pid_t *cgi_pid) {
+    if (cgi_pid->prev)
+        cgi_pid->prev->next = cgi_pid->next;
+    else
+        p->cgi_pid = cgi_pid->next;
 
-    if (i != bp->used - 1)
-        bp->ptr[i] = bp->ptr[bp->used - 1];
+    if (cgi_pid->next)
+        cgi_pid->next->prev = cgi_pid->prev;
 
-    --bp->used;
+    free(cgi_pid);
 }
 
 
@@ -377,15 +377,11 @@ static void cgi_connection_close(handler_ctx *hctx) {
 	}
 
 	plugin_data * const p = hctx->plugin_data;
-
-	if (hctx->pid > 0) {
-		cgi_pid_kill(p, hctx->pid);
-	}
-
 	request_st * const r = hctx->r;
-
 	r->plugin_ctx[p->id] = NULL;
 
+	if (hctx->cgi_pid)
+		cgi_pid_kill(hctx->cgi_pid);
 	cgi_handler_ctx_free(hctx);
 
 	/* finish response (if not already r->resp_body_started, r->resp_body_finished) */
@@ -744,7 +740,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	}
 
 	int serrh_fd = r->conf.serrh ? r->conf.serrh->errorlog_fd : -1;
-	hctx->pid = (dfd >= 0)
+	pid_t pid = (dfd >= 0)
 	  ? fdevent_fork_execve(args[0], args, envp,
 	                        to_cgi_fds[0], from_cgi_fds[1], serrh_fd, dfd)
 	  : -1;
@@ -754,7 +750,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	env->boffsets = NULL;
 	env->b = NULL;
 
-	if (-1 == hctx->pid) {
+	if (-1 == pid) {
 		/* log error with errno prior to calling close() (might change errno) */
 		log_perror(r->conf.errh, __FILE__, __LINE__, "fork failed");
 		if (-1 != dfd) close(dfd);
@@ -769,8 +765,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		close(to_cgi_fds[0]);
 
 		hctx->fd = from_cgi_fds[0];
-
-		cgi_pid_add(p, hctx->pid, hctx);
+		hctx->cgi_pid = cgi_pid_add(p, pid, hctx);
 
 		if (0 == r->reqbody_length) {
 			close(to_cgi_fds[1]);
@@ -952,7 +947,7 @@ static void cgi_trigger_hctx_timeout(handler_ctx * const hctx, const char * cons
 
     log_error(r->conf.errh, __FILE__, __LINE__,
       "%s timeout on CGI: %s (pid: %lld)",
-      msg, r->physical.path.ptr, (long long)hctx->pid);
+      msg, r->physical.path.ptr, (long long)hctx->cgi_pid->pid);
 
     if (*msg == 'w') { /* "write" */
         /* theoretically, response might be waiting on hctx->fdn pipe
@@ -970,11 +965,11 @@ static void cgi_trigger_hctx_timeout(handler_ctx * const hctx, const char * cons
 static handler_t cgi_trigger_cb(server *srv, void *p_d) {
     UNUSED(srv);
     const unix_time64_t mono = log_monotonic_secs;
-    const buffer_pid_t * const cgi_pid = &((plugin_data *)p_d)->cgi_pid;
-    for (size_t i = 0, used = cgi_pid->used; i < used; ++i) {
+    plugin_data * const p = p_d;
+    for (cgi_pid_t *cgi_pid = p->cgi_pid; cgi_pid; cgi_pid = cgi_pid->next) {
         /*(hctx stays in cgi_pid list until process pid is reaped,
          * so p->cgi_pid[] is not modified during this loop)*/
-        handler_ctx * const hctx = (handler_ctx *)cgi_pid->ptr[i].ctx;
+        handler_ctx * const hctx = cgi_pid->hctx;
         if (!hctx) continue; /*(already called cgi_pid_kill())*/
         const cgi_limits * const limits = hctx->conf.limits;
         if (NULL == limits) continue;
@@ -996,14 +991,15 @@ static handler_t cgi_trigger_cb(server *srv, void *p_d) {
 
 
 static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
+    /*(XXX: if supporting a large number of CGI, might use a different algorithm
+     * instead of linked list, e.g. splaytree indexed with pid)*/
     plugin_data *p = (plugin_data *)p_d;
-    for (size_t i = 0; i < p->cgi_pid.used; ++i) {
-        handler_ctx *hctx;
-        if (pid != p->cgi_pid.ptr[i].pid) continue;
+    for (cgi_pid_t *cgi_pid = p->cgi_pid; cgi_pid; cgi_pid = cgi_pid->next) {
+        if (pid != cgi_pid->pid) continue;
 
-        hctx = (handler_ctx *)p->cgi_pid.ptr[i].ctx;
-        if (hctx) hctx->pid = -1;
-        cgi_pid_del(p, i);
+        handler_ctx * const hctx = cgi_pid->hctx;
+        if (hctx) hctx->cgi_pid = NULL;
+        cgi_pid_del(p, cgi_pid);
 
         if (WIFEXITED(status)) {
             /* (skip logging (non-zero) CGI exit; might be very noisy) */
