@@ -1,6 +1,5 @@
 #include "first.h"
 
-#include "base.h"
 #include "fdevent.h"
 #include "log.h"
 #include "buffer.h"
@@ -8,6 +7,7 @@
 #include "http_chunk.h"
 #include "http_etag.h"
 #include "http_header.h"
+#include "request.h"
 #include "stat_cache.h"
 
 #include "plugin.h"

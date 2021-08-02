@@ -5,10 +5,10 @@
 
 #include "plugin.h"
 
-#include "base.h"
 #include "log.h"
 #include "buffer.h"
 #include "array.h"
+#include "request.h"
 
 /**
  * this is a skeleton for a lighttpd plugin

@@ -9,12 +9,12 @@ typedef gw_plugin_config plugin_config;
 typedef gw_plugin_data   plugin_data;
 typedef gw_handler_ctx   handler_ctx;
 
-#include "base.h"
 #include "buffer.h"
 #include "fdevent.h"
 #include "http_cgi.h"
 #include "http_chunk.h"
 #include "log.h"
+#include "request.h"
 #include "status_counter.h"
 
 #include "compat/fastcgi.h"

@@ -22,12 +22,12 @@
 #include "mod_auth_api.h"
 #include "sys-crypto-md.h" /* USE_LIB_CRYPTO */
 
-#include "base.h"
 #include "base64.h"
 #include "ck.h"
 #include "fdevent.h"
 #include "log.h"
 #include "plugin.h"
+#include "request.h"
 
 /*
  * htdigest, htpasswd, plain auth backends

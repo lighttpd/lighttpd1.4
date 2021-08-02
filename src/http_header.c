@@ -10,9 +10,9 @@
 #include "sys-strings.h"
 
 #include "http_header.h"
-#include "base.h"
 #include "array.h"
 #include "buffer.h"
+#include "request.h"
 
 
 typedef struct keyvlenvalue {

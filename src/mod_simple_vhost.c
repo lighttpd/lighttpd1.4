@@ -1,8 +1,8 @@
 #include "first.h"
 
-#include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "request.h"
 #include "stat_cache.h"
 
 #include "plugin.h"

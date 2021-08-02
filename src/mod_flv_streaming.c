@@ -1,11 +1,11 @@
 #include "first.h"
 
-#include "base.h"
 #include "array.h"
 #include "buffer.h"
 #include "log.h"
 #include "http_chunk.h"
 #include "http_header.h"
+#include "request.h"
 #include "stat_cache.h"
 
 #include "plugin.h"

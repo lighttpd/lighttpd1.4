@@ -8,11 +8,11 @@
 #include "first.h"
 
 #include "http_chunk.h"
-#include "base.h"
 #include "chunk.h"
 #include "stat_cache.h"
 #include "fdevent.h"
 #include "log.h"
+#include "request.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
