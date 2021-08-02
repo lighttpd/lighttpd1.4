@@ -1300,6 +1300,7 @@ The following types have already been registered for the <type> field :
 #define PP2_TYPE_AUTHORITY        0x02
 #define PP2_TYPE_CRC32C           0x03
 #define PP2_TYPE_NOOP             0x04
+#define PP2_TYPE_UNIQUE_ID        0x05
 #define PP2_TYPE_SSL              0x20
 #define PP2_SUBTYPE_SSL_VERSION   0x21
 #define PP2_SUBTYPE_SSL_CN        0x22
@@ -1595,11 +1596,17 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
 
     /* (optional) Type-Length-Value (TLV vectors) follow addresses */
 
+    if (3 + len > sz) return 0;
+
+    handler_ctx * const hctx =
+      con->plugin_ctx[mod_extforward_plugin_data_singleton->id];
     tlv = (struct pp2_tlv *)((char *)hdr + 16);
     for (sz -= len, len -= 3; sz >= 3; sz -= 3 + len) {
         tlv = (struct pp2_tlv *)((char *)tlv + 3 + len);
         len = ((uint32_t)tlv->length_hi << 8) | tlv->length_lo;
         if (3 + len > sz) break; /*(invalid TLV)*/
+        const char *k;
+        uint32_t klen;
         switch (tlv->type) {
          #if 0 /*(not implemented here)*/
           case PP2_TYPE_ALPN:
@@ -1607,9 +1614,8 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
           case PP2_TYPE_CRC32C:
          #endif
           case PP2_TYPE_SSL: {
+            if (len < 5) continue;
             static const uint32_t zero = 0;
-            handler_ctx *hctx =
-              con->plugin_ctx[mod_extforward_plugin_data_singleton->id];
             struct pp2_tlv_ssl *tlv_ssl =
               (struct pp2_tlv_ssl *)(void *)((char *)tlv+3);
             struct pp2_tlv *subtlv = tlv;
@@ -1620,53 +1626,56 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
                 && 0 == memcmp(&tlv_ssl->verify, &zero, 4)) { /* misaligned */
                 hctx->ssl_client_verify = 1;
             }
+            if (len < 5 + 3) continue;
+            if (NULL == hctx->env) hctx->env = array_init(8);
             for (uint32_t subsz = len-5, n = 5; subsz >= 3; subsz -= 3 + n) {
                 subtlv = (struct pp2_tlv *)((char *)subtlv + 3 + n);
                 n = ((uint32_t)subtlv->length_hi << 8) | subtlv->length_lo;
                 if (3 + n > subsz) break; /*(invalid TLV)*/
-                if (NULL == hctx->env) hctx->env = array_init(8);
                 switch (subtlv->type) {
                   case PP2_SUBTYPE_SSL_VERSION:
-                    array_set_key_value(hctx->env,
-                                        CONST_STR_LEN("SSL_PROTOCOL"),
-                                        (char *)subtlv+3, n);
+                    k = "SSL_PROTOCOL";
+                    klen = sizeof("SSL_PROTOCOL")-1;
                     break;
                   case PP2_SUBTYPE_SSL_CN:
                     /* (tlv_ssl->client & PP2_CLIENT_CERT_CONN)
                      *   or
                      * (tlv_ssl->client & PP2_CLIENT_CERT_SESS) */
-                    array_set_key_value(hctx->env,
-                                        CONST_STR_LEN("SSL_CLIENT_S_DN_CN"),
-                                        (char *)subtlv+3, n);
+                    k = "SSL_CLIENT_S_DN_CN";
+                    klen = sizeof("SSL_CLIENT_S_DN_CN")-1;
                     break;
                   case PP2_SUBTYPE_SSL_CIPHER:
-                    array_set_key_value(hctx->env,
-                                        CONST_STR_LEN("SSL_CIPHER"),
-                                        (char *)subtlv+3, n);
+                    k = "SSL_CIPHER";
+                    klen = sizeof("SSL_CIPHER")-1;
                     break;
                   case PP2_SUBTYPE_SSL_SIG_ALG:
-                    array_set_key_value(hctx->env,
-                                        CONST_STR_LEN("SSL_SERVER_A_SIG"),
-                                        (char *)subtlv+3, n);
+                    k = "SSL_SERVER_A_SIG";
+                    klen = sizeof("SSL_SERVER_A_SIG")-1;
                     break;
                   case PP2_SUBTYPE_SSL_KEY_ALG:
-                    array_set_key_value(hctx->env,
-                                        CONST_STR_LEN("SSL_SERVER_A_KEY"),
-                                        (char *)subtlv+3, n);
+                    k = "SSL_SERVER_A_KEY";
+                    klen = sizeof("SSL_SERVER_A_KEY")-1;
                     break;
                   default:
-                    break;
+                    continue;
                 }
+                array_set_key_value(hctx->env, k, klen, (char *)subtlv+3, n);
             }
-            break;
+            continue;
           }
+          case PP2_TYPE_UNIQUE_ID:
+            k = "PP2_UNIQUE_ID";
+            klen = sizeof("PP2_UNIQUE_ID")-1;
+            break;
          #if 0 /*(not implemented here)*/
           case PP2_TYPE_NETNS:
          #endif
           /*case PP2_TYPE_NOOP:*//* no-op */
           default:
-            break;
+            continue;
         }
+        if (NULL == hctx->env) hctx->env = array_init(8);
+        array_set_key_value(hctx->env, k, klen, (char *)tlv+3, len);
     }
 
     return 0;
