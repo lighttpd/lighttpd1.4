@@ -1,8 +1,9 @@
 #include "first.h"
 
-#include "base.h"
+#include "algo_splaytree.h"
 #include "log.h"
 #include "buffer.h"
+#include "request.h"
 #include "http_header.h"
 
 #include "plugin.h"
@@ -16,16 +17,10 @@
  */
 
 typedef struct {
-	buffer     *r_id;
-	request_st *r;
+    buffer r_id;
+    request_st *r;
+    int ndx;
 } request_map_entry;
-
-typedef struct {
-	request_map_entry **ptr;
-
-	uint32_t used;
-	uint32_t size;
-} request_map;
 
 typedef struct {
     const buffer *progress_url;
@@ -36,7 +31,7 @@ typedef struct {
     plugin_config defaults;
     plugin_config conf;
 
-    request_map request_map;
+    splay_tree *request_map;
 } plugin_data;
 
 /**
@@ -45,81 +40,75 @@ typedef struct {
  *
  */
 
-static void request_map_free_data(request_map *rm) {
-	for (uint32_t i = 0; i < rm->size; ++i) {
-		request_map_entry *rme = rm->ptr[i];
-
-		if (!rme) break;
-
-		if (rme->r_id) {
-			buffer_free(rme->r_id);
-		}
-		free(rme);
-	}
+static request_map_entry *
+request_map_entry_init (request_st * const r, const char *r_id, size_t idlen)
+{
+    request_map_entry * const rme = calloc(1, sizeof(request_map_entry));
+    force_assert(rme);
+    rme->r = r;
+    rme->ndx = splaytree_djbhash(r_id, idlen);
+    buffer_copy_string_len(&rme->r_id, r_id, idlen);
+    return rme;
 }
 
-static int request_map_insert(request_map *rm, request_st * const r, const char *r_id, size_t idlen) {
-	request_map_entry *rme;
+static void
+request_map_entry_free (request_map_entry *rme)
+{
+    free(rme->r_id.ptr);
+    free(rme);
+}
 
-	if (rm->used == rm->size) {
-		rm->size = rm->size ? (rm->size << 1) : 16;
-		force_assert(rm->size);
-		rm->ptr = realloc(rm->ptr, rm->size * sizeof(*(rm->ptr)));
-		force_assert(rm->ptr);
-		memset(rm->ptr+rm->used, 0, (rm->size - rm->used)*sizeof(*(rm->ptr)));
-	}
+static void
+request_map_remove (plugin_data * const p, request_map_entry * const rme)
+{
+    splay_tree ** const sptree = &p->request_map;
+    *sptree = splaytree_splay(*sptree, rme->ndx);
+    if (NULL != *sptree && (*sptree)->key == rme->ndx) {
+        request_map_entry_free((*sptree)->data);
+        *sptree = splaytree_delete(*sptree, (*sptree)->key);
+    }
+}
 
-	if (rm->ptr[rm->used]) {
-		/* is already allocated, just reuse it */
-		rme = rm->ptr[rm->used];
-	} else {
-		rme = malloc(sizeof(*rme));
-		force_assert(rme);
-		rme->r_id = buffer_init();
-	}
-	buffer_copy_string_len(rme->r_id, r_id, idlen);
-	rme->r = r;
-
-	rm->ptr[rm->used++] = rme;
-
-	return 0;
+static request_map_entry *
+request_map_insert (plugin_data * const p, request_map_entry * const rme)
+{
+    splay_tree ** const sptree = &p->request_map;
+    *sptree = splaytree_splay(*sptree, rme->ndx);
+    if (NULL == *sptree || (*sptree)->key != rme->ndx) {
+        *sptree = splaytree_insert(*sptree, rme->ndx, rme);
+        return rme;
+    }
+    else { /* collision (not expected); leave old entry and forget new */
+        /*(old entry is referenced elsewhere, so new entry is freed here)*/
+        request_map_entry_free(rme);
+        return NULL;
+    }
 }
 
 __attribute_pure__
-static request_st * request_map_get_request(const request_map * const rm, const char * const r_id,  const size_t idlen) {
-	for (uint32_t i = 0; i < rm->used; ++i) {
-		const request_map_entry * const rme = rm->ptr[i];
-
-		if (buffer_is_equal_string(rme->r_id, r_id, idlen)) {
-			return rme->r; /* found request */
-		}
-	}
-	return NULL;
+static request_st *
+request_map_get_request (plugin_data * const p, const char * const r_id,  const size_t idlen)
+{
+    splay_tree ** const sptree = &p->request_map;
+    int ndx = splaytree_djbhash(r_id, idlen);
+    *sptree = splaytree_splay(*sptree, ndx);
+    if (NULL != *sptree && (*sptree)->key == ndx) {
+        request_map_entry * const rme = (*sptree)->data;
+        if (buffer_eq_slen(&rme->r_id, r_id, idlen))
+            return rme->r;
+    }
+    return NULL;
 }
 
-static int request_map_remove_request(request_map * const rm, const request_st * const r) {
-	for (uint32_t i = 0; i < rm->used; ++i) {
-		request_map_entry *rme = rm->ptr[i];
-
-		if (rme->r == r) {
-			/* found request */
-
-			buffer_clear(rme->r_id);
-			rme->r = NULL;
-
-			rm->used--;
-
-			/* swap positions with the last entry */
-			if (rm->used) {
-				rm->ptr[i] = rm->ptr[rm->used];
-				rm->ptr[rm->used] = rme;
-			}
-
-			return 1;
-		}
-	}
-
-	return 0;
+static void
+request_map_free (plugin_data * const p)
+{
+    splay_tree *sptree = p->request_map;
+    p->request_map = NULL;
+    while (sptree) {
+        request_map_entry_free(sptree->data);
+        sptree = splaytree_delete(sptree, sptree->key);
+    }
 }
 
 INIT_FUNC(mod_uploadprogress_init) {
@@ -127,8 +116,7 @@ INIT_FUNC(mod_uploadprogress_init) {
 }
 
 FREE_FUNC(mod_uploadprogress_free) {
-    plugin_data *p = p_d;
-    request_map_free_data(&p->request_map);
+    request_map_free((plugin_data *)p_d);
 }
 
 static void mod_uploadprogress_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -197,6 +185,44 @@ SETDEFAULTS_FUNC(mod_uploadprogress_set_defaults) {
     return HANDLER_GO_ON;
 }
 
+#define REQID_LEN 32
+
+static const char * mod_uploadprogress_get_reqid (request_st * const r) {
+    const char *idstr;
+    uint32_t len;
+    int pathinfo = 0;
+    const buffer *h = http_header_request_get(r, HTTP_HEADER_OTHER,
+                                              CONST_STR_LEN("X-Progress-ID"));
+    if (NULL != h)
+        idstr = h->ptr;
+    else if (!buffer_is_blank(&r->uri.query)
+             && (idstr = strstr(r->uri.query.ptr, "X-Progress-ID=")))
+        idstr += sizeof("X-Progress-ID=")-1;
+    else { /*(path-info is not known at this point in request)*/
+        idstr = r->uri.path.ptr;
+        len = buffer_clen(&r->uri.path);
+        if (len > REQID_LEN && idstr[len-REQID_LEN-1] == '/') {
+            pathinfo = 1;
+            idstr += len - REQID_LEN;
+        }
+        else
+            return NULL;
+    }
+
+    /* request must contain ID of REQID_LEN bytes */
+    for (len = 0; light_isxdigit(idstr[len]); ++len) ;
+    if (len != REQID_LEN) {
+        if (!pathinfo) { /*(reduce false positive noise in error log)*/
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "invalid progress-id; non-xdigit or len != %d: %s",
+              REQID_LEN, idstr);
+        }
+        return NULL;
+    }
+
+    return idstr;
+}
+
 /**
  *
  * the idea:
@@ -217,13 +243,7 @@ SETDEFAULTS_FUNC(mod_uploadprogress_set_defaults) {
 
 URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	plugin_data *p = p_d;
-	size_t len;
-	char *id;
-	buffer *b;
-	request_st *post_r;
-	int pathinfo = 0;
 
-	if (buffer_is_blank(&r->uri.path)) return HANDLER_GO_ON;
 	switch(r->http_method) {
 	case HTTP_METHOD_GET:
 	case HTTP_METHOD_POST: break;
@@ -233,50 +253,19 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 	mod_uploadprogress_patch_config(r, p);
 	if (!p->conf.progress_url) return HANDLER_GO_ON;
 
-	if (r->http_method == HTTP_METHOD_GET) {
-		if (!buffer_is_equal(&r->uri.path, p->conf.progress_url)) {
-			return HANDLER_GO_ON;
-		}
-	}
-
-	const buffer *h = http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Progress-ID"));
-	if (NULL != h) {
-		id = h->ptr;
-	} else if (!buffer_is_blank(&r->uri.query)
-		   && (id = strstr(r->uri.query.ptr, "X-Progress-ID="))) {
-		/* perhaps the POST request is using the query-string to pass the X-Progress-ID */
-		id += sizeof("X-Progress-ID=")-1;
-	} else {
-		/*(path-info is not known at this point in request)*/
-		id = r->uri.path.ptr;
-		len = buffer_clen(&r->uri.path);
-		if (len >= 33 && id[len-33] == '/') {
-			id += len - 32;
-			pathinfo = 1;
-		} else {
-			return HANDLER_GO_ON;
-		}
-	}
-
-	/* the request has to contain a 32byte ID */
-	for (len = 0; light_isxdigit(id[len]); ++len) ;
-	if (len != 32) {
-		if (!pathinfo) { /*(reduce false positive noise in error log)*/
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "invalid progress-id; non-xdigit or len != 32: %s", id);
-		}
+	if (r->http_method == HTTP_METHOD_GET
+	    && !buffer_is_equal(&r->uri.path, p->conf.progress_url))
 		return HANDLER_GO_ON;
-	}
 
-	/* check if this is a POST request */
-	switch(r->http_method) {
-	case HTTP_METHOD_POST:
+	const char * const idstr = mod_uploadprogress_get_reqid(r);
+	if (NULL == idstr) return HANDLER_GO_ON;
 
-		request_map_insert(&p->request_map, r, id, len);
-
+	if (r->http_method == HTTP_METHOD_POST) {
+		r->plugin_ctx[p->id] =
+		  request_map_insert(p, request_map_entry_init(r, idstr, REQID_LEN));
 		return HANDLER_GO_ON;
-	case HTTP_METHOD_GET:
-		buffer_clear(&r->physical.path);
+	} /* else r->http_method == HTTP_METHOD_GET */
+
 
 		r->resp_body_started = 1;
 		r->resp_body_finished = 1;
@@ -285,11 +274,12 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		r->handler_module = NULL;
 
 		/* get the connection */
-		if (NULL == (post_r = request_map_get_request(&p->request_map, id, len))) {
-			log_error(r->conf.errh, __FILE__, __LINE__, "ID not known: %s", id);
-
+		request_st * const post_r = request_map_get_request(p,idstr,REQID_LEN);
+		if (NULL == post_r) {
+			log_error(r->conf.errh, __FILE__, __LINE__, "ID not known: %.*s", REQID_LEN, idstr);
+			/* XXX: why is this not an XML response, too?
+			 * (At least Content-Type is not set to text/xml) */
 			chunkqueue_append_mem(&r->write_queue, CONST_STR_LEN("not in progress"));
-
 			return HANDLER_FINISHED;
 		}
 
@@ -301,7 +291,7 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		http_header_response_set(r, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"), CONST_STR_LEN("no-store, no-cache, must-revalidate, post-check=0, pre-check=0"));
 
 		/* prepare XML */
-		b = r->tmp_buf;
+		buffer * const b = chunkqueue_append_buffer_open(&r->write_queue);
 		buffer_copy_string_len(b, CONST_STR_LEN(
 			"<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>"
 			"<upload>"
@@ -314,25 +304,17 @@ URIHANDLER_FUNC(mod_uploadprogress_uri_handler) {
 		buffer_append_string_len(b, CONST_STR_LEN(
 			"</received>"
 			"</upload>"));
-		chunkqueue_append_mem(&r->write_queue, BUF_PTR_LEN(b));
+		chunkqueue_append_buffer_commit(&r->write_queue);
 		return HANDLER_FINISHED;
-	default:
-		break;
-	}
-
-	return HANDLER_GO_ON;
 }
 
 REQUESTDONE_FUNC(mod_uploadprogress_request_done) {
 	plugin_data *p = p_d;
-
-	if (r->http_method != HTTP_METHOD_POST) return HANDLER_GO_ON;
-	if (buffer_is_blank(&r->uri.path)) return HANDLER_GO_ON;
-
-	if (request_map_remove_request(&p->request_map, r)) {
-		/* removed */
+	request_map_entry * const rme = r->plugin_ctx[p->id];
+	if (rme) {
+		r->plugin_ctx[p->id] = NULL;
+		request_map_remove(p, rme);
 	}
-
 	return HANDLER_GO_ON;
 }
 
