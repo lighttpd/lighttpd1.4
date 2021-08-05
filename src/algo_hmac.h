@@ -22,5 +22,10 @@ li_hmac_sha256 (unsigned char digest[32], /* [SHA256_DIGEST_LENGTH] */
                 const void * const secret, const uint32_t slen,
                 const unsigned char * const msg, const uint32_t mlen);
 
+int
+li_hmac_sha512 (unsigned char digest[64], /* [SHA512_DIGEST_LENGTH] */
+                const void * const secret, const uint32_t slen,
+                const unsigned char * const msg, const uint32_t mlen);
+
 
 #endif /* INCLUDED_ALGO_HMAC_H */

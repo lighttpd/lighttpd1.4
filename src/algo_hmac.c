@@ -219,3 +219,78 @@ li_hmac_sha256 (unsigned char digest[SHA256_DIGEST_LENGTH],
   #endif
 }
 #endif
+
+
+#ifdef USE_LIB_CRYPTO_SHA512
+int
+li_hmac_sha512 (unsigned char digest[SHA512_DIGEST_LENGTH],
+                const void * const secret, const uint32_t slen,
+                const unsigned char * const msg, const uint32_t mlen)
+{
+  #ifdef USE_LIB_CRYPTO
+   #if defined(USE_NETTLE_CRYPTO)
+    struct hmac_sha512_ctx ctx;
+    hmac_sha512_set_key(&ctx, slen, (const uint8_t *)secret);
+    hmac_sha512_update(&ctx, mlen, (const uint8_t *)msg);
+    hmac_sha512_digest(&ctx, SHA512_DIGEST_LENGTH, (uint8_t *)digest);
+    return 1;
+   #elif defined(USE_MBEDTLS_CRYPTO) \
+      && defined(MBEDTLS_MD_C) && defined(MBEDTLS_SHA512_C)
+    return 0 ==
+      mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA512),
+                      (const unsigned char *)secret, slen,
+                      (const unsigned char *)msg, mlen, digest);
+   #elif defined(USE_WOLFSSL_CRYPTO)
+    Hmac hmac;
+    if (0 != wc_HmacInit(&hmac, NULL, INVALID_DEVID)
+        || wc_HmacSetKey(&hmac, WC_SHA512,(const byte *)secret,(word32)slen) < 0
+        || wc_HmacUpdate(&hmac, (const byte *)msg, (word32)mlen) < 0
+        || wc_HmacFinal(&hmac, (byte *)digest) < 0)
+        return 0;
+    return 1;
+   #elif defined(USE_OPENSSL_CRYPTO)
+    return (NULL != HMAC(EVP_sha512(),
+                         (const unsigned char *)secret, (int)slen,
+                         (const unsigned char *)msg, mlen,
+                         digest, NULL));
+   #elif defined(USE_GNUTLS_CRYPTO)
+    return 0 ==
+      gnutls_hmac_fast(GNUTLS_MAC_SHA512,
+                       (const unsigned char *)secret, slen,
+                       (const unsigned char *)msg, mlen, digest);
+   #elif defined(USE_NSS_CRYPTO)
+    /*(HMAC* funcs not public export of libfreebl3.so,
+     * even though nss3/alghmac.h is public (WTH?!))*/
+    #if 0
+    HMACContext *hmac =
+      HMAC_Create(HASH_GetHashObject(HASH_AlgSHA512),
+                  (const unsigned char *)secret, slen, PR_FALSE);
+    if (NULL == hmac)
+        return 0;
+    HMAC_Begin(hmac);
+    HMAC_Update(hmac, (const unsigned char *)msg, mlen);
+    unsigned int dlen;
+    int rc = HMAC_Finish(hmac, digest, &dlen, SHA512_DIGEST_LENGTH);
+    HMAC_Destroy(hmac, PR_TRUE);
+    return (SECSuccess == rc);
+    #else
+    UNUSED(digest);
+    UNUSED(secret);
+    UNUSED(slen);
+    UNUSED(msg);
+    UNUSED(mlen);
+    return 0;
+    #endif
+   #else
+   #error "unexpected; crypto lib not configured for HMAC SHA512"
+   #endif
+  #else
+    UNUSED(digest);
+    UNUSED(secret);
+    UNUSED(slen);
+    UNUSED(msg);
+    UNUSED(mlen);
+    return 0;
+  #endif
+}
+#endif
