@@ -202,6 +202,12 @@ static void magnet_setfenv_mainfn(lua_State *L, int funcIndex) { /* (-1, 0, -) *
 }
 
 #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
+/* lua 5.1 deprecated luaL_getn() for lua_objlen() */
+/* lua 5.2 renamed lua_objlen() to lua_rawlen() */
+#define lua_rawlen lua_objlen
+#endif
+
+#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
 /* lua 5.2 already supports __pairs */
 
 /* See http://lua-users.org/wiki/GeneralizedPairsAndIpairs for implementation details.
@@ -336,7 +342,7 @@ static int magnet_stat(lua_State *L) {
 		return 1;
 	}
 
-	lua_newtable(L); // return value
+	lua_createtable(L, 0, 16); /* returned on stack */
 
 	lua_pushboolean(L, S_ISREG(sce->st.st_mode));
 	lua_setfield(L, -2, "is_file");
@@ -750,10 +756,8 @@ static int magnet_cgi_pairs(lua_State *L) {
 }
 
 
-static int magnet_copy_response_header(request_st * const r, lua_State * const L, int lighty_table_ndx) {
-	force_assert(lua_istable(L, lighty_table_ndx));
-
-	lua_getfield(L, lighty_table_ndx, "header"); /* lighty.header */
+static int magnet_copy_response_header(request_st * const r, lua_State * const L) {
+	lua_getfield(L, -1, "header"); /* lighty.header */
 	if (lua_istable(L, -1)) {
 		/* header is found, and is a table */
 
@@ -786,14 +790,12 @@ static int magnet_copy_response_header(request_st * const r, lua_State * const L
  *
  * return 200
  */
-static int magnet_attach_content(request_st * const r, lua_State * const L, int lighty_table_ndx) {
-	force_assert(lua_istable(L, lighty_table_ndx));
-
-	lua_getfield(L, lighty_table_ndx, "content"); /* lighty.content */
+static int magnet_attach_content(request_st * const r, lua_State * const L) {
+	lua_getfield(L, -1, "content"); /* lighty.content */
 	if (lua_istable(L, -1)) {
 		/* content is found, and is a table */
 		http_response_body_clear(r, 0);
-		for (int i = 1, end = 0; !end; i++) {
+		for (int i=1, end=0, n=(int)lua_rawlen(L,-1); !end && i <= n; ++i) {
 			lua_rawgeti(L, -1, i);
 
 			/* -1 is the value and should be the value ... aka a table */
@@ -865,6 +867,145 @@ static int magnet_attach_content(request_st * const r, lua_State * const L, int 
 	return 0;
 }
 
+static void magnet_mainenv_metatable(lua_State * const L) {
+    if (luaL_newmetatable(L, "lighty.mainenv")) {             /* (sp += 1) */
+        lua_pushglobaltable(L);                               /* (sp += 1) */
+        lua_setfield(L, -2, "__index"); /* { __index = _G }      (sp -= 1) */
+        lua_pushboolean(L, 0);                                /* (sp += 1) */
+        lua_setfield(L, -2, "__metatable"); /* protect metatable (sp -= 1) */
+    }
+}
+
+__attribute_cold__
+static void magnet_init_lighty_table(lua_State * const L) {
+    /* init lighty table and other initial setup for global lua_State */
+
+    lua_atpanic(L, magnet_atpanic);
+
+    lua_pushglobaltable(L);                                   /* (sp += 1) */
+
+    /* we have to overwrite the print function */
+    lua_pushcfunction(L, magnet_print);                       /* (sp += 1) */
+    lua_setfield(L, -2, "print"); /* -1 is the env we want to set(sp -= 1) */
+
+  #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
+    /* override the default pairs() function to our __pairs capable version;
+     * not needed for lua 5.2+
+     */
+    lua_getglobal(L, "pairs"); /* push original pairs()          (sp += 1) */
+    lua_pushcclosure(L, magnet_pairs, 1);
+    lua_setfield(L, -2, "pairs");                             /* (sp -= 1) */
+  #endif
+
+    lua_pop(L, 1); /* pop global table */                     /* (sp -= 1) */
+
+    magnet_mainenv_metatable(L); /* init table for mem locality  (sp += 1) */
+    lua_pop(L, 1);               /* pop mainenv metatable        (sp -= 1) */
+
+    /* lighty table
+     *
+     * lighty.request[]      HTTP request headers
+     * lighty.req_env[]      CGI environment variables
+     * lighty.env[]          lighttpd request metadata,
+     *                       various url components,
+     *                       physical file paths;
+     *                       might contain nil values
+     *
+     * lighty.header[]       (script) HTTP response headers
+     * lighty.content[]      (script) HTTP response body (table of string/file)
+     *
+     * lighty.status[]       lighttpd status counters
+     */
+
+    /*(adjust the preallocation if more entries are added)*/
+    lua_createtable(L, 0, 8); /* lighty.* (returned on stack)    (sp += 1) */
+
+    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
+    lua_createtable(L, 0, 3); /* metatable for request table     (sp += 1) */
+    lua_pushcfunction(L, magnet_reqhdr_get);                  /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_reqhdr_pairs);                /* (sp += 1) */
+    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+    lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
+    lua_setfield(L, -2, "request"); /* request = {}              (sp -= 1) */
+
+    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
+    lua_createtable(L, 0, 4); /* metatable for env table         (sp += 1) */
+    lua_pushcfunction(L, magnet_env_get);                     /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_env_set);                     /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_env_pairs);                   /* (sp += 1) */
+    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+    lua_setmetatable(L, -2); /* tie the metatable to env         (sp -= 1) */
+    lua_setfield(L, -2, "env"); /* env = {}                      (sp -= 1) */
+
+    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
+    lua_createtable(L, 0, 4); /* metatable for req_env table     (sp += 1) */
+    lua_pushcfunction(L, magnet_cgi_get);                     /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_cgi_set);                     /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_cgi_pairs);                   /* (sp += 1) */
+    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+    lua_setmetatable(L, -2); /* tie the metatable to req_env     (sp -= 1) */
+    lua_setfield(L, -2, "req_env"); /* req_env = {}              (sp -= 1) */
+
+    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
+    lua_createtable(L, 0, 4); /* metatable for status table      (sp += 1) */
+    lua_pushcfunction(L, magnet_status_get);                  /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_status_set);                  /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_status_pairs);                /* (sp += 1) */
+    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+    lua_setmetatable(L, -2); /* tie the metatable to status      (sp -= 1) */
+    lua_setfield(L, -2, "status"); /* status = {}                (sp -= 1) */
+
+    lua_pushinteger(L, MAGNET_RESTART_REQUEST);
+    lua_setfield(L, -2, "RESTART_REQUEST");
+
+    lua_pushcfunction(L, magnet_stat);                        /* (sp += 1) */
+    lua_setfield(L, -2, "stat"); /* -1 is the env we want to set (sp -= 1) */
+
+    lua_createtable(L, 0, 8); /* {}                              (sp += 1) */
+    lua_setfield(L, -2, "header"); /* header = {}                (sp -= 1) */
+
+    /* add empty 'content' and 'header' tables;
+     * (preallocate for 8 entries, though content often assigned new table)*/
+    lua_createtable(L, 8, 0); /* {}                              (sp += 1) */
+    lua_setfield(L, -2, "content"); /* content = {}              (sp -= 1) */
+
+    /* lighty table (returned on stack) */
+}
+
+static void magnet_clear_table(lua_State * const L) {
+    for (int n = (int)lua_rawlen(L, -1); n; --n) {
+        lua_pushnil(L);
+        lua_rawseti(L, -2, n);
+    }
+}
+
+static void magnet_reset_lighty_table(lua_State * const L) {
+    /* clear response tables (release mem if reusing lighty table) */
+    lua_getfield(L, -1, "content"); /* lighty.content */
+    if (lua_istable(L, -1))
+        magnet_clear_table(L);
+    lua_pop(L, 1);
+    lua_getfield(L, -1, "header");  /* lighty.header */
+    if (lua_istable(L, -1))
+        magnet_clear_table(L);
+    lua_pop(L, 1);
+}
+
 static int traceback(lua_State *L) {
 	if (!lua_isstring(L, 1))  /* 'message' not a string? */
 		return 1;  /* keep it intact */
@@ -918,9 +1059,7 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 	if (lua_isstring(L, -1)) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "loading script %s failed: %s", sc->name.ptr, lua_tostring(L, -1));
-
 		lua_pop(L, 1);
-
 		force_assert(lua_gettop(L) == 0); /* only the error should have been on the stack */
 
 		if (p->conf.stage != -1) { /* skip for response-start */
@@ -931,13 +1070,17 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 		return HANDLER_FINISHED;
 	}
 
-	force_assert(lua_gettop(L) == 1);
-	force_assert(lua_isfunction(L, func_ndx));
-
 	lua_pushlightuserdata(L, r);
 	lua_setfield(L, LUA_REGISTRYINDEX, LUA_RIDX_LIGHTTPD_REQUEST);
 
-	lua_atpanic(L, magnet_atpanic);
+	if (lua_gettop(L) == 2) {
+		/*force_assert(lua_istable(L, -1));*//* lighty.* table */
+	}
+	else {
+	        /*force_assert(lua_gettop(L) == 1);*/
+		/* insert lighty table at index 2 (lighty_table_ndx = 2) */
+		magnet_init_lighty_table(L); /* lighty.*             (sp += 1) */
+	}
 
 	/**
 	 * we want to create empty environment for our script
@@ -950,97 +1093,12 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 	 * all variables created in the script-env will be thrown
 	 * away at the end of the script run.
 	 */
-	lua_newtable(L); /* my empty environment aka {}              (sp += 1) */
+	lua_createtable(L, 0, 1); /* my empty environment aka {}     (sp += 1) */
 
-	/* we have to overwrite the print function */
-	lua_pushcfunction(L, magnet_print);                       /* (sp += 1) */
-	lua_setfield(L, -2, "print"); /* -1 is the env we want to set(sp -= 1) */
-
-	/**
-	 * lighty.request[] (ro) has the HTTP-request headers
-	 * lighty.env[] (rw) has various url/physical file paths and
-	 *                   request meta data; might contain nil values
-	 * lighty.req_env[] (ro) has the cgi environment
-	 * lighty.status[] (ro) has the status counters
-	 * lighty.content[] (rw) is a table of string/file
-	 * lighty.header[] (rw) is a array to set response headers
-	 */
-
-	lua_newtable(L); /* lighty.*                                 (sp += 1) */
-
-	lua_newtable(L); /*  {}                                      (sp += 1) */
-	lua_newtable(L); /* the meta-table for the request-table     (sp += 1) */
-	lua_pushcfunction(L, magnet_reqhdr_get);                  /* (sp += 1) */
-	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-	lua_pushcfunction(L, magnet_reqhdr_pairs);                /* (sp += 1) */
-	lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
-	lua_setmetatable(L, -2); /* tie the metatable to request     (sp -= 1) */
-	lua_setfield(L, -2, "request"); /* content = {}              (sp -= 1) */
-
-	lua_newtable(L); /*  {}                                      (sp += 1) */
-	lua_newtable(L); /* the meta-table for the env-table         (sp += 1) */
-	lua_pushcfunction(L, magnet_env_get);                     /* (sp += 1) */
-	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-	lua_pushcfunction(L, magnet_env_set);                     /* (sp += 1) */
-	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-	lua_pushcfunction(L, magnet_env_pairs);                   /* (sp += 1) */
-	lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
-	lua_setmetatable(L, -2); /* tie the metatable to env         (sp -= 1) */
-	lua_setfield(L, -2, "env"); /* content = {}                  (sp -= 1) */
-
-	lua_newtable(L); /*  {}                                      (sp += 1) */
-	lua_newtable(L); /* the meta-table for the req_env-table     (sp += 1) */
-	lua_pushcfunction(L, magnet_cgi_get);                     /* (sp += 1) */
-	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-	lua_pushcfunction(L, magnet_cgi_set);                     /* (sp += 1) */
-	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-	lua_pushcfunction(L, magnet_cgi_pairs);                   /* (sp += 1) */
-	lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
-	lua_setmetatable(L, -2); /* tie the metatable to req_env     (sp -= 1) */
-	lua_setfield(L, -2, "req_env"); /* content = {}              (sp -= 1) */
-
-	lua_newtable(L); /*  {}                                      (sp += 1) */
-	lua_newtable(L); /* the meta-table for the status-table      (sp += 1) */
-	lua_pushcfunction(L, magnet_status_get);                  /* (sp += 1) */
-	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-	lua_pushcfunction(L, magnet_status_set);                  /* (sp += 1) */
-	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-	lua_pushcfunction(L, magnet_status_pairs);                /* (sp += 1) */
-	lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
-	lua_setmetatable(L, -2); /* tie the metatable to statzs      (sp -= 1) */
-	lua_setfield(L, -2, "status"); /* content = {}               (sp -= 1) */
-
-	/* add empty 'content' and 'header' tables */
-	lua_newtable(L); /*  {}                                      (sp += 1) */
-	lua_setfield(L, -2, "content"); /* content = {}              (sp -= 1) */
-
-	lua_newtable(L); /*  {}                                      (sp += 1) */
-	lua_setfield(L, -2, "header"); /* header = {}                (sp -= 1) */
-
-	lua_pushinteger(L, MAGNET_RESTART_REQUEST);
-	lua_setfield(L, -2, "RESTART_REQUEST");
-
-	lua_pushcfunction(L, magnet_stat);                        /* (sp += 1) */
-	lua_setfield(L, -2, "stat"); /* -1 is the env we want to set (sp -= 1) */
-
-	/* insert lighty table at index 2 */
-	lua_pushvalue(L, -1);
-	lua_insert(L, lighty_table_ndx);
-
+	lua_pushvalue(L, lighty_table_ndx);                       /* (sp += 1) */
 	lua_setfield(L, -2, "lighty"); /* lighty.*                   (sp -= 1) */
 
-#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
-	/* override the default pairs() function to our __pairs capable version;
-	 * not needed for lua 5.2+
-	 */
-	lua_getglobal(L, "pairs"); /* push original pairs()          (sp += 1) */
-	lua_pushcclosure(L, magnet_pairs, 1);
-	lua_setfield(L, -2, "pairs");                             /* (sp -= 1) */
-#endif
-
-	lua_newtable(L); /* the meta-table for the new env           (sp += 1) */
-	lua_pushglobaltable(L);                                   /* (sp += 1) */
-	lua_setfield(L, -2, "__index"); /* { __index = _G }          (sp -= 1) */
+	magnet_mainenv_metatable(L);                              /* (sp += 1) */
 	lua_setmetatable(L, -2); /* setmetatable({}, {__index = _G}) (sp -= 1) */
 
 	magnet_setfenv_mainfn(L, 1);                              /* (sp -= 1) */
@@ -1059,9 +1117,10 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 		if (0 != ret) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "lua_pcall(): %s", lua_tostring(L, -1));
-			lua_pop(L, 2); /* remove the error-msg and the lighty table at index 2 */
-
-			force_assert(lua_gettop(L) == 1); /* only the function should be on the stack */
+			lua_pop(L, 1); /* pop error msg */
+			/* only the function and lighty table should remain on the stack */
+			force_assert(lua_gettop(L) == 2);
+			magnet_reset_lighty_table(L);
 
 			if (p->conf.stage != -1) { /* skip for response-start */
 				r->http_status = 500;
@@ -1073,7 +1132,7 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 	}
 
 	/* we should have the function, the lighty table and the return value on the stack */
-	force_assert(lua_gettop(L) == 3);
+	/*force_assert(lua_gettop(L) == 3);*/
 
 	switch (lua_type(L, -1)) {
 	case LUA_TNUMBER:
@@ -1088,8 +1147,9 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 	}
 
 	lua_pop(L, 1); /* pop return value */
+	/*force_assert(lua_istable(sc->L, -1));*/
 
-	magnet_copy_response_header(r, L, lighty_table_ndx);
+	magnet_copy_response_header(r, L);
 
 	{
 		handler_t result = HANDLER_GO_ON;
@@ -1099,7 +1159,7 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			r->resp_body_finished = 1;
 
 			if (0 == setjmp(exceptionjmp)) {
-				magnet_attach_content(r, L, lighty_table_ndx);
+				magnet_attach_content(r, L);
 				if (!chunkqueue_is_empty(&r->write_queue)) {
 					r->handler_module = p->self;
 				}
@@ -1121,9 +1181,7 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			result = HANDLER_COMEBACK;
 		}
 
-		lua_pop(L, 1); /* pop the lighty table */
-		force_assert(lua_gettop(L) == 1); /* only the function should remain on the stack */
-
+		magnet_reset_lighty_table(L);
 		return result;
 	}
 }

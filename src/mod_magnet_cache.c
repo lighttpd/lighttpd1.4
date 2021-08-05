@@ -22,8 +22,6 @@ __attribute_cold__
 static void script_free(script *sc)
 {
     if (!sc) return;
-    if (lua_gettop(sc->L) != 0)
-        lua_pop(sc->L, 1); /* the function copy */
     lua_close(sc->L);
     free(sc->name.ptr);
     free(sc->etag.ptr);
@@ -126,12 +124,12 @@ lua_State *script_cache_check_script(script * const sc, int etag_flags)
     if (lua_gettop(sc->L) == 0)
         return script_cache_load_script(sc, etag_flags);
 
-    force_assert(lua_gettop(sc->L) == 1);
-    force_assert(lua_isfunction(sc->L, -1));
+    /*force_assert(lua_gettop(sc->L) == 2);*/
+    /*force_assert(lua_isfunction(sc->L, -2));*/
 
     stat_cache_entry * const sce = stat_cache_get_entry(&sc->name);
     if (NULL == sce) {
-        lua_pop(sc->L, 1); /* pop the old function */
+        lua_pop(sc->L, 2); /* pop the old function and lighty table */
         return script_cache_load_script(sc, etag_flags);
     }
 
@@ -140,7 +138,7 @@ lua_State *script_cache_check_script(script * const sc, int etag_flags)
         if (0 == etag_flags)
             return sc->L;
         /* the etag is outdated, reload the function */
-        lua_pop(sc->L, 1);
+        lua_pop(sc->L, 2); /* pop the old function and lighty table */
         return script_cache_load_script(sc, etag_flags);
     }
 
