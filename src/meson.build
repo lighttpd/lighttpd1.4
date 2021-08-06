@@ -1070,7 +1070,7 @@ endif
 if get_option('with_lua')
 	modules += [
 		[ 'mod_cml', [ 'mod_cml.c', 'mod_cml_lua.c', 'mod_cml_funcs.c' ], liblua + libmemcached + libcrypto ],
-		[ 'mod_magnet', [ 'mod_magnet.c', 'mod_magnet_cache.c' ], liblua ],
+		[ 'mod_magnet', [ 'mod_magnet.c', 'mod_magnet_cache.c', 'algo_hmac.c' ], liblua + libcrypto ],
 	]
 endif
 

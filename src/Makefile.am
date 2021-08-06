@@ -155,10 +155,10 @@ mod_webdav_la_LIBADD = $(common_libadd) $(XML_LIBS) $(SQLITE_LIBS) $(UUID_LIBS) 
 
 if BUILD_WITH_LUA
 lib_LTLIBRARIES += mod_magnet.la
-mod_magnet_la_SOURCES = mod_magnet.c mod_magnet_cache.c
+mod_magnet_la_SOURCES = mod_magnet.c mod_magnet_cache.c algo_hmac.c
 mod_magnet_la_CFLAGS = $(AM_CFLAGS) $(LUA_CFLAGS)
 mod_magnet_la_LDFLAGS = $(common_module_ldflags)
-mod_magnet_la_LIBADD = $(common_libadd) $(LUA_LIBS) -lm
+mod_magnet_la_LIBADD = $(common_libadd) $(LUA_LIBS) $(CRYPTO_LIB) -lm
 endif
 
 if BUILD_WITH_LUA
@@ -562,6 +562,7 @@ endif
 if BUILD_WITH_LUA
 lighttpd_SOURCES += mod_cml.c mod_cml_lua.c mod_cml_funcs.c \
                     mod_magnet.c mod_magnet_cache.c
+                    #algo_hmac.c
 lighttpd_CPPFLAGS += $(LUA_CFLAGS)
 lighttpd_LDADD += $(LUA_LIBS) -lm
 endif

@@ -1,11 +1,15 @@
 #include "first.h"
 
+#include "sys-crypto-md.h"
+#include "algo_hmac.h"
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "ck.h"
 #include "http_chunk.h"
 #include "http_etag.h"
 #include "http_header.h"
+#include "rand.h"
 #include "response.h"   /* http_response_send_1xx() */
 
 #include "plugin.h"
@@ -205,6 +209,9 @@ static void magnet_setfenv_mainfn(lua_State *L, int funcIndex) { /* (-1, 0, -) *
 /* lua 5.1 deprecated luaL_getn() for lua_objlen() */
 /* lua 5.2 renamed lua_objlen() to lua_rawlen() */
 #define lua_rawlen lua_objlen
+/* lua 5.2 deprecated luaL_register() for luaL_setfuncs()
+ * (this define is valid only when 0 == nup) */
+#define luaL_setfuncs(L, l, nup) luaL_register((L), NULL, (l))
 #endif
 
 #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
@@ -229,6 +236,11 @@ static int magnet_pairs(lua_State *L) {
 	return 3;
 }
 #endif
+
+static int magnet_newindex_readonly(lua_State *L) {
+    lua_pushliteral(L, "lua table is read-only");
+    return lua_error(L);
+}
 
 static void magnet_push_buffer(lua_State *L, const buffer *b) {
     if (b && !buffer_is_unset(b))
@@ -406,6 +418,172 @@ static int magnet_stat(lua_State *L) {
 	return 1;
 }
 
+
+static int magnet_time(lua_State *L) {
+    lua_pushinteger(L, (lua_Integer)log_epoch_secs);
+    return 1;
+}
+
+
+static int magnet_rand(lua_State *L) {
+    lua_pushinteger(L, (lua_Integer)li_rand_pseudo());
+    return 1;
+}
+
+
+static int magnet_md_once(lua_State *L) {
+    if (lua_gettop(L) != 2) {
+        lua_pushliteral(L,
+          "lighty.c.md(algo, data): incorrect number of arguments");
+        return lua_error(L);
+    }
+    const_buffer algo = magnet_checkconstbuffer(L, -2);
+    const_buffer msg  = magnet_checkconstbuffer(L, -1);
+    uint8_t digest[MD_DIGEST_LENGTH_MAX];
+    uint32_t dlen = 0;
+    switch (algo.len) {
+     #ifdef USE_LIB_CRYPTO
+      case 6:
+       #ifdef USE_LIB_CRYPTO_SHA512
+        if (0 == memcmp(algo.ptr, "sha512", 6)) {
+            SHA512_once(digest, msg.ptr, msg.len);
+            dlen = SHA512_DIGEST_LENGTH;
+            break;
+        }
+       #endif
+       #ifdef USE_LIB_CRYPTO_SHA256
+        if (0 == memcmp(algo.ptr, "sha256", 6)) {
+            SHA256_once(digest, msg.ptr, msg.len);
+            dlen = SHA256_DIGEST_LENGTH;
+            break;
+        }
+       #endif
+        break;
+      case 4:
+       #ifdef USE_LIB_CRYPTO_SHA1
+        if (0 == memcmp(algo.ptr, "sha1", 4)) {
+            SHA1_once(digest, msg.ptr, msg.len);
+            dlen = SHA1_DIGEST_LENGTH;
+            break;
+        }
+       #endif
+        break;
+     #endif
+      case 3:
+        if (0 == memcmp(algo.ptr, "md5", 3)) {
+            MD5_once(digest, msg.ptr, msg.len);
+            dlen = MD5_DIGEST_LENGTH;
+            break;
+        }
+        break;
+      default:
+        break;
+    }
+
+    if (dlen) {
+        char dighex[MD_DIGEST_LENGTH_MAX*2+1];
+        li_tohex_uc(dighex, sizeof(dighex), (char *)digest, dlen);
+        lua_pushlstring(L, dighex, dlen*2);
+    }
+    else
+        lua_pushnil(L);
+
+    return 1;
+}
+
+static int magnet_hmac_once(lua_State *L) {
+    if (lua_gettop(L) != 3) {
+        lua_pushliteral(L,
+          "lighty.c.hmac(algo, secret, data): incorrect number of arguments");
+        return lua_error(L);
+    }
+    const_buffer algo   = magnet_checkconstbuffer(L, -3);
+    const_buffer secret = magnet_checkconstbuffer(L, -2);
+    const_buffer msg    = magnet_checkconstbuffer(L, -1);
+    const uint8_t * const msgptr = (uint8_t *)msg.ptr;
+    uint8_t digest[MD_DIGEST_LENGTH_MAX];
+    uint32_t dlen = 0;
+    int rc = 0;
+    switch (algo.len) {
+     #ifdef USE_LIB_CRYPTO
+      case 6:
+       #ifdef USE_LIB_CRYPTO_SHA512
+        if (0 == memcmp(algo.ptr, "sha512", 6)) {
+            rc = li_hmac_sha512(digest,secret.ptr,secret.len,msgptr,msg.len);
+            dlen = SHA512_DIGEST_LENGTH;
+            break;
+        }
+       #endif
+       #ifdef USE_LIB_CRYPTO_SHA256
+        if (0 == memcmp(algo.ptr, "sha256", 6)) {
+            rc = li_hmac_sha256(digest,secret.ptr,secret.len,msgptr,msg.len);
+            dlen = SHA256_DIGEST_LENGTH;
+            break;
+        }
+       #endif
+        break;
+      case 4:
+       #ifdef USE_LIB_CRYPTO_SHA1
+        if (0 == memcmp(algo.ptr, "sha1", 4)) {
+            rc = li_hmac_sha1(digest,secret.ptr,secret.len,msgptr,msg.len);
+            dlen = SHA1_DIGEST_LENGTH;
+            break;
+        }
+       #endif
+        break;
+     #endif
+      case 3:
+        if (0 == memcmp(algo.ptr, "md5", 3)) {
+            rc = li_hmac_md5(digest,secret.ptr,secret.len,msgptr,msg.len);
+            dlen = MD5_DIGEST_LENGTH;
+            break;
+        }
+        break;
+      default:
+        break;
+    }
+
+    if (rc) {
+        char dighex[MD_DIGEST_LENGTH_MAX*2+1];
+        li_tohex_uc(dighex, sizeof(dighex), (char *)digest, dlen);
+        lua_pushlstring(L, dighex, dlen*2);
+    }
+    else
+        lua_pushnil(L);
+
+    return 1;
+}
+
+static int magnet_digest_eq(lua_State *L) {
+    if (lua_gettop(L) != 2) {
+        lua_pushliteral(L,
+          "lighty.c.digest_eq(d1, d2): incorrect number of arguments");
+        return lua_error(L);
+    }
+    const_buffer d1 = magnet_checkconstbuffer(L, -2);
+    const_buffer d2 = magnet_checkconstbuffer(L, -1);
+    /* convert hex to binary: validate hex and eliminate hex case comparison */
+    uint8_t b1[MD_DIGEST_LENGTH_MAX];
+    uint8_t b2[MD_DIGEST_LENGTH_MAX];
+    int rc = (d1.len == d2.len)
+          && 0 == li_hex2bin(b1, sizeof(b1), d1.ptr, d1.len)
+          && 0 == li_hex2bin(b2, sizeof(b2), d2.ptr, d2.len)
+          && ck_memeq_const_time_fixed_len(b1, b2, d2.len >> 1);
+    lua_pushboolean(L, rc);
+    return 1;
+}
+
+static int magnet_secret_eq(lua_State *L) {
+    if (lua_gettop(L) != 2) {
+        lua_pushliteral(L,
+          "lighty.c.secret_eq(d1, d2): incorrect number of arguments");
+        return lua_error(L);
+    }
+    const_buffer d1 = magnet_checkconstbuffer(L, -2);
+    const_buffer d2 = magnet_checkconstbuffer(L, -1);
+    lua_pushboolean(L, ck_memeq_const_time(d1.ptr, d1.len, d2.ptr, d2.len));
+    return 1;
+}
 
 static int magnet_atpanic(lua_State *L) {
 	request_st * const r = magnet_get_request(L);
@@ -918,7 +1096,7 @@ static void magnet_init_lighty_table(lua_State * const L) {
      */
 
     /*(adjust the preallocation if more entries are added)*/
-    lua_createtable(L, 0, 8); /* lighty.* (returned on stack)    (sp += 1) */
+    lua_createtable(L, 0, 9); /* lighty.* (returned on stack)    (sp += 1) */
 
     lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
     lua_createtable(L, 0, 3); /* metatable for request table     (sp += 1) */
@@ -983,6 +1161,27 @@ static void magnet_init_lighty_table(lua_State * const L) {
      * (preallocate for 8 entries, though content often assigned new table)*/
     lua_createtable(L, 8, 0); /* {}                              (sp += 1) */
     lua_setfield(L, -2, "content"); /* content = {}              (sp -= 1) */
+
+    static const luaL_Reg cmethods[] = {
+      { "stat",             magnet_stat }
+     ,{ "time",             magnet_time }
+     ,{ "rand",             magnet_rand }
+     ,{ "md",               magnet_md_once   } /* message digest */
+     ,{ "hmac",             magnet_hmac_once } /* HMAC */
+     ,{ "digest_eq",        magnet_digest_eq } /* timing-safe eq fixed len */
+     ,{ "secret_eq",        magnet_secret_eq } /* timing-safe eq variable len */
+     ,{ NULL, NULL }
+    };
+
+    lua_createtable(L, 0, sizeof(cmethods)/sizeof(luaL_Reg)-1);/*(sp += 1) */
+    luaL_setfuncs(L, cmethods, 0);
+    lua_createtable(L, 0, 2); /* metatable for c table           (sp += 1) */
+    lua_pushcfunction(L, magnet_newindex_readonly);           /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+    lua_setmetatable(L, -2); /* tie the metatable to c           (sp -= 1) */
+    lua_setfield(L, -2, "c"); /* c = {}                          (sp -= 1) */
 
     /* lighty table (returned on stack) */
 }

@@ -987,8 +987,8 @@ if(WITH_PCRE AND (WITH_MEMCACHED OR WITH_GDBM))
 endif()
 
 if(WITH_LUA)
-	add_and_install_library(mod_magnet "mod_magnet.c;mod_magnet_cache.c")
-	target_link_libraries(mod_magnet ${LUA_LDFLAGS})
+	add_and_install_library(mod_magnet "mod_magnet.c;mod_magnet_cache.c;algo_hmac.c")
+	target_link_libraries(mod_magnet ${LUA_LDFLAGS} ${CRYPTO_LIBRARY})
 	add_target_properties(mod_magnet COMPILE_FLAGS ${LUA_CFLAGS})
 
 	add_and_install_library(mod_cml "mod_cml.c;mod_cml_lua.c;mod_cml_funcs.c")

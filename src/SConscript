@@ -146,7 +146,10 @@ if env['with_ldap']:
 	modules['mod_vhostdb_ldap'] = { 'src' : [ 'mod_vhostdb_ldap.c' ], 'lib' : [ env['LIBLDAP'], env['LIBLBER'] ] }
 
 if env['with_lua']:
-	modules['mod_magnet'] = { 'src' : [ 'mod_magnet.c', 'mod_magnet_cache.c' ], 'lib' : [ env['LIBLUA'] ] }
+	modules['mod_magnet'] = {
+		'src' : [ 'mod_magnet.c', 'mod_magnet_cache.c', 'algo_hmac.c' ],
+		'lib' : [ env['LIBLUA'], env['LIBCRYPTO'] ]
+	}
 	modules['mod_cml'] = {
 		'src' : [ 'mod_cml_lua.c', 'mod_cml.c', 'mod_cml_funcs.c' ],
 		'lib' : [ env['LIBMEMCACHED'], env['LIBLUA'], env['LIBCRYPTO'] ]
