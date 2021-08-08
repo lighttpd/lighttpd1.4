@@ -343,79 +343,200 @@ static int magnet_print(lua_State *L) {
 	return 0;
 }
 
+
+static int magnet_stat_field(lua_State *L) {
+    if (lua_gettop(L) != 2)
+        return 0; /*(should not happen; __index method in protected metatable)*/
+
+    stat_cache_entry * const sce = *(stat_cache_entry **)lua_touserdata(L, -2);
+    const_buffer k = magnet_checkconstbuffer(L, -1);
+    switch (k.ptr[0]) {
+      case 'c': { /* content-type */
+        if (0 != strcmp(k.ptr, "content-type")) break;
+        request_st * const r = magnet_get_request(L);
+        const buffer *content_type = stat_cache_content_type_get(sce, r);
+        if (content_type && !buffer_is_blank(content_type))
+            lua_pushlstring(L, BUF_PTR_LEN(content_type));
+        else
+            lua_pushnil(L);
+        return 1;
+      }
+      case 'e': { /* etag */
+        if (0 != strcmp(k.ptr, "etag")) break;
+        request_st * const r = magnet_get_request(L);
+        const buffer *etag = stat_cache_etag_get(sce, r->conf.etag_flags);
+        if (etag && !buffer_is_blank(etag))
+            lua_pushlstring(L, BUF_PTR_LEN(etag));
+        else
+            lua_pushnil(L);
+        return 1;
+      }
+      case 'i': /* is_* */
+        if (k.len < 4) break;
+        switch (k.ptr[3]) {
+          case 'b': /* is_block */
+            if (0 == strcmp(k.ptr, "is_block")) {
+                lua_pushboolean(L, S_ISBLK(sce->st.st_mode));
+                return 1;
+            }
+            break;
+          case 'c': /* is_char */
+            if (0 == strcmp(k.ptr, "is_char")) {
+                lua_pushboolean(L, S_ISCHR(sce->st.st_mode));
+                return 1;
+            }
+            break;
+          case 'd': /* is_dir */
+            if (0 == strcmp(k.ptr, "is_dir")) {
+                lua_pushboolean(L, S_ISDIR(sce->st.st_mode));
+                return 1;
+            }
+            break;
+          case 'f': /* is_file is_fifo */
+            if (0 == strcmp(k.ptr, "is_file")) {
+                lua_pushboolean(L, S_ISREG(sce->st.st_mode));
+                return 1;
+            }
+            if (0 == strcmp(k.ptr, "is_fifo")) {
+                lua_pushboolean(L, S_ISFIFO(sce->st.st_mode));
+                return 1;
+            }
+            break;
+          case 'l': /* is_link */
+            if (0 == strcmp(k.ptr, "is_link")) {
+                lua_pushboolean(L, S_ISLNK(sce->st.st_mode));
+                return 1;
+            }
+            break;
+          case 's': /* is_socket */
+            if (0 == strcmp(k.ptr, "is_socket")) {
+                lua_pushboolean(L, S_ISSOCK(sce->st.st_mode));
+                return 1;
+            }
+            break;
+          default:
+            break;
+        }
+        break;
+      case 's': /* st_* */
+        if (k.len < 4) break;
+        switch (k.ptr[3]) {
+          case 'a': /* st_atime */
+            if (0 == strcmp(k.ptr, "st_atime")) {
+                lua_pushinteger(L, TIME64_CAST(sce->st.st_atime));
+                return 1;
+            }
+            break;
+          case 'c': /* st_ctime */
+            if (0 == strcmp(k.ptr, "st_ctime")) {
+                lua_pushinteger(L, TIME64_CAST(sce->st.st_ctime));
+                return 1;
+            }
+            break;
+          case 'i': /* st_ino */
+            if (0 == strcmp(k.ptr, "st_ino")) {
+                lua_pushinteger(L, sce->st.st_ino);
+                return 1;
+            }
+            break;
+          case 'm': /* st_mtime st_mode */
+            if (0 == strcmp(k.ptr, "st_mtime")) {
+                lua_pushinteger(L, TIME64_CAST(sce->st.st_mtime));
+                return 1;
+            }
+            if (0 == strcmp(k.ptr, "st_mode")) {
+                lua_pushinteger(L, sce->st.st_mode);
+                return 1;
+            }
+            break;
+          case 'g': /* st_gid */
+            if (0 == strcmp(k.ptr, "st_gid")) {
+                lua_pushinteger(L, sce->st.st_gid);
+                return 1;
+            }
+            break;
+          case 's': /* st_size */
+            if (0 == strcmp(k.ptr, "st_size")) {
+                lua_pushinteger(L, sce->st.st_size);
+                return 1;
+            }
+            break;
+          case 'u': /* st_uid */
+            if (0 == strcmp(k.ptr, "st_uid")) {
+                lua_pushinteger(L, sce->st.st_uid);
+                return 1;
+            }
+            break;
+          default:
+            break;
+        }
+        break;
+      default:
+        break;
+    }
+
+    lua_pushliteral(L, "stat[\"field\"] invalid: ");
+    lua_pushvalue(L, -2); /* field */
+    lua_concat(L, 2);
+    lua_error(L);
+    return 0;
+}
+
+
+__attribute_cold__
+static int magnet_stat_pairs_noimpl_iter(lua_State *L) {
+    request_st * const r = magnet_get_request(L);
+    log_error(r->conf.errh, __FILE__, __LINE__,
+      "(lua) pairs() not implemented on lighty.stat object; "
+      "returning empty iter");
+    return 0;
+}
+
+
+__attribute_cold__
+static int magnet_stat_pairs_noimpl(lua_State *L) {
+    lua_pushcclosure(L, magnet_stat_pairs_noimpl_iter, 0);
+    return 1;
+}
+
+
+static void magnet_stat_metatable(lua_State *L) {
+    if (luaL_newmetatable(L, "lighty.stat")) {                  /* (sp += 1) */
+        lua_pushcfunction(L, magnet_stat_field);                /* (sp += 1) */
+        lua_setfield(L, -2, "__index");                         /* (sp -= 1) */
+        lua_pushcfunction(L, magnet_newindex_readonly);         /* (sp += 1) */
+        lua_setfield(L, -2, "__newindex");                      /* (sp -= 1) */
+        lua_pushcfunction(L, magnet_stat_pairs_noimpl);         /* (sp += 1) */
+        lua_setfield(L, -2, "__pairs");                         /* (sp -= 1) */
+        lua_pushboolean(L, 0);                                  /* (sp += 1) */
+        lua_setfield(L, -2, "__metatable"); /* protect metatable   (sp -= 1) */
+    }
+}
+
+
 static int magnet_stat(lua_State *L) {
-	buffer stor; /*(note: do not free magnet_checkbuffer() result)*/
-	const buffer * const sb = magnet_checkbuffer(L, 1, &stor);
-	stat_cache_entry * const sce = (!buffer_is_blank(sb))
-	  ? stat_cache_get_entry(sb)
-	  : NULL;
-	if (NULL == sce) {
-		lua_pushnil(L);
-		return 1;
-	}
+    buffer stor; /*(note: do not free magnet_checkbuffer() result)*/
+    const buffer * const sb = magnet_checkbuffer(L, 1, &stor);
+    stat_cache_entry * const sce = (!buffer_is_blank(sb))
+      ? stat_cache_get_entry(sb)
+      : NULL;
+    if (NULL == sce) {
+        lua_pushnil(L);
+        return 1;
+    }
 
-	lua_createtable(L, 0, 16); /* returned on stack */
+    /* note: caching sce valid only for procedural script which does not yield;
+     * (sce might not be valid if script yields and is later resumed)
+     * (script must not cache sce in persistent global state for later use)
+     * (If we did want sce to be persistent, then could increment sce refcnt,
+     *  and set up __gc metatable method to decrement sce refcnt) */
+    stat_cache_entry ** const udata =                           /* (sp += 1) */
+      (struct stat_cache_entry **)lua_newuserdata(L, sizeof(stat_cache_entry *));
+    *udata = sce;
 
-	lua_pushboolean(L, S_ISREG(sce->st.st_mode));
-	lua_setfield(L, -2, "is_file");
-
-	lua_pushboolean(L, S_ISDIR(sce->st.st_mode));
-	lua_setfield(L, -2, "is_dir");
-
-	lua_pushboolean(L, S_ISCHR(sce->st.st_mode));
-	lua_setfield(L, -2, "is_char");
-
-	lua_pushboolean(L, S_ISBLK(sce->st.st_mode));
-	lua_setfield(L, -2, "is_block");
-
-	lua_pushboolean(L, S_ISSOCK(sce->st.st_mode));
-	lua_setfield(L, -2, "is_socket");
-
-	lua_pushboolean(L, S_ISLNK(sce->st.st_mode));
-	lua_setfield(L, -2, "is_link");
-
-	lua_pushboolean(L, S_ISFIFO(sce->st.st_mode));
-	lua_setfield(L, -2, "is_fifo");
-
-	lua_pushinteger(L, sce->st.st_mtime);
-	lua_setfield(L, -2, "st_mtime");
-
-	lua_pushinteger(L, sce->st.st_ctime);
-	lua_setfield(L, -2, "st_ctime");
-
-	lua_pushinteger(L, sce->st.st_atime);
-	lua_setfield(L, -2, "st_atime");
-
-	lua_pushinteger(L, sce->st.st_uid);
-	lua_setfield(L, -2, "st_uid");
-
-	lua_pushinteger(L, sce->st.st_gid);
-	lua_setfield(L, -2, "st_gid");
-
-	lua_pushinteger(L, sce->st.st_size);
-	lua_setfield(L, -2, "st_size");
-
-	lua_pushinteger(L, sce->st.st_ino);
-	lua_setfield(L, -2, "st_ino");
-
-	request_st * const r = magnet_get_request(L);
-	const buffer *etag = stat_cache_etag_get(sce, r->conf.etag_flags);
-	if (etag && !buffer_is_blank(etag)) {
-		lua_pushlstring(L, BUF_PTR_LEN(etag));
-	} else {
-		lua_pushnil(L);
-	}
-	lua_setfield(L, -2, "etag");
-
-	const buffer *content_type = stat_cache_content_type_get(sce, r);
-	if (content_type && !buffer_is_blank(content_type)) {
-		lua_pushlstring(L, BUF_PTR_LEN(content_type));
-	} else {
-		lua_pushnil(L);
-	}
-	lua_setfield(L, -2, "content-type");
-
-	return 1;
+    magnet_stat_metatable(L);                                   /* (sp += 1) */
+    lua_setmetatable(L, -2);                                    /* (sp -= 1) */
+    return 1;
 }
 
 
@@ -1142,7 +1263,8 @@ static void magnet_init_lighty_table(lua_State * const L) {
     lua_pop(L, 1); /* pop global table */                     /* (sp -= 1) */
 
     magnet_mainenv_metatable(L); /* init table for mem locality  (sp += 1) */
-    lua_pop(L, 1);               /* pop mainenv metatable        (sp -= 1) */
+    magnet_stat_metatable(L);    /* init table for mem locality  (sp += 1) */
+    lua_pop(L, 2);               /* pop mainenv,stat metatables  (sp -= 2) */
 
     /* lighty table
      *
