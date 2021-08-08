@@ -603,6 +603,70 @@ static int magnet_reqhdr_get(lua_State *L) {
     return 1;
 }
 
+static int magnet_reqhdr_set(lua_State *L) {
+    /* __newindex: param 1 is (empty) table in which value is to be set */
+    const_buffer k = magnet_checkconstbuffer(L, 2);
+    const_buffer v = magnet_checkconstbuffer(L, 3);
+
+    request_st * const r = magnet_get_request(L);
+    enum http_header_e id = http_header_hkey_get(k.ptr, (uint32_t)k.len);
+
+    switch (id) {
+      /*case HTTP_HEADER_OTHER:*/
+      default:
+        break;
+
+      case HTTP_HEADER_HOST:
+        /* do not allow Host to be unset, even if HTTP/1.0
+         * (change Host to something else, if you must */
+        if (0 == v.len) return 0;
+
+        /*(must set r->http_host if r->http_host was not previously set)*/
+        /* copied from request.c:http_request_header_set_Host() */
+        r->http_host = http_header_request_set_ptr(r, HTTP_HEADER_HOST,
+                                                   CONST_STR_LEN("Host"));
+        buffer_copy_string_len_lc(r->http_host, v.ptr, v.len);
+        return 0;
+
+      case HTTP_HEADER_CONTENT_LENGTH:
+        /* not attempting to handle Content-Length modification; may revisit */
+        /* future: might permit setting to 0 to force discard of request body
+         * but would have to check if request body present, and if
+         * Content-Length was set, or if Transfer-Encoding: chunked,
+         * and handle resetting internal chunked encoding state,
+         * as well as making sure that this is handled properly for HTTP/2 */
+        return 0; /* silently ignore; do not allow modification */
+
+      /* do not permit modification of hop-by-hop (connection) headers */
+
+      case HTTP_HEADER_CONNECTION:
+        /* do not permit modification of Connection, incl add/remove tokens */
+        /* future: might provide a different interface to set r->keep_alive = 0,
+         *         and also handle in context if HTTP/2 */
+      case HTTP_HEADER_TRANSFER_ENCODING:
+      case HTTP_HEADER_SET_COOKIE:/*(response hdr;avoid accidental reflection)*/
+        return 0; /* silently ignore; do not allow modification */
+     #if 0 /*(eh, if script sets Upgrade, script probably intends this action)*/
+      case HTTP_HEADER_UPGRADE:
+        /* note: modifications here do not modify Connection header
+         *       to add or remove "upgrade" token */
+        /* future: might allow removal of existing tokens, but not addition */
+        if (0 != v.len) return 0; /* do not allow Upgrade other than to unset */
+        break;
+     #endif
+     #if 0 /*(eh, if script sets TE, script probably intends this action)*/
+      case HTTP_HEADER_TE:
+        if (0 != v.len) return 0; /* do not allow TE other than to unset */
+        break;
+     #endif
+    }
+
+    v.len
+      ? http_header_request_set(r, id, k.ptr, k.len, v.ptr, v.len)
+      : http_header_request_unset(r, id, k.ptr, k.len);
+    return 0;
+}
+
 static int magnet_reqhdr_pairs(lua_State *L) {
 	request_st * const r = magnet_get_request(L);
 	return magnet_array_pairs(L, &r->rqst_headers);
@@ -1099,9 +1163,11 @@ static void magnet_init_lighty_table(lua_State * const L) {
     lua_createtable(L, 0, 9); /* lighty.* (returned on stack)    (sp += 1) */
 
     lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
-    lua_createtable(L, 0, 3); /* metatable for request table     (sp += 1) */
+    lua_createtable(L, 0, 4); /* metatable for request table     (sp += 1) */
     lua_pushcfunction(L, magnet_reqhdr_get);                  /* (sp += 1) */
     lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_reqhdr_set);                  /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
     lua_pushcfunction(L, magnet_reqhdr_pairs);                /* (sp += 1) */
     lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
     lua_pushboolean(L, 0);                                    /* (sp += 1) */
