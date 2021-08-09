@@ -1119,6 +1119,39 @@ static int magnet_cgi_pairs(lua_State *L) {
 }
 
 
+static int magnet_lighty_result_get(lua_State *L) {
+    /* __index: param 1 is the lighty table the value was not found in */
+    lua_getfield(L, 1, "result"); /* lighty.result */
+    lua_pushvalue(L, 2);
+    lua_rawget(L, -2);
+    if (lua_isnil(L, -1)) {
+        const_buffer k = magnet_checkconstbuffer(L, 2);
+        if (k.len == 7 && 0 == memcmp(k.ptr, "content", 7)) {
+            lua_pop(L, 1); /* pop nil */
+            lua_createtable(L, 0, 0); /* create "content" table on demand */
+            lua_pushvalue(L, -1);
+            lua_rawset(L, 3); /* set in "lighty.result" */
+        }
+    }
+    lua_replace(L, 3);
+    return 1;
+}
+
+static int magnet_lighty_result_set(lua_State *L) {
+    /* __newindex: param 1 is lighty table the value is supposed to be set in */
+    /* assign value to table, replacing existing value, if any
+     * (expecting "content" here, but compatible with prior misuse potential)
+     * (special-case "header" back into lighty.header) */
+    const_buffer k = magnet_checkconstbuffer(L, 2);
+    if (k.len != 6 || 0 != memcmp(k.ptr, "header", 6)) {
+        lua_getfield(L, 1, "result"); /* lighty.result */
+        lua_replace(L, 1); /* replace param 1, original target table */
+    }
+    lua_rawset(L, -3);
+    return 0;
+}
+
+
 static int magnet_copy_response_header(request_st * const r, lua_State * const L) {
 	lua_getfield(L, -1, "header"); /* lighty.header */
 	if (lua_istable(L, -1)) {
@@ -1145,16 +1178,15 @@ static int magnet_copy_response_header(request_st * const r, lua_State * const L
 }
 
 /**
- * walk through the content array
- *
- * content = { "<pre>", { file = "/content" } , "</pre>" }
- *
- * header["Content-Type"] = "text/html"
- *
- * return 200
+ * walk through the content array set by lua script, e.g.
+ *   lighy.header["Content-Type"] = "text/html"
+ *   lighty.content =
+ *     { "<html><body><pre>", { file = "/content" } , "</pre></body></html>" }
+ *   return 200
  */
-static int magnet_attach_content(request_st * const r, lua_State * const L) {
-	lua_getfield(L, -1, "content"); /* lighty.content */
+static int magnet_attach_content(lua_State * const L, request_st * const r) {
+	lua_getfield(L, -1, "result");  /* lighty.result */
+	lua_getfield(L, -1, "content"); /* lighty.result.content */
 	if (lua_istable(L, -1)) {
 		/* content is found, and is a table */
 		http_response_body_clear(r, 0);
@@ -1221,11 +1253,11 @@ static int magnet_attach_content(request_st * const r, lua_State * const L) {
 
 			lua_pop(L, 1); /* pop the content[...] entry value */
 		}
-	} else {
+	} else if (!lua_isnil(L, -1)) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "lighty.content has to be a table");
 	}
-	lua_pop(L, 1); /* pop lighty.content */
+	lua_pop(L, 2); /* pop lighty.result.content and lighty.result */
 
 	return 0;
 }
@@ -1342,13 +1374,12 @@ static void magnet_init_lighty_table(lua_State * const L) {
     lua_pushcfunction(L, magnet_stat);                        /* (sp += 1) */
     lua_setfield(L, -2, "stat"); /* -1 is the env we want to set (sp -= 1) */
 
+    /* add empty 'header' and 'result' tables; ('content' is under 'result') */
     lua_createtable(L, 0, 8); /* {}                              (sp += 1) */
     lua_setfield(L, -2, "header"); /* header = {}                (sp -= 1) */
 
-    /* add empty 'content' and 'header' tables;
-     * (preallocate for 8 entries, though content often assigned new table)*/
-    lua_createtable(L, 8, 0); /* {}                              (sp += 1) */
-    lua_setfield(L, -2, "content"); /* content = {}              (sp -= 1) */
+    lua_createtable(L, 0, 1); /* {}                              (sp += 1) */
+    lua_setfield(L, -2, "result"); /* result = {}                (sp -= 1) */
 
     static const luaL_Reg cmethods[] = {
       { "stat",             magnet_stat }
@@ -1371,6 +1402,15 @@ static void magnet_init_lighty_table(lua_State * const L) {
     lua_setmetatable(L, -2); /* tie the metatable to c           (sp -= 1) */
     lua_setfield(L, -2, "c"); /* c = {}                          (sp -= 1) */
 
+    lua_createtable(L, 0, 3); /* metatable for lighty table      (sp += 1) */
+    lua_pushcfunction(L, magnet_lighty_result_get);           /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_lighty_result_set);           /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+    lua_setmetatable(L, -2); /* tie the metatable to lighty      (sp -= 1) */
+
     /* lighty table (returned on stack) */
 }
 
@@ -1383,13 +1423,22 @@ static void magnet_clear_table(lua_State * const L) {
 
 static void magnet_reset_lighty_table(lua_State * const L) {
     /* clear response tables (release mem if reusing lighty table) */
-    lua_getfield(L, -1, "content"); /* lighty.content */
+    lua_getfield(L, -1, "result"); /* lighty.result */
     if (lua_istable(L, -1))
         magnet_clear_table(L);
+    else {
+        lua_createtable(L, 0, 1);
+        lua_setfield(L, -3, "result");
+    }
     lua_pop(L, 1);
+
     lua_getfield(L, -1, "header");  /* lighty.header */
     if (lua_istable(L, -1))
         magnet_clear_table(L);
+    else {
+        lua_createtable(L, 0, 0);
+        lua_setfield(L, -3, "header");
+    }
     lua_pop(L, 1);
 }
 
@@ -1546,7 +1595,7 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			r->resp_body_finished = 1;
 
 			if (0 == setjmp(exceptionjmp)) {
-				magnet_attach_content(r, L);
+				magnet_attach_content(L, r);
 				if (!chunkqueue_is_empty(&r->write_queue)) {
 					r->handler_module = p->self;
 				}
