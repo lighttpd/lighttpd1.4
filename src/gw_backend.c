@@ -2630,7 +2630,8 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
     r->handler_module = p->self;
 
     if (r->conf.log_request_handling) {
-        log_error(r->conf.errh, __FILE__, __LINE__, "handling it in mod_gw");
+        log_error(r->conf.errh, __FILE__, __LINE__,
+                  "handling the request using %s", p->self->name);
     }
 
     return HANDLER_GO_ON;
