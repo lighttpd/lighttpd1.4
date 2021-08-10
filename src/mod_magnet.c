@@ -1160,6 +1160,7 @@ static int magnet_status_pairs(lua_State *L) {
 
 typedef struct {
 	const char *name;
+	uint32_t nlen;
 	enum {
 		MAGNET_ENV_UNSET,
 
@@ -1189,31 +1190,31 @@ typedef struct {
 } magnet_env_t;
 
 static const magnet_env_t magnet_env[] = {
-	{ "physical.path", MAGNET_ENV_PHYSICAL_PATH },
-	{ "physical.rel-path", MAGNET_ENV_PHYSICAL_REL_PATH },
-	{ "physical.doc-root", MAGNET_ENV_PHYSICAL_DOC_ROOT },
-	{ "physical.basedir", MAGNET_ENV_PHYSICAL_BASEDIR },
+    { CONST_STR_LEN("physical.path"),        MAGNET_ENV_PHYSICAL_PATH },
+    { CONST_STR_LEN("physical.rel-path"),    MAGNET_ENV_PHYSICAL_REL_PATH },
+    { CONST_STR_LEN("physical.doc-root"),    MAGNET_ENV_PHYSICAL_DOC_ROOT },
+    { CONST_STR_LEN("physical.basedir"),     MAGNET_ENV_PHYSICAL_BASEDIR },
 
-	{ "uri.path", MAGNET_ENV_URI_PATH },
-	{ "uri.path-raw", MAGNET_ENV_URI_PATH_RAW },
-	{ "uri.scheme", MAGNET_ENV_URI_SCHEME },
-	{ "uri.authority", MAGNET_ENV_URI_AUTHORITY },
-	{ "uri.query", MAGNET_ENV_URI_QUERY },
+    { CONST_STR_LEN("uri.path"),             MAGNET_ENV_URI_PATH },
+    { CONST_STR_LEN("uri.path-raw"),         MAGNET_ENV_URI_PATH_RAW },
+    { CONST_STR_LEN("uri.scheme"),           MAGNET_ENV_URI_SCHEME },
+    { CONST_STR_LEN("uri.authority"),        MAGNET_ENV_URI_AUTHORITY },
+    { CONST_STR_LEN("uri.query"),            MAGNET_ENV_URI_QUERY },
 
-	{ "request.method", MAGNET_ENV_REQUEST_METHOD },
-	{ "request.uri", MAGNET_ENV_REQUEST_URI },
-	{ "request.orig-uri", MAGNET_ENV_REQUEST_ORIG_URI },
-	{ "request.path-info", MAGNET_ENV_REQUEST_PATH_INFO },
-	{ "request.remote-ip", MAGNET_ENV_REQUEST_REMOTE_IP },
-	{ "request.remote-addr", MAGNET_ENV_REQUEST_REMOTE_IP },
-	{ "request.server-addr", MAGNET_ENV_REQUEST_SERVER_ADDR },
-	{ "request.protocol", MAGNET_ENV_REQUEST_PROTOCOL },
+    { CONST_STR_LEN("request.method"),       MAGNET_ENV_REQUEST_METHOD },
+    { CONST_STR_LEN("request.uri"),          MAGNET_ENV_REQUEST_URI },
+    { CONST_STR_LEN("request.orig-uri"),     MAGNET_ENV_REQUEST_ORIG_URI },
+    { CONST_STR_LEN("request.path-info"),    MAGNET_ENV_REQUEST_PATH_INFO },
+    { CONST_STR_LEN("request.remote-ip"),    MAGNET_ENV_REQUEST_REMOTE_IP },
+    { CONST_STR_LEN("request.remote-addr"),  MAGNET_ENV_REQUEST_REMOTE_IP },
+    { CONST_STR_LEN("request.server-addr"),  MAGNET_ENV_REQUEST_SERVER_ADDR },
+    { CONST_STR_LEN("request.protocol"),     MAGNET_ENV_REQUEST_PROTOCOL },
 
-	{ "response.http-status", MAGNET_ENV_RESPONSE_HTTP_STATUS },
-	{ "response.body-length", MAGNET_ENV_RESPONSE_BODY_LENGTH },
-	{ "response.body", MAGNET_ENV_RESPONSE_BODY },
+    { CONST_STR_LEN("response.http-status"), MAGNET_ENV_RESPONSE_HTTP_STATUS },
+    { CONST_STR_LEN("response.body-length"), MAGNET_ENV_RESPONSE_BODY_LENGTH },
+    { CONST_STR_LEN("response.body"),        MAGNET_ENV_RESPONSE_BODY },
 
-	{ NULL, MAGNET_ENV_UNSET }
+    { NULL, 0, MAGNET_ENV_UNSET }
 };
 
 static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
@@ -1323,33 +1324,36 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	return dest;
 }
 
-static int magnet_env_get_id(const char * const key) {
-	for (int i = 0; magnet_env[i].name; ++i) {
-		if (0 == strcmp(key, magnet_env[i].name))
-			return magnet_env[i].type;
-	}
-	return MAGNET_ENV_UNSET;
+static int magnet_env_get_id(const char * const key, const size_t klen) {
+    for (int i = 0; magnet_env[i].name; ++i) {
+        if (klen == magnet_env[i].nlen
+            && 0 == memcmp(key, magnet_env[i].name, klen))
+            return magnet_env[i].type;
+    }
+    return MAGNET_ENV_UNSET;
 }
 
-static buffer *magnet_env_get_buffer(request_st * const r, const char * const key) {
-	return magnet_env_get_buffer_by_id(r, magnet_env_get_id(key));
+static buffer *magnet_env_get_buffer(request_st * const r, const char * const k, const size_t klen) {
+    return magnet_env_get_buffer_by_id(r, magnet_env_get_id(k, klen));
 }
 
 static int magnet_env_get(lua_State *L) {
-	/* __index: param 1 is the (empty) table the value was not found in */
-	const char *key = luaL_checkstring(L, 2);
-	request_st * const r = magnet_get_request(L);
-	magnet_push_buffer(L, magnet_env_get_buffer(r, key));
-	return 1;
+    /* __index: param 1 is the (empty) table the value was not found in */
+    size_t klen;
+    const char * const k = luaL_checklstring(L, 2, &klen);
+    request_st * const r = magnet_get_request(L);
+    magnet_push_buffer(L, magnet_env_get_buffer(r, k, klen));
+    return 1;
 }
 
 static int magnet_env_set(lua_State *L) {
     /* __newindex: param 1 is the (empty) table the value is supposed to be set in */
-    const char * const key = luaL_checkstring(L, 2);
+    size_t klen;
+    const char * const key = luaL_checklstring(L, 2, &klen);
     luaL_checkany(L, 3); /* nil or a string */
 
     request_st * const r = magnet_get_request(L);
-    const int env_id = magnet_env_get_id(key);
+    const int env_id = magnet_env_get_id(key, klen);
 
     switch (env_id) {
       default:
@@ -1420,7 +1424,7 @@ static int magnet_env_next(lua_State *L) {
 	lua_replace(L, lua_upvalueindex(1));
 
 	/* key to return */
-	lua_pushstring(L, magnet_env[pos].name);
+	lua_pushlstring(L, magnet_env[pos].name, magnet_env[pos].nlen);
 
 	/* get value */
 	request_st * const r = magnet_get_request(L);
