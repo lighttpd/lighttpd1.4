@@ -296,6 +296,34 @@ li_restricted_strtoint64 (const char *v, const uint32_t vlen, const char ** cons
 }
 
 
+__attribute_cold__
+static int http_request_parse_duplicate(request_st * const restrict r, const enum http_header_e id, const char * const restrict k, const size_t klen, const char * const restrict v, const size_t vlen) {
+    /* Proxies sometimes send dup headers
+     * if they are the same we ignore the second
+     * if not, we raise an error */
+    const buffer * const vb = http_header_request_get(r, id, k, klen);
+    if (vb && buffer_eq_icase_slen(vb, v, vlen))
+        return 0; /* ignore header; matches existing header */
+
+    const char *errmsg;
+    switch (id) {
+      case HTTP_HEADER_HOST:
+        errmsg = "duplicate Host header -> 400";
+        break;
+      case HTTP_HEADER_CONTENT_TYPE:
+        errmsg = "duplicate Content-Type header -> 400";
+        break;
+      case HTTP_HEADER_IF_MODIFIED_SINCE:
+        errmsg = "duplicate If-Modified-Since header -> 400";
+        break;
+      default:
+        errmsg = "duplicate header -> 400";
+        break;
+    }
+    return http_request_header_line_invalid(r, 400, errmsg);
+}
+
+
 /* add header to list of headers
  * certain headers are also parsed
  * might drop a header if deemed unnecessary/broken
@@ -327,14 +355,13 @@ static int http_request_parse_single_header(request_st * const restrict r, const
             return 0;
         }
         else if (NULL != r->http_host
-                 && (__builtin_expect( buffer_eq_slen(r->http_host, v, vlen), 1)
-                     || buffer_eq_icase_slen(r->http_host, v, vlen))) {
+                 && __builtin_expect( buffer_eq_slen(r->http_host,v,vlen), 1)) {
             /* ignore all Host: headers if match authority in request line */
             /* (expect Host to match case in :authority of HTTP/2 request) */
             return 0; /* ignore header */
         }
         else {
-            return http_request_header_line_invalid(r, 400, "duplicate Host header -> 400");
+            return http_request_parse_duplicate(r, id, k, klen, v, vlen);
         }
         break;
       case HTTP_HEADER_CONNECTION:
@@ -351,7 +378,7 @@ static int http_request_parse_single_header(request_st * const restrict r, const
         break;
       case HTTP_HEADER_CONTENT_TYPE:
         if (light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_TYPE)) {
-            return http_request_header_line_invalid(r, 400, "duplicate Content-Type header -> 400");
+            return http_request_parse_duplicate(r, id, k, klen, v, vlen);
         }
         break;
       case HTTP_HEADER_IF_NONE_MATCH:
@@ -385,19 +412,7 @@ static int http_request_parse_single_header(request_st * const restrict r, const
         break;
       case HTTP_HEADER_IF_MODIFIED_SINCE:
         if (light_btst(r->rqst_htags, HTTP_HEADER_IF_MODIFIED_SINCE)) {
-            /* Proxies sometimes send dup headers
-             * if they are the same we ignore the second
-             * if not, we raise an error */
-            const buffer *vb =
-              http_header_request_get(r, HTTP_HEADER_IF_MODIFIED_SINCE,
-                                      CONST_STR_LEN("If-Modified-Since"));
-            if (vb && buffer_eq_icase_slen(vb, v, vlen)) {
-                /* ignore it if they are the same */
-                return 0; /* ignore header */
-            }
-            else {
-                return http_request_header_line_invalid(r, 400, "duplicate If-Modified-Since header -> 400");
-            }
+            return http_request_parse_duplicate(r, id, k, klen, v, vlen);
         }
         break;
       case HTTP_HEADER_TRANSFER_ENCODING:
