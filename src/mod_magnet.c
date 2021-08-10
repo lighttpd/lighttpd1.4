@@ -3,8 +3,11 @@
 #include "sys-crypto-md.h"
 #include "algo_hmac.h"
 #include "base.h"
+#include "base64.h"
+#include "burl.h"
 #include "log.h"
 #include "buffer.h"
+#include "chunk.h"
 #include "ck.h"
 #include "http_chunk.h"
 #include "http_etag.h"
@@ -706,6 +709,345 @@ static int magnet_secret_eq(lua_State *L) {
     return 1;
 }
 
+static int magnet_b64dec(lua_State *L, base64_charset dict) {
+    if (lua_isnil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = chunk_buffer_acquire();
+    if (buffer_append_base64_decode(b, s.ptr, s.len, dict))
+        lua_pushlstring(L, BUF_PTR_LEN(b));
+    else
+        lua_pushnil(L);
+    chunk_buffer_release(b);
+    return 1;
+}
+
+static int magnet_b64enc(lua_State *L, base64_charset dict) {
+    if (lua_isnil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = chunk_buffer_acquire();
+    buffer_append_base64_encode_no_padding(b, (uint8_t *)s.ptr, s.len, dict);
+    lua_pushlstring(L, BUF_PTR_LEN(b));
+    chunk_buffer_release(b);
+    return 1;
+}
+
+static int magnet_b64urldec(lua_State *L) {
+    return magnet_b64dec(L, BASE64_URL);
+}
+
+static int magnet_b64urlenc(lua_State *L) {
+    return magnet_b64enc(L, BASE64_URL);
+}
+
+static int magnet_b64stddec(lua_State *L) {
+    return magnet_b64dec(L, BASE64_STANDARD);
+}
+
+static int magnet_b64stdenc(lua_State *L) {
+    return magnet_b64enc(L, BASE64_STANDARD);
+}
+
+static int magnet_hexdec(lua_State *L) {
+    if (lua_isnil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = chunk_buffer_acquire();
+    uint8_t * const p = (uint8_t *)buffer_extend(b, s.len >> 1);
+    int rc = li_hex2bin(p, s.len >> 1, s.ptr, s.len);
+    if (0 == rc)
+        lua_pushlstring(L, BUF_PTR_LEN(b));
+    chunk_buffer_release(b);
+    return rc+1; /* 1 on success (pushed string); 0 on failure (no value) */
+}
+
+static int magnet_hexenc(lua_State *L) {
+    if (lua_isnil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = chunk_buffer_acquire();
+    buffer_append_string_encoded_hex_uc(b, s.ptr, s.len);
+    lua_pushlstring(L, BUF_PTR_LEN(b));
+    chunk_buffer_release(b);
+    return 1; /* uppercase hex string; use lua s = s:lower() to lowercase */
+}
+
+static int magnet_xmlenc(lua_State *L) {
+    if (lua_isnil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = chunk_buffer_acquire();
+  #if 1
+    buffer_append_string_encoded(b, s.ptr, s.len, ENCODING_MINIMAL_XML);
+  #else
+    const char *e;
+    size_t i, n, elen;
+    for (i = 0, n = 0; i < s.len; ++i) {
+        switch (s.ptr[i]) {
+          default: continue;
+          case '<':  e = "&lt;";   elen = sizeof("&lt;")-1;   break;
+          case '>':  e = "&gt;";   elen = sizeof("&gt;")-1;   break;
+          case '&':  e = "&amp;";  elen = sizeof("&amp;")-1;  break;
+          case '\'': e = "&apos;"; elen = sizeof("&apos;")-1; break;
+          case '"':  e = "&quot;"; elen = sizeof("&quot;")-1; break;
+          /*(XXX: would be good idea to add CTRLs, DEL, '`' */
+        }
+        buffer_append_str2(b, s.ptr+n, i-n, e, elen);
+        n = i+1;
+    }
+    if (i-n)
+        buffer_append_string_len(b, s.ptr+n, i-n);
+  #endif
+    lua_pushlstring(L, BUF_PTR_LEN(b));
+    chunk_buffer_release(b);
+    return 1;
+}
+
+static int magnet_urldec(lua_State *L) {
+    /* url-decode and replace non-printable chars with '_'
+     * This function should not be used on query-string unless it is used on
+     * portions of query-string after splitting on '&', replacing '+' w/ ' ' */
+    if (lua_isnil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = chunk_buffer_acquire();
+    buffer_copy_string_len(b, s.ptr, s.len);
+    buffer_urldecode_path(b);
+    lua_pushlstring(L, BUF_PTR_LEN(b));
+    chunk_buffer_release(b);
+    return 1;
+}
+
+static int magnet_urlenc(lua_State *L) {
+    /* url-encode path
+     * ('?' is encoded, if present)
+     *  caller must split string if '?' is part of query-string)
+     * ('/' is not encoded; caller must encode if not path separator) */
+    if (lua_isnil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = chunk_buffer_acquire();
+    buffer_append_string_encoded(b, s.ptr, s.len, ENCODING_REL_URI);
+    lua_pushlstring(L, BUF_PTR_LEN(b));
+    chunk_buffer_release(b);
+    return 1;
+}
+
+static void magnet_urldec_query_part(buffer * const b, const char *s, const size_t slen) {
+    buffer_clear(b);
+    char *p = buffer_extend(b, slen);
+    for (size_t i = 0; i < slen; ++i)
+        p[i] = (s[i] != '+') ? s[i] : ' ';
+    buffer_urldecode_path(b);
+}
+
+static int magnet_urldec_query(lua_State *L) {
+    /* split on '&' and '=', url-decode and replace non-printable chars w/ '_',
+     * and store components in table
+     * (string input should be query-string without leading '?')
+     * (note: duplicated keys replace earlier values, but this interface returns
+     *  an table useful for lookups, so this limitation is often acceptable) */
+    lua_createtable(L, 0, 0);
+    if (lua_isnil(L, -1)) {
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        return 1;
+    }
+    buffer * const k = chunk_buffer_acquire();
+    buffer * const v = chunk_buffer_acquire();
+    for (const char *qs = s.ptr, *eq, *amp; *qs; qs = amp+1) {
+        for (amp = qs, eq = NULL; *amp && *amp != '&'; ++amp) {
+            if (*amp == '=' && !eq) eq = amp;
+        }
+        if (amp != qs) {
+            if (eq) {
+                magnet_urldec_query_part(k, qs, (size_t)(eq - qs));
+                magnet_urldec_query_part(v, eq+1, (size_t)(amp - (eq+1)));
+            }
+            else {
+                magnet_urldec_query_part(k, qs, (size_t)(amp - qs));
+                lua_pushnil(L);
+            }
+            lua_pushlstring(L, BUF_PTR_LEN(k));
+            lua_pushlstring(L, BUF_PTR_LEN(v));
+            lua_rawset(L, -3);
+        }
+        if (*amp == '\0') break;
+    }
+    chunk_buffer_release(k);
+    chunk_buffer_release(v);
+    return 1;
+}
+
+static void magnet_urlenc_query_part(buffer * const b, const char * const s, const size_t slen, const int iskey) {
+    /* encode query part (each part is typically much smaller than chunk buffer)
+     * all required chars plus '&' ';' '+' '\'' (and encode '=' if part of key)
+     * (burl_append(b,str,len,BURL_ENCODE_ALL) works, but over-encodes) */
+  #if 0
+    /* alternative: (over-encodes some, but less than burl_append()) */
+    UNUSED(iskey);
+    buffer_append_string_encoded(b, s, slen, ENCODING_REL_URI);
+  #else
+    static const char hex_chars_uc[] = "0123456789ABCDEF";
+    char * const p = buffer_string_prepare_append(b, slen*3);
+    int j = 0;
+    for (size_t i = 0; i < slen; ++i, ++j) {
+        int c = s[i];
+        if (!light_isalnum(c)) switch (c) {
+          case ' ':
+            c = '+';
+            break;
+          /*case '\'':*//*(ok in url query-part, but might be misused in HTML)*/
+          case '!': case '$': case '(': case ')': case '*': case ',': case '-':
+          case '.': case '/': case ':': case '?': case '@': case '_': case '~':
+            break;
+          case '=':
+            if (!iskey) break;
+            __attribute_fallthrough__
+          default:
+            p[j]   = '%';
+            p[++j] = hex_chars_uc[(s[i] >> 4) & 0xF];
+            p[++j] = hex_chars_uc[s[i] & 0xF];
+            continue;
+        }
+        p[j] = c;
+    }
+    buffer_commit(b, j);
+  #endif
+}
+
+static int magnet_urlenc_query(lua_State *L) {
+    /* encode pairs in lua table into query string
+     * (caller should add leading '?' or '&' when appending to full URL)
+     * (caller should skip empty table if appending to existing query-string) */
+    const int n = lua_istable(L, 1) ? (int)lua_rawlen(L, 1) : 0;
+    if (n == 0) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    buffer * const b = chunk_buffer_acquire();
+    const_buffer s;
+    for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+        if (lua_isstring(L, -2)) {
+            if (!buffer_is_blank(b))
+                buffer_append_string_len(b, CONST_STR_LEN("&"));
+            s = magnet_checkconstbuffer(L, -2);
+            magnet_urlenc_query_part(b, s.ptr, s.len, 1);
+            if (!lua_isnil(L, -1)) {
+                s = magnet_checkconstbuffer(L, -1);
+                buffer_append_string_len(b, CONST_STR_LEN("="));
+                magnet_urlenc_query_part(b, s.ptr, s.len, 0);
+            }
+        }
+    }
+    lua_pushlstring(L, BUF_PTR_LEN(b));
+    chunk_buffer_release(b);
+    return 1;
+}
+
+static int magnet_urlenc_normalize(lua_State *L) {
+    /* normalize url-encoding
+     * url-encode (and url-decode safe chars) to normalize url-path
+     * ('?' is treated as start of query-string and is not encoded;
+     *  caller must encode '?' if intended to be part of url-path)
+     * ('/' is not encoded; caller must encode if not path separator)
+     * (burl_append() is not exposed here; caller might want to build
+     *  url with lighty.c.urlenc() and lighty.c.urlenc_query(),
+     *  then call lighty.c.urlenc_normalize()) */
+    if (lua_isnil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = chunk_buffer_acquire();
+    buffer * const t = chunk_buffer_acquire();
+  #if 0 /*(?maybe have different interface to use config policy?)*/
+    request_st * const r = magnet_get_request(L);
+    const int flags = r->conf.http_parseopts;
+  #else
+    const int flags = HTTP_PARSEOPT_URL_NORMALIZE
+                    | HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED
+                    | HTTP_PARSEOPT_URL_NORMALIZE_REQUIRED
+                    | HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE
+                    | HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE
+                    | HTTP_PARSEOPT_URL_NORMALIZE_QUERY_20_PLUS;
+  #endif
+    buffer_copy_string_len(b, s.ptr, s.len);
+    burl_normalize(b, t, flags);
+    lua_pushlstring(L, BUF_PTR_LEN(b));
+    chunk_buffer_release(t);
+    chunk_buffer_release(b);
+    return 1;
+}
+
+static int magnet_fspath_simplify(lua_State *L) {
+    /* simplify filesystem path */
+    if (lua_isnil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = chunk_buffer_acquire();
+    buffer_copy_string_len(b, s.ptr, s.len);
+    buffer_path_simplify(b);
+    lua_pushlstring(L, BUF_PTR_LEN(b));
+    chunk_buffer_release(b);
+    return 1;
+}
+
 static int magnet_atpanic(lua_State *L) {
 	request_st * const r = magnet_get_request(L);
 	log_error(r->conf.errh, __FILE__, __LINE__, "(lua-atpanic) %s",
@@ -1389,6 +1731,19 @@ static void magnet_init_lighty_table(lua_State * const L) {
      ,{ "hmac",             magnet_hmac_once } /* HMAC */
      ,{ "digest_eq",        magnet_digest_eq } /* timing-safe eq fixed len */
      ,{ "secret_eq",        magnet_secret_eq } /* timing-safe eq variable len */
+     ,{ "b64urldec",        magnet_b64urldec } /* validate and decode base64url */
+     ,{ "b64urlenc",        magnet_b64urlenc } /* base64url encode, no padding */
+     ,{ "b64dec",           magnet_b64stddec } /* validate and decode base64 */
+     ,{ "b64enc",           magnet_b64stdenc } /* base64 encode, no padding */
+     ,{ "hexdec",           magnet_hexdec } /* validate and decode hex str */
+     ,{ "hexenc",           magnet_hexenc } /* uc; lc w/ lua s = s:lower() */
+     ,{ "xmlenc",           magnet_xmlenc } /* xml-encode/html-encode: <>&'\" */
+     ,{ "urldec",           magnet_urldec } /* url-decode (path) */
+     ,{ "urlenc",           magnet_urlenc } /* url-encode (path) */
+     ,{ "urldec_query",     magnet_urldec_query } /* url-decode query-string */
+     ,{ "urlenc_query",     magnet_urlenc_query } /* url-encode query-string */
+     ,{ "urlenc_normalize", magnet_urlenc_normalize }/* url-enc normalization */
+     ,{ "fspath_simplify",  magnet_fspath_simplify } /* simplify fspath */
      ,{ NULL, NULL }
     };
 
