@@ -1048,6 +1048,43 @@ static int magnet_fspath_simplify(lua_State *L) {
     return 1;
 }
 
+static const char * magnet_cookie_param_push(lua_State *L, const char *s) {
+    const char *b = s;
+    while (    *s!=';' && *s!=' ' && *s!='\t' && *s!='\r' && *s!='\n' && *s)
+        ++s;
+    lua_pushlstring(L, b, (size_t)(s-b));
+    return s;
+}
+
+static int magnet_cookie_tokens(lua_State *L) {
+    lua_createtable(L, 0, 0);
+    if (lua_isnil(L, -1))
+        return 1;
+    const char *s = luaL_checkstring(L, -1);
+    do {
+        while (*s==';' || *s==' ' || *s=='\t' || *s=='\r' || *s=='\n')
+            ++s;
+        if (*s == '\0') break;
+        s = magnet_cookie_param_push(L, s);
+        while (           *s==' ' || *s=='\t' || *s=='\r' || *s=='\n')
+            ++s;
+        if (*s == '=') {
+            while (       *s==' ' || *s=='\t' || *s=='\r' || *s=='\n')
+                ++s;
+            if (*s==';' || *s=='\0')
+                lua_pushnil(L);
+            else
+                s = magnet_cookie_param_push(L, s);
+        }
+        else {
+            lua_pushnil(L);
+        }
+        lua_settable(L, -3);
+        while (*s!=';' && *s!='\0') ++s; /* ignore/skip stray tokens */
+    } while (*s++);
+    return 1;
+}
+
 static int magnet_atpanic(lua_State *L) {
 	request_st * const r = magnet_get_request(L);
 	log_error(r->conf.errh, __FILE__, __LINE__, "(lua-atpanic) %s",
@@ -2006,6 +2043,7 @@ static void magnet_init_lighty_table(lua_State * const L) {
      ,{ "urlenc_query",     magnet_urlenc_query } /* url-encode query-string */
      ,{ "urlenc_normalize", magnet_urlenc_normalize }/* url-enc normalization */
      ,{ "fspath_simplify",  magnet_fspath_simplify } /* simplify fspath */
+     ,{ "cookie_tokens",    magnet_cookie_tokens } /* parse cookie tokens */
      ,{ NULL, NULL }
     };
 
