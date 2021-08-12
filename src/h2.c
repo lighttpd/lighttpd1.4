@@ -407,6 +407,30 @@ h2_send_goaway_e (connection * const con, const request_h2error_t e)
 }
 
 
+__attribute_cold__
+static int
+h2_send_refused_stream (uint32_t h2id, connection * const con)
+{
+    h2con * const h2c = con->h2;
+    if (0 == h2c->sent_settings  /*(see h2_recv_settings() comments)*/
+        || (h2id < 200 && log_monotonic_secs - con->connection_start < 2)) {
+        /* too many active streams; refuse new stream */
+        h2c->h2_cid = h2id;
+        h2_send_rst_stream_id(h2id, con, H2_E_REFUSED_STREAM);
+        return 1;
+    }
+    else {
+        /* alternative: stop processing frames and defer processing this
+         * HEADERS frame until num active streams drops below limit.
+         * lighttpd sends SETTINGS_MAX_CONCURRENT_STREAMS <limit> with
+         * server Connection Preface, so a well-behaved client will
+         * adjust after it sends its initial requests.
+         * (e.g. h2load -n 100 -m 100 sends 100 requests upon connect)*/
+        return -1;
+    }
+}
+
+
 static int
 h2_recv_goaway (connection * const con, const uint8_t * const s, uint32_t len)
 {
@@ -1315,23 +1339,8 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
     int trailers = 0;
 
     if (id > h2c->h2_cid) {
-        if (h2c->rused == sizeof(h2c->r)/sizeof(*h2c->r)) {
-            if (0 == h2c->sent_settings) { /*(see h2_recv_settings() comments)*/
-                /* too many active streams; refuse new stream */
-                h2c->h2_cid = id;
-                h2_send_rst_stream_id(id, con, H2_E_REFUSED_STREAM);
-                return 1;
-            }
-            else {
-                /* alternative: stop processing frames and defer processing this
-                 * HEADERS frame until num active streams drops below limit.
-                 * lighttpd sends SETTINGS_MAX_CONCURRENT_STREAMS <limit> with
-                 * server Connection Preface, so a well-behaved client will
-                 * adjust after it sends its initial requests.
-                 * (e.g. h2load -n 100 -m 100 sends 100 requests upon connect)*/
-                return -1;
-            }
-        }
+        if (h2c->rused == sizeof(h2c->r)/sizeof(*h2c->r))
+            return h2_send_refused_stream(id, con);
         /* Note: MUST process HPACK decode even if already sent GOAWAY.
          * This is necessary since there may be active streams not in
          * H2_STATE_HALF_CLOSED_REMOTE, e.g. H2_STATE_OPEN, still possibly
