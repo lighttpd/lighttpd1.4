@@ -22,6 +22,7 @@
 #include "stat_cache.h"
 #include "status_counter.h"
 
+#include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
 #include <setjmp.h>
@@ -239,6 +240,72 @@ static int magnet_pairs(lua_State *L) {
 	return 3;
 }
 #endif
+
+
+/* XXX: mystery why dir walk (readdir) is not already part of lua io liolib.c */
+
+#ifndef _D_EXACT_NAMLEN
+#ifdef _DIRENT_HAVE_D_NAMLEN
+#define _D_EXACT_NAMLEN(d) ((d)->d_namlen)
+#else
+#define _D_EXACT_NAMLEN(d) (strlen ((d)->d_name))
+#endif
+#endif
+
+static int magnet_readdir_iter(lua_State *L) {
+    DIR ** const d = (DIR **)lua_touserdata(L, lua_upvalueindex(1));
+    if (NULL == *d) return 0;
+
+    /* readdir() and skip over "." and ".." */
+    struct dirent *de;
+    const char *n;
+    do {
+        de = readdir(*d);
+    } while (de && (n = de->d_name)[0] == '.'
+             && (n[1] == '\0' || (n[1] == '.' && n[2] == '\0')));
+
+    if (de) {
+        lua_pushlstring(L, de->d_name, _D_EXACT_NAMLEN(de));
+        return 1;
+    }
+    else { /* EOF */
+        closedir(*d);
+        *d = NULL;
+        return 0;
+    }
+}
+
+static int magnet_readdir_gc(lua_State *L) {
+    /*DIR ** const d = ((DIR **)luaL_checkudata(L, 1, "lighty.DIR"));*/
+    DIR ** const d = lua_touserdata(L, 1);
+    if (*d) closedir(*d);
+    return 0;
+}
+
+static void magnet_readdir_metatable(lua_State * const L) {
+    if (luaL_newmetatable(L, "lighty.DIR")) {                 /* (sp += 1) */
+        lua_pushcclosure(L, magnet_readdir_gc, 0);            /* (sp += 1) */
+        lua_setfield(L, -2, "__gc");                          /* (sp -= 1) */
+        lua_pushboolean(L, 0);                                /* (sp += 1) */
+        lua_setfield(L, -2, "__metatable"); /* protect metatable (sp -= 1) */
+    }
+}
+
+static int magnet_readdir(lua_State *L) {
+    const char * const s = luaL_checkstring(L, 1);
+    DIR * const d = opendir(s);
+    if (d) {
+        DIR ** const dp = (DIR **)lua_newuserdata(L, sizeof(DIR *));
+        *dp = d;
+        magnet_readdir_metatable(L);
+        lua_setmetatable(L, -2);
+        lua_pushcclosure(L, magnet_readdir_iter, 1);
+    }
+    else
+        lua_pushnil(L);
+    return 1;
+}
+
 
 static int magnet_newindex_readonly(lua_State *L) {
     lua_pushliteral(L, "lua table is read-only");
@@ -1878,7 +1945,8 @@ static void magnet_init_lighty_table(lua_State * const L) {
 
     magnet_mainenv_metatable(L); /* init table for mem locality  (sp += 1) */
     magnet_stat_metatable(L);    /* init table for mem locality  (sp += 1) */
-    lua_pop(L, 2);               /* pop mainenv,stat metatables  (sp -= 2) */
+    magnet_readdir_metatable(L); /* init table for mem locality  (sp += 1) */
+    lua_pop(L, 3);               /* pop init'd metatables        (sp -= 3) */
 
     /* lighty table
      *
@@ -2044,6 +2112,7 @@ static void magnet_init_lighty_table(lua_State * const L) {
      ,{ "urlenc_normalize", magnet_urlenc_normalize }/* url-enc normalization */
      ,{ "fspath_simplify",  magnet_fspath_simplify } /* simplify fspath */
      ,{ "cookie_tokens",    magnet_cookie_tokens } /* parse cookie tokens */
+     ,{ "readdir",          magnet_readdir } /* dir walk */
      ,{ NULL, NULL }
     };
 
