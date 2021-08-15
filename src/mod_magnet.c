@@ -1623,7 +1623,7 @@ static int magnet_env_pairs(lua_State *L) {
 	return 1;
 }
 
-static int magnet_cgi_get(lua_State *L) {
+static int magnet_envvar_get(lua_State *L) {
     /* __index: param 1 is the (empty) table the value was not found in */
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
@@ -1633,7 +1633,7 @@ static int magnet_cgi_get(lua_State *L) {
     return 1;
 }
 
-static int magnet_cgi_set(lua_State *L) {
+static int magnet_envvar_set(lua_State *L) {
     /* __newindex: param 1 is the (empty) table the value is supposed to be set in */
     const_buffer key = magnet_checkconstbuffer(L, 2);
     const_buffer val = magnet_checkconstbuffer(L, 3);
@@ -1642,7 +1642,7 @@ static int magnet_cgi_set(lua_State *L) {
     return 0;
 }
 
-static int magnet_cgi_pairs(lua_State *L) {
+static int magnet_envvar_pairs(lua_State *L) {
 	request_st * const r = magnet_get_request(L);
 	return magnet_array_pairs(L, &r->env);
 }
@@ -1967,7 +1967,7 @@ static void magnet_init_lighty_table(lua_State * const L) {
      * (older interface)
      *
      * lighty.request[]      HTTP request headers
-     * lighty.req_env[]      CGI environment variables
+     * lighty.req_env[]      environment variables
      * lighty.env[]          lighttpd request metadata,
      *                       various url components,
      *                       physical file paths;
@@ -2012,11 +2012,11 @@ static void magnet_init_lighty_table(lua_State * const L) {
 
     lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
     lua_createtable(L, 0, 4); /* metatable for req_env table     (sp += 1) */
-    lua_pushcfunction(L, magnet_cgi_get);                     /* (sp += 1) */
+    lua_pushcfunction(L, magnet_envvar_get);                  /* (sp += 1) */
     lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_cgi_set);                     /* (sp += 1) */
+    lua_pushcfunction(L, magnet_envvar_set);                  /* (sp += 1) */
     lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_cgi_pairs);                   /* (sp += 1) */
+    lua_pushcfunction(L, magnet_envvar_pairs);                /* (sp += 1) */
     lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
     lua_pushboolean(L, 0);                                    /* (sp += 1) */
     lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
