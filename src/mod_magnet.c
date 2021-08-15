@@ -392,7 +392,12 @@ typedef struct {
 
 static const_buffer magnet_checkconstbuffer(lua_State *L, int idx) {
 	const_buffer cb;
-	cb.ptr = luaL_checklstring(L, idx, &cb.len);
+	if (!lua_isnil(L, idx))
+		cb.ptr = luaL_checklstring(L, idx, &cb.len);
+	else {
+		cb.ptr = NULL;
+		cb.len = 0;
+	}
 	return cb;
 }
 
@@ -400,7 +405,7 @@ static const buffer* magnet_checkbuffer(lua_State *L, int idx, buffer *b) {
 	const_buffer cb = magnet_checkconstbuffer(L, idx);
 	/* assign result into (buffer *), and return (const buffer *)
 	 * (note: caller must not free result) */
-	*(const char **)&b->ptr = cb.ptr;
+	*(const char **)&b->ptr = cb.ptr ? cb.ptr : "";
 	b->used = cb.len+1;
 	b->size = 0;
 	return b;
@@ -420,7 +425,7 @@ static int magnet_stat_field(lua_State *L) {
 
     stat_cache_entry * const sce = *(stat_cache_entry **)lua_touserdata(L, -2);
     const_buffer k = magnet_checkconstbuffer(L, -1);
-    switch (k.ptr[0]) {
+    switch (k.len ? k.ptr[0] : 0) {
       case 'c': { /* content-type */
         if (0 != strcmp(k.ptr, "content-type")) break;
         request_st * const r = magnet_get_request(L);
