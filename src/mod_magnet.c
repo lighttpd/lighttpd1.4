@@ -1561,12 +1561,12 @@ static int magnet_env_set(lua_State *L) {
       case MAGNET_ENV_RESPONSE_HTTP_STATUS:
       case MAGNET_ENV_RESPONSE_BODY_LENGTH:
       case MAGNET_ENV_RESPONSE_BODY:
-        return luaL_error(L, "lighty.env['%s'] is read-only", key);
+        return luaL_error(L, "lighty.r.req_attr['%s'] is read-only", key);
     }
 
     buffer * const dest = magnet_env_get_buffer_by_id(r, env_id);
     if (NULL == dest)
-        return luaL_error(L, "couldn't store '%s' in lighty.env[]", key);
+        return luaL_error(L, "couldn't store '%s' in lighty.r.req_attr[]", key);
 
     if (lua_isnil(L, 3)) {
         if (env_id==MAGNET_ENV_URI_QUERY || env_id==MAGNET_ENV_PHYSICAL_PATH)
@@ -1575,18 +1575,25 @@ static int magnet_env_set(lua_State *L) {
             buffer_blank(dest);
     }
     else {
-        const_buffer val = magnet_checkconstbuffer(L, 3);
         buffer_copy_string_len(dest, val.ptr, val.len);
-        /* NB: setting r->uri.query does not modify query-part in r->target
-         * (r->uri.query is uri-decoded; r->target is not) */
+        /* NB: setting r->uri.query does not modify query-part in r->target */
     }
 
     switch (env_id) {
       case MAGNET_ENV_URI_SCHEME:
-      case MAGNET_ENV_URI_AUTHORITY:
         buffer_to_lower(dest);
-        if (env_id == MAGNET_ENV_URI_AUTHORITY)
-            r->server_name = dest;
+        config_cond_cache_reset_item(r, COMP_HTTP_SCHEME);
+        break;
+      case MAGNET_ENV_URI_AUTHORITY:
+        r->server_name = dest;
+        buffer_to_lower(dest);
+        config_cond_cache_reset_item(r, COMP_HTTP_HOST);
+        break;
+      case MAGNET_ENV_URI_PATH:
+        config_cond_cache_reset_item(r, COMP_HTTP_URL);
+        break;
+      case MAGNET_ENV_URI_QUERY:
+        config_cond_cache_reset_item(r, COMP_HTTP_QUERY_STRING);
         break;
       default:
         break;
