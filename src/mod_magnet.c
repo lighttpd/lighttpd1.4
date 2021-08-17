@@ -1362,7 +1362,7 @@ typedef struct {
 		MAGNET_ENV_REQUEST_URI,
 		MAGNET_ENV_REQUEST_ORIG_URI,
 		MAGNET_ENV_REQUEST_PATH_INFO,
-		MAGNET_ENV_REQUEST_REMOTE_IP,
+		MAGNET_ENV_REQUEST_REMOTE_ADDR,
 		MAGNET_ENV_REQUEST_SERVER_ADDR,
 		MAGNET_ENV_REQUEST_PROTOCOL,
 
@@ -1388,8 +1388,8 @@ static const magnet_env_t magnet_env[] = {
     { CONST_STR_LEN("request.uri"),          MAGNET_ENV_REQUEST_URI },
     { CONST_STR_LEN("request.orig-uri"),     MAGNET_ENV_REQUEST_ORIG_URI },
     { CONST_STR_LEN("request.path-info"),    MAGNET_ENV_REQUEST_PATH_INFO },
-    { CONST_STR_LEN("request.remote-ip"),    MAGNET_ENV_REQUEST_REMOTE_IP },
-    { CONST_STR_LEN("request.remote-addr"),  MAGNET_ENV_REQUEST_REMOTE_IP },
+    { CONST_STR_LEN("request.remote-ip"),    MAGNET_ENV_REQUEST_REMOTE_ADDR },
+    { CONST_STR_LEN("request.remote-addr"),  MAGNET_ENV_REQUEST_REMOTE_ADDR },
     { CONST_STR_LEN("request.server-addr"),  MAGNET_ENV_REQUEST_SERVER_ADDR },
     { CONST_STR_LEN("request.protocol"),     MAGNET_ENV_REQUEST_PROTOCOL },
 
@@ -1436,7 +1436,7 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	case MAGNET_ENV_REQUEST_URI:      dest = &r->target; break;
 	case MAGNET_ENV_REQUEST_ORIG_URI: dest = &r->target_orig; break;
 	case MAGNET_ENV_REQUEST_PATH_INFO: dest = &r->pathinfo; break;
-	case MAGNET_ENV_REQUEST_REMOTE_IP: dest = &r->con->dst_addr_buf; break;
+	case MAGNET_ENV_REQUEST_REMOTE_ADDR: dest = &r->con->dst_addr_buf; break;
 	case MAGNET_ENV_REQUEST_SERVER_ADDR: /* local IP without port */
 	    {
 		const server_socket * const srv_socket = r->con->srv_socket;
@@ -1533,7 +1533,7 @@ static int magnet_env_set(lua_State *L) {
     /* __newindex: param 1 is the (empty) table the value is supposed to be set in */
     size_t klen;
     const char * const key = luaL_checklstring(L, 2, &klen);
-    luaL_checkany(L, 3); /* nil or a string */
+    const_buffer val = magnet_checkconstbuffer(L, 3);
 
     request_st * const r = magnet_get_request(L);
     const int env_id = magnet_env_get_id(key, klen);
@@ -1547,9 +1547,6 @@ static int magnet_env_set(lua_State *L) {
         /* XXX: should we require that resulting path begin with '/' or %2F ? */
         const uint32_t len = buffer_clen(&r->target);
         const char * const qmark = memchr(r->target.ptr, '?', len);
-        const_buffer val = { NULL, 0 };
-        if (!lua_isnil(L, 3))
-            val = magnet_checkconstbuffer(L, 3);
         if (NULL != qmark)
             buffer_copy_string_len(r->tmp_buf, qmark,
                                    len - (uint32_t)(qmark - r->target.ptr));
@@ -1558,6 +1555,36 @@ static int magnet_env_set(lua_State *L) {
             buffer_append_string_buffer(&r->target, r->tmp_buf);
         return 0;
       }
+      case MAGNET_ENV_REQUEST_REMOTE_ADDR:
+       #ifdef HAVE_SYS_UN_H
+        if (val.len && *val.ptr == '/'
+            && 0 == sock_addr_assign(&r->con->dst_addr, AF_UNIX, 0, val.ptr)) {
+        }
+        else
+       #endif
+        {
+            sock_addr saddr;
+            saddr.plain.sa_family = AF_UNSPEC;
+            if (1 == sock_addr_from_str_numeric(&saddr, val.ptr, r->conf.errh)
+                && saddr.plain.sa_family != AF_UNSPEC) {
+                /*(set port 0 instead of memset(&saddr, 0, sizeof(saddr)) above
+                 * and instead of sock_addr_assign() as in mod_extforward.c)
+                 *(future: might provide MAGNET_ENV_REQUEST_REMOTE_PORT
+                 * and create sock_addr_set_port()) */
+                if (saddr.plain.sa_family == AF_INET)
+                    saddr.ipv4.sin_port = 0;
+                else if (saddr.plain.sa_family == AF_INET6)
+                    saddr.ipv6.sin6_port = 0;
+                memcpy(&r->con->dst_addr, &saddr, sizeof(sock_addr));
+            }
+            else {
+                return luaL_error(L, "lighty.r.req_attr['%s'] invalid addr: %s",
+                                  key, val.ptr);
+            }
+        }
+        buffer_copy_string_len(&r->con->dst_addr_buf, val.ptr, val.len);
+        config_cond_cache_reset_item(r, COMP_HTTP_REMOTE_IP);
+        return 0;
       case MAGNET_ENV_RESPONSE_HTTP_STATUS:
       case MAGNET_ENV_RESPONSE_BODY_LENGTH:
       case MAGNET_ENV_RESPONSE_BODY:
