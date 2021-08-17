@@ -191,6 +191,26 @@ int sock_addr_is_addr_eq_bits(const sock_addr *a, const sock_addr *b, int bits) 
 }
 
 
+void sock_addr_set_port (sock_addr * const restrict saddr, const unsigned short port)
+{
+    switch (saddr->plain.sa_family) {
+      case AF_INET:
+        saddr->ipv4.sin_port = htons(port);
+        break;
+     #ifdef HAVE_IPV6
+      case AF_INET6:
+        saddr->ipv6.sin6_port = htons(port);
+        break;
+     #endif
+     #ifdef HAVE_SYS_UN_H
+     /*case AF_UNIX:*/
+     #endif
+      default:
+        break;
+    }
+}
+
+
 int sock_addr_assign (sock_addr * const restrict saddr, int family, unsigned short nport, const void * const restrict naddr)
 {
     switch (family) {
