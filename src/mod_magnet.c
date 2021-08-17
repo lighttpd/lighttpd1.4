@@ -1363,7 +1363,9 @@ typedef struct {
 		MAGNET_ENV_REQUEST_ORIG_URI,
 		MAGNET_ENV_REQUEST_PATH_INFO,
 		MAGNET_ENV_REQUEST_REMOTE_ADDR,
+		MAGNET_ENV_REQUEST_REMOTE_PORT,
 		MAGNET_ENV_REQUEST_SERVER_ADDR,
+		MAGNET_ENV_REQUEST_SERVER_PORT,
 		MAGNET_ENV_REQUEST_PROTOCOL,
 
 		MAGNET_ENV_RESPONSE_HTTP_STATUS,
@@ -1390,7 +1392,9 @@ static const magnet_env_t magnet_env[] = {
     { CONST_STR_LEN("request.path-info"),    MAGNET_ENV_REQUEST_PATH_INFO },
     { CONST_STR_LEN("request.remote-ip"),    MAGNET_ENV_REQUEST_REMOTE_ADDR },
     { CONST_STR_LEN("request.remote-addr"),  MAGNET_ENV_REQUEST_REMOTE_ADDR },
+    { CONST_STR_LEN("request.remote-port"),  MAGNET_ENV_REQUEST_REMOTE_PORT },
     { CONST_STR_LEN("request.server-addr"),  MAGNET_ENV_REQUEST_SERVER_ADDR },
+    { CONST_STR_LEN("request.server-port"),  MAGNET_ENV_REQUEST_SERVER_PORT },
     { CONST_STR_LEN("request.protocol"),     MAGNET_ENV_REQUEST_PROTOCOL },
 
     { CONST_STR_LEN("response.http-status"), MAGNET_ENV_RESPONSE_HTTP_STATUS },
@@ -1437,6 +1441,11 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	case MAGNET_ENV_REQUEST_ORIG_URI: dest = &r->target_orig; break;
 	case MAGNET_ENV_REQUEST_PATH_INFO: dest = &r->pathinfo; break;
 	case MAGNET_ENV_REQUEST_REMOTE_ADDR: dest = &r->con->dst_addr_buf; break;
+	case MAGNET_ENV_REQUEST_REMOTE_PORT:
+		dest = r->tmp_buf;
+		buffer_clear(dest);
+		buffer_append_int(dest, sock_addr_get_port(&r->con->dst_addr));
+		break;
 	case MAGNET_ENV_REQUEST_SERVER_ADDR: /* local IP without port */
 	    {
 		const server_socket * const srv_socket = r->con->srv_socket;
@@ -1463,6 +1472,16 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 		default:
 			break;
 		}
+		break;
+	    }
+	case MAGNET_ENV_REQUEST_SERVER_PORT:
+	    {
+		const server_socket * const srv_socket = r->con->srv_socket;
+		const buffer * const srv_token = srv_socket->srv_token;
+		const uint32_t portoffset = srv_socket->srv_token_colon+1;
+		dest = r->tmp_buf;
+		buffer_copy_string_len(dest, srv_token->ptr+portoffset,
+		                       buffer_clen(srv_token)-portoffset);
 		break;
 	    }
 	case MAGNET_ENV_REQUEST_PROTOCOL:
@@ -1567,14 +1586,7 @@ static int magnet_env_set(lua_State *L) {
             saddr.plain.sa_family = AF_UNSPEC;
             if (1 == sock_addr_from_str_numeric(&saddr, val.ptr, r->conf.errh)
                 && saddr.plain.sa_family != AF_UNSPEC) {
-                /*(set port 0 instead of memset(&saddr, 0, sizeof(saddr)) above
-                 * and instead of sock_addr_assign() as in mod_extforward.c)
-                 *(future: might provide MAGNET_ENV_REQUEST_REMOTE_PORT
-                 * and create sock_addr_set_port()) */
-                if (saddr.plain.sa_family == AF_INET)
-                    saddr.ipv4.sin_port = 0;
-                else if (saddr.plain.sa_family == AF_INET6)
-                    saddr.ipv6.sin6_port = 0;
+                sock_addr_set_port(&saddr, 0);
                 memcpy(&r->con->dst_addr, &saddr, sizeof(sock_addr));
             }
             else {
@@ -1584,6 +1596,9 @@ static int magnet_env_set(lua_State *L) {
         }
         buffer_copy_string_len(&r->con->dst_addr_buf, val.ptr, val.len);
         config_cond_cache_reset_item(r, COMP_HTTP_REMOTE_IP);
+        return 0;
+      case MAGNET_ENV_REQUEST_REMOTE_PORT:
+        sock_addr_set_port(&r->con->dst_addr, (unsigned short)atoi(val.ptr));
         return 0;
       case MAGNET_ENV_RESPONSE_HTTP_STATUS:
       case MAGNET_ENV_RESPONSE_BODY_LENGTH:
