@@ -2392,7 +2392,25 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			  ? HANDLER_GO_ON
 			  : HANDLER_ERROR;
 		} else if (MAGNET_RESTART_REQUEST == lua_return_value) {
+			/*(could detect restart loops in same way as is done in mod_rewrite,
+			 * but using r->env means that we do not need to reset plugin state
+			 * at end of every request, as is done in mod_rewrite.  mod_rewrite
+			 * always restarts the request processing (if request is rewritten),
+			 * whereas mod_magnet can be used in many other ways)*/
+			buffer *vb =
+			  http_header_env_get(r, CONST_STR_LEN("_L_MAGNET_RESTART"));
+			if (NULL == vb) {
+				vb =
+				  http_header_env_set_ptr(r,CONST_STR_LEN("_L_MAGNET_RESTART"));
+				buffer_append_string_len(vb, "0", 1);
+			}
 			result = HANDLER_COMEBACK;
+			if (++*vb->ptr-'0' >= 10) {
+				log_error(r->conf.errh, __FILE__, __LINE__,
+				  "too many request restarts (infinite loop?) for %s",
+				  sc->name.ptr);
+				result = HANDLER_ERROR;
+			}
 		}
 
 		magnet_reset_lighty_table(L);
