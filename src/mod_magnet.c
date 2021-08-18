@@ -2385,7 +2385,8 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			}
 
 			result = HANDLER_FINISHED;
-		} else if (lua_return_value >= 100) {
+		} else if (lua_return_value >= 100 && p->conf.stage != -1) {
+			/*(skip for response-start; send response as-is w/ added headers)*/
 			/*(custom lua code should not return 101 Switching Protocols)*/
 			r->http_status = lua_return_value;
 			result = http_response_send_1xx(r)
