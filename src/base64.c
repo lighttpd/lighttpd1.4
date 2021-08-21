@@ -23,14 +23,14 @@ static const signed char base64_standard_reverse_table[] = {
 	41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1, /* 0x70 - 0x7F */
 };
 
-/* BASE64_URL: "A-Z a-z 0-9 - _" maps to 0-63, pad with "." */
-static const char base64_url_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.";
+/* BASE64_URL: "A-Z a-z 0-9 - _" maps to 0-63, pad with "=" */
+static const char base64_url_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_=";
 static const signed char base64_url_reverse_table[] = {
 /*	 0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F */
 	-1, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, /* 0x00 - 0x0F */
 	-2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, /* 0x10 - 0x1F */
-	-2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -3, -1, /* 0x20 - 0x2F */
-	52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1, /* 0x30 - 0x3F */
+	-2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, /* 0x20 - 0x2F */
+	52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -3, -1, -1, /* 0x30 - 0x3F */
 	-1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, /* 0x40 - 0x4F */
 	15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, 63, /* 0x50 - 0x5F */
 	-1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, /* 0x60 - 0x6F */
