@@ -2605,6 +2605,8 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
         conf.ssl_verifyclient_enforce = p->defaults.ssl_verifyclient_enforce;
         conf.ssl_verifyclient_depth   = p->defaults.ssl_verifyclient_depth;
         conf.ssl_read_ahead           = p->defaults.ssl_read_ahead;
+        conf.ssl_disable_client_renegotiation
+          = p->defaults.ssl_disable_client_renegotiation;
 
         int sidx = ps->cvlist[i].k_id;
         for (int j = !p->cvlist[0].v.u2[1]; j < p->nconfig; ++j) {
