@@ -73,6 +73,7 @@ typedef struct {
 	PLUGIN_DATA;
 	plugin_config defaults;
 	plugin_config conf;
+	int tempfile_accum;
 	struct cgi_pid_t *cgi_pid;
 	env_accum env;
 } plugin_data;
@@ -313,6 +314,12 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
             mod_cgi_merge_config(&p->defaults, cpv);
     }
 
+    p->tempfile_accum =
+      !srv->srvconf.feature_flags
+      || config_plugin_value_tobool(
+          array_get_element_klen(srv->srvconf.feature_flags,
+                                 CONST_STR_LEN("cgi.tempfile-accum")), 1);
+
     return HANDLER_GO_ON;
 }
 
@@ -391,11 +398,13 @@ static void cgi_connection_close(handler_ctx *hctx) {
 }
 
 static handler_t cgi_connection_close_callback(request_st * const r, void *p_d) {
-	plugin_data *p = p_d;
-	handler_ctx *hctx = r->plugin_ctx[p->id];
-	if (hctx) cgi_connection_close(hctx);
-
-	return HANDLER_GO_ON;
+    handler_ctx *hctx = r->plugin_ctx[((plugin_data *)p_d)->id];
+    if (hctx) {
+        chunkqueue_set_tempdirs(&r->reqbody_queue, /* reset sz */
+                                r->reqbody_queue.tempdirs, 0);
+        cgi_connection_close(hctx);
+    }
+    return HANDLER_GO_ON;
 }
 
 
@@ -672,13 +681,49 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		}
 	}
 
-	if (pipe_cloexec(to_cgi_fds)) {
+	to_cgi_fds[0] = -1;
+  #ifndef __CYGWIN__
+	if (0 == r->reqbody_length) {
+		/* future: might keep fd open in p->devnull for reuse
+		 * and dup() here, or do not close() (later in this func) */
+		to_cgi_fds[0] = fdevent_open_devnull();
+		if (-1 == to_cgi_fds[0]) {
+			log_perror(r->conf.errh, __FILE__, __LINE__, "open /dev/null");
+			return -1;
+		}
+	}
+	else if (!(r->conf.stream_request_body /*(if not streaming request body)*/
+	           & (FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN))) {
+		chunkqueue * const cq = &r->reqbody_queue;
+		chunk * const c = cq->first;
+		if (c && c == cq->last && c->type == FILE_CHUNK && c->file.is_temp) {
+			/* request body in single tempfile if not streaming req body */
+			if (-1 == c->file.fd
+			    && 0 != chunkqueue_open_file_chunk(cq, r->conf.errh))
+				return -1;
+			if (-1 == lseek(c->file.fd, 0, SEEK_SET)) {
+				log_perror(r->conf.errh, __FILE__, __LINE__,
+				  "lseek %s", c->mem->ptr);
+				return -1;
+			}
+			to_cgi_fds[0] = c->file.fd;
+			to_cgi_fds[1] = -1;
+		}
+	}
+  #endif
+
+	if (-1 == to_cgi_fds[0] && pipe_cloexec(to_cgi_fds)) {
 		log_perror(r->conf.errh, __FILE__, __LINE__, "pipe failed");
 		return -1;
 	}
 	if (pipe_cloexec(from_cgi_fds)) {
-		close(to_cgi_fds[0]);
-		close(to_cgi_fds[1]);
+		if (0 == r->reqbody_length) {
+			close(to_cgi_fds[0]);
+		}
+		else if (-1 != to_cgi_fds[1]) {
+			close(to_cgi_fds[0]);
+			close(to_cgi_fds[1]);
+		}
 		log_perror(r->conf.errh, __FILE__, __LINE__, "pipe failed");
 		return -1;
 	}
@@ -756,25 +801,35 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		if (-1 != dfd) close(dfd);
 		close(from_cgi_fds[0]);
 		close(from_cgi_fds[1]);
-		close(to_cgi_fds[0]);
-		close(to_cgi_fds[1]);
+		if (0 == r->reqbody_length) {
+			close(to_cgi_fds[0]);
+		}
+		else if (-1 != to_cgi_fds[1]) {
+			close(to_cgi_fds[0]);
+			close(to_cgi_fds[1]);
+		}
 		return -1;
 	} else {
 		if (-1 != dfd) close(dfd);
 		close(from_cgi_fds[1]);
-		close(to_cgi_fds[0]);
 
 		hctx->fd = from_cgi_fds[0];
 		hctx->cgi_pid = cgi_pid_add(p, pid, hctx);
 
 		if (0 == r->reqbody_length) {
-			close(to_cgi_fds[1]);
+			close(to_cgi_fds[0]);
+		}
+		else if (-1 == to_cgi_fds[1]) {
+			chunkqueue * const cq = &r->reqbody_queue;
+			chunkqueue_mark_written(cq, chunkqueue_length(cq));
 		}
 		else if (0 == fdevent_fcntl_set_nb(to_cgi_fds[1])
 		         && 0 == cgi_write_request(hctx, to_cgi_fds[1])) {
+			close(to_cgi_fds[0]);
 			++r->con->srv->cur_fds;
 		}
 		else {
+			close(to_cgi_fds[0]);
 			close(to_cgi_fds[1]);
 			/*(hctx->fd not yet registered with fdevent, so manually
 			 * cleanup here; see fdevent_register() further below)*/
@@ -826,6 +881,18 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	/* (aside: CGI might be executable even if it is not readable) */
 	if (!S_ISREG(st->st_mode)) return HANDLER_GO_ON;
 	if (p->conf.execute_x_only == 1 && (st->st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) return HANDLER_GO_ON;
+
+	if (r->reqbody_length
+	    && p->tempfile_accum
+	    && !(r->conf.stream_request_body /*(if not streaming request body)*/
+	         & (FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN))) {
+		/* store request body in single tempfile if not streaming request body*/
+		chunkqueue * const cq = &r->reqbody_queue;
+		chunkqueue_set_tempdirs(cq, cq->tempdirs, INTMAX_MAX);
+		/* force huge cq->upload_temp_file_size since chunkqueue_set_tempdirs()
+		 * might truncate upload_temp_file_size to chunk.c:MAX_TEMPFILE_SIZE */
+		cq->upload_temp_file_size = INTMAX_MAX;
+	}
 
 	{
 		handler_ctx *hctx = cgi_handler_ctx_init();
