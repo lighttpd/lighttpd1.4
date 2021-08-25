@@ -161,7 +161,8 @@ http_response_write_header (request_st * const r)
 	r->resp_header_len = buffer_clen(b);
 
 	if (r->conf.log_response_header) {
-		log_error(r->conf.errh,__FILE__,__LINE__,"Response-Header:\n%s",b->ptr);
+		log_error_multiline(r->conf.errh, __FILE__, __LINE__,
+		                    BUF_PTR_LEN(b), "fd:%d resp: ", r->con->fd);
 	}
 
 	chunkqueue_prepend_buffer_commit(cq);

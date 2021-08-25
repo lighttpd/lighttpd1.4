@@ -42,7 +42,7 @@ __attribute_format__((__printf__, 4, 5))
 void log_perror(log_error_st *errh, const char *filename, unsigned int line, const char *fmt, ...);
 
 __attribute_cold__
-__attribute_format__((__printf__, 5, 6))
-void log_error_multiline_buffer(log_error_st *errh, const char *filename, unsigned int line, const buffer *multiline, const char *fmt, ...);
+__attribute_format__((__printf__, 6, 7))
+void log_error_multiline(log_error_st *errh, const char *filename, unsigned int line, const char * restrict multiline, const size_t len, const char *fmt, ...);
 
 #endif

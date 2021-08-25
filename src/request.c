@@ -1266,8 +1266,8 @@ http_request_headers_process (request_st * const restrict r, char * const restri
         if (r->conf.log_request_header_on_error) {
             /*(http_request_parse_headers() modifies hdrs only to
              * undo line-wrapping in-place using spaces)*/
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "request-header:\n%.*s", (int)r->rqst_header_len, hdrs);
+            log_error_multiline(r->conf.errh, __FILE__, __LINE__,
+                                hdrs, r->rqst_header_len, "rqst: ");
         }
     }
 }

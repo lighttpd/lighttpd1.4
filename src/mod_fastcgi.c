@@ -462,8 +462,8 @@ static handler_t fcgi_recv_parse(request_st * const r, struct http_response_opts
 				buffer * const tb = r->tmp_buf;
 				buffer_clear(tb);
 				fastcgi_get_packet_body(tb, hctx, &packet);
-				log_error_multiline_buffer(r->conf.errh, __FILE__, __LINE__, tb,
-				  "FastCGI-stderr:");
+				log_error_multiline(r->conf.errh, __FILE__, __LINE__,
+				  BUF_PTR_LEN(tb), "FastCGI-stderr:");
 			}
 			break;
 		case FCGI_END_REQUEST:

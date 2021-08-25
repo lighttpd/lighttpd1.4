@@ -247,13 +247,14 @@ log_perror (log_error_st * const errh,
 
 
 void
-log_error_multiline_buffer (log_error_st * const restrict errh,
-                            const char * const restrict filename,
-                            const unsigned int line,
-                            const buffer * const restrict multiline,
-                            const char * const restrict fmt, ...)
+log_error_multiline (log_error_st * const restrict errh,
+                     const char * const restrict filename,
+                     const unsigned int line,
+                     const char * const restrict multiline,
+                     const size_t len,
+                     const char * const restrict fmt, ...)
 {
-    if (multiline->used < 2) return;
+    if (0 == len) return;
 
     const int errnum = errno;
     buffer * const b = &errh->b;
@@ -264,17 +265,19 @@ log_error_multiline_buffer (log_error_st * const restrict errh,
     log_buffer_vprintf(b, fmt, ap);
     va_end(ap);
 
-    const size_t prefix_len = buffer_clen(b);
-    const char * const end = multiline->ptr + multiline->used - 2;
-    const char *pos = multiline->ptr-1, *current_line;
-    do {
-        pos = strchr(current_line = pos+1, '\n');
+    const uint32_t prefix_len = buffer_clen(b);
+    const char * const end = multiline + len;
+    for (const char *pos = multiline; pos < end; ++pos) {
+        const char * const current_line = pos;
+        pos = strchr(pos, '\n');
         if (!pos)
             pos = end;
+        size_t n = (size_t)(pos - current_line);
+        if (n && current_line[n-1] == '\r') --n; /*(skip "\r\n")*/
         buffer_truncate(b, prefix_len);
-        log_buffer_append_encoded(b, current_line, pos - current_line);
+        log_buffer_append_encoded(b, current_line, n);
         log_write(errh, b);
-    } while (pos < end);
+    }
 
     errno = errnum;
 }

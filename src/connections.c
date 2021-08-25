@@ -772,9 +772,8 @@ static int connection_handle_read_state(connection * const con)  {
 
     r->rqst_header_len = header_len;
     if (r->conf.log_request_header)
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "fd: %d request-len: %d\n%.*s", con->fd,
-          (int)header_len, (int)header_len, hdrs);
+        log_error_multiline(r->conf.errh, __FILE__, __LINE__,
+                            hdrs, header_len, "fd:%d rqst: ", con->fd);
     http_request_headers_process(r, hdrs, hoff, con->proto_default_port);
     chunkqueue_mark_written(cq, r->rqst_header_len);
     connection_set_state(r, CON_STATE_REQUEST_END);
