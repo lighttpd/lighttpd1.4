@@ -28,11 +28,11 @@ mkdir -p "${tmpdir}/servers/www.example.org/pages/"           \
          "${tmpdir}/cache/compress/"
 
 # copy everything into the right places
-cp "${srcdir}/docroot/www/"*.html \
-   "${srcdir}/docroot/www/"*.pl \
-   "${srcdir}/docroot/www/"*.fcgi \
-   "${srcdir}/docroot/www/"*.shtml \
-   "${srcdir}/docroot/www/"*.txt \
+cp "${srcdir}/docroot/"*.html \
+   "${srcdir}/docroot/"*.pl \
+   "${srcdir}/docroot/"*.fcgi \
+   "${srcdir}/docroot/"*.shtml \
+   "${srcdir}/docroot/"*.txt \
    "${tmpdir}/servers/www.example.org/pages/"
 cp "${srcdir}/lighttpd.user" "${tmpdir}/"
 cp "${srcdir}/lighttpd.htpasswd" "${tmpdir}/"
