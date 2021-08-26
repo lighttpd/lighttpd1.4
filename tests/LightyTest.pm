@@ -92,14 +92,22 @@ sub listening_on {
 	my $self = shift;
 	my $port = shift;
 
+	local $@;
+	local $SIG{ALRM} = sub { };
+    eval {
+	local $SIG{ALRM} = sub { die 'alarm()'; };
+	alarm(1);
 	my $remote = IO::Socket::INET->new(
+		Timeout  => 1,
 		Proto    => "tcp",
 		PeerAddr => "127.0.0.1",
-		PeerPort => $port) or return 0;
+		PeerPort => $port) || do { alarm(0); die 'socket()'; };
 
 	close $remote;
-
-	return 1;
+	alarm(0);
+    };
+	alarm(0);
+	return (defined($@) && $@ eq "");
 }
 
 sub stop_proc {
