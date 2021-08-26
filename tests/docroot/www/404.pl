@@ -34,6 +34,10 @@ elsif ($request_uri =~ m/^\/dynamic\/redirect_status\// ) {
         "\n",
         "REDIRECT_STATUS\n";
 }
+elsif ($ENV{PATH_INFO} eq "/internal-redir" ) {
+  # (not actually 404 error, but use separate script from cgi.pl for testing)
+  print "Status: 200\r\n\r\n";
+}
 else {
   print "Status: 500\n",
         "Content-Type: text/plain\n",

@@ -9,5 +9,3 @@ EXTRA_DIST=\
 	ssi-include.shtml \
 	ssi-include.txt \
 	ssi.shtml
-SUBDIRS=\
-	indexfile

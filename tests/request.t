@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 181;
+use Test::More tests => 179;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -1406,23 +1406,6 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 302, 'Location' => 'http://www.example.org/' } ];
 ok($tf->handle_http($t) == 0, 'broken header via perl cgi');
-
-$t->{REQUEST}  = ( <<EOF
-GET /indexfile/ HTTP/1.0
-Host: cgi.example.org
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => '/indexfile/index.pl' } ];
-ok($tf->handle_http($t) == 0, 'index-file handling, Bug #3, Bug #6');
-
-$t->{REQUEST}  = ( <<EOF
-POST /indexfile/abc HTTP/1.0
-Host: cgi.example.org
-Content-Length: 0
-EOF
- );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 404, 'HTTP-Content' => '/indexfile/index.pl' } ];
-ok($tf->handle_http($t) == 0, 'server.error-handler-404, Bug #12');
 
 
 ## mod_deflate

@@ -9,6 +9,7 @@ noinst_PROGRAMS=\
 	t/test_keyvalue \
 	t/test_mod_access \
 	t/test_mod_evhost \
+	t/test_mod_indexfile \
 	t/test_mod_simple_vhost \
 	t/test_mod_staticfile \
 	t/test_mod_userdir \
@@ -26,6 +27,7 @@ TESTS=\
 	t/test_keyvalue$(EXEEXT) \
 	t/test_mod_access$(EXEEXT) \
 	t/test_mod_evhost$(EXEEXT) \
+	t/test_mod_indexfile$(EXEEXT) \
 	t/test_mod_simple_vhost$(EXEEXT) \
 	t/test_mod_staticfile$(EXEEXT) \
 	t/test_mod_userdir$(EXEEXT) \
@@ -661,6 +663,9 @@ t_test_mod_access_LDADD = $(LIBUNWIND_LIBS)
 
 t_test_mod_evhost_SOURCES = t/test_mod_evhost.c buffer.c array.c log.c ck.c
 t_test_mod_evhost_LDADD = $(LIBUNWIND_LIBS)
+
+t_test_mod_indexfile_SOURCES = t/test_mod_indexfile.c request.c base64.c buffer.c burl.c array.c fdevent.c http_etag.c http_header.c http_kv.c log.c sock_addr.c stat_cache.c algo_splaytree.c ck.c
+t_test_mod_indexfile_LDADD = $(LIBUNWIND_LIBS) $(FAM_LIBS)
 
 t_test_mod_simple_vhost_SOURCES = t/test_mod_simple_vhost.c buffer.c array.c log.c ck.c
 t_test_mod_simple_vhost_LDADD = $(LIBUNWIND_LIBS)

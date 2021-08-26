@@ -8,7 +8,8 @@ if ($ENV{"QUERY_STRING"} =~ /^env=(\w+)/) {
 
 # redirection
 if ($ENV{"QUERY_STRING"} eq "internal-redir") {
-    print "Location: /indexfile/index.pl/foo\r\n\r\n";
+    # (not actually 404 error, but use separate script from cgi.pl for testing)
+    print "Location: /404.pl/internal-redir\r\n\r\n";
     exit 0;
 }
 

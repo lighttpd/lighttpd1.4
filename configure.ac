@@ -1696,7 +1696,6 @@ AC_CONFIG_FILES([\
   Makefile \
   src/Makefile \
   tests/docroot/Makefile \
-  tests/docroot/www/indexfile/Makefile \
   tests/docroot/www/Makefile \
   tests/Makefile \
 ])

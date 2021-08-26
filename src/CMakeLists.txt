@@ -917,6 +917,25 @@ add_executable(test_mod_evhost
 )
 add_test(NAME test_mod_evhost COMMAND test_mod_evhost)
 
+add_executable(test_mod_indexfile
+	t/test_mod_indexfile.c
+	request.c
+	base64.c
+	buffer.c
+	burl.c
+	array.c
+	fdevent.c
+	http_etag.c
+	http_header.c
+	http_kv.c
+	log.c
+	sock_addr.c
+	stat_cache.c
+	algo_splaytree.c
+	ck.c
+)
+add_test(NAME test_mod_indexfile COMMAND test_mod_indexfile)
+
 add_executable(test_mod_simple_vhost
 	t/test_mod_simple_vhost.c
 	buffer.c
@@ -1226,6 +1245,8 @@ if(WITH_LIBUNWIND)
 	add_target_properties(test_mod_access COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_mod_evhost ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_mod_evhost COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
+	target_link_libraries(test_mod_indexfile ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_mod_indexfile COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_mod_simple_vhost ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_mod_simple_vhost COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_mod_staticfile ${LIBUNWIND_LDFLAGS})

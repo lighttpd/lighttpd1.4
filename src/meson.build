@@ -942,6 +942,33 @@ test('test_mod_evhost', executable('test_mod_evhost',
 	build_by_default: false,
 ))
 
+test('test_mod_indexfile', executable('test_mod_indexfile',
+	sources: [
+		't/test_mod_indexfile.c',
+		'request.c',
+		'base64.c',
+		'buffer.c',
+		'burl.c',
+		'array.c',
+		'fdevent.c',
+		'http_etag.c',
+		'http_header.c',
+		'http_kv.c',
+		'log.c',
+		'sock_addr.c',
+		'stat_cache.c',
+		'algo_splaytree.c',
+		'ck.c'
+	],
+	dependencies: [ common_flags
+		, libfam
+		, libpcre
+		, libunwind
+		, libws2_32
+	],
+	build_by_default: false,
+))
+
 test('test_mod_simple_vhost', executable('test_mod_simple_vhost',
 	sources: [
 		't/test_mod_simple_vhost.c',

@@ -20,7 +20,6 @@ mkdir -p "${tmpdir}/servers/www.example.org/pages/"           \
          "${tmpdir}/servers/www.example.org/pages/dummydir/"  \
          "${tmpdir}/servers/www.example.org/pages/~test ä_/"  \
          "${tmpdir}/servers/www.example.org/pages/expire/"    \
-         "${tmpdir}/servers/www.example.org/pages/indexfile/" \
          "${tmpdir}/servers/123.example.org/pages/"           \
          "${tmpdir}/servers/a.example.org/pages/a/"           \
          "${tmpdir}/servers/b.example.org/pages/b/"           \
@@ -35,7 +34,6 @@ cp "${srcdir}/docroot/www/"*.html \
    "${srcdir}/docroot/www/"*.shtml \
    "${srcdir}/docroot/www/"*.txt \
    "${tmpdir}/servers/www.example.org/pages/"
-cp "${srcdir}/docroot/www/indexfile/"*.pl "${tmpdir}/servers/www.example.org/pages/indexfile/"
 cp "${srcdir}/lighttpd.user" "${tmpdir}/"
 cp "${srcdir}/lighttpd.htpasswd" "${tmpdir}/"
 cp "${srcdir}/var-include-sub.conf" "${tmpdir}/../"
