@@ -120,12 +120,18 @@ static handler_t mod_indexfile_tryfiles(request_st * const r, const array * cons
 			buffer_copy_buffer(&r->uri.path, v);
 			http_header_env_set(r, CONST_STR_LEN("PATH_TRANSLATED_DIRINDEX"),
 			                       BUF_PTR_LEN(&r->physical.path));
-			buffer_copy_buffer(&r->physical.path, &r->physical.doc_root);
+			buffer_copy_path_len2(&r->physical.path,
+			                      BUF_PTR_LEN(&r->physical.doc_root),
+			                      BUF_PTR_LEN(v));
+			/*(XXX: not done historical, but rel_path probably should be updated)*/
+			/*buffer_copy_buffer(&r->physical.rel_path, v);*/
 		} else {
 			/* append to uri.path the relative path to index file (/ -> /index.php) */
 			buffer_append_string_buffer(&r->uri.path, v);
+			buffer_append_path_len(&r->physical.path, BUF_PTR_LEN(v));
+			/*(XXX: not done historical, but rel_path probably should be updated)*/
+			/*buffer_append_path_len(&r->physical.rel_path, BUF_PTR_LEN(v));*/
 		}
-		buffer_append_string_buffer(&r->physical.path, v);
 		return HANDLER_GO_ON;
 	}
 
