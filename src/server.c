@@ -72,6 +72,10 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC)+1, 0 };
 #endif
 #endif
 #include <malloc.h>
+#if defined(HAVE_MALLOC_TRIM)
+static int(*malloc_trim_fn)(size_t);
+static size_t malloc_top_pad;
+#endif
 #endif
 
 #include "sys-crypto.h"
@@ -1872,6 +1876,9 @@ static void server_handle_sigalrm (server * const srv, unix_time64_t mono_ts, un
 					/* clear request and connection pools every 64 secs */
 					request_pool_free();
 					connections_pool_clear(srv);
+				  #if defined(HAVE_MALLOC_TRIM)
+					if (malloc_trim_fn) malloc_trim_fn(malloc_top_pad);
+				  #endif
 					/* attempt to restart dead piped loggers every 64 secs */
 					if (0 == srv->srvconf.max_worker)
 						fdevent_restart_logger_pipes(mono_ts);
@@ -1996,6 +2003,23 @@ int main (int argc, char **argv) {
         mallopt_fn = (int (*)(int, int))(intptr_t)dlsym(RTLD_DEFAULT,"mallopt");
         if (mallopt_fn) mallopt_fn(M_ARENA_MAX, 2); /*(ignore error, if any)*/
     }
+  #endif
+  #endif
+
+  #if defined(HAVE_MALLOC_TRIM)
+    malloc_top_pad = 524288;
+    {
+        const char * const top_pad_str = getenv("MALLOC_TOP_PAD_");
+        if (top_pad_str) {
+            unsigned long top_pad = strtoul(top_pad_str, NULL, 10);
+            if (top_pad != ULONG_MAX) malloc_top_pad = (size_t)top_pad;
+        }
+    }
+  #ifdef LIGHTTPD_STATIC
+    malloc_trim_fn = malloc_trim;
+  #else
+    malloc_trim_fn =
+      (int (*)(size_t))(intptr_t)dlsym(RTLD_DEFAULT,"malloc_trim");
   #endif
   #endif
 

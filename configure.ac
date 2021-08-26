@@ -1500,6 +1500,7 @@ AC_CHECK_FUNCS([\
   localtime_r \
   lstat \
   madvise \
+  malloc_trim \
   mallopt \
   memcpy \
   mempcpy \
