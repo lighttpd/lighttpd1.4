@@ -205,7 +205,9 @@ typedef enum FAMCodes { /*(copied from fam.h to define arbitrary enum values)*/
 
 #ifdef HAVE_FAMNOEXISTS
 #ifndef LIGHTTPD_STATIC
+#ifdef HAVE_DLFCN_H
 #include <dlfcn.h>
+#endif
 #endif
 #endif
 

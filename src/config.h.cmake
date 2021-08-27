@@ -13,6 +13,7 @@
 #endif
 
 /* System */
+#cmakedefine  HAVE_DLFCN_H
 #cmakedefine  HAVE_PORT_H
 #cmakedefine  HAVE_SYS_DEVPOLL_H
 #cmakedefine  HAVE_SYS_EPOLL_H

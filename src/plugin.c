@@ -14,8 +14,10 @@ array plugin_stats; /* global */
 # include <valgrind/valgrind.h>
 #endif
 
-#if !defined(__WIN32) && !defined(LIGHTTPD_STATIC)
-# include <dlfcn.h>
+#ifndef LIGHTTPD_STATIC
+#ifdef HAVE_DLFCN_H
+#include <dlfcn.h>
+#endif
 #endif
 /*
  *

@@ -367,6 +367,7 @@ if 1:
 	autoconf.haveCHeaders([
 		'arpa/inet.h',
 		'crypt.h',
+		'dlfcn.h',
 		'fcntl.h',
 		'getopt.h',
 		'inttypes.h',
