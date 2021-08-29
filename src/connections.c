@@ -283,9 +283,9 @@ connection_write_chunkqueue (connection * const con, chunkqueue * const restrict
      * walked the entire chunkqueue (on each and every call).  The loads here
      * make a measurable difference in performance in underlying call to
      * con->network_write() */
-    if (cq->first->next) {
+    if (cq->first->next && cq->first->type == MEM_CHUNK) {
         const chunk *c = cq->first;
-        while (c->type == MEM_CHUNK && NULL != (c = c->next)) ;
+        do { c = c->next; } while (c && c->type == MEM_CHUNK);
       #ifdef TCP_CORK
         /* Linux: put a cork into socket as we want to combine write() calls
          * but only if we really have multiple chunks including non-MEM_CHUNK
