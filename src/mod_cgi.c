@@ -887,11 +887,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	    && !(r->conf.stream_request_body /*(if not streaming request body)*/
 	         & (FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN))) {
 		/* store request body in single tempfile if not streaming request body*/
-		chunkqueue * const cq = &r->reqbody_queue;
-		chunkqueue_set_tempdirs(cq, cq->tempdirs, INTMAX_MAX);
-		/* force huge cq->upload_temp_file_size since chunkqueue_set_tempdirs()
-		 * might truncate upload_temp_file_size to chunk.c:MAX_TEMPFILE_SIZE */
-		cq->upload_temp_file_size = INTMAX_MAX;
+		r->reqbody_queue.upload_temp_file_size = INTMAX_MAX;
 	}
 
 	{

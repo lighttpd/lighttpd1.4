@@ -76,7 +76,6 @@ void chunkqueue_set_tempdirs_default_reset (void);
 __attribute_cold__
 void chunkqueue_set_tempdirs_default (const array *tempdirs, off_t upload_temp_file_size);
 
-__attribute_cold__
 void chunkqueue_set_tempdirs(chunkqueue * restrict cq, const array * restrict tempdirs, off_t upload_temp_file_size);
 
 void chunkqueue_append_file(chunkqueue * restrict cq, const buffer * restrict fn, off_t offset, off_t len); /* copies "fn" */

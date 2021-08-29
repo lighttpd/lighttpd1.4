@@ -21,9 +21,8 @@
 #include <errno.h>
 #include <string.h>
 
-/* default 1MB, upper limit 128MB */
+/* default 1 MB */
 #define DEFAULT_TEMPFILE_SIZE (1 * 1024 * 1024)
-#define MAX_TEMPFILE_SIZE (128 * 1024 * 1024)
 
 static size_t chunk_buf_sz = 8192;
 static chunk *chunks, *chunks_oversized;
@@ -509,21 +508,18 @@ void chunkqueue_update_file(chunkqueue * const restrict cq, chunk *c, off_t len)
 }
 
 void chunkqueue_set_tempdirs_default (const array *tempdirs, off_t upload_temp_file_size) {
-	chunkqueue_default_tempdirs = tempdirs;
-	chunkqueue_default_tempfile_size
-		= (0 == upload_temp_file_size)                ? DEFAULT_TEMPFILE_SIZE
-		: (upload_temp_file_size > MAX_TEMPFILE_SIZE) ? MAX_TEMPFILE_SIZE
-		                                              : upload_temp_file_size;
+    if (upload_temp_file_size == 0)
+        upload_temp_file_size = DEFAULT_TEMPFILE_SIZE;
+    chunkqueue_default_tempdirs = tempdirs;
+    chunkqueue_default_tempfile_size = upload_temp_file_size;
 }
 
 void chunkqueue_set_tempdirs(chunkqueue * const restrict cq, const array * const restrict tempdirs, off_t upload_temp_file_size) {
-	force_assert(NULL != cq);
-	cq->tempdirs = tempdirs;
-	cq->upload_temp_file_size
-		= (0 == upload_temp_file_size)                ? DEFAULT_TEMPFILE_SIZE
-		: (upload_temp_file_size > MAX_TEMPFILE_SIZE) ? MAX_TEMPFILE_SIZE
-		                                              : upload_temp_file_size;
-	cq->tempdir_idx = 0;
+    if (upload_temp_file_size == 0)
+        upload_temp_file_size = chunkqueue_default_tempfile_size;
+    cq->tempdirs = tempdirs;
+    cq->upload_temp_file_size = upload_temp_file_size;
+    cq->tempdir_idx = 0;
 }
 
 static void chunkqueue_dup_file_chunk_fd (chunk * const restrict d, const chunk * const restrict c) {

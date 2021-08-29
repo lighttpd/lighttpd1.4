@@ -4451,9 +4451,6 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
     force_assert(cq->last);
   #endif
     buffer_clear(cq->last->mem); /* file already unlink()ed */
-    chunkqueue_set_tempdirs(cq, cq->tempdirs, INTMAX_MAX);
-    /* force huge cq->upload_temp_file_size since chunkqueue_set_tempdirs()
-     * might truncate upload_temp_file_size to chunk.c:MAX_TEMPFILE_SIZE */
     cq->upload_temp_file_size = INTMAX_MAX;
     cq->last->file.is_temp = 1;
 
