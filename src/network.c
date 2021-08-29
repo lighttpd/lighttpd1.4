@@ -671,20 +671,12 @@ int network_init(server *srv, int stdin_fd) {
             }
         }
 
-        /* process srv->srvconf.bindhost
-         * (skip if systemd socket activation is enabled and bindhost is empty;
-         *  do not additionally listen on "*") */
-        if (!srv->srvconf.systemd_socket_activation || srv->srvconf.bindhost) {
+        /* special-case srv->srvconf.bindhost = "/dev/stdin" (see server.c) */
+        if (-1 != stdin_fd) {
             buffer *b = buffer_init();
-            if (srv->srvconf.bindhost)
-                buffer_copy_buffer(b, srv->srvconf.bindhost);
-            /*(skip adding port if unix socket path)*/
-            if (!b->ptr || b->ptr[0] != '/') {
-                buffer_append_string_len(b, CONST_STR_LEN(":"));
-                buffer_append_int(b, srv->srvconf.port);
-            }
-
-            rc = (-1 == stdin_fd || 0 == srv->srv_sockets.used)
+            buffer_copy_buffer(b, srv->srvconf.bindhost);
+            /*assert(buffer_eq_slen(b, CONST_STR_LEN("/dev/stdin")));*/
+            rc = (0 == srv->srv_sockets.used)
               ? network_server_init(srv, &p->defaults, b, 0, stdin_fd)
               : close(stdin_fd);/*(graceful restart listening to "/dev/stdin")*/
             buffer_free(b);
@@ -724,6 +716,30 @@ int network_init(server *srv, int stdin_fd) {
             }
         }
         if (0 != rc) break;
+
+        /* process srv->srvconf.bindhost
+         * init global config for server.bindhost and server.port after
+         * initializing $SERVER["socket"] so that if bindhost and port match
+         * another $SERVER["socket"], the $SERVER["socket"] config is used,
+         * as the $SERVER["socket"] config inherits from the global scope and
+         * can then be overridden.  (bindhost = "/dev/stdin" is handled above)
+         * (skip if systemd socket activation is enabled and bindhost is empty;
+         *  do not additionally listen on "*") */
+        if ((!srv->srvconf.systemd_socket_activation || srv->srvconf.bindhost)
+            && -1 == stdin_fd) {
+            buffer *b = buffer_init();
+            if (srv->srvconf.bindhost)
+                buffer_copy_buffer(b, srv->srvconf.bindhost);
+            /*(skip adding port if unix socket path)*/
+            if (!b->ptr || b->ptr[0] != '/') {
+                buffer_append_string_len(b, CONST_STR_LEN(":"));
+                buffer_append_int(b, srv->srvconf.port);
+            }
+
+            rc = network_server_init(srv, &p->defaults, b, 0, -1);
+            buffer_free(b);
+            if (0 != rc) break;
+        }
 
         if (srv->srvconf.systemd_socket_activation) {
             /* activate any inherited sockets not explicitly listed in config */
