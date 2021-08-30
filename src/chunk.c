@@ -627,9 +627,33 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue * const restrict cq, log
 	return c;
 }
 
+__attribute_cold__
+__attribute_noinline__
+static int chunkqueue_to_tempfiles(chunkqueue * const restrict dest, log_error_st * const restrict errh) {
+    /* transfer chunks from dest to src, adjust dest->bytes_in, and then call
+     * chunkqueue_steal_with_tempfiles() to write chunks from src back into
+     * dest, but into tempfiles.   chunkqueue_steal_with_tempfiles() calls back
+     * into chunkqueue_append_mem_to_tempfile(), but will not re-enter this func
+     * since chunks moved to src, and dest made empty before recursive call */
+    const off_t cqlen = chunkqueue_length(dest);
+    chunkqueue src = *dest; /*(copy struct)*/
+    dest->first = dest->last = NULL;
+    dest->bytes_in -= cqlen;
+    return (0 == chunkqueue_steal_with_tempfiles(dest, &src, cqlen, errh))
+      ? 0
+      : (chunkqueue_release_chunks(&src), -1);
+}
+
 int chunkqueue_append_mem_to_tempfile(chunkqueue * const restrict dest, const char * restrict mem, size_t len, log_error_st * const restrict errh) {
-	chunk *dst_c;
-	ssize_t written;
+	chunk *dst_c = dest->first;
+
+	/* check if prior MEM_CHUNK(s) exist and write to tempfile
+	 * (check first chunk only, since if we are using tempfiles, then
+	 *  we expect further chunks to be tempfiles after starting tempfiles)*/
+	if (dst_c && dst_c->type == MEM_CHUNK
+	    && 0 != chunkqueue_to_tempfiles(dest, errh)) {
+		return -1;
+	}
 
 	do {
 		/*
@@ -675,7 +699,7 @@ int chunkqueue_append_mem_to_tempfile(chunkqueue * const restrict dest, const ch
 
 		/* (dst_c->file.fd >= 0) */
 		/* coverity[negative_returns : FALSE] */
-		written = write(dst_c->file.fd, mem, len);
+		const ssize_t written = write(dst_c->file.fd, mem, len);
 
 		if ((size_t) written == len) {
 			dst_c->file.length += len;
