@@ -56,6 +56,12 @@ __attribute_nonnull__
 int ck_memeq_const_time_fixed_len (const void *a, const void *b, size_t len);
 
 
+/*(ck_bt() is not from C11 Annex K)
+ * ck_bt() prints backtrace to stderr */
+__attribute_cold__
+__attribute_nonnull__
+void ck_bt(const char *filename, unsigned int line, const char *msg);
+
 /*(ck_bt_abort() is not from C11 Annex K)
  * ck_bt_abort() prints backtrace to stderr and calls abort() */
 __attribute_cold__

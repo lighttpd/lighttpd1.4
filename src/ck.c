@@ -373,15 +373,31 @@ error:
 #endif
 
 
-__attribute_noreturn__
-void
-ck_bt_abort (const char *filename, unsigned int line, const char *msg)
+__attribute_noinline__
+__attribute_nonnull__
+static void
+ck_bt_stderr (const char *filename, unsigned int line, const char *msg, const char *fmt)
 {
-    fprintf(stderr, "%s.%u: %s\n", filename, line, msg);
+    fprintf(stderr, fmt, filename, line, msg);
   #ifdef HAVE_LIBUNWIND
     ck_backtrace(stderr);
   #endif
     fflush(stderr);
+}
+
+
+void
+ck_bt (const char *filename, unsigned int line, const char *msg)
+{
+    ck_bt_stderr(filename, line, msg, "%s.%u: %s\n");
+}
+
+
+__attribute_noreturn__
+void
+ck_bt_abort (const char *filename, unsigned int line, const char *msg)
+{
+    ck_bt(filename, line, msg);
     abort();
 }
 
@@ -391,10 +407,6 @@ void ck_assert_failed(const char *filename, unsigned int line, const char *msg)
 {
     /* same as ck_bt_abort() but add "assertion failed: " prefix here
      * to avoid bloating string tables in callers */
-    fprintf(stderr, "%s.%u: assertion failed: %s\n", filename, line, msg);
-  #ifdef HAVE_LIBUNWIND
-    ck_backtrace(stderr);
-  #endif
-    fflush(stderr);
+    ck_bt_stderr(filename, line, msg, "%s.%u: assertion failed: %s\n");
     abort();
 }
