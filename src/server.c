@@ -272,6 +272,7 @@ server_epoch_secs (server * const srv)
 }
 
 __attribute_cold__
+__attribute_noinline__
 static server *server_init(void) {
 	server *srv = calloc(1, sizeof(*srv));
 	force_assert(srv);
@@ -322,6 +323,7 @@ static server *server_init(void) {
 }
 
 __attribute_cold__
+__attribute_noinline__
 static void server_free(server *srv) {
 	if (oneshot_fd > 0) {
 		if (oneshot_fdn) {
@@ -354,6 +356,7 @@ static void server_free(server *srv) {
 }
 
 __attribute_cold__
+__attribute_noinline__
 static void remove_pid_file(server *srv) {
 	if (pid_fd <= -2) return;
 	if (srv->srvconf.pid_file && 0 <= pid_fd) {
@@ -761,6 +764,7 @@ static void show_help (void) {
 }
 
 __attribute_cold__
+__attribute_noinline__
 static void server_sockets_save (server *srv) {    /* graceful_restart */
     for (uint32_t i = 0; i < srv->srv_sockets.used; ++i)
         srv->srv_sockets.ptr[i]->srv = NULL; /* srv will shortly be invalid */
@@ -773,6 +777,7 @@ static void server_sockets_save (server *srv) {    /* graceful_restart */
 }
 
 __attribute_cold__
+__attribute_noinline__
 static void server_sockets_restore (server *srv) { /* graceful_restart */
     memcpy(&srv->srv_sockets, &graceful_sockets, sizeof(server_socket_array));
     memset(&graceful_sockets, 0, sizeof(server_socket_array));
@@ -1059,6 +1064,7 @@ static void server_load_check (server *srv) {
 }
 
 __attribute_cold__
+__attribute_noinline__
 static int server_main_setup (server * const srv, int argc, char **argv) {
 	int print_config = 0;
 	int test_config = 0;
@@ -1980,9 +1986,8 @@ static void server_main_loop (server * const srv) {
 }
 
 __attribute_cold__
-int main (int argc, char **argv) {
-    int rc;
-
+__attribute_noinline__
+static int main_init_once (void) {
   #ifdef HAVE_GETUID
   #ifndef HAVE_ISSETUGID
   #define issetugid() (geteuid() != getuid() || getegid() != getgid())
@@ -1990,7 +1995,7 @@ int main (int argc, char **argv) {
     if (0 != getuid() && issetugid()) { /*check as early as possible in main()*/
         fprintf(stderr,
                 "Are you nuts ? Don't apply a SUID bit to this binary\n");
-        return -1;
+        return 0;
     }
   #endif
 
@@ -2026,6 +2031,15 @@ int main (int argc, char **argv) {
     /* for nice %b handling in strftime() */
     setlocale(LC_TIME, "C");
     tzset();
+
+    return 1;
+}
+
+__attribute_cold__
+int main (int argc, char ** argv) {
+    if (!main_init_once()) return -1;
+
+    int rc;
 
     do {
         server * const srv = server_init();
