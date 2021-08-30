@@ -67,6 +67,7 @@ static char* buffer_realloc(buffer * const restrict b, const size_t len) {
         const size_t psz = sz;
         for (sz = 256; sz < psz; sz <<= 1) ;
     }
+    sz |= 1; /*(extra +1 for '\0' when needed buffer size is exact power-2)*/
 
     b->size = sz;
     b->ptr = realloc(b->ptr, sz);
@@ -86,7 +87,8 @@ static char* buffer_alloc_replace(buffer * const restrict b, const size_t size) 
         b->ptr = NULL;
     }
     /*(note: if size larger than one lshift, use size instead of power-2)*/
-    return buffer_realloc(b, (b->size << 1) > size ? (b->size << 1)-1 : size);
+    const size_t bsize2x = (b->size & ~1uL) << 1;
+    return buffer_realloc(b, bsize2x > size ? bsize2x-1 : size);
 }
 
 char* buffer_string_prepare_copy(buffer * const b, const size_t size) {
@@ -109,8 +111,9 @@ static char* buffer_string_prepare_append_resize(buffer * const restrict b, cons
 
     /* not empty, b->used already includes a terminating 0 */
     /*(note: if size larger than one lshift, use size instead of power-2)*/
-    const size_t req_size = ((b->size << 1) - b->used > size)
-      ? (b->size << 1)-1
+    const size_t bsize2x = (b->size & ~1uL) << 1;
+    const size_t req_size = (bsize2x - b->used > size)
+      ? bsize2x-1
       : b->used + size;
 
     /* check for overflow: unsigned overflow is defined to wrap around */

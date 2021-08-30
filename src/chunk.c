@@ -147,7 +147,7 @@ __attribute_returns_nonnull__
 static buffer * chunk_buffer_acquire_sz(size_t sz) {
     chunk *c;
     buffer *b;
-    if (sz <= chunk_buf_sz) {
+    if (sz <= (chunk_buf_sz|1)) {
         if (chunks) {
             c = chunks;
             chunks = c->next;
@@ -183,7 +183,7 @@ void chunk_buffer_release(buffer *b) {
         chunk_buffers = c->next;
         c->mem = b;
         buffer_clear(b);
-        if (b->size == chunk_buf_sz) {
+        if (b->size == (chunk_buf_sz|1)) {
             c->next = chunks;
             chunks = c;
         }
@@ -215,7 +215,7 @@ size_t chunk_buffer_prepare_append(buffer * const b, size_t sz) {
 
 __attribute_returns_nonnull__
 static chunk * chunk_acquire(size_t sz) {
-    if (sz <= chunk_buf_sz) {
+    if (sz <= (chunk_buf_sz|1)) {
         if (chunks) {
             chunk *c = chunks;
             chunks = c->next;
@@ -235,7 +235,7 @@ static chunk * chunk_acquire(size_t sz) {
 
 static void chunk_release(chunk *c) {
     const size_t sz = c->mem->size;
-    if (sz == chunk_buf_sz) {
+    if (sz == (chunk_buf_sz|1)) {
         chunk_reset(c);
         c->next = chunks;
         chunks = c;
