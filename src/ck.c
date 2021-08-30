@@ -361,8 +361,8 @@ ck_backtrace (FILE *fp)
             }
         }
 
-        fprintf(fp, "%u: %s (+0x%x) [%p]\n",
-                frame, name, (unsigned int)offset, (void *)(uintptr_t)ip);
+        fprintf(fp, "%.2u: [%.012lx] (+%04x) %s\n",
+                frame, (uintptr_t)ip, (unsigned int)offset, name);
     }
     if (0 == rc)
         return;
