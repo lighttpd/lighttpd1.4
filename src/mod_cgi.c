@@ -55,6 +55,7 @@ typedef struct {
 typedef struct {
 	unix_time64_t read_timeout;
 	unix_time64_t write_timeout;
+	int signal_fin;
 } cgi_limits;
 
 typedef struct {
@@ -99,6 +100,7 @@ typedef struct {
 
 typedef struct cgi_pid_t {
 	pid_t pid;
+	int signal_sent;
 	handler_ctx *hctx;
 	struct cgi_pid_t *next;
 	struct cgi_pid_t *prev;
@@ -218,6 +220,64 @@ static void mod_cgi_patch_config(request_st * const r, plugin_data * const p) {
     }
 }
 
+__attribute_cold__
+__attribute_pure__
+static int mod_cgi_str_to_signal (const char *s, int default_sig) {
+    static const struct { const char *name; int sig; } sigs[] = {
+      { "HUP",  SIGHUP  }
+     ,{ "INT",  SIGINT  }
+     ,{ "QUIT", SIGQUIT }
+     ,{ "ILL",  SIGILL  }
+     ,{ "TRAP", SIGTRAP }
+     ,{ "ABRT", SIGABRT }
+     #ifdef SIGBUS
+     ,{ "BUS",  SIGBUS  }
+     #endif
+     ,{ "FPE",  SIGFPE  }
+     ,{ "KILL", SIGKILL }
+     #ifdef SIGUSR1
+     ,{ "USR1", SIGUSR1 }
+     #endif
+     ,{ "SEGV", SIGSEGV }
+     #ifdef SIGUSR2
+     ,{ "USR2", SIGUSR2 }
+     #endif
+     ,{ "PIPE", SIGPIPE }
+     ,{ "ALRM", SIGALRM }
+     ,{ "TERM", SIGTERM }
+     #ifdef SIGCHLD
+     ,{ "CHLD", SIGCHLD }
+     #endif
+     #ifdef SIGCONT
+     ,{ "CONT", SIGCONT }
+     #endif
+     #ifdef SIGURG
+     ,{ "URG",  SIGURG  }
+     #endif
+     #ifdef SIGXCPU
+     ,{ "XCPU", SIGXCPU }
+     #endif
+     #ifdef SIGXFSZ
+     ,{ "XFSZ", SIGXFSZ }
+     #endif
+     #ifdef SIGWINCH
+     ,{ "WINCH",SIGWINCH}
+     #endif
+     #ifdef SIGPOLL
+     ,{ "POLL", SIGPOLL }
+     #endif
+     #ifdef SIGIO
+     ,{ "IO",   SIGIO   }
+     #endif
+    };
+
+    if (s[0] == 'S' && s[1] == 'I' && s[2] == 'G') s += 3; /*("SIG" prefix)*/
+    for (uint32_t i = 0; i < sizeof(sigs)/sizeof(*sigs); ++i) {
+        if (0 == strcmp(s, sigs[i].name)) return sigs[i].sig;
+    }
+    return default_sig;
+}
+
 static cgi_limits * mod_cgi_parse_limits(const array * const a, log_error_st * const errh) {
     cgi_limits * const limits = calloc(1, sizeof(cgi_limits));
     force_assert(limits);
@@ -230,6 +290,18 @@ static cgi_limits * mod_cgi_parse_limits(const array * const a, log_error_st * c
         }
         if (buffer_eq_icase_slen(&du->key, CONST_STR_LEN("write-timeout"))) {
             limits->write_timeout = (unix_time64_t)v;
+            continue;
+        }
+        if (buffer_eq_icase_slen(&du->key, CONST_STR_LEN("tcp-fin-propagate"))) {
+            if (-1 == v) {
+                v = SIGTERM;
+                if (du->type == TYPE_STRING) {
+                    buffer * const vstr = &((data_string *)du)->value;
+                    buffer_to_upper(vstr);
+                    v = mod_cgi_str_to_signal(vstr->ptr, SIGTERM);
+                }
+            }
+            limits->signal_fin = v;
             continue;
         }
         log_error(errh, __FILE__, __LINE__,
@@ -328,6 +400,7 @@ static cgi_pid_t * cgi_pid_add(plugin_data *p, pid_t pid, handler_ctx *hctx) {
     cgi_pid_t *cgi_pid = malloc(sizeof(cgi_pid_t));
     force_assert(cgi_pid);
     cgi_pid->pid = pid;
+    cgi_pid->signal_sent = 0;
     cgi_pid->hctx = hctx;
     cgi_pid->prev = NULL;
     cgi_pid->next = p->cgi_pid;
@@ -335,9 +408,9 @@ static cgi_pid_t * cgi_pid_add(plugin_data *p, pid_t pid, handler_ctx *hctx) {
     return cgi_pid;
 }
 
-static void cgi_pid_kill(cgi_pid_t *cgi_pid) {
-    cgi_pid->hctx = NULL;
-    kill(cgi_pid->pid, SIGTERM);
+static void cgi_pid_kill(cgi_pid_t *cgi_pid, int sig) {
+    cgi_pid->signal_sent = sig; /*(save last signal sent)*/
+    kill(cgi_pid->pid, sig);
 }
 
 static void cgi_pid_del(plugin_data *p, cgi_pid_t *cgi_pid) {
@@ -387,8 +460,10 @@ static void cgi_connection_close(handler_ctx *hctx) {
 	request_st * const r = hctx->r;
 	r->plugin_ctx[p->id] = NULL;
 
-	if (hctx->cgi_pid)
-		cgi_pid_kill(hctx->cgi_pid);
+	if (hctx->cgi_pid) {
+		cgi_pid_kill(hctx->cgi_pid, SIGTERM);
+		hctx->cgi_pid->hctx = NULL;
+	}
 	cgi_handler_ctx_free(hctx);
 
 	/* finish response (if not already r->resp_body_started, r->resp_body_finished) */
@@ -937,6 +1012,16 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 	handler_ctx * const hctx = r->plugin_ctx[p->id];
 	if (NULL == hctx) return HANDLER_GO_ON;
 
+	if (__builtin_expect(
+	     (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_TCP_FIN), 0)
+	    && hctx->conf.limits && hctx->conf.limits->signal_fin) {
+		/* XXX: consider setting r->http_status = 499 if (0 == r->http_status)
+		 * (499 is nginx custom status to indicate client closed connection) */
+		if (-1 == hctx->fd) return HANDLER_ERROR; /*(CGI not yet spawned)*/
+		if (hctx->cgi_pid) /* send signal to notify CGI about TCP FIN */
+			cgi_pid_kill(hctx->cgi_pid, hctx->conf.limits->signal_fin);
+	}
+
 	if (2 == hctx->conf.local_redir) return mod_cgi_local_redir(r);
 
 	if ((r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
@@ -1062,14 +1147,13 @@ static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
 
         handler_ctx * const hctx = cgi_pid->hctx;
         if (hctx) hctx->cgi_pid = NULL;
-        cgi_pid_del(p, cgi_pid);
 
         if (WIFEXITED(status)) {
             /* (skip logging (non-zero) CGI exit; might be very noisy) */
         }
         else if (WIFSIGNALED(status)) {
             /* ignore SIGTERM if sent by cgi_connection_close() (NULL == hctx)*/
-            if (WTERMSIG(status) != SIGTERM || NULL != hctx) {
+            if (WTERMSIG(status) != cgi_pid->signal_sent) {
                 log_error_st *errh = hctx ? hctx->r->conf.errh : srv->errh;
                 log_error(errh, __FILE__, __LINE__,
                   "CGI pid %d died with signal %d", pid, WTERMSIG(status));
@@ -1081,6 +1165,7 @@ static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
               "CGI pid %d ended unexpectedly", pid);
         }
 
+        cgi_pid_del(p, cgi_pid);
         return HANDLER_FINISHED;
     }
 
