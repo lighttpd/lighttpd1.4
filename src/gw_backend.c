@@ -2724,9 +2724,11 @@ static void gw_handle_trigger_host(gw_host * const host, log_error_st * const er
     unix_time64_t idle_timestamp;
     int overload = 1;
 
+  #if 0 /* redundant w/ handle_waitpid hook since lighttpd 1.4.46 */
     for (proc = host->first; proc; proc = proc->next) {
         gw_proc_waitpid(host, proc, errh);
     }
+  #endif
 
     gw_restart_dead_procs(host, errh, debug, 1);
 
@@ -2771,9 +2773,11 @@ static void gw_handle_trigger_host(gw_host * const host, log_error_st * const er
         break;
     }
 
+  #if 0 /* redundant w/ handle_waitpid hook since lighttpd 1.4.46 */
     for (proc = host->unused_procs; proc; proc = proc->next) {
         gw_proc_waitpid(host, proc, errh);
     }
+  #endif
 }
 
 static void gw_handle_trigger_exts(gw_exts * const exts, log_error_st * const errh, const int debug) {
@@ -2886,6 +2890,8 @@ handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
 
                     /* restart, but avoid spinning if child exits too quickly */
                     if (proc->disabled_until < cur_ts) {
+                        /*(set state PROC_STATE_DIED above, so != KILLED here)*/
+                        /*(PROC_STATE_KILLED belongs in unused_procs, anyway)*/
                         if (proc->state != PROC_STATE_KILLED)
                             proc->disabled_until = cur_ts;
                         if (gw_spawn_connection(host, proc, errh, debug)) {
