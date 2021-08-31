@@ -123,6 +123,7 @@ static void gw_status_init_host(gw_host *host) {
 
 
 
+__attribute_cold__
 static void gw_proc_set_state(gw_host *host, gw_proc *proc, int state) {
     if ((int)proc->state == state) return;
     if (proc->state == PROC_STATE_RUNNING) {
@@ -346,6 +347,7 @@ static void gw_proc_release(gw_host *host, gw_proc *proc, int debug, log_error_s
     }
 }
 
+__attribute_cold__
 static void gw_proc_check_enable(gw_host * const host, gw_proc * const proc, log_error_st * const errh) {
     if (log_monotonic_secs <= proc->disabled_until) return;
     if (proc->state != PROC_STATE_OVERLOADED) return;
@@ -359,6 +361,7 @@ static void gw_proc_check_enable(gw_host * const host, gw_proc * const proc, log
       host->unixsocket ? host->unixsocket->ptr : "");
 }
 
+__attribute_cold__
 static void gw_proc_waitpid_log(const gw_host * const host, const gw_proc * const proc, log_error_st * const errh, const int status) {
     if (WIFEXITED(status)) {
         if (proc->state != PROC_STATE_KILLED) {
@@ -405,6 +408,7 @@ static int gw_proc_waitpid(gw_host *host, gw_proc *proc, log_error_st *errh) {
     return 1;
 }
 
+__attribute_cold__
 static int gw_proc_sockaddr_init(gw_host * const host, gw_proc * const proc, log_error_st * const errh) {
     sock_addr addr;
     socklen_t addrlen;
@@ -715,6 +719,7 @@ static void gw_proc_spawn(gw_host * const host, log_error_st * const errh, const
     }
 }
 
+__attribute_cold__
 static void gw_proc_kill(gw_host *host, gw_proc *proc) {
     if (proc->next) proc->next->prev = proc->prev;
     if (proc->prev) proc->prev->next = proc->next;
@@ -824,6 +829,7 @@ enum {
 };
 
 __attribute_noinline__
+__attribute_pure__
 static uint32_t
 gw_hash(const char *str, const uint32_t len, uint32_t hash)
 {
@@ -1013,14 +1019,9 @@ static int gw_establish_connection(request_st * const r, gw_host *host, gw_proc 
     return 0;
 }
 
-static void gw_restart_dead_procs(gw_host * const host, log_error_st * const errh, const int debug, const int trigger) {
-    for (gw_proc *proc = host->first; proc; proc = proc->next) {
-        if (debug > 2) {
-            log_error(errh, __FILE__, __LINE__,
-              "proc: %s %d %d %d %d", proc->connection_name->ptr,
-              proc->state, proc->is_local, proc->load, proc->pid);
-        }
-
+__attribute_cold__
+__attribute_noinline__
+static void gw_restart_dead_proc(gw_host * const host, log_error_st * const errh, const int debug, const int trigger, gw_proc * const proc) {
         switch (proc->state) {
         case PROC_STATE_RUNNING:
             break;
@@ -1079,6 +1080,17 @@ static void gw_restart_dead_procs(gw_host * const host, log_error_st * const err
             }
             break;
         }
+}
+
+static void gw_restart_dead_procs(gw_host * const host, log_error_st * const errh, const int debug, const int trigger) {
+    for (gw_proc *proc = host->first; proc; proc = proc->next) {
+        if (debug > 2) {
+            log_error(errh, __FILE__, __LINE__,
+              "proc: %s %d %d %d %d", proc->connection_name->ptr,
+              proc->state, proc->is_local, proc->load, proc->pid);
+        }
+        if (proc->state != PROC_STATE_RUNNING)
+            gw_restart_dead_proc(host, errh, debug, trigger, proc);
     }
 }
 
@@ -1853,6 +1865,7 @@ handler_t gw_handle_request_reset(request_st * const r, void *p_d) {
 }
 
 
+__attribute_cold__
 static void gw_conditional_tcp_fin(gw_handler_ctx * const hctx, request_st * const r) {
     /*assert(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_TCP_FIN);*/
     if (!chunkqueue_is_empty(&hctx->wb))return;
