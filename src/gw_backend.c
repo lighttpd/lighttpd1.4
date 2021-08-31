@@ -501,7 +501,6 @@ __attribute_cold__
 static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_error_st * const errh, int debug) {
     int gw_fd;
     int status;
-    struct timeval tv = { 0, 10 * 1000 };
 
     if (debug) {
         log_error(errh, __FILE__, __LINE__,
@@ -642,6 +641,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
         proc->is_local = 1;
 
         /* wait */
+        struct timeval tv = { 0, 1000 };
         select(0, NULL, NULL, NULL, &tv);
 
         if (0 != gw_proc_waitpid(host, proc, errh)) {
