@@ -100,7 +100,7 @@ static void gw_host_reset(gw_host *host) {
     *host->stats_load = --host->load; /* "gw.backend...load" */
 }
 
-static int gw_status_init(gw_host *host, gw_proc *proc) {
+static void gw_status_init_proc(gw_host *host, gw_proc *proc) {
     *gw_status_get_counter(host, proc, CONST_STR_LEN(".disabled")) = 0;
     *gw_status_get_counter(host, proc, CONST_STR_LEN(".died")) = 0;
     *gw_status_get_counter(host, proc, CONST_STR_LEN(".overloaded")) = 0;
@@ -110,14 +110,14 @@ static int gw_status_init(gw_host *host, gw_proc *proc) {
     proc->stats_load =
       gw_status_get_counter(host, proc, CONST_STR_LEN(".load"));
     *proc->stats_load = 0;
+}
 
+static void gw_status_init_host(gw_host *host) {
     host->stats_load =
       gw_status_get_counter(host, NULL, CONST_STR_LEN(".load"));
     *host->stats_load = 0;
     host->stats_global_active =
       status_counter_get_counter(CONST_STR_LEN("gw.active-requests"));
-
-    return 0;
 }
 
 
@@ -134,30 +134,57 @@ static void gw_proc_set_state(gw_host *host, gw_proc *proc, int state) {
 }
 
 
-static gw_proc *gw_proc_init(void) {
-    gw_proc *f = calloc(1, sizeof(*f));
-    force_assert(f);
+__attribute_cold__
+__attribute_noinline__
+static void gw_proc_init_portpath(gw_host *host, gw_proc *proc) {
+    if (!host->unixsocket) {
+        proc->port = host->port + proc->id;
+        return;
+    }
 
-    /*f->unixsocket = buffer_init();*//*(init on demand)*/
-    f->connection_name = buffer_init();
+    if (!proc->unixsocket)
+        proc->unixsocket = buffer_init();
 
-    f->prev = NULL;
-    f->next = NULL;
-    f->state = PROC_STATE_DIED;
-
-    return f;
+    if (!host->bin_path)
+        buffer_copy_buffer(proc->unixsocket, host->unixsocket);
+    else {
+        buffer_clear(proc->unixsocket);
+        buffer_append_str2(proc->unixsocket, BUF_PTR_LEN(host->unixsocket),
+                                             CONST_STR_LEN("-"));
+        buffer_append_int(proc->unixsocket, proc->id);
+    }
 }
 
-static void gw_proc_free(gw_proc *f) {
-    if (!f) return;
+__attribute_cold__
+__attribute_noinline__
+static gw_proc *gw_proc_init(gw_host *host) {
+    gw_proc *proc = calloc(1, sizeof(*proc));
+    force_assert(proc);
 
-    gw_proc_free(f->next);
+    /*proc->unixsocket = buffer_init();*//*(init on demand)*/
+    proc->connection_name = buffer_init();
 
-    buffer_free(f->unixsocket);
-    buffer_free(f->connection_name);
-    free(f->saddr);
+    proc->prev = NULL;
+    proc->next = NULL;
+    proc->state = PROC_STATE_DIED;
 
-    free(f);
+    proc->id = host->max_id++;
+    gw_status_init_proc(host, proc); /*(proc->id must be set)*/
+    gw_proc_init_portpath(host, proc);
+
+    return proc;
+}
+
+static void gw_proc_free(gw_proc *proc) {
+    if (!proc) return;
+
+    gw_proc_free(proc->next);
+
+    buffer_free(proc->unixsocket);
+    buffer_free(proc->connection_name);
+    free(proc->saddr);
+
+    free(proc);
 }
 
 static gw_host *gw_host_init(void) {
@@ -466,6 +493,7 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
     return 0;
 }
 
+__attribute_cold__
 static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_error_st * const errh, int debug) {
     int gw_fd;
     int status;
@@ -637,6 +665,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
     return 0;
 }
 
+__attribute_cold__
 static void gw_proc_spawn(gw_host * const host, log_error_st * const errh, const int debug) {
     gw_proc *proc;
     for (proc = host->unused_procs; proc; proc = proc->next) {
@@ -658,22 +687,9 @@ static void gw_proc_spawn(gw_host * const host, log_error_st * const errh, const
         }
 
         proc->prev = NULL;
+        gw_proc_init_portpath(host, proc);
     } else {
-        proc = gw_proc_init();
-        proc->id = host->max_id++;
-        if (host->unixsocket)
-            proc->unixsocket = buffer_init();
-    }
-
-    ++host->num_procs;
-
-    if (!host->unixsocket) {
-        proc->port = host->port + proc->id;
-    } else {
-        buffer_clear(proc->unixsocket);
-        buffer_append_str2(proc->unixsocket, BUF_PTR_LEN(host->unixsocket),
-                                             CONST_STR_LEN("-"));
-        buffer_append_int(proc->unixsocket, proc->id);
+        proc = gw_proc_init(host);
     }
 
     if (0 != gw_proc_sockaddr_init(host, proc, errh)) {
@@ -681,7 +697,6 @@ static void gw_proc_spawn(gw_host * const host, log_error_st * const errh, const
          * and translated from name to IP address at startup)*/
         log_error(errh, __FILE__, __LINE__,
           "ERROR: spawning backend failed.");
-        --host->num_procs;
         if (proc->id == host->max_id-1) --host->max_id;
         gw_proc_free(proc);
     } else if (gw_spawn_connection(host, proc, errh, debug)) {
@@ -696,14 +711,15 @@ static void gw_proc_spawn(gw_host * const host, log_error_st * const errh, const
         if (host->first)
             host->first->prev = proc;
         host->first = proc;
+        ++host->num_procs;
     }
 }
 
 static void gw_proc_kill(gw_host *host, gw_proc *proc) {
     if (proc->next) proc->next->prev = proc->prev;
     if (proc->prev) proc->prev->next = proc->next;
-
-    if (proc->prev == NULL) host->first = proc->next;
+    else host->first = proc->next;
+    --host->num_procs;
 
     proc->prev = NULL;
     proc->next = host->unused_procs;
@@ -716,8 +732,6 @@ static void gw_proc_kill(gw_host *host, gw_proc *proc) {
     kill(proc->pid, host->kill_signal);
 
     gw_proc_set_state(host, proc, PROC_STATE_KILLED);
-
-    --host->num_procs;
 }
 
 __attribute_pure__
@@ -1565,6 +1579,8 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                   ? AF_INET6
                   : AF_INET;
             }
+            if (!host->refcount)
+                gw_status_init_host(host);
 
             if (host->refcount) {
                 /* already init'd; skip spawning */
@@ -1635,19 +1651,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                 }
 
                 for (uint32_t pno = 0; pno < host->min_procs; ++pno) {
-                    gw_proc *proc = gw_proc_init();
-                    proc->id = host->num_procs++;
-                    host->max_id++;
-
-                    if (!host->unixsocket) {
-                        proc->port = host->port + pno;
-                    } else {
-                        proc->unixsocket = buffer_init();
-                        buffer_append_str2(proc->unixsocket,
-                                           BUF_PTR_LEN(host->unixsocket),
-                                           CONST_STR_LEN("-"));
-                        buffer_append_int(proc->unixsocket, pno);
-                    }
+                    gw_proc * const proc = gw_proc_init(host);
 
                     if (s->debug) {
                         log_error(srv->errh, __FILE__, __LINE__,
@@ -1673,36 +1677,19 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                         goto error;
                     }
 
-                    gw_status_init(host, proc);
-
                     proc->next = host->first;
                     if (host->first) host->first->prev = proc;
-
                     host->first = proc;
+                    ++host->num_procs;
                 }
             } else {
-                gw_proc *proc;
-
-                proc = gw_proc_init();
-                proc->id = host->num_procs++;
-                host->max_id++;
-                gw_proc_set_state(host, proc, PROC_STATE_RUNNING);
-
-                if (!host->unixsocket) {
-                    proc->port = host->port;
-                } else {
-                    proc->unixsocket = buffer_init();
-                    buffer_copy_buffer(proc->unixsocket, host->unixsocket);
-                }
-
-                gw_status_init(host, proc);
-
+                gw_proc * const proc = gw_proc_init(host);
                 host->first = proc;
-
+                ++host->num_procs;
                 host->min_procs = 1;
                 host->max_procs = 1;
-
                 if (0 != gw_proc_sockaddr_init(host, proc, srv->errh)) goto error;
+                gw_proc_set_state(host, proc, PROC_STATE_RUNNING);
             }
 
             const buffer * const h = host->host ? host->host : host->unixsocket;
