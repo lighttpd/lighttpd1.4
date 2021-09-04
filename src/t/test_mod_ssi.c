@@ -37,21 +37,33 @@ static void test_mod_ssi_write_testfile (int fd, const char *buf, size_t len)
 static void
 test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
 {
-    /* TODO: add adjustments for _WIN32 */
-    char fn[] = "/tmp/lighttpd_mod_ssi_XXXXXX";
     struct stat st;
     chunkqueue * const cq = &r->write_queue;
 
+    const char *tmpdir = getenv("TMPDIR");
+  #ifdef _WIN32
+    if (NULL == tmpdir) tmpdir = getenv("TEMP");
+  #endif
+    if (NULL == tmpdir) tmpdir = "/tmp";
+    size_t tmpdirlen = strlen(tmpdir);
+    buffer fnb = { NULL, 0, 0 };
+    buffer_copy_path_len2(&fnb, tmpdir, tmpdirlen,
+                          CONST_STR_LEN("lighttpd_mod_ssi.XXXXXX"));
+    if (fnb.ptr[tmpdirlen] == '/') ++tmpdirlen;
+    char * const fn = fnb.ptr;
     int fd = fdevent_mkostemp(fn, 0);
     if (fd < 0) {
         perror("mkstemp()");
+        buffer_free_ptr(&fnb);
         exit(1);
     }
     if (0 != fstat(fd, &st)) {
         perror("fstat()");
+        buffer_free_ptr(&fnb);
         exit(1);
     }
     unlink(fn);
+    buffer_free_ptr(&fnb);
 
     const char ssi_simple[] =
       "<!--#echo var=\"SCRIPT_NAME\" -->";
@@ -89,7 +101,10 @@ test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
     assert(0 == memcmp(buf, "2\n", 2));
     hctx->conf.ssi_exec = 0;
 
-    char fni[] = "/tmp/lighttpd_mod_ssi_inc_XXXXXX";
+    buffer_copy_path_len2(&fnb, tmpdir, tmpdirlen,
+                          CONST_STR_LEN("lighttpd_mod_ssi_inc.XXXXXX"));
+    char * const fni = fnb.ptr;
+    const size_t fnilen = buffer_clen(&fnb);
     int fdi = fdevent_mkostemp(fni, 0);
     if (fdi < 0) {
         perror("mkstemp()");
@@ -107,11 +122,11 @@ test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
     buffer * const b = buffer_init();
     buffer_copy_string_len(b, CONST_STR_LEN(ssi_include_shtml));
     buffer_append_str3(b, CONST_STR_LEN("<!--#include virtual=\""),
-                          fni+5, strlen(fni)-5, /*(step over "/tmp/")*/
-                          CONST_STR_LEN("\" -->\n"));
+                          fni+tmpdirlen, fnilen-tmpdirlen,
+                          CONST_STR_LEN("\" -->\n")); /*(step over "/tmp/")*/
     buffer_append_str3(b, CONST_STR_LEN("<!--#include file=\""),
-                          fni+5, strlen(fni)-5, /*(step over "/tmp/")*/
-                          CONST_STR_LEN("\" -->\n"));
+                          fni+tmpdirlen, fnilen-tmpdirlen,
+                          CONST_STR_LEN("\" -->\n")); /*(step over "/tmp/")*/
     test_mod_ssi_write_testfile(fd, BUF_PTR_LEN(b));
     buffer_free(b);
     test_mod_ssi_reset(r, hctx);
@@ -132,6 +147,7 @@ test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
                                         "ssi-include\n")));
 
     unlink(fni);
+    buffer_free_ptr(&fnb);
 
     test_mod_ssi_reset(r, hctx);
     close(fd);

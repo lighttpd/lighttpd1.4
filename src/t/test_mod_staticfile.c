@@ -371,15 +371,28 @@ test_mod_staticfile_process (request_st * const r, plugin_config * const pconf)
 void test_mod_staticfile (void);
 void test_mod_staticfile (void)
 {
-    char fn[] = "/tmp/lighttpd_mod_staticfile.XXXXXX";
+    const char *tmpdir = getenv("TMPDIR");
+  #ifdef _WIN32
+    if (NULL == tmpdir) tmpdir = getenv("TEMP");
+  #endif
+    if (NULL == tmpdir) tmpdir = "/tmp";
+    size_t tmpdirlen = strlen(tmpdir);
+    buffer fnb = { NULL, 0, 0 };
+    buffer_copy_path_len2(&fnb, tmpdir, tmpdirlen,
+                          CONST_STR_LEN("lighttpd_mod_staticfile.XXXXXX"));
+    if (fnb.ptr[tmpdirlen] == '/') ++tmpdirlen;
+    char * const fn = fnb.ptr;
+    const size_t fnlen = buffer_clen(&fnb);
     int fd = fdevent_mkostemp(fn, 0);
     if (fd < 0) {
         perror("mkstemp()");
+        buffer_free_ptr(&fnb);
         exit(1);
     }
     struct stat st;
     if (0 != fstat(fd, &st)) {
         perror("fstat()");
+        buffer_free_ptr(&fnb);
         exit(1);
     }
 
@@ -399,18 +412,18 @@ void test_mod_staticfile (void)
     buffer_copy_string_len(&r.uri.path, CONST_STR_LEN("/"));
     array * const mimetypes = array_init(1);
     r.conf.mimetypes = mimetypes;
-    array_set_key_value(mimetypes, fn+sizeof(fn)-8, 7,
+    array_set_key_value(mimetypes, fn+fnlen-7, 7,
                                    CONST_STR_LEN("text/plain"));
 
     strftime_cache_reset();
 
-    buffer_copy_string_len(&r.physical.path, fn, sizeof(fn)-1);
+    buffer_copy_string_len(&r.physical.path, fn, fnlen);
     test_http_response_send_file(&r, st.st_mtime);
 
     r.rqst_htags = 0;
     array_reset_data_strings(&r.rqst_headers);
 
-    buffer_copy_string_len(&r.physical.path, fn, sizeof(fn)-1);
+    buffer_copy_string_len(&r.physical.path, fn, fnlen);
     test_mod_staticfile_process(&r, &p->conf);
 
     array_free(mimetypes);
@@ -429,4 +442,5 @@ void test_mod_staticfile (void)
     free(p);
     stat_cache_free();
     unlink(fn);
+    buffer_free_ptr(&fnb);
 }

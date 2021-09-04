@@ -10,12 +10,12 @@
 #include "fdlog.h"
 
 __attribute_noinline__
-static void test_mod_indexfile_reset (request_st * const r)
+static void test_mod_indexfile_reset (request_st * const r, const char * const fn, const size_t fnlen)
 {
     r->http_status = 0;
     buffer_copy_string_len(&r->uri.path, CONST_STR_LEN("/"));
-    buffer_copy_string_len(&r->physical.doc_root, CONST_STR_LEN("/tmp"));
-    buffer_copy_string_len(&r->physical.path, CONST_STR_LEN("/tmp/"));
+    buffer_copy_string_len(&r->physical.doc_root, fn, fnlen-1);
+    buffer_copy_string_len(&r->physical.path, fn, fnlen);
 }
 
 __attribute_noinline__
@@ -40,48 +40,62 @@ run_mod_indexfile_tryfiles (request_st * const r, const array * const indexfiles
 static void
 test_mod_indexfile_tryfiles (request_st * const r)
 {
-    char fn[] = "/tmp/lighttpd_mod_indexfile.XXXXXX";
+    const char *tmpdir = getenv("TMPDIR");
+  #ifdef _WIN32
+    if (NULL == tmpdir) tmpdir = getenv("TEMP");
+  #endif
+    if (NULL == tmpdir) tmpdir = "/tmp";
+    size_t tmpdirlen = strlen(tmpdir);
+    buffer fnb = { NULL, 0, 0 };
+    buffer_copy_path_len2(&fnb, tmpdir, tmpdirlen,
+                          CONST_STR_LEN("lighttpd_mod_indexfile.XXXXXX"));
+    if (fnb.ptr[tmpdirlen] == '/') ++tmpdirlen;
+    char * const fn = fnb.ptr;
+    const size_t fnlen = buffer_clen(&fnb);
     int fd = fdevent_mkostemp(fn, 0);
     if (fd < 0) {
         perror("mkstemp()");
+        buffer_free_ptr(&fnb);
         exit(1);
     }
     struct stat st;
     if (0 != fstat(fd, &st)) {
         perror("fstat()");
+        buffer_free_ptr(&fnb);
         exit(1);
     }
     array * const indexfiles = array_init(3);
 
-    test_mod_indexfile_reset(r);
+    test_mod_indexfile_reset(r, fn, tmpdirlen);
 
     run_mod_indexfile_tryfiles(r, indexfiles, __LINE__, 0,
       "empty indexfiles");
-    assert(buffer_eq_slen(&r->physical.path, CONST_STR_LEN("/tmp/")));
-    test_mod_indexfile_reset(r);
+    assert(buffer_eq_slen(&r->physical.path, fn, tmpdirlen));
+    test_mod_indexfile_reset(r, fn, tmpdirlen);
 
     /*(assumes modified tempfile name does not exist)*/
-    array_insert_value(indexfiles, fn+5, sizeof(fn)-6-1);
+    array_insert_value(indexfiles, fn+tmpdirlen, fnlen-tmpdirlen-1);
     run_mod_indexfile_tryfiles(r, indexfiles, __LINE__, 0,
       "non-matching indexfiles");
-    assert(buffer_eq_slen(&r->physical.path, CONST_STR_LEN("/tmp/")));
-    test_mod_indexfile_reset(r);
+    assert(buffer_eq_slen(&r->physical.path, fn, tmpdirlen));
+    test_mod_indexfile_reset(r, fn, tmpdirlen);
 
-    array_insert_value(indexfiles, fn+5, sizeof(fn)-5-1);
+    array_insert_value(indexfiles, fn+tmpdirlen, fnlen-tmpdirlen);
     run_mod_indexfile_tryfiles(r, indexfiles, __LINE__, 0,
       "matching indexfile entry (w/o leading '/')");
-    assert(buffer_eq_slen(&r->physical.path, fn, sizeof(fn)-1));
-    test_mod_indexfile_reset(r);
+    assert(buffer_eq_slen(&r->physical.path, fn, fnlen));
+    test_mod_indexfile_reset(r, fn, tmpdirlen);
 
     array_reset_data_strings(indexfiles);
-    array_insert_value(indexfiles, fn+4, sizeof(fn)-4-1);
+    array_insert_value(indexfiles, fn+tmpdirlen-1, fnlen-(tmpdirlen-1));
     run_mod_indexfile_tryfiles(r, indexfiles, __LINE__, 0,
       "matching indexfile entry (w/ leading '/')");
-    assert(buffer_eq_slen(&r->physical.path, fn, sizeof(fn)-1));
-    test_mod_indexfile_reset(r);
+    assert(buffer_eq_slen(&r->physical.path, fn, fnlen));
+    test_mod_indexfile_reset(r, fn, tmpdirlen);
 
     array_free(indexfiles);
     unlink(fn);
+    buffer_free_ptr(&fnb);
 }
 
 void test_mod_indexfile (void);
