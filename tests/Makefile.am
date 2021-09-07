@@ -4,7 +4,9 @@ testdir=$(srcdir)/tmp/lighttpd/
 check_PROGRAMS=fcgi-responder scgi-responder
 
 fcgi_responder_SOURCES=fcgi-responder.c
+fcgi_responder_LDADD=$(WS2_32_LIB)
 scgi_responder_SOURCES=scgi-responder.c
+scgi_responder_LDADD=$(WS2_32_LIB)
 
 TESTS=\
 	prepare.sh \

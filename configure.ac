@@ -90,6 +90,14 @@ LT_INIT([dlopen disable-static shared])
 dnl for solaris
 CPPFLAGS="${CPPFLAGS} -D_REENTRANT"
 
+case "$host_os" in
+  *mingw*)
+    WS2_32_LIB="-lws2_32"
+    AC_SUBST([WS2_32_LIB])
+    ;;
+  *);;
+esac
+
 dnl Checks for header files.
 
 dnl checks for sys/wait.h => HAVE_SYS_WAIT_H
@@ -127,6 +135,9 @@ AC_CHECK_MEMBER([struct tm.tm_gmtoff],
   [],
   [#include <time.h>]
 )
+case "$host_os" in
+  *mingw*) AC_DEFINE([HAVE_SOCKLEN_T], [1]) ;;
+  *)
 AC_CHECK_TYPES([socklen_t],
   [], dnl defines HAVE_SOCKLEN_T
   [],
@@ -135,6 +146,8 @@ AC_CHECK_TYPES([socklen_t],
     #include <sys/socket.h>
   ]
 )
+;;
+esac
 
 dnl solaris needs -lsocket -lnsl
 dnl Haiku needs -lnetwork
@@ -1417,8 +1430,12 @@ esac
 AC_MSG_NOTICE([----------------------------------------])
 
 case "$host_os" in
-*mingw* ) LIBS="$LIBS -lwsock32" ;;
-* ) ;;
+  *mingw*)
+    # (-lws2_32 needed to detect inet_pton() and select() on _WIN32)
+    save_LIBS=$LIBS
+    LIBS="$LIBS $WS2_32_LIB"
+    ;;
+  *);;
 esac
 
 AC_CHECK_FUNCS([\
@@ -1466,6 +1483,13 @@ if test "$ac_cv_func_poll" = no; then
   AC_CHECK_HEADERS([sys/select.h])
   AC_CHECK_FUNCS([select])
 fi
+
+case "$host_os" in
+  *mingw*)
+    LIBS=$save_LIBS
+    ;;
+  *);;
+esac
 
 case "$host_os" in
 *sunos*|*solaris* )
@@ -1573,6 +1597,10 @@ if test "$ipv6" = true; then
       [ac_cv_ipv6_support=no]
     )
   ])
+  case "$host_os" in
+    *mingw*) ac_cv_ipv6_support=yes ;;
+    *) ;;
+  esac
 
   if test "$ac_cv_ipv6_support" = yes; then
     AC_DEFINE([HAVE_IPV6], [1], [Whether to enable IPv6 support])

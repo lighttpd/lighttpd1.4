@@ -4,6 +4,9 @@
 
 #ifdef _WIN32
 
+#ifdef _MSC_VER
+#pragma comment(lib, "ws2_32.lib")
+#endif
 #include <winsock2.h>
 /* https://docs.microsoft.com/en-us/windows/win32/winsock/sockaddr-2 */
 #include <ws2tcpip.h>
