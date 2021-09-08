@@ -434,7 +434,11 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	ts = srv->startup_ts;
 
 	struct tm tm;
+  #ifdef __MINGW32__
+	buffer_append_strftime(b, "%Y-%m-%d %H:%M:%S", localtime64_r(&ts, &tm));
+  #else
 	buffer_append_strftime(b, "%F %T", localtime64_r(&ts, &tm));
+  #endif
 	buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"
 	                                          "<tr><th colspan=\"2\">absolute (since start)</th></tr>\n"
 	                                          "<tr><td>Requests</td><td class=\"string\">"));

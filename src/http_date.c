@@ -269,7 +269,11 @@ http_date_time_to_str (char * const s, const size_t sz, const unix_time64_t t)
 {
     /*('max' is expected to be >= 30 (IMF-fixdate is 29 chars + '\0'))*/
     struct tm tm;
+  #ifdef __MINGW32__
+    const char fmt[] = "%a, %d %b %Y %H:%M:%S GMT"; /*IMF-fixdate fmt*/
+  #else
     const char fmt[] = "%a, %d %b %Y %T GMT";       /*IMF-fixdate fmt*/
+  #endif
     return (__builtin_expect( (NULL != gmtime64_r(&t, &tm)), 1))
       ? (uint32_t)strftime(s, sz, fmt, &tm)
       : 0;

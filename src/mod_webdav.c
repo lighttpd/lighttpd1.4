@@ -3426,7 +3426,11 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
         if (__builtin_expect( (NULL != gmtime64_r(&pb->st.st_ctime, &tm)), 1)) {
             buffer_append_string_len(b, CONST_STR_LEN(
               "<D:creationdate ns0:dt=\"dateTime.tz\">"));
+          #ifdef __MINGW32__
+            buffer_append_strftime(b, "%Y-%m-%dT%H:%M:%SZ", &tm));
+          #else
             buffer_append_strftime(b, "%FT%TZ", &tm));
+          #endif
             buffer_append_string_len(b, CONST_STR_LEN(
               "</D:creationdate>"));
         }

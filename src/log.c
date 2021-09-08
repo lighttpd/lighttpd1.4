@@ -119,8 +119,13 @@ log_buffer_tstr (const unix_time64_t t)
     /* cache the generated timestamp */
     struct tm tm;
     tlast = t;
+   #ifdef __MINGW32__
+    tlen = (uint32_t) strftime(tstr, sizeof(tstr), "%Y-%m-%d %H:%M:%S",
+                               localtime64_r(&tlast, &tm));
+   #else
     tlen = (uint32_t) strftime(tstr, sizeof(tstr), "%F %T",
                                localtime64_r(&tlast, &tm));
+   #endif
 }
 
 

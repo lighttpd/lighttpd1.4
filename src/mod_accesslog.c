@@ -738,11 +738,19 @@ accesslog_append_time (buffer * const b, const request_st * const r,
 					buffer_clear(ts_accesslog_str);
 				      #if defined(HAVE_STRUCT_TM_GMTOFF)
 					buffer_append_strftime(ts_accesslog_str,
+					                     #ifdef __MINGW32__
+					                       fmt ? fmt : "[%d/%b/%Y:%H:%M:%S %z]",
+					                     #else
 					                       fmt ? fmt : "[%d/%b/%Y:%T %z]",
+					                     #endif
 					                       localtime64_r(&t, &tm));
 				      #else /* HAVE_STRUCT_TM_GMTOFF */
 					buffer_append_strftime(ts_accesslog_str,
+					                     #ifdef ___MINGW32__
+					                       fmt ? fmt : "[%d/%b/%Y:%H:%M:%S +0000]",
+					                     #else
 					                       fmt ? fmt : "[%d/%b/%Y:%T +0000]",
+					                     #endif
 					                       gmtime64_r(&t, &tm));
 				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 					buffer_append_string_buffer(b, ts_accesslog_str);

@@ -569,7 +569,12 @@ static int build_ssi_cgi_vars(request_st * const r, handler_ctx * const p) {
 static void mod_ssi_timefmt (buffer * const b, buffer *timefmtb, unix_time64_t t, int localtm) {
     struct tm tm;
     const char * const timefmt = buffer_is_blank(timefmtb)
-      ? "%a, %d %b %Y %T %Z"
+      ?
+     #ifdef __MINGW32__
+        "%a, %d %b %Y %H:%M:%S %Z"
+     #else
+        "%a, %d %b %Y %T %Z"
+     #endif
       : timefmtb->ptr;
     buffer_append_strftime(b, timefmt, localtm
                                        ? localtime64_r(&t, &tm)
