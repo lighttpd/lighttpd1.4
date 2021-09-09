@@ -833,6 +833,9 @@ static int http_response_process_headers(request_st * const restrict r, http_res
                 end[0] = '\0';
                 int status = http_header_str_to_code(value);
                 if (status >= 100 && status < 1000) {
+                  #ifdef __COVERITY__ /* Coverity false positive for tainted */
+                    status = 200;/* http_header_str_to_code() validates */
+                  #endif
                     r->http_status = status;
                     opts->local_redir = 0; /*(disable; status was set)*/
                 }
@@ -854,6 +857,9 @@ static int http_response_process_headers(request_st * const restrict r, http_res
                 end[0] = '\0';
                 int status = http_header_str_to_code(value);
                 if (status >= 100 && status < 1000) {
+                  #ifdef __COVERITY__ /* Coverity false positive for tainted */
+                    status = 200;/* http_header_str_to_code() validates */
+                  #endif
                     r->http_status = status;
                     opts->local_redir = 0; /*(disable; status was set)*/
                 }

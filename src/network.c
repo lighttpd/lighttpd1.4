@@ -735,6 +735,9 @@ int network_init(server *srv, int stdin_fd) {
                 buffer_append_string_len(b, CONST_STR_LEN(":"));
                 buffer_append_int(b, srv->srvconf.port);
             }
+          #ifdef __COVERITY__
+            force_assert(b->ptr);
+          #endif
 
             rc = network_server_init(srv, &p->defaults, b, 0, -1);
             buffer_free(b);
