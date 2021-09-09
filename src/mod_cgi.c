@@ -776,6 +776,9 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 			if (-1 == c->file.fd
 			    && 0 != chunkqueue_open_file_chunk(cq, r->conf.errh))
 				return -1;
+		  #ifdef __COVERITY__
+			force_assert(-1 != c->file.fd);
+		  #endif
 			if (-1 == lseek(c->file.fd, 0, SEEK_SET)) {
 				log_perror(r->conf.errh, __FILE__, __LINE__,
 				  "lseek %s", c->mem->ptr);

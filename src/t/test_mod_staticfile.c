@@ -125,6 +125,10 @@ test_http_response_send_file (request_st * const r, time_t lmtime)
       "if-modified-since newer than st_mtime");
     test_mod_staticfile_reset(r);
 
+  #ifdef __COVERITY__ /* Coverity misses that this is set a few lines above */
+    force_assert(http_header_request_get(r, HTTP_HEADER_IF_MODIFIED_SINCE,
+                 CONST_STR_LEN("If-Modified-Since")));
+  #endif
     buffer_append_string_len(
       http_header_request_get(r, HTTP_HEADER_IF_MODIFIED_SINCE,
                               CONST_STR_LEN("If-Modified-Since")),

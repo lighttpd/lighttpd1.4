@@ -425,6 +425,9 @@ static int gw_proc_sockaddr_init(gw_host * const host, gw_proc * const proc, log
                            BUF_PTR_LEN(proc->unixsocket));
     }
     else {
+      #ifdef __COVERITY__
+        force_assert(host->host); /*(not NULL if !host->unixsocket)*/
+      #endif
         /*(note: name resolution here is *blocking* if IP string not supplied)*/
         if (1 != sock_addr_from_str_hints(&addr, &addrlen, host->host->ptr,
                                           0, proc->port, errh)) {

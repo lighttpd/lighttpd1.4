@@ -74,6 +74,7 @@ static lua_State *script_cache_load_script(script * const sc, int etag_flags)
     } while (rd > 0 ? (off += rd) != sz : rd < 0 && errno == EINTR);
     if (off != sz) { /*(file truncated?)*/
         if (rd >= 0) errno = EIO;
+        free(buf);
         return NULL;
     }
 

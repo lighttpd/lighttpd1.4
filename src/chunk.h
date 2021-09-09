@@ -82,7 +82,11 @@ void chunkqueue_append_file(chunkqueue * restrict cq, const buffer * restrict fn
 void chunkqueue_append_file_fd(chunkqueue * restrict cq, const buffer * restrict fn, int fd, off_t offset, off_t len); /* copies "fn" */
 void chunkqueue_append_mem(chunkqueue * restrict cq, const char * restrict mem, size_t len); /* copies memory */
 void chunkqueue_append_mem_min(chunkqueue * restrict cq, const char * restrict mem, size_t len); /* copies memory */
+
+__attribute_nonnull__
 void chunkqueue_append_buffer(chunkqueue * restrict cq, buffer * restrict mem); /* may reset "mem" */
+
+__attribute_nonnull__
 void chunkqueue_append_chunkqueue(chunkqueue * restrict cq, chunkqueue * restrict src);
 
 __attribute_returns_nonnull__

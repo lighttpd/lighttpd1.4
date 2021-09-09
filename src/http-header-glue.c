@@ -785,6 +785,9 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             /* after the space should be a status code for us */
             int status = http_header_str_to_code(s+9);
             if (status >= 100 && status < 1000) {
+              #ifdef __COVERITY__ /* Coverity false positive for tainted data */
+                status = 200;/* http_header_str_to_code() validates, untaints */
+              #endif
                 r->http_status = status;
                 opts->local_redir = 0; /*(disable; status was set)*/
                 i = 2;

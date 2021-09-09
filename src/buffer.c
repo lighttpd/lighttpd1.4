@@ -93,6 +93,9 @@ static char* buffer_alloc_replace(buffer * const restrict b, const size_t size) 
 
 char* buffer_string_prepare_copy(buffer * const b, const size_t size) {
     b->used = 0;
+  #ifdef __COVERITY__ /*(b->ptr is not NULL if b->size is not 0)*/
+    force_assert(size >= b->size || b->ptr);
+  #endif
     return (size < b->size)
       ? b->ptr
       : buffer_alloc_replace(b, size);
