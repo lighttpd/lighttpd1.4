@@ -1494,8 +1494,15 @@ static void connection_check_timeout (connection * const con, const unix_time64_
 
     /* max_write_idle timeout currently functions as backend timeout,
      * too, after response has been started.
-     * future: have separate backend timeout, and then change this
-     * to check for write interest before checking for timeout */
+     * Although backend timeouts now exist, there is no default for timeouts
+     * to backends, so were this client timeout now to be changed to check
+     * for write interest to the client, then timeout would not occur if the
+     * backend hung and there was no backend read timeout set.  Therefore,
+     * max_write_idle timeout remains timeout for both reading from backend
+     * and writing to client, though this check here is only for HTTP/1.1.
+     * In the future, if there were a quick way to detect that a backend
+     * read timeout was in effect, then this timeout could check for write
+     * interest to client.  (not a priority) */
     /*if (waitevents & FDEVENT_OUT)*/
     if (r->http_version <= HTTP_VERSION_1_1
         && r->state == CON_STATE_WRITE && con->write_request_ts != 0) {
