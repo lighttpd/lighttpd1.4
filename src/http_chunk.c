@@ -482,6 +482,8 @@ int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
         r->resp_send_chunked = 1;
         return rc;
     }
+    else
+        buffer_clear(mem);
 
     return 0;
 }
