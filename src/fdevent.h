@@ -101,14 +101,6 @@ int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr);
 pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd);
 int fdevent_waitpid(pid_t pid, int *status, int nb);
 int fdevent_waitpid_intr(pid_t pid, int *status);
-int fdevent_open_logger(const char *logger);
-int fdevent_cycle_logger(const char *logger, int *curfd);
-int fdevent_reaped_logger_pipe(pid_t pid);
-int fdevent_waitpid_logger_pipe_pid(pid_t pid, unix_time64_t ts);
-void fdevent_restart_logger_pipes(unix_time64_t ts);
-void fdevent_close_logger_pipes(void);
-void fdevent_breakagelog_logger_pipe(int fd);
-void fdevent_clr_logger_pipe_pids(void);
 
 ssize_t fdevent_socket_read_discard (int fd, char *buf, size_t sz, int family, int so_type);
 

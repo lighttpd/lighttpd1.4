@@ -730,6 +730,7 @@ common_src = [
 	'fdevent_solaris_devpoll.c',
 	'fdevent_solaris_port.c',
 	'fdevent.c',
+	'fdlog.c',
 	'gw_backend.c',
 	'http_cgi.c',
 	'http_chunk.c',

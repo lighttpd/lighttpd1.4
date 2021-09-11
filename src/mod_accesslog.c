@@ -4,6 +4,7 @@
 
 #include "base.h"
 #include "fdevent.h"
+#include "fdlog.h"
 #include "log.h"
 #include "buffer.h"
 #include "http_header.h"
@@ -421,7 +422,7 @@ static format_fields * accesslog_parse_format(const char * const format, const s
 }
 
 static void mod_accesslog_free_accesslog(accesslog_st * const x, plugin_data *p) {
-    /*(piped loggers are closed in fdevent_close_logger_pipes())*/
+    /*(piped loggers are closed in fdlog_pipes_close())*/
     if (!x->piped_logger && -1 != x->log_access_fd) {
         if (!accesslog_write_all(x->log_access_fd, &x->access_logbuffer)) {
             log_perror(p->errh, __FILE__, __LINE__,
@@ -595,7 +596,7 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
         if (use_syslog) continue; /* ignore the next checks */
         if (NULL == x || buffer_is_blank(x->access_logfile)) continue;
 
-        x->log_access_fd = fdevent_open_logger(x->access_logfile->ptr);
+        x->log_access_fd = fdlog_open(x->access_logfile->ptr);
         if (-1 == x->log_access_fd) {
             log_perror(srv->errh, __FILE__, __LINE__,
               "opening log '%s' failed", x->access_logfile->ptr);
@@ -772,8 +773,8 @@ SIGHUP_FUNC(log_access_cycle) {
                 accesslog_st * const x = cpv->v.v;
                 if (x->piped_logger) continue;
                 if (buffer_is_blank(x->access_logfile)) continue;
-                if (-1 == fdevent_cycle_logger(x->access_logfile->ptr,
-                                               &x->log_access_fd)) {
+                if (-1 == fdlog_cycle(x->access_logfile->ptr,
+                                      &x->log_access_fd)) {
                     log_perror(srv->errh, __FILE__, __LINE__,
                       "cycling access log failed: %s", x->access_logfile->ptr);
                 }

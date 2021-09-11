@@ -5,6 +5,7 @@
 #include "chunk.h"
 #include "ck.h"
 #include "fdevent.h"
+#include "fdlog.h"
 #include "http_etag.h"
 #include "keyvalue.h"
 #include "log.h"
@@ -1508,7 +1509,7 @@ static void config_log_error_open_syslog(server *srv, log_error_st *errh, const 
 }
 
 static int config_log_error_open_fn(server *srv, log_error_st *errh, const char *fn) {
-    int fd = fdevent_open_logger(fn);
+    int fd = fdlog_open(fn);
     if (-1 == fd) {
         log_perror(srv->errh, __FILE__, __LINE__,
           "opening errorlog '%s' failed", fn);
@@ -1595,7 +1596,7 @@ int config_log_error_open(server *srv) {
         }
 
         errfd = serrh->errorlog_fd;
-        if (*serrh->fn == '|') fdevent_breakagelog_logger_pipe(errfd);
+        if (*serrh->fn == '|') fdlog_pipe_serrh(errfd); /* breakagelog */
     }
     else if (!srv->srvconf.dont_daemonize) {
         /* move STDERR_FILENO to /dev/null */
@@ -1655,7 +1656,7 @@ void config_log_error_cycle(server *srv) {
               case 32:/* server.breakagelog */
                 errh = cpv->v.v; /* cycle only if the error log is a file */
                 if (errh->errorlog_mode != ERRORLOG_FILE) continue;
-                if (-1 == fdevent_cycle_logger(errh->fn, &errh->errorlog_fd)) {
+                if (-1 == fdlog_cycle(errh->fn, &errh->errorlog_fd)) {
                     /* write to top-level error log
                      * (the prior log if srv->errh is the one being cycled) */
                     log_perror(srv->errh, __FILE__, __LINE__,
@@ -1713,7 +1714,7 @@ void config_log_error_close(server *srv) {
               case ERRORLOG_FD:
                 if (-1 != errh->errorlog_fd) {
                     /* don't close STDERR */
-                    /* fdevent_close_logger_pipes() closes ERRORLOG_PIPE */
+                    /* fdlog_pipes_close() closes ERRORLOG_PIPE */
                     if (STDERR_FILENO != errh->errorlog_fd
                         && ERRORLOG_PIPE != errh->errorlog_mode) {
                         close(errh->errorlog_fd);
@@ -1732,7 +1733,7 @@ void config_log_error_close(server *srv) {
         }
     }
 
-    fdevent_close_logger_pipes();
+    fdlog_pipes_close();
 
     if (srv->errh->errorlog_mode == ERRORLOG_SYSLOG) {
         srv->errh->errorlog_mode = ERRORLOG_FD;

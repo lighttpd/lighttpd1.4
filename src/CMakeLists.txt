@@ -768,6 +768,7 @@ set(COMMON_SRC
 	request.c
 	sock_addr.c
 	rand.c
+	fdlog.c
 	ck.c
 )
 

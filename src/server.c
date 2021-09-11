@@ -8,6 +8,7 @@
 #include "chunk.h"
 #include "h2.h"             /* h2_send_1xx() */
 #include "fdevent.h"
+#include "fdlog.h"
 #include "connections.h"
 #include "sock_addr.h"
 #include "stat_cache.h"
@@ -1633,7 +1634,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 						if (!timer) alarm((timer = 5));
 						continue;
 					}
-					switch (fdevent_reaped_logger_pipe(pid)) {
+					switch (fdlog_pipes_waitpid_cb(pid)) {
 					  default: break;
 					  case -1: if (!timer) alarm((timer = 5));
 						   __attribute_fallthrough__
@@ -1672,7 +1673,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 							handle_sig_alarm = 0;
 							timer = 0;
 							plugins_call_handle_trigger(srv);
-							fdevent_restart_logger_pipes(log_monotonic_secs);
+							fdlog_pipes_restart(log_monotonic_secs);
 						}
 						break;
 					default:
@@ -1722,7 +1723,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		}
 		if (srv->srvconf.pid_file) buffer_clear(srv->srvconf.pid_file);
 
-		fdevent_clr_logger_pipe_pids();
+		fdlog_pipes_abandon_pids();
 		srv->pid = getpid();
 		li_rand_reseed();
 	}
@@ -1887,7 +1888,7 @@ static void server_handle_sigalrm (server * const srv, unix_time64_t mono_ts, un
 				  #endif
 					/* attempt to restart dead piped loggers every 64 secs */
 					if (0 == srv->srvconf.max_worker)
-						fdevent_restart_logger_pipes(mono_ts);
+						fdlog_pipes_restart(mono_ts);
 				}
 				/* cleanup stat-cache */
 				stat_cache_trigger_cleanup();
@@ -1911,7 +1912,7 @@ static void server_handle_sigchld (server * const srv) {
 					}
 					if (0 == srv->srvconf.max_worker) {
 						/* check piped-loggers and restart, even if shutting down */
-						if (fdevent_waitpid_logger_pipe_pid(pid, log_monotonic_secs)) {
+						if (fdlog_pipes_waitpid_cb(pid)) {
 							continue;
 						}
 					}
