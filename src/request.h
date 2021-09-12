@@ -10,7 +10,6 @@
 #include "chunk.h"
 #include "http_kv.h"
 
-struct log_error_st;    /* declaration */
 struct chunkqueue;      /* declaration */
 struct cond_cache_t;    /* declaration */
 struct cond_match_t;    /* declaration */
@@ -25,7 +24,7 @@ typedef struct request_config {
     const buffer *document_root;
     const buffer *server_name;
     const buffer *server_tag;
-    struct log_error_st *errh;
+    fdlog_st *errh;
 
     unsigned int max_request_size;
     unsigned short max_keep_alive_requests;
@@ -75,7 +74,7 @@ typedef struct request_config {
     const buffer *error_handler;
     const buffer *error_handler_404;
     const buffer *errorfile_prefix;
-    struct log_error_st *serrh; /* script errh */
+    fdlog_st *serrh; /* script errh */
 } request_config;
 
 typedef struct {

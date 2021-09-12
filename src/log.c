@@ -5,7 +5,6 @@
 
 #include "first.h"
 
-#include "ck.h"
 #include "log.h"
 
 #include <sys/types.h>
@@ -20,6 +19,9 @@
 #ifdef HAVE_SYSLOG_H
 # include <syslog.h>
 #endif
+
+#include "ck.h"
+#include "fdlog.h"
 
 /* log_con_jqueue instance here to be defined in shared object (see base.h) */
 connection *log_con_jqueue;
@@ -92,11 +94,11 @@ static int log_buffer_prepare(const log_error_st *errh, const char *filename, un
 	static unix_time64_t tlast;
 	static uint32_t tlen;
 	static char tstr[24]; /* 20 "%F %T" incl '\0' +3 ": (" */
-	switch(errh->errorlog_mode) {
-	case ERRORLOG_PIPE:
-	case ERRORLOG_FILE:
-	case ERRORLOG_FD:
-		if (-1 == errh->errorlog_fd) return -1;
+	switch(errh->mode) {
+	case FDLOG_PIPE:
+	case FDLOG_FILE:
+	case FDLOG_FD:
+		if (-1 == errh->fd) return -1;
 		/* cache the generated timestamp */
 		if (__builtin_expect( (tlast != log_epoch_secs), 0)) {
 			struct tm tm;
@@ -112,7 +114,7 @@ static int log_buffer_prepare(const log_error_st *errh, const char *filename, un
 
 		buffer_copy_string_len(b, tstr, tlen);
 		break;
-	case ERRORLOG_SYSLOG:
+	case FDLOG_SYSLOG:
 		/* syslog is generating its own timestamps */
 		buffer_copy_string_len(b, CONST_STR_LEN("("));
 		break;
@@ -127,14 +129,14 @@ static int log_buffer_prepare(const log_error_st *errh, const char *filename, un
 }
 
 static void log_write(const log_error_st *errh, buffer *b) {
-	switch(errh->errorlog_mode) {
-	case ERRORLOG_PIPE:
-	case ERRORLOG_FILE:
-	case ERRORLOG_FD:
+	switch(errh->mode) {
+	case FDLOG_PIPE:
+	case FDLOG_FILE:
+	case FDLOG_FD:
 		buffer_append_string_len(b, CONST_STR_LEN("\n"));
-		write_all(errh->errorlog_fd, BUF_PTR_LEN(b));
+		write_all(errh->fd, BUF_PTR_LEN(b));
 		break;
-	case ERRORLOG_SYSLOG:
+	case FDLOG_SYSLOG:
 		syslog(LOG_ERR, "%s", b->ptr);
 		break;
 	}
@@ -280,24 +282,4 @@ log_error_multiline (log_error_st * const restrict errh,
     }
 
     errno = errnum;
-}
-
-
-log_error_st *
-log_error_st_init (void)
-{
-    log_error_st *errh = calloc(1, sizeof(log_error_st));
-    force_assert(errh);
-    errh->errorlog_fd = STDERR_FILENO;
-    errh->errorlog_mode = ERRORLOG_FD;
-    return errh;
-}
-
-
-void
-log_error_st_free (log_error_st *errh)
-{
-    if (NULL == errh) return;
-    free(errh->b.ptr);
-    free(errh);
 }

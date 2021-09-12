@@ -13,7 +13,8 @@
 #define MAX_READ_LIMIT  (256*1024)
 #define MAX_WRITE_LIMIT (256*1024)
 
-struct log_error_st;    /*(declaration)*/
+struct fdlog_st;        /*(declaration)*/
+#define log_error_st fdlog_st
 
 typedef struct chunk {
 	struct chunk *next;

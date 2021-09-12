@@ -71,6 +71,7 @@ common_src = Split("base64.c buffer.c burl.c log.c \
 	request.c \
 	sock_addr.c \
 	rand.c \
+	fdlog_maint.c \
 	fdlog.c \
 	ck.c \
 ")

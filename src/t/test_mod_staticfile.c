@@ -7,6 +7,7 @@
 #include <stdio.h>
 
 #include "mod_staticfile.c"
+#include "fdlog.h"
 #include "http_date.h"
 #include "http_etag.h"
 #include "http_header.h"
@@ -396,8 +397,8 @@ int main (void)
     r.http_method            = HTTP_METHOD_GET;
     r.http_version           = HTTP_VERSION_1_1;
     r.tmp_buf                = buffer_init();
-    r.conf.errh              = log_error_st_init();
-    r.conf.errh->errorlog_fd = -1; /* (disable) */
+    r.conf.errh              = fdlog_init(NULL, -1, FDLOG_FD);
+    r.conf.errh->fd          = -1; /* (disable) */
     r.conf.follow_symlink    = 1;
     buffer_copy_string_len(&r.uri.path, CONST_STR_LEN("/"));
     array * const mimetypes = array_init(1);
@@ -417,7 +418,7 @@ int main (void)
     test_mod_staticfile_process(&r, &p->conf);
 
     array_free(mimetypes);
-    log_error_st_free(r.conf.errh);
+    fdlog_free(r.conf.errh);
     buffer_free(r.tmp_buf);
     chunkqueue_reset(&r.write_queue);
 

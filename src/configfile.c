@@ -1440,7 +1440,10 @@ void config_init(server *srv) {
 
 static void config_log_error_open_syslog(server *srv, log_error_st *errh, const buffer *syslog_facility) {
   #ifdef HAVE_SYSLOG_H
-    errh->errorlog_mode = ERRORLOG_SYSLOG;
+    /*assert(errh->mode == FDLOG_FD);*/
+    /*assert(errh->fd == STDERR_FILENO);*/
+    errh->mode = FDLOG_SYSLOG;
+    errh->fd = -1;
     /* perhaps someone wants to use syslog() */
     int facility = -1;
     if (syslog_facility) {
@@ -1508,20 +1511,6 @@ static void config_log_error_open_syslog(server *srv, log_error_st *errh, const 
   #endif
 }
 
-static int config_log_error_open_fn(server *srv, log_error_st *errh, const char *fn) {
-    int fd = fdlog_open(fn);
-    if (-1 == fd) {
-        log_perror(srv->errh, __FILE__, __LINE__,
-          "opening errorlog '%s' failed", fn);
-        return -1;
-    }
-    errh->errorlog_fd = fd;
-    errh->errorlog_mode = fn[0] == '|' ? ERRORLOG_PIPE : ERRORLOG_FILE;
-    errh->fn = fn;
-
-    return 0;
-}
-
 int config_log_error_open(server *srv) {
     /* logs are opened after preflight check (srv->srvconf.preflight_check)
      * and after dropping privileges instead of being opened during config
@@ -1529,8 +1518,6 @@ int config_log_error_open(server *srv) {
   #ifdef __clang_analyzer__
     force_assert(srv->errh);
   #endif
-
-    /* Note: implementation does not de-dup repeated files or pipe commands */
 
     config_data_base * const p = srv->config_data_base;
     log_error_st *serrh = NULL;
@@ -1561,11 +1548,22 @@ int config_log_error_open(server *srv) {
 
             if (NULL == fn) continue;
 
-            if (NULL == errh) errh = log_error_st_init();
-            cpv->v.v = errh;
-            cpv->vtype = T_CONFIG_LOCAL;
+            fdlog_st * const fdlog = fdlog_open(fn);
+            if (NULL == fdlog) {
+                log_perror(srv->errh, __FILE__, __LINE__,
+                  "opening errorlog '%s' failed", fn);
+                return -1;
+            }
 
-            if (0 != config_log_error_open_fn(srv, errh, fn)) return -1;
+            if (errh) {
+                /*(logfiles are opened early in setup; this function is called
+                 * prior to set_defaults hook, and modules should not save a
+                 * pointer to srv->errh until set_defaults hook or later)*/
+                p->defaults.errh = srv->errh = fdlog;
+                fdlog_free(errh);
+            }
+            cpv->v.v = errh = fdlog;
+            cpv->vtype = T_CONFIG_LOCAL;
 
             if (0 == i && errh != srv->errh) /*(top-level server.breakagelog)*/
                 serrh = errh;
@@ -1575,9 +1573,8 @@ int config_log_error_open(server *srv) {
     if (srv->srvconf.errorlog_use_syslog) /*(restricted to global scope)*/
         config_log_error_open_syslog(srv, srv->errh,
                                      srv->srvconf.syslog_facility);
-    else if (srv->errh->errorlog_mode == ERRORLOG_FD
-             && !srv->srvconf.dont_daemonize)
-        srv->errh->errorlog_fd = -1;
+    else if (srv->errh->mode == FDLOG_FD && !srv->srvconf.dont_daemonize)
+        srv->errh->fd = -1;
         /* We can only log to stderr in dont-daemonize mode;
          * if we do daemonize and no errorlog file is specified,
          * we log into /dev/null
@@ -1590,12 +1587,12 @@ int config_log_error_open(server *srv) {
 
     int errfd;
     if (NULL != serrh) {
-        if (srv->errh->errorlog_mode == ERRORLOG_FD) {
-            srv->errh->errorlog_fd = dup(STDERR_FILENO);
-            fdevent_setfd_cloexec(srv->errh->errorlog_fd);
+        if (srv->errh->mode == FDLOG_FD) {
+            srv->errh->fd = dup(STDERR_FILENO);
+            fdevent_setfd_cloexec(srv->errh->fd);
         }
 
-        errfd = serrh->errorlog_fd;
+        errfd = serrh->fd;
         if (*serrh->fn == '|') fdlog_pipe_serrh(errfd); /* breakagelog */
     }
     else if (!srv->srvconf.dont_daemonize) {
@@ -1622,122 +1619,25 @@ int config_log_error_open(server *srv) {
   #endif
 
     if (NULL != serrh) {
-        close(errfd); /* serrh->errorlog_fd */
-        serrh->errorlog_fd = STDERR_FILENO;
+        close(errfd); /* serrh->fd */
+        serrh->fd = STDERR_FILENO;
     }
 
     return 0;
-}
-
-/**
- * cycle the errorlog
- *
- */
-
-void config_log_error_cycle(server *srv) {
-    /* All logs are rotated in parent and children workers so that all have
-     * valid filehandles.  The parent might reap a child and respawn, so the
-     * parent needs valid handles for more than top-level srv->errh */
-
-    /*(no need to flush error log before cycling; error logs are not buffered)*/
-
-    config_data_base * const p = srv->config_data_base;
-
-    /* future: might be slightly faster to have allocated array of open files
-     * rather than walking config, but only might matter with many directives */
-    /* (init i to 0 if global context; to 1 to skip empty global context) */
-    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
-        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
-        for (; -1 != cpv->k_id; ++cpv) {
-            if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
-            log_error_st *errh;
-            switch (cpv->k_id) {
-              case 31:/* server.errorlog */
-              case 32:/* server.breakagelog */
-                errh = cpv->v.v; /* cycle only if the error log is a file */
-                if (errh->errorlog_mode != ERRORLOG_FILE) continue;
-                if (-1 == fdlog_cycle(errh->fn, &errh->errorlog_fd)) {
-                    /* write to top-level error log
-                     * (the prior log if srv->errh is the one being cycled) */
-                    log_perror(srv->errh, __FILE__, __LINE__,
-                      "cycling errorlog '%s' failed", errh->fn);
-                }
-                else if (0 == i && errh != srv->errh) { /*(server.breakagelog)*/
-                    int fd = errh->errorlog_fd;
-                    if (STDERR_FILENO != dup2(fd, STDERR_FILENO)) {
-                        errh->errorlog_fd = STDERR_FILENO;
-                        close(fd);
-                    }
-                    else {
-                        log_perror(srv->errh, __FILE__, __LINE__,
-                          "dup2() %s to STDERR failed", errh->fn);
-                    }
-                }
-                break;
-              default:
-                break;
-            }
-        }
-    }
 }
 
 void config_log_error_close(server *srv) {
     config_data_base * const p = srv->config_data_base;
     if (NULL == p) return;
 
-    /* future: might be slightly faster to have allocated array of open files
-     * rather than walking config, but only might matter with many directives */
-    /* (init i to 0 if global context; to 1 to skip empty global context) */
-    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
-        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
-        for (; -1 != cpv->k_id; ++cpv) {
-            if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
-            log_error_st *errh = NULL;
-            switch (cpv->k_id) {
-              /* NB: these indexes are repeated below switch() block
-               *     and all must stay in sync with configfile.c */
-              case 31:/* server.errorlog */
-                if (0 == i) continue; /*(srv->errh is free'd later)*/
-                __attribute_fallthrough__
-              case 32:/* server.breakagelog */
-                errh = cpv->v.v; /* cycle only if the error log is a file */
-                break;
-              default:
-                break;
-            }
+    /*(reset serrh just in case; should not be used after this func returns)*/
+    p->defaults.serrh = NULL;
 
-            if (NULL == errh) continue;
+    fdlog_closeall(srv->errh); /*(close all except srv->errh)*/
 
-            switch(errh->errorlog_mode) {
-              case ERRORLOG_PIPE:
-              case ERRORLOG_FILE:
-              case ERRORLOG_FD:
-                if (-1 != errh->errorlog_fd) {
-                    /* don't close STDERR */
-                    /* fdlog_pipes_close() closes ERRORLOG_PIPE */
-                    if (STDERR_FILENO != errh->errorlog_fd
-                        && ERRORLOG_PIPE != errh->errorlog_mode) {
-                        close(errh->errorlog_fd);
-                    }
-                    errh->errorlog_fd = -1;
-                }
-                break;
-              case ERRORLOG_SYSLOG: /*(restricted to global scope)*/
-               #ifdef HAVE_SYSLOG_H
-                closelog();
-               #endif
-                break;
-            }
-
-            log_error_st_free(errh);
-        }
-    }
-
-    fdlog_pipes_close();
-
-    if (srv->errh->errorlog_mode == ERRORLOG_SYSLOG) {
-        srv->errh->errorlog_mode = ERRORLOG_FD;
-        srv->errh->errorlog_fd = STDERR_FILENO;
+    if (srv->errh->mode == FDLOG_SYSLOG) {
+        srv->errh->mode = FDLOG_FD;
+        srv->errh->fd = STDERR_FILENO;
       #ifdef HAVE_SYSLOG_H
         closelog();
       #endif

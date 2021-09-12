@@ -307,7 +307,7 @@ static server *server_init(void) {
   #endif
 	log_monotonic_secs = server_monotonic_secs();
 
-	srv->errh = log_error_st_init();
+	srv->errh = fdlog_init(NULL, STDERR_FILENO, FDLOG_FD);
 
 	config_init(srv);
 
@@ -352,7 +352,7 @@ static void server_free(server *srv) {
 	li_rand_cleanup();
 	chunkqueue_chunk_pool_free();
 
-	log_error_st_free(srv->errh);
+	fdlog_free(srv->errh);
 	free(srv);
 }
 
@@ -895,7 +895,7 @@ static int server_graceful_state_bg (server *srv) {
     /* flush log buffers to avoid potential duplication of entries
      * server_handle_sighup(srv) does the following, but skip logging */
     plugins_call_handle_sighup(srv);
-    config_log_error_cycle(srv);
+    fdlog_files_cycle(srv->errh); /* reopen log files, not pipes */
 
     /* backgrounding to continue processing requests in progress */
     /* re-exec lighttpd in original process
@@ -1661,8 +1661,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 						 */
 						if (handle_sig_hup) {
 							handle_sig_hup = 0;
-
-							config_log_error_cycle(srv);
+							fdlog_files_cycle(srv->errh); /* reopen log files, not pipes */
 
 							/* forward SIGHUP to workers */
 							for (int n = 0; n < npids; ++n) {
@@ -1834,8 +1833,7 @@ static void server_handle_sighup (server * const srv) {
 			/* cycle logfiles */
 
 			plugins_call_handle_sighup(srv);
-
-			config_log_error_cycle(srv);
+			fdlog_files_cycle(srv->errh); /* reopen log files, not pipes */
 #ifdef HAVE_SIGACTION
 				log_error(srv->errh, __FILE__, __LINE__,
 				  "logfiles cycled UID = %d PID = %d",
@@ -1878,6 +1876,8 @@ static void server_handle_sigalrm (server * const srv, unix_time64_t mono_ts, un
 			      #endif
 
 				if (0 == (mono_ts & 0x3f)) { /*(once every 64 secs)*/
+					/* free logger buffers every 64 secs */
+					fdlog_flushall(srv->errh);
 					/* free excess chunkqueue buffers every 64 secs */
 					chunkqueue_chunk_pool_clear();
 					/* clear request and connection pools every 64 secs */

@@ -7,6 +7,7 @@
 #include <stdio.h>
 
 #include "mod_indexfile.c"
+#include "fdlog.h"
 
 __attribute_noinline__
 static void test_mod_indexfile_reset (request_st * const r)
@@ -92,8 +93,8 @@ int main (void)
     request_st r;
 
     memset(&r, 0, sizeof(request_st));
-    r.conf.errh              = log_error_st_init();
-    r.conf.errh->errorlog_fd = -1; /* (disable) */
+    r.conf.errh              = fdlog_init(NULL, -1, FDLOG_FD);
+    r.conf.errh->fd          = -1; /* (disable) */
     r.conf.follow_symlink    = 1;
     array * const mimetypes = array_init(0);
     r.conf.mimetypes = mimetypes; /*(must not be NULL)*/
@@ -101,7 +102,7 @@ int main (void)
     test_mod_indexfile_tryfiles(&r);
 
     array_free(mimetypes);
-    log_error_st_free(r.conf.errh);
+    fdlog_free(r.conf.errh);
 
     free(r.uri.path.ptr);
     free(r.physical.path.ptr);

@@ -4,18 +4,18 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h> /* STDERR_FILENO */
 
 #include "keyvalue.c"
 
 #include "base.h"   /* struct server */
 #include "plugin_config.h" /* struct cond_match_t */
+#include "fdlog.h"  /* struct fdlog_st */
 
 #ifdef HAVE_PCRE_H
 static pcre_keyvalue_buffer * test_keyvalue_test_kvb_init (void) {
     pcre_keyvalue_buffer *kvb = pcre_keyvalue_buffer_init();
 
-    log_error_st * const errh = log_error_st_init();
+    fdlog_st * const errh = fdlog_init(NULL, -1, FDLOG_FD);
 
     /* strings must be persistent for pcre_keyvalue_buffer_append() */
     static const buffer kvstr[] = {
@@ -34,7 +34,7 @@ static pcre_keyvalue_buffer * test_keyvalue_test_kvb_init (void) {
     assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+4, kvstr+5, 1));
     assert(pcre_keyvalue_buffer_append(errh, kvb, kvstr+6, kvstr+7, 1));
 
-    log_error_st_free(errh);
+    fdlog_free(errh);
 
     return kvb;
 }

@@ -3,6 +3,7 @@
 #include "base.h"
 #include "stat_cache.h"
 #include "http_kv.h"
+#include "fdlog.h"
 #include "log.h"
 #include "response.h"
 #include "http_cgi.h"
@@ -862,7 +863,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		log_perror(r->conf.errh, __FILE__, __LINE__, "open dirname %s failed", r->physical.path.ptr);
 	}
 
-	int serrh_fd = r->conf.serrh ? r->conf.serrh->errorlog_fd : -1;
+	int serrh_fd = r->conf.serrh ? r->conf.serrh->fd : -1;
 	pid_t pid = (dfd >= 0)
 	  ? fdevent_fork_execve(args[0], args, envp,
 	                        to_cgi_fds[0], from_cgi_fds[1], serrh_fd, dfd)

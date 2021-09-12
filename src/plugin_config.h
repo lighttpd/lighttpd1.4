@@ -71,9 +71,6 @@ __attribute_cold__
 int config_log_error_open(server *srv);
 
 __attribute_cold__
-void config_log_error_cycle(server *srv);
-
-__attribute_cold__
 void config_log_error_close(server *srv);
 
 void config_reset_config_bytes_sec(void *p);

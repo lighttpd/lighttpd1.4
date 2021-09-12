@@ -24,8 +24,9 @@ typedef union sock_addr sock_addr;
 struct fdnode_st;
 typedef struct fdnode_st fdnode;
 
-struct log_error_st;
-typedef struct log_error_st log_error_st;
+struct fdlog_st;
+typedef struct fdlog_st fdlog_st;
+typedef struct fdlog_st log_error_st;
 
 enum handler_t {
   HANDLER_GO_ON,

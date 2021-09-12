@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "mod_userdir.c"
+#include "fdlog.h"
 
 static void test_mod_userdir_reset(request_st * const r)
 {
@@ -164,8 +165,8 @@ int main (void)
 
     memset(&r, 0, sizeof(request_st));
     r.tmp_buf                = buffer_init();
-    r.conf.errh              = log_error_st_init();
-    r.conf.errh->errorlog_fd = -1; /* (disable) */
+    r.conf.errh              = fdlog_init(NULL, -1, FDLOG_FD);
+    r.conf.errh->fd          = -1; /* (disable) */
 
     test_mod_userdir_docroot_handler(&r, p);
 
@@ -174,7 +175,7 @@ int main (void)
     free(r.physical.path.ptr);
     free(r.physical.rel_path.ptr);
 
-    log_error_st_free(r.conf.errh);
+    fdlog_free(r.conf.errh);
     buffer_free(r.tmp_buf);
 
     buffer_free(basepath);

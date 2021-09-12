@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "request.c"
+#include "fdlog.h"
 
 static void test_request_reset(request_st * const r)
 {
@@ -605,8 +606,8 @@ int main (void)
     request_st r;
 
     memset(&r, 0, sizeof(request_st));
-    r.conf.errh              = log_error_st_init();
-    r.conf.errh->errorlog_fd = -1; /* (disable) */
+    r.conf.errh              = fdlog_init(NULL, -1, FDLOG_FD);
+    r.conf.errh->fd          = -1; /* (disable) */
     r.conf.allow_http11      = 1;
     r.conf.http_parseopts    = HTTP_PARSEOPT_HEADER_STRICT
                              | HTTP_PARSEOPT_HOST_STRICT
@@ -618,7 +619,7 @@ int main (void)
     free(r.target.ptr);
     array_free_data(&r.rqst_headers);
 
-    log_error_st_free(r.conf.errh);
+    fdlog_free(r.conf.errh);
 
     return 0;
 }

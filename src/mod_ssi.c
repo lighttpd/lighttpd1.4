@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "fdevent.h"
+#include "fdlog.h"
 #include "log.h"
 #include "buffer.h"
 #include "http_cgi.h"
@@ -802,7 +803,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 		args[3] = NULL;
 
 		/*(expects STDIN_FILENO open to /dev/null)*/
-		int serrh_fd = r->conf.serrh ? r->conf.serrh->errorlog_fd : -1;
+		int serrh_fd = r->conf.serrh ? r->conf.serrh->fd : -1;
 		pid = fdevent_fork_execve(args[0], args, NULL, -1, c->file.fd, serrh_fd, -1);
 		if (-1 == pid) {
 			log_perror(errh, __FILE__, __LINE__, "spawning exec failed: %s", cmd);

@@ -4,7 +4,8 @@
 
 #include "base_decls.h" /* handler_t */
 
-struct log_error_st;    /* declaration */
+struct fdlog_st;        /*(declaration)*/
+#define log_error_st fdlog_st
 struct fdevents;        /* declaration */
 typedef struct fdevents fdevents;
 

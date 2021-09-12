@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "configfile-glue.c"
+#include "fdlog.h"
 
 const struct {
     const char *string;
@@ -46,8 +47,8 @@ const struct {
 static void test_configfile_addrbuf_eq_remote_ip_mask (void) {
 	request_st r;
 	memset(&r, 0, sizeof(request_st));
-	r.conf.errh              = log_error_st_init();
-	r.conf.errh->errorlog_fd = -1; /* (disable) */
+	r.conf.errh              = fdlog_init(NULL, -1, FDLOG_FD);
+	r.conf.errh->fd          = -1; /* (disable) */
 
 	buffer * const b = buffer_init();
 	buffer * const tb = buffer_init();
@@ -90,7 +91,7 @@ static void test_configfile_addrbuf_eq_remote_ip_mask (void) {
 
 	buffer_free(tb);
 	buffer_free(b);
-	log_error_st_free(r.conf.errh);
+	fdlog_free(r.conf.errh);
 }
 
 int main (void) {

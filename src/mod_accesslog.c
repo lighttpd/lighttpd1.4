@@ -148,41 +148,23 @@ typedef struct {
 } format_fields;
 
 typedef struct {
-	int    log_access_fd;
+	fdlog_st *fdlog;
 	char use_syslog; /* syslog has global buffer */
-	char piped_logger;
 	unsigned short syslog_level;
-	buffer *access_logbuffer; /* each logfile has a separate buffer */
-	const buffer *access_logfile;
 
 	format_fields *parsed_format;
 } plugin_config;
-
-typedef struct {
-    int log_access_fd;
-    char piped_logger;
-    const buffer *access_logfile;
-    buffer access_logbuffer; /* each logfile has a separate buffer */
-} accesslog_st;
 
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
     plugin_config conf;
 
-    buffer syslog_logbuffer; /* syslog has global buffer. no caching, always written directly */
-    log_error_st *errh; /* copy of srv->errh */
     format_fields *default_format;/* allocated if default format */
 } plugin_data;
 
 INIT_FUNC(mod_accesslog_init) {
     return calloc(1, sizeof(plugin_data));
-}
-
-static int accesslog_write_all(const int fd, buffer * const b) {
-    const ssize_t wr = (fd >= 0) ? write_all(fd, BUF_PTR_LEN(b)) : 0;
-    buffer_clear(b); /*(clear buffer, even if fd < 0)*/
-    return (-1 != wr);
 }
 
 static void accesslog_append_escaped_str(buffer * const dest, const char * const str, const size_t len) {
@@ -421,19 +403,6 @@ static format_fields * accesslog_parse_format(const char * const format, const s
 	return fields;
 }
 
-static void mod_accesslog_free_accesslog(accesslog_st * const x, plugin_data *p) {
-    /*(piped loggers are closed in fdlog_pipes_close())*/
-    if (!x->piped_logger && -1 != x->log_access_fd) {
-        if (!accesslog_write_all(x->log_access_fd, &x->access_logbuffer)) {
-            log_perror(p->errh, __FILE__, __LINE__,
-              "writing access log entry failed: %s", x->access_logfile->ptr);
-        }
-        close(x->log_access_fd);
-    }
-    free(x->access_logbuffer.ptr);
-    free(x);
-}
-
 static void mod_accesslog_free_format_fields(format_fields * const ff) {
     for (format_field *f = ff->ptr; f->type != FIELD_UNSET; ++f)
         free(f->string.ptr);
@@ -443,7 +412,6 @@ static void mod_accesslog_free_format_fields(format_fields * const ff) {
 
 FREE_FUNC(mod_accesslog_free) {
     plugin_data * const p = p_d;
-    free(p->syslog_logbuffer.ptr);
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
@@ -452,7 +420,7 @@ FREE_FUNC(mod_accesslog_free) {
             if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
             switch (cpv->k_id) {
               case 0: /* accesslog.filename */
-                mod_accesslog_free_accesslog(cpv->v.v, p);
+                /*(handled by fdlog_closeall())*/
                 break;
               case 1: /* accesslog.format */
                 mod_accesslog_free_format_fields(cpv->v.v);
@@ -472,11 +440,7 @@ static void mod_accesslog_merge_config_cpv(plugin_config * const pconf, const co
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0:{/* accesslog.filename */
         if (cpv->vtype != T_CONFIG_LOCAL) break;
-        accesslog_st * const x = cpv->v.v;
-        pconf->log_access_fd    = x->log_access_fd;
-        pconf->piped_logger     = x->piped_logger;
-        pconf->access_logfile   = x->access_logfile;
-        pconf->access_logbuffer = &x->access_logbuffer;
+        pconf->fdlog = cpv->v.v;
         break;
       }
       case 1:{/* accesslog.format */
@@ -531,7 +495,6 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
     };
 
     plugin_data * const p = p_d;
-    p->errh = srv->errh;
     if (!config_plugin_values_init(srv, p, cpk, "mod_accesslog"))
         return HANDLER_ERROR;
 
@@ -540,17 +503,16 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
     for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
         config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
         int use_syslog = 0;
-        accesslog_st *x = NULL;
+        config_plugin_value_t *cpvfile = NULL;
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* accesslog.filename */
-                x = calloc(1, sizeof(accesslog_st));
-                force_assert(x);
-                x->log_access_fd = -1;
-                x->piped_logger = (cpv->v.b->ptr[0] == '|');
-                x->access_logfile = cpv->v.b;
-                cpv->vtype = T_CONFIG_LOCAL;
-                cpv->v.v = x;
+                if (!buffer_is_blank(cpv->v.b))
+                    cpvfile = cpv;
+                else {
+                    cpv->v.v = NULL;
+                    cpv->vtype = T_CONFIG_LOCAL;
+                }
                 break;
               case 1: /* accesslog.format */
                 if (NULL != strchr(cpv->v.b->ptr, '\\')) {
@@ -594,17 +556,18 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
         if (srv->srvconf.preflight_check) continue;
 
         if (use_syslog) continue; /* ignore the next checks */
-        if (NULL == x || buffer_is_blank(x->access_logfile)) continue;
-
-        x->log_access_fd = fdlog_open(x->access_logfile->ptr);
-        if (-1 == x->log_access_fd) {
+        cpv = cpvfile; /* accesslog.filename handled after preflight_check */
+        if (NULL == cpv) continue;
+        const char * const fn = cpv->v.b->ptr;
+        cpv->v.v = fdlog_open(fn);
+        cpv->vtype = T_CONFIG_LOCAL;
+        if (NULL == cpv->v.v) {
             log_perror(srv->errh, __FILE__, __LINE__,
-              "opening log '%s' failed", x->access_logfile->ptr);
+              "opening log '%s' failed", fn);
             return HANDLER_ERROR;
         }
     }
 
-    p->defaults.log_access_fd = -1;
     p->defaults.syslog_level = LOG_INFO;
 
     /* initialize p->defaults from global config context */
@@ -722,72 +685,10 @@ static format_fields * mod_accesslog_process_format(const char * const format, c
 			return parsed_format;
 }
 
-static void log_access_flush(plugin_data * const p) {
-    /* future: might be slightly faster to have allocated array of open files
-     * rather than walking config, but only might matter with many directives */
-    /* (init i to 0 if global context; to 1 to skip empty global context) */
-    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
-        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
-        for (; -1 != cpv->k_id; ++cpv) {
-            switch (cpv->k_id) {
-              case 0: /* accesslog.filename */
-                if (cpv->vtype == T_CONFIG_LOCAL && NULL != cpv->v.v) {
-                    accesslog_st * const x = cpv->v.v;
-                    if (buffer_is_blank(&x->access_logbuffer)) continue;
-                    if (!accesslog_write_all(x->log_access_fd,
-                                             &x->access_logbuffer)) {
-                        log_perror(p->errh, __FILE__, __LINE__,
-                          "writing access log entry failed: %s",
-                          x->access_logfile->ptr);
-                    }
-                }
-                break;
-              default:
-                break;
-            }
-        }
-    }
-}
-
 TRIGGER_FUNC(log_access_periodic_flush) {
+    UNUSED(p_d);
     /* flush buffered access logs every 4 seconds */
-    if (0 == (log_monotonic_secs & 3)) log_access_flush((plugin_data *)p_d);
-    UNUSED(srv);
-    return HANDLER_GO_ON;
-}
-
-SIGHUP_FUNC(log_access_cycle) {
-    plugin_data * const p = p_d;
-
-    log_access_flush(p);
-
-    /* future: might be slightly faster to have allocated array of open files
-     * rather than walking config, but only might matter with many directives */
-    /* (init i to 0 if global context; to 1 to skip empty global context) */
-    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
-        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
-        for (; -1 != cpv->k_id; ++cpv) {
-            if (cpv->vtype != T_CONFIG_LOCAL || NULL == cpv->v.v) continue;
-            switch (cpv->k_id) {
-              case 0:{/* accesslog.filename */
-                accesslog_st * const x = cpv->v.v;
-                if (x->piped_logger) continue;
-                if (buffer_is_blank(x->access_logfile)) continue;
-                if (-1 == fdlog_cycle(x->access_logfile->ptr,
-                                      &x->log_access_fd)) {
-                    log_perror(srv->errh, __FILE__, __LINE__,
-                      "cycling access log failed: %s", x->access_logfile->ptr);
-                }
-                /*(update p->defaults after cycling log)*/
-                if (0 == i) p->defaults.log_access_fd = x->log_access_fd;
-                break;
-              }
-              default:
-                break;
-            }
-        }
-    }
-
+    if (0 == (log_monotonic_secs & 3)) fdlog_files_flush(srv->errh, 0);
     return HANDLER_GO_ON;
 }
 
@@ -1113,41 +1014,38 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 }
 
 REQUESTDONE_FUNC(log_access_write) {
-	plugin_data * const p = p_d;
-	mod_accesslog_patch_config(r, p);
+    plugin_data * const p = p_d;
+    mod_accesslog_patch_config(r, p);
+    fdlog_st * const fdlog = p->conf.fdlog;
 
-	/* No output device, nothing to do */
-	if (!p->conf.use_syslog && p->conf.log_access_fd == -1) return HANDLER_GO_ON;
+    /* No output device, nothing to do */
+    if (!p->conf.use_syslog && !fdlog) return HANDLER_GO_ON;
 
-	buffer * const b = (p->conf.use_syslog)
-	  ? &p->syslog_logbuffer
-	  : p->conf.access_logbuffer;
+    buffer * const b = (p->conf.use_syslog || fdlog->mode == FDLOG_PIPE)
+      ? (buffer_clear(r->tmp_buf), r->tmp_buf)
+      : &fdlog->b;
 
-	const int flush = p->conf.piped_logger
-	                | log_access_record(r, b, p->conf.parsed_format);
+    const int flush = log_access_record(r, b, p->conf.parsed_format);
 
-	if (p->conf.use_syslog) { /* syslog doesn't cache */
-#ifdef HAVE_SYSLOG_H
-		if (!buffer_is_blank(b)) {
-			/*(syslog appends a \n on its own)*/
-			syslog(p->conf.syslog_level, "%s", b->ptr);
-		}
-#endif
-		buffer_clear(b);
-	}
-	else {
-		buffer_append_string_len(b, CONST_STR_LEN("\n"));
+  #ifdef HAVE_SYSLOG_H
+    if (p->conf.use_syslog) {
+        if (!buffer_is_blank(b))
+            syslog(p->conf.syslog_level, "%s", b->ptr);
+        return HANDLER_GO_ON;
+    }
+  #endif
 
-		if (flush || buffer_clen(b) >= 8192) {
-			if (!accesslog_write_all(p->conf.log_access_fd, b)) {
-				log_perror(r->conf.errh, __FILE__, __LINE__,
-				  "writing access log entry failed: %s",
-				  p->conf.access_logfile->ptr);
-			}
-		}
-	}
+    buffer_append_string_len(b, CONST_STR_LEN("\n"));
 
-	return HANDLER_GO_ON;
+    if (flush || fdlog->mode == FDLOG_PIPE || buffer_clen(b) >= 8192) {
+        const ssize_t wr = write_all(fdlog->fd, BUF_PTR_LEN(b));
+        buffer_clear(b); /*(clear buffer, even on error)*/
+        if (-1 == wr)
+            log_perror(r->conf.errh, __FILE__, __LINE__,
+              "error flushing log %s", fdlog->fn);
+    }
+
+    return HANDLER_GO_ON;
 }
 
 
@@ -1162,7 +1060,6 @@ int mod_accesslog_plugin_init(plugin *p) {
 
 	p->handle_request_done  = log_access_write;
 	p->handle_trigger       = log_access_periodic_flush;
-	p->handle_sighup        = log_access_cycle;
 
 	return 0;
 }
