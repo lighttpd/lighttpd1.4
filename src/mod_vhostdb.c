@@ -35,8 +35,6 @@ typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
     plugin_config conf;
-
-    buffer tmp_buf;
 } plugin_data;
 
 typedef struct {
@@ -134,7 +132,6 @@ INIT_FUNC(mod_vhostdb_init) {
 
 FREE_FUNC(mod_vhostdb_free) {
     plugin_data *p = p_d;
-    free(p->tmp_buf.ptr);
 
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
@@ -273,8 +270,6 @@ static handler_t mod_vhostdb_found (request_st * const r, vhostdb_cache_entry * 
 REQUEST_FUNC(mod_vhostdb_handle_docroot) {
     plugin_data *p = p_d;
     vhostdb_cache_entry *ve;
-    const http_vhostdb_backend_t *backend;
-    buffer *b;
 
     /* no host specified? */
     if (buffer_is_blank(&r->uri.authority)) return HANDLER_GO_ON;
@@ -291,8 +286,8 @@ REQUEST_FUNC(mod_vhostdb_handle_docroot) {
     if (p->conf.vhostdb_cache && (ve = mod_vhostdb_cache_query(r, p)))
         return mod_vhostdb_found(r, ve); /* HANDLER_GO_ON */
 
-    b = &p->tmp_buf;
-    backend = p->conf.vhostdb_backend;
+    buffer * const b = r->tmp_buf; /*(cleared before use in backend->query())*/
+    const http_vhostdb_backend_t * const backend = p->conf.vhostdb_backend;
     if (0 != backend->query(r, backend->p_d, b)) {
         return mod_vhostdb_error_500(r); /* HANDLER_FINISHED */
     }

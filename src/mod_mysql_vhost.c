@@ -30,8 +30,6 @@ typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
     plugin_config conf;
-
-    buffer tmp_buf;
 } plugin_data;
 
 typedef struct {
@@ -46,7 +44,6 @@ INIT_FUNC(mod_mysql_vhost_init) {
 /* cleanup the mysql connections */
 FREE_FUNC(mod_mysql_vhost_cleanup) {
     plugin_data * const p = p_d;
-    free(p->tmp_buf.ptr);
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
     for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
@@ -291,7 +288,7 @@ REQUEST_FUNC(mod_mysql_vhost_handle_docroot) {
 	if (buffer_is_equal(c->server_name, &r->uri.authority)) goto GO_ON;
 
 	/* build and run SQL query */
-	buffer * const b = &p->tmp_buf;
+	buffer * const b = r->tmp_buf;
 	buffer_clear(b);
 	for (const char *ptr = p->conf.mysql_query->ptr, *d; *ptr; ptr = d+1) {
 		if (NULL != (d = strchr(ptr, '?'))) {

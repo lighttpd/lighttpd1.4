@@ -34,7 +34,6 @@ typedef struct {
     plugin_config defaults;
     plugin_config conf;
 
-    buffer tmp_buf;
     array split_vals;
 } plugin_data;
 
@@ -51,7 +50,6 @@ static void mod_evhost_free_path_pieces(const buffer *path_pieces) {
 
 FREE_FUNC(mod_evhost_free) {
     plugin_data * const p = p_d;
-    free(p->tmp_buf.ptr);
     array_free_data(&p->split_vals);
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
@@ -335,7 +333,7 @@ static handler_t mod_evhost_uri_handler(request_st * const r, void *p_d) {
 	/* missing even default(global) conf */
 	if (NULL == p->conf.path_pieces) return HANDLER_GO_ON;
 
-	buffer * const b = &p->tmp_buf;
+	buffer * const b = r->tmp_buf;/*(tmp_buf cleared before use in call below)*/
 	mod_evhost_build_doc_root_path(b, &p->split_vals, &r->uri.authority, p->conf.path_pieces);
 
 	if (!stat_cache_path_isdir(b)) {

@@ -22,7 +22,6 @@ typedef struct {
     plugin_config defaults;
     plugin_config conf;
 
-    buffer tmp_buf;
     buffer last_root;
 } plugin_data;
 
@@ -32,7 +31,6 @@ INIT_FUNC(mod_simple_vhost_init) {
 
 FREE_FUNC(mod_simple_vhost_free) {
     plugin_data *p = p_d;
-    free(p->tmp_buf.ptr);
     free(p->last_root.ptr);
 }
 
@@ -183,7 +181,7 @@ static handler_t mod_simple_vhost_docroot(request_st * const r, void *p_data) {
      *  are the two differences between mod_simple_vhost and mod_vhostdb) */
 
     /* build document-root */
-    buffer * const b = &p->tmp_buf;
+    buffer * const b = r->tmp_buf;/*(tmp_buf cleared before use in call below)*/
     const buffer *host = &r->uri.authority;
     if ((!buffer_is_blank(host) && build_doc_root(r, p, b, host))
         || build_doc_root(r, p, b, (host = p->conf.default_host))) {
