@@ -308,6 +308,7 @@ static server *server_init(void) {
 	log_monotonic_secs = server_monotonic_secs();
 
 	srv->errh = fdlog_init(NULL, STDERR_FILENO, FDLOG_FD);
+	log_set_global_errh(srv->errh);
 
 	config_init(srv);
 
@@ -352,6 +353,7 @@ static void server_free(server *srv) {
 	li_rand_cleanup();
 	chunkqueue_chunk_pool_free();
 
+	log_set_global_errh(NULL);
 	fdlog_free(srv->errh);
 	free(srv);
 }

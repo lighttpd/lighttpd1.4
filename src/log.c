@@ -23,6 +23,8 @@
 #include "ck.h"
 #include "fdlog.h"
 
+static buffer *errh_b;
+
 /* log_con_jqueue instance here to be defined in shared object (see base.h) */
 connection *log_con_jqueue;
 
@@ -163,7 +165,7 @@ log_buffer_vprintf (buffer * const b,
 {
     /* NOTE: log_buffer_prepare() ensures 0 != b->used */
     /*assert(0 != b->used);*//*(only because code calcs below assume this)*/
-    /*assert(0 != b->size);*//*(errh->b should not have 0 size here)*/
+    /*assert(0 != b->size);*//*(b has non-size after log_buffer_prepare())*/
     size_t blen = buffer_clen(b);
     size_t bsp  = buffer_string_space(b)+1;
     char *s = b->ptr + blen;
@@ -214,7 +216,7 @@ log_error_va_list_impl (log_error_st * const errh,
                         const int perr)
 {
     const int errnum = errno;
-    buffer * const b = &errh->b;
+    buffer * const b = errh_b ? errh_b : &errh->b;
     if (-1 == log_buffer_prepare(errh, filename, line, b)) return;
     log_buffer_vprintf(b, fmt, ap);
     if (perr)
@@ -259,7 +261,7 @@ log_error_multiline (log_error_st * const restrict errh,
     if (0 == len) return;
 
     const int errnum = errno;
-    buffer * const b = &errh->b;
+    buffer * const b = errh_b ? errh_b : &errh->b;
     if (-1 == log_buffer_prepare(errh, filename, line, b)) return;
 
     va_list ap;
@@ -282,4 +284,11 @@ log_error_multiline (log_error_st * const restrict errh,
     }
 
     errno = errnum;
+}
+
+
+void
+log_set_global_errh (log_error_st * const errh)
+{
+    errh_b = errh ? &errh->b : NULL;
 }

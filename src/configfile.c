@@ -1560,6 +1560,7 @@ int config_log_error_open(server *srv) {
                  * prior to set_defaults hook, and modules should not save a
                  * pointer to srv->errh until set_defaults hook or later)*/
                 p->defaults.errh = srv->errh = fdlog;
+                log_set_global_errh(srv->errh);
                 fdlog_free(errh);
             }
             cpv->v.v = errh = fdlog;
