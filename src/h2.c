@@ -412,22 +412,39 @@ static int
 h2_send_refused_stream (uint32_t h2id, connection * const con)
 {
     h2con * const h2c = con->h2;
-    if (0 == h2c->sent_settings  /*(see h2_recv_settings() comments)*/
-        || (h2id < 200 && log_monotonic_secs - con->connection_start < 2)) {
-        /* too many active streams; refuse new stream */
-        h2c->h2_cid = h2id;
-        h2_send_rst_stream_id(h2id, con, H2_E_REFUSED_STREAM);
-        return 1;
-    }
-    else {
-        /* alternative: stop processing frames and defer processing this
-         * HEADERS frame until num active streams drops below limit.
+
+    if (h2c->sent_settings) { /*(see h2_recv_settings() comments)*/
+        /* client connected and immediately sent flurry of request streams
+         * (h2c->sent_settings is non-zero if sent SETTINGS frame to
+         *  client and have not yet received SETTINGS ACK from client)
          * lighttpd sends SETTINGS_MAX_CONCURRENT_STREAMS <limit> with
          * server Connection Preface, so a well-behaved client will
          * adjust after it sends its initial requests.
-         * (e.g. h2load -n 100 -m 100 sends 100 requests upon connect)*/
-        return -1;
+         *   (e.g. h2load -n 100 -m 100 sends 100 requests upon connect)
+         *
+         * Check if active streams have pending request body.  If all active
+         * streams have pending request body, then must refuse new stream as
+         * progress might be blocked if active streams all wait for DATA. */
+        for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
+            const request_st * const r = h2c->r[i];
+            if (r->reqbody_length == r->reqbody_queue.bytes_in) {
+                /* no pending request body; at least this request may proceed,
+                 * though others waiting for request body may block until new
+                 * request streams become active if new request streams precede
+                 * DATA frames for active streams
+                 *
+                 * alternative to sending refused stream:
+                 * stop processing frames and defer processing this HEADERS
+                 * frame until num active streams drops below limit. */
+                return -1;
+            }
+        }
     }
+
+    /* too many active streams; refuse new stream */
+    h2c->h2_cid = h2id;
+    h2_send_rst_stream_id(h2id, con, H2_E_REFUSED_STREAM);
+    return 1;
 }
 
 
