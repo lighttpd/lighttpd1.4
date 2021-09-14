@@ -281,15 +281,16 @@ fdlog_files_cycle (fdlog_st * const errh)
         fdlog_st * const fdlog = fdlog_files.ptr[i];
         int fd = fdlog_file_open_fd(fdlog->fn);
         if (-1 != fd) {
-            if (fdlog->fd != STDERR_FILENO) {
+            if (fdlog->fd > STDERR_FILENO) {
                 close(fdlog->fd);
                 fdlog->fd = fd;
             }
-            else if (STDERR_FILENO == dup2(fd, STDERR_FILENO))
+            else {
+                if (fdlog->fd != dup2(fd, fdlog->fd))
+                    log_perror(errh, __FILE__, __LINE__,
+                      "dup2() %s to %d", fdlog->fn, fdlog->fd);
                 close(fd);
-            else
-                log_perror(errh, __FILE__, __LINE__,
-                  "dup2() %s to STDERR", fdlog->fn);
+            }
         }
         else {
             log_perror(errh, __FILE__, __LINE__,

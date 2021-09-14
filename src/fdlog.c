@@ -21,7 +21,7 @@ fdlog_init (const char * const fn, const int fd, const int mode)
 void
 fdlog_free (fdlog_st * const fdlog)
 {
-    if (fdlog->fd != STDERR_FILENO)
+    if (fdlog->fd > STDERR_FILENO)
         close(fdlog->fd);
     free(fdlog->b.ptr);
     free(fdlog);
