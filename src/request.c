@@ -749,6 +749,9 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
         }
     }
     else { /*(trailers)*/
+        if (*k == ':')
+            return http_request_header_line_invalid(r, 400,
+              "invalid pseudo-header in trailers -> 400");
         /* ignore trailers (after required HPACK decoding) if streaming
          * request body to backend since headers have already been sent
          * to backend via Common Gateway Interface (CGI) (CGI, FastCGI,

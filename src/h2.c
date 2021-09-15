@@ -1220,7 +1220,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
     const unsigned char * const endp = psrc + plen;
     http_header_parse_ctx hpctx;
     hpctx.hlen     = 0;
-    hpctx.pseudo   = 1;
+    hpctx.pseudo   = 1; /*(XXX: should be !trailers if handling trailers)*/
     hpctx.scheme   = 0;
     hpctx.trailers = trailers;
     hpctx.max_request_field_size = r->conf.max_request_field_size;
@@ -1252,7 +1252,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
         rc = lshpack_dec_decode(decoder, &psrc, endp, &lsx);
         if (0 == lsx.name_len)
             rc = LSHPACK_ERR_BAD_DATA;
-        if (rc == LSHPACK_OK) {
+        if (__builtin_expect( (rc == LSHPACK_OK), 1)) {
             hpctx.k = lsx.buf+lsx.name_offset;
             hpctx.v = lsx.buf+lsx.val_offset;
             hpctx.klen = lsx.name_len;
@@ -1265,9 +1265,12 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
                   "fd:%d id:%u rqst: %.*s: %.*s", r->con->fd, r->h2id,
                   (int)hpctx.klen, hpctx.k, (int)hpctx.vlen, hpctx.v);
 
-            r->http_status = http_request_parse_header(r, &hpctx);
-            if (0 != r->http_status)
+            const int http_status = http_request_parse_header(r, &hpctx);
+            if (__builtin_expect( (0 != http_status), 0)) {
+                if (r->http_status == 0) /*might be set if processing trailers*/
+                    r->http_status = http_status;
                 break;
+            }
         }
       #if 0 /*(see catch-all below)*/
         /* Send GOAWAY (further below) (decoder state not maintained on error)
@@ -1319,7 +1322,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
     rq->bytes_in  += (off_t)hpctx.hlen;
     rq->bytes_out += (off_t)hpctx.hlen;
 
-    if (0 == r->http_status && LSHPACK_OK == rc) {
+    if (0 == r->http_status && LSHPACK_OK == rc && !trailers) {
         if (hpctx.pseudo)
             r->http_status =
               http_request_validate_pseudohdrs(r, hpctx.scheme,
