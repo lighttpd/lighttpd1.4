@@ -1460,6 +1460,7 @@ static void connection_check_timeout (connection * const con, const unix_time64_
                               con->fd);
                 }
                 connection_set_state(r, CON_STATE_RESPONSE_END);
+                con->is_readable = 0;
                 changed = 1;
             }
         }
