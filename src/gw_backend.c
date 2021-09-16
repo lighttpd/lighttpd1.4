@@ -1389,6 +1389,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
             host->max_procs    = 4;
             host->max_load_per_proc = 1;
             host->idle_timeout = 60;
+            host->connect_timeout = 8;
             host->disable_time = 1;
             host->break_scriptfilename_for_php = 0;
             host->kill_signal = SIGTERM;
