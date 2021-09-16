@@ -1346,10 +1346,12 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
     request_st *r = NULL;
     h2con * const h2c = con->h2;
     const uint32_t id = h2_u31(s+5);
+  #if 0 /*(included in (!(id & 1)) below)*/
     if (0 == id) { /* HEADERS, PUSH_PROMISE stream id must != 0 */
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return 0;
     }
+  #endif
     if (!(id & 1)) { /* stream id from client must be odd */
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return 0;
