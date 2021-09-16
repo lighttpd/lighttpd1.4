@@ -1460,10 +1460,12 @@ static void connection_check_timeout (connection * const con, const unix_time64_
                               con->fd);
                 }
                 connection_set_state(r, CON_STATE_RESPONSE_END);
-                con->is_readable = 0;
                 changed = 1;
             }
         }
+        /* process changes before optimistic read of additional HTTP/2 frames */
+        if (changed)
+            con->is_readable = 0;
     }
     else if (waitevents & FDEVENT_IN) {
         if (con->request_count == 1 || r->state != CON_STATE_READ) {
