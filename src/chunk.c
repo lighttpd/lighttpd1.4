@@ -144,7 +144,7 @@ static void chunk_push_oversized(chunk * const c, const size_t sz) {
 }
 
 __attribute_returns_nonnull__
-static buffer * chunk_buffer_acquire_sz(size_t sz) {
+static buffer * chunk_buffer_acquire_sz(const size_t sz) {
     chunk *c;
     buffer *b;
     if (sz <= (chunk_buf_sz|1)) {
@@ -159,11 +159,15 @@ static buffer * chunk_buffer_acquire_sz(size_t sz) {
              * (and if doing so, might replace chunks_oversized_n) */
     }
     else {
-        /*(round up to nearest chunk_buf_sz)*/
-        sz = (sz + (chunk_buf_sz-1)) & ~(chunk_buf_sz-1);
         c = chunk_pop_oversized(sz);
-        if (NULL == c)
-            c = chunk_init(sz);
+        if (NULL == c) {
+            /*(round up to nearest chunk_buf_sz)*/
+            /* NB: round down power-2 + 1 to avoid excess allocation
+             *   (sz & ~1uL) relies on buffer_realloc() adding +1 *and* on callers
+             *   of this func never passing power-2 + 1 sz unless the direct caller
+             *   adds +1 for '\0', as is done in chunk_buffer_prepare_append() */
+            c = chunk_init(((sz & ~1uL)+(chunk_buf_sz-1)) & ~(chunk_buf_sz-1));
+        }
     }
     c->next = chunk_buffers;
     chunk_buffers = c;

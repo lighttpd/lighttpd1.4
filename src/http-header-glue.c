@@ -1207,7 +1207,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
 
         if (avail < toread) {
             /*(add avail+toread to reduce allocations when ioctl EOPNOTSUPP)*/
-            avail = avail ? avail - 1 + toread : toread;
+            avail = toread < MAX_READ_LIMIT && avail ? avail-1+toread : toread;
             avail = chunk_buffer_prepare_append(b, avail);
         }
 
