@@ -194,24 +194,16 @@ static int http_chunk_append_cq_to_tempfile(request_st * const r, chunkqueue * c
 
 /*(inlined by compiler optimizer)*/
 __attribute_pure__
-static int http_chunk_uses_tempfile(const request_st * const r, const chunkqueue * const cq, const size_t len) {
+static int http_chunk_uses_tempfile(const chunkqueue * const cq, const size_t len) {
 
     /* current usage does not append_mem or append_buffer after appending
      * file, so not checking if users of this interface have appended large
      * (references to) files to chunkqueue, which would not be in memory
      * (but included in calculation for whether or not to use temp file) */
-
-    /*(allow slightly larger mem use if FDEVENT_STREAM_RESPONSE_BUFMIN
-     * to reduce creation of temp files when backend producer will be
-     * blocked until more data is sent to network to client)*/
-
     const chunk * const c = cq->last;
     return
       ((c && c->type == FILE_CHUNK && c->file.is_temp)
-       || chunkqueue_length(cq) + len
-          > ((r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
-             ? 128*1024
-             :  64*1024));
+       || chunkqueue_length(cq) + len > 65536);
 }
 
 __attribute_noinline__
@@ -221,7 +213,7 @@ int http_chunk_append_buffer(request_st * const r, buffer * const mem) {
 
     chunkqueue * const cq = &r->write_queue;
 
-    if (http_chunk_uses_tempfile(r, cq, len)) {
+    if (http_chunk_uses_tempfile(cq, len)) {
         int rc = http_chunk_append_to_tempfile(r, mem->ptr, len);
         buffer_clear(mem);
         return rc;
@@ -246,7 +238,7 @@ int http_chunk_append_mem(request_st * const r, const char * const mem, const si
 
     chunkqueue * const cq = &r->write_queue;
 
-    if (http_chunk_uses_tempfile(r, cq, len))
+    if (http_chunk_uses_tempfile(cq, len))
         return http_chunk_append_to_tempfile(r, mem, len);
 
     if (r->resp_send_chunked)
@@ -265,7 +257,7 @@ int http_chunk_transfer_cqlen(request_st * const r, chunkqueue * const src, cons
 
     chunkqueue * const cq = &r->write_queue;
 
-    if (http_chunk_uses_tempfile(r, cq, len))
+    if (http_chunk_uses_tempfile(cq, len))
         return http_chunk_append_cq_to_tempfile(r, src, len);
 
     if (r->resp_send_chunked)

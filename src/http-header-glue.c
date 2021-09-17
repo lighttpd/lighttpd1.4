@@ -1153,6 +1153,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
     const int fd = fdn->fd;
     ssize_t n;
     size_t avail;
+    /*size_t total = 0;*/
     do {
         unsigned int toread = 0;
         avail = buffer_string_space(b);
@@ -1162,8 +1163,8 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
                 uint32_t blen = buffer_clen(b);
                 if (toread + blen < 4096)
                     toread = 4095 - blen;
-                else if (toread > MAX_READ_LIMIT)
-                    toread = MAX_READ_LIMIT;
+                else if (toread > opts->max_per_read)
+                    toread = opts->max_per_read;
             }
             else if (0 == toread) {
               #if 0
@@ -1212,7 +1213,9 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
 
         if (avail < toread) {
             /*(add avail+toread to reduce allocations when ioctl EOPNOTSUPP)*/
-            avail = toread < MAX_READ_LIMIT && avail ? avail-1+toread : toread;
+            avail = toread < opts->max_per_read && avail
+              ? avail-1+toread
+              : toread;
             avail = chunk_buffer_prepare_append(b, avail);
         }
 
@@ -1314,8 +1317,9 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
                 break;
             }
         }
-    } while ((size_t)n == avail);
-    /* else emptied kernel read buffer or partial read */
+    } while (0); /*(extra logic might benefit systems without FIONREAD)*/
+    /*while ((size_t)n == avail && (total += (size_t)n) < opts->max_per_read);*/
+    /* else emptied kernel read buffer or partial read or reached read limit */
 
     if (buffer_is_blank(b)) chunk_buffer_yield(b); /*(improve large buf reuse)*/
 

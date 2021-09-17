@@ -64,7 +64,6 @@ static int proxy_check_extforward;
 
 typedef struct {
 	gw_handler_ctx gw;
-	http_response_opts opts;
 	plugin_config conf;
 } handler_ctx;
 

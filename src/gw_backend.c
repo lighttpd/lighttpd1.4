@@ -2629,6 +2629,13 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
     hctx->conf.proto       = p->conf.proto;
     hctx->conf.debug       = p->conf.debug;
 
+    hctx->opts.max_per_read =
+      !(r->conf.stream_response_body /*(if not streaming response body)*/
+        & (FDEVENT_STREAM_RESPONSE|FDEVENT_STREAM_RESPONSE_BUFMIN))
+        ? 262144
+        : (r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
+          ? 16384  /* FDEVENT_STREAM_RESPONSE_BUFMIN */
+          : 65536; /* FDEVENT_STREAM_RESPONSE */
     hctx->opts.fdfmt = S_IFSOCK;
     hctx->opts.authorizer = (gw_mode == GW_AUTHORIZER);
     hctx->opts.local_redir = 0;

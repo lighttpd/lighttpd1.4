@@ -21,6 +21,7 @@ enum {
 };
 
 typedef struct http_response_opts_t {
+  uint32_t max_per_read;
   int fdfmt;
   int backend;
   int authorizer; /* bool */

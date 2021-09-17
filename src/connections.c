@@ -1896,8 +1896,14 @@ connection_handle_read_post_state (request_st * const r)
     }
     else if (con->is_readable > 0) {
         con->read_idle_ts = log_monotonic_secs;
-
-        switch(con->network_read(con, cq, MAX_READ_LIMIT)) {
+        const off_t max_per_read =
+          !(r->conf.stream_request_body /*(if not streaming request body)*/
+            & (FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN))
+            ? MAX_READ_LIMIT
+            : (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)
+              ? 16384  /* FDEVENT_STREAM_REQUEST_BUFMIN */
+              : 65536; /* FDEVENT_STREAM_REQUEST */
+        switch(con->network_read(con, cq, max_per_read)) {
         case -1:
             connection_set_state_error(r, CON_STATE_ERROR);
             return HANDLER_ERROR;

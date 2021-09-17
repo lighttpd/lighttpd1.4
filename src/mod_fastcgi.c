@@ -497,7 +497,8 @@ static handler_t fcgi_check_extension(request_st * const r, void *p_d, int uri_p
 		handler_ctx *hctx = r->plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_FASTCGI;
 		hctx->opts.parse = fcgi_recv_parse;
-		hctx->opts.pdata = hctx;
+		hctx->opts.pdata = hctx;   /*(skip +255 for potential padding)*/
+		hctx->opts.max_per_read = sizeof(FCGI_Header)+FCGI_MAX_LENGTH+1;
 		hctx->stdin_append = fcgi_stdin_append;
 		hctx->create_env = fcgi_create_env;
 		if (!hctx->rb) {
