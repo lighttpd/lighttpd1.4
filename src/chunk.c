@@ -144,8 +144,15 @@ static void chunk_push_oversized(chunk * const c, const size_t sz) {
         c->next = *co;
         *co = c;
     }
-    else
+    else {
+        buffer * const tb = chunks_oversized ? chunks_oversized->mem : NULL;
+        if (tb && tb->size < sz) {
+            /* swap larger mem block onto head of list; free smaller mem */
+            chunks_oversized->mem = c->mem;
+            c->mem = tb;
+        }
         chunk_free(c);
+    }
 }
 
 __attribute_returns_nonnull__
