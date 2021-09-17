@@ -739,6 +739,7 @@ static int http_response_append_buffer(request_st * const r, buffer * const mem,
     }
     else if (0 == r->resp_body_scratchpad) {
         /*(silently truncate if data exceeds Content-Length)*/
+        buffer_clear(mem);
         return 0;
     }
     else if (simple_accum
@@ -1195,7 +1196,11 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
                      * mod_proxy_handle_subrequest())*/
                     fdevent_fdnode_event_clr(r->con->srv->ev, fdn, FDEVENT_IN);
                 }
-                if (cqlen >= 65536-1) return HANDLER_GO_ON;
+                if (cqlen >= 65536-1) {
+                    if (buffer_is_blank(b))
+                        chunk_buffer_yield(b); /*(improve large buf reuse)*/
+                    return HANDLER_GO_ON;
+                }
                 toread = 65536 - 1 - (unsigned int)cqlen;
                 /* Note: heuristic is fuzzy in that it limits how much to read
                  * from backend based on how much is pending to write to client.
@@ -1222,6 +1227,8 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
              #endif
              #endif
               case EINTR:
+                if (buffer_is_blank(b))
+                    chunk_buffer_yield(b); /*(improve large buf reuse)*/
                 return HANDLER_GO_ON;
               default:
                 log_perror(r->conf.errh, __FILE__, __LINE__,
@@ -1240,9 +1247,12 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
             handler_t rc = opts->parse(r, opts, b, (size_t)n);
             if (rc != HANDLER_GO_ON) return rc;
         } else if (0 == n) {
-            if (!buffer_is_blank(b) && opts->simple_accum) {
+            if (buffer_is_blank(b))
+                chunk_buffer_yield(b); /*(improve large buf reuse)*/
+            else if (opts->simple_accum) {
                 /*(flush small reads previously accumulated in b)*/
                 int rc = http_response_append_buffer(r, b, 0); /*(0 to flush)*/
+                chunk_buffer_yield(b); /*(improve large buf reuse)*/
                 if (__builtin_expect( (0 != rc), 0)) {
                     /* error writing to tempfile;
                      * truncate response or send 500 if nothing sent yet */
@@ -1306,6 +1316,8 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
         }
     } while ((size_t)n == avail);
     /* else emptied kernel read buffer or partial read */
+
+    if (buffer_is_blank(b)) chunk_buffer_yield(b); /*(improve large buf reuse)*/
 
     return (!r->resp_body_finished ? HANDLER_GO_ON : HANDLER_FINISHED);
 }

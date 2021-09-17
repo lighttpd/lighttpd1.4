@@ -137,6 +137,7 @@ static chunk * chunk_pop_oversized(size_t sz) {
 }
 
 static void chunk_push_oversized(chunk * const c, const size_t sz) {
+    /* XXX: chunk_buffer_yield() may have removed need for list size limit */
     if (chunks_oversized_n < 64 && chunk_buf_sz >= 4096) {
         ++chunks_oversized_n;
         chunk **co = &chunks_oversized;
@@ -166,9 +167,6 @@ static buffer * chunk_buffer_acquire_sz(const size_t sz) {
         }
         else
             c = chunk_init_sz(chunk_buf_sz);
-            /* future: might choose to pop from chunks_oversized, if available
-             * (even if larger than sz) rather than allocating new chunk
-             * (and if doing so, might replace chunks_oversized_n) */
     }
     else {
         c = chunk_pop_oversized(sz);
@@ -211,6 +209,16 @@ void chunk_buffer_release(buffer *b) {
     else {
         buffer_free(b);
     }
+}
+
+void chunk_buffer_yield(buffer *b) {
+    if (b->size == (chunk_buf_sz|1)) return;
+
+    buffer * const cb = chunk_buffer_acquire_sz(chunk_buf_sz);
+    buffer tb = *b;
+    *b = *cb;
+    *cb = tb;
+    chunk_buffer_release(cb);
 }
 
 size_t chunk_buffer_prepare_append(buffer * const b, size_t sz) {
