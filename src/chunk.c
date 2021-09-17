@@ -25,7 +25,7 @@
 #define DEFAULT_TEMPFILE_SIZE (1 * 1024 * 1024)
 
 static size_t chunk_buf_sz = 8192;
-static chunk *chunks, *chunks_oversized;
+static chunk *chunks, *chunks_oversized, *chunks_filechunk;
 static chunk *chunk_buffers;
 static int chunks_oversized_n;
 static const array *chunkqueue_default_tempdirs = NULL;
@@ -62,7 +62,7 @@ chunkqueue *chunkqueue_init(chunkqueue *cq) {
 }
 
 __attribute_returns_nonnull__
-static chunk *chunk_init(size_t sz) {
+static chunk *chunk_init(void) {
 	chunk * const restrict c = calloc(1, sizeof(*c));
 	force_assert(NULL != c);
 
@@ -78,8 +78,13 @@ static chunk *chunk_init(size_t sz) {
 	c->file.mmap.start = MAP_FAILED;
 
 	c->mem = buffer_init();
-	buffer_string_prepare_copy(c->mem, sz-1);
+	return c;
+}
 
+__attribute_returns_nonnull__
+static chunk *chunk_init_sz(size_t sz) {
+	chunk * const restrict c = chunk_init();
+	buffer_string_prepare_copy(c->mem, sz-1);
 	return c;
 }
 
@@ -153,7 +158,7 @@ static buffer * chunk_buffer_acquire_sz(const size_t sz) {
             chunks = c->next;
         }
         else
-            c = chunk_init(chunk_buf_sz);
+            c = chunk_init_sz(chunk_buf_sz);
             /* future: might choose to pop from chunks_oversized, if available
              * (even if larger than sz) rather than allocating new chunk
              * (and if doing so, might replace chunks_oversized_n) */
@@ -163,10 +168,10 @@ static buffer * chunk_buffer_acquire_sz(const size_t sz) {
         if (NULL == c) {
             /*(round up to nearest chunk_buf_sz)*/
             /* NB: round down power-2 + 1 to avoid excess allocation
-             *   (sz & ~1uL) relies on buffer_realloc() adding +1 *and* on callers
-             *   of this func never passing power-2 + 1 sz unless the direct caller
-             *   adds +1 for '\0', as is done in chunk_buffer_prepare_append() */
-            c = chunk_init(((sz & ~1uL)+(chunk_buf_sz-1)) & ~(chunk_buf_sz-1));
+             * (sz & ~1uL) relies on buffer_realloc() adding +1 *and* on callers
+             * of this func never passing power-2 + 1 sz unless direct caller
+             * adds +1 for '\0', as is done in chunk_buffer_prepare_append() */
+            c = chunk_init_sz(((sz&~1uL)+(chunk_buf_sz-1)) & ~(chunk_buf_sz-1));
         }
     }
     c->next = chunk_buffers;
@@ -234,7 +239,7 @@ static chunk * chunk_acquire(size_t sz) {
         if (c) return c;
     }
 
-    return chunk_init(sz);
+    return chunk_init_sz(sz);
 }
 
 static void chunk_release(chunk *c) {
@@ -248,9 +253,24 @@ static void chunk_release(chunk *c) {
         chunk_reset(c);
         chunk_push_oversized(c, sz);
     }
+    else if (c->type == FILE_CHUNK) {
+        chunk_reset(c);
+        c->next = chunks_filechunk;
+        chunks_filechunk = c;
+    }
     else {
         chunk_free(c);
     }
+}
+
+__attribute_returns_nonnull__
+static chunk * chunk_acquire_filechunk(void) {
+    if (chunks_filechunk) {
+        chunk *c = chunks_filechunk;
+        chunks_filechunk = c->next;
+        return c;
+    }
+    return chunk_init();
 }
 
 void chunkqueue_chunk_pool_clear(void)
@@ -266,6 +286,11 @@ void chunkqueue_chunk_pool_clear(void)
     }
     chunks_oversized = NULL;
     chunks_oversized_n = 0;
+    for (chunk *next, *c = chunks_filechunk; c; c = next) {
+        next = c->next;
+        chunk_free(c);
+    }
+    chunks_filechunk = NULL;
 }
 
 void chunkqueue_chunk_pool_free(void)
@@ -273,8 +298,12 @@ void chunkqueue_chunk_pool_free(void)
     chunkqueue_chunk_pool_clear();
     for (chunk *next, *c = chunk_buffers; c; c = next) {
         next = c->next;
+      #if 1 /*(chunk_buffers contains MEM_CHUNK with (c->mem == NULL))*/
+        free(c);
+      #else /*(c->mem = buffer_init() is no longer necessary below)*/
         c->mem = buffer_init(); /*(chunk_reset() expects c->mem != NULL)*/
         chunk_free(c);
+      #endif
     }
     chunk_buffers = NULL;
 }
@@ -327,15 +356,16 @@ static chunk * chunkqueue_append_mem_chunk(chunkqueue *cq, size_t sz) {
     return c;
 }
 
+__attribute_nonnull__
 __attribute_returns_nonnull__
 static chunk * chunkqueue_append_file_chunk(chunkqueue * const restrict cq, const buffer * const restrict fn, off_t offset, off_t len) {
-    chunk *c = chunk_acquire((fn ? buffer_clen(fn) : 0)+1);
+    chunk * const c = chunk_acquire_filechunk();
     chunkqueue_append_chunk(cq, c);
     c->type = FILE_CHUNK;
     c->offset = offset;
     c->file.length = offset + len;
     cq->bytes_in += len;
-    if (fn) buffer_copy_buffer(c->mem, fn);
+    buffer_copy_buffer(c->mem, fn);
     return c;
 }
 
@@ -405,7 +435,7 @@ void chunkqueue_append_mem_min(chunkqueue * const restrict cq, const char * cons
 	if (len < chunk_buf_sz && chunkqueue_append_mem_extend_chunk(cq, mem, len))
 		return;
 
-	c = chunk_init(len+1);
+	c = chunk_init_sz(len+1);
 	chunkqueue_append_chunk(cq, c);
 	cq->bytes_in += len;
 	buffer_copy_string_len(c->mem, mem, len);
