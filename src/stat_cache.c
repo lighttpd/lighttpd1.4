@@ -237,6 +237,7 @@ typedef struct stat_cache_fam {
 	int fd;
 } stat_cache_fam;
 
+__attribute_returns_nonnull__
 static fam_dir_entry * fam_dir_entry_init(const char *name, size_t len)
 {
     fam_dir_entry * const fam_dir = calloc(1, sizeof(*fam_dir));
@@ -789,6 +790,8 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
 #endif
 
 
+__attribute_malloc__
+__attribute_returns_nonnull__
 static stat_cache_entry * stat_cache_entry_init(void) {
     stat_cache_entry *sce = calloc(1, sizeof(*sce));
     force_assert(NULL != sce);

@@ -29,6 +29,7 @@ typedef struct {
 } buffer;
 
 /* create new buffer; either empty or copy given data */
+__attribute_malloc__
 __attribute_returns_nonnull__
 buffer* buffer_init(void);
 

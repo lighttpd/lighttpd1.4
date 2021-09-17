@@ -281,8 +281,12 @@ int fdevent_reset(fdevents *ev) {
 	return rc;
 }
 
+__attribute_malloc__
+__attribute_returns_nonnull__
 static fdnode *fdnode_init(void) {
-	return calloc(1, sizeof(fdnode));
+	fdnode * const restrict fdn = calloc(1, sizeof(fdnode));
+	force_assert(NULL != fdn);
+	return fdn;
 }
 
 static void fdnode_free(fdnode *fdn) {
@@ -291,7 +295,6 @@ static void fdnode_free(fdnode *fdn) {
 
 fdnode * fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx) {
 	fdnode *fdn  = ev->fdarray[fd] = fdnode_init();
-	force_assert(NULL != fdn);
 	fdn->handler = handler;
 	fdn->fd      = fd;
 	fdn->ctx     = ctx;

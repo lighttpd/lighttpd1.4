@@ -53,6 +53,8 @@ typedef enum {
 	PLUGIN_FUNC_SIZEOF
 } plugin_t;
 
+__attribute_malloc__
+__attribute_returns_nonnull__
 static plugin *plugin_init(void) {
 	plugin *p;
 

@@ -158,6 +158,7 @@ static void gw_proc_init_portpath(gw_host *host, gw_proc *proc) {
 
 __attribute_cold__
 __attribute_noinline__
+__attribute_returns_nonnull__
 static gw_proc *gw_proc_init(gw_host *host) {
     gw_proc *proc = calloc(1, sizeof(*proc));
     force_assert(proc);
@@ -188,6 +189,8 @@ static void gw_proc_free(gw_proc *proc) {
     free(proc);
 }
 
+__attribute_malloc__
+__attribute_returns_nonnull__
 static gw_host *gw_host_init(void) {
     gw_host *f = calloc(1, sizeof(*f));
     force_assert(f);
@@ -209,6 +212,8 @@ static void gw_host_free(gw_host *h) {
     free(h);
 }
 
+__attribute_malloc__
+__attribute_returns_nonnull__
 static gw_exts *gw_extensions_init(void) {
     gw_exts *f = calloc(1, sizeof(*f));
     force_assert(f);
@@ -1108,6 +1113,7 @@ static void gw_restart_dead_procs(gw_host * const host, log_error_st * const err
 static handler_t gw_handle_fdevent(void *ctx, int revents);
 
 
+__attribute_returns_nonnull__
 static gw_handler_ctx * handler_ctx_init(size_t sz) {
     gw_handler_ctx *hctx = calloc(1, 0 == sz ? sizeof(*hctx) : sz);
     force_assert(hctx);

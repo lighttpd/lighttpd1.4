@@ -13,7 +13,6 @@ typedef struct fdlog_st {
 } fdlog_st;
 
 __attribute_cold__
-__attribute_malloc__
 __attribute_returns_nonnull__
 fdlog_st * fdlog_init (const char *fn, int fd, int mode);
 

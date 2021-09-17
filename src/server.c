@@ -274,6 +274,7 @@ server_epoch_secs (server * const srv)
 
 __attribute_cold__
 __attribute_noinline__
+__attribute_returns_nonnull__
 static server *server_init(void) {
 	server *srv = calloc(1, sizeof(*srv));
 	force_assert(srv);
