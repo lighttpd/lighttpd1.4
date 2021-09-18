@@ -1560,8 +1560,7 @@ int config_log_error_open(server *srv) {
                  * prior to set_defaults hook, and modules should not save a
                  * pointer to srv->errh until set_defaults hook or later)*/
                 p->defaults.errh = srv->errh = fdlog;
-                log_set_global_errh(srv->errh);
-                fdlog_free(errh);
+                log_set_global_errh(srv->errh, 0);
             }
             cpv->v.v = errh = fdlog;
             cpv->vtype = T_CONFIG_LOCAL;
@@ -1569,6 +1568,14 @@ int config_log_error_open(server *srv) {
             if (0 == i && errh != srv->errh) /*(top-level server.breakagelog)*/
                 serrh = errh;
         }
+    }
+
+    if (NULL != srv->srvconf.feature_flags) {
+        data_unset * const du =
+          array_get_data_unset(srv->srvconf.feature_flags,
+                               CONST_STR_LEN("server.errorlog-high-precision"));
+        if (config_plugin_value_tobool(du, 0))
+            log_set_global_errh(srv->errh, 1);
     }
 
     if (srv->srvconf.errorlog_use_syslog) /*(restricted to global scope)*/
