@@ -16,9 +16,10 @@ $HTTP["host"] == "download.example.com" {
   server.document-root = vhosts_dir + "/example.com/download/htdocs"
   ##
   ## use a seperate access log file
-  ## At the moment you cant have different error log files.
+  ## Since lighttpd 1.4.56, server.errorlog can also be used in virtual hosts.
   ##
   accesslog.filename          = log_root + "/" + server_name + "/access.log"
+  server.errorlog             = log_root + "/" + server_name + "/error.log"
 }
 
 $SERVER["socket"] == "127.0.0.1:443" {
