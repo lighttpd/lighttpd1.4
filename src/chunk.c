@@ -639,41 +639,44 @@ void chunkqueue_steal(chunkqueue * const restrict dest, chunkqueue * const restr
 	}
 }
 
+static int chunkqueue_get_append_mkstemp(buffer * const b, const char *path, const uint32_t len) {
+    buffer_copy_path_len2(b,path,len,CONST_STR_LEN("lighttpd-upload-XXXXXX"));
+    return fdevent_mkstemp_append(b->ptr);
+}
+
 static chunk *chunkqueue_get_append_tempfile(chunkqueue * const restrict cq, log_error_st * const restrict errh) {
-	chunk *c;
-	buffer *template = buffer_init_string("/var/tmp/lighttpd-upload-XXXXXX");
-	int fd = -1;
+    static const buffer emptyb = { "", 0, 0 };
+    chunk * const restrict last = cq->last;
+    chunk * const restrict c = chunkqueue_append_file_chunk(cq, &emptyb, 0, 0);
+    buffer * const restrict template = c->mem;
+    c->file.is_temp = 1;
 
-	if (cq->tempdirs && cq->tempdirs->used) {
-		/* we have several tempdirs, only if all of them fail we jump out */
+    if (cq->tempdirs && cq->tempdirs->used) {
+        /* we have several tempdirs, only if all of them fail we jump out */
+        for (errno = EIO; cq->tempdir_idx < cq->tempdirs->used; ++cq->tempdir_idx) {
+            data_string *ds = (data_string *)cq->tempdirs->data[cq->tempdir_idx];
+            c->file.fd =
+              chunkqueue_get_append_mkstemp(template, BUF_PTR_LEN(&ds->value));
+            if (-1 != c->file.fd) return c;
+        }
+    }
+    else {
+        c->file.fd =
+          chunkqueue_get_append_mkstemp(template, CONST_STR_LEN("/var/tmp"));
+        if (-1 != c->file.fd) return c;
+    }
 
-		for (errno = EIO; cq->tempdir_idx < cq->tempdirs->used; ++cq->tempdir_idx) {
-			data_string *ds = (data_string *)cq->tempdirs->data[cq->tempdir_idx];
-			buffer_copy_path_len2(template,
-			                      BUF_PTR_LEN(&ds->value),
-			                      CONST_STR_LEN("lighttpd-upload-XXXXXX"));
-			if (-1 != (fd = fdevent_mkstemp_append(template->ptr))) break;
-		}
-	} else {
-		fd = fdevent_mkstemp_append(template->ptr);
-	}
-
-	if (fd < 0) {
-		/* (report only the last error to mkstemp()
-		 *  if multiple temp dirs attempted) */
-		log_perror(errh, __FILE__, __LINE__,
-		  "opening temp-file failed: %s", template->ptr);
-		buffer_free(template);
-		return NULL;
-	}
-
-	c = chunkqueue_append_file_chunk(cq, template, 0, 0);
-	c->file.fd = fd;
-	c->file.is_temp = 1;
-
-	buffer_free(template);
-
-	return c;
+    /* (report only last error to mkstemp() even if multiple temp dirs tried) */
+    log_perror(errh, __FILE__, __LINE__,
+      "opening temp-file failed: %s", template->ptr);
+    /* remove (failed) final chunk */
+    c->file.is_temp = 0;
+    if ((cq->last = last))
+        last->next = NULL;
+    else
+        cq->first = NULL;
+    chunk_release(c);
+    return NULL;
 }
 
 __attribute_cold__
