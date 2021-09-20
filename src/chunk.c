@@ -644,7 +644,7 @@ static int chunkqueue_get_append_mkstemp(buffer * const b, const char *path, con
     return fdevent_mkstemp_append(b->ptr);
 }
 
-static chunk *chunkqueue_get_append_tempfile(chunkqueue * const restrict cq, log_error_st * const restrict errh) {
+static chunk *chunkqueue_get_append_newtempfile(chunkqueue * const restrict cq, log_error_st * const restrict errh) {
     static const buffer emptyb = { "", 0, 0 };
     chunk * const restrict last = cq->last;
     chunk * const restrict c = chunkqueue_append_file_chunk(cq, &emptyb, 0, 0);
@@ -679,6 +679,67 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue * const restrict cq, log
     return NULL;
 }
 
+static chunk *chunkqueue_get_append_tempfile(chunkqueue * const restrict cq, log_error_st * const restrict errh) {
+    /*
+     * if the last chunk is
+     * - smaller than cq->upload_temp_file_size
+     * - not read yet (offset == 0)
+     * -> append to it (and it then might exceed cq->upload_temp_file_size)
+     * otherwise
+     * -> create a new chunk
+     */
+
+    chunk * const c = cq->last;
+    if (NULL != c
+        && FILE_CHUNK == c->type
+        && c->file.is_temp
+        && c->file.fd >= 0
+        && 0 == c->offset) {
+
+        if (c->file.length < (off_t)cq->upload_temp_file_size)
+            return c; /* ok, take the last chunk for our job */
+
+        /* the chunk is too large now, close it */
+        force_assert(0 == c->file.refchg); /*(else should not happen)*/
+        int rc = close(c->file.fd);
+        c->file.fd = -1;
+        if (0 != rc) {
+            log_perror(errh, __FILE__, __LINE__,
+              "close() temp-file %s failed", c->mem->ptr);
+            return NULL;
+        }
+    }
+    return chunkqueue_get_append_newtempfile(cq, errh);
+}
+
+__attribute_cold__
+static int chunkqueue_append_tempfile_err(chunkqueue * const cq, log_error_st * const restrict errh, chunk * const c) {
+    const int errnum = errno;
+    if (errnum == EINTR) return 1; /* retry */
+
+    int retry = (errnum == ENOSPC && cq->tempdirs
+                 && ++cq->tempdir_idx < cq->tempdirs->used);
+    if (!retry)
+        log_perror(errh, __FILE__, __LINE__,
+          "write() temp-file %s failed", c->mem->ptr);
+
+    if (0 == chunk_remaining_length(c)) {
+        /*(remove empty chunk and unlink tempfile)*/
+        chunkqueue_remove_empty_chunks(cq);
+    }
+    else {/*(close tempfile; avoid later attempts to append)*/
+        force_assert(0 == c->file.refchg); /*(else should not happen)*/
+        int rc = close(c->file.fd);
+        c->file.fd = -1;
+        if (0 != rc) {
+            log_perror(errh, __FILE__, __LINE__,
+              "close() temp-file %s failed", c->mem->ptr);
+            retry = 0;
+        }
+    }
+    return retry;
+}
+
 __attribute_cold__
 __attribute_noinline__
 static int chunkqueue_to_tempfiles(chunkqueue * const restrict dest, log_error_st * const restrict errh) {
@@ -708,55 +769,18 @@ int chunkqueue_append_mem_to_tempfile(chunkqueue * const restrict dest, const ch
 	}
 
 	do {
-		/*
-		 * if the last chunk is
-		 * - smaller than dest->upload_temp_file_size
-		 * - not read yet (offset == 0)
-		 * -> append to it (so it might actually become larger than dest->upload_temp_file_size)
-		 * otherwise
-		 * -> create a new chunk
-		 *
-		 * */
-
-		dst_c = dest->last;
-		if (NULL != dst_c
-			&& FILE_CHUNK == dst_c->type
-			&& dst_c->file.is_temp
-			&& dst_c->file.fd >= 0
-			&& 0 == dst_c->offset) {
-			/* ok, take the last chunk for our job */
-
-			if (dst_c->file.length >= (off_t)dest->upload_temp_file_size) {
-				/* the chunk is too large now, close it */
-				force_assert(0 == dst_c->file.refchg); /*(else should not happen)*/
-				int rc = close(dst_c->file.fd);
-				dst_c->file.fd = -1;
-				if (0 != rc) {
-					log_perror(errh, __FILE__, __LINE__,
-					  "close() temp-file %s failed", dst_c->mem->ptr);
-					return -1;
-				}
-				dst_c = NULL;
-			}
-		} else {
-			dst_c = NULL;
-		}
-
-		if (NULL == dst_c && NULL == (dst_c = chunkqueue_get_append_tempfile(dest, errh))) {
+		dst_c = chunkqueue_get_append_tempfile(dest, errh);
+		if (NULL == dst_c)
 			return -1;
-		}
 	      #ifdef __COVERITY__
 		if (dst_c->file.fd < 0) return -1;
 	      #endif
-
-		/* (dst_c->file.fd >= 0) */
 		/* coverity[negative_returns : FALSE] */
 		const ssize_t written = write(dst_c->file.fd, mem, len);
 
 		if ((size_t) written == len) {
 			dst_c->file.length += len;
 			dest->bytes_in += len;
-
 			return 0;
 		} else if (written >= 0) {
 			/*(assume EINTR if partial write and retry write();
@@ -766,34 +790,10 @@ int chunkqueue_append_mem_to_tempfile(chunkqueue * const restrict dest, const ch
 			len -= (size_t)written;
 			dst_c->file.length += (size_t)written;
 			/* continue; retry */
-		} else if (errno == EINTR) {
-			/* continue; retry */
-		} else {
-			int retry = (errno == ENOSPC && dest->tempdirs && ++dest->tempdir_idx < dest->tempdirs->used);
-			if (!retry) {
-				log_perror(errh, __FILE__, __LINE__,
-				  "write() temp-file %s failed", dst_c->mem->ptr);
-			}
-
-			if (0 == chunk_remaining_length(dst_c)) {
-				/*(remove empty chunk and unlink tempfile)*/
-				chunkqueue_remove_empty_chunks(dest);
-			} else {/*(close tempfile; avoid later attempts to append)*/
-				force_assert(0 == dst_c->file.refchg); /*(else should not happen)*/
-				int rc = close(dst_c->file.fd);
-				dst_c->file.fd = -1;
-				if (0 != rc) {
-					log_perror(errh, __FILE__, __LINE__,
-					  "close() temp-file %s failed", dst_c->mem->ptr);
-					return -1;
-				}
-			}
-			if (!retry) break; /* return -1; */
-
-			/* continue; retry */
-		}
-
-	} while (dst_c);
+		} else if (!chunkqueue_append_tempfile_err(dest, errh, dst_c)) {
+			break; /* return -1; */
+		} /* else continue; retry */
+	} while (len);
 
 	return -1;
 }
