@@ -1160,7 +1160,7 @@ ssize_t
 chunkqueue_write_chunk_to_pipe (const int fd, chunkqueue * const restrict cq, log_error_st * const restrict errh)
 {
     /*(note: expects non-empty cq->first)*/
-  #ifdef SPLICE_F_NONBLOCK /* splice() temp files to pipe on Linux */
+  #ifdef HAVE_SPLICE /* splice() temp files to pipe on Linux */
     chunk * const c = cq->first;
     if (c->type == FILE_CHUNK) {
         loff_t abs_offset = c->offset;

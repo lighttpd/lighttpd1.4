@@ -1512,12 +1512,15 @@ AC_CHECK_FUNCS([\
   pipe2 \
   poll \
   port_create \
+  pread \
+  pwrite \
   select \
   send_file \
   sendfile \
   sendfile64 \
   sigaction \
   signal \
+  splice \
   srandom \
   strerror_r \
   timegm \

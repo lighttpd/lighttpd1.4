@@ -140,6 +140,7 @@
 #cmakedefine  HAVE_PORT_CREATE
 #cmakedefine  HAVE_PRCTL
 #cmakedefine  HAVE_PREAD
+#cmakedefine  HAVE_PWRITE
 #cmakedefine  HAVE_POSIX_FADVISE
 #cmakedefine  HAVE_SELECT
 #cmakedefine  HAVE_SENDFILE
@@ -149,6 +150,7 @@
 #cmakedefine  HAVE_SIGACTION
 #cmakedefine  HAVE_SIGNAL
 #cmakedefine  HAVE_SIGTIMEDWAIT
+#cmakedefine  HAVE_SPLICE
 #cmakedefine  HAVE_STRERROR_R
 #cmakedefine  HAVE_STRPTIME
 #cmakedefine  HAVE_SYSLOG
