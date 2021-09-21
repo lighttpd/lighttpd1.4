@@ -683,18 +683,13 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue * const restrict cq, log
     /*
      * if the last chunk is
      * - smaller than cq->upload_temp_file_size
-     * - not read yet (offset == 0)
      * -> append to it (and it then might exceed cq->upload_temp_file_size)
      * otherwise
      * -> create a new chunk
      */
 
     chunk * const c = cq->last;
-    if (NULL != c
-        && FILE_CHUNK == c->type
-        && c->file.is_temp
-        && c->file.fd >= 0
-        && 0 == c->offset) {
+    if (NULL != c && c->file.is_temp && c->file.fd >= 0) {
 
         if (c->file.length < (off_t)cq->upload_temp_file_size)
             return c; /* ok, take the last chunk for our job */
