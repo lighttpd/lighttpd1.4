@@ -609,7 +609,10 @@ int fdevent_open_dirname(char *path, int symlinks) {
 }
 
 
-int fdevent_mkstemp_append(char *path) {
+int fdevent_mkostemp(char *path, int flags) {
+ #if defined(HAVE_MKOSTEMP)
+    return mkostemp(path, O_CLOEXEC | flags);
+ #else
   #ifdef __COVERITY__
     /* POSIX-2008 requires mkstemp create file with 0600 perms */
     umask(0600);
@@ -618,7 +621,7 @@ int fdevent_mkstemp_append(char *path) {
     const int fd = mkstemp(path);
     if (fd < 0) return fd;
 
-    if (0 != fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_APPEND)) {
+    if (flags && 0 != fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | flags)) {
         /* (should not happen; fd is regular file) */
         int errnum = errno;
         close(fd);

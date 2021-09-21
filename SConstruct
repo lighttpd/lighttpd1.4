@@ -436,6 +436,7 @@ if 1:
 		'mempcpy',
 		'memset_s',
 		'memset',
+		'mkostemp',
 		'mmap',
 		'munmap',
 		'pathconf',

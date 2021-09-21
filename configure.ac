@@ -1506,6 +1506,7 @@ AC_CHECK_FUNCS([\
   mempcpy \
   memset \
   memset_s \
+  mkostemp \
   mmap \
   pathconf \
   pipe2 \

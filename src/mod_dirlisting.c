@@ -1442,7 +1442,7 @@ static void mod_dirlisting_cache_add (request_st * const r, plugin_data * const 
     memcpy(newpath, tb->ptr, len+1);   /*(include '\0')*/
     buffer_append_string_len(tb, CONST_STR_LEN(".XXXXXX"));
     memcpy(oldpath, tb->ptr, len+7+1); /*(include '\0')*/
-    const int fd = fdevent_mkstemp_append(oldpath);
+    const int fd = fdevent_mkostemp(oldpath, 0);
     if (fd < 0) return;
     if (mod_dirlisting_write_cq(fd, &r->write_queue, r->conf.errh)
         && 0 == rename(oldpath, newpath))

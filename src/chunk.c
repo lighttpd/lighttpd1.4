@@ -641,7 +641,7 @@ void chunkqueue_steal(chunkqueue * const restrict dest, chunkqueue * const restr
 
 static int chunkqueue_get_append_mkstemp(buffer * const b, const char *path, const uint32_t len) {
     buffer_copy_path_len2(b,path,len,CONST_STR_LEN("lighttpd-upload-XXXXXX"));
-    return fdevent_mkstemp_append(b->ptr);
+    return fdevent_mkostemp(b->ptr, O_APPEND);
 }
 
 static chunk *chunkqueue_get_append_newtempfile(chunkqueue * const restrict cq, log_error_st * const restrict errh) {

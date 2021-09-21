@@ -133,6 +133,7 @@
 #cmakedefine  HAVE_MEMCPY
 #cmakedefine  HAVE_MEMPCPY
 #cmakedefine  HAVE_MEMSET
+#cmakedefine  HAVE_MKOSTEMP
 #cmakedefine  HAVE_MMAP
 #cmakedefine  HAVE_PATHCONF
 #cmakedefine  HAVE_POLL

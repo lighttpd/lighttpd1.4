@@ -4416,7 +4416,7 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
   #endif
     {
         buffer_append_string_len(&r->physical.path, CONST_STR_LEN("-XXXXXX"));
-        fd = fdevent_mkstemp_append(r->physical.path.ptr);
+        fd = fdevent_mkostemp(r->physical.path.ptr, 0);
         if (fd >= 0) unlink(r->physical.path.ptr);
         buffer_truncate(&r->physical.path, len);
     }
