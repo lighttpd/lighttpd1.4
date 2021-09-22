@@ -831,24 +831,32 @@ http_response_write_prepare(request_st * const r)
             else if (r->http_version == HTTP_VERSION_1_1) {
                 off_t qlen = chunkqueue_length(&r->write_queue);
                 r->resp_send_chunked = 1;
+                if (r->resp_decode_chunked) {
+                    /*(reconstitute initial partially-decoded chunk)*/
+                    off_t gw_chunked = r->gw_dechunk->gw_chunked;
+                    if (gw_chunked > 2)
+                        qlen += gw_chunked - 2;
+                    else if (1 == gw_chunked)
+                        chunkqueue_append_mem(&r->write_queue,
+                                              CONST_STR_LEN("\r"));
+                    else {
+                        if (qlen)
+                            chunkqueue_append_mem(&r->write_queue,
+                                                  CONST_STR_LEN("\r\n"));
+                        const buffer * const hdr = &r->gw_dechunk->b;
+                        if (!buffer_is_blank(hdr)) /*(partial chunked header)*/
+                            chunkqueue_append_mem(&r->write_queue,
+                                                  BUF_PTR_LEN(hdr));
+                    }
+                }
+                else if (qlen) {
+                        chunkqueue_append_mem(&r->write_queue,
+                                              CONST_STR_LEN("\r\n"));
+                }
                 if (qlen) {
                     /* create initial Transfer-Encoding: chunked segment */
                     buffer * const b =
                       chunkqueue_prepend_buffer_open(&r->write_queue);
-                    if (r->resp_decode_chunked
-                        && 0 != r->gw_dechunk->gw_chunked) {
-                        /*(reconstitute initial partially-decoded chunk)*/
-                        off_t gw_chunked = r->gw_dechunk->gw_chunked;
-                        if (gw_chunked > 2)
-                            qlen += gw_chunked - 2;
-                        else if (1 == gw_chunked)
-                            chunkqueue_append_mem(&r->write_queue,
-                                                  CONST_STR_LEN("\r"));
-                    }
-                    else {
-                        chunkqueue_append_mem(&r->write_queue,
-                                              CONST_STR_LEN("\r\n"));
-                    }
                     buffer_append_uint_hex(b, (uintmax_t)qlen);
                     buffer_append_string_len(b, CONST_STR_LEN("\r\n"));
                     chunkqueue_prepend_buffer_commit(&r->write_queue);
