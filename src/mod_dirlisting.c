@@ -203,11 +203,7 @@ static struct dirlist_cache * mod_dirlisting_parse_cache(server *srv, const arra
 
 
 static pcre_keyvalue_buffer * mod_dirlisting_parse_excludes(server *srv, const array *a) {
-    const int pcre_jit =
-      !srv->srvconf.feature_flags
-      || config_plugin_value_tobool(
-          array_get_element_klen(srv->srvconf.feature_flags,
-                                 CONST_STR_LEN("server.pcre_jit")), 1);
+    const int pcre_jit = config_feature_bool(srv, "server.pcre_jit", 1);
     pcre_keyvalue_buffer * const kvb = pcre_keyvalue_buffer_init();
     buffer empty = { NULL, 0, 0 };
     for (uint32_t j = 0; j < a->used; ++j) {

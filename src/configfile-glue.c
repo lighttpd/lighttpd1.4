@@ -39,6 +39,22 @@ void config_get_config_cond_info(config_cond_info * const cfginfo, uint32_t idx)
     cfginfo->comp_key = dc->comp_key;
 }
 
+int config_feature_bool (const server *srv, const char *feature, int default_value) {
+    return srv->srvconf.feature_flags
+      ? config_plugin_value_tobool(
+          array_get_element_klen(srv->srvconf.feature_flags,
+                                 feature, strlen(feature)), default_value)
+      : default_value;
+}
+
+int32_t config_feature_int (const server *srv, const char *feature, int32_t default_value) {
+    return srv->srvconf.feature_flags
+      ? config_plugin_value_to_int32(
+          array_get_element_klen(srv->srvconf.feature_flags,
+                                 feature, strlen(feature)), default_value)
+      : default_value;
+}
+
 int config_plugin_value_tobool (const data_unset *du, int default_value)
 {
     if (NULL == du) return default_value;

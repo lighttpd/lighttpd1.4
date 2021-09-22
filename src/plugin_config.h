@@ -173,4 +173,12 @@ typedef struct cond_match_t {
 
 int config_check_cond(request_st *r, int context_ndx);
 
+__attribute_cold__
+__attribute_pure__
+int config_feature_bool (const server *srv, const char *feature, int default_value);
+
+__attribute_cold__
+__attribute_pure__
+int32_t config_feature_int (const server *srv, const char *feature, int32_t default_value);
+
 #endif

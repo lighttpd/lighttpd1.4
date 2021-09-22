@@ -164,11 +164,7 @@ static int mod_trigger_b4_dl_init_regex(server * const srv, config_plugin_value_
         return 1;
     }
 
-    const int pcre_jit =
-      !srv->srvconf.feature_flags
-      || config_plugin_value_tobool(
-          array_get_element_klen(srv->srvconf.feature_flags,
-                                 CONST_STR_LEN("server.pcre_jit")), 1);
+    const int pcre_jit = config_feature_bool(srv, "server.pcre_jit", 1);
     pcre_keyvalue_buffer * const kvb = pcre_keyvalue_buffer_init();
     buffer empty = { NULL, 0, 0 };
     if (!pcre_keyvalue_buffer_append(srv->errh, kvb, b, &empty, pcre_jit)) {

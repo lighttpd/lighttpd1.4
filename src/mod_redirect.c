@@ -76,11 +76,7 @@ static void mod_redirect_patch_config(request_st * const r, plugin_data * const 
 }
 
 static pcre_keyvalue_buffer * mod_redirect_parse_list(server *srv, const array *a, const int condidx) {
-    const int pcre_jit =
-      !srv->srvconf.feature_flags
-      || config_plugin_value_tobool(
-          array_get_element_klen(srv->srvconf.feature_flags,
-                                 CONST_STR_LEN("server.pcre_jit")), 1);
+    const int pcre_jit = config_feature_bool(srv, "server.pcre_jit", 1);
     pcre_keyvalue_buffer * const kvb = pcre_keyvalue_buffer_init();
     kvb->x0 = (unsigned short)condidx;
     buffer * const tb = srv->tmp_buf;

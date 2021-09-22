@@ -366,10 +366,7 @@ SETDEFAULTS_FUNC(mod_proxy_set_defaults)
     /*p->defaults.balance = (unsigned int)gw_get_defaults_balance(srv, NULL);*/
 
     p->defaults.header.force_http10 =
-      srv->srvconf.feature_flags
-      && config_plugin_value_tobool(
-           array_get_element_klen(srv->srvconf.feature_flags,
-                                  CONST_STR_LEN("proxy.force-http10")), 0);
+      config_feature_bool(srv, "proxy.force-http10", 0);
 
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {

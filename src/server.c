@@ -256,11 +256,8 @@ server_epoch_secs (server * const srv)
         log_error(srv->errh, __FILE__, __LINE__,
           "warning: clock jumped %lld secs",
           (long long)((int64_t)new_ts - (int64_t)cur_ts));
-        data_unset * const du = (NULL != srv->srvconf.feature_flags)
-          ? array_get_data_unset(srv->srvconf.feature_flags,
-                                 CONST_STR_LEN("server.clock-jump-restart"))
-          : NULL;
-        int delta = config_plugin_value_to_int32(du, 1800);/*(30 mins default)*/
+        int delta =                             /*(30 mins default)*/
+          config_feature_int(srv, "server.clock-jump-restart", 1800);
         if (delta && (new_ts > cur_ts ? new_ts-cur_ts : cur_ts-new_ts) > delta){
             log_error(srv->errh, __FILE__, __LINE__,
               "attempting graceful restart in < ~5 seconds, else hard restart");
@@ -856,16 +853,15 @@ static int server_graceful_state_bg (server *srv) {
     /*assert(graceful_restart);*/
     /*(SIGUSR1 set to SIG_IGN in workers, so should not reach here if worker)*/
     if (srv_shutdown) return 0;
-    if (NULL == srv->srvconf.feature_flags) return 0;
 
     /* check if server should fork and background (bg) itself
      * to continue processing requests already in progress */
+    if (!config_feature_bool(srv, "server.graceful-restart-bg", 0)) return 0;
+
+    /*(set flag to false to avoid repeating)*/
     data_unset * const du =
       array_get_data_unset(srv->srvconf.feature_flags,
                            CONST_STR_LEN("server.graceful-restart-bg"));
-    if (!config_plugin_value_tobool(du, 0)) return 0;
-
-    /*(set flag to false to avoid repeating)*/
     if (du->type == TYPE_STRING)
         buffer_copy_string_len(&((data_string *)du)->value,
                                CONST_STR_LEN("false"));
@@ -999,11 +995,9 @@ __attribute_noinline__
 static void server_graceful_state (server *srv) {
 
     if (!srv_shutdown) {
-        if (0 == srv->graceful_expire_ts && srv->srvconf.feature_flags) {
-            const data_unset * const du =
-              array_get_element_klen(srv->srvconf.feature_flags,
-                CONST_STR_LEN("server.graceful-shutdown-timeout"));
-            srv->graceful_expire_ts = config_plugin_value_to_int32(du, 0);
+        if (0 == srv->graceful_expire_ts) {
+            srv->graceful_expire_ts =
+              config_feature_int(srv, "server.graceful-shutdown-timeout", 0);
             if (srv->graceful_expire_ts)
                 srv->graceful_expire_ts += log_monotonic_secs;
         }
@@ -1265,20 +1259,12 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 
 	http_response_send_1xx_cb_set(NULL, HTTP_VERSION_2);
-	if (srv->srvconf.feature_flags
-	    && !config_plugin_value_tobool(
-	          array_get_element_klen(srv->srvconf.feature_flags,
-	            CONST_STR_LEN("server.h2-discard-backend-1xx")), 0))
-		http_response_send_1xx_cb_set(h2_send_1xx,
-		                              HTTP_VERSION_2);
+	if (!config_feature_bool(srv, "server.h2-discard-backend-1xx", 0))
+		http_response_send_1xx_cb_set(h2_send_1xx, HTTP_VERSION_2);
 
 	http_response_send_1xx_cb_set(NULL, HTTP_VERSION_1_1);
-	if (srv->srvconf.feature_flags
-	    && !config_plugin_value_tobool(
-	          array_get_element_klen(srv->srvconf.feature_flags,
-	            CONST_STR_LEN("server.h1-discard-backend-1xx")), 0))
-		http_response_send_1xx_cb_set(connection_send_1xx,
-		                              HTTP_VERSION_1_1);
+	if (!config_feature_bool(srv, "server.h1-discard-backend-1xx", 0))
+		http_response_send_1xx_cb_set(connection_send_1xx, HTTP_VERSION_1_1);
 
 	if (0 != config_set_defaults(srv)) {
 		log_error(srv->errh, __FILE__, __LINE__,

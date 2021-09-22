@@ -94,11 +94,7 @@ static void mod_rewrite_patch_config(request_st * const r, plugin_data * const p
 }
 
 static pcre_keyvalue_buffer * mod_rewrite_parse_list(server *srv, const array *a, pcre_keyvalue_buffer *kvb, const int condidx) {
-    const int pcre_jit =
-      !srv->srvconf.feature_flags
-      || config_plugin_value_tobool(
-          array_get_element_klen(srv->srvconf.feature_flags,
-                                 CONST_STR_LEN("server.pcre_jit")), 1);
+    const int pcre_jit = config_feature_bool(srv, "server.pcre_jit", 1);
     int allocated = 0;
     if (NULL == kvb) {
         allocated = 1;

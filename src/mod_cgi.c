@@ -374,11 +374,7 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
             mod_cgi_merge_config(&p->defaults, cpv);
     }
 
-    p->tempfile_accum =
-      !srv->srvconf.feature_flags
-      || config_plugin_value_tobool(
-          array_get_element_klen(srv->srvconf.feature_flags,
-                                 CONST_STR_LEN("cgi.tempfile-accum")), 1);
+    p->tempfile_accum = config_feature_bool(srv, "cgi.tempfile-accum", 1);
 
     return HANDLER_GO_ON;
 }

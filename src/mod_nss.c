@@ -1600,10 +1600,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     UNUSED(p);
 
     const int disable_sess_cache =
-      srv->srvconf.feature_flags
-      && !config_plugin_value_tobool(
-           array_get_element_klen(srv->srvconf.feature_flags,
-                                  CONST_STR_LEN("ssl.session-cache")), 0);
+      !config_feature_bool(srv, "ssl.session-cache", 0);
     if (!disable_sess_cache) /* undo disable from mod_nss_init_once_nss() */
         SSL_OptionSetDefault(SSL_NO_CACHE, PR_FALSE);
 

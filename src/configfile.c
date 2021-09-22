@@ -246,11 +246,7 @@ static void config_burl_normalize_cond (server * const srv) {
 }
 
 static int config_pcre_keyvalue (server * const srv) {
-    const int pcre_jit =
-      !srv->srvconf.feature_flags
-      || config_plugin_value_tobool(
-          array_get_element_klen(srv->srvconf.feature_flags,
-                                 CONST_STR_LEN("server.pcre_jit")), 1);
+    const int pcre_jit = config_feature_bool(srv, "server.pcre_jit", 1);
     for (uint32_t i = 0; i < srv->config_context->used; ++i) {
         data_config * const dc = (data_config *)srv->config_context->data[i];
         if (dc->cond != CONFIG_COND_NOMATCH && dc->cond != CONFIG_COND_MATCH)
@@ -1570,13 +1566,8 @@ int config_log_error_open(server *srv) {
         }
     }
 
-    if (NULL != srv->srvconf.feature_flags) {
-        data_unset * const du =
-          array_get_data_unset(srv->srvconf.feature_flags,
-                               CONST_STR_LEN("server.errorlog-high-precision"));
-        if (config_plugin_value_tobool(du, 0))
-            log_set_global_errh(srv->errh, 1);
-    }
+    if (config_feature_bool(srv, "server.errorlog-high-precision", 0))
+        log_set_global_errh(srv->errh, 1);
 
     if (srv->srvconf.errorlog_use_syslog) /*(restricted to global scope)*/
         config_log_error_open_syslog(srv, srv->errh,
