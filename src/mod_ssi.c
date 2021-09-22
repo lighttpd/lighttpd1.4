@@ -802,33 +802,30 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 		*(const char **)&args[2] = cmd;
 		args[3] = NULL;
 
+		int status = 0;
+		struct stat stb;
+		stb.st_size = 0;
 		/*(expects STDIN_FILENO open to /dev/null)*/
 		int serrh_fd = r->conf.serrh ? r->conf.serrh->fd : -1;
 		pid = fdevent_fork_execve(args[0], args, NULL, -1, c->file.fd, serrh_fd, -1);
 		if (-1 == pid) {
 			log_perror(errh, __FILE__, __LINE__, "spawning exec failed: %s", cmd);
+		} else if (fdevent_waitpid(pid, &status, 0) < 0) {
+			log_perror(errh, __FILE__, __LINE__, "waitpid failed");
 		} else {
-			struct stat stb;
-			int status = 0;
-
 			/* wait for the client to end */
 			/* NOTE: synchronous; blocks entire lighttpd server */
 
 			/*
 			 * OpenBSD and Solaris send a EINTR on SIGCHILD even if we ignore it
 			 */
-			if (fdevent_waitpid(pid, &status, 0) < 0) {
-				log_perror(errh, __FILE__, __LINE__, "waitpid failed");
-				break;
-			}
 			if (!WIFEXITED(status)) {
 				log_error(errh, __FILE__, __LINE__, "process exited abnormally: %s", cmd);
 			}
 			if (0 == fstat(c->file.fd, &stb)) {
-				chunkqueue_update_file(cq, c, stb.st_size);
 			}
 		}
-
+		chunkqueue_update_file(cq, c, stb.st_size);
 		break;
 	}
 	case SSI_IF: {

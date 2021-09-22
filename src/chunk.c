@@ -554,6 +554,8 @@ void chunkqueue_update_file(chunkqueue * const restrict cq, chunk *c, off_t len)
     /*assert(c->type == FILE_CHUNK);*/
     c->file.length += len;
     cq->bytes_in += len;
+    if (0 == chunk_remaining_length(c))
+        chunkqueue_remove_empty_chunks(cq);
 }
 
 void chunkqueue_set_tempdirs_default (const array *tempdirs, off_t upload_temp_file_size) {
@@ -764,6 +766,11 @@ int chunkqueue_append_mem_to_tempfile(chunkqueue * const restrict dest, const ch
 	}
 
 	do {
+		/*(aside: arg len is permitted to be 0 and creates tempfile as a
+		 * side effect.  This is used by mod_ssi for ssi exec, as the func
+		 * chunkqueue_get_append_tempfile() is not public.  The result is
+		 * an empty chunk at the end of the chunkqueue, which typically
+		 * should be avoided)*/
 		dst_c = chunkqueue_get_append_tempfile(dest, errh);
 		if (NULL == dst_c)
 			return -1;

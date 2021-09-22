@@ -1185,9 +1185,10 @@ static void http_list_directory(request_st * const r, handler_ctx * const hctx) 
 	}
 
 	if (out == tb) {
-		if (0 != chunkqueue_append_mem_to_tempfile(cq,
-		                                           BUF_PTR_LEN(out),
-		                                           r->conf.errh)) {
+		if (!buffer_is_blank(out)
+		    && 0 != chunkqueue_append_mem_to_tempfile(cq,
+		                                              BUF_PTR_LEN(out),
+		                                              r->conf.errh)) {
 			/* ignore */
 		}
 	}
