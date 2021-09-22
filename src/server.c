@@ -1758,6 +1758,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		return -1;
 	}
 
+	chunkqueue_internal_pipes(config_feature_bool(srv, "chunkqueue.splice", 1));
+
 	/* might fail if user is using fam (not gamin) and famd isn't running */
 	if (!stat_cache_init(srv->ev, srv->errh)) {
 		log_error(srv->errh, __FILE__, __LINE__,
@@ -2064,6 +2066,7 @@ int main (int argc, char ** argv) {
         }
 
         /* clean-up */
+        chunkqueue_internal_pipes(0);
         remove_pid_file(srv);
         config_log_error_close(srv);
         if (graceful_restart)

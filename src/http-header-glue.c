@@ -750,6 +750,42 @@ static int http_response_append_buffer(request_st * const r, buffer * const mem,
 }
 
 
+#ifdef HAVE_SPLICE
+static int http_response_append_splice(request_st * const r, http_response_opts * const opts, buffer * const b, const int fd, unsigned int toread) {
+    /* check if worthwhile to splice() to avoid copying through userspace */
+    /*assert(opts->simple_accum);*//*(checked in caller)*/
+    if (r->resp_body_scratchpad >= toread
+        && (toread > 32768
+            || (toread >= 8192 /*(!http_response_append_buffer_simple_accum())*/
+                && r->write_queue.last && r->write_queue.last->file.is_temp))) {
+
+        if (!buffer_is_blank(b)) {
+            /*(flush small reads previously accumulated in b)*/
+            int rc = http_response_append_buffer(r, b, 0); /*(0 to flush)*/
+            chunk_buffer_yield(b); /*(improve large buf reuse)*/
+            if (__builtin_expect( (0 != rc), 0)) return -1; /* error */
+        }
+
+        /*assert(opts->fdfmt == S_IFSOCK || opts->fdfmt == S_IFIFO);*/
+        ssize_t n = (opts->fdfmt == S_IFSOCK)
+          ? chunkqueue_append_splice_sock_tempfile(
+              &r->write_queue, fd, toread, r->conf.errh)
+          : chunkqueue_append_splice_pipe_tempfile(
+              &r->write_queue, fd, toread, r->conf.errh);
+        if (__builtin_expect( (n >= 0), 1)) {
+            if (0 == (r->resp_body_scratchpad -= n))
+                r->resp_body_finished = 1;
+            return 1; /* success */
+        }
+        else if (n != -EINVAL)
+            return -1; /* error */
+        /*(fall through; target filesystem w/o splice() support)*/
+    }
+    return 0; /* not handled */
+}
+#endif
+
+
 static int http_response_append_mem(request_st * const r, const char * const mem, size_t len) {
     if (r->resp_decode_chunked)
         return http_chunk_decode_append_mem(r, mem, len);
@@ -1159,6 +1195,19 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
         avail = buffer_string_space(b);
 
         if (0 == fdevent_ioctl_fionread(fd, opts->fdfmt, (int *)&toread)) {
+
+          #ifdef HAVE_SPLICE
+            /* check if worthwhile to splice() to avoid copying to userspace */
+            if (opts->simple_accum) {
+                int rc = http_response_append_splice(r, opts, b, fd, toread);
+                if (rc) {
+                    if (__builtin_expect( (rc > 0), 1))
+                        break;
+                    return HANDLER_ERROR;
+                } /*(fall through to handle traditionally)*/
+            }
+          #endif
+
             if (avail < toread) {
                 uint32_t blen = buffer_clen(b);
                 if (toread + blen < 4096)

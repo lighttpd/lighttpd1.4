@@ -111,6 +111,15 @@ void chunkqueue_append_buffer_commit(chunkqueue *cq);
 
 int chunkqueue_append_mem_to_tempfile(chunkqueue * restrict cq, const char * restrict mem, size_t len, struct log_error_st * const restrict errh);
 
+#ifdef HAVE_SPLICE
+ssize_t chunkqueue_append_splice_pipe_tempfile(chunkqueue * restrict cq, int fd, unsigned int len, struct log_error_st * restrict errh);
+ssize_t chunkqueue_append_splice_sock_tempfile(chunkqueue * restrict cq, int fd, unsigned int len, struct log_error_st * restrict errh);
+__attribute_cold__
+void chunkqueue_internal_pipes(int init);
+#else
+#define chunkqueue_internal_pipes(init) do { } while (0)
+#endif
+
 /* functions to handle buffers to read into: */
 /* obtain/reserve memory in chunkqueue at least len (input) size,
  * return pointer to memory with len (output) available for use
