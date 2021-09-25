@@ -957,8 +957,6 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             /*(assumes "Transfer-Encoding: chunked"; does not verify)*/
             r->resp_decode_chunked = 1;
             r->gw_dechunk = calloc(1, sizeof(response_dechunk));
-            /* XXX: future: might consider using chunk_buffer_acquire()
-             *      and chunk_buffer_release() for r->gw_dechunk->b */
             force_assert(r->gw_dechunk);
             continue;
           case HTTP_HEADER_HTTP2_SETTINGS:
