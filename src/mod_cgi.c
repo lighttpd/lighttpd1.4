@@ -71,10 +71,13 @@ typedef struct {
 	struct cgi_pid_t *cgi_pid;
 	int fd;
 	int fdtocgi;
+	int rd_revents;
+	int wr_revents;
 	fdnode *fdn;
 	fdnode *fdntocgi;
 
 	request_st *r;
+	connection *con;          /* dumb pointer */
 	struct fdevents *ev;      /* dumb pointer */
 	plugin_data *plugin_data; /* dumb pointer */
 
@@ -472,11 +475,13 @@ static int cgi_write_request(handler_ctx *hctx, int fd);
 
 static handler_t cgi_handle_fdevent_send (void *ctx, int revents) {
 	handler_ctx *hctx = ctx;
-	request_st * const r = hctx->r;
+	hctx->wr_revents |= revents;
+	joblist_append(hctx->con);
+	return HANDLER_FINISHED;
+}
 
-	/*(joblist only actually necessary here in mod_cgi fdevent send if returning HANDLER_ERROR)*/
-	joblist_append(r->con);
 
+static handler_t cgi_process_wr_revents (handler_ctx * const hctx, request_st * const r, int revents) {
 	if (revents & FDEVENT_OUT) {
 		if (0 != cgi_write_request(hctx, hctx->fdtocgi)) {
 			cgi_connection_close(hctx);
@@ -505,7 +510,7 @@ static handler_t cgi_handle_fdevent_send (void *ctx, int revents) {
 		return HANDLER_ERROR;
 	}
 
-	return HANDLER_FINISHED;
+	return HANDLER_GO_ON;
 }
 
 
@@ -543,6 +548,18 @@ static handler_t cgi_response_headers(request_st * const r, struct http_response
 }
 
 
+__attribute_cold__
+__attribute_noinline__
+static handler_t cgi_local_redir(request_st * const r, handler_ctx * const hctx) {
+    buffer_clear(hctx->response);
+    chunk_buffer_yield(hctx->response);
+    http_response_reset(r); /*(includes r->http_status = 0)*/
+    plugins_call_handle_request_reset(r);
+    /*cgi_connection_close(hctx);*//*(already cleaned up and hctx is now invalid)*/
+    return HANDLER_COMEBACK;
+}
+
+
 static int cgi_recv_response(request_st * const r, handler_ctx * const hctx) {
 		const off_t bytes_in = r->write_queue.bytes_in;
 		switch (http_response_read(r, &hctx->opts,
@@ -558,20 +575,20 @@ static int cgi_recv_response(request_st * const r, handler_ctx * const hctx) {
 			cgi_connection_close(hctx);
 			return HANDLER_FINISHED;
 		case HANDLER_COMEBACK:
-			/* flag for mod_cgi_handle_subrequest() */
-			hctx->conf.local_redir = 2;
-			buffer_clear(hctx->response);
-			return HANDLER_COMEBACK;
+			return cgi_local_redir(r, hctx); /* HANDLER_COMEBACK */
 		}
 }
 
 
 static handler_t cgi_handle_fdevent(void *ctx, int revents) {
 	handler_ctx *hctx = ctx;
-	request_st * const r = hctx->r;
+	hctx->rd_revents |= revents;
+	joblist_append(hctx->con);
+	return HANDLER_FINISHED;
+}
 
-	joblist_append(r->con);
 
+static handler_t cgi_process_rd_revents(handler_ctx * const hctx, request_st * const r, int revents) {
 	if (revents & FDEVENT_IN) {
 		handler_t rc = cgi_recv_response(r, hctx); /*(might invalidate hctx)*/
 		if (rc != HANDLER_GO_ON) return rc;         /*(unless HANDLER_GO_ON)*/
@@ -610,7 +627,7 @@ static handler_t cgi_handle_fdevent(void *ctx, int revents) {
 		return HANDLER_ERROR;
 	}
 
-	return HANDLER_FINISHED;
+	return HANDLER_GO_ON;
 }
 
 
@@ -959,6 +976,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		handler_ctx *hctx = cgi_handler_ctx_init();
 		hctx->ev = r->con->srv->ev;
 		hctx->r = r;
+		hctx->con = r->con;
 		hctx->plugin_data = p;
 		hctx->cgi_handler = &ds->value;
 		memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
@@ -988,17 +1006,6 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	return HANDLER_GO_ON;
 }
 
-__attribute_cold__
-__attribute_noinline__
-static handler_t mod_cgi_local_redir(request_st * const r) {
-    /* must be called from mod_cgi_handle_subrequest() so that HANDLER_COMEBACK
-     * return value propagates back through connection_state_machine() */
-    http_response_reset(r); /*(includes r->http_status = 0)*/
-    plugins_call_handle_request_reset(r);
-    /*cgi_connection_close(hctx);*//*(already cleaned up and hctx is now invalid)*/
-    return HANDLER_COMEBACK;
-}
-
 /*
  * - HANDLER_GO_ON : not our job
  * - HANDLER_FINISHED: got response
@@ -1019,7 +1026,18 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			cgi_pid_kill(hctx->cgi_pid, hctx->conf.limits->signal_fin);
 	}
 
-	if (2 == hctx->conf.local_redir) return mod_cgi_local_redir(r);
+	const int rd_revents = hctx->rd_revents;
+	const int wr_revents = hctx->wr_revents;
+	if (rd_revents) {
+		hctx->rd_revents = 0;
+		handler_t rc = cgi_process_rd_revents(hctx, r, rd_revents);
+		if (rc != HANDLER_GO_ON) return rc; /*(might invalidate hctx)*/
+	}
+	if (wr_revents) {
+		hctx->wr_revents = 0;
+		handler_t rc = cgi_process_wr_revents(hctx, r, wr_revents);
+		if (rc != HANDLER_GO_ON) return rc; /*(might invalidate hctx)*/
+	}
 
 	if ((r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
 	    && r->resp_body_started) {
@@ -1028,7 +1046,6 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 		} else if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_IN)) {
 			/* optimistic read from backend */
 			handler_t rc = cgi_recv_response(r, hctx);  /*(might invalidate hctx)*/
-			if (rc == HANDLER_COMEBACK) mod_cgi_local_redir(r);
 			if (rc != HANDLER_GO_ON) return rc;          /*(unless HANDLER_GO_ON)*/
 			hctx->read_ts = log_monotonic_secs;
 			fdevent_fdnode_event_add(hctx->ev, hctx->fdn, FDEVENT_IN);
