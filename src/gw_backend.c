@@ -2290,6 +2290,9 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
                 physpath = r->physical.path.ptr;
             }
 
+            /*(restore streaming flags removed during authorizer processing)*/
+            r->conf.stream_response_body |= (hctx->opts.authorizer >> 1);
+
             gw_backend_close(hctx, r);
             handler_ctx_clear(hctx);
 

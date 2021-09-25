@@ -24,7 +24,7 @@ typedef struct http_response_opts_t {
   uint32_t max_per_read;
   int fdfmt;
   int backend;
-  int authorizer; /* bool */
+  int authorizer; /* bool *//*(maybe overloaded w/ response streaming flags)*/
   uint8_t simple_accum; /* bool */
   uint8_t local_redir; /* 0,1,2 */
   uint8_t xsendfile_allow; /* bool */

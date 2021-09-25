@@ -445,6 +445,12 @@ static handler_t fcgi_recv_parse(request_st * const r, struct http_response_opts
 					 (r->http_status == 0 || r->http_status == 200)) {
 					/* authorizer approved request; ignore the content here */
 					hctx->send_content_body = 0;
+					opts->authorizer |= /*(save response streaming flags)*/
+					  (r->conf.stream_response_body
+					   & (FDEVENT_STREAM_RESPONSE
+					     |FDEVENT_STREAM_RESPONSE_BUFMIN)) << 1;
+					r->conf.stream_response_body &=
+					  ~(FDEVENT_STREAM_RESPONSE|FDEVENT_STREAM_RESPONSE_BUFMIN);
 				}
 			} else if (hctx->send_content_body) {
 				if (0 != mod_fastcgi_transfer_cqlen(r, hctx->rb, packet.len - packet.padding)) {
