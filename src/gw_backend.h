@@ -318,6 +318,7 @@ typedef struct gw_handler_ctx {
     struct fdevents *ev;
     fdnode   *fdn;       /* fdevent (fdnode *) object */
     int       fd;        /* fd to the gw process */
+    int       revents;   /* ready events on fd */
 
     pid_t     pid;
     int       reconnects; /* number of reconnect attempts */
@@ -329,6 +330,7 @@ typedef struct gw_handler_ctx {
     gw_plugin_config conf;
 
     request_st *r;               /* dumb pointer */
+    connection *con;             /* dumb pointer */
     gw_plugin_data *plugin_data; /* dumb pointer */
     unix_time64_t read_ts;
     unix_time64_t write_ts;

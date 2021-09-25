@@ -1111,6 +1111,7 @@ static void gw_restart_dead_procs(gw_host * const host, log_error_st * const err
 
 /* ok, we need a prototype */
 static handler_t gw_handle_fdevent(void *ctx, int revents);
+static handler_t gw_process_fdevent(gw_handler_ctx *hctx, request_st *r, int revents);
 
 
 __attribute_returns_nonnull__
@@ -2138,6 +2139,14 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
     gw_handler_ctx *hctx = r->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON;
 
+    const int revents = hctx->revents;
+    if (revents) {
+        hctx->revents = 0;
+        handler_t rc = gw_process_fdevent(hctx, r, revents);
+        if (rc != HANDLER_GO_ON && rc != HANDLER_WAIT_FOR_EVENT)
+            return rc;             /*(might invalidate hctx)*/
+    }
+
     if ((r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
         && r->resp_body_started) {
         if (chunkqueue_length(&r->write_queue) > 65536 - 4096) {
@@ -2377,10 +2386,12 @@ static handler_t gw_recv_response_error(gw_handler_ctx * const hctx, request_st 
 
 static handler_t gw_handle_fdevent(void *ctx, int revents) {
     gw_handler_ctx *hctx = ctx;
-    request_st * const r = hctx->r;
+    hctx->revents |= revents;
+    joblist_append(hctx->con);
+    return HANDLER_FINISHED;
+}
 
-    joblist_append(r->con);
-
+static handler_t gw_process_fdevent(gw_handler_ctx * const hctx, request_st * const r, int revents) {
     if (revents & FDEVENT_IN) {
         handler_t rc = gw_recv_response(hctx, r);   /*(might invalidate hctx)*/
         if (rc != HANDLER_GO_ON) return rc;         /*(unless HANDLER_GO_ON)*/
@@ -2393,16 +2404,7 @@ static handler_t gw_handle_fdevent(void *ctx, int revents) {
     /* perhaps this issue is already handled */
     if (revents & (FDEVENT_HUP|FDEVENT_RDHUP)) {
         if (hctx->state == GW_STATE_CONNECT_DELAYED) {
-            /* getoptsock will catch this one (right ?)
-             *
-             * if we are in connect we might get an EINPROGRESS
-             * in the first call and an FDEVENT_HUP in the
-             * second round
-             *
-             * FIXME: as it is a bit ugly.
-             *
-             */
-            gw_send_request(hctx, r);
+            return gw_send_request(hctx, r); /*(might invalidate hctx)*/
         } else if (r->resp_body_started) {
             /* drain any remaining data from kernel pipe buffers
              * even if (r->conf.stream_response_body
@@ -2427,6 +2429,7 @@ static handler_t gw_handle_fdevent(void *ctx, int revents) {
               proc->connection_name->ptr, hctx->state);
 
             gw_connection_close(hctx, r);
+            return HANDLER_FINISHED;
         }
     } else if (revents & FDEVENT_ERR) {
         log_error(r->conf.errh, __FILE__, __LINE__,
@@ -2434,7 +2437,7 @@ static handler_t gw_handle_fdevent(void *ctx, int revents) {
         return gw_backend_error(hctx, r); /* HANDLER_FINISHED */
     }
 
-    return HANDLER_FINISHED;
+    return HANDLER_GO_ON;
 }
 
 handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int uri_path_handler, size_t hctx_sz) {
@@ -2610,6 +2613,7 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
 
     hctx->ev               = r->con->srv->ev;
     hctx->r                = r;
+    hctx->con              = r->con;
     hctx->plugin_data      = p;
     hctx->host             = host;
     hctx->proc             = NULL;
