@@ -1340,6 +1340,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
 
     gw_host *host = NULL;
 
+    int graceful_restart_bg =
+      config_feature_bool(srv, "server.graceful-restart-bg", 0);
+
     p->srv_pid = srv->pid;
 
     s->exts      = gw_extensions_init();
@@ -1704,6 +1707,23 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     if (host->first) host->first->prev = proc;
                     host->first = proc;
                     ++host->num_procs;
+                }
+
+                if (graceful_restart_bg) {
+                    /*(set flag to false to avoid repeating)*/
+                    graceful_restart_bg = 0;
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "server.graceful-restart-bg disabled "
+                      "(incompatible with %s.server \"bin-path\")",
+                      p->self->name);
+                    data_unset * const du =
+                      array_get_data_unset(srv->srvconf.feature_flags,
+                        CONST_STR_LEN("server.graceful-restart-bg"));
+                    if (du->type == TYPE_STRING)
+                        buffer_copy_string_len(&((data_string *)du)->value,
+                                               CONST_STR_LEN("false"));
+                    else /* (du->type == TYPE_INTEGER) */
+                        ((data_integer *)du)->value = 0;
                 }
             } else {
                 gw_proc * const proc = gw_proc_init(host);
