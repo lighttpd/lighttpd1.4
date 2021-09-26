@@ -25,6 +25,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef HAVE_SIGNAL      /* XXX: must be defined; config.h not included here */
+#include <signal.h>
+#endif
+
 #ifndef MSG_DONTWAIT
 #define MSG_DONTWAIT 0
 #endif
@@ -351,6 +355,11 @@ main (void)
     int fd;
     fcntl(FCGI_LISTENSOCK_FILENO, F_SETFL,
           fcntl(FCGI_LISTENSOCK_FILENO, F_GETFL) & ~O_NONBLOCK);
+
+  #ifdef HAVE_SIGNAL
+    signal(SIGINT,  SIG_IGN);
+    signal(SIGUSR1, SIG_IGN);
+  #endif
 
     do {
         fd = accept(FCGI_LISTENSOCK_FILENO, NULL, NULL);
