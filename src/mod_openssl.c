@@ -1075,7 +1075,7 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
         /* x509/pkey available <=> pemfile was set <=> pemfile got patched:
          * so this should never happen, unless you nest $SERVER["socket"] */
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-          "SSL: no certificate/private key for TLS server name %s.  "
+          "SSL: no certificate/private key for TLS server name \"%s\".  "
           "$SERVER[\"socket\"] should not be nested in other conditions.",
           hctx->r->uri.authority.ptr);
         return 0;
