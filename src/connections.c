@@ -1242,6 +1242,10 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
           ? connection_write_throttle(con, MAX_WRITE_LIMIT)
           : 0;
         const off_t fsize = (off_t)h2c->s_max_frame_size;
+        const off_t cqlen = chunkqueue_length(con->write_queue);
+        if (cqlen > 8192 && max_bytes > 65536) max_bytes = 65536;
+        max_bytes -= cqlen;
+        if (max_bytes < 0) max_bytes = 0;
 
         /* XXX: to avoid buffer bloat due to staging too much data in
          * con->write_queue, consider setting limit on how much is staged
@@ -1314,6 +1318,8 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
                     connection_request_end_h2(h2r, con);
             }
         }
+
+        if (0 == max_bytes) resched |= 2;
     }
 
     if (h2c->sent_goaway > 0 && h2c->rused) {
@@ -1339,6 +1345,8 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
         if (chunkqueue_is_empty(con->write_queue)
             && 0 == h2c->rused && h2c->sent_goaway)
             connection_set_state(h2r, CON_STATE_RESPONSE_END);
+        else if (resched & 2)
+            resched = (resched & 1) | (chunkqueue_is_empty(con->write_queue));
     }
 
     if (h2r->state == CON_STATE_WRITE) {
