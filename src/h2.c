@@ -2432,7 +2432,7 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
         dataframe.c[5] = (len      ) & 0xFF;
         chunkqueue_append_mem(con->write_queue,  /*(+3 to skip over align pad)*/
                               (const char *)dataframe.c+3, sizeof(dataframe)-3);
-        chunkqueue_steal(con->write_queue, cq, (off_t)dlen);
+        chunkqueue_steal(con->write_queue, cq, (off_t)len);
         dlen -= len;
     } while (dlen);
 }
