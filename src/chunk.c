@@ -1362,7 +1362,9 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
     const int fd = filec->file.fd;
     if (fd < 0) return; /*(require that file already be open)*/
     off_t offset = filec->offset;
+  #ifndef HAVE_PREAD
     if (-1 == lseek(fd, offset, SEEK_SET)) return;
+  #endif
 
     /* Note: there should be no size change in chunkqueue,
      * so cq->bytes_in and cq->bytes_out should not be modified */
@@ -1378,9 +1380,16 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
 
     char * const ptr = b->ptr + buffer_clen(b);
     ssize_t rd;
+  #ifdef HAVE_PREAD
+    const off_t foff = offset;
+  #endif
     offset = 0; /*(reuse offset var for offset into mem buffer)*/
     do {
+      #ifdef HAVE_PREAD
+        rd =pread(fd, ptr+offset, (size_t)len, foff+offset);
+      #else
         rd = read(fd, ptr+offset, (size_t)len);
+      #endif
     } while (rd > 0 ? (offset += rd, len -= rd) : errno == EINTR);
     /*(contents of chunkqueue kept valid even if error reading from file)*/
     if (len)
@@ -1425,14 +1434,20 @@ chunkqueue_peek_data (chunkqueue * const cq,
                 if (0 == len)
                     break;
 
+              #ifndef HAVE_PREAD
                 if (-1 == lseek(c->file.fd, offset, SEEK_SET)) {
                     log_perror(errh, __FILE__, __LINE__, "lseek(\"%s\")",
                                c->mem->ptr);
                     return -1;
                 }
+              #endif
                 ssize_t rd;
                 do {
+                  #ifdef HAVE_PREAD
+                    rd =pread(c->file.fd, data_in + *dlen, (size_t)len, offset);
+                  #else
                     rd = read(c->file.fd, data_in + *dlen, (size_t)len);
+                  #endif
                 } while (-1 == rd && errno == EINTR);
                 if (rd <= 0) { /* -1 error; 0 EOF (unexpected) */
                     log_perror(errh, __FILE__, __LINE__, "read(\"%s\")",

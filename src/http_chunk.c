@@ -71,12 +71,21 @@ static int http_chunk_append_read_fd_range(request_st * const r, const buffer * 
     if (r->resp_send_chunked)
         http_chunk_len_append(cq, (uintmax_t)len);
 
+  #ifndef HAVE_PREAD
     if (-1 == lseek(fd, offset, SEEK_SET)) return -1;
+  #endif
     buffer * const b = chunkqueue_append_buffer_open_sz(cq, len+2+1);
     ssize_t rd;
+  #ifdef HAVE_PREAD
+    const off_t foff = offset;
+  #endif
     offset = 0;
     do {
+      #ifdef HAVE_PREAD
+        rd =pread(fd, b->ptr+offset, (size_t)(len-offset), foff+offset);
+      #else
         rd = read(fd, b->ptr+offset, (size_t)(len-offset));
+      #endif
     } while (rd > 0 ? (offset += rd) != len : errno == EINTR);
     buffer_commit(b, offset);
 

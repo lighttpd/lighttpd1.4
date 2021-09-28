@@ -163,11 +163,16 @@ static int network_write_file_chunk_no_mmap(const int fd, chunkqueue * const cq,
 
     if (toSend > (off_t)sizeof(buf)) toSend = (off_t)sizeof(buf);
 
+  #ifndef HAVE_PREAD
     if (-1 == lseek(c->file.fd, offset, SEEK_SET)) {
         log_perror(errh, __FILE__, __LINE__, "lseek");
         return -1;
     }
-    if ((toSend = read(c->file.fd, buf, toSend)) <= 0) {
+    toSend = read(c->file.fd, buf, toSend);
+  #else
+    toSend =pread(c->file.fd, buf, toSend, offset);
+  #endif
+    if (toSend <= 0) {
         log_perror(errh, __FILE__, __LINE__, "read");/* err or unexpected EOF */
         return -1;
     }
