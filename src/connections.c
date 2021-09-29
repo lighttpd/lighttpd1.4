@@ -1241,7 +1241,6 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
         off_t max_bytes = con->is_writable > 0
           ? connection_write_throttle(con, MAX_WRITE_LIMIT)
           : 0;
-        const off_t fsize = (off_t)h2c->s_max_frame_size;
         const off_t cqlen = chunkqueue_length(con->write_queue);
         if (cqlen > 8192 && max_bytes > 65536) max_bytes = 65536;
         max_bytes -= cqlen;
@@ -1268,30 +1267,25 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
             connection_state_machine_loop(r, con);
 
             if (r->resp_header_len && !chunkqueue_is_empty(&r->write_queue)
+                && max_bytes
                 && (r->resp_body_finished
                     || (r->conf.stream_response_body
                         & (FDEVENT_STREAM_RESPONSE
                           |FDEVENT_STREAM_RESPONSE_BUFMIN)))) {
 
-                chunkqueue * const cq = &r->write_queue;
-                off_t avail = chunkqueue_length(cq);
-                if (avail > max_bytes)    avail = max_bytes;
-                if (avail > fsize)        avail = fsize;
-                if (avail > r->h2_swin)   avail = r->h2_swin;
-                if (avail > h2r->h2_swin) avail = h2r->h2_swin;
+                uint32_t dlen = (uint32_t)max_bytes;
+                dlen = h2_send_cqdata(r, con, &r->write_queue, dlen);
+                max_bytes -= (off_t)dlen;
 
-                if (avail > 0) {
-                    max_bytes -= avail;
-                    h2_send_cqdata(r, con, cq, (uint32_t)avail);
+                if (chunkqueue_is_empty(&r->write_queue)) {
+                    if (r->resp_body_finished) {
+                        connection_set_state(r, CON_STATE_RESPONSE_END);
+                        if (__builtin_expect( (r->conf.log_state_handling), 0))
+                            connection_state_machine_loop(r, con);
+                    }
                 }
-
-                if (r->resp_body_finished && chunkqueue_is_empty(cq)) {
-                    connection_set_state(r, CON_STATE_RESPONSE_END);
-                    if (r->conf.log_state_handling)
-                        connection_state_machine_loop(r, con);
-                }
-                else if (avail) /*(do not spin if swin empty window)*/
-                    resched |= (!chunkqueue_is_empty(cq));
+                else if (dlen) /*(do not spin if swin empty window)*/
+                    resched |= 1; /*(!chunkqueue_is_empty(&r->write_queue))*/
             }
 
           #if 0

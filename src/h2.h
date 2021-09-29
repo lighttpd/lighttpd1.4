@@ -101,7 +101,7 @@ void h2_send_100_continue (request_st *r, connection *con);
 
 void h2_send_headers (request_st *r, connection *con);
 
-void h2_send_cqdata (request_st *r, connection *con, struct chunkqueue *cq, uint32_t dlen);
+uint32_t h2_send_cqdata (request_st *r, connection *con, struct chunkqueue *cq, uint32_t dlen);
 
 void h2_send_end_stream (request_st *r, connection *con);
 

@@ -2315,7 +2315,7 @@ h2_send_cqheaders (request_st * const r, connection * const con)
 
 #if 0
 
-void
+uint32_t
 h2_send_data (request_st * const r, connection * const con, const char *data, uint32_t dlen)
 {
     /* Note: dlen should be <= MAX_WRITE_LIMIT in order to share resources */
@@ -2340,11 +2340,11 @@ h2_send_data (request_st * const r, connection * const con, const char *data, ui
     /* adjust stream and connection windows */
     /*assert(dlen <= INT32_MAX);*//* dlen should be <= MAX_WRITE_LIMIT */
     request_st * const h2r = &con->request;
-    if (r->h2_swin   < 0) return;
-    if (h2r->h2_swin < 0) return;
+    if (r->h2_swin   < 0) return 0;
+    if (h2r->h2_swin < 0) return 0;
     if ((int32_t)dlen > r->h2_swin)   dlen = (uint32_t)r->h2_swin;
     if ((int32_t)dlen > h2r->h2_swin) dlen = (uint32_t)h2r->h2_swin;
-    if (0 == dlen) return;
+    if (0 == dlen) return 0;
     r->h2_swin   -= (int32_t)dlen;
     h2r->h2_swin -= (int32_t)dlen;
 
@@ -2362,6 +2362,7 @@ h2_send_data (request_st * const r, connection * const con, const char *data, ui
     char * restrict ptr = b->ptr;
     h2con * const h2c = con->h2;
     const uint32_t fsize = h2c->s_max_frame_size;
+    uint32_t sent = 0;
     do {
         const uint32_t len = dlen < fsize ? dlen : fsize;
         dataframe.c[3] = (len >> 16) & 0xFF; /*(off +3 to skip over align pad)*/
@@ -2377,16 +2378,18 @@ h2_send_data (request_st * const r, connection * const con, const char *data, ui
         ptr  += len + sizeof(dataframe)-3;
       #endif
         data += len;
+        sent += len;
         dlen -= len;
     } while (dlen);
     buffer_truncate(b, (uint32_t)(ptr - b->ptr));
     chunkqueue_append_buffer_commit(con->write_queue);
+    return sent;
 }
 
 #endif
 
 
-void
+uint32_t
 h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const cq, uint32_t dlen)
 {
     /* Note: dlen should be <= MAX_WRITE_LIMIT in order to share resources */
@@ -2411,13 +2414,13 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
     /* adjust stream and connection windows */
     /*assert(dlen <= INT32_MAX);*//* dlen should be <= MAX_WRITE_LIMIT */
     request_st * const h2r = &con->request;
-    if (r->h2_swin   < 0) return;
-    if (h2r->h2_swin < 0) return;
+    if (r->h2_swin   < 0) return 0;
+    if (h2r->h2_swin < 0) return 0;
     if ((int32_t)dlen > r->h2_swin)   dlen = (uint32_t)r->h2_swin;
     if ((int32_t)dlen > h2r->h2_swin) dlen = (uint32_t)h2r->h2_swin;
-    if (0 == dlen) return;
-    r->h2_swin   -= (int32_t)dlen;
-    h2r->h2_swin -= (int32_t)dlen;
+    const uint32_t cqlen = (uint32_t)chunkqueue_length(cq);
+    if (dlen > cqlen) dlen = cqlen;
+    if (0 == dlen) return 0;
 
     /* XXX: future: should have an interface which processes chunkqueue
      * and takes string refs to mmap FILE_CHUNK to avoid extra copying
@@ -2425,16 +2428,21 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
 
     h2con * const h2c = con->h2;
     const uint32_t fsize = h2c->s_max_frame_size;
+    uint32_t sent = 0;
     do {
         const uint32_t len = dlen < fsize ? dlen : fsize;
+        dlen -= len;
+        sent += len;
         dataframe.c[3] = (len >> 16) & 0xFF; /*(off +3 to skip over align pad)*/
         dataframe.c[4] = (len >>  8) & 0xFF;
         dataframe.c[5] = (len      ) & 0xFF;
         chunkqueue_append_mem(con->write_queue,  /*(+3 to skip over align pad)*/
                               (const char *)dataframe.c+3, sizeof(dataframe)-3);
         chunkqueue_steal(con->write_queue, cq, (off_t)len);
-        dlen -= len;
     } while (dlen);
+    r->h2_swin   -= (int32_t)sent;
+    h2r->h2_swin -= (int32_t)sent;
+    return sent;
 }
 
 
