@@ -1212,6 +1212,14 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
                     toread = 4095 - blen;
                 else if (toread > opts->max_per_read)
                     toread = opts->max_per_read;
+                /* reduce amount read for response headers to reduce extra data
+                 * copying for initial data following response headers
+                 * (see http_response_parse_headers())
+                 * (This seems reasonable to do even if opts->parse is set)
+                 * (default chunk buffer is 8k; typical response headers < 8k)
+                 * (An alternative might be the opposite: read extra, e.g. 128k,
+                 *  if data available, in order to write to temp files sooner)*/
+                if (toread > 8192 && !r->resp_body_started) toread = 8192;
             }
             else if (0 == toread) {
               #if 0
@@ -1364,7 +1372,8 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
                 break;
             }
         }
-    } while (0); /*(extra logic might benefit systems without FIONREAD)*/
+    } while (!r->resp_body_started); /*(loop to read large response headers)*/
+    /*while (0);*//*(extra logic might benefit systems without FIONREAD)*/
     /*while ((size_t)n == avail && (total += (size_t)n) < opts->max_per_read);*/
     /* else emptied kernel read buffer or partial read or reached read limit */
 
