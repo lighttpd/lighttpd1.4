@@ -1273,7 +1273,7 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
                         & (FDEVENT_STREAM_RESPONSE
                           |FDEVENT_STREAM_RESPONSE_BUFMIN)))) {
 
-                uint32_t dlen = (uint32_t)max_bytes;
+                uint32_t dlen = max_bytes > 32768 ? 32768 : (uint32_t)max_bytes;
                 dlen = h2_send_cqdata(r, con, &r->write_queue, dlen);
                 max_bytes -= (off_t)dlen;
 
