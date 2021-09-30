@@ -2430,6 +2430,42 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
     const uint32_t fsize = h2c->s_max_frame_size;
     uint32_t sent = 0;
     do {
+        if (cq->first->type == FILE_CHUNK) {
+            /* combine frame header and data into single mem chunk buffer
+             * and adjust to fit efficiently into power-2 sized buffer
+             * (default and minimum HTTP/2 SETTINGS_MAX_FRAME_SIZE is 16k)
+             * (default send buffer size in lighttpd TLS modules is 16k)
+             * (read into memory since likely needed for HTTP/2 over TLS,
+             *  and to avoid many small calls to dup(), sendfile(), close())
+             * (reading here into single chunk buffer is likely more efficient
+             *  than reference counting file chunks split and duplicated by
+             *  chunkqueue_steal() into 16k chunks, and alternating with 8k
+             *  chunk buffers containing 9 byte HTTP/2 header frame) */
+            const uint32_t len = dlen < fsize ? dlen : fsize-9;
+            uint32_t blen = len;
+            buffer * const b =         /*(sizeof(dataframe)-3 == 9)*/
+              chunkqueue_append_buffer_open_sz(con->write_queue, 9+len);
+            char *data = b->ptr+9;     /*(note: not including +1 to _open_sz)*/
+            if (0 == chunkqueue_peek_data(cq, &data, &blen, r->conf.errh)
+                && blen == len) {
+                dlen -= len;
+                sent += len;
+                dataframe.c[3] = (len >> 16) & 0xFF; /*(+3 to skip align pad)*/
+                dataframe.c[4] = (len >>  8) & 0xFF;
+                dataframe.c[5] = (len      ) & 0xFF;
+                memcpy(b->ptr,(const char *)dataframe.c+3, sizeof(dataframe)-3);
+                if (b->ptr+9 != data)
+                    memcpy(b->ptr+9, data, len);
+                buffer_commit(b, 9+len);
+                chunkqueue_append_buffer_commit(con->write_queue);
+                chunkqueue_mark_written(cq, len);
+                continue;
+            }
+
+            /*(else remove empty last chunk and fall through to below)*/
+            chunkqueue_remove_finished_chunks(cq);
+        }
+
         const uint32_t len = dlen < fsize ? dlen : fsize;
         dlen -= len;
         sent += len;
