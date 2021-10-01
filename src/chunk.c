@@ -1444,6 +1444,42 @@ chunkqueue_peek_data (chunkqueue * const cq,
                 if (0 == len)
                     break;
 
+            #if 0 /* XXX: might improve performance on some system workloads */
+              #if defined(_LP64) || defined(__LP64__) || defined(_WIN64)
+              #if defined(HAVE_MMAP) || defined(_WIN32) /*see local sys-mmap.h*/
+                /* mmap file to access data
+                 * (Only consider temp files here since not catching SIGBUS)
+                 * (For now, also limit to 64-bit to avoid address space issues)
+                 * If temp file is used, data should be large enough that mmap
+                 * is worthwhile.  fd need not be kept open for the mmap once
+                 * the mmap has been created, but is currently kept open for
+                 * other pre-existing logic which checks fd and opens file,
+                 * such as the condition for entering this code block above. */
+                /* Note: under heavy load (or microbenchmark), system-reported
+                 * memory use for RSS can be very, very large, due to presence
+                 * of lots and lots of temp file read-only memory maps.
+                 * pmap -X and exclude lighttpd temporary files to get a better
+                 * view of memory use */
+                char *mdata;
+                if (c->file.is_temp
+                    && (mdata = chunkqueue_mmap_chunk_len(c, len))) {
+                    if (*dlen) {
+                        if (*data != data_in) {
+                            memcpy(data_in, *data, *dlen);
+                            *data = data_in;
+                        }
+                        memcpy(data_in+*dlen, mdata, (size_t)len);
+                    }
+                    else {
+                        *data = mdata;
+                    }
+                    *dlen += (uint32_t)len;
+                    break;
+                }
+              #endif
+              #endif
+            #endif
+
               #ifndef HAVE_PREAD
                 if (-1 == lseek(c->file.fd, offset, SEEK_SET)) {
                     log_perror(errh, __FILE__, __LINE__, "lseek(\"%s\")",
