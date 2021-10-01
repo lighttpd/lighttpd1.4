@@ -1180,6 +1180,15 @@ int chunkqueue_open_file_chunk(chunkqueue * const restrict cq, log_error_st * co
 }
 
 
+static ssize_t
+chunkqueue_write_data (const int fd, const void *buf, size_t count)
+{
+    ssize_t wr;
+    do { wr = write(fd, buf, count); } while (-1 == wr && errno == EINTR);
+    return wr;
+}
+
+
 #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
 __attribute_cold__
 #endif
@@ -1194,13 +1203,12 @@ chunkqueue_write_chunk_file_intermed (const int fd, chunk * const restrict c, lo
     chunkqueue cq = {c,c,0,0,0,0,0}; /*(fake cq for chunkqueue_peek_data())*/
     if (0 != chunkqueue_peek_data(&cq, &data, &dlen, errh) && 0 == dlen)
         return -1;
-    ssize_t wr;
-    do { wr = write(fd, data, dlen); } while (-1 == wr && errno == EINTR);
-    return wr;
+    return chunkqueue_write_data(fd, data, dlen);
 }
 
 
 #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
+
 /*(improved from network_write_mmap.c)*/
 static off_t
 mmap_align_offset (off_t start)
@@ -1217,6 +1225,46 @@ mmap_align_offset (off_t start)
     }
     return (start & pagemask);
 }
+
+
+__attribute_noinline__
+static char *
+chunkqueue_mmap_chunk_len (chunk * const c, off_t len)
+{
+    /* (re)mmap the buffer to file length if range is not covered completely */
+    /*(caller is responsible for handling SIGBUS if chunkqueue might contain
+     * untrusted file, i.e. any file other than lighttpd-created tempfile)*/
+    /*(tempfiles are expected for input, MAP_PRIVATE used for portability)*/
+    /*(mmaps and writes complete chunk instead of only small parts; files
+     * are expected to be temp files with reasonable chunk sizes)*/
+    if (MAP_FAILED == c->file.mmap.start
+        || c->offset < c->file.mmap.offset
+        || c->offset+len > (off_t)(c->file.mmap.offset + c->file.mmap.length)) {
+
+        if (MAP_FAILED != c->file.mmap.start) {
+            munmap(c->file.mmap.start, c->file.mmap.length);
+            /*c->file.mmap.start = MAP_FAILED;*//*(assigned below)*/
+        }
+
+        c->file.mmap.offset = mmap_align_offset(c->offset);
+        c->file.mmap.length = c->file.length - c->file.mmap.offset;
+        c->file.mmap.start  =
+          mmap(NULL, c->file.mmap.length, PROT_READ, MAP_PRIVATE,
+               c->file.fd, c->file.mmap.offset);
+        if (MAP_FAILED == c->file.mmap.start) return NULL;
+
+      #if 0 /*(review callers before changing; some expect open file)*/
+        /* close() fd as soon as fully mmap() rather than when done w/ chunk
+         * (possibly worthwhile to keep active fd count lower) */
+        if (c->file.is_temp && !c->file.refchg) {
+            close(c->file.fd);
+            c->file.fd = -1;
+        }
+      #endif
+    }
+    return c->file.mmap.start + c->offset - c->file.mmap.offset;
+}
+
 #endif
 
 
@@ -1238,62 +1286,24 @@ chunkqueue_write_chunk_file (const int fd, chunk * const restrict c, log_error_s
     const off_t count = c->file.length - c->offset;
     if (0 == count) return 0; /*(sanity check)*/
 
-    ssize_t wr;
   #if defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILE \
    && (!defined _LARGEFILE_SOURCE || defined HAVE_SENDFILE64) \
    && defined(__linux__) && !defined HAVE_SENDFILE_BROKEN
     /* Linux kernel >= 2.6.33 supports sendfile() between most fd types */
     off_t offset = c->offset;
-    wr = sendfile(fd, c->file.fd, &offset, count<INT32_MAX ? count : INT32_MAX);
-    if (wr >= 0) return wr;
-
-    if (wr < 0 && (errno == EINVAL || errno == ENOSYS))
+    const ssize_t wr =
+      sendfile(fd, c->file.fd, &offset, count<INT32_MAX ? count : INT32_MAX);
+    if (__builtin_expect( (wr >= 0), 1) || (errno != EINVAL && errno != ENOSYS))
+        return wr;
   #endif
-    {
-      #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
-        /*(caller is responsible for handling SIGBUS if chunkqueue might contain
-         * untrusted file, i.e. any file other than lighttpd-created tempfile)*/
-        /*(tempfiles are expected for input, MAP_PRIVATE used for portability)*/
-        /*(mmaps and writes complete chunk instead of only small parts; files
-         * are expected to be temp files with reasonable chunk sizes)*/
 
-        /* (re)mmap the buffer if range is not covered completely */
-        if (MAP_FAILED == c->file.mmap.start
-            || c->offset < c->file.mmap.offset
-            || c->file.length
-                 > (off_t)(c->file.mmap.offset + c->file.mmap.length)) {
+  #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
+    const char * const data = chunkqueue_mmap_chunk_len(c, count);
+    if (NULL != data)
+        return chunkqueue_write_data(fd, data, count);
+  #endif
 
-            if (MAP_FAILED != c->file.mmap.start) {
-                munmap(c->file.mmap.start, c->file.mmap.length);
-                c->file.mmap.start = MAP_FAILED;
-            }
-
-            c->file.mmap.offset = mmap_align_offset(c->offset);
-            c->file.mmap.length = c->file.length - c->file.mmap.offset;
-            c->file.mmap.start  =
-              mmap(NULL, c->file.mmap.length, PROT_READ, MAP_PRIVATE,
-                   c->file.fd, c->file.mmap.offset);
-
-          #if 0
-            /* close() fd as soon as fully mmap() rather than when done w/ chunk
-             * (possibly worthwhile to keep active fd count lower) */
-            if (c->file.is_temp && !c->file.refchg) {
-                close(c->file.fd);
-                c->file.fd = -1;
-            }
-          #endif
-        }
-
-        if (MAP_FAILED != c->file.mmap.start) {
-            const char * const data =
-              c->file.mmap.start + c->offset - c->file.mmap.offset;
-            do { wr = write(fd,data,count); } while (-1 == wr && errno==EINTR);
-        }
-        else
-      #endif
-            wr = chunkqueue_write_chunk_file_intermed(fd, c, errh);
-    }
-    return wr;
+    return chunkqueue_write_chunk_file_intermed(fd, c, errh);
 }
 
 
