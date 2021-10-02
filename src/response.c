@@ -834,7 +834,7 @@ http_response_write_prepare(request_st * const r)
                 if (r->resp_decode_chunked) {
                     /*(reconstitute initial partially-decoded chunk)*/
                     off_t gw_chunked = r->gw_dechunk->gw_chunked;
-                    if (gw_chunked > 2)
+                    if (gw_chunked >= 2)
                         qlen += gw_chunked - 2;
                     else if (1 == gw_chunked)
                         chunkqueue_append_mem(&r->write_queue,
