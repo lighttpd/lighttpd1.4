@@ -918,7 +918,7 @@ void chunkqueue_internal_pipes(int init) {
     if (-1 != cqpipes[0]) { close(cqpipes[0]); cqpipes[0] = -1; }
     if (-1 != cqpipes[1]) { close(cqpipes[1]); cqpipes[1] = -1; }
     if (init)
-        fdevent_pipe_cloexec(cqpipes, 262144);
+        if (0 != fdevent_pipe_cloexec(cqpipes, 262144)) { } /*(ignore error)*/
 }
 
 __attribute_cold__

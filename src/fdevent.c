@@ -637,7 +637,7 @@ int fdevent_pipe_cloexec (int * const fds, const unsigned int bufsz_hint) {
     }
   #ifdef F_SETPIPE_SZ
     if (bufsz_hint > 65536)
-        fcntl(fds[1], F_SETPIPE_SZ, bufsz_hint);
+        if (0 != fcntl(fds[1], F_SETPIPE_SZ, bufsz_hint)) { } /*(ignore error)*/
   #endif
     return 0;
  #endif
