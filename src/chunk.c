@@ -896,7 +896,7 @@ ssize_t chunkqueue_append_splice_pipe_tempfile(chunkqueue * const restrict cq, c
                 return total;
               case EINVAL: /*(assume total == 0 if EINVAL)*/
                 wr = chunkqueue_append_drain_pipe_tempfile(cq, fd, len, errh);
-                return (0 == wr) ? total + len : wr;
+                return (0 == wr) ? total + (ssize_t)len : wr;
               default:
                 if (!chunkqueue_append_tempfile_err(cq, errh, c))
                     return -errnum;

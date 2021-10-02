@@ -16,6 +16,11 @@
 #ifndef _NETBSD_SOURCE
 #define _NETBSD_SOURCE
 #endif
+#ifdef __OpenBSD__
+#ifndef _BSD_SOURCE
+#define _BSD_SOURCE
+#endif
+#endif
 #include "first.h"
 
 #include "ck.h"
