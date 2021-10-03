@@ -450,7 +450,7 @@ if get_option('with_openssl')
 	# manual search:
 	# header: openssl/ssl.h
 	# function: SSL_new (-lssl)
-	# function: BIO_f_base64 (-lcrypto)
+	# function: RAND_bytes (-lcrypto)
 	libssl = [ dependency('libssl') ]
 	libsslcrypto = [ dependency('libcrypto') ]
 	libcrypto = [ dependency('libcrypto') ]

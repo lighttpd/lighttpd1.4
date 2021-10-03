@@ -682,7 +682,7 @@ if test "$WITH_OPENSSL" != no; then
   AC_CHECK_HEADERS([openssl/ssl.h], [], [
     AC_MSG_ERROR([openssl headers not found. install them or build without --with-openssl])
   ])
-  AC_CHECK_LIB([crypto], [BIO_f_base64],
+  AC_CHECK_LIB([crypto], [RAND_bytes],
     [CRYPTO_LIB="-lcrypto"],
     [AC_MSG_ERROR([openssl crypto library not found. install it or build without --with-openssl])]
   )

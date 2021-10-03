@@ -239,6 +239,7 @@ mod_openssl_session_ticket_key_generate (unix_time64_t active_ts, unix_time64_t 
      */
     /*(RAND_priv_bytes() not in openssl 1.1.0; introduced in openssl 1.1.1)*/
   #if OPENSSL_VERSION_NUMBER < 0x10101000L \
+   || defined(BORINGSSL_API_VERSION) \
    || defined(LIBRESSL_VERSION_NUMBER)
   #define RAND_priv_bytes(x,sz) RAND_bytes((x),(sz))
   #endif
@@ -653,6 +654,7 @@ PEM_ASN1_read_bio_secmem(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
     char *ret = NULL;
 
   #if OPENSSL_VERSION_NUMBER >= 0x10101000L \
+   && !defined(BORINGSSL_API_VERSION) \
    && !defined(LIBRESSL_VERSION_NUMBER)
     if (!PEM_bytes_read_bio_secmem(&data, &len, NULL, name, bp, cb, u))
   #else
@@ -666,6 +668,7 @@ PEM_ASN1_read_bio_secmem(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
         PEMerr(PEM_F_PEM_ASN1_READ_BIO, ERR_R_ASN1_LIB);
   #endif
   #if OPENSSL_VERSION_NUMBER >= 0x10101000L \
+   && !defined(BORINGSSL_API_VERSION) \
    && !defined(LIBRESSL_VERSION_NUMBER)
     OPENSSL_secure_clear_free(data, len);
   #else
