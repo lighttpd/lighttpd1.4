@@ -3,6 +3,443 @@
 NEWS
 ====
 
+- 1.4.60 - 2021-10-03
+  * [meson] add with_zstd to meson_options.txt
+  * [mod_magnet] reject stat() of empty string (fixes #3064)
+  * [mod_magnet] avoid infinite loop in atpanic (fixes #3065)
+  * [mod_magnet] do not call luaL_error outside pcall (#3065)
+  * [core] 101 upgrade fails if Content-Length incl (fixes #3063)
+  * [mod_gnutls,mod_mbedtls] recog common cipherstring
+  * [tests] remove stray option in test lighttpd.conf
+  * [mod_auth] close HTTP/2 connection after bad pass
+  * [build] fix SCons pkg-config err handling (fixes #3066)
+  * [core] inline funcs to decode h2 framing nums (fixes #3067)
+  * [build] use -pipe with gcc and clang
+  * [mod_mbedtls] preproc wrap ssl_parse_client_hello
+  * [build] augment configure.ac msgs to remove FAM (#3068)
+  * [core] allow '*' in "*:80" socket spec
+  * [core] rename local var
+  * [core] mark config registration funcs cold
+  * [core] fix -fsanitize=undefined pedantic warning (fixes #3069)
+  * [core] algo_hmac.[ch] wrapper (portability)
+  * [mod_secdownload] use algo_hmac.[ch]
+  * [mod_secdownload] use http_auth_const_time_memeq()
+  * [autoconf] add ajp13 to build msgs
+  * [mod_auth] send 401 if digest algo not supported
+  * [mod_deflate] do not cache 206 Partial Content
+  * [core] chunkqueue_append_cq_range()
+  * [core] http_range.[ch] RFC 7233 Range handling
+  * [core] RFC 7233 Range handling for non-streaming
+  * [TLS] fix crash for (broken) nested $SERVER[] cfg
+  * [core] ignore server.event-handler = "libev"
+  * [mod_openssl] use newer openssl 3.0.0 interfaces
+  * [core] quiet coverity warning
+  * [core] http_cgi_local_redir() rename
+  * [core] http_cgi.[ch] CGI interfaces (RFC 3875)
+  * [core] save parsed listen addrs at startup
+  * [core] http_cgi_encode_varname()
+  * [core] add some ifdefs in algo_hmac.c
+  * [core] use epoll_create1() if available
+  * [core] adjust stat_cache_get_entry() conditions
+  * [core] _WIN32 impl of read-only mmap(), munmap()
+  * [core] remove stream.[ch]
+  * [multiple] use binary '|' to reconstruct ts
+  * [core] check EAGAIN if unix socket connect() delay
+  * [multiple] prefer monotonic time for internal use
+  * [core] optimize buffer_urldecode_path()
+  * [mod_openssl] skip cert chain build if self-issued
+  * [mod_nss] avoid NSS crash w/ config file error
+  * [multiple] prefer monotonic time for internal use
+  * [core] http_response_handle_cachable() optim
+  * [core] fix chunkqueue_small_resp_optim partial rd
+  * [core] defer pcre_compile until after config parse
+  * [multiple] PCRE w/ PCRE_STUDY_JIT_COMPILE (fixes #2361)
+  * [mod_dirlisting, mod_trigger_b4_dl] use keyvalue
+  * [multiple] add attrs from gcc -Wsuggest-attribute=
+  * [mod_gnutls] quiet clang warning
+  * [core] http_response_physical_path_error()
+  * [multiple] buffer_has_slash_suffix()
+  * [core] modify path in-place checking for path-info
+  * [multiple] optimize primitives, buffer_extend()
+  * [multiple] do not clear physical.path if finished
+  * [core] http_kv.[ch] perf tuning
+  * [core] remove bad prototype from algo_splaytree.h
+  * [multiple] mark addtl funcs attr returns_nonnull
+  * [TLS] init STEK even if time is 1970 (fixes #3075)
+  * [core] restart if large large clock jump detected (#3075)
+  * [core] copy string and len directly from tmp_buf
+  * [core] move special case for Content-Type CGI hdr
+  * [mod_ssi] inline some buffers in ssi plugin_data
+  * [core] use monotonic secs for piped loggers start
+  * [mod_cml] use cached time from log_epoch_secs
+  * [mod_dirlisting] limit buffer use for large dirs
+  * [multiple] http_header APIs to reduce str copies
+  * [mod_userdir] use stat_cache_path_isdir()
+  * [mod_indexfile] reduce copying of base path
+  * [TLS] https_add_ssl_client_verify_err()
+  * [TLS] use stack for SSL_CLIENT_S_DN_* tag
+  * [core] buffer_append_strftime() perf annotations
+  * [mod_userdir] use 2-element cache
+  * [mod_magnet] use http_chunk_* APIs
+  * [mod_accesslog] reformat numeric timestamp
+  * [mod_accesslog] strftime %z for numeric timestamp
+  * [mod_accesslog] reformat numeric timestamp code
+  * [multiple] strftime %F and %T
+  * [mod_trigger_b4_dl] gdbm_reorganize once a day
+  * [mod_status] double-buffer large output to tmpfile
+  * [mod_ssi] shared code to wrap strftime()
+  * [mod_ssi] use intermediate chunkqueue to aggregate
+  * [multiple] pass len when copying constant strings
+  * [core] short-circuit encoding if nothing to encode
+  * [build] check for mempcpy()
+  * [core] buffer_append_* aggregates
+  * [core] config_vars_init()
+  * [multiple] use buffer_append_* aggregates
+  * [core] define __attribute_nonnull__
+  * [core] mark select buffer.[ch] funcs attr nonnull
+  * [core] mark select http_kv.[ch] funcs attr nonnull
+  * [core] mark some chunk.h funcs attr cold
+  * [core] remove an excess check
+  * [core] mark debug path unlikely
+  * [core] ignore empty headers unless pseudo-headers
+  * [multiple] buffer_copy_path_len2() aggregate
+  * [mod_dirlisting] process dir in subrequest handler
+  * [mod_dirlisting] restructure and keep state
+  * [mod_dirlisting] read dir in pieces; less blocking
+  * [mod_dirlisting] upper limit on parallel dirlist
+  * [mod_dirlisting] parse query string in javascript
+  * [mod_dirlisting] dir-listing.cache option
+  * [mod_webdav] webdav_log_xml_response()
+  * [mod_webdav] limit mem use under extreme condition
+  * [core] vector.h tweaks
+  * [mod_proxy] send HTTP/1.0 to backend if no Host
+  * [build] fix zstd option in meson (fixes #3076)
+  * [multiple] more reuse of http_date_time_to_str()
+  * [TLS] rename ssl.verifyclient.ca-*file options
+  * [mod_openssl] issue error trace if < openssl 1.1.1
+  * [mod_webdav] always define webdav_mmap_file_chunk
+  * [mod_dirlisting] ignore error if include file fail
+  * [multiple] quiet coverity warnings
+  * [scons] link lighttpd with pcre for fullstatic
+  * [scons] link lighttpd with pcre for static build
+  * [core] exit 0 upon shutdown if no connections open
+  * [mod_nss] define TLSv1_3 as bitflag
+  * [core] update ls-hpack
+  * [core] discard some HTTP/2 DATA after response (fixes #3078)
+  * [mod_expires,mod_webdav] fix truncated date string
+  * [mod_expire] accept time labels without plural 's'
+  * [mod_webdav] accept alt syntax in webdav.opts
+  * [core] recognize "enabled"/"disabled" for bool
+  * [mod_expire] check for default if mime not found
+  * [core] move timegm() impl inline in sys-time.h
+  * [mod_expire] send only Cache-Control to >=HTTP/1.1
+  * [mod_webdav] quiet pedantic compiler warning
+  * [core] reuse code to parse backend response
+  * [core] consistent inclusion of sys-time.h
+  * [mod_authn_file] wipe password/digest after use
+  * [TLS] ALPN h2 policy
+  * [core] tolerate dup array config values if match
+  * [multiple] static file optimization; reuse cache
+  * [mod_staticfile] move cold paths to separate func
+  * [build] --with-nss add test for /usr/include/nspr4
+  * [core] li_base64_decode similar to li_to_base64
+  * [core] li_base64_decode mark cold code path
+  * [core] li_to_base64 alt code to add padding
+  * [core] buffer_append_base64_encode_opt()
+  * [core] base64_charset enum supports only 2 tables
+  * [core] consolidate overflow checks in li_to_base64
+  * [mod_auth] include unistd.h for crypt() on Mac OS
+  * [core] tighten code in request_check_hostname()
+  * [core] merge http_response_send_file 0-size case
+  * [mod_extforward] shared mod_extforward_bad_request
+  * [core] http_response_send_file() mark cold paths
+  * [core] improve HTTP/2 behavior w/ max-request-size
+  * [tests] disable secdownload HMAC tests for NSS
+  * [core] check for Upgrade before h2 upgrade check
+  * [core] remove buffer_is_equal_right_len()
+  * [core] buffer_is_equal_string -> buffer_eq_slen
+  * [core] mark cold paths in http_response_config
+  * [core] http_response_prepare() OPTIONS *, CONNECT
+  * [core] mark some likely hot paths (better asm)
+  * [core] simplify buffer_path_simplify()
+  * [core] remove excess assertions in buffer_commit()
+  * [core] quiet coverity noise
+  * [mod_auth] include unistd.h for crypt() on *nix
+  * [cmake] improve cmake detection of timegm
+  * [cmake] update src/config.h.cmake
+  * [core] adjust r->http_host ptr caching
+  * [core] merge uri_raw and uri_clean hooks
+  * [core] reorder hook enum for better mem locality
+  * [core] remove redundant check for max_conns
+  * [multiple] mark con->srv_socket a const ptr
+  * [core] accept in network_server_handle_fdevent()
+  * [mod_*_dbi] fix sqlite3_dbdir spelling in comments
+  * [core] remove HANDLER_UNSET enum value
+  * [core] add option to read config file from stdin
+  * [mod_flv_streaming] check range before sending FLV
+  * [mod_magnet] use http_chunk_append_file_ref_range
+  * [core] range chk http_chunk_append_file_ref_range
+  * [core] remove some (now) unused http_chunk APIs
+  * [core] document error edge case for HTTP/1.0
+  * [core] fix kill workers and shutdown by signal
+  * [core] store int* ptr to common gw status counters
+  * [tests] quite coverity warning in test_request.c
+  * [core] tighter OS event poll loops (better asm)
+  * [core] omit fdevent select() code if poll() avail
+  * [core] adjust some array code (better asm)
+  * [core] base64 encode round-up for required space
+  * [core] base64 encode w/ reduced data dependencies
+  * [core] merge base64 encoding to li_base64_enc()
+  * [core] li_base64_dec() on 4 bytes at a time
+  * [core] load padding char from base64_table
+  * [core] remove size maint in algo_splaytree
+  * [core] remove excess counts from print config
+  * [core] consolidate config printing code
+  * [core] move data_{array,integer,string} to array.c
+  * [core] define __attribute_unused__ if needed
+  * [core] ck.[ch] - C11 Annex K wrappers
+  * [multiple] use thread-safe strerror where avail
+  * [multiple] move const time cmp funcs to ck.[ch]
+  * [multiple] rename safe_memclear() -> ck_memzero()
+  * [multiple] http_auth_digest_hex2bin -> li_hex2bin
+  * [mod_auth,mod_vhostdb] move helper funcs to mods
+  * [mod_auth*] rename http_auth.* -> mod_auth_api.*
+  * [mod_vhostdb*] rename http_vhostdb->mod_vhostdb_api
+  * [core] comment out ck_getenv_s() (unused)
+  * [mod_secdownload] include algo_hmac.c in mod
+  * [core] make insert_dup an optional array method
+  * [core] return entry from array_insert_data_at_pos
+  * [core] network_write optimizations
+  * [core] network_write prefer writev() over write()
+  * [core] connection_handle_read_state mark hot case
+  * [core] buffer_commit() optim; better asm
+  * [TLS] write_cq_ssl defer remove_finished_chunks
+  * [core] compare entire "/bin/sh" "-c" after execve
+  * [core] reduce repeated work in http_cgi_headers()
+  * [core] code reuse with array_match_value_prefix()
+  * [build] adjustments for autotools on Mac OS X
+  * [build] autoupdate; still autoconf 2.60 compatible
+  * [build] MacOS linker compat
+  * [core] http_header_hkey_get() perf (better asm)
+  * [TLS] reset stek_rotate_ts if clock moves backward
+  * [core] sock_addr_from_buffer_hints_numeric unused
+  * [core] tweaks writing response header (better asm)
+  * [core] adjust buffer use for hdr name for lshpack
+  * [core] comment out unused part of http_etag_remix
+  * [core] inline fam_dir_entry buffer 'name' member
+  * [multiple] reduce redundant NULL buffer checks
+  * [core] calculate backend host gw_hash at startup
+  * [core] gw_host_get() comment out devel debugging
+  * [core] request_config_reset()
+  * [mod_magnet] inline name and etag buffers in cache
+  * [mod_magnet] sync script load w/ stat_cache
+  * [core] clear etag in stat_cache_get_entry_open()
+  * [mod_auth] merge some repeated code; code reuse
+  * [core] add iovec wrappers to sys-crypto-md.h
+  * [core] li_base64_dec()
+  * [multiple] use <algo>_iov() digest funcs
+  * [mod_auth] mod_auth_digest_get()
+  * [mod_auth] mod_auth_algorithm_parse() w/ algo len
+  * [mod_authn_dbi] copy strings before escaping
+  * [mod_auth] refactor mod_auth_check_digest()
+  * [mod_auth] refactor mod_auth_check_basic()
+  * [build] look for memcpy and define HAVE_MEMCPY
+  * [core] buffer_path_simplify() quick(er) path
+  * [core] reduce memcmp in http_request_parse_header
+  * [build] look for port.h on Solaris, not sys/port.h
+  * [core] buffer_realloc() using power-2 realloc
+  * [core] lowercase r->http_host, r->uri.authority
+  * [multiple] buffer_copy_string_len_lc()
+  * [mod_magnet] cache script objects at config time
+  * [core] move backtrace and assert macros to ck.[ch]
+  * [core] allocate initial request pool w/ srv->conns
+  * [mod_extforward] inline some more data structures
+  * [mod_access] remove excess trace
+  * [multiple] reduce use of BUFFER_INTLEN_PTR
+  * [multiple] inline struct in con->dst_addr_buf
+  * [core] reset large path buffers from long URLs
+  * [core] construct file path after docroot hook
+  * [core] avoid inlining buffer_eq_icase_ssn()
+  * [core] order gw_proc members for packing and usage
+  * [core] order gw_host members for packing and usage
+  * [mod_proxy] proxy_response_headers load v earlier
+  * [core] proxy_create_env() tweaks
+  * [core] write_all() simpler loop; better asm
+  * [core] http_date_time_append() convenience macro
+  * [core] reduce excess cc inlining in http_chunk.c
+  * [core] const buffer * in config_check_cond_nocache
+  * [core] parse $HTTP["remote-ip"] CIDR mask at start
+  * [core] reduce $HTTP["host"] compare str scanning
+  * [multiple] http_method_buf()
+  * [core] config_check_cond_nocache() xor return code
+  * [core] refactor config_check_cond_nocache() flow
+  * [mod_deflate] use deflate.allowed-encodings order
+  * [mod_deflate] use ZSTD_c_strategy w/ compress lvl
+  * [mod_deflate] deflate.params per-encoder params
+  * [mod_deflate] use brotli quality 5 by default
+  * [mod_deflate] improve compress.*->deflate.* remap
+  * [mod_auth] detect and skip BWS (bad whitespace)
+  * [core] better trace if TLS received on clear port
+  * [core] replace strncasecmp w/ buffer_eq_icase_ssn
+  * [tests] use generated date in HTTP If conditionals
+  * [tests] update t/test_request.c
+  * [tests] mv tests from request.t to test_request.c
+  * [tests] t/test_mod_staticfile
+  * [tests] combine *.t using tests/lighttpd.conf
+  * [tests] combine *.t using tests/condition.conf
+  * [tests] speed up mod-fastcgi and mod-scgi tests
+  * [core] report Y2038 support in lighttpd -V
+  * [autoconf] add AC_SYS_LARGEFILE for lfs
+  * [multiple] Y2038 32-bit signed time_t mitigations
+  * [mod_deflate] use http_header_str_contains_token
+  * [core] tune http_response_process_headers()
+  * [core] use CLOCK_MONOTONIC_COARSE where available
+  * [core] log_clock_gettime->clock_gettime for 64-bit
+  * [core] Y2038: use _TIME_BITS=64 on 32-bit glibc
+  * [core] define _DEFAULT_SOURCE in first.h
+  * [build] check for sys/filio.h in CMake and meson
+  * [core] quiet compiler warnings
+  * [mod_openssl] no ALPN fatal error w/ mod_sockproxy (fixes #3081)
+  * [core] make missing mod_deflate not a fatal error
+  * [core] store time for last r/w to a backend socket
+  * [core] gw_backend_error() shared code
+  * [core] connect, write, read timeouts on backends (fixes #3086)
+  * [doc] https://wiki.lighttpd.net/Docs_Performance
+  * [core] tweak buffer merging to reduce mem
+  * [core] chunkqueue_append_buffer always clears buf
+  * [core] http_response_append_{buffer,mem}()
+  * [core] improve handling of suboptimal backend wr
+  * [core] http_response_read() indicate resp finished
+  * [mod_cgi] cgi.limits "read-timeout" "write-timeout" (#3086)
+  * [core] clarify error message in gw_backend.c
+  * [core] set min srv->max_fds = 32 (sanity check)
+  * [core] adjust server overload check
+  * [core] free fdwaitqueue list when empty
+  * [core] adjust srv->srvconf.max_conns at startup
+  * [core] conns_pool separate from conns list (#3084)
+  * [build] update ax_prog_cc_for_build.m4
+  * [core] add wolfssl-specific include
+  * [core] rename srv->max_conns -> srv->lim_conns
+  * [core] change srv->conns to doubly-linked-list
+  * [core] change con joblist to singly-linked-list
+  * [core] remove connection_list_append()
+  * [core] clear request,connection pools every 64 sec (#3084)
+  * [mod_wolfssl] wolfSSL_sk_X509_NAME_push change
+  * [core] clarify an error message
+  * [core] reduce optim inline of cold funcs
+  * [core] remove HANDLER_WAIT_FOR_FD
+  * [mod_cgi] reuse chunk buffers
+  * [mod_cgi] use linked list for process list
+  * [mod_uploadprogress] use splay_tree for req list
+  * [multiple] remove base.h include where not used
+  * [mod_indexfile] section into subroutines
+  * [mod_extforward] HAProxy PROXY env PP2_UNIQUE_ID
+  * [mod_magnet] reuse lighty lua table
+  * [core] li_hmac_sha512()
+  * [mod_magnet] expose md and hmac funcs to lua
+  * [mod_magnet] allow modification of request headers
+  * [mod_magnet] lighty.stat now returns userdata obj
+  * [mod_magnet] protect and control lighty table mod
+  * [mod_magnet] expose enc/dec str funcs to lua
+  * [mod_magnet] look up env id by strlen, then strcmp
+  * [core] reuse some cold duplicate hdr match code
+  * [core] use mod name in trace instead of mod_gw
+  * [mod_magnet] lighty.r.* interfaces to request
+  * [core] refuse excess h2 streams at con start (fixes #3093)
+  * [mod_magnet] lighty.c.cookie_tokens
+  * [mod_magnet] lighty.c.readdir
+  * [mod_magnet] use blank str for nil (do not panic)
+  * [mod_magnet] rename magnet_cgi_ to magnet_envvar_
+  * [mod_magnet] reset config cache for uri components
+  * [mod_magnet] reset config cache for remote addr
+  * [core] sock_addr_set_port()
+  * [mod_magnet] attrs for remote port and server port
+  * [mod_magnet] detect MAGNET_RESTART_REQUEST loops
+  * [mod_magnet] ignore 1xx return in response start
+  * [mod_echo] test module to echo request as response
+  * [core] base64url pad char is '='; change from '.'
+  * [mod_cgi] improve CGI offloading
+  * [mod_openssl] default disable client renegotiation
+  * [core] log_error_multiline()
+  * [tests] t/test_mod_indexfile
+  * [tests] IO::Socket::INET->new( Timeout => 1 )
+  * [mod_indexfile] update path with buffer path funcs
+  * [tests] move tests/docroot/www contents up 1 level
+  * [build] look for malloc.h and mallopt()
+  * [core] config mallopt(M_ARENA_MAX, 2) (#3084)
+  * [core] periodically malloc_trim() to release mem (fixes #3084)
+  * [build] propagate HAVE_DLFCN_H in builds
+  * [core] cfg server.bindhost after $SERVER["socket"]
+  * [core] TCP_CORK w/ MEM_CHUNK then FILE_CHUNK
+  * [core] remove server.upload-temp-file-size limit
+  * [core] expose ck_bt() for debugging
+  * [core] change backtrace format to put addr first
+  * [core] reduce stack use in main()
+  * [core] write all cq MEM_CHUNK if spill to tempfile
+  * [core] realloc buffer power-2 size + 1 for '\0'
+  * [mod_cgi] cgi.limits "tcp-fin-propagate" => "SIG"
+  * [core] consolidate more gw_host, gw_proc init code
+  * [core] mark cold more gateway maintenance code
+  * [core] reduce wait time in gw_spawn_connection()
+  * [core] remove redundant waitpid() on each backend
+  * [multiple] quiet coverity warnings
+  * [build] define rsize_t on FreeBSD
+  * [core] quiet coverity warnings
+  * [tests] skip time-sensitive test during CI testing
+  * [core] clear buffer after backend dechunk
+  * [core] update comment about server.max-write-idle
+  * [core] fdlog.[ch]; fdevent_*_logger_* -> fdlog_*
+  * [multiple] de-dup file and piped loggers (fixes #3101)
+  * [multiple] prefer r->tmp_buf to p->tmp_buf
+  * [core] shared temp buffer for log_*error*()
+  * [core] refuse excess initial streams only if block (fixes #3100)
+  * [core] quiet coverity warnings
+  * [core] reject HTTP/2 pseudo-header in trailers (#3102)
+  * [core] remove redundant check in h2_recv_headers()
+  * [core] reduce oversized mem alloc for backends
+  * [core] HTTP/2 GOAWAY after timeout before read (fixes #3102)
+  * [core] default backend "connect-timeout" to 8 (#3086)
+  * [core] HTTP/2 GOAWAY after timeout before read (#3102)
+  * [core] mark attr malloc, returns nonnull
+  * [core] separate mem pool for FILE_CHUNK reuse
+  * [core] retain largest chunk on oversized chunk lst
+  * [core] improve chunk buffer reuse from backends
+  * [multiple] internal control for backend read bytes
+  * [core] option: errorlog high precision timestamps
+  * [core] create temp file name in chunk buffer
+  * [core] chunkqueue_get_append_newtempfile()
+  * [core] remove redundant checks for tempfile chunk
+  * [multiple] fdevent_mkostemp()
+  * [build] check for pread(), pwrite(), splice()
+  * [multiple] _WIN32 fdevent_pipe_cloexec()
+  * [core] _WIN32 impl of fdevent_mkostemp()
+  * [multiple] check feature flags funcs; code reuse
+  * [multiple] avoid empty chunks in chunkqueue
+  * [core] splice() data from backends to tempfiles
+  * [core] fix chunked decoding from backend (#3044, #3046)
+  * [core] remove obsolete comment about r->gw_dechunk
+  * [core] improve chunk buffer reuse from backends
+  * [mod_cgi] improve chunk buffer reuse from backends
+  * [core] disable streaming response with authorizer (fixes #3106)
+  * [multiple] clarify error msg when no cert avail
+  * [core] disable server.graceful-restart-bg if spawn
+  * [tests] ignore SIGINT, SIGUSR1 in fcgi-responder
+  * [core] cap size of data framed for HTTP/2 response
+  * [core] fix typo in h2_send_cqdata()
+  * [core] use pread() to skip lseek()
+  * [core] h2_send_cqdata() returns how much data sent
+  * [core] allow up to 32k of data frames per stream
+  * [core] limit initial response header backend read
+  * [core] read files into mem when framed for HTTP/2
+  * [core] chunkqueue_mmap_chunk_len() for code reuse
+  * [core] chunkqueue_peek_data() mmap experiment
+  * [core] quiet coverity warnings
+  * [core] portability tweaks for various platforms/cc
+  * [core] fix chunked decoding from backend (#3044, #3046)
+  * [doc] update config files
+  * [mod_openssl] boringssl compat
+  * [core] adjust indent for clarity
+
 - 1.4.59 - 2021-02-02
   * [mod_webdav] hide unused funcs depending on build
   * [mod_mbedtls] include mbedtls/platform_util.h
