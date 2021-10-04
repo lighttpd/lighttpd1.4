@@ -39,6 +39,22 @@
 #include <sys/types.h>
 #include <stddef.h>
 
+#ifndef __BEGIN_DECLS
+#ifdef __cplusplus
+#define __BEGIN_DECLS extern "C" {
+#else
+#define __BEGIN_DECLS
+#endif
+#endif
+
+#ifndef __END_DECLS
+#ifdef __cplusplus
+#define __END_DECLS }
+#else
+#define __END_DECLS
+#endif
+#endif
+
 #if defined HAVE_STDINT_H
 # include <stdint.h>
 #elif defined HAVE_INTTYPES_H
