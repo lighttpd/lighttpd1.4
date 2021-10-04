@@ -100,7 +100,7 @@ static void
 log_buffer_timestamp (buffer * const restrict b)
 {
     if (-2 == log_tlast) { /* -2 is value to flag high-precision timestamp */
-        struct timespec ts = { 0, 0 };
+        unix_timespec64_t ts = { 0, 0 };
         log_clock_gettime_realtime(&ts);
       #if 0
         buffer_append_int(b, TIME64_CAST(ts.tv_sec));
