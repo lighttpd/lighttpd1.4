@@ -56,7 +56,7 @@ void buffer_move(buffer * restrict b, buffer * restrict src) {
 /* make sure buffer is at least "size" big + 1 for '\0'. keep old data */
 __attribute_cold__
 __attribute_noinline__
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 static char* buffer_realloc(buffer * const restrict b, const size_t len) {
     #define BUFFER_PIECE_SIZE 64uL  /*(must be power-of-2)*/
@@ -78,7 +78,7 @@ static char* buffer_realloc(buffer * const restrict b, const size_t len) {
 
 __attribute_cold__
 __attribute_noinline__
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 static char* buffer_alloc_replace(buffer * const restrict b, const size_t size) {
     /*(discard old data so realloc() does not copy)*/
@@ -103,7 +103,7 @@ char* buffer_string_prepare_copy(buffer * const b, const size_t size) {
 
 __attribute_cold__
 __attribute_noinline__
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 static char* buffer_string_prepare_append_resize(buffer * const restrict b, const size_t size) {
     if (b->used < 2) {  /* buffer_is_blank(b) */
@@ -300,7 +300,7 @@ void buffer_append_uint_hex_lc(buffer *b, uintmax_t value) {
 	}
 }
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 static char* utostr(char buf[LI_ITOSTRING_LENGTH], uintmax_t val) {
 	char *cur = buf+LI_ITOSTRING_LENGTH;
@@ -313,7 +313,7 @@ static char* utostr(char buf[LI_ITOSTRING_LENGTH], uintmax_t val) {
 	return cur;
 }
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 static char* itostr(char buf[LI_ITOSTRING_LENGTH], intmax_t val) {
 	/* absolute value not defined for INTMAX_MIN, but can take absolute

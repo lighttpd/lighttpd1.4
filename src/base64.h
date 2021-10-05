@@ -19,7 +19,7 @@ size_t li_base64_enc(char* restrict out, size_t out_length, const unsigned char*
 #define li_to_base64(out, out_length, in, in_length, charset) \
         li_base64_enc((out), (out_length), (in), (in_length), (charset), 1)
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 char* buffer_append_base64_enc(buffer *out, const unsigned char* in, size_t in_length, base64_charset charset, int pad);
 

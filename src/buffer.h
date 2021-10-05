@@ -33,7 +33,7 @@ __attribute_malloc__
 __attribute_returns_nonnull__
 buffer* buffer_init(void);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 buffer* buffer_init_buffer(const buffer *src);
 
@@ -43,7 +43,7 @@ buffer* buffer_init_string(const char *str); /* str can  be NULL */
 void buffer_free(buffer *b); /* b can be NULL */
 
 /* reset b. if NULL != b && NULL != src, move src content to b. reset src. */
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_move(buffer * restrict b, buffer * restrict src);
 
 /* make sure buffer is large enough to store a string of given size
@@ -51,7 +51,7 @@ void buffer_move(buffer * restrict b, buffer * restrict src);
  * sets b to an empty string, and may drop old content.
  * @return b->ptr
  */
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 char* buffer_string_prepare_copy(buffer *b, size_t size);
 
@@ -61,7 +61,7 @@ char* buffer_string_prepare_copy(buffer *b, size_t size);
  * "used" data is preserved; if not empty buffer must contain a
  * zero terminated string.
  */
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 char* buffer_string_prepare_append(buffer *b, size_t size);
 
@@ -69,7 +69,7 @@ char* buffer_string_prepare_append(buffer *b, size_t size);
  * buffer_string_prepare_append() which only ensures space is available)
  * returns pointer to which callers should immediately write x bytes
  */
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 char* buffer_extend(buffer * const restrict b, size_t x);
 
@@ -78,7 +78,7 @@ char* buffer_extend(buffer * const restrict b, size_t x);
  * requires enough space is present for the terminating zero (prepare with the
  * same size to be sure).
  */
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_commit(buffer *b, size_t size);
 
 /* clear buffer
@@ -86,7 +86,7 @@ void buffer_commit(buffer *b, size_t size);
  * - unsets used chars but does not modify existing ptr contents
  *   (b->ptr *is not* set to an empty, '\0'-terminated string "")
  */
-__attribute_nonnull__
+__attribute_nonnull__()
 static inline void buffer_clear(buffer *b);
 
 /* reset buffer
@@ -96,14 +96,14 @@ static inline void buffer_clear(buffer *b);
  *   (b->ptr *is not* set to an empty, '\0'-terminated string "")
  * - frees larger buffer (b->size > BUFFER_MAX_REUSE_SIZE)
  */
-__attribute_nonnull__
+__attribute_nonnull__()
 static inline void buffer_reset(buffer *b);
 
 /* free buffer ptr
  * - invalidate buffer contents; free ptr; reset ptr, used, size to 0
  */
 __attribute_cold__
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_free_ptr(buffer *b);
 
 void buffer_copy_string(buffer * restrict b, const char * restrict s);
@@ -123,13 +123,13 @@ struct const_iovec {
 };
 #endif
 
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_append_iovec(buffer * restrict b, const struct const_iovec *iov, size_t n);
 
 #define buffer_append_uint_hex(b,len) buffer_append_uint_hex_lc((b),(len))
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_append_uint_hex_lc(buffer *b, uintmax_t len);
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_append_int(buffer *b, intmax_t val);
 
 void buffer_append_strftime(buffer * restrict b, const char * restrict format, const struct tm * restrict tm);
@@ -137,44 +137,44 @@ void buffer_append_strftime(buffer * restrict b, const char * restrict format, c
 /* '-', log_10 (2^bits) = bits * log 2 / log 10 < bits * 0.31, terminating 0 */
 #define LI_ITOSTRING_LENGTH (2 + (8 * sizeof(intmax_t) * 31 + 99) / 100)
 
-__attribute_nonnull__
+__attribute_nonnull__()
 size_t li_itostrn(char *buf, size_t buf_len, intmax_t val);
-__attribute_nonnull__
+__attribute_nonnull__()
 size_t li_utostrn(char *buf, size_t buf_len, uintmax_t val);
 
 /* buf must be (at least) 2*s_len + 1 big. uses lower-case hex letters. */
 #define li_tohex(buf,buf_len,s,s_len) li_tohex_lc((buf),(buf_len),(s),(s_len))
-__attribute_nonnull__
+__attribute_nonnull__()
 void li_tohex_lc(char * restrict buf, size_t buf_len, const char * restrict s, size_t s_len);
-__attribute_nonnull__
+__attribute_nonnull__()
 void li_tohex_uc(char * restrict buf, size_t buf_len, const char * restrict s, size_t s_len);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 int buffer_eq_icase_ssn(const char * const a, const char * const b, const size_t len);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 int buffer_eq_icase_ss(const char * const a, const size_t alen, const char * const b, const size_t blen);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 int buffer_eq_icase_slen(const buffer * const b, const char * const s, const size_t slen);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 int buffer_eq_slen(const buffer * const b, const char * const s, const size_t slen);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 int buffer_is_equal(const buffer *a, const buffer *b);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_substr_replace (buffer * restrict b, size_t offset, size_t len, const buffer * restrict replace);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_append_string_encoded_hex_lc(buffer * restrict b, const char * restrict s, size_t len);
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_append_string_encoded_hex_uc(buffer * restrict b, const char * restrict s, size_t len);
 
 typedef enum {
@@ -187,22 +187,22 @@ typedef enum {
 void buffer_append_string_encoded(buffer * restrict b, const char * restrict s, size_t s_len, buffer_encoding_t encoding);
 
 /* escape non-printable characters; simple escapes for \t, \r, \n; fallback to \xCC */
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_append_string_c_escaped(buffer * restrict b, const char * restrict s, size_t s_len);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_urldecode_path(buffer *b);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 int buffer_is_valid_UTF8(const buffer *b);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_path_simplify(buffer *b);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_to_lower(buffer *b);
-__attribute_nonnull__
+__attribute_nonnull__()
 void buffer_to_upper(buffer *b);
 
 
@@ -248,11 +248,11 @@ static inline int light_isalnum(int c) {
 void buffer_append_path_len(buffer * restrict b, const char * restrict a, size_t alen); /* join strings with '/', if '/' not present */
 void buffer_copy_path_len2(buffer * restrict b, const char * restrict s1, size_t len1, const char * restrict s2, size_t len2);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 static inline int buffer_has_slash_suffix (const buffer * const b);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 static inline int buffer_has_pathsep_suffix (const buffer * const b);
 
@@ -265,14 +265,14 @@ static inline int buffer_has_pathsep_suffix (const buffer * const b);
 
 /* inline implementations */
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 static inline int buffer_is_unset(const buffer *b);
 static inline int buffer_is_unset(const buffer *b) {
     return 0 == b->used;
 }
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 static inline int buffer_is_blank(const buffer *b);
 static inline int buffer_is_blank(const buffer *b) {
@@ -280,7 +280,7 @@ static inline int buffer_is_blank(const buffer *b) {
 }
 
 /* buffer "C" len (bytes) */
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 static inline uint32_t buffer_clen (const buffer *b);
 static inline uint32_t buffer_clen (const buffer *b) {
@@ -288,40 +288,40 @@ static inline uint32_t buffer_clen (const buffer *b) {
 }
 
 /* buffer space remaining to append string without reallocating */
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 static inline uint32_t buffer_string_space(const buffer *b);
 static inline uint32_t buffer_string_space(const buffer *b) {
     return b->size ? b->size - (b->used | (0 == b->used)) : 0;
 }
 
-__attribute_nonnull__
+__attribute_nonnull__()
 static inline void buffer_copy_buffer(buffer * restrict b, const buffer * restrict src);
 static inline void buffer_copy_buffer(buffer * restrict b, const buffer * restrict src) {
     buffer_copy_string_len(b, BUF_PTR_LEN(src));
 }
 
-__attribute_nonnull__
+__attribute_nonnull__()
 static inline void buffer_append_buffer(buffer * restrict b, const buffer * restrict src);
 static inline void buffer_append_buffer(buffer * restrict b, const buffer * restrict src) {
     buffer_append_string_len(b, BUF_PTR_LEN(src));
 }
 
-__attribute_nonnull__
+__attribute_nonnull__()
 static inline void buffer_truncate(buffer *b, uint32_t len);
 static inline void buffer_truncate(buffer *b, uint32_t len) {
     b->ptr[len] = '\0'; /* b->ptr must exist; use buffer_blank() for trunc 0 */
     b->used = len + 1;
 }
 
-__attribute_nonnull__
+__attribute_nonnull__()
 static inline void buffer_blank(buffer *b);
 static inline void buffer_blank(buffer *b) {
     b->ptr ? buffer_truncate(b, 0) : (void)buffer_extend(b, 0);
 }
 
 /* append '/' to non-empty strings not ending in '/' */
-__attribute_nonnull__
+__attribute_nonnull__()
 static inline void buffer_append_slash(buffer *b);
 static inline void buffer_append_slash(buffer *b) {
     const uint32_t len = buffer_clen(b);
@@ -391,7 +391,7 @@ static inline uint32_t buffer_string_length(const buffer *b) {
  * - does not modify the string data apart from terminating zero
  * - reallocates the buffer iff needed
  */
-__attribute_nonnull__
+__attribute_nonnull__()
 static inline void buffer_string_set_length(buffer *b, uint32_t len);
 static inline void buffer_string_set_length(buffer *b, uint32_t len) {
     if (len < b->size)

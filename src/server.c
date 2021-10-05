@@ -1910,7 +1910,7 @@ static void server_handle_sigchld (server * const srv) {
 }
 
 __attribute_hot__
-__attribute_nonnull__
+__attribute_nonnull__()
 static void server_run_con_queue (connection * const restrict joblist, const connection * const sentinel) {
     for (connection *con = joblist, *jqnext; con != sentinel; con = jqnext) {
         jqnext = con->jqnext;

@@ -246,9 +246,9 @@ typedef struct unix_timespec64 unix_timespec64_t;
 #ifndef __attribute_nonnull__
 #if __has_attribute(nonnull) \
  || __GNUC_PREREQ(3,3)
-#define __attribute_nonnull__  __attribute__((__nonnull__))
+#define __attribute_nonnull__(params)  __attribute__((__nonnull__ params))
 #else
-#define __attribute_nonnull__
+#define __attribute_nonnull__(params)
 #endif
 #endif
 

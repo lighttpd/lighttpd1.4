@@ -95,7 +95,7 @@ ssize_t write_all(int fd, const void * const buf, size_t count) {
 }
 
 
-__attribute_nonnull__
+__attribute_nonnull__()
 static void
 log_buffer_timestamp (buffer * const restrict b)
 {
@@ -136,7 +136,7 @@ log_buffer_timestamp (buffer * const restrict b)
 }
 
 
-__attribute_nonnull__
+__attribute_nonnull__()
 static void
 log_buffer_prefix (buffer * const restrict b,
                    const char * const restrict filename,
@@ -168,7 +168,7 @@ log_buffer_append_encoded (buffer * const b,
 
 
 __attribute_format__((__printf__, 2, 0))
-__attribute_nonnull__
+__attribute_nonnull__()
 static void
 log_buffer_vsprintf (buffer * const restrict b,
                      const char * const restrict fmt, va_list ap)
@@ -207,7 +207,7 @@ log_buffer_vsprintf (buffer * const restrict b,
 }
 
 
-__attribute_nonnull__
+__attribute_nonnull__()
 static buffer *
 log_buffer_prepare (const log_error_st * const errh,
                     const char * const restrict filename,
@@ -224,7 +224,7 @@ log_buffer_prepare (const log_error_st * const errh,
 }
 
 
-__attribute_nonnull__
+__attribute_nonnull__()
 static void
 log_error_write (const log_error_st * const errh, buffer * const restrict b)
 {

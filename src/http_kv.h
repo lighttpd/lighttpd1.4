@@ -71,7 +71,7 @@ const char *get_http_version_name(int i);
 #define get_http_method_name(i) http_method_buf(i)->ptr
 
 #if 0 /*(unused)*/
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 int get_http_version_key(const char *s, size_t slen);
 #endif
@@ -79,20 +79,20 @@ int get_http_version_key(const char *s, size_t slen);
 __attribute_pure__
 const buffer *http_method_buf (http_method_t i);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_pure__
 http_method_t get_http_method_key(const char *s, size_t slen);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 void http_status_append(buffer *b, int status);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 void http_version_append(buffer *b, http_version_t version);
 
 #define http_method_get_or_head(method)   ((method) <= HTTP_METHOD_HEAD)
 #define http_method_get_head_post(method) ((method) <= HTTP_METHOD_POST)
 
-__attribute_nonnull__
+__attribute_nonnull__()
 static inline void http_method_append (buffer * const b, const http_method_t method);
 static inline void http_method_append (buffer * const b, const http_method_t method) {
     const buffer * const kv = http_method_buf(method);

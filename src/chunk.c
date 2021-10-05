@@ -371,7 +371,7 @@ static chunk * chunkqueue_append_mem_chunk(chunkqueue *cq, size_t sz) {
     return c;
 }
 
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 static chunk * chunkqueue_append_file_chunk(chunkqueue * const restrict cq, const buffer * const restrict fn, off_t offset, off_t len) {
     chunk * const c = chunk_acquire_filechunk();

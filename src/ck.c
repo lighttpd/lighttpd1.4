@@ -379,7 +379,7 @@ error:
 
 
 __attribute_noinline__
-__attribute_nonnull__
+__attribute_nonnull__()
 static void
 ck_bt_stderr (const char *filename, unsigned int line, const char *msg, const char *fmt)
 {

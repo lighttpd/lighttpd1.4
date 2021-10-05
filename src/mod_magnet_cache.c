@@ -91,7 +91,7 @@ static lua_State *script_cache_load_script(script * const sc, int etag_flags)
 }
 
 __attribute_cold__
-__attribute_nonnull__
+__attribute_nonnull__()
 __attribute_returns_nonnull__
 static script *script_cache_new_script(script_cache * const cache, const buffer * const name)
 {

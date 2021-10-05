@@ -60,7 +60,7 @@ buffer * chunk_buffer_acquire(void);
 
 void chunk_buffer_release(buffer *b);
 
-__attribute_nonnull__
+__attribute_nonnull__()
 void chunk_buffer_yield(buffer *b);
 
 size_t chunk_buffer_prepare_append (buffer *b, size_t sz);
@@ -87,10 +87,10 @@ void chunkqueue_append_file_fd(chunkqueue * restrict cq, const buffer * restrict
 void chunkqueue_append_mem(chunkqueue * restrict cq, const char * restrict mem, size_t len); /* copies memory */
 void chunkqueue_append_mem_min(chunkqueue * restrict cq, const char * restrict mem, size_t len); /* copies memory */
 
-__attribute_nonnull__
+__attribute_nonnull__()
 void chunkqueue_append_buffer(chunkqueue * restrict cq, buffer * restrict mem); /* may reset "mem" */
 
-__attribute_nonnull__
+__attribute_nonnull__()
 void chunkqueue_append_chunkqueue(chunkqueue * restrict cq, chunkqueue * restrict src);
 
 __attribute_returns_nonnull__

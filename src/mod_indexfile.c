@@ -78,7 +78,7 @@ SETDEFAULTS_FUNC(mod_indexfile_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-__attribute_nonnull__
+__attribute_nonnull__()
 static handler_t mod_indexfile_tryfiles(request_st * const r, const array * const indexfiles) {
 	for (uint32_t k = 0; k < indexfiles->used; ++k) {
 		const buffer * const v = &((data_string *)indexfiles->data[k])->value;
