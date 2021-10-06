@@ -753,9 +753,9 @@ void buffer_urldecode_path(buffer * const b) {
     char *dst = src;
     do {
         /* *src == '%' */
-        unsigned char high = hex2int(*(src + 1));
-        unsigned char low = hex2int(*(src + 2));
-        if (0xFF != high && 0xFF != low) {
+        unsigned char high = ((unsigned char *)src)[1];
+        unsigned char low = high ? hex2int(((unsigned char *)src)[2]) : 0xFF;
+        if (0xFF != (high = hex2int(high)) && 0xFF != low) {
             high = (high << 4) | low;   /* map ctrls to '_' */
             *dst = (high >= 32 && high != 127) ? high : '_';
             src += 2;
