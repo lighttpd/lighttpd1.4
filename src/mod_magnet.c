@@ -295,7 +295,11 @@ static int magnet_readdir(lua_State *L) {
     const char * const s = luaL_checkstring(L, 1);
     DIR * const d = opendir(s);
     if (d) {
+      #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 504
         DIR ** const dp = (DIR **)lua_newuserdata(L, sizeof(DIR *));
+      #else
+        DIR ** const dp = (DIR **)lua_newuserdatauv(L, sizeof(DIR *), 0);
+      #endif
         *dp = d;
         magnet_readdir_metatable(L);
         lua_setmetatable(L, -2);
@@ -605,8 +609,12 @@ static int magnet_stat(lua_State *L) {
      * (script must not cache sce in persistent global state for later use)
      * (If we did want sce to be persistent, then could increment sce refcnt,
      *  and set up __gc metatable method to decrement sce refcnt) */
-    stat_cache_entry ** const udata =                           /* (sp += 1) */
-      (struct stat_cache_entry **)lua_newuserdata(L, sizeof(stat_cache_entry *));
+    stat_cache_entry ** const udata =(struct stat_cache_entry**)/* (sp += 1) */
+     #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 504
+      lua_newuserdata(L, sizeof(stat_cache_entry *));
+     #else
+      lua_newuserdatauv(L, sizeof(stat_cache_entry *), 0);
+     #endif
     *udata = sce;
 
     magnet_stat_metatable(L);                                   /* (sp += 1) */
