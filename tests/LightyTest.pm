@@ -213,7 +213,7 @@ sub start_proc {
 		}
 		else {
 			require Fcntl;
-			fcntl($SOCK, Fcntl::F_SETFD, 0); # clr FD_CLOEXEC
+			fcntl($SOCK, Fcntl::F_SETFD(), 0); # clr FD_CLOEXEC
 		}
 		exec @cmdline or die($?);
 	}
