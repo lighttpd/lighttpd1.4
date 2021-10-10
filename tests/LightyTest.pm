@@ -137,7 +137,7 @@ sub wait_for_port_with_proc {
 
 		# the process is gone, we failed
 		require POSIX;
-		if (0 != waitpid($child, POSIX::WNOHANG)) {
+		if (0 != waitpid($child, POSIX::WNOHANG())) {
 			return -1;
 		}
 		if (0 >= $timeout) {
