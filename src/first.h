@@ -13,6 +13,12 @@
 #define _DEFAULT_SOURCE
 #endif
 
+#if defined(__APPLE__) && defined(__MACH__)
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE
+#endif
+#endif
+
 #ifndef __STDC_WANT_LIB_EXT1__
 #define __STDC_WANT_LIB_EXT1__ 1
 #endif
