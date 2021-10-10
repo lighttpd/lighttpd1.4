@@ -703,8 +703,8 @@ static const char js_simple_table_resort[] = \
 " var bt = get_inner_text(b.cells[sort_column]);\n" \
 " var cmp;\n" \
 " if (sort_column == name_column) {\n" \
-"  if (at == '..') return -1;\n" \
-"  if (bt == '..') return  1;\n" \
+"  if (at == '../') return -1;\n" \
+"  if (bt == '../') return  1;\n" \
 " }\n" \
 " if (a.cells[sort_column].className == 'int') {\n" \
 "  cmp = parseInt(at)-parseInt(bt);\n" \
