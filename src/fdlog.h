@@ -5,12 +5,12 @@
 #include "base_decls.h"
 #include "buffer.h"
 
-typedef struct fdlog_st {
+struct fdlog_st {
     enum { FDLOG_FILE, FDLOG_FD, FDLOG_SYSLOG, FDLOG_PIPE } mode;
     int fd;
     buffer b;
     const char *fn;
-} fdlog_st;
+};
 
 __attribute_cold__
 __attribute_returns_nonnull__
