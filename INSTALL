@@ -141,6 +141,7 @@ required packages to run test harness ::
   perl-HTTP-Message
   perl-IO-HTML
   perl-LWP-MediaTypes
+  perl-Test-Harness
   perl-Tie-Function
   perl-TimeDate
 
