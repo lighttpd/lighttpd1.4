@@ -51,6 +51,7 @@ request_init_data (request_st * const r, connection * const con, server * const 
     r->con = con;
     r->tmp_buf = srv->tmp_buf;
     r->resp_body_scratchpad = -1;
+    r->resp_conn_reset = 0;
     r->server_name = &r->uri.authority;
 
     /* init plugin-specific per-request structures */
@@ -93,6 +94,7 @@ request_reset (request_st * const r)
     r->reqbody_length = 0;
     r->te_chunked = 0;
     r->resp_body_scratchpad = -1;
+    r->resp_conn_reset = 0;
     r->rqst_htags = 0;
 
     r->async_callback = 0;

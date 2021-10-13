@@ -120,6 +120,7 @@ typedef struct {
 	unsigned char config_unsupported;
 	unsigned char systemd_socket_activation;
 	unsigned char errorlog_use_syslog;
+	unsigned char forward_reset;
 	const buffer *syslog_facility;
 	const buffer *bindhost;
 	const buffer *changeroot;

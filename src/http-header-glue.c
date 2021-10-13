@@ -1288,6 +1288,9 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
                 if (buffer_is_blank(b))
                     chunk_buffer_yield(b); /*(improve large buf reuse)*/
                 return HANDLER_GO_ON;
+              case ECONNRESET:
+                  r->resp_conn_reset = 1;
+                  __attribute_fallthrough__
               default:
                 log_perror(r->conf.errh, __FILE__, __LINE__,
                   "read() %d %d", r->con->fd, fd);

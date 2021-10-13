@@ -173,6 +173,7 @@ struct request_st {
     char resp_send_chunked;
     char resp_decode_chunked;
     char resp_header_repeated;
+    char resp_conn_reset; /*connection was reset by peer*/
 
     char loops_per_request;  /* catch endless loops in a single request */
     int8_t keep_alive; /* only request.c can enable it, all other just disable */

@@ -721,6 +721,9 @@ static int config_insert_srvconf(server *srv) {
      ,{ CONST_STR_LEN("server.feature-flags"),
         T_CONFIG_ARRAY_KVANY,
         T_CONFIG_SCOPE_SERVER }
+     ,{ CONST_STR_LEN("server.forward-reset"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_SERVER }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -877,6 +880,9 @@ static int config_insert_srvconf(server *srv) {
                   config_plugin_value_tobool(
                     array_get_element_klen(cpv->v.a,
                       CONST_STR_LEN("server.absolute-dir-redirect")), 0);
+                break;
+              case 34:/* server.forward-reset */
+                srv->srvconf.forward_reset = (unsigned short)cpv->v.u;;
                 break;
               default:/* should not happen */
                 break;

@@ -218,6 +218,12 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 #endif
 		connection_set_state(r, CON_STATE_REQUEST_START);
 	} else {
+		if (r->resp_conn_reset) {
+			struct linger so_linger;
+			so_linger.l_onoff = 1;
+			so_linger.l_linger = 0;
+			(void)setsockopt(con->fd, SOL_SOCKET, SO_LINGER, &so_linger, sizeof so_linger);
+		}
 		connection_handle_shutdown(con);
 	}
 }

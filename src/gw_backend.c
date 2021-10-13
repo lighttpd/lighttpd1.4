@@ -2102,6 +2102,8 @@ static handler_t gw_backend_error(gw_handler_ctx * const hctx, request_st * cons
     if (hctx->backend_error) hctx->backend_error(hctx);
     http_response_backend_error(r);
     gw_connection_close(hctx, r);
+    if (r->con->srv->srvconf.forward_reset && r->resp_conn_reset)
+        return HANDLER_ERROR;
     return HANDLER_FINISHED;
 }
 
@@ -2401,6 +2403,10 @@ static handler_t gw_recv_response_error(gw_handler_ctx * const hctx, request_st 
               "socket: %s for %s?%.*s, terminating connection",
               proc->connection_name->ptr,
               r->uri.path.ptr, BUFFER_INTLEN_PTR(&r->uri.query));
+        }
+
+        if (r->resp_conn_reset) {
+            r->con->request.resp_conn_reset = 1;
         }
 
         return gw_backend_error(hctx, r); /* HANDLER_FINISHED */
