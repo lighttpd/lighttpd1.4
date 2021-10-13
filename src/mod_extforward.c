@@ -43,28 +43,13 @@
  *       config. However "all" has effect only on connecting IP, as the
  *       X-Forwarded-For header can not be trusted.
  *
- * Note: The effect of this module is variable on $HTTP["remotip"] directives and
+ * Note: The effect of this module is variable on $HTTP["remoteip"] directives and
  *       other module's remote ip dependent actions.
  *  Things done by modules before we change the remoteip or after we reset it will match on the proxy's IP.
  *  Things done in between these two moments will match on the real client's IP.
  *  The moment things are done by a module depends on in which hook it does things and within the same hook
  *  on whether they are before/after us in the module loading order
  *  (order in the server.modules directive in the config file).
- *
- * Tested behaviours:
- *
- *  mod_access: Will match on the real client.
- *
- *  mod_accesslog:
- *   In order to see the "real" ip address in access log ,
- *   you'll have to load mod_extforward after mod_accesslog.
- *   like this:
- *
- *    server.modules  = (
- *       .....
- *       mod_accesslog,
- *       mod_extforward
- *    )
  */
 
 
@@ -1218,7 +1203,6 @@ int mod_extforward_plugin_init(plugin *p) {
 	p->handle_connection_accept = mod_extforward_handle_con_accept;
 	p->handle_uri_raw = mod_extforward_uri_handler;
 	p->handle_request_env = mod_extforward_handle_request_env;
-	p->handle_request_done = mod_extforward_restore;
 	p->handle_request_reset = mod_extforward_restore;
 	p->handle_connection_close = mod_extforward_handle_con_close;
 	p->set_defaults  = mod_extforward_set_defaults;
