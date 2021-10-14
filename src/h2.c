@@ -1742,6 +1742,7 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
     con->read_idle_ts = log_monotonic_secs;
     con->keep_alive_idle = h2r->conf.max_keep_alive_idle;
 
+    /*(h2r->h2_rwin must match value assigned in h2_init_stream())*/
     h2r->h2_rwin = 65535;                 /* h2 connection recv window */
     h2r->h2_swin = 65535;                 /* h2 connection send window */
     /* settings sent from peer */         /* initial values */
@@ -2552,7 +2553,7 @@ h2_init_stream (request_st * const h2r, connection * const con)
     /* XXX: TODO: assign default priority, etc.
      *      Perhaps store stream id and priority in separate table */
     h2c->r[h2c->rused++] = r;
-    r->h2_rwin = h2c->s_initial_window_size;
+    r->h2_rwin = 65535; /* must keep in sync with h2_init_con() */
     r->h2_swin = h2c->s_initial_window_size;
     r->http_version = HTTP_VERSION_2;
 
