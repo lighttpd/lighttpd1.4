@@ -63,7 +63,7 @@ http_auth_cache_entry_init (const struct http_auth_require_t * const require, co
      *(store pointer to http_auth_require_t, which is persistent
      * and will be different for each realm + permissions combo)*/
     http_auth_cache_entry * const ae =
-      malloc(sizeof(http_auth_cache_entry) + ulen + pwlen);
+      malloc(sizeof(http_auth_cache_entry) + ulen + pwlen+1);
     force_assert(ae);
     ae->require = require;
     ae->ctime = log_monotonic_secs;
@@ -74,6 +74,7 @@ http_auth_cache_entry_init (const struct http_auth_require_t * const require, co
     ae->pwdigest = ae->username + ulen;
     memcpy(ae->username, username, ulen);
     memcpy(ae->pwdigest, pw, pwlen);
+    ae->pwdigest[pwlen] = '\0';
     return ae;
 }
 
