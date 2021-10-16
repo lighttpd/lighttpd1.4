@@ -521,7 +521,7 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 			/*(r->uri.authority lowercased during request parsing)*/
 			if (llen && llen != dlen) {
 				match ^= ((llen > dlen)
-				             ? l->ptr[dlen] == ':' && llen - dlen <= 5
+				             ? l->ptr[dlen] == ':' && llen - dlen <= 6
 				             : dc->string.ptr[(dlen = llen)] == ':')
 				         && 0 == memcmp(l->ptr, dc->string.ptr, dlen);
 				break;
