@@ -452,6 +452,21 @@ static handler_t fcgi_recv_parse(request_st * const r, struct http_response_opts
 					r->conf.stream_response_body &=
 					  ~(FDEVENT_STREAM_RESPONSE|FDEVENT_STREAM_RESPONSE_BUFMIN);
 				}
+			  #if 0
+				else if ((r->conf.stream_response_body &
+				           (FDEVENT_STREAM_RESPONSE|FDEVENT_STREAM_RESPONSE_BUFMIN))
+				         && (   r->http_status == 204
+				             || r->http_status == 205
+				             || r->http_status == 304
+				             || r->http_method == HTTP_METHOD_HEAD)) {
+					/* disable streaming to wait for backend protocol to signal
+					 * end of response (prevent http_response_write_prepare()
+					 * from short-circuiting and finishing responses without
+					 * response body) */
+					r->conf.stream_response_body &=
+					  ~(FDEVENT_STREAM_RESPONSE|FDEVENT_STREAM_RESPONSE_BUFMIN);
+				}
+			  #endif
 			} else if (hctx->send_content_body) {
 				if (0 != mod_fastcgi_transfer_cqlen(r, hctx->rb, packet.len - packet.padding)) {
 					/* error writing to tempfile;
