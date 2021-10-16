@@ -4014,9 +4014,8 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
         http_status_set_error(r, 403);
         return HANDLER_FINISHED;
     }
-    else if (0 != pb.depth) {
-        http_status_set_error(r, 403);
-        return HANDLER_FINISHED;
+    else {
+        pb.depth = 0;
     }
 
     pb.proplist.ptr  = NULL;
