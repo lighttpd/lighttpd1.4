@@ -270,6 +270,11 @@ ck_memeq_const_time (const void *a, const size_t alen, const void *b, const size
     /* rounds to next multiple of 64 to avoid potentially leaking exact
      * string lengths when subject to high precision timing attacks
      */
+    /* Note: implementation detail
+     * each string is expected to have a valid char one byte after len,
+     * i.e. a[alen] and b[blen], and which must match if the strings match.
+     * (In most use cases, this char is end of string '\0').
+     */
     /* Note: some libs provide similar funcs but might not obscure length, e.g.
      * OpenSSL:
      *   int CRYPTO_memcmp(const void * in_a, const void * in_b, size_t len)
