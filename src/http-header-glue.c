@@ -1329,15 +1329,20 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
             /* accumulate response in b until headers completed (or error)*/
             if (r->resp_body_started) {
                 buffer_clear(b);
+                /* check if Content-Length provided and response body received
+                 * (done here instead of http_response_process_headers() since
+                 *  backends which set opts->parse() might handle differently)*/
+                if (0 == r->resp_body_scratchpad)
+                    r->resp_body_finished = 1;
                 /* enable simple accumulation of small reads in some situations
                  * no Content-Length (will read to EOF)
                  * Content-Length (will read until r->resp_body_scratchpad == 0)
                  * not chunked-encoding
                  * not bufmin streaming
                  * (no custom parse routine set for opts->parse()) */
-                if (!r->resp_decode_chunked /* && NULL == opts->parse */
-                    && !(r->conf.stream_response_body
-                         & FDEVENT_STREAM_RESPONSE_BUFMIN))
+                else if (!r->resp_decode_chunked /* && NULL == opts->parse */
+                         && !(r->conf.stream_response_body
+                              & FDEVENT_STREAM_RESPONSE_BUFMIN))
                     opts->simple_accum = 1;
             }
         } else {
