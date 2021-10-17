@@ -141,6 +141,9 @@ void chunkqueue_mark_written(chunkqueue *cq, off_t len);
 
 void chunkqueue_remove_finished_chunks(chunkqueue *cq);
 
+__attribute_cold__
+void chunkqueue_remove_empty_chunks(chunkqueue *cq);
+
 void chunkqueue_steal(chunkqueue * restrict dest, chunkqueue * restrict src, off_t len);
 int chunkqueue_steal_with_tempfiles(chunkqueue * restrict dest, chunkqueue * restrict src, off_t len, struct log_error_st * const restrict errh);
 void chunkqueue_append_cq_range (chunkqueue *dst, const chunkqueue *src, off_t offset, off_t len);

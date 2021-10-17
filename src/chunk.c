@@ -506,9 +506,6 @@ void chunkqueue_append_buffer_commit(chunkqueue *cq) {
 }
 
 
-static void chunkqueue_remove_empty_chunks(chunkqueue *cq);
-
-
 char * chunkqueue_get_memory(chunkqueue * const restrict cq, size_t * const restrict len) {
 	size_t sz = *len ? *len : (chunk_buf_sz >> 1);
 	buffer *b;
@@ -1082,7 +1079,7 @@ void chunkqueue_remove_finished_chunks(chunkqueue *cq) {
     }
 }
 
-static void chunkqueue_remove_empty_chunks(chunkqueue *cq) {
+void chunkqueue_remove_empty_chunks(chunkqueue *cq) {
 	chunk *c;
 	chunkqueue_remove_finished_chunks(cq);
 

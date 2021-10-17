@@ -2464,7 +2464,7 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
             }
 
             /*(else remove empty last chunk and fall through to below)*/
-            chunkqueue_remove_finished_chunks(cq);
+            chunkqueue_remove_empty_chunks(cq);
         }
 
         const uint32_t len = dlen < fsize ? dlen : fsize;
