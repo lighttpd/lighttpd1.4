@@ -1299,7 +1299,7 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
                 /*(trigger reschedule of con if frames pending)*/
                 if (h2c->rused == sizeof(h2c->r)/sizeof(*h2c->r)
                     && !chunkqueue_is_empty(con->read_queue))
-                    resched |= 1;
+                    resched |= 2;
                 h2_send_end_stream(r, con);
                 const int alive = r->keep_alive;
                 h2_retire_stream(r, con);/*r invalidated;removed from h2c->r[]*/
@@ -1313,7 +1313,7 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
             }
         }
 
-        if (0 == max_bytes) resched |= 2;
+        if (0 == max_bytes) resched |= 1;
     }
 
     if (h2c->sent_goaway > 0 && h2c->rused) {
@@ -1339,12 +1339,15 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
         if (chunkqueue_is_empty(con->write_queue)
             && 0 == h2c->rused && h2c->sent_goaway)
             connection_set_state(h2r, CON_STATE_RESPONSE_END);
-        else if (resched & 2)
-            resched = (resched & 1) | (chunkqueue_is_empty(con->write_queue));
     }
 
     if (h2r->state == CON_STATE_WRITE) {
-        if (resched && !con->traffic_limit_reached)
+        /* (resched & 1) more data is available to write, if still able to write
+         * (resched & 2) resched to read deferred frames from con->read_queue */
+        /*(con->is_writable set to 0 if !chunkqueue_is_empty(con->write_queue)
+         * after trying to write in connection_handle_write() above)*/
+        if (((resched & 1) && con->is_writable>0 && !con->traffic_limit_reached)
+            || (resched & 2))
             joblist_append(con);
 
         if (h2_want_read(con))
