@@ -930,7 +930,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			te = &ds->value; /*("trailers")*/
 			break;
 		case HTTP_HEADER_UPGRADE:
-			if (hctx->conf.header.force_http10 || r->http_version == HTTP_VERSION_1_0) continue;
+			if (hctx->conf.header.force_http10 || r->http_version != HTTP_VERSION_1_1) continue;
 			if (!hctx->conf.header.upgrade) continue;
 			if (!buffer_is_blank(&ds->value)) upgrade = &ds->value;
 			break;

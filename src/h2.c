@@ -2810,6 +2810,7 @@ h2_check_con_upgrade_h2c (request_st * const r)
             buffer * const b = r->tmp_buf;
             buffer_clear(b);
             if (r->conf.h2proto > 1/*(must be enabled with server.h2c feature)*/
+                && !r->con->is_ssl_sock /*(disallow h2c over TLS socket)*/
                 &&
                 http_header_str_contains_token(BUF_PTR_LEN(http_connection),
                                                CONST_STR_LEN("HTTP2-Settings"))

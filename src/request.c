@@ -1167,6 +1167,13 @@ http_request_parse (request_st * const restrict r, const int scheme_port)
             return http_request_header_line_invalid(r, 400, "HTTP/1.1 but Host missing -> 400");
     }
 
+    if (HTTP_VERSION_1_1 != r->http_version
+        && (r->rqst_htags
+            & (light_bshift(HTTP_HEADER_UPGRADE)
+              |light_bshift(HTTP_HEADER_HTTP2_SETTINGS)))) {
+        return http_request_header_line_invalid(r, 400, "invalid hop-by-hop header w/o HTTP/1.1 -> 400");
+    }
+
     if (0 == r->reqbody_length) {
         /* POST requires Content-Length (or Transfer-Encoding)
          * (-1 == r->reqbody_length when Transfer-Encoding: chunked)*/

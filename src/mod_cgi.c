@@ -980,10 +980,13 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		hctx->plugin_data = p;
 		hctx->cgi_handler = &ds->value;
 		memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
-		hctx->conf.upgrade =
-		  hctx->conf.upgrade
-		  && r->http_version == HTTP_VERSION_1_1
-		  && light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE);
+		if (!light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE))
+			hctx->conf.upgrade = 0;
+		else if (!hctx->conf.upgrade || r->http_version != HTTP_VERSION_1_1) {
+			hctx->conf.upgrade = 0;
+			http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+			                          CONST_STR_LEN("Upgrade"));
+		}
 		hctx->opts.max_per_read =
 		  !(r->conf.stream_response_body /*(if not streaming response body)*/
 		    & (FDEVENT_STREAM_RESPONSE|FDEVENT_STREAM_RESPONSE_BUFMIN))
