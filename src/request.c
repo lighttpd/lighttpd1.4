@@ -48,6 +48,7 @@ __attribute_pure__
 static const char * http_request_check_line_minimal (const char * const restrict s, const uint_fast32_t len) {
     for (uint_fast32_t i = 0; i < len; ++i) {
         if (__builtin_expect( (s[i] == '\0'), 0)) return s+i;
+        if (__builtin_expect( (s[i] == '\n'), 0)) return s+i;
     }
     return NULL;
 }
@@ -1012,12 +1013,15 @@ static int http_request_parse_header_other(request_st * const restrict r, const 
         case ' ':
         case '\t':
             return http_request_header_line_invalid(r, 400, "WS character in key -> 400");
+        case '\r':
+        case '\n':
         case '(':
         case ')':
         case '<':
         case '>':
         case '@':
         case ',':
+        case ':':
         case ';':
         case '\\':
         case '\"':
