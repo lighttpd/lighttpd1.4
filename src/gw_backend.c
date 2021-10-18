@@ -2261,6 +2261,55 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
 }
 
 
+static handler_t gw_authorizer_ok(gw_handler_ctx * const hctx, request_st * const r) {
+    /*
+     * If we are here in AUTHORIZER mode then a request for authorizer
+     * was processed already, and status 200 has been returned. We need
+     * now to handle authorized request.
+     */
+    char *physpath = NULL;
+
+    gw_host * const host = hctx->host;
+    if (host->docroot) {
+        buffer_copy_buffer(&r->physical.doc_root, host->docroot);
+        buffer_copy_buffer(&r->physical.basedir, host->docroot);
+        buffer_copy_path_len2(&r->physical.path,
+                              BUF_PTR_LEN(host->docroot),
+                              BUF_PTR_LEN(&r->uri.path));
+        physpath = r->physical.path.ptr;
+    }
+
+    /*(restore streaming flags removed during authorizer processing)*/
+    r->conf.stream_response_body |= (hctx->opts.authorizer >> 1);
+
+    gw_backend_close(hctx, r);
+    handler_ctx_clear(hctx);
+
+    /* don't do more than 6 loops here; normally shouldn't happen */
+    if (++r->loops_per_request > 5) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "too many loops while processing request: %s",
+          r->target_orig.ptr);
+        r->http_status = 500; /* Internal Server Error */
+        r->handler_module = NULL;
+        return HANDLER_FINISHED;
+    }
+
+    /* restart the request so other handlers can process it */
+
+    if (physpath) r->physical.path.ptr = NULL;
+    http_response_reset(r); /*(includes r->http_status=0)*/
+    /* preserve r->physical.path.ptr with modified docroot */
+    if (physpath) r->physical.path.ptr = physpath;
+
+    /*(FYI: if multiple FastCGI authorizers were to be supported,
+     * next one could be started here instead of restarting request)*/
+
+    r->handler_module = NULL;
+    return HANDLER_COMEBACK;
+}
+
+
 __attribute_cold__
 static handler_t gw_recv_response_error(gw_handler_ctx * const hctx, request_st * const r, gw_proc * const proc);
 
@@ -2291,58 +2340,12 @@ static handler_t gw_recv_response(gw_handler_ctx * const hctx, request_st * cons
         return HANDLER_GO_ON;
     case HANDLER_FINISHED:
         /*hctx->read_ts =*/ proc->last_used = log_monotonic_secs;
+
         if (hctx->gw_mode == GW_AUTHORIZER
-            && (200 == r->http_status || 0 == r->http_status)) {
-            /*
-             * If we are here in AUTHORIZER mode then a request for authorizer
-             * was processed already, and status 200 has been returned. We need
-             * now to handle authorized request.
-             */
-            char *physpath = NULL;
+            && (200 == r->http_status || 0 == r->http_status))
+            return gw_authorizer_ok(hctx, r);
 
-            gw_host * const host = hctx->host;
-            if (host->docroot) {
-                buffer_copy_buffer(&r->physical.doc_root, host->docroot);
-                buffer_copy_buffer(&r->physical.basedir, host->docroot);
-                buffer_copy_path_len2(&r->physical.path,
-                                      BUF_PTR_LEN(host->docroot),
-                                      BUF_PTR_LEN(&r->uri.path));
-                physpath = r->physical.path.ptr;
-            }
-
-            /*(restore streaming flags removed during authorizer processing)*/
-            r->conf.stream_response_body |= (hctx->opts.authorizer >> 1);
-
-            gw_backend_close(hctx, r);
-            handler_ctx_clear(hctx);
-
-            /* don't do more than 6 loops here; normally shouldn't happen */
-            if (++r->loops_per_request > 5) {
-                log_error(r->conf.errh, __FILE__, __LINE__,
-                  "too many loops while processing request: %s",
-                  r->target_orig.ptr);
-                r->http_status = 500; /* Internal Server Error */
-                r->handler_module = NULL;
-                return HANDLER_FINISHED;
-            }
-
-            /* restart the request so other handlers can process it */
-
-            if (physpath) r->physical.path.ptr = NULL;
-            http_response_reset(r); /*(includes r->http_status=0)*/
-            /* preserve r->physical.path.ptr with modified docroot */
-            if (physpath) r->physical.path.ptr = physpath;
-
-            /*(FYI: if multiple FastCGI authorizers were to be supported,
-             * next one could be started here instead of restarting request)*/
-
-            r->handler_module = NULL;
-            return HANDLER_COMEBACK;
-        } else {
-            /* we are done */
-            gw_connection_close(hctx, r);
-        }
-
+        gw_connection_close(hctx, r);
         return HANDLER_FINISHED;
     case HANDLER_COMEBACK: /*(not expected; treat as error)*/
     case HANDLER_ERROR:
