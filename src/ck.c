@@ -264,16 +264,11 @@ ck_strerror_s (char * const s, const rsize_t maxsize, const errno_t errnum)
 
 
 int
-ck_memeq_const_time (const void *a, const size_t alen, const void *b, const size_t blen)
+ck_memeq_const_time (const void *a, size_t alen, const void *b, size_t blen)
 {
     /* constant time memory compare for equality */
     /* rounds to next multiple of 64 to avoid potentially leaking exact
      * string lengths when subject to high precision timing attacks
-     */
-    /* Note: implementation detail
-     * each string is expected to have a valid char one byte after len,
-     * i.e. a[alen] and b[blen], and which must match if the strings match.
-     * (In most use cases, this char is end of string '\0').
      */
     /* Note: some libs provide similar funcs but might not obscure length, e.g.
      * OpenSSL:
@@ -282,10 +277,14 @@ ck_memeq_const_time (const void *a, const size_t alen, const void *b, const size
      * OpenBSD: int timingsafe_bcmp(const void *b1, const void *b2, size_t len)
      * NetBSD: int consttime_memequal(void *b1, void *b2, size_t len)
      */
-    const volatile unsigned char * const av = (const unsigned char *)a;
-    const volatile unsigned char * const bv = (const unsigned char *)b;
+    const volatile unsigned char * const av =
+      (const unsigned char *)(alen ? a : "");
+    const volatile unsigned char * const bv =
+      (const unsigned char *)(blen ? b : "");
     size_t lim = ((alen >= blen ? alen : blen) + 0x3F) & ~0x3F;
     int diff = (alen != blen); /*(never match if string length mismatch)*/
+    alen -= (alen != 0);
+    blen -= (blen != 0);
     for (size_t i = 0, j = 0; lim; --lim) {
         diff |= (av[i] ^ bv[j]);
         i += (i < alen);
