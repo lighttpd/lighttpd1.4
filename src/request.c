@@ -19,6 +19,39 @@
 #include <stdlib.h>
 #include <string.h>
 
+__attribute_noinline__
+__attribute_nonnull__()
+__attribute_pure__
+static const char * http_request_check_uri_strict (const uint8_t * const restrict s, const uint_fast32_t len) {
+    for (uint_fast32_t i = 0; i < len; ++i) {
+        if (__builtin_expect( (s[i] <= 32),  0)) return (const char *)s+i;
+        if (__builtin_expect( (s[i] == 127), 0)) return (const char *)s+i;
+        if (__builtin_expect( (s[i] == 255), 0)) return (const char *)s+i;
+    }
+    return NULL;
+}
+
+__attribute_nonnull__()
+__attribute_pure__
+static const char * http_request_check_line_strict (const char * const restrict s, const uint_fast32_t len) {
+    for (uint_fast32_t i = 0; i < len; ++i) {
+        if (__builtin_expect( (((const uint8_t *)s)[i]<32), 0) && s[i] != '\t')
+            return s+i;
+        if (__builtin_expect( (s[i] == 127), 0))
+            return s+i;
+    }
+    return NULL;
+}
+
+__attribute_nonnull__()
+__attribute_pure__
+static const char * http_request_check_line_minimal (const char * const restrict s, const uint_fast32_t len) {
+    for (uint_fast32_t i = 0; i < len; ++i) {
+        if (__builtin_expect( (s[i] == '\0'), 0)) return s+i;
+    }
+    return NULL;
+}
+
 static int request_check_hostname(buffer * const host) {
     /*
      *       hostport      = host [ ":" port ]
@@ -231,14 +264,10 @@ int http_request_host_policy (buffer * const b, const unsigned int http_parseopt
      * for consistency in case the value is used prior to calling policy func */
     /*buffer_to_lower(b);*/
     return (((http_parseopts & HTTP_PARSEOPT_HOST_STRICT)
-             && 0 != request_check_hostname(b))
+               ? 0 != request_check_hostname(b)
+               : NULL != http_request_check_line_minimal(BUF_PTR_LEN(b)))
             || ((http_parseopts & HTTP_PARSEOPT_HOST_NORMALIZE)
                 && 0 != http_request_host_normalize(b, scheme_port)));
-}
-
-__attribute_const__
-static int request_uri_is_valid_char(const unsigned char c) {
-	return (c > 32 && c != 127 && c != 255);
 }
 
 __attribute_cold__
@@ -551,26 +580,16 @@ http_request_validate_pseudohdrs (request_st * const restrict r, const int schem
     /* copied and modified from end of http_request_parse_reqline() */
 
     /* check uri for invalid characters */
-    const unsigned int http_header_strict =
-      (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
-    const uint32_t ulen = buffer_clen(&r->target);
-    const uint8_t * const uri = (uint8_t *)r->target.ptr;
-    if (http_header_strict) {
-        if (http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)
-            return 0; /* URI will be checked in http_request_parse_target() */
-        for (uint32_t i = 0; i < ulen; ++i) {
-            if (!request_uri_is_valid_char(uri[i]))
-                return http_request_header_char_invalid(r, uri[i],
-                  "invalid character in URI -> 400");
-        }
-    }
-    else {
-        if (NULL != memchr(uri, '\0', ulen))
-            return http_request_header_char_invalid(r, '\0',
-              "invalid character in header -> 400");
-    }
-
-    return 0;
+    const uint32_t len = buffer_clen(&r->target);/*(http_header_strict)*/
+    const char * const x = (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT)
+      ? (http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)
+          ? NULL /* URI will be checked in http_request_parse_target() */
+          : http_request_check_uri_strict((const uint8_t *)r->target.ptr, len)
+      : http_request_check_line_minimal(r->target.ptr, len);
+    return (NULL == x)
+      ? 0
+      : http_request_header_char_invalid(r, *x,
+          "invalid character in URI -> 400");
 }
 
 
@@ -709,18 +728,12 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
             const unsigned int http_header_strict =
               (hpctx->http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
-            if (http_header_strict) {
-                for (uint32_t j = 0; j < vlen; ++j) {
-                    if ((((uint8_t *)v)[j] < 32 && v[j] != '\t') || v[j]==127)
-                        return http_request_header_char_invalid(r, v[j],
-                          "invalid character in header -> 400");
-                }
-            }
-            else {
-                if (NULL != memchr(v, '\0', vlen))
-                    return http_request_header_char_invalid(r, '\0',
-                      "invalid character in header -> 400");
-            }
+            const char * const x = (http_header_strict)
+              ? http_request_check_line_strict(v, vlen)
+              : http_request_check_line_minimal(v, vlen);
+            if (x)
+                return http_request_header_char_invalid(r, *x,
+                  "invalid character in header -> 400");
 
             if (__builtin_expect( (hpctx->id == HTTP_HEADER_H2_UNKNOWN), 0)) {
                 uint32_t j = 0;
@@ -861,23 +874,14 @@ static int http_request_parse_reqline(request_st * const restrict r, const char 
     if (0 == len)
         return http_request_header_line_invalid(r, 400, "no uri specified -> 400");
 
-    /* check uri for invalid characters */
-    if (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) { /* http_header_strict */
-        if ((http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)) {
-            /* URI will be checked in http_request_parse_target() */
-        }
-        else {
-            for (i = 0; i < len; ++i) {
-                if (!request_uri_is_valid_char(uri[i]))
-                    return http_request_header_char_invalid(r, uri[i], "invalid character in URI -> 400");
-            }
-        }
-    }
-    else {
-        /* check entire set of request headers for '\0' */
-        if (NULL != memchr(ptr, '\0', hoff[hoff[0]]))
-            return http_request_header_char_invalid(r, '\0', "invalid character in header -> 400");
-    }
+    /* check uri for invalid characters */     /* http_header_strict */
+    const char * const x = (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT)
+      ? (http_parseopts & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT)
+          ? NULL /* URI will be checked in http_request_parse_target() */
+          : http_request_check_uri_strict((const uint8_t *)uri, len)
+      : memchr(ptr, '\0', hoff[hoff[0]]);/* check entire headers set for '\0' */
+    if (x)
+        http_request_header_char_invalid(r, *x, "invalid character in URI -> 400");
 
     buffer_copy_string_len(&r->target, uri, len);
     buffer_copy_string_len(&r->target_orig, uri, len);
@@ -1130,10 +1134,10 @@ static int http_request_parse_headers(request_st * const restrict r, char * cons
         if (vlen <= 0) continue; /* ignore header */
 
         if (http_header_strict) {
-            for (int j = 0; j < vlen; ++j) {
-                if ((((unsigned char *)v)[j] < 32 && v[j] != '\t') || v[j]==127)
-                    return http_request_header_char_invalid(r, v[j], "invalid character in header -> 400");
-            }
+            const char * const x = http_request_check_line_strict(v, vlen);
+            if (x)
+                return http_request_header_char_invalid(r, *x,
+                  "invalid character in header -> 400");
         } /* else URI already checked in http_request_parse_reqline() for any '\0' */
 
         int status = http_request_parse_single_header(r, id, k, (size_t)klen, v, (size_t)vlen);
