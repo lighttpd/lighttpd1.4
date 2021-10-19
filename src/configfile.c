@@ -186,10 +186,13 @@ static void config_merge_config_cpv(request_config * const pconf, const config_p
       case 30:/* debug.log-timeouts */
         pconf->log_timeouts = (0 != cpv->v.u);
         break;
-      case 31: /* server.errorlog */
+      case 31:/* debug.log-state-handling */
+        pconf->log_state_handling = (0 != cpv->v.u);
+        break;
+      case 32:/* server.errorlog */
         if (cpv->vtype == T_CONFIG_LOCAL) pconf->errh = cpv->v.v;
         break;
-      case 32:/* server.breakagelog */
+      case 33:/* server.breakagelog */
         if (cpv->vtype == T_CONFIG_LOCAL) pconf->serrh = cpv->v.v;
         break;
       default:/* should not happen */
@@ -715,9 +718,6 @@ static int config_insert_srvconf(server *srv) {
      ,{ CONST_STR_LEN("debug.log-request-header-on-error"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_SERVER }
-     ,{ CONST_STR_LEN("debug.log-state-handling"),
-        T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_SERVER }
      ,{ CONST_STR_LEN("server.feature-flags"),
         T_CONFIG_ARRAY_KVANY,
         T_CONFIG_SCOPE_SERVER }
@@ -859,10 +859,7 @@ static int config_insert_srvconf(server *srv) {
               case 31:/* debug.log-request-header-on-error */
                 srv->srvconf.log_request_header_on_error = (0 != cpv->v.u);
                 break;
-              case 32:/* debug.log-state-handling */
-                srv->srvconf.log_state_handling = (0 != cpv->v.u);
-                break;
-              case 33:/* server.feature-flags */
+              case 32:/* server.feature-flags */
                 srv->srvconf.feature_flags = cpv->v.a;
                 srv->srvconf.h2proto =
                   config_plugin_value_tobool(
@@ -999,6 +996,9 @@ static int config_insert(server *srv) {
      ,{ CONST_STR_LEN("debug.log-timeouts"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("debug.log-state-handling"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("server.errorlog"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
@@ -1110,8 +1110,9 @@ static int config_insert(server *srv) {
               case 28:/* debug.log-request-header */
               case 29:/* debug.log-response-header */
               case 30:/* debug.log-timeouts */
-              case 31:/* server.errorlog */   /*(idx in server.c must match)*/
-              case 32:/* server.breakagelog *//*(idx in server.c must match)*/
+              case 31:/* debug.log-state-handling */
+              case 32:/* server.errorlog *//*must match config_log_error_open*/
+              case 33:/* server.breakagelog */ /* match config_log_error_open*/
                 break;
               default:/* should not happen */
                 break;
@@ -1151,7 +1152,6 @@ static int config_insert(server *srv) {
 
     /* (after processing config defaults) */
     p->defaults.max_request_field_size = srv->srvconf.max_request_field_size;
-    p->defaults.log_state_handling = srv->srvconf.log_state_handling;
     p->defaults.log_request_header_on_error =
       srv->srvconf.log_request_header_on_error;
     if (p->defaults.log_request_handling || p->defaults.log_request_header)
@@ -1529,13 +1529,13 @@ int config_log_error_open(server *srv) {
             switch (cpv->k_id) {
               /* NB: these indexes are repeated below switch() block
                *     and all must stay in sync with configfile.c */
-              case 31:/* server.errorlog */
+              case 32:/* server.errorlog */
                 if (0 == i) {
                     if (srv->srvconf.errorlog_use_syslog) continue;
                     errh = srv->errh;
                 }
                 __attribute_fallthrough__
-              case 32:/* server.breakagelog */
+              case 33:/* server.breakagelog */
                 if (!buffer_is_blank(cpv->v.b)) fn = cpv->v.b->ptr;
                 break;
               default:

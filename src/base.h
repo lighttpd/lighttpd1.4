@@ -13,6 +13,7 @@
 #include "sock_addr.h"
 
 struct fdevents;        /* declaration */
+struct server_socket;   /* declaration */
 
 
 struct connection {
@@ -78,22 +79,9 @@ static inline void connection_jq_append(connection * const restrict con)
 }
 
 typedef struct {
-	connection **ptr;
-	uint32_t size;
-	uint32_t used;
-} connections;
-
-typedef struct {
-	void *ptr;
-	uint32_t used;
-	uint32_t size;
-} buffer_plugin;
-
-typedef struct {
 	/*(used sparsely, if at all, after config at startup)*/
 
 	uint32_t max_request_field_size;
-	unsigned char log_state_handling;
 	unsigned char log_request_header_on_error;
 	unsigned char http_header_strict;
 	unsigned char http_host_strict;
@@ -101,8 +89,8 @@ typedef struct {
 	unsigned char http_method_get_body;
 	unsigned char high_precision_timestamps;
 	unsigned char h2proto;
-	unsigned short http_url_normalize;
 	unsigned char absolute_dir_redirect;
+	unsigned short http_url_normalize;
 
 	unsigned short max_worker;
 	unsigned short max_fds;
@@ -194,7 +182,7 @@ struct server {
 
 	server_socket_array srv_sockets;
 	server_socket_array srv_sockets_inherited;
-	buffer_plugin plugins;
+	struct { void *ptr; uint32_t used; uint32_t size; } plugins;
 
 	unix_time64_t startup_ts;
 	unix_time64_t graceful_expire_ts;
