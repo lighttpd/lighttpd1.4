@@ -2191,6 +2191,7 @@ mod_nss_read_err(connection *con, handler_ctx *hctx)
         return 0;
       case PR_CONNECT_ABORTED_ERROR:
       case PR_CONNECT_RESET_ERROR:
+      case PR_END_OF_FILE_ERROR:
         if (!hctx->conf.ssl_log_noise) return -1;
         __attribute_fallthrough__
       default:
