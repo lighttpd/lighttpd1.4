@@ -269,6 +269,7 @@ log_error_va_list_impl (const log_error_st *errh,
 
     log_error_write(errh, b);
 
+    buffer_clear(b);
     errno = errnum;
 }
 
@@ -332,6 +333,7 @@ log_error_multiline (log_error_st *errh,
         log_error_write(errh, b);
     }
 
+    buffer_clear(b);
     errno = errnum;
 }
 
