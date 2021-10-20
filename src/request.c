@@ -346,9 +346,15 @@ static int http_request_parse_duplicate(request_st * const restrict r, const enu
       case HTTP_HEADER_IF_MODIFIED_SINCE:
         errmsg = "duplicate If-Modified-Since header -> 400";
         break;
+      case HTTP_HEADER_HTTP2_SETTINGS:
+        errmsg = "duplicate HTTP2-Settings header -> 400";
+        break;
       default:
         errmsg = "duplicate header -> 400";
         break;
+      case HTTP_HEADER_IF_NONE_MATCH:
+        /* if dup, only the first one will survive */
+        return 0; /* ignore header */
     }
     return http_request_header_line_invalid(r, 400, errmsg);
 }
@@ -390,9 +396,14 @@ static int http_request_parse_single_header(request_st * const restrict r, const
             /* (expect Host to match case in :authority of HTTP/2 request) */
             return 0; /* ignore header */
         }
-        else {
+        /* else parse duplicate for match or error */
+        __attribute_fallthrough__
+      case HTTP_HEADER_IF_MODIFIED_SINCE:
+      case HTTP_HEADER_IF_NONE_MATCH:
+      case HTTP_HEADER_CONTENT_TYPE:
+      case HTTP_HEADER_HTTP2_SETTINGS:
+        if (light_btst(r->rqst_htags, id))
             return http_request_parse_duplicate(r, id, k, klen, v, vlen);
-        }
         break;
       case HTTP_HEADER_CONNECTION:
         /* "Connection: close" is common case if header is present */
@@ -404,17 +415,6 @@ static int http_request_parse_single_header(request_st * const restrict r, const
         if (http_header_str_contains_token(v,vlen,CONST_STR_LEN("keep-alive"))){
             r->keep_alive = 1;
             break;
-        }
-        break;
-      case HTTP_HEADER_CONTENT_TYPE:
-        if (light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_TYPE)) {
-            return http_request_parse_duplicate(r, id, k, klen, v, vlen);
-        }
-        break;
-      case HTTP_HEADER_IF_NONE_MATCH:
-        /* if dup, only the first one will survive */
-        if (light_btst(r->rqst_htags, HTTP_HEADER_IF_NONE_MATCH)) {
-            return 0; /* ignore header */
         }
         break;
       case HTTP_HEADER_CONTENT_LENGTH:
@@ -433,16 +433,6 @@ static int http_request_parse_single_header(request_st * const restrict r, const
         }
         else {
             return http_request_header_line_invalid(r, 400, "duplicate Content-Length header -> 400");
-        }
-        break;
-      case HTTP_HEADER_HTTP2_SETTINGS:
-        if (light_btst(r->rqst_htags, HTTP_HEADER_HTTP2_SETTINGS)) {
-            return http_request_header_line_invalid(r, 400, "duplicate HTTP2-Settings header -> 400");
-        }
-        break;
-      case HTTP_HEADER_IF_MODIFIED_SINCE:
-        if (light_btst(r->rqst_htags, HTTP_HEADER_IF_MODIFIED_SINCE)) {
-            return http_request_parse_duplicate(r, id, k, klen, v, vlen);
         }
         break;
       case HTTP_HEADER_TRANSFER_ENCODING:
