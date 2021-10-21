@@ -729,7 +729,7 @@ static int http_response_append_buffer(request_st * const r, buffer * const mem,
         }
         else { /* (r->resp_body_scratchpad <= 0) */
             r->resp_body_finished = 1;
-            if (r->resp_body_scratchpad < 0) {
+            if (__builtin_expect( (r->resp_body_scratchpad < 0), 0)) {
                 /*(silently truncate if data exceeds Content-Length)*/
                 len += r->resp_body_scratchpad;
                 r->resp_body_scratchpad = 0;
@@ -794,7 +794,7 @@ static int http_response_append_mem(request_st * const r, const char * const mem
         r->resp_body_scratchpad -= (off_t)len;
         if (r->resp_body_scratchpad <= 0) {
             r->resp_body_finished = 1;
-            if (r->resp_body_scratchpad < 0) {
+            if (__builtin_expect( (r->resp_body_scratchpad < 0), 0)) {
                 /*(silently truncate if data exceeds Content-Length)*/
                 len = (size_t)(r->resp_body_scratchpad + (off_t)len);
                 r->resp_body_scratchpad = 0;
@@ -806,6 +806,46 @@ static int http_response_append_mem(request_st * const r, const char * const mem
         return 0;
     }
     return http_chunk_append_mem(r, mem, len);
+}
+
+
+int http_response_transfer_cqlen(request_st * const r, chunkqueue * const cq, size_t len) {
+    /*(intended for use as callback from modules setting opts->parse(),
+     * e.g. mod_fastcgi and mod_ajp13)
+     *(do not set r->resp_body_finished here since those protocols handle it)*/
+    if (0 == len) return 0;
+    if (__builtin_expect( (!r->resp_decode_chunked), 1)) {
+        const size_t olen = len;
+        if (r->resp_body_scratchpad >= 0) {
+            r->resp_body_scratchpad -= (off_t)len;
+            if (__builtin_expect( (r->resp_body_scratchpad < 0), 0)) {
+                /*(silently truncate if data exceeds Content-Length)*/
+                len = (size_t)(r->resp_body_scratchpad + (off_t)len);
+                r->resp_body_scratchpad = 0;
+            }
+        }
+        int rc = http_chunk_transfer_cqlen(r, cq, len);
+        if (__builtin_expect( (0 != rc), 0))
+            return -1;
+        if (__builtin_expect( (olen != len), 0)) /*discard excess data, if any*/
+            chunkqueue_mark_written(cq, (off_t)(olen - len));
+    }
+    else {
+        /* specialized use by opts->parse() to decode chunked encoding;
+         * FastCGI, AJP13 packet data is all type MEM_CHUNK
+         * (This extra copy can be avoided if FastCGI backend does not send
+         *  Transfer-Encoding: chunked, which FastCGI is not supposed to do) */
+        uint32_t remain = (uint32_t)len, wr;
+        for (const chunk *c = cq->first; c && remain; c=c->next, remain-=wr) {
+            /*assert(c->type == MEM_CHUNK);*/
+            wr = buffer_clen(c->mem) - c->offset;
+            if (wr > remain) wr = remain;
+            if (0 != http_chunk_decode_append_mem(r, c->mem->ptr+c->offset, wr))
+                return -1;
+        }
+        chunkqueue_mark_written(cq, len);
+    }
+    return 0;
 }
 
 

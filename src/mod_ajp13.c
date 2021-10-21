@@ -888,7 +888,7 @@ ajp13_recv_parse (request_st * const r, struct http_response_opts_t * const opts
                     return HANDLER_FINISHED;
                 }
                 chunkqueue_mark_written(hctx->rb, 7);
-                if (0 == http_chunk_transfer_cqlen(r, hctx->rb, len)) {
+                if (0 == http_response_transfer_cqlen(r, hctx->rb, len)) {
                     if (len != plen - 3)
                         chunkqueue_mark_written(hctx->rb, plen - 3 - len);
                     continue;
@@ -896,6 +896,7 @@ ajp13_recv_parse (request_st * const r, struct http_response_opts_t * const opts
                 else {
                     /* error writing to tempfile;
                      * truncate response or send 500 if nothing sent yet */
+                    hctx->send_content_body = 0;
                     return HANDLER_FINISHED;
                 }
             }

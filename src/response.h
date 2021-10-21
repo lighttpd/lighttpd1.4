@@ -9,6 +9,7 @@
 #include "array.h"
 
 struct stat_cache_entry;/* declaration */
+struct chunkqueue;      /* declaration */
 
 int http_response_parse(server *srv, request_st *r);
 
@@ -55,6 +56,7 @@ void http_response_send_file (request_st *r, buffer *path, struct stat_cache_ent
 void http_response_backend_done (request_st *r);
 void http_response_backend_error (request_st *r);
 void http_response_upgrade_read_body_unknown(request_st *r);
+int http_response_transfer_cqlen(request_st *r, struct chunkqueue *cq, size_t len);
 
 __attribute_cold__
 int http_response_omit_header(request_st *r, const data_string *ds);
