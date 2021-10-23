@@ -891,10 +891,11 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			  r->reqbody_length);
 		}
 	}
-	else if (!hctx->conf.header.force_http10
-	         && -1 == r->reqbody_length
+	else if (-1 == r->reqbody_length
 	         && (r->conf.stream_request_body
 	             & (FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN))) {
+		if (__builtin_expect( (hctx->conf.header.force_http10), 0))
+			return http_response_reqbody_read_error(r, 411);
 		hctx->gw.stdin_append = proxy_stdin_append; /* stream chunked body */
 		buffer_append_string_len(b, CONST_STR_LEN("\r\nTransfer-Encoding: chunked"));
 	}
