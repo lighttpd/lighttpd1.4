@@ -2117,9 +2117,11 @@ static handler_t gw_write_error(gw_handler_ctx * const hctx, request_st * const 
 
         /* (optimization to detect backend process exit while processing a
          *  large number of ready events; (this block could be removed)) */
-        server * const srv = r->con->srv;
-        if (0 == srv->srvconf.max_worker)
-            gw_restart_dead_procs(hctx->host, srv->errh, hctx->conf.debug, 0);
+        if (hctx->proc && hctx->proc->is_local) {
+            server * const srv = r->con->srv;
+            if (0 == srv->srvconf.max_worker)
+                gw_restart_dead_procs(hctx->host,srv->errh,hctx->conf.debug,0);
+        }
 
         /* cleanup this request and let request handler start request again */
         if (hctx->reconnects++ < 5) return gw_reconnect(hctx, r);
