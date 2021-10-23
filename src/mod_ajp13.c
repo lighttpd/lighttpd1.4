@@ -764,32 +764,30 @@ enum {
 };
 
 
+__attribute_cold__
 static handler_t
-ajp13_recv_parse (request_st * const r, struct http_response_opts_t * const opts, buffer * const b, size_t n)
+ajp13_recv_0(const request_st * const r, const handler_ctx * const hctx)
 {
-    handler_ctx * const hctx = (handler_ctx *)opts->pdata;
-    log_error_st * const errh = r->conf.errh;
-    int fin = 0;
-
-    if (0 == n) {
         if (-1 == hctx->request_id) /*(flag request ended)*/
             return HANDLER_FINISHED;
         if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_IN)
             && !(r->conf.stream_response_body
                  & FDEVENT_STREAM_RESPONSE_POLLRDHUP))
             return HANDLER_GO_ON;
-        log_error(errh, __FILE__, __LINE__,
+        log_error(r->conf.errh, __FILE__, __LINE__,
           "unexpected end-of-file (perhaps the ajp13 process died):"
           "pid: %d socket: %s",
           hctx->proc->pid, hctx->proc->connection_name->ptr);
 
         return HANDLER_ERROR;
-    }
+}
 
-    /* future: might try to elide copying if buffer contains full packet(s)
-     *         and prior read did not end in a partial packet */
-    chunkqueue_append_buffer(hctx->rb, b);
 
+static handler_t
+ajp13_recv_parse_loop (request_st * const r, handler_ctx * const hctx)
+{
+    log_error_st * const errh = r->conf.errh;
+    int fin = 0;
     do {
         uint8_t header[7];
         const off_t rblen = chunkqueue_length(hctx->rb);
@@ -838,7 +836,7 @@ ajp13_recv_parse (request_st * const r, struct http_response_opts_t * const opts
                      (r->http_status == 0 || r->http_status == 200)) {
                     /* authorizer approved request; ignore the content here */
                     hctx->send_content_body = 0;
-                    opts->authorizer |= /*(save response streaming flags)*/
+                    hctx->opts.authorizer |= /*(save response streaming flags)*/
                       (r->conf.stream_response_body
                        & (FDEVENT_STREAM_RESPONSE
                          |FDEVENT_STREAM_RESPONSE_BUFMIN)) << 1;
@@ -944,6 +942,18 @@ ajp13_recv_parse (request_st * const r, struct http_response_opts_t * const opts
     } while (0 == fin);
 
     return 0 == fin ? HANDLER_GO_ON : HANDLER_FINISHED;
+}
+
+
+static handler_t
+ajp13_recv_parse (request_st * const r, struct http_response_opts_t * const opts, buffer * const b, size_t n)
+{
+    handler_ctx * const hctx = (handler_ctx *)opts->pdata;
+    if (0 == n) return ajp13_recv_0(r, hctx);
+    /* future: might try to elide copying if buffer contains full packet(s)
+     *         and prior read did not end in a partial packet */
+    chunkqueue_append_buffer(hctx->rb, b);
+    return ajp13_recv_parse_loop(r, hctx);
 }
 
 

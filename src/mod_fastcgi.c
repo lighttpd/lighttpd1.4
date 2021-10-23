@@ -353,11 +353,8 @@ static void fastcgi_get_packet_body(buffer * const b, handler_ctx * const hctx, 
     buffer_truncate(b, blen + packet->len - packet->padding);
 }
 
-static handler_t fcgi_recv_parse(request_st * const r, struct http_response_opts_t *opts, buffer *b, size_t n) {
-	handler_ctx *hctx = (handler_ctx *)opts->pdata;
-	int fin = 0;
-
-	if (0 == n) {
+__attribute_cold__
+static handler_t fcgi_recv_0(const request_st * const r, const handler_ctx * const hctx) {
 		if (-1 == hctx->request_id) return HANDLER_FINISHED; /*(flag request ended)*/
 		if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_IN)
 		    && !(r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_POLLRDHUP))
@@ -368,17 +365,16 @@ static handler_t fcgi_recv_parse(request_st * const r, struct http_response_opts
 		  hctx->proc->pid, hctx->proc->connection_name->ptr);
 
 		return HANDLER_ERROR;
-	}
+}
 
-	chunkqueue_append_buffer(hctx->rb, b);
-
+static handler_t fcgi_recv_parse_loop(request_st * const r, handler_ctx * const hctx) {
 	/*
 	 * parse the fastcgi packets and forward the content to the write-queue
 	 *
 	 */
-	while (fin == 0) {
-		fastcgi_response_packet packet;
-
+	fastcgi_response_packet packet;
+	int fin = 0;
+	do {
 		/* check if we have at least one packet */
 		if (0 != fastcgi_get_packet(hctx, &packet)) {
 			/* no full packet */
@@ -413,7 +409,7 @@ static handler_t fcgi_recv_parse(request_st * const r, struct http_response_opts
 					 (r->http_status == 0 || r->http_status == 200)) {
 					/* authorizer approved request; ignore the content here */
 					hctx->send_content_body = 0;
-					opts->authorizer |= /*(save response streaming flags)*/
+					hctx->opts.authorizer |= /*(save response streaming flags)*/
 					  (r->conf.stream_response_body
 					   & (FDEVENT_STREAM_RESPONSE
 					     |FDEVENT_STREAM_RESPONSE_BUFMIN)) << 1;
@@ -466,9 +462,16 @@ static handler_t fcgi_recv_parse(request_st * const r, struct http_response_opts
 			chunkqueue_mark_written(hctx->rb, packet.len);
 			break;
 		}
-	}
+	} while (0 == fin);
 
 	return 0 == fin ? HANDLER_GO_ON : HANDLER_FINISHED;
+}
+
+static handler_t fcgi_recv_parse(request_st * const r, struct http_response_opts_t *opts, buffer *b, size_t n) {
+    handler_ctx * const hctx = (handler_ctx *)opts->pdata;
+    if (0 == n) return fcgi_recv_0(r, hctx);
+    chunkqueue_append_buffer(hctx->rb, b);
+    return fcgi_recv_parse_loop(r, hctx);
 }
 
 static handler_t fcgi_check_extension(request_st * const r, void *p_d, int uri_path_handler) {
