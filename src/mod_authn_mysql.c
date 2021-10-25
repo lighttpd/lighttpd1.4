@@ -290,6 +290,12 @@ SETDEFAULTS_FUNC(mod_authn_mysql_set_defaults) {
             mod_authn_mysql_merge_config(&p->defaults, cpv);
     }
 
+    log_error(srv->errh, __FILE__, __LINE__,
+      "Warning: mod_%s is deprecated "
+      "and will be removed from a future lighttpd release in early 2022. "
+      "https://wiki.lighttpd.net/Docs_ModAuth#mysql-mod_authn_mysql-since-lighttpd-1442",
+      p->self->name);
+
     return HANDLER_GO_ON;
 }
 

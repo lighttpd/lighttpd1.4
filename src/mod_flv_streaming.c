@@ -75,6 +75,12 @@ SETDEFAULTS_FUNC(mod_flv_streaming_set_defaults) {
             mod_flv_streaming_merge_config(&p->defaults, cpv);
     }
 
+    log_error(NULL, __FILE__, __LINE__,
+      "Warning: mod_%s is deprecated "
+      "and will be removed from a future lighttpd release in early 2022. "
+      "https://wiki.lighttpd.net/Docs_ConfigurationOptions#Deprecated",
+      p->self->name);
+
     return HANDLER_GO_ON;
 }
 
