@@ -631,7 +631,6 @@ void chunkqueue_steal(chunkqueue * const restrict dest, chunkqueue * const restr
 			}
 
 			c->offset += use;
-			force_assert(0 == len);
 		}
 
 		src->bytes_out += use;
@@ -991,7 +990,6 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue
 				/* tempfile flag is in "last" chunk after the split */
 				chunkqueue_steal_partial_file_chunk(dest, c, use);
 				c->offset += use;
-				force_assert(0 == len);
 			}
 			break;
 
@@ -1009,7 +1007,6 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue
 			} else {
 				/* partial chunk */
 				c->offset += use;
-				force_assert(0 == len);
 			}
 			break;
 		}
@@ -1153,9 +1150,6 @@ static int chunk_open_file_chunk(chunk * const restrict c, log_error_st * const 
 	/*(skip file size checks if file is temp file created by lighttpd)*/
 	if (c->file.is_temp) return 0;
 
-	force_assert(FILE_CHUNK == c->type);
-	force_assert(c->offset >= 0 && c->offset <= c->file.length);
-
 	struct stat st;
 	if (-1 == fstat(c->file.fd, &st)) {
 		log_perror(errh, __FILE__, __LINE__, "fstat failed");
@@ -1164,7 +1158,8 @@ static int chunk_open_file_chunk(chunk * const restrict c, log_error_st * const 
 
 	const off_t offset = c->offset;
 	const off_t len = c->file.length - c->offset;
-	if (offset > st.st_size || len > st.st_size || offset > st.st_size - len) {
+	force_assert(offset >= 0 && len >= 0);
+	if (offset > st.st_size - len) {
 		log_error(errh, __FILE__, __LINE__, "file shrunk: %s", c->mem->ptr);
 		return -1;
 	}
