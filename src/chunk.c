@@ -1159,24 +1159,21 @@ void chunkqueue_append_cq_range (chunkqueue * const dst, const chunkqueue * cons
 void chunkqueue_mark_written(chunkqueue *cq, off_t len) {
     cq->bytes_out += len;
 
-    for (chunk *c; (c = cq->first); ) {
+    for (chunk *c = cq->first; c; ) {
         off_t c_len = chunk_remaining_length(c);
         if (len >= c_len) { /* chunk got finished */
+            chunk * const x = c;
+            c = c->next;
             len -= c_len;
-            cq->first = c->next;
-            chunk_release(c);
-            if (0 == len) break;
+            chunk_release(x);
         }
         else { /* partial chunk */
             c->offset += len;
+            cq->first = c;
             return; /* chunk not finished */
         }
     }
-
-    if (NULL == cq->first)
-        cq->last = NULL;
-    else
-        chunkqueue_remove_finished_chunks(cq);
+    cq->first = cq->last = NULL;
 }
 
 void chunkqueue_remove_finished_chunks(chunkqueue *cq) {
