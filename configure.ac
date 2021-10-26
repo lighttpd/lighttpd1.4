@@ -1513,7 +1513,9 @@ AC_CHECK_FUNCS([\
   poll \
   port_create \
   pread \
+  preadv \
   pwrite \
+  pwritev \
   select \
   send_file \
   sendfile \
