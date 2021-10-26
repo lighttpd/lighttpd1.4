@@ -570,6 +570,7 @@ void chunkqueue_set_tempdirs(chunkqueue * const restrict cq, const array * const
     cq->tempdir_idx = 0;
 }
 
+__attribute_noinline__
 static void chunkqueue_dup_file_chunk_fd (chunk * const restrict d, const chunk * const restrict c) {
     /*assert(d != c);*/
     /*assert(d->type == FILE_CHUNK);*/
@@ -586,54 +587,48 @@ static void chunkqueue_dup_file_chunk_fd (chunk * const restrict d, const chunk 
     }
 }
 
+__attribute_noinline__
 static void chunkqueue_steal_partial_file_chunk(chunkqueue * const restrict dest, const chunk * const restrict c, const off_t len) {
     chunkqueue_append_file(dest, c->mem, c->offset, len);
     chunkqueue_dup_file_chunk_fd(dest->last, c);
 }
 
 void chunkqueue_steal(chunkqueue * const restrict dest, chunkqueue * const restrict src, off_t len) {
-	while (len > 0) {
-		chunk *c = src->first;
-		off_t clen = 0, use;
-
-		if (NULL == c) break;
+	for (off_t clen; len > 0; len -= clen) {
+		chunk * const c = src->first;
+		if (__builtin_expect( (NULL == c), 0)) break;
 
 		clen = chunk_remaining_length(c);
-		if (0 == clen) {
-			/* drop empty chunk */
-			src->first = c->next;
-			if (c == src->last) src->last = NULL;
-			chunk_release(c);
-			continue;
-		}
 
-		use = len >= clen ? clen : len;
-		len -= use;
-
-		if (use == clen) {
+		if (len >= clen) {
 			/* move complete chunk */
 			src->first = c->next;
 			if (c == src->last) src->last = NULL;
 
-			chunkqueue_append_chunk(dest, c);
-			dest->bytes_in += use;
+			if (__builtin_expect( (0 != clen), 1)) {
+				chunkqueue_append_chunk(dest, c);
+				dest->bytes_in += clen;
+			}
+			else /* drop empty chunk */
+				chunk_release(c);
 		} else {
-			/* partial chunk with length "use" */
+			/* copy partial chunk */
 
 			switch (c->type) {
 			case MEM_CHUNK:
-				chunkqueue_append_mem(dest, c->mem->ptr + c->offset, use);
+				chunkqueue_append_mem(dest, c->mem->ptr + c->offset, len);
 				break;
 			case FILE_CHUNK:
 				/* tempfile flag is in "last" chunk after the split */
-				chunkqueue_steal_partial_file_chunk(dest, c, use);
+				chunkqueue_steal_partial_file_chunk(dest, c, len);
 				break;
 			}
 
-			c->offset += use;
+			c->offset += len;
+			clen = len;
 		}
 
-		src->bytes_out += use;
+		src->bytes_out += clen;
 	}
 }
 
@@ -959,14 +954,12 @@ ssize_t chunkqueue_append_splice_sock_tempfile(chunkqueue * const restrict cq, c
 #endif /* HAVE_SPLICE */
 
 int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue * const restrict src, off_t len, log_error_st * const restrict errh) {
-	while (len > 0) {
-		chunk *c = src->first;
-		off_t clen = 0, use;
-
-		if (NULL == c) break;
+	for (off_t clen; len > 0; len -= clen) {
+		chunk * const c = src->first;
+		if (__builtin_expect( (NULL == c), 0)) break;
 
 		clen = chunk_remaining_length(c);
-		if (0 == clen) {
+		if (__builtin_expect( (0 == clen), 0)) {
 			/* drop empty chunk */
 			src->first = c->next;
 			if (c == src->last) src->last = NULL;
@@ -974,44 +967,44 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue
 			continue;
 		}
 
-		use = (len >= clen) ? clen : len;
-		len -= use;
-
 		switch (c->type) {
 		case FILE_CHUNK:
-			if (use == clen) {
+			if (len >= clen) {
 				/* move complete chunk */
 				src->first = c->next;
 				if (c == src->last) src->last = NULL;
 				chunkqueue_append_chunk(dest, c);
-				dest->bytes_in += use;
+				dest->bytes_in += clen;
 			} else {
-				/* partial chunk with length "use" */
+				/* copy partial chunk */
 				/* tempfile flag is in "last" chunk after the split */
-				chunkqueue_steal_partial_file_chunk(dest, c, use);
-				c->offset += use;
+				chunkqueue_steal_partial_file_chunk(dest, c, len);
+				c->offset += len;
+				clen = len;
 			}
 			break;
 
 		case MEM_CHUNK:
-			/* store "use" bytes from memory chunk in tempfile */
-			if (0 != chunkqueue_append_mem_to_tempfile(dest, c->mem->ptr + c->offset, use, errh)) {
+			/* store bytes from memory chunk in tempfile */
+			if (0 != chunkqueue_append_mem_to_tempfile(dest, c->mem->ptr + c->offset,
+			                                           (len >= clen) ? clen : len, errh)) {
 				return -1;
 			}
 
-			if (use == clen) {
+			if (len >= clen) {
 				/* finished chunk */
 				src->first = c->next;
 				if (c == src->last) src->last = NULL;
 				chunk_release(c);
 			} else {
 				/* partial chunk */
-				c->offset += use;
+				c->offset += len;
+				clen = len;
 			}
 			break;
 		}
 
-		src->bytes_out += use;
+		src->bytes_out += clen;
 	}
 
 	return 0;
