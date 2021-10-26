@@ -805,6 +805,106 @@ int chunkqueue_append_mem_to_tempfile(chunkqueue * const restrict dest, const ch
 	return -1;
 }
 
+#ifdef HAVE_PWRITEV
+
+#ifdef HAVE_SYS_UIO_H
+#include <sys/uio.h>
+#endif
+
+__attribute_cold__
+__attribute_noinline__
+static ssize_t chunkqueue_append_cqmem_to_tempfile_partial(chunkqueue * const dest, chunk * const c, ssize_t wr, log_error_st * const restrict errh) {
+    /* recover from partial write of existing dest MEM_CHUNK to tempfile */
+    chunk *ckpt = dest->first;
+    while (ckpt->next != c) ckpt = ckpt->next;
+    ckpt->next = NULL;
+    dest->last = ckpt;
+    dest->bytes_in  -= wr; /*(avoid double count in dest cq)*/
+    dest->bytes_out -= wr;
+    chunkqueue_mark_written(dest, wr);/*(remove MEM_CHUNK written to tempfile)*/
+
+    c->next = dest->first; /*(place tempfile at beginning of dest cq)*/
+    dest->first = c;
+    return (0 == chunkqueue_to_tempfiles(dest, errh)) ? 0 : -1;
+}
+
+static ssize_t chunkqueue_append_cqmem_to_tempfile(chunkqueue * const restrict dest, chunkqueue * const restrict src, off_t len, log_error_st * const restrict errh) {
+    /* write multiple MEM_CHUNKs to tempfile in single pwritev() syscall */
+    /*(could lseek() and writev() if pwritev() is not available,
+     * but if writev() is available, pwritev() is likely available,
+     * e.g. any modern Linux or *BSD, and possibly anything not Windows)*/
+    unsigned int iovcnt = 0;
+    struct iovec iov[16];
+
+    off_t dlen = 0;
+    chunk *c;
+    for (c = dest->first; c && c->type == MEM_CHUNK; c = c->next) {
+        const off_t clen = chunk_remaining_length(c);
+        iov[iovcnt].iov_base = c->mem->ptr + c->offset;
+        iov[iovcnt].iov_len  = (size_t)clen;
+        dlen += clen;
+        ++iovcnt;
+        if (__builtin_expect( (iovcnt == sizeof(iov)/sizeof(*iov)), 0))
+            break; /*(not expecting large number of MEM_CHUNK)*/
+    }
+    if (__builtin_expect( (c != NULL), 0) && dest->first->type == MEM_CHUNK) {
+        /*(expecting only MEM_CHUNK if dest cq starts w/ MEM_CHUNK)*/
+        /*(use less efficient fallback if that assumption does not hold true)*/
+        if (0 != chunkqueue_to_tempfiles(dest, errh))
+            return -1;
+        dlen = 0;
+        iovcnt = 0;
+    }
+
+    if (__builtin_expect( (iovcnt < sizeof(iov)/sizeof(*iov)), 1)) {
+        for (c = src->first; c && c->type == MEM_CHUNK; c = c->next) {
+            off_t clen = chunk_remaining_length(c);
+            if (clen > len) clen = len;
+            iov[iovcnt].iov_base = c->mem->ptr + c->offset;
+            iov[iovcnt].iov_len  = (size_t)clen;
+            len -= clen;
+            ++iovcnt;
+            if (0 == len) break;
+            if (__builtin_expect( (iovcnt == sizeof(iov)/sizeof(*iov)), 0))
+                break; /*(not expecting large number of MEM_CHUNK)*/
+        }
+    }
+
+    if (__builtin_expect( (0 == iovcnt), 0)) return 0; /*(should not happen)*/
+
+    c = chunkqueue_get_append_tempfile(dest, errh);
+    if (NULL == c)
+        return -1;
+  #ifdef __COVERITY__
+    if (c->file.fd < 0) return -1;
+  #endif
+    /* coverity[negative_returns : FALSE] */
+    ssize_t wr = pwritev(c->file.fd, iov, (int)iovcnt, c->file.length);
+
+    /*(memory use in chunkqueues is expected to be limited before spilling
+     * to tempfiles, so common case will write entire iovec to tempfile,
+     * and we return amount written *from src cq*, even if partial write;
+     * (not looping here to retry writing more, but caller might loop))*/
+
+    if (wr >= 0) {
+        c->file.length += wr;
+        dest->bytes_in += wr;
+        if (dlen) {
+            if (__builtin_expect( (wr < dlen), 0))
+                return
+                  chunkqueue_append_cqmem_to_tempfile_partial(dest,c,wr,errh);
+            wr -= (ssize_t)dlen;
+            dest->bytes_in  -= dlen; /*(avoid double count in dest cq)*/
+            dest->bytes_out -= dlen;
+            chunkqueue_mark_written(dest, dlen);
+        }
+    }
+
+    return wr;
+}
+
+#endif /* HAVE_PWRITEV */
+
 #ifdef HAVE_SPLICE
 
 __attribute_cold__
@@ -958,6 +1058,21 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue
 		chunk * const c = src->first;
 		if (__builtin_expect( (NULL == c), 0)) break;
 
+	  #ifdef HAVE_PWRITEV
+
+		if (c->type == MEM_CHUNK) {
+			clen = chunkqueue_append_cqmem_to_tempfile(dest, src, len, errh);
+			if (__builtin_expect( (clen < 0), 0)) return -1;
+			chunkqueue_mark_written(src, clen); /*(updates src->bytes_out)*/
+		}
+		else { /* (c->type == FILE_CHUNK) */
+			clen = chunk_remaining_length(c);
+			if (len < clen) clen = len;
+			chunkqueue_steal(dest, src, clen);/*(same as below for FILE_CHUNK)*/
+		}
+
+	  #else
+
 		clen = chunk_remaining_length(c);
 		if (__builtin_expect( (0 == clen), 0)) {
 			/* drop empty chunk */
@@ -1005,6 +1120,8 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue
 		}
 
 		src->bytes_out += clen;
+
+	  #endif
 	}
 
 	return 0;
