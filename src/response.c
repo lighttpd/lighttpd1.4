@@ -172,7 +172,7 @@ http_response_write_header (request_st * const r)
 	if (r->resp_body_finished
 	    && light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)
 	    && (cqlen = chunkqueue_length(cq) - r->resp_header_len) > 0
-	    && cqlen <= 32768)
+	    && cqlen < 16384)
 		chunkqueue_small_resp_optim(cq);
 }
 
