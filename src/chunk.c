@@ -1463,49 +1463,51 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
      *(If TLS, then will shortly need to be in memory for encryption anyway)*/
 
     /*assert(cq->first);*/
-    chunk *c = cq->first;
-    chunk * const filec = c->next;
-    if (c->type != MEM_CHUNK || filec != cq->last || filec->type != FILE_CHUNK)
+    chunk * restrict c = cq->first;
+    chunk * const restrict filec = c->next;  /*(require file already be open)*/
+    if (filec != cq->last || filec->type != FILE_CHUNK || filec->file.fd < 0)
         return;
 
-    const int fd = filec->file.fd;
-    if (fd < 0) return; /*(require that file already be open)*/
-    off_t offset = filec->offset;
   #ifndef HAVE_PREAD
-    if (-1 == lseek(fd, offset, SEEK_SET)) return;
+    if (-1 == lseek(filec->file.fd, filec->offset, SEEK_SET)) return;
   #endif
 
     /* Note: there should be no size change in chunkqueue,
      * so cq->bytes_in and cq->bytes_out should not be modified */
 
-    buffer *b = c->mem;
     off_t len = filec->file.length - filec->offset;
-    if ((size_t)len > buffer_string_space(b)) {
-        chunk * const nc = chunk_acquire((size_t)len+1);
-        c->next = nc;
-        nc->next = filec;
-        b = nc->mem;
+    if (c->type != MEM_CHUNK || (size_t)len > buffer_string_space(c->mem)) {
+        c->next = chunk_acquire((size_t)len+1);
+        c = c->next;
+        /*c->next = filec;*/
     }
+    /* detach filec from chunkqueue; file expected to be read fully */
+    c->next = NULL;
+    cq->last = c;
 
-    char * const ptr = b->ptr + buffer_clen(b);
     ssize_t rd;
-  #ifdef HAVE_PREAD
-    const off_t foff = offset;
-  #endif
-    offset = 0; /*(reuse offset var for offset into mem buffer)*/
+    off_t offset = 0;
+    char * const ptr = buffer_extend(c->mem, len);
     do {
       #ifdef HAVE_PREAD
-        rd =pread(fd, ptr+offset, (size_t)len, foff+offset);
+        rd =pread(filec->file.fd, ptr+offset, (size_t)len,filec->offset+offset);
       #else
-        rd = read(fd, ptr+offset, (size_t)len);
+        rd = read(filec->file.fd, ptr+offset, (size_t)len);
       #endif
     } while (rd > 0 ? (offset += rd, len -= rd) : errno == EINTR);
     /*(contents of chunkqueue kept valid even if error reading from file)*/
-    if (len)
-        cq->bytes_in -= len;
-    buffer_commit(b, offset);
-    filec->offset += offset;
-    chunkqueue_remove_empty_chunks(cq);
+    if (__builtin_expect( (0 == len), 1))
+        chunk_release(filec);
+    else { /*(unexpected; error recovery)*/
+        buffer_truncate(c->mem, (uint32_t)(ptr + offset - c->mem->ptr));
+        cq->last = c->next = filec;
+        if (offset)
+            filec->offset += offset;
+        else if (__builtin_expect( (cq->first != c), 0)) {
+            cq->first->next = filec;
+            chunk_release(c);
+        }
+    }
 }
 
 
