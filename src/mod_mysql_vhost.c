@@ -68,6 +68,7 @@ static void* mod_mysql_vhost_connection_data(request_st * const r, void *p_d)
 
 	if (c) return c;
 	c = calloc(1, sizeof(*c));
+	force_assert(c);
 
 	c->server_name = buffer_init();
 	c->document_root = buffer_init();

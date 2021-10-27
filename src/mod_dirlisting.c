@@ -1077,6 +1077,7 @@ static int http_read_directory(handler_ctx * const p) {
 		}
 		dirls_entry_t * const tmp = list->ent[list->used++] =
 		  (dirls_entry_t*) malloc(sizeof(dirls_entry_t) + 1 + dsz);
+		force_assert(tmp);
 		tmp->mtime = st.st_mtime;
 		tmp->size  = st.st_size;
 		tmp->namelen = dsz;
