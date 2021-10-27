@@ -305,7 +305,7 @@ static int mod_authn_mysql_password_cmp(const char *userpw, unsigned long userpw
         char *crypted = crypt(reqpw, userpw);
         size_t crypwlen = (NULL != crypted) ? strlen(crypted) : 0;
         int rc = (crypwlen == userpwlen) ? memcmp(crypted, userpw, crypwlen) : -1;
-        if (crypwlen) ck_memzero(crypted, crypwlen);
+        if (crypwlen >= 13) ck_memzero(crypted, crypwlen);
         return rc;
     }
     else

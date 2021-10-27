@@ -575,8 +575,7 @@ static size_t apr_md5_encode(const char *pw, const char *salt, char *result, siz
 #if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
 static int mod_authn_file_crypt_cmp(const buffer * const password, const char * const pw) {
             int rc = -1;
-            char *crypted;
-            char sample[256];
+            char *crypted = NULL;
            #if 0 && defined(HAVE_CRYPT_R)
             struct crypt_data crypt_tmp_data;
             #ifdef _AIX
@@ -597,6 +596,7 @@ static int mod_authn_file_crypt_cmp(const buffer * const password, const char * 
                  * NTLM passwords limited to 127 chars, and encoding to UCS-2LE
                  * requires double that, so sample[256] buf is large enough.
                  * Prior sample[120] size likely taken from apr_md5_encode(). */
+                char sample[256];
                 char *b = password->ptr+sizeof("$1+ntlm$")-1;
                 char *e = strchr(b, '$');
                 size_t slen = (NULL != e) ? (size_t)(e - b) : sizeof(sample);
@@ -632,6 +632,7 @@ static int mod_authn_file_crypt_cmp(const buffer * const password, const char * 
                         && 0 == strncmp(crypted, "$1$", sizeof("$1$")-1)) {
                         rc = strcmp(b, crypted+3); /*skip crypted "$1$" prefix*/
                     }
+                    ck_memzero(sample, sizeof(sample));
                 }
             }
             else
@@ -646,7 +647,10 @@ static int mod_authn_file_crypt_cmp(const buffer * const password, const char * 
                     rc = strcmp(password->ptr, crypted);
                 }
             }
-            ck_memzero(sample, sizeof(sample));
+            if (NULL != crypted) {
+                size_t crypwlen = strlen(crypted);
+                if (crypwlen >= 13) ck_memzero(crypted, crypwlen);
+            }
             return rc;
 }
 #endif
