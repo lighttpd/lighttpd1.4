@@ -1456,6 +1456,8 @@ void
 chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
 {
     /*(caller must verify response is small (and non-empty) before calling)*/
+    /*(caller must verify first chunk is MEM_CHUNK, i.e. response headers)*/
+    /*(caller must verify response is non-zero length)*/
 
     /*(optimization to use fewer syscalls to send a small response by reading
      * small files into memory, thereby avoiding use of sendfile() and multiple
@@ -1463,6 +1465,8 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
      *(If TLS, then will shortly need to be in memory for encryption anyway)*/
 
     /*assert(cq->first);*/
+    /*assert(cq->first->type == MEM_CHUNK);*/
+    /*assert(cq->first->next);*/
     chunk * restrict c = cq->first;
     chunk * const restrict filec = c->next;  /*(require file already be open)*/
     if (filec != cq->last || filec->type != FILE_CHUNK || filec->file.fd < 0)
@@ -1476,7 +1480,7 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
      * so cq->bytes_in and cq->bytes_out should not be modified */
 
     off_t len = filec->file.length - filec->offset;
-    if (c->type != MEM_CHUNK || (size_t)len > buffer_string_space(c->mem)) {
+    if ((size_t)len > buffer_string_space(c->mem)) {
         c->next = chunk_acquire((size_t)len+1);
         c = c->next;
         /*c->next = filec;*/
