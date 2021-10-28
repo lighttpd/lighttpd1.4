@@ -1275,17 +1275,21 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
 
                 uint32_t dlen = max_bytes > 32768 ? 32768 : (uint32_t)max_bytes;
                 dlen = h2_send_cqdata(r, con, &r->write_queue, dlen);
-                max_bytes -= (off_t)dlen;
+                if (dlen) { /*(do not resched (spin) if swin empty window)*/
+                    max_bytes -= (off_t)dlen;
+                    if (!chunkqueue_is_empty(&r->write_queue))
+                        resched |= 1;
+                }
+            }
 
+            {
                 if (chunkqueue_is_empty(&r->write_queue)) {
-                    if (r->resp_body_finished) {
+                    if (r->resp_body_finished && r->state == CON_STATE_WRITE) {
                         connection_set_state(r, CON_STATE_RESPONSE_END);
                         if (__builtin_expect( (r->conf.log_state_handling), 0))
                             connection_state_machine_loop(r, con);
                     }
                 }
-                else if (dlen) /*(do not spin if swin empty window)*/
-                    resched |= 1; /*(!chunkqueue_is_empty(&r->write_queue))*/
             }
 
           #if 0
