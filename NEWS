@@ -3,6 +3,56 @@
 NEWS
 ====
 
+- 1.4.61 - 2021-10-28
+  * [core] define __BEGIN_DECLS, __END_DECLS if needed
+  * [core] Y2038: error log high-precision timestamps
+  * [multiple] __attribute_nonnull__ now takes params
+  * [core] bounds check while url-decoding
+  * [mod_magnet] prefer lua_newuserdatauv() w/ lua 5.4
+  * [core] earlier macOS need define for errno_t (fixes #3107)
+  * [tests] force POSIX::WNOHANG() autovivification (fixes #3110)
+  * [mod_dirlisting] sort "../" to top (fixes #3109)
+  * [tests] force Fcntl::F_SETFD() autovivification (#3110)
+  * [core] avoid repeated typedef for fdlog_st
+  * [doc] update INSTALL
+  * [mod_extforward] keep remote IP thru request reset
+  * [core] fix HTTP/2 upload > 64k w/ max-request-size (fixes #3108)
+  * [mod_auth] fix Basic auth passwd cache (fixes #3112)
+  * [mod_ajp13,mod_fastcgi] comment: no response body
+  * [mod_webdav] ignore PROPFIND Depth for files
+  * [core] add comment to ck_memeq_const_time()
+  * [core] accept up to 5 digit port num in host cond
+  * [core] expose chunkqueue_remove_empty_chunks()
+  * [core] short-circuit if response body recv w/ hdrs (fixes #3111)
+  * [core] resched HTTP/2 streams w/ pending data (#3111)
+  * [core] separate func for gw_authorizer_ok()
+  * [core] make ck_memeq_const_time() more generic (#3112)
+  * [mod_auth] revert adjustment to auth passwd cache (#3112)
+  * [core] thwart h2c smuggling when Upgrade enabled
+  * [core] separate funcs to check for valid chars
+  * [core] thwart h2 request tunnelling
+  * [core] clear shared log buffer after writes
+  * [mod_nss] quiet trace for PR_END_OF_FILE_ERROR
+  * [core] allow debug.log-state-handling in condition
+  * [core] combine more dup header processing code
+  * [mod_ajp13,mod_fastcgi] check resp w/ content len
+  * [mod_proxy] Length Req if proxy forcing HTTP/1.0
+  * [core] restart dead proc on connect error if local
+  * [mod_ajp13,mod_fastcgi] recv_parse smaller funcs
+  * [multiple] warn deprecated mods slated for removal
+  * [core] remove redundant checks in same context
+  * [core] tighten chunkqueue_steal* code; better asm
+  * [build] check for preadv(), pwritev()
+  * [core] pwritev w/ chunkqueue_steal_with_tempfiles
+  * [core] tighten chunkqueue_mark_written; better asm
+  * [doc] uncomment mod_auth load in conf.d/auth.conf
+  * [core] tighten chunkqueue_small_resp_optim()
+  * [core] chunkqueue_small_resp_optim if resp < 16k
+  * [mod_auth] clear crypt() output if len >= 13
+  * [multiple] add assert after malloc in two spots
+  * [core] add HTTP/2 check resp finished w/ empty cq (#3111)
+  * [core] chunkqueue_small_resp_optim() comment
+
 - 1.4.60 - 2021-10-03
   * [meson] add with_zstd to meson_options.txt
   * [mod_magnet] reject stat() of empty string (fixes #3064)
