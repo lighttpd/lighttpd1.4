@@ -8,12 +8,13 @@
 
 #include "buffer.h"
 #include "array.h"
+#include "fdlog.h"
 
 /* both should be way smaller than SSIZE_MAX :) */
 #define MAX_READ_LIMIT  (256*1024)
 #define MAX_WRITE_LIMIT (256*1024)
 
-struct fdlog_st;        /*(declaration)*/
+/*(needed until 'struct log_error_st' below replaced with 'log_error_st')*/
 #define log_error_st fdlog_st
 
 typedef struct chunk {
