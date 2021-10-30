@@ -45,6 +45,12 @@
 #include <sys/types.h>
 #include <stddef.h>
 
+#ifdef __has_include
+#if __has_include(<sys/cdefs.h>)
+#include <sys/cdefs.h>
+#endif
+#endif
+
 #ifndef __BEGIN_DECLS
 #ifdef __cplusplus
 #define __BEGIN_DECLS extern "C" {
