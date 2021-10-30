@@ -9,10 +9,6 @@
 static const char hex_chars_lc[] = "0123456789abcdef";
 static const char hex_chars_uc[] = "0123456789ABCDEF";
 
-/**
- * init the buffer
- *
- */
 
 __attribute_noinline__
 buffer* buffer_init(void) {
@@ -334,7 +330,6 @@ void buffer_append_int(buffer *b, intmax_t val) {
 }
 
 void buffer_append_strftime(buffer * const restrict b, const char * const restrict format, const struct tm * const restrict tm) {
-    force_assert(NULL != format);
     /*(localtime_r() or gmtime_r() producing tm should not have failed)*/
     if (__builtin_expect( (NULL == tm), 0)) return;
 
@@ -609,10 +604,6 @@ void buffer_append_string_encoded(buffer * const restrict b, const char * const 
 	size_t d_len, ndx;
 	const char *map = NULL;
 
-	if (0 == s_len) return;
-
-	force_assert(NULL != s);
-
 	switch(encoding) {
 	case ENCODING_REL_URI:
 		map = encoded_chars_rel_uri;
@@ -627,8 +618,6 @@ void buffer_append_string_encoded(buffer * const restrict b, const char * const 
 		map = encoded_chars_minimal_xml;
 		break;
 	}
-
-	force_assert(NULL != map);
 
 	/* count to-be-encoded-characters */
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
@@ -683,8 +672,6 @@ void buffer_append_string_encoded(buffer * const restrict b, const char * const 
 void buffer_append_string_c_escaped(buffer * const restrict b, const char * const restrict s, size_t s_len) {
 	unsigned char *ds, *d;
 	size_t d_len, ndx;
-
-	if (0 == s_len) return;
 
 	/* count to-be-encoded-characters */
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
