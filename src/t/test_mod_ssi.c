@@ -178,15 +178,6 @@ int main (void)
  * stub functions
  */
 
-#include "fdevent_impl.h"
-int fdevent_select_init(struct fdevents *ev) { return NULL == ev; }
-int fdevent_poll_init(struct fdevents *ev) { return NULL == ev; }
-int fdevent_linux_sysepoll_init(struct fdevents *ev) { return NULL == ev; }
-int fdevent_solaris_devpoll_init(struct fdevents *ev) { return NULL == ev; }
-int fdevent_solaris_port_init(struct fdevents *ev) { return NULL == ev; }
-int fdevent_freebsd_kqueue_init(struct fdevents *ev) { return NULL == ev; }
-int fdevent_libev_init(struct fdevents *ev) { return NULL == ev; }
-
 int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname) {
     UNUSED(srv);
     UNUSED(p_d);

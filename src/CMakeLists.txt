@@ -762,10 +762,6 @@ set(COMMON_SRC
 	http_chunk.c fdevent.c gw_backend.c
 	stat_cache.c plugin.c http_etag.c array.c
 	algo_md5.c algo_sha1.c algo_splaytree.c
-	fdevent_select.c fdevent_libev.c
-	fdevent_poll.c fdevent_linux_sysepoll.c
-	fdevent_solaris_devpoll.c fdevent_solaris_port.c
-	fdevent_freebsd_kqueue.c
 	configfile-glue.c
 	http-header-glue.c
 	http_cgi.c
@@ -804,6 +800,11 @@ add_executable(lighttpd
 	sock_addr_cache.c
 	ls-hpack/lshpack.c
 	algo_xxhash.c
+	fdevent_impl.c
+	fdevent_select.c fdevent_libev.c
+	fdevent_poll.c fdevent_linux_sysepoll.c
+	fdevent_solaris_devpoll.c fdevent_solaris_port.c
+	fdevent_freebsd_kqueue.c
 	http_range.c
 	network.c
 	network_write.c
