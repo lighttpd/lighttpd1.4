@@ -56,6 +56,7 @@ test_mod_access
 test_mod_evhost
 test_mod_indexfile
 test_mod_simple_vhost
+test_mod_ssi
 test_mod_staticfile
 test_mod_userdir
 test_request
