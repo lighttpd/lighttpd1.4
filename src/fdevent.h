@@ -62,6 +62,9 @@ int fdevent_reset(fdevents *ev); /* "init" after fork() */
 __attribute_cold__
 void fdevent_free(fdevents *ev);
 
+__attribute_cold__
+void fdevent_socket_nb_cloexec_init(void);
+
 #define fdevent_fdnode_interest(fdn) (NULL != (fdn) ? (fdn)->events : 0)
 void fdevent_fdnode_event_del(fdevents *ev, fdnode *fdn);
 void fdevent_fdnode_event_set(fdevents *ev, fdnode *fdn, int events);

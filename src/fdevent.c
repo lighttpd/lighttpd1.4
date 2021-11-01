@@ -28,6 +28,33 @@ static int use_sock_cloexec;
 static int use_sock_nonblock;
 #endif
 
+void fdevent_socket_nb_cloexec_init (void)
+{
+      #ifdef SOCK_CLOEXEC
+	/* Test if SOCK_CLOEXEC is supported by kernel.
+	 * Linux kernels < 2.6.27 might return EINVAL if SOCK_CLOEXEC used
+	 * https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=529929
+	 * http://www.linksysinfo.org/index.php?threads/lighttpd-no-longer-starts-toastman-1-28-0510-7.73132/
+	 * Test if SOCK_NONBLOCK is ignored by kernel on sockets.
+	 * (reported on Android running a custom ROM)
+	 * https://redmine.lighttpd.net/issues/2883
+	 */
+       #ifdef SOCK_NONBLOCK
+	int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+       #else
+	int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+       #endif
+	if (fd >= 0) {
+		int flags = fcntl(fd, F_GETFL, 0);
+              #ifdef SOCK_NONBLOCK
+		use_sock_nonblock = (-1 != flags && (flags & O_NONBLOCK));
+              #endif
+		use_sock_cloexec = 1;
+		close(fd);
+	}
+      #endif
+}
+
 int fdevent_config(const char **event_handler_name, log_error_st *errh) {
 	static const struct ev_map { fdevent_handler_t et; const char *name; } event_handlers[] =
 	{
@@ -159,29 +186,7 @@ fdevents * fdevent_init(const char *event_handler, int *max_fds, int *cur_fds, l
 	int type = fdevent_config(&event_handler, errh);
 	if (type <= 0) return NULL;
 
-      #ifdef SOCK_CLOEXEC
-	/* Test if SOCK_CLOEXEC is supported by kernel.
-	 * Linux kernels < 2.6.27 might return EINVAL if SOCK_CLOEXEC used
-	 * https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=529929
-	 * http://www.linksysinfo.org/index.php?threads/lighttpd-no-longer-starts-toastman-1-28-0510-7.73132/
-	 * Test if SOCK_NONBLOCK is ignored by kernel on sockets.
-	 * (reported on Android running a custom ROM)
-	 * https://redmine.lighttpd.net/issues/2883
-	 */
-       #ifdef SOCK_NONBLOCK
-	int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
-       #else
-	int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
-       #endif
-	if (fd >= 0) {
-		int flags = fcntl(fd, F_GETFL, 0);
-              #ifdef SOCK_NONBLOCK
-		use_sock_nonblock = (-1 != flags && (flags & O_NONBLOCK));
-              #endif
-		use_sock_cloexec = 1;
-		close(fd);
-	}
-      #endif
+	fdevent_socket_nb_cloexec_init();
 
       #ifdef FDEVENT_USE_SELECT
 	/* select limits itself
