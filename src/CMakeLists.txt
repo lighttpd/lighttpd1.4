@@ -801,10 +801,6 @@ add_executable(lighttpd
 	ls-hpack/lshpack.c
 	algo_xxhash.c
 	fdevent_impl.c
-	fdevent_select.c fdevent_libev.c
-	fdevent_poll.c fdevent_linux_sysepoll.c
-	fdevent_solaris_devpoll.c fdevent_solaris_port.c
-	fdevent_freebsd_kqueue.c
 	http_range.c
 	network.c
 	network_write.c

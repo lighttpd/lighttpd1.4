@@ -132,19 +132,4 @@ struct fdevents {
     fdevent_handler_t type;
 };
 
-__attribute_cold__
-int fdevent_select_init(struct fdevents *ev);
-__attribute_cold__
-int fdevent_poll_init(struct fdevents *ev);
-__attribute_cold__
-int fdevent_linux_sysepoll_init(struct fdevents *ev);
-__attribute_cold__
-int fdevent_solaris_devpoll_init(struct fdevents *ev);
-__attribute_cold__
-int fdevent_solaris_port_init(struct fdevents *ev);
-__attribute_cold__
-int fdevent_freebsd_kqueue_init(struct fdevents *ev);
-__attribute_cold__
-int fdevent_libev_init(struct fdevents *ev);
-
 #endif
