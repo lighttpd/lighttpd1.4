@@ -759,7 +759,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 set(COMMON_SRC
 	base64.c buffer.c burl.c log.c
 	http_header.c http_kv.c keyvalue.c chunk.c
-	http_chunk.c fdevent.c gw_backend.c
+	http_chunk.c fdevent.c fdevent_fdnode.c gw_backend.c
 	stat_cache.c plugin.c http_etag.c array.c
 	algo_md5.c algo_sha1.c algo_splaytree.c
 	configfile-glue.c
@@ -943,6 +943,7 @@ add_executable(test_mod_indexfile
 	fdlog.c
 	sock_addr.c
 	stat_cache.c
+	fdevent_fdnode.c
 	algo_splaytree.c
 	ck.c
 )
@@ -978,6 +979,7 @@ add_executable(test_mod_ssi
 	fdlog.c
 	sock_addr.c
 	stat_cache.c
+	fdevent_fdnode.c
 	algo_splaytree.c
 	ck.c
 )
@@ -1003,6 +1005,7 @@ add_executable(test_mod_staticfile
 	fdlog.c
 	sock_addr.c
 	stat_cache.c
+	fdevent_fdnode.c
 	algo_splaytree.c
 	ck.c
 )
