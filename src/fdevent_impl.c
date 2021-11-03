@@ -339,7 +339,7 @@ fdevent_sched_run (fdevents * const ev)
 int
 fdevent_poll (fdevents * const ev, const int timeout_ms)
 {
-    const int n = ev->poll(ev, timeout_ms);
+    const int n = ev->poll(ev, ev->pendclose ? 0 : timeout_ms);
     if (n >= 0)
         fdevent_sched_run(ev);
     else if (errno != EINTR)
