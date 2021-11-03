@@ -290,7 +290,7 @@ connection_write_chunkqueue (connection * const con, chunkqueue * const restrict
         /* Linux: put a cork into socket as we want to combine write() calls
          * but only if we really have multiple chunks including non-MEM_CHUNK
          * (or if multiple chunks and TLS), and only if TCP socket */
-        if (NULL != c || con->is_ssl_sock) {
+        if (NULL != c || (max_bytes > 16384 && con->is_ssl_sock)) {
             const int sa_family = sock_addr_get_family(&con->srv_socket->addr);
             if (sa_family == AF_INET || sa_family == AF_INET6) {
                 corked = 1;
