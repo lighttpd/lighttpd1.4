@@ -763,6 +763,13 @@ fdevent_solaris_devpoll_init (fdevents *ev)
 
 #ifdef FDEVENT_USE_LIBEV
 
+#if (defined(__APPLE__) && defined(__MACH__)) \
+  || defined(__FreeBSD__) || defined(__NetBSD__) \
+  || defined(__OpenBSD__) || defined(__DragonFly__)
+/* libev EV_ERROR conflicts with kqueue sys/event.h EV_ERROR */
+#undef EV_ERROR
+#endif
+
 #include <ev.h>
 
 static void
