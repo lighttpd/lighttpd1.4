@@ -415,6 +415,7 @@ static void cgi_pid_del(plugin_data *p, cgi_pid_t *cgi_pid) {
 
 static void cgi_connection_close_fdtocgi(handler_ctx *hctx) {
 	/*(closes only hctx->fdtocgi)*/
+	if (-1 == hctx->fdtocgi) return;
 	struct fdevents * const ev = hctx->ev;
 	fdevent_fdnode_event_del(ev, hctx->fdntocgi);
 	/*fdevent_unregister(ev, hctx->fdtocgi);*//*(handled below)*/
