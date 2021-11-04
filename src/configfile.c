@@ -403,6 +403,26 @@ static void config_compat_module_load (server *srv) {
             else if (!(prepend_mod_vhostdb & 2))
                 prepend_mod_vhostdb |= 1;
         }
+        else if (   0 == strncmp(m->ptr, "mod_ajp13",
+                                         sizeof("mod_ajp13")-1)
+                 || 0 == strncmp(m->ptr, "mod_cgi",
+                                         sizeof("mod_cgi")-1)
+                 || 0 == strncmp(m->ptr, "mod_fastcgi",
+                                         sizeof("mod_fastcgi")-1)
+                 || 0 == strncmp(m->ptr, "mod_proxy",
+                                         sizeof("mod_proxy")-1)
+                 || 0 == strncmp(m->ptr, "mod_scgi",
+                                         sizeof("mod_scgi")-1)
+                 || 0 == strncmp(m->ptr, "mod_sockproxy",
+                                         sizeof("mod_sockproxy")-1)
+                 || 0 == strncmp(m->ptr, "mod_wstunnel",
+                                         sizeof("mod_wstunnel")-1)) {
+            if (!contains_mod_auth) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "Warning: mod_auth should be listed in server.modules before "
+                  "dynamic backends such as %s", m->ptr);
+            }
+        }
     }
 
     /* prepend default modules */
