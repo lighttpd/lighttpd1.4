@@ -959,31 +959,31 @@ add_executable(test_mod_simple_vhost
 )
 add_test(NAME test_mod_simple_vhost COMMAND test_mod_simple_vhost)
 
-add_executable(test_mod_ssi
-	t/test_mod_ssi.c
-	request.c
-	base64.c
-	buffer.c
-	burl.c
-	array.c
-	chunk.c
-	fdevent.c
-	http-header-glue.c
-	http_cgi.c
-	http_chunk.c
-	http_date.c
-	http_etag.c
-	http_header.c
-	http_kv.c
-	log.c
-	fdlog.c
-	sock_addr.c
-	stat_cache.c
-	fdevent_fdnode.c
-	algo_splaytree.c
-	ck.c
-)
-add_test(NAME test_mod_ssi COMMAND test_mod_ssi)
+#add_executable(test_mod_ssi
+#	t/test_mod_ssi.c
+#	request.c
+#	base64.c
+#	buffer.c
+#	burl.c
+#	array.c
+#	chunk.c
+#	fdevent.c
+#	http-header-glue.c
+#	http_cgi.c
+#	http_chunk.c
+#	http_date.c
+#	http_etag.c
+#	http_header.c
+#	http_kv.c
+#	log.c
+#	fdlog.c
+#	sock_addr.c
+#	stat_cache.c
+#	fdevent_fdnode.c
+#	algo_splaytree.c
+#	ck.c
+#)
+#add_test(NAME test_mod_ssi COMMAND test_mod_ssi)
 
 add_executable(test_mod_staticfile
 	t/test_mod_staticfile.c
