@@ -20,14 +20,15 @@ $HTTP["host"] == "download.example.com" {
   ##
   accesslog.filename          = log_root + "/" + server_name + "/access.log"
   server.errorlog             = log_root + "/" + server_name + "/error.log"
-}
 
-$SERVER["socket"] == "127.0.0.1:443" {
-  server.name = "localhost"
-  ssl.pemfile = "/etc/ssl/private/lighttpd-localhost.pem"
-  ssl.engine  = "enable"
+  $HTTP["scheme"] == "https" {
+    server.name = "download.example.com"
+    ssl.pemfile = "/etc/lighttpd/certs/download.example.com.cert.pem"
+    ssl.privkey = "/etc/lighttpd/certs/download.example.com.key.pem"
+    ssl.engine  = "enable"
 
-  server.document-root = vhosts_dir + "/ssl-localhost/pages/"
+    server.document-root = vhosts_dir + "/example.com/download/htdocs"
+  }
 }
 
 ##
