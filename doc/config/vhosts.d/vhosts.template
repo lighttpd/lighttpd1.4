@@ -22,13 +22,5 @@ $HTTP["host"] == "download.example.com" {
   server.errorlog             = log_root + "/" + server_name + "/error.log"
 }
 
-$SERVER["socket"] == "127.0.0.1:443" {
-  server.name = "localhost"
-  ssl.pemfile = "/etc/ssl/private/lighttpd-localhost.pem"
-  ssl.engine  = "enable"
-
-  server.document-root = vhosts_dir + "/ssl-localhost/pages/"
-}
-
 ##
 #######################################################################
