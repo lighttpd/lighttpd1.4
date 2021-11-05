@@ -414,13 +414,19 @@ static void plugins_call_cleanup(server * const srv) {
     }
 }
 
-/**
- *
- * - call init function of all plugins to init the plugin-internals
- * - added each plugin that supports has callback to the corresponding slot
- *
- * - is only called once.
- */
+__attribute_cold__
+static void plugins_call_init_reverse(server *srv, const uint32_t offset) {
+    if (0 == offset) return;
+    plugin_fn_data *a = (plugin_fn_data *)
+      (((uintptr_t)srv->plugin_slots) + offset);
+    plugin_fn_data *b = a;
+    while (b->fn) ++b;
+    for (; a < --b; ++a) { /* swap to reverse list */
+        plugin_fn_data tmp = *a;
+        *a = *b;
+        *b = tmp;
+    }
+}
 
 __attribute_cold__
 static void plugins_call_init_slot(server *srv, handler_t(*fn)(), void *data, const uint32_t offset) {
@@ -560,6 +566,10 @@ handler_t plugins_call_init(server *srv) {
 		plugins_call_init_slot(srv, p->worker_init, p->data,
 					offsets[PLUGIN_FUNC_WORKER_INIT]);
 	}
+
+	/* reverse cleanup lists to balance ctor/dtor-like plugin behaviors */
+	plugins_call_init_reverse(srv,offsets[PLUGIN_FUNC_HANDLE_REQUEST_RESET]);
+	plugins_call_init_reverse(srv,offsets[PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE]);
 
 	return HANDLER_GO_ON;
 }
