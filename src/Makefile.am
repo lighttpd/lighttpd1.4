@@ -672,6 +672,8 @@ t_test_mod_indexfile_LDADD = $(LIBUNWIND_LIBS) $(FAM_LIBS)
 t_test_mod_simple_vhost_SOURCES = t/test_mod_simple_vhost.c buffer.c array.c log.c fdlog.c ck.c
 t_test_mod_simple_vhost_LDADD = $(LIBUNWIND_LIBS)
 
+t_test_mod_ssi_CPPFLAGS = -DINCLUDE_MOD_SSI_EXPRPARSER_C
+t_test_mod_ssi_DEPENDENCIES = mod_ssi_exprparser.h
 t_test_mod_ssi_SOURCES = t/test_mod_ssi.c request.c base64.c buffer.c burl.c array.c chunk.c fdevent.c http-header-glue.c http_cgi.c http_chunk.c http_date.c http_etag.c http_header.c http_kv.c log.c fdlog.c sock_addr.c stat_cache.c fdevent_fdnode.c algo_splaytree.c ck.c
 t_test_mod_ssi_LDADD = $(LIBUNWIND_LIBS) $(FAM_LIBS)
 

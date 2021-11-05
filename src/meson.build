@@ -997,6 +997,7 @@ test('test_mod_simple_vhost', executable('test_mod_simple_vhost',
 test('test_mod_ssi', executable('test_mod_ssi',
 	sources: [
 		't/test_mod_ssi.c',
+		ssi_exprparser,
 		'request.c',
 		'base64.c',
 		'buffer.c',
