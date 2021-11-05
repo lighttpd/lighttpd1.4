@@ -21,14 +21,13 @@ $HTTP["host"] == "download.example.com" {
   accesslog.filename          = log_root + "/" + server_name + "/access.log"
   server.errorlog             = log_root + "/" + server_name + "/error.log"
 
-  $HTTP["scheme"] == "https" {
-    server.name = "download.example.com"
-    ssl.pemfile = "/etc/lighttpd/certs/download.example.com.cert.pem"
-    ssl.privkey = "/etc/lighttpd/certs/download.example.com.key.pem"
-    ssl.engine  = "enable"
+#  $HTTP["scheme"] == "https" {
+#    server.name = "download.example.com"
+#    ssl.pemfile = "/etc/lighttpd/certs/download.example.com.cert.pem"
+#    ssl.privkey = "/etc/lighttpd/certs/download.example.com.key.pem"
 
-    server.document-root = vhosts_dir + "/example.com/download/htdocs"
-  }
+#    server.document-root = vhosts_dir + "/example.com/download/htdocs
+#  }
 }
 
 ##
