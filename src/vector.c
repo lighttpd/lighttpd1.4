@@ -12,9 +12,9 @@ void *vector_malloc(size_t sz) { return malloc(sz); }
 void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used) {
 	const size_t total_size = elem_size * size;
 	const size_t used_size = elem_size * used;
-	force_assert(size <= SIZE_MAX / elem_size);
+	ck_assert(size <= SIZE_MAX / elem_size);
 	data = realloc(data, total_size);
-	force_assert(NULL != data);
+	ck_assert(NULL != data);
 
 	/* clear new memory */
 	memset(((char*)data) + used_size, 0, total_size - used_size);

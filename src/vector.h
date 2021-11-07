@@ -2,7 +2,7 @@
 #define LI_VECTOR_H
 #include "first.h"
 
-#include "buffer.h"     /* force_assert() */
+#include "ck.h"         /* ck_assert() */
 
 static inline size_t vector_align_size(size_t s) {
 	size_t a = (s + 15) & ~(size_t)15uL;
@@ -31,7 +31,7 @@ void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 	__attribute_returns_nonnull__ \
 	static inline vector_ ## name *vector_ ## name ## _alloc() { \
 		vector_ ## name *v = vector_malloc(sizeof(*v)); \
-		force_assert(NULL != v); \
+		ck_assert(NULL != v); \
 		vector_ ## name ## _init(v); \
 		return v; \
 	} \
@@ -48,7 +48,7 @@ void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 	} \
 	static inline void vector_ ## name ## _reserve(vector_ ## name *v, size_t p) { \
 		if (v->size - v->used < p) { \
-			force_assert(v->used < SIZE_MAX - p); \
+			ck_assert(v->used < SIZE_MAX - p); \
 			v->size = vector_align_size(v->used + p); \
 			v->data = vector_realloc(v->data, sizeof(entry), v->size, v->used); \
 		} \
@@ -58,7 +58,7 @@ void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 		v->data[v->used++] = e; \
 	} \
 	static inline entry vector_ ## name ## _pop(vector_ ## name *v) { \
-		force_assert(v->used > 0); \
+		ck_assert(v->used > 0); \
 		return v->data[--v->used]; \
 	} \
 	struct vector_ ## name /* expect trailing semicolon */ \
