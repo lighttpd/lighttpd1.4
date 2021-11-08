@@ -31,7 +31,6 @@ mkdir -p "${tmpdir}/servers/www.example.org/pages/"           \
 cp "${srcdir}/docroot/"*.html \
    "${srcdir}/docroot/"*.pl \
    "${srcdir}/docroot/"*.fcgi \
-   "${srcdir}/docroot/"*.shtml \
    "${srcdir}/docroot/"*.txt \
    "${tmpdir}/servers/www.example.org/pages/"
 cp "${srcdir}/lighttpd.user" "${tmpdir}/"
