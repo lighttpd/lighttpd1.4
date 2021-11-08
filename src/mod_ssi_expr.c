@@ -282,6 +282,7 @@ int ssi_eval_expr(handler_ctx *p, const char *expr) {
 	t.in_brace = 0;
 	t.in_cond = 0;
 
+	memset(&context.val, 0, sizeof(ssi_val_t));
 	context.ok = 1;
 
 	/* default context */
