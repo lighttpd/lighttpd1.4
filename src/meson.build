@@ -1117,7 +1117,7 @@ modules = [
 	[ 'mod_setenv', [ 'mod_setenv.c' ] ],
 	[ 'mod_simple_vhost', [ 'mod_simple_vhost.c' ] ],
 	[ 'mod_sockproxy', [ 'mod_sockproxy.c' ] ],
-	[ 'mod_ssi', [ 'mod_ssi_expr.c', 'mod_ssi.c' ], libws2_32 ],
+	[ 'mod_ssi', [ 'mod_ssi.c' ], libws2_32 ],
 	[ 'mod_staticfile', [ 'mod_staticfile.c' ] ],
 	[ 'mod_status', [ 'mod_status.c' ] ],
 	[ 'mod_uploadprogress', [ 'mod_uploadprogress.c' ] ],

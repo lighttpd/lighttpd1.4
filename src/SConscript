@@ -119,7 +119,7 @@ modules = {
 	'mod_setenv' : { 'src' : [ 'mod_setenv.c' ] },
 	'mod_simple_vhost' : { 'src' : [ 'mod_simple_vhost.c' ] },
 	'mod_sockproxy' : { 'src' : [ 'mod_sockproxy.c' ] },
-	'mod_ssi' : { 'src' : [ 'mod_ssi_expr.c', 'mod_ssi.c' ] },
+	'mod_ssi' : { 'src' : [ 'mod_ssi.c' ] },
 	'mod_staticfile' : { 'src' : [ 'mod_staticfile.c' ] },
 	'mod_status' : { 'src' : [ 'mod_status.c' ] },
 	'mod_uploadprogress' : { 'src' : [ 'mod_uploadprogress.c' ] },

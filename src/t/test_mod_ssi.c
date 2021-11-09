@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 #include "mod_ssi.c"
-#include "mod_ssi_expr.c"
 #include "fdlog.h"
 
 static void test_mod_ssi_reset (request_st * const r, handler_ctx * const hctx)

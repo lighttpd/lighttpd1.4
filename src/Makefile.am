@@ -282,7 +282,7 @@ mod_sockproxy_la_LDFLAGS = $(common_module_ldflags)
 mod_sockproxy_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_ssi.la
-mod_ssi_la_SOURCES = mod_ssi_expr.c mod_ssi.c
+mod_ssi_la_SOURCES = mod_ssi.c
 mod_ssi_la_LDFLAGS = $(common_module_ldflags)
 mod_ssi_la_LIBADD = $(common_libadd)
 
@@ -478,7 +478,6 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	plugin.h plugin_config.h \
 	http_etag.h array.h vector.h \
 	fdevent_impl.h network_write.h configfile.h \
-	mod_ssi.h \
 	sock_addr_cache.h \
 	configparser.h \
 	rand.h \
@@ -528,7 +527,7 @@ lighttpd_SOURCES = \
   mod_secdownload.c algo_hmac.c \
   mod_setenv.c \
   mod_simple_vhost.c \
-  mod_ssi_expr.c mod_ssi.c \
+  mod_ssi.c \
   mod_staticfile.c \
   mod_status.c \
   mod_uploadprogress.c \
