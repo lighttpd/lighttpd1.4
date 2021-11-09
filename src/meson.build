@@ -779,11 +779,6 @@ configparser = custom_target('configparser',
 	output: ['configparser.c', 'configparser.h'],
 	command: [lemon, '-q', 'o=@OUTDIR@', '@INPUT0@', '@INPUT1@'],
 )
-ssi_exprparser = custom_target('mod_ssi_exprparser',
-	input:  ['mod_ssi_exprparser.y', 'lempar.c'],
-	output: ['mod_ssi_exprparser.c', 'mod_ssi_exprparser.h'],
-	command: [lemon, '-q', 'o=@OUTDIR@', '@INPUT0@', '@INPUT1@'],
-)
 
 common_cflags = defs + [
 	'-DHAVE_CONFIG_H',
@@ -997,7 +992,6 @@ test('test_mod_simple_vhost', executable('test_mod_simple_vhost',
 test('test_mod_ssi', executable('test_mod_ssi',
 	sources: [
 		't/test_mod_ssi.c',
-		ssi_exprparser,
 		'request.c',
 		'base64.c',
 		'buffer.c',
@@ -1123,7 +1117,7 @@ modules = [
 	[ 'mod_setenv', [ 'mod_setenv.c' ] ],
 	[ 'mod_simple_vhost', [ 'mod_simple_vhost.c' ] ],
 	[ 'mod_sockproxy', [ 'mod_sockproxy.c' ] ],
-	[ 'mod_ssi', [ ssi_exprparser, 'mod_ssi_expr.c', 'mod_ssi.c' ], libws2_32 ],
+	[ 'mod_ssi', [ 'mod_ssi_expr.c', 'mod_ssi.c' ], libws2_32 ],
 	[ 'mod_staticfile', [ 'mod_staticfile.c' ] ],
 	[ 'mod_status', [ 'mod_status.c' ] ],
 	[ 'mod_uploadprogress', [ 'mod_uploadprogress.c' ] ],

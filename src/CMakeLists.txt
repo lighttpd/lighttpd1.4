@@ -783,7 +783,6 @@ add_executable(lemon lemon.c)
 
 ## Build parsers by using lemon...
 lemon_parser(configparser.y)
-lemon_parser(mod_ssi_exprparser.y)
 
 set(L_INSTALL_TARGETS)
 
@@ -839,7 +838,7 @@ add_and_install_library(mod_secdownload "mod_secdownload.c;algo_hmac.c")
 add_and_install_library(mod_setenv mod_setenv.c)
 add_and_install_library(mod_simple_vhost mod_simple_vhost.c)
 add_and_install_library(mod_sockproxy mod_sockproxy.c)
-add_and_install_library(mod_ssi "mod_ssi_exprparser.c;mod_ssi_expr.c;mod_ssi.c")
+add_and_install_library(mod_ssi "mod_ssi_expr.c;mod_ssi.c")
 add_and_install_library(mod_staticfile mod_staticfile.c)
 add_and_install_library(mod_status mod_status.c)
 add_and_install_library(mod_uploadprogress mod_uploadprogress.c)
@@ -961,7 +960,6 @@ add_test(NAME test_mod_simple_vhost COMMAND test_mod_simple_vhost)
 
 add_executable(test_mod_ssi
 	t/test_mod_ssi.c
-	mod_ssi_exprparser.c
 	request.c
 	base64.c
 	buffer.c

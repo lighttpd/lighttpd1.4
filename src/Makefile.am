@@ -64,15 +64,10 @@ configparser.c: $(srcdir)/configparser.y $(srcdir)/lempar.c lemon$(BUILD_EXEEXT)
 	rm -f configparser.h
 	$(LEMON) -q $(srcdir)/configparser.y $(srcdir)/lempar.c
 
-mod_ssi_exprparser.h: mod_ssi_exprparser.c
-mod_ssi_exprparser.c: $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c lemon$(BUILD_EXEEXT)
-	rm -f mod_ssi_exprparser.h
-	$(LEMON) -q $(srcdir)/mod_ssi_exprparser.y $(srcdir)/lempar.c
-
-parsers: configparser.c mod_ssi_exprparser.c
+parsers: configparser.c
 
 BUILT_SOURCES = parsers versionstamp
-MAINTAINERCLEANFILES = configparser.c configparser.h mod_ssi_exprparser.c mod_ssi_exprparser.h
+MAINTAINERCLEANFILES = configparser.c configparser.h
 CLEANFILES = versionstamp.h versionstamp.h.tmp lemon$(BUILD_EXEEXT)
 
 common_src=base64.c buffer.c burl.c log.c \
@@ -287,7 +282,7 @@ mod_sockproxy_la_LDFLAGS = $(common_module_ldflags)
 mod_sockproxy_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_ssi.la
-mod_ssi_la_SOURCES = mod_ssi_exprparser.c mod_ssi_expr.c mod_ssi.c
+mod_ssi_la_SOURCES = mod_ssi_expr.c mod_ssi.c
 mod_ssi_la_LDFLAGS = $(common_module_ldflags)
 mod_ssi_la_LIBADD = $(common_libadd)
 
@@ -483,9 +478,9 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	plugin.h plugin_config.h \
 	http_etag.h array.h vector.h \
 	fdevent_impl.h network_write.h configfile.h \
-	mod_ssi.h mod_ssi_expr.h \
+	mod_ssi.h \
 	sock_addr_cache.h \
-	configparser.h mod_ssi_exprparser.h \
+	configparser.h \
 	rand.h \
 	sys-crypto.h sys-crypto-md.h \
 	sys-endian.h sys-mmap.h sys-socket.h sys-strings.h sys-time.h \
@@ -533,7 +528,7 @@ lighttpd_SOURCES = \
   mod_secdownload.c algo_hmac.c \
   mod_setenv.c \
   mod_simple_vhost.c \
-  mod_ssi_exprparser.c mod_ssi_expr.c mod_ssi.c \
+  mod_ssi_expr.c mod_ssi.c \
   mod_staticfile.c \
   mod_status.c \
   mod_uploadprogress.c \
@@ -672,8 +667,6 @@ t_test_mod_indexfile_LDADD = $(LIBUNWIND_LIBS) $(FAM_LIBS)
 t_test_mod_simple_vhost_SOURCES = t/test_mod_simple_vhost.c buffer.c array.c log.c fdlog.c ck.c
 t_test_mod_simple_vhost_LDADD = $(LIBUNWIND_LIBS)
 
-t_test_mod_ssi_CPPFLAGS = -DINCLUDE_MOD_SSI_EXPRPARSER_C
-t_test_mod_ssi_DEPENDENCIES = mod_ssi_exprparser.h
 t_test_mod_ssi_SOURCES = t/test_mod_ssi.c request.c base64.c buffer.c burl.c array.c chunk.c fdevent.c http-header-glue.c http_cgi.c http_chunk.c http_date.c http_etag.c http_header.c http_kv.c log.c fdlog.c sock_addr.c stat_cache.c fdevent_fdnode.c algo_splaytree.c ck.c
 t_test_mod_ssi_LDADD = $(LIBUNWIND_LIBS) $(FAM_LIBS)
 
@@ -691,7 +684,6 @@ EXTRA_DIST = \
 	t/README \
 	mod_skeleton.c \
 	configparser.y \
-	mod_ssi_exprparser.y \
 	lemon.c \
 	lempar.c \
 	SConscript \

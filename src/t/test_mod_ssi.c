@@ -9,9 +9,6 @@
 
 #include "mod_ssi.c"
 #include "mod_ssi_expr.c"
-#ifdef INCLUDE_MOD_SSI_EXPRPARSER_C
-#include "mod_ssi_exprparser.c"
-#endif
 #include "fdlog.h"
 
 static void test_mod_ssi_reset (request_st * const r, handler_ctx * const hctx)

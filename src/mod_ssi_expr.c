@@ -3,12 +3,23 @@
 #include "buffer.h"
 #include "log.h"
 #include "mod_ssi.h"
-#include "mod_ssi_expr.h"
-#include "mod_ssi_exprparser.h"
 
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define TK_AND                             1
+#define TK_OR                              2
+#define TK_EQ                              3
+#define TK_NE                              4
+#define TK_GT                              5
+#define TK_GE                              6
+#define TK_LT                              7
+#define TK_LE                              8
+#define TK_NOT                             9
+#define TK_LPARAN                         10
+#define TK_RPARAN                         11
+#define TK_VALUE                          12
 
 typedef struct {
 	const char *input;
@@ -20,24 +31,15 @@ typedef struct {
 	handler_ctx *p;
 } ssi_tokenizer_t;
 
-ssi_val_t *ssi_val_init(void) {
-	ssi_val_t *s;
+typedef struct {
+	enum { SSI_TYPE_UNSET, SSI_TYPE_BOOL, SSI_TYPE_STRING } type;
 
-	s = calloc(1, sizeof(*s));
-	force_assert(s);
-	s->str = buffer_init();
-
-	return s;
-}
-
-void ssi_val_free(ssi_val_t *s) {
-	if (s->str) buffer_free(s->str);
-
-	free(s);
-}
+	buffer *str;
+	int     bo;
+} ssi_val_t;
 
 __attribute_pure__
-int ssi_val_tobool(const ssi_val_t *B) {
+static int ssi_val_tobool(const ssi_val_t *B) {
     return B->type == SSI_TYPE_BOOL ? B->bo : !buffer_is_blank(B->str);
 }
 
