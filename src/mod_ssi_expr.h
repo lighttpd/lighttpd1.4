@@ -23,7 +23,8 @@ void *ssiexprparserAlloc(void *(*mallocProc)(size_t));
 void ssiexprparserFree(void *p, void (*freeProc)(void*));
 void ssiexprparser(void *yyp, int yymajor, buffer *yyminor, ssi_ctx_t *ctx);
 
-int ssi_val_tobool(ssi_val_t *B);
+__attribute_pure__
+int ssi_val_tobool(const ssi_val_t *B);
 
 __attribute_malloc__
 __attribute_returns_nonnull__
