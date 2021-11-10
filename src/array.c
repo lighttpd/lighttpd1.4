@@ -234,9 +234,9 @@ static int32_t array_get_index_ext(const array * const a, const int ext, const c
     /* invariant: [lower-1] < probe < [upper]
      * invariant: 0 <= lower <= upper <= a->used
      */
-    uint32_t lower = 0, upper = a->used;
+    uint_fast32_t lower = 0, upper = a->used;
     while (lower != upper) {
-        const uint32_t probe = (lower + upper) / 2;
+        const uint_fast32_t probe = (lower + upper) / 2;
         const int x = ((data_string *)a->sorted[probe])->ext;
         /* (compare strings only if ext is 0 for both)*/
         const int e = (ext|x)
@@ -268,9 +268,9 @@ static int32_t array_get_index(const array * const a, const char * const k, cons
     /* invariant: [lower-1] < probe < [upper]
      * invariant: 0 <= lower <= upper <= a->used
      */
-    uint32_t lower = 0, upper = a->used;
+    uint_fast32_t lower = 0, upper = a->used;
     while (lower != upper) {
-        uint32_t probe = (lower + upper) / 2;
+        uint_fast32_t probe = (lower + upper) / 2;
         const buffer * const b = &a->sorted[probe]->key;
         /* key is non-empty (0==b->used), though possibly blank (1==b->used),
          * if inserted into key-value array */

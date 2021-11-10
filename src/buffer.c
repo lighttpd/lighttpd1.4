@@ -755,6 +755,7 @@ void buffer_urldecode_path(buffer * const b) {
 
 int buffer_is_valid_UTF8(const buffer *b) {
     /* https://www.w3.org/International/questions/qa-forms-utf-8 */
+    /*assert(b->used);*//*(b->ptr must exist and be '\0'-terminated)*/
     const unsigned char *c = (unsigned char *)b->ptr;
     while (*c) {
 
@@ -897,7 +898,8 @@ void buffer_path_simplify(buffer *b)
 
 void buffer_to_lower(buffer * const b) {
     unsigned char * const restrict s = (unsigned char *)b->ptr;
-    for (uint32_t i = 0; i < b->used; ++i) {
+    const uint_fast32_t used = b->used;
+    for (uint_fast32_t i = 0; i < used; ++i) {
         if (light_isupper(s[i])) s[i] |= 0x20;
     }
 }
@@ -905,7 +907,8 @@ void buffer_to_lower(buffer * const b) {
 
 void buffer_to_upper(buffer * const b) {
     unsigned char * const restrict s = (unsigned char *)b->ptr;
-    for (uint32_t i = 0; i < b->used; ++i) {
+    const uint_fast32_t used = b->used;
+    for (uint_fast32_t i = 0; i < used; ++i) {
         if (light_islower(s[i])) s[i] &= 0xdf;
     }
 }
