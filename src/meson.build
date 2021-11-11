@@ -921,152 +921,29 @@ test('test_keyvalue', executable('test_keyvalue',
 	build_by_default: false,
 ))
 
-test('test_mod_access', executable('test_mod_access',
+test('test_mod', executable('test_mod',
 	sources: [
+		common_src,
+		't/test_mod.c',
 		't/test_mod_access.c',
-		'buffer.c',
-		'array.c',
-		'log.c',
-		'fdlog.c',
-		'ck.c',
-	],
-	dependencies: common_flags + libunwind,
-	build_by_default: false,
-))
-
-test('test_mod_evhost', executable('test_mod_evhost',
-	sources: [
 		't/test_mod_evhost.c',
-		'buffer.c',
-		'array.c',
-		'log.c',
-		'fdlog.c',
-		'ck.c',
-	],
-	dependencies: common_flags + libunwind,
-	build_by_default: false,
-))
-
-test('test_mod_indexfile', executable('test_mod_indexfile',
-	sources: [
 		't/test_mod_indexfile.c',
-		'request.c',
-		'base64.c',
-		'buffer.c',
-		'burl.c',
-		'array.c',
-		'fdevent.c',
-		'http_etag.c',
-		'http_header.c',
-		'http_kv.c',
-		'log.c',
-		'fdlog.c',
-		'sock_addr.c',
-		'stat_cache.c',
-		'fdevent_fdnode.c',
-		'algo_splaytree.c',
-		'ck.c'
-	],
-	dependencies: [ common_flags
-		, libfam
-		, libpcre
-		, libunwind
-		, libws2_32
-	],
-	build_by_default: false,
-))
-
-test('test_mod_simple_vhost', executable('test_mod_simple_vhost',
-	sources: [
 		't/test_mod_simple_vhost.c',
-		'buffer.c',
-		'array.c',
-		'log.c',
-		'fdlog.c',
-		'ck.c',
-	],
-	dependencies: common_flags + libunwind,
-	build_by_default: false,
-))
-
-test('test_mod_ssi', executable('test_mod_ssi',
-	sources: [
 		't/test_mod_ssi.c',
-		'request.c',
-		'base64.c',
-		'buffer.c',
-		'burl.c',
-		'array.c',
-		'chunk.c',
-		'fdevent.c',
-		'http-header-glue.c',
-		'http_cgi.c',
-		'http_chunk.c',
-		'http_date.c',
-		'http_etag.c',
-		'http_header.c',
-		'http_kv.c',
-		'log.c',
-		'fdlog.c',
-		'sock_addr.c',
-		'stat_cache.c',
-		'fdevent_fdnode.c',
-		'algo_splaytree.c',
-		'ck.c'
-	],
-	dependencies: [ common_flags
-		, libfam
-		, libpcre
-		, libunwind
-		, libws2_32
-	],
-	build_by_default: false,
-))
-
-test('test_mod_staticfile', executable('test_mod_staticfile',
-	sources: [
 		't/test_mod_staticfile.c',
-		'request.c',
-		'base64.c',
-		'buffer.c',
-		'burl.c',
-		'array.c',
-		'chunk.c',
-		'fdevent.c',
-		'http-header-glue.c',
-		'http_cgi.c',
-		'http_chunk.c',
-		'http_date.c',
-		'http_etag.c',
-		'http_header.c',
-		'http_kv.c',
-		'log.c',
-		'fdlog.c',
-		'sock_addr.c',
-		'stat_cache.c',
-		'fdevent_fdnode.c',
-		'algo_splaytree.c',
-		'ck.c'
+		't/test_mod_userdir.c',
 	],
-	dependencies: [ common_flags
+	dependencies: [ common_flags, lighttpd_flags
+		, libattr
+		, libcrypto
+		, libdl
+		, libev
 		, libfam
 		, libpcre
 		, libunwind
+		, libxxhash
 		, libws2_32
 	],
-	build_by_default: false,
-))
-
-test('test_mod_userdir', executable('test_mod_userdir',
-	sources: [
-		't/test_mod_userdir.c',
-		'buffer.c',
-		'array.c',
-		'log.c',
-		'fdlog.c',
-		'ck.c',
-	],
-	dependencies: common_flags + libunwind,
 	build_by_default: false,
 ))
 

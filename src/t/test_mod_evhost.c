@@ -65,31 +65,8 @@ static void test_mod_evhost_build_doc_root_path(void) {
     array_free(a);
 }
 
-int main (void) {
+void test_mod_evhost (void);
+void test_mod_evhost (void)
+{
     test_mod_evhost_build_doc_root_path();
-
-    return 0;
-}
-
-/*
- * stub functions
- */
-
-int stat_cache_path_isdir(const buffer *name) {
-    UNUSED(name);
-    return 1;
-}
-
-int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname) {
-    UNUSED(srv);
-    UNUSED(p_d);
-    UNUSED(cpk);
-    UNUSED(mname);
-    return 0;
-}
-
-int config_check_cond(request_st *r, int context_ndx) {
-    UNUSED(r);
-    UNUSED(context_ndx);
-    return 0;
 }

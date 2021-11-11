@@ -7,13 +7,7 @@ noinst_PROGRAMS=\
 	t/test_base64 \
 	t/test_configfile \
 	t/test_keyvalue \
-	t/test_mod_access \
-	t/test_mod_evhost \
-	t/test_mod_indexfile \
-	t/test_mod_simple_vhost \
-	t/test_mod_ssi \
-	t/test_mod_staticfile \
-	t/test_mod_userdir \
+	t/test_mod \
 	t/test_request
 
 sbin_PROGRAMS=lighttpd lighttpd-angel
@@ -26,13 +20,7 @@ TESTS=\
 	t/test_base64$(EXEEXT) \
 	t/test_configfile$(EXEEXT) \
 	t/test_keyvalue$(EXEEXT) \
-	t/test_mod_access$(EXEEXT) \
-	t/test_mod_evhost$(EXEEXT) \
-	t/test_mod_indexfile$(EXEEXT) \
-	t/test_mod_simple_vhost$(EXEEXT) \
-	t/test_mod_ssi$(EXEEXT) \
-	t/test_mod_staticfile$(EXEEXT) \
-	t/test_mod_userdir$(EXEEXT) \
+	t/test_mod$(EXEEXT) \
 	t/test_request$(EXEEXT)
 
 lemon$(BUILD_EXEEXT): lemon.c
@@ -654,26 +642,16 @@ t_test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 t_test_keyvalue_SOURCES = t/test_keyvalue.c burl.c buffer.c base64.c array.c log.c fdlog.c ck.c
 t_test_keyvalue_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
-t_test_mod_access_SOURCES = t/test_mod_access.c buffer.c array.c log.c fdlog.c ck.c
-t_test_mod_access_LDADD = $(LIBUNWIND_LIBS)
-
-t_test_mod_evhost_SOURCES = t/test_mod_evhost.c buffer.c array.c log.c fdlog.c ck.c
-t_test_mod_evhost_LDADD = $(LIBUNWIND_LIBS)
-
-t_test_mod_indexfile_SOURCES = t/test_mod_indexfile.c request.c base64.c buffer.c burl.c array.c fdevent.c http_etag.c http_header.c http_kv.c log.c fdlog.c sock_addr.c stat_cache.c fdevent_fdnode.c algo_splaytree.c ck.c
-t_test_mod_indexfile_LDADD = $(LIBUNWIND_LIBS) $(FAM_LIBS)
-
-t_test_mod_simple_vhost_SOURCES = t/test_mod_simple_vhost.c buffer.c array.c log.c fdlog.c ck.c
-t_test_mod_simple_vhost_LDADD = $(LIBUNWIND_LIBS)
-
-t_test_mod_ssi_SOURCES = t/test_mod_ssi.c request.c base64.c buffer.c burl.c array.c chunk.c fdevent.c http-header-glue.c http_cgi.c http_chunk.c http_date.c http_etag.c http_header.c http_kv.c log.c fdlog.c sock_addr.c stat_cache.c fdevent_fdnode.c algo_splaytree.c ck.c
-t_test_mod_ssi_LDADD = $(LIBUNWIND_LIBS) $(FAM_LIBS)
-
-t_test_mod_staticfile_SOURCES = t/test_mod_staticfile.c request.c base64.c buffer.c burl.c array.c chunk.c fdevent.c http-header-glue.c http_cgi.c http_chunk.c http_date.c http_etag.c http_header.c http_kv.c log.c fdlog.c sock_addr.c stat_cache.c fdevent_fdnode.c algo_splaytree.c ck.c
-t_test_mod_staticfile_LDADD = $(LIBUNWIND_LIBS) $(FAM_LIBS)
-
-t_test_mod_userdir_SOURCES = t/test_mod_userdir.c buffer.c array.c log.c fdlog.c ck.c
-t_test_mod_userdir_LDADD = $(LIBUNWIND_LIBS)
+t_test_mod_SOURCES = $(common_src) t/test_mod.c \
+                     t/test_mod_access.c \
+                     t/test_mod_evhost.c \
+                     t/test_mod_indexfile.c \
+                     t/test_mod_simple_vhost.c \
+                     t/test_mod_ssi.c \
+                     t/test_mod_staticfile.c \
+                     t/test_mod_userdir.c
+t_test_mod_CFLAGS  = $(AM_CFLAGS) $(LIBEV_CFLAGS)
+t_test_mod_LDADD   = $(LIBUNWIND_LIBS) $(PCRE_LIB) $(CRYPTO_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(ATTR_LIB)
 
 t_test_request_SOURCES = t/test_request.c base64.c buffer.c burl.c array.c http_header.c http_kv.c log.c fdlog.c sock_addr.c ck.c
 t_test_request_LDADD = $(LIBUNWIND_LIBS)

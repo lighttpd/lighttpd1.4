@@ -907,118 +907,18 @@ add_executable(test_keyvalue
 )
 add_test(NAME test_keyvalue COMMAND test_keyvalue)
 
-add_executable(test_mod_access
+add_executable(test_mod
+	${COMMON_SRC}
+	t/test_mod.c
 	t/test_mod_access.c
-	buffer.c
-	array.c
-	log.c
-	fdlog.c
-	ck.c
-)
-add_test(NAME test_mod_access COMMAND test_mod_access)
-
-add_executable(test_mod_evhost
 	t/test_mod_evhost.c
-	buffer.c
-	array.c
-	log.c
-	fdlog.c
-	ck.c
-)
-add_test(NAME test_mod_evhost COMMAND test_mod_evhost)
-
-add_executable(test_mod_indexfile
 	t/test_mod_indexfile.c
-	request.c
-	base64.c
-	buffer.c
-	burl.c
-	array.c
-	fdevent.c
-	http_etag.c
-	http_header.c
-	http_kv.c
-	log.c
-	fdlog.c
-	sock_addr.c
-	stat_cache.c
-	fdevent_fdnode.c
-	algo_splaytree.c
-	ck.c
-)
-add_test(NAME test_mod_indexfile COMMAND test_mod_indexfile)
-
-add_executable(test_mod_simple_vhost
 	t/test_mod_simple_vhost.c
-	buffer.c
-	array.c
-	log.c
-	fdlog.c
-	ck.c
-)
-add_test(NAME test_mod_simple_vhost COMMAND test_mod_simple_vhost)
-
-add_executable(test_mod_ssi
 	t/test_mod_ssi.c
-	request.c
-	base64.c
-	buffer.c
-	burl.c
-	array.c
-	chunk.c
-	fdevent.c
-	http-header-glue.c
-	http_cgi.c
-	http_chunk.c
-	http_date.c
-	http_etag.c
-	http_header.c
-	http_kv.c
-	log.c
-	fdlog.c
-	sock_addr.c
-	stat_cache.c
-	fdevent_fdnode.c
-	algo_splaytree.c
-	ck.c
-)
-add_test(NAME test_mod_ssi COMMAND test_mod_ssi)
-
-add_executable(test_mod_staticfile
 	t/test_mod_staticfile.c
-	request.c
-	base64.c
-	buffer.c
-	burl.c
-	array.c
-	chunk.c
-	fdevent.c
-	http-header-glue.c
-	http_cgi.c
-	http_chunk.c
-	http_date.c
-	http_etag.c
-	http_header.c
-	http_kv.c
-	log.c
-	fdlog.c
-	sock_addr.c
-	stat_cache.c
-	fdevent_fdnode.c
-	algo_splaytree.c
-	ck.c
-)
-add_test(NAME test_mod_staticfile COMMAND test_mod_staticfile)
-
-add_executable(test_mod_userdir
 	t/test_mod_userdir.c
-	buffer.c
-	array.c
-	log.c
-	fdlog.c
-	ck.c
 )
-add_test(NAME test_mod_userdir COMMAND test_mod_userdir)
+add_test(NAME test_mod COMMAND test_mod)
 
 add_executable(test_request
 	t/test_request.c
@@ -1042,6 +942,8 @@ if(HAVE_PCRE_H)
 	add_target_properties(test_configfile COMPILE_FLAGS ${PCRE_CFLAGS})
 	target_link_libraries(test_keyvalue ${PCRE_LDFLAGS})
 	add_target_properties(test_keyvalue COMPILE_FLAGS ${PCRE_CFLAGS})
+	target_link_libraries(test_mod ${PCRE_LDFLAGS})
+	add_target_properties(test_mod COMPILE_FLAGS ${PCRE_CFLAGS})
 endif()
 
 if(WITH_PCRE AND (WITH_MEMCACHED OR WITH_GDBM))
@@ -1169,8 +1071,7 @@ endif()
 
 if(HAVE_LIBFAM)
 	target_link_libraries(lighttpd fam)
-	target_link_libraries(test_mod_ssi fam)
-	target_link_libraries(test_mod_staticfile fam)
+	target_link_libraries(test_mod fam)
 endif()
 
 if(HAVE_GDBM_H)
@@ -1183,10 +1084,12 @@ endif()
 
 if(HAVE_XATTR)
 	target_link_libraries(lighttpd attr)
+	target_link_libraries(test_mod attr)
 endif()
 
 if(HAVE_XXHASH)
 	target_link_libraries(lighttpd xxhash)
+	target_link_libraries(test_mod xxhash)
 endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
@@ -1233,6 +1136,7 @@ if(NOT ${CRYPTO_LIBRARY} EQUAL "")
 	target_link_libraries(mod_secdownload ${CRYPTO_LIBRARY})
 	target_link_libraries(mod_usertrack ${CRYPTO_LIBRARY})
 	target_link_libraries(mod_wstunnel ${CRYPTO_LIBRARY})
+	target_link_libraries(test_mod ${CRYPTO_LIBRARY})
 endif()
 
 if(HAVE_OPENSSL)
@@ -1267,6 +1171,8 @@ endif()
 if(WITH_LIBEV)
 	target_link_libraries(lighttpd ${LIBEV_LDFLAGS})
 	add_target_properties(lighttpd COMPILE_FLAGS ${LIBEV_CFLAGS})
+	target_link_libraries(test_mod ${LIBEV_LDFLAGS})
+	add_target_properties(test_mod COMPILE_FLAGS ${LIBEV_CFLAGS})
 endif()
 
 if(WITH_LIBUNWIND)
@@ -1285,20 +1191,8 @@ if(WITH_LIBUNWIND)
 	add_target_properties(test_configfile COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_keyvalue ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_keyvalue COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_mod_access ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_mod_access COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_mod_evhost ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_mod_evhost COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_mod_indexfile ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_mod_indexfile COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_mod_simple_vhost ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_mod_simple_vhost COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_mod_ssi ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_mod_ssi COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_mod_staticfile ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_mod_staticfile COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_mod_userdir ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_mod_userdir COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
+	target_link_libraries(test_mod ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_mod COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_request ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_request COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 endif()

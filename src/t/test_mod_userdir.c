@@ -151,7 +151,10 @@ test_mod_userdir_docroot_handler(request_st * const r, plugin_data * const p)
     array_free(exclude_user);
 }
 
-int main (void)
+#include "base.h"
+
+void test_mod_userdir (void);
+void test_mod_userdir (void)
 {
     plugin_data * const p = mod_userdir_init();
     assert(NULL != p);
@@ -162,11 +165,19 @@ int main (void)
     p->defaults.path = path;
 
     request_st r;
+    connection con;
+    server srv;
 
     memset(&r, 0, sizeof(request_st));
+    memset(&con, 0, sizeof(connection));
+    memset(&srv, 0, sizeof(server));
     r.tmp_buf                = buffer_init();
     r.conf.errh              = fdlog_init(NULL, -1, FDLOG_FD);
     r.conf.errh->fd          = -1; /* (disable) */
+    /* r->con->srv->srvconf.absolute_dir_redirect
+     * in http_response_redirect_to_directory() */
+    r.con = &con;
+    con.srv = &srv;
 
     test_mod_userdir_docroot_handler(&r, p);
 
@@ -181,33 +192,4 @@ int main (void)
     buffer_free(basepath);
     buffer_free(path);
     free(p);
-    return 0;
-}
-
-/*
- * stub functions
- */
-
-int http_response_redirect_to_directory(request_st *r, int status) {
-    r->http_status = status;
-    return 0;
-}
-
-int stat_cache_path_isdir(const buffer *name) {
-    UNUSED(name);
-    return 1;
-}
-
-int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname) {
-    UNUSED(srv);
-    UNUSED(p_d);
-    UNUSED(cpk);
-    UNUSED(mname);
-    return 0;
-}
-
-int config_check_cond(request_st *r, int context_ndx) {
-    UNUSED(r);
-    UNUSED(context_ndx);
-    return 0;
 }

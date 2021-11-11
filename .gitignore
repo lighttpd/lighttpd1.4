@@ -52,12 +52,6 @@ test_buffer
 test_burl
 test_keyvalue
 test_configfile
-test_mod_access
-test_mod_evhost
-test_mod_indexfile
-test_mod_simple_vhost
-test_mod_ssi
-test_mod_staticfile
-test_mod_userdir
+test_mod
 test_request
 versionstamp.h

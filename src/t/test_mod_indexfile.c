@@ -88,7 +88,8 @@ test_mod_indexfile_tryfiles (request_st * const r)
     unlink(fn);
 }
 
-int main (void)
+void test_mod_indexfile (void);
+void test_mod_indexfile (void)
 {
     request_st r;
 
@@ -109,24 +110,4 @@ int main (void)
     free(r.physical.doc_root.ptr);
 
     stat_cache_free();
-    return 0;
-}
-
-
-/*
- * stub functions
- */
-
-int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname) {
-    UNUSED(srv);
-    UNUSED(p_d);
-    UNUSED(cpk);
-    UNUSED(mname);
-    return 0;
-}
-
-int config_check_cond(request_st *r, int context_ndx) {
-    UNUSED(r);
-    UNUSED(context_ndx);
-    return 0;
 }

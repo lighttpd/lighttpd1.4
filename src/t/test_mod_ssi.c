@@ -137,7 +137,8 @@ test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
     close(fd);
 }
 
-int main (void)
+void test_mod_ssi (void);
+void test_mod_ssi (void)
 {
     plugin_data * const p = mod_ssi_init();
     assert(NULL != p);
@@ -169,24 +170,4 @@ int main (void)
     mod_ssi_free(p);
     free(p);
     stat_cache_free();
-    return 0;
-}
-
-
-/*
- * stub functions
- */
-
-int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname) {
-    UNUSED(srv);
-    UNUSED(p_d);
-    UNUSED(cpk);
-    UNUSED(mname);
-    return 0;
-}
-
-int config_check_cond(request_st *r, int context_ndx) {
-    UNUSED(r);
-    UNUSED(context_ndx);
-    return 0;
 }

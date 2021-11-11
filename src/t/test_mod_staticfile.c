@@ -368,7 +368,8 @@ test_mod_staticfile_process (request_st * const r, plugin_config * const pconf)
 
 #include <unistd.h>     /* unlink() */
 
-int main (void)
+void test_mod_staticfile (void);
+void test_mod_staticfile (void)
 {
     char fn[] = "/tmp/lighttpd_mod_staticfile.XXXXXX";
   #ifdef __COVERITY__
@@ -431,24 +432,4 @@ int main (void)
     free(p);
     stat_cache_free();
     unlink(fn);
-    return 0;
-}
-
-
-/*
- * stub functions
- */
-
-int config_plugin_values_init(server *srv, void *p_d, const config_plugin_keys_t *cpk, const char *mname) {
-    UNUSED(srv);
-    UNUSED(p_d);
-    UNUSED(cpk);
-    UNUSED(mname);
-    return 0;
-}
-
-int config_check_cond(request_st *r, int context_ndx) {
-    UNUSED(r);
-    UNUSED(context_ndx);
-    return 0;
 }
