@@ -300,12 +300,10 @@ __attribute_nonnull__()
 __attribute_returns_nonnull__
 static char* utostr(char buf[LI_ITOSTRING_LENGTH], uintmax_t val) {
 	char *cur = buf+LI_ITOSTRING_LENGTH;
+	uintmax_t x;
 	do {
-		int mod = val % 10;
-		val /= 10;
-		/* prepend digit mod */
-		*(--cur) = (char) ('0' + mod);
-	} while (0 != val);
+		*(--cur) = (char) ('0' + (int)(val - (x = val/10) * 10));
+	} while (0 != (val = x));           /* val % 10 */
 	return cur;
 }
 

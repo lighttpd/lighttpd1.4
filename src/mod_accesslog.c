@@ -754,8 +754,9 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 						} else {/*(f->opt & FORMAT_FLAG_TIME_NSEC_FRAC)*/
 							buffer_append_string_len(b, CONST_STR_LEN("000000000"));
 						}
-						for (ptr = b->ptr + buffer_clen(b); ns > 0; ns /= 10)
-							*--ptr = (ns % 10) + '0';
+						ptr = b->ptr + buffer_clen(b);
+						for (long x; ns > 0; ns = x)
+							*--ptr += (ns - (x = ns/10) * 10); /* ns % 10 */
 					}
 				} else {
 					buffer * const ts_accesslog_str = &parsed_format->ts_accesslog_str;

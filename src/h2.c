@@ -1924,14 +1924,7 @@ h2_send_headers (request_st * const r, connection * const con)
     const int log_response_header = r->conf.log_response_header;
     const int resp_header_repeated = r->resp_header_repeated;
 
-    char status[12] = ":status: ";
-    int x = r->http_status; /*(expect status < 1000; should be [100-599])*/
-    status[11] = (x % 10) + '0';
-    status[10] = (x / 10 % 10) + '0';
-    status[9]  = (x / 100) + '0';
-
-    if (log_response_header)
-        h2_log_response_header(r, 12, status);
+    char status[12] = ":status: 200";
 
     memset(&lsx, 0, sizeof(lsxpack_header_t));
     lsx.buf = status;
@@ -1939,22 +1932,37 @@ h2_send_headers (request_st * const r, connection * const con)
     lsx.name_len = 7;
     lsx.val_offset = 9;
     lsx.val_len = 3;
-    switch (r->http_status) {
-      case 200: lsx.hpack_index = LSHPACK_HDR_STATUS_200; break;
-      case 204: lsx.hpack_index = LSHPACK_HDR_STATUS_204; break;
-      case 206: lsx.hpack_index = LSHPACK_HDR_STATUS_206; break;
-      case 304: lsx.hpack_index = LSHPACK_HDR_STATUS_304; break;
-      case 400: lsx.hpack_index = LSHPACK_HDR_STATUS_400; break;
-      case 404: lsx.hpack_index = LSHPACK_HDR_STATUS_404; break;
-      case 500: lsx.hpack_index = LSHPACK_HDR_STATUS_500; break;
-      default:
-        break;
+    if (__builtin_expect( (200 == r->http_status), 1)) {
+        lsx.hpack_index = LSHPACK_HDR_STATUS_200;
     }
+    else {
+        int x = r->http_status; /*(expect status < 1000; should be [100-599])*/
+        switch (x) {
+          /*case 200: lsx.hpack_index = LSHPACK_HDR_STATUS_200; break;*/
+          case 204: lsx.hpack_index = LSHPACK_HDR_STATUS_204; break;
+          case 206: lsx.hpack_index = LSHPACK_HDR_STATUS_206; break;
+          case 304: lsx.hpack_index = LSHPACK_HDR_STATUS_304; break;
+          case 400: lsx.hpack_index = LSHPACK_HDR_STATUS_400; break;
+          case 404: lsx.hpack_index = LSHPACK_HDR_STATUS_404; break;
+          case 500: lsx.hpack_index = LSHPACK_HDR_STATUS_500; break;
+          default:
+            break;
+        }
+        int nx;
+        status[11] += (x - (nx = x/10) * 10); /* (x % 10) */
+        x = nx;
+        status[10] += (x - (nx = x/10) * 10); /* (x / 10 % 10) */
+        status[9]   = '0' + nx;               /* (x / 100) */
+    }
+
     dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
     if (dst == (unsigned char *)tb->ptr) {
         h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
         return;
     }
+
+    if (log_response_header)
+        h2_log_response_header(r, 12, status);
 
     /* add all headers */
     data_string * const * const restrict hdata =
