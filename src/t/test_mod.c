@@ -4,6 +4,7 @@
 #include <assert.h>
 
 void test_mod_access (void);
+void test_mod_alias (void);
 void test_mod_evhost (void);
 void test_mod_indexfile (void);
 void test_mod_simple_vhost (void);
@@ -13,6 +14,7 @@ void test_mod_userdir (void);
 
 int main() {
     test_mod_access();
+    test_mod_alias();
     test_mod_evhost();
     test_mod_indexfile();
     test_mod_simple_vhost();

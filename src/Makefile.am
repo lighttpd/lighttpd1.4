@@ -644,6 +644,7 @@ t_test_keyvalue_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
 t_test_mod_SOURCES = $(common_src) t/test_mod.c \
                      t/test_mod_access.c \
+                     t/test_mod_alias.c \
                      t/test_mod_evhost.c \
                      t/test_mod_indexfile.c \
                      t/test_mod_simple_vhost.c \
