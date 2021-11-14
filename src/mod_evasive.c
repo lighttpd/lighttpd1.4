@@ -122,26 +122,11 @@ SETDEFAULTS_FUNC(mod_evasive_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-URIHANDLER_FUNC(mod_evasive_uri_handler) {
-	plugin_data *p = p_d;
-
-	mod_evasive_patch_config(r, p);
-
-	/* no limit set, nothing to block */
-	if (p->conf.max_conns == 0) return HANDLER_GO_ON;
-
-	sock_addr * const dst_addr = &r->con->dst_addr;
-	uint32_t conns_by_ip = 0;
-	for (const connection *c = r->con->srv->conns; c; c = c->next) {
-		/* check if other connections are already actively serving data for the same IP
-		 * we can only ban connections which are already behind the 'read request' state
-		 */
-		if (c->request.state <= CON_STATE_REQUEST_END) continue;
-
-		if (!sock_addr_is_addr_eq(&c->dst_addr, dst_addr)) continue;
-		conns_by_ip++;
-
-		if (conns_by_ip > p->conf.max_conns) {
+__attribute_cold__
+__attribute_noinline__
+static handler_t
+mod_evasive_reached_per_ip_limit (request_st * const r, const plugin_data * const p)
+{
 			if (!p->conf.silent) {
 				log_error(r->conf.errh, __FILE__, __LINE__,
 				  "%s turned away. Too many connections.",
@@ -159,10 +144,29 @@ URIHANDLER_FUNC(mod_evasive_uri_handler) {
 			}
 			r->handler_module = NULL;
 			return HANDLER_FINISHED;
-		}
-	}
+}
 
-	return HANDLER_GO_ON;
+static handler_t
+mod_evasive_check_per_ip_limit (request_st * const r, const plugin_data * const p, const connection *c)
+{
+    const sock_addr * const dst_addr = &r->con->dst_addr;
+    for (uint_fast32_t conns_by_ip = 0; c; c = c->next) {
+        /* count connections already actively serving data for the same IP
+         * (only count connections already behind the 'read request' state) */
+        if (c->request.state > CON_STATE_REQUEST_END
+            && sock_addr_is_addr_eq(&c->dst_addr, dst_addr)
+            && ++conns_by_ip > p->conf.max_conns)
+            return mod_evasive_reached_per_ip_limit(r, p);/* HANDLER_FINISHED */
+    }
+    return HANDLER_GO_ON;
+}
+
+URIHANDLER_FUNC(mod_evasive_uri_handler) {
+    plugin_data * const p = p_d;
+    mod_evasive_patch_config(r, p);
+    return (p->conf.max_conns == 0) /* no limit set, nothing to block */
+      ? HANDLER_GO_ON
+      : mod_evasive_check_per_ip_limit(r, p, r->con->srv->conns);
 }
 
 
