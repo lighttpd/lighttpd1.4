@@ -14,13 +14,24 @@
 /**
  * mod_evasive
  *
- * we indent to implement all features the mod_evasive from apache has
+ * A combination of lighttpd modules provides similar features
+ * to those in (old) Apache mod_evasive
  *
  * - limit of connections per IP
+ *     ==> mod_evasive
  * - provide a list of block-listed ip/networks (no access)
+ *     ==> block at firewall
+ *     ==> block using lighttpd.conf conditionals and mod_access
+ *     ==> block using mod_magnet and an external (updatable) constant database
+ *         https://wiki.lighttpd.net/AbsoLUAtion#Fight-DDoS
  * - provide a white-list of ips/network which is not affected by the limit
- *   (hmm, conditionals might be enough)
+ *     ==> allow using lighttpd.conf conditionals
+ *         and configure evasive.max-conns-per-ip = 0 for whitelist
  * - provide a bandwidth limiter per IP
+ *     ==> set using lighttpd.conf conditionals
+ *         and configure connection.kbytes-per-second
+ * - enforce additional policy using mod_magnet and libmodsecurity
+ *     ==> https://wiki.lighttpd.net/AbsoLUAtion#Mod_Security
  *
  * started by:
  * - w1zzard@techpowerup.com
