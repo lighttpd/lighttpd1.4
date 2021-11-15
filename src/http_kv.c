@@ -187,7 +187,7 @@ int get_http_version_key(const char *s, size_t slen) {
 http_method_t get_http_method_key(const char *s, const size_t slen) {
     if (slen == 3 && s[0] == 'G' && s[1] == 'E' && s[2] == 'T')
         return HTTP_METHOD_GET;
-    const buffer *kv = http_methods;
+    const buffer *kv = http_methods+1; /*(step over http_methods[0] ("GET"))*/
     while (kv->used && (kv->used-1 != slen || 0 != memcmp(kv->ptr, s, slen)))
         ++kv;
     const uint_fast32_t i = kv - http_methods;
