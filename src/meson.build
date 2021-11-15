@@ -860,27 +860,27 @@ executable('lighttpd', configparser,
 	install_dir: sbinddir,
 )
 
-test('test_array', executable('test_array',
-	sources: ['t/test_array.c', 'array.c', 'buffer.c', 'ck.c'],
-	dependencies: common_flags + libunwind,
-	build_by_default: false,
-))
-
-test('test_buffer', executable('test_buffer',
-	sources: ['t/test_buffer.c', 'buffer.c', 'ck.c'],
-	dependencies: common_flags + libunwind,
-	build_by_default: false,
-))
-
-test('test_burl', executable('test_burl',
-	sources: ['t/test_burl.c', 'burl.c', 'buffer.c', 'base64.c', 'ck.c'],
-	dependencies: common_flags + libunwind,
-	build_by_default: false,
-))
-
-test('test_base64', executable('test_base64',
-	sources: ['t/test_base64.c', 'buffer.c', 'base64.c', 'ck.c'],
-	dependencies: common_flags + libunwind,
+test('test_common', executable('test_common',
+	sources: [
+		't/test_common.c',
+		't/test_array.c',
+		't/test_base64.c',
+		't/test_buffer.c',
+		't/test_burl.c',
+		't/test_keyvalue.c',
+		't/test_request.c',
+		'http_header.c',
+		'http_kv.c',
+		'log.c',
+		'fdlog.c',
+		'sock_addr.c',
+		'ck.c',
+	],
+	dependencies: [ common_flags
+		, libpcre
+		, libunwind
+		, libws2_32
+	],
 	build_by_default: false,
 ))
 
@@ -903,21 +903,6 @@ test('test_configfile', executable('test_configfile',
 		, libunwind
 		, libws2_32
 	],
-	build_by_default: false,
-))
-
-test('test_keyvalue', executable('test_keyvalue',
-	sources: [
-		't/test_keyvalue.c',
-		'burl.c',
-		'buffer.c',
-		'base64.c',
-		'array.c',
-		'log.c',
-		'fdlog.c',
-		'ck.c',
-	],
-	dependencies: common_flags + libpcre + libunwind,
 	build_by_default: false,
 ))
 
@@ -944,28 +929,6 @@ test('test_mod', executable('test_mod',
 		, libpcre
 		, libunwind
 		, libxxhash
-		, libws2_32
-	],
-	build_by_default: false,
-))
-
-test('test_request', executable('test_request',
-	sources: [
-		't/test_request.c',
-		'base64.c',
-		'buffer.c',
-		'burl.c',
-		'array.c',
-		'http_header.c',
-		'http_kv.c',
-		'log.c',
-		'fdlog.c',
-		'sock_addr.c',
-		'ck.c',
-	],
-	dependencies: [ common_flags
-		, libpcre
-		, libunwind
 		, libws2_32
 	],
 	build_by_default: false,

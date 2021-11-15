@@ -119,9 +119,10 @@ static void test_keyvalue_pcre_keyvalue_buffer_process (void) {
 }
 #endif
 
-int main (void) {
+void test_keyvalue (void);
+void test_keyvalue (void)
+{
   #ifdef HAVE_PCRE_H
     test_keyvalue_pcre_keyvalue_buffer_process();
   #endif
-    return 0;
 }

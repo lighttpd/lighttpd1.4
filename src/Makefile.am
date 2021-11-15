@@ -1,27 +1,17 @@
 AM_CFLAGS = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 
 noinst_PROGRAMS=\
-	t/test_array \
-	t/test_buffer \
-	t/test_burl \
-	t/test_base64 \
+	t/test_common \
 	t/test_configfile \
-	t/test_keyvalue \
-	t/test_mod \
-	t/test_request
+	t/test_mod
 
 sbin_PROGRAMS=lighttpd lighttpd-angel
 LEMON=$(top_builddir)/src/lemon$(BUILD_EXEEXT)
 
 TESTS=\
-	t/test_array$(EXEEXT) \
-	t/test_buffer$(EXEEXT) \
-	t/test_burl$(EXEEXT) \
-	t/test_base64$(EXEEXT) \
+	t/test_common$(EXEEXT) \
 	t/test_configfile$(EXEEXT) \
-	t/test_keyvalue$(EXEEXT) \
-	t/test_mod$(EXEEXT) \
-	t/test_request$(EXEEXT)
+	t/test_mod$(EXEEXT)
 
 lemon$(BUILD_EXEEXT): lemon.c
 	$(AM_V_CC)$(CC_FOR_BUILD) $(CPPFLAGS_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) -o $@ $(srcdir)/lemon.c
@@ -624,23 +614,23 @@ lighttpd_LDFLAGS = -export-dynamic
 
 endif
 
-t_test_array_SOURCES = t/test_array.c array.c buffer.c ck.c
-t_test_array_LDADD = $(LIBUNWIND_LIBS)
-
-t_test_buffer_SOURCES = t/test_buffer.c buffer.c ck.c
-t_test_buffer_LDADD = $(LIBUNWIND_LIBS)
-
-t_test_base64_SOURCES = t/test_base64.c base64.c buffer.c ck.c
-t_test_base64_LDADD = $(LIBUNWIND_LIBS)
-
-t_test_burl_SOURCES = t/test_burl.c burl.c buffer.c base64.c ck.c
-t_test_burl_LDADD = $(LIBUNWIND_LIBS)
+t_test_common_SOURCES = t/test_common.c \
+                        t/test_array.c \
+                        t/test_base64.c \
+                        t/test_buffer.c \
+                        t/test_burl.c \
+                        t/test_keyvalue.c \
+                        t/test_request.c \
+                        http_header.c \
+                        http_kv.c \
+                        log.c \
+                        fdlog.c \
+                        sock_addr.c \
+                        ck.c
+t_test_common_LDADD   = $(LIBUNWIND_LIBS) $(PCRE_LIB)
 
 t_test_configfile_SOURCES = t/test_configfile.c buffer.c array.c data_config.c http_header.c http_kv.c vector.c log.c fdlog.c sock_addr.c ck.c
 t_test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
-
-t_test_keyvalue_SOURCES = t/test_keyvalue.c burl.c buffer.c base64.c array.c log.c fdlog.c ck.c
-t_test_keyvalue_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
 t_test_mod_SOURCES = $(common_src) t/test_mod.c \
                      t/test_mod_access.c \
@@ -654,9 +644,6 @@ t_test_mod_SOURCES = $(common_src) t/test_mod.c \
                      t/test_mod_userdir.c
 t_test_mod_CFLAGS  = $(AM_CFLAGS) $(LIBEV_CFLAGS)
 t_test_mod_LDADD   = $(LIBUNWIND_LIBS) $(PCRE_LIB) $(CRYPTO_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(ATTR_LIB)
-
-t_test_request_SOURCES = t/test_request.c base64.c buffer.c burl.c array.c http_header.c http_kv.c log.c fdlog.c sock_addr.c ck.c
-t_test_request_LDADD = $(LIBUNWIND_LIBS)
 
 noinst_HEADERS   = $(hdr)
 EXTRA_DIST = \

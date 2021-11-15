@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "buffer.h"
+#include "buffer.c"
 
 static void run_buffer_path_simplify(buffer *psrc, buffer *pdest, const char *in, size_t in_len, const char *out, size_t out_len) {
 	buffer_copy_string_len(psrc, in, in_len);
@@ -144,11 +144,11 @@ static void test_buffer_append_path_len(void) {
 	buffer_free(b);
 }
 
-int main() {
+void test_buffer (void);
+void test_buffer (void)
+{
 	test_buffer_path_simplify();
 	test_buffer_to_lower_upper();
 	test_buffer_string_space();
 	test_buffer_append_path_len();
-
-	return 0;
 }

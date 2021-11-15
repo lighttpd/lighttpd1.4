@@ -1,6 +1,6 @@
 #include "first.h"
 
-#include "base64.h"
+#include "base64.c"
 
 static const base64_charset encs[] = { BASE64_STANDARD, BASE64_URL };
 static buffer *check;
@@ -43,7 +43,9 @@ static void check_all_len_3 (const base64_charset enc) {
 	}
 }
 
-int main() {
+void test_base64 (void);
+void test_base64 (void)
+{
 	check = buffer_init();
 
 	for (unsigned int enc = 0; enc < sizeof(encs)/sizeof(*encs); ++enc) {
@@ -54,5 +56,4 @@ int main() {
 	}
 
 	buffer_free(check);
-	return 0;
 }

@@ -601,7 +601,8 @@ static void test_request_http_request_parse(request_st * const r)
 #include "burl.h"
 #include "log.h"
 
-int main (void)
+void test_request (void);
+void test_request (void)
 {
     request_st r;
 
@@ -620,6 +621,4 @@ int main (void)
     array_free_data(&r.rqst_headers);
 
     fdlog_free(r.conf.errh);
-
-    return 0;
 }

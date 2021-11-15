@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "array.h"
+#include "array.c"
 #include "buffer.h"
 
 static void test_array_get_int_ptr (void) {
@@ -63,10 +63,10 @@ static void test_array_set_key_value (void) {
     array_free(a);
 }
 
-int main() {
+void test_array (void);
+void test_array (void)
+{
     test_array_get_int_ptr();
     test_array_insert_value();
     test_array_set_key_value();
-
-    return 0;
 }

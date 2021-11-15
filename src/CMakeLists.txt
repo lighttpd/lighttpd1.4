@@ -848,38 +848,6 @@ add_and_install_library(mod_vhostdb "mod_vhostdb.c;mod_vhostdb_api.c")
 add_and_install_library(mod_webdav mod_webdav.c)
 add_and_install_library(mod_wstunnel mod_wstunnel.c)
 
-add_executable(test_array
-	t/test_array.c
-	array.c
-	buffer.c
-	ck.c
-)
-add_test(NAME test_array COMMAND test_array)
-
-add_executable(test_buffer
-	t/test_buffer.c
-	buffer.c
-	ck.c
-)
-add_test(NAME test_buffer COMMAND test_buffer)
-
-add_executable(test_burl
-	t/test_burl.c
-	burl.c
-	buffer.c
-	base64.c
-	ck.c
-)
-add_test(NAME test_burl COMMAND test_burl)
-
-add_executable(test_base64
-	t/test_base64.c
-	buffer.c
-	base64.c
-	ck.c
-)
-add_test(NAME test_base64 COMMAND test_base64)
-
 add_executable(test_configfile
 	t/test_configfile.c
 	buffer.c
@@ -894,18 +862,6 @@ add_executable(test_configfile
 	ck.c
 )
 add_test(NAME test_configfile COMMAND test_configfile)
-
-add_executable(test_keyvalue
-	t/test_keyvalue.c
-	burl.c
-	buffer.c
-	base64.c
-	array.c
-	log.c
-	fdlog.c
-	ck.c
-)
-add_test(NAME test_keyvalue COMMAND test_keyvalue)
 
 add_executable(test_mod
 	${COMMON_SRC}
@@ -922,12 +878,14 @@ add_executable(test_mod
 )
 add_test(NAME test_mod COMMAND test_mod)
 
-add_executable(test_request
+add_executable(test_common
+	t/test_common.c
+	t/test_array.c
+	t/test_base64.c
+	t/test_buffer.c
+	t/test_burl.c
+	t/test_keyvalue.c
 	t/test_request.c
-	base64.c
-	buffer.c
-	burl.c
-	array.c
 	http_header.c
 	http_kv.c
 	log.c
@@ -935,15 +893,15 @@ add_executable(test_request
 	sock_addr.c
 	ck.c
 )
-add_test(NAME test_request COMMAND test_request)
+add_test(NAME test_common COMMAND test_common)
 
 if(HAVE_PCRE_H)
 	target_link_libraries(lighttpd ${PCRE_LDFLAGS})
 	add_target_properties(lighttpd COMPILE_FLAGS ${PCRE_CFLAGS})
+	target_link_libraries(test_common ${PCRE_LDFLAGS})
+	add_target_properties(test_common COMPILE_FLAGS ${PCRE_CFLAGS})
 	target_link_libraries(test_configfile ${PCRE_LDFLAGS})
 	add_target_properties(test_configfile COMPILE_FLAGS ${PCRE_CFLAGS})
-	target_link_libraries(test_keyvalue ${PCRE_LDFLAGS})
-	add_target_properties(test_keyvalue COMPILE_FLAGS ${PCRE_CFLAGS})
 	target_link_libraries(test_mod ${PCRE_LDFLAGS})
 	add_target_properties(test_mod COMPILE_FLAGS ${PCRE_CFLAGS})
 endif()
@@ -1181,22 +1139,12 @@ if(WITH_LIBUNWIND)
 	target_link_libraries(lighttpd ${LIBUNWIND_LDFLAGS})
 	add_target_properties(lighttpd COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 
-	target_link_libraries(test_array ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_array COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_buffer ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_buffer COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_burl ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_burl COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_base64 ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_base64 COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
+	target_link_libraries(test_common ${LIBUNWIND_LDFLAGS})
+	add_target_properties(test_common COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_configfile ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_configfile COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_keyvalue ${PCRE_LDFLAGS} ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_keyvalue COMPILE_FLAGS ${PCRE_CFLAGS} ${LIBUNWIND_CFLAGS})
 	target_link_libraries(test_mod ${LIBUNWIND_LDFLAGS})
 	add_target_properties(test_mod COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
-	target_link_libraries(test_request ${LIBUNWIND_LDFLAGS})
-	add_target_properties(test_request COMPILE_FLAGS ${LIBUNWIND_CFLAGS})
 endif()
 
 if(NOT WIN32)

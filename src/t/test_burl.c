@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "burl.h"
+#include "burl.c"
 
 static void run_burl_normalize (buffer *psrc, buffer *ptmp, int flags, int line, const char *in, size_t in_len, const char *out, size_t out_len) {
     int qs;
@@ -146,7 +146,8 @@ static void test_burl_normalize (void) {
     buffer_free(ptmp);
 }
 
-int main (void) {
+void test_burl (void);
+void test_burl (void)
+{
     test_burl_normalize();
-    return 0;
 }
