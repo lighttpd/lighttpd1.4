@@ -460,6 +460,10 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
               case 15:/* dir-listing.cache */
                 cpv->v.v = mod_dirlisting_parse_cache(srv, cpv->v.a);
                 if (NULL == cpv->v.v) return HANDLER_ERROR;
+                if (0 == ((struct dirlist_cache *)cpv->v.v)->max_age) {
+                    free(cpv->v.v);
+                    cpv->v.v = NULL; /*(to disable after having been enabled)*/
+                }
                 cpv->vtype = T_CONFIG_LOCAL;
                 break;
               default:/* should not happen */
@@ -1346,7 +1350,6 @@ REQUEST_FUNC(mod_dirlisting_reset) {
 static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data * const p) {
     /* optional: an external process can trigger a refresh by deleting the cache
      * entry when the external process detects (or initiaties) changes to dir */
-    if (0 == p->conf.cache->max_age) return HANDLER_GO_ON;
     buffer * const tb = r->tmp_buf;
     buffer_copy_path_len2(tb, BUF_PTR_LEN(p->conf.cache->path),
                               BUF_PTR_LEN(&r->physical.path));
@@ -1427,7 +1430,6 @@ static void mod_dirlisting_cache_add (request_st * const r, plugin_data * const 
   #endif
     char oldpath[PATH_MAX];
     char newpath[PATH_MAX];
-    if (0 == p->conf.cache->max_age) return;
     buffer * const tb = r->tmp_buf;
     buffer_copy_path_len2(tb, BUF_PTR_LEN(p->conf.cache->path),
                               BUF_PTR_LEN(&r->physical.path));
