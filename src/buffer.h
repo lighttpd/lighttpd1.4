@@ -186,6 +186,8 @@ typedef enum {
 
 void buffer_append_string_encoded(buffer * restrict b, const char * restrict s, size_t s_len, buffer_encoding_t encoding);
 
+void buffer_append_string_encoded_json(buffer * restrict b, const char * restrict s, size_t len);
+
 /* escape non-printable characters; simple escapes for \t, \r, \n; fallback to \xCC */
 __attribute_nonnull__()
 void buffer_append_string_c_escaped(buffer * restrict b, const char * restrict s, size_t s_len);
