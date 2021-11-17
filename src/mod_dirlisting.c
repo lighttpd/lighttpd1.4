@@ -74,6 +74,7 @@ struct dirlist_cache {
 
 typedef struct {
 	char dir_listing;
+	char json;
 	char hide_dot_files;
 	char hide_readme_file;
 	char encode_readme;
@@ -122,6 +123,11 @@ typedef struct {
 	char *path_file;
 	int dfd; /*(dirfd() owned by (DIR *))*/
 	uint32_t name_max;
+	buffer *jb;
+	int jcomma;
+	int jfd;
+	char *jfn;
+	uint32_t jfn_len;
 	plugin_config conf;
 } handler_ctx;
 
@@ -150,6 +156,15 @@ static void mod_dirlisting_handler_ctx_free (handler_ctx *hctx) {
         for (uint32_t i = 0, used = hctx->dirs.used; i < used; ++i)
             free(ent[i]);
         free(ent);
+    }
+    if (hctx->jb) {
+        chunk_buffer_release(hctx->jb);
+        if (hctx->jfn) {
+            unlink(hctx->jfn);
+            free(hctx->jfn);
+        }
+        if (-1 != hctx->jfd)
+            close(hctx->jfd);
     }
     free(hctx->path);
     free(hctx);
@@ -476,6 +491,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
     if (0 == dirlist_max_in_progress) dirlist_max_in_progress = 1;
 
     p->defaults.dir_listing = 0;
+    p->defaults.json = 0;
     p->defaults.hide_dot_files = 1;
     p->defaults.hide_readme_file = 0;
     p->defaults.hide_header_file = 0;
@@ -1002,6 +1018,8 @@ static int http_open_directory(request_st * const r, handler_ctx * const hctx) {
         return -1;
     }
 
+    if (hctx->conf.json) return 0;
+
     dirls_list_t * const dirs = &hctx->dirs;
     dirls_list_t * const files = &hctx->files;
     dirs->ent   =
@@ -1072,6 +1090,38 @@ static int http_read_directory(handler_ctx * const p) {
 		if (0 != fstatat(p->dfd, d_name, &st, 0))
 			continue; /* file *just* disappeared? */
 	  #endif
+
+		if (p->jb) { /* json output */
+			if (__builtin_expect( (p->jcomma), 1))/*(to avoid excess comma)*/
+				buffer_append_string_len(p->jb, CONST_STR_LEN(",{\"name\":\""));
+			else {
+				p->jcomma = 1;
+				buffer_append_string_len(p->jb, CONST_STR_LEN( "{\"name\":\""));
+			}
+			buffer_append_string_encoded_json(p->jb, d_name, dsz);
+
+			const char *t;
+			size_t tlen;
+			if (!S_ISDIR(st.st_mode)) {
+				t =           "\",\"type\":\"file\",\"size\":";
+				tlen = sizeof("\",\"type\":\"file\",\"size\":")-1;
+			}
+			else {
+				t =           "\",\"type\":\"dir\",\"size\":";
+				tlen = sizeof("\",\"type\":\"dir\",\"size\":")-1;
+			}
+			char sstr[LI_ITOSTRING_LENGTH];
+			char mstr[LI_ITOSTRING_LENGTH];
+			struct const_iovec iov[] = {
+			  { t, tlen }
+			 ,{ sstr, li_itostrn(sstr, sizeof(sstr), st.st_size) }
+			 ,{ CONST_STR_LEN(",\"mtime\":") }
+			 ,{ mstr, li_itostrn(mstr, sizeof(mstr), TIME64_CAST(st.st_mtime)) }
+			 ,{ CONST_STR_LEN("}") }
+			};
+			buffer_append_iovec(p->jb, iov, sizeof(iov)/sizeof(*iov));
+			continue;
+		}
 
 		dirls_list_t * const list = !S_ISDIR(st.st_mode) ? &p->files : &p->dirs;
 		if (list->used == list->size) {
@@ -1225,11 +1275,46 @@ static void mod_dirlisting_response (request_st * const r, handler_ctx * const h
 }
 
 
+static void mod_dirlisting_json_append (request_st * const r, handler_ctx * const hctx, const int fin) {
+    buffer * const jb = hctx->jb;
+    if (fin)
+        buffer_append_string_len(jb, CONST_STR_LEN("]}"));
+    else if (buffer_clen(jb) < 16384-1024)
+        return; /* aggregate bunches of entries, even if streaming response */
+
+    if (hctx->jfn) {
+        if (__builtin_expect( (write_all(hctx->jfd, BUF_PTR_LEN(jb)) < 0), 0)) {
+            /*(cleanup, cease caching if error occurs writing to cache file)*/
+            unlink(hctx->jfn);
+            free(hctx->jfn);
+            hctx->jfn = NULL;
+            close(hctx->jfd);
+            hctx->jfd = -1;
+        }
+        /* Note: writing cache file is separate from the response so that if an
+         * error occurs with cache, the response still proceeds.  While this is
+         * duplicative if the response is large enough to spill to temporary
+         * files, it is expected that only very large directories will spill to
+         * temporary files, and even then most responses will be less than 1 MB.
+         * The cache path can be different from server.upload-dirs.
+         * Note: since responses are not expected to be large, no effort is
+         * currently made here to handle FDEVENT_STREAM_RESPONSE_BUFMIN and to
+         * defer reading more from directory while data is sent to client */
+    }
+
+    http_chunk_append_buffer(r, jb); /* clears jb */
+}
+
+
 SUBREQUEST_FUNC(mod_dirlisting_subrequest);
 REQUEST_FUNC(mod_dirlisting_reset);
 static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data * const p);
 __attribute_noinline__
-static void mod_dirlisting_cache_add (request_st * const r, plugin_data * const p);
+static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const hctx);
+__attribute_noinline__
+static void mod_dirlisting_cache_json_init (request_st * const r, handler_ctx * const hctx);
+__attribute_noinline__
+static void mod_dirlisting_cache_json (request_st * const r, handler_ctx * const hctx);
 
 
 URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
@@ -1263,6 +1348,13 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 		r->http_status = 500;
 		return HANDLER_FINISHED;
 	}
+  #endif
+
+	/* TODO: add option/mechanism to enable json output */
+  #if 0 /* XXX: ??? might this be enabled accidentally by clients ??? */
+	const buffer * const vb =
+	  http_header_request_get(r, HTTP_HEADER_ACCEPT, CONST_STR_LEN("Accept"));
+	p->conf.json = (vb && strstr(vb->ptr, "application/json")); /*(coarse)*/
   #endif
 
 	if (p->conf.cache) {
@@ -1306,6 +1398,19 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	}
 	++p->processing;
 
+	if (p->conf.json) {
+		hctx->jfd = -1;
+		hctx->jb = chunk_buffer_acquire();
+		buffer_append_string_len(hctx->jb, CONST_STR_LEN("{["));
+		if (p->conf.cache)
+			mod_dirlisting_cache_json_init(r, hctx);
+		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+		                         CONST_STR_LEN("Content-Type"),
+		                         CONST_STR_LEN("application/json"));
+		r->http_status = 200;
+		r->resp_body_started = 1;
+	}
+
 	r->plugin_ctx[p->id] = hctx;
 	r->handler_module = p->self;
 	return mod_dirlisting_subrequest(r, p);
@@ -1320,12 +1425,22 @@ SUBREQUEST_FUNC(mod_dirlisting_subrequest) {
     handler_t rc = http_read_directory(hctx);
     switch (rc) {
       case HANDLER_FINISHED:
-        mod_dirlisting_response(r, hctx);
+        if (hctx->jb) { /* (hctx->conf.json) */
+            mod_dirlisting_json_append(r, hctx, 1);
+            r->resp_body_finished = 1;
+            if (hctx->jfn) /* (also (hctx->conf.cache) */
+                mod_dirlisting_cache_json(r, hctx);
+        }
+        else {
+            mod_dirlisting_response(r, hctx);
+            if (hctx->conf.cache)
+                mod_dirlisting_cache_add(r, hctx);
+        }
         mod_dirlisting_reset(r, p); /*(release resources, including hctx)*/
-        if (p->conf.cache)
-            mod_dirlisting_cache_add(r, p);
         break;
       case HANDLER_WAIT_FOR_EVENT: /*(used here to mean 'yield')*/
+        if (hctx->jb)   /* (hctx->conf.json) */
+            mod_dirlisting_json_append(r, hctx, 0);
         joblist_append(r->con);
         break;
       default:
@@ -1353,23 +1468,43 @@ static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data *
     buffer * const tb = r->tmp_buf;
     buffer_copy_path_len2(tb, BUF_PTR_LEN(p->conf.cache->path),
                               BUF_PTR_LEN(&r->physical.path));
-    buffer_append_string_len(tb, CONST_STR_LEN("dirlist.html"));
+    buffer_append_string_len(tb, p->conf.json ? "dirlist.json" : "dirlist.html",
+                             sizeof("dirlist.html")-1);
     stat_cache_entry * const sce = stat_cache_get_entry_open(tb, 1);
     if (NULL == sce || sce->fd == -1)
         return HANDLER_GO_ON;
     if (TIME64_CAST(sce->st.st_mtime) + p->conf.cache->max_age < log_epoch_secs)
         return HANDLER_GO_ON;
 
+    p->conf.json
+      ? mod_dirlisting_content_type(r, p->conf.encoding)
+      : http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+                                 CONST_STR_LEN("Content-Type"),
+                                 CONST_STR_LEN("application/json"));
+
+  #if 0
+    /*(XXX: ETag needs to be set for mod_deflate to potentially handle)*/
+    /*(XXX: should ETag be created from cache file mtime or directory mtime?)*/
+    const int follow_symlink = r->conf.follow_symlink;
+    r->conf.follow_symlink = 1; /*(skip symlink checks into cache)*/
+    http_response_send_file(r, sce->name, sce);
+    r->conf.follow_symlink = follow_symlink;
+    if (r->http_status < 400)
+        return HANDLER_FINISHED;
+    r->http_status = 0;
+  #endif
+
     /* Note: dirlist < 350 or so entries will generally trigger file
      * read into memory for dirlist < 32k, which will not be able to use
      * mod_deflate cache.  Still, this is much more efficient than lots of
      * stat() calls to generate the dirlisting for each and every request */
     if (0 != http_chunk_append_file_ref(r, sce)) {
+        http_header_response_unset(r, HTTP_HEADER_CONTENT_TYPE,
+                                   CONST_STR_LEN("Content-Type"));
         http_response_body_clear(r, 0);
         return HANDLER_GO_ON;
     }
 
-    mod_dirlisting_content_type(r, p->conf.encoding);
     r->resp_body_finished = 1;
     return HANDLER_FINISHED;
 }
@@ -1424,17 +1559,17 @@ static int mkdir_recursive (char *dir, size_t off) {
 
 #include <stdio.h>      /* rename() */
 __attribute_noinline__
-static void mod_dirlisting_cache_add (request_st * const r, plugin_data * const p) {
+static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const hctx) {
   #ifndef PATH_MAX
   #define PATH_MAX 4096
   #endif
     char oldpath[PATH_MAX];
     char newpath[PATH_MAX];
     buffer * const tb = r->tmp_buf;
-    buffer_copy_path_len2(tb, BUF_PTR_LEN(p->conf.cache->path),
+    buffer_copy_path_len2(tb, BUF_PTR_LEN(hctx->conf.cache->path),
                               BUF_PTR_LEN(&r->physical.path));
     if (!stat_cache_path_isdir(tb)
-        && 0 != mkdir_recursive(tb->ptr, buffer_clen(p->conf.cache->path)))
+        && 0 != mkdir_recursive(tb->ptr, buffer_clen(hctx->conf.cache->path)))
         return;
     buffer_append_string_len(tb, CONST_STR_LEN("dirlist.html"));
     const size_t len = buffer_clen(tb);
@@ -1450,6 +1585,48 @@ static void mod_dirlisting_cache_add (request_st * const r, plugin_data * const 
     else
         unlink(oldpath);
     close(fd);
+}
+
+
+__attribute_noinline__
+static void mod_dirlisting_cache_json_init (request_st * const r, handler_ctx * const hctx) {
+  #ifndef PATH_MAX
+  #define PATH_MAX 4096
+  #endif
+    buffer * const tb = r->tmp_buf;
+    buffer_copy_path_len2(tb, BUF_PTR_LEN(hctx->conf.cache->path),
+                              BUF_PTR_LEN(&r->physical.path));
+    if (!stat_cache_path_isdir(tb)
+        && 0 != mkdir_recursive(tb->ptr, buffer_clen(hctx->conf.cache->path)))
+        return;
+    buffer_append_string_len(tb, CONST_STR_LEN("dirlist.json.XXXXXX"));
+    const int fd = fdevent_mkostemp(tb->ptr, 0);
+    if (fd < 0) return;
+    hctx->jfn_len = buffer_clen(tb);
+    hctx->jfd = fd;
+    hctx->jfn = malloc(hctx->jfn_len+1);
+    force_assert(hctx->jfn);
+    memcpy(hctx->jfn, tb->ptr, hctx->jfn_len+1); /*(include '\0')*/
+}
+
+
+__attribute_noinline__
+static void mod_dirlisting_cache_json (request_st * const r, handler_ctx * const hctx) {
+  #ifndef PATH_MAX
+  #define PATH_MAX 4096
+  #endif
+    UNUSED(r);
+    char newpath[PATH_MAX];
+    const size_t len = hctx->jfn_len - 7; /*(-7 for .XXXXXX)*/
+    force_assert(len < PATH_MAX);
+    memcpy(newpath, hctx->jfn, len);
+    newpath[len] = '\0';
+    if (0 == rename(hctx->jfn, newpath))
+        stat_cache_invalidate_entry(newpath, len);
+    else
+        unlink(hctx->jfn);
+    free(hctx->jfn);
+    hctx->jfn = NULL;
 }
 
 
