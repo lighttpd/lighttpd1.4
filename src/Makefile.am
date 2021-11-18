@@ -643,7 +643,7 @@ t_test_mod_SOURCES = $(common_src) t/test_mod.c \
                      t/test_mod_staticfile.c \
                      t/test_mod_userdir.c
 t_test_mod_CFLAGS  = $(AM_CFLAGS) $(LIBEV_CFLAGS)
-t_test_mod_LDADD   = $(LIBUNWIND_LIBS) $(PCRE_LIB) $(CRYPTO_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(ATTR_LIB)
+t_test_mod_LDADD   = $(LIBUNWIND_LIBS) $(PCRE_LIB) $(CRYPTO_LIB) $(DL_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(ATTR_LIB)
 
 noinst_HEADERS   = $(hdr)
 EXTRA_DIST = \

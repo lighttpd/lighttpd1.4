@@ -1085,6 +1085,7 @@ endif()
 if(NOT BUILD_STATIC)
 	if(HAVE_LIBDL)
 		target_link_libraries(lighttpd dl)
+		target_link_libraries(test_mod dl)
 	endif()
 endif()
 
