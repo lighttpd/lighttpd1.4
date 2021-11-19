@@ -2571,8 +2571,9 @@ h2_init_stream (request_st * const h2r, connection * const con)
     r->conditional_is_valid = h2r->conditional_is_valid;
     memcpy(r->cond_cache, h2r->cond_cache, used * sizeof(cond_cache_t));
   #ifdef HAVE_PCRE_H
-    if (used > 1) /*(save 128b per con if no conditions)*/
-        memcpy(r->cond_match, h2r->cond_match, used * sizeof(cond_match_t));
+    if (srv->config_captures > 1)
+        memcpy(r->cond_match, h2r->cond_match,
+               srv->config_captures * sizeof(cond_match_t));
   #endif
     /*(see request_config_reset() and request_reset_ex())*/
     r->server_name = h2r->server_name;

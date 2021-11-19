@@ -39,6 +39,13 @@ void config_get_config_cond_info(config_cond_info * const cfginfo, uint32_t idx)
     cfginfo->comp_key = dc->comp_key;
 }
 
+int config_capture(server *srv, int idx) {
+    data_config * const dc = (data_config *)config_reference.data[idx];
+    return (dc->capture_idx)
+      ? dc->capture_idx
+      : (dc->capture_idx = ++srv->config_captures);
+}
+
 int config_feature_bool (const server *srv, const char *feature, int default_value) {
     return srv->srvconf.feature_flags
       ? config_plugin_value_tobool(
@@ -543,7 +550,8 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		break;
 	case CONFIG_COND_NOMATCH:
 	case CONFIG_COND_MATCH: {
-		cond_match_t *cond_match = r->cond_match + dc->context_ndx;
+		cond_match_t * const cond_match =
+			r->cond_match[dc->capture_idx] = r->cond_match_data+dc->capture_idx;
 		match = (dc->cond == CONFIG_COND_MATCH);
 		match ^= (data_config_pcre_exec(dc, cache, l, cond_match) > 0);
 		break;
@@ -596,8 +604,6 @@ static void config_cond_clear_node(cond_cache_t * const cond_cache, const data_c
 
 /**
  * reset the config-cache for a named item
- *
- * if the item is COND_LAST_ELEMENT we reset all items
  */
 void config_cond_cache_reset_item(request_st * const r, comp_key_t item) {
 	cond_cache_t * const cond_cache = r->cond_cache;

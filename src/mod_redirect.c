@@ -78,13 +78,22 @@ static void mod_redirect_patch_config(request_st * const r, plugin_data * const 
 static pcre_keyvalue_buffer * mod_redirect_parse_list(server *srv, const array *a, const int condidx) {
     const int pcre_jit = config_feature_bool(srv, "server.pcre_jit", 1);
     pcre_keyvalue_buffer * const kvb = pcre_keyvalue_buffer_init();
-    kvb->x0 = (unsigned short)condidx;
+    kvb->cfgidx = condidx;
     buffer * const tb = srv->tmp_buf;
+    int percent = 0;
     for (uint32_t j = 0; j < a->used; ++j) {
         data_string *ds = (data_string *)a->data[j];
         if (srv->srvconf.http_url_normalize) {
             pcre_keyvalue_burl_normalize_key(&ds->key, tb);
             pcre_keyvalue_burl_normalize_value(&ds->value, tb);
+        }
+        for (const char *s = ds->value.ptr; (s = strchr(s, '%')); ++s) {
+            if (s[1] == '%')
+                ++s;
+            else if (light_isdigit(s[1]) || s[1] == '{') {
+                percent |= 1;
+                break;
+            }
         }
         if (!pcre_keyvalue_buffer_append(srv->errh, kvb, &ds->key, &ds->value,
                                          pcre_jit)) {
@@ -94,6 +103,8 @@ static pcre_keyvalue_buffer * mod_redirect_parse_list(server *srv, const array *
             return NULL;
         }
     }
+    if (percent)
+        kvb->x0 = config_capture(srv, condidx);
     return kvb;
 }
 
@@ -157,10 +168,10 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
     if (!p->conf.redirect || !p->conf.redirect->used) return HANDLER_GO_ON;
 
     ctx.cache = NULL;
-    if (p->conf.redirect->x0) { /*(p->conf.redirect->x0 is context_idx)*/
+    if (p->conf.redirect->x0) { /*(p->conf.redirect->x0 is capture_idx)*/
         ctx.cond_match_count =
-          r->cond_cache[p->conf.redirect->x0].patterncount;
-        ctx.cache = r->cond_match + p->conf.redirect->x0;
+          r->cond_cache[p->conf.redirect->cfgidx].patterncount;
+        ctx.cache = r->cond_match[p->conf.redirect->x0];
     }
     ctx.burl = &burl;
     burl.scheme    = &r->uri.scheme;

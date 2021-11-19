@@ -146,6 +146,7 @@ typedef struct {
 struct server {
 	void *plugin_slots;
 	array *config_context;
+	int config_captures;
 
 	struct fdevents *ev;
 	int (* network_backend_write)(int fd, chunkqueue *cq, off_t max_bytes, log_error_st *errh);

@@ -99,15 +99,24 @@ static pcre_keyvalue_buffer * mod_rewrite_parse_list(server *srv, const array *a
     if (NULL == kvb) {
         allocated = 1;
         kvb = pcre_keyvalue_buffer_init();
-        kvb->x0 = (unsigned short)condidx;
+        kvb->cfgidx = condidx;
     }
 
     buffer * const tb = srv->tmp_buf;
+    int percent = 0;
     for (uint32_t j = 0; j < a->used; ++j) {
         data_string *ds = (data_string *)a->data[j];
         if (srv->srvconf.http_url_normalize) {
             pcre_keyvalue_burl_normalize_key(&ds->key, tb);
             pcre_keyvalue_burl_normalize_value(&ds->value, tb);
+        }
+        for (const char *s = ds->value.ptr; (s = strchr(s, '%')); ++s) {
+            if (s[1] == '%')
+                ++s;
+            else if (light_isdigit(s[1]) || s[1] == '{') {
+                percent |= 1;
+                break;
+            }
         }
         if (!pcre_keyvalue_buffer_append(srv->errh, kvb, &ds->key, &ds->value,
                                          pcre_jit)) {
@@ -117,6 +126,8 @@ static pcre_keyvalue_buffer * mod_rewrite_parse_list(server *srv, const array *a
             return NULL;
         }
     }
+    if (percent && 0 == kvb->x0)
+        kvb->x0 = config_capture(srv, condidx);
 
     return kvb;
 }
@@ -207,7 +218,7 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
             kvb = cpv->v.v;
         }
 
-        if (kvb) kvb->x1 = (unsigned short)kvb->used; /* repeat_idx */
+        if (kvb) kvb->x1 = (int)kvb->used; /* repeat_idx */
 
         if ((cpv = rewrite_repeat)) {
             cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb, condidx);
@@ -223,7 +234,7 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
             kvb_NF = cpv->v.v;
         }
 
-        if (kvb_NF) kvb_NF->x1 = (unsigned short)kvb_NF->used; /* repeat_idx */
+        if (kvb_NF) kvb_NF->x1 = (int)kvb_NF->used; /* repeat_idx */
 
         if ((cpv = rewrite_repeat_NF)) {
             cpv->v.v = mod_rewrite_parse_list(srv, cpv->v.a, kvb_NF, condidx);
@@ -243,6 +254,23 @@ SETDEFAULTS_FUNC(mod_rewrite_set_defaults) {
     return HANDLER_GO_ON;
 }
 
+__attribute_cold__
+static handler_t process_rewrite_rules_loop_error(request_st * const r, const int cfgidx) {
+    if (0 != cfgidx) {
+        config_cond_info cfginfo;
+        config_get_config_cond_info(&cfginfo, (uint32_t)cfgidx);
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, "
+          "perhaps you want to use url.rewrite-once instead of "
+          "url.rewrite-repeat (%s)", cfginfo.comp_key);
+    }
+    else
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request");
+
+    return HANDLER_ERROR;
+}
+
 URIHANDLER_FUNC(mod_rewrite_con_reset) {
     r->plugin_ctx[((plugin_data *)p_d)->id] = NULL;
     return HANDLER_GO_ON;
@@ -255,31 +283,17 @@ static handler_t process_rewrite_rules(request_st * const r, plugin_data *p, con
 
 	if (r->plugin_ctx[p->id]) {
 		uintptr_t * const hctx = (uintptr_t *)(r->plugin_ctx + p->id);
-
 		if (((++*hctx) & 0x1FF) > 100) {
-			if (0 != kvb->x0) {
-				config_cond_info cfginfo;
-				config_get_config_cond_info(&cfginfo, kvb->x0);
-				log_error(r->conf.errh, __FILE__, __LINE__,
-				  "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request, "
-				  "perhaps you want to use url.rewrite-once instead of "
-				  "url.rewrite-repeat (%s)", cfginfo.comp_key);
-				return HANDLER_ERROR;
-			}
-
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "ENDLESS LOOP IN rewrite-rule DETECTED ... aborting request");
-			return HANDLER_ERROR;
+			return process_rewrite_rules_loop_error(r, kvb->cfgidx);
 		}
-
 		if (*hctx & REWRITE_STATE_FINISHED) return HANDLER_GO_ON;
 	}
 
 	ctx.cache = NULL;
-	if (kvb->x0) { /*(kvb->x0 is context_idx)*/
+	if (kvb->x0) { /*(kvb->x0 is capture_idx)*/
 		ctx.cond_match_count =
-		  r->cond_cache[kvb->x0].patterncount;
-		ctx.cache = r->cond_match + kvb->x0;
+		  r->cond_cache[kvb->cfgidx].patterncount;
+		ctx.cache = r->cond_match[kvb->x0];
         }
 	ctx.burl = &burl;
 	burl.scheme    = &r->uri.scheme;

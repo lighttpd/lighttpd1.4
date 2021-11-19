@@ -37,6 +37,7 @@ struct data_config {
 	void *regex;
 	struct pcre_extra *regex_study;
 #endif
+	int capture_idx;
 	int ext;
 	buffer comp_tag;
 	const char *comp_key;

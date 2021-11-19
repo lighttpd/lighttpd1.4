@@ -138,7 +138,8 @@ struct request_st {
     /* config conditions (internal) */
     uint32_t conditional_is_valid;
     struct cond_cache_t *cond_cache;
-    struct cond_match_t *cond_match;
+    struct cond_match_t **cond_match;
+    struct cond_match_t *cond_match_data;
 
     request_config conf;
 

@@ -50,6 +50,9 @@ __attribute_cold__
 void config_get_config_cond_info(config_cond_info *cfginfo, uint32_t idx);
 
 __attribute_cold__
+int config_capture(server *srv, int idx);
+
+__attribute_cold__
 void config_init(server *srv);
 
 __attribute_cold__

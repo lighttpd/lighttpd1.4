@@ -19,8 +19,9 @@ typedef struct pcre_keyvalue_ctx {
 typedef struct {
 	struct pcre_keyvalue *kv;
 	uint32_t used;
-	uint16_t x0;
-	uint16_t x1;
+	int x0;
+	int x1;
+	int cfgidx;
 } pcre_keyvalue_buffer;
 
 __attribute_cold__
