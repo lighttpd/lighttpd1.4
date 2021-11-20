@@ -61,10 +61,10 @@ static void test_keyvalue_pcre_keyvalue_buffer_process (void) {
     buffer_copy_string_len(scheme, CONST_STR_LEN("http"));
     buffer_copy_string_len(authority, CONST_STR_LEN("www.example.com"));
     /* model outer conditional match of $HTTP["host"] =~ "^(www).example.com$" */
-    ctx.cond_match_count = 2;
     ctx.cache = &cache;
     memset(&cache, 0, sizeof(cache));
     cache.comp_value = authority;
+    cache.captures = 2;
     cache.matches[0] = 0;
     cache.matches[1] = 15;
     cache.matches[2] = 0;

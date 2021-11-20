@@ -163,16 +163,13 @@ typedef struct cond_cache_t {
     int8_t result;        /*(cond_result_t)*/
     /* result without preconditions (must never be "skip") */
     int8_t local_result;  /*(cond_result_t)*/
-    int16_t patterncount;
-} cond_cache_t; /* 8 bytes (2^3) */
+} cond_cache_t; /* 2 bytes (2^1) */
 
 typedef struct cond_match_t {
     const buffer *comp_value; /* just a pointer */
-  #if !(defined(_LP64) || defined(__LP64__) || defined(_WIN64)) /*(not 64-bit)*/
-    int dummy_alignment; /*(for alignment in 32-bit)*/
-  #endif
+    int captures;
     int matches[3 * 10];
-} cond_match_t; /* 128 bytes (2^7) */
+} cond_match_t;
 
 int config_check_cond(request_st *r, int context_ndx);
 

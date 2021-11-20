@@ -1229,19 +1229,7 @@ int config_finalize(server *srv, const buffer *default_server_tag) {
     }
 
     /* adjust cond_match_data list size if regex config conditions present */
-    if (srv->config_context->used > 1) {
-        const data_config *dcrx = NULL;
-        for (uint32_t i = 1; i < srv->config_context->used; ++i) {
-            const data_config * const dc =
-              (data_config *)srv->config_context->data[i];
-            if ((dc->cond==CONFIG_COND_MATCH || dc->cond==CONFIG_COND_NOMATCH)
-                && 0 == dc->capture_idx) {
-                dcrx = dc;
-                break;
-            }
-        }
-        if (dcrx || srv->config_captures) ++srv->config_captures;
-    }
+    if (srv->config_captures) ++srv->config_captures;
 
     return 1;
 }

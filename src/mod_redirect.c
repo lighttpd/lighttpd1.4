@@ -169,8 +169,6 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
 
     ctx.cache = NULL;
     if (p->conf.redirect->x0) { /*(p->conf.redirect->x0 is capture_idx)*/
-        ctx.cond_match_count =
-          r->cond_cache[p->conf.redirect->cfgidx].patterncount;
         ctx.cache = r->cond_match[p->conf.redirect->x0];
     }
     ctx.burl = &burl;

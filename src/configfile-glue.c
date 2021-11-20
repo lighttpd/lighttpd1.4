@@ -642,19 +642,22 @@ void config_cond_cache_reset(request_st * const r) {
 
 static int config_pcre_match(request_st * const r, const data_config * const dc, const buffer * const b) {
 #ifdef HAVE_PCRE_H
+    if (__builtin_expect( (0 == dc->capture_idx), 1)) {
+        int matches[3 * 10];
+        return pcre_exec(dc->regex, dc->regex_study, BUF_PTR_LEN(b), 0, 0,
+                         matches, sizeof(matches)/sizeof(*matches));
+    }
+
     #ifndef elementsof
     #define elementsof(x) (sizeof(x) / sizeof(x[0]))
     #endif
     cond_match_t * const cond_match =
       r->cond_match[dc->capture_idx] = r->cond_match_data + dc->capture_idx;
     cond_match->comp_value = b; /*holds pointer to b (!) for pattern subst*/
-    /* Note: patterncount is in cond_cache_t instead of cond_match_t only
-     * so that both structures are sized power-2 for efficient array access */
-    cond_cache_t * const cache = &r->cond_cache[dc->context_ndx];
-    cache->patterncount =
+    cond_match->captures =
       pcre_exec(dc->regex, dc->regex_study, BUF_PTR_LEN(b), 0, 0,
                 cond_match->matches, elementsof(cond_match->matches));
-    return cache->patterncount;
+    return cond_match->captures;
 #else
     UNUSED(r);
     UNUSED(dc);

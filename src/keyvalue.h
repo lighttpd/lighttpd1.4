@@ -12,7 +12,6 @@ struct pcre_keyvalue;   /* declaration */
 typedef struct pcre_keyvalue_ctx {
   struct cond_match_t *cache;
   struct burl_parts_t *burl;
-  int cond_match_count;
   int m;
 } pcre_keyvalue_ctx;
 

@@ -291,8 +291,6 @@ static handler_t process_rewrite_rules(request_st * const r, plugin_data *p, con
 
 	ctx.cache = NULL;
 	if (kvb->x0) { /*(kvb->x0 is capture_idx)*/
-		ctx.cond_match_count =
-		  r->cond_cache[kvb->cfgidx].patterncount;
 		ctx.cache = r->cond_match[kvb->x0];
         }
 	ctx.burl = &burl;
