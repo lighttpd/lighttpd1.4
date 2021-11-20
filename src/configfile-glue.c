@@ -393,7 +393,9 @@ static cond_result_t config_check_cond_cached(request_st * const r, const data_c
     return config_check_cond_nocache_calc(r, dc, debug_cond, cache);
 }
 
-static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, const buffer *b, cond_match_t *cond_match);
+static int config_pcre_match(request_st *r, const data_config *dc, const buffer *b);
+
+static cond_result_t config_check_cond_nocache_eval(request_st * const r, const data_config * const dc, const int debug_cond, cond_cache_t * const cache);
 
 static cond_result_t config_check_cond_nocache(request_st * const r, const data_config * const dc, const int debug_cond, cond_cache_t * const cache) {
 	/* check parent first */
@@ -467,6 +469,10 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		return (cache->local_result = COND_RESULT_TRUE);
 		/* remember result of local condition for a partial reset */
 
+	return config_check_cond_nocache_eval(r, dc, debug_cond, cache);
+}
+
+static cond_result_t config_check_cond_nocache_eval(request_st * const r, const data_config * const dc, const int debug_cond, cond_cache_t * const cache) {
 	/* pass the rules */
 
 	static struct const_char_buffer {
@@ -549,15 +555,13 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		match ^= (buffer_is_equal(l, &dc->string));
 		break;
 	case CONFIG_COND_NOMATCH:
-	case CONFIG_COND_MATCH: {
-		cond_match_t * const cond_match =
-			r->cond_match[dc->capture_idx] = r->cond_match_data+dc->capture_idx;
+	case CONFIG_COND_MATCH:
 		match = (dc->cond == CONFIG_COND_MATCH);
-		match ^= (data_config_pcre_exec(dc, cache, l, cond_match) > 0);
+		match ^= (config_pcre_match(r, dc, l) > 0);
 		break;
-	}
 	default:
 		match = 1; /* return (cache->local_result = COND_RESULT_FALSE); below */
+		break;
 	}
 	/* remember result of local condition for a partial reset */
 	cache->local_result = match ? COND_RESULT_FALSE : COND_RESULT_TRUE;
@@ -636,22 +640,25 @@ void config_cond_cache_reset(request_st * const r) {
 #include <pcre.h>
 #endif
 
-static int data_config_pcre_exec(const data_config *dc, cond_cache_t *cache, const buffer *b, cond_match_t *cond_match) {
+static int config_pcre_match(request_st * const r, const data_config * const dc, const buffer * const b) {
 #ifdef HAVE_PCRE_H
     #ifndef elementsof
     #define elementsof(x) (sizeof(x) / sizeof(x[0]))
     #endif
+    cond_match_t * const cond_match =
+      r->cond_match[dc->capture_idx] = r->cond_match_data + dc->capture_idx;
+    cond_match->comp_value = b; /*holds pointer to b (!) for pattern subst*/
+    /* Note: patterncount is in cond_cache_t instead of cond_match_t only
+     * so that both structures are sized power-2 for efficient array access */
+    cond_cache_t * const cache = &r->cond_cache[dc->context_ndx];
     cache->patterncount =
       pcre_exec(dc->regex, dc->regex_study, BUF_PTR_LEN(b), 0, 0,
                 cond_match->matches, elementsof(cond_match->matches));
-    if (cache->patterncount > 0)
-        cond_match->comp_value = b; /*holds pointer to b (!) for pattern subst*/
     return cache->patterncount;
 #else
+    UNUSED(r);
     UNUSED(dc);
-    UNUSED(cache);
     UNUSED(b);
-    UNUSED(cond_match);
     return 0;
 #endif
 }
