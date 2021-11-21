@@ -185,7 +185,7 @@ static int mod_trigger_b4_dl_init_regex(server * const srv, config_plugin_value_
 static int mod_trigger_b4_dl_match(pcre_keyvalue_buffer * const kvb, const buffer * const input) {
     /*(re-use keyvalue.[ch] for match-only;
      *  must have been configured with empty kvb 'value' during init)*/
-    pcre_keyvalue_ctx ctx = { NULL, NULL, -1 };
+    pcre_keyvalue_ctx ctx = { NULL, NULL, -1, 0, NULL, NULL };
   #ifdef __COVERITY__
     /*(again, must have been configured w/ empty kvb 'value' during init)*/
     struct cond_match_t cache;

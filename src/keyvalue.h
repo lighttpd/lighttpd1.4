@@ -13,6 +13,10 @@ typedef struct pcre_keyvalue_ctx {
   struct cond_match_t *cache;
   struct burl_parts_t *burl;
   int m;
+  /*(internal use)*/
+  int n;
+  void *ovec;
+  const char *subject;
 } pcre_keyvalue_ctx;
 
 typedef struct {

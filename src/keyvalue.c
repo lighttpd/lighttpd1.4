@@ -91,8 +91,8 @@ int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, c
 
 void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb) {
 #ifdef HAVE_PCRE_H
-	for (uint32_t i = 0; i < kvb->used; ++i) {
-		pcre_keyvalue * const kv = kvb->kv+i;
+	pcre_keyvalue *kv = kvb->kv;
+	for (int i = 0, used = (int)kvb->used; i < used; ++i, ++kv) {
 		if (kv->key) pcre_free(kv->key);
 		if (kv->key_extra) pcre_free_study(kv->key_extra);
 		/*free (kv->value.ptr);*//*(see pcre_keyvalue_buffer_append)*/
@@ -104,23 +104,27 @@ void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb) {
 }
 
 #ifdef HAVE_PCRE_H
-static void pcre_keyvalue_buffer_append_match(buffer *b, const char **list, int n, unsigned int num, int flags) {
-    if (num < (unsigned int)n) { /* n is always > 0 */
-        burl_append(b, list[num], strlen(list[num]), flags);
+static void pcre_keyvalue_buffer_append_match(buffer *b, const pcre_keyvalue_ctx *ctx, unsigned int num, int flags) {
+    if (num < (unsigned int)ctx->n) { /* n is always > 0 */
+        const int *ovec = (int *)ctx->ovec;
+        const size_t off = (size_t)ovec[(num <<= 1)]; /*(num *= 2)*/
+        const size_t len = (size_t)ovec[num+1] - off;
+        burl_append(b, ctx->subject + off, len, flags);
     }
 }
 
 static void pcre_keyvalue_buffer_append_ctxmatch(buffer *b, const pcre_keyvalue_ctx *ctx, unsigned int num, int flags) {
     const struct cond_match_t * const cache = ctx->cache;
     if (!cache) return; /* no enclosing match context */
-    if ((int)num < cache->captures) {
-        const int off = cache->matches[(num <<= 1)]; /*(num *= 2)*/
-        const int len = cache->matches[num+1] - off;
-        burl_append(b, cache->comp_value->ptr + off, (size_t)len, flags);
+    if (num < (unsigned int)cache->captures) {
+        const int *ovec = (int *)cache->matches;
+        const size_t off = (size_t)ovec[(num <<= 1)]; /*(num *= 2)*/
+        const size_t len = (size_t)ovec[num+1] - off;
+        burl_append(b, cache->comp_value->ptr + off, len, flags);
     }
 }
 
-static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const char **list, int n, const pcre_keyvalue_ctx *ctx) {
+static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const pcre_keyvalue_ctx *ctx) {
     const unsigned char *p = (unsigned char *)pattern+2;/* +2 past ${} or %{} */
     int flags = 0;
     while (!light_isdigit(*p) && *p != '}' && *p != '\0') {
@@ -256,13 +260,13 @@ static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const 
         }
         if (0 == flags) flags = BURL_ENCODE_PSNDE; /* default */
         pattern[0] == '$' /*(else '%')*/
-          ? pcre_keyvalue_buffer_append_match(b, list, n, num, flags)
+          ? pcre_keyvalue_buffer_append_match(b, ctx, num, flags)
           : pcre_keyvalue_buffer_append_ctxmatch(b, ctx, num, flags);
     }
     return (int)(p + 1 - (unsigned char *)pattern - 2);
 }
 
-static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const char **list, int n, const pcre_keyvalue_ctx *ctx) {
+static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const pcre_keyvalue_ctx *ctx) {
 	const char *pattern = patternb->ptr;
 	const size_t pattern_len = buffer_clen(patternb);
 	size_t start = 0;
@@ -277,13 +281,13 @@ static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const 
 			buffer_append_string_len(b, pattern + start, k - start);
 
 			if (pattern[k + 1] == '{') {
-				int num = pcre_keyvalue_buffer_subst_ext(b, pattern+k, list, n, ctx);
+				int num = pcre_keyvalue_buffer_subst_ext(b, pattern+k, ctx);
 				if (num < 0) return; /* error; truncate result */
 				k += (size_t)num;
 			} else if (light_isdigit(((unsigned char *)pattern)[k + 1])) {
 				unsigned int num = (unsigned int)pattern[k + 1] - '0';
 				pattern[k] == '$' /*(else '%')*/
-				  ? pcre_keyvalue_buffer_append_match(b, list, n, num, 0)
+				  ? pcre_keyvalue_buffer_append_match(b, ctx, num, 0)
 				  : pcre_keyvalue_buffer_append_ctxmatch(b, ctx, num, 0);
 			} else {
 				/* enable escape: "%%" => "%", "%a" => "%a", "$$" => "$" */
@@ -299,8 +303,8 @@ static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const 
 }
 
 handler_t pcre_keyvalue_buffer_process(const pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, const buffer *input, buffer *result) {
-    for (int i = 0, used = (int)kvb->used; i < used; ++i) {
-        const pcre_keyvalue * const kv = kvb->kv+i;
+    const pcre_keyvalue *kv = kvb->kv;
+    for (int i = 0, used = (int)kvb->used; i < used; ++i, ++kv) {
         #define N 20
         int ovec[N * 3];
         #undef N
@@ -318,11 +322,11 @@ handler_t pcre_keyvalue_buffer_process(const pcre_keyvalue_buffer *kvb, pcre_key
             return HANDLER_GO_ON;
         }
         else { /* it matched */
-            const char **list;
             ctx->m = i;
-            pcre_get_substring_list(input->ptr, ovec, n, &list);
-            pcre_keyvalue_buffer_subst(result, &kv->value, list, n, ctx);
-            pcre_free(list);
+            ctx->n = n;
+            ctx->subject = input->ptr;
+            ctx->ovec = ovec;
+            pcre_keyvalue_buffer_subst(result, &kv->value, ctx);
             return HANDLER_FINISHED;
         }
     }

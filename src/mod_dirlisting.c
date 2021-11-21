@@ -243,7 +243,7 @@ static int mod_dirlisting_exclude(pcre_keyvalue_buffer * const kvb, const char *
      *  must have been configured with empty kvb 'value' during init)*/
     buffer input = { NULL, len+1, 0 };
     *(const char **)&input.ptr = name;
-    pcre_keyvalue_ctx ctx = { NULL, NULL, -1 };
+    pcre_keyvalue_ctx ctx = { NULL, NULL, -1, 0, NULL, NULL };
   #ifdef __COVERITY__
     /*(again, must have been configured w/ empty kvb 'value' during init)*/
     struct cond_match_t cache;
