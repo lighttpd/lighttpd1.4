@@ -1233,9 +1233,6 @@ int config_finalize(server *srv, const buffer *default_server_tag) {
         return 0;
     }
 
-    /* adjust cond_match_data list size if regex config conditions present */
-    if (srv->config_captures) ++srv->config_captures;
-
   #ifdef HAVE_PCRE2_H
     for (uint32_t i = 1; i < srv->config_context->used; ++i) {
         data_config * const dc =

@@ -651,8 +651,9 @@ static int config_pcre_match(request_st * const r, const data_config * const dc,
         return pcre2_match(dc->code, (PCRE2_SPTR)BUF_PTR_LEN(b),
                            0, 0, dc->match_data, NULL);
 
+    const int capture_offset = dc->capture_idx - 1;
     cond_match_t * const cond_match =
-      r->cond_match[dc->capture_idx] = r->cond_match_data + dc->capture_idx;
+      r->cond_match[capture_offset] = r->cond_match_data + capture_offset;
     pcre2_match_data *match_data = cond_match->match_data;
     if (__builtin_expect( (NULL == match_data), 0)) {
         /*(allocate on demand)*/
@@ -689,8 +690,9 @@ static int config_pcre_match(request_st * const r, const data_config * const dc,
     #ifndef elementsof
     #define elementsof(x) (sizeof(x) / sizeof(x[0]))
     #endif
+    const int capture_offset = dc->capture_idx - 1;
     cond_match_t * const cond_match =
-      r->cond_match[dc->capture_idx] = r->cond_match_data + dc->capture_idx;
+      r->cond_match[capture_offset] = r->cond_match_data + capture_offset;
     cond_match->comp_value = b; /*holds pointer to b (!) for pattern subst*/
     cond_match->captures =
       pcre_exec(dc->regex, dc->regex_study, BUF_PTR_LEN(b), 0, 0,

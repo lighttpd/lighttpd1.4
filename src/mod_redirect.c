@@ -169,7 +169,7 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
 
     ctx.cache = NULL;
     if (p->conf.redirect->x0) { /*(p->conf.redirect->x0 is capture_idx)*/
-        ctx.cache = r->cond_match[p->conf.redirect->x0];
+        ctx.cache = r->cond_match[p->conf.redirect->x0 - 1];
     }
     ctx.burl = &burl;
     burl.scheme    = &r->uri.scheme;

@@ -2571,7 +2571,7 @@ h2_init_stream (request_st * const h2r, connection * const con)
     r->conditional_is_valid = h2r->conditional_is_valid;
     memcpy(r->cond_cache, h2r->cond_cache, used * sizeof(cond_cache_t));
   #ifdef HAVE_PCRE
-    if (srv->config_captures > 1)
+    if (srv->config_captures)
         memcpy(r->cond_match, h2r->cond_match,
                srv->config_captures * sizeof(cond_match_t));
   #endif
