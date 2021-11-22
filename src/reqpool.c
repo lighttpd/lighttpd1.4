@@ -18,6 +18,11 @@
 #include "request.h"
 #include "response.h"
 
+#ifdef HAVE_PCRE2_H
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+#endif
+
 
 static const request_config *request_config_defaults;
 
@@ -60,7 +65,7 @@ request_init_data (request_st * const r, connection * const con, server * const 
     r->cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
     force_assert(NULL != r->cond_cache);
 
-  #ifdef HAVE_PCRE_H
+  #ifdef HAVE_PCRE
     if (srv->config_captures) {/*(save 128b per con if no regex conditions)*/
         r->cond_match = calloc(srv->config_captures, sizeof(cond_match_t *));
         force_assert(NULL != r->cond_match);
@@ -225,9 +230,17 @@ request_free_data (request_st * const r)
 
     free(r->plugin_ctx);
     free(r->cond_cache);
-  #ifdef HAVE_PCRE_H
-    free(r->cond_match);
-    free(r->cond_match_data);
+  #ifdef HAVE_PCRE
+    if (r->cond_match_data) {
+      #ifdef HAVE_PCRE2_H
+        for (int i = 0, used = r->con->srv->config_captures; i < used; ++i) {
+            if (r->cond_match_data[i].match_data)
+                pcre2_match_data_free(r->cond_match_data[i].match_data);
+        }
+      #endif
+        free(r->cond_match_data);
+        free(r->cond_match);
+    }
   #endif
 
     /* note: r is not zeroed here and r is not freed here */

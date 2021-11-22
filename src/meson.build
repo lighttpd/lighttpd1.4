@@ -524,13 +524,20 @@ if get_option('with_nss')
 endif
 
 libpcre = []
-if get_option('with_pcre')
+if get_option('with_pcre2')
+	# manual search:
+	# header: pcre2.h
+	# function: pcre_match (-lpcre2-8)
+	libpcre = [ dependency('libpcre2-8') ]
+	conf_data.set('HAVE_PCRE2_H', true)
+	conf_data.set('HAVE_PCRE', true)
+elif get_option('with_pcre')
 	# manual search:
 	# header: pcre.h
 	# function: pcre_exec (-lpcre)
 	libpcre = [ dependency('libpcre') ]
 	conf_data.set('HAVE_PCRE_H', true)
-	conf_data.set('HAVE_LIBPCRE', true)
+	conf_data.set('HAVE_PCRE', true)
 endif
 
 libpq = []

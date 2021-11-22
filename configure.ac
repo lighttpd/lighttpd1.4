@@ -902,6 +902,37 @@ if test "x$use_nss" = "xyes"; then
 fi
 
 
+dnl pcre2 support
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for perl regular expressions support])
+AC_ARG_WITH([pcre2],
+  [AS_HELP_STRING([--with-pcre2], [Enable pcre2 support (default no)])],
+  [WITH_PCRE2=$withval],
+  [WITH_PCRE2=no]
+)
+AC_MSG_RESULT([$WITH_PCRE2])
+
+if test "$WITH_PCRE2" != no; then
+  if test "$WITH_PCRE2" != yes; then
+    PCRE_LIB="-L$WITH_PCRE2/lib -lpcre2-8"
+    CPPFLAGS="$CPPFLAGS -I$WITH_PCRE/include"
+  else
+    AC_PATH_PROG([PCRE2CONFIG], [pcre2-config])
+    if test -n "$PCRE2CONFIG"; then
+      PCRE_LIB=`"$PCRE2CONFIG" --libs8`
+      CPPFLAGS="$CPPFLAGS `"$PCRE2CONFIG" --cflags`"
+    fi
+  fi
+
+  if test -z "$PCRE_LIB"; then
+    AC_MSG_ERROR([pcre2-config not found, install the pcre2-devel package or build with --without-pcre2])
+  fi
+
+  AC_DEFINE([HAVE_PCRE], [1], [libpcre2-8])
+  AC_DEFINE([HAVE_PCRE2_H], [1], [pcre.h])
+  AC_SUBST([PCRE_LIB])
+fi
+
 dnl pcre support
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for perl regular expressions support])
@@ -912,7 +943,7 @@ AC_ARG_WITH([pcre],
 )
 AC_MSG_RESULT([$WITH_PCRE])
 
-if test "$WITH_PCRE" != no; then
+if test "$WITH_PCRE" != no && test "$WITH_PCRE2" = "no"; then
   if test "$WITH_PCRE" != yes; then
     PCRE_LIB="-L$WITH_PCRE/lib -lpcre"
     CPPFLAGS="$CPPFLAGS -I$WITH_PCRE/include"
@@ -928,7 +959,7 @@ if test "$WITH_PCRE" != no; then
     AC_MSG_ERROR([pcre-config not found, install the pcre-devel package or build with --without-pcre])
   fi
 
-  AC_DEFINE([HAVE_LIBPCRE], [1], [libpcre])
+  AC_DEFINE([HAVE_PCRE], [1], [libpcre])
   AC_DEFINE([HAVE_PCRE_H], [1], [pcre.h])
   AC_SUBST([PCRE_LIB])
 fi

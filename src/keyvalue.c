@@ -15,7 +15,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef HAVE_PCRE_H
+#ifdef HAVE_PCRE2_H
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+#elif defined(HAVE_PCRE_H)
 #include <pcre.h>
 #ifndef PCRE_STUDY_JIT_COMPILE
 #define PCRE_STUDY_JIT_COMPILE 0
@@ -23,11 +26,18 @@
 #endif
 #endif
 
+#ifdef HAVE_PCRE2_H
+static struct pcre2_real_match_data_8 *keyvalue_match_data;
+#endif
+
 typedef struct pcre_keyvalue {
-#ifdef HAVE_PCRE_H
+  #ifdef HAVE_PCRE2_H
+	pcre2_code *code;
+	struct pcre2_real_match_data_8 *match_data;
+  #elif defined(HAVE_PCRE_H)
 	pcre *key;
 	pcre_extra *key_extra;
-#endif
+  #endif
 	buffer value;
 } pcre_keyvalue;
 
@@ -41,9 +51,9 @@ pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void) {
 }
 
 int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, const buffer *key, const buffer *value, const int pcre_jit) {
-#ifdef HAVE_PCRE_H
-	const char *errptr;
-	int erroff;
+
+  #ifdef HAVE_PCRE
+
 	pcre_keyvalue *kv;
 
 	if (0 == (kvb->used & 3)) { /*(allocate in groups of 4)*/
@@ -52,11 +62,69 @@ int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, c
 	}
 
 	kv = kvb->kv + kvb->used++;
-	kv->key_extra = NULL;
 
         /* copy persistent config data, and elide free() in free_data below */
 	memcpy(&kv->value, value, sizeof(buffer));
 	/*buffer_copy_buffer(&kv->value, value);*/
+
+   #ifdef HAVE_PCRE2_H
+
+	int errcode;
+	PCRE2_SIZE erroff;
+	PCRE2_UCHAR errbuf[1024];
+
+	kv->code = pcre2_compile((PCRE2_SPTR)BUF_PTR_LEN(key),
+	                         PCRE2_UTF, &errcode, &erroff, NULL);
+	if (NULL == kv->code) {
+		pcre2_get_error_message(errcode, errbuf, sizeof(errbuf));
+		log_error(errh, __FILE__, __LINE__,
+		          "pcre2_compile: %s at offset %zu, regex: %s",
+		          (char *)errbuf, erroff, key->ptr);
+		return 0;
+	}
+
+	if (pcre_jit) {
+		errcode = pcre2_jit_compile(kv->code, PCRE2_JIT_COMPLETE);
+		if (0 != errcode) {
+			pcre2_get_error_message(errcode, errbuf, sizeof(errbuf));
+			log_error(errh, __FILE__, __LINE__,
+			  "pcre2_jit_compile: %s, regex: %s", (char *)errbuf, key->ptr);
+			/*return 0;*/
+		}
+	}
+
+	uint32_t captures;
+	errcode = pcre2_pattern_info(kv->code, PCRE2_INFO_CAPTURECOUNT, &captures);
+	if (0 != errcode) {
+		pcre2_get_error_message(errcode, errbuf, sizeof(errbuf));
+		log_error(errh, __FILE__, __LINE__,
+		  "pcre2_pattern_info: %s, regex: %s", (char *)errbuf, key->ptr);
+		return 0;
+	}
+	else if (captures > 19) {
+		log_error(errh, __FILE__, __LINE__,
+		  "Too many captures in regex, "
+		  "use (?:...) instead of (...): %s", key->ptr);
+		return 0;
+	}
+
+    #if 1 /*(share single keyvalue_match_data among all keyvalue regexes)*/
+	if (NULL == keyvalue_match_data) {
+		keyvalue_match_data = pcre2_match_data_create(20, NULL);
+		force_assert(keyvalue_match_data);
+	}
+	kv->match_data = keyvalue_match_data;
+    #else
+	kv->match_data = pcre2_match_data_create_from_pattern(kv->code, NULL);
+	force_assert(kv->match_data);
+    #endif
+
+   #elif defined(HAVE_PCRE_H)
+
+	const char *errptr;
+	int erroff;
+
+	kv->key_extra = NULL;
 
 	if (NULL == (kv->key = pcre_compile(key->ptr,
 					  0, &errptr, &erroff, NULL))) {
@@ -74,7 +142,11 @@ int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, c
 		  key->ptr, errptr);
 		return 0;
 	}
-#else
+
+   #endif
+
+  #else  /* !HAVE_PCRE */
+
 	static int logged_message = 0;
 	if (logged_message) return 1;
 	logged_message = 1;
@@ -84,29 +156,47 @@ int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, c
 	UNUSED(key);
 	UNUSED(value);
 	UNUSED(pcre_jit);
-#endif
+
+  #endif /* !HAVE_PCRE */
 
 	return 1;
 }
 
 void pcre_keyvalue_buffer_free(pcre_keyvalue_buffer *kvb) {
-#ifdef HAVE_PCRE_H
+  #ifdef HAVE_PCRE
 	pcre_keyvalue *kv = kvb->kv;
 	for (int i = 0, used = (int)kvb->used; i < used; ++i, ++kv) {
+	  #ifdef HAVE_PCRE2_H
+		if (kv->code) pcre2_code_free(kv->code);
+	   #if 1
+		if (keyvalue_match_data) {
+			pcre2_match_data_free(keyvalue_match_data);
+			keyvalue_match_data = NULL;
+		}
+	   #else
+		if (kv->match_data) pcre2_match_data_free(kv->match_data);
+	   #endif
+	  #elif defined(HAVE_PCRE_H)
 		if (kv->key) pcre_free(kv->key);
 		if (kv->key_extra) pcre_free_study(kv->key_extra);
 		/*free (kv->value.ptr);*//*(see pcre_keyvalue_buffer_append)*/
+	  #endif
 	}
 
 	if (kvb->kv) free(kvb->kv);
-#endif
+  #endif
 	free(kvb);
 }
 
-#ifdef HAVE_PCRE_H
+#ifdef HAVE_PCRE
+
 static void pcre_keyvalue_buffer_append_match(buffer *b, const pcre_keyvalue_ctx *ctx, unsigned int num, int flags) {
     if (num < (unsigned int)ctx->n) { /* n is always > 0 */
+      #ifdef HAVE_PCRE2_H
+        const PCRE2_SIZE *ovec = (PCRE2_SIZE *)ctx->ovec;
+      #elif defined(HAVE_PCRE_H)
         const int *ovec = (int *)ctx->ovec;
+      #endif
         const size_t off = (size_t)ovec[(num <<= 1)]; /*(num *= 2)*/
         const size_t len = (size_t)ovec[num+1] - off;
         burl_append(b, ctx->subject + off, len, flags);
@@ -117,7 +207,11 @@ static void pcre_keyvalue_buffer_append_ctxmatch(buffer *b, const pcre_keyvalue_
     const struct cond_match_t * const cache = ctx->cache;
     if (!cache) return; /* no enclosing match context */
     if (num < (unsigned int)cache->captures) {
+      #ifdef HAVE_PCRE2_H
+        const PCRE2_SIZE *ovec = (PCRE2_SIZE *)cache->matches;
+      #elif defined(HAVE_PCRE_H)
         const int *ovec = (int *)cache->matches;
+      #endif
         const size_t off = (size_t)ovec[(num <<= 1)]; /*(num *= 2)*/
         const size_t len = (size_t)ovec[num+1] - off;
         burl_append(b, cache->comp_value->ptr + off, len, flags);
@@ -305,15 +399,23 @@ static void pcre_keyvalue_buffer_subst(buffer *b, const buffer *patternb, const 
 handler_t pcre_keyvalue_buffer_process(const pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, const buffer *input, buffer *result) {
     const pcre_keyvalue *kv = kvb->kv;
     for (int i = 0, used = (int)kvb->used; i < used; ++i, ++kv) {
+      #ifdef HAVE_PCRE2_H
+        int n = pcre2_match(kv->code, (PCRE2_SPTR)BUF_PTR_LEN(input),
+                            0, 0, kv->match_data, NULL);
+      #else
         #define N 20
         int ovec[N * 3];
         #undef N
         int n = pcre_exec(kv->key, kv->key_extra, BUF_PTR_LEN(input),
                           0, 0, ovec, sizeof(ovec)/sizeof(int));
+      #endif
         if (n < 0) {
-            if (n != PCRE_ERROR_NOMATCH) {
+          #ifdef HAVE_PCRE2_H
+            if (n != PCRE2_ERROR_NOMATCH)
+          #else
+            if (n != PCRE_ERROR_NOMATCH)
+          #endif
                 return HANDLER_ERROR;
-            }
         }
         else if (buffer_is_blank(&kv->value)) {
             /* short-circuit if blank replacement pattern
@@ -325,7 +427,11 @@ handler_t pcre_keyvalue_buffer_process(const pcre_keyvalue_buffer *kvb, pcre_key
             ctx->m = i;
             ctx->n = n;
             ctx->subject = input->ptr;
+          #ifdef HAVE_PCRE2_H
+            ctx->ovec = pcre2_get_ovector_pointer(kv->match_data);
+          #else
             ctx->ovec = ovec;
+          #endif
             pcre_keyvalue_buffer_subst(result, &kv->value, ctx);
             return HANDLER_FINISHED;
         }
@@ -333,7 +439,9 @@ handler_t pcre_keyvalue_buffer_process(const pcre_keyvalue_buffer *kvb, pcre_key
 
     return HANDLER_GO_ON;
 }
-#else
+
+#else  /* !HAVE_PCRE */
+
 handler_t pcre_keyvalue_buffer_process(const pcre_keyvalue_buffer *kvb, pcre_keyvalue_ctx *ctx, const buffer *input, buffer *result) {
     UNUSED(kvb);
     UNUSED(ctx);
@@ -341,7 +449,8 @@ handler_t pcre_keyvalue_buffer_process(const pcre_keyvalue_buffer *kvb, pcre_key
     UNUSED(result);
     return HANDLER_GO_ON;
 }
-#endif
+
+#endif /* !HAVE_PCRE */
 
 
 /* modified from burl_normalize_basic() to handle %% extra encoding layer */

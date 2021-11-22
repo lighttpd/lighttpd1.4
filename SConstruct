@@ -261,6 +261,7 @@ vars.AddVariables(
 	PackageVariable('with_wolfssl', 'enable wolfSSL support', 'no'),
 	BoolVariable('with_nettle', 'enable Nettle support', 'no'),
 	BoolVariable('with_pam', 'enable PAM auth support', 'no'),
+	PackageVariable('with_pcre2', 'enable pcre2 support', 'no'),
 	PackageVariable('with_pcre', 'enable pcre support', 'yes'),
 	PackageVariable('with_pgsql', 'enable pgsql support', 'no'),
 	PackageVariable('with_sasl', 'enable SASL support', 'no'),
@@ -691,11 +692,16 @@ if 1:
 			LIBPAM = 'pam',
 		)
 
-	if env['with_pcre']:
+	if env['with_pcre2']:
+		pcre2_config = autoconf.checkProgram('pcre2', 'pcre2-config')
+		if not autoconf.CheckParseConfigForLib('LIBPCRE', pcre2_config + ' --cflags --libs8'):
+			fail("Couldn't find pcre2")
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_PCRE2_H', '-DHAVE_PCRE' ])
+	elif env['with_pcre']:
 		pcre_config = autoconf.checkProgram('pcre', 'pcre-config')
 		if not autoconf.CheckParseConfigForLib('LIBPCRE', pcre_config + ' --cflags --libs'):
 			fail("Couldn't find pcre")
-		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_PCRE_H', '-DHAVE_LIBPCRE' ])
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_PCRE_H', '-DHAVE_PCRE' ])
 
 	if env['with_pgsql']:
 		if not autoconf.CheckParseConfigForLib('LIBPGSQL', 'pkg-config libpq --cflags --libs'):

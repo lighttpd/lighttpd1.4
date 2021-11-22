@@ -662,7 +662,7 @@ static void show_features (void) {
 #else
       "\t- Nettle support\n"
 #endif
-#ifdef HAVE_LIBPCRE
+#ifdef HAVE_PCRE
       "\t+ PCRE support\n"
 #else
       "\t- PCRE support\n"

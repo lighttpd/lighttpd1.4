@@ -834,7 +834,7 @@ static handler_t mod_status_handle_server_config(request_st * const r) {
 			   "  <table summary=\"status\" border=\"1\">\n"));
 
 	mod_status_header_append(b, CONST_STR_LEN("Server-Features"));
-#ifdef HAVE_PCRE_H
+#ifdef HAVE_PCRE
 	mod_status_row_append(b, CONST_STR_LEN("RegEx Conditionals"), CONST_STR_LEN("enabled"));
 #else
 	mod_status_row_append(b, CONST_STR_LEN("RegEx Conditionals"), CONST_STR_LEN("disabled - pcre missing"));

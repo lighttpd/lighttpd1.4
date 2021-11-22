@@ -165,10 +165,20 @@ typedef struct cond_cache_t {
     int8_t local_result;  /*(cond_result_t)*/
 } cond_cache_t; /* 2 bytes (2^1) */
 
+#ifdef HAVE_PCRE2_H
+struct pcre2_real_match_data_8; /* declaration */
+#endif
+
 typedef struct cond_match_t {
     const buffer *comp_value; /* just a pointer */
+ #ifdef HAVE_PCRE2_H
+    struct pcre2_real_match_data_8 *match_data;
+    int captures;
+    void *matches; /* (PCRE2_SIZE *) */
+ #elif defined(HAVE_PCRE_H)
     int captures;
     int matches[3 * 10];
+ #endif
 } cond_match_t;
 
 int config_check_cond(request_st *r, int context_ndx);

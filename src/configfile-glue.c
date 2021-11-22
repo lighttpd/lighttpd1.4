@@ -636,12 +636,50 @@ void config_cond_cache_reset(request_st * const r) {
 		memset(r->cond_cache, 0, used*sizeof(cond_cache_t));
 }
 
-#ifdef HAVE_PCRE_H
+#ifdef HAVE_PCRE2_H
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+#elif defined(HAVE_PCRE_H)
 #include <pcre.h>
 #endif
 
 static int config_pcre_match(request_st * const r, const data_config * const dc, const buffer * const b) {
-#ifdef HAVE_PCRE_H
+
+  #ifdef HAVE_PCRE2_H
+
+    if (__builtin_expect( (0 == dc->capture_idx), 1))
+        return pcre2_match(dc->code, (PCRE2_SPTR)BUF_PTR_LEN(b),
+                           0, 0, dc->match_data, NULL);
+
+    cond_match_t * const cond_match =
+      r->cond_match[dc->capture_idx] = r->cond_match_data + dc->capture_idx;
+    pcre2_match_data *match_data = cond_match->match_data;
+    if (__builtin_expect( (NULL == match_data), 0)) {
+        /*(allocate on demand)*/
+      #if 0 /*(if we did not want to share dc->match_data across requests)*/
+        /* index 0 is reused for all matches for which captures not used by
+         * other directives within the condition, so allocate for up to 9
+         * captures, plus 1 for %0 for full match.  Number of captures is
+         * checked at startup to be <= 9 in data_config_pcre_compile()
+         * (future: could save a few bytes if max captures were calculated
+         *  at startup in config_finalize()) */
+        match_data = cond_match->match_data = (0 == dc->capture_idx)
+          ? pcre2_match_data_create(10, NULL)
+          : pcre2_match_data_create_from_pattern(dc->code, NULL);
+      #else
+        match_data = cond_match->match_data =
+          pcre2_match_data_create_from_pattern(dc->code, NULL);
+      #endif
+        force_assert(match_data);
+        cond_match->matches = pcre2_get_ovector_pointer(match_data);
+    }
+    cond_match->comp_value = b; /*holds pointer to b (!) for pattern subst*/
+    cond_match->captures =
+      pcre2_match(dc->code, (PCRE2_SPTR)BUF_PTR_LEN(b), 0, 0, match_data, NULL);
+    return cond_match->captures;
+
+  #elif defined(HAVE_PCRE_H)
+
     if (__builtin_expect( (0 == dc->capture_idx), 1)) {
         int matches[3 * 10];
         return pcre_exec(dc->regex, dc->regex_study, BUF_PTR_LEN(b), 0, 0,
@@ -658,10 +696,13 @@ static int config_pcre_match(request_st * const r, const data_config * const dc,
       pcre_exec(dc->regex, dc->regex_study, BUF_PTR_LEN(b), 0, 0,
                 cond_match->matches, elementsof(cond_match->matches));
     return cond_match->captures;
-#else
+
+  #else
+
     UNUSED(r);
     UNUSED(dc);
     UNUSED(b);
     return 0;
-#endif
+
+  #endif
 }

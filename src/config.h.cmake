@@ -73,8 +73,9 @@
 #cmakedefine  HAVE_LIBXML
 
 /* PCRE */
+#cmakedefine  HAVE_PCRE
 #cmakedefine  HAVE_PCRE_H
-#cmakedefine  HAVE_LIBPCRE
+#cmakedefine  HAVE_PCRE2_H
 
 #cmakedefine  HAVE_MALLOC_H
 #cmakedefine  HAVE_POLL_H
@@ -82,7 +83,6 @@
 
 /* sqlite3 */
 #cmakedefine  HAVE_SQLITE3_H
-#cmakedefine  HAVE_LIBPCRE
 
 #cmakedefine  HAVE_STDDEF_H
 #cmakedefine  HAVE_STDINT_H

@@ -6,7 +6,10 @@
 #include <string.h>
 #include <stdlib.h>
 
-#ifdef HAVE_PCRE_H
+#ifdef HAVE_PCRE2_H
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+#elif defined(HAVE_PCRE_H)
 #include <pcre.h>
 #ifndef PCRE_STUDY_JIT_COMPILE
 #define PCRE_STUDY_JIT_COMPILE 0
@@ -40,10 +43,15 @@ static void data_config_free(data_unset *d) {
 	vector_config_weak_clear(&ds->children);
 
 	free(ds->string.ptr);
-#ifdef HAVE_PCRE_H
+  #ifdef HAVE_PCRE2_H
+        if (ds->code) pcre2_code_free(ds->code);
+   #if 0 /*(see config_finalize())*/
+        if (ds->match_data) pcre2_match_data_free(ds->match_data);
+   #endif
+  #elif defined(HAVE_PCRE_H)
 	if (ds->regex) pcre_free(ds->regex);
 	if (ds->regex_study) pcre_free_study(ds->regex_study);
-#endif
+  #endif
 
 	free(d);
 }
@@ -72,7 +80,58 @@ data_config *data_config_init(void) {
 #include "log.h"
 
 int data_config_pcre_compile(data_config * const dc, const int pcre_jit, log_error_st * const errh) {
-#ifdef HAVE_PCRE_H
+
+  #ifdef HAVE_PCRE2_H
+
+    int errcode;
+    PCRE2_SIZE erroff;
+    PCRE2_UCHAR errbuf[1024];
+
+    dc->code = pcre2_compile((PCRE2_SPTR)BUF_PTR_LEN(&dc->string),
+                             PCRE2_UTF, &errcode, &erroff, NULL);
+    if (NULL == dc->code) {
+        pcre2_get_error_message(errcode, errbuf, sizeof(errbuf));
+        log_error(errh, __FILE__, __LINE__,
+                  "pcre2_compile: %s at offset %zu, regex: %s",
+                  (char *)errbuf, erroff, dc->string.ptr);
+        return 0;
+    }
+
+    if (pcre_jit) {
+        errcode = pcre2_jit_compile(dc->code, PCRE2_JIT_COMPLETE);
+        if (0 != errcode) {
+            pcre2_get_error_message(errcode, errbuf, sizeof(errbuf));
+            log_error(errh, __FILE__, __LINE__,
+                      "pcre2_jit_compile: %s, regex: %s",
+                      (char *)errbuf, dc->string.ptr);
+        }
+        /*return 0;*/
+    }
+
+    uint32_t captures;
+    errcode = pcre2_pattern_info(dc->code, PCRE2_INFO_CAPTURECOUNT, &captures);
+    if (0 != errcode) {
+        pcre2_get_error_message(errcode, errbuf, sizeof(errbuf));
+        log_error(errh, __FILE__, __LINE__,
+          "pcre2_pattern_info: %s, regex: %s", (char *)errbuf, dc->string.ptr);
+        return 0;
+    }
+    else if (captures > 9) {
+        log_error(errh, __FILE__, __LINE__,
+          "Too many captures in regex, use (?:...) instead of (...): %s",
+          dc->string.ptr);
+        return 0;
+    }
+
+   #if 0 /*(see config_finalize())*/
+    dc->match_data = pcre2_match_data_create_from_pattern(dc->code, NULL);
+    force_assert(dc->match_data);
+   #endif
+
+    return 1;
+
+  #elif defined(HAVE_PCRE_H)
+
     const char *errptr;
     int erroff, captures;
 
@@ -108,12 +167,15 @@ int data_config_pcre_compile(data_config * const dc, const int pcre_jit, log_err
         return 0;
     }
     return 1;
-#else
+
+  #else
+
     UNUSED(pcre_jit);
     log_error(errh, __FILE__, __LINE__,
               "can't handle '%s' as you compiled without pcre support. \n"
               "(perhaps just a missing pcre-devel package ?) \n",
               dc->comp_key);
     return 0;
-#endif
+
+  #endif
 }

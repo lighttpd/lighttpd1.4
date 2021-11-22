@@ -65,6 +65,10 @@ static void test_keyvalue_pcre_keyvalue_buffer_process (void) {
     memset(&cache, 0, sizeof(cache));
     cache.comp_value = authority;
     cache.captures = 2;
+  #ifdef HAVE_PCRE2_H
+    PCRE2_SIZE matches[4];
+    cache.matches = matches;
+  #endif
     cache.matches[0] = 0;
     cache.matches[1] = 15;
     cache.matches[2] = 0;

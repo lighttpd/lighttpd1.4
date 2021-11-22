@@ -194,6 +194,9 @@ struct server {
 	int stdin_fd;
 
 	char **argv;
+  #ifdef HAVE_PCRE2_H
+	void *match_data; /*(shared and reused)*/
+  #endif
 };
 
 

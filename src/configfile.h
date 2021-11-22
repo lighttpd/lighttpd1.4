@@ -13,7 +13,9 @@
  * for compare: comp          cond  string/regex
  */
 
-#ifdef HAVE_PCRE_H
+#ifdef HAVE_PCRE2_H
+struct pcre2_real_match_data_8; /* declaration */
+#elif defined(HAVE_PCRE_H)
 struct pcre_extra;      /* declaration */
 #endif
 
@@ -33,10 +35,13 @@ struct data_config {
 	data_config *next;
 
 	buffer string;
-#ifdef HAVE_PCRE_H
+  #ifdef HAVE_PCRE2_H
+	void *code;
+	struct pcre2_real_match_data_8 *match_data;
+  #elif defined(HAVE_PCRE_H)
 	void *regex;
 	struct pcre_extra *regex_study;
-#endif
+  #endif
 	int capture_idx;
 	int ext;
 	buffer comp_tag;

@@ -36,6 +36,11 @@
 # include <syslog.h>
 #endif
 
+#ifdef HAVE_PCRE2_H
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+#endif
+
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
@@ -1231,6 +1236,43 @@ int config_finalize(server *srv, const buffer *default_server_tag) {
     /* adjust cond_match_data list size if regex config conditions present */
     if (srv->config_captures) ++srv->config_captures;
 
+  #ifdef HAVE_PCRE2_H
+    for (uint32_t i = 1; i < srv->config_context->used; ++i) {
+        data_config * const dc =
+          (data_config *)srv->config_context->data[i];
+        if ((dc->cond == CONFIG_COND_MATCH || dc->cond == CONFIG_COND_NOMATCH)
+            && 0 == dc->capture_idx) {
+            if (__builtin_expect( (NULL == srv->match_data), 0)) {
+              #if 0
+                /* calculate max output vector size to save a few bytes;
+                 * currently using hard-coded ovec_max = 10 below
+                 * (increase in code size is probably more than bytes saved) */
+                uint32_t ovec_max = 0;
+                for (uint32_t j = i; j < srv->config_context->used; ++j) {
+                    const data_config * const dc =
+                      (data_config *)srv->config_context->data[j];
+                    if ((dc->cond == CONFIG_COND_MATCH
+                         || dc->cond == CONFIG_COND_NOMATCH)
+                        && 0 == dc->capture_idx) {
+                        uint32_t v;
+                        if (0==pcre2_pattern_info(dc->code,
+                                                  PCRE2_INFO_CAPTURECOUNT,&v)) {
+                            if (ovec_max < v)
+                                ovec_max = v;
+                        }
+                    }
+                }
+              #else
+                uint32_t ovec_max = 10;
+              #endif
+                srv->match_data = pcre2_match_data_create(ovec_max, NULL);
+                force_assert(srv->match_data);
+            }
+            dc->match_data = srv->match_data;
+        }
+    }
+  #endif
+
     return 1;
 }
 
@@ -1416,6 +1458,9 @@ void config_free(server *srv) {
     array_free(srv->srvconf.modules);
     buffer_free(srv->srvconf.modules_dir);
     array_free(srv->srvconf.upload_tempdirs);
+  #ifdef HAVE_PCRE2_H
+    if (NULL == srv->match_data) pcre2_match_data_free(srv->match_data);
+  #endif
 }
 
 void config_init(server *srv) {
