@@ -166,6 +166,7 @@ int data_config_pcre_compile(data_config * const dc, const int pcre_jit, log_err
                   dc->string.ptr);
         return 0;
     }
+    dc->ovec_nelts = 3 * (captures + 1);
     return 1;
 
   #else

@@ -687,16 +687,18 @@ static int config_pcre_match(request_st * const r, const data_config * const dc,
                          matches, sizeof(matches)/sizeof(*matches));
     }
 
-    #ifndef elementsof
-    #define elementsof(x) (sizeof(x) / sizeof(x[0]))
-    #endif
     const int capture_offset = dc->capture_idx - 1;
     cond_match_t * const cond_match =
       r->cond_match[capture_offset] = r->cond_match_data + capture_offset;
+    if (__builtin_expect( (NULL == cond_match->matches), 0)) {
+        /*(allocate on demand)*/
+        cond_match->matches = malloc(dc->ovec_nelts * sizeof(int *));
+        force_assert(cond_match->matches);
+    }
     cond_match->comp_value = b; /*holds pointer to b (!) for pattern subst*/
     cond_match->captures =
       pcre_exec(dc->regex, dc->regex_study, BUF_PTR_LEN(b), 0, 0,
-                cond_match->matches, elementsof(cond_match->matches));
+                cond_match->matches, dc->ovec_nelts);
     return cond_match->captures;
 
   #else

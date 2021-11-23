@@ -173,12 +173,9 @@ typedef struct cond_match_t {
     const buffer *comp_value; /* just a pointer */
  #ifdef HAVE_PCRE2_H
     struct pcre2_real_match_data_8 *match_data;
-    int captures;
-    void *matches; /* (PCRE2_SIZE *) */
- #elif defined(HAVE_PCRE_H)
-    int captures;
-    int matches[3 * 10];
  #endif
+    int captures;
+    void *matches; /* pcre2:(PCRE2_SIZE *), pcre:(int *) */
 } cond_match_t;
 
 int config_check_cond(request_st *r, int context_ndx);

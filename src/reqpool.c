@@ -232,12 +232,15 @@ request_free_data (request_st * const r)
     free(r->cond_cache);
   #ifdef HAVE_PCRE
     if (r->cond_match_data) {
-      #ifdef HAVE_PCRE2_H
         for (int i = 0, used = r->con->srv->config_captures; i < used; ++i) {
+          #ifdef HAVE_PCRE2_H
             if (r->cond_match_data[i].match_data)
                 pcre2_match_data_free(r->cond_match_data[i].match_data);
+          #else /* HAVE_PCRE_H */
+            if (r->cond_match_data[i].matches)
+                free(r->cond_match_data[i].matches);
+          #endif
         }
-      #endif
         free(r->cond_match_data);
         free(r->cond_match);
     }

@@ -41,6 +41,7 @@ struct data_config {
   #elif defined(HAVE_PCRE_H)
 	void *regex;
 	struct pcre_extra *regex_study;
+	int ovec_nelts;
   #endif
 	int capture_idx;
 	int ext;

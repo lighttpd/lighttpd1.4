@@ -67,12 +67,14 @@ static void test_keyvalue_pcre_keyvalue_buffer_process (void) {
     cache.captures = 2;
   #ifdef HAVE_PCRE2_H
     PCRE2_SIZE matches[4];
-    cache.matches = matches;
+  #else /* HAVE_PCRE_H */
+    int matches[4];
   #endif
-    cache.matches[0] = 0;
-    cache.matches[1] = 15;
-    cache.matches[2] = 0;
-    cache.matches[3] = 3;
+    matches[0] = 0;
+    matches[1] = 15;
+    matches[2] = 0;
+    matches[3] = 3;
+    cache.matches = matches;
 
     /* converted from prior sparse tests/mod-redirect.t and tests/mod-rewrite.t
      * (real-world use should prefer ${url.path} and ${qsa} in substitutions)
