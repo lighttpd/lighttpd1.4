@@ -17,7 +17,7 @@ case "${build}" in
 	./configure \
 		--with-pic --enable-extra-warnings \
 		--with-dbi --with-mysql --with-pgsql \
-		--with-ldap --with-pcre \
+		--with-ldap --with-pcre2 \
 		--with-zlib --with-zstd --with-brotli --with-bzip2 \
 		--with-webdav-props --with-webdav-locks --with-gdbm \
 		--with-memcached --with-lua --with-libev --with-libunwind \
@@ -38,7 +38,7 @@ case "${build}" in
 	./configure \
 		--with-pic --enable-extra-warnings \
 		--with-dbi --with-mysql --with-pgsql \
-		--with-ldap --with-pcre \
+		--with-ldap --with-pcre2 \
 		--with-zlib --with-zstd --with-brotli --with-bzip2 \
 		--with-webdav-props --with-webdav-locks --with-gdbm \
 		--with-memcached --with-lua --with-libev --with-libunwind \
@@ -55,6 +55,7 @@ case "${build}" in
 	cmake \
 		-DBUILD_EXTRA_WARNINGS=ON \
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DWITH_PCRE2=ON \
 		-DWITH_ZSTD=ON \
 		-DWITH_BROTLI=ON \
 		-DWITH_BZIP=ON \
@@ -86,7 +87,7 @@ case "${build}" in
 	esac
 	# scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic
 	# scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes with_memcached=yes -k check_static check_dynamic
-	scons with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic check_static check_dynamic
+	scons with_pcre2=yes with_zlib=yes with_brotli=yes with_bzip2=yes with_openssl=yes -k check_fullstatic check_static check_dynamic
 	;;
 *)
 	echo >&2 "Unknown build system: ${build}"
