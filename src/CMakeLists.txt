@@ -256,7 +256,7 @@ macro(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)
 		set(XCONFIG_EXECUTABLE "${${_package}CONFIG_EXECUTABLE}")
 		message(STATUS "found ${_package}: ${XCONFIG_EXECUTABLE}")
 
-		if(${_package} EQUAL "pcre2-config")
+		if(${_package} STREQUAL "pcre2-config")
 			exec_program(${XCONFIG_EXECUTABLE} ARGS --libs8 OUTPUT_VARIABLE __link_FLAGS)
 		else()
 			exec_program(${XCONFIG_EXECUTABLE} ARGS --libs OUTPUT_VARIABLE __link_FLAGS)
