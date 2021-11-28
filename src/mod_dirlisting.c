@@ -596,7 +596,7 @@ static void http_list_directory_include_file(request_st * const r, const handler
       stat_cache_get_entry_open(path, r->conf.follow_symlink);
     if (len)
         buffer_truncate(&r->physical.path, len);
-    if (NULL == sce || sce->fd < 0 || 0 != sce->st.st_size)
+    if (NULL == sce || sce->fd < 0 || 0 == sce->st.st_size)
         return;
 
     chunkqueue * const cq = &r->write_queue;
