@@ -50,6 +50,7 @@ typedef struct {
     dbi_conn dbconn;
     dbi_inst dbinst;
     const buffer *sqlquery;
+    const buffer *sqluserhash;
     log_error_st *errh;
     short reconnect_count;
 } dbi_config;
@@ -100,6 +101,7 @@ static int
 mod_authn_dbi_dbconf_setup (server *srv, const array *opts, void **vdata)
 {
     const buffer *sqlquery = NULL;
+    const buffer *sqluserhash = NULL;
     const buffer *dbtype=NULL, *dbname=NULL;
 
     for (size_t i = 0; i < opts->used; ++i) {
@@ -111,6 +113,9 @@ mod_authn_dbi_dbconf_setup (server *srv, const array *opts, void **vdata)
                 dbname = &ds->value;
             else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("dbtype")))
                 dbtype = &ds->value;
+            else if (buffer_eq_icase_slen(&ds->key,
+                                          CONST_STR_LEN("sql-userhash")))
+                sqluserhash = &ds->value;
         }
     }
 
@@ -159,7 +164,8 @@ mod_authn_dbi_dbconf_setup (server *srv, const array *opts, void **vdata)
                 }
                 else if (du->type == TYPE_STRING) {
                     data_string *ds = (data_string *)du;
-                    if (&ds->value != sqlquery && &ds->value != dbtype) {
+                    if (&ds->value != sqlquery && &ds->value != dbtype
+                        && &ds->value != sqluserhash) {
                         dbi_conn_set_option(dbconn, opt->ptr, ds->value.ptr);
                     }
                 }
@@ -170,6 +176,7 @@ mod_authn_dbi_dbconf_setup (server *srv, const array *opts, void **vdata)
         dbconf->dbinst = dbinst;
         dbconf->dbconn = dbconn;
         dbconf->sqlquery = sqlquery;
+        dbconf->sqluserhash = sqluserhash;
         dbconf->errh = srv->errh;
         dbconf->reconnect_count = 0;
         *vdata = dbconf;
@@ -419,7 +426,12 @@ mod_authn_dbi_query_build (buffer * const sqlquery, dbi_config * const dbconf, h
     char buf[1024];
     buffer_clear(sqlquery);
     int qcount = 0;
-    for (char *b = dbconf->sqlquery->ptr, *d; *b; b = d+1) {
+    const buffer * const sqlb = (ai->userhash)
+      ? dbconf->sqluserhash
+      : dbconf->sqlquery;
+    if (NULL == sqlb)
+        return NULL;
+    for (char *b = sqlb->ptr, *d; *b; b = d+1) {
         if (NULL != (d = strchr(b, '?'))) {
             /* Substitute for up to three question marks (?)
              *   substitute username for first question mark
@@ -468,7 +480,7 @@ mod_authn_dbi_query_build (buffer * const sqlquery, dbi_config * const dbconf, h
             free(esc);
         }
         else {
-            d = dbconf->sqlquery->ptr + buffer_clen(dbconf->sqlquery);
+            d = sqlb->ptr + buffer_clen(sqlb);
             buffer_append_string_len(sqlquery, b, (size_t)(d - b));
             break;
         }
@@ -511,18 +523,31 @@ mod_authn_dbi_query (request_st * const r, void *p_d, http_auth_info_t * const a
     if (nrows && nrows != DBI_ROW_ERROR && dbi_result_next_row(result)) {
         size_t len = dbi_result_get_field_length_idx(result, 1);
         const char *rpw = dbi_result_get_string_idx(result, 1);
-        /*("ERROR" indicates an error and should not be permitted as passwd)*/
-        if (len != DBI_LENGTH_ERROR
-            && rpw && (len != 5 || 0 != memcmp(rpw, "ERROR", 5))) {
+        if (len != DBI_LENGTH_ERROR && rpw
+            && (len != 5  /*(rpw might be "ERROR" if len == 5)*/
+                || dbi_conn_error(dbconf->dbconn, NULL) == DBI_ERROR_NONE)) {
             if (pw) {  /* used with HTTP Basic auth */
                 if (0 == mod_authn_dbi_password_cmp(rpw, len, ai, pw))
                     rc = HANDLER_GO_ON;
             }
             else {     /* used with HTTP Digest auth */
-                /*(currently supports only single row, single digest algorithm)*/
+                /*(currently supports only single row, single digest algo)*/
                 if (len == (ai->dlen << 1)
                     && 0 == li_hex2bin(ai->digest,sizeof(ai->digest),rpw,len))
                     rc = HANDLER_GO_ON;
+            }
+        }
+        if (ai->userhash) {
+            len = dbi_result_get_field_length_idx(result, 2);
+            rpw = dbi_result_get_string_idx(result, 2);
+            ai->username = ai->userbuf;
+            if (len != DBI_LENGTH_ERROR && rpw && len <= sizeof(ai->userbuf)
+                && (len != 5  /*(rpw might be "ERROR" if len == 5)*/
+                    || dbi_conn_error(dbconf->dbconn, NULL) == DBI_ERROR_NONE))
+                memcpy(ai->userbuf, rpw, (ai->ulen = len));
+            else {
+                ai->ulen = 1;
+                ai->userbuf[0] = '\0'; /* invalid username "\0" */
             }
         }
     } /* else not found */
@@ -543,6 +568,7 @@ mod_authn_dbi_basic (request_st * const r, void *p_d, const http_auth_require_t 
     ai.ulen     = buffer_clen(username);
     ai.realm    = require->realm->ptr;
     ai.rlen     = buffer_clen(require->realm);
+    ai.userhash = 0;
     rc = mod_authn_dbi_query(r, p_d, &ai, pw);
     if (HANDLER_GO_ON != rc) return rc;
     return http_auth_match_rules(require, username->ptr, NULL, NULL)

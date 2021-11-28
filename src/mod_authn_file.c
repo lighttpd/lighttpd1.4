@@ -211,13 +211,17 @@ static int mod_authn_file_htdigest_get_loop(const char *data, const buffer *auth
         /*
          * htdigest format
          *
-         * user:realm:md5(user:realm:password)
+         * (4th field for userhash is optional,
+         *  though must be lowercase hex string if present)
+         *
+         * user:realm:<md5(user:realm:password)>:<md5(user:realm)>
+         * user:realm:<sha256(user:realm:password)>:<sha256(user:realm)>
          */
 
         if (NULL == (f_realm = memchr(f_user, ':', n - f_user))
             || NULL == (f_pwd = memchr(f_realm+1, ':', n - (f_realm+1)))) {
             log_error(errh, __FILE__, __LINE__,
-              "parse error in %s expected 'username:realm:hashed password'",
+              "parse error in %s expected 'username:realm:digest[:userhash]'",
               auth_fn->ptr);
             continue; /* skip bad lines */
         }
@@ -227,13 +231,41 @@ static int mod_authn_file_htdigest_get_loop(const char *data, const buffer *auth
         f_realm++;
         r_len = f_pwd - f_realm;
         f_pwd++;
+        const char *f_userhash = memchr(f_pwd, ':', (size_t)(n - f_pwd));
 
+        if (ai->userhash) {
+            if (NULL == f_userhash) continue;
+            ++f_userhash;
+            size_t uh_len = n - f_userhash;
+            if (f_userhash[uh_len-1] == '\r') --uh_len;
+            if (ai->ulen == uh_len && ai->rlen == r_len
+                /*(timing-safe hash cmp might not matter much; do it anyway)*/
+                /*&& 0 == memcmp(ai->username, f_userhash, uh_len)*/
+                && ck_memeq_const_time_fixed_len(ai->username,f_userhash,uh_len)
+                && 0 == memcmp(ai->realm, f_realm, r_len)
+                && u_len <= sizeof(ai->userbuf)) {
+                /* found */
+                ai->ulen = u_len;
+                ai->username = memcpy(ai->userbuf, f_user, u_len);
+                --f_userhash; /*(step back to ':' for pwd_len below)*/
+            }
+            else
+                continue;
+        }
+        else
         if (ai->ulen == u_len && ai->rlen == r_len
             && 0 == memcmp(ai->username, f_user, u_len)
             && 0 == memcmp(ai->realm, f_realm, r_len)) {
             /* found */
+            if (NULL == f_userhash) f_userhash = n;
+        }
+        else {
+            continue;
+        }
 
-            size_t pwd_len = n - f_pwd;
+        {
+            /* found */
+            size_t pwd_len = f_userhash - f_pwd;
             if (f_pwd[pwd_len-1] == '\r') --pwd_len;
 
             if (pwd_len != (ai->dlen << 1)) continue;
@@ -277,6 +309,7 @@ static handler_t mod_authn_file_htdigest_basic(request_st * const r, void *p_d, 
     ai.ulen     = buffer_clen(username);
     ai.realm    = require->realm->ptr;
     ai.rlen     = buffer_clen(require->realm);
+    ai.userhash = 0;
 
     if (mod_authn_file_htdigest_get(r, p_d, &ai)) return HANDLER_ERROR;
 
@@ -331,7 +364,7 @@ static int mod_authn_file_htpasswd_get(const buffer *auth_fn, const char *userna
 
         if (NULL == (f_pwd = memchr(f_user, ':', n - f_user))) {
             log_error(errh, __FILE__, __LINE__,
-              "parsed error in %s expected 'username:hashed password'",
+              "parsed error in %s expected 'username:password'",
               auth_fn->ptr);
             continue; /* skip bad lines */
         }

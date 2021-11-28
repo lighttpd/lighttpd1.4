@@ -477,6 +477,7 @@ static handler_t mod_authn_mysql_basic(request_st * const r, void *p_d, const ht
     ai.ulen     = buffer_clen(username);
     ai.realm    = require->realm->ptr;
     ai.rlen     = buffer_clen(require->realm);
+    ai.userhash = 0;
     rc = mod_authn_mysql_query(r, p_d, &ai, pw);
     if (HANDLER_GO_ON != rc) return rc;
     return http_auth_match_rules(require, username->ptr, NULL, NULL)

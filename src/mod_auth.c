@@ -49,12 +49,14 @@ typedef struct {
     int dalgo;
     uint32_t dlen;
     uint32_t ulen;
+    uint32_t klen;
+    char *k;
     char *username;
     char *pwdigest;
 } http_auth_cache_entry;
 
 static http_auth_cache_entry *
-http_auth_cache_entry_init (const struct http_auth_require_t * const require, const int dalgo, const char *username, const uint32_t ulen, const char *pw, const uint32_t pwlen)
+http_auth_cache_entry_init (const struct http_auth_require_t * const require, const int dalgo, const char *k, const uint32_t klen, const char *username, const uint32_t ulen, const char *pw, const uint32_t pwlen)
 {
     /*(similar to buffer_copy_string_len() for each element,
      * but allocate exact lengths in single chunk of memory
@@ -63,15 +65,20 @@ http_auth_cache_entry_init (const struct http_auth_require_t * const require, co
      *(store pointer to http_auth_require_t, which is persistent
      * and will be different for each realm + permissions combo)*/
     http_auth_cache_entry * const ae =
-      malloc(sizeof(http_auth_cache_entry) + ulen + pwlen);
+      malloc(sizeof(http_auth_cache_entry) + ulen + pwlen
+             + (k == username ? 0 : klen));
     force_assert(ae);
     ae->require = require;
     ae->ctime = log_monotonic_secs;
     ae->dalgo = dalgo;
     ae->ulen = ulen;
     ae->dlen = pwlen;
+    ae->klen = klen;
     ae->username = (char *)(ae + 1);
     ae->pwdigest = ae->username + ulen;
+    ae->k = (k == username)
+      ? ae->username
+      : memcpy(ae->pwdigest + pwlen, k, klen);
     memcpy(ae->username, username, ulen);
     memcpy(ae->pwdigest, pw, pwlen);
     return ae;
@@ -442,6 +449,7 @@ static handler_t mod_auth_require_parse_array(const array *value, array * const 
 			data_array *da_file = (data_array *)value->data[n];
 			const buffer *method = NULL, *realm = NULL, *require = NULL;
 			const buffer *nonce_secret = NULL;
+			data_unset *userhash = NULL;
 			const http_auth_scheme_t *auth_scheme;
 			buffer *algos = NULL;
 			int algorithm = HTTP_AUTH_DIGEST_SESS;
@@ -468,6 +476,8 @@ static handler_t mod_auth_require_parse_array(const array *value, array * const 
 					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("nonce_secret"))
 					           || buffer_is_equal_string(&ds->key, CONST_STR_LEN("nonce-secret"))) {
 						nonce_secret = &ds->value;
+					} else if (buffer_is_equal_string(&ds->key, CONST_STR_LEN("userhash"))) {
+						userhash = (data_unset *)ds;
 					} else {
 						log_error(errh, __FILE__, __LINE__,
 						  "the field is unknown in: "
@@ -531,6 +541,7 @@ static handler_t mod_auth_require_parse_array(const array *value, array * const 
 				dauth->require->algorithm = algorithm;
 				dauth->require->realm = realm;
 				dauth->require->nonce_secret = nonce_secret; /*(NULL is ok)*/
+				dauth->require->userhash = config_plugin_value_tobool(userhash, 0);
 				if (!mod_auth_require_parse(dauth->require, require, errh)) {
 					dauth->fn->free((data_unset *)dauth);
 					return HANDLER_ERROR;
@@ -828,7 +839,8 @@ mod_auth_check_basic(request_st * const r, void *p_d, const struct http_auth_req
     case HANDLER_GO_ON:
         http_auth_setenv(r, user, ulen, CONST_STR_LEN("Basic"));
         if (sptree && NULL == ae) { /*(cache (new) successful result)*/
-            ae = http_auth_cache_entry_init(require, 0, user, ulen, pw, pwlen);
+            ae = http_auth_cache_entry_init(require, 0, user, ulen, user, ulen,
+                                            pw, pwlen);
             http_auth_cache_insert(sptree, ndx, ae, http_auth_cache_entry_free);
         }
         break;
@@ -861,6 +873,8 @@ enum http_auth_digest_params_e {
  ,e_cnonce
  ,e_nc
  ,e_response
+ ,e_userstar
+ ,e_userhash
  ,http_auth_digest_params_sz /*(last item)*/
 };
 
@@ -868,7 +882,7 @@ typedef struct http_auth_digest_params_t {
     const char *ptr[http_auth_digest_params_sz];
     uint16_t len[http_auth_digest_params_sz];
     unix_time64_t send_nextnonce_ts;
-    unsigned char rdigest[MD_DIGEST_LENGTH_MAX]; /*(last member)*/
+    unsigned char rdigest[MD_DIGEST_LENGTH_MAX];/*(earlier members get 0-init)*/
 } http_auth_digest_params_t;
 
 
@@ -1071,6 +1085,9 @@ mod_auth_digest_www_authenticate (buffer *b, unix_time64_t cur_ts, const struct 
         buffer_append_iovec(b, iov+(0==i), sizeof(iov)/sizeof(*iov)-(0==i));
         mod_auth_append_nonce(b, cur_ts, require, algoid[i], NULL);
         buffer_append_string_len(b, CONST_STR_LEN("\", qop=\"auth\""));
+        if (require->userhash) {
+            buffer_append_string_len(b, CONST_STR_LEN(", userhash=true"));
+        }
         if (nonce_stale) {
             buffer_append_string_len(b, CONST_STR_LEN(", stale=true"));
         }
@@ -1112,22 +1129,45 @@ mod_auth_digest_get (request_st * const r, void *p_d, const struct http_auth_req
     http_auth_cache_entry *ae = NULL;
     handler_t rc = HANDLER_GO_ON;
     int ndx = -1;
+
+    const char *user = ai->username;
+    const uint32_t ulen = ai->ulen;
+    char userbuf[sizeof(ai->userbuf)];
+    if (ai->userhash && ulen <= sizeof(userbuf)) {
+        /*(lowercase hex in userhash for consistency)*/
+        const char * const restrict s = ai->username;
+        for (uint_fast32_t i = 0; i < ulen; ++i)
+            userbuf[i] = !light_isupper(s[i]) ? s[i] : (s[i] | 0x20);
+        user = userbuf;
+    }
+
     if (sptree) {
-        ndx = http_auth_cache_hash(require, ai->username, ai->ulen);
+        ndx = http_auth_cache_hash(require, user, ulen);
         ae = http_auth_cache_query(sptree, ndx);
         if (ae && ae->require == require
             && ae->dalgo == ai->dalgo
             && ae->dlen == ai->dlen
-            && ae->ulen == ai->ulen
-            && 0 == memcmp(ae->username, ai->username, ai->ulen)) {
+            && ae->klen == ulen
+            && 0 == memcmp(ae->k, user, ulen)
+            && (ae->k == ae->username || ai->userhash)) {
             memcpy(ai->digest, ae->pwdigest, ai->dlen);
+            if (ae->k != ae->username) { /*(userhash was key; copy username)*/
+                if (__builtin_expect( (ae->ulen <= sizeof(ai->userbuf)), 1)) {
+                    ai->ulen = ae->ulen;
+                    ai->username = memcpy(ai->userbuf, ae->username, ae->ulen);
+                }
+            }
         }
         else /*(not found or hash collision)*/
             ae = NULL;
     }
 
-    if (NULL == ae)
+    if (NULL == ae) {
+        if (ai->userhash && ulen <= sizeof(ai->userbuf))
+            ai->username = memcpy(ai->userbuf, userbuf, ulen);
+            /* ai->username (lowercase userhash) will be replaced by username */
         rc = backend->digest(r, backend->p_d, ai);
+    }
 
     switch (rc) {
     case HANDLER_GO_ON:
@@ -1143,8 +1183,9 @@ mod_auth_digest_get (request_st * const r, void *p_d, const struct http_auth_req
     }
 
     if (sptree && NULL == ae) { /*(cache digest from backend)*/
-        ae = http_auth_cache_entry_init(require, ai->dalgo, ai->username,
-                                        ai->ulen, (char *)ai->digest, ai->dlen);
+        ae = http_auth_cache_entry_init(require, ai->dalgo, user, ulen,
+                                        ai->username, ai->ulen,
+                                        (char *)ai->digest, ai->dlen);
         http_auth_cache_insert(sptree, ndx, ae, http_auth_cache_entry_free);
     }
 
@@ -1189,6 +1230,8 @@ mod_auth_digest_parse_authorization (http_auth_digest_params_t * const dp, const
         { CONST_STR_LEN("cnonce"),    e_cnonce },
         { CONST_STR_LEN("nc"),        e_nc },
         { CONST_STR_LEN("response"),  e_response },
+        { CONST_STR_LEN("username*"), e_userstar },
+        { CONST_STR_LEN("userhash"),  e_userhash },
 
         { NULL, 0, http_auth_digest_params_sz }
     };
@@ -1239,11 +1282,76 @@ mod_auth_digest_parse_authorization (http_auth_digest_params_t * const dp, const
 
 
 static handler_t
+mod_auth_digest_validate_userstar (request_st * const r, http_auth_digest_params_t * const dp, http_auth_info_t * const ai)
+{
+    /*assert(dp->ptr[e_userstar]);*/
+
+    if (dp->len[e_userhash] == 4) { /*("true")*/
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: invalid \"username*\" with \"userhash\" = true");
+        return mod_auth_send_400_bad_request(r);
+    }
+
+    /* "username*" RFC5987 ext-value
+     * ext-value = charset  "'" [ language ] "'" value-chars */
+    const char *ptr = dp->ptr[e_userstar];
+    uint32_t len    = dp->len[e_userstar];
+    /* validate and step over charset... */
+    if ((*ptr | 0x20) == 'u' && len > 5
+        && buffer_eq_icase_ssn(ptr, "utf-8", 5))
+        ptr += 5;
+    else if ((*ptr | 0x20) == 'i' && len > 10
+             && buffer_eq_icase_ssn(ptr, "iso-8859-1", 10))
+        ptr += 10;
+    else
+        ptr = ""; /*(invalid char; (not '\''); error below)*/
+    /* step over ...'language'... */
+    if (*ptr++ != '\''
+        || !(ptr = memchr(ptr, '\'',
+                          len - (uint32_t)(ptr - dp->ptr[e_userstar])))) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: invalid \"username*\" ext-value");
+        return mod_auth_send_400_bad_request(r);
+    }
+    ++ptr;
+
+    /* decode %XX encodings (could be more efficient by combining tests) */
+    buffer * const tb = r->tmp_buf;
+    buffer_copy_string_len(tb, ptr, len-(uint32_t)(ptr - dp->ptr[e_userstar]));
+    buffer_urldecode_path(tb);
+    if (dp->ptr[e_userstar][0] == 'u' && !buffer_is_valid_UTF8(tb)) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: invalid \"username*\" invalid UTF-8");
+        return mod_auth_send_400_bad_request(r);
+    }
+    len = buffer_clen(tb);
+    if (len > sizeof(ai->userbuf)) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "digest: invalid \"username*\" too long");
+        return mod_auth_send_400_bad_request(r);
+    }
+    for (ptr = tb->ptr; *ptr; ++ptr) {
+        /* prohibit decoded control chars, including '\0','\r','\n' */
+        /* (theoretically could permit '\t', but not currently done) */
+        if (*(unsigned char *)ptr < 0x20 || *ptr == 127) { /* iscntrl() */
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "digest: invalid \"username*\" contains ctrl chars");
+            return mod_auth_send_400_bad_request(r);
+        }
+    }
+
+    ai->ulen     = len;
+    ai->username = memcpy(ai->userbuf, tb->ptr, len);
+    return HANDLER_GO_ON;
+}
+
+
+static handler_t
 mod_auth_digest_validate_params (request_st * const r, const struct http_auth_require_t * const require, http_auth_digest_params_t * const dp, http_auth_info_t * const ai)
 {
     /* check for required parameters */
     if ((!dp->ptr[e_qop] || (dp->ptr[e_nc] && dp->ptr[e_cnonce]))
-        && dp->ptr[e_username]
+        && ((NULL != dp->ptr[e_username]) ^ (NULL != dp->ptr[e_userstar]))
         && dp->ptr[e_realm]
         && dp->ptr[e_nonce]
         && dp->ptr[e_uri]
@@ -1252,6 +1360,11 @@ mod_auth_digest_validate_params (request_st * const r, const struct http_auth_re
         ai->ulen     = dp->len[e_username];
         ai->realm    = dp->ptr[e_realm];
         ai->rlen     = dp->len[e_realm];
+        ai->userhash = (dp->len[e_userhash]==4);/*("true", not "false",absent)*/
+        if (!ai->username) { /* (dp->ptr[e_userstar]) */
+            if (HANDLER_GO_ON != mod_auth_digest_validate_userstar(r, dp, ai))
+                return HANDLER_FINISHED;
+        }
     }
     else {
         log_error(r->conf.errh, __FILE__, __LINE__,
@@ -1398,6 +1511,7 @@ mod_auth_check_digest (request_st * const r, void *p_d, const struct http_auth_r
     http_auth_info_t ai;
     handler_t rc;
 
+    /* XXX: should use offsetof() (if portable enough) */
     memset(&dp, 0, sizeof(dp) - sizeof(dp.rdigest));
 
     mod_auth_digest_parse_authorization(&dp, vb->ptr + sizeof("Digest ")-1);

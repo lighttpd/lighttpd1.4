@@ -39,7 +39,8 @@ typedef struct http_auth_require_t {
     const struct http_auth_scheme_t *scheme;
     const buffer *realm;
     const buffer *nonce_secret;
-    int valid_user;
+    uint8_t valid_user;
+    uint8_t userhash;
     int algorithm;
     array user;
     array group;
@@ -63,8 +64,10 @@ typedef struct http_auth_info_t {
     size_t ulen;
     const char *realm;
     size_t rlen;
+    int userhash;
     /*(must be >= largest binary digest length accepted above)*/
     unsigned char digest[32];
+    char userbuf[256];
 } http_auth_info_t;
 
 typedef struct http_auth_backend_t {
