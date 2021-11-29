@@ -149,6 +149,7 @@ void test_mod_ssi (void)
     r.tmp_buf                = buffer_init();
     r.conf.errh              = fdlog_init(NULL, -1, FDLOG_FD);
     r.conf.errh->fd          = -1; /* (disable) */
+    r.conf.follow_symlink    = 1;
 
     handler_ctx * const hctx = handler_ctx_init(p, r.conf.errh);
     assert(NULL != hctx);
