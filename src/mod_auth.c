@@ -1304,7 +1304,7 @@ mod_auth_digest_validate_userstar (request_st * const r, http_auth_digest_params
              && buffer_eq_icase_ssn(ptr, "iso-8859-1", 10))
         ptr += 10;
     else
-        ptr = ""; /*(invalid char; (not '\''); error below)*/
+        ptr = "\n"; /*(invalid char; (not '\''); error below)*/
     /* step over ...'language'... */
     if (*ptr++ != '\''
         || !(ptr = memchr(ptr, '\'',
