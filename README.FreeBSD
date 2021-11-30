@@ -2,37 +2,25 @@
 FreeBSD dependencies:
 
 - compiler:
-  pkg install gcc5
+  pkg install gcc11
+  or
+  pkg install llvm13
 - autotools + pkgconf (for builds from svn/git)
   pkg install autotools pkgconf
 - pkgconf might be needed to find libs in build from tarball too:
   pkg install pkgconf
 - building with cmake + ninja instead of autotools:
   pkg install cmake ninja
-- libev (cross-platform event loop library) if freebsd-kqueue from lighty isn't working
-  pkg install libev
 - stack traces on asserts:
   pkg install libunwind
 - PCRE (mod_rewrite, mod_redirect, config conditionals, ...)
-  pkg install pcre
+  pkg install pcre2
 - TLS support (and mod_auth {SHA1} support)
   pkg install libressl
-  or (mysql-connector-c still requires openssl)
-  pkg install openssl
-- PHP for unit tests
-  pkg install php56
-- MySQL for mod_mysql_vhost
-  pkg install mysql-connector-c
-- File and directory monitoring
-  pkg install gamin
   or
-  pkg install fam
-- Lua 5.1, 5.2 or 5.3 (mod_magnet and mod_cml)
-  pkg install lua51  (or lua52 or lua53)
-- memcached library (mod_cml and mod_trigger_b4_dl feature)
-  pkg install libmemcached
-- gdbm (mod_trigger_b4_dl feature)
-  pkg install gdbm
+  pkg install openssl
+- Lua 5.1, 5.2, 5.3, or 5.4 (mod_magnet)
+  pkg install lua51  (or lua52 or lua53 or lua54)
 - LDAP (mod_auth feature)
   pkg install openldap-client
 - SQLite3 (required for most mod_webdav features)

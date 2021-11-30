@@ -43,9 +43,16 @@ required packages ::
   automake
   libtool
   m4
-  pcre
-  pcre-devel
   pkg-config
+
+recommended additional packages ::
+
+  pcre2
+  pcre2-devel
+  lua
+  lua-devel
+  nettle
+  nettle-devel
 
 optional packages for optional features ::
 
@@ -98,6 +105,8 @@ optional packages for optional features ::
   pam-devel
   pcre                # PCRE       ./configure --with-pcre      # (default)
   pcre-devel
+  pcre2               # PCRE       ./configure --with-pcre2
+  pcre2-devel
   sqlite              # SQLite     ./configure --with-webdav-props
   sqlite-devel
   valgrind            # valgrind   ./configure --with-valgrind
@@ -130,7 +139,6 @@ required packages to run test harness ::
   (e.g. on Fedora 22, sudo dnf install ...)
   (e.g. on Arch Linux, sudo pacman ... (with lowercased package names))
 
-  perl-CGI
   perl-Digest
   perl-Digest-MD5
   perl-Encode-Locale
@@ -142,6 +150,7 @@ required packages to run test harness ::
   perl-IO-HTML
   perl-LWP-MediaTypes
   perl-Test-Harness
+  perl-Test-Simple
   perl-Tie-Function
   perl-TimeDate
 
@@ -183,12 +192,12 @@ build using CMake and Xcode on Mac OS X with MacPorts
   $ xcodebuild --license
   $ xcode-select --install
   $ sudo port selfupdate
-  $ sudo port install autoconf automake cmake libtool m4 pcre pkgconfig zlib zstd brotli openssl libxml sqlite3 openldap libunwind libunwind-headers mysql57 libev gdbm openldap ossp-uuid
+  $ sudo port install autoconf automake cmake libtool m4 pcre2 pkgconfig zlib zstd brotli openssl libxml sqlite3 openldap libunwind libunwind-headers mysql57 openldap ossp-uuid
   # Note: some of the above require more fiddling to configure with CMake...
 
   # cmake and build
   # (all -DWITH_... flags below are optional)
-  $ cmake -Wno-dev -DWITH_OPENSSL=1 -DWITH_LUA=1 -DWITH_ZLIB=1 -DWITH_ZSTD=1 -DWITH_BROTLI=1 -DWITH_WEBDAV_PROPS=1 .
+  $ cmake -Wno-dev -DWITH_PCRE2=1 -DWITH_OPENSSL=1 -DWITH_LUA=1 -DWITH_ZLIB=1 -DWITH_ZSTD=1 -DWITH_BROTLI=1 -DWITH_WEBDAV_PROPS=1 .
   $ make -j 4
   $ make test
 
