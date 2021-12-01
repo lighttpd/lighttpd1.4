@@ -444,7 +444,7 @@ static handler_t server_oneshot_handle_fdevent(void *context, int revents) {
     fdevent_fdnode_event_set(con->srv->ev, oneshot_fdn, n);
 
     fdnode * const fdn = con->fdn; /* fdn->ctx == con */
-    handler_t rc = ((fdevent_handler)NULL != fdn->handler)
+    handler_t rc = (fdn && (fdevent_handler)NULL != fdn->handler)
       ? (*fdn->handler)(con, revents)
       : HANDLER_FINISHED;
 
