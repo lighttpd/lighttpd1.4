@@ -3,6 +3,68 @@
 NEWS
 ====
 
+- 1.4.62 - 2021-12-01
+  * [mod_alias] fix use-after-free bug (fixes #3114)
+  * [core] clean up fdlog_st and log_error_st decls
+  * [core] 'struct log_error_st' -> 'log_error_st'
+  * [core] remove redundant asserts
+  * [core] explicitly include sys/cdefs.h
+  * [tests] t/test_mod_ssi
+  * [core] fdevent_socket_nb_cloexec_init()
+  * [core] fdevent_impl.c separate from fdevent.c
+  * [core] merge fdevent impls into fdevent_impl.c
+  * [core] fdevent_fdnode.c separate from fdevent.c
+  * [core] close backend socket fds more quickly
+  * [core] use TCP_CORK w/ TLS if cq length > 16k
+  * [core] warn if dynamic modules before mod_auth
+  * [mod_cgi] check fd-to-cgi not -1 before close
+  * [core] libev EV_ERROR conflicts with kqueue
+  * [tests] disable test_mod_ssi in cmake (temporary)
+  * [tests] disable test_mod_ssi in cmake (temporary)
+  * [tests] reenable test_mod_ssi in cmake
+  * [core] run plugin cleanup hooks in reverse
+  * [core] fix removal of server.pid-file when testing (fixes #3115)
+  * [doc] improve sample configs
+  * [doc] expand vhosts.template
+  * [doc] improve sample configs
+  * [core] use ck_assert() in vector.[ch]
+  * [tests] mod_ssi tests moved to src/t/test_mod_ssi
+  * [mod_ssi] 0-init ssi_val_t in ssi_ctx_t
+  * [mod_ssi] fix ancient bugs; replace cond parser
+  * [mod_ssi] remove mod_ssi parser generator file
+  * [mod_ssi] merge mod_ssi_expr.c into mod_ssi.c
+  * [core] uint_fast32_t tweaks
+  * [core] better asm for binary num to ascii string
+  * [tests] t/test_mod now runs all t/test_mod_*.c
+  * [tests] t/test_mod_alias.c
+  * [tests] remove unused mod from tests/lighttpd.conf
+  * [mod_evasive] smaller funcs for testing
+  * [tests] t/test_mod_evasive.c
+  * [mod_evasive] update comment to add references
+  * [tests] combine tests into test_common.c
+  * [core] get_http_method_key() tweak
+  * [mod_dirlisting] check for disabled cache at start
+  * [core] buffer_append_string_encoded_json()
+  * [mod_dirlisting] (experimental) json (disabled)
+  * [tests] t/test_mod needs -ldl on Debian
+  * [core] save config regex captures only if used
+  * [core] save pcre result state in config_pcre_match
+  * [core] use stack w/ pcre_exec unless save captures
+  * [core] extend pcre_keyvalue_ctx to pass more state
+  * [core] pcre2 support (--with-pcre2)
+  * [core] allocate one fewer cond_match_t, if needed
+  * [core] allocate pcre output vector on demand
+  * [build] configure.ac with AC_PROG_CC_C99 (fixes #3116)
+  * [build] CI builds now use pcre2 (upgrade pcre)
+  * [core] fix compiler warning in 32-bit build
+  * [build] fix CMake pcre2 detection
+  * [mod_auth] RFC7616 HTTP Digest username* userhash
+  * [mod_dirlisting] fix bug not showing HEADER.txt
+  * [tests] t/test_mod_ssi adjust to follow symlinks
+  * [mod_auth] quiet coverity warning
+  * [doc] refresh/update dependency lists in doc
+  * [core] fix crash when using lighttpd -1 with pipes (fixes #3117)
+
 - 1.4.61 - 2021-10-28
   * [core] define __BEGIN_DECLS, __END_DECLS if needed
   * [core] Y2038: error log high-precision timestamps
