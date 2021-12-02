@@ -37,10 +37,6 @@
 # include <pwd.h>
 #endif
 
-#ifdef HAVE_SYS_FILIO_H
-# include <sys/filio.h>
-#endif
-
 typedef struct {
 	const array *ssi_extension;
 	const buffer *content_type;

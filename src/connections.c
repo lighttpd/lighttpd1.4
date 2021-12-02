@@ -27,10 +27,6 @@
 #include <errno.h>
 #include <string.h>
 
-#ifdef HAVE_SYS_FILIO_H
-# include <sys/filio.h>
-#endif
-
 #include "sys-socket.h"
 
 #define HTTP_LINGER_TIMEOUT 5
