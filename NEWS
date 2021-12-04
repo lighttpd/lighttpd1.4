@@ -3,6 +3,11 @@
 NEWS
 ====
 
+- 1.4.63 - 2021-12-04
+  * [core] import xxHash v0.8.1
+  * [core] isolate use of sys/filio.h
+  * [core] fix reqpool mem corruption in 1.4.62 (fixes #3118)
+
 - 1.4.62 - 2021-12-01
   * [mod_alias] fix use-after-free bug (fixes #3114)
   * [core] clean up fdlog_st and log_error_st decls
