@@ -2573,7 +2573,7 @@ h2_init_stream (request_st * const h2r, connection * const con)
   #ifdef HAVE_PCRE
     if (srv->config_captures)
         memcpy(r->cond_match, h2r->cond_match,
-               srv->config_captures * sizeof(cond_match_t));
+               srv->config_captures * sizeof(cond_match_t *));
   #endif
     /*(see request_config_reset() and request_reset_ex())*/
     r->server_name = h2r->server_name;

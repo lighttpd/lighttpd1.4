@@ -66,7 +66,8 @@ request_init_data (request_st * const r, connection * const con, server * const 
     force_assert(NULL != r->cond_cache);
 
   #ifdef HAVE_PCRE
-    if (srv->config_captures) {/*(save 128b per con if no regex conditions)*/
+    if (srv->config_captures) {
+        r->cond_captures = srv->config_captures;
         r->cond_match = calloc(srv->config_captures, sizeof(cond_match_t *));
         force_assert(NULL != r->cond_match);
         r->cond_match_data = calloc(srv->config_captures, sizeof(cond_match_t));
@@ -232,7 +233,7 @@ request_free_data (request_st * const r)
     free(r->cond_cache);
   #ifdef HAVE_PCRE
     if (r->cond_match_data) {
-        for (int i = 0, used = r->con->srv->config_captures; i < used; ++i) {
+        for (int i = 0, used = r->cond_captures; i < used; ++i) {
           #ifdef HAVE_PCRE2_H
             if (r->cond_match_data[i].match_data)
                 pcre2_match_data_free(r->cond_match_data[i].match_data);

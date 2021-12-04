@@ -692,7 +692,7 @@ static int config_pcre_match(request_st * const r, const data_config * const dc,
       r->cond_match[capture_offset] = r->cond_match_data + capture_offset;
     if (__builtin_expect( (NULL == cond_match->matches), 0)) {
         /*(allocate on demand)*/
-        cond_match->matches = malloc(dc->ovec_nelts * sizeof(int *));
+        cond_match->matches = malloc(dc->ovec_nelts * sizeof(int));
         force_assert(cond_match->matches);
     }
     cond_match->comp_value = b; /*holds pointer to b (!) for pattern subst*/

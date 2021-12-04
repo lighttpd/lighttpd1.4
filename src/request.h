@@ -194,6 +194,7 @@ struct request_st {
     struct chunkqueue reqbody_queue; /*(might use tempfiles)*/
 
     struct stat_cache_entry *tmp_sce; /*(value valid only in sequential code)*/
+    int cond_captures;
 };
 
 
