@@ -369,6 +369,7 @@ static void config_compat_module_load (server *srv) {
     int contains_mod_auth      = 0;
     int prepend_mod_auth       = 0;
     int prepend_mod_vhostdb    = 0;
+    const char *dyn_name = NULL;
 
     for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
         buffer *m = &((data_string *)srv->srvconf.modules->data[i])->value;
@@ -390,8 +391,15 @@ static void config_compat_module_load (server *srv) {
         else if (buffer_eq_slen(m, CONST_STR_LEN("mod_wolfssl")))
             append_mod_openssl = 0;
         else if (0 == strncmp(m->ptr, "mod_auth", sizeof("mod_auth")-1)) {
-            if (buffer_eq_slen(m, CONST_STR_LEN("mod_auth")))
-                contains_mod_auth = 1;
+            if (buffer_eq_slen(m, CONST_STR_LEN("mod_auth"))) {
+                if (!contains_mod_auth) {
+                    contains_mod_auth = 1;
+                    if (dyn_name)
+                        log_error(srv->errh, __FILE__, __LINE__,
+                          "Warning: mod_auth should be listed in server.modules"
+                          " before dynamic backends such as %s", dyn_name);
+                }
+            }
             else if (!contains_mod_auth)
                 prepend_mod_auth = 1;
 
@@ -422,11 +430,8 @@ static void config_compat_module_load (server *srv) {
                                          sizeof("mod_sockproxy")-1)
                  || 0 == strncmp(m->ptr, "mod_wstunnel",
                                          sizeof("mod_wstunnel")-1)) {
-            if (!contains_mod_auth) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "Warning: mod_auth should be listed in server.modules before "
-                  "dynamic backends such as %s", m->ptr);
-            }
+            if (NULL == dyn_name)
+                dyn_name = m->ptr;
         }
     }
 
