@@ -907,17 +907,27 @@ if test "x$use_nss" = "xyes"; then
 fi
 
 
+dnl pcre support
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for perl regular expressions support])
+AC_ARG_WITH([pcre],
+  [AS_HELP_STRING([--with-pcre], [Enable pcre support (default yes)])],
+  [WITH_PCRE=$withval],
+  [WITH_PCRE=no]
+)
+AC_MSG_RESULT([$WITH_PCRE])
+
 dnl pcre2 support
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for perl regular expressions support])
 AC_ARG_WITH([pcre2],
   [AS_HELP_STRING([--with-pcre2], [Enable pcre2 support (default no)])],
   [WITH_PCRE2=$withval],
-  [WITH_PCRE2=no]
+  [WITH_PCRE2=yes]
 )
 AC_MSG_RESULT([$WITH_PCRE2])
 
-if test "$WITH_PCRE2" != no; then
+if test "$WITH_PCRE2" != no && test "$WITH_PCRE" = "no"; then
   if test "$WITH_PCRE2" != yes; then
     PCRE_LIB="-L$WITH_PCRE2/lib -lpcre2-8"
     CPPFLAGS="$CPPFLAGS -I$WITH_PCRE/include"
@@ -943,17 +953,7 @@ if test "$WITH_PCRE2" != no; then
   AC_SUBST([PCRE_LIB])
 fi
 
-dnl pcre support
-AC_MSG_NOTICE([----------------------------------------])
-AC_MSG_CHECKING([for perl regular expressions support])
-AC_ARG_WITH([pcre],
-  [AS_HELP_STRING([--with-pcre], [Enable pcre support (default yes)])],
-  [WITH_PCRE=$withval],
-  [WITH_PCRE=yes]
-)
-AC_MSG_RESULT([$WITH_PCRE])
-
-if test "$WITH_PCRE" != no && test "$WITH_PCRE2" = "no"; then
+if test "$WITH_PCRE" != no; then
   if test "$WITH_PCRE" != yes; then
     PCRE_LIB="-L$WITH_PCRE/lib -lpcre"
     CPPFLAGS="$CPPFLAGS -I$WITH_PCRE/include"
@@ -973,6 +973,7 @@ if test "$WITH_PCRE" != no && test "$WITH_PCRE2" = "no"; then
   AC_DEFINE([HAVE_PCRE_H], [1], [pcre.h])
   AC_SUBST([PCRE_LIB])
 fi
+
 
 dnl zlib
 AC_MSG_NOTICE([----------------------------------------])

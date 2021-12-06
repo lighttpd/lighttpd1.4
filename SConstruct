@@ -258,8 +258,8 @@ vars.AddVariables(
 	PackageVariable('with_wolfssl', 'enable wolfSSL support', 'no'),
 	BoolVariable('with_nettle', 'enable Nettle support', 'no'),
 	BoolVariable('with_pam', 'enable PAM auth support', 'no'),
-	PackageVariable('with_pcre2', 'enable pcre2 support', 'no'),
-	PackageVariable('with_pcre', 'enable pcre support', 'yes'),
+	PackageVariable('with_pcre2', 'enable pcre2 support', 'yes'),
+	PackageVariable('with_pcre', 'enable pcre support', 'no'),
 	PackageVariable('with_pgsql', 'enable pgsql support', 'no'),
 	PackageVariable('with_sasl', 'enable SASL support', 'no'),
 	BoolVariable('with_sqlite3', 'enable sqlite3 support (required for webdav props)', 'no'),
@@ -659,7 +659,7 @@ if 1:
 			LIBPAM = 'pam',
 		)
 
-	if env['with_pcre2']:
+	if env['with_pcre2'] and not env['with_pcre']:
 		pcre2_config = autoconf.checkProgram('pcre2', 'pcre2-config')
 		if not autoconf.CheckParseConfigForLib('LIBPCRE', pcre2_config + ' --cflags --libs8'):
 			fail("Couldn't find pcre2")

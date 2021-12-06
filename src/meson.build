@@ -480,7 +480,7 @@ if get_option('with_nss')
 endif
 
 libpcre = []
-if get_option('with_pcre2')
+if get_option('with_pcre2') and not(get_option('with_pcre'))
 	# manual search:
 	# header: pcre2.h
 	# function: pcre_match (-lpcre2-8)
