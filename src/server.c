@@ -993,7 +993,7 @@ static void server_graceful_state (server *srv) {
     if (!srv_shutdown) {
         if (0 == srv->graceful_expire_ts) {
             srv->graceful_expire_ts =
-              config_feature_int(srv, "server.graceful-shutdown-timeout", 0);
+              config_feature_int(srv, "server.graceful-shutdown-timeout", 8);
             if (srv->graceful_expire_ts)
                 srv->graceful_expire_ts += log_monotonic_secs;
         }
