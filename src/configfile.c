@@ -364,7 +364,6 @@ static void config_compat_module_load (server *srv) {
     int append_mod_staticfile  = 1;
     int append_mod_authn_file  = 1;
     int append_mod_authn_ldap  = 1;
-    int append_mod_authn_mysql = 1;
     int append_mod_openssl     = 1;
     int contains_mod_auth      = 0;
     int prepend_mod_auth       = 0;
@@ -407,8 +406,6 @@ static void config_compat_module_load (server *srv) {
                 append_mod_authn_file = 0;
             else if (buffer_eq_slen(m, CONST_STR_LEN("mod_authn_ldap")))
                 append_mod_authn_ldap = 0;
-            else if (buffer_eq_slen(m, CONST_STR_LEN("mod_authn_mysql")))
-                append_mod_authn_mysql = 0;
         }
         else if (0 == strncmp(m->ptr, "mod_vhostdb", sizeof("mod_vhostdb")-1)) {
             if (buffer_eq_slen(m, CONST_STR_LEN("mod_vhostdb")))
@@ -477,13 +474,6 @@ static void config_compat_module_load (server *srv) {
             if (config_has_opt_and_value(srv, CONST_STR_LEN("auth.backend"),
                                               CONST_STR_LEN("ldap")))
                 config_warn_authn_module(srv, CONST_STR_LEN("ldap"), "ldap");
-          #endif
-        }
-        if (append_mod_authn_mysql) {
-          #if defined(HAVE_MYSQL)
-            if (config_has_opt_and_value(srv, CONST_STR_LEN("auth.backend"),
-                                              CONST_STR_LEN("mysql")))
-                config_warn_authn_module(srv, CONST_STR_LEN("mysql"), "mysql");
           #endif
         }
     }

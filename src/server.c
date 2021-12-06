@@ -703,11 +703,6 @@ static void show_features (void) {
 #else
       "\t- PAM support\n"
 #endif
-#ifdef USE_MEMCACHED
-      "\t+ memcached support\n"
-#else
-      "\t- memcached support\n"
-#endif
 #ifdef HAVE_FAM_H
       "\t+ FAM support\n"
 #else
@@ -727,11 +722,6 @@ static void show_features (void) {
       "\t+ SQLite support\n"
 #else
       "\t- SQLite support\n"
-#endif
-#ifdef HAVE_GDBM_H
-      "\t+ GDBM support\n"
-#else
-      "\t- GDBM support\n"
 #endif
       ;
   show_version();

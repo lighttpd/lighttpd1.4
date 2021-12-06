@@ -99,18 +99,6 @@ common_libadd =
 endif
 common_module_ldflags = -module -export-dynamic $(common_ldflags)
 
-lib_LTLIBRARIES += mod_flv_streaming.la
-mod_flv_streaming_la_SOURCES = mod_flv_streaming.c
-mod_flv_streaming_la_LDFLAGS = $(common_module_ldflags)
-mod_flv_streaming_la_LIBADD = $(common_libadd)
-
-if BUILD_WITH_GEOIP
-lib_LTLIBRARIES += mod_geoip.la
-mod_geoip_la_SOURCES = mod_geoip.c
-mod_geoip_la_LDFLAGS = $(common_module_ldflags)
-mod_geoip_la_LIBADD = $(common_libadd) $(GEOIP_LIB)
-endif
-
 if BUILD_WITH_MAXMINDDB
 lib_LTLIBRARIES += mod_maxminddb.la
 mod_maxminddb_la_SOURCES = mod_maxminddb.c
@@ -137,21 +125,6 @@ mod_magnet_la_LDFLAGS = $(common_module_ldflags)
 mod_magnet_la_LIBADD = $(common_libadd) $(LUA_LIBS) $(CRYPTO_LIB) -lm
 endif
 
-if BUILD_WITH_LUA
-lib_LTLIBRARIES += mod_cml.la
-mod_cml_la_SOURCES = mod_cml.c mod_cml_lua.c mod_cml_funcs.c
-mod_cml_la_CFLAGS = $(AM_CFLAGS) $(LUA_CFLAGS)
-mod_cml_la_LDFLAGS = $(common_module_ldflags)
-mod_cml_la_LIBADD = $(MEMCACHED_LIB) $(common_libadd) $(LUA_LIBS) $(CRYPTO_LIB) -lm
-endif
-
-if BUILD_MOD_TRIGGER_B4_DL
-lib_LTLIBRARIES += mod_trigger_b4_dl.la
-mod_trigger_b4_dl_la_SOURCES = mod_trigger_b4_dl.c
-mod_trigger_b4_dl_la_LDFLAGS = $(common_module_ldflags)
-mod_trigger_b4_dl_la_LIBADD = $(GDBM_LIB) $(MEMCACHED_LIB) $(common_libadd)
-endif
-
 lib_LTLIBRARIES += mod_vhostdb.la
 mod_vhostdb_la_SOURCES = mod_vhostdb.c
 if !NO_RDYNAMIC
@@ -165,14 +138,6 @@ lib_LTLIBRARIES += mod_vhostdb_ldap.la
 mod_vhostdb_ldap_la_SOURCES = mod_vhostdb_ldap.c
 mod_vhostdb_ldap_la_LDFLAGS = $(common_module_ldflags)
 mod_vhostdb_ldap_la_LIBADD = $(LDAP_LIB) $(LBER_LIB) $(common_libadd)
-endif
-
-if BUILD_WITH_MYSQL
-lib_LTLIBRARIES += mod_mysql_vhost.la
-mod_mysql_vhost_la_SOURCES = mod_mysql_vhost.c
-mod_mysql_vhost_la_LDFLAGS = $(common_module_ldflags)
-mod_mysql_vhost_la_LIBADD = $(MYSQL_LIBS) $(common_libadd)
-mod_mysql_vhost_la_CPPFLAGS = $(MYSQL_CFLAGS)
 endif
 
 if BUILD_WITH_MYSQL
@@ -356,14 +321,6 @@ mod_authn_pam_la_LDFLAGS = $(common_module_ldflags)
 mod_authn_pam_la_LIBADD = $(PAM_LIB) $(common_libadd)
 endif
 
-if BUILD_WITH_MYSQL
-lib_LTLIBRARIES += mod_authn_mysql.la
-mod_authn_mysql_la_SOURCES = mod_authn_mysql.c
-mod_authn_mysql_la_LDFLAGS = $(common_module_ldflags)
-mod_authn_mysql_la_LIBADD = $(CRYPT_LIB) $(MYSQL_LIBS) $(CRYPTO_LIB) $(common_libadd)
-mod_authn_mysql_la_CPPFLAGS = $(MYSQL_CFLAGS)
-endif
-
 if BUILD_WITH_SASL
 lib_LTLIBRARIES += mod_authn_sasl.la
 mod_authn_sasl_la_SOURCES = mod_authn_sasl.c
@@ -461,7 +418,6 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	rand.h \
 	sys-crypto.h sys-crypto-md.h \
 	sys-endian.h sys-mmap.h sys-socket.h sys-strings.h sys-time.h \
-	mod_cml.h mod_cml_funcs.h \
 	sock_addr.h status_counter.h \
 	mod_auth_api.h \
 	mod_magnet_cache.h \
@@ -495,7 +451,6 @@ lighttpd_SOURCES = \
   mod_expire.c \
   mod_extforward.c \
   mod_fastcgi.c \
-  mod_flv_streaming.c \
   mod_indexfile.c \
   mod_proxy.c \
   mod_redirect.c \
@@ -527,17 +482,12 @@ lighttpd_LDADD = \
   $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS)
 lighttpd_LDFLAGS = -export-dynamic
 
-if BUILD_WITH_GEOIP
-lighttpd_SOURCES += mod_geoip.c
-lighttpd_LDADD += $(GEOIP_LIB)
-endif
 if BUILD_WITH_MAXMINDDB
 lighttpd_SOURCES += mod_maxminddb.c
 lighttpd_LDADD += $(MAXMINDDB_LIB)
 endif
 if BUILD_WITH_LUA
-lighttpd_SOURCES += mod_cml.c mod_cml_lua.c mod_cml_funcs.c \
-                    mod_magnet.c mod_magnet_cache.c
+lighttpd_SOURCES += mod_magnet.c mod_magnet_cache.c
                     #algo_hmac.c
 lighttpd_CPPFLAGS += $(LUA_CFLAGS)
 lighttpd_LDADD += $(LUA_LIBS) -lm
@@ -555,7 +505,7 @@ lighttpd_SOURCES += mod_authn_pam.c
 lighttpd_LDADD += $(PAM_LIB)
 endif
 if BUILD_WITH_MYSQL
-lighttpd_SOURCES += mod_authn_mysql.c mod_mysql_vhost.c mod_vhostdb_mysql.c
+lighttpd_SOURCES += mod_vhostdb_mysql.c
 lighttpd_CPPFLAGS += $(MYSQL_CFLAGS)
 lighttpd_LDADD += $(MYSQL_LIBS)
 endif
@@ -592,16 +542,6 @@ if BUILD_WITH_WOLFSSL
 lighttpd_SOURCES += mod_wolfssl.c
 lighttpd_CPPFLAGS += $(WOLFSSL_CFLAGS)
 lighttpd_LDADD += $(WOLFSSL_LIBS)
-endif
-if BUILD_WITH_MEMCACHED
-lighttpd_CPPFLAGS += $(MEMCACHED_CFLAGS)
-lighttpd_LDADD += $(MEMCACHED_LIB)
-endif
-if BUILD_WITH_GDBM
-lighttpd_LDADD += $(GDBM_LIB)
-endif
-if BUILD_MOD_TRIGGER_B4_DL
-lighttpd_SOURCES += mod_trigger_b4_dl.c
 endif
 
 else

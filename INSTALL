@@ -60,10 +60,6 @@ optional packages for optional features ::
   bzip2-libs
   cyrus-sasl          # SASL       ./configure --with-sasl
   cyrus-sasl-devel
-  gdbm                # GDBM       ./configure --with-gdbm
-  gdbm-devel
-  GeoIP-devel         # GeoIP      ./configure --with-geoip
-  GeoIP
   gnutls              # GnuTLS     ./configure --with-gnutls
   gnutls-devel
   krb5-devel          # Kerberos5  ./configure --with-krb5
@@ -77,11 +73,9 @@ optional packages for optional features ::
   libdbi-dbd-sqlite
   libmaxminddb        # MaxMindDB  ./configure --with-maxminddb
   libmaxminddb-devel
-  libmemcached-devel  # Memcached  ./configure --with-memcache
-  libmemcached-libs
   libpq               # Postgresql ./configure --with-pgsql
   libpq-devel
-  libunwind           # libunwind  ./configure --with-libunwind
+  libunwind-devel     # libunwind  ./configure --with-libunwind
   libuuid             # libuuid    ./configure --with-webdav-locks
   libuuid-devel
   libxml2             # libxml2    ./configure --with-webdav-props
@@ -103,9 +97,9 @@ optional packages for optional features ::
   openssl-libs
   pam                 # PAM        ./configure --with-pam
   pam-devel
-  pcre                # PCRE       ./configure --with-pcre      # (default)
+  pcre                # PCRE       ./configure --with-pcre
   pcre-devel
-  pcre2               # PCRE       ./configure --with-pcre2
+  pcre2               # PCRE       ./configure --with-pcre2     # (default)
   pcre2-devel
   sqlite              # SQLite     ./configure --with-webdav-props
   sqlite-devel
@@ -113,9 +107,9 @@ optional packages for optional features ::
   valgrind-devel
   wolfssl             # wolfSSL    ./configure --with-wolfssl
   wolfssl-devel
-  zlib                # zlib       ./configure --with-zlib
+  zlib                # zlib       ./configure --with-zlib      # (default)
   zlib-devel
-  zstd                # zstd       ./configure --with-zstd
+  libzstd             # zstd       ./configure --with-zstd
   libzstd-devel
 
 more options: ./configure --help

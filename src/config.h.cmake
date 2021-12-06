@@ -138,13 +138,6 @@
 /* lua */
 #cmakedefine  HAVE_LUA_H
 
-/* gdbm */
-#cmakedefine  HAVE_GDBM_H
-#cmakedefine  HAVE_GDBM
-
-/* memcache */
-#cmakedefine  USE_MEMCACHED
-
 /* inotify */
 #cmakedefine  HAVE_INOTIFY_INIT
 #cmakedefine  HAVE_SYS_INOTIFY_H

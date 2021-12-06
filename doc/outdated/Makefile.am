@@ -22,14 +22,11 @@ state.txt \
 rrdtool.txt \
 alias.txt \
 userdir.txt \
-mysqlvhost.txt \
 access.txt \
 traffic-shaping.txt \
 setenv.txt \
 status.txt \
 scgi.txt \
-cml.txt \
-trigger_b4_dl.txt \
 webdav.txt \
 expire.txt \
 dirlisting.txt \
@@ -60,14 +57,11 @@ HTMLDOCS=accesslog.html \
 	 rrdtool.html \
 	 alias.html \
 	 userdir.html \
-	 mysqlvhost.html \
 	 access.html \
 	 traffic-shaping.html \
 	 setenv.html \
 	 status.html \
 	 scgi.html \
-	 cml.html \
-	 trigger_b4_dl.html \
 	 webdav.html \
 	 expire.html \
 	 dirlisting.html \

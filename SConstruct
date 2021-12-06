@@ -244,15 +244,12 @@ vars.AddVariables(
 	BoolVariable('with_brotli', 'enable brotli compression', 'no'),
 	PackageVariable('with_dbi', 'enable dbi support', 'no'),
 	BoolVariable('with_fam', 'enable FAM/gamin support', 'no'),
-	BoolVariable('with_gdbm', 'enable gdbm support', 'no'),
-	BoolVariable('with_geoip', 'enable GeoIP support', 'no'),
 	BoolVariable('with_maxminddb', 'enable MaxMind GeoIP2 support', 'no'),
 	BoolVariable('with_krb5', 'enable krb5 auth support', 'no'),
 	BoolVariable('with_ldap', 'enable ldap auth support', 'no'),
 	# with_libev not supported
 	# with_libunwind not supported
-	BoolVariable('with_lua', 'enable lua support for mod_cml', 'no'),
-	BoolVariable('with_memcached', 'enable memcached support', 'no'),
+	BoolVariable('with_lua', 'enable lua support', 'no'),
 	PackageVariable('with_mysql', 'enable mysql support', 'no'),
 	BoolVariable('with_openssl', 'enable openssl support', 'no'),
 	PackageVariable('with_gnutls', 'enable GnuTLS support', 'no'),
@@ -336,7 +333,6 @@ if 1:
 		LIBCRYPTO = '',
 		LIBDBI = '',
 		LIBDL = '',
-		LIBGDBM = '',
 		LIBGNUTLS = '',
 		LIBGSSAPI_KRB5 = '',
 		LIBKRB5 = '',
@@ -346,7 +342,6 @@ if 1:
 		LIBMBEDTLS = '',
 		LIBMBEDX509 = '',
 		LIBMBEDCRYPTO = '',
-		LIBMEMCACHED = '',
 		LIBMYSQL = '',
 		LIBNSS = '',
 		LIBPAM = '',
@@ -544,22 +539,6 @@ if 1:
 		)
 		autoconf.haveFunc('FAMNoExists')
 
-	if env['with_gdbm']:
-		if not autoconf.CheckLibWithHeader('gdbm', 'gdbm.h', 'C'):
-			fail("Couldn't find gdbm")
-		autoconf.env.Append(
-			CPPFLAGS = [ '-DHAVE_GDBM_H', '-DHAVE_GDBM' ],
-			LIBGDBM = 'gdbm',
-		)
-
-	if env['with_geoip']:
-		if not autoconf.CheckLibWithHeader('GeoIP', 'GeoIP.h', 'C'):
-			fail("Couldn't find geoip")
-		autoconf.env.Append(
-			CPPFLAGS = [ '-DHAVE_GEOIP' ],
-			LIBGEOIP = 'GeoIP',
-		)
-
 	if env['with_maxminddb']:
 		if not autoconf.CheckLibWithHeader('maxminddb', 'maxminddb.h', 'C'):
 			fail("Couldn't find maxminddb")
@@ -603,14 +582,6 @@ if 1:
 				break
 		if not found_lua:
 			fail("Couldn't find any lua implementation")
-
-	if env['with_memcached']:
-		if not autoconf.CheckLibWithHeader('memcached', 'libmemcached/memcached.h', 'C'):
-			fail("Couldn't find memcached")
-		autoconf.env.Append(
-			CPPFLAGS = [ '-DUSE_MEMCACHED' ],
-			LIBMEMCACHED = 'memcached',
-		)
 
 	if env['with_mysql']:
 		mysql_config = autoconf.checkProgram('mysql', 'mysql_config')

@@ -273,29 +273,6 @@ if get_option('with_maxminddb')
 	endif
 endif
 
-libgeoip = []
-if get_option('with_geoip')
-	libgeoip = dependency('geoip', required: false)
-	if libgeoip.found()
-		libgeoip = [ libgeoip ]
-	else
-		libgeoip = [ compiler.find_library('GeoIP') ]
-		if not(compiler.has_function('GeoIP_country_name_by_addr', args: defs, dependencies: libgeoip))
-			error('Couldn\'t find GeoIP_country_name_by_addr in lib GeoIP')
-		endif
-	endif
-endif
-
-libgdbm = []
-if get_option('with_gdbm')
-	libgdbm = [ compiler.find_library('gdbm') ]
-	if not(compiler.has_function('gdbm_open', args: defs, dependencies: libgdbm, prefix: '#include <gdbm.h>'))
-		error('Couldn\'t find gdbm.h or gdbm_open in lib gdbm')
-	endif
-	conf_data.set('HAVE_GDBM_H', true)
-	conf_data.set('HAVE_GDBM', true)
-endif
-
 libkrb5 = []
 libgssapi_krb5 = []
 if get_option('with_krb5')
@@ -406,15 +383,6 @@ if get_option('with_lua')
 	endif
 	liblua = [ liblua ]
 	conf_data.set('HAVE_LUA_H', true)
-endif
-
-libmemcached = []
-if get_option('with_memcached')
-	# manual search:
-	# header: libmemcached/memcached.h
-	# function: memcached (-lmemcached)
-	libmemcached = [ dependency('libmemcached') ]
-	conf_data.set('USE_MEMCACHED', true)
 endif
 
 libmysqlclient = []
@@ -957,7 +925,6 @@ modules = [
 	[ 'mod_expire', [ 'mod_expire.c' ] ],
 	[ 'mod_extforward', [ 'mod_extforward.c' ] ],
 	[ 'mod_fastcgi', [ 'mod_fastcgi.c' ], libws2_32 ],
-	[ 'mod_flv_streaming', [ 'mod_flv_streaming.c' ] ],
 	[ 'mod_indexfile', [ 'mod_indexfile.c' ] ],
 	[ 'mod_proxy', [ 'mod_proxy.c' ], libws2_32 ],
 	[ 'mod_redirect', [ 'mod_redirect.c' ] ],
@@ -985,15 +952,8 @@ if target_machine.system() != 'windows'
 	]
 endif
 
-if get_option('with_pcre') and (get_option('with_memcached') or get_option('with_gdbm'))
-	modules += [
-		[ 'mod_trigger_b4_dl', [ 'mod_trigger_b4_dl.c' ], libmemcached + libgdbm ],
-	]
-endif
-
 if get_option('with_lua')
 	modules += [
-		[ 'mod_cml', [ 'mod_cml.c', 'mod_cml_lua.c', 'mod_cml_funcs.c' ], liblua + libmemcached + libcrypto ],
 		[ 'mod_magnet', [ 'mod_magnet.c', 'mod_magnet_cache.c', 'algo_hmac.c' ], liblua + libcrypto ],
 	]
 endif
@@ -1004,16 +964,8 @@ if get_option('with_maxminddb')
 	]
 endif
 
-if get_option('with_geoip')
-	modules += [
-		[ 'mod_geoip', [ 'mod_geoip.c' ], libgeoip ],
-	]
-endif
-
 if get_option('with_mysql')
 	modules += [
-		[ 'mod_authn_mysql', [ 'mod_authn_mysql.c' ], libcrypt + libmysqlclient + libcrypto ],
-		[ 'mod_mysql_vhost', [ 'mod_mysql_vhost.c' ], libmysqlclient ],
 		[ 'mod_vhostdb_mysql', [ 'mod_vhostdb_mysql.c' ], libmysqlclient ],
 	]
 endif

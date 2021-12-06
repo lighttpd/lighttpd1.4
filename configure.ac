@@ -1296,66 +1296,6 @@ if test "$WITH_XXHASH" != no; then
   AC_SUBST([XXHASH_LIBS])
 fi
 
-dnl Check for gdbm
-AC_MSG_NOTICE([----------------------------------------])
-AC_MSG_CHECKING([for gdbm])
-AC_ARG_WITH([gdbm],
-  [AS_HELP_STRING([--with-gdbm], [gdbm storage for mod_trigger_b4_dl])],
-  [WITH_GDBM=$withval],
-  [WITH_GDBM=no]
-)
-AC_MSG_RESULT([$WITH_GDBM])
-
-if test "$WITH_GDBM" != no; then
-  if test "$WITH_GDBM" != yes; then
-    GDBM_LIB="-L$WITH_GDBM -lgdbm"
-    CPPFLAGS="$CPPFLAGS -I$WITH_GDBM"
-  else
-    AC_CHECK_LIB([gdbm], [gdbm_open],
-      [GDBM_LIB=-lgdbm],
-      [AC_MSG_ERROR([gdbm lib not found, install it or build without --with-gdbm])]
-    )
-    AC_CHECK_HEADERS([gdbm.h], [],
-      [AC_MSG_ERROR([gdbm headers not found, install them or build without --with-gdbm])]
-    )
-  fi
-
-  AC_DEFINE([HAVE_GDBM], [1], [libgdbm])
-  AC_DEFINE([HAVE_GDBM_H], [1])
-  AC_SUBST([GDBM_LIB])
-fi
-AM_CONDITIONAL([BUILD_WITH_GDBM], [test "$WITH_GDBM" != no])
-
-dnl Check for GeoIP
-AC_MSG_NOTICE([----------------------------------------])
-AC_MSG_CHECKING([for GeoIP])
-AC_ARG_WITH([geoip],
-  [AS_HELP_STRING([--with-geoip], [IP-based geolocation lookup])],
-  [WITH_GEOIP=$withval],
-  [WITH_GEOIP=no]
-)
-AC_MSG_RESULT([$WITH_GEOIP])
-
-if test "$WITH_GEOIP" != no; then
-  if test "$WITH_GEOIP" != yes; then
-    GEOIP_LIB="-L$WITH_GEOIP -lGeoIP"
-    CPPFLAGS="$CPPFLAGS -I$WITH_GEOIP"
-  else
-    AC_CHECK_LIB([GeoIP], [GeoIP_country_name_by_addr],
-      [GEOIP_LIB=-lGeoIP],
-      [AC_MSG_ERROR([GeoIP lib not found, install it or build without --with-geoip])]
-    )
-    AC_CHECK_HEADERS([GeoIP.h], [],
-      [AC_MSG_ERROR([GeoIP headers not found, install them or build without --with-geoip])]
-    )
-  fi
-
-  AC_DEFINE([HAVE_GEOIP], [1], [libGeoIP])
-  AC_DEFINE([HAVE_GEOIP_H], [1])
-  AC_SUBST([GEOIP_LIB])
-fi
-AM_CONDITIONAL([BUILD_WITH_GEOIP], [test "$WITH_GEOIP" != no])
-
 dnl Check for maxminddb
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for maxminddb])
@@ -1386,49 +1326,11 @@ if test "$WITH_MAXMINDDB" != no; then
 fi
 AM_CONDITIONAL([BUILD_WITH_MAXMINDDB], [test "$WITH_MAXMINDDB" != no])
 
-dnl Check for memcached
-AC_MSG_NOTICE([----------------------------------------])
-AC_MSG_CHECKING([for memcached])
-AC_ARG_WITH([memcached],
-  [AS_HELP_STRING([--with-memcached],
-    [memcached storage for mod_trigger_b4_dl/mod_cml]
-  )],
-  [WITH_MEMCACHED=$withval],
-  [WITH_MEMCACHED=no]
-)
-AC_MSG_RESULT([$WITH_MEMCACHED])
-
-if test "$WITH_MEMCACHED" != no; then
-  if test "$WITH_MEMCACHED" != yes; then
-    MEMCACHED_LIB="-L$WITH_MEMCACHED -lMEMCACHED"
-    CPPFLAGS="$CPPFLAGS -I$WITH_MEMCACHED"
-  else
-    AC_CHECK_LIB([memcached], [memcached],
-      [ MEMCACHED_LIB=-lmemcached ],
-      [AC_MSG_ERROR([memcached lib not found, install it or build without --with-memcached])]
-    )
-    AC_CHECK_HEADERS([libmemcached/memcached.h], [],
-      [AC_MSG_ERROR([memcached headers not found, install them or build without --with-memcached])]
-    )
-  fi
-
-  AC_DEFINE([USE_MEMCACHED], [1], [libmemcached])
-  AC_SUBST([MEMCACHED_LIB])
-fi
-AM_CONDITIONAL([BUILD_WITH_MEMCACHED], [test "$WITH_MEMCACHED" != no])
-
-BUILD_MOD_TRIGGER_B4_DL=no
-if test "$WITH_MEMCACHED" != no || test "$WITH_GDBM" != no ; then
-  BUILD_MOD_TRIGGER_B4_DL=yes
-fi
-
-AM_CONDITIONAL([BUILD_MOD_TRIGGER_B4_DL], [test "$BUILD_MOD_TRIGGER_B4_DL" != no])
-
 dnl Check for lua
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([if lua-support is requested])
 AC_ARG_WITH([lua],
-  [AS_HELP_STRING([--with-lua], [lua engine for mod_magnet/mod_cml])],
+  [AS_HELP_STRING([--with-lua], [lua engine for mod_magnet])],
   [WITH_LUA=$withval],
   [WITH_LUA=no]
 )
@@ -1765,7 +1667,6 @@ do_build="\
   mod_expire \
   mod_extforward \
   mod_fastcgi \
-  mod_flv_streaming \
   mod_indexfile \
   mod_proxy \
   mod_redirect \
@@ -1799,16 +1700,7 @@ lighty_track_feature() {
 lighty_track_feature "regex-conditionals" "" \
   'test "$WITH_PCRE" != no'
 
-lighty_track_feature "storage-gdbm" "" \
-  'test "$WITH_GDBM" != no'
-
-lighty_track_feature "storage-memcached" "" \
-  'test "$WITH_MEMCACHED" != no'
-
-lighty_track_feature "" "mod_trigger_b4_dl" \
-  'test "$BUILD_MOD_TRIGGER_B4_DL" != no'
-
-lighty_track_feature "mysql" "mod_authn_mysql mod_mysql_vhost mod_vhostdb_mysql" \
+lighty_track_feature "mysql" "mod_vhostdb_mysql" \
   'test "$WITH_MYSQL" != no'
 
 lighty_track_feature "postgresql" "mod_vhostdb_pgsql" \
@@ -1817,11 +1709,8 @@ lighty_track_feature "postgresql" "mod_vhostdb_pgsql" \
 lighty_track_feature "dbi" "mod_authn_dbi mod_vhostdb_dbi" \
   'test "$WITH_DBI" != no'
 
-lighty_track_feature "lua" "mod_cml mod_magnet" \
+lighty_track_feature "lua" "mod_magnet" \
   'test "$WITH_LUA" != no'
-
-lighty_track_feature "geoip" "mod_geoip" \
-  'test "$WITH_GEOIP" != no'
 
 lighty_track_feature "maxminddb" "mod_maxminddb" \
   'test "$WITH_MAXMINDDB" != no'

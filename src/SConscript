@@ -108,7 +108,6 @@ modules = {
 	'mod_expire' : { 'src' : [ 'mod_expire.c' ] },
 	'mod_extforward' : { 'src' : [ 'mod_extforward.c' ] },
 	'mod_fastcgi' : { 'src' : [ 'mod_fastcgi.c' ] },
-	'mod_flv_streaming' : { 'src' : [ 'mod_flv_streaming.c' ] },
 	'mod_indexfile' : { 'src' : [ 'mod_indexfile.c' ] },
 	'mod_proxy' : { 'src' : [ 'mod_proxy.c' ] },
 	'mod_redirect' : { 'src' : [ 'mod_redirect.c' ] },
@@ -130,9 +129,6 @@ modules = {
 	'mod_wstunnel' : { 'src' : [ 'mod_wstunnel.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
 }
 
-if env['with_geoip']:
-	modules['mod_geoip'] = { 'src' : [ 'mod_geoip.c' ], 'lib' : [ env['LIBGEOIP'] ] }
-
 if env['with_maxminddb']:
 	modules['mod_maxminddb'] = { 'src' : [ 'mod_maxminddb.c' ], 'lib' : [ env['LIBMAXMINDDB'] ] }
 
@@ -148,20 +144,11 @@ if env['with_lua']:
 		'src' : [ 'mod_magnet.c', 'mod_magnet_cache.c', 'algo_hmac.c' ],
 		'lib' : [ env['LIBLUA'], env['LIBCRYPTO'] ]
 	}
-	modules['mod_cml'] = {
-		'src' : [ 'mod_cml_lua.c', 'mod_cml.c', 'mod_cml_funcs.c' ],
-		'lib' : [ env['LIBMEMCACHED'], env['LIBLUA'], env['LIBCRYPTO'] ]
-	}
 
 if env['with_pam']:
 	modules['mod_authn_pam'] = { 'src' : [ 'mod_authn_pam.c' ], 'lib' : [ env['LIBPAM'] ] }
 
-if env['with_pcre'] and (env['with_memcached'] or env['with_gdbm']):
-	modules['mod_trigger_b4_dl'] = { 'src' : [ 'mod_trigger_b4_dl.c' ], 'lib' : [ env['LIBMEMCACHED'], env['LIBGDBM'] ] }
-
 if env['with_mysql']:
-	modules['mod_authn_mysql'] = { 'src' : [ 'mod_authn_mysql.c' ], 'lib' : [ env['LIBCRYPT'], env['LIBMYSQL'], env['LIBCRYPTO'] ] }
-	modules['mod_mysql_vhost'] = { 'src' : [ 'mod_mysql_vhost.c' ], 'lib' : [ env['LIBMYSQL'] ] }
 	modules['mod_vhostdb_mysql'] = { 'src' : [ 'mod_vhostdb_mysql.c' ], 'lib' : [ env['LIBMYSQL'] ] }
 
 if env['with_pgsql']:

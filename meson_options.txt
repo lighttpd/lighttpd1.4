@@ -18,16 +18,6 @@ option('with_fam',
 	value: false,
 	description: 'fam/gamin for reducing number of stat() calls [default: off]',
 )
-option('with_gdbm',
-	type: 'boolean',
-	value: false,
-	description: 'gdbm storage for mod_trigger_b4_dl [default: off]',
-)
-option('with_geoip',
-	type: 'boolean',
-	value: false,
-	description: 'with GeoIP-support mod_geoip [default: off]',
-)
 option('with_gnutls',
 	type: 'boolean',
 	value: 'false',
@@ -67,11 +57,6 @@ option('with_mbedtls',
 	type: 'boolean',
 	value: 'false',
 	description: 'with mbedTLS-support [default: off]',
-)
-option('with_memcached',
-	type: 'boolean',
-	value: false,
-	description: 'memcached storage for mod_trigger_b4_dl [default: off]',
 )
 option('with_mysql',
 	type: 'boolean',
