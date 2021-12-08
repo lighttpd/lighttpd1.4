@@ -862,6 +862,7 @@ executable('lighttpd', configparser,
 		, libunwind
 		, libxxhash
 		, libws2_32
+		, clock_lib
 	],
 	install: true,
 	install_dir: sbinddir,
@@ -887,6 +888,7 @@ test('test_common', executable('test_common',
 		, libpcre
 		, libunwind
 		, libws2_32
+		, clock_lib
 	],
 	build_by_default: false,
 ))
@@ -909,6 +911,7 @@ test('test_configfile', executable('test_configfile',
 		, libpcre
 		, libunwind
 		, libws2_32
+		, clock_lib
 	],
 	build_by_default: false,
 ))
@@ -937,6 +940,7 @@ test('test_mod', executable('test_mod',
 		, libunwind
 		, libxxhash
 		, libws2_32
+		, clock_lib
 	],
 	build_by_default: false,
 ))
