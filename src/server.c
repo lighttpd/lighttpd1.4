@@ -1357,7 +1357,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 			if (0 != setrlimit(RLIMIT_NOFILE, &rlim)) {
 				log_perror(srv->errh, __FILE__, __LINE__, "setrlimit()");
-				return -1;
+				log_error(srv->errh, __FILE__, __LINE__, "setrlimit() may need root to run once: setsebool -P httpd_setrlimit on");
+				use_rlimit = 0;
 			}
 		}
 
