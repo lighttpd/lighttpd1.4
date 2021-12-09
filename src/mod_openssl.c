@@ -3133,7 +3133,8 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
         if (hctx->renegotiations > 1
             && hctx->conf.ssl_disable_client_renegotiation) {
             log_error(hctx->errh, __FILE__, __LINE__,
-              "SSL: renegotiation initiated by client, killing connection");
+              "SSL: renegotiation initiated by client, killing connection (%s)",
+              con->dst_addr_buf.ptr);
             return -1;
         }
 
@@ -3245,7 +3246,8 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
                 }
                 /* get all errors from the error-queue */
                 log_error(hctx->errh, __FILE__, __LINE__,
-                  "SSL: %d %s", rc, ERR_error_string(ssl_err, NULL));
+                  "SSL: %d %s (%s)", rc, ERR_error_string(ssl_err, NULL),
+                  con->dst_addr_buf.ptr);
             }
             break;
         }
