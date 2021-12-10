@@ -112,8 +112,6 @@ tags:
 ---
 {% excerpt %}
 
-TODO
-
 h2. Important changes
 
 TODO
@@ -208,6 +206,7 @@ if [ -n "${append}" ]; then
 fi
 
 force sha256sum "${name}.tar."{gz,xz} > "${name}.sha256sum"
+force sha512sum "${name}.tar."{gz,xz} > "${name}.sha512sum"
 
 rm -f "${name}".tar.*.asc
 
@@ -222,6 +221,7 @@ force gpg ${KEYID:+-u "${KEYID}"} -a --output "${name}.tar.xz.asc" --detach-sig 
 	echo "** GPG signature: ${BASEDOWNLOADURL}/${name}.tar.xz.asc"
 	echo "** SHA256: @$(sha256sum ${name}.tar.xz | cut -d' ' -f1)@"
 	echo "* SHA256 checksums: ${BASEDOWNLOADURL}/${name}.sha256sum"
+	echo "* SHA512 checksums: ${BASEDOWNLOADURL}/${name}.sha512sum"
 ) > DOWNLOADS
 
 (
@@ -230,6 +230,7 @@ force gpg ${KEYID:+-u "${KEYID}"} -a --output "${name}.tar.xz.asc" --detach-sig 
 	echo "* \"${name}.tar.xz\":${BASEDOWNLOADURL}/${name}.tar.xz (\"GPG signature\":${BASEDOWNLOADURL}/${name}.tar.xz.asc)"
 	echo "** SHA256: @$(sha256sum ${name}.tar.xz | cut -d' ' -f1)@"
 	echo "* \"SHA256 checksums\":${BASEDOWNLOADURL}/${name}.sha256sum"
+	echo "* \"SHA512 checksums\":${BASEDOWNLOADURL}/${name}.sha512sum"
 ) > DOWNLOADS.links
 
 force genchanges
@@ -291,4 +292,6 @@ echo
 echo -------
 echo
 
-echo wget "${BASEDOWNLOADURL}/${name}".'{tar.gz,tar.xz,sha256sum}; sha256sum -c '${name}'.sha256sum'
+echo wget "${BASEDOWNLOADURL}/${name}".'{tar.gz,tar.xz,sha256sum,sha512sum}'
+echo sha256sum -c "${name}".sha256sum
+echo sha512sum -c "${name}".sha512sum
