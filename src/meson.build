@@ -656,6 +656,15 @@ if get_option('with_xattr')
     )
 	conf_data.set('HAVE_SYS_XATTR_H', true)
 	conf_data.set('HAVE_XATTR', true)
+    elif compiler.has_function('extattr_get_file',
+		args: defs,
+		prefix: '''
+			#include <sys/types.h>
+			#include <sys/extattr.h>
+		'''
+    )
+	conf_data.set('HAVE_SYS_EXTATTR_H', true)
+	conf_data.set('HAVE_EXTATTR', true)
     else
 	libattr = [ compiler.find_library('attr') ]
 	if not(compiler.has_function('attr_get',

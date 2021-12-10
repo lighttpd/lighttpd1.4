@@ -489,16 +489,6 @@ AC_MSG_RESULT([$WITH_ATTR])
 
 if test "$WITH_ATTR" != no; then
   have_xattr=no
-  # libattr (linux only?)
-  AC_CHECK_LIB([attr], [attr_get], [
-    AC_CHECK_HEADERS([attr/attributes.h], [
-      ATTR_LIB=-lattr
-      AC_DEFINE([HAVE_XATTR], [1], [libattr])
-      AC_DEFINE([HAVE_ATTR_ATTRIBUTES_H], [1])
-      have_xattr=yes
-    ])
-  ])
-  AC_SUBST([ATTR_LIB])
 
   # Linux getxattr
   AC_CHECK_FUNC([getxattr], [
@@ -517,6 +507,19 @@ if test "$WITH_ATTR" != no; then
       have_xattr=yes
     ])
   ])
+
+  # libattr (linux only?)
+  if test "$have_xattr" = no; then
+    AC_CHECK_LIB([attr], [attr_get], [
+      AC_CHECK_HEADERS([attr/attributes.h], [
+        ATTR_LIB=-lattr
+        AC_DEFINE([HAVE_XATTR], [1], [libattr])
+        AC_DEFINE([HAVE_ATTR_ATTRIBUTES_H], [1])
+        have_xattr=yes
+      ])
+    ])
+  fi
+  AC_SUBST([ATTR_LIB])
 
   if test "$have_xattr" = no; then
     AC_MSG_ERROR([no backend found implementing extended attributes])

@@ -39,6 +39,8 @@
 #cmakedefine HAVE_ATTR_ATTRIBUTES_H
 #cmakedefine HAVE_SYS_XATTR_H
 #cmakedefine HAVE_XATTR
+#cmakedefine HAVE_SYS_EXTATTR_H
+#cmakedefine HAVE_EXTATTR
 
 /* mySQL */
 #cmakedefine  HAVE_MYSQL_H
