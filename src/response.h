@@ -52,7 +52,7 @@ const buffer * http_response_set_last_modified(request_st *r, unix_time64_t lmti
 int http_response_handle_cachable(request_st *r, const buffer *lmod, unix_time64_t lmtime);
 void http_response_body_clear(request_st *r, int preserve_length);
 void http_response_reset(request_st *r);
-void http_response_send_file (request_st *r, buffer *path, struct stat_cache_entry *sce);
+void http_response_send_file (request_st *r, const buffer *path, struct stat_cache_entry *sce);
 void http_response_backend_done (request_st *r);
 void http_response_backend_error (request_st *r);
 void http_response_upgrade_read_body_unknown(request_st *r);

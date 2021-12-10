@@ -308,7 +308,7 @@ handler_t http_response_reqbody_read_error (request_st * const r, int http_statu
 }
 
 
-void http_response_send_file (request_st * const r, buffer * const path, stat_cache_entry *sce) {
+void http_response_send_file (request_st * const r, const buffer * const path, stat_cache_entry *sce) {
 	if (NULL == sce
 	    || (sce->fd < 0 && __builtin_expect( (0 != sce->st.st_size), 0))) {
 		sce = stat_cache_get_entry_open(path, r->conf.follow_symlink);
