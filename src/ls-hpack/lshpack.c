@@ -684,6 +684,7 @@ lshpack_enc_enc_int (unsigned char *dst, unsigned char *const end,
  */
 #if __GNUC__
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
 #if __clang__
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #endif
