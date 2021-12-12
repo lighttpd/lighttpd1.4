@@ -52,7 +52,7 @@ const buffer * stat_cache_content_type_get_by_ext(stat_cache_entry *sce, const a
 #define stat_cache_content_type_get(con, r) stat_cache_content_type_get_by_ext((sce), (r)->conf.mimetypes)
 #endif
 const buffer * stat_cache_etag_get(stat_cache_entry *sce, int flags);
-void stat_cache_update_entry(const char *name, uint32_t len, struct stat *st, buffer *etagb);
+void stat_cache_update_entry(const char *name, uint32_t len, const struct stat *st, const buffer *etagb);
 void stat_cache_delete_entry(const char *name, uint32_t len);
 void stat_cache_delete_dir(const char *name, uint32_t len);
 void stat_cache_invalidate_entry(const char *name, uint32_t len);

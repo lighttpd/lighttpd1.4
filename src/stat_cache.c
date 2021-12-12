@@ -1089,7 +1089,7 @@ static int stat_cache_stat_eq(const struct stat * const sta, const struct stat *
 }
 
 void stat_cache_update_entry(const char *name, uint32_t len,
-                             struct stat *st, buffer *etagb)
+                             const struct stat *st, const buffer *etagb)
 {
     if (sc.stat_cache_engine == STAT_CACHE_ENGINE_NONE) return;
     force_assert(0 != len);
