@@ -450,6 +450,13 @@ static int magnet_stat_field(lua_State *L) {
             lua_pushnil(L);
         return 1;
       }
+      case 'h': { /* http-response-send-file */
+        if (0 != strcmp(k.ptr, "http-response-send-file")) break;
+        request_st * const r = magnet_get_request(L);
+        http_response_send_file(r, &sce->name, sce);
+        lua_pushinteger(L, r->http_status);
+        return 1;
+      }
       case 'i': /* is_* */
         if (k.len < 4) break;
         switch (k.ptr[3]) {
