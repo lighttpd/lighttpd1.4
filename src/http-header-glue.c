@@ -187,7 +187,7 @@ int http_response_handle_cachable(request_st * const r, const buffer * const lmo
 		return HANDLER_GO_ON;
 	}
 
-	const buffer *vb;
+	const buffer *vb, *etag;
 
 	/*
 	 * 14.26 If-None-Match
@@ -200,10 +200,12 @@ int http_response_handle_cachable(request_st * const r, const buffer * const lmo
 	 */
 
 	if ((vb = http_header_request_get(r, HTTP_HEADER_IF_NONE_MATCH,
-	                                  CONST_STR_LEN("If-None-Match")))) {
+	                                  CONST_STR_LEN("If-None-Match")))
+	    && (etag = http_header_response_get(r, HTTP_HEADER_ETAG,
+	                                        CONST_STR_LEN("ETag")))) {
 		/*(weak etag comparison must not be used for ranged requests)*/
 		int range_request = (0 != light_btst(r->rqst_htags, HTTP_HEADER_RANGE));
-		if (http_etag_matches(&r->physical.etag, vb->ptr, !range_request)) {
+		if (http_etag_matches(etag, vb->ptr, !range_request)) {
 			if (http_method_get_or_head(r->http_method)) {
 				r->http_status = 304;
 				return HANDLER_FINISHED;
@@ -382,10 +384,9 @@ void http_response_send_file (request_st * const r, const buffer * const path, s
 			const buffer *etag =
 			  stat_cache_etag_get(sce, r->conf.etag_flags);
 			if (etag && !buffer_is_blank(etag)) {
-				buffer_copy_buffer(&r->physical.etag, etag);
 				http_header_response_set(r, HTTP_HEADER_ETAG,
 				                         CONST_STR_LEN("ETag"),
-				                         BUF_PTR_LEN(&r->physical.etag));
+				                         BUF_PTR_LEN(etag));
 			}
 		}
 
