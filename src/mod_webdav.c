@@ -2256,7 +2256,8 @@ webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
     if (NULL == st)
         st = (0 == lstat(r->physical.path.ptr, &stp)) ? &stp : NULL;
 
-    buffer *etagb = &r->physical.etag;
+    buffer * const etagb = r->tmp_buf;
+    buffer_clear(etagb);
     if (NULL != st && (NULL != im || NULL != inm)) {
         http_etag_create(etagb, st, r->conf.etag_flags);
     }
@@ -2288,17 +2289,13 @@ webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
 static void
 webdav_response_etag (request_st * const r, struct stat *st)
 {
+    buffer *etagb = NULL;
     if (0 != r->conf.etag_flags) {
-        buffer *etagb = &r->physical.etag;
+        etagb = http_header_response_set_ptr(r, HTTP_HEADER_ETAG,
+                                             CONST_STR_LEN("ETag"));
         http_etag_create(etagb, st, r->conf.etag_flags);
-        stat_cache_update_entry(BUF_PTR_LEN(&r->physical.path), st, etagb);
-        http_header_response_set(r, HTTP_HEADER_ETAG,
-                                 CONST_STR_LEN("ETag"),
-                                 BUF_PTR_LEN(etagb));
     }
-    else {
-        stat_cache_update_entry(BUF_PTR_LEN(&r->physical.path), st, NULL);
-    }
+    stat_cache_update_entry(BUF_PTR_LEN(&r->physical.path), st, etagb);
 }
 
 
@@ -3217,7 +3214,7 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
         __attribute_fallthrough__
       case WEBDAV_PROP_GETETAG:
         if (0 != pb->r->conf.etag_flags) {
-            buffer *etagb = &pb->r->physical.etag;
+            buffer * const etagb = pb->r->tmp_buf;
             http_etag_create(etagb, &pb->st, pb->r->conf.etag_flags);
             buffer_append_str3(b,
               CONST_STR_LEN(
@@ -3225,7 +3222,6 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
               BUF_PTR_LEN(etagb),
               CONST_STR_LEN(
               "</D:getetag>"));
-            buffer_clear(etagb);
         }
         else if (pnum != WEBDAV_PROP_ALL)
             return -1; /* invalid; report 'not found' */
@@ -3828,7 +3824,7 @@ webdav_has_lock (request_st * const r,
                         return 0;
                     }
                     if (S_ISDIR(st.st_mode)) continue;/*we ignore etag if dir*/
-                    buffer *etagb = &r->physical.etag;
+                    buffer * const etagb = r->tmp_buf;
                     http_etag_create(etagb, &st, r->conf.etag_flags);
                     *p = '\0';
                     int ematch = http_etag_matches(etagb, etag, 0);

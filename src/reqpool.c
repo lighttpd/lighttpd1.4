@@ -223,7 +223,6 @@ request_free_data (request_st * const r)
     free(r->physical.doc_root.ptr);
     free(r->physical.path.ptr);
     free(r->physical.basedir.ptr);
-    free(r->physical.etag.ptr);
     free(r->physical.rel_path.ptr);
 
     free(r->pathinfo.ptr);

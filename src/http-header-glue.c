@@ -285,7 +285,6 @@ void http_response_reset (request_st * const r) {
     if (r->physical.path.ptr) { /*(skip for mod_fastcgi authorizer)*/
         buffer_clear(&r->physical.doc_root);
         buffer_clear(&r->physical.basedir);
-        buffer_clear(&r->physical.etag);
         buffer_reset(&r->physical.path);
         buffer_reset(&r->physical.rel_path);
     }

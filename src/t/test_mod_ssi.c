@@ -163,7 +163,6 @@ void test_mod_ssi (void)
     chunkqueue_reset(&r.write_queue);
 
     free(r.uri.path.ptr);
-    free(r.physical.etag.ptr);
     free(r.physical.path.ptr);
     free(r.physical.rel_path.ptr);
     free(r.physical.doc_root.ptr);

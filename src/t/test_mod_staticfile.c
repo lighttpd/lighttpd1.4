@@ -19,7 +19,6 @@ static void test_mod_staticfile_reset (request_st * const r)
     r->resp_htags = 0;
     array_reset_data_strings(&r->resp_headers);
     http_response_body_clear(r, 0);
-    buffer_clear(&r->physical.etag);
     r->conf.etag_flags = ETAG_USE_INODE | ETAG_USE_MTIME | ETAG_USE_SIZE;
 }
 
@@ -424,7 +423,6 @@ void test_mod_staticfile (void)
     chunkqueue_reset(&r.write_queue);
 
     free(r.uri.path.ptr);
-    free(r.physical.etag.ptr);
     free(r.physical.path.ptr);
     free(r.physical.rel_path.ptr);
     free(r.physical.doc_root.ptr);

@@ -94,8 +94,6 @@ typedef struct {
 
     buffer doc_root; /* path = doc_root + rel_path */
     buffer rel_path;
-
-    buffer etag;
 } physical;
 
 typedef struct {
