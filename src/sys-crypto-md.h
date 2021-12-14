@@ -150,7 +150,8 @@ SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
 
 #elif defined(USE_MBEDTLS_CRYPTO)
 
-#include <mbedtls/config.h>
+#include <mbedtls/version.h>
+/*#include <mbedtls/compat-2.x.h>*//*(func renames ifdef'd below)*/
 
 #ifdef MBEDTLS_MD4_C
 #define USE_LIB_CRYPTO_MD4
@@ -184,19 +185,31 @@ static inline int
 MD5_Init(MD5_CTX *ctx)
 {
     mbedtls_md5_init(ctx);
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    return (0 == mbedtls_md5_starts(ctx));
+  #else
     return (0 == mbedtls_md5_starts_ret(ctx));
+  #endif
 }
 static inline int
 MD5_Final(unsigned char *digest, MD5_CTX *ctx)
 {
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    int rc = mbedtls_md5_finish(ctx, digest);
+  #else
     int rc = mbedtls_md5_finish_ret(ctx, digest);
+  #endif
     mbedtls_md5_free(ctx);
     return (0 == rc);
 }
 static inline int
 MD5_Update(MD5_CTX *ctx, const void *data, size_t length)
 {
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    return (0 == mbedtls_md5_update(ctx, data, length));
+  #else
     return (0 == mbedtls_md5_update_ret(ctx, data, length));
+  #endif
 }
 #endif
 
@@ -208,19 +221,31 @@ static inline int
 SHA1_Init(SHA_CTX *ctx)
 {
     mbedtls_sha1_init(ctx);
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    return (0 == mbedtls_sha1_starts(ctx));
+  #else
     return (0 == mbedtls_sha1_starts_ret(ctx));
+  #endif
 }
 static inline int
 SHA1_Final(unsigned char *digest, SHA_CTX *ctx)
 {
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    int rc = mbedtls_sha1_finish(ctx, digest);
+  #else
     int rc = mbedtls_sha1_finish_ret(ctx, digest);
+  #endif
     mbedtls_sha1_free(ctx);
     return (0 == rc);
 }
 static inline int
 SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
 {
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    return (0 == mbedtls_sha1_update(ctx, data, length));
+  #else
     return (0 == mbedtls_sha1_update_ret(ctx, data, length));
+  #endif
 }
 #endif
 
@@ -232,19 +257,31 @@ static inline int
 SHA256_Init(SHA256_CTX *ctx)
 {
     mbedtls_sha256_init(ctx);
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    return (0 == mbedtls_sha256_starts(ctx, 0));
+  #else
     return (0 == mbedtls_sha256_starts_ret(ctx, 0));
+  #endif
 }
 static inline int
 SHA256_Final(unsigned char *digest, SHA256_CTX *ctx)
 {
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    int rc = mbedtls_sha256_finish(ctx, digest);
+  #else
     int rc = mbedtls_sha256_finish_ret(ctx, digest);
+  #endif
     mbedtls_sha256_free(ctx);
     return (0 == rc);
 }
 static inline int
 SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
 {
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    return (0 == mbedtls_sha256_update(ctx, data, length));
+  #else
     return (0 == mbedtls_sha256_update_ret(ctx, data, length));
+  #endif
 }
 #endif
 
@@ -256,19 +293,31 @@ static inline int
 SHA512_Init(SHA512_CTX *ctx)
 {
     mbedtls_sha512_init(ctx);
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    return (0 == mbedtls_sha512_starts(ctx, 0));
+  #else
     return (0 == mbedtls_sha512_starts_ret(ctx, 0));
+  #endif
 }
 static inline int
 SHA512_Final(unsigned char *digest, SHA512_CTX *ctx)
 {
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    int rc = mbedtls_sha512_finish(ctx, digest);
+  #else
     int rc = mbedtls_sha512_finish_ret(ctx, digest);
+  #endif
     mbedtls_sha512_free(ctx);
     return (0 == rc);
 }
 static inline int
 SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
 {
+  #if MBEDTLS_VERSION_MAJOR >= 3
+    return (0 == mbedtls_sha512_update(ctx, data, length));
+  #else
     return (0 == mbedtls_sha512_update_ret(ctx, data, length));
+  #endif
 }
 #endif
 

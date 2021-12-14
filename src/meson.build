@@ -468,7 +468,7 @@ endif
 if get_option('with_mbedtls')
 	# manual search:
 	# header: mbedtls/ssl.h
-	# function: mbedtls_cipher_info_from_type (-lmbedtls)
+	# function: mbedtls_ssl_init (-lmbedtls)
 	# function: mbedtls_x509_get_name (-lmbedx509)
 	# function: mbedtls_base64_encode (-lmbedcrypto)
 	libmbedtls = [ compiler.find_library('mbedtls') ]

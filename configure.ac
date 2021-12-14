@@ -772,9 +772,9 @@ AM_CONDITIONAL(BUILD_WITH_MBEDTLS, test ! $WITH_MBEDTLS = no)
 if test "x$use_mbedtls" = "xyes"; then
   AC_CHECK_HEADERS([mbedtls/ssl.h])
   OLDLIBS="$LIBS"
-  AC_CHECK_LIB(mbedcrypto,mbedtls_base64_encode,
+  AC_CHECK_LIB(mbedcrypto, mbedtls_base64_encode,
     [AC_CHECK_LIB(mbedx509, mbedtls_x509_get_name,
-      [AC_CHECK_LIB(mbedtls, mbedtls_cipher_info_from_type,
+      [AC_CHECK_LIB(mbedtls, mbedtls_ssl_init,
         [MTLS_LIBS="-lmbedtls -lmbedx509 -lmbedcrypto"
          CRYPTO_LIB="-lmbedcrypto"
          AC_DEFINE(HAVE_LIBMBEDTLS, [1], [Have libmbedtls library])
