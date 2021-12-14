@@ -378,7 +378,7 @@ http_response_prepare (request_st * const r)
     do {
 
 	/* looks like someone has already made a decision */
-	if (r->http_status != 0 && r->http_status != 200) {
+	if (__builtin_expect( (r->http_status > 200), 0)) { /* yes, > 200 */
 		if (0 == r->resp_body_finished)
 			http_response_body_clear(r, 0);
 		return HANDLER_FINISHED;
@@ -535,9 +535,18 @@ http_response_prepare (request_st * const r)
 		rc = plugins_call_handle_subrequest_start(r);
 		if (HANDLER_GO_ON != rc) continue;
 
-		/* if we are still here, no one wanted the file, status 403 is ok I think */
-		if (NULL == r->handler_module && 0 == r->http_status) {
-			r->http_status = (r->http_method != HTTP_METHOD_OPTIONS) ? 403 : 200;
+		if (__builtin_expect( (NULL == r->handler_module), 0)) {
+			/* no handler; finish request */
+			if (__builtin_expect( (0 == r->http_status), 0)) {
+				if (r->http_method == HTTP_METHOD_OPTIONS) {
+					http_response_body_clear(r, 0);
+					http_response_prepare_options_star(r); /*(treat like "*")*/
+				}
+				else if (!http_method_get_head_post(r->http_method))
+					r->http_status = 501;
+				else
+					r->http_status = 403;
+			}
 			return HANDLER_FINISHED;
 		}
 
@@ -713,28 +722,6 @@ http_response_merge_trailers (request_st * const r)
 static handler_t
 http_response_write_prepare(request_st * const r)
 {
-    if (NULL == r->handler_module) {
-        /* static files */
-        switch(r->http_method) {
-          case HTTP_METHOD_GET:
-          case HTTP_METHOD_POST:
-          case HTTP_METHOD_HEAD:
-            break;
-          case HTTP_METHOD_OPTIONS:
-            if ((!r->http_status || r->http_status == 200)
-                && !buffer_is_blank(&r->uri.path)
-                && r->uri.path.ptr[0] != '*') {
-                http_response_body_clear(r, 0);
-		http_response_prepare_options_star(r); /*(treat like "*")*/
-            }
-            break;
-          default:
-            if (r->http_status == 0)
-                r->http_status = 501;
-            break;
-        }
-    }
-
     switch (r->http_status) {
       case 200: /* common case */
         break;
@@ -749,8 +736,6 @@ http_response_write_prepare(request_st * const r)
         r->resp_body_finished = 1;
         break;
       default: /* class: header + body */
-        if (r->http_status == 0)
-            r->http_status = 403;
         /* only custom body for 4xx and 5xx */
         if (r->http_status >= 400 && r->http_status < 600)
             http_response_static_errdoc(r);
@@ -950,7 +935,7 @@ http_response_handler (request_st * const r)
         /* response headers received from backend; start response */
         __attribute_fallthrough__
       case HANDLER_GO_ON:
-      case HANDLER_FINISHED: /*(HANDLER_FINISHED if request not handled)*/
+      case HANDLER_FINISHED:
         if (r->http_status == 0) r->http_status = 200;
         if (r->error_handler_saved_status > 0)
             r->http_method = r->error_handler_saved_method;
