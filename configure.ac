@@ -1612,6 +1612,9 @@ if test "$ac_cv_func_sendfile" = yes; then
         #include <sys/sendfile.h>
         #endif /* HAVE_SYS_SENDFILE_H */
         #include <errno.h>
+        #include <sys/types.h>
+        #include <sys/socket.h>
+        #include <sys/uio.h>
         int main() {
           int o = 0;
           if (-1 == sendfile(-1, 0, &o, 0) && errno == ENOSYS) return -1;
