@@ -921,11 +921,16 @@ if test "$WITH_PCRE2" != no; then
     PCRE_LIB="-L$WITH_PCRE2/lib -lpcre2-8"
     CPPFLAGS="$CPPFLAGS -I$WITH_PCRE/include"
   else
-    AC_PATH_PROG([PCRE2CONFIG], [pcre2-config])
-    if test -n "$PCRE2CONFIG"; then
-      PCRE_LIB=`"$PCRE2CONFIG" --libs8`
-      CPPFLAGS="$CPPFLAGS `"$PCRE2CONFIG" --cflags`"
-    fi
+    PKG_CHECK_MODULES([PCRE2],[libpcre2-8],[
+      PCRE_LIB="$PCRE2_LIBS"
+      CPPFLAGS="$CPPFLAGS $PCRE2_CFLAGS"
+    ],[
+      AC_PATH_PROG([PCRE2CONFIG], [pcre2-config])
+      if test -n "$PCRE2CONFIG"; then
+        PCRE_LIB=`"$PCRE2CONFIG" --libs8`
+        CPPFLAGS="$CPPFLAGS `"$PCRE2CONFIG" --cflags`"
+      fi
+    ])
   fi
 
   if test -z "$PCRE_LIB"; then

@@ -477,8 +477,14 @@ if(WITH_GNUTLS)
 endif()
 
 if(WITH_PCRE2)
-	## if we have pcre2-config, use it
-	xconfig(pcre2-config PCRE_INCDIR PCRE_LIBDIR PCRE_LDFLAGS PCRE_CFLAGS)
+	pkg_check_modules(PCRE2 libpcre2-8)
+	if(PCRE2_FOUND)
+		set(PCRE_LDFLAGS "${PCRE2_LDFLAGS}")
+		set(PCRE_CFLAGS "${PCRE2_CFLAGS}")
+	else()
+		## if we have pcre2-config, use it
+		xconfig(pcre2-config PCRE_INCDIR PCRE_LIBDIR PCRE_LDFLAGS PCRE_CFLAGS)
+	endif()
 	if(PCRE_LDFLAGS OR PCRE_CFLAGS)
 		message(STATUS "found pcre2 at: LDFLAGS: ${PCRE_LDFLAGS} CFLAGS: ${PCRE_CFLAGS}")
 
