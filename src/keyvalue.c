@@ -85,7 +85,7 @@ int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, c
 
 	if (pcre_jit) {
 		errcode = pcre2_jit_compile(kv->code, PCRE2_JIT_COMPLETE);
-		if (0 != errcode) {
+		if (0 != errcode && errcode != PCRE2_ERROR_JIT_BADOPTION) {
 			pcre2_get_error_message(errcode, errbuf, sizeof(errbuf));
 			log_error(errh, __FILE__, __LINE__,
 			  "pcre2_jit_compile: %s, regex: %s", (char *)errbuf, key->ptr);

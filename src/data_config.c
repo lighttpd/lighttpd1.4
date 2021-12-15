@@ -99,7 +99,7 @@ int data_config_pcre_compile(data_config * const dc, const int pcre_jit, log_err
 
     if (pcre_jit) {
         errcode = pcre2_jit_compile(dc->code, PCRE2_JIT_COMPLETE);
-        if (0 != errcode) {
+        if (0 != errcode && errcode != PCRE2_ERROR_JIT_BADOPTION) {
             pcre2_get_error_message(errcode, errbuf, sizeof(errbuf));
             log_error(errh, __FILE__, __LINE__,
                       "pcre2_jit_compile: %s, regex: %s",
