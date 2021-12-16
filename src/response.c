@@ -867,7 +867,7 @@ http_response_write_prepare(request_st * const r)
 
 
 __attribute_cold__
-static handler_t
+static int
 http_response_call_error_handler (request_st * const r, const buffer * const error_handler)
 {
     /* call error-handler */
@@ -909,8 +909,48 @@ http_response_call_error_handler (request_st * const r, const buffer * const err
     buffer_copy_buffer(&r->target, error_handler);
     http_response_errdoc_init(r);
     r->http_status = 0; /*(after http_response_errdoc_init())*/
-    http_response_comeback(r);
-    return HANDLER_COMEBACK;
+    return 1;
+}
+
+
+__attribute_cold__
+__attribute_noinline__
+static int
+http_response_has_error_handler (request_st * const r)
+{
+    if (r->error_handler_saved_status > 0)
+        r->http_method = r->error_handler_saved_method;
+    if (NULL == r->handler_module || r->conf.error_intercept) {
+        if (__builtin_expect( (r->error_handler_saved_status), 0)) {
+            const int subreq_status = r->http_status;
+            if (r->error_handler_saved_status > 0)
+                r->http_status = r->error_handler_saved_status;
+            else if (r->http_status == 404 || r->http_status == 403)
+                /* error-handler-404 is a 404 */
+                r->http_status = -r->error_handler_saved_status;
+            else {
+                /* error-handler-404 is back and has generated content */
+                /* if Status: was set, take it otherwise use 200 */
+            }
+            if (200 <= subreq_status && subreq_status <= 299) {
+                /*(flag value to indicate that error handler succeeded)
+                 *(for (NULL == r->handler_module))*/
+                r->error_handler_saved_status = 65535; /* >= 1000 */
+            }
+        }
+        else if (__builtin_expect( (r->http_status >= 400), 0)) {
+            const buffer *error_handler = NULL;
+            if (r->conf.error_handler)
+                error_handler = r->conf.error_handler;
+            else if ((r->http_status == 404 || r->http_status == 403)
+                   && r->conf.error_handler_404)
+                error_handler = r->conf.error_handler_404;
+
+            if (error_handler)
+                return http_response_call_error_handler(r, error_handler);
+        }
+    }
+    return 0;
 }
 
 
@@ -937,42 +977,13 @@ http_response_handler (request_st * const r)
       case HANDLER_GO_ON:
       case HANDLER_FINISHED:
         if (r->http_status == 0) r->http_status = 200;
-        if (r->error_handler_saved_status > 0)
-            r->http_method = r->error_handler_saved_method;
-        if (NULL == r->handler_module || r->conf.error_intercept) {
-            if (__builtin_expect( (r->error_handler_saved_status), 0)) {
-                const int subreq_status = r->http_status;
-                if (r->error_handler_saved_status > 0)
-                    r->http_status = r->error_handler_saved_status;
-                else if (r->http_status == 404 || r->http_status == 403)
-                    /* error-handler-404 is a 404 */
-                    r->http_status = -r->error_handler_saved_status;
-                else {
-                    /* error-handler-404 is back and has generated content */
-                    /* if Status: was set, take it otherwise use 200 */
-                }
-                if (200 <= subreq_status && subreq_status <= 299) {
-                    /*(flag value to indicate that error handler succeeded)
-                     *(for (NULL == r->handler_module))*/
-                    r->error_handler_saved_status = 65535; /* >= 1000 */
-                }
-            }
-            else if (__builtin_expect( (r->http_status >= 400), 0)) {
-                const buffer *error_handler = NULL;
-                if (r->conf.error_handler)
-                    error_handler = r->conf.error_handler;
-                else if ((r->http_status == 404 || r->http_status == 403)
-                       && r->conf.error_handler_404)
-                    error_handler = r->conf.error_handler_404;
-
-                if (error_handler)
-                    return http_response_call_error_handler(r, error_handler);
-            }
-        }
-
-        /* we have something to send; go on */
-        /*(CON_STATE_RESPONSE_START; transient state)*/
-        return http_response_write_prepare(r);
+        if ((__builtin_expect( (r->http_status < 400), 1)
+             && __builtin_expect( (0 == r->error_handler_saved_status), 1))
+            || __builtin_expect( (!http_response_has_error_handler(r)), 1))
+            /* we have something to send; go on */
+            /*(CON_STATE_RESPONSE_START; transient state)*/
+            return http_response_write_prepare(r);
+        __attribute_fallthrough__
       case HANDLER_COMEBACK:
         http_response_comeback(r);
         return HANDLER_COMEBACK;
