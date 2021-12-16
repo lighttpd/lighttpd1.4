@@ -1031,10 +1031,7 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 				break;
 			  case HANDLER_WAIT_FOR_EVENT:
 				return;
-			  case HANDLER_COMEBACK:
-				/* redo loop; will not match r->state */
-				ostate = CON_STATE_CONNECT;
-				continue;
+			  /*case HANDLER_COMEBACK:*//*(not expected)*/
 			  /*case HANDLER_ERROR:*/
 			  default:
 				connection_set_state_error(r, CON_STATE_ERROR);

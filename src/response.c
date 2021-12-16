@@ -366,10 +366,7 @@ static handler_t http_response_config (request_st * const r) {
 }
 
 
-__attribute_cold__
-static handler_t http_response_comeback (request_st * const r);
-
-
+__attribute_noinline__
 static handler_t
 http_response_prepare (request_st * const r)
 {
@@ -552,14 +549,14 @@ http_response_prepare (request_st * const r)
 
 		return HANDLER_GO_ON;
 
-    } while (HANDLER_COMEBACK == rc
-             && HANDLER_GO_ON ==(rc = http_response_comeback(r)));
+    } while (0);
 
     return rc;
 }
 
 
 __attribute_cold__
+__attribute_noinline__
 static handler_t http_response_comeback (request_st * const r)
 {
     if (NULL != r->handler_module || !buffer_is_unset(&r->physical.path))
@@ -719,6 +716,7 @@ http_response_merge_trailers (request_st * const r)
 }
 
 
+__attribute_noinline__
 static handler_t
 http_response_write_prepare(request_st * const r)
 {
@@ -957,8 +955,9 @@ http_response_has_error_handler (request_st * const r)
 handler_t
 http_response_handler (request_st * const r)
 {
+  int rc;
+  do {
     const plugin *p = r->handler_module;
-    int rc;
     if (NULL != p
         || ((rc = http_response_prepare(r)) == HANDLER_GO_ON
             && NULL != (p = r->handler_module)))
@@ -986,9 +985,12 @@ http_response_handler (request_st * const r)
         __attribute_fallthrough__
       case HANDLER_COMEBACK:
         http_response_comeback(r);
-        return HANDLER_COMEBACK;
+        rc = HANDLER_COMEBACK;
+        continue;
       /*case HANDLER_ERROR:*/
       default:
         return HANDLER_ERROR; /* something went wrong */
     }
+  } while (rc == HANDLER_COMEBACK);
+  return HANDLER_ERROR; /* should not happen */
 }
