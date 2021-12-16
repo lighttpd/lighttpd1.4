@@ -180,12 +180,17 @@ const buffer * http_response_set_last_modified(request_st * const r, const unix_
 }
 
 
-int http_response_handle_cachable(request_st * const r, const buffer * const lmod, const unix_time64_t lmtime) {
-	if (!(r->rqst_htags
-	      & (light_bshift(HTTP_HEADER_IF_NONE_MATCH)
-	        |light_bshift(HTTP_HEADER_IF_MODIFIED_SINCE)))) {
+__attribute_pure__
+static int http_response_maybe_cachable (const request_st * const r) {
+    return (r->rqst_htags
+            & (light_bshift(HTTP_HEADER_IF_NONE_MATCH)
+              |light_bshift(HTTP_HEADER_IF_MODIFIED_SINCE)));
+}
+
+
+int http_response_handle_cachable(request_st * const r, const buffer *lmod, const unix_time64_t lmtime) {
+	if (!http_response_maybe_cachable(r))
 		return HANDLER_GO_ON;
-	}
 
 	const buffer *vb, *etag;
 
@@ -217,7 +222,10 @@ int http_response_handle_cachable(request_st * const r, const buffer * const lmo
 		}
 	} else if (http_method_get_or_head(r->http_method)
 		   && (vb = http_header_request_get(r, HTTP_HEADER_IF_MODIFIED_SINCE,
-		                                    CONST_STR_LEN("If-Modified-Since")))) {
+		                                    CONST_STR_LEN("If-Modified-Since")))
+		   && (lmod
+		       || (lmod = http_header_response_get(r, HTTP_HEADER_LAST_MODIFIED,
+				                           CONST_STR_LEN("Last-Modified"))))) {
 		/* last-modified handling */
 		if (buffer_is_equal(lmod, vb)
 		    || !http_date_if_modified_since(BUF_PTR_LEN(vb), lmtime)) {
@@ -389,17 +397,14 @@ void http_response_send_file (request_st * const r, const buffer * const path, s
 			}
 		}
 
-		/* prepare header */
-		const buffer *mtime;
-		mtime = http_header_response_get(r, HTTP_HEADER_LAST_MODIFIED,
-		                                 CONST_STR_LEN("Last-Modified"));
-		if (NULL == mtime) {
-			mtime = http_response_set_last_modified(r, sce->st.st_mtime);
-		}
+		const buffer * const lmod =
+		  (!light_btst(r->resp_htags, HTTP_HEADER_LAST_MODIFIED))
+		  ? http_response_set_last_modified(r, sce->st.st_mtime)
+		  : NULL;
 
-		if (HANDLER_FINISHED == http_response_handle_cachable(r, mtime, sce->st.st_mtime)) {
+		if (http_response_maybe_cachable(r)
+		    && HANDLER_FINISHED == http_response_handle_cachable(r, lmod, sce->st.st_mtime))
 			return;
-		}
 	}
 
 	/* if we are still here, prepare body */
