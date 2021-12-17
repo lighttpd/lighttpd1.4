@@ -1476,7 +1476,7 @@ static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data *
     if (TIME64_CAST(sce->st.st_mtime) + p->conf.cache->max_age < log_epoch_secs)
         return HANDLER_GO_ON;
 
-    p->conf.json
+    !p->conf.json
       ? mod_dirlisting_content_type(r, p->conf.encoding)
       : http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
                                  CONST_STR_LEN("Content-Type"),
