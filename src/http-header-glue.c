@@ -318,8 +318,8 @@ handler_t http_response_reqbody_read_error (request_st * const r, int http_statu
 
 
 void http_response_send_file (request_st * const r, const buffer * const path, stat_cache_entry *sce) {
-	if (NULL == sce
-	    || (sce->fd < 0 && __builtin_expect( (0 != sce->st.st_size), 0))) {
+	if (__builtin_expect( (NULL == sce), 0)
+	    || (__builtin_expect( (sce->fd < 0), 0) && 0 != sce->st.st_size)) {
 		sce = stat_cache_get_entry_open(path, r->conf.follow_symlink);
 		if (NULL == sce) {
 			r->http_status = (errno == ENOENT) ? 404 : 403;
@@ -360,33 +360,27 @@ void http_response_send_file (request_st * const r, const buffer * const path, s
 		return;
 	}
 
-	int allow_caching = (0 == r->http_status || 200 == r->http_status);
-
 	/* set response content-type, if not set already */
-
-	if (!light_btst(r->resp_htags, HTTP_HEADER_CONTENT_TYPE)) {
-		const buffer *content_type = stat_cache_content_type_get(sce, r);
-		if (content_type && !buffer_is_blank(content_type)) {
-			http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
-			                         CONST_STR_LEN("Content-Type"),
-			                         BUF_PTR_LEN(content_type));
-		} else {
-			/* we are setting application/octet-stream, but also announce that
-			 * this header field might change in the seconds few requests
-			 *
-			 * This should fix the aggressive caching of FF and the script download
-			 * seen by the first installations
-			 */
-			http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
-			                         CONST_STR_LEN("Content-Type"),
-			                         CONST_STR_LEN("application/octet-stream"));
-
-			allow_caching = 0;
-		}
+	static const buffer octet_stream =
+	  { CONST_STR_LEN("application/octet-stream")+1, 0 };
+	const buffer *content_type = NULL;
+	if (__builtin_expect( (!light_btst(r->resp_htags, HTTP_HEADER_CONTENT_TYPE)), 1)) {
+		content_type = stat_cache_content_type_get(sce, r);
+		if (__builtin_expect( (!content_type), 0)
+		    || __builtin_expect( (buffer_is_blank(content_type)), 0))
+			content_type = &octet_stream;
+		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+		                         CONST_STR_LEN("Content-Type"),
+		                         BUF_PTR_LEN(content_type));
 	}
 
-	if (allow_caching) {
-		if (!light_btst(r->resp_htags, HTTP_HEADER_ETAG)
+	/* avoid sending caching headers if implicit "application/octet-stream"
+	 * This should workaround aggressive caching by FF and script download
+	 * seen by the first installations (e.g. if lighttpd is misconfigured)*/
+	int allow_caching = (content_type != &octet_stream)
+	                 && (0 == r->http_status || 200 == r->http_status);
+	if (__builtin_expect( (allow_caching), 1)) {
+		if (__builtin_expect( (!light_btst(r->resp_htags, HTTP_HEADER_ETAG)), 1)
 		    && 0 != r->conf.etag_flags) {
 			const buffer *etag =
 			  stat_cache_etag_get(sce, r->conf.etag_flags);
@@ -398,7 +392,7 @@ void http_response_send_file (request_st * const r, const buffer * const path, s
 		}
 
 		const buffer * const lmod =
-		  (!light_btst(r->resp_htags, HTTP_HEADER_LAST_MODIFIED))
+		  __builtin_expect( (!light_btst(r->resp_htags, HTTP_HEADER_LAST_MODIFIED)), 1)
 		  ? http_response_set_last_modified(r, sce->st.st_mtime)
 		  : NULL;
 
