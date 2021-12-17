@@ -436,8 +436,7 @@ static int connection_handle_write(request_st * const r, connection * const con)
 	case -1: /* error on our side */
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "connection closed: write failed on fd %d", con->fd);
-		connection_set_state_error(r, CON_STATE_ERROR);
-		return CON_STATE_ERROR;
+		__attribute_fallthrough__
 	case -2: /* remote close */
 		connection_set_state_error(r, CON_STATE_ERROR);
 		return CON_STATE_ERROR;
@@ -606,6 +605,7 @@ static chunk * connection_read_header_more(connection *con, chunkqueue *cq, chun
 }
 
 
+__attribute_cold__
 static void
 connection_transition_h2 (request_st * const h2r, connection * const con)
 {
@@ -619,7 +619,7 @@ connection_transition_h2 (request_st * const h2r, connection * const con)
     /* (h2r->state == CON_STATE_READ) for transition by ALPN
      *   or starting cleartext HTTP/2 with Prior Knowledge
      *   (e.g. via HTTP Alternative Services)
-     * (h2r->state == CON_STATE_RESPONSE_END) for Upgrade: h2c */
+     * (h2r->state == CON_STATE_REQUEST_END) for Upgrade: h2c */
 
     if (h2r->state != CON_STATE_ERROR)
         connection_set_state(h2r, CON_STATE_WRITE);
@@ -1015,10 +1015,10 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 			/*connection_set_state(r, CON_STATE_REQUEST_END);*/
 			__attribute_fallthrough__
 		case CON_STATE_REQUEST_END: /* transient */
-			ostate = (0 == r->reqbody_length)
+			connection_set_state(r,
+			  (0 == r->reqbody_length)
 			  ? CON_STATE_HANDLE_REQUEST
-			  : CON_STATE_READ_POST;
-			connection_set_state(r, ostate);
+			  : CON_STATE_READ_POST);
 			__attribute_fallthrough__
 		case CON_STATE_READ_POST:
 		case CON_STATE_HANDLE_REQUEST:
@@ -1043,15 +1043,16 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 			connection_set_state(r, CON_STATE_WRITE);
 			__attribute_fallthrough__
 		case CON_STATE_WRITE:
-			if (connection_handle_write_state(r, con)
-			    != CON_STATE_RESPONSE_END)
-				break;
+			if (connection_handle_write_state(r, con) == CON_STATE_WRITE)
+				return;
 			__attribute_fallthrough__
 		case CON_STATE_RESPONSE_END: /* transient */
 		case CON_STATE_ERROR:        /* transient */
 			if (r->http_version > HTTP_VERSION_1_1 && r != &con->request)
 				return;
 			connection_handle_response_end_state(r, con);
+			/*(make sure ostate will not match r->state)*/
+			ostate = CON_STATE_RESPONSE_END;/* != r->state */
 			break;
 		case CON_STATE_CLOSE:
 			/*(should not be reached by HTTP/2 streams)*/
