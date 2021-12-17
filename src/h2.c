@@ -2682,8 +2682,6 @@ h2_retire_con (request_st * const h2r, connection * const con)
 static void
 h2_con_upgrade_h2c (request_st * const h2r, const buffer * const http2_settings)
 {
-    /* status: (h2r->state == CON_STATE_REQUEST_END) for Upgrade: h2c */
-
     /* HTTP/1.1 101 Switching Protocols
      * Connection: Upgrade
      * Upgrade: h2c
@@ -2717,7 +2715,7 @@ h2_con_upgrade_h2c (request_st * const h2r, const buffer * const http2_settings)
     request_st * const r = h2_init_stream(h2r, con);
     /*(undo double-count; already incremented in CON_STATE_REQUEST_START)*/
     --con->request_count;
-    r->state = h2r->state; /* CON_STATE_REQUEST_END */
+    r->state = CON_STATE_REQUEST_END;
     r->http_status = 0;
     r->http_method = h2r->http_method;
     r->h2state = H2_STATE_HALF_CLOSED_REMOTE;

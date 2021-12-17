@@ -690,7 +690,6 @@ static int connection_handle_read_state(connection * const con)  {
                       "oversized request-header -> sending Status 431");
             r->http_status = 431; /* Request Header Fields Too Large */
             r->keep_alive = 0;
-            connection_set_state(r, CON_STATE_REQUEST_END);
             return 1;
         }
 
@@ -722,7 +721,6 @@ static int connection_handle_read_state(connection * const con)  {
                       con->dst_addr_buf.ptr);
             r->http_status = 400; /* Bad Request */
             r->keep_alive = 0;
-            connection_set_state(r, CON_STATE_REQUEST_END);
             return 1;
         }
     } while ((c = connection_read_header_more(con, cq, c, clen)));
@@ -773,7 +771,6 @@ static int connection_handle_read_state(connection * const con)  {
                             hdrs, header_len, "fd:%d rqst: ", con->fd);
     http_request_headers_process(r, hdrs, hoff, con->proto_default_port);
     chunkqueue_mark_written(cq, r->rqst_header_len);
-    connection_set_state(r, CON_STATE_REQUEST_END);
 
     if (light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE)
         && 0 == r->http_status
@@ -1015,7 +1012,7 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 				}
 				break;
 			}
-			/*if (r->state != CON_STATE_REQUEST_END) break;*/
+			/*connection_set_state(r, CON_STATE_REQUEST_END);*/
 			__attribute_fallthrough__
 		case CON_STATE_REQUEST_END: /* transient */
 			ostate = (0 == r->reqbody_length)
