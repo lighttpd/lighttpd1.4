@@ -372,8 +372,6 @@ http_response_prepare (request_st * const r)
 {
     handler_t rc;
 
-    do {
-
 	/* looks like someone has already made a decision */
 	if (__builtin_expect( (r->http_status > 200), 0)) { /* yes, > 200 */
 		if (0 == r->resp_body_finished)
@@ -386,7 +384,7 @@ http_response_prepare (request_st * const r)
 
 		if (__builtin_expect( (!r->async_callback), 1)) {
 			rc = http_response_config(r);
-			if (HANDLER_GO_ON != rc) continue;
+			if (HANDLER_GO_ON != rc) return rc;
 		}
 		else
 			r->async_callback = 0; /* reset */
@@ -418,7 +416,7 @@ http_response_prepare (request_st * const r)
 
 
 		rc = plugins_call_handle_uri_clean(r);
-		if (HANDLER_GO_ON != rc) continue;
+		if (HANDLER_GO_ON != rc) return rc;
 
 		if (__builtin_expect( (r->http_method == HTTP_METHOD_OPTIONS), 0)
 		    && r->uri.path.ptr[0] == '*' && r->uri.path.ptr[1] == '\0')
@@ -438,7 +436,7 @@ http_response_prepare (request_st * const r)
 		buffer_clear(&r->physical.doc_root);
 
 		rc = plugins_call_handle_docroot(r);
-		if (HANDLER_GO_ON != rc) continue;
+		if (HANDLER_GO_ON != rc) return rc;
 
 
 		/* transform r->uri.path to r->physical.rel_path (relative file path) */
@@ -486,7 +484,7 @@ http_response_prepare (request_st * const r)
 		                      BUF_PTR_LEN(&r->physical.rel_path));
 
 			rc = plugins_call_handle_physical(r);
-			if (HANDLER_GO_ON != rc) continue;
+			if (HANDLER_GO_ON != rc) return rc;
 
 			if (r->conf.log_request_handling) {
 				log_error(r->conf.errh, __FILE__, __LINE__,
@@ -511,7 +509,7 @@ http_response_prepare (request_st * const r)
 	 */
 
 		rc = http_response_physical_path_check(r);
-		if (HANDLER_GO_ON != rc) continue;
+		if (HANDLER_GO_ON != rc) return rc;
 
 		/* r->physical.path is non-empty and exists in the filesystem */
 
@@ -530,7 +528,7 @@ http_response_prepare (request_st * const r)
 
 		/* call the handlers */
 		rc = plugins_call_handle_subrequest_start(r);
-		if (HANDLER_GO_ON != rc) continue;
+		if (HANDLER_GO_ON != rc) return rc;
 
 		if (__builtin_expect( (NULL == r->handler_module), 0)) {
 			/* no handler; finish request */
@@ -548,10 +546,6 @@ http_response_prepare (request_st * const r)
 		}
 
 		return HANDLER_GO_ON;
-
-    } while (0);
-
-    return rc;
 }
 
 
@@ -992,5 +986,7 @@ http_response_handler (request_st * const r)
         return HANDLER_ERROR; /* something went wrong */
     }
   } while (rc == HANDLER_COMEBACK);
-  return HANDLER_ERROR; /* should not happen */
+ #ifndef __COVERITY__
+  return HANDLER_ERROR; /* should not happen */ /*(not reached)*/
+ #endif
 }
