@@ -1258,32 +1258,6 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
 
             connection_state_machine_loop(r, con);
 
-            if (r->resp_header_len && !chunkqueue_is_empty(&r->write_queue)
-                && max_bytes
-                && (r->resp_body_finished
-                    || (r->conf.stream_response_body
-                        & (FDEVENT_STREAM_RESPONSE
-                          |FDEVENT_STREAM_RESPONSE_BUFMIN)))) {
-
-                uint32_t dlen = max_bytes > 32768 ? 32768 : (uint32_t)max_bytes;
-                dlen = h2_send_cqdata(r, con, &r->write_queue, dlen);
-                if (dlen) { /*(do not resched (spin) if swin empty window)*/
-                    max_bytes -= (off_t)dlen;
-                    if (!chunkqueue_is_empty(&r->write_queue))
-                        resched |= 1;
-                }
-            }
-
-            {
-                if (chunkqueue_is_empty(&r->write_queue)) {
-                    if (r->resp_body_finished && r->state == CON_STATE_WRITE) {
-                        connection_set_state(r, CON_STATE_RESPONSE_END);
-                        if (__builtin_expect( (r->conf.log_state_handling), 0))
-                            connection_state_machine_loop(r, con);
-                    }
-                }
-            }
-
           #if 0
             if (log_state_handling)
                 log_error(r->conf.errh, __FILE__, __LINE__,
@@ -1291,7 +1265,35 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
                   connection_get_state(r->state));
           #endif
 
-            if (r->state==CON_STATE_RESPONSE_END || r->state==CON_STATE_ERROR) {
+            if (r->state < CON_STATE_WRITE)
+                continue;
+            /* else CON_STATE_WRITE, CON_STATE_RESPONSE_END, CON_STATE_ERROR */
+            else if (r->state == CON_STATE_WRITE) {
+                if (__builtin_expect((!chunkqueue_is_empty(&r->write_queue)), 1)
+                    && max_bytes
+                    && (r->resp_body_finished
+                        || (r->conf.stream_response_body
+                            & (FDEVENT_STREAM_RESPONSE
+                              |FDEVENT_STREAM_RESPONSE_BUFMIN)))) {
+                    uint32_t dlen =
+                      max_bytes > 32768 ? 32768 : (uint32_t)max_bytes;
+                    dlen = h2_send_cqdata(r, con, &r->write_queue, dlen);
+                    if (dlen) { /*(do not resched (spin) if swin empty window)*/
+                        max_bytes -= (off_t)dlen;
+                        if (!chunkqueue_is_empty(&r->write_queue))
+                            resched |= 1;
+                    }
+                }
+                if (!chunkqueue_is_empty(&r->write_queue)
+                    || !r->resp_body_finished)
+                    continue;
+
+                connection_set_state(r, CON_STATE_RESPONSE_END);
+                if (__builtin_expect( (r->conf.log_state_handling), 0))
+                    connection_state_machine_loop(r, con);
+            }
+
+            {/*(r->state==CON_STATE_RESPONSE_END || r->state==CON_STATE_ERROR)*/
                 /*(trigger reschedule of con if frames pending)*/
                 if (h2c->rused == sizeof(h2c->r)/sizeof(*h2c->r)
                     && !chunkqueue_is_empty(con->read_queue))
