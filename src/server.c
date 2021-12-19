@@ -1352,6 +1352,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		    && (i_am_root || srv->srvconf.max_fds <= rlim.rlim_max)) {
 			/* set rlimits */
 
+			rlim_t rlim_cur = rlim.rlim_cur;
 			rlim.rlim_cur = srv->srvconf.max_fds;
 			if (i_am_root) rlim.rlim_max = srv->srvconf.max_fds;
 
@@ -1359,6 +1360,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 				log_perror(srv->errh, __FILE__, __LINE__, "setrlimit()");
 				log_error(srv->errh, __FILE__, __LINE__, "setrlimit() may need root to run once: setsebool -P httpd_setrlimit on");
 				use_rlimit = 0;
+				if (srv->srvconf.max_fds > rlim_cur)
+					srv->srvconf.max_fds = rlim_cur;
 			}
 		}
 
