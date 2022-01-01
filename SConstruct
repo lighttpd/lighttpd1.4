@@ -445,7 +445,6 @@ if 1:
 		'poll',
 		'port_create',
 		'posix_fadvise',
-		'prctl',
 		'pread',
 		'preadv',
 		'pwrite',
