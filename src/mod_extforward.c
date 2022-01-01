@@ -1255,6 +1255,7 @@ union hap_PROXY_hdr {
             } unx;
         } addr;
     } v2;
+    uint64_t ext[32]; /* 2k (- hdr) for v2 TLV extensions (at least 1536 MTU) */
 };
 
 /*
