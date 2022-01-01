@@ -388,6 +388,7 @@ if 1:
 		'sys/loadavg.h',
 		'sys/poll.h',
 		'sys/prctl.h',
+		'sys/procctl.h',
 		'sys/sendfile.h',
 		'sys/time.h',
 		'sys/wait.h',

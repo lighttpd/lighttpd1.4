@@ -22,6 +22,7 @@
 #cmakedefine  HAVE_SYS_MMAN_H
 #cmakedefine  HAVE_SYS_POLL_H
 #cmakedefine  HAVE_SYS_PRCTL_H
+#cmakedefine  HAVE_SYS_PROCCTL_H
 #cmakedefine  HAVE_SYS_RESOURCE_H
 #cmakedefine  HAVE_SYS_SENDFILE_H
 #cmakedefine  HAVE_SYS_SELECT_H

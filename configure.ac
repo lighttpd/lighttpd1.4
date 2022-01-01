@@ -113,6 +113,7 @@ AC_CHECK_HEADERS([\
   sys/mman.h \
   sys/poll.h \
   sys/prctl.h \
+  sys/procctl.h \
   sys/resource.h \
   sys/select.h \
   sys/sendfile.h \

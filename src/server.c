@@ -65,6 +65,9 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC)+1, 0 };
 #ifdef HAVE_SYS_PRCTL_H
 # include <sys/prctl.h>
 #endif
+#ifdef HAVE_SYS_PROCCTL_H
+# include <sys/procctl.h>
+#endif
 
 #ifdef HAVE_MALLOC_H
 #ifndef LIGHTTPD_STATIC
@@ -1474,6 +1477,12 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		 */
 		if (srv->srvconf.enable_cores) {
 			prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
+		}
+#elif defined(HAVE_SYS_PROCCTL_H) && defined(PROC_TRACE_CTL_ENABLE)
+		/* (DragonFlyBSD has procctl(), but not PROC_TRACE_CTL_ENABLE) */
+		if (srv->srvconf.enable_cores) {
+			int dumpable = PROC_TRACE_CTL_ENABLE;
+			procctl(P_PID, 0, PROC_TRACE_CTL, &dumpable);
 		}
 #endif
 	}
