@@ -4555,7 +4555,8 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (request_st * const r,
         ssize_t wr;
         do {
             wr = copy_file_range(c->file.fd,&zoff,fd,&ooff,(size_t)cqlen, 0);
-        } while (wr >= 0 && (cqlen -= wr));
+        } while (wr > 0 && (cqlen -= wr));
+        /*(ignore if c->file.fd truncated (wr == 0 && cqlen != 0); fail below)*/
     }
     if (0 != cqlen) /* fallback, retry if copy_file_range() did not finish */
   #endif
