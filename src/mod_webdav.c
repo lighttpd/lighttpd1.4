@@ -169,12 +169,10 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
-#ifdef HAVE_COPY_FILE_RANGE /* FreeBSD 13+ */
 #ifdef __FreeBSD__ /* FreeBSD strict compliance hides libc extensions */
 /*#define _XOPEN_SOURCE 700*//*(defined above)*/
-#define _ISOC11_SOURCE
+#define _ISOC11_SOURCE 1
 #define __BSD_VISIBLE 1
-#endif
 #endif
 
 #include "first.h"      /* first */
