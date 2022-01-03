@@ -442,19 +442,21 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	}
 
 	if (s->ssl_enabled) {
+	}
 #ifdef TCP_DEFER_ACCEPT
-	} else if (s->defer_accept) {
+	else if (s->defer_accept) {
 		int v = s->defer_accept;
 		if (-1 == setsockopt(srv_socket->fd, IPPROTO_TCP, TCP_DEFER_ACCEPT, &v, sizeof(v))) {
 			log_perror(srv->errh, __FILE__, __LINE__, "can't set TCP_DEFER_ACCEPT");
 		}
+	}
 #endif
 #if defined(__FreeBSD__) || defined(__NetBSD__) \
  || defined(__OpenBSD__) || defined(__DragonFly__)
-	} else if (s->bsd_accept_filter
+#ifdef SO_ACCEPTFILTER
+	else if (s->bsd_accept_filter
 		   && (buffer_is_equal_string(s->bsd_accept_filter, CONST_STR_LEN("httpready"))
 			|| buffer_is_equal_string(s->bsd_accept_filter, CONST_STR_LEN("dataready")))) {
-#ifdef SO_ACCEPTFILTER
 		/* FreeBSD accf_http filter */
 		struct accept_filter_arg afa;
 		memset(&afa, 0, sizeof(afa));
@@ -465,9 +467,9 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 				  "can't set accept-filter '%s'", s->bsd_accept_filter->ptr);
 			}
 		}
-#endif
-#endif
 	}
+#endif
+#endif
 
 	return 0;
 }
