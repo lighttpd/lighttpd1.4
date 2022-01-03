@@ -81,6 +81,13 @@
 #ifdef RNDGETENTCNT
 #include <sys/ioctl.h>
 #endif
+#if defined(__APPLE__) && defined(__MACH__)
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101000 /* OS X 10.10+ */
+#undef HAVE_ARC4RANDOM_BUF
+#define HAVE_CCRANDOMGENERATEBYTES
+#include <CommonCrypto/CommonRandom.h>
+#endif
+#endif
 
 /* Take some reasonable steps to attempt to *seed* random number generators with
  * cryptographically random data.  Some of these initialization routines may
@@ -239,6 +246,11 @@ static void li_rand_init (void)
     if (1 == li_rand_device_bytes((unsigned char *)xsubi, (int)sizeof(xsubi))) {
         u = ((unsigned int)xsubi[0] << 16) | xsubi[1];
     }
+  #ifdef HAVE_CCRANDOMGENERATEBYTES
+    else if (CCRandomGenerateBytes(xsubi, sizeof(xsubi)) == kCCSuccess
+             && CCRandomGenerateBytes(&u, sizeof(u)) == kCCSuccess) {
+    }
+  #endif
     else {
       #ifdef HAVE_ARC4RANDOM_BUF
         u = arc4random();
@@ -371,6 +383,11 @@ int li_rand_pseudo (void)
   #ifdef USE_NSS_CRYPTO
     int i;
     if (SECSuccess == PK11_GenerateRandom((unsigned char *)&i, sizeof(i)))
+        return i;
+  #endif
+  #ifdef HAVE_CCRANDOMGENERATEBYTES
+    int i;
+    if (CCRandomGenerateBytes(&i, sizeof(i)) == kCCSuccess)
         return i;
   #endif
   #ifdef HAVE_ARC4RANDOM_BUF
