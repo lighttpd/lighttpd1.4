@@ -25,6 +25,9 @@ typedef size_t rsize_t;
 #endif
 #include <errno.h>
 #endif
+#ifdef __sun
+#include <errno.h>
+#endif
 
 __BEGIN_DECLS
 
