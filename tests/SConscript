@@ -4,26 +4,22 @@ tests = Split('prepare.sh \
 	run-tests.pl \
 	cleanup.sh')
 
-extra_dist = Split('fastcgi-10.conf \
-	fastcgi-responder.conf \
-	core-var-include.t \
-	var-include.conf \
-	var-include-sub.conf \
+extra_dist = Split(' \
 	condition.conf \
 	core-condition.t \
-	core-request.t \
-	core-response.t \
-	core-keepalive.t \
-	mod-auth.conf \
-	mod-auth.t \
-	mod-cgi.t \
-	mod-deflate.t \
-	mod-deflate.conf \
-	mod-fastcgi.t \
-	request.t \
-	mod-ssi.t \
+	fastcgi-responder.conf \
 	LightyTest.pm \
-	mod-setenv.t')
+	lighttpd.conf \
+	lighttpd.htpasswd \
+	lighttpd.user \
+	mod-fastcgi.t \
+	mod-scgi.t \
+	proxy.conf \
+	request.t \
+	scgi-responder.conf \
+	var-include-sub.conf \
+	wrapper.sh \
+	')
 
 fcgi_responder = env.Program("fcgi-responder", "fcgi-responder.c")
 scgi_responder = env.Program("scgi-responder", "scgi-responder.c")
