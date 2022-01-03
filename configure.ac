@@ -1699,7 +1699,7 @@ lighty_track_feature() {
 }
 
 lighty_track_feature "regex-conditionals" "" \
-  'test "$WITH_PCRE" != no'
+  'test "$WITH_PCRE" != no || test "$WITH_PCRE2" != no'
 
 lighty_track_feature "mysql" "mod_vhostdb_mysql" \
   'test "$WITH_MYSQL" != no'
