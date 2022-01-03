@@ -11,6 +11,9 @@
  * Copyright(c) 2020 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
  * License: BSD 3-clause (same as lighttpd)
  */
+#if defined(__sun)
+#define __EXTENSIONS__
+#endif
 
 #include <sys/types.h>
 #include <sys/socket.h>
