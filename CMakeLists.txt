@@ -2,6 +2,9 @@ project(lighttpd C)
 
 cmake_minimum_required(VERSION 2.8.2 FATAL_ERROR)
 
+# use C11 with CMake >= 3.1
+set(CMAKE_C_STANDARD 11)
+
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/scripts/cmake)
 
 include(CTest)
