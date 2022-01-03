@@ -1,3 +1,4 @@
+compiler = meson.get_compiler('c')
 sbinddir = join_paths(get_option('prefix'), get_option('sbindir'))
 moduledir = join_paths(get_option('prefix'), get_option('moduledir'))
 
@@ -15,16 +16,20 @@ defs = [
 	'-D_GNU_SOURCE',
 ]
 
-libws2_32 = []
+socket_libs = []
 if target_machine.system() == 'windows'
-	libws2_32 = [ compiler.find_library('ws2_32') ]
+	socket_libs = [ compiler.find_library('ws2_32') ]
 	defs += [
 		'-DNVALGRIND',
 	]
 endif
+if target_machine.system() == 'sunos'
+	socket_libs = [ compiler.find_library('socket')
+	              , compiler.find_library('nsl')
+	              ]
+endif
 
 
-compiler = meson.get_compiler('c')
 conf_data = configuration_data()
 
 conf_data.set('HAVE_SYS_DEVPOLL_H', compiler.has_header('sys/devpoll.h'))
@@ -837,7 +842,7 @@ executable('lighttpd', configparser,
 		, libpcre
 		, libunwind
 		, libxxhash
-		, libws2_32
+		, socket_libs
 		, clock_lib
 	],
 	install: true,
@@ -863,7 +868,7 @@ test('test_common', executable('test_common',
 	dependencies: [ common_flags
 		, libpcre
 		, libunwind
-		, libws2_32
+		, socket_libs
 		, clock_lib
 	],
 	build_by_default: false,
@@ -886,7 +891,7 @@ test('test_configfile', executable('test_configfile',
 	dependencies: [ common_flags
 		, libpcre
 		, libunwind
-		, libws2_32
+		, socket_libs
 		, clock_lib
 	],
 	build_by_default: false,
@@ -915,7 +920,7 @@ test('test_mod', executable('test_mod',
 		, libpcre
 		, libunwind
 		, libxxhash
-		, libws2_32
+		, socket_libs
 		, clock_lib
 	],
 	build_by_default: false,
@@ -934,18 +939,18 @@ modules = [
 	[ 'mod_evhost', [ 'mod_evhost.c' ] ],
 	[ 'mod_expire', [ 'mod_expire.c' ] ],
 	[ 'mod_extforward', [ 'mod_extforward.c' ] ],
-	[ 'mod_fastcgi', [ 'mod_fastcgi.c' ], libws2_32 ],
+	[ 'mod_fastcgi', [ 'mod_fastcgi.c' ], socket_libs ],
 	[ 'mod_indexfile', [ 'mod_indexfile.c' ] ],
-	[ 'mod_proxy', [ 'mod_proxy.c' ], libws2_32 ],
+	[ 'mod_proxy', [ 'mod_proxy.c' ], socket_libs ],
 	[ 'mod_redirect', [ 'mod_redirect.c' ] ],
 	[ 'mod_rewrite', [ 'mod_rewrite.c' ] ],
 	[ 'mod_rrdtool', [ 'mod_rrdtool.c' ] ],
-	[ 'mod_scgi', [ 'mod_scgi.c' ], libws2_32 ],
+	[ 'mod_scgi', [ 'mod_scgi.c' ], socket_libs ],
 	[ 'mod_secdownload', [ 'mod_secdownload.c', 'algo_hmac.c' ], libcrypto ],
 	[ 'mod_setenv', [ 'mod_setenv.c' ] ],
 	[ 'mod_simple_vhost', [ 'mod_simple_vhost.c' ] ],
 	[ 'mod_sockproxy', [ 'mod_sockproxy.c' ] ],
-	[ 'mod_ssi', [ 'mod_ssi.c' ], libws2_32 ],
+	[ 'mod_ssi', [ 'mod_ssi.c' ], socket_libs ],
 	[ 'mod_staticfile', [ 'mod_staticfile.c' ] ],
 	[ 'mod_status', [ 'mod_status.c' ] ],
 	[ 'mod_uploadprogress', [ 'mod_uploadprogress.c' ] ],

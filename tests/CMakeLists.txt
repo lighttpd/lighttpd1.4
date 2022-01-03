@@ -1,5 +1,15 @@
 add_executable(fcgi-responder fcgi-responder.c)
 add_executable(scgi-responder scgi-responder.c)
+if(WIN32)
+  set(SOCKLIBS ws2_32)
+endif()
+if(CMAKE_SYSTEM_NAME MATCHES "SunOS")
+  set(SOCKLIBS socket nsl)
+endif()
+if(SOCKLIBS)
+  target_link_libraries(fcgi-responder ${SOCKLIBS})
+  target_link_libraries(scgi-responder ${SOCKLIBS})
+endif()
 
 set(T_FILES
 	prepare.sh

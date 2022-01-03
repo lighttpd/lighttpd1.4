@@ -1,11 +1,22 @@
+compiler = meson.get_compiler('c')
+socket_libs = []
+if target_machine.system() == 'windows'
+	socket_libs = [ compiler.find_library('ws2_32') ]
+endif
+if target_machine.system() == 'sunos'
+	socket_libs = [ compiler.find_library('socket')
+	              , compiler.find_library('nsl')
+	              ]
+endif
+
 executable('fcgi-responder',
 	sources: 'fcgi-responder.c',
-	dependencies: common_flags,
+	dependencies: [ common_flags, socket_libs ]
 )
 
 executable('scgi-responder',
 	sources: 'scgi-responder.c',
-	dependencies: common_flags,
+	dependencies: [ common_flags, socket_libs ]
 )
 
 env = environment()
