@@ -424,7 +424,6 @@ if 1:
 		'getrlimit',
 		'getuid',
 		'inet_aton',
-		'inet_ntop',
 		'inet_pton',
 		'issetugid',
 		'jrand48',
@@ -441,11 +440,9 @@ if 1:
 		'mkostemp',
 		'mmap',
 		'munmap',
-		'pathconf',
 		'pipe2',
 		'poll',
 		'port_create',
-		'posix_fadvise',
 		'pread',
 		'preadv',
 		'pwrite',
@@ -477,7 +474,6 @@ if 1:
 	# have crypt_r/crypt, and is -lcrypt needed?
 	if autoconf.CheckLib('crypt'):
 		autoconf.env.Append(
-			CPPFLAGS = [ '-DHAVE_LIBCRYPT' ],
 			LIBCRYPT = 'crypt',
 		)
 		with autoconf.restoreEnvLibs():
@@ -535,7 +531,7 @@ if 1:
 		if not autoconf.CheckLibWithHeader('dbi', 'dbi/dbi.h', 'C'):
 			fail("Couldn't find dbi")
 		autoconf.env.Append(
-			CPPFLAGS = [ '-DHAVE_DBI_H', '-DHAVE_LIBDBI' ],
+			CPPFLAGS = [ '-DHAVE_DBI' ],
 			LIBDBI = 'dbi',
 		)
 
@@ -620,7 +616,7 @@ if 1:
 		mysql_config = autoconf.checkProgram('mysql', 'mysql_config')
 		if not autoconf.CheckParseConfigForLib('LIBMYSQL', mysql_config + ' --cflags --libs'):
 			fail("Couldn't find mysql")
-		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_MYSQL_H', '-DHAVE_LIBMYSQL' ])
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_MYSQL' ])
 
 	if env['with_nss']:
 		nss_config = autoconf.checkProgram('nss', 'nss-config')
@@ -706,7 +702,7 @@ if 1:
 	if env['with_pgsql']:
 		if not autoconf.CheckParseConfigForLib('LIBPGSQL', 'pkg-config libpq --cflags --libs'):
 			fail("Couldn't find libpq")
-		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_PGSQL_H', '-DHAVE_LIBPGSQL' ])
+		autoconf.env.Append(CPPFLAGS = [ '-DHAVE_PGSQL' ])
 
 	if env['with_sasl']:
 		if not autoconf.CheckLibWithHeader('sasl2', 'sasl/sasl.h', 'C'):

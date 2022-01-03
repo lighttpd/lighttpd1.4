@@ -1459,7 +1459,6 @@ if test "$WITH_LUA" != no; then
     fi
   fi
 
-  AC_DEFINE([HAVE_LUA], [1], [liblua])
   AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
   AC_SUBST([LUA_LIBS])
   AC_SUBST([LUA_CFLAGS])
@@ -1549,7 +1548,6 @@ AC_CHECK_FUNCS([\
   memset_s \
   mkostemp \
   mmap \
-  pathconf \
   pipe2 \
   poll \
   port_create \

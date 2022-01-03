@@ -11,11 +11,6 @@
 #include <unistd.h>
 #endif
 
-#if defined(HAVE_LIBCRYPT) && !defined(HAVE_CRYPT)
-/* always assume crypt() is present if we have -lcrypt */
-# define HAVE_CRYPT
-#endif
-
 #include <stdlib.h>
 #include <string.h>
 

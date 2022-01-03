@@ -633,7 +633,7 @@ static void show_features (void) {
 #else
       "\t- brotli support\n"
 #endif
-#if defined(HAVE_CRYPT) || defined(HAVE_CRYPT_R) || defined(HAVE_LIBCRYPT)
+#if defined(HAVE_CRYPT) || defined(HAVE_CRYPT_R)
       "\t+ crypt support\n"
 #else
       "\t- crypt support\n"

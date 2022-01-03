@@ -44,7 +44,7 @@
  */
 /*#define OPENSSL_NO_STDIO*/
 
-#ifndef USE_OPENSSL_KERBEROS
+#ifndef HAVE_KRB5
 #ifndef OPENSSL_NO_KRB5
 #define OPENSSL_NO_KRB5
 #endif
