@@ -464,10 +464,10 @@ if get_option('with_nss')
 	# function: NSS_GetVersion (-lnss3)
 	# function: NSSUTIL_GetVersion (-lnssutil3)
 	libnss3 = [ dependency('nss') ]
-	#libssl3 = [ compiler.find_library('libssl3') ]
-	#libsmime3 = [ compiler.find_library('libsmime3') ]
-	#libnss3 = [ compiler.find_library('libnss3') ]
-	#libnssutil3 = [ compiler.find_library('libnssutil3') ]
+	#libssl3 = [ compiler.find_library('ssl3') ]
+	#libsmime3 = [ compiler.find_library('smime3') ]
+	#libnss3 = [ compiler.find_library('nss3') ]
+	#libnssutil3 = [ compiler.find_library('nssutil3') ]
 	conf_data.set('HAVE_NSS3_NSS_H', true)
 	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(getoption('with_nettle')) and not(getoption('with_gnutls'))
 	  libcrypto = [ dependency('nss') ]
@@ -484,14 +484,24 @@ if get_option('with_pcre2') and not(get_option('with_pcre'))
 	# manual search:
 	# header: pcre2.h
 	# function: pcre_match (-lpcre2-8)
-	libpcre = [ dependency('libpcre2-8') ]
+	libpcre = dependency('libpcre2-8', required: false)
+	if libpcre.found()
+		libpcre = [ libpcre ]
+	else
+		libpcre = [ compiler.find_library('pcre2-8', required: true) ]
+	endif
 	conf_data.set('HAVE_PCRE2_H', true)
 	conf_data.set('HAVE_PCRE', true)
 elif get_option('with_pcre')
 	# manual search:
 	# header: pcre.h
 	# function: pcre_exec (-lpcre)
-	libpcre = [ dependency('libpcre') ]
+	libpcre = dependency('libpcre', required: false)
+	if libpcre.found()
+		libpcre = [ libpcre ]
+	else
+		libpcre = [ compiler.find_library('pcre', required: true) ]
+	endif
 	conf_data.set('HAVE_PCRE_H', true)
 	conf_data.set('HAVE_PCRE', true)
 endif
@@ -508,7 +518,7 @@ endif
 if get_option('with_sasl')
 	libsasl = dependency('sasl2', required: false)
 	if libsasl.found()
-		libsasl = [ libsasl2 ]
+		libsasl = [ libsasl ]
 	else
 		libsasl = [ compiler.find_library('sasl2') ]
 		if not(compiler.has_function('sasl_server_init', args: defs, dependencies: libsasl, prefix: '#include <sasl/sasl.h>'))
