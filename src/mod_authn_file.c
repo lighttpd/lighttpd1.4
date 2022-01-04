@@ -6,8 +6,16 @@
 # include <crypt.h>
 #elif defined(__linux__)
 /* linux needs _XOPEN_SOURCE */
-# define _XOPEN_SOURCE
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#endif
 #elif !defined(_MSC_VER)
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#endif
+#ifndef _XOPEN_CRYPT
+#define _XOPEN_CRYPT 1
+#endif
 #include <unistd.h>
 #endif
 

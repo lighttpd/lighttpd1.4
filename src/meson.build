@@ -86,6 +86,16 @@ if conf_data.get('HAVE_CRYPT_H')
 		libcrypt = [ compiler.find_library('crypt') ]
 		conf_data.set('HAVE_CRYPT', 1)
 	endif
+elif conf_data.get('HAVE_UNISTD_H')
+	# crypt in default libs?
+	if compiler.has_function('crypt', args: defs, prefix: '#include <unistd.h>')
+		libcrypt = []
+		conf_data.set('HAVE_CRYPT', 1)
+	# crypt in -lcrypt ?
+	elif compiler.has_function('crypt', args: defs + ['-lcrypt'], prefix: '#include <unistd.h>')
+		libcrypt = [ compiler.find_library('crypt') ]
+		conf_data.set('HAVE_CRYPT', 1)
+	endif
 endif
 
 conf_data.set('HAVE_SOCKLEN_T', compiler.has_type('socklen_t', args: defs, prefix: '#include <sys/socket.h>'))
@@ -219,7 +229,7 @@ conf_data.set('LIGHTTPD_STATIC', get_option('build_static'))
 libdl = []
 if not(get_option('build_static'))
 	if target_machine.system() != 'windows'
-		libdl = [ compiler.find_library('dl') ]
+		libdl = [ compiler.find_library('dl', required: false) ]
 		if not(compiler.has_function('dlopen', args: defs, dependencies: libdl, prefix: '#include <dlfcn.h>'))
 			error('Couldn\'t find dlfcn.h or dlopen in lib dl')
 		endif

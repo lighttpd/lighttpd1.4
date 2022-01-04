@@ -24,6 +24,9 @@
 #include "first.h"
 
 #if defined(HAVE_CRYPT_R) || defined(HAVE_CRYPT)
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#endif
 #ifndef _XOPEN_CRYPT
 #define _XOPEN_CRYPT 1
 #endif
