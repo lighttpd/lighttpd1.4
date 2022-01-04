@@ -178,6 +178,7 @@
 #include "first.h"      /* first */
 #include "sys-mmap.h"
 #include <sys/types.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include "sys-time.h"
 #include <dirent.h>
@@ -187,6 +188,22 @@
 #include <stdlib.h>     /* strtol() */
 #include <string.h>
 #include <unistd.h>     /* getpid() linkat() rmdir() unlinkat() */
+
+#ifdef HAVE_COPY_FILE_RANGE
+#ifdef __FreeBSD__
+typedef off_t loff_t;
+#endif
+#else
+#ifdef __linux__
+#include <linux/fs.h>   /* ioctl(..., FICLONE, ...) */
+#endif
+#endif
+
+#ifdef _WIN32
+#define VC_EXTRALEAN
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>    /* CopyFile() */
+#endif
 
 #ifdef AT_FDCWD
 #ifndef _ATFILE_SOURCE
@@ -301,6 +318,7 @@ int mod_webdav_plugin_init(plugin *p) {
 #define WEBDAV_FLAG_COPY_LINK    0x08
 #define WEBDAV_FLAG_MOVE_XDEV    0x10
 #define WEBDAV_FLAG_COPY_XDEV    0x20
+#define WEBDAV_FLAG_NO_CLONE     0x40
 
 #define webdav_xmlstrcmp_fixed(s, fixed) \
         strncmp((const char *)(s), (fixed), sizeof(fixed))
@@ -2158,6 +2176,10 @@ webdav_prop_select_propnames (const plugin_config * const pconf,
 
 
 #if defined(__APPLE__) && defined(__MACH__)
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200
+#include <sys/attr.h>
+#include <sys/clonefile.h>/* clonefile() *//* OS X 10.12+ */
+#endif
 #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050
 #include <copyfile.h>     /* fcopyfile() *//* OS X 10.5+ */
 #endif
@@ -2175,7 +2197,7 @@ webdav_prop_select_propnames (const plugin_config * const pconf,
  *   (unless O_NONBLOCK not relevant for files on a given operating system)
  * isz should be size of input file, and is a param to avoid extra fstat()
  *   since size is needed for Linux sendfile(), as well as posix_fadvise().
- * caller should handler fchmod() and copying extended attribute, if desired
+ * caller should handle fchmod() and copying extended attribute, if desired
  */
 __attribute_noinline__
 static int
@@ -2184,9 +2206,10 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
     if (0 == isz)
         return 0;
 
-  #ifdef _WIN32
-    /* Windows CopyFile() not usable here; operates on filenames, not fds */
-  #else
+    /* Note: copy acceleration does not handle if ifd is extended during copy
+     * (file should not be modified during copy with proper WebDAV locking) */
+
+  #ifndef _WIN32
     /*(file descriptors to *regular files* on most OS ignore O_NONBLOCK)*/
     /*fcntl(ifd, F_SETFL, fcntl(ifd, F_GETFL, 0) & ~O_NONBLOCK);*/
     /*fcntl(ofd, F_SETFL, fcntl(ofd, F_GETFL, 0) & ~O_NONBLOCK);*/
@@ -2211,30 +2234,54 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
   #endif
 
   #ifdef __linux__ /* Linux 2.6.33+ sendfile() supports file-to-file copy */
+  #if defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILE \
+   && (!defined _LARGEFILE_SOURCE || defined HAVE_SENDFILE64) \
+   && defined(__linux__) && !defined HAVE_SENDFILE_BROKEN
     off_t offset = 0;
+   #if defined(_LP64) || defined(__LP64__) || defined(_WIN64)
     while (offset < isz && sendfile(ifd,ofd,&offset,(size_t)(isz-offset)) >= 0);
+   #else
+    while (offset < isz
+           && sendfile(ifd, ofd, &offset,
+                       (size_t)(isz-offset < INT32_MAX
+                                ? isz-offset
+                                : (INT32_MAX & ~(131072-1)))) >= 0)
+        ;
+   #endif
     if (offset == isz)
         return 0;
 
     /*lseek(ifd, 0, SEEK_SET);*/ /*(ifd offset not modified due to &offset arg)*/
     if (0 != lseek(ofd, 0, SEEK_SET)) return -1;
   #endif
+  #endif
 
     ssize_t rd, wr, off;
     char buf[16384];
+    isz = 0;
     do {
         do {
             rd = read(ifd, buf, sizeof(buf));
         } while (-1 == rd && errno == EINTR);
-        if (rd < 0) return rd;
+        if (rd <= 0) break;
 
         off = 0;
         do {
             wr = write(ofd, buf+off, (size_t)(rd-off));
         } while (wr >= 0 ? (off += wr) != rd : errno == EINTR);
         if (wr < 0) return -1;
-    } while (rd > 0);
-    return rd;
+    } while ((isz += rd)); /*(always true when reached w/ largefile support)*/
+  #if (defined(__APPLE__) && defined(__MACH__) \
+       && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050) \
+   || defined(HAVE_ELFTC_COPYFILE) /* __FreeBSD__ */ \
+   || (defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILE \
+       && (!defined _LARGEFILE_SOURCE || defined HAVE_SENDFILE64) \
+       && defined(__linux__) && !defined HAVE_SENDFILE_BROKEN)
+    /*(file may have been truncated during prior copy acceleration attempt)*/
+    if (0 == rd)
+        return ftruncate(ofd, isz);
+  #endif
+    return (int)rd;
 }
 
 
@@ -2533,8 +2580,43 @@ static int
 webdav_copytmp_rename (const plugin_config * const pconf,
                        const physical_st * const src,
                        const physical_st * const dst,
-                       const int overwrite)
+                       int * const flags)
 {
+  #if defined(__APPLE__) && defined(__MACH__)
+  #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050
+    if (!(*flags & (WEBDAV_FLAG_COPY_XDEV
+                   |WEBDAV_FLAG_MOVE_XDEV
+                   |WEBDAV_FLAG_NO_CLONE))) {
+      #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200 /* 10.12+ */
+        if (0==clonefile(src->path.ptr,dst->path.ptr,CLONE_NOFOLLOW))
+      #else /* __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050 */
+        if (0==copyfile(src->path.ptr,dst->path.ptr,NULL,COPYFILE_CLONE_FORCE))
+      #endif
+            /* target did not exist; skip stat_cache_delete_entry() */
+            return 0; /* copied */
+        else {
+            switch (errno) {
+              case ENOTSUP:
+                *flags |= WEBDAV_FLAG_NO_CLONE;
+                break;
+              case EXDEV:
+                if (*flags & WEBDAV_FLAG_COPY_LINK) {
+                    *flags &= ~WEBDAV_FLAG_COPY_LINK;
+                    *flags |= WEBDAV_FLAG_COPY_XDEV;
+                }
+                break;
+              case EEXIST:
+                if (!(*flags & WEBDAV_FLAG_OVERWRITE))
+                    return 412; /* Precondition Failed */
+                break;
+              default:
+                break;
+            }
+        }
+    }
+  #endif
+  #endif
+
     buffer * const tmpb = pconf->tmpb;
     buffer_clear(tmpb);
     buffer_append_str2(tmpb, BUF_PTR_LEN(&dst->path),
@@ -2546,6 +2628,38 @@ webdav_copytmp_rename (const plugin_config * const pconf,
     if (buffer_clen(tmpb) >= PATH_MAX)
         return 414; /* URI Too Long */
 
+  do {
+
+   #if defined(__APPLE__) && defined(__MACH__)
+   #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050
+    if (!(*flags & (WEBDAV_FLAG_COPY_XDEV
+                   |WEBDAV_FLAG_MOVE_XDEV
+                   |WEBDAV_FLAG_NO_CLONE))) {
+      #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200 /* 10.12+ */
+        if (0 == clonefile(src->path.ptr, tmpb->ptr, CLONE_NOFOLLOW))
+      #else /* __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050 */
+        if (0 == copyfile(src->path.ptr, tmpb->ptr, NULL, COPYFILE_CLONE_FORCE))
+      #endif
+            break; /* copied */
+        else {
+            switch (errno) {
+              case ENOTSUP:
+                *flags |= WEBDAV_FLAG_NO_CLONE;
+                break;
+              case EXDEV:
+                if (*flags & WEBDAV_FLAG_COPY_LINK) {
+                    *flags &= ~WEBDAV_FLAG_COPY_LINK;
+                    *flags |= WEBDAV_FLAG_COPY_XDEV;
+                }
+                break;
+              default:
+                break;
+            }
+        }
+    }
+   #endif
+   #endif
+
     /* code does not currently support symlinks in webdav collections;
      * disallow symlinks as target when opening src and dst */
     struct stat st;
@@ -2556,6 +2670,28 @@ webdav_copytmp_rename (const plugin_config * const pconf,
         close(ifd);
         return 403; /* Forbidden */
     }
+
+   #ifdef _WIN32
+    /* Windows is frequently incompatible with similar functions from other OS.
+     * https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-copyfile
+     *   Symbolic link behavior—If the source file is a symbolic link,
+     *   the actual file copied is the target of the symbolic link.
+     *   If the destination file already exists and is a symbolic link,
+     *   the target of the symbolic link is overwritten by the source file.
+     * Therefore, open and check src file above, and keep fd open during copy.
+     * (and pass flag to CopyFile() to fail if target exists)
+     * (assumes typical windows filesystem behavior where an opened file can not
+     *  be replaced while it is held open.  XXX: is this true?)
+     * Aside: WebDAV does not support symlinks, so there is already the
+     * assumption that the collection does not contain symlinks unless
+     * there is some alternate means to access the containing volume.
+     */
+    if (CopyFile((LPTSTR)src->path.ptr, (LPTSTR)tmpb->ptr, TRUE)) {
+        close(ifd);
+        break; /* copied */
+    }
+   #endif
+
     const int ofd = fdevent_open_cloexec(tmpb->ptr, 0,
                                          O_WRONLY | O_CREAT | O_EXCL | O_TRUNC,
                                          WEBDAV_FILE_MODE);
@@ -2568,18 +2704,96 @@ webdav_copytmp_rename (const plugin_config * const pconf,
      * blocks server from doing any other work until after copy completes
      * (should reach here only if unable to use link() and rename()
      *  due to copy/move crossing device boundaries within the workspace) */
-    int rc = webdav_fcopyfile_sz(ifd, ofd, st.st_size);
+    int rc = 0;
+    do {
+        if (0 == st.st_size)
+            break; /* copied */
+
+      #ifdef HAVE_COPY_FILE_RANGE
+        if (!(*flags & WEBDAV_FLAG_NO_CLONE)) {
+            loff_t ioff = 0; /*(provide offset ptr so ifd offset not changed)*/
+            loff_t ooff = 0; /*(provide offset ptr so ofd offset not changed)*/
+            off_t ilen = st.st_size;
+            ssize_t wr;
+            do {
+              #if defined(_LP64) || defined(__LP64__) || defined(_WIN64)
+                wr = copy_file_range(ifd, &ioff, ofd, &ooff, (size_t)ilen, 0);
+              #else
+                wr = copy_file_range(ifd, &ioff, ofd, &ooff,
+                                     (size_t)(ilen < INT32_MAX
+                                              ? ilen
+                                              : (INT32_MAX & ~(131072-1))),
+                                     0);
+              #endif
+            } while (wr > 0 && (ilen -= wr));
+            if (__builtin_expect( (0 == ilen), 1))
+                break; /* copied */
+
+            if (-1 == wr) {
+                rc = errno;
+                if (rc == ENOSPC)
+                    break;
+                if (rc == EXDEV) {
+                    /*(cross-filesystem copies introduced in Linux 5.3)
+                     *(overload WEBDAV_FLAG_NO_CLONE to indicate
+                     * no cross-filesystem copy_file_range() support) */
+                    *flags |= WEBDAV_FLAG_NO_CLONE;
+                    if (*flags & WEBDAV_FLAG_COPY_LINK) {
+                        *flags &= ~WEBDAV_FLAG_COPY_LINK;
+                        *flags |= WEBDAV_FLAG_COPY_XDEV;
+                    }
+                }
+            }
+            /*(ifd truncated if (0 == wr && ilen != 0))*/
+            if (0 != ooff && 0 != ftruncate(ofd, 0)) {
+                if (0 == rc) rc = errno;
+                break;
+            }
+            /* fallback, retry if copy_file_range() did not finish */
+        }
+      #elif defined(FICLONE) /* defined(__linux__) */
+        /*(redundant if copy_file_range() available)*/
+        if (!(*flags & (WEBDAV_FLAG_COPY_XDEV
+                       |WEBDAV_FLAG_MOVE_XDEV
+                       |WEBDAV_FLAG_NO_CLONE))) {
+            rc = ioctl(ofd, FICLONE, ifd);
+            if (__builtin_expect( (0 == rc), 1))
+                break; /* copied */
+
+            /*(reached if filesystem does not support reflinks or fds not on
+             * same mounted filesystem.  If this code is reached, link() was
+             * not used, e.g. due to enabling "deprecated-unsafe-partial-put")*/
+            if (errno == EXDEV) {
+                if (*flags & WEBDAV_FLAG_COPY_LINK) {
+                    *flags &= ~WEBDAV_FLAG_COPY_LINK;
+                    *flags |= WEBDAV_FLAG_COPY_XDEV;
+                }
+            }
+            else
+                *flags |= WEBDAV_FLAG_NO_CLONE;
+        }
+      #endif
+
+        rc = webdav_fcopyfile_sz(ifd, ofd, st.st_size);
+        if (__builtin_expect( (0 != rc), 0))
+            rc = errno;
+    } while (0);
 
     close(ifd);
     const int wc = close(ofd);
+    if (__builtin_expect( (0 != wc), 0) && 0 == rc)
+        rc = errno;
 
-    if (0 != rc || 0 != wc) {
+    if (__builtin_expect( (0 != rc), 0)) {
         /* error reading or writing files */
-        rc = (0 != wc && wc == ENOSPC) ? 507 : 403;
+        rc = (rc == ENOSPC) ? 507 : 403;
         unlink(tmpb->ptr);
         return rc;
     }
 
+  } while (0);
+
+    const int overwrite = (*flags & WEBDAV_FLAG_OVERWRITE);
   #ifndef RENAME_NOREPLACE /*(renameat2() not well-supported yet)*/
     if (!overwrite) {
         struct stat stb;
@@ -2678,7 +2892,7 @@ webdav_copymove_file (const plugin_config * const pconf,
     }
 
     /* link() or rename() failed; fall back to copy to tempfile and rename() */
-    int status = webdav_copytmp_rename(pconf, src, dst, overwrite);
+    int status = webdav_copytmp_rename(pconf, src, dst, flags);
     if (0 == status) {
         webdav_prop_copy_uri(pconf, &src->rel_path, &dst->rel_path);
         if (*flags & (WEBDAV_FLAG_MOVE_RENAME|WEBDAV_FLAG_MOVE_XDEV))
@@ -4542,12 +4756,10 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (request_st * const r,
     }
 
   #ifdef HAVE_COPY_FILE_RANGE
-   #ifdef __FreeBSD__
-   typedef off_t loff_t;
-   #endif
     /* use Linux copy_file_range() if available
      * (Linux 4.5, but glibc 2.27 provides a user-space emulation)
      * fd_in and fd_out must be on same mount (handled in mod_webdav_put_prep())
+     *   before Linux 5.3
      * check that reqbody is contained in single tempfile and open fd (expected)
      * (Note: copying might take some time, temporarily pausing server)
      */
@@ -4559,7 +4771,15 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (request_st * const r,
         loff_t ooff = offset;
         ssize_t wr;
         do {
+          #if defined(_LP64) || defined(__LP64__) || defined(_WIN64)
             wr = copy_file_range(c->file.fd,&zoff,fd,&ooff,(size_t)cqlen, 0);
+          #else
+            wr = copy_file_range(c->file.fd,&zoff,fd,&ooff,
+                                 (size_t)(cqlen < INT32_MAX
+                                          ? cqlen
+                                          : (INT32_MAX & ~(131072-1))),
+                                 0);
+          #endif
         } while (wr > 0 && (cqlen -= wr));
         /*(ignore if c->file.fd truncated (wr == 0 && cqlen != 0); fail below)*/
     }
@@ -4742,7 +4962,9 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
                   : 0)
               | (r->http_method == HTTP_METHOD_MOVE
                   ? WEBDAV_FLAG_MOVE_RENAME
-                  : WEBDAV_FLAG_COPY_LINK);
+                  : (pconf->opts & MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT)
+                      ? 0
+                      : WEBDAV_FLAG_COPY_LINK);
 
     const buffer * const h =
       http_header_request_get(r,HTTP_HEADER_OTHER,CONST_STR_LEN("Overwrite"));
