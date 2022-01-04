@@ -188,6 +188,8 @@ int fdevent_open_cloexec(const char *pathname, int symlinks, int flags, mode_t m
 int fdevent_open_devnull(void) {
   #if defined(_WIN32)
     return fdevent_open_cloexec("nul", 0, O_RDWR, 0);
+  #elif defined(__sun) /* /dev/null is a symlink on Illumos */
+    return fdevent_open_cloexec("/dev/null", 1, O_RDWR, 0);
   #else
     return fdevent_open_cloexec("/dev/null", 0, O_RDWR, 0);
   #endif

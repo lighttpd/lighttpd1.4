@@ -208,6 +208,9 @@ if (NOT HAVE_CLOCK_GETTIME)
 	check_library_exists(rt clock_gettime "time.h" HAVE_CLOCK_GETTIME)
 endif()
 check_library_exists(elftc elftc_copyfile "libelftc.h" HAVE_ELFTC_COPYFILE)
+if(CMAKE_SYSTEM_NAME MATCHES "SunOS")
+set(CMAKE_REQUIRED_LIBRARIES "socket;nsl")
+endif()
 check_c_source_compiles("
 	#include <sys/types.h>
 	#include <sys/socket.h>
@@ -217,6 +220,9 @@ check_c_source_compiles("
 		struct sockaddr_in6 s; struct in6_addr t=in6addr_any; int i=AF_INET6; s; t.s6_addr[0] = 0;
 		return 0;
 	}" HAVE_IPV6)
+if(CMAKE_SYSTEM_NAME MATCHES "SunOS")
+set(CMAKE_REQUIRED_LIBRARIES)
+endif()
 check_c_source_compiles("
 	__attribute__((weak)) void __dummy(void *x) { }
 	int main() {
@@ -734,6 +740,7 @@ if(WITH_FAM AND NOT HAVE_SYS_INOTIFY_H)
 	if(HAVE_LIBFAM)
 		set(CMAKE_REQUIRED_LIBRARIES fam)
 		check_function_exists(FAMNoExists HAVE_FAMNOEXISTS)
+		set(CMAKE_REQUIRED_LIBRARIES)
 	endif()
 else()
 	unset(HAVE_FAM_H)
