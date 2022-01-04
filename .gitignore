@@ -35,6 +35,7 @@ distribute.sh
 fcgi-responder
 install-sh
 lemon
+lemon.dSYM
 libtool
 lighttpd
 lighttpd-angel
