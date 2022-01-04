@@ -18,14 +18,11 @@
 #endif
 #endif
 #include "first.h"
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__sun)
 #ifndef _RSIZE_T_DEFINED /* expecting __EXT1_VISIBLE 1 and _RSIZE_T_DEFINED */
 #define _RSIZE_T_DEFINED
 typedef size_t rsize_t;
 #endif
-#include <errno.h>
-#endif
-#ifdef __sun
 #include <errno.h>
 #endif
 
