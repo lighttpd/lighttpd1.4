@@ -815,7 +815,7 @@ if target_machine.system() == 'windows'
 	endif
 endif
 
-if compiler.get_id() == 'gcc' or target_machine.system() != 'darwin'
+if (compiler.get_id() == 'gcc' or compiler.get_id() == 'clang') and target_machine.system() != 'darwin' and target_machine.system() != 'sunos'
 	lighttpd_flags += [ declare_dependency(
 		link_args: [
 			'-Wl,-export-dynamic',
