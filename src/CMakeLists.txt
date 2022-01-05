@@ -155,6 +155,11 @@ set(CMAKE_EXTRA_INCLUDE_FILES time.h)
 check_function_exists(timegm HAVE_TIMEGM)
 set(CMAKE_EXTRA_INCLUDE_FILES)
 
+if(CMAKE_SYSTEM_NAME MATCHES "SunOS")
+check_include_files(priv.h HAVE_PRIV_H)
+check_function_exists(setpflags HAVE_SETPFLAGS)
+endif()
+
 check_type_size(long SIZEOF_LONG)
 check_type_size(off_t SIZEOF_OFF_T)
 

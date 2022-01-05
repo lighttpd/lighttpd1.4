@@ -1472,6 +1472,10 @@ AC_CHECK_FUNCS([\
 ])
 AC_CHECK_HEADERS([sys/random.h], [AC_CHECK_FUNCS([getentropy])])
 AC_CHECK_HEADERS([linux/random.h], [AC_CHECK_FUNCS([getrandom])])
+case "$host_os" in
+*sunos*|*solaris* ) AC_CHECK_HEADERS([priv.h], [AC_CHECK_FUNCS([setpflags])]) ;;
+* ) ;;
+esac
 
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([if weak symbols are supported])

@@ -118,6 +118,11 @@ if conf_data.get('HAVE_LINUX_RANDOM_H')
 	))
 endif
 
+if target_machine.system() == 'sunos'
+conf_data.set('HAVE_PRIV_H', compiler.has_header('priv.h'))
+conf_data.set('HAVE_SETPFLAGS', compiler.has_function('setpflags', args: defs))
+endif
+
 conf_data.set('SIZEOF_LONG', compiler.sizeof('long', args: defs))
 conf_data.set('SIZEOF_OFF_T', compiler.sizeof('off_t', args: defs))
 

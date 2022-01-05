@@ -463,6 +463,9 @@ if 1:
 	])
 	autoconf.haveFunc('getentropy', 'sys/random.h')
 	autoconf.haveFunc('getrandom', 'linux/random.h')
+	if re.compile("sunos|solaris").search(env['PLATFORM']):
+		autoconf.haveCHeader('priv.h')
+		autoconf.haveFunc('setpflags', 'priv.h')
 
 	autoconf.haveTypes(Split('pid_t size_t off_t'))
 

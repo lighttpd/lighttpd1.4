@@ -20,6 +20,7 @@
 #cmakedefine  HAVE_MALLOC_H
 #cmakedefine  HAVE_POLL_H
 #cmakedefine  HAVE_PORT_H
+#cmakedefine  HAVE_PRIV_H
 #cmakedefine  HAVE_PWD_H
 #cmakedefine  HAVE_STDINT_H
 #cmakedefine  HAVE_STDLIB_H
@@ -186,6 +187,7 @@
 #cmakedefine  HAVE_SEND_FILE
 #cmakedefine  HAVE_SENDFILE64
 #cmakedefine  HAVE_SENDFILEV
+#cmakedefine  HAVE_SETPFLAGS
 #cmakedefine  HAVE_SIGACTION
 #cmakedefine  HAVE_SIGNAL
 #cmakedefine  HAVE_SIGTIMEDWAIT
