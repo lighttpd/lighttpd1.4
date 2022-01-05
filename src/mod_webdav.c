@@ -189,6 +189,10 @@
 #include <string.h>
 #include <unistd.h>     /* getpid() linkat() rmdir() unlinkat() */
 
+#ifdef RENAME_NOREPLACE /*(renameat2() not well-supported yet)*/
+#define HAVE_RENAMEAT2
+#endif
+
 #ifdef HAVE_COPY_FILE_RANGE
 #ifdef __FreeBSD__
 typedef off_t loff_t;
@@ -2794,7 +2798,7 @@ webdav_copytmp_rename (const plugin_config * const pconf,
   } while (0);
 
     const int overwrite = (*flags & WEBDAV_FLAG_OVERWRITE);
-  #ifndef RENAME_NOREPLACE /*(renameat2() not well-supported yet)*/
+  #ifndef HAVE_RENAMEAT2
     if (!overwrite) {
         struct stat stb;
         if (0 == lstat(dst->path.ptr, &stb) || errno != ENOENT)
@@ -2836,7 +2840,7 @@ webdav_copymove_file (const plugin_config * const pconf,
 {
     const int overwrite = (*flags & WEBDAV_FLAG_OVERWRITE);
     if (*flags & WEBDAV_FLAG_MOVE_RENAME) {
-      #ifndef RENAME_NOREPLACE /*(renameat2() not well-supported yet)*/
+      #ifndef HAVE_RENAMEAT2
         if (!overwrite) {
             struct stat st;
             if (0 == lstat(dst->path.ptr, &st) || errno != ENOENT)
@@ -3021,7 +3025,7 @@ webdav_copymove_dir (const plugin_config * const pconf,
     int make_destdir = 1;
     const int overwrite = (flags & WEBDAV_FLAG_OVERWRITE);
     if (flags & WEBDAV_FLAG_MOVE_RENAME) {
-      #ifndef RENAME_NOREPLACE /*(renameat2() not well-supported yet)*/
+      #ifndef HAVE_RENAMEAT2
         if (!overwrite) {
             if (0 == lstat(dst->path.ptr, &st) || errno != ENOENT) {
                 webdav_xml_response_status(r, &src->rel_path, 412);
@@ -4688,7 +4692,7 @@ mod_webdav_put_linkat_rename (request_st * const r,
     pathproc[sizeof("/proc/self/fd/")-1+plen] = '\0';
     if (0 == linkat(AT_FDCWD, pathproc, AT_FDCWD, pathtemp, AT_SYMLINK_FOLLOW)){
         struct stat st;
-      #ifdef RENAME_NOREPLACE /*(renameat2() not well-supported yet)*/
+      #ifdef HAVE_RENAMEAT2
         if (0 == renameat2(AT_FDCWD, pathtemp,
                            AT_FDCWD, r->physical.path.ptr, RENAME_NOREPLACE))
             http_status_set_fin(r, 201); /* Created */
