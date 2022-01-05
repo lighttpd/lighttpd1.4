@@ -27,6 +27,8 @@ if target_machine.system() == 'sunos'
 	socket_libs = [ compiler.find_library('socket')
 	              , compiler.find_library('nsl')
 	              ]
+elif target_machine.system() == 'haiku'
+	socket_libs = [ compiler.find_library('network') ]
 endif
 
 

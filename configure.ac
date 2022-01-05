@@ -146,8 +146,8 @@ AC_CHECK_TYPES([socklen_t],
 )
 
 dnl openssl on solaris needs -lsocket -lnsl
-AC_SEARCH_LIBS([socket], [socket])
-AC_SEARCH_LIBS([gethostbyname], [nsl socket])
+AC_SEARCH_LIBS([socket], [socket network])
+AC_SEARCH_LIBS([gethostbyname], [nsl socket network])
 
 dnl On Haiku accept() and friends are in libnetwork
 AC_SEARCH_LIBS([accept], [network])
