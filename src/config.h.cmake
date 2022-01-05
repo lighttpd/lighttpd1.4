@@ -170,9 +170,7 @@
 #cmakedefine  HAVE_MADVISE
 #cmakedefine  HAVE_MALLOC_TRIM
 #cmakedefine  HAVE_MALLOPT
-#cmakedefine  HAVE_MEMCPY
 #cmakedefine  HAVE_MEMPCPY
-#cmakedefine  HAVE_MEMSET
 #cmakedefine  HAVE_MKOSTEMP
 #cmakedefine  HAVE_MMAP
 #cmakedefine  HAVE_PIPE2

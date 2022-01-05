@@ -1445,9 +1445,7 @@ AC_CHECK_FUNCS([\
   madvise \
   malloc_trim \
   mallopt \
-  memcpy \
   mempcpy \
-  memset \
   memset_s \
   mkostemp \
   mmap \

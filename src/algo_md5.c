@@ -3,6 +3,9 @@
 #include "sys-crypto-md.h"
 #ifndef USE_LIB_CRYPTO_MD5
 
+#define HAVE_MEMCPY
+#define HAVE_MEMSET
+
 /* MD5C.C - RSA Data Security, Inc., MD5 message-digest algorithm
  */
 
