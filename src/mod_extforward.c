@@ -715,7 +715,7 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
         while (s[i] == ' ' || s[i] == '\t') ++i;
         if (s[i] == ';') { ++i; continue; }
         if (s[i] == ',') {
-            if (j >= (int)(sizeof(offsets)/sizeof(int))) break;
+            if (j >= (int)(sizeof(offsets)/sizeof(int))-1) break;
             offsets[++j] = -1; /*("offset" separating params from next proxy)*/
             ++i;
             continue;
