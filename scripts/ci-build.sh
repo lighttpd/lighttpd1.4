@@ -49,11 +49,17 @@ case "${build}" in
 	make -j 2
 	make check
 	;;
-"cmake")
+"cmake"|"cmake-asan")
 	mkdir cmakebuild
 	cd cmakebuild
+	if [ "${build}" = "cmake-asan" ]; then
+		asan_opts="-DBUILD_SANITIZE_ADDRESS=ON -DBUILD_SANITIZE_UNDEFINED=ON"
+	else
+		asan_opts=""
+	fi
 	cmake \
 		-DBUILD_EXTRA_WARNINGS=ON \
+		${asan_opts} \
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
 		-DWITH_PCRE2=ON \
 		-DWITH_ZSTD=ON \
