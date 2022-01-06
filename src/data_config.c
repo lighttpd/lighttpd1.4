@@ -57,7 +57,7 @@ static void data_config_free(data_unset *d) {
 }
 
 data_config *data_config_init(void) {
-	static const struct data_methods fn = {
+	static const struct data_methods config_fn = {
 		data_config_copy,
 		data_config_free,
 		NULL
@@ -72,7 +72,7 @@ data_config *data_config_init(void) {
 	vector_config_weak_init(&ds->children);
 
 	ds->type = TYPE_CONFIG;
-	ds->fn = &fn;
+	ds->fn = &config_fn;
 
 	return ds;
 }

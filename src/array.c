@@ -37,7 +37,7 @@ static void array_data_string_free(data_unset *du) {
 
 __attribute_noinline__
 data_string *array_data_string_init(void) {
-    static const struct data_methods fn = {
+    static const struct data_methods string_fn = {
         array_data_string_copy,
         array_data_string_free,
         array_data_string_insert_dup,
@@ -45,7 +45,7 @@ data_string *array_data_string_init(void) {
     data_string *ds = calloc(1, sizeof(*ds));
     force_assert(NULL != ds);
     ds->type = TYPE_STRING;
-    ds->fn = &fn;
+    ds->fn = &string_fn;
     return ds;
 }
 
@@ -67,7 +67,7 @@ static void array_data_integer_free(data_unset *du) {
 
 __attribute_noinline__
 data_integer *array_data_integer_init(void) {
-    static const struct data_methods fn = {
+    static const struct data_methods integer_fn = {
         array_data_integer_copy,
         array_data_integer_free,
         NULL
@@ -75,7 +75,7 @@ data_integer *array_data_integer_init(void) {
     data_integer *di = calloc(1, sizeof(*di));
     force_assert(NULL != di);
     di->type = TYPE_INTEGER;
-    di->fn = &fn;
+    di->fn = &integer_fn;
     return di;
 }
 
@@ -98,7 +98,7 @@ static void array_data_array_free(data_unset *du) {
 
 __attribute_noinline__
 data_array *array_data_array_init(void) {
-    static const struct data_methods fn = {
+    static const struct data_methods array_fn = {
         array_data_array_copy,
         array_data_array_free,
         NULL
@@ -106,7 +106,7 @@ data_array *array_data_array_init(void) {
     data_array *da = calloc(1, sizeof(*da));
     force_assert(NULL != da);
     da->type = TYPE_ARRAY;
-    da->fn = &fn;
+    da->fn = &array_fn;
     return da;
 }
 
