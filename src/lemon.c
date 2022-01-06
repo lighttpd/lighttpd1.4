@@ -448,13 +448,11 @@ struct acttab {
 #define acttab_yylookahead(X,N)  ((X)->aAction[N].lookahead)
 
 /* Free all memory associated with the given acttab */
-/*
 PRIVATE void acttab_free(acttab *p){
   free( p->aAction );
   free( p->aLookahead );
   free( p );
 }
-*/
 
 /* Allocate a new acttab structure */
 PRIVATE acttab *acttab_alloc(void){
@@ -1704,6 +1702,7 @@ FILE *err;
   int j;
   int errcnt = 0;
   cp = strchr(argv[i],'=');
+  if( NULL == cp ) return 1; /*(should not happen; checked by caller)*/
   *cp = 0;
   for(j=0; op[j].label; j++){
     if( strcmp(argv[i],op[j].label)==0 ) break;
@@ -2325,6 +2324,7 @@ struct lemon *gp;
   int c;
   char *cp, *nextcp;
   int startline = 0;
+  long epos;
 
   ps.gp = gp;
   ps.filename = gp->filename;
@@ -2339,7 +2339,14 @@ struct lemon *gp;
     return;
   }
   fseek(fp,0,2);
-  filesize = ftell(fp);
+  epos = ftell(fp);
+  if( -1 == epos ) {
+    ErrorMsg(ps.filename,0,"Can't determine file size.");
+    fclose(fp);
+    gp->errorcnt++;
+    return;
+  }
+  filesize = (size_t)epos;
   rewind(fp);
   filebuf = (char *)malloc( filesize+1 );
   if( filebuf==0 ){
@@ -3586,6 +3593,7 @@ int mhflag;     /* Output in makeheaders format if true */
   /* Append any addition code the user desires */
   tplt_print(out,lemp,lemp->extracode,lemp->extracodeln,&lineno);
 
+  acttab_free(pActtab);
   fclose(in);
   fclose(out);
   return;
