@@ -48,11 +48,33 @@ option(WITH_XXHASH "with system-provided xxhash [default: off]")
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
 	option(BUILD_EXTRA_WARNINGS "extra warnings")
+	option(BUILD_SANITIZE_ADDRESS "Enable address sanitizer" OFF)
+	option(BUILD_SANITIZE_UNDEFINED "Enable undefined sanitizer" OFF)
 
 	if(BUILD_EXTRA_WARNINGS)
 		set(WARN_CFLAGS "-g -g2 -Wall -Wmissing-declarations -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security")
-		set(WARN_LDFLAGS "-Wl,--as-needed")
+		set(WARN_LDFLAGS "")
 		# -Werror -Wbad-function-cast -Wmissing-prototypes
+		if(NOT BUILD_SANITIZE_ADDRESS)
+			# with asan we need to link all libraries we might need later
+			# so asan can initialize intercepts properly
+			# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103930
+			set(WARN_LDFLAGS "${WARN_LDFLAGS} -Wl,--as-needed")
+		endif()
+	endif()
+
+	set(SANITIZE_FLAGS "")
+
+	if(BUILD_SANITIZE_ADDRESS)
+		set(SANITIZE_FLAGS "${SANITIZE_FLAGS} -fsanitize=address")
+	endif()
+
+	if(BUILD_SANITIZE_UNDEFINED)
+		set(SANITIZE_FLAGS "${SANITIZE_FLAGS} -fsanitize=undefined")
+	endif()
+
+	if(SANITIZE_FLAGS)
+		set(WARN_CFLAGS "${SANITIZE_FLAGS} -fno-omit-frame-pointer ${WARN_CFLAGS}")
 	endif()
 endif()
 
@@ -998,6 +1020,14 @@ if(HAVE_LIBCRYPT)
 	set(L_MOD_AUTHN_FILE ${L_MOD_AUTHN_FILE} crypt)
 endif()
 target_link_libraries(mod_authn_file ${L_MOD_AUTHN_FILE})
+
+if(BUILD_SANITIZE_ADDRESS AND HAVE_LIBCRYPT)
+	# libasan initializes intercepts early (before lighty loads plugins);
+	# if libcrypt isn't loaded at that time calling crypt later ends up
+	# calling a nullptr.
+	# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103930
+	target_link_libraries(lighttpd crypt)
+endif()
 
 if(WITH_KRB5)
 	check_library_exists(krb5 krb5_init_context "" HAVE_KRB5)
