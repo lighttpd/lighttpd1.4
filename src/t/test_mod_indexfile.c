@@ -108,6 +108,7 @@ void test_mod_indexfile (void)
     free(r.uri.path.ptr);
     free(r.physical.path.ptr);
     free(r.physical.doc_root.ptr);
+    array_free_data(&r.env);
 
     stat_cache_free();
 }

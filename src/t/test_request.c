@@ -618,6 +618,9 @@ void test_request (void)
 
     free(r.target_orig.ptr);
     free(r.target.ptr);
+    free(r.uri.authority.ptr);
+    free(r.uri.path.ptr);
+    free(r.uri.scheme.ptr);
     array_free_data(&r.rqst_headers);
 
     fdlog_free(r.conf.errh);

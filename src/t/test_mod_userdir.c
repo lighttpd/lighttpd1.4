@@ -185,6 +185,7 @@ void test_mod_userdir (void)
     free(r.physical.basedir.ptr);
     free(r.physical.path.ptr);
     free(r.physical.rel_path.ptr);
+    array_free_data(&r.resp_headers);
 
     fdlog_free(r.conf.errh);
     buffer_free(r.tmp_buf);

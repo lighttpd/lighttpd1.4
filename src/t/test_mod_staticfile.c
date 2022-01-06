@@ -423,9 +423,12 @@ void test_mod_staticfile (void)
     chunkqueue_reset(&r.write_queue);
 
     free(r.uri.path.ptr);
+    free(r.pathinfo.ptr);
     free(r.physical.path.ptr);
     free(r.physical.rel_path.ptr);
     free(r.physical.doc_root.ptr);
+    array_free_data(&r.rqst_headers);
+    array_free_data(&r.resp_headers);
 
     free(p);
     stat_cache_free();
