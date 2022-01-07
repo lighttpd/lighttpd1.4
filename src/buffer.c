@@ -166,8 +166,10 @@ void buffer_commit(buffer *b, size_t size)
 	b->ptr[sz - 1] = '\0';
 }
 
+__attribute_cold__ /*(reduce code size due to inlining)*/
 void buffer_copy_string(buffer * restrict b, const char * restrict s) {
-	buffer_copy_string_len(b, s, NULL != s ? strlen(s) : 0);
+    if (__builtin_expect( (NULL == s), 0)) s = "";
+    buffer_copy_string_len(b, s, strlen(s));
 }
 
 void buffer_copy_string_len(buffer * const restrict b, const char * const restrict s, const size_t len) {
@@ -179,8 +181,10 @@ void buffer_copy_string_len(buffer * const restrict b, const char * const restri
     memcpy(d, s, len);
 }
 
+__attribute_cold__ /*(reduce code size due to inlining)*/
 void buffer_append_string(buffer * restrict b, const char * restrict s) {
-	buffer_append_string_len(b, s, NULL != s ? strlen(s) : 0);
+    if (__builtin_expect( (NULL == s), 0)) s = "";
+    buffer_append_string_len(b, s, strlen(s));
 }
 
 /**
