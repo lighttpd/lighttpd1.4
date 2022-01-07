@@ -911,7 +911,7 @@ dnl pcre support
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for perl regular expressions support])
 AC_ARG_WITH([pcre],
-  [AS_HELP_STRING([--with-pcre], [Enable pcre support (default yes)])],
+  [AS_HELP_STRING([--with-pcre], [Enable pcre support (default no)])],
   [WITH_PCRE=$withval],
   [WITH_PCRE=no]
 )
@@ -921,7 +921,7 @@ dnl pcre2 support
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for perl regular expressions support])
 AC_ARG_WITH([pcre2],
-  [AS_HELP_STRING([--with-pcre2], [Enable pcre2 support (default no)])],
+  [AS_HELP_STRING([--with-pcre2], [Enable pcre2 support (default yes)])],
   [WITH_PCRE2=$withval],
   [WITH_PCRE2=yes]
 )
