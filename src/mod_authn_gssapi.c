@@ -204,14 +204,12 @@ static void mod_authn_gssapi_log_krb5_error(log_error_st *errh, const char *file
 
 static int mod_authn_gssapi_create_krb5_ccache(request_st * const r, plugin_data * const p, krb5_context kcontext, krb5_principal princ, krb5_ccache * const ccache)
 {
-    buffer * const kccname = buffer_init_string("FILE:/tmp/krb5cc_gssapi_XXXXXX");
-    char * const ccname    = kccname->ptr + sizeof("FILE:")-1;
-    const size_t ccnamelen = buffer_clen(kccname)-(sizeof("FILE:")-1);
+    char kccname[]         = "FILE:/tmp/krb5cc_gssapi_XXXXXX";
+    char * const ccname    = kccname + sizeof("FILE:")-1;
     /*(future: might consider using server.upload-dirs instead of /tmp)*/
     int fd = fdevent_mkostemp(ccname, 0);
     if (fd < 0) {
         log_perror(r->conf.errh, __FILE__, __LINE__, "mkstemp(): %s", ccname);
-        buffer_free(kccname);
         return -1;
     }
     close(fd);
@@ -219,7 +217,7 @@ static int mod_authn_gssapi_create_krb5_ccache(request_st * const r, plugin_data
     do {
         krb5_error_code problem;
 
-        problem = krb5_cc_resolve(kcontext, kccname->ptr, ccache);
+        problem = krb5_cc_resolve(kcontext, kccname, ccache);
         if (problem) {
             mod_authn_gssapi_log_krb5_error(r->conf.errh, __FILE__, __LINE__, "krb5_cc_resolve", NULL, kcontext, problem);
             break;
@@ -227,13 +225,14 @@ static int mod_authn_gssapi_create_krb5_ccache(request_st * const r, plugin_data
 
         problem = krb5_cc_initialize(kcontext, *ccache, princ);
         if (problem) {
-            mod_authn_gssapi_log_krb5_error(r->conf.errh, __FILE__, __LINE__, "krb5_cc_initialize", kccname->ptr, kcontext, problem);
+            mod_authn_gssapi_log_krb5_error(r->conf.errh, __FILE__, __LINE__, "krb5_cc_initialize", kccname, kcontext, problem);
             break;
         }
 
-        r->plugin_ctx[p->id] = kccname;
-
-        http_header_env_set(r, CONST_STR_LEN("KRB5CCNAME"), ccname, ccnamelen);
+        buffer * const vb = http_header_env_set_ptr(r, CONST_STR_LEN("KRB5CCNAME"));
+        r->plugin_ctx[p->id] = vb;
+        const size_t ccnamelen = sizeof(kccname)-sizeof("FILE:");
+        buffer_copy_string_len(vb, ccname, ccnamelen);
         http_header_request_set(r, HTTP_HEADER_OTHER, CONST_STR_LEN("X-Forwarded-Keytab"), ccname, ccnamelen);
 
         return 0;
@@ -245,7 +244,6 @@ static int mod_authn_gssapi_create_krb5_ccache(request_st * const r, plugin_data
         *ccache = NULL;
     }
     unlink(ccname);
-    buffer_free(kccname);
 
     return -1;
 }
@@ -789,11 +787,10 @@ static handler_t mod_authn_gssapi_basic(request_st * const r, void *p_d, const h
 
 REQUEST_FUNC(mod_authn_gssapi_handle_reset) {
     plugin_data *p = (plugin_data *)p_d;
-    buffer *kccname = (buffer *)r->plugin_ctx[p->id];
-    if (NULL != kccname) {
+    buffer * const ccname = (buffer *)r->plugin_ctx[p->id];
+    if (NULL != ccname) {
         r->plugin_ctx[p->id] = NULL;
-        unlink(kccname->ptr+sizeof("FILE:")-1);
-        buffer_free(kccname);
+        unlink(ccname->ptr);
     }
 
     return HANDLER_GO_ON;
