@@ -33,10 +33,6 @@ __attribute_malloc__
 __attribute_returns_nonnull__
 buffer* buffer_init(void);
 
-__attribute_nonnull__()
-__attribute_returns_nonnull__
-buffer* buffer_init_buffer(const buffer *src);
-
 void buffer_free(buffer *b); /* b can be NULL */
 
 /* reset b. if NULL != b && NULL != src, move src content to b. reset src. */

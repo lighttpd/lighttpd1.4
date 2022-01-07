@@ -321,7 +321,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	srv_socket->sidx = sidx;
 	srv_socket->is_ssl = s->ssl_enabled;
 	srv_socket->srv = srv;
-	srv_socket->srv_token = buffer_init_buffer(host_token);
+	buffer_copy_buffer((srv_socket->srv_token = buffer_init()), host_token);
 	srv_socket->srv_token_colon =
 	  network_srv_token_colon(srv_socket->srv_token);
 
@@ -758,8 +758,9 @@ int network_init(server *srv, int stdin_fd) {
                 force_assert(NULL != srv_socket);
                 memcpy(srv_socket, srv->srv_sockets_inherited.ptr[i],
                        sizeof(server_socket));
-                srv_socket->srv_token =
-                  buffer_init_buffer(srv_socket->srv_token);
+                const buffer * const srv_token = srv_socket->srv_token;
+                buffer_copy_buffer((srv_socket->srv_token = buffer_init()),
+                                   srv_token);
                 srv_socket->srv_token_colon =
                   network_srv_token_colon(srv_socket->srv_token);
                 network_srv_sockets_append(srv, srv_socket);

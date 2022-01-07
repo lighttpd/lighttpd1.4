@@ -688,7 +688,7 @@ static handler_t mod_authn_gssapi_basic(request_st * const r, void *p_d, const h
     }
 
     if (strchr(username->ptr, '@') == NULL) {
-        user_at_realm = buffer_init_buffer(username);
+        buffer_copy_buffer((user_at_realm = buffer_init()), username);
         buffer_append_str2(user_at_realm, CONST_STR_LEN("@"),
                                           BUF_PTR_LEN(require->realm));
     }

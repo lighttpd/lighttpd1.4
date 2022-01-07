@@ -1260,8 +1260,8 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
 
   #if 0
 
-    buffer *privkey = buffer_init_buffer(b);
-    buffer_append_string_len(b, CONST_STR_LEN(".crt.pem"));
+    buffer * const privkey = buffer_init();
+    buffer_append_str2(b, BUF_PTR_LEN(b), CONST_STR_LEN(".crt.pem"));
     buffer_append_string_len(privkey, CONST_STR_LEN(".key.pem"));
 
     /*(similar to network_gnutls_load_pemfile() but propagates rc)*/

@@ -17,15 +17,8 @@ buffer* buffer_init(void) {
 	return b;
 }
 
-buffer *buffer_init_buffer(const buffer *src) {
-	buffer * const b = buffer_init();
-	buffer_copy_string_len(b, BUF_PTR_LEN(src));
-	return b;
-}
-
 void buffer_free(buffer *b) {
 	if (NULL == b) return;
-
 	free(b->ptr);
 	free(b);
 }

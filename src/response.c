@@ -596,7 +596,7 @@ http_response_errdoc_init (request_st * const r)
         const buffer * const vb =
           http_header_response_get(r, HTTP_HEADER_WWW_AUTHENTICATE,
                                    CONST_STR_LEN("WWW-Authenticate"));
-        if (NULL != vb) www_auth = buffer_init_buffer(vb);
+        if (NULL != vb) buffer_copy_buffer((www_auth = buffer_init()), vb);
     }
 
     buffer_reset(&r->physical.path);

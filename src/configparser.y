@@ -720,7 +720,7 @@ stringop(A) ::= expression(B). {
   A = NULL;
   if (ctx->ok) {
     if (B->type == TYPE_STRING) {
-      A = buffer_init_buffer(&((data_string*)B)->value);
+      buffer_copy_buffer((A = buffer_init()), &((data_string*)B)->value);
     } else if (B->type == TYPE_INTEGER) {
       A = buffer_init();
       buffer_append_int(A, ((data_integer *)B)->value);
