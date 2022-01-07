@@ -31,6 +31,7 @@
 #include "mod_auth_api.h"
 #include "base.h"
 #include "base64.h"
+#include "fdevent.h"
 #include "http_header.h"
 #include "log.h"
 #include "plugin.h"
@@ -207,12 +208,7 @@ static int mod_authn_gssapi_create_krb5_ccache(request_st * const r, plugin_data
     char * const ccname    = kccname->ptr + sizeof("FILE:")-1;
     const size_t ccnamelen = buffer_clen(kccname)-(sizeof("FILE:")-1);
     /*(future: might consider using server.upload-dirs instead of /tmp)*/
-  #ifdef __COVERITY__
-    /* POSIX-2008 requires mkstemp create file with 0600 perms */
-    umask(0600);
-  #endif
-    /* coverity[secure_temp : FALSE] */
-    int fd = mkstemp(ccname);
+    int fd = fdevent_mkostemp(ccname, 0);
     if (fd < 0) {
         log_perror(r->conf.errh, __FILE__, __LINE__, "mkstemp(): %s", ccname);
         buffer_free(kccname);
