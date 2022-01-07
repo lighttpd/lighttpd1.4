@@ -159,8 +159,10 @@ void test_mod_userdir (void)
     plugin_data * const p = mod_userdir_init();
     assert(NULL != p);
 
-    buffer *basepath = buffer_init_string("/web/u/"); /*(skip getpwnam())*/
-    buffer *path     = buffer_init_string("public_html");
+    buffer *basepath = buffer_init();
+    buffer *path     = buffer_init();
+    buffer_copy_string(basepath, "/web/u/"); /*(skip getpwnam())*/
+    buffer_copy_string(path, "public_html");
     p->defaults.basepath = basepath;
     p->defaults.path = path;
 

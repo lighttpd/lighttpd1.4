@@ -37,9 +37,6 @@ __attribute_nonnull__()
 __attribute_returns_nonnull__
 buffer* buffer_init_buffer(const buffer *src);
 
-__attribute_returns_nonnull__
-buffer* buffer_init_string(const char *str); /* str can  be NULL */
-
 void buffer_free(buffer *b); /* b can be NULL */
 
 /* reset b. if NULL != b && NULL != src, move src content to b. reset src. */

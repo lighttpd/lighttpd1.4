@@ -2138,7 +2138,8 @@ static int config_parse(server *srv, config_t *context, const char *source, cons
 
 	if (ret != -1 && context->ok) {
 		/* add an EOL at EOF, better than say sorry */
-		configparser(pParser, TK_EOL, buffer_init_string("(EOL)"), context);
+		buffer_copy_string((token = buffer_init()), "(EOL)");
+		configparser(pParser, TK_EOL, token, context);
 		if (context->ok) {
 			configparser(pParser, 0, NULL, context);
 		}

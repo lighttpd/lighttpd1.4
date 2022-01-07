@@ -124,13 +124,13 @@ INIT_FUNC(mod_cgi_init) {
 
 	/* for valgrind */
 	s = getenv("LD_PRELOAD");
-	if (s) p->env.ld_preload = buffer_init_string(s);
+	if (s) buffer_copy_string((p->env.ld_preload = buffer_init()), s);
 	s = getenv("LD_LIBRARY_PATH");
-	if (s) p->env.ld_library_path = buffer_init_string(s);
+	if (s) buffer_copy_string((p->env.ld_library_path = buffer_init()), s);
       #ifdef __CYGWIN__
 	/* CYGWIN needs SYSTEMROOT */
 	s = getenv("SYSTEMROOT");
-	if (s) p->env.systemroot = buffer_init_string(s);
+	if (s) buffer_copy_string((p->env.systemroot = buffer_init()), s);
       #endif
 
 	return p;

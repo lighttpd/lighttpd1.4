@@ -400,7 +400,7 @@ varline ::= key(A) APPEND expression(B). {
 
 key(A) ::= LKEY(B). {
   if (strchr(B->ptr, '.') == NULL) {
-    A = buffer_init_string("var.");
+    buffer_copy_string((A = buffer_init()), "var.");
     buffer_append_string_buffer(A, B);
   } else {
     A = B;

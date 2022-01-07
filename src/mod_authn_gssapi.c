@@ -161,11 +161,12 @@ static handler_t mod_authn_gssapi_send_400_bad_request (request_st * const r)
 __attribute_cold__
 static void mod_authn_gssapi_log_gss_error(log_error_st *errh, const char *file, unsigned int line, const char *func, const char *extra, OM_uint32 err_maj, OM_uint32 err_min)
 {
-    buffer * const msg = buffer_init_string(func);
+    buffer * const msg = buffer_init();
     OM_uint32 maj_stat, min_stat;
     OM_uint32 msg_ctx = 0;
     gss_buffer_desc status_string;
 
+    buffer_copy_string(msg, func);
     buffer_append_string_len(msg, CONST_STR_LEN("("));
     if (extra) buffer_append_string(msg, extra);
     buffer_append_string_len(msg, CONST_STR_LEN("):"));

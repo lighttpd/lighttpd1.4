@@ -23,12 +23,6 @@ buffer *buffer_init_buffer(const buffer *src) {
 	return b;
 }
 
-buffer *buffer_init_string(const char *str) {
-	buffer * const b = buffer_init();
-	buffer_copy_string(b, str);
-	return b;
-}
-
 void buffer_free(buffer *b) {
 	if (NULL == b) return;
 
