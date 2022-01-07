@@ -1110,7 +1110,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			}
 			break;
 		case 'm':
-			buffer_copy_string(srv->srvconf.modules_dir, optarg);
+			srv->srvconf.modules_dir = optarg;
 			break;
 		case 'i': {
 			char *endptr;
@@ -1145,7 +1145,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			return -1;
 		}
 		srv->srvconf.dont_daemonize = 1;
-		buffer_copy_string_len(srv->srvconf.modules_dir, CONST_STR_LEN("modules"));
+		srv->srvconf.modules_dir = "modules";
 		if (config_read(srv, "conf/lighttpd.conf")) return -1;
 	}
       #endif

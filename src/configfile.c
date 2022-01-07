@@ -1448,7 +1448,6 @@ void config_free(server *srv) {
     array_free(srv->config_context);
     array_free(srv->srvconf.config_touched);
     array_free(srv->srvconf.modules);
-    buffer_free(srv->srvconf.modules_dir);
     array_free(srv->srvconf.upload_tempdirs);
   #ifdef HAVE_PCRE2_H
     if (NULL == srv->match_data) pcre2_match_data_free(srv->match_data);
@@ -1479,7 +1478,7 @@ void config_init(server *srv) {
       | HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE;
 
     srv->srvconf.modules = array_init(16);
-    srv->srvconf.modules_dir = buffer_init_string(LIBRARY_DIR);
+    srv->srvconf.modules_dir = LIBRARY_DIR;
     srv->srvconf.upload_tempdirs = array_init(2);
 }
 

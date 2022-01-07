@@ -116,8 +116,8 @@ typedef struct {
 	const buffer *network_backend;
 	const array *feature_flags;
 	const char *event_handler;
+	const char *modules_dir;
 	buffer *pid_file;
-	buffer *modules_dir;
 	array *modules;
 	array *config_touched;
 	array empty_array;
