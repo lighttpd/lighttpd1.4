@@ -99,15 +99,12 @@ AC_CHECK_HEADERS([\
   inttypes.h \
   malloc.h \
   poll.h \
-  port.h \
   pwd.h \
   stdlib.h \
   stdint.h \
   strings.h \
-  sys/devpoll.h \
   sys/epoll.h \
   sys/event.h \
-  sys/filio.h \
   sys/inotify.h \
   sys/loadavg.h \
   sys/mman.h \
@@ -1451,7 +1448,6 @@ AC_CHECK_FUNCS([\
   mmap \
   pipe2 \
   poll \
-  port_create \
   pread \
   preadv \
   pwrite \
@@ -1470,8 +1466,16 @@ AC_CHECK_FUNCS([\
 ])
 AC_CHECK_HEADERS([sys/random.h], [AC_CHECK_FUNCS([getentropy])])
 AC_CHECK_HEADERS([linux/random.h], [AC_CHECK_FUNCS([getrandom])])
+
 case "$host_os" in
-*sunos*|*solaris* ) AC_CHECK_HEADERS([priv.h], [AC_CHECK_FUNCS([setpflags])]) ;;
+*sunos*|*solaris* )
+  AC_CHECK_HEADERS([priv.h], [AC_CHECK_FUNCS([setpflags])])
+  AC_CHECK_HEADERS([port.h], [AC_CHECK_FUNCS([port_create])])
+  AC_CHECK_HEADERS([\
+    sys/devpoll.h \
+    sys/filio.h \
+  ])
+  ;;
 * ) ;;
 esac
 

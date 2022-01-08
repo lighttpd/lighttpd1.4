@@ -370,15 +370,12 @@ if 1:
 		'linux/random.h',
 		'malloc.h',
 		'poll.h',
-		'port.h',
 		'pwd.h',
 		'stdint.h',
 		'stdlib.h',
 		'string.h',
 		'strings.h',
-		'sys/devpoll.h',
 		'sys/epoll.h',
-		'sys/filio.h',
 		'sys/inotify.h',
 		'sys/loadavg.h',
 		'sys/poll.h',
@@ -431,7 +428,6 @@ if 1:
 		'mmap',
 		'pipe2',
 		'poll',
-		'port_create',
 		'pread',
 		'preadv',
 		'pwrite',
@@ -451,7 +447,13 @@ if 1:
 	autoconf.haveFunc('getentropy', 'sys/random.h')
 	autoconf.haveFunc('getrandom', 'linux/random.h')
 	if re.compile("sunos|solaris").search(env['PLATFORM']):
-		autoconf.haveCHeader('priv.h')
+		autoconf.haveCHeaders([
+			'port.h',
+			'priv.h',
+			'sys/devpoll.h',
+			'sys/filio.h',
+		])
+		autoconf.haveFunc('port_create', 'port.h')
 		autoconf.haveFunc('setpflags', 'priv.h')
 
 	autoconf.haveTypes(Split('pid_t size_t off_t'))

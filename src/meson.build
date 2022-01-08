@@ -34,10 +34,8 @@ endif
 
 conf_data = configuration_data()
 
-conf_data.set('HAVE_SYS_DEVPOLL_H', compiler.has_header('sys/devpoll.h'))
 conf_data.set('HAVE_SYS_EPOLL_H', compiler.has_header('sys/epoll.h'))
 conf_data.set('HAVE_SYS_EVENT_H', compiler.has_header('sys/event.h'))
-conf_data.set('HAVE_SYS_FILIO_H', compiler.has_header('sys/filio.h'))
 conf_data.set('HAVE_SYS_INOTIFY_H', compiler.has_header('sys/inotify.h'))
 conf_data.set('HAVE_SYS_LOADAVG_H', compiler.has_header('sys/loadavg.h'))
 conf_data.set('HAVE_SYS_MMAN_H', compiler.has_header('sys/mman.h'))
@@ -59,7 +57,6 @@ conf_data.set('HAVE_GETOPT_H', compiler.has_header('getopt.h'))
 conf_data.set('HAVE_INTTYPES_H', compiler.has_header('inttypes.h'))
 conf_data.set('HAVE_MALLOC_H', compiler.has_header('malloc.h'))
 conf_data.set('HAVE_POLL_H', compiler.has_header('poll.h'))
-conf_data.set('HAVE_PORT_H', compiler.has_header('port.h'))
 conf_data.set('HAVE_PWD_H', compiler.has_header('pwd.h'))
 conf_data.set('HAVE_STDINT_H', compiler.has_header('stdint.h'))
 conf_data.set('HAVE_STDLIB_H', compiler.has_header('stdlib.h'))
@@ -121,7 +118,11 @@ if conf_data.get('HAVE_LINUX_RANDOM_H')
 endif
 
 if target_machine.system() == 'sunos'
+conf_data.set('HAVE_PORT_H', compiler.has_header('port.h'))
 conf_data.set('HAVE_PRIV_H', compiler.has_header('priv.h'))
+conf_data.set('HAVE_SYS_DEVPOLL_H', compiler.has_header('sys/devpoll.h'))
+conf_data.set('HAVE_SYS_FILIO_H', compiler.has_header('sys/filio.h'))
+conf_data.set('HAVE_PORT_CREATE', compiler.has_function('port_create', args: defs))
 conf_data.set('HAVE_SETPFLAGS', compiler.has_function('setpflags', args: defs))
 endif
 
@@ -151,7 +152,6 @@ conf_data.set('HAVE_MKOSTEMP', compiler.has_function('mkostemp', args: defs))
 conf_data.set('HAVE_MMAP', compiler.has_function('mmap', args: defs))
 conf_data.set('HAVE_PIPE2', compiler.has_function('pipe2', args: defs))
 conf_data.set('HAVE_POLL', compiler.has_function('poll', args: defs))
-conf_data.set('HAVE_PORT_CREATE', compiler.has_function('port_create', args: defs))
 conf_data.set('HAVE_PREAD', compiler.has_function('pread', args: defs))
 conf_data.set('HAVE_PREADV', compiler.has_function('preadv', args: defs))
 conf_data.set('HAVE_PWRITE', compiler.has_function('pwrite', args: defs))
