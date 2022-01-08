@@ -52,7 +52,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
 	option(BUILD_SANITIZE_UNDEFINED "Enable undefined sanitizer" OFF)
 
 	if(BUILD_EXTRA_WARNINGS)
-		set(WARN_CFLAGS "-g -g2 -Wall -Wmissing-declarations -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 -Wformat -Werror=format-security")
+		set(WARN_CFLAGS "-g -g2 -Wall -Wmissing-declarations -Wcast-align -Wsign-compare -Wnested-externs -Wpointer-arith -D_FORTIFY_SOURCE=2 -fstack-protector-strong --param=ssp-buffer-size=4 -Wformat -Werror=format-security")
 		set(WARN_LDFLAGS "")
 		# -Werror -Wbad-function-cast -Wmissing-prototypes
 		if(NOT BUILD_SANITIZE_ADDRESS)
