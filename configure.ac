@@ -142,12 +142,10 @@ AC_CHECK_TYPES([socklen_t],
   ]
 )
 
-dnl openssl on solaris needs -lsocket -lnsl
+dnl solaris needs -lsocket -lnsl
+dnl Haiku needs -lnetwork
 AC_SEARCH_LIBS([socket], [socket network])
 AC_SEARCH_LIBS([gethostbyname], [nsl socket network])
-
-dnl On Haiku accept() and friends are in libnetwork
-AC_SEARCH_LIBS([accept], [network])
 
 dnl clock_gettime() needs -lrt with glibc < 2.17, and possibly other platforms
 AC_SEARCH_LIBS([clock_gettime], [rt])
