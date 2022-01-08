@@ -1393,6 +1393,8 @@ AC_MSG_CHECKING([crypt_r/crypt support])
 AC_MSG_RESULT([$found_crypt])
 
 dnl check whether sendfilev needs -lsendfile
+case "$host_os" in
+*sunos*|*solaris* )
 AC_MSG_NOTICE([----------------------------------------])
 save_LIBS=$LIBS
 LIBS=
@@ -1411,6 +1413,9 @@ AC_SUBST([SENDFILE_LIB])
 
 AC_MSG_CHECKING([solaris sendfilev present])
 AC_MSG_RESULT([$have_sendfilev])
+  ;;
+* ) ;;
+esac
 
 AC_MSG_NOTICE([----------------------------------------])
 

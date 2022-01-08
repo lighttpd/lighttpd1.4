@@ -454,6 +454,7 @@ if 1:
 			'sys/filio.h',
 		])
 		autoconf.haveFunc('port_create', 'port.h')
+		autoconf.haveFunc('sendfilev')
 		autoconf.haveFunc('setpflags', 'priv.h')
 
 	autoconf.haveTypes(Split('pid_t size_t off_t'))
