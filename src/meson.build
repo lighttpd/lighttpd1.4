@@ -34,19 +34,12 @@ endif
 
 conf_data = configuration_data()
 
-conf_data.set('HAVE_SYS_EPOLL_H', compiler.has_header('sys/epoll.h'))
-conf_data.set('HAVE_SYS_EVENT_H', compiler.has_header('sys/event.h'))
 conf_data.set('HAVE_SYS_INOTIFY_H', compiler.has_header('sys/inotify.h'))
 conf_data.set('HAVE_SYS_LOADAVG_H', compiler.has_header('sys/loadavg.h'))
-conf_data.set('HAVE_SYS_MMAN_H', compiler.has_header('sys/mman.h'))
 conf_data.set('HAVE_SYS_POLL_H', compiler.has_header('sys/poll.h'))
 conf_data.set('HAVE_SYS_PRCTL_H', compiler.has_header('sys/prctl.h'))
 conf_data.set('HAVE_SYS_PROCCTL_H', compiler.has_header('sys/procctl.h'))
-conf_data.set('HAVE_SYS_RESOURCE_H', compiler.has_header('sys/resource.h'))
 conf_data.set('HAVE_SYS_SENDFILE_H', compiler.has_header('sys/sendfile.h'))
-conf_data.set('HAVE_SYS_SELECT_H', compiler.has_header('sys/select.h'))
-conf_data.set('HAVE_SYS_TYPES_H', compiler.has_header('sys/types.h'))
-conf_data.set('HAVE_SYS_UIO_H', compiler.has_header('sys/uio.h'))
 conf_data.set('HAVE_SYS_UN_H', compiler.has_header('sys/un.h'))
 conf_data.set('HAVE_SYS_WAIT_H', compiler.has_header('sys/wait.h'))
 conf_data.set('HAVE_SYS_TIME_H', compiler.has_header('sys/time.h'))
@@ -55,7 +48,6 @@ conf_data.set('HAVE_PTHREAD_H', compiler.has_header('pthread.h'))
 conf_data.set('HAVE_DLFCN_H', compiler.has_header('dlfcn.h'))
 conf_data.set('HAVE_GETOPT_H', compiler.has_header('getopt.h'))
 conf_data.set('HAVE_INTTYPES_H', compiler.has_header('inttypes.h'))
-conf_data.set('HAVE_MALLOC_H', compiler.has_header('malloc.h'))
 conf_data.set('HAVE_POLL_H', compiler.has_header('poll.h'))
 conf_data.set('HAVE_PWD_H', compiler.has_header('pwd.h'))
 conf_data.set('HAVE_STDINT_H', compiler.has_header('stdint.h'))
@@ -99,6 +91,32 @@ endif
 
 conf_data.set('HAVE_SOCKLEN_T', compiler.has_type('socklen_t', args: defs, prefix: '#include <sys/socket.h>'))
 
+conf_data.set('HAVE_MALLOC_H', compiler.has_header('malloc.h'))
+if conf_data.get('HAVE_MALLOC_H')
+conf_data.set('HAVE_MALLOC_TRIM', compiler.has_function('malloc_trim', args: defs))
+conf_data.set('HAVE_MALLOPT', compiler.has_function('mallopt', args: defs))
+endif
+
+if compiler.has_header('signal.h')
+conf_data.set('HAVE_SIGACTION', compiler.has_function('sigaction', args: defs))
+conf_data.set('HAVE_SIGNAL', compiler.has_function('signal', args: defs))
+endif
+
+conf_data.set('HAVE_SYS_EPOLL_H', compiler.has_header('sys/epoll.h'))
+if conf_data.get('HAVE_SYS_EPOLL_H')
+conf_data.set('HAVE_EPOLL_CTL', compiler.has_function('epoll_ctl', args: defs))
+endif
+
+conf_data.set('HAVE_SYS_EVENT_H', compiler.has_header('sys/event.h'))
+if conf_data.get('HAVE_SYS_EVENT_H')
+conf_data.set('HAVE_KQUEUE', compiler.has_function('kqueue', args: defs))
+endif
+
+conf_data.set('HAVE_SYS_MMAN_H', compiler.has_header('sys/mman.h'))
+if conf_data.get('HAVE_SYS_MMAN_H')
+conf_data.set('HAVE_MMAP', compiler.has_function('mmap', args: defs))
+endif
+
 conf_data.set('HAVE_SYS_RANDOM_H', compiler.has_header('sys/random.h'))
 if conf_data.get('HAVE_SYS_RANDOM_H')
 	conf_data.set('HAVE_GETENTROPY', compiler.has_function(
@@ -117,6 +135,24 @@ if conf_data.get('HAVE_LINUX_RANDOM_H')
 	))
 endif
 
+conf_data.set('HAVE_SYS_RESOURCE_H', compiler.has_header('sys/resource.h'))
+if conf_data.get('HAVE_SYS_RESOURCE_H')
+conf_data.set('HAVE_GETRLIMIT', compiler.has_function('getrlimit', args: defs))
+endif
+
+conf_data.set('HAVE_SYS_UIO_H', compiler.has_header('sys/uio.h'))
+if conf_data.get('HAVE_SYS_UIO_H')
+conf_data.set('HAVE_PREADV', compiler.has_function('preadv', args: defs))
+conf_data.set('HAVE_PWRITEV', compiler.has_function('pwritev', args: defs))
+conf_data.set('HAVE_WRITEV', compiler.has_function('writev', args: defs))
+endif
+
+conf_data.set('HAVE_POLL', compiler.has_function('poll', args: defs))
+if not(conf_data.get('HAVE_POLL'))
+conf_data.set('HAVE_SYS_SELECT_H', compiler.has_header('sys/select.h'))
+conf_data.set('HAVE_SELECT', compiler.has_function('select', args: defs))
+endif
+
 if target_machine.system() == 'sunos'
 conf_data.set('HAVE_PORT_H', compiler.has_header('port.h'))
 conf_data.set('HAVE_PRIV_H', compiler.has_header('priv.h'))
@@ -133,41 +169,27 @@ conf_data.set('SIZEOF_OFF_T', compiler.sizeof('off_t', args: defs))
 conf_data.set('HAVE_ARC4RANDOM_BUF', compiler.has_function('arc4random_buf', args: defs))
 conf_data.set('HAVE_CHROOT', compiler.has_function('chroot', args: defs))
 conf_data.set('HAVE_COPY_FILE_RANGE', compiler.has_function('copy_file_range', args: defs))
-conf_data.set('HAVE_EPOLL_CTL', compiler.has_function('epoll_ctl', args: defs))
 conf_data.set('HAVE_FORK', compiler.has_function('fork', args: defs))
 conf_data.set('HAVE_GETLOADAVG', compiler.has_function('getloadavg', args: defs))
-conf_data.set('HAVE_GETRLIMIT', compiler.has_function('getrlimit', args: defs))
 conf_data.set('HAVE_GETUID', compiler.has_function('getuid', args: defs))
 conf_data.set('HAVE_GMTIME_R', compiler.has_function('gmtime_r', args: defs))
 conf_data.set('HAVE_INET_ATON', compiler.has_function('inet_aton', args: defs))
 conf_data.set('HAVE_INET_PTON', compiler.has_function('inet_pton', args: defs))
 conf_data.set('HAVE_JRAND48', compiler.has_function('jrand48', args: defs))
-conf_data.set('HAVE_KQUEUE', compiler.has_function('kqueue', args: defs))
 conf_data.set('HAVE_LOCALTIME_R', compiler.has_function('localtime_r', args: defs))
 conf_data.set('HAVE_LSTAT', compiler.has_function('lstat', args: defs))
 conf_data.set('HAVE_MADVISE', compiler.has_function('madvise', args: defs))
-conf_data.set('HAVE_MALLOC_TRIM', compiler.has_function('malloc_trim', args: defs))
-conf_data.set('HAVE_MALLOPT', compiler.has_function('mallopt', args: defs))
 conf_data.set('HAVE_MEMPCPY', compiler.has_function('mempcpy', args: defs, prefix: '#include <string.h>'))
 conf_data.set('HAVE_MKOSTEMP', compiler.has_function('mkostemp', args: defs))
-conf_data.set('HAVE_MMAP', compiler.has_function('mmap', args: defs))
 conf_data.set('HAVE_PIPE2', compiler.has_function('pipe2', args: defs))
-conf_data.set('HAVE_POLL', compiler.has_function('poll', args: defs))
 conf_data.set('HAVE_PREAD', compiler.has_function('pread', args: defs))
-conf_data.set('HAVE_PREADV', compiler.has_function('preadv', args: defs))
 conf_data.set('HAVE_PWRITE', compiler.has_function('pwrite', args: defs))
-conf_data.set('HAVE_PWRITEV', compiler.has_function('pwritev', args: defs))
-conf_data.set('HAVE_SELECT', compiler.has_function('select', args: defs))
 conf_data.set('HAVE_SENDFILE', compiler.has_function('sendfile', args: defs))
-conf_data.set('HAVE_SEND_FILE', compiler.has_function('send_file', args: defs))
 conf_data.set('HAVE_SENDFILE64', compiler.has_function('sendfile64', args: defs))
-conf_data.set('HAVE_SIGACTION', compiler.has_function('sigaction', args: defs))
-conf_data.set('HAVE_SIGNAL', compiler.has_function('signal', args: defs))
 conf_data.set('HAVE_SPLICE', compiler.has_function('splice', args: defs))
 conf_data.set('HAVE_SRANDOM', compiler.has_function('srandom', args: defs))
 conf_data.set('HAVE_STRERROR_R', compiler.has_function('strerror_r', args: defs))
 conf_data.set('HAVE_TIMEGM', compiler.has_function('timegm', args: defs))
-conf_data.set('HAVE_WRITEV', compiler.has_function('writev', args: defs))
 conf_data.set('HAVE_ISSETUGID', compiler.has_function('issetugid', args: defs))
 conf_data.set('HAVE_MEMSET_S', compiler.has_function('memset_s', args: defs))
 conf_data.set('HAVE_EXPLICIT_BZERO', compiler.has_function('explicit_bzero', args: defs))

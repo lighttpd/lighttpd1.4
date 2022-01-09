@@ -97,22 +97,16 @@ AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS([\
   getopt.h \
   inttypes.h \
-  malloc.h \
   poll.h \
   pwd.h \
   stdlib.h \
   stdint.h \
   strings.h \
-  sys/epoll.h \
-  sys/event.h \
   sys/inotify.h \
   sys/loadavg.h \
-  sys/mman.h \
   sys/poll.h \
   sys/prctl.h \
   sys/procctl.h \
-  sys/resource.h \
-  sys/select.h \
   sys/sendfile.h \
   sys/time.h \
   sys/uio.h \
@@ -1427,48 +1421,46 @@ AC_CHECK_FUNCS([\
   chroot \
   clock_gettime \
   copy_file_range \
-  epoll_ctl \
   explicit_bzero \
   explicit_memset \
   fork \
   getloadavg \
-  getrlimit \
   getuid \
   gmtime_r \
   inet_aton \
   inet_pton \
   issetugid \
   jrand48 \
-  kqueue \
   localtime_r \
   lstat \
   madvise \
-  malloc_trim \
-  mallopt \
   mempcpy \
   memset_s \
   mkostemp \
-  mmap \
   pipe2 \
   poll \
   pread \
-  preadv \
   pwrite \
-  pwritev \
-  select \
-  send_file \
   sendfile \
   sendfile64 \
-  sigaction \
-  signal \
   splice \
   srandom \
   strerror_r \
   timegm \
-  writev \
 ])
-AC_CHECK_HEADERS([sys/random.h], [AC_CHECK_FUNCS([getentropy])])
-AC_CHECK_HEADERS([linux/random.h], [AC_CHECK_FUNCS([getrandom])])
+AC_CHECK_HEADERS([linux/random.h],   [AC_CHECK_FUNCS([getrandom])])
+AC_CHECK_HEADERS([malloc.h],         [AC_CHECK_FUNCS([malloc_trim mallopt])])
+AC_CHECK_HEADERS([signal.h],         [AC_CHECK_FUNCS([signal sigaction])])
+AC_CHECK_HEADERS([sys/epoll.h],      [AC_CHECK_FUNCS([epoll_ctl])])
+AC_CHECK_HEADERS([sys/event.h],      [AC_CHECK_FUNCS([kqueue])])
+AC_CHECK_HEADERS([sys/mman.h],       [AC_CHECK_FUNCS([mmap])])
+AC_CHECK_HEADERS([sys/random.h],     [AC_CHECK_FUNCS([getentropy])])
+AC_CHECK_HEADERS([sys/resource.h],   [AC_CHECK_FUNCS([getrlimit])])
+AC_CHECK_HEADERS([sys/uio.h],        [AC_CHECK_FUNCS([preadv pwritev writev])])
+if test "$ac_cv_func_poll" = no; then
+  AC_CHECK_HEADERS([sys/select.h])
+  AC_CHECK_FUNCS([select])
+fi
 
 case "$host_os" in
 *sunos*|*solaris* )

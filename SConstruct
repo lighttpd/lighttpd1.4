@@ -433,7 +433,6 @@ if 1:
 		'pwrite',
 		'pwritev',
 		'select',
-		'send_file',
 		'sendfile',
 		'sendfile64',
 		'sigaction',
