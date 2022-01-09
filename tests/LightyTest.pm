@@ -195,7 +195,7 @@ sub start_proc {
 	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'valgrind') {
 		@cmdline = (qw(valgrind --tool=memcheck --track-origins=yes --show-reachable=yes --leak-check=yes --log-file=valgrind.%p), @cmdline);
 	}
-	# diag("\nstarting lighttpd at :".$self->{PORT}.", cmdline: ".@cmdline );
+	# diag("\nstarting lighttpd at :".$self->{PORT}.", cmdline: @cmdline");
 	my $child = fork();
 	if (not defined $child) {
 		diag("\nFork failed");
@@ -203,21 +203,38 @@ sub start_proc {
 		return -1;
 	}
 	if ($child == 0) {
-		# set up systemd socket activation env vars
-		$ENV{LISTEN_FDS} = "1";
-		$ENV{LISTEN_PID} = $$;
-		if (defined($ENV{"TRACEME"}) && $ENV{"TRACEME"} ne "valgrind") {
-			$ENV{LISTEN_PID} = "parent:$$"; # lighttpd extension
-		}
-		listen($SOCK, 1024) || die "listen: $!";
-		if (fileno($SOCK) != 3) { # SD_LISTEN_FDS_START 3
-			require POSIX;
-			POSIX::dup2(fileno($SOCK), 3) || die "dup2: $!";
+		if ($^O eq "MSWin32") {
+			# On platforms where systemd socket activation is not supported
+			# or inconvenient for testing (i.e. cygwin <-> native Windows exe),
+			# there is a race condition with close() before server start,
+			# but port specific port is unlikely to be reused so quickly,
+			# and the point is to avoid a port which is already in use.
 			close($SOCK);
+			my $CONF;
+			open($CONF,'>',"$ENV{'SRCDIR'}/tmp/bind.conf") || die "open: $!";
+			print $CONF <<BIND_OVERRIDE;
+server.systemd-socket-activation := "disable"
+server.bind = "127.0.0.1"
+server.port = $ENV{'PORT'}
+BIND_OVERRIDE
 		}
 		else {
-			require Fcntl;
-			fcntl($SOCK, Fcntl::F_SETFD(), 0); # clr FD_CLOEXEC
+			# set up systemd socket activation env vars
+			$ENV{LISTEN_FDS} = "1";
+			$ENV{LISTEN_PID} = $$;
+			if (defined($ENV{"TRACEME"}) && $ENV{"TRACEME"} ne "valgrind") {
+				$ENV{LISTEN_PID} = "parent:$$"; # lighttpd extension
+			}
+			listen($SOCK, 1024) || die "listen: $!";
+			if (fileno($SOCK) != 3) { # SD_LISTEN_FDS_START 3
+				require POSIX;
+				POSIX::dup2(fileno($SOCK), 3) || die "dup2: $!";
+				close($SOCK);
+			}
+			else {
+				require Fcntl;
+				fcntl($SOCK, Fcntl::F_SETFD(), 0); # clr FD_CLOEXEC
+			}
 		}
 		exec @cmdline or die($?);
 	}
