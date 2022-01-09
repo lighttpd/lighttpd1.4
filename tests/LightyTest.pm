@@ -115,6 +115,7 @@ sub stop_proc {
 
 	my $pid = $self->{LIGHTTPD_PID};
 	if (defined $pid && $pid != -1) {
+		kill('USR1', $pid) if (($ENV{"TRACEME"}||'') eq 'strace');
 		kill('TERM', $pid) or return -1;
 		return -1 if ($pid != waitpid($pid, 0));
 	} else {
@@ -205,6 +206,9 @@ sub start_proc {
 		# set up systemd socket activation env vars
 		$ENV{LISTEN_FDS} = "1";
 		$ENV{LISTEN_PID} = $$;
+		if (defined($ENV{"TRACEME"}) && $ENV{"TRACEME"} ne "valgrind") {
+			$ENV{LISTEN_PID} = "parent:$$"; # lighttpd extension
+		}
 		listen($SOCK, 1024) || die "listen: $!";
 		if (fileno($SOCK) != 3) { # SD_LISTEN_FDS_START 3
 			require POSIX;

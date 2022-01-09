@@ -581,7 +581,13 @@ static int network_socket_activation_from_env(server *srv, network_socket_config
     char *listen_fds = getenv("LISTEN_FDS");
     pid_t lpid = listen_pid ? (pid_t)strtoul(listen_pid,NULL,10) : 0;
     int nfds = listen_fds ? atoi(listen_fds) : 0;
-    int rc = (lpid == getpid() && nfds > 0 && nfds < 5000)
+    int rc = (nfds > 0 && nfds < 5000
+              && (lpid == getpid()
+                 #ifndef _WIN32
+                  || (0 == strncmp(listen_pid, "parent:", 7)
+                      && getppid() == (pid_t)strtoul(listen_pid+7,NULL,10))
+                 #endif
+                 ))
       ? network_socket_activation_nfds(srv, s, nfds)
       : 0;
     unsetenv("LISTEN_PID");
