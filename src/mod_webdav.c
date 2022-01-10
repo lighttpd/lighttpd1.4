@@ -178,7 +178,6 @@
 #include "first.h"      /* first */
 #include "sys-mmap.h"
 #include <sys/types.h>
-#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include "sys-time.h"
 #include <dirent.h>
@@ -199,6 +198,7 @@ typedef off_t loff_t;
 #endif
 #else
 #ifdef __linux__
+#include <sys/ioctl.h>
 #include <linux/fs.h>   /* ioctl(..., FICLONE, ...) */
 #endif
 #endif
