@@ -50,20 +50,17 @@ sub new {
 	my $class = shift;
 	my $self = {};
 	my $lpath;
+	my $exe = $^O eq "cygwin" ? ".exe" : "";
 
 	$self->{CONFIGFILE} = 'lighttpd.conf';
 
 	$lpath = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'} : '..');
 	$self->{BASEDIR} = abs_path($lpath);
 
-	$lpath = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'}."/tests/" : '.');
+	$lpath = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'}."/tests" : '.');
 	$self->{TESTDIR} = abs_path($lpath);
 
-	$lpath = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
-	$self->{SRCDIR} = abs_path($lpath);
-
-
-	if (mtime($self->{BASEDIR}.'/src/lighttpd') > mtime($self->{BASEDIR}.'/build/lighttpd')) {
+	if (mtime($self->{BASEDIR}."/src/lighttpd$exe") > mtime($self->{BASEDIR}."/build/lighttpd$exe")) {
 		$self->{BINDIR} = $self->{BASEDIR}.'/src';
 		if (mtime($self->{BASEDIR}.'/src/.libs')) {
 			$self->{MODULES_PATH} = $self->{BASEDIR}.'/src/.libs';
@@ -74,7 +71,7 @@ sub new {
 		$self->{BINDIR} = $self->{BASEDIR}.'/build';
 		$self->{MODULES_PATH} = $self->{BASEDIR}.'/build';
 	}
-	$self->{LIGHTTPD_PATH} = $self->{BINDIR}.'/lighttpd';
+	$self->{LIGHTTPD_PATH} = $self->{BINDIR}."/lighttpd$exe";
 	if (exists $ENV{LIGHTTPD_EXE_PATH}) {
 		$self->{LIGHTTPD_PATH} = $ENV{LIGHTTPD_EXE_PATH};
 	}
@@ -178,24 +175,39 @@ sub start_proc {
 	my $SOCK;
 	($SOCK, $self->{PORT}) = bind_ephemeral_tcp_socket();
 
-	# pre-process configfile if necessary
-	#
+	my $testdir      = $self->{TESTDIR};
+	my $conf         = $self->{TESTDIR}.'/'.$self->{CONFIGFILE};
+	my $modules_path = $self->{MODULES_PATH};
 
-	$ENV{'SRCDIR'} = $self->{BASEDIR}.'/tests';
-	$ENV{'PORT'} = $self->{PORT};
+	# test for cygwin w/ _WIN32 native lighttpd.exe (not linked w/ cygwin1.dll)
+	#   ($^O eq "MSWin32") is untested; not supported
+	my $win32native = $^O eq "cygwin"
+	               && 0 != system("ldd '$$self{LIGHTTPD_PATH}' | grep -q cygwin");
 
-	my @cmdline = ($self->{LIGHTTPD_PATH}, "-D", "-f", $self->{SRCDIR}."/".$self->{CONFIGFILE}, "-m", $self->{MODULES_PATH});
+	if ($win32native) {
+		chomp($ENV{PERL}    = `cygpath -alm "$ENV{PERL}"`);
+		chomp($testdir      = `cygpath -alm "$testdir"`);
+		chomp($conf         = `cygpath -alm "$conf"`);
+		chomp($modules_path = `cygpath -alm "$modules_path"`);
+		$ENV{PERL}          =~ s/^[A-Z]://i; # remove volume (C:)
+		$testdir            =~ s/^[A-Z]://i; # remove volume (C:)
+		$conf               =~ s/^[A-Z]://i; # remove volume (C:)
+		$modules_path       =~ s/^[A-Z]://i; # remove volume (C:)
+	}
+
+	my @cmdline = ($self->{LIGHTTPD_PATH}, "-D", "-f", $conf, "-m", $modules_path);
 	splice(@cmdline, -2) if exists $ENV{LIGHTTPD_EXE_PATH};
-	if (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'strace') {
+	if (!defined $ENV{"TRACEME"}) {
+	} elsif ($ENV{"TRACEME"} eq 'strace') {
 		@cmdline = (qw(strace -tt -s 4096 -o strace -f -v), @cmdline);
-	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'truss') {
+	} elsif ($ENV{"TRACEME"} eq 'truss') {
 		@cmdline = (qw(truss -a -l -w all -v all -o strace), @cmdline);
-	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'gdb') {
+	} elsif ($ENV{"TRACEME"} eq 'gdb') {
 		@cmdline = ('gdb', '--batch', '--ex', 'run', '--ex', 'bt full', '--args', @cmdline);
-	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'valgrind') {
+	} elsif ($ENV{"TRACEME"} eq 'valgrind') {
 		@cmdline = (qw(valgrind --tool=memcheck --track-origins=yes --show-reachable=yes --leak-check=yes --log-file=valgrind.%p), @cmdline);
 	}
-	# diag("\nstarting lighttpd at :".$self->{PORT}.", cmdline: @cmdline");
+	# diag("\nstarting lighttpd at :$$self{PORT}, cmdline: @cmdline");
 	my $child = fork();
 	if (not defined $child) {
 		diag("\nFork failed");
@@ -203,7 +215,8 @@ sub start_proc {
 		return -1;
 	}
 	if ($child == 0) {
-		if ($^O eq "MSWin32") {
+		$ENV{'SRCDIR'} = $testdir;
+		if ($win32native) {
 			# On platforms where systemd socket activation is not supported
 			# or inconvenient for testing (i.e. cygwin <-> native Windows exe),
 			# there is a race condition with close() before server start,
@@ -211,11 +224,11 @@ sub start_proc {
 			# and the point is to avoid a port which is already in use.
 			close($SOCK);
 			my $CONF;
-			open($CONF,'>',"$ENV{'SRCDIR'}/tmp/bind.conf") || die "open: $!";
+			open($CONF,'>',$self->{TESTDIR}."/tmp/bind.conf") || die "open: $!";
 			print $CONF <<BIND_OVERRIDE;
 server.systemd-socket-activation := "disable"
 server.bind = "127.0.0.1"
-server.port = $ENV{'PORT'}
+server.port = $$self{'PORT'}
 BIND_OVERRIDE
 		}
 		else {

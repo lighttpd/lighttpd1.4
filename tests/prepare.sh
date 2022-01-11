@@ -33,9 +33,6 @@ cp "${srcdir}/docroot/"*.html \
    "${srcdir}/docroot/"*.fcgi \
    "${srcdir}/docroot/"*.txt \
    "${tmpdir}/servers/www.example.org/pages/"
-cp "${srcdir}/lighttpd.user" "${tmpdir}/"
-cp "${srcdir}/lighttpd.htpasswd" "${tmpdir}/"
-cp "${srcdir}/var-include-sub.conf" "${tmpdir}/../"
 
 # create some content
 touch "${tmpdir}/servers/www.example.org/pages/image.jpg" \
