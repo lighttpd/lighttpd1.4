@@ -79,7 +79,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'FastCGI + bin-copy-environment');
 
 SKIP: {
-	skip "no crypt-des under openbsd", 2 if $^O eq 'openbsd';
+	skip "no crypt-des under openbsd or MS Visual Studio", 2 if $^O eq 'openbsd' || $tf->{'win32native'};
 
 	$t->{REQUEST}  = ( <<EOF
 GET /get-server-env.php?env=REMOTE_USER HTTP/1.0

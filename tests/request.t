@@ -971,6 +971,7 @@ ok($tf->handle_http($t) == 0, 'lowercase access');
 my $docroot = $tf->{'TESTDIR'}."/tmp/lighttpd/servers/www.example.org/pages";
 
 sub init_testbed {
+    return 0 if $tf->{'win32native'}; # win32native lighttpd.exe
     return 0 unless eval { symlink("",""); 1 };
     my $f = "$docroot/index.html";
     my $l = "$docroot/index.xhtml";
@@ -1105,7 +1106,7 @@ $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - plain');
 
 SKIP: {
-	skip "no crypt-des under openbsd", 2 if $^O eq 'openbsd';
+	skip "no crypt-des under openbsd or MS Visual Studio", 2 if $^O eq 'openbsd' || $tf->{'win32native'};
 $t->{REQUEST}  = ( <<EOF
 GET /server-config HTTP/1.0
 Host: auth-htpasswd.example.org

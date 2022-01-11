@@ -50,20 +50,17 @@ sub new {
 	my $class = shift;
 	my $self = {};
 	my $lpath;
+	my $exe = $^O eq "cygwin" ? ".exe" : "";
 
 	$self->{CONFIGFILE} = 'lighttpd.conf';
 
 	$lpath = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'} : '..');
 	$self->{BASEDIR} = abs_path($lpath);
 
-	$lpath = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'}."/tests/" : '.');
+	$lpath = (defined $ENV{'top_builddir'} ? $ENV{'top_builddir'}."/tests" : '.');
 	$self->{TESTDIR} = abs_path($lpath);
 
-	$lpath = (defined $ENV{'srcdir'} ? $ENV{'srcdir'} : '.');
-	$self->{SRCDIR} = abs_path($lpath);
-
-
-	if (mtime($self->{BASEDIR}.'/src/lighttpd') > mtime($self->{BASEDIR}.'/build/lighttpd')) {
+	if (mtime($self->{BASEDIR}."/src/lighttpd$exe") > mtime($self->{BASEDIR}."/build/lighttpd$exe")) {
 		$self->{BINDIR} = $self->{BASEDIR}.'/src';
 		if (mtime($self->{BASEDIR}.'/src/.libs')) {
 			$self->{MODULES_PATH} = $self->{BASEDIR}.'/src/.libs';
@@ -74,7 +71,7 @@ sub new {
 		$self->{BINDIR} = $self->{BASEDIR}.'/build';
 		$self->{MODULES_PATH} = $self->{BASEDIR}.'/build';
 	}
-	$self->{LIGHTTPD_PATH} = $self->{BINDIR}.'/lighttpd';
+	$self->{LIGHTTPD_PATH} = $self->{BINDIR}."/lighttpd$exe";
 	if (exists $ENV{LIGHTTPD_EXE_PATH}) {
 		$self->{LIGHTTPD_PATH} = $ENV{LIGHTTPD_EXE_PATH};
 	}
@@ -115,8 +112,43 @@ sub stop_proc {
 
 	my $pid = $self->{LIGHTTPD_PID};
 	if (defined $pid && $pid != -1) {
-		kill('USR1', $pid) if (($ENV{"TRACEME"}||'') eq 'strace');
-		kill('TERM', $pid) or return -1;
+		if ($self->{"win32native"}) {
+			# kill process tree; not a graceful shutdown of lighttpd or backends
+			#
+			# https://cygwin.com/cygwin-ug-net/kill.html
+			# aside: /bin/kill is not the same as shell builtin kill
+			# Still, lighttpd currently does not appear able to catch
+			# signals from Perl kill() or from /bin/kill, and so the
+			# process tree including backends is not cleaned up; only
+			# lighttpd is killed.
+			# system('/bin/kill', '-s', 'INT', '-f', '-W', $winpid) == 0 or return -1;
+			#
+			# powershell kill -Force -Id $winpid          (same as Stop-Process)
+			# powershell Stop-Process -Force -Id $winpid  (same as kill)
+			# powershell Stop-Process -Force -Name lighttpd.exe
+			#
+			# sysinternal tools
+			# https://docs.microsoft.com/en-us/sysinternals/downloads/pskill
+			#   pskill -nobanner -t $winpid
+			#   pskill -nobanner -t lighttpd.exe
+			#
+			my $winpid = 0;
+			if (open(my $WH, "<", "/proc/$pid/winpid")) {
+				$winpid = <$WH>;
+				chomp($winpid);
+				close($WH);
+			}
+			if ($winpid) {
+				system('/cygdrive/c/windows/system32/taskkill.exe', '/F', '/T', '/PID', $winpid);
+			}
+			else {
+				system('/cygdrive/c/windows/system32/taskkill.exe', '/F', '/T', '/IM', 'lighttpd.exe');
+			}
+		}
+		else {
+			kill('USR1', $pid) if (($ENV{"TRACEME"}||'') eq 'strace');
+			kill('TERM', $pid) or return -1;
+		}
 		return -1 if ($pid != waitpid($pid, 0));
 	} else {
 		diag("\nProcess not started, nothing to stop");
@@ -169,6 +201,16 @@ sub get_ephemeral_tcp_port {
 	return $port;
 }
 
+sub cygpath_alm {
+    my $FH;
+    open($FH, '-|', "cygpath", "-alm", $_[0]) || return $_[0];
+    my $result = <$FH>;
+    close $FH;
+    chomp $result;
+    $result =~ s/^[A-Z]://i; # remove volume (C:)
+    return $result;
+}
+
 sub start_proc {
 	my $self = shift;
 	# kill old proc if necessary
@@ -178,24 +220,37 @@ sub start_proc {
 	my $SOCK;
 	($SOCK, $self->{PORT}) = bind_ephemeral_tcp_socket();
 
-	# pre-process configfile if necessary
-	#
+	my $testdir      = $self->{TESTDIR};
+	my $conf         = $self->{TESTDIR}.'/'.$self->{CONFIGFILE};
+	my $modules_path = $self->{MODULES_PATH};
 
-	$ENV{'SRCDIR'} = $self->{BASEDIR}.'/tests';
-	$ENV{'PORT'} = $self->{PORT};
+	# test for cygwin w/ _WIN32 native lighttpd.exe (not linked w/ cygwin1.dll)
+	#   ($^O eq "MSWin32") is untested; not supported
+	my $win32native = $^O eq "cygwin"
+	               && 0 != system("ldd '$$self{LIGHTTPD_PATH}' | grep -q cygwin");
+	$self->{"win32native"} = $win32native;
 
-	my @cmdline = ($self->{LIGHTTPD_PATH}, "-D", "-f", $self->{SRCDIR}."/".$self->{CONFIGFILE}, "-m", $self->{MODULES_PATH});
+	if ($win32native) {
+		$ENV{SHELL}         = "/bin/sh";
+		$ENV{PERL}          = cygpath_alm($ENV{PERL});
+		$testdir            = cygpath_alm($testdir);
+		$conf               = cygpath_alm($conf);
+		$modules_path       = cygpath_alm($modules_path);
+	}
+
+	my @cmdline = ($self->{LIGHTTPD_PATH}, "-D", "-f", $conf, "-m", $modules_path);
 	splice(@cmdline, -2) if exists $ENV{LIGHTTPD_EXE_PATH};
-	if (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'strace') {
+	if (!defined $ENV{"TRACEME"}) {
+	} elsif ($ENV{"TRACEME"} eq 'strace') {
 		@cmdline = (qw(strace -tt -s 4096 -o strace -f -v), @cmdline);
-	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'truss') {
+	} elsif ($ENV{"TRACEME"} eq 'truss') {
 		@cmdline = (qw(truss -a -l -w all -v all -o strace), @cmdline);
-	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'gdb') {
+	} elsif ($ENV{"TRACEME"} eq 'gdb') {
 		@cmdline = ('gdb', '--batch', '--ex', 'run', '--ex', 'bt full', '--args', @cmdline);
-	} elsif (defined $ENV{"TRACEME"} && $ENV{"TRACEME"} eq 'valgrind') {
+	} elsif ($ENV{"TRACEME"} eq 'valgrind') {
 		@cmdline = (qw(valgrind --tool=memcheck --track-origins=yes --show-reachable=yes --leak-check=yes --log-file=valgrind.%p), @cmdline);
 	}
-	# diag("\nstarting lighttpd at :".$self->{PORT}.", cmdline: @cmdline");
+	# diag("\nstarting lighttpd at :$$self{PORT}, cmdline: @cmdline");
 	my $child = fork();
 	if (not defined $child) {
 		diag("\nFork failed");
@@ -203,7 +258,8 @@ sub start_proc {
 		return -1;
 	}
 	if ($child == 0) {
-		if ($^O eq "MSWin32") {
+		$ENV{'SRCDIR'} = $testdir;
+		if ($win32native) {
 			# On platforms where systemd socket activation is not supported
 			# or inconvenient for testing (i.e. cygwin <-> native Windows exe),
 			# there is a race condition with close() before server start,
@@ -211,11 +267,11 @@ sub start_proc {
 			# and the point is to avoid a port which is already in use.
 			close($SOCK);
 			my $CONF;
-			open($CONF,'>',"$ENV{'SRCDIR'}/tmp/bind.conf") || die "open: $!";
+			open($CONF,'>',$self->{TESTDIR}."/tmp/bind.conf") || die "open: $!";
 			print $CONF <<BIND_OVERRIDE;
 server.systemd-socket-activation := "disable"
 server.bind = "127.0.0.1"
-server.port = $ENV{'PORT'}
+server.port = $$self{'PORT'}
 BIND_OVERRIDE
 		}
 		else {
@@ -236,6 +292,7 @@ BIND_OVERRIDE
 				fcntl($SOCK, Fcntl::F_SETFD(), 0); # clr FD_CLOEXEC
 			}
 		}
+		#diag(sprintf('\ncmd: %s', "@cmdline"));
 		exec @cmdline or die($?);
 	}
 	close($SOCK);
