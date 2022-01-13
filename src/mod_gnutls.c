@@ -2771,9 +2771,11 @@ https_add_ssl_client_subject (request_st * const r, gnutls_x509_dn_t dn)
             if (prelen+len >= sizeof(key)) continue;
             memcpy(key+prelen, name, len); /*(not '\0'-terminated)*/
 
-            unsigned int v, n = 0;
-            for (v = 0; v < ava.value.size && n < sizeof(buf)-1; ++n) {
-                unsigned char c = ava.value.data[v];
+            unsigned int n, vlen = ava.value.size;
+            if (vlen > sizeof(buf)-1)
+                vlen = sizeof(buf)-1;
+            for (n = 0; n < vlen; ++n) {
+                unsigned char c = ava.value.data[n];
                 buf[n] = (c < 32 || c == 127 || (c > 128 && c < 160)) ? '?' : c;
             }
 
