@@ -2401,16 +2401,15 @@ https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *nam
 {
     /* add components of client Subject DN */
     /* code block is similar to mbedtls_x509_dn_gets() */
+    /* code block specialized for creating env vars of Subject DN components
+     * and splits multi-valued RDNs into separate env vars for attribute=value*/
     const size_t prelen = sizeof("SSL_CLIENT_S_DN_")-1;
     char key[64] = "SSL_CLIENT_S_DN_";
     char buf[MBEDTLS_X509_MAX_DN_NAME_SIZE]; /*(256)*/
 
-    while (name != NULL) {
-        if (!name->oid.p) {
-            name = name->next;
+    for (; name != NULL; name = name->next) {
+        if (!name->oid.p)
             continue;
-        }
-
         const char *short_name = NULL;
         if (0 != mbedtls_oid_get_attr_short_name(&name->oid, &short_name))
             continue;
@@ -2418,20 +2417,13 @@ https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *nam
         if (prelen+len >= sizeof(key)) continue;
         memcpy(key+prelen, short_name, len); /*(not '\0'-terminated)*/
 
-        const mbedtls_x509_name *nm = name;
-        int n = 0;
-        do {
-            if (nm != name && n < (int)sizeof(buf)-1)
-                buf[n++] = ',';
-            for (size_t i = 0; i < nm->val.len && n < (int)sizeof(buf)-1; ++n) {
-                unsigned char c = nm->val.p[i];
-                buf[n] = (c < 32 || c == 127 || (c > 128 && c < 160)) ? '?' : c;
-            }
-            buf[n] = '\0';
-        } while (nm->next_merged && nm->next && (nm = nm->next));
-        if (n == sizeof(buf)-1)
-            while (nm->next_merged && nm->next) nm = nm->next;
-        name = nm->next;
+        size_t n, vlen = name->val.len;
+        if (vlen > sizeof(buf)-1)
+            vlen = sizeof(buf)-1;
+        for (n = 0; n < vlen; ++n) {
+            unsigned char c = name->val.p[n];
+            buf[n] = (c < 32 || c == 127 || (c > 128 && c < 160)) ? '?' : c;
+        }
 
         http_header_env_set(r, key, prelen+len, buf, n);
     }
