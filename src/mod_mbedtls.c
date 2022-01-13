@@ -191,6 +191,7 @@ typedef struct {
     plugin_config conf;
     buffer *tmp_buf;
     log_error_st *errh;
+    mbedtls_ssl_config *ssl_ctx;
     mbedtls_pk_context *acme_tls_1_pkey;
     mbedtls_x509_crt *acme_tls_1_x509;
 } handler_ctx;
@@ -768,7 +769,7 @@ mod_mbedtls_SNI (void *arg, mbedtls_ssl_context *ssl, const unsigned char *serve
 
 
 static int
-mod_mbedtls_conf_verify (handler_ctx *hctx, mbedtls_ssl_config *ssl_ctx)
+mod_mbedtls_conf_verify (handler_ctx *hctx)
 {
     if (NULL == hctx->conf.ssl_ca_file) {
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
@@ -787,10 +788,13 @@ mod_mbedtls_conf_verify (handler_ctx *hctx, mbedtls_ssl_config *ssl_ctx)
     mbedtls_ssl_context * const ssl = &hctx->ssl;
     mbedtls_ssl_set_hs_ca_chain(ssl, ca_certs, hctx->conf.ssl_ca_crl_file);
   #if MBEDTLS_VERSION_NUMBER >= 0x02120000 /* mbedtls 2.18.0 */
-    UNUSED(ssl_ctx);
     mbedtls_ssl_set_verify(ssl, mod_mbedtls_verify_cb, hctx);
   #else
-    mbedtls_ssl_conf_verify(ssl_ctx, mod_mbedtls_verify_cb, hctx);
+    /* overwrite callback with hctx each time we enter here, before handshake
+     * (Some callbacks are on mbedtls_ssl_config, not mbedtls_ssl_context)
+     * (Not thread-safe if config (mbedtls_ssl_config *ssl_ctx) is shared)
+     * (XXX: there is probably a better way to do this...) */
+    mbedtls_ssl_conf_verify(hctx->ssl_ctx, mod_mbedtls_verify_cb, hctx);
   #endif
     return 0;
 }
@@ -2056,11 +2060,8 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
      * (Some callbacks are on mbedtls_ssl_config, not mbedtls_ssl_context)
      * (Not thread-safe if config (mbedtls_ssl_config *ssl_ctx) is shared)
      * (XXX: there is probably a better way to do this...) */
-    /* (alternative: save ssl_ctx in hctx in mod_mbedtls_handle_con_accept()) */
-    mbedtls_ssl_config *ssl_ctx;
-    *(const mbedtls_ssl_config **)&ssl_ctx = hctx->ssl.conf;
   #ifdef MBEDTLS_SSL_SERVER_NAME_INDICATION
-    mbedtls_ssl_conf_sni(ssl_ctx, mod_mbedtls_SNI, hctx);
+    mbedtls_ssl_conf_sni(hctx->ssl_ctx, mod_mbedtls_SNI, hctx);
   #endif
 
     if (hctx->ssl.state < MBEDTLS_SSL_SERVER_HELLO) {
@@ -2088,10 +2089,6 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
         }
     }
 
-    /* overwrite callback with hctx each time we enter here, before handshake
-     * (Some callbacks are on mbedtls_ssl_config, not mbedtls_ssl_context)
-     * (Not thread-safe if config (mbedtls_ssl_config *ssl_ctx) is shared)
-     * (XXX: there is probably a better way to do this...) */
     if (0 == rc && hctx->conf.ssl_verifyclient
         && hctx->ssl.state >= MBEDTLS_SSL_SERVER_HELLO  /*(after SNI and ALPN)*/
         && hctx->ssl.state <= MBEDTLS_SSL_SERVER_HELLO_DONE
@@ -2106,7 +2103,7 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
             if (0 != rc) break;
         }
         if (0 == rc && hctx->ssl.state == MBEDTLS_SSL_CERTIFICATE_REQUEST) {
-            rc = mod_mbedtls_conf_verify(hctx, ssl_ctx);
+            rc = mod_mbedtls_conf_verify(hctx);
             if (0 == rc)
                 rc = mbedtls_ssl_handshake_step(&hctx->ssl);
             /* reconfigure CA trust chain after sending client certificate
@@ -2262,9 +2259,9 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
     con->plugin_ctx[p->id] = hctx;
     buffer_blank(&r->uri.authority);
 
-    plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
+    hctx->ssl_ctx = p->ssl_ctxs[srv_sock->sidx].ssl_ctx;
     mbedtls_ssl_init(&hctx->ssl);
-    int rc = mbedtls_ssl_setup(&hctx->ssl, s->ssl_ctx);
+    int rc = mbedtls_ssl_setup(&hctx->ssl, hctx->ssl_ctx);
     if (0 == rc) {
         con->network_read = connection_read_cq_ssl;
         con->network_write = connection_write_cq_ssl;
@@ -2286,7 +2283,7 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
       #if MBEDTLS_VERSION_NUMBER >= 0x02000000 /* mbedtls 2.0.0 */
         mbedtls_debug_set_threshold(hctx->conf.ssl_log_noise);
       #endif
-        mbedtls_ssl_conf_dbg(s->ssl_ctx, mod_mbedtls_debug_cb,
+        mbedtls_ssl_conf_dbg(hctx->ssl_ctx, mod_mbedtls_debug_cb,
                              (void *)(intptr_t)hctx->conf.ssl_log_noise);
     }
 
@@ -2298,7 +2295,7 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
      * and it is recommended to leave it disabled (lighttpd mbedtls default) */
   #ifdef MBEDTLS_LEGACY_SSL_RENEGOTIATION_ENABLED
     if (!hctx->conf.ssl_disable_client_renegotiation)
-        mbedtls_legacy_ssl_conf_renegotiation(s->ssl_ctx,
+        mbedtls_legacy_ssl_conf_renegotiation(hctx->ssl_ctx,
                                       MBEDTLS_LEGACY_SSL_RENEGOTIATION_ENABLED);
   #endif
 
