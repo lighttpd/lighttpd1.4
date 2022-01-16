@@ -2419,7 +2419,7 @@ https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *nam
             vlen = sizeof(buf)-1;
         for (n = 0; n < vlen; ++n) {
             unsigned char c = name->val.p[n];
-            buf[n] = (c < 32 || c == 127 || (c > 128 && c < 160)) ? '?' : c;
+            buf[n] = (c >= 32 && c != 127) ? c : '?';
         }
 
         http_header_env_set(r, key, prelen+len, buf, n);

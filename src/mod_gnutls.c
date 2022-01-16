@@ -2776,7 +2776,7 @@ https_add_ssl_client_subject (request_st * const r, gnutls_x509_dn_t dn)
                 vlen = sizeof(buf)-1;
             for (n = 0; n < vlen; ++n) {
                 unsigned char c = ava.value.data[n];
-                buf[n] = (c < 32 || c == 127 || (c > 128 && c < 160)) ? '?' : c;
+                buf[n] = (c >= 32 && c != 127) ? c : '?';
             }
 
             http_header_env_set(r, key, prelen+len, buf, n);

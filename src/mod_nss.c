@@ -2542,7 +2542,7 @@ https_add_ssl_client_subject (request_st * const r, CERTName * const subj)
         unsigned int n;
         unsigned char c;
         for (n = 0; (c = ((unsigned char *)s)[n]); ++n) {
-            if (c < 32 || c == 127 || (c > 128 && c < 160)) s[n] = '?';
+            if (c < 32 || c == 127) s[n] = '?';
         }
 
         /*if (prelen+comp[i].tlen >= sizeof(key)) continue;*//*(not possible)*/
