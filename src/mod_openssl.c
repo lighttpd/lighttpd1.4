@@ -932,7 +932,8 @@ safer_X509_NAME_oneline(X509_NAME *name, char *buf, size_t sz)
 {
     BIO *bio = BIO_new(BIO_s_mem());
     if (bio) {
-        int len = X509_NAME_print_ex(bio, name, 0, XN_FLAG_ONELINE);
+        int len = X509_NAME_print_ex(bio, name, 0,
+                                     XN_FLAG_ONELINE & ~ASN1_STRFLGS_ESC_MSB);
         BIO_gets(bio, buf, (int)sz); /*(may be truncated if len >= sz)*/
         BIO_free(bio);
         return len; /*return value has similar semantics to that of snprintf()*/
