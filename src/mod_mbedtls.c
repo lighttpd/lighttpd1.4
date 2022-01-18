@@ -2400,9 +2400,10 @@ https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *nam
     /* code block is similar to mbedtls_x509_dn_gets() */
     /* code block specialized for creating env vars of Subject DN components
      * and splits multi-valued RDNs into separate env vars for attribute=value*/
+    size_t n = 0;
     const size_t prelen = sizeof("SSL_CLIENT_S_DN_")-1;
     char key[64] = "SSL_CLIENT_S_DN_";
-    char buf[MBEDTLS_X509_MAX_DN_NAME_SIZE]; /*(256)*/
+    char buf[512]; /* MBEDTLS_X509_MAX_DN_NAME_SIZE is (256) */
 
     for (; name != NULL; name = name->next) {
         if (!name->oid.p)
@@ -2414,16 +2415,33 @@ https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *nam
         if (prelen+len >= sizeof(key)) continue;
         memcpy(key+prelen, short_name, len); /*(not '\0'-terminated)*/
 
-        size_t n, vlen = name->val.len;
-        if (vlen > sizeof(buf)-1)
-            vlen = sizeof(buf)-1;
-        for (n = 0; n < vlen; ++n) {
-            unsigned char c = name->val.p[n];
-            buf[n] = (c >= 32 && c != 127) ? c : '?';
+        if (n+2+len+1+name->val.len > sizeof(buf)) continue;
+        buf[n++] = ','; /*(", " at beginning is skipped outside loop below)*/
+        buf[n++] = ' ';
+        memcpy(buf+n, short_name, len);
+        n += len;
+        buf[n++] = '=';
+
+        for (size_t i = 0; i < name->val.len; ++i) {
+            unsigned char c = name->val.p[i];
+            buf[n+i] = (c >= 32 && c != 127) ? c : '?';
         }
 
-        http_header_env_set(r, key, prelen+len, buf, n);
+        http_header_env_set(r, key, prelen+len, buf+n, name->val.len);
+        n += name->val.len;
     }
+
+    /* mbedtls_x509_dn_gets() is not used to construct DN because that func does
+     * not support non-ASCII UTF-8.  This func allows non-ASCII UTF-8 but does
+     * not check for need to backslash-encode special chars.  This func
+     * *assumes* a trusted and validated cert which does contain any chars which
+     * need to be backslash-encoded in the stringified DN, even if such chars
+     * are allowed in ASN.1 DN.  Above, CTLs are encoded as '?' above, even
+     * though some are allowed if backslash-encoded.  Multi-valued RDNs are not
+     * combined with '+' above, as name->next_merged is private in mbedtls 3.0.0
+     */
+    if (n > 2)
+        http_header_env_set(r, CONST_STR_LEN("SSL_CLIENT_S_DN"), buf+2, n-2);
 }
 
 
@@ -2453,7 +2471,6 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
      * the peer cert and check for NULL before using it. */
     const mbedtls_x509_crt *crt = mbedtls_ssl_get_peer_cert(&hctx->ssl);
     buffer *vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_VERIFY"));
-    int n;
 
     uint32_t rc = (NULL != crt)
       ? mbedtls_ssl_get_verify_result(&hctx->ssl)
@@ -2469,14 +2486,6 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
     }
     else {
         buffer_copy_string_len(vb, CONST_STR_LEN("SUCCESS"));
-    }
-
-    char buf[512];
-    n = mbedtls_x509_dn_gets(buf, sizeof(buf), &crt->subject);
-    if (n > 0 && n < (int)sizeof(buf)) {
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_S_DN"),
-                            buf, n);
     }
 
     https_add_ssl_client_subject(r, &crt->subject);
