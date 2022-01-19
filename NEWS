@@ -3,6 +3,103 @@
 NEWS
 ====
 
+- 1.4.64 - 2022-01-19
+  * [core] fix trace issued for loading mod_auth (fixes #3121)
+  * [meson] need -lrt with glibc < 2.17 (fixes #3120)
+  * [core] adjust time jump detection (fixes #3123)
+  * [core] make setrlimit() warn, not fatal
+  * [core] add remote IP to some error msgs (fixes #3122)
+  * [mod_webdav] If-None-Match on non-existent entity
+  * [build] check getxattr before attr_get and -lattr
+  * [doc] SELinux: setsebool -P httpd_setrlimit on
+  * [build] create sha512sum file with release
+  * [build] CI builds now use make -j 2
+  * [core] http_response_send_file() takes const path
+  * [core] use ETag response header to check cachable
+  * [core] add more const to stat_cache_update_entry()
+  * [multiple] remove r->physical.etag
+  * [mod_magnet] interface to http_response_send_file
+  * [build] add headers for sendfile() detect on MacOS
+  * [core] http_response_write_prepare optimization
+  * [core] define static_assert for uClibc (fixes #3127)
+  * [build] -Wno-implicit-fallthrough for ls-hpack
+  * [core] ignore pcre2 "bad JIT option" warning
+  * [build] pcre2: use pkg-config before pcre2-config
+  * [core] http_response_has_error_handler()
+  * [core] consolidate request restart loop check
+  * [core] defer retrieving Last-Modified until needed
+  * [mod_dirlisting] fix logic inversion in cache
+  * [core] mark expect cond in http_response_send_file
+  * [core] connection_handle_read_state() tweak
+  * [core] connection_state_machine_loop() tweaks
+  * [core] connection_state_machine_h2() tweaks
+  * [core] quiet coverity noise
+  * [core] use lower limit for max-fds if !setrlimit
+  * [build] do not check for prctl; HAVE_PRCTL unused
+  * [core] server.core-files support on FreeBSD (fixes #3128)
+  * [mod_extforward] support longer PROXY v2 TLV vec
+  * [mod_webdav] detect truncated copy_file_range()
+  * [mod_webdav] copy_file_range() new in FreeBSD 13
+  * [mod_webdav] copy_file_range() new in FreeBSD 13
+  * [build] feature consistency between build types
+  * [build] cmake build now defaults to C11
+  * [core] CCRandomGenerateBytes() for rand on macOS (fixes #3129)
+  * [multiple] remove long-deprecated modules
+  * [build] default --with-pcre2 unless --with-pcre
+  * [core] "server.graceful-shutdown-timeout" => 8
+  * [build] adjust trace for regex-conditionals
+  * [build] update tests/SConscript
+  * [core] errno_t detection on Illumos
+  * [build] cmake build now defaults to C11
+  * [build] meson: find pcre2 w/o pkg-config
+  * [core] define __EXTENSIONS__ on Illumos
+  * [build] cmake,meson socket libs for win32, Illumos (fixes #3130)
+  * [core] hide bsd_accept_filter code on OpenBSD (fixes #3131)
+  * [core] errno_t and rsize_t detection on Illumos
+  * [mod_webdav] copy acceleration
+  * [mod_webdav] define HAVE_RENAMEAT2 earlier
+  * [build] meson misdetects mempcpy on some platforms
+  * [build] cmake: skip "-Wl,-export-dynamic" Illumos
+  * [build] adjust .gitignore for macOS
+  * [build] meson crypt and dl detection on *BSD (fixes #3133)
+  * [core] /dev/null is a symlink on Illumos (fixes #3132)
+  * [core] server.core-files support for solaris (fixes #3135)
+  * [build] feature consistency between build types
+  * [build] Haiku build fix (fixes #3136)
+  * [lemon] silence coverity warnings
+  * [cmake] raise minimum version to 3.7
+  * [cmake] add address/undefined sanitize compile options
+  * [asan tests] fix memory leaks
+  * [array] use speaking names for array "fn" vtables for better debugging experience
+  * [ci] add cmake-asan build type
+  * [core] buffer_copy_string() use "" if s is NULL
+  * [mod_authn_gssapi] code reuse: fdevent_mkostemp()
+  * [mod_authn_gssapi] reduce KRB5CCNAME mem alloc
+  * [build] adjust help strings for pcre2 default
+  * [core] (const char *) for srvconf.modules_dir
+  * [multiple] remove buffer_init_string()
+  * [multiple] remove buffer_init_buffer()
+  * [mod_extforward] fix out-of-bounds (OOB) write (fixes #3134)
+  * [build] use -fstack-protector-strong w/ extra warn
+  * [build] collect Sun-specific headers and funcs
+  * [build] collect Sun-specific headers and funcs
+  * [build] rm redundant check for -lnetwork on Haiku
+  * [build] check headers before some funcs
+  * [core] allow LISTEN_PID to be ppid if TRACEME (fixes #3137)
+  * [core] allow tests/tmp/bind.conf override (#3137)
+  * [mod_webdav] no sys/ioctl.h on _WIN32
+  * [tests] _WIN32 adjustments in LightyTest.pm
+  * [tests] revert _WIN32 adjustments in LightyTest.pm
+  * [mod_gnutls] lift size check out of DN loop
+  * [mod_mbedtls] lift size check out of DN loop
+  * [mbedtls] save (mbedtls_ssl_config *) in hctx
+  * [multiple] permit UTF-8 in SSL_CLIENT_S_DN_*
+  * [mod_openssl] do not esc UTF-8 in cert subject
+  * [mod_mbedtls] reconstruct SSL_CLIENT_S_DN
+  * [mod_mbedtls] changes to build with mbedtls 3.0.0
+  * [mod_mbedtls] remove use of out_left in mbedtls 3
+  * [mod_mbedtls] mbedtls_ssl_conf_groups for 3.1.0
+
 - 1.4.63 - 2021-12-04
   * [core] import xxHash v0.8.1
   * [core] isolate use of sys/filio.h
