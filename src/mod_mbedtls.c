@@ -114,13 +114,13 @@ typedef struct {
 typedef struct {
     mbedtls_ssl_config *ssl_ctx;        /* context shared between mbedtls_ssl_CONTEXT structures */
     int *ciphersuites;
-    mbedtls_ecp_group_id *curves;
+    void *curves;
 } plugin_ssl_ctx;
 
 typedef struct {
     mbedtls_ssl_config *ssl_ctx;        /* output from network_init_ssl() */
     int *ciphersuites;                  /* output from network_init_ssl() */
-    mbedtls_ecp_group_id *curves;       /* output from network_init_ssl() */
+    void *curves;                       /* output from network_init_ssl() */
 
     /*(used only during startup; not patched)*/
     unsigned char ssl_enabled; /* only interesting for setting up listening sockets. don't use at runtime */
@@ -3939,6 +3939,7 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
 }
 
 
+#if MBEDTLS_VERSION_NUMBER < 0x03010000 /* mbedtls 3.01.0 */
 static int
 mod_mbedtls_ssl_append_curve (server *srv, mbedtls_ecp_group_id *ids, int nids, int idsz, const mbedtls_ecp_group_id id)
 {
@@ -3947,9 +3948,7 @@ mod_mbedtls_ssl_append_curve (server *srv, mbedtls_ecp_group_id *ids, int nids, 
           "MTLS: error: too many curves during list expand");
         return -1;
     }
-
     ids[++nids] = id;
-
     return nids;
 }
 
@@ -3998,6 +3997,65 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     mbedtls_ssl_conf_curves(s->ssl_ctx, s->curves);
     return 1;
 }
+#else
+static int
+mod_mbedtls_ssl_append_curve (server *srv, uint16_t *ids, int nids, int idsz, const uint16_t id)
+{
+    if (1 >= idsz - (nids + 1)) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "MTLS: error: too many curves during list expand");
+        return -1;
+    }
+    ids[++nids] = id;
+    return nids;
+}
+
+
+static int
+mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *curvelist)
+{
+    uint16_t ids[512];
+    int nids = -1;
+    const int idsz = (int)(sizeof(ids)/sizeof(*ids)-1);
+    const mbedtls_ecp_curve_info * const curve_info = mbedtls_ecp_curve_list();
+
+    const buffer * const b = curvelist;
+    for (const char *e = b->ptr-1; e; ) {
+        const char * const n = e+1;
+        e = strchr(n, ':');
+        size_t len = e ? (size_t)(e - n) : strlen(n);
+        /* similar to mbedtls_ecp_curve_info_from_name() */
+        const mbedtls_ecp_curve_info *info;
+        for (info = curve_info; info->tls_id != 0; ++info) {
+            if (0 == strncmp(info->name, n, len) && info->name[len] == '\0')
+                break;
+        }
+        if (info->tls_id == 0) {
+            log_error(srv->errh, __FILE__, __LINE__,
+                      "MTLS: unrecognized curve: %.*s; ignored", (int)len, n);
+            continue;
+        }
+
+        nids = mod_mbedtls_ssl_append_curve(srv, ids, nids, idsz, info->tls_id);
+        if (-1 == nids) return 0;
+    }
+
+    /* XXX: mod_openssl configures "prime256v1" if curve list not specified,
+     * but mbedtls provides a list of supported curves if not explicitly set */
+    if (-1 == nids) return 1; /* empty list; no-op */
+
+    ids[++nids] = 0; /* terminate list */
+    ++nids;
+
+    /* curves list must be persistent for lifetime of mbedtls_ssl_config */
+    s->curves = malloc(nids * sizeof(uint16_t));
+    force_assert(s->curves);
+    memcpy(s->curves, ids, nids * sizeof(uint16_t));
+
+    mbedtls_ssl_conf_groups(s->ssl_ctx, s->curves);
+    return 1;
+}
+#endif /* MBEDTLS_VERSION_NUMBER >= 0x03010000 */ /* mbedtls 3.01.0 */
 
 
 static void
