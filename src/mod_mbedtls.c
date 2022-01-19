@@ -2005,7 +2005,9 @@ mod_mbedtls_ssl_write_err(connection *con, handler_ctx *hctx, int wr, size_t wr_
         return -1;
     }
 
+  #if MBEDTLS_VERSION_NUMBER < 0x03000000 /* mbedtls 3.00.0 */
     if (0 != hctx->ssl.out_left)  /* partial write; save attempted wr_len */
+  #endif
         hctx->pending_write = wr_len;
 
     return 0; /* try again later */
@@ -2024,7 +2026,10 @@ connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t ma
 
     if (hctx->pending_write) {
         int wr = (int)hctx->pending_write;
-        if (0 != ssl->out_left) {
+      #if MBEDTLS_VERSION_NUMBER < 0x03000000 /* mbedtls 3.00.0 */
+        if (0 != ssl->out_left)
+      #endif
+        {
             /*(would prefer mbedtls_ssl_flush_output() from ssl_internal.h)*/
             size_t data_len = hctx->pending_write;
             wr = mbedtls_ssl_write(ssl, NULL, data_len);
