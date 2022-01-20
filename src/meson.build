@@ -266,7 +266,7 @@ endif
 libbrotli = []
 if get_option('with_brotli')
 	libbrotli = [ compiler.find_library('brotlienc') ]
-	if compiler.has_function('BrotliEncoderCreateInstance', args: defs, dependencies: libbrotlienc, prefix: '#include <brotli/encode.h>')
+	if compiler.has_function('BrotliEncoderCreateInstance', args: defs, dependencies: libbrotli, prefix: '#include <brotli/encode.h>')
 		conf_data.set('HAVE_BROTLI_ENCODE_H', true)
 		conf_data.set('HAVE_BROTLI', true)
 	else
