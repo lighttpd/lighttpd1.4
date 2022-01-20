@@ -1727,6 +1727,9 @@ lighty_track_feature "compress-bzip2" "" \
 lighty_track_feature "compress-brotli" "" \
   'test "$WITH_BROTLI" != no'
 
+lighty_track_feature "compress-zstd" "" \
+  'test "$WITH_ZSTD" != no'
+
 lighty_track_feature "kerberos" "mod_authn_gssapi" \
   'test "$WITH_KRB5" != no'
 
