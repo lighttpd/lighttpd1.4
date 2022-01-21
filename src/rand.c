@@ -82,9 +82,10 @@
 #include <sys/ioctl.h>
 #endif
 #if defined(__APPLE__) && defined(__MACH__)
-#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101000 /* OS X 10.10+ */
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200 /* OS X 10.12+ */
 #undef HAVE_ARC4RANDOM_BUF
 #define HAVE_CCRANDOMGENERATEBYTES
+#include <CommonCrypto/CommonCryptoError.h>
 #include <CommonCrypto/CommonRandom.h>
 #endif
 #endif
