@@ -396,32 +396,32 @@ endif
 
 liblua = []
 if get_option('with_lua')
-	found_lua = false
-	foreach l: ['lua5.4', 'lua-5.4', 'lua5.3', 'lua-5.3', 'lua5.2', 'lua-5.2', 'lua5.1', 'lua-5.1', 'lua']
-		if not(found_lua)
+	lua_version = get_option('lua_version')
+	if (lua_version != '')
+		liblua = dependency(lua_version, required: true)
+	else
+		found_lua = false
+		foreach l: ['lua5.4', 'lua-5.4', 'lua5.3', 'lua-5.3', 'lua5.2', 'lua-5.2', 'lua5.1', 'lua-5.1', 'lua']
 			liblua = dependency(l, required: false)
-			if (liblua.found())
-				found_lua = true
-			else
+			if not(liblua.found())
 				liblua = compiler.find_library(l, required: false)
-				if (liblua.found())
-					found_lua = true
-					liblua_found_header = false
-					foreach ib: include_base_paths
-						if not(liblua_found_header)
-							i = join_paths(ib, l)
-							if compiler.has_header(join_paths(i, 'lua.h'))
-								liblua_found_header = true
-								liblua += [ declare_dependency(include_directories: include_directories(i)) ]
-							endif
-						endif
-					endforeach
+				if not(liblua.found())
+					continue
 				endif
+				foreach ib: include_base_paths
+					i = join_paths(ib, l)
+					if compiler.has_header(join_paths(i, 'lua.h'))
+						liblua += [ declare_dependency(include_directories: include_directories(i)) ]
+						break
+					endif
+				endforeach
 			endif
+			found_lua = true
+			break
+		endforeach
+		if not(found_lua)
+			error('Couldn\'t find any lua library')
 		endif
-	endforeach
-	if not(found_lua)
-		error('Couldn\'t find any lua library')
 	endif
 	liblua = [ liblua ]
 	conf_data.set('HAVE_LUA_H', true)

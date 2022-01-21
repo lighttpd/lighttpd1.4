@@ -166,3 +166,8 @@ option('moduledir',
 	value: 'lib/lighttpd',
 	description: 'Location to install modules to (relative to prefix)',
 )
+
+option('lua_version',
+	type: 'string',
+	description: 'Look for a specific lua version',
+)
