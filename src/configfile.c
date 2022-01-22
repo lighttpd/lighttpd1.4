@@ -2299,6 +2299,9 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 		char *shell = getenv("SHELL");
 		char *args[4];
 		pid_t pid;
+		if (shell && (0 == strcmp(shell, "/usr/bin/false")
+		              || 0 == strcmp(shell, "/bin/false")))
+			shell = NULL;
 		*(const char **)&args[0] = shell ? shell : "/bin/sh";
 		*(const char **)&args[1] = "-c";
 		*(const char **)&args[2] = cmd;
