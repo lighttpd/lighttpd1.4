@@ -387,9 +387,9 @@ int li_rand_pseudo (void)
         return i;
   #endif
   #ifdef HAVE_CCRANDOMGENERATEBYTES
-    int i;
-    if (CCRandomGenerateBytes(&i, sizeof(i)) == kCCSuccess)
-        return i;
+    int j;
+    if (CCRandomGenerateBytes(&j, sizeof(j)) == kCCSuccess)
+        return j;
   #endif
   #ifdef HAVE_ARC4RANDOM_BUF
     return (int)arc4random();
