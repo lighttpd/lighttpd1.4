@@ -56,6 +56,9 @@ EVP_HMAC (const EVP_MD *evp_md, const void *key,
     EVP_PKEY_free(pkey);
     return (1 == rc) ? md : NULL;
 }
+typedef size_t evp_siglen_t;
+#else
+typedef unsigned int evp_siglen_t;
 #endif
 #endif
 
@@ -99,10 +102,11 @@ li_hmac_sha1 (unsigned char digest[SHA_DIGEST_LENGTH],
         return 0;
     return 1;
    #elif defined(USE_OPENSSL_CRYPTO)
+    evp_siglen_t dlen = SHA_DIGEST_LENGTH;
     return (NULL != HMAC(EVP_sha1(),
                          (const unsigned char *)secret, (int)slen,
                          (const unsigned char *)msg, mlen,
-                         digest, NULL));
+                         digest, &dlen));
    #elif defined(USE_GNUTLS_CRYPTO)
     return 0 ==
       gnutls_hmac_fast(GNUTLS_MAC_SHA1,
@@ -174,10 +178,11 @@ li_hmac_sha256 (unsigned char digest[SHA256_DIGEST_LENGTH],
         return 0;
     return 1;
    #elif defined(USE_OPENSSL_CRYPTO)
+    evp_siglen_t dlen = SHA256_DIGEST_LENGTH;
     return (NULL != HMAC(EVP_sha256(),
                          (const unsigned char *)secret, (int)slen,
                          (const unsigned char *)msg, mlen,
-                         digest, NULL));
+                         digest, &dlen));
    #elif defined(USE_GNUTLS_CRYPTO)
     return 0 ==
       gnutls_hmac_fast(GNUTLS_MAC_SHA256,
@@ -249,10 +254,11 @@ li_hmac_sha512 (unsigned char digest[SHA512_DIGEST_LENGTH],
         return 0;
     return 1;
    #elif defined(USE_OPENSSL_CRYPTO)
+    evp_siglen_t dlen = SHA512_DIGEST_LENGTH;
     return (NULL != HMAC(EVP_sha512(),
                          (const unsigned char *)secret, (int)slen,
                          (const unsigned char *)msg, mlen,
-                         digest, NULL));
+                         digest, &dlen));
    #elif defined(USE_GNUTLS_CRYPTO)
     return 0 ==
       gnutls_hmac_fast(GNUTLS_MAC_SHA512,
