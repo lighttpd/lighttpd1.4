@@ -2587,15 +2587,11 @@ webdav_copytmp_rename (const plugin_config * const pconf,
                        int * const flags)
 {
   #if defined(__APPLE__) && defined(__MACH__)
-  #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050
+  #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200 /* 10.12+ */
     if (!(*flags & (WEBDAV_FLAG_COPY_XDEV
                    |WEBDAV_FLAG_MOVE_XDEV
                    |WEBDAV_FLAG_NO_CLONE))) {
-      #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200 /* 10.12+ */
         if (0==clonefile(src->path.ptr,dst->path.ptr,CLONE_NOFOLLOW))
-      #else /* __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050 */
-        if (0==copyfile(src->path.ptr,dst->path.ptr,NULL,COPYFILE_CLONE_FORCE))
-      #endif
             /* target did not exist; skip stat_cache_delete_entry() */
             return 0; /* copied */
         else {
@@ -2635,15 +2631,11 @@ webdav_copytmp_rename (const plugin_config * const pconf,
   do {
 
    #if defined(__APPLE__) && defined(__MACH__)
-   #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050
+   #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200 /* 10.12+ */
     if (!(*flags & (WEBDAV_FLAG_COPY_XDEV
                    |WEBDAV_FLAG_MOVE_XDEV
                    |WEBDAV_FLAG_NO_CLONE))) {
-      #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200 /* 10.12+ */
         if (0 == clonefile(src->path.ptr, tmpb->ptr, CLONE_NOFOLLOW))
-      #else /* __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050 */
-        if (0 == copyfile(src->path.ptr, tmpb->ptr, NULL, COPYFILE_CLONE_FORCE))
-      #endif
             break; /* copied */
         else {
             switch (errno) {
