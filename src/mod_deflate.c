@@ -1433,155 +1433,111 @@ static int deflate_compress_cleanup(request_st * const r, handler_ctx * const hc
 }
 
 
-static int mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx, chunk * const c, off_t st_size) {
-	off_t abs_offset;
-	off_t toSend = -1;
-	char *start;
 #ifdef USE_MMAP
-	/* use large chunks since server blocks while compressing, anyway
-	 * (mod_deflate is not recommended for large files) */
-	const off_t mmap_chunk_size = 16 * 1024 * 1024; /* must be power-of-2 */
-	off_t we_want_to_send = st_size;
-	volatile int mapped = 0;/* quiet warning: might be clobbered by 'longjmp' */
-#else
-	start = NULL;
+static int mod_deflate_file_chunk_remap(chunk * const c, const off_t n)
+{
+    if (c->file.mmap.start == MAP_FAILED
+        || c->offset < c->file.mmap.offset
+        || c->offset >= c->file.mmap.offset + (off_t)c->file.mmap.length) {
+
+        /* use large chunks since server blocks while compressing
+         * (mod_deflate is not recommended for large files) */
+
+        if (c->file.mmap.start != MAP_FAILED) /*(munmap, remap at new offset)*/
+            munmap(c->file.mmap.start, c->file.mmap.length);
+        c->file.mmap.offset = c->offset & ~(16384-1); /* pagesize multiple */
+        c->file.mmap.length = (size_t)(c->offset - c->file.mmap.offset + n);
+      #if !(defined(_LP64) || defined(__LP64__) || defined(_WIN64))
+        /*(consider 512k blocks if this func is used more generically)*/
+        const off_t mmap_chunk_size = 8 * 1024 * 1024;
+        if (c->file.mmap.length > (size_t)mmap_chunk_size)
+            c->file.mmap.length = (size_t)mmap_chunk_size;
+      #endif
+        c->file.mmap.start =
+          mmap(0, c->file.mmap.length, PROT_READ,
+               c->file.is_temp ? MAP_PRIVATE : MAP_SHARED,
+               c->file.fd, c->file.mmap.offset);
+        if (MAP_FAILED == c->file.mmap.start) {
+            if (errno != EINVAL) return 0;
+            c->file.mmap.start =
+              mmap(0, c->file.mmap.length, PROT_READ, MAP_PRIVATE,
+                   c->file.fd, c->file.mmap.offset);
+            if (MAP_FAILED == c->file.mmap.start) return 0;
+        }
+      #ifdef HAVE_MADVISE
+        /*(consider func param for madvise if func is used more generically)*/
+        if (c->file.mmap.length > 65536) /*(skip syscall if size <= 64KB)*/
+            (void)madvise(c->file.mmap.start,c->file.mmap.length,MADV_WILLNEED);
+      #endif
+    }
+    return 1;
+}
 #endif
 
-	if (-1 == c->file.fd) {  /* open the file if not already open */
-		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, r->conf.follow_symlink, O_RDONLY, 0))) {
-			log_perror(r->conf.errh, __FILE__, __LINE__, "open failed %s", c->mem->ptr);
-			return -1;
-		}
-	}
 
-	abs_offset = c->offset;
+static off_t mod_deflate_file_chunk_no_mmap(request_st * const r, handler_ctx * const hctx, const chunk * const c, off_t n)
+{
+    if (n > 2*1024*1024) n = 2*1024*1024;
+    char * const p = malloc((size_t)n);
+    if (p && -1 != lseek(c->file.fd, c->offset, SEEK_SET)
+        && n == read(c->file.fd, p, (size_t)n)) {
+        if (mod_deflate_compress(hctx, (unsigned char *)p, n) < 0) {
+            log_error(r->conf.errh, __FILE__, __LINE__, "compress failed.");
+            n = -1;
+        }
+    }
+    else {
+        log_perror(r->conf.errh, __FILE__, __LINE__, "reading %s failed", c->mem->ptr);
+        n = -1;
+    }
+    free(p);
+    return n;
+}
 
-#ifdef USE_MMAP
-	/* mmap the buffer
-	 * - first mmap
-	 * - new mmap as the we are at the end of the last one */
-	if (c->file.mmap.start == MAP_FAILED ||
-	    abs_offset == (off_t)(c->file.mmap.offset + c->file.mmap.length)) {
-
-		/* Optimizations for the future:
-		 *
-		 * (comment is outdated since server blocks compressing file and then munmap()s file)
-		 *
-		 * adaptive mem-mapping
-		 *   the problem:
-		 *     we mmap() the whole file. If someone has a lot of large files and 32bit
-		 *     machine the virtual address area will be exhausted and we will have a failing
-		 *     mmap() call.
-		 *   solution:
-		 *     only mmap 16M in one chunk and move the window as soon as we have finished
-		 *     the first 8M
-		 *
-		 * read-ahead buffering
-		 *   the problem:
-		 *     sending out several large files in parallel trashes the read-ahead of the
-		 *     kernel leading to long wait-for-seek times.
-		 *   solutions: (increasing complexity)
-		 *     1. use madvise
-		 *     2. use a internal read-ahead buffer in the chunk-structure
-		 *     3. use non-blocking IO for file-transfers
-		 *   */
-
-		/* all mmap()ed areas are mmap_chunk_size except the last which might be smaller */
-		off_t to_mmap;
-
-		/* this is a remap, move the mmap-offset */
-		if (c->file.mmap.start != MAP_FAILED) {
-			munmap(c->file.mmap.start, c->file.mmap.length);
-			c->file.mmap.offset += mmap_chunk_size;
-		} else {
-			/* in case the range-offset is after the first mmap()ed area we skip the area */
-			c->file.mmap.offset = c->offset & ~(mmap_chunk_size-1);
-		}
-
-		to_mmap = c->file.length - c->file.mmap.offset;
-		if (to_mmap > mmap_chunk_size) to_mmap = mmap_chunk_size;
-		/* we have more to send than we can mmap() at once */
-		if (we_want_to_send > to_mmap) we_want_to_send = to_mmap;
-
-		if (MAP_FAILED == (c->file.mmap.start = mmap(0, (size_t)to_mmap, PROT_READ, MAP_SHARED, c->file.fd, c->file.mmap.offset))
-		    && (errno != EINVAL || MAP_FAILED == (c->file.mmap.start = mmap(0, (size_t)to_mmap, PROT_READ, MAP_PRIVATE, c->file.fd, c->file.mmap.offset)))) {
-			log_perror(r->conf.errh, __FILE__, __LINE__,
-			  "mmap failed %s %d", c->mem->ptr, c->file.fd);
-
-			return -1;
-		}
-
-		c->file.mmap.length = to_mmap;
-#ifdef HAVE_MADVISE
-		/* don't advise files <= 64Kb */
-		if (c->file.mmap.length > 65536 &&
-		    0 != madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED)) {
-			log_perror(r->conf.errh, __FILE__, __LINE__,
-			  "madvise failed %s %d", c->mem->ptr, c->file.fd);
-		}
-#endif
-
-		/* chunk_reset() or chunk_free() will cleanup for us */
-	}
-
-	/* to_send = abs_mmap_end - abs_offset */
-	toSend = (c->file.mmap.offset + c->file.mmap.length) - abs_offset;
-	if (toSend > we_want_to_send) toSend = we_want_to_send;
-
-	if (toSend < 0) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "toSend is negative: %lld %lld %lld %lld",
-		  (long long)toSend,
-		  (long long)c->file.mmap.length,
-		  (long long)abs_offset,
-		  (long long)c->file.mmap.offset);
-		force_assert(toSend < 0);
-	}
-
-	start = c->file.mmap.start;
-	mapped = 1;
-#endif
-
-	if (MAP_FAILED == c->file.mmap.start) {
-		toSend = st_size;
-		if (toSend > 2*1024*1024) toSend = 2*1024*1024;
-		if (NULL == (start = malloc((size_t)toSend)) || -1 == lseek(c->file.fd, abs_offset, SEEK_SET) || toSend != read(c->file.fd, start, (size_t)toSend)) {
-			log_perror(r->conf.errh, __FILE__, __LINE__, "reading %s failed", c->mem->ptr);
-
-			free(start);
-			return -1;
-		}
-		abs_offset = 0;
-	}
 
 #ifdef USE_MMAP
-	if (mapped) {
-		signal(SIGBUS, sigbus_handler);
-		sigbus_jmp_valid = 1;
-		if (0 != sigsetjmp(sigbus_jmp, 1)) {
-			sigbus_jmp_valid = 0;
+static off_t mod_deflate_file_chunk_mmap(request_st * const r, handler_ctx * const hctx, chunk * const c, off_t n)
+{
+    if (!mod_deflate_file_chunk_remap(c, n))
+        return mod_deflate_file_chunk_no_mmap(r, hctx, c, n);
 
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "SIGBUS in mmap: %s %d", c->mem->ptr, c->file.fd);
-			return -1;
-		}
-	}
+    signal(SIGBUS, sigbus_handler);
+    if (0 == sigsetjmp(sigbus_jmp, 1)) {
+        off_t moffset = c->offset - c->file.mmap.offset;
+        char *p = c->file.mmap.start + moffset;
+        off_t len = c->file.mmap.length - moffset;
+        if (len > n) len = n;
+        sigbus_jmp_valid = 1;
+        int rc = mod_deflate_compress(hctx, (unsigned char *)p, len);
+        sigbus_jmp_valid = 0;
+        if (rc < 0) {
+            log_error(r->conf.errh, __FILE__, __LINE__, "compress failed.");
+            len = -1;
+        }
+        return len;
+    }
+    else {
+        sigbus_jmp_valid = 0;
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "SIGBUS in mmap: %s %d", c->mem->ptr, c->file.fd);
+        return -1;
+    }
+}
 #endif
 
-	if (mod_deflate_compress(hctx,
-				(unsigned char *)start + (abs_offset - c->file.mmap.offset), toSend) < 0) {
-		log_error(r->conf.errh, __FILE__, __LINE__, "compress failed.");
-		toSend = -1;
-	}
 
-#ifdef USE_MMAP
-	if (mapped)
-		sigbus_jmp_valid = 0;
-	else
-#endif
-		free(start);
-
-	return toSend;
+static off_t mod_deflate_file_chunk(request_st * const r, handler_ctx * const hctx, chunk * const c, off_t n) {
+    if (-1 == c->file.fd) {  /* open the file if not already open */
+        if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, r->conf.follow_symlink, O_RDONLY, 0))) {
+            log_perror(r->conf.errh, __FILE__, __LINE__, "open failed %s", c->mem->ptr);
+            return -1;
+        }
+    }
+  #ifdef USE_MMAP
+    return mod_deflate_file_chunk_mmap(r, hctx, c, n);
+  #else
+    return mod_deflate_file_chunk_no_mmap(r, hctx, c, n);
+  #endif
 }
 
 
