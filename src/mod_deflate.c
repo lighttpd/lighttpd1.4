@@ -1849,7 +1849,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	vb = http_header_response_get(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"));
 	etaglen = vb ? buffer_clen(vb) : 0;
 	if (etaglen && light_btst(r->rqst_htags, HTTP_HEADER_IF_NONE_MATCH)) {
-		const buffer *if_none_match = http_header_response_get(r, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
+		const buffer *if_none_match = http_header_request_get(r, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
 		if (   r->http_status < 300 /*(want 2xx only)*/
 		    && NULL != if_none_match
 		    && 0 == strncmp(if_none_match->ptr, vb->ptr, etaglen-1)
