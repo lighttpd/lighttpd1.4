@@ -100,6 +100,9 @@
 #cmakedefine  HAVE_ZSTD
 #cmakedefine  HAVE_ZSTD_H
 
+/* libdeflate */
+#cmakedefine  HAVE_LIBDEFLATE
+
 /* FAM */
 #cmakedefine  HAVE_FAM_H
 #cmakedefine  HAVE_FAMNOEXISTS

@@ -307,6 +307,16 @@ if get_option('with_fam') and not(conf_data.get('HAVE_SYS_INOTIFY_H'))
 	conf_data.set('HAVE_FAM_H', true)
 endif
 
+libdeflate = []
+if get_option('with_libdeflate')
+	libdeflate = [ compiler.find_library('deflate') ]
+	if compiler.has_function('libdeflate_alloc_compressor', args: defs, dependencies: libdeflate, prefix: '#include <libdeflate.h>')
+		conf_data.set('HAVE_LIBDEFLATE', true)
+	else
+		error('Couldn\'t find libdeflate header / library')
+	endif
+endif
+
 libmaxminddb = []
 if get_option('with_maxminddb')
 	libmaxminddb = [ compiler.find_library('maxminddb') ]
@@ -970,7 +980,7 @@ modules = [
 	[ 'mod_alias', [ 'mod_alias.c' ] ],
 	[ 'mod_auth', [ 'mod_auth.c', 'mod_auth_api.c' ], [ libcrypto ] ],
 	[ 'mod_authn_file', [ 'mod_authn_file.c' ], [ libcrypt, libcrypto ] ],
-	[ 'mod_deflate', [ 'mod_deflate.c' ], libbz2 + libz + libzstd + libbrotli ],
+	[ 'mod_deflate', [ 'mod_deflate.c' ], libbz2 + libz + libzstd + libbrotli + libdeflate ],
 	[ 'mod_dirlisting', [ 'mod_dirlisting.c' ] ],
 	[ 'mod_evasive', [ 'mod_evasive.c' ] ],
 	[ 'mod_evhost', [ 'mod_evhost.c' ] ],

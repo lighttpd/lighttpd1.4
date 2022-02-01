@@ -1085,6 +1085,36 @@ if test "$WITH_BROTLI" != no; then
   AC_SUBST([BROTLI_LIBS])
 fi
 
+dnl libdeflate
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for libdeflate support])
+AC_ARG_WITH([libdeflate],
+  [AS_HELP_STRING([--with-libdeflate],
+    [Enable libdeflate support for mod_deflate]
+  )],
+  [WITH_LIBDEFLATE=$withval],
+  [WITH_LIBDEFLATE=no]
+)
+AC_MSG_RESULT([$WITH_LIBDEFLATE])
+
+if test "$WITH_LIBDEFLATE" != no; then
+  if test "$WITH_LIBDEFLATE" != yes; then
+    DEFLATE_LIBS="-L$WITH_LIBDEFLATE -ldeflate"
+    CPPFLAGS="$CPPFLAGS -I$WITH_LIBDEFLATE"
+  else
+    AC_CHECK_HEADERS([libdeflate.h], [],
+      [AC_MSG_ERROR([libdeflate header not found, install them or build without --with-libdeflate])]
+    )
+    AC_CHECK_LIB([deflate], [libdeflate_alloc_compressor],
+      [DEFLATE_LIBS=-ldeflate],
+      [AC_MSG_ERROR([libdeflate library not found, install it or build without --with-libdeflate])]
+    )
+  fi
+
+  AC_DEFINE([HAVE_LIBDEFLATE], [1], [libdeflate])
+  AC_SUBST([DEFLATE_LIBS])
+fi
+
 dnl Check for fam/gamin
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for FAM])

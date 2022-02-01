@@ -244,6 +244,7 @@ vars.AddVariables(
 	BoolVariable('with_brotli', 'enable brotli compression', 'no'),
 	PackageVariable('with_dbi', 'enable dbi support', 'no'),
 	BoolVariable('with_fam', 'enable FAM/gamin support', 'no'),
+	BoolVariable('with_libdeflate', 'enable libdeflate compression', 'no'),
 	BoolVariable('with_maxminddb', 'enable MaxMind GeoIP2 support', 'no'),
 	BoolVariable('with_krb5', 'enable krb5 auth support', 'no'),
 	BoolVariable('with_ldap', 'enable ldap auth support', 'no'),
@@ -332,6 +333,7 @@ if 1:
 		LIBCRYPT = '',
 		LIBCRYPTO = '',
 		LIBDBI = '',
+		LIBDEFLATE = '',
 		LIBDL = '',
 		LIBGNUTLS = '',
 		LIBGSSAPI_KRB5 = '',
@@ -530,6 +532,14 @@ if 1:
 			LIBS = [ 'fam' ],
 		)
 		autoconf.haveFunc('FAMNoExists')
+
+	if env['with_libdeflate']:
+		if not autoconf.CheckLibWithHeader('deflate', 'libdeflate.h', 'C'):
+			fail("Couldn't find libdeflate")
+		autoconf.env.Append(
+			CPPFLAGS = [ '-DHAVE_LIBDEFLATE' ],
+			LIBDEFLATE = 'libdeflate',
+		)
 
 	if env['with_maxminddb']:
 		if not autoconf.CheckLibWithHeader('maxminddb', 'maxminddb.h', 'C'):

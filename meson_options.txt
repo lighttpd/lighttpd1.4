@@ -13,6 +13,11 @@ option('with_dbi',
 	value: false,
 	description: 'with dbi-support for mod_auth mod_vhostdb_dbi [default: off]',
 )
+option('with_libdeflate',
+	type: 'boolean',
+	value: false,
+	description: 'with libdeflate-support for mod_deflate [default: off]',
+)
 option('with_fam',
 	type: 'boolean',
 	value: false,

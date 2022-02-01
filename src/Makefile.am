@@ -277,7 +277,7 @@ mod_access_la_LIBADD = $(common_libadd)
 lib_LTLIBRARIES += mod_deflate.la
 mod_deflate_la_SOURCES = mod_deflate.c
 mod_deflate_la_LDFLAGS = $(BROTLI_CFLAGS) $(common_module_ldflags)
-mod_deflate_la_LIBADD = $(Z_LIB) $(ZSTD_LIB) $(BZ_LIB) $(BROTLI_LIBS) $(common_libadd)
+mod_deflate_la_LIBADD = $(Z_LIB) $(ZSTD_LIB) $(BZ_LIB) $(BROTLI_LIBS) $(DEFLATE_LIBS) $(common_libadd)
 
 lib_LTLIBRARIES += mod_auth.la
 mod_auth_la_SOURCES = mod_auth.c
@@ -477,7 +477,7 @@ lighttpd_LDADD = \
   $(common_libadd) \
   $(CRYPT_LIB) $(CRYPTO_LIB) $(XXHASH_LIBS) \
   $(XML_LIBS) $(SQLITE_LIBS) $(UUID_LIBS) $(ELFTC_LIB) \
-  $(PCRE_LIB) $(Z_LIB) $(ZSTD_LIB) $(BZ_LIB) $(BROTLI_LIBS) \
+  $(PCRE_LIB) $(Z_LIB) $(ZSTD_LIB) $(BZ_LIB) $(BROTLI_LIBS) $(DEFLATE_LIBS) \
   $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) \
   $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS)
 lighttpd_LDFLAGS = -export-dynamic
