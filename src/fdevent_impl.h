@@ -36,6 +36,8 @@ struct pollfd;          /* declaration */
 #if defined HAVE_PORT_H && defined HAVE_PORT_CREATE && defined(__sun)
 # define FDEVENT_USE_SOLARIS_PORT
 # include <port.h>
+/* Illumos epoll not supported by lighttpd; POLLRDHUP != EPOLLRDHUP on Illumos*/
+# undef FDEVENT_USE_LINUX_EPOLL
 #endif
 
 #if defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
