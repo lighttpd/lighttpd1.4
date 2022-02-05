@@ -2629,6 +2629,7 @@ http_cgi_ssl_env (request_st * const r, handler_ctx * const hctx)
       #if MBEDTLS_VERSION_NUMBER >= 0x03020000 /* mbedtls 3.02.0 */
         size_t algkeysize =
           mbedtls_ssl_ciphersuite_get_cipher_key_bitlen(ciphersuite_info);
+        unsigned int usekeysize = algkeysize; /*(equivalent in modern ciphers)*/
       #elif MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.00.0 */
        #ifdef MBEDTLS_CIPHER_C
         /*(messy transition; ssl->transform is hidden in ssl_internal.h)*/
