@@ -11,6 +11,9 @@
 #include "base_decls.h"
 
 
+__attribute_cold__
+void http_range_config_allow_http10 (int flag);
+
 int http_range_rfc7233 (request_st *r);
 
 

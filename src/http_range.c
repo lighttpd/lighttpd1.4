@@ -27,6 +27,14 @@
  * interoperability. */
 
 
+/* default: ignore Range with HTTP/1.0 requests */
+static int http_range_allow_http10;
+void http_range_config_allow_http10 (int flag)
+{
+    http_range_allow_http10 = flag;
+}
+
+
 __attribute_noinline__
 static int
 http_range_coalesce (off_t * const restrict ranges, int n)
@@ -347,6 +355,7 @@ http_range_rfc7233 (request_st * const r)
         return http_status;
     /* no "Range" in HTTP/1.0 */
     if (r->http_version < HTTP_VERSION_1_1)
+      if (!http_range_allow_http10)
         return http_status;
     /* do not attempt to handle range if Transfer-Encoding already applied.
      * skip Range processing if Content-Encoding has already been applied,

@@ -7,6 +7,7 @@
 #include "rand.h"
 #include "chunk.h"
 #include "h2.h"             /* h2_send_1xx() */
+#include "http_range.h"     /* http_range_config_allow_http10() */
 #include "fdevent.h"
 #include "fdlog.h"
 #include "connections.h"
@@ -1264,6 +1265,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	http_response_send_1xx_cb_set(NULL, HTTP_VERSION_1_1);
 	if (!config_feature_bool(srv, "server.h1-discard-backend-1xx", 0))
 		http_response_send_1xx_cb_set(connection_send_1xx, HTTP_VERSION_1_1);
+
+	http_range_config_allow_http10(config_feature_bool(srv, "http10.range", 0));
 
 	if (0 != config_set_defaults(srv)) {
 		log_error(srv->errh, __FILE__, __LINE__,
