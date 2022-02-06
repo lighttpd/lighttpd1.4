@@ -30,6 +30,7 @@ static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC)+1, 0 };
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "sys-setjmp.h"
 #include "sys-time.h"
 
 #include <string.h>
@@ -1503,19 +1504,27 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 #ifdef HAVE_SIGACTION
 	memset(&act, 0, sizeof(act));
+	sigemptyset(&act.sa_mask);
+
 	act.sa_handler = SIG_IGN;
 	sigaction(SIGPIPE, &act, NULL);
+
+#ifndef _MSC_VER
+	act.sa_flags = SA_NODEFER;
+	act.sa_handler = sys_setjmp_sigbus;
+	sigaction(SIGBUS, &act, NULL);
+	act.sa_flags = 0;
+#endif
+
 # if defined(SA_SIGINFO)
 	last_sighup_info.si_uid = 0,
 	last_sighup_info.si_pid = 0;
 	last_sigterm_info.si_uid = 0,
 	last_sigterm_info.si_pid = 0;
 	act.sa_sigaction = sigaction_handler;
-	sigemptyset(&act.sa_mask);
 	act.sa_flags = SA_SIGINFO;
 # else
 	act.sa_handler = signal_handler;
-	sigemptyset(&act.sa_mask);
 	act.sa_flags = 0;
 # endif
 	sigaction(SIGINT,  &act, NULL);
@@ -1527,7 +1536,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	/* it should be safe to restart syscalls after SIGCHLD */
 	act.sa_flags |= SA_RESTART | SA_NOCLDSTOP;
 	sigaction(SIGCHLD, &act, NULL);
-
 #elif defined(HAVE_SIGNAL)
 	/* ignore the SIGPIPE from sendfile() */
 	signal(SIGPIPE, SIG_IGN);
@@ -1537,6 +1545,9 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	signal(SIGCHLD,  signal_handler);
 	signal(SIGINT,  signal_handler);
 	signal(SIGUSR1, signal_handler);
+#ifndef _MSC_VER
+	signal(SIGBUS,  sys_setjmp_sigbus);
+#endif
 #endif
 
 

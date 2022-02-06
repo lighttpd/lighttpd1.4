@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "sys-mmap.h"
+#include "sys-setjmp.h"
 
 #include <stdlib.h>
 #include <fcntl.h>
@@ -1397,6 +1398,7 @@ chunkqueue_write_chunk_file (const int fd, chunk * const restrict c, log_error_s
   #endif
 
   #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
+    /*(chunkqueue_write_chunk() caller must protect against SIGBUS, if needed)*/
     const char * const data = chunkqueue_mmap_chunk_len(c, count);
     if (NULL != data)
         return chunkqueue_write_data(fd, data, count);
@@ -1515,6 +1517,22 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
 }
 
 
+#if 0
+#if defined(_LP64) || defined(__LP64__) || defined(_WIN64)
+#if defined(HAVE_MMAP) || defined(_WIN32) /*see local sys-mmap.h*/
+__attribute_noinline__
+static off_t
+chunk_setjmp_memcpy_cb (void *dst, const void *src, off_t len)
+{
+    /*(on 32-bit systems, caller should assert len <= SIZE_MAX)*/
+    memcpy(dst, src, (size_t)len);
+    return len;
+}
+#endif
+#endif
+#endif
+
+
 int
 chunkqueue_peek_data (chunkqueue * const cq,
                       char ** const data, uint32_t * const dlen,
@@ -1532,6 +1550,8 @@ chunkqueue_peek_data (chunkqueue * const cq,
                 uint32_t have = buffer_clen(c->mem) - (uint32_t)c->offset;
                 if (have > space)
                     have = space;
+                if (__builtin_expect( (0 == have), 0))
+                    break;
                 if (*dlen)
                     memcpy(data_in + *dlen, c->mem->ptr + c->offset, have);
                 else
@@ -1546,17 +1566,17 @@ chunkqueue_peek_data (chunkqueue * const cq,
                 off_t len = c->file.length - c->offset;
                 if (len > (off_t)space)
                     len = (off_t)space;
-                if (0 == len)
+                if (__builtin_expect( (0 == len), 0))
                     break;
 
             #if 0 /* XXX: might improve performance on some system workloads */
               #if defined(_LP64) || defined(__LP64__) || defined(_WIN64)
               #if defined(HAVE_MMAP) || defined(_WIN32) /*see local sys-mmap.h*/
                 /* mmap file to access data
-                 * (Only consider temp files here since not catching SIGBUS)
                  * (For now, also limit to 64-bit to avoid address space issues)
-                 * If temp file is used, data should be large enough that mmap
-                 * is worthwhile.  fd need not be kept open for the mmap once
+                 * (chunkqueue_mmap_chunk_len() uses MAP_PRIVATE, even though we
+                 *  might use MAP_SHARED, if supported, and !c->file.is_temp)
+                 * fd need not be kept open for the mmap once
                  * the mmap has been created, but is currently kept open for
                  * other pre-existing logic which checks fd and opens file,
                  * such as the condition for entering this code block above. */
@@ -1565,19 +1585,24 @@ chunkqueue_peek_data (chunkqueue * const cq,
                  * of lots and lots of temp file read-only memory maps.
                  * pmap -X and exclude lighttpd temporary files to get a better
                  * view of memory use */
+                /* Data should be large enough that mmap is worthwhile.
+                 * mmap if file chunk > 16k or if already mapped */
                 char *mdata;
-                if (c->file.is_temp
+                if ((c->file.mmap.start != MAP_FAILED
+                     || c->file.length - c->offset > 16384)
                     && (mdata = chunkqueue_mmap_chunk_len(c, len))) {
-                    if (*dlen) {
-                        if (*data != data_in) {
-                            memcpy(data_in, *data, *dlen);
-                            *data = data_in;
+                    if (!c->file.is_temp) {/*(might be changed to policy flag)*/
+                        if (sys_setjmp_eval3(chunk_setjmp_memcpy_cb,
+                                             data_in+*dlen, mdata, len) < 0) {
+                            log_error(errh, __FILE__, __LINE__,
+                              "SIGBUS in mmap: %s %d", c->mem->ptr, c->file.fd);
+                            return -1;
                         }
+                    }
+                    else if (*dlen)
                         memcpy(data_in+*dlen, mdata, (size_t)len);
-                    }
-                    else {
+                    else
                         *data = mdata;
-                    }
                     *dlen += (uint32_t)len;
                     break;
                 }

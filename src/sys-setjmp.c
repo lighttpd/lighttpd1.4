@@ -51,9 +51,15 @@ void sys_setjmp_sigbus (int sig)
  *       something (elsewhere) is missing protection to catch SIGBUS.)
  */
 
+/* Note: sigaction() config in server.c sets SA_NODEFER and empty signal mask
+ * so we avoid saving and restoring signal mask on systems with sigaction() */
+
 #ifdef _WIN32
 #define if_SYS_SETJMP_TRY()     if ((sys_setjmp_sigbus_jmp_valid = \
                                       !setjmp(sys_setjmp_sigbus_jmp_buf))) {
+#elif defined(HAVE_SIGACTION)
+#define if_SYS_SETJMP_TRY()     if ((sys_setjmp_sigbus_jmp_valid = \
+                                      !sigsetjmp(sys_setjmp_sigbus_jmp_buf, 0))) {
 #else
 #define if_SYS_SETJMP_TRY()     if ((sys_setjmp_sigbus_jmp_valid = \
                                       !sigsetjmp(sys_setjmp_sigbus_jmp_buf, 1))) {

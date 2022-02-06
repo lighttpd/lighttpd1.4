@@ -156,19 +156,8 @@
 
 #if defined HAVE_SYS_MMAN_H && defined HAVE_MMAP && defined ENABLE_MMAP
 #define USE_MMAP
-
 #include "sys-mmap.h"
-#include <setjmp.h>
-#include <signal.h>
-
-static volatile int sigbus_jmp_valid;
-static sigjmp_buf sigbus_jmp;
-
-static void sigbus_handler(int sig) {
-	UNUSED(sig);
-	if (sigbus_jmp_valid) siglongjmp(sigbus_jmp, 1);
-	ck_bt_abort(__FILE__, __LINE__, "SIGBUS");
-}
+#include "sys-setjmp.h"
 #endif
 
 /* request: accept-encoding */
@@ -1547,26 +1536,23 @@ static int mod_deflate_using_libdeflate_sm (handler_ctx * const hctx, const plug
 #ifdef USE_MMAP
 #if defined(_LP64) || defined(__LP64__) || defined(_WIN64)
 
-static void mod_deflate_using_libdeflate_compress (struct libdeflate_compressor * const compressor, handler_ctx * const hctx, void * const out, const size_t outsz)
+struct mod_deflate_setjmp_params {
+    struct libdeflate_compressor *compressor;
+    void *out;
+    size_t outsz;
+};
+
+static off_t mod_deflate_using_libdeflate_setjmp_cb (void *dst, const void *src, off_t len)
 {
-    signal(SIGBUS, sigbus_handler);
+    const struct mod_deflate_setjmp_params * const params = dst;
+    const handler_ctx * const hctx = src;
     const chunk * const c = hctx->r->write_queue.first;
-    if (0 == sigsetjmp(sigbus_jmp, 1)) {
-        off_t moffset = c->offset - c->file.mmap.offset;
-        const char *in = c->file.mmap.start + moffset;
-        size_t in_nbytes = (size_t)hctx->bytes_in;
-        sigbus_jmp_valid = 1;
-        size_t sz = (hctx->compression_type == HTTP_ACCEPT_ENCODING_GZIP)
-          ? libdeflate_gzip_compress(compressor, in, in_nbytes, out, outsz)
-          : libdeflate_deflate_compress(compressor, in, in_nbytes, out, outsz);
-        hctx->bytes_out = (off_t)sz;
-        sigbus_jmp_valid = 0;
-    }
-    else {
-        sigbus_jmp_valid = 0;
-        log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-          "SIGBUS in mmap: %s %d", c->mem->ptr, c->file.fd);
-    }
+    const char *in = c->file.mmap.start + c->offset - c->file.mmap.offset;
+    return (off_t)((hctx->compression_type == HTTP_ACCEPT_ENCODING_GZIP)
+      ? libdeflate_gzip_compress(params->compressor, in, (size_t)len,
+                                 params->out, params->outsz)
+      : libdeflate_deflate_compress(params->compressor, in, (size_t)len,
+                                    params->out, params->outsz));
 }
 
 
@@ -1611,7 +1597,10 @@ static int mod_deflate_using_libdeflate (handler_ctx * const hctx, const plugin_
       libdeflate_alloc_compressor(clevel > 0 ? clevel : 6);
       /* Z_DEFAULT_COMPRESSION -1 not supported */
     if (NULL != compressor) {
-        mod_deflate_using_libdeflate_compress(compressor, hctx, addr, sz);
+        struct mod_deflate_setjmp_params outparams = { compressor, addr, sz };
+        hctx->bytes_out =
+          sys_setjmp_eval3(mod_deflate_using_libdeflate_setjmp_cb,
+                           &outparams, hctx, hctx->bytes_in);
         libdeflate_free_compressor(compressor);
     }
 
@@ -1626,7 +1615,12 @@ static int mod_deflate_using_libdeflate (handler_ctx * const hctx, const plugin_
     if (0 != munmap(addr, sz))
         log_perror(hctx->r->conf.errh, __FILE__, __LINE__, "munmap");
 
-    if (0 != hctx->bytes_out && 0 != ftruncate(fd, hctx->bytes_out))
+    if (0 == hctx->bytes_out) {
+        const chunk * const c = hctx->r->write_queue.first;
+        log_error(hctx->r->conf.errh, __FILE__, __LINE__,
+          "SIGBUS in mmap: %s %d", c->mem->ptr, c->file.fd);
+    }
+    else if (0 != ftruncate(fd, hctx->bytes_out))
         hctx->bytes_out = 0;
 
     if (0 == hctx->bytes_out)
@@ -1673,33 +1667,34 @@ static off_t mod_deflate_file_chunk_no_mmap(request_st * const r, handler_ctx * 
 
 
 #ifdef USE_MMAP
+
+static off_t mod_deflate_file_chunk_setjmp_cb (void *dst, const void *src, off_t len)
+{
+    return mod_deflate_compress(dst, (const unsigned char *)src, len);
+}
+
+
 static off_t mod_deflate_file_chunk_mmap(request_st * const r, handler_ctx * const hctx, chunk * const c, off_t n)
 {
     if (!mod_deflate_file_chunk_remap(c, n))
         return mod_deflate_file_chunk_no_mmap(r, hctx, c, n);
 
-    signal(SIGBUS, sigbus_handler);
-    if (0 == sigsetjmp(sigbus_jmp, 1)) {
-        off_t moffset = c->offset - c->file.mmap.offset;
-        char *p = c->file.mmap.start + moffset;
-        off_t len = c->file.mmap.length - moffset;
-        if (len > n) len = n;
-        sigbus_jmp_valid = 1;
-        int rc = mod_deflate_compress(hctx, (unsigned char *)p, len);
-        sigbus_jmp_valid = 0;
-        if (rc < 0) {
+    const off_t moffset = c->offset - c->file.mmap.offset;
+    char * const p = c->file.mmap.start + moffset;
+    off_t len = c->file.mmap.length - moffset;
+    if (len > n) len = n;
+    off_t rc = sys_setjmp_eval3(mod_deflate_file_chunk_setjmp_cb, hctx, p, len);
+    if (__builtin_expect( (rc < 0), 0)) {
+        if (errno == EFAULT)
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "SIGBUS in mmap: %s %d", c->mem->ptr, c->file.fd);
+        else
             log_error(r->conf.errh, __FILE__, __LINE__, "compress failed.");
-            len = -1;
-        }
-        return len;
+        len = -1; /*return -1;*/
     }
-    else {
-        sigbus_jmp_valid = 0;
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "SIGBUS in mmap: %s %d", c->mem->ptr, c->file.fd);
-        return -1;
-    }
+    return len;
 }
+
 #endif
 
 

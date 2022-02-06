@@ -183,9 +183,7 @@ static int network_write_file_chunk_no_mmap(const int fd, chunkqueue * const cq,
 #if defined(NETWORK_WRITE_USE_MMAP)
 
 #include "sys-mmap.h"
-
-#include <setjmp.h>
-#include <signal.h>
+#include "sys-setjmp.h"
 
 #define MMAP_CHUNK_SIZE (512*1024)
 
@@ -197,15 +195,6 @@ static off_t mmap_align_offset(off_t start) {
     }
     force_assert(start >= (start % pagesize));
     return start - (start % pagesize);
-}
-
-static volatile int sigbus_jmp_valid;
-static sigjmp_buf sigbus_jmp;
-
-static void sigbus_handler(int sig) {
-    UNUSED(sig);
-    if (sigbus_jmp_valid) siglongjmp(sigbus_jmp, 1);
-    ck_bt_abort(__FILE__, __LINE__, "SIGBUS");
 }
 
 static int
@@ -272,6 +261,12 @@ network_write_file_chunk_remap(chunk * const c)
 }
 
 
+static off_t
+network_write_setjmp_write_cb (void *fd, const void *data, off_t len)
+{
+    return network_write_data_len((int)(uintptr_t)fd, data, len);
+}
+
 /* next chunk must be FILE_CHUNK. send mmap()ed file with write() */
 static int network_write_file_chunk_mmap(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
     chunk* const c = cq->first;
@@ -288,26 +283,20 @@ static int network_write_file_chunk_mmap(const int fd, chunkqueue * const cq, of
     off_t mmap_avail = (off_t)c->file.mmap.length - mmap_offset;
     const char * const data = c->file.mmap.start + mmap_offset;
     if (toSend > mmap_avail) toSend = mmap_avail;
-
-    /* setup SIGBUS handler, but don't activate sigbus_jmp_valid yet */
-    if (0 == sigsetjmp(sigbus_jmp, 1)) {
-        signal(SIGBUS, sigbus_handler);
-
-        sigbus_jmp_valid = 1;
-        ssize_t wr = network_write_data_len(fd, data, toSend);
-        sigbus_jmp_valid = 0;
-        return network_write_accounting(fd, cq, p_max_bytes, errh, wr, toSend);
-    } else {
-        sigbus_jmp_valid = 0;
-
+    off_t wr = sys_setjmp_eval3(network_write_setjmp_write_cb,
+                                (void *)(uintptr_t)fd, data, toSend);
+  #if 0
+    /*(future: might writev() with multiple maps,
+     * so will not know which chunk failed)*/
+    if (wr < 0 && errno == EFAULT) { /*(see sys-setjmp.c)*/
         log_error(errh, __FILE__, __LINE__,
           "SIGBUS in mmap: %s %d", c->mem->ptr, c->file.fd);
-
         munmap(c->file.mmap.start, c->file.mmap.length);
         c->file.mmap.start = MAP_FAILED;
         return -1;
     }
-
+  #endif
+    return network_write_accounting(fd,cq,p_max_bytes,errh,(ssize_t)wr,toSend);
 }
 
 #endif /* NETWORK_WRITE_USE_MMAP */
