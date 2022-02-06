@@ -147,30 +147,26 @@ static int network_write_mem_chunk(const int fd, chunkqueue * const cq, off_t * 
 
 
 
-#if !defined(NETWORK_WRITE_USE_MMAP)
-
+__attribute_noinline__
 static int network_write_file_chunk_no_mmap(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
     chunk* const c = cq->first;
-    off_t offset, toSend;
+    off_t toSend = c->file.length - c->offset;
     char buf[16384]; /* max read 16kb in one step */
 
-    offset = c->offset;
-    toSend = c->file.length - c->offset;
     if (toSend > *p_max_bytes) toSend = *p_max_bytes;
     if (toSend <= 0) return network_remove_finished_chunks(cq, toSend);
+    if (toSend > (off_t)sizeof(buf)) toSend = (off_t)sizeof(buf);
 
     if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
 
-    if (toSend > (off_t)sizeof(buf)) toSend = (off_t)sizeof(buf);
-
   #ifndef HAVE_PREAD
-    if (-1 == lseek(c->file.fd, offset, SEEK_SET)) {
+    if (-1 == lseek(c->file.fd, c->offset, SEEK_SET)) {
         log_perror(errh, __FILE__, __LINE__, "lseek");
         return -1;
     }
     toSend = read(c->file.fd, buf, toSend);
   #else
-    toSend =pread(c->file.fd, buf, toSend, offset);
+    toSend =pread(c->file.fd, buf, toSend, c->offset);
   #endif
     if (toSend <= 0) {
         log_perror(errh, __FILE__, __LINE__, "read");/* err or unexpected EOF */
@@ -180,8 +176,6 @@ static int network_write_file_chunk_no_mmap(const int fd, chunkqueue * const cq,
     ssize_t wr = network_write_data_len(fd, buf, toSend);
     return network_write_accounting(fd, cq, p_max_bytes, errh, wr, toSend);
 }
-
-#endif
 
 
 
@@ -214,25 +208,13 @@ static void sigbus_handler(int sig) {
     ck_bt_abort(__FILE__, __LINE__, "SIGBUS");
 }
 
-/* next chunk must be FILE_CHUNK. send mmap()ed file with write() */
-static int network_write_file_chunk_mmap(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
-    chunk* const c = cq->first;
-    off_t offset, toSend, file_end;
-    size_t mmap_offset, mmap_avail;
-    const char *data;
-
-    file_end = c->file.length; /*file end offset in this chunk*/
-    offset = c->offset;
-    toSend = c->file.length - c->offset;
-    if (toSend > *p_max_bytes) toSend = *p_max_bytes;
-    if (toSend <= 0) return network_remove_finished_chunks(cq, toSend);
-
-    if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
-
+static int
+network_write_file_chunk_remap(chunk * const c)
+{
     /* mmap buffer if offset is outside old mmap area or not mapped at all */
     if (MAP_FAILED == c->file.mmap.start
-        || offset < c->file.mmap.offset
-        || offset >= (off_t)(c->file.mmap.offset + c->file.mmap.length)) {
+        || c->offset < c->file.mmap.offset
+        || c->offset >= (off_t)(c->file.mmap.offset + c->file.mmap.length)) {
 
         if (MAP_FAILED != c->file.mmap.start) {
             munmap(c->file.mmap.start, c->file.mmap.length);
@@ -260,22 +242,19 @@ static int network_write_file_chunk_mmap(const int fd, chunkqueue * const cq, of
          *     3. use non-blocking IO for file-transfers
          *   */
 
-        c->file.mmap.offset = mmap_align_offset(offset);
+        c->file.mmap.offset = mmap_align_offset(c->offset);
 
         /* all mmap()ed areas are MMAP_CHUNK_SIZE
          * except the last which might be smaller */
         c->file.mmap.length = MMAP_CHUNK_SIZE;
-        if (c->file.mmap.offset > file_end - (off_t)c->file.mmap.length) {
-            c->file.mmap.length = file_end - c->file.mmap.offset;
+        if (c->file.mmap.offset > c->file.length - (off_t)c->file.mmap.length) {
+            c->file.mmap.length = c->file.length - c->file.mmap.offset;
         }
 
         c->file.mmap.start = mmap(NULL, c->file.mmap.length, PROT_READ,
                                   MAP_SHARED, c->file.fd, c->file.mmap.offset);
         if (MAP_FAILED == c->file.mmap.start) {
-            log_perror(errh, __FILE__, __LINE__,
-              "mmap failed: %s %d %lld %zu", c->mem->ptr, c->file.fd,
-              (long long)c->file.mmap.offset, c->file.mmap.length);
-            return -1;
+            return 0;
         }
 
       #if defined(HAVE_MADVISE)
@@ -289,14 +268,26 @@ static int network_write_file_chunk_mmap(const int fd, chunkqueue * const cq, of
         }
       #endif
     }
+    return 1;
+}
 
-    force_assert(offset >= c->file.mmap.offset);
-    mmap_offset = offset - c->file.mmap.offset;
-    force_assert(c->file.mmap.length > mmap_offset);
-    mmap_avail = c->file.mmap.length - mmap_offset;
-    if (toSend > (off_t) mmap_avail) toSend = mmap_avail;
 
-    data = c->file.mmap.start + mmap_offset;
+/* next chunk must be FILE_CHUNK. send mmap()ed file with write() */
+static int network_write_file_chunk_mmap(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
+    chunk* const c = cq->first;
+    off_t toSend = c->file.length - c->offset;
+    if (toSend > *p_max_bytes) toSend = *p_max_bytes;
+    if (toSend <= 0) return network_remove_finished_chunks(cq, toSend);
+
+    if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
+
+    if (!network_write_file_chunk_remap(c))
+        return network_write_file_chunk_no_mmap(fd, cq, p_max_bytes, errh);
+
+    off_t mmap_offset = c->offset - c->file.mmap.offset;
+    off_t mmap_avail = (off_t)c->file.mmap.length - mmap_offset;
+    const char * const data = c->file.mmap.start + mmap_offset;
+    if (toSend > mmap_avail) toSend = mmap_avail;
 
     /* setup SIGBUS handler, but don't activate sigbus_jmp_valid yet */
     if (0 == sigsetjmp(sigbus_jmp, 1)) {
