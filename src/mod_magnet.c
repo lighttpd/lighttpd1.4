@@ -1902,12 +1902,7 @@ static void magnet_copy_response_header(lua_State * const L, request_st * const 
  *     { "<html><body><pre>", { file = "/content" } , "</pre></body></html>" }
  *   return 200
  */
-static int magnet_attach_content(lua_State * const L, request_st * const r) {
-	lua_getfield(L, -1, "result");  /* lighty.result */
-	lua_getfield(L, -1, "content"); /* lighty.result.content */
-	if (lua_istable(L, -1)) {
-		/* content is found, and is a table */
-		http_response_body_clear(r, 0);
+static void magnet_attach_content_table(lua_State * const L, request_st * const r) {
 		for (int i=1, end=0, n=(int)lua_rawlen(L,-1); !end && i <= n; ++i) {
 			lua_rawgeti(L, -1, i);
 
@@ -1921,6 +1916,14 @@ static int magnet_attach_content(lua_State * const L, request_st * const r) {
 				lua_getfield(L, -3, "offset"); /* (0-based) start of range */
 
 				if (lua_isstring(L, -3)) { /* filename has to be a string */
+					/*(luaL_optinteger might raise error on non-numeric data,
+					 * and is the reason this func is wrapped in setjmp())
+					 *(could avoid setjmp and possibility of error raised
+					 * by checking lua_type for LUA_TNUMBER or LUA_TNIL prior to
+					 * calling luaL_optinteger(), or checking LUA_TNUMBER prior
+					 * to calling lua_tointeger())*/
+					/*off_t off = lua_type(L, -1) == LUA_TNUMBER ? (off_t)lua_tointeger(L, -1) : 0;*/
+					/*off_t len = lua_type(L, -2) == LUA_TNUMBER ? (off_t)lua_tointeger(L, -2) : -1;*/
 					off_t off = (off_t) luaL_optinteger(L, -1, 0);
 					off_t len = (off_t) luaL_optinteger(L, -2, -1); /*(-1 as flag to use file size minus offset (below))*/
 					if (off < 0) {
@@ -1971,13 +1974,33 @@ static int magnet_attach_content(lua_State * const L, request_st * const r) {
 
 			lua_pop(L, 1); /* pop the content[...] entry value */
 		}
-	} else if (!lua_isnil(L, -1)) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "lighty.content has to be a table");
-	}
-	lua_pop(L, 2); /* pop lighty.result.content and lighty.result */
+}
 
-	return 0;
+static int magnet_attach_content(lua_State * const L, request_st * const r) {
+    lua_getfield(L, -1, "result");  /* lighty.result */
+    if (!lua_istable(L, -1)) {
+        lua_pop(L, 1); /* pop nil lighty.result */
+        return 0;
+    }
+    lua_getfield(L, -1, "content"); /* lighty.result.content */
+    switch (lua_type(L, -1)) {
+      case LUA_TNIL:
+        break;
+      case LUA_TTABLE:
+        /* content found and is a table */
+        http_response_body_clear(r, 0);
+        if (0 == setjmp(exceptionjmp))
+            magnet_attach_content_table(L, r);
+        else
+            return -1; /*(caller cleans up lua stack)*/
+        break;
+      default:
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "lighty.content has to be a table");
+        break;
+    }
+    lua_pop(L, 2); /* pop lighty.result.content and lighty.result */
+    return 0;
 }
 
 static void magnet_mainenv_metatable(lua_State * const L) {
@@ -2386,9 +2409,8 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 		if (lua_return_value >= 200) {
 			r->http_status = lua_return_value;
 			r->resp_body_finished = 1;
-
-			if (0 == setjmp(exceptionjmp)) {
-				magnet_attach_content(L, r);
+			/*(note: body may already have been set via lighty.r.resp_body.*)*/
+			if (0 == magnet_attach_content(L, r)) {
 				if (!chunkqueue_is_empty(&r->write_queue)) {
 					r->handler_module = p->self;
 				}
