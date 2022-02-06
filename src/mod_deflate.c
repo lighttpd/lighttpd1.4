@@ -924,11 +924,12 @@ static int stream_deflate_init(handler_ctx *hctx) {
 	return 0;
 }
 
-static int stream_deflate_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+static int stream_deflate_compress(handler_ctx * const hctx, const unsigned char * const start, off_t st_size) {
 	z_stream * const z = &(hctx->u.z);
 	size_t len;
 
-	z->next_in = start;
+	/*(unknown whether or not linked zlib was built with ZLIB_CONST defined)*/
+	*((const unsigned char **)&z->next_in) = start;
 	z->avail_in = st_size;
 	hctx->bytes_in += st_size;
 
@@ -1039,7 +1040,7 @@ static int stream_bzip2_init(handler_ctx *hctx) {
 	return 0;
 }
 
-static int stream_bzip2_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+static int stream_bzip2_compress(handler_ctx * const hctx, const unsigned char * const start, off_t st_size) {
 	bz_stream * const bz = &(hctx->u.bz);
 	size_t len;
 
@@ -1162,7 +1163,7 @@ static int stream_br_init(handler_ctx *hctx) {
     return 0;
 }
 
-static int stream_br_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+static int stream_br_compress(handler_ctx * const hctx, const unsigned char * const start, off_t st_size) {
     const uint8_t *in = (uint8_t *)start;
     BrotliEncoderState * const br = hctx->u.br;
     hctx->bytes_in += st_size;
@@ -1250,7 +1251,7 @@ static int stream_zstd_init(handler_ctx *hctx) {
     return 0;
 }
 
-static int stream_zstd_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+static int stream_zstd_compress(handler_ctx * const hctx, const unsigned char * const start, off_t st_size) {
     ZSTD_CStream * const cctx = hctx->u.cctx;
     ZSTD_inBuffer zib = { start, (size_t)st_size, 0 };
     ZSTD_outBuffer zob = { hctx->output->ptr,
@@ -1335,7 +1336,7 @@ static int mod_deflate_stream_init(handler_ctx *hctx) {
 	}
 }
 
-static int mod_deflate_compress(handler_ctx * const hctx, unsigned char * const start, off_t st_size) {
+static int mod_deflate_compress(handler_ctx * const hctx, const unsigned char * const start, off_t st_size) {
 	if (0 == st_size) return 0;
 	switch(hctx->compression_type) {
 #ifdef USE_ZLIB
