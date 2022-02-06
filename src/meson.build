@@ -781,6 +781,7 @@ common_src = [
 	'ck.c',
 	'sock_addr.c',
 	'stat_cache.c',
+	'sys-setjmp.c',
 	'vector.c',
 ]
 if target_machine.system() == 'windows'

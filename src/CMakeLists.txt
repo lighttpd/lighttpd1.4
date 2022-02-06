@@ -870,6 +870,7 @@ set(COMMON_SRC
 	rand.c
 	fdlog_maint.c
 	fdlog.c
+	sys-setjmp.c
 	ck.c
 )
 
