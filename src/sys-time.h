@@ -4,8 +4,8 @@
  * Copyright(c) 2015 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
  * License: BSD 3-clause (same as lighttpd)
  */
-#ifndef INCLUDED_SYS_TIME_H
-#define INCLUDED_SYS_TIME_H
+#ifndef LI_SYS_TIME_H
+#define LI_SYS_TIME_H
 #include "first.h"
 
 #ifdef HAVE_SYS_TIME_H
