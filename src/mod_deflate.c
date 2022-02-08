@@ -1603,10 +1603,18 @@ static int mod_deflate_using_libdeflate (handler_ctx * const hctx, const plugin_
 
 static off_t mod_deflate_file_chunk_no_mmap(request_st * const r, handler_ctx * const hctx, const chunk * const c, off_t n)
 {
+    /* deflate transformation is optional for responses, so we do not retry
+     * after partial read or if interrupted by a signal, e.g. EINTR */
     if (n > 2*1024*1024) n = 2*1024*1024;
     char * const p = malloc((size_t)n);
-    if (p && -1 != lseek(c->file.fd, c->offset, SEEK_SET)
-        && n == read(c->file.fd, p, (size_t)n)) {
+    if (p
+       #ifndef HAVE_PREAD
+        && -1 != lseek(c->file.fd, c->offset, SEEK_SET)
+        && n == read(c->file.fd, p, (size_t)psz)
+       #else
+        && n ==pread(c->file.fd, p, (size_t)psz, c->offset)
+       #endif
+       ) {
         if (mod_deflate_compress(hctx, (unsigned char *)p, n) < 0) {
             log_error(r->conf.errh, __FILE__, __LINE__, "compress failed.");
             n = -1;
