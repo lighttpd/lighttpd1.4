@@ -2,10 +2,6 @@
 #define _CHUNK_H_
 #include "first.h"
 
-#ifdef _AIX  /*(AIX might #define mmap mmap64)*/
-#include "sys-mmap.h"
-#endif
-
 #include "buffer.h"
 #include "array.h"
 #include "fdlog.h"
@@ -13,6 +9,13 @@
 /* both should be way smaller than SSIZE_MAX :) */
 #define MAX_READ_LIMIT  (256*1024)
 #define MAX_WRITE_LIMIT (256*1024)
+
+typedef struct chunk_file_view {
+	char    *mptr; /* base pointer of mmap'ed area */
+	off_t    mlen; /* length of mmap'ed area */
+	off_t    foff; /* offset from the start of the file */
+	int    refcnt;
+} chunk_file_view;
 
 typedef struct chunk {
 	struct chunk *next;
@@ -32,11 +35,9 @@ typedef struct chunk {
 
 		int    fd;
 		int is_temp; /* file is temporary and will be deleted if on cleanup */
-		struct {
-			char   *start; /* the start pointer of the mmap'ed area */
-			size_t length; /* size of the mmap'ed area */
-			off_t  offset; /* start is <n> octet away from the start of the file */
-		} mmap;
+	  #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
+		chunk_file_view *view;
+	  #endif
 		void *ref;
 		void(*refchg)(void *, int);
 	} file;
@@ -162,6 +163,7 @@ int chunkqueue_read_data (chunkqueue *cq, char *data, uint32_t dlen, log_error_s
 buffer * chunkqueue_read_squash (chunkqueue * restrict cq, log_error_st * restrict errh);
 
 __attribute_pure__
+__attribute_nonnull__()
 static inline off_t chunkqueue_length(const chunkqueue *cq);
 static inline off_t chunkqueue_length(const chunkqueue *cq) {
 	return cq->bytes_in - cq->bytes_out;
@@ -173,9 +175,55 @@ void chunkqueue_free(chunkqueue *cq);
 void chunkqueue_reset(chunkqueue *cq);
 
 __attribute_pure__
+__attribute_nonnull__()
 static inline int chunkqueue_is_empty(const chunkqueue *cq);
 static inline int chunkqueue_is_empty(const chunkqueue *cq) {
 	return NULL == cq->first;
+}
+
+const chunk_file_view * chunkqueue_chunk_file_viewadj (chunk *c, off_t n, log_error_st * restrict errh);
+
+__attribute_pure__
+__attribute_nonnull__()
+static inline char *
+chunk_file_view_dptr (const chunk_file_view * const cfv, off_t offset);
+static inline char *
+chunk_file_view_dptr (const chunk_file_view * const cfv, off_t offset)
+{
+    return cfv->mptr - cfv->foff + offset;
+}
+
+__attribute_pure__
+__attribute_nonnull__()
+static inline off_t
+chunk_file_view_dlen (const chunk_file_view * const cfv, off_t offset);
+static inline off_t
+chunk_file_view_dlen (const chunk_file_view * const cfv, off_t offset)
+{
+    return cfv->mlen + cfv->foff - offset;
+}
+
+static inline const chunk_file_view *
+chunkqueue_chunk_file_view (chunk * const c, const off_t n, log_error_st * const restrict errh);
+static inline const chunk_file_view *
+chunkqueue_chunk_file_view (chunk * const c, const off_t n, log_error_st * const restrict errh)
+{
+    /*assert(c->type == FILE_CHUNK);*/
+  #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
+    /* mmap buffer if offset is outside old mmap area or not mapped at all */
+    const chunk_file_view * const restrict cfv = c->file.view;
+    if (NULL == cfv
+        ? c->file.length - c->offset >= 131072 /* TBD: min chunk size to mmap */
+        : (c->offset - cfv->foff < 0
+           || chunk_file_view_dlen(cfv, c->offset) < (n ? n : 1)))
+        return chunkqueue_chunk_file_viewadj(c, n, errh);
+    return cfv;
+  #else
+    UNUSED(c);
+    UNUSED(n);
+    UNUSED(errh);
+    return NULL;
+  #endif
 }
 
 #endif

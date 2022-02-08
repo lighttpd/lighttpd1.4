@@ -63,8 +63,10 @@
 # define NETWORK_WRITE_USE_WRITEV
 #endif
 
-#if defined HAVE_SYS_MMAN_H && defined HAVE_MMAP && defined ENABLE_MMAP
+#if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
+#ifdef ENABLE_MMAP
 # define NETWORK_WRITE_USE_MMAP
+#endif
 #endif
 
 
@@ -182,84 +184,7 @@ static int network_write_file_chunk_no_mmap(const int fd, chunkqueue * const cq,
 
 #if defined(NETWORK_WRITE_USE_MMAP)
 
-#include "sys-mmap.h"
 #include "sys-setjmp.h"
-
-#define MMAP_CHUNK_SIZE (512*1024)
-
-static off_t mmap_align_offset(off_t start) {
-    static long pagesize = 0;
-    if (0 == pagesize) {
-        pagesize = sysconf(_SC_PAGESIZE);
-        force_assert(pagesize < MMAP_CHUNK_SIZE);
-    }
-    force_assert(start >= (start % pagesize));
-    return start - (start % pagesize);
-}
-
-static int
-network_write_file_chunk_remap(chunk * const c)
-{
-    /* mmap buffer if offset is outside old mmap area or not mapped at all */
-    if (MAP_FAILED == c->file.mmap.start
-        || c->offset < c->file.mmap.offset
-        || c->offset >= (off_t)(c->file.mmap.offset + c->file.mmap.length)) {
-
-        if (MAP_FAILED != c->file.mmap.start) {
-            munmap(c->file.mmap.start, c->file.mmap.length);
-            c->file.mmap.start = MAP_FAILED;
-        }
-
-        /* Optimizations for the future:
-         *
-         * adaptive mem-mapping
-         *   the problem:
-         *     we mmap() the whole file. If someone has a lot of large files and
-         *     32-bit machine the virtual address area will be exhausted and we
-         *     will have a failing mmap() call.
-         *   solution:
-         *     only mmap 16M in one chunk and move the window as soon as we have
-         *     finished the first 8M
-         *
-         * read-ahead buffering
-         *   the problem:
-         *     sending out several large files in parallel trashes read-ahead
-         *     of the kernel leading to long wait-for-seek times.
-         *   solutions: (increasing complexity)
-         *     1. use madvise
-         *     2. use a internal read-ahead buffer in the chunk-structure
-         *     3. use non-blocking IO for file-transfers
-         *   */
-
-        c->file.mmap.offset = mmap_align_offset(c->offset);
-
-        /* all mmap()ed areas are MMAP_CHUNK_SIZE
-         * except the last which might be smaller */
-        c->file.mmap.length = MMAP_CHUNK_SIZE;
-        if (c->file.mmap.offset > c->file.length - (off_t)c->file.mmap.length) {
-            c->file.mmap.length = c->file.length - c->file.mmap.offset;
-        }
-
-        c->file.mmap.start = mmap(NULL, c->file.mmap.length, PROT_READ,
-                                  MAP_SHARED, c->file.fd, c->file.mmap.offset);
-        if (MAP_FAILED == c->file.mmap.start) {
-            return 0;
-        }
-
-      #if defined(HAVE_MADVISE)
-        /* don't advise files < 64Kb */
-        if (c->file.mmap.length > (64*1024)) {
-            /* darwin 7 is returning EINVAL all the time and I don't know how to
-             * detect this at runtime.
-             *
-             * ignore the return value for now */
-            madvise(c->file.mmap.start, c->file.mmap.length, MADV_WILLNEED);
-        }
-      #endif
-    }
-    return 1;
-}
-
 
 static off_t
 network_write_setjmp_write_cb (void *fd, const void *data, off_t len)
@@ -269,33 +194,22 @@ network_write_setjmp_write_cb (void *fd, const void *data, off_t len)
 
 /* next chunk must be FILE_CHUNK. send mmap()ed file with write() */
 static int network_write_file_chunk_mmap(const int fd, chunkqueue * const cq, off_t * const p_max_bytes, log_error_st * const errh) {
-    chunk* const c = cq->first;
+    chunk * const restrict c = cq->first;
+    const chunk_file_view * const restrict cfv = (!c->file.is_temp)
+      ? chunkqueue_chunk_file_view(cq->first, 0, errh)/*use default 512k block*/
+      : NULL;
+    if (NULL == cfv)
+        return network_write_file_chunk_no_mmap(fd, cq, p_max_bytes, errh);
+
     off_t toSend = c->file.length - c->offset;
     if (toSend > *p_max_bytes) toSend = *p_max_bytes;
     if (toSend <= 0) return network_remove_finished_chunks(cq, toSend);
 
-    if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
-
-    if (!network_write_file_chunk_remap(c))
-        return network_write_file_chunk_no_mmap(fd, cq, p_max_bytes, errh);
-
-    off_t mmap_offset = c->offset - c->file.mmap.offset;
-    off_t mmap_avail = (off_t)c->file.mmap.length - mmap_offset;
-    const char * const data = c->file.mmap.start + mmap_offset;
+    const off_t mmap_avail = chunk_file_view_dlen(cfv, c->offset);
+    const char * const data = chunk_file_view_dptr(cfv, c->offset);
     if (toSend > mmap_avail) toSend = mmap_avail;
     off_t wr = sys_setjmp_eval3(network_write_setjmp_write_cb,
                                 (void *)(uintptr_t)fd, data, toSend);
-  #if 0
-    /*(future: might writev() with multiple maps,
-     * so will not know which chunk failed)*/
-    if (wr < 0 && errno == EFAULT) { /*(see sys-setjmp.c)*/
-        log_error(errh, __FILE__, __LINE__,
-          "SIGBUS in mmap: %s %d", c->mem->ptr, c->file.fd);
-        munmap(c->file.mmap.start, c->file.mmap.length);
-        c->file.mmap.start = MAP_FAILED;
-        return -1;
-    }
-  #endif
     return network_write_accounting(fd,cq,p_max_bytes,errh,(ssize_t)wr,toSend);
 }
 

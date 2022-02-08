@@ -739,9 +739,6 @@ typedef struct {
 #define MOD_WEBDAV_XMLNS_NS0 "xmlns:ns0=\"urn:uuid:c2f41010-65b3-11d1-a29f-00aa00c14882/\""
 
 
-static char *
-webdav_mmap_file_chunk (chunk * const c);
-
 __attribute_cold__
 __attribute_noinline__
 static void
@@ -761,8 +758,19 @@ webdav_xml_log_response (request_st * const r)
             break;
           case FILE_CHUNK:
             /*(safe to mmap tempfiles from response XML)*/
-            s = webdav_mmap_file_chunk(c);
-            len = (uint32_t)c->file.length;
+            /*(response body provided in temporary file, so ok to mmap().
+             * Otherwise, must access through sys_setjmp_eval3()) */
+            /*(tempfiles (and xml response) should easily fit in uint32_t
+             * and are not expected to already be mmap'd.  Avoid >= 128k
+             * requirement of chunkqueue_chunk_file_view() by using viewadj)*/
+            len = (uint32_t)(c->file.length - c->offset);
+            {
+                const chunk_file_view * const restrict cfv =
+                  chunkqueue_chunk_file_viewadj(c, (off_t)len, r->conf.errh);
+                s = (cfv && chunk_file_view_dlen(cfv, c->offset) >= (off_t)len)
+                  ? chunk_file_view_dptr(cfv, c->offset)
+                  : NULL;
+            }
             if (s == NULL) continue;
             break;
           default:
@@ -3725,72 +3733,28 @@ webdav_propfind_dir (webdav_propfind_bufs * const restrict pb)
 }
 
 
-static int
-webdav_open_chunk_file_rd (chunk * const c)
+#if defined(USE_PROPPATCH) || defined(USE_LOCKS)
+
+static char *
+webdav_mmap_file_chunk (chunk * const c, log_error_st * const errh)
 {
-    if (c->file.fd < 0) /* open file if not already open *//*permit symlink*/
-        c->file.fd = fdevent_open_cloexec(c->mem->ptr, 1, O_RDONLY, 0);
-    return c->file.fd;
-}
-
-
-static int
-webdav_mmap_file_rd (void ** const addr, const size_t length,
-                   const int fd, const off_t offset)
-{
-    /*(caller must ensure offset is properly aligned to mmap requirements)*/
-
-    if (0 == length) {
-        *addr = NULL; /*(something other than MAP_FAILED)*/
-        return 0;
-    }
-
-  #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
-
-    *addr = mmap(NULL, length, PROT_READ, MAP_SHARED, fd, offset);
-    if (*addr == MAP_FAILED && errno == EINVAL)
-        *addr = mmap(NULL, length, PROT_READ, MAP_PRIVATE, fd, offset);
-    return (*addr != MAP_FAILED ? 0 : -1);
-
+  #ifdef HAVE_MMAP
+    /*(request body provided in temporary file, so ok to mmap().
+     * Otherwise, must access through sys_setjmp_eval3()) */
+    /*assert(c->type == FILE_CHUNK);*/
+    const off_t len = c->file.length - c->offset;
+    const chunk_file_view * const restrict cfv =
+      chunkqueue_chunk_file_view(c, len, errh);
+    return (cfv && chunk_file_view_dlen(cfv, c->offset) >= len)
+      ? chunk_file_view_dptr(cfv, c->offset)
+      : NULL;
   #else
-
-    UNUSED(fd);
-    UNUSED(offset);
-    return -1;
-
+    UNUSED(c);
+    UNUSED(errh);
+    return NULL;
   #endif
 }
 
-
-static char *
-webdav_mmap_file_chunk (chunk * const c)
-{
-    /*(request body provided in temporary file, so ok to mmap().
-     * Otherwise, must check defined(ENABLE_MMAP)) */
-    /* chunk_reset() or chunk_free() will clean up mmap'd chunk */
-    /* close c->file.fd only after mmap() succeeds, since it will not
-     * be able to be re-opened if it was a tmpfile that was unlinked */
-    /*assert(c->type == FILE_CHUNK);*/
-    if (MAP_FAILED != c->file.mmap.start)
-        return c->file.mmap.start + c->offset - c->file.mmap.offset;
-
-    if (webdav_open_chunk_file_rd(c) < 0)
-        return NULL;
-
-    webdav_mmap_file_rd((void **)&c->file.mmap.start, (size_t)c->file.length,
-                        c->file.fd, 0);
-
-    if (MAP_FAILED == c->file.mmap.start)
-        return NULL;
-
-    close(c->file.fd);
-    c->file.fd = -1;
-    c->file.mmap.length = c->file.length;
-    return c->file.mmap.start + c->offset - c->file.mmap.offset;
-}
-
-
-#if defined(USE_PROPPATCH) || defined(USE_LOCKS)
 
 __attribute_noinline__
 static xmlDoc *
@@ -3820,8 +3784,7 @@ webdav_parse_chunkqueue (request_st * const r,
             weHave = buffer_clen(c->mem) - c->offset;
         }
         else if (c->type == FILE_CHUNK) {
-            xmlstr = webdav_mmap_file_chunk(c);
-            /*xmlstr = c->file.mmap.start + c->offset - c->file.mmap.offset;*/
+            xmlstr = webdav_mmap_file_chunk(c, r->conf.errh);
             if (NULL != xmlstr) {
                 weHave = c->file.length - c->offset;
             }

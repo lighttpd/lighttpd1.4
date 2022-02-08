@@ -101,6 +101,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "sys-mmap.h"
+#ifdef HAVE_MMAP
+#include "sys-setjmp.h"
+#endif
 #include "sys-time.h"
 
 #include <fcntl.h>
@@ -152,12 +155,6 @@
 
 #ifndef HAVE_LIBZ
 #undef HAVE_LIBDEFLATE
-#endif
-
-#if defined HAVE_SYS_MMAN_H && defined HAVE_MMAP && defined ENABLE_MMAP
-#define USE_MMAP
-#include "sys-mmap.h"
-#include "sys-setjmp.h"
 #endif
 
 /* request: accept-encoding */
@@ -1427,48 +1424,6 @@ static int deflate_compress_cleanup(request_st * const r, handler_ctx * const hc
 }
 
 
-#ifdef USE_MMAP
-static int mod_deflate_file_chunk_remap(chunk * const c, const off_t n)
-{
-    if (c->file.mmap.start == MAP_FAILED
-        || c->offset < c->file.mmap.offset
-        || c->offset >= c->file.mmap.offset + (off_t)c->file.mmap.length) {
-
-        /* use large chunks since server blocks while compressing
-         * (mod_deflate is not recommended for large files) */
-
-        if (c->file.mmap.start != MAP_FAILED) /*(munmap, remap at new offset)*/
-            munmap(c->file.mmap.start, c->file.mmap.length);
-        c->file.mmap.offset = c->offset & ~(16384-1); /* pagesize multiple */
-        c->file.mmap.length = (size_t)(c->offset - c->file.mmap.offset + n);
-      #if !(defined(_LP64) || defined(__LP64__) || defined(_WIN64))
-        /*(consider 512k blocks if this func is used more generically)*/
-        const off_t mmap_chunk_size = 8 * 1024 * 1024;
-        if (c->file.mmap.length > (size_t)mmap_chunk_size)
-            c->file.mmap.length = (size_t)mmap_chunk_size;
-      #endif
-        c->file.mmap.start =
-          mmap(0, c->file.mmap.length, PROT_READ,
-               c->file.is_temp ? MAP_PRIVATE : MAP_SHARED,
-               c->file.fd, c->file.mmap.offset);
-        if (MAP_FAILED == c->file.mmap.start) {
-            if (errno != EINVAL) return 0;
-            c->file.mmap.start =
-              mmap(0, c->file.mmap.length, PROT_READ, MAP_PRIVATE,
-                   c->file.fd, c->file.mmap.offset);
-            if (MAP_FAILED == c->file.mmap.start) return 0;
-        }
-      #ifdef HAVE_MADVISE
-        /*(consider func param for madvise if func is used more generically)*/
-        if (c->file.mmap.length > 65536) /*(skip syscall if size <= 64KB)*/
-            (void)madvise(c->file.mmap.start,c->file.mmap.length,MADV_WILLNEED);
-      #endif
-    }
-    return 1;
-}
-#endif
-
-
 #ifdef HAVE_LIBDEFLATE
 #include <libdeflate.h>
 
@@ -1533,7 +1488,7 @@ static int mod_deflate_using_libdeflate_sm (handler_ctx * const hctx, const plug
 }
 
 
-#ifdef USE_MMAP
+#ifdef HAVE_MMAP
 #if defined(_LP64) || defined(__LP64__) || defined(_WIN64)
 
 struct mod_deflate_setjmp_params {
@@ -1547,7 +1502,7 @@ static off_t mod_deflate_using_libdeflate_setjmp_cb (void *dst, const void *src,
     const struct mod_deflate_setjmp_params * const params = dst;
     const handler_ctx * const hctx = src;
     const chunk * const c = hctx->r->write_queue.first;
-    const char *in = c->file.mmap.start + c->offset - c->file.mmap.offset;
+    const char *in = chunk_file_view_dptr(c->file.view, c->offset);
     return (off_t)((hctx->compression_type == HTTP_ACCEPT_ENCODING_GZIP)
       ? libdeflate_gzip_compress(params->compressor, in, (size_t)len,
                                  params->out, params->outsz)
@@ -1641,7 +1596,7 @@ static int mod_deflate_using_libdeflate (handler_ctx * const hctx, const plugin_
 }
 
 #endif /* defined(_LP64) || defined(__LP64__) || defined(_WIN64) */
-#endif /* USE_MMAP */
+#endif /* HAVE_MMAP */
 
 #endif /* HAVE_LIBDEFLATE */
 
@@ -1666,7 +1621,7 @@ static off_t mod_deflate_file_chunk_no_mmap(request_st * const r, handler_ctx * 
 }
 
 
-#ifdef USE_MMAP
+#ifdef ENABLE_MMAP
 
 static off_t mod_deflate_file_chunk_setjmp_cb (void *dst, const void *src, off_t len)
 {
@@ -1676,12 +1631,18 @@ static off_t mod_deflate_file_chunk_setjmp_cb (void *dst, const void *src, off_t
 
 static off_t mod_deflate_file_chunk_mmap(request_st * const r, handler_ctx * const hctx, chunk * const c, off_t n)
 {
-    if (!mod_deflate_file_chunk_remap(c, n))
+    /* n is length of entire file since server blocks while compressing
+     * (mod_deflate is not recommended for large files;
+     *  mod_deflate default upper limit is 128MB; deflate.max-compress-size) */
+
+    const chunk_file_view * const restrict cfv = (!c->file.is_temp)
+      ? chunkqueue_chunk_file_view(c, n, r->conf.errh)
+      : NULL;
+    if (NULL == cfv)
         return mod_deflate_file_chunk_no_mmap(r, hctx, c, n);
 
-    const off_t moffset = c->offset - c->file.mmap.offset;
-    char * const p = c->file.mmap.start + moffset;
-    off_t len = c->file.mmap.length - moffset;
+    const char * const p = chunk_file_view_dptr(cfv, c->offset);
+    off_t len = chunk_file_view_dlen(cfv, c->offset);
     if (len > n) len = n;
     off_t rc = sys_setjmp_eval3(mod_deflate_file_chunk_setjmp_cb, hctx, p, len);
     if (__builtin_expect( (rc < 0), 0)) {
@@ -1705,7 +1666,7 @@ static off_t mod_deflate_file_chunk(request_st * const r, handler_ctx * const hc
             return -1;
         }
     }
-  #ifdef USE_MMAP
+  #ifdef ENABLE_MMAP
     return mod_deflate_file_chunk_mmap(r, hctx, c, n);
   #else
     return mod_deflate_file_chunk_no_mmap(r, hctx, c, n);
@@ -2097,16 +2058,18 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 
   #ifdef HAVE_LIBDEFLATE
 	chunk * const c = r->write_queue.first; /*(invalid after compression)*/
-  #ifdef USE_MMAP
+  #ifdef HAVE_MMAP
   #if defined(_LP64) || defined(__LP64__) || defined(_WIN64)
 	/* optimization to compress single file in one-shot to writeable mmap */
 	/*(future: might extend to other compression types)*/
-	if (len > 65536 /* XXX: TBD what should min size be for this optimization?*/
+	/*(chunkqueue_chunk_file_view() current min size for mmap is 128k)*/
+	if (len > 131072 /* XXX: TBD what should min size be for optimization?*/
 	    && (hctx->compression_type == HTTP_ACCEPT_ENCODING_GZIP
 	        || hctx->compression_type == HTTP_ACCEPT_ENCODING_DEFLATE)
 	    && c == r->write_queue.last
 	    && c->type == FILE_CHUNK
-	    && mod_deflate_file_chunk_remap(c, len)) {
+	    && chunkqueue_chunk_file_view(c, len, r->conf.errh)
+	    && chunk_file_view_dlen(c->file.view, c->offset) >= len) { /*(cfv)*/
 		rc = HANDLER_GO_ON;
 		hctx->bytes_in = len;
 		if (mod_deflate_using_libdeflate(hctx, p)) {

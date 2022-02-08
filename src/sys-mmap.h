@@ -26,6 +26,8 @@
 #define PROT_READ PAGE_READONLY
 #endif
 
+#define HAVE_MMAP 1
+
 #define munmap(addr, length) UnmapViewOfFile((LPCVOID)(addr))
 
 static inline void *
