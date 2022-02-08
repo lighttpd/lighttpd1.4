@@ -1281,10 +1281,11 @@ int chunkqueue_open_file_chunk(chunkqueue * const restrict cq, log_error_st * co
 
 
 static ssize_t
-chunkqueue_write_data (const int fd, const void *buf, size_t count)
+chunkqueue_write_data (const int fd, const void *buf, size_t len)
 {
-    ssize_t wr;
-    do { wr = write(fd, buf, count); } while (-1 == wr && errno == EINTR);
+    ssize_t wr = 0;
+    if (len)
+        do { wr = write(fd, buf, len); } while (-1 == wr && errno == EINTR);
     return wr;
 }
 
@@ -1298,8 +1299,8 @@ chunkqueue_write_chunk_file_intermed (const int fd, chunk * const restrict c, lo
 {
     char buf[16384];
     char *data = buf;
-    const off_t count = c->file.length - c->offset;
-    uint32_t dlen = count < (off_t)sizeof(buf) ? (uint32_t)count : sizeof(buf);
+    const off_t len = c->file.length - c->offset;
+    uint32_t dlen = len < (off_t)sizeof(buf) ? (uint32_t)len : sizeof(buf);
     chunkqueue cq = {c,c,0,0,0,0,0}; /*(fake cq for chunkqueue_peek_data())*/
     if (0 != chunkqueue_peek_data(&cq, &data, &dlen, errh) && 0 == dlen)
         return -1;
@@ -1383,8 +1384,8 @@ chunkqueue_write_chunk_file (const int fd, chunk * const restrict c, log_error_s
     if (0 != chunk_open_file_chunk(c, errh))
         return -1;
 
-    const off_t count = c->file.length - c->offset;
-    if (0 == count) return 0; /*(sanity check)*/
+    const off_t len = c->file.length - c->offset;
+    if (0 == len) return 0; /*(sanity check)*/
 
   #if defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILE \
    && (!defined _LARGEFILE_SOURCE || defined HAVE_SENDFILE64) \
@@ -1392,16 +1393,16 @@ chunkqueue_write_chunk_file (const int fd, chunk * const restrict c, log_error_s
     /* Linux kernel >= 2.6.33 supports sendfile() between most fd types */
     off_t offset = c->offset;
     const ssize_t wr =
-      sendfile(fd, c->file.fd, &offset, count<INT32_MAX ? count : INT32_MAX);
+      sendfile(fd, c->file.fd, &offset, len < INT32_MAX ? len : INT32_MAX);
     if (__builtin_expect( (wr >= 0), 1) || (errno != EINVAL && errno != ENOSYS))
         return wr;
   #endif
 
   #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
     /*(chunkqueue_write_chunk() caller must protect against SIGBUS, if needed)*/
-    const char * const data = chunkqueue_mmap_chunk_len(c, count);
+    const char * const data = chunkqueue_mmap_chunk_len(c, len);
     if (NULL != data)
-        return chunkqueue_write_data(fd, data, count);
+        return chunkqueue_write_data(fd, data, len);
   #endif
 
     return chunkqueue_write_chunk_file_intermed(fd, c, errh);
@@ -1412,10 +1413,8 @@ static ssize_t
 chunkqueue_write_chunk_mem (const int fd, const chunk * const restrict c)
 {
     const void * const buf = c->mem->ptr + c->offset;
-    const size_t count = buffer_clen(c->mem) - (size_t)c->offset;
-    ssize_t wr;
-    do { wr = write(fd, buf, count); } while (-1 == wr && errno == EINTR);
-    return wr;
+    const size_t len = buffer_clen(c->mem) - (size_t)c->offset;
+    return chunkqueue_write_data(fd, buf, len);
 }
 
 
@@ -1439,14 +1438,14 @@ chunkqueue_write_chunk (const int fd, chunkqueue * const restrict cq, log_error_
 ssize_t
 chunkqueue_write_chunk_to_pipe (const int fd, chunkqueue * const restrict cq, log_error_st * const restrict errh)
 {
-    /*(note: expects non-empty cq->first)*/
   #ifdef HAVE_SPLICE /* splice() temp files to pipe on Linux */
     chunk * const c = cq->first;
     if (c->type == FILE_CHUNK) {
+        const size_t len = (size_t)(c->file.length - c->offset);
         loff_t abs_offset = c->offset;
+        if (__builtin_expect( (0 == len), 0)) return 0;
         return (0 == chunk_open_file_chunk(c, errh))
-          ? splice(c->file.fd, &abs_offset, fd, NULL,
-                   (size_t)(c->file.length - c->offset), SPLICE_F_NONBLOCK)
+          ? splice(c->file.fd, &abs_offset, fd, NULL, len, SPLICE_F_NONBLOCK)
           : -1;
     }
   #endif

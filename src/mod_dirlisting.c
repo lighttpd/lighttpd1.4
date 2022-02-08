@@ -1519,16 +1519,17 @@ static int mod_dirlisting_write_cq (const int fd, chunkqueue * const cq, log_err
     cq->bytes_out -= in.bytes_in;
 
     /*(similar to mod_webdav.c:mod_webdav_write_cq(), but operates on two cqs)*/
-    chunkqueue_remove_finished_chunks(&in);
     while (!chunkqueue_is_empty(&in)) {
         ssize_t wr = chunkqueue_write_chunk(fd, &in, errh);
-        if (wr > 0)
+        if (__builtin_expect( (wr > 0), 1))
             chunkqueue_steal(cq, &in, wr);
         else if (wr < 0) {
             /*(writing to tempfile failed; transfer remaining data back to cq)*/
             chunkqueue_append_chunkqueue(cq, &in);
             return 0;
         }
+        else /*(wr == 0)*/
+            chunkqueue_remove_finished_chunks(&in);
     }
     return 1;
 }

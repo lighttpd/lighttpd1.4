@@ -4486,15 +4486,16 @@ static int
 mod_webdav_write_cq (request_st * const r, chunkqueue * const cq, const int fd)
 {
     /* (Note: copying might take some time, temporarily pausing server) */
-    chunkqueue_remove_finished_chunks(cq);
     while (!chunkqueue_is_empty(cq)) {
         ssize_t wr = chunkqueue_write_chunk(fd, cq, r->conf.errh);
-        if (wr > 0)
+        if (__builtin_expect( (wr > 0), 1))
             chunkqueue_mark_written(cq, wr);
         else if (wr < 0) {
             http_status_set_error(r, (errno == ENOSPC) ? 507 : 403);
             return 0;
         }
+        else /*(wr == 0)*/
+            chunkqueue_remove_finished_chunks(cq);
     }
     return 1;
 }
