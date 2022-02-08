@@ -1603,27 +1603,48 @@ static int mod_deflate_using_libdeflate (handler_ctx * const hctx, const plugin_
 
 static off_t mod_deflate_file_chunk_no_mmap(request_st * const r, handler_ctx * const hctx, const chunk * const c, off_t n)
 {
-    /* deflate transformation is optional for responses, so we do not retry
-     * after partial read or if interrupted by a signal, e.g. EINTR */
-    if (n > 2*1024*1024) n = 2*1024*1024;
-    char * const p = malloc((size_t)n);
-    if (p
-       #ifndef HAVE_PREAD
-        && -1 != lseek(c->file.fd, c->offset, SEEK_SET)
-        && n == read(c->file.fd, p, (size_t)psz)
-       #else
-        && n ==pread(c->file.fd, p, (size_t)psz, c->offset)
-       #endif
-       ) {
-        if (mod_deflate_compress(hctx, (unsigned char *)p, n) < 0) {
-            log_error(r->conf.errh, __FILE__, __LINE__, "compress failed.");
-            n = -1;
+    const off_t insz = n;
+    const size_t psz = (n < 2*1024*1024) ? (size_t)n : 2*1024*1024;
+    char * const p = malloc(psz);
+    if (NULL == p) {
+        log_perror(r->conf.errh, __FILE__, __LINE__, "malloc");
+        return -1;
+    }
+
+  #ifndef HAVE_PREAD
+    if (-1 == lseek(c->file.fd, c->offset, SEEK_SET)) {
+        log_perror(r->conf.errh, __FILE__, __LINE__, "lseek %s", c->mem->ptr);
+        return -1;
+    }
+  #endif
+
+    ssize_t rd = 0;
+    for (n = 0; n < insz; n += rd) {
+      #ifndef HAVE_PREAD
+        rd = read(c->file.fd, p, (size_t)psz);
+      #else
+        rd =pread(c->file.fd, p, (size_t)psz, c->offset+n);
+      #endif
+        if (__builtin_expect( (rd > 0), 1)) {
+            if (0 == mod_deflate_compress(hctx, (unsigned char *)p, rd))
+                continue;
+            /*(else error trace printed upon return)*/
         }
-    }
-    else {
-        log_perror(r->conf.errh, __FILE__, __LINE__, "reading %s failed", c->mem->ptr);
+        else if (-1 == rd) {
+            if (errno == EINTR) {
+                rd = 0;
+                continue;
+            }
+            log_perror(r->conf.errh, __FILE__, __LINE__,
+              "reading %s failed", c->mem->ptr);
+        }
+        else /*(0 == rd)*/
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "file truncated %s", c->mem->ptr);
         n = -1;
+        break;
     }
+
     free(p);
     return n;
 }
@@ -1720,7 +1741,8 @@ static handler_t deflate_compress_response(request_st * const r, handler_ctx * c
 			len = c->file.length - c->offset;
 			if (len > max) len = max;
 			if ((len = mod_deflate_file_chunk(r, hctx, c, len)) < 0) {
-				log_error(r->conf.errh, __FILE__, __LINE__, "compress file chunk failed.");
+				log_error(r->conf.errh, __FILE__, __LINE__,
+				  "compress file chunk failed %s", c->mem->ptr);
 				return HANDLER_ERROR;
 			}
 			break;
