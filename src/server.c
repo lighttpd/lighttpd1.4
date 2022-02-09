@@ -26,7 +26,8 @@
 #endif
 
 #define PACKAGE_DESC PACKAGE_NAME "/" PACKAGE_VERSION REPO_VERSION
-static const buffer default_server_tag = { CONST_STR_LEN(PACKAGE_DESC)+1, 0 };
+static const buffer default_server_tag =
+  { PACKAGE_DESC "\0server", sizeof(PACKAGE_DESC), 0 };
 
 #include <sys/types.h>
 #include <sys/stat.h>

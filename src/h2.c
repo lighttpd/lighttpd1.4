@@ -1877,6 +1877,7 @@ h2_send_hpack (request_st * const r, connection * const con, const char *data, u
 
 
 __attribute_cold__
+__attribute_noinline__
 static void
 h2_log_response_header_lsx(request_st * const r, const lsxpack_header_t * const lsx)
 {
@@ -2075,26 +2076,24 @@ h2_send_headers (request_st * const r, connection * const con)
     }
 
     if (!light_btst(r->resp_htags, HTTP_HEADER_SERVER) && r->conf.server_tag) {
-        buffer * const b = chunk_buffer_acquire();
+        /*("server" is appended after '\0' in r->conf.server_tag at startup)*/
         const uint32_t vlen = buffer_clen(r->conf.server_tag);
-        buffer_append_str2(b, CONST_STR_LEN("server: "),
-                              r->conf.server_tag->ptr, vlen);
 
         alen += 6+vlen+4;
 
-        if (log_response_header)
-            h2_log_response_header(r, (int)6+vlen+2, b->ptr);
-
         memset(&lsx, 0, sizeof(lsxpack_header_t));
-        lsx.buf = b->ptr;
-        lsx.name_offset = 0;
+        lsx.buf = r->conf.server_tag->ptr;
+        lsx.name_offset = vlen+1;
         lsx.name_len = 6;
-        lsx.val_offset = 8;
+        lsx.val_offset = 0;
         lsx.val_len = vlen;
         lsx.hpack_index = LSHPACK_HDR_SERVER;
+
+        if (log_response_header)
+            h2_log_response_header_lsx(r, &lsx);
+
         unsigned char * const dst_in = dst;
         dst = lshpack_enc_encode(encoder, dst, dst_end, &lsx);
-        chunk_buffer_release(b);
         if (dst == dst_in) {
             h2_send_rst_stream(r, con, H2_E_INTERNAL_ERROR);
             return;

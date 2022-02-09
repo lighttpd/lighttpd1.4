@@ -1070,6 +1070,12 @@ static int config_insert(server *srv) {
                     char *t = b->ptr; /*(make empty if tag is whitespace-only)*/
                     while (*t==' ' || *t=='\t' || *t=='\r' || *t=='\n') ++t;
                     if (*t == '\0') buffer_truncate(b, 0);
+                    if (buffer_is_blank(b) && 0 != i)
+                        cpv->v.b = NULL;
+                    else { /* prep for use by h2.c:h2_send_headers() */
+                        buffer_string_prepare_append(b, 6);
+                        memcpy(b->ptr+buffer_clen(b)+1, "server", 6);
+                    }
                 }
                 else if (0 != i)
                     cpv->v.b = NULL;
