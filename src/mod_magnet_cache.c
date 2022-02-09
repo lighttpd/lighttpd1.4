@@ -5,7 +5,8 @@
 
 #include <errno.h>
 #include <stdlib.h>
-#include <unistd.h>     /* read() */
+#include <string.h>     /* strstr() */
+#include <unistd.h>     /* lseek() read() */
 
 #include <lualib.h>
 #include <lauxlib.h>
@@ -54,7 +55,7 @@ static lua_State *script_cache_load_script(script * const sc, int etag_flags)
 
     stat_cache_entry * const sce = stat_cache_get_entry_open(&sc->name, 1);
     buffer_clear(&sc->etag);
-    if (NULL == sce || sce->fd < 0) {
+    if (NULL == sce || sce->fd < 0 || -1 == lseek(sce->fd, 0, SEEK_SET)) {
         /*(sce->fd < 0 might indicate empty file, which is not a valid script)*/
         if (NULL != sce) errno = EBADF;
         return NULL;
@@ -64,7 +65,7 @@ static lua_State *script_cache_load_script(script * const sc, int etag_flags)
         buffer_copy_buffer(&sc->etag, etag);
 
     const off_t sz = sce->st.st_size;
-    char * const buf = malloc(sz);
+    char * const buf = malloc(sz+1);
     force_assert(buf);
 
     ssize_t rd = 0;
@@ -77,6 +78,10 @@ static lua_State *script_cache_load_script(script * const sc, int etag_flags)
         free(buf);
         return NULL;
     }
+
+    /*(coarse heuristic to detect if script needs req_env initialized)*/
+    buf[sz] = '\0'; /* for strstr() */
+    sc->req_env_init = (NULL != strstr(buf, "req_env"));
 
     int rc = luaL_loadbuffer(sc->L, buf, (size_t)sz, sc->name.ptr);
     free(buf);

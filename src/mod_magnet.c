@@ -2289,14 +2289,12 @@ static int push_traceback(lua_State *L, int narg) {
 }
 
 static handler_t magnet_attract(request_st * const r, plugin_data * const p, script * const sc) {
-	/*(always check at least mtime and size to trigger script reload)*/
-	int etag_flags = r->conf.etag_flags | ETAG_USE_MTIME | ETAG_USE_SIZE;
-	lua_State * const L = script_cache_check_script(sc, etag_flags);
+	lua_State * const L = sc->L;
 	int lua_return_value;
 	const int func_ndx = 1;
 	const int lighty_table_ndx = 2;
 
-	if (NULL == L) {
+	if (lua_gettop(L) == 0) {
 		log_perror(r->conf.errh, __FILE__, __LINE__,
 		  "loading script %s failed", sc->name.ptr);
 
@@ -2469,11 +2467,19 @@ static handler_t magnet_attract_array(request_st * const r, plugin_data * const 
 	}
 	if (NULL == scripts) return HANDLER_GO_ON; /* no scripts set */
 
-	r->con->srv->request_env(r);
+	/*(always check at least mtime and size to trigger script reload)*/
+	const int etag_flags = r->conf.etag_flags | ETAG_USE_MTIME | ETAG_USE_SIZE;
+	int req_env_inited = 0;
 
 	/* execute scripts sequentially while HANDLER_GO_ON */
 	handler_t rc = HANDLER_GO_ON;
 	do {
+		script_cache_check_script(*scripts, etag_flags);
+		if ((*scripts)->req_env_init && !req_env_inited) {
+			/*(request env init is deferred until needed)*/
+			req_env_inited = 1;
+			r->con->srv->request_env(r);
+		}
 		rc = magnet_attract(r, p, *scripts);
 	} while (rc == HANDLER_GO_ON && *++scripts);
 

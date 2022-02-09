@@ -12,6 +12,7 @@ typedef struct {
 	buffer etag;
 
 	lua_State *L;
+	int req_env_init;
 } script;
 
 typedef struct {
