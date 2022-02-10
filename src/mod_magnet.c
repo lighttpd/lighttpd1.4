@@ -2413,7 +2413,10 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 					r->handler_module = p->self;
 				}
 			} else {
-				lua_settop(L, 2); /* remove all but function and lighty table */
+				if (lua_gettop(L) > 2)
+					lua_settop(L, 2); /* remove all but function and lighty table */
+				else if (lua_gettop(L) != 2)
+					lua_settop(L, 0); /* throw everything away; force script reload */
 				r->http_status = 500;
 				r->handler_module = NULL;
 				http_response_body_clear(r, 0);
