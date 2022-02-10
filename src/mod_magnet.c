@@ -25,7 +25,7 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
-#include <setjmp.h>
+/*#include <setjmp.h>*//*(not currently used)*/
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -36,7 +36,7 @@
 
 /* plugin config for all request/connections */
 
-static jmp_buf exceptionjmp;
+/*static jmp_buf exceptionjmp;*//*(not currently used)*/
 
 typedef struct {
     script * const *url_raw;
@@ -180,6 +180,17 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
 
     return HANDLER_GO_ON;
 }
+
+#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
+static lua_Integer
+lua_tointegerx (lua_State * const L, int idx, int *isnum)
+{
+    /*(caller should check for LUA_TNIL if using a default value is desired)*/
+    /*(note: return 0 for floating point not convertible to integer)*/
+    *isnum = lua_isnumber(L, idx);
+    return *isnum ? lua_tointeger(L, idx) : 0;
+}
+#endif
 
 #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
 /* lua5.1 backward compat definition */
@@ -1176,7 +1187,8 @@ static int magnet_atpanic(lua_State *L) {
 	request_st * const r = magnet_get_request(L);
 	log_error(r->conf.errh, __FILE__, __LINE__, "(lua-atpanic) %s",
 	          lua_isstring(L, 1) ? lua_tostring(L, 1) : "");
-	longjmp(exceptionjmp, 1);
+	/*longjmp(exceptionjmp, 1);*//*(must be init with setjmp() elsewhere)*/
+	return 0;
 }
 
 static int magnet_reqhdr_get(lua_State *L) {
@@ -1902,6 +1914,7 @@ static void magnet_copy_response_header(lua_State * const L, request_st * const 
  *     { "<html><body><pre>", { file = "/content" } , "</pre></body></html>" }
  *   return 200
  */
+__attribute_noinline__
 static void magnet_attach_content_table(lua_State * const L, request_st * const r) {
 		for (int i=1, end=0, n=(int)lua_rawlen(L,-1); !end && i <= n; ++i) {
 			lua_rawgeti(L, -1, i);
@@ -1916,16 +1929,24 @@ static void magnet_attach_content_table(lua_State * const L, request_st * const 
 				lua_getfield(L, -3, "offset"); /* (0-based) start of range */
 
 				if (lua_isstring(L, -3)) { /* filename has to be a string */
-					/*(luaL_optinteger might raise error on non-numeric data,
-					 * and is the reason this func is wrapped in setjmp())
-					 *(could avoid setjmp and possibility of error raised
-					 * by checking lua_type for LUA_TNUMBER or LUA_TNIL prior to
-					 * calling luaL_optinteger(), or checking LUA_TNUMBER prior
-					 * to calling lua_tointeger())*/
-					/*off_t off = lua_type(L, -1) == LUA_TNUMBER ? (off_t)lua_tointeger(L, -1) : 0;*/
-					/*off_t len = lua_type(L, -2) == LUA_TNUMBER ? (off_t)lua_tointeger(L, -2) : -1;*/
-					off_t off = (off_t) luaL_optinteger(L, -1, 0);
-					off_t len = (off_t) luaL_optinteger(L, -2, -1); /*(-1 as flag to use file size minus offset (below))*/
+					/*(luaL_optinteger might raise error, which we want to avoid)*/
+					/*off_t off = (off_t) luaL_optinteger(L, -1, 0);*/
+					/*off_t len = (off_t) luaL_optinteger(L, -2, -1);*/ /*(-1 as flag to use file size minus offset (below))*/
+					int isnum = 1;
+					off_t off = lua_isnil(L, -1) ? 0 : (off_t) lua_tointegerx(L, -1, &isnum);
+					if (!isnum) {
+						off = 0;
+						log_error(r->conf.errh, __FILE__, __LINE__,
+						  "content[%d] is a table and field \"offset\" must be an integer", i);
+					}
+					isnum = 1;
+					off_t len = lua_isnil(L, -2) ? -1 : (off_t) lua_tointegerx(L, -2, &isnum);
+					/*(-1 len as flag to use file size minus offset (below))*/
+					if (!isnum) {
+						len = -1;
+						log_error(r->conf.errh, __FILE__, __LINE__,
+						  "content[%d] is a table and field \"length\" must be an integer", i);
+					}
 					if (off < 0) {
 						log_error(r->conf.errh, __FILE__, __LINE__,
 						  "offset for '%s' is negative", lua_tostring(L, -3));
@@ -1976,11 +1997,11 @@ static void magnet_attach_content_table(lua_State * const L, request_st * const 
 		}
 }
 
-static int magnet_attach_content(lua_State * const L, request_st * const r) {
+static void magnet_attach_content(lua_State * const L, request_st * const r) {
     lua_getfield(L, -1, "result");  /* lighty.result */
     if (!lua_istable(L, -1)) {
         lua_pop(L, 1); /* pop nil lighty.result */
-        return 0;
+        return;
     }
     lua_getfield(L, -1, "content"); /* lighty.result.content */
     switch (lua_type(L, -1)) {
@@ -1989,10 +2010,7 @@ static int magnet_attach_content(lua_State * const L, request_st * const r) {
       case LUA_TTABLE:
         /* content found and is a table */
         http_response_body_clear(r, 0);
-        if (0 == setjmp(exceptionjmp))
-            magnet_attach_content_table(L, r);
-        else
-            return -1; /*(caller cleans up lua stack)*/
+        magnet_attach_content_table(L, r);
         break;
       default:
         log_error(r->conf.errh, __FILE__, __LINE__,
@@ -2000,7 +2018,6 @@ static int magnet_attach_content(lua_State * const L, request_st * const r) {
         break;
     }
     lua_pop(L, 2); /* pop lighty.result.content and lighty.result */
-    return 0;
 }
 
 static void magnet_mainenv_metatable(lua_State * const L) {
@@ -2013,6 +2030,7 @@ static void magnet_mainenv_metatable(lua_State * const L) {
 }
 
 __attribute_cold__
+__attribute_noinline__
 static void magnet_init_lighty_table(lua_State * const L) {
     /* init lighty table and other initial setup for global lua_State */
 
@@ -2290,7 +2308,6 @@ static int push_traceback(lua_State *L, int narg) {
 
 static handler_t magnet_attract(request_st * const r, plugin_data * const p, script * const sc) {
 	lua_State * const L = sc->L;
-	int lua_return_value;
 	const int func_ndx = 1;
 	const int lighty_table_ndx = 2;
 
@@ -2384,17 +2401,18 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 	/* we should have the function, the lighty table and the return value on the stack */
 	/*force_assert(lua_gettop(L) == 3);*/
 
-	switch (lua_type(L, -1)) {
-	case LUA_TNUMBER:
-	case LUA_TNIL:
-		lua_return_value = (int) luaL_optinteger(L, -1, -1);
-		break;
-	default:
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "lua_pcall(): unexpected return type: %s", luaL_typename(L, -1));
-		lua_return_value = -1;
-		break;
-	}
+		/*(luaL_optinteger might raise error, which we want to avoid)*/
+		/*lua_return_value = (int) luaL_optinteger(L, -1, -1);*/
+		int isnum = 1;
+		int lua_return_value = lua_isnil(L, -1)
+		  ? 0
+		  : (int) lua_tointegerx(L, -1, &isnum);
+		if (!isnum) {
+			lua_return_value = -1;
+			log_error(r->conf.errh, __FILE__, __LINE__,
+			  "lua_pcall(): unexpected non-integer return type: %s",
+			  luaL_typename(L, -1));
+		}
 
 	lua_pop(L, 1); /* pop return value */
 	/*force_assert(lua_istable(sc->L, -1));*/
@@ -2408,20 +2426,10 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			r->http_status = lua_return_value;
 			r->resp_body_finished = 1;
 			/*(note: body may already have been set via lighty.r.resp_body.*)*/
-			if (0 == magnet_attach_content(L, r)) {
-				if (!chunkqueue_is_empty(&r->write_queue)) {
-					r->handler_module = p->self;
-				}
-			} else {
-				if (lua_gettop(L) > 2)
-					lua_settop(L, 2); /* remove all but function and lighty table */
-				else if (lua_gettop(L) != 2)
-					lua_settop(L, 0); /* throw everything away; force script reload */
-				r->http_status = 500;
-				r->handler_module = NULL;
-				http_response_body_clear(r, 0);
+			magnet_attach_content(L, r);
+			if (!chunkqueue_is_empty(&r->write_queue)) {
+				r->handler_module = p->self;
 			}
-
 			result = HANDLER_FINISHED;
 		} else if (lua_return_value >= 100 && p->conf.stage != -1) {
 			/*(skip for response-start; send response as-is w/ added headers)*/
