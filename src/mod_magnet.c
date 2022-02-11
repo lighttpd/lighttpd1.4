@@ -2372,7 +2372,7 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 
 	/* pcall will destroy the func value, duplicate it */     /* (sp += 1) */
 	lua_pushvalue(L, func_ndx);
-	{
+
 		int errfunc = push_traceback(L, 0);
 		int ret = lua_pcall(L, 0, 1, errfunc);
 		lua_remove(L, errfunc);
@@ -2381,25 +2381,24 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 		lua_pushglobaltable(L);                               /* (sp += 1) */
 		magnet_setfenv_mainfn(L, 1);                          /* (sp -= 1) */
 
-		if (0 != ret) {
+	handler_t result = HANDLER_GO_ON;
+	if (0 != ret) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "lua_pcall(): %s", lua_tostring(L, -1));
 			lua_pop(L, 1); /* pop error msg */
 			/* only the function and lighty table should remain on the stack */
 			force_assert(lua_gettop(L) == 2);
-			magnet_reset_lighty_table(L);
 
 			if (p->conf.stage != -1) { /* skip for response-start */
 				r->http_status = 500;
 				r->handler_module = NULL;
 			}
 
-			return HANDLER_FINISHED;
-		}
+			result = HANDLER_FINISHED;
 	}
-
-	/* we should have the function, the lighty table and the return value on the stack */
-	/*force_assert(lua_gettop(L) == 3);*/
+	else {
+		/* we should have the function, the lighty table and the return value on the stack */
+		/*force_assert(lua_gettop(L) == 3);*/
 
 		/*(luaL_optinteger might raise error, which we want to avoid)*/
 		/*lua_return_value = (int) luaL_optinteger(L, -1, -1);*/
@@ -2413,14 +2412,10 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			  "lua_pcall(): unexpected non-integer return type: %s",
 			  luaL_typename(L, -1));
 		}
+		lua_pop(L, 1); /* pop return value */
+		/*force_assert(lua_istable(sc->L, -1));*/
 
-	lua_pop(L, 1); /* pop return value */
-	/*force_assert(lua_istable(sc->L, -1));*/
-
-	magnet_copy_response_header(L, r);
-
-	{
-		handler_t result = HANDLER_GO_ON;
+		magnet_copy_response_header(L, r);
 
 		if (lua_return_value >= 200) {
 			r->http_status = lua_return_value;
@@ -2460,9 +2455,9 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			}
 		}
 
-		magnet_reset_lighty_table(L);
-		return result;
 	}
+	magnet_reset_lighty_table(L);
+	return result;
 }
 
 static handler_t magnet_attract_array(request_st * const r, plugin_data * const p, int stage) {
