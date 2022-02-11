@@ -55,12 +55,13 @@
 #include <stdio.h>      /* vsnprintf() */
 #include <string.h>
 
-/*(temporary while waiting for future mbedtls 3.x interfaces)*/
+#include <mbedtls/version.h>
+/*(compatibility while waiting for future mbedtls 3.x interfaces)*/
+#if MBEDTLS_VERSION_NUMBER < 0x03020000 /* mbedtls 3.02.0 */
 #ifndef MBEDTLS_ALLOW_PRIVATE_ACCESS
 #define MBEDTLS_ALLOW_PRIVATE_ACCESS
 #endif
-
-#include <mbedtls/version.h>
+#endif
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/debug.h>
 #include <mbedtls/dhm.h>
@@ -360,6 +361,15 @@ mod_mbedtls_session_ticket_key_check (plugin_data *p, const unix_time64_t cur_ts
 
     tlsext_ticket_key_t *stek = session_ticket_keys;
     if (stek->active_ts != 0 && stek->active_ts - 63 <= cur_ts) {
+      #if MBEDTLS_VERSION_NUMBER >= 0x03020000 /* mbedtls 3.02.0 */
+        int rc = mbedtls_ssl_ticket_rotate(&p->ticket_ctx,
+                   stek->tick_key_name, sizeof(stek->tick_key_name),
+                   stek->tick_aes_key, sizeof(stek->tick_aes_key),
+                   (uint32_t)(stek->expire_ts - stek->active_ts));
+        if (0 != rc)
+            elog(p->srv->errh, __FILE__,__LINE__, rc,
+                 "session ticket encryption key rotation failed");
+      #else /*(mbedtls_allow_private_access at top of file for [3.0.0,3.2.0))*/
         /* expect to get newer ssl.stek-file prior to mbedtls detecting
          * expiration and internally generating a new key.  If not, then
          * lifetime may be up to 2x specified lifetime until overwritten
@@ -382,6 +392,7 @@ mod_mbedtls_session_ticket_key_check (plugin_data *p, const unix_time64_t cur_ts
               : 0;
             ctx->active = 1 - ctx->active;
         }
+      #endif
         mbedtls_platform_zeroize(stek, sizeof(tlsext_ticket_key_t));
     }
 }
@@ -908,8 +919,14 @@ mod_mbedtls_x509_crt_parse_acme (mbedtls_x509_crt *chain, const char *fn)
                                  (unsigned char *)data, NULL, 0, &use_len);
     if (0 == rc) {
         mbedtls_x509_crt_ext_cb_t cb = mod_mbedtls_x509_crt_ext_cb;
-        rc = mbedtls_x509_crt_parse_der_with_ext_cb(chain, pem.buf, pem.buflen,
-                                                    1, cb, NULL);
+      #if MBEDTLS_VERSION_NUMBER >= 0x03020000 /* mbedtls 3.02.0 */
+        size_t buflen;
+        const unsigned char *buf = mbedtls_pem_get_buffer(&pem, &buflen);
+      #else
+        const unsigned char *buf = pem.MBEDTLS_PRIVATE(buf);
+        size_t buflen = pem.MBEDTLS_PRIVATE(buflen);
+      #endif
+        rc = mbedtls_x509_crt_parse_der_with_ext_cb(chain,buf,buflen,1,cb,NULL);
     }
 
     mbedtls_pem_free(&pem);
