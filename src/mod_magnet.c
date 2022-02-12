@@ -2311,23 +2311,23 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 	const int func_ndx = 1;
 	const int lighty_table_ndx = 2;
 
-	if (lua_gettop(L) == 0) {
-		log_perror(r->conf.errh, __FILE__, __LINE__,
-		  "loading script %s failed", sc->name.ptr);
-
-		if (p->conf.stage != -1) { /* skip for response-start */
-			r->http_status = 500;
-			r->handler_module = NULL;
-		}
-
-		return HANDLER_FINISHED;
+	if (__builtin_expect( (lua_gettop(L) == 2), 1)) {
+		/*force_assert(lua_istable(L, -1));*//* lighty.* table */
 	}
-
-	if (lua_isstring(L, -1)) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "loading script %s failed: %s", sc->name.ptr, lua_tostring(L, -1));
-		lua_pop(L, 1);
-		force_assert(lua_gettop(L) == 0); /* only the error should have been on the stack */
+	else if (lua_isfunction(L, func_ndx)) {
+	        /*force_assert(lua_gettop(L) == 1);*/
+		/* insert lighty table at index 2 (lighty_table_ndx = 2) */
+		magnet_init_lighty_table(L); /* lighty.*             (sp += 1) */
+	}
+	else {
+		if (lua_isstring(L, func_ndx))
+			log_error(r->conf.errh, __FILE__, __LINE__,
+			  "loading script %s failed: %s", sc->name.ptr,
+			  lua_tostring(L, func_ndx));
+		else /*(lua_gettop(L) == 0)*/
+			log_perror(r->conf.errh, __FILE__, __LINE__,
+			  "loading script %s failed", sc->name.ptr);
+		lua_settop(L, 0);
 
 		if (p->conf.stage != -1) { /* skip for response-start */
 			r->http_status = 500;
@@ -2339,15 +2339,6 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 
 	lua_pushlightuserdata(L, r);
 	lua_setfield(L, LUA_REGISTRYINDEX, LUA_RIDX_LIGHTTPD_REQUEST);
-
-	if (lua_gettop(L) == 2) {
-		/*force_assert(lua_istable(L, -1));*//* lighty.* table */
-	}
-	else {
-	        /*force_assert(lua_gettop(L) == 1);*/
-		/* insert lighty table at index 2 (lighty_table_ndx = 2) */
-		magnet_init_lighty_table(L); /* lighty.*             (sp += 1) */
-	}
 
 	/**
 	 * we want to create empty environment for our script
