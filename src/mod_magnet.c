@@ -181,6 +181,18 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
     return HANDLER_GO_ON;
 }
 
+#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
+#define lua_getfield_and_type(L,idx,k) \
+       (lua_getfield((L),(idx),(k)), lua_type((L),-1))
+#define lua_getglobal_and_type(L,name) \
+       (lua_getglobal((L),(name)), lua_type((L),-1))
+#else
+#define lua_getfield_and_type(L,idx,k) \
+        lua_getfield((L),(idx),(k))
+#define lua_getglobal_and_type(L,name) \
+        lua_getglobal((L),(name))
+#endif
+
 #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
 static lua_Integer
 lua_tointegerx (lua_State * const L, int idx, int *isnum)
@@ -1897,8 +1909,7 @@ static int magnet_lighty_result_set(lua_State *L) {
 
 
 static void magnet_copy_response_header(lua_State * const L, request_st * const r) {
-    lua_getfield(L, -1, "header"); /* lighty.header */
-    if (lua_istable(L, -1)) {
+    if (lua_getfield_and_type(L, -1, "header") == LUA_TTABLE) {/*lighty.header*/
         for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
             if (lua_isstring(L, -1) && lua_isstring(L, -2))
                 magnet_resphdr_set_kv(L, r);
@@ -1998,13 +2009,11 @@ static void magnet_attach_content_table(lua_State * const L, request_st * const 
 }
 
 static void magnet_attach_content(lua_State * const L, request_st * const r) {
-    lua_getfield(L, -1, "result");  /* lighty.result */
-    if (!lua_istable(L, -1)) {
+    if (lua_getfield_and_type(L, -1, "result") != LUA_TTABLE) {/*lighty.result*/
         lua_pop(L, 1); /* pop nil lighty.result */
         return;
     }
-    lua_getfield(L, -1, "content"); /* lighty.result.content */
-    switch (lua_type(L, -1)) {
+    switch (lua_getfield_and_type(L, -1, "content")) {/*lighty.result.content*/
       case LUA_TNIL:
         break;
       case LUA_TTABLE:
@@ -2257,8 +2266,7 @@ static void magnet_clear_table(lua_State * const L) {
 
 static void magnet_reset_lighty_table(lua_State * const L) {
     /* clear response tables (release mem if reusing lighty table) */
-    lua_getfield(L, -1, "result"); /* lighty.result */
-    if (lua_istable(L, -1))
+    if (lua_getfield_and_type(L, -1, "result") == LUA_TTABLE) /*lighty.result*/
         magnet_clear_table(L);
     else {
         lua_createtable(L, 0, 1);
@@ -2266,8 +2274,7 @@ static void magnet_reset_lighty_table(lua_State * const L) {
     }
     lua_pop(L, 1);
 
-    lua_getfield(L, -1, "header");  /* lighty.header */
-    if (lua_istable(L, -1))
+    if (lua_getfield_and_type(L, -1, "header") == LUA_TTABLE) /*lighty.header*/
         magnet_clear_table(L);
     else {
         lua_createtable(L, 0, 0);
@@ -2279,13 +2286,11 @@ static void magnet_reset_lighty_table(lua_State * const L) {
 static int traceback(lua_State *L) {
 	if (!lua_isstring(L, 1))  /* 'message' not a string? */
 		return 1;  /* keep it intact */
-	lua_getglobal(L, "debug");
-	if (!lua_istable(L, -1)) {
+	if (lua_getglobal_and_type(L, "debug") != LUA_TTABLE) {
 		lua_pop(L, 1);
 		return 1;
 	}
-	lua_getfield(L, -1, "traceback");
-	if (!lua_isfunction(L, -1)) {
+	if (lua_getfield_and_type(L, -1, "traceback") != LUA_TFUNCTION) {
 		lua_pop(L, 2);
 		return 1;
 	}
