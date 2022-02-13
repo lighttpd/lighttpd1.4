@@ -350,8 +350,11 @@ static handler_t http_response_config (request_st * const r) {
 
     /* do we have to downgrade from 1.1 to 1.0 ? (ignore for HTTP/2) */
     if (__builtin_expect( (!r->conf.allow_http11), 0)
-        && r->http_version == HTTP_VERSION_1_1)
+        && r->http_version == HTTP_VERSION_1_1) {
         r->http_version = HTTP_VERSION_1_0;
+        /*(when forcing HTTP/1.0, ignore (unlikely) Connection: keep-alive)*/
+        r->keep_alive = 0;
+    }
 
     if (__builtin_expect( (r->reqbody_length > 0), 0)
         && 0 != r->conf.max_request_size   /* r->conf.max_request_size in kB */
