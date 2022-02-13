@@ -1611,33 +1611,17 @@ static off_t mod_deflate_file_chunk_no_mmap(request_st * const r, handler_ctx * 
         return -1;
     }
 
-  #ifndef HAVE_PREAD
-    if (-1 == lseek(c->file.fd, c->offset, SEEK_SET)) {
-        log_perror(r->conf.errh, __FILE__, __LINE__, "lseek %s", c->mem->ptr);
-        return -1;
-    }
-  #endif
-
     ssize_t rd = 0;
     for (n = 0; n < insz; n += rd) {
-      #ifndef HAVE_PREAD
-        rd = read(c->file.fd, p, (size_t)psz);
-      #else
-        rd =pread(c->file.fd, p, (size_t)psz, c->offset+n);
-      #endif
+        rd = chunk_file_pread(c->file.fd, p, (size_t)psz, c->offset+n);
         if (__builtin_expect( (rd > 0), 1)) {
             if (0 == mod_deflate_compress(hctx, (unsigned char *)p, rd))
                 continue;
             /*(else error trace printed upon return)*/
         }
-        else if (-1 == rd) {
-            if (errno == EINTR) {
-                rd = 0;
-                continue;
-            }
+        else if (-1 == rd)
             log_perror(r->conf.errh, __FILE__, __LINE__,
               "reading %s failed", c->mem->ptr);
-        }
         else /*(0 == rd)*/
             log_error(r->conf.errh, __FILE__, __LINE__,
               "file truncated %s", c->mem->ptr);

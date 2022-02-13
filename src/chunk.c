@@ -168,6 +168,30 @@ static chunk_file_view * chunk_file_view_failed (chunk_file_view *cfv) {
 
 #endif /* HAVE_MMAP */
 
+ssize_t
+chunk_file_pread (int fd, void *buf, size_t count, off_t offset)
+{
+    /*(expects open file for FILE_CHUNK)*/
+  #ifndef HAVE_PREAD
+    /*(On systems without pread() or equivalent, lseek() is repeated if this
+     * func is called in a loop, but this func is generally used on small files,
+     * or reading a small bit at a time.  Even in the case of mod_deflate, files
+     * are not expected to be excessively large.) */
+    if (-1 == lseek(fd, offset, SEEK_SET))
+        return -1;
+  #endif
+
+    ssize_t rd;
+    do {
+      #ifdef HAVE_PREAD
+        rd =pread(fd, buf, count, offset);
+      #else
+        rd = read(fd, buf, count);
+      #endif
+    } while (-1 == rd && errno == EINTR);
+    return rd;
+}
+
 static void chunk_reset_file_chunk(chunk *c) {
 	if (c->file.is_temp) {
 		c->file.is_temp = 0;
@@ -1499,10 +1523,6 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
     if (filec != cq->last || filec->type != FILE_CHUNK || filec->file.fd < 0)
         return;
 
-  #ifndef HAVE_PREAD
-    if (-1 == lseek(filec->file.fd, filec->offset, SEEK_SET)) return;
-  #endif
-
     /* Note: there should be no size change in chunkqueue,
      * so cq->bytes_in and cq->bytes_out should not be modified */
 
@@ -1520,12 +1540,9 @@ chunkqueue_small_resp_optim (chunkqueue * const restrict cq)
     off_t offset = 0;
     char * const ptr = buffer_extend(c->mem, len);
     do {
-      #ifdef HAVE_PREAD
-        rd =pread(filec->file.fd, ptr+offset, (size_t)len,filec->offset+offset);
-      #else
-        rd = read(filec->file.fd, ptr+offset, (size_t)len);
-      #endif
-    } while (rd > 0 ? (offset += rd, len -= rd) : errno == EINTR);
+        rd = chunk_file_pread(filec->file.fd, ptr+offset, (size_t)len,
+                              filec->offset+offset);
+    } while (rd > 0 && (offset += rd, len -= rd));
     /*(contents of chunkqueue kept valid even if error reading from file)*/
     if (__builtin_expect( (0 == len), 1))
         chunk_release(filec);
@@ -1630,21 +1647,8 @@ chunkqueue_peek_data (chunkqueue * const cq,
               #endif
             #endif
 
-              #ifndef HAVE_PREAD
-                if (-1 == lseek(c->file.fd, c->offset, SEEK_SET)) {
-                    log_perror(errh, __FILE__, __LINE__, "lseek(\"%s\")",
-                               c->mem->ptr);
-                    return -1;
-                }
-              #endif
-                ssize_t rd;
-                do {
-                  #ifdef HAVE_PREAD
-                    rd =pread(c->file.fd,data_in+*dlen,(size_t)len,c->offset);
-                  #else
-                    rd = read(c->file.fd,data_in+*dlen,(size_t)len);
-                  #endif
-                } while (-1 == rd && errno == EINTR);
+                ssize_t rd = chunk_file_pread(c->file.fd, data_in+*dlen,
+                                              (size_t)len, c->offset);
                 if (rd <= 0) { /* -1 error; 0 EOF (unexpected) */
                     log_perror(errh, __FILE__, __LINE__, "read(\"%s\")",
                                c->mem->ptr);

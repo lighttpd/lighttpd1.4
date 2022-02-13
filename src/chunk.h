@@ -54,6 +54,8 @@ typedef struct chunkqueue {
 	unsigned int tempdir_idx;
 } chunkqueue;
 
+ssize_t chunk_file_pread (int fd, void *buf, size_t count, off_t offset);
+
 __attribute_returns_nonnull__
 buffer * chunk_buffer_acquire(void);
 
