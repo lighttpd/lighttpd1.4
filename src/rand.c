@@ -90,6 +90,15 @@
 #endif
 #endif
 
+#ifdef __has_include
+#if __has_include(<sys/auxv.h>)
+#include <sys/auxv.h> /* getauxval(AT_RANDOM) is a glibc extension */
+#ifdef AT_RANDOM
+#define HAVE_GETAUXVAL
+#endif
+#endif
+#endif
+
 /* Take some reasonable steps to attempt to *seed* random number generators with
  * cryptographically random data.  Some of these initialization routines may
  * block, and are intended to be called only at startup in lighttpd, or
@@ -262,10 +271,24 @@ static void li_rand_init (void)
         u = (unsigned int)(time(NULL) ^ getpid());
       #else
         /* NOTE: not cryptographically random !!! */
+       #ifdef HAVE_GETAUXVAL
+        char *auxv_random = (char *)(uintptr_t)getauxval(AT_RANDOM);
+        if (auxv_random) {
+            memcpy(&u, auxv_random, 4);
+            memcpy(xsubi, auxv_random+4, 6);
+        }
+        else
+            memset(xsubi, (u = 0), sizeof(xsubi));
+        srand((unsigned int)(time(NULL) ^ getpid()) ^ u);
+        for (u = 0; u < sizeof(unsigned short); ++u)
+            /* coverity[dont_call : FALSE] */
+            xsubi[u] ^= (unsigned short)(rand() & 0xFFFF);
+       #else
         srand((unsigned int)(time(NULL) ^ getpid()));
         for (u = 0; u < sizeof(unsigned short); ++u)
             /* coverity[dont_call : FALSE] */
             xsubi[u] = (unsigned short)(rand() & 0xFFFF);
+       #endif
         u = ((unsigned int)xsubi[0] << 16) | xsubi[1];
       #endif
     }
