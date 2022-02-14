@@ -30,7 +30,9 @@
 #include <lua.h>
 #include <lauxlib.h>
 
+#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
 #define LUA_RIDX_LIGHTTPD_REQUEST "lighty.request"
+#endif
 
 #define MAGNET_RESTART_REQUEST      99
 
@@ -406,10 +408,14 @@ static int magnet_array_pairs(lua_State *L, array *a) {
 }
 
 static request_st * magnet_get_request(lua_State *L) {
+     #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
 	lua_getfield(L, LUA_REGISTRYINDEX, LUA_RIDX_LIGHTTPD_REQUEST);
 	request_st * const r = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	return r;
+     #else
+	return *(request_st **)lua_getextraspace(L);
+     #endif
 }
 
 typedef struct {
@@ -2342,8 +2348,12 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 		return HANDLER_FINISHED;
 	}
 
+     #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
 	lua_pushlightuserdata(L, r);
 	lua_setfield(L, LUA_REGISTRYINDEX, LUA_RIDX_LIGHTTPD_REQUEST);
+     #else
+	*(request_st **)lua_getextraspace(L) = r;
+     #endif
 
 	/**
 	 * we want to create empty environment for our script
