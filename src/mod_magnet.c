@@ -2289,7 +2289,7 @@ static void magnet_reset_lighty_table(lua_State * const L) {
     lua_pop(L, 1);
 }
 
-static int traceback(lua_State *L) {
+static int magnet_traceback(lua_State *L) {
 	if (!lua_isstring(L, 1))  /* 'message' not a string? */
 		return 1;  /* keep it intact */
 	if (lua_getglobal_and_type(L, "debug") != LUA_TTABLE) {
@@ -2306,28 +2306,19 @@ static int traceback(lua_State *L) {
 	return 1;
 }
 
-/* push traceback function before calling lua_pcall after narg arguments
- * have been pushed (inserts it before the arguments). returns index for
- * traceback function ("msgh" in lua_pcall)
- */
-static int push_traceback(lua_State *L, int narg) {
-	int base = lua_gettop(L) - narg;  /* function index */
-	lua_pushcfunction(L, traceback);
-	lua_insert(L, base);
-	return base;
-}
-
 static handler_t magnet_attract(request_st * const r, plugin_data * const p, script * const sc) {
 	lua_State * const L = sc->L;
 	const int func_ndx = 1;
-	const int lighty_table_ndx = 2;
+	const int errfunc_ndx = 2;
+	const int lighty_table_ndx = 3;
 
-	if (__builtin_expect( (lua_gettop(L) == 2), 1)) {
+	if (__builtin_expect( (lua_gettop(L) == 3), 1)) {
 		/*force_assert(lua_istable(L, -1));*//* lighty.* table */
 	}
 	else if (lua_isfunction(L, func_ndx)) {
 	        /*force_assert(lua_gettop(L) == 1);*/
-		/* insert lighty table at index 2 (lighty_table_ndx = 2) */
+		lua_pushcfunction(L, magnet_traceback);/*errfunc*//* (sp += 1) */
+		/* insert lighty table at index 3 (lighty_table_ndx = 3) */
 		magnet_init_lighty_table(L); /* lighty.*             (sp += 1) */
 	}
 	else {
@@ -2376,12 +2367,9 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 
 	magnet_setfenv_mainfn(L, 1);                              /* (sp -= 1) */
 
-	/* pcall will destroy the func value, duplicate it */     /* (sp += 1) */
-	lua_pushvalue(L, func_ndx);
-
-		int errfunc = push_traceback(L, 0);
-		int ret = lua_pcall(L, 0, 1, errfunc);
-		lua_remove(L, errfunc);
+	/* pcall will destroy the func value, duplicate it */
+	lua_pushvalue(L, func_ndx);                               /* (sp += 1) */
+	int ret = lua_pcall(L, 0, 1, errfunc_ndx);       /* (sp -= 1; sp += 1) */
 
 		/* reset environment */
 		lua_pushglobaltable(L);                               /* (sp += 1) */
@@ -2392,8 +2380,8 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "lua_pcall(): %s", lua_tostring(L, -1));
 			lua_pop(L, 1); /* pop error msg */
-			/* only the function and lighty table should remain on the stack */
-			force_assert(lua_gettop(L) == 2);
+			/* only func, errfunc, and lighty table, should remain on stack */
+			force_assert(lua_gettop(L) == 3);
 
 			if (p->conf.stage != -1) { /* skip for response-start */
 				r->http_status = 500;
@@ -2403,8 +2391,8 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			result = HANDLER_FINISHED;
 	}
 	else {
-		/* we should have the function, the lighty table and the return value on the stack */
-		/*force_assert(lua_gettop(L) == 3);*/
+		/* should have func, errfunc, lighty table, and return value on stack */
+		/*force_assert(lua_gettop(L) == 4);*/
 
 		/*(luaL_optinteger might raise error, which we want to avoid)*/
 		/*lua_return_value = (int) luaL_optinteger(L, -1, -1);*/
