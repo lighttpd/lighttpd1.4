@@ -425,7 +425,7 @@ typedef struct {
 
 static const_buffer magnet_checkconstbuffer(lua_State *L, int idx) {
 	const_buffer cb;
-	if (!lua_isnil(L, idx))
+	if (!lua_isnoneornil(L, idx))
 		cb.ptr = luaL_checklstring(L, idx, &cb.len);
 	else {
 		cb.ptr = NULL;
@@ -826,7 +826,7 @@ static int magnet_secret_eq(lua_State *L) {
 }
 
 static int magnet_b64dec(lua_State *L, base64_charset dict) {
-    if (lua_isnil(L, -1)) {
+    if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
         return 1;
     }
@@ -845,7 +845,7 @@ static int magnet_b64dec(lua_State *L, base64_charset dict) {
 }
 
 static int magnet_b64enc(lua_State *L, base64_charset dict) {
-    if (lua_isnil(L, -1)) {
+    if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
         return 1;
     }
@@ -878,7 +878,7 @@ static int magnet_b64stdenc(lua_State *L) {
 }
 
 static int magnet_hexdec(lua_State *L) {
-    if (lua_isnil(L, -1)) {
+    if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
         return 1;
     }
@@ -897,7 +897,7 @@ static int magnet_hexdec(lua_State *L) {
 }
 
 static int magnet_hexenc(lua_State *L) {
-    if (lua_isnil(L, -1)) {
+    if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
         return 1;
     }
@@ -914,7 +914,7 @@ static int magnet_hexenc(lua_State *L) {
 }
 
 static int magnet_xmlenc(lua_State *L) {
-    if (lua_isnil(L, -1)) {
+    if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
         return 1;
     }
@@ -954,7 +954,7 @@ static int magnet_urldec(lua_State *L) {
     /* url-decode and replace non-printable chars with '_'
      * This function should not be used on query-string unless it is used on
      * portions of query-string after splitting on '&', replacing '+' w/ ' ' */
-    if (lua_isnil(L, -1)) {
+    if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
         return 1;
     }
@@ -976,7 +976,7 @@ static int magnet_urlenc(lua_State *L) {
      * ('?' is encoded, if present)
      *  caller must split string if '?' is part of query-string)
      * ('/' is not encoded; caller must encode if not path separator) */
-    if (lua_isnil(L, -1)) {
+    if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
         return 1;
     }
@@ -1007,7 +1007,7 @@ static int magnet_urldec_query(lua_State *L) {
      * (note: duplicated keys replace earlier values, but this interface returns
      *  an table useful for lookups, so this limitation is often acceptable) */
     lua_createtable(L, 0, 0);
-    if (lua_isnil(L, -1)) {
+    if (lua_isnoneornil(L, -1)) {
         return 1;
     }
     const_buffer s = magnet_checkconstbuffer(L, -1);
@@ -1115,7 +1115,7 @@ static int magnet_urlenc_normalize(lua_State *L) {
      * (burl_append() is not exposed here; caller might want to build
      *  url with lighty.c.urlenc() and lighty.c.urlenc_query(),
      *  then call lighty.c.urlenc_normalize()) */
-    if (lua_isnil(L, -1)) {
+    if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
         return 1;
     }
@@ -1147,7 +1147,7 @@ static int magnet_urlenc_normalize(lua_State *L) {
 
 static int magnet_fspath_simplify(lua_State *L) {
     /* simplify filesystem path */
-    if (lua_isnil(L, -1)) {
+    if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
         return 1;
     }
@@ -1174,7 +1174,7 @@ static const char * magnet_cookie_param_push(lua_State *L, const char *s) {
 
 static int magnet_cookie_tokens(lua_State *L) {
     lua_createtable(L, 0, 0);
-    if (lua_isnil(L, -1))
+    if (lua_isnoneornil(L, -1))
         return 1;
     const char *s = luaL_checkstring(L, -1);
     do {
@@ -1655,7 +1655,7 @@ static int magnet_env_set(lua_State *L) {
     if (NULL == dest)
         return luaL_error(L, "couldn't store '%s' in lighty.r.req_attr[]", key);
 
-    if (lua_isnil(L, 3)) {
+    if (lua_isnoneornil(L, 3)) {
         if (env_id==MAGNET_ENV_URI_QUERY || env_id==MAGNET_ENV_PHYSICAL_PATH)
             buffer_clear(dest);
         else
