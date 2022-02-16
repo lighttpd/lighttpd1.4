@@ -1914,14 +1914,15 @@ static int magnet_lighty_result_set(lua_State *L) {
 }
 
 
-static void magnet_copy_response_header(lua_State * const L, request_st * const r) {
-    if (lua_getfield_and_type(L, -1, "header") == LUA_TTABLE) {/*lighty.header*/
+static void magnet_copy_response_header(lua_State * const L, request_st * const r, const int lighty_table_ndx) {
+    if (lua_getfield_and_type(L, lighty_table_ndx, "header") == LUA_TTABLE) {
+        /* walk lighty.header */
         for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
             if (lua_isstring(L, -1) && lua_isstring(L, -2))
                 magnet_resphdr_set_kv(L, r);
         }
     }
-    lua_pop(L, 1); /* pop lighty.header */
+    /*lua_pop(L, 1);*/ /* pop lighty.header */ /* defer to later */
 }
 
 /**
@@ -2014,9 +2015,9 @@ static void magnet_attach_content_table(lua_State * const L, request_st * const 
 		}
 }
 
-static void magnet_attach_content(lua_State * const L, request_st * const r) {
-    if (lua_getfield_and_type(L, -1, "result") != LUA_TTABLE) {/*lighty.result*/
-        lua_pop(L, 1); /* pop nil lighty.result */
+static void magnet_attach_content(lua_State * const L, request_st * const r, const int lighty_table_ndx) {
+    if (lua_getfield_and_type(L, lighty_table_ndx, "result") != LUA_TTABLE) {
+        /*lua_pop(L, 1);*/ /* pop nil lighty.result */ /* defer to later */
         return;
     }
     switch (lua_getfield_and_type(L, -1, "content")) {/*lighty.result.content*/
@@ -2032,7 +2033,8 @@ static void magnet_attach_content(lua_State * const L, request_st * const r) {
           "lighty.content has to be a table");
         break;
     }
-    lua_pop(L, 2); /* pop lighty.result.content and lighty.result */
+    /* defer lua_pop() to later */
+    /*lua_pop(L, 2);*/ /* pop lighty.result.content and lighty.result */
 }
 
 static void magnet_mainenv_metatable(lua_State * const L) {
@@ -2263,30 +2265,31 @@ static void magnet_init_lighty_table(lua_State * const L) {
     /* lighty table (returned on stack) */
 }
 
-static void magnet_clear_table(lua_State * const L) {
-    for (int n = (int)lua_rawlen(L, -1); n; --n) {
+static void magnet_clear_table(lua_State * const L, int ndx) {
+    for (int n = (int)lua_rawlen(L, ndx < 0 ? ndx-- : ndx); n; --n) {
         lua_pushnil(L);
-        lua_rawseti(L, -2, n);
+        lua_rawseti(L, ndx, n);
     }
 }
 
-static void magnet_reset_lighty_table(lua_State * const L) {
+static void magnet_reset_lighty_table(lua_State * const L, const int lighty_table_ndx) {
     /* clear response tables (release mem if reusing lighty table) */
-    if (lua_getfield_and_type(L, -1, "result") == LUA_TTABLE) /*lighty.result*/
-        magnet_clear_table(L);
+    if (lua_getfield_and_type(L, lighty_table_ndx, "result") == LUA_TTABLE)
+        magnet_clear_table(L, -1); /*lighty.result*/
     else {
         lua_createtable(L, 0, 1);
-        lua_setfield(L, -3, "result");
+        lua_setfield(L, lighty_table_ndx, "result");
     }
-    lua_pop(L, 1);
 
-    if (lua_getfield_and_type(L, -1, "header") == LUA_TTABLE) /*lighty.header*/
-        magnet_clear_table(L);
+    if (lua_getfield_and_type(L, lighty_table_ndx, "header") == LUA_TTABLE)
+        magnet_clear_table(L, -1); /*lighty.header*/
     else {
         lua_createtable(L, 0, 0);
-        lua_setfield(L, -3, "header");
+        lua_setfield(L, lighty_table_ndx, "header");
     }
-    lua_pop(L, 1);
+
+    /* pop two tables (or nils) added by two lua_getfield_and_type() calls */
+    /*lua_pop(L, 2);*/ /* defer to later */
 }
 
 static int magnet_traceback(lua_State *L) {
@@ -2379,9 +2382,9 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 	if (0 != ret) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "lua_pcall(): %s", lua_tostring(L, -1));
-			lua_pop(L, 1); /* pop error msg */
+			/*lua_pop(L, 1);*/ /* pop error msg */ /* defer to later */
 			/* only func, errfunc, and lighty table, should remain on stack */
-			force_assert(lua_gettop(L) == 3);
+			/*force_assert(lua_gettop(L) == 3);*//* lua_pop() deferred, so +1 */
 
 			if (p->conf.stage != -1) { /* skip for response-start */
 				r->http_status = 500;
@@ -2406,16 +2409,16 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			  "lua_pcall(): unexpected non-integer return type: %s",
 			  luaL_typename(L, -1));
 		}
-		lua_pop(L, 1); /* pop return value */
+		/*lua_pop(L, 1);*/ /* pop return value */ /* defer to later */
 		/*force_assert(lua_istable(sc->L, -1));*/
 
-		magnet_copy_response_header(L, r);
+		magnet_copy_response_header(L, r, lighty_table_ndx);
 
 		if (lua_return_value >= 200) {
 			r->http_status = lua_return_value;
 			r->resp_body_finished = 1;
 			/*(note: body may already have been set via lighty.r.resp_body.*)*/
-			magnet_attach_content(L, r);
+			magnet_attach_content(L, r, lighty_table_ndx);
 			if (!chunkqueue_is_empty(&r->write_queue)) {
 				r->handler_module = p->self;
 			}
@@ -2450,7 +2453,9 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 		}
 
 	}
-	magnet_reset_lighty_table(L);
+	magnet_reset_lighty_table(L, lighty_table_ndx);
+	/* reset stack to have only func, errfunc, lighty table */
+	lua_settop(L, lighty_table_ndx); /*(handle deferred lua_pop()s)*/
 	return result;
 }
 
