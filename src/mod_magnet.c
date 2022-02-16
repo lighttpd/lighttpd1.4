@@ -2313,15 +2313,23 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 	lua_State * const L = sc->L;
 	const int func_ndx = 1;
 	const int errfunc_ndx = 2;
-	const int lighty_table_ndx = 3;
+	const int env_ndx = 3;
+	const int lighty_table_ndx = 4;
 
-	if (__builtin_expect( (lua_gettop(L) == 3), 1)) {
+	if (__builtin_expect( (lua_gettop(L) == 4), 1)) {
 		/*force_assert(lua_istable(L, -1));*//* lighty.* table */
 	}
 	else if (lua_isfunction(L, func_ndx)) {
 	        /*force_assert(lua_gettop(L) == 1);*/
 		lua_pushcfunction(L, magnet_traceback);/*errfunc*//* (sp += 1) */
-		/* insert lighty table at index 3 (lighty_table_ndx = 3) */
+		/* create empty table for script environment (reused)
+		 *   setmetatable({}, {__index = _G})
+		 *     if a function symbol is not defined in our env,
+		 *     __index will lookup in the global env. */
+		lua_createtable(L, 0, 1);                         /* (sp += 1) */
+		magnet_mainenv_metatable(L);                      /* (sp += 1) */
+		lua_setmetatable(L, -2);                          /* (sp -= 1) */
+		/* insert lighty table at index 4 (lighty_table_ndx = 4) */
 		magnet_init_lighty_table(L); /* lighty.*             (sp += 1) */
 	}
 	else {
@@ -2350,24 +2358,12 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
      #endif
 
 	/**
-	 * we want to create empty environment for our script
-	 *
-	 * setmetatable({}, {__index = _G})
-	 *
-	 * if a function symbol is not defined in our env, __index will lookup
-	 * in the global env.
-	 *
 	 * all variables created in the script-env will be thrown
 	 * away at the end of the script run.
 	 */
-	lua_createtable(L, 0, 1); /* my empty environment aka {}     (sp += 1) */
-
 	lua_pushvalue(L, lighty_table_ndx);                       /* (sp += 1) */
-	lua_setfield(L, -2, "lighty"); /* lighty.*                   (sp -= 1) */
-
-	magnet_mainenv_metatable(L);                              /* (sp += 1) */
-	lua_setmetatable(L, -2); /* setmetatable({}, {__index = _G}) (sp -= 1) */
-
+	lua_setfield(L, env_ndx, "lighty"); /* lighty.*              (sp -= 1) */
+	lua_pushvalue(L, env_ndx);                                /* (sp += 1) */
 	magnet_setfenv_mainfn(L, 1);                              /* (sp -= 1) */
 
 	/* pcall will destroy the func value, duplicate it */
@@ -2383,8 +2379,8 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "lua_pcall(): %s", lua_tostring(L, -1));
 			/*lua_pop(L, 1);*/ /* pop error msg */ /* defer to later */
-			/* only func, errfunc, and lighty table, should remain on stack */
-			/*force_assert(lua_gettop(L) == 3);*//* lua_pop() deferred, so +1 */
+			/* only func, errfunc, env, lighty table should remain on stack */
+			/*force_assert(lua_gettop(L) == 4);*//* lua_pop() deferred, so +1 */
 
 			if (p->conf.stage != -1) { /* skip for response-start */
 				r->http_status = 500;
@@ -2394,8 +2390,8 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			result = HANDLER_FINISHED;
 	}
 	else {
-		/* should have func, errfunc, lighty table, and return value on stack */
-		/*force_assert(lua_gettop(L) == 4);*/
+		/* should have func, errfunc, env, lighty table, return value on stack*/
+		/*force_assert(lua_gettop(L) == 5);*/
 
 		/*(luaL_optinteger might raise error, which we want to avoid)*/
 		/*lua_return_value = (int) luaL_optinteger(L, -1, -1);*/
@@ -2453,8 +2449,9 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 		}
 
 	}
+	magnet_clear_table(L, env_ndx);
 	magnet_reset_lighty_table(L, lighty_table_ndx);
-	/* reset stack to have only func, errfunc, lighty table */
+	/* reset stack to have only func, errfunc, env, lighty table */
 	lua_settop(L, lighty_table_ndx); /*(handle deferred lua_pop()s)*/
 	return result;
 }
