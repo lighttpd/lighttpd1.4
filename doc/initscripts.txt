@@ -29,13 +29,13 @@ Rather than attempting to maintain scripts for an unknown number of distros,
 here are links to a few, which can be used as examples.
 
 Arch:
-https://git.archlinux.org/svntogit/packages.git/tree/trunk?h=packages/lighttpd
+https://github.com/archlinux/svntogit-packages/tree/packages/lighttpd/trunk
 
 Debian:
-https://anonscm.debian.org/cgit/pkg-lighttpd/lighttpd.git/tree/debian
+https://salsa.debian.org/debian/lighttpd
 
 Fedora:
-http://pkgs.fedoraproject.org/cgit/rpms/lighttpd.git/tree/
+https://src.fedoraproject.org/rpms/lighttpd/tree/rawhide
 
 Gentoo:
 https://gitweb.gentoo.org/repo/gentoo.git/tree/www-servers/lighttpd/files
