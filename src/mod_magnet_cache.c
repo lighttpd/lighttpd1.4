@@ -130,12 +130,12 @@ lua_State *script_cache_check_script(script * const sc, int etag_flags)
     if (lua_gettop(sc->L) == 0)
         return script_cache_load_script(sc, etag_flags);
 
-    /*force_assert(lua_gettop(sc->L) == 2);*/
-    /*force_assert(lua_isfunction(sc->L, -2));*/
+    /*force_assert(lua_gettop(sc->L) == 4);*/
+    /*force_assert(lua_isfunction(sc->L, 1));*/
 
     stat_cache_entry * const sce = stat_cache_get_entry(&sc->name);
     if (NULL == sce) {
-        lua_pop(sc->L, 2); /* pop the old function and lighty table */
+        lua_settop(sc->L, 0); /* pop the old function; clear stack */
         return script_cache_load_script(sc, etag_flags);
     }
 
@@ -144,7 +144,7 @@ lua_State *script_cache_check_script(script * const sc, int etag_flags)
         if (0 == etag_flags)
             return sc->L;
         /* the etag is outdated, reload the function */
-        lua_pop(sc->L, 2); /* pop the old function and lighty table */
+        lua_settop(sc->L, 0); /* pop the old function; clear stack */
         return script_cache_load_script(sc, etag_flags);
     }
 
