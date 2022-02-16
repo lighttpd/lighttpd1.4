@@ -1164,9 +1164,20 @@ static int magnet_fspath_simplify(lua_State *L) {
     return 1;
 }
 
-static const char * magnet_cookie_param_push(lua_State *L, const char *s) {
+static const char * magnet_cookie_param_push_token(lua_State *L, const char *s) {
     const char *b = s;
-    while (    *s!=';' && *s!=' ' && *s!='\t' && *s!='\r' && *s!='\n' && *s)
+    while (*s!='=' /*(note: not strictly rejecting all 'separators')*/
+            && *s!=';' && *s!=' ' && *s!='\t' && *s!='\r' && *s!='\n' && *s)
+        ++s;
+    lua_pushlstring(L, b, (size_t)(s-b));
+    return s;
+}
+
+static const char * magnet_cookie_param_push_quoted_string(lua_State *L, const char *s) {
+    const char *b = s;
+    /*force_assert(*s == '"');*/
+    do { ++s; } while (*s && *s != '"' && (*s != '\\' || *++s));
+    if (*s == '"') /*(else invalid quoted-string, but handle anyway)*/
         ++s;
     lua_pushlstring(L, b, (size_t)(s-b));
     return s;
@@ -1174,26 +1185,29 @@ static const char * magnet_cookie_param_push(lua_State *L, const char *s) {
 
 static int magnet_cookie_tokens(lua_State *L) {
     lua_createtable(L, 0, 0);
-    if (lua_isnoneornil(L, -1))
+    if (lua_isnoneornil(L, 1))
         return 1;
-    const char *s = luaL_checkstring(L, -1);
+    const char *s = luaL_checkstring(L, 1);
     do {
         while (*s==';' || *s==' ' || *s=='\t' || *s=='\r' || *s=='\n')
             ++s;
         if (*s == '\0') break;
-        s = magnet_cookie_param_push(L, s);
+        s = magnet_cookie_param_push_token(L, s);
         while (           *s==' ' || *s=='\t' || *s=='\r' || *s=='\n')
             ++s;
         if (*s == '=') {
-            while (       *s==' ' || *s=='\t' || *s=='\r' || *s=='\n')
+            do {
                 ++s;
+            } while (     *s==' ' || *s=='\t' || *s=='\r' || *s=='\n');
             if (*s==';' || *s=='\0')
-                lua_pushnil(L);
+                lua_pushlstring(L, "", 0); /*(lua_pushnil() would delete key)*/
+            else if (*s != '"')
+                s = magnet_cookie_param_push_token(L, s);
             else
-                s = magnet_cookie_param_push(L, s);
+                s = magnet_cookie_param_push_quoted_string(L, s);
         }
         else {
-            lua_pushnil(L);
+            lua_pushlstring(L, "", 0); /*(lua_pushnil() would delete key)*/
         }
         lua_settable(L, -3);
         while (*s!=';' && *s!='\0') ++s; /* ignore/skip stray tokens */
