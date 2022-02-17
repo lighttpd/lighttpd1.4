@@ -935,6 +935,61 @@ static int magnet_hexenc(lua_State *L) {
     return 1; /* uppercase hex string; use lua s = s:lower() to lowercase */
 }
 
+static int magnet_quoteddec(lua_State *L) {
+    if (lua_isnoneornil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len || s.ptr[0] != '"') {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = magnet_tmpbuf_acquire(L);
+    char *p = buffer_string_prepare_append(b, s.len);/*(s.len-1 is sufficient)*/
+    size_t i = 1;
+    for (; i < s.len && s.ptr[i] != '"'; ++i) {
+        if (s.ptr[i] == '\\') {
+            if (i+2 < s.len)
+                ++i;
+            else
+                break;
+        }
+        *p++ = s.ptr[i];
+    }
+    int rc = (i == s.len-1 && s.ptr[i] == '"');
+    if (rc)
+        lua_pushlstring(L, b->ptr, (size_t)(p - b->ptr));
+    magnet_tmpbuf_release(b);
+    return rc; /* 1 on success (pushed string); 0 on failure (no value) */
+}
+
+static int magnet_quotedenc(lua_State *L) {
+    if (lua_isnoneornil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = magnet_tmpbuf_acquire(L);
+    char *p = buffer_string_prepare_append(b, 2+(s.len << 1));
+    *p++ = '"';
+    for (size_t i = 0; i < s.len; ++i) {
+        /*(note: not strictly checking for TEXT)*/
+        /*(TEXT: any OCTET except CTLs but including LWS)*/
+        if (s.ptr[i] == '"' || s.ptr[i] == '\\')
+            *p++ = '\\';
+        *p++ = s.ptr[i];
+    }
+    *p++ = '"';
+    lua_pushlstring(L, b->ptr, (size_t)(p - b->ptr));
+    magnet_tmpbuf_release(b);
+    return 1;
+}
+
 static int magnet_xmlenc(lua_State *L) {
     if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
@@ -2272,6 +2327,8 @@ static void magnet_init_lighty_table(lua_State * const L) {
      ,{ "fspath_simplify",  magnet_fspath_simplify } /* simplify fspath */
      ,{ "cookie_tokens",    magnet_cookie_tokens } /* parse cookie tokens */
      ,{ "readdir",          magnet_readdir } /* dir walk */
+     ,{ "quoteddec",        magnet_quoteddec } /* quoted-string decode */
+     ,{ "quotedenc",        magnet_quotedenc } /* quoted-string encode */
      ,{ NULL, NULL }
     };
 
