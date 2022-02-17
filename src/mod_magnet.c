@@ -1005,38 +1005,37 @@ static int magnet_urldec_query(lua_State *L) {
      * and store components in table
      * (string input should be query-string without leading '?')
      * (note: duplicated keys replace earlier values, but this interface returns
-     *  an table useful for lookups, so this limitation is often acceptable) */
+     *  a table useful for lookups, so this limitation is often acceptable) */
     lua_createtable(L, 0, 0);
-    if (lua_isnoneornil(L, -1)) {
+    if (lua_isnoneornil(L, 1)) {
         return 1;
     }
-    const_buffer s = magnet_checkconstbuffer(L, -1);
+    const_buffer s = magnet_checkconstbuffer(L, 1);
     if (0 == s.len) {
         return 1;
     }
-    buffer * const k = chunk_buffer_acquire();
-    buffer * const v = chunk_buffer_acquire();
+    buffer * const b = chunk_buffer_acquire();
     for (const char *qs = s.ptr, *eq, *amp; *qs; qs = amp+1) {
         for (amp = qs, eq = NULL; *amp && *amp != '&'; ++amp) {
             if (*amp == '=' && !eq) eq = amp;
         }
         if (amp != qs) {
             if (eq) {
-                magnet_urldec_query_part(k, qs, (size_t)(eq - qs));
-                magnet_urldec_query_part(v, eq+1, (size_t)(amp - (eq+1)));
+                magnet_urldec_query_part(b, qs, (size_t)(eq - qs));
+                lua_pushlstring(L, BUF_PTR_LEN(b));
+                magnet_urldec_query_part(b, eq+1, (size_t)(amp - (eq+1)));
+                lua_pushlstring(L, BUF_PTR_LEN(b));
             }
             else {
-                magnet_urldec_query_part(k, qs, (size_t)(amp - qs));
-                lua_pushnil(L);
+                magnet_urldec_query_part(b, qs, (size_t)(amp - qs));
+                lua_pushlstring(L, BUF_PTR_LEN(b));
+                lua_pushlstring(L, "", 0); /*(lua_pushnil() would delete key)*/
             }
-            lua_pushlstring(L, BUF_PTR_LEN(k));
-            lua_pushlstring(L, BUF_PTR_LEN(v));
             lua_rawset(L, -3);
         }
         if (*amp == '\0') break;
     }
-    chunk_buffer_release(k);
-    chunk_buffer_release(v);
+    chunk_buffer_release(b);
     return 1;
 }
 
