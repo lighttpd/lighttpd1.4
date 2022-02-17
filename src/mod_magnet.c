@@ -418,6 +418,28 @@ static request_st * magnet_get_request(lua_State *L) {
      #endif
 }
 
+static buffer * magnet_tmpbuf_acquire(lua_State *L)
+{
+  #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
+    UNUSED(L);
+    return chunk_buffer_acquire();
+  #else
+    request_st * const r = magnet_get_request(L);
+    buffer * const tb = r->tmp_buf;
+    buffer_clear(tb);
+    return tb;
+  #endif
+}
+
+static void magnet_tmpbuf_release(buffer *b)
+{
+  #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
+    chunk_buffer_release(b);
+  #else
+    UNUSED(b);
+  #endif
+}
+
 typedef struct {
 	const char *ptr;
 	size_t len;
@@ -835,12 +857,12 @@ static int magnet_b64dec(lua_State *L, base64_charset dict) {
         lua_pushvalue(L, -1);
         return 1;
     }
-    buffer * const b = chunk_buffer_acquire();
+    buffer * const b = magnet_tmpbuf_acquire(L);
     if (buffer_append_base64_decode(b, s.ptr, s.len, dict))
         lua_pushlstring(L, BUF_PTR_LEN(b));
     else
         lua_pushnil(L);
-    chunk_buffer_release(b);
+    magnet_tmpbuf_release(b);
     return 1;
 }
 
@@ -854,10 +876,10 @@ static int magnet_b64enc(lua_State *L, base64_charset dict) {
         lua_pushvalue(L, -1);
         return 1;
     }
-    buffer * const b = chunk_buffer_acquire();
+    buffer * const b = magnet_tmpbuf_acquire(L);
     buffer_append_base64_encode_no_padding(b, (uint8_t *)s.ptr, s.len, dict);
     lua_pushlstring(L, BUF_PTR_LEN(b));
-    chunk_buffer_release(b);
+    magnet_tmpbuf_release(b);
     return 1;
 }
 
@@ -887,12 +909,12 @@ static int magnet_hexdec(lua_State *L) {
         lua_pushvalue(L, -1);
         return 1;
     }
-    buffer * const b = chunk_buffer_acquire();
+    buffer * const b = magnet_tmpbuf_acquire(L);
     uint8_t * const p = (uint8_t *)buffer_extend(b, s.len >> 1);
     int rc = li_hex2bin(p, s.len >> 1, s.ptr, s.len);
     if (0 == rc)
         lua_pushlstring(L, BUF_PTR_LEN(b));
-    chunk_buffer_release(b);
+    magnet_tmpbuf_release(b);
     return rc+1; /* 1 on success (pushed string); 0 on failure (no value) */
 }
 
@@ -906,10 +928,10 @@ static int magnet_hexenc(lua_State *L) {
         lua_pushvalue(L, -1);
         return 1;
     }
-    buffer * const b = chunk_buffer_acquire();
+    buffer * const b = magnet_tmpbuf_acquire(L);
     buffer_append_string_encoded_hex_uc(b, s.ptr, s.len);
     lua_pushlstring(L, BUF_PTR_LEN(b));
-    chunk_buffer_release(b);
+    magnet_tmpbuf_release(b);
     return 1; /* uppercase hex string; use lua s = s:lower() to lowercase */
 }
 
@@ -923,7 +945,7 @@ static int magnet_xmlenc(lua_State *L) {
         lua_pushvalue(L, -1);
         return 1;
     }
-    buffer * const b = chunk_buffer_acquire();
+    buffer * const b = magnet_tmpbuf_acquire(L);
   #if 1
     buffer_append_string_encoded(b, s.ptr, s.len, ENCODING_MINIMAL_XML);
   #else
@@ -946,7 +968,7 @@ static int magnet_xmlenc(lua_State *L) {
         buffer_append_string_len(b, s.ptr+n, i-n);
   #endif
     lua_pushlstring(L, BUF_PTR_LEN(b));
-    chunk_buffer_release(b);
+    magnet_tmpbuf_release(b);
     return 1;
 }
 
@@ -963,11 +985,11 @@ static int magnet_urldec(lua_State *L) {
         lua_pushvalue(L, -1);
         return 1;
     }
-    buffer * const b = chunk_buffer_acquire();
+    buffer * const b = magnet_tmpbuf_acquire(L);
     buffer_copy_string_len(b, s.ptr, s.len);
     buffer_urldecode_path(b);
     lua_pushlstring(L, BUF_PTR_LEN(b));
-    chunk_buffer_release(b);
+    magnet_tmpbuf_release(b);
     return 1;
 }
 
@@ -985,10 +1007,10 @@ static int magnet_urlenc(lua_State *L) {
         lua_pushvalue(L, -1);
         return 1;
     }
-    buffer * const b = chunk_buffer_acquire();
+    buffer * const b = magnet_tmpbuf_acquire(L);
     buffer_append_string_encoded(b, s.ptr, s.len, ENCODING_REL_URI);
     lua_pushlstring(L, BUF_PTR_LEN(b));
-    chunk_buffer_release(b);
+    magnet_tmpbuf_release(b);
     return 1;
 }
 
@@ -1014,7 +1036,7 @@ static int magnet_urldec_query(lua_State *L) {
     if (0 == s.len) {
         return 1;
     }
-    buffer * const b = chunk_buffer_acquire();
+    buffer * const b = magnet_tmpbuf_acquire(L);
     for (const char *qs = s.ptr, *eq, *amp; *qs; qs = amp+1) {
         for (amp = qs, eq = NULL; *amp && *amp != '&'; ++amp) {
             if (*amp == '=' && !eq) eq = amp;
@@ -1035,7 +1057,7 @@ static int magnet_urldec_query(lua_State *L) {
         }
         if (*amp == '\0') break;
     }
-    chunk_buffer_release(b);
+    magnet_tmpbuf_release(b);
     return 1;
 }
 
@@ -1085,7 +1107,7 @@ static int magnet_urlenc_query(lua_State *L) {
         lua_pushlstring(L, "", 0);
         return 1;
     }
-    buffer * const b = chunk_buffer_acquire();
+    buffer * const b = magnet_tmpbuf_acquire(L);
     const_buffer s;
     for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
         if (lua_isstring(L, -2)) {
@@ -1101,7 +1123,7 @@ static int magnet_urlenc_query(lua_State *L) {
         }
     }
     lua_pushlstring(L, BUF_PTR_LEN(b));
-    chunk_buffer_release(b);
+    magnet_tmpbuf_release(b);
     return 1;
 }
 
@@ -1123,7 +1145,7 @@ static int magnet_urlenc_normalize(lua_State *L) {
         lua_pushvalue(L, -1);
         return 1;
     }
-    buffer * const b = chunk_buffer_acquire();
+    buffer * const b = magnet_tmpbuf_acquire(L);
     buffer * const t = chunk_buffer_acquire();
   #if 0 /*(?maybe have different interface to use config policy?)*/
     request_st * const r = magnet_get_request(L);
@@ -1140,7 +1162,7 @@ static int magnet_urlenc_normalize(lua_State *L) {
     burl_normalize(b, t, flags);
     lua_pushlstring(L, BUF_PTR_LEN(b));
     chunk_buffer_release(t);
-    chunk_buffer_release(b);
+    magnet_tmpbuf_release(b);
     return 1;
 }
 
@@ -1155,11 +1177,11 @@ static int magnet_fspath_simplify(lua_State *L) {
         lua_pushvalue(L, -1);
         return 1;
     }
-    buffer * const b = chunk_buffer_acquire();
+    buffer * const b = magnet_tmpbuf_acquire(L);
     buffer_copy_string_len(b, s.ptr, s.len);
     buffer_path_simplify(b);
     lua_pushlstring(L, BUF_PTR_LEN(b));
-    chunk_buffer_release(b);
+    magnet_tmpbuf_release(b);
     return 1;
 }
 
