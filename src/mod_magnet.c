@@ -1228,8 +1228,7 @@ static int magnet_reqhdr_get(lua_State *L) {
     const char * const k = luaL_checklstring(L, 2, &klen);
     request_st * const r = magnet_get_request(L);
     const int id = http_header_hkey_get(k, (uint32_t)klen);
-    const buffer * const vb = http_header_request_get(r, id, k, klen);
-    magnet_push_buffer(L, NULL != vb ? vb : NULL);
+    magnet_push_buffer(L, http_header_request_get(r, id, k, klen));
     return 1;
 }
 
@@ -1310,8 +1309,7 @@ static int magnet_resphdr_get(lua_State *L) {
     const char * const k = luaL_checklstring(L, 2, &klen);
     request_st * const r = magnet_get_request(L);
     const int id = http_header_hkey_get(k, (uint32_t)klen);
-    const buffer * const vb = http_header_response_get(r, id, k, klen);
-    magnet_push_buffer(L, NULL != vb ? vb : NULL);
+    magnet_push_buffer(L, http_header_response_get(r, id, k, klen));
     return 1;
 }
 
@@ -1735,8 +1733,7 @@ static int magnet_envvar_get(lua_State *L) {
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
     request_st * const r = magnet_get_request(L);
-    const buffer * const vb = http_header_env_get(r, k, klen);
-    magnet_push_buffer(L, NULL != vb ? vb : NULL);
+    magnet_push_buffer(L, http_header_env_get(r, k, klen));
     return 1;
 }
 
