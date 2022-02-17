@@ -1899,9 +1899,9 @@ static int magnet_lighty_result_get(lua_State *L) {
     if (lua_isnil(L, -1)) {
         const_buffer k = magnet_checkconstbuffer(L, 2);
         if (k.len == 7 && 0 == memcmp(k.ptr, "content", 7)) {
-            lua_pop(L, 1); /* pop nil */
             lua_createtable(L, 0, 0); /* create "content" table on demand */
-            lua_pushvalue(L, -1);
+            lua_pushvalue(L, 2);      /* k: "content" */
+            lua_pushvalue(L, -2);     /* v: table */
             lua_rawset(L, 3); /* set in "lighty.result" */
         }
     }
