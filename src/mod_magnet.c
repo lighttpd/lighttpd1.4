@@ -1157,8 +1157,7 @@ static int magnet_urlenc_query(lua_State *L) {
     /* encode pairs in lua table into query string
      * (caller should add leading '?' or '&' when appending to full URL)
      * (caller should skip empty table if appending to existing query-string) */
-    const int n = lua_istable(L, 1) ? (int)lua_rawlen(L, 1) : 0;
-    if (n == 0) {
+    if (!lua_istable(L, 1)) {
         lua_pushlstring(L, "", 0);
         return 1;
     }
@@ -2004,9 +2003,14 @@ static int magnet_lighty_result_set(lua_State *L) {
 static void magnet_copy_response_header(lua_State * const L, request_st * const r, const int lighty_table_ndx) {
     if (lua_getfield_and_type(L, lighty_table_ndx, "header") == LUA_TTABLE) {
         /* walk lighty.header */
-        for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
+        for (lua_pushnil(L); lua_next(L, -2); ) {
             if (lua_isstring(L, -1) && lua_isstring(L, -2))
                 magnet_resphdr_set_kv(L, r);
+            /* unset value after use while walking table entries */
+            lua_pop(L, 1);
+            lua_pushvalue(L, -1);
+            lua_pushnil(L);
+            lua_rawset(L, -4);
         }
     }
     /*lua_pop(L, 1);*/ /* pop lighty.header */ /* defer to later */
@@ -2114,6 +2118,9 @@ static void magnet_attach_content(lua_State * const L, request_st * const r, con
         /* content found and is a table */
         http_response_body_clear(r, 0);
         magnet_attach_content_table(L, r);
+        /* assign nil to content to remove from "result" table */
+        lua_pushnil(L);
+        lua_setfield(L, -3, "content");
         break;
       default:
         log_error(r->conf.errh, __FILE__, __LINE__,
@@ -2355,9 +2362,15 @@ static void magnet_init_lighty_table(lua_State * const L) {
 }
 
 static void magnet_clear_table(lua_State * const L, int ndx) {
-    for (int n = (int)lua_rawlen(L, ndx < 0 ? ndx-- : ndx); n; --n) {
+    /*(avoid lua_absindex() func call since expecting empty tables for legacy
+     * interfaces to lighty.header and lighty.content, though not script-env)*/
+    /*ndx = lua_absindex(ndx);*//*(lua 5.2+)*/
+    if (ndx < 0) --ndx;
+    for (lua_pushnil(L); lua_next(L, ndx); ) {
+        lua_pop(L, 1);
+        lua_pushvalue(L, -1);
         lua_pushnil(L);
-        lua_rawseti(L, ndx, n);
+        lua_rawset(L, ndx < 0 ? ndx - 2 : ndx);
     }
 }
 
