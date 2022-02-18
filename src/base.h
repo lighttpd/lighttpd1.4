@@ -178,6 +178,8 @@ struct server {
 
 	/* members used at start-up or rarely used */
 
+	handler_t (* plugins_request_reset)(request_st *r);/*(for cgi.local-redir)*/
+
 	server_config srvconf;
 	void *config_data_base;
 

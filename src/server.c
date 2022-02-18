@@ -321,6 +321,7 @@ static server *server_init(void) {
 	config_init(srv);
 
 	srv->request_env = plugins_call_handle_request_env;
+	srv->plugins_request_reset = plugins_call_handle_request_reset;
 
 	srv->loadavg[0] = 0.0;
 	srv->loadavg[1] = 0.0;

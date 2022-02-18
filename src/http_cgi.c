@@ -81,7 +81,7 @@ http_cgi_local_redir (request_st * const r)
 
         /*(caller must reset request as follows)*/
         /*http_response_reset(r);*/ /*(sets r->http_status = 0)*/
-        /*plugins_call_handle_request_reset(r);*/
+        /*r->con->srv->plugins_request_reset(r);*/
 
         return HANDLER_COMEBACK;
     }

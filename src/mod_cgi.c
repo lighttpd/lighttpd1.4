@@ -555,7 +555,7 @@ static handler_t cgi_local_redir(request_st * const r, handler_ctx * const hctx)
     buffer_clear(hctx->response);
     chunk_buffer_yield(hctx->response);
     http_response_reset(r); /*(includes r->http_status = 0)*/
-    plugins_call_handle_request_reset(r);
+    r->con->srv->plugins_request_reset(r);
     /*cgi_connection_close(hctx);*//*(already cleaned up and hctx is now invalid)*/
     return HANDLER_COMEBACK;
 }
