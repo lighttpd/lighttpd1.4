@@ -188,4 +188,21 @@ __attribute_cold__
 __attribute_pure__
 int32_t config_feature_int (const server *srv, const char *feature, int32_t default_value);
 
+
+/**
+ * The status array can carry all the status information you want
+ * the key to the array is <module-prefix>.<name>
+ * and the values are counters
+ *
+ * example:
+ *   fastcgi.backends        = 10
+ *   fastcgi.active-backends = 6
+ *   fastcgi.backend.<key>.load = 24
+ *   fastcgi.backend.<key>....
+ *
+ *   fastcgi.backend.<key>.disconnects = ...
+ */
+extern array plugin_stats;
+
+
 #endif

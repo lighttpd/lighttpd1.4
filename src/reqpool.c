@@ -13,7 +13,7 @@
 #include "base.h"
 #include "buffer.h"
 #include "chunk.h"
-#include "plugin.h"
+#include "plugins.h"
 #include "plugin_config.h"
 #include "request.h"
 #include "response.h"

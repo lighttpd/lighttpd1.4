@@ -859,7 +859,7 @@ set(COMMON_SRC
 	base64.c buffer.c burl.c log.c
 	http_header.c http_kv.c keyvalue.c chunk.c
 	http_chunk.c fdevent.c fdevent_fdnode.c gw_backend.c
-	stat_cache.c plugin.c http_etag.c array.c
+	stat_cache.c http_etag.c array.c
 	algo_md5.c algo_sha1.c algo_splaytree.c
 	configfile-glue.c
 	http-header-glue.c
@@ -896,6 +896,7 @@ add_executable(lighttpd
 	connections.c
 	h2.c
 	reqpool.c
+	plugin.c
 	sock_addr_cache.c
 	ls-hpack/lshpack.c
 	algo_xxhash.c

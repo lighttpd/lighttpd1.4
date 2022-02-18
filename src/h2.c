@@ -2544,7 +2544,7 @@ h2_send_end_stream (request_st * const r, connection * const con)
  */
 #include "base64.h"
 #include "chunk.h"
-#include "plugin.h"
+#include "plugins.h"
 #include "plugin_config.h"
 #include "reqpool.h"
 

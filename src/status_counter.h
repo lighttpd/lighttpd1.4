@@ -17,7 +17,7 @@ void status_counter_set(const char *s, size_t len, int val);
 /* inline status counter routines */
 
 #include "array.h"
-#include "plugin.h"
+#include "plugin_config.h"
 
 static inline
 int *status_counter_get_counter(const char *s, size_t len) {

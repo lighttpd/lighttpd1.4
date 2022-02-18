@@ -13,6 +13,8 @@
 #include <string.h>
 #include <stdlib.h>     /* strtol */
 
+array plugin_stats; /* global */
+
 /**
  * like all glue code this file contains functions which
  * are the external interface of lighttpd. The functions

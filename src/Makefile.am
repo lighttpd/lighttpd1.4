@@ -51,7 +51,7 @@ CLEANFILES = versionstamp.h versionstamp.h.tmp lemon$(BUILD_EXEEXT)
 common_src=base64.c buffer.c burl.c log.c \
 	http_header.c http_kv.c keyvalue.c chunk.c  \
 	http_chunk.c fdevent.c fdevent_fdnode.c gw_backend.c \
-	stat_cache.c plugin.c http_etag.c array.c \
+	stat_cache.c http_etag.c array.c \
 	algo_md5.c algo_sha1.c algo_splaytree.c \
 	configfile-glue.c \
 	http-header-glue.c \
@@ -66,6 +66,7 @@ common_src=base64.c buffer.c burl.c log.c \
 	ck.c
 
 src = server.c response.c connections.c h2.c reqpool.c \
+	plugin.c \
 	sock_addr_cache.c \
 	network.c \
 	network_write.c \
@@ -411,7 +412,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	http_cgi.h http_date.h \
 	http_header.h http_range.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
-	plugin.h plugin_config.h \
+	plugin.h plugins.h plugin_config.h \
 	http_etag.h array.h vector.h \
 	fdevent_impl.h network_write.h configfile.h \
 	sock_addr_cache.h \

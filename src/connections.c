@@ -17,6 +17,7 @@
 #include "stat_cache.h"
 
 #include "plugin.h"
+#include "plugins.h"
 
 #include "sock_addr_cache.h"
 

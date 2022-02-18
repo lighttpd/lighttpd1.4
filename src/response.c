@@ -15,6 +15,7 @@
 #include "http_range.h"
 
 #include "plugin.h"
+#include "plugins.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>

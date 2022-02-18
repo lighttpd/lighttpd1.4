@@ -1,5 +1,6 @@
 #include "first.h"
 
+#include "plugins.h"
 #include "plugin.h"
 #include "base.h"
 #include "array.h"
@@ -7,8 +8,6 @@
 
 #include <string.h>
 #include <stdlib.h>
-
-array plugin_stats; /* global */
 
 #ifdef HAVE_VALGRIND_VALGRIND_H
 # include <valgrind/valgrind.h>
