@@ -1846,8 +1846,10 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s);
  * but does not provide most other openssl 1.1.0+ interfaces
  * and get_dh2048() might not be necessary if wolfSSL defines
  * HAVE_TLS_EXTENSIONS HAVE_DH_DEFAULT_PARAMS HAVE_FFDHE HAVE_SUPPORTED_CURVES*/
+#ifndef DH_set0_pqg /*(added in wolfssl v5.0.0)*/
 #define DH_set0_pqg(dh, dh_p, NULL, dh_g) \
         ((dh)->p = (dh_p), (dh)->g = (dh_g), (dh_p) != NULL && (dh_g) != NULL)
+#endif
 /* https://tools.ietf.org/html/rfc7919#appendix-A.1
  * A.1.  ffdhe2048
  *
