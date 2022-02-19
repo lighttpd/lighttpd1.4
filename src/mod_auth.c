@@ -392,12 +392,12 @@ static int mod_auth_require_parse (http_auth_require_t * const require, const bu
           case 4:
             if (0 == memcmp(str, CONST_STR_LEN("user"))) {
                 /*("user=" is 5)*/
-                array_set_key_value(&require->user, str+5, len-5, CONST_STR_LEN(""));
+                array_insert_value(&require->user, str+5, len-5);
                 continue;
             }
             else if (0 == memcmp(str, CONST_STR_LEN("host"))) {
                 /*("host=" is 5)*/
-                array_set_key_value(&require->host, str+5, len-5, CONST_STR_LEN(""));
+                array_insert_value(&require->host, str+5, len-5);
                 log_error(errh, __FILE__, __LINE__,
                   "warning parsing auth.require 'require' field: "
                   "'host' not implemented; field value: %s", b->ptr);
@@ -407,7 +407,7 @@ static int mod_auth_require_parse (http_auth_require_t * const require, const bu
           case 5:
             if (0 == memcmp(str, CONST_STR_LEN("group"))) {
                 /*("group=" is 6)*/
-                array_set_key_value(&require->group, str+6, len-6, CONST_STR_LEN(""));
+                array_insert_value(&require->group, str+6, len-6);
               #if 0/*(supported by mod_authn_ldap, but not all other backends)*/
                 log_error(errh, __FILE__, __LINE__,
                   "warning parsing auth.require 'require' field: "

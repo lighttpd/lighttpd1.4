@@ -87,9 +87,8 @@ __attribute_pure__
 static int http_auth_array_contains (const array * const a, const char * const k, const size_t klen)
 {
     for (size_t i = 0, used = a->used; i < used; ++i) {
-        if (buffer_is_equal_string(&a->data[i]->key, k, klen)) {
+        if (buffer_eq_slen(&((data_string *)a->data[i])->value, k, klen))
             return 1;
-        }
     }
     return 0;
 }
