@@ -3,6 +3,62 @@
 NEWS
 ====
 
+- 1.4.65 -
+  * [build] meson: fix typo in variable name
+  * [build] autoconf: report if building with zstd
+  * [build] meson -Dlua_version=... to specify lua ver
+  * [core] avoid CCRandomGenerateBytes on MacOS <10.12 (fixes #3140)
+  * [core] use diff var name w/ CCRandomGenerateBytes (fixes #3141)
+  * [core] parse conf cmds with SHELL or /bin/sh
+  * [core] fix HMAC with openssl 3.0
+  * [mod_webdav] no COPYFILE_CLONE_FORCE on OSX <10.12 (fixes #3142)
+  * [mod_deflate] fix to return 304 with If-None-Match (fixes #3143)
+  * [core] Illumos epoll incompatible w/ lighttpd impl
+  * [core] feature flag to allow Range w/ HTTP/1.0
+  * [mod_mbedtls] set usekeysize for mbedtls 3.2.0+
+  * [mod_deflate] collect mmap code
+  * [mod_deflate] prototype using libdeflate w/ mmap
+  * [mod_deflate] --with-libdeflate to use libdeflate
+  * [mod_deflate] mark input bytes const
+  * [core] sys-setjmp.[ch]
+  * [mod_magnet] check lighty.result.content b4 setjmp
+  * [core] include guard consistency in sys-time.h
+  * [core] network_write_file_chunk_remap separate fn
+  * [multiple] use new sys_setjmp_eval3() interface
+  * [multiple] pedantic chunk.c checks for 0-len chunk
+  * [multiple] shared code for struct chunk and mmap
+  * [mod_deflate] use pread if available
+  * [mod_deflate] improve loop compressing file chunk
+  * [core] prep server_tag at startup for h2 resp hdr
+  * [mod_magnet] defer req_env init unless needed
+  * [mod_magnet] reset after error attaching content
+  * [mod_magnet] lua_tointegerx() avoids raising error
+  * [mod_mbedtls] use newer mbedtls 3.2.0+ interfaces
+  * [mod_magnet] adjust hot path for more inlining
+  * [mod_magnet] collect chk for magnet lua_State init
+  * [mod_magnet] use type returned from lua_getfield()
+  * [core] chunk_file_pread() to wrap pread()
+  * [core] disable keep-alive if forcing HTTP/1.0 resp
+  * [mod_magnet] use lua_getextraspace() to store r
+  * [core] fall back to getauxval(AT_RANDOM), if avail
+  * [mod_magnet] keep message handler on stack
+  * [doc] update external links
+  * [mod_magnet] pass lighty table index, defer pops
+  * [mod_magnet] clear and reuse script-env table
+  * [mod_magnet] clear stack when reloading script
+  * [mod_magnet] use lua_isnoneornil() in interfaces
+  * [mod_magnet] fix lighty.c.cookie_tokens()
+  * [mod_magnet] fix lighty.c.urldec_query()
+  * [mod_magnet] remove duplicated NULL checks
+  * [mod_magnet] adjust magnet_lighty_result_get()
+  * [mod_magnet] magnet_tmpbuf_acquire(),release()
+  * [mod_magnet] lighty.c.quotedenc(),dec() funcs
+  * [mod_magnet] fix header,content legacy table clear
+  * [mod_cgi] cgi.local-redir request_reset thru fnptr
+  * [core] isolate plugins_*() funcs to main server
+  * [mod_wolfssl] wolfssl v5.0.0 defines DH_set0_pqg()
+  * [mod_auth] save letter-case diff in require config
+
 - 1.4.64 - 2022-01-19
   * [core] fix trace issued for loading mod_auth (fixes #3121)
   * [meson] need -lrt with glibc < 2.17 (fixes #3120)
