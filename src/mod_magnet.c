@@ -1318,6 +1318,50 @@ static int magnet_cookie_tokens(lua_State *L) {
     return 1;
 }
 
+static const char * magnet_push_token(lua_State *L, const char *s) {
+    const char *b = s;
+    while (               *s!=' ' && *s!='\t' && *s!='\r' && *s!='\n'
+           && *s!=',' && *s!=';' && *s!='=' && *s)
+        ++s;
+    lua_pushlstring(L, b, (size_t)(s-b));
+    return s;
+}
+
+static int magnet_header_tokens(lua_State *L) {
+    /* split into sequence of tokens/words
+     *   Intermediate table is then more convenient to walk once quoted-string
+     *   parsed into table entries since quoted-string may contain separators.
+     *   Each token can be passed to lighty.c.quoteddec()
+     *     (lighty.c.quoteddec() returns string as-is if not quoted-string)
+     * (note: non-validating;
+     *  e.g. existence of '=' token does not mean that next token is value,
+     *       and '=' in value which is not part of quoted-string will be
+     *       treated as separate token)
+     * (note: case is preserved; non-quoted-string tokens are not lower-cased)
+     * (words separated by whitespace are separate tokens unless quoted-string)
+     *   (if that format not permitted in a specific header, caller must detect)
+     * (optional whitespace (OWS) and bad whitespace (BWS) are removed)
+     * (caller can create lookup table from sequence table, as appropriate) */
+    lua_createtable(L, 0, 0);
+    if (lua_isnoneornil(L, 1))
+        return 1;
+    const char *s = luaL_checkstring(L, 1);
+    int i = 0;
+    do {
+        while (           *s==' ' || *s=='\t' || *s=='\r' || *s=='\n')
+            ++s;
+        if (*s=='\0') break;
+        if (*s==',' || *s==';' || *s=='=')
+            lua_pushlstring(L, s++, 1);
+        else if (*s != '"')
+            s = magnet_push_token(L, s);
+        else
+            s = magnet_push_quoted_string(L, s);
+        lua_rawseti(L, -2, ++i);
+    } while (*s);
+    return 1;
+}
+
 static int magnet_atpanic(lua_State *L) {
 	request_st * const r = magnet_get_request(L);
 	log_error(r->conf.errh, __FILE__, __LINE__, "(lua-atpanic) %s",
@@ -2361,6 +2405,7 @@ static void magnet_init_lighty_table(lua_State * const L) {
      ,{ "urlenc_normalize", magnet_urlenc_normalize }/* url-enc normalization */
      ,{ "fspath_simplify",  magnet_fspath_simplify } /* simplify fspath */
      ,{ "cookie_tokens",    magnet_cookie_tokens } /* parse cookie tokens */
+     ,{ "header_tokens",    magnet_header_tokens } /* parse header tokens seq */
      ,{ "readdir",          magnet_readdir } /* dir walk */
      ,{ "quoteddec",        magnet_quoteddec } /* quoted-string decode */
      ,{ "quotedenc",        magnet_quotedenc } /* quoted-string encode */
