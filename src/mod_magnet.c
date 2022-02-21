@@ -1239,6 +1239,43 @@ static int magnet_fspath_simplify(lua_State *L) {
     return 1;
 }
 
+__attribute_pure__
+static const char * magnet_scan_quoted_string (const char *s) {
+    /* scan to end of of quoted-string (with s starting at '"')
+     * loose parse; non-validating
+     * - permit missing '"' at end of string (caller should check)
+     * - stop at stray '\\' at end of string missing closing '"'
+     * - not rejecting non-WS CTL chars
+     */
+    /*force_assert(*s == '"');*/
+    do { ++s; } while (*s && *s != '"' && (*s != '\\' || (s[1] ? ++s : 0)));
+    /*do { ++s; } while (*s && *s != '"' && (*s != '\\' || (*++s || (--s, 0))));*/
+    return s;
+}
+
+static const char * magnet_push_quoted_string_range (lua_State *L, const char *b, const char *s) {
+    /* quoted-string is unmodified (except for quoted-string end consistency)
+     * including surrounding double-quotes and with quoted-pair unmodified */
+    if (__builtin_expect( (*s == '"'), 1))
+        lua_pushlstring(L, b, (size_t)(++s-b));
+    else { /*(else invalid quoted-string, but handle anyway)*/
+        /* append closing '"' for consistency */
+        lua_pushlstring(L, b, (size_t)(s-b));
+        if (*s != '\\')
+            lua_pushlstring(L, "\"", 1);
+        else { /* unescaped backslash at end of string; escape and close '"' */
+            lua_pushlstring(L, "\\\\\"", 3);
+            ++s; /*(now *s == '\0')*/
+        }
+        lua_concat(L, 2);
+    }
+    return s;
+}
+
+static const char * magnet_push_quoted_string(lua_State *L, const char *s) {
+    return magnet_push_quoted_string_range(L, s, magnet_scan_quoted_string(s));
+}
+
 static const char * magnet_cookie_param_push_token(lua_State *L, const char *s) {
     const char *b = s;
     while (*s!='=' /*(note: not strictly rejecting all 'separators')*/
@@ -1248,17 +1285,8 @@ static const char * magnet_cookie_param_push_token(lua_State *L, const char *s) 
     return s;
 }
 
-static const char * magnet_cookie_param_push_quoted_string(lua_State *L, const char *s) {
-    const char *b = s;
-    /*force_assert(*s == '"');*/
-    do { ++s; } while (*s && *s != '"' && (*s != '\\' || *++s));
-    if (*s == '"') /*(else invalid quoted-string, but handle anyway)*/
-        ++s;
-    lua_pushlstring(L, b, (size_t)(s-b));
-    return s;
-}
-
 static int magnet_cookie_tokens(lua_State *L) {
+    /*(special-case cookies (';' separator); dup cookie-names overwritten)*/
     lua_createtable(L, 0, 0);
     if (lua_isnoneornil(L, 1))
         return 1;
@@ -1279,7 +1307,7 @@ static int magnet_cookie_tokens(lua_State *L) {
             else if (*s != '"')
                 s = magnet_cookie_param_push_token(L, s);
             else
-                s = magnet_cookie_param_push_quoted_string(L, s);
+                s = magnet_push_quoted_string(L, s);
         }
         else {
             lua_pushlstring(L, "", 0); /*(lua_pushnil() would delete key)*/
