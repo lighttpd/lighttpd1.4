@@ -611,17 +611,11 @@ static void buffer_append_string_backslash_escaped(buffer *b, const char *s, siz
 }
 
 static void proxy_set_Forwarded(connection * const con, request_st * const r, const unsigned int flags) {
-    buffer *b = NULL, *efor = NULL, *eproto = NULL, *ehost = NULL;
+    buffer *b = NULL;
+    buffer * const efor = (proxy_check_extforward)
+      ? http_header_env_get(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"))
+      : NULL;
     int semicolon = 0;
-
-    if (proxy_check_extforward) {
-        efor   =
-          http_header_env_get(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"));
-        eproto =
-          http_header_env_get(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_PROTO"));
-        ehost  =
-          http_header_env_get(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_HOST"));
-    }
 
     /* note: set "Forwarded" prior to updating X-Forwarded-For (below) */
 
@@ -727,6 +721,9 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
     }
 
     if (flags & PROXY_FORWARDED_PROTO) {
+        const buffer * const eproto = (proxy_check_extforward)
+          ? http_header_env_get(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_PROTO"))
+          : NULL;
         /* expecting "http" or "https"
          * (not checking if quoted-string and encoding needed) */
         if (semicolon) buffer_append_string_len(b, CONST_STR_LEN(";"));
@@ -741,6 +738,9 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
     }
 
     if (flags & PROXY_FORWARDED_HOST) {
+        const buffer * const ehost = (proxy_check_extforward)
+          ? http_header_env_get(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_HOST"))
+          : NULL;
         if (NULL != ehost) {
             if (semicolon)
                 buffer_append_string_len(b, CONST_STR_LEN(";"));
@@ -777,11 +777,11 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
     /* legacy X-* headers, including X-Forwarded-For */
 
     b = (NULL != efor) ? efor : &con->dst_addr_buf;
-    http_header_request_set(r, HTTP_HEADER_X_FORWARDED_FOR,
-                            CONST_STR_LEN("X-Forwarded-For"),
-                            BUF_PTR_LEN(b));
+    http_header_request_append(r, HTTP_HEADER_X_FORWARDED_FOR,
+                               CONST_STR_LEN("X-Forwarded-For"),
+                               BUF_PTR_LEN(b));
 
-    b = (NULL != ehost) ? ehost : r->http_host;
+    b = r->http_host;
     if (b && !buffer_is_blank(b)) {
         http_header_request_set(r, HTTP_HEADER_OTHER,
                                 CONST_STR_LEN("X-Host"),
@@ -791,7 +791,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
                                 BUF_PTR_LEN(b));
     }
 
-    b = (NULL != eproto) ? eproto : &r->uri.scheme;
+    b = &r->uri.scheme;
     http_header_request_set(r, HTTP_HEADER_X_FORWARDED_PROTO,
                             CONST_STR_LEN("X-Forwarded-Proto"),
                             BUF_PTR_LEN(b));
