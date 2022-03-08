@@ -536,6 +536,7 @@ static int mod_extforward_set_addr(request_st * const r, plugin_data *p, const c
 	 * should not reuse same h2 connection for requests from different clients*/
 	if (hctx && !buffer_is_unset(&hctx->saved_remote_addr_buf)
 	    && r->http_version > HTTP_VERSION_1_1) { /*(e.g. HTTP_VERSION_2)*/
+		hctx->request_count = con->request_count;
 		if (extforward_check_proxy) /* save old address */
 			http_header_env_set(r, CONST_STR_LEN("_L_EXTFORWARD_ACTUAL_FOR"),
 			                    BUF_PTR_LEN(&hctx->saved_remote_addr_buf));
@@ -1063,14 +1064,17 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 
 	if (NULL == p->conf.headers) return HANDLER_GO_ON;
 
-	/* Do not reparse headers for same request, e.g after HANDER_COMEBACK
+	/* Do not reparse headers for same request, e.g. after HANDER_COMEBACK
 	 * from mod_rewrite, mod_magnet MAGNET_RESTART_REQUEST, mod_cgi
 	 * cgi.local-redir, or gw_backend reconnect.  This has the implication
 	 * that mod_magnet and mod_cgi with local-redir should not modify
-	 * Forwarded or related headers and expect effects here. */
+	 * Forwarded or related headers and expect effects here, though there
+	 * are some scenarios with HTTP/2 where headers are reparsed anyway,
+	 * due to the loose heuristic checking if request_count changed. */
 	handler_ctx *hctx = r->con->plugin_ctx[p->id];
-	if (NULL != hctx && !buffer_is_unset(&hctx->saved_remote_addr_buf)
-	    && hctx->request_count == r->con->request_count)
+	const int already =
+	  (NULL != hctx && !buffer_is_unset(&hctx->saved_remote_addr_buf));
+	if (already && hctx->request_count == r->con->request_count)
 		return HANDLER_GO_ON;
 
 	const buffer *forwarded = NULL;
@@ -1085,7 +1089,9 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		}
 	}
 
-	if (forwarded && is_connection_trusted(r->con, p)) {
+	if (forwarded
+	    && ((already && r->http_version > HTTP_VERSION_1_1) /*(HTTP_VERSION_2)*/
+	        || is_connection_trusted(r->con, p))) {
 		return (is_forwarded_header)
 		  ? mod_extforward_Forwarded(r, p, forwarded)
 		  : mod_extforward_X_Forwarded_For(r, p, forwarded);
