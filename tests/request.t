@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 176;
+use Test::More tests => 178;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -1398,6 +1398,24 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, '+Content-Length' => '' } ];
 ok($tf->handle_http($t) == 0, 'cgi-env: HTTP_HOST');
+
+$t->{REQUEST}  = ( <<EOF
+GET /cgi.pl?env=ABSENT HTTP/1.1
+Host: www.example.org
+Connection: close
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, 'HTTP-Content' => '[ABSENT not found]' } ];
+ok($tf->handle_http($t) == 0, 'cgi-env: ABSENT');
+
+$t->{REQUEST}  = ( <<EOF
+GET /cgi.pl?env=BLANK_VALUE HTTP/1.1
+Host: www.example.org
+Connection: close
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, 'HTTP-Content' => '' } ];
+ok($tf->handle_http($t) == 0, 'cgi-env: BLANK_VALUE');
 
 # broken header crash
 $t->{REQUEST}  = ( <<EOF

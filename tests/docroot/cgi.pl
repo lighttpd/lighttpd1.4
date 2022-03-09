@@ -2,7 +2,8 @@
 
 # env
 if ($ENV{"QUERY_STRING"} =~ /^env=(\w+)/) {
-    print "Status: 200\r\n\r\n$ENV{$1}";
+    my $v = defined($ENV{$1}) ? $ENV{$1} : "[$1 not found]";
+    print "Status: 200\r\n\r\n$v";
     exit 0;
 }
 

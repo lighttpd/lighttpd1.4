@@ -353,7 +353,6 @@ void http_header_env_set(request_st * const r, const char *k, uint32_t klen, con
 void http_header_env_append(request_st * const r, const char *k, uint32_t klen, const char *v, uint32_t vlen) {
     /*if (0 == vlen) return;*//* skip check; permit env var w/ blank value */
     buffer * const vb = array_get_buf_ptr(&r->env, k, klen);
-    if (0 == vlen) return;
     http_header_token_append(vb, v, vlen);
 }
 
