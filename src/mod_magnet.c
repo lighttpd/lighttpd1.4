@@ -1888,6 +1888,12 @@ static int magnet_envvar_get(lua_State *L) {
 static int magnet_envvar_set(lua_State *L) {
     /* __newindex: param 1 is the (empty) table the value is supposed to be set in */
     const_buffer key = magnet_checkconstbuffer(L, 2);
+    if (__builtin_expect( (lua_isnil(L, 3)), 0)) {
+        request_st * const r = magnet_get_request(L);
+        buffer * const v = http_header_env_get(r, key.ptr, key.len);
+        if (v) buffer_clear(v); /*(unset)*/
+        return 0;
+    }
     const_buffer val = magnet_checkconstbuffer(L, 3);
     request_st * const r = magnet_get_request(L);
     http_header_env_set(r, key.ptr, key.len, val.ptr, val.len);
