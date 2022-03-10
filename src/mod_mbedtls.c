@@ -1825,7 +1825,7 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("debug.log-ssl-noise"),
-        T_CONFIG_SHORT,
+        T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.verifyclient.ca-file"),
         T_CONFIG_STRING,
