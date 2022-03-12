@@ -136,6 +136,9 @@ static void * stat_cache_sptree_find(splay_tree ** const sptree,
  && !(defined(HAVE_SYS_EVENT_H) && defined(HAVE_KQUEUE))
 
 #include <sys/inotify.h>
+#ifndef IN_EXCL_UNLINK /*(not defined in some very old glibc headers)*/
+#define IN_EXCL_UNLINK 0x04000000
+#endif
 
 /*(translate FAM API to inotify; this is specific to stat_cache.c use of FAM)*/
 #define fam fd /*(translate struct stat_cache_fam scf->fam -> scf->fd)*/

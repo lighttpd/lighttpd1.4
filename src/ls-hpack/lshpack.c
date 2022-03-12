@@ -700,7 +700,7 @@ lshpack_enc_huff_encode (const unsigned char *src,
     uintptr_t bits;  /* OK not to initialize this variable */
     unsigned bits_used = 0, adj;
     struct encode_el cur_enc_code;
-#if __GNUC__ && !defined(__COVERITY__)
+#if __GNUC__ && __GNUC__ >= 5 && !defined(__COVERITY__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #pragma GCC diagnostic ignored "-Wuninitialized"
@@ -817,7 +817,7 @@ lshpack_enc_huff_encode (const unsigned char *src,
         return p_dst - dst;
     else
         return -1;
-#if __GNUC__
+#if __GNUC__ && __GNUC__ >= 5 && !defined(__COVERITY__)
 #pragma GCC diagnostic pop
 #endif
 }
@@ -1873,7 +1873,7 @@ lshpack_dec_huff_decode (const unsigned char *src, int src_len,
     uint16_t idx;
     int r;
 
-#if __GNUC__
+#if __GNUC__ && __GNUC__ >= 5 && !defined(__COVERITY__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #pragma GCC diagnostic ignored "-Wuninitialized"
@@ -2038,7 +2038,7 @@ lshpack_dec_huff_decode (const unsigned char *src, int src_len,
         if (((1u << avail_bits) - 1) != (buf & ((1u << avail_bits) - 1)))
             return -1;  /* Not EOF as expected */
     }
-#if __GNUC__
+#if __GNUC__ && __GNUC__ >= 5 && !defined(__COVERITY__)
 #pragma GCC diagnostic pop
 #endif
 
@@ -2058,6 +2058,6 @@ lshpack_dec_huff_decode (const unsigned char *src, int src_len,
         return r;
 }
 #endif
-#if __GNUC__
+#if __GNUC__ && (__GNUC__ >= 5 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6))
 #pragma GCC diagnostic pop  /* -Wunknown-pragmas */
 #endif
