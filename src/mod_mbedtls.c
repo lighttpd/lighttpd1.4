@@ -810,14 +810,25 @@ mod_mbedtls_conf_verify (handler_ctx *hctx)
         return MBEDTLS_ERR_SSL_INTERNAL_ERROR;
     }
 
+    mbedtls_ssl_context * const ssl = &hctx->ssl;
+
+  #if MBEDTLS_VERSION_NUMBER >= 0x03020000 /* mbedtls 3.02.0 */
+    int mode = (hctx->conf.ssl_verifyclient_enforce)
+      ? MBEDTLS_SSL_VERIFY_REQUIRED
+      : MBEDTLS_SSL_VERIFY_OPTIONAL;
+    mbedtls_ssl_set_hs_authmode(ssl, mode);
+    mbedtls_ssl_set_hs_ca_chain(ssl, hctx->conf.ssl_ca_file,
+                                     hctx->conf.ssl_ca_crl_file);
+    if (hctx->conf.ssl_ca_dn_file)
+        mbedtls_ssl_set_hs_dn_hints(ssl, hctx->conf.ssl_ca_dn_file);
+  #else
     /* send ssl_ca_dn_file (if set) in client certificate request
      * (later changed to ssl_ca_file before client certificate verification) */
     mbedtls_x509_crt *ca_certs = hctx->conf.ssl_ca_dn_file
                                ? hctx->conf.ssl_ca_dn_file
                                : hctx->conf.ssl_ca_file;
-
-    mbedtls_ssl_context * const ssl = &hctx->ssl;
     mbedtls_ssl_set_hs_ca_chain(ssl, ca_certs, hctx->conf.ssl_ca_crl_file);
+  #endif
   #if MBEDTLS_VERSION_NUMBER >= 0x02120000 /* mbedtls 2.18.0 */
     mbedtls_ssl_set_verify(ssl, mod_mbedtls_verify_cb, hctx);
   #else
@@ -1243,6 +1254,45 @@ mod_mbedtls_alpn_select_cb (handler_ctx *hctx, const unsigned char *in, const un
 #endif /* MBEDTLS_SSL_ALPN */
 
 
+#if MBEDTLS_VERSION_NUMBER >= 0x03020000 /* mbedtls 3.02.0 */
+static int
+mod_mbedtls_cert_cb (mbedtls_ssl_context * const ssl)
+{
+    handler_ctx * const hctx = mbedtls_ssl_get_user_data_p(ssl);
+    int rc = 0;
+
+  #ifdef MBEDTLS_SSL_ALPN
+    const char *alpn = mbedtls_ssl_get_alpn_protocol(&hctx->ssl);
+    if (NULL != alpn) {
+        rc = mod_mbedtls_alpn_selected(hctx, alpn);
+        if (0 != rc) return rc;
+    }
+  #endif
+
+  #ifdef MBEDTLS_SSL_SERVER_NAME_INDICATION
+    size_t len;
+    const unsigned char *servername = mbedtls_ssl_get_hs_sni(ssl, &len);
+    if (servername) {
+        rc = mod_mbedtls_SNI(hctx, ssl, servername, len);
+        if (0 != rc) return rc;
+    } /*(else no SNI)*/
+   #if 0 /*"acme-tls/1" required SNI; use default cert; let cert challenge fail*/
+    else if (hctx->alpn == MOD_MBEDTLS_ALPN_ACME_TLS_1)
+        return MBEDTLS_ERR_SSL_ILLEGAL_PARAMETER;
+   #endif
+  #endif /* MBEDTLS_SSL_SERVER_NAME_INDICATION */
+
+    if (hctx->conf.ssl_verifyclient
+        && hctx->alpn != MOD_MBEDTLS_ALPN_ACME_TLS_1) { /*(not "acme-tls/1")*/
+        rc = mod_mbedtls_conf_verify(hctx);
+        if (0 != rc) return rc;
+    }
+
+    return rc;
+}
+#endif
+
+
 static int
 mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *ciphersuites, const buffer *cipherstring);
 
@@ -1430,6 +1480,10 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         return -1;
     }
 
+  #if MBEDTLS_VERSION_NUMBER >= 0x03020000 /* mbedtls 3.02.0 */
+    mbedtls_ssl_conf_cert_cb(s->ssl_ctx, mod_mbedtls_cert_cb);
+  #endif
+
   #ifdef MBEDTLS_SSL_ALPN
     /* https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids */
     static const char *alpn_protos_http_acme[] = {
@@ -1487,7 +1541,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
  #endif
 
   #if defined(MBEDTLS_SSL_SESSION_TICKETS)
-    if (s->ssl_session_ticket && !p->ticket_ctx.ticket_lifetime) { /*init once*/
+    if (s->ssl_session_ticket            /*(.ticket_lifetime is private)*/
+        && !*(unsigned char *)&p->ticket_ctx) { /*init once*/
         rc = mbedtls_ssl_ticket_setup(&p->ticket_ctx, mbedtls_ctr_drbg_random,
                                       &p->ctr_drbg, MBEDTLS_CIPHER_AES_256_GCM,
                                       43200); /* ticket timeout: 12 hours */
@@ -2118,7 +2173,6 @@ connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t ma
 
 
 #if MBEDTLS_VERSION_NUMBER >= 0x03020000 /* mbedtls 3.02.0 */
-#define handshake_state(ssl) (ssl)->MBEDTLS_PRIVATE(state)
 #elif MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.00.0 */
 #define handshake_state(ssl) (ssl)->MBEDTLS_PRIVATE(state)
 #else /* MBEDTLS_VERSION_NUMBER < 0x03000000 */ /* mbedtls 3.00.0 */
@@ -2135,6 +2189,12 @@ static int
 mod_mbedtls_ssl_handshake (handler_ctx *hctx)
 {
     int rc = 0;
+
+ #if MBEDTLS_VERSION_NUMBER >= 0x03020000 /* mbedtls 3.02.0 */
+
+    rc = mbedtls_ssl_handshake(&hctx->ssl);
+
+ #else
 
     /* overwrite callback with hctx each time we enter here, before handshake
      * (Some callbacks are on mbedtls_ssl_config, not mbedtls_ssl_context)
@@ -2208,6 +2268,8 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
     if (0 == rc && handshake_state(&hctx->ssl) != MBEDTLS_SSL_HANDSHAKE_OVER) {
         rc = mbedtls_ssl_handshake(&hctx->ssl);
     }
+
+ #endif
 
     switch (rc) {
       case 0:
@@ -2358,6 +2420,10 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
         elog(r->conf.errh, __FILE__, __LINE__, rc, "ssl_setup() failed");
         return HANDLER_ERROR;
     }
+
+  #if MBEDTLS_VERSION_NUMBER >= 0x03020000 /* mbedtls 3.02.0 */
+    mbedtls_ssl_set_user_data_p(&hctx->ssl, hctx);
+  #endif
 
     mbedtls_ssl_set_bio(&hctx->ssl, (mbedtls_net_context *)&con->fd,
                         mbedtls_net_send, mbedtls_net_recv, NULL);
