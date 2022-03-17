@@ -1535,7 +1535,9 @@ static void mod_ssi_read_fd(request_st * const r, handler_ctx * const p, struct 
 		 * (reduce occurrence of copying to reallocate larger chunk) */
 		if (cq->last && cq->last->type == MEM_CHUNK
 		    && buffer_string_space(cq->last->mem) < 1023)
-			http_chunk_transfer_cqlen(r, cq, chunkqueue_length(cq));
+			if (0 != http_chunk_transfer_cqlen(r, cq, chunkqueue_length(cq)))
+				chunkqueue_remove_empty_chunks(&r->write_queue);
+				/*(likely unrecoverable error if r->resp_send_chunked)*/
 	}
 
 	if (0 != rd) {
@@ -1551,7 +1553,9 @@ static void mod_ssi_read_fd(request_st * const r, handler_ctx * const p, struct 
 	}
 
 	chunk_buffer_release(b);
-	http_chunk_transfer_cqlen(r, cq, chunkqueue_length(cq));
+	if (0 != http_chunk_transfer_cqlen(r, cq, chunkqueue_length(cq)))
+		chunkqueue_remove_empty_chunks(&r->write_queue);
+		/*(likely error unrecoverable if r->resp_send_chunked)*/
 }
 
 
