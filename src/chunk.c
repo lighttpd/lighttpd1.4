@@ -703,7 +703,10 @@ static void chunkqueue_steal_partial_file_chunk(chunkqueue * const restrict dest
 }
 
 void chunkqueue_steal(chunkqueue * const restrict dest, chunkqueue * const restrict src, off_t len) {
-	for (off_t clen; len > 0; len -= clen) {
+	/*(0-length first chunk (unexpected) is removed from src even if len == 0;
+         * progress is made when caller loops on this func)*/
+	off_t clen;
+	do {
 		chunk * const c = src->first;
 		if (__builtin_expect( (NULL == c), 0)) break;
 
@@ -738,7 +741,7 @@ void chunkqueue_steal(chunkqueue * const restrict dest, chunkqueue * const restr
 		}
 
 		src->bytes_out += clen;
-	}
+	} while ((len -= clen));
 }
 
 static int chunkqueue_get_append_mkstemp(buffer * const b, const char *path, const uint32_t len) {
@@ -1163,7 +1166,10 @@ ssize_t chunkqueue_append_splice_sock_tempfile(chunkqueue * const restrict cq, c
 #endif /* HAVE_SPLICE */
 
 int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue * const restrict src, off_t len, log_error_st * const restrict errh) {
-	for (off_t clen; len > 0; len -= clen) {
+	/*(0-length first chunk (unexpected) is removed from src even if len == 0;
+         * progress is made when caller loops on this func)*/
+	off_t clen;
+	do {
 		chunk * const c = src->first;
 		if (__builtin_expect( (NULL == c), 0)) break;
 
@@ -1172,66 +1178,37 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * const restrict dest, chunkqueue
 		if (c->type == MEM_CHUNK) {
 			clen = chunkqueue_append_cqmem_to_tempfile(dest, src, len, errh);
 			if (__builtin_expect( (clen < 0), 0)) return -1;
-			chunkqueue_mark_written(src, clen); /*(updates src->bytes_out)*/
+			chunkqueue_mark_written(src, clen);
 		}
 		else { /* (c->type == FILE_CHUNK) */
 			clen = chunk_remaining_length(c);
 			if (len < clen) clen = len;
-			chunkqueue_steal(dest, src, clen);/*(same as below for FILE_CHUNK)*/
+			chunkqueue_steal(dest, src, clen);
 		}
 
 	  #else
 
 		clen = chunk_remaining_length(c);
-		if (__builtin_expect( (0 == clen), 0)) {
-			/* drop empty chunk */
-			src->first = c->next;
-			if (c == src->last) src->last = NULL;
-			chunk_release(c);
-			continue;
-		}
+		if (len < clen) clen = len;
 
 		switch (c->type) {
 		case FILE_CHUNK:
-			if (len >= clen) {
-				/* move complete chunk */
-				src->first = c->next;
-				if (c == src->last) src->last = NULL;
-				chunkqueue_append_chunk(dest, c);
-				dest->bytes_in += clen;
-			} else {
-				/* copy partial chunk */
-				/* tempfile flag is in "last" chunk after the split */
-				chunkqueue_steal_partial_file_chunk(dest, c, len);
-				c->offset += len;
-				clen = len;
-			}
+			chunkqueue_steal(dest, src, clen);
 			break;
 
 		case MEM_CHUNK:
 			/* store bytes from memory chunk in tempfile */
-			if (0 != chunkqueue_append_mem_to_tempfile(dest, c->mem->ptr + c->offset,
-			                                           (len >= clen) ? clen : len, errh)) {
+			if (clen
+			    && 0 != chunkqueue_append_mem_to_tempfile(dest,
+			                                              c->mem->ptr+c->offset,
+			                                              clen, errh))
 				return -1;
-			}
-
-			if (len >= clen) {
-				/* finished chunk */
-				src->first = c->next;
-				if (c == src->last) src->last = NULL;
-				chunk_release(c);
-			} else {
-				/* partial chunk */
-				c->offset += len;
-				clen = len;
-			}
+			chunkqueue_mark_written(src, clen);
 			break;
 		}
 
-		src->bytes_out += clen;
-
 	  #endif
-	}
+	} while ((len -= clen));
 
 	return 0;
 }
