@@ -439,6 +439,12 @@ h2_send_refused_stream (uint32_t h2id, connection * const con)
                 return -1;
             }
         }
+        /* overload h2c->half_closed_ts to discard DATA (in h2_recv_data())
+         * from refused streams while waiting for SETTINGS ackn from client
+         * (instead of additional h2 con init time check in h2_recv_data())
+         * (though h2c->half_closed_ts is not unset when SETTINGS ackn received)
+         * (fuzzy discard; imprecise; see further comments in h2_recv_data()) */
+        h2c->half_closed_ts = h2c->sent_settings;
     }
 
     /* too many active streams; refuse new stream */
