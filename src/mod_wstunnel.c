@@ -349,14 +349,16 @@ static handler_t wstunnel_create_env(gw_handler_ctx *gwhctx) {
     handler_ctx *hctx = (handler_ctx *)gwhctx;
     request_st * const r = hctx->gw.r;
     handler_t rc;
-    if (0 == r->reqbody_length) {
+    if (0 == r->reqbody_length || r->http_version > HTTP_VERSION_1_1) {
         http_response_upgrade_read_body_unknown(r);
         chunkqueue_append_chunkqueue(&r->reqbody_queue, &r->read_queue);
     }
     rc = mod_wstunnel_handshake_create_response(hctx);
     if (rc != HANDLER_GO_ON) return rc;
 
-    r->http_status = 101; /* Switching Protocols */
+    r->http_status = (r->http_version > HTTP_VERSION_1_1)
+      ? 200  /* OK (response status for CONNECT) */
+      : 101; /* Switching Protocols */
     r->resp_body_started = 1;
 
     hctx->ping_ts = log_monotonic_secs;
@@ -553,11 +555,15 @@ static handler_t wstunnel_handler_setup (request_st * const r, plugin_data * con
 
 static handler_t mod_wstunnel_check_extension(request_st * const r, void *p_d) {
     plugin_data *p = p_d;
-    const buffer *vb;
     handler_t rc;
 
     if (NULL != r->handler_module)
         return HANDLER_GO_ON;
+  if (r->http_version > HTTP_VERSION_1_1) {
+    if (!r->h2_connect_ext)
+        return HANDLER_GO_ON;
+  }
+  else {
     if (r->http_method != HTTP_METHOD_GET)
         return HANDLER_GO_ON;
     if (r->http_version != HTTP_VERSION_1_1)
@@ -567,6 +573,7 @@ static handler_t mod_wstunnel_check_extension(request_st * const r, void *p_d) {
      * Connection: upgrade, keep-alive, ...
      * Upgrade: WebSocket, ...
      */
+    const buffer *vb;
     vb = http_header_request_get(r, HTTP_HEADER_UPGRADE, CONST_STR_LEN("Upgrade"));
     if (NULL == vb
         || !http_header_str_contains_token(BUF_PTR_LEN(vb), CONST_STR_LEN("websocket")))
@@ -575,6 +582,7 @@ static handler_t mod_wstunnel_check_extension(request_st * const r, void *p_d) {
     if (NULL == vb
         || !http_header_str_contains_token(BUF_PTR_LEN(vb), CONST_STR_LEN("upgrade")))
         return HANDLER_GO_ON;
+  }
 
     mod_wstunnel_patch_config(r, p);
     if (NULL == p->conf.gw.exts) return HANDLER_GO_ON;
@@ -774,6 +782,7 @@ static int create_response_ietf_00(handler_ctx *hctx) {
 
 static int create_response_rfc_6455(handler_ctx *hctx) {
     request_st * const r = hctx->gw.r;
+  if (r->http_version == HTTP_VERSION_1_1) {
     SHA_CTX sha;
     unsigned char sha_digest[SHA_DIGEST_LENGTH];
 
@@ -804,6 +813,7 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
       http_header_response_set_ptr(r, HTTP_HEADER_OTHER,
                                    CONST_STR_LEN("Sec-WebSocket-Accept"));
     buffer_append_base64_encode(value, sha_digest, SHA_DIGEST_LENGTH, BASE64_STANDARD);
+  }
 
     if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_BIN)
         http_header_response_set(r, HTTP_HEADER_OTHER,
@@ -834,7 +844,7 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
   #endif /* _MOD_WEBSOCKET_SPEC_RFC_6455_ */
 
   #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
-    if (hctx->hybivers == 0) {
+    if (hctx->hybivers == 0 && r->http_version == HTTP_VERSION_1_1) {
       #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
         /* 8 bytes should have been sent with request
          * for draft-ietf-hybi-thewebsocketprotocol-00 */

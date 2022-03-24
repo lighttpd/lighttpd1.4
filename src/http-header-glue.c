@@ -951,7 +951,8 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             /*(flag only for mod_proxy and mod_cgi (for now))*/
             if (opts->backend != BACKEND_PROXY && opts->backend != BACKEND_CGI)
                 continue;
-            if (r->http_version >= HTTP_VERSION_2) continue;
+            if (r->http_version >= HTTP_VERSION_2 && !r->h2_connect_ext)
+                continue;
             break;
           case HTTP_HEADER_CONNECTION:
             if (opts->backend == BACKEND_PROXY) continue;

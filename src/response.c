@@ -426,7 +426,8 @@ http_response_prepare (request_st * const r)
 		    && r->uri.path.ptr[0] == '*' && r->uri.path.ptr[1] == '\0')
 			return http_response_prepare_options_star(r);
 
-		if (__builtin_expect( (r->http_method == HTTP_METHOD_CONNECT), 0))
+		if (__builtin_expect( (r->http_method == HTTP_METHOD_CONNECT), 0)
+		    && (r->handler_module || !r->h2_connect_ext))
 			return http_response_prepare_connect(r);
 
 
@@ -541,6 +542,10 @@ http_response_prepare (request_st * const r)
 					http_response_body_clear(r, 0);
 					http_response_prepare_options_star(r); /*(treat like "*")*/
 				}
+				else if (r->http_method == HTTP_METHOD_CONNECT)
+					/* 405 Method Not Allowed */
+					return http_status_set_error_close(r, 405);
+					/*return http_response_prepare_connect(r);*/
 				else if (!http_method_get_head_post(r->http_method))
 					r->http_status = 501;
 				else

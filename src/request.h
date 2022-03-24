@@ -193,6 +193,7 @@ struct request_st {
 
     struct stat_cache_entry *tmp_sce; /*(value valid only in sequential code)*/
     int cond_captures;
+    int h2_connect_ext;
 };
 
 

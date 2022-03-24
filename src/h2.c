@@ -1769,7 +1769,7 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
 
     static const uint8_t h2settings[] = { /*(big-endian numbers)*/
       /* SETTINGS */
-      0x00, 0x00, 0x0c        /* frame length */ /* 6 * 2 for two settings */
+      0x00, 0x00, 0x12        /* frame length */ /* 6 * 3 for three settings */
      ,H2_FTYPE_SETTINGS       /* frame type */
      ,0x00                    /* frame flags */
      ,0x00, 0x00, 0x00, 0x00  /* stream identifier */
@@ -1796,6 +1796,8 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
      #endif
      ,0x00, H2_SETTINGS_MAX_HEADER_LIST_SIZE
      ,0x00, 0x00, 0xFF, 0xFF  /* 65535 */
+     ,0x00, H2_SETTINGS_ENABLE_CONNECT_PROTOCOL
+     ,0x00, 0x00, 0x00, 0x01  /* 1 */
 
      #if 0
       /* WINDOW_UPDATE */

@@ -528,13 +528,19 @@ http_request_validate_pseudohdrs (request_st * const restrict r, const int schem
 {
     /* :method is required to indicate method
      * CONNECT method must have :method and :authority
+     *   unless RFC8441 CONNECT extension, which must follow 'other' (below)
      * All other methods must have at least :method :scheme :path */
 
     if (HTTP_METHOD_UNSET == r->http_method)
         return http_request_header_line_invalid(r, 400,
           "missing pseudo-header method -> 400");
 
-    if (__builtin_expect( (HTTP_METHOD_CONNECT != r->http_method), 1)) {
+    if (HTTP_METHOD_CONNECT != r->http_method)
+        r->h2_connect_ext = 0;
+
+    if (__builtin_expect( (HTTP_METHOD_CONNECT != r->http_method), 1)
+        || __builtin_expect( (r->h2_connect_ext != 0), 0)) {
+
         if (!scheme)
             return http_request_header_line_invalid(r, 400,
               "missing pseudo-header scheme -> 400");
@@ -638,6 +644,10 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                     else if (0 == memcmp(k+1, "scheme", 6))
                         hpctx->id = HTTP_HEADER_H2_SCHEME_HTTP;
                     break;
+                  case 8:
+                    if (0 == memcmp(k+1, "protocol", 8))
+                        hpctx->id = HTTP_HEADER_H2_PROTOCOL;
+                    break;
                   case 9:
                     if (0 == memcmp(k+1, "authority", 9))
                         hpctx->id = HTTP_HEADER_H2_AUTHORITY;
@@ -698,6 +708,14 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                 return http_request_header_line_invalid(r, 400,
                   "unknown pseudo-header scheme -> 400");
                #endif
+              case HTTP_HEADER_H2_PROTOCOL:
+                /* support only ":protocol: websocket" for now */
+                if (vlen != 9 || 0 != memcmp(v, "websocket", 9))
+                    return http_request_header_line_invalid(r, 405,
+                      "unhandled :protocol value -> 405");
+                /*(future: might be enum of recognized :protocol: ext values)*/
+                r->h2_connect_ext = 1;
+                return 0;
               default:
                 return http_request_header_line_invalid(r, 400,
                   "invalid pseudo-header -> 400");
@@ -913,7 +931,7 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
     buffer_copy_string_len(&r->uri.scheme, "https", scheme_port == 443 ? 5 : 4);
 
     buffer * const target = &r->target;
-    if (r->http_method == HTTP_METHOD_CONNECT
+    if ((r->http_method == HTTP_METHOD_CONNECT && !r->h2_connect_ext)
         || (r->http_method == HTTP_METHOD_OPTIONS
             && target->ptr[0] == '*'
             && target->ptr[1] == '\0')) {

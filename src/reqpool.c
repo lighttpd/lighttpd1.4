@@ -107,6 +107,7 @@ request_reset (request_st * const r)
     /*r->error_handler_saved_method = HTTP_METHOD_UNSET;*/
     /*(error_handler_saved_method value is not valid
      * unless error_handler_saved_status is set)*/
+    r->h2_connect_ext = 0;
 
     buffer_clear(&r->uri.scheme);
 

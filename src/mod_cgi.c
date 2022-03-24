@@ -522,6 +522,13 @@ static handler_t cgi_response_headers(request_st * const r, struct http_response
     if (light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) {
         if (hctx->conf.upgrade && r->http_status == 101) {
             /* 101 Switching Protocols; transition to transparent proxy */
+            if (r->h2_connect_ext) {
+                r->http_status = 200; /* OK (response status for CONNECT) */
+                http_header_response_unset(r, HTTP_HEADER_UPGRADE,
+                                           CONST_STR_LEN("Upgrade"));
+                http_header_response_unset(r, HTTP_HEADER_OTHER,
+                                         CONST_STR_LEN("Sec-WebSocket-Accept"));
+            }
             http_response_upgrade_read_body_unknown(r);
         }
         else {
@@ -535,9 +542,18 @@ static handler_t cgi_response_headers(request_st * const r, struct http_response
           #endif
         }
     }
+    else if (__builtin_expect( (r->h2_connect_ext != 0), 0)
+             && r->http_status < 300) {
+        /*(not handling other 1xx intermediate responses here; not expected)*/
+        http_response_body_clear(r, 0);
+        r->handler_module = NULL;
+        r->http_status = 405; /* Method Not Allowed */
+        return HANDLER_FINISHED;
+    }
 
     if (hctx->conf.upgrade
-        && !light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) {
+        && !(light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)
+             || r->h2_connect_ext)) {
         chunkqueue *cq = &r->reqbody_queue;
         hctx->conf.upgrade = 0;
         if (cq->bytes_out == (off_t)r->reqbody_length) {
@@ -825,7 +841,38 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 
 		/* create environment */
 
+		off_t reqbody_length = r->reqbody_length;
+		if (r->h2_connect_ext) {
+			/*(SERVER_PROTOCOL=HTTP/1.1 instead of HTTP/2.0)*/
+			r->http_version = HTTP_VERSION_1_1;
+			r->http_method = HTTP_METHOD_GET;
+			if (reqbody_length < 0)
+				r->reqbody_length = 0;
+		}
+
 		http_cgi_headers(r, &opts, cgi_env_add, env);
+
+		if (r->h2_connect_ext) {
+			r->http_version = HTTP_VERSION_2;
+			r->http_method = HTTP_METHOD_CONNECT;
+			r->reqbody_length = reqbody_length;
+			/* https://datatracker.ietf.org/doc/html/rfc6455#section-4.1
+			 * 7. The request MUST include a header field with the name
+			 *    |Sec-WebSocket-Key|.  The value of this header field MUST be a
+			 *    nonce consisting of a randomly selected 16-byte value that has
+			 *    been base64-encoded (see Section 4 of [RFC4648]).  The nonce
+			 *    MUST be selected randomly for each connection.
+			 * Note: Sec-WebSocket-Key is not used in RFC8441;
+			 *       include Sec-WebSocket-Key for HTTP/1.1 compatibility;
+			 *       !!not random!! base64-encoded "0000000000000000" */
+			if (!http_header_request_get(r, HTTP_HEADER_OTHER,
+			                             CONST_STR_LEN("Sec-WebSocket-Key")))
+				cgi_env_add(env, CONST_STR_LEN("HTTP_SEC_WEBSOCKET_KEY"),
+				                 CONST_STR_LEN("MDAwMDAwMDAwMDAwMDAwMAo="));
+			/*(Upgrade and Connection should not exist for HTTP/2 request)*/
+			cgi_env_add(env, CONST_STR_LEN("HTTP_UPGRADE"), CONST_STR_LEN("websocket"));
+			cgi_env_add(env, CONST_STR_LEN("HTTP_CONNECTION"), CONST_STR_LEN("upgrade"));
+		}
 
 		/* for valgrind */
 		if (p->env.ld_preload) {
@@ -965,6 +1012,11 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	if (!S_ISREG(st->st_mode)) return HANDLER_GO_ON;
 	if (p->conf.execute_x_only == 1 && (st->st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) return HANDLER_GO_ON;
 
+	if (__builtin_expect( (r->h2_connect_ext != 0), 0) && !p->conf.upgrade) {
+		r->http_status = 405; /* Method Not Allowed */
+		return HANDLER_FINISHED;
+	}
+
 	if (r->reqbody_length
 	    && p->tempfile_accum
 	    && !(r->conf.stream_request_body /*(if not streaming request body)*/
@@ -981,7 +1033,9 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		hctx->plugin_data = p;
 		hctx->cgi_handler = &ds->value;
 		memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
-		if (!light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE))
+		if (__builtin_expect( (r->h2_connect_ext != 0), 0)) {
+		}
+		else if (!light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE))
 			hctx->conf.upgrade = 0;
 		else if (!hctx->conf.upgrade || r->http_version != HTTP_VERSION_1_1) {
 			hctx->conf.upgrade = 0;
@@ -1078,7 +1132,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			 * Send 411 Length Required if Content-Length missing.
 			 * (occurs here if client sends Transfer-Encoding: chunked
 			 *  and module is flagged to stream request body to backend) */
-			if (-1 == r->reqbody_length) {
+			if (-1 == r->reqbody_length && !r->h2_connect_ext) {
 				return (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
 				  ? http_response_reqbody_read_error(r, 411)
 				  : HANDLER_WAIT_FOR_EVENT;
