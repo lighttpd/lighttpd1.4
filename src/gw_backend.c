@@ -2210,12 +2210,22 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
         else {
             handler_t rc = r->con->reqbody_read(r);
 
-            /* XXX: create configurable flag */
-            /* CGI environment requires that Content-Length be set.
-             * Send 411 Length Required if Content-Length missing.
-             * (occurs here if client sends Transfer-Encoding: chunked
-             *  and module is flagged to stream request body to backend) */
-            if (-1 == r->reqbody_length && hctx->opts.backend != BACKEND_PROXY){
+            if (hctx->opts.backend == BACKEND_PROXY) {
+                if (hctx->state == GW_STATE_INIT /* ??? < GW_STATE_WRITE ??? */
+                    && rc == HANDLER_WAIT_FOR_EVENT
+                    /* streaming flags might not be set yet
+                     * if hctx->create_env() not called yet */
+                    && ((r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
+                        || r->h2_connect_ext))
+                    rc = HANDLER_GO_ON;
+                    /* connect() to backend proxy w/o waiting for any request body*/
+            }
+            else if (-1 == r->reqbody_length) {
+                /* XXX: create configurable flag */
+                /* CGI environment requires that Content-Length be set.
+                 * Send 411 Length Required if Content-Length missing.
+                 * (occurs here if client sends Transfer-Encoding: chunked
+                 *  and module is flagged to stream request body to backend) */
                 return (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
                   ? http_response_reqbody_read_error(r, 411)
                   : HANDLER_WAIT_FOR_EVENT;

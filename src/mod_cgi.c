@@ -1118,16 +1118,16 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 		if (chunkqueue_length(cq) > 65536 - 4096
 		    && (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)){
 			r->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
-			if (-1 != hctx->fd) return HANDLER_WAIT_FOR_EVENT;
 		} else {
 			handler_t rc = r->con->reqbody_read(r);
-			if (!chunkqueue_is_empty(cq)) {
-				if (fdevent_fdnode_interest(hctx->fdntocgi) & FDEVENT_OUT) {
-					return (rc == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : rc;
-				}
-			}
-			if (rc != HANDLER_GO_ON) return rc;
+			if (rc != HANDLER_GO_ON
+			    && !(r->h2_connect_ext && -1 == hctx->fd
+				    && rc == HANDLER_WAIT_FOR_EVENT))
+				return rc;
+		}
+	}
 
+	if (-1 == hctx->fd) {
 			/* CGI environment requires that Content-Length be set.
 			 * Send 411 Length Required if Content-Length missing.
 			 * (occurs here if client sends Transfer-Encoding: chunked
@@ -1137,10 +1137,6 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 				  ? http_response_reqbody_read_error(r, 411)
 				  : HANDLER_WAIT_FOR_EVENT;
 			}
-		}
-	}
-
-	if (-1 == hctx->fd) {
 		if (cgi_create_env(r, p, hctx, hctx->cgi_handler)) {
 			r->http_status = 500;
 			r->handler_module = NULL;
@@ -1148,6 +1144,8 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			return HANDLER_FINISHED;
 		}
 	} else if (!chunkqueue_is_empty(cq)) {
+		if (fdevent_fdnode_interest(hctx->fdntocgi) & FDEVENT_OUT)
+			return HANDLER_WAIT_FOR_EVENT;
 		if (0 != cgi_write_request(hctx, hctx->fdtocgi)) {
 			cgi_connection_close(hctx);
 			return HANDLER_ERROR;

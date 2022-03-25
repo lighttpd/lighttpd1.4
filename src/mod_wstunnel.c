@@ -494,7 +494,7 @@ static handler_t wstunnel_handler_setup (request_st * const r, plugin_data * con
         DEBUG_LOG_INFO("WebSocket Version = %d", hybivers);
     }
 
-    hctx->gw.opts.backend     = BACKEND_PROXY; /*(act proxy-like; not used)*/
+    hctx->gw.opts.backend     = BACKEND_PROXY; /*(act proxy-like)*/
     hctx->gw.opts.pdata       = hctx;
     hctx->gw.opts.parse       = wstunnel_recv_parse;
     hctx->gw.stdin_append     = wstunnel_stdin_append;
