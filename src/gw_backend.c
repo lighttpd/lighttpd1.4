@@ -1972,6 +1972,8 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
         __attribute_fallthrough__
     case GW_STATE_CONNECT_DELAYED:
         if (hctx->state == GW_STATE_CONNECT_DELAYED) { /*(not GW_STATE_INIT)*/
+            if (!(fdevent_fdnode_interest(hctx->fdn) & FDEVENT_OUT))
+                return HANDLER_WAIT_FOR_EVENT;
             int socket_error = fdevent_connect_status(hctx->fd);
             if (socket_error != 0) {
                 gw_proc_connect_error(r, hctx->host, hctx->proc, hctx->pid,
