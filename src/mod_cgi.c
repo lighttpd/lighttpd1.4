@@ -785,7 +785,8 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		}
 	}
 	else if (!(r->conf.stream_request_body /*(if not streaming request body)*/
-	           & (FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN))) {
+	           & (FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN))
+	         && !hctx->conf.upgrade) {
 		chunkqueue * const cq = &r->reqbody_queue;
 		chunk * const c = cq->first;
 		if (c && c == cq->last && c->type == FILE_CHUNK && c->file.is_temp) {
@@ -1129,8 +1130,8 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 		} else {
 			handler_t rc = r->con->reqbody_read(r);
 			if (rc != HANDLER_GO_ON
-			    && !(r->h2_connect_ext && -1 == hctx->fd
-				    && rc == HANDLER_WAIT_FOR_EVENT))
+			    && !(hctx->conf.upgrade && -1 == hctx->fd
+			         && rc == HANDLER_WAIT_FOR_EVENT))
 				return rc;
 		}
 	}
@@ -1140,7 +1141,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 			 * Send 411 Length Required if Content-Length missing.
 			 * (occurs here if client sends Transfer-Encoding: chunked
 			 *  and module is flagged to stream request body to backend) */
-			if (-1 == r->reqbody_length && !r->h2_connect_ext) {
+			if (-1 == r->reqbody_length && !hctx->conf.upgrade) {
 				return (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
 				  ? http_response_reqbody_read_error(r, 411)
 				  : HANDLER_WAIT_FOR_EVENT;
