@@ -87,6 +87,7 @@ typedef struct {
 	buffer *cgi_handler;      /* dumb pointer */
 	http_response_opts opts;
 	plugin_config conf;
+	off_t orig_reqbody_length;
 } handler_ctx;
 
 typedef struct cgi_pid_t {
@@ -552,10 +553,10 @@ static handler_t cgi_response_headers(request_st * const r, struct http_response
     }
 
     if (hctx->conf.upgrade
-        && !(light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)
-             || r->h2_connect_ext)) {
+        && !light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) {
         chunkqueue *cq = &r->reqbody_queue;
         hctx->conf.upgrade = 0;
+        r->reqbody_length = hctx->orig_reqbody_length;
         if (cq->bytes_out == (off_t)r->reqbody_length) {
             cgi_connection_close_fdtocgi(hctx); /*(closes hctx->fdtocgi)*/
         }
@@ -808,7 +809,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 
 	unsigned int bufsz_hint = 16384;
   #ifdef _WIN32
-	if (r->reqbody_length <= 1048576)
+	if (r->reqbody_length <= 1048576 && r->reqbody_length > 0)
 		bufsz_hint = (unsigned int)r->reqbody_length;
   #endif
 	if (-1 == to_cgi_fds[0] && fdevent_pipe_cloexec(to_cgi_fds, bufsz_hint)) {
@@ -841,21 +842,24 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 
 		/* create environment */
 
-		off_t reqbody_length = r->reqbody_length;
 		if (r->h2_connect_ext) {
 			/*(SERVER_PROTOCOL=HTTP/1.1 instead of HTTP/2.0)*/
 			r->http_version = HTTP_VERSION_1_1;
 			r->http_method = HTTP_METHOD_GET;
-			if (reqbody_length < 0)
+		}
+		if (hctx->conf.upgrade) {
+			r->reqbody_length = hctx->orig_reqbody_length;
+			if (r->reqbody_length < 0)
 				r->reqbody_length = 0;
 		}
 
 		http_cgi_headers(r, &opts, cgi_env_add, env);
 
+		if (hctx->conf.upgrade)
+			r->reqbody_length = -1;
 		if (r->h2_connect_ext) {
 			r->http_version = HTTP_VERSION_2;
 			r->http_method = HTTP_METHOD_CONNECT;
-			r->reqbody_length = reqbody_length;
 			/* https://datatracker.ietf.org/doc/html/rfc6455#section-4.1
 			 * 7. The request MUST include a header field with the name
 			 *    |Sec-WebSocket-Key|.  The value of this header field MUST be a
@@ -1041,6 +1045,10 @@ URIHANDLER_FUNC(cgi_is_handled) {
 			hctx->conf.upgrade = 0;
 			http_header_request_unset(r, HTTP_HEADER_UPGRADE,
 			                          CONST_STR_LEN("Upgrade"));
+		}
+		if (hctx->conf.upgrade) {
+			hctx->orig_reqbody_length = r->reqbody_length;
+			r->reqbody_length = -1;
 		}
 		hctx->opts.max_per_read =
 		  !(r->conf.stream_response_body /*(if not streaming response body)*/
