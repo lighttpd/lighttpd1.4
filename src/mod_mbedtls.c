@@ -870,6 +870,14 @@ mod_mbedtls_x509_crl_parse_file (mbedtls_x509_crl *chain, const char *fn)
 }
 
 
+static int
+mod_mbedtls_cert_is_active (const mbedtls_x509_crt *crt)
+{
+    return (   !mbedtls_x509_time_is_future(&crt->valid_from)
+            && !mbedtls_x509_time_is_past(&crt->valid_to));
+}
+
+
 #if MBEDTLS_VERSION_NUMBER >= 0x02170000 /* mbedtls 2.23.0 */
 
 static int
@@ -881,7 +889,8 @@ mod_mbedtls_x509_crt_ext_cb (void *p_ctx,
                              const unsigned char *end)
 {
     UNUSED(p_ctx);
-    UNUSED(crt);
+    if (!mod_mbedtls_cert_is_active(crt))
+        return MBEDTLS_ERR_X509_INVALID_DATE;
     /* id-pe-acmeIdentifier 1.3.6.1.5.5.7.1.31 */
     static const unsigned char acmeIdentifier[] = MBEDTLS_OID_PKIX "\x01\x1f";
     if (0 == MBEDTLS_OID_CMP(acmeIdentifier, oid)) {
@@ -1009,6 +1018,10 @@ network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *
               "PEM file cert read failed (%s)", pemfile->ptr);
         return NULL;
     }
+    else if (!mod_mbedtls_cert_is_active(&ssl_pemfile_x509)) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "MTLS: inactive/expired X509 certificate '%s'", pemfile->ptr);
+    }
 
     mbedtls_pk_init(&ssl_pemfile_pkey);  /* init private key context */
     rc = mod_mbedtls_pk_parse_keyfile(&ssl_pemfile_pkey, privkey->ptr, NULL);
@@ -1044,6 +1057,21 @@ network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     pc->need_chain = (ssl_pemfile_x509.next == NULL
                       && !mod_mbedtls_crt_is_self_issued(&ssl_pemfile_x509));
     mbedtls_platform_zeroize(&ssl_pemfile_pkey, sizeof(ssl_pemfile_pkey));
+
+  #if 0
+    /* needed at top of file for portable timegm(): #include "sys-time.h" */
+    struct tm tm;
+    memset(&tm, 0, sizeof(tm));
+    mbedtls_x509_time *notAfter = &ssl_pemfile_x509->valid_to;
+    tm.tm_sec   = notAfter->sec;
+    tm.tm_min   = notAfter->min;
+    tm.tm_hour  = notAfter->hour;
+    tm.tm_mday  = notAfter->day;
+    tm.tm_mon   = notAfter->mon;
+    tm.tm_year  = notAfter->year;
+    pc->notAfter = TIME64_CAST(timegm(&tm));
+  #endif
+
     return pc;
 }
 

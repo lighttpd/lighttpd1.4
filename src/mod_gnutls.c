@@ -490,6 +490,16 @@ mod_gnutls_free_config_crls (gnutls_datum_t *d)
 }
 
 
+static int
+mod_gnutls_cert_is_active (gnutls_x509_crt_t crt)
+{
+    const time_t before = gnutls_x509_crt_get_activation_time(crt);
+    const time_t after  = gnutls_x509_crt_get_expiration_time(crt);
+    const unix_time64_t now = log_epoch_secs;
+    return (before <= now && now <= after);
+}
+
+
 static gnutls_datum_t *
 mod_gnutls_load_config_crts (const char *fn, log_error_st *errh)
 {
@@ -515,6 +525,11 @@ mod_gnutls_load_config_crts (const char *fn, log_error_st *errh)
               "gnutls_x509_crt_list_import2() %s", fn);
         mod_gnutls_free_config_crts(d);
         return NULL;
+    }
+    else if (
+      !mod_gnutls_cert_is_active(((gnutls_x509_crt_t *)(void *)d->data)[0])) {
+        log_error(errh, __FILE__, __LINE__,
+          "GnuTLS: inactive/expired X509 certificate '%s'", fn);
     }
 
     return d;
@@ -1224,6 +1239,11 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
                   "certificate %s marked OCSP Must-Staple, "
                   "but ssl.stapling-file not provided", pemfile->ptr);
     }
+
+  #if 0
+    pc->notAfter = TIME64_CAST(gnutls_x509_crt_get_expiration_time(
+                                 ((gnutls_x509_crt_t *)(void *)d->data)[0]));
+  #endif
 
     return pc;
 

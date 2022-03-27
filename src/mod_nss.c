@@ -428,6 +428,17 @@ static void mod_nss_free_nss (void)
 }
 
 
+static int
+mod_nss_cert_is_active (const CERTCertificate *crt)
+{
+    PRTime notBefore, notAfter;
+    SECStatus rc = CERT_GetCertTimes(crt, &notBefore, &notAfter);
+    const unix_time64_t now = log_epoch_secs;
+    return (rc == SECSuccess
+            && notBefore/1000000 <= now && now <= notAfter/1000000);
+}
+
+
 #define PEM_BEGIN          "-----BEGIN "
 #define PEM_END            "-----END "
 #define PEM_BEGIN_CERT     "-----BEGIN CERTIFICATE-----"
@@ -554,6 +565,11 @@ mod_nss_load_pem_crts (const char *fn, log_error_st *errh, CERTCertificateList *
         CERT_DestroyCertificateList(*pchain);
         *pchain = NULL;
     }
+    else if (!mod_nss_cert_is_active(cert)) {
+        log_error(errh, __FILE__, __LINE__,
+          "NSS: inactive/expired X509 certificate '%s'", fn);
+    }
+
     return cert;
 }
 
@@ -1190,6 +1206,12 @@ network_nss_load_pemfile (server *srv, const buffer *pemfile, const buffer *priv
                   "certificate %s marked OCSP Must-Staple, "
                   "but ssl.stapling-file not provided", pemfile->ptr);
     }
+
+  #if 0
+    PRTime notBefore, notAfter;
+    SECStatus rc = CERT_GetCertTimes(crt, &notBefore, &notAfter);
+    pc->notAfter = (rc == SECSuccess) ? notAfter/1000000 : 0;
+  #endif
 
     return pc;
 }

@@ -1275,6 +1275,33 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 #endif
 
 
+#if defined(BORINGSSL_API_VERSION) \
+ || defined(LIBRESSL_VERSION_NUMBER)
+static unix_time64_t
+mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time);
+#endif
+
+static int
+mod_openssl_cert_is_active (const X509 *crt)
+{
+    const ASN1_TIME *notBefore = X509_get0_notBefore(crt);
+    const ASN1_TIME *notAfter  = X509_get0_notAfter(crt);
+  #if OPENSSL_VERSION_NUMBER < 0x10101000L \
+   || defined(BORINGSSL_API_VERSION) \
+   || defined(LIBRESSL_VERSION_NUMBER)
+    const unix_time64_t before = mod_openssl_asn1_time_to_posix(notBefore);
+    const unix_time64_t after  = mod_openssl_asn1_time_to_posix(notAfter);
+    const unix_time64_t now = log_epoch_secs;
+    return (before <= now && now <= after);
+  #else /*(-2 is an error from ASN1_TIME_cmp_time_t(); test cmp for -1, 0, 1)*/
+    const unix_time64_t now = log_epoch_secs;
+    const int before_cmp = ASN1_TIME_cmp_time_t(notBefore, (time_t)now);
+    const int after_cmp  = ASN1_TIME_cmp_time_t(notAfter,  (time_t)now);
+    return ((before_cmp == -1 || before_cmp == 0) && 0 <= after_cmp);
+  #endif
+}
+
+
 static X509 *
 mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) **chain)
 {
@@ -1301,6 +1328,10 @@ mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) 
     else if (!mod_openssl_load_X509_sk(file, errh, chain, in)) {
         X509_free(x);
         x = NULL;
+    }
+    else if (!mod_openssl_cert_is_active(x)) {
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: inactive/expired X509 certificate '%s'", file);
     }
 
     BIO_free(in);
@@ -1409,7 +1440,6 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
 }
 
 
-#if !defined(BORINGSSL_API_VERSION)
 static unix_time64_t
 mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
 {
@@ -1494,7 +1524,6 @@ mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
 
   #endif
 }
-#endif
 
 
 static unix_time64_t
@@ -1711,6 +1740,11 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
                   "certificate %s marked OCSP Must-Staple, "
                   "but ssl.stapling-file not provided", pemfile->ptr);
     }
+
+  #if 0
+    const ASN1_TIME *notAfter = X509_get0_notAfter(ssl_pemfile_x509);
+    pc->notAfter = mod_openssl_asn1_time_to_posix(notAfter);
+  #endif
 
     return pc;
 }

@@ -606,6 +606,29 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
 }
 
 
+#if LIBWOLFSSL_VERSION_HEX >= 0x04002000
+static int
+mod_wolfssl_cert_is_active (const buffer *b)
+{
+    WOLFSSL_X509 *crt =
+      wolfSSL_X509_load_certificate_buffer((const unsigned char *)b->ptr,
+                                           (int)buffer_clen(b),
+                                           WOLFSSL_FILETYPE_ASN1);
+    if (NULL == crt) return 0;
+    const WOLFSSL_ASN1_TIME *notBefore = wolfSSL_X509_get_notBefore(crt);
+    const WOLFSSL_ASN1_TIME *notAfter  = wolfSSL_X509_get_notAfter(crt);
+    const time_t now = (time_t)log_epoch_secs;
+    /*(wolfSSL_X509_cmp_time() might return 0 (WOLFSSL_FAILURE) on failure
+     * to convert WOLFSSL_ASN1_TIME to struct tm; should not happen but WTH?
+     * Also might return -337 (GETTIME_ERROR))*/
+    const int before_cmp = wolfSSL_X509_cmp_time(notBefore, &now);
+    const int after_cmp  = wolfSSL_X509_cmp_time(notAfter,  &now);
+    wolfSSL_X509_free(crt);
+    return ((before_cmp == -1 || before_cmp == 0) && 0 <= after_cmp);
+}
+#endif
+
+
 /* WolfSSL OpenSSL compat API does not wipe temp mem used; write our own */
 /* (pemfile might contain private key)*/
 /* code here is based on similar code in mod_nss */
@@ -706,6 +729,12 @@ mod_wolfssl_load_pem_file (const char *fn, log_error_st *errh, buffer ***chain)
         mod_wolfssl_free_der_certs(certs);
         certs = NULL;
     }
+
+  #if LIBWOLFSSL_VERSION_HEX >= 0x04002000
+    if (certs && !mod_wolfssl_cert_is_active(certs[0]))
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: inactive/expired X509 certificate '%s'", fn);
+  #endif
 
     *chain = certs;
     return certs ? certs[0] : NULL;
@@ -1639,6 +1668,13 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
                   "certificate %s marked OCSP Must-Staple, "
                   "but ssl.stapling-file not provided", pemfile->ptr);
     }
+
+  #if 0
+  #if LIBWOLFSSL_VERSION_HEX >= 0x05000000 /*(stub func filled in v5.0.0)*/
+    pc->notAfter = /*(see mod_wolfssl_cert_is_active to get X509 crt from buf)*/
+      mod_openssl_asn1_time_to_posix(wolfSSL_X509_get_notAfter(crt));
+  #endif
+  #endif
 
     return pc;
 }
