@@ -1382,9 +1382,9 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
 
 
 static unix_time64_t
-mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
+mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
 {
-  #if LIBWOLFSSL_VERSION_HEX >= 0x04002000
+  #if LIBWOLFSSL_VERSION_HEX >= 0x05000000 /*(stub func filled in v5.0.0)*/
     /* Note: up to at least wolfSSL 4.5.0 (current version as this is written)
      * wolfSSL_ASN1_TIME_diff() is a stub function which always returns 0 */
     /* Note: this does not check for integer overflow of time_t! */
@@ -1402,8 +1402,7 @@ mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
 static unix_time64_t
 mod_openssl_ocsp_next_update (plugin_cert *pc)
 {
-  #if defined(WOLFSSL_VERSION)
-    /* XXX: future TODO */
+  #if LIBWOLFSSL_VERSION_HEX < 0x05000000
     UNUSED(pc);
     (void)mod_openssl_asn1_time_to_posix(NULL);
     return -1; /*(not implemented)*/
@@ -1420,7 +1419,7 @@ mod_openssl_ocsp_next_update (plugin_cert *pc)
 
     /* XXX: should save and evaluate cert status returned by these calls */
     ASN1_TIME *nextupd = NULL;
-   #ifdef WOLFSSL_VERSION /* WolfSSL limitation */
+   #if LIBWOLFSSL_VERSION_HEX < 0x04006000
     /* WolfSSL does not provide OCSP_resp_get0() OCSP_single_get0_status() */
     /* (inactive code path; alternative path followed in #if above for WolfSSL)
      * (chain not currently available in mod_openssl when used with WolfSSL)
