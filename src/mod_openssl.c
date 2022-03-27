@@ -1411,9 +1411,9 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
 
 #if !defined(BORINGSSL_API_VERSION)
 static unix_time64_t
-mod_openssl_asn1_time_to_posix (ASN1_TIME *asn1time)
+mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
 {
-  #ifdef LIBRESSL_VERSION_NUMBER
+  #if defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3050000fL
     /* LibreSSL was forked from OpenSSL 1.0.1; does not have ASN1_TIME_diff */
 
     /*(Note: all certificate times are expected to use UTC)*/
