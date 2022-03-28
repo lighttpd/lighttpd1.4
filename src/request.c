@@ -48,6 +48,7 @@ __attribute_pure__
 static const char * http_request_check_line_minimal (const char * const restrict s, const uint_fast32_t len) {
     for (uint_fast32_t i = 0; i < len; ++i) {
         if (__builtin_expect( (s[i] == '\0'), 0)) return s+i;
+        if (__builtin_expect( (s[i] == '\r'), 0)) return s+i;
         if (__builtin_expect( (s[i] == '\n'), 0)) return s+i;
     }
     return NULL;
@@ -596,9 +597,9 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
     /* Note: k and v might not be '\0' terminated strings;
      * care must be taken to avoid libc funcs which expect z-strings */
     const char * const restrict k = hpctx->k;
-    const char * const restrict v = hpctx->v;
+    const char * restrict v = hpctx->v;
     const uint32_t klen = hpctx->klen;
-    const uint32_t vlen = hpctx->vlen;
+    uint32_t vlen = hpctx->vlen;
 
     if (0 == klen)
         return http_request_header_line_invalid(r, 400,
@@ -743,6 +744,16 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
             if (x)
                 return http_request_header_char_invalid(r, *x,
                   "invalid character in header -> 400");
+
+            /* remove leading and trailing whitespace (strict RFC conformance)*/
+            if (__builtin_expect( (*v <= 0x20), 0)) {
+                while ((*v == ' ' || *v == '\t') && (++v, --vlen)) ;
+                if (0 == vlen)
+                    return 0;
+            }
+            if (__builtin_expect( (v[vlen-1] <= 0x20), 0)) {
+                while (v[vlen-1] == ' ' || v[vlen-1] == '\t') --vlen;
+            }
 
             if (__builtin_expect( (hpctx->id == HTTP_HEADER_H2_UNKNOWN), 0)) {
                 uint32_t j = 0;
