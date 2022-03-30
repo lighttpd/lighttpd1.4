@@ -74,8 +74,11 @@ static handler_t network_server_handle_fdevent(void *context, int revents) {
 
         if (nagle_disable)
             network_accept_tcp_nagle_disable(fd);
+      #ifdef HAVE_SYS_UN_H /*(see sock_addr.h)*/
         else if (addrlen <= 2) /*(AF_UNIX if !nagle_disable)*/
-            memcpy(addr.un.sun_path, BUF_PTR_LEN(srv_socket->srv_token)+1);
+            memcpy(addr.un.sun_path, srv_socket->srv_token->ptr,
+                         buffer_clen(srv_socket->srv_token)+1);
+      #endif
 
         connection *con = connection_accepted(srv, srv_socket, &addr, fd);
         if (__builtin_expect( (!con), 0)) return HANDLER_GO_ON;
