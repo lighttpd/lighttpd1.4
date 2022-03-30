@@ -1442,10 +1442,13 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
 
     h2_parse_headers_frame(r, psrc, alen, trailers);
 
+    if (__builtin_expect( (trailers), 0))
+        return 1;
+
   #if 0 /*(handled in h2_parse_frames() as a connection error)*/
     /* not handled here:
      * r is invalid if h2_parse_headers_frame() HPACK decode error */
-    if (s[3] == H2_FTYPE_PUSH_PROMISE && !trailers) {
+    if (s[3] == H2_FTYPE_PUSH_PROMISE) {
         /* Had to process HPACK to keep HPACK tables sync'd with peer but now
          * discard the request if PUSH_PROMISE, since not expected, as this code
          * is running as a server, not as a client.
@@ -1483,7 +1486,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
          * https://github.com/summerwind/h2spec/issues/122
          */
       #if 0
-        if (400 == r->http_status && !trailers) {
+        if (400 == r->http_status) {
             h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
             h2_retire_stream(r, con);
         }
