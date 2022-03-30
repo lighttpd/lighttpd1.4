@@ -252,7 +252,14 @@ static void * mod_extforward_parse_forwarder(server *srv, const array *forwarder
         struct sock_addr_mask * const sm = fwd->addrs + fwd->addrs_used++;
         sm->bits = nm_bits;
         *nm_slash = '\0';
-        rc = sock_addr_from_str_numeric(&sm->addr, ds->key.ptr, srv->errh);
+        if (ds->key.ptr[0] == '['
+            && ds->key.ptr+1 < nm_slash && nm_slash[-1] == ']') {
+            nm_slash[-1] = '\0';
+            rc = sock_addr_from_str_numeric(&sm->addr,ds->key.ptr+1,srv->errh);
+            nm_slash[-1] = ']';
+        }
+        else
+            rc = sock_addr_from_str_numeric(&sm->addr,ds->key.ptr,  srv->errh);
         *nm_slash = '/';
         if (1 != rc) {
             free(fwd);
