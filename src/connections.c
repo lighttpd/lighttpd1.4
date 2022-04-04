@@ -957,7 +957,7 @@ connection *connection_accepted(server *srv, const server_socket *srv_socket, so
 
 
 __attribute_cold__
-__attribute_noinline__
+__attribute_const__
 static const char *
 connection_get_state (request_state_t state)
 {
@@ -978,6 +978,18 @@ connection_get_state (request_state_t state)
 }
 
 
+__attribute_cold__
+__attribute_noinline__
+__attribute_nonnull__()
+static void
+connection_log_state (const request_st * const r, const char * const tag)
+{
+    log_error(r->conf.errh, __FILE__, __LINE__,
+      "fd:%d id:%d state:%s%s", r->con->fd, r->h2id,
+      connection_get_state(r->state), tag);
+}
+
+
 static void connection_state_machine_h2 (request_st *h2r, connection *con);
 
 
@@ -986,11 +998,8 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 {
 	request_state_t ostate;
 	do {
-		if (r->conf.log_state_handling) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "state for fd:%d id:%d %s", con->fd, r->h2id,
-			  connection_get_state(r->state));
-		}
+		if (r->conf.log_state_handling)
+			connection_log_state(r, "");
 
 		switch ((ostate = r->state)) {
 		case CON_STATE_REQUEST_START: /* transient */
@@ -1063,9 +1072,8 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 			break;
 		case CON_STATE_CONNECT:
 			break;
-		default:
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "unknown state: %d %d", con->fd, r->state);
+		default:/*(should not happen)*/
+			/*connection_log_state(r, "");*/ /*(unknown state)*/
 			break;
 		}
 	} while (ostate != (request_state_t)r->state);
@@ -1251,21 +1259,11 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
             /* future: might track read/write interest per request
              * to avoid iterating through all active requests */
 
-          #if 0
-            const int log_state_handling = r->conf.log_state_handling;
-            if (log_state_handling)
-                log_error(r->conf.errh, __FILE__, __LINE__,
-                  "state at enter %d %d %s", con->fd, r->h2id,
-                  connection_get_state(r->state));
-          #endif
-
             connection_state_machine_loop(r, con);
 
           #if 0
-            if (log_state_handling)
-                log_error(r->conf.errh, __FILE__, __LINE__,
-                  "state at exit %d %d %s", con->fd, r->h2id,
-                  connection_get_state(r->state));
+            if (r->conf.log_state_handling)
+                connection_log_state(r, " at loop exit");
           #endif
 
             if (r->state < CON_STATE_WRITE)
@@ -1293,7 +1291,7 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
 
                 connection_set_state(r, CON_STATE_RESPONSE_END);
                 if (__builtin_expect( (r->conf.log_state_handling), 0))
-                    connection_state_machine_loop(r, con);
+                    connection_log_state(r, "");
             }
 
             {/*(r->state==CON_STATE_RESPONSE_END || r->state==CON_STATE_ERROR)*/
@@ -1366,18 +1364,10 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
 static void
 connection_state_machine_h1 (request_st * const r, connection * const con)
 {
-	const int log_state_handling = r->conf.log_state_handling;
-	if (log_state_handling) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "state at enter %d %s", con->fd, connection_get_state(r->state));
-	}
-
 	connection_state_machine_loop(r, con);
 
-	if (log_state_handling) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "state at exit: %d %s", con->fd, connection_get_state(r->state));
-	}
+	if (r->conf.log_state_handling)
+		connection_log_state(r, " at loop exit");
 
 	connection_set_fdevent_interest(r, con);
 }
