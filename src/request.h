@@ -16,6 +16,7 @@ struct cond_match_t;    /* declaration */
 struct stat_cache_entry;/* declaration */
 
 typedef struct request_config {
+    fdlog_st *errh;
     unsigned int http_parseopts;
     uint32_t max_request_field_size;
     const array *mimetypes;
@@ -24,7 +25,6 @@ typedef struct request_config {
     const buffer *document_root;
     const buffer *server_name;
     const buffer *server_tag;
-    fdlog_st *errh;
 
     unsigned int max_request_size;
     unsigned short max_keep_alive_requests;
@@ -33,26 +33,26 @@ typedef struct request_config {
     unsigned short max_write_idle;
     unsigned short stream_request_body;
     unsigned short stream_response_body;
-    unsigned char high_precision_timestamps;
-    unsigned char allow_http11;
-    unsigned char follow_symlink;
-    unsigned char etag_flags;
-    unsigned char force_lowercase_filenames; /*(case-insensitive file systems)*/
-    unsigned char use_xattr;
-    unsigned char range_requests;
-    unsigned char error_intercept;
+    unsigned int high_precision_timestamps:1;
+    unsigned int allow_http11:1;
+    unsigned int range_requests:1;
+    unsigned int follow_symlink:1;
+    unsigned int etag_flags:3;
+    unsigned int use_xattr:1;
+    unsigned int force_lowercase_filenames:2;/*(case-insensitive file systems)*/
+    unsigned int error_intercept:1;
 
-    unsigned char h2proto; /*(global setting copied for convenient access)*/
+    unsigned int h2proto:2; /*(global setting copied for convenient access)*/
 
     /* debug */
-    unsigned char log_file_not_found;
-    unsigned char log_request_header;
-    unsigned char log_request_handling;
-    unsigned char log_response_header;
-    unsigned char log_condition_handling;
-    unsigned char log_timeouts;
-    unsigned char log_state_handling;
-    unsigned char log_request_header_on_error;
+    unsigned int log_request_handling:1;
+    unsigned int log_state_handling:1;
+    unsigned int log_condition_handling:1;
+    unsigned int log_response_header:1;
+    unsigned int log_request_header:1;
+    unsigned int log_request_header_on_error:1;
+    unsigned int log_file_not_found:1;
+    unsigned int log_timeouts:1;
 
     unsigned int bytes_per_second; /* connection bytes/sec limit */
     unsigned int global_bytes_per_second;/*total bytes/sec limit for scope*/
