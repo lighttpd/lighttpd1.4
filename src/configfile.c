@@ -1235,6 +1235,43 @@ int config_finalize(server *srv, const buffer *default_server_tag) {
         return 0;
     }
 
+    /* check if condition regex captures are used by modules (redirect,rewrite)
+     * and convert back to regex if condition was simplified to non-regex by
+     * configparser_simplify_regex() */
+    if (__builtin_expect( (srv->config_captures != 0), 0)) {
+        for (uint32_t i = 1; i < srv->config_context->used; ++i) {
+            data_config * const dc =
+              (data_config *)srv->config_context->data[i];
+            if (__builtin_expect( (0 == dc->capture_idx), 1))
+                continue;
+            switch (dc->cond) {
+              case CONFIG_COND_EQ:
+              case CONFIG_COND_PREFIX:
+              case CONFIG_COND_SUFFIX:
+                break;
+              /*case CONFIG_COND_NE:*/
+              /*case CONFIG_COND_MATCH:*/
+              /*case CONFIG_COND_NOMATCH:*/
+              /*case CONFIG_COND_ELSE:*/
+              default:
+                continue;
+            }
+            buffer * const b = &dc->string;
+            if (dc->cond != CONFIG_COND_SUFFIX || b->ptr[0] == '.') {
+                buffer_extend(b, 1);
+                memmove(b->ptr+1, b->ptr, buffer_clen(b)-1);
+                b->ptr[0] = (dc->cond == CONFIG_COND_SUFFIX) ? '\\' : '^';
+            }
+            if (dc->cond != CONFIG_COND_PREFIX)
+                buffer_append_string_len(b, CONST_STR_LEN("$"));
+            dc->cond = CONFIG_COND_MATCH;
+            /*(config_pcre_keyvalue())*/
+            const int pcre_jit = config_feature_bool(srv, "server.pcre_jit", 1);
+            if (!data_config_pcre_compile(dc, pcre_jit, srv->errh))
+                return 0;
+        }
+    }
+
   #ifdef HAVE_PCRE2_H
     for (uint32_t i = 1; i < srv->config_context->used; ++i) {
         data_config * const dc =

@@ -177,9 +177,51 @@ configparser_comp_key_id(const buffer * const obj_tag, const buffer * const comp
   return COMP_UNSET;
 }
 
-static void
-configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag, const buffer * const comp_tag, const config_cond_t cond, buffer * const rvalue)
+static config_cond_t
+configparser_simplify_regex(buffer * const b)
 {
+    /* translate simple regex anchored with ^ and/or $ to simpler match types
+     * (note: skips if regex contains any '\\', even if some could be removed,
+     *  though we special-case "\.ext"; skips if other '.' found in str)
+     * (currently assumes CONFIG_COND_NOMATCH input, not CONFIG_COND_NOMATCH) */
+    uint32_t len = buffer_clen(b);
+    config_cond_t cond = CONFIG_COND_MATCH;
+    int off = 0;
+    if (len && b->ptr[len-1] == '$') {
+        cond = CONFIG_COND_SUFFIX;
+        if (b->ptr[0] == '\\' && b->ptr[1] == '.')
+            off = 2;
+        else if (b->ptr[0] == '^') {
+            off = 1;
+            cond = CONFIG_COND_EQ;
+        }
+        --len;
+    }
+    else if (b->ptr[0] == '^') {
+        off = 1;
+        cond = CONFIG_COND_PREFIX;
+    }
+    else
+        return CONFIG_COND_MATCH;
+
+    static const char regex_chars[] = "\\^$.|?*+()[]{}";
+    if (strcspn(b->ptr+off, regex_chars) != len - off)
+        return CONFIG_COND_MATCH;
+    if (off) { /*(remove only first char if (off == 2) to keep '.' in "\.")*/
+        memmove(b->ptr, b->ptr+1, len-1);
+        --len;
+    }
+    buffer_truncate(b, len);
+    return cond;
+}
+
+static void
+configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag, const buffer * const comp_tag, config_cond_t cond, buffer * const rvalue)
+{
+    const comp_key_t comp = configparser_comp_key_id(obj_tag, comp_tag);
+    if (cond == CONFIG_COND_MATCH && comp != COMP_SERVER_SOCKET)
+        cond = configparser_simplify_regex(rvalue);
+
     const char *op = NULL;
     switch(cond) {
     case CONFIG_COND_NE:      op = "!="; break;
@@ -219,7 +261,7 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
     else {
       dc = data_config_init();
       dc->cond = cond;
-      dc->comp = configparser_comp_key_id(obj_tag, comp_tag);
+      dc->comp = comp;
 
       buffer_copy_buffer(&dc->key, tb);
       buffer_copy_buffer(&dc->comp_tag, comp_tag);
