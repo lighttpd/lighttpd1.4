@@ -15,6 +15,8 @@ typedef enum {
 	CONFIG_COND_MATCH,   /** =~ */
 	CONFIG_COND_NE,      /** != */
 	CONFIG_COND_NOMATCH, /** !~ */
+	CONFIG_COND_PREFIX,  /** =^ */ /*(use ELSE for not-prefix)*/
+	CONFIG_COND_SUFFIX,  /** =$ */ /*(use ELSE for not-suffix)*/
 	CONFIG_COND_ELSE     /** (always true if reached) */
 } config_cond_t;
 

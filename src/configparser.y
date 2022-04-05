@@ -185,6 +185,8 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
     case CONFIG_COND_EQ:      op = "=="; break;
     case CONFIG_COND_NOMATCH: op = "!~"; break;
     case CONFIG_COND_MATCH:   op = "=~"; break;
+    case CONFIG_COND_PREFIX:  op = "=^"; break;
+    case CONFIG_COND_SUFFIX:  op = "=$"; break;
     default:
       force_assert(0);
       return; /* unreachable */
@@ -235,7 +237,10 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
         buffer_copy_string_len(&dc->comp_tag, CONST_STR_LEN("User-Agent"));
       }
       else if (COMP_HTTP_REMOTE_IP == dc->comp
-               && (dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE)) {
+               && (dc->cond == CONFIG_COND_EQ     ||
+                   dc->cond == CONFIG_COND_NE     ||
+                   dc->cond == CONFIG_COND_PREFIX ||
+                   dc->cond == CONFIG_COND_SUFFIX)) {
         if (!config_remoteip_normalize(rvalue, tb)) {
           fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
           ctx->ok = 0;
@@ -252,7 +257,10 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
         }
       }
       else if (COMP_HTTP_HOST == dc->comp) {
-        if (dc->cond == CONFIG_COND_EQ || dc->cond == CONFIG_COND_NE) {
+        if (dc->cond == CONFIG_COND_EQ     ||
+            dc->cond == CONFIG_COND_NE     ||
+            dc->cond == CONFIG_COND_PREFIX ||
+            dc->cond == CONFIG_COND_SUFFIX) {
           if (http_request_host_normalize(rvalue, 0)) {
             fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
             ctx->ok = 0;
@@ -623,6 +631,14 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
       C->key.ptr[pos] = '!'; /* opposite cond */
       /*buffer_copy_string_len(C->op, CONST_STR_LEN("!~"));*/
       break;
+    case CONFIG_COND_PREFIX:
+      C->key.ptr[pos] = '!'; /* opposite cond */
+      /*buffer_copy_string_len(C->op, CONST_STR_LEN("!^"));*/
+      break;
+    case CONFIG_COND_SUFFIX:
+      C->key.ptr[pos] = '!'; /* opposite cond */
+      /*buffer_copy_string_len(C->op, CONST_STR_LEN("!$"));*/
+      break;
     default: /* should not happen; CONFIG_COND_ELSE checked further above */
       force_assert(0);
     }
@@ -714,6 +730,12 @@ cond(A) ::= NE. {
 }
 cond(A) ::= NOMATCH. {
   A = CONFIG_COND_NOMATCH;
+}
+cond(A) ::= PREFIX. {
+  A = CONFIG_COND_PREFIX;
+}
+cond(A) ::= SUFFIX. {
+  A = CONFIG_COND_SUFFIX;
 }
 
 stringop(A) ::= expression(B). {

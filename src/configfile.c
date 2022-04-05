@@ -239,6 +239,8 @@ static void config_burl_normalize_cond (server * const srv) {
         switch(config->cond) {
         case CONFIG_COND_NE:
         case CONFIG_COND_EQ:
+        case CONFIG_COND_PREFIX:
+        case CONFIG_COND_SUFFIX:
             /* (can use this routine as long as it does not perform
              *  any regex-specific normalization of first arg) */
             pcre_keyvalue_burl_normalize_key(&config->string, tb);
@@ -1782,22 +1784,17 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 							"use => for assignments in arrays");
 				}
 			} else if (t->in_cond) {
-				if (t->input[t->offset + 1] == '=') {
-					t->offset += 2;
-
-					buffer_copy_string_len(token, CONST_STR_LEN("=="));
-
-					tid = TK_EQ;
-				} else if (t->input[t->offset + 1] == '~') {
-					t->offset += 2;
-
-					buffer_copy_string_len(token, CONST_STR_LEN("=~"));
-
-					tid = TK_MATCH;
-				} else {
+				switch (t->input[t->offset + 1]) {
+				  case '=': tid = TK_EQ;     break;
+				  case '~': tid = TK_MATCH;  break;
+				  case '^': tid = TK_PREFIX; break;
+				  case '$': tid = TK_SUFFIX; break;
+				  default:
 					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
-							"only =~ and == are allowed in the condition");
+							"only == =~ =^ =$ are allowed in the condition");
 				}
+				buffer_copy_string_len(token, t->input + t->offset, 2);
+				t->offset += 2;
 				t->in_key = 1;
 				t->in_cond = 0;
 			} else if (t->in_key) {
@@ -1815,22 +1812,15 @@ static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *
 			break;
 		case '!':
 			if (t->in_cond) {
-				if (t->input[t->offset + 1] == '=') {
-					t->offset += 2;
-
-					buffer_copy_string_len(token, CONST_STR_LEN("!="));
-
-					tid = TK_NE;
-				} else if (t->input[t->offset + 1] == '~') {
-					t->offset += 2;
-
-					buffer_copy_string_len(token, CONST_STR_LEN("!~"));
-
-					tid = TK_NOMATCH;
-				} else {
+				switch (t->input[t->offset + 1]) {
+				  case '=': tid = TK_NE;      break;
+				  case '~': tid = TK_NOMATCH; break;
+				  default:
 					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
 							"only !~ and != are allowed in the condition");
 				}
+				buffer_copy_string_len(token, t->input + t->offset, 2);
+				t->offset += 2;
 				t->in_key = 1;
 				t->in_cond = 0;
 			} else {

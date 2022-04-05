@@ -561,6 +561,18 @@ static cond_result_t config_check_cond_nocache_eval(request_st * const r, const 
 		match = (dc->cond == CONFIG_COND_MATCH);
 		match ^= (config_pcre_match(r, dc, l) > 0);
 		break;
+	case CONFIG_COND_PREFIX:
+	case CONFIG_COND_SUFFIX:
+		{
+			uint_fast32_t llen = buffer_clen(l);
+			uint_fast32_t dlen = buffer_clen(&dc->string);
+			uint_fast32_t off  = (dc->cond == CONFIG_COND_PREFIX)
+			                   ? 0
+			                   : llen - dlen; /*(underflow caught below)*/
+			match = !(dlen <= llen
+			          && 0 == memcmp(l->ptr+off, dc->string.ptr, dlen));
+		}
+		break;
 	default:
 		match = 1; /* return (cache->local_result = COND_RESULT_FALSE); below */
 		break;
