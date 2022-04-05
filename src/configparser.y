@@ -41,6 +41,7 @@ static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
 static data_config *configparser_pop(config_t *ctx) {
   data_config *old = ctx->current;
   ctx->current = vector_config_weak_pop(&ctx->configs_stack);
+  force_assert(old && ctx->current);
   return old;
 }
 
@@ -567,9 +568,7 @@ globalstart ::= GLOBAL. {
 }
 
 global ::= globalstart LCURLY metalines RCURLY. {
-  force_assert(ctx->current);
   configparser_pop(ctx);
-  force_assert(ctx->current);
 }
 
 condlines(A) ::= condlines(B) eols ELSE condline(C). {
@@ -669,28 +668,14 @@ condlines(A) ::= condline(B). {
 condline(A) ::= context LCURLY metalines RCURLY. {
   A = NULL;
   if (ctx->ok) {
-    data_config *cur;
-
-    cur = ctx->current;
-    configparser_pop(ctx);
-
-    force_assert(cur && ctx->current);
-
-    A = cur;
+    A = configparser_pop(ctx);
   }
 }
 
 cond_else(A) ::= context_else LCURLY metalines RCURLY. {
   A = NULL;
   if (ctx->ok) {
-    data_config *cur;
-
-    cur = ctx->current;
-    configparser_pop(ctx);
-
-    force_assert(cur && ctx->current);
-
-    A = cur;
+    A = configparser_pop(ctx);
   }
 }
 

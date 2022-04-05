@@ -28,7 +28,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
-#include <ctype.h>
 #include <limits.h>
 #include <glob.h>
 
@@ -1715,427 +1714,336 @@ void config_log_error_close(server *srv) {
 typedef struct {
 	const char *source;
 	const char *input;
-	size_t offset;
-	size_t size;
+	int offset;
+	int size;
 
 	int line_pos;
 	int line;
 
 	int in_key;
-	int in_brace;
+	int parens;
 	int in_cond;
 	int simulate_eol;
+	log_error_st *errh;
 } tokenizer_t;
 
-static int config_skip_newline(tokenizer_t *t) {
-	int skipped = 1;
-	force_assert(t->input[t->offset] == '\r' || t->input[t->offset] == '\n');
-	if (t->input[t->offset] == '\r' && t->input[t->offset + 1] == '\n') {
-		skipped ++;
-		t->offset ++;
-	}
-	t->offset ++;
-	return skipped;
+__attribute_pure__
+static int config_skip_newline(const tokenizer_t * const t) {
+    const char * const s = t->input + t->offset;
+    /*force_assert(s[0] == '\r' || s[0] == '\n');*/
+    return 1 + (s[0] == '\r' && s[1] == '\n');
 }
 
-static int config_skip_comment(tokenizer_t *t) {
-	int i;
-	force_assert(t->input[t->offset] == '#');
-	for (i = 1; t->input[t->offset + i] &&
-	     (t->input[t->offset + i] != '\n' && t->input[t->offset + i] != '\r');
-	     i++);
-	t->offset += i;
-	return i;
+__attribute_noinline__
+__attribute_pure__
+static int config_skip_comment(const tokenizer_t * const t) {
+    /*assert(t->input[t->offset] == '#');*/
+    const char *s = t->input + t->offset;
+    do { ++s; } while (*s && *s != '\r' && *s != '\n');
+    return (int)(s - t->input);
 }
 
 __attribute_cold__
-static int config_tokenizer_err(server *srv, const char *file, unsigned int line, tokenizer_t *t, const char *msg) {
-    log_error(srv->errh, file, line, "source: %s line: %d pos: %d %s",
-              t->source, t->line, t->line_pos, msg);
+static int config_tokenizer_err(tokenizer_t *t, const char *file, unsigned int line, const char *msg) {
+    log_error(t->errh, file, line, "source: %s line: %d pos: %d %s",
+              t->source, t->line, t->offset - t->line_pos, msg);
     return -1;
 }
 
-static int config_tokenizer(server *srv, tokenizer_t *t, int *token_id, buffer *token) {
-	int tid = 0;
-	size_t i;
+static int config_tokenizer(tokenizer_t *t, buffer *token) {
+    if (t->simulate_eol) {
+        t->simulate_eol = 0;
+        t->in_key = 1;
+        buffer_copy_string_len(token, CONST_STR_LEN("(EOL)"));
+        return TK_EOL;
+    }
 
-	if (t->simulate_eol) {
-		t->simulate_eol = 0;
-		t->in_key = 1;
-		tid = TK_EOL;
-		buffer_copy_string_len(token, CONST_STR_LEN("(EOL)"));
-	}
+    while (t->offset < t->size) {
+        const char * const s = t->input + t->offset;
+        switch (s[0]) {
+          case '\t':
+          case ' ':
+            t->offset++;
+            break;
+          case '=':
+            if (t->parens) {
+                if (s[1] != '>')
+                    return config_tokenizer_err(t, __FILE__, __LINE__,
+                             "use => for assignments in arrays");
+                t->offset += 2;
+                buffer_copy_string_len(token, s, 2); /* "=>" */
+                return TK_ARRAY_ASSIGN;
+            }
+            else if (t->in_cond) {
+                int tid;
+                switch (s[1]) {
+                  case '=': tid = TK_EQ;     break;
+                  case '~': tid = TK_MATCH;  break;
+                  case '^': tid = TK_PREFIX; break;
+                  case '$': tid = TK_SUFFIX; break;
+                  default:
+                    return config_tokenizer_err(t, __FILE__, __LINE__,
+                             "only == =~ =^ =$ are allowed in the condition");
+                }
+                t->offset += 2;
+                t->in_key = 1;
+                t->in_cond = 0;
+                buffer_copy_string_len(token, s, 2); /* "==" "=~" "=^" "=$" */
+                return tid;
+            }
+            else if (t->in_key) {
+                t->offset++;
+                buffer_copy_string_len(token, s, 1); /* "=" */
+                return TK_ASSIGN;
+            }
+            else
+                return config_tokenizer_err(t, __FILE__, __LINE__,
+                         "unexpected equal-sign: =");
+          case '!':
+            if (t->in_cond) {
+                int tid;
+                switch (s[1]) {
+                  case '=': tid = TK_NE;      break;
+                  case '~': tid = TK_NOMATCH; break;
+                  default:
+                    return config_tokenizer_err(t, __FILE__, __LINE__,
+                             "only !~ and != are allowed in the condition");
+                }
+                t->offset += 2;
+                t->in_key = 1;
+                t->in_cond = 0;
+                buffer_copy_string_len(token, s, 2); /* "!=" "!~" */
+                return tid;
+            }
+            else
+                return config_tokenizer_err(t, __FILE__, __LINE__,
+                         "unexpected exclamation-marks: !");
+          case '\n':
+          case '\r':
+            do {
+                switch (t->input[t->offset]) {
+                  case '\r':
+                  case '\n':
+                    t->offset += config_skip_newline(t);
+                    t->line_pos = t->offset;
+                    t->line++;
+                    continue;
+                  case '#':
+                    t->offset = config_skip_comment(t);
+                    continue;
+                  case '\t':
+                  case ' ':
+                    t->offset++;
+                    continue;
+                  default:
+                    break;
+                }
+                break;
+            } while (t->offset < t->size);
+            if (!t->parens) {
+                t->in_key = 1;
+                buffer_copy_string_len(token, CONST_STR_LEN("(EOL)"));
+                return TK_EOL;
+            }
+            break;
+          case ',':
+            t->offset++;
+            if (t->parens) {
+                buffer_copy_string_len(token, CONST_STR_LEN("(COMMA)"));
+                return TK_COMMA;
+            }
+            break;
+          case '"':
+           {
+            /* search for the terminating " */
+            const char *start = s + 1;   /*buffer_blank(token);*/
+            buffer_copy_string_len(token, CONST_STR_LEN(""));
 
-	while (tid == 0 && t->offset < t->size && t->input[t->offset]) {
-		char c = t->input[t->offset];
-		const char *start = NULL;
+            int i;
+            for (i = 1; s[i] && s[i] != '"'; ++i) {
+                if (s[i] == '\\' && s[i+1] == '"') {
+                    buffer_append_string_len(token, start, s + i - start);
+                    start = s + ++i; /* step over '"' */
+                }
+            }
 
-		switch (c) {
-		case '=':
-			if (t->in_brace) {
-				if (t->input[t->offset + 1] == '>') {
-					t->offset += 2;
+            if (s[i] == '\0') {
+                return config_tokenizer_err(t, __FILE__, __LINE__,
+                         "missing closing quote");
+            }
 
-					buffer_copy_string_len(token, CONST_STR_LEN("=>"));
+            t->offset += i + 1;
+            buffer_append_string_len(token, start, s + i - start);
+            return TK_STRING;
+           }
+          case '(':
+            t->offset++;
+            t->parens++;
+            buffer_copy_string_len(token, s, 1); /* "(" */
+            return TK_LPARAN;
+          case ')':
+            if (!t->parens)
+                return config_tokenizer_err(t, __FILE__, __LINE__,
+                         "close-parens seen open-parens");
+            t->offset++;
+            t->parens--;
+            buffer_copy_string_len(token, s, 1); /* ")" */
+            return TK_RPARAN;
+          case '$':
+            t->offset++;
+            t->in_cond = 1;
+            t->in_key = 0;
+            buffer_copy_string_len(token, s, 1); /* "$" */
+            return TK_DOLLAR;
+          case '+':
+            if (s[1] == '=') {
+                t->offset += 2;
+                buffer_copy_string_len(token, s, 2); /* "+=" */
+                return TK_APPEND;
+            }
+            else {
+                t->offset++;
+                buffer_copy_string_len(token, s, 1); /* "+" */
+                return TK_PLUS;
+            }
+          case ':':
+            if (s[1] != '=')
+                return config_tokenizer_err(t, __FILE__, __LINE__,
+                         "unexpected character ':'");
+            t->offset += 2;
+            buffer_copy_string_len(token, s, 2); /* ":=" */
+            return TK_FORCE_ASSIGN;
+          case '{':
+            t->offset++;
+            buffer_copy_string_len(token, s, 1); /* "{" */
+            return TK_LCURLY;
+          case '}':
+            while (++t->offset < t->size) {
+                int c = t->input[t->offset];
+                if (c == '\r' || c == '\n') {
+                    break;
+                }
+                else if (c == '#') {
+                    t->offset = config_skip_comment(t);
+                    break;
+                }
+                else if (c != ' ' && c != '\t') {
+                    t->simulate_eol = 1;
+                    break;
+                } /* else (c == ' ' || c == '\t') */
+            }
+            buffer_copy_string_len(token, s, 1); /* "}" */
+            return TK_RCURLY;
+          case '[':
+            t->offset++;
+            buffer_copy_string_len(token, s, 1); /* "[" */
+            return TK_LBRACKET;
+          case ']':
+            t->offset++;
+            buffer_copy_string_len(token, s, 1); /* "]" */
+            return TK_RBRACKET;
+          case '#':
+            t->offset = config_skip_comment(t);
+            break;
+          case '\0':
+            config_tokenizer_err(t, __FILE__, __LINE__, "stray NUL");
+            return 0;
+          default:
+            if (t->in_cond) {
+                int i = 0;
+                while (light_isalpha(s[i]) || s[i] == '_') ++i;
+                if (i && s[i]) {
+                    t->offset += i;
+                    buffer_copy_string_len(token, s, i);
+                    return TK_SRVVARNAME;
+                }
+                else
+                    return config_tokenizer_err(t, __FILE__, __LINE__,
+                             "invalid character in condition");
+            }
+            else if (light_isdigit(s[0])) {
+                /* take all digits */
+                int i = 1;
+                while (light_isdigit(s[i])) ++i;
+                t->offset += i;
+                buffer_copy_string_len(token, s, i);
+                return TK_INTEGER;
+            }
+            else {
+                /* the key might consist of [-.0-9a-z] */
+                int i = 0;
+                while (light_isalnum(s[i])
+                       || s[i] == '.'
+                       || s[i] == '_'  /* for env.* */
+                       || s[i] == '-') ++i;
 
-					tid = TK_ARRAY_ASSIGN;
-				} else {
-					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
-							"use => for assignments in arrays");
-				}
-			} else if (t->in_cond) {
-				switch (t->input[t->offset + 1]) {
-				  case '=': tid = TK_EQ;     break;
-				  case '~': tid = TK_MATCH;  break;
-				  case '^': tid = TK_PREFIX; break;
-				  case '$': tid = TK_SUFFIX; break;
-				  default:
-					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
-							"only == =~ =^ =$ are allowed in the condition");
-				}
-				buffer_copy_string_len(token, t->input + t->offset, 2);
-				t->offset += 2;
-				t->in_key = 1;
-				t->in_cond = 0;
-			} else if (t->in_key) {
-				tid = TK_ASSIGN;
-
-				buffer_copy_string_len(token, t->input + t->offset, 1);
-
-				t->offset++;
-				t->line_pos++;
-			} else {
-				return config_tokenizer_err(srv, __FILE__, __LINE__, t,
-						"unexpected equal-sign: =");
-			}
-
-			break;
-		case '!':
-			if (t->in_cond) {
-				switch (t->input[t->offset + 1]) {
-				  case '=': tid = TK_NE;      break;
-				  case '~': tid = TK_NOMATCH; break;
-				  default:
-					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
-							"only !~ and != are allowed in the condition");
-				}
-				buffer_copy_string_len(token, t->input + t->offset, 2);
-				t->offset += 2;
-				t->in_key = 1;
-				t->in_cond = 0;
-			} else {
-				return config_tokenizer_err(srv, __FILE__, __LINE__, t,
-						"unexpected exclamation-marks: !");
-			}
-
-			break;
-		case '\t':
-		case ' ':
-			t->offset++;
-			t->line_pos++;
-			break;
-		case '\n':
-		case '\r':
-			if (t->in_brace == 0) {
-				int done = 0;
-				while (!done && t->offset < t->size) {
-					switch (t->input[t->offset]) {
-					case '\r':
-					case '\n':
-						config_skip_newline(t);
-						t->line_pos = 1;
-						t->line++;
-						break;
-
-					case '#':
-						t->line_pos += config_skip_comment(t);
-						break;
-
-					case '\t':
-					case ' ':
-						t->offset++;
-						t->line_pos++;
-						break;
-
-					default:
-						done = 1;
-					}
-				}
-				t->in_key = 1;
-				tid = TK_EOL;
-				buffer_copy_string_len(token, CONST_STR_LEN("(EOL)"));
-			} else {
-				config_skip_newline(t);
-				t->line_pos = 1;
-				t->line++;
-			}
-			break;
-		case ',':
-			if (t->in_brace > 0) {
-				tid = TK_COMMA;
-
-				buffer_copy_string_len(token, CONST_STR_LEN("(COMMA)"));
-			}
-
-			t->offset++;
-			t->line_pos++;
-			break;
-		case '"':
-			/* search for the terminating " */
-			start = t->input + t->offset + 1;
-			buffer_copy_string_len(token, CONST_STR_LEN(""));
-
-			for (i = 1; t->input[t->offset + i]; i++) {
-				if (t->input[t->offset + i] == '\\' &&
-				    t->input[t->offset + i + 1] == '"') {
-
-					buffer_append_string_len(token, start, t->input + t->offset + i - start);
-
-					start = t->input + t->offset + i + 1;
-
-					/* skip the " */
-					i++;
-					continue;
-				}
-
-
-				if (t->input[t->offset + i] == '"') {
-					tid = TK_STRING;
-
-					buffer_append_string_len(token, start, t->input + t->offset + i - start);
-
-					break;
-				}
-			}
-
-			if (t->input[t->offset + i] == '\0') {
-				return config_tokenizer_err(srv, __FILE__, __LINE__, t,
-						"missing closing quote");
-			}
-
-			t->offset += i + 1;
-			t->line_pos += i + 1;
-
-			break;
-		case '(':
-			t->offset++;
-			t->in_brace++;
-
-			tid = TK_LPARAN;
-
-			buffer_copy_string_len(token, CONST_STR_LEN("("));
-			break;
-		case ')':
-			t->offset++;
-			t->in_brace--;
-
-			tid = TK_RPARAN;
-
-			buffer_copy_string_len(token, CONST_STR_LEN(")"));
-			break;
-		case '$':
-			t->offset++;
-
-			tid = TK_DOLLAR;
-			t->in_cond = 1;
-			t->in_key = 0;
-
-			buffer_copy_string_len(token, CONST_STR_LEN("$"));
-
-			break;
-
-		case '+':
-			if (t->input[t->offset + 1] == '=') {
-				t->offset += 2;
-				buffer_copy_string_len(token, CONST_STR_LEN("+="));
-				tid = TK_APPEND;
-			} else {
-				t->offset++;
-				tid = TK_PLUS;
-				buffer_copy_string_len(token, CONST_STR_LEN("+"));
-			}
-			break;
-
-		case ':':
-			if (t->input[t->offset+1] == '=') {
-				t->offset += 2;
-				tid = TK_FORCE_ASSIGN;
-				buffer_copy_string_len(token, CONST_STR_LEN(":="));
-			} else {
-				return config_tokenizer_err(srv, __FILE__, __LINE__, t,
-						"unexpected character ':'");
-			}
-			break;
-
-		case '{':
-			t->offset++;
-
-			tid = TK_LCURLY;
-
-			buffer_copy_string_len(token, CONST_STR_LEN("{"));
-
-			break;
-
-		case '}':
-			t->offset++;
-
-			tid = TK_RCURLY;
-
-			buffer_copy_string_len(token, CONST_STR_LEN("}"));
-
-			for (; t->offset < t->size; ++t->offset,++t->line_pos) {
-				c = t->input[t->offset];
-				if (c == '\r' || c == '\n') {
-					break;
-				}
-				else if (c == '#') {
-					t->line_pos += config_skip_comment(t);
-					break;
-				}
-				else if (c != ' ' && c != '\t') {
-					t->simulate_eol = 1;
-					break;
-				} /* else (c == ' ' || c == '\t') */
-			}
-
-			break;
-
-		case '[':
-			t->offset++;
-
-			tid = TK_LBRACKET;
-
-			buffer_copy_string_len(token, CONST_STR_LEN("["));
-
-			break;
-
-		case ']':
-			t->offset++;
-
-			tid = TK_RBRACKET;
-
-			buffer_copy_string_len(token, CONST_STR_LEN("]"));
-
-			break;
-		case '#':
-			t->line_pos += config_skip_comment(t);
-
-			break;
-		default:
-			if (t->in_cond) {
-				for (i = 0; t->input[t->offset + i] &&
-				     (isalpha((unsigned char)t->input[t->offset + i])
-				      || t->input[t->offset + i] == '_'); ++i);
-
-				if (i && t->input[t->offset + i]) {
-					tid = TK_SRVVARNAME;
-					buffer_copy_string_len(token, t->input + t->offset, i);
-
-					t->offset += i;
-					t->line_pos += i;
-				} else {
-					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
-							"invalid character in condition");
-				}
-			} else if (isdigit((unsigned char)c)) {
-				/* take all digits */
-				for (i = 0; t->input[t->offset + i] && isdigit((unsigned char)t->input[t->offset + i]);  i++);
-
-				/* was there it least a digit ? */
-				if (i) {
-					tid = TK_INTEGER;
-
-					buffer_copy_string_len(token, t->input + t->offset, i);
-
-					t->offset += i;
-					t->line_pos += i;
-				}
-			} else {
-				/* the key might consist of [-.0-9a-z] */
-				for (i = 0; t->input[t->offset + i] &&
-				     (isalnum((unsigned char)t->input[t->offset + i]) ||
-				      t->input[t->offset + i] == '.' ||
-				      t->input[t->offset + i] == '_' || /* for env.* */
-				      t->input[t->offset + i] == '-'
-				      ); i++);
-
-				if (i && t->input[t->offset + i]) {
-					buffer_copy_string_len(token, t->input + t->offset, i);
-
-					if (strcmp(token->ptr, "include") == 0) {
-						tid = TK_INCLUDE;
-					} else if (strcmp(token->ptr, "include_shell") == 0) {
-						tid = TK_INCLUDE_SHELL;
-					} else if (strcmp(token->ptr, "global") == 0) {
-						tid = TK_GLOBAL;
-					} else if (strcmp(token->ptr, "else") == 0) {
-						tid = TK_ELSE;
-					} else {
-						tid = TK_LKEY;
-					}
-
-					t->offset += i;
-					t->line_pos += i;
-				} else if (0 == i
-				           && ((uint8_t *)t->input)[t->offset+0] == 0xc2
-				           && ((uint8_t *)t->input)[t->offset+1] == 0xa0) {
-					/* treat U+00A0	(c2 a0) "NO-BREAK SPACE" as whitespace */
-					/* http://www.fileformat.info/info/unicode/char/a0/index.htm */
-					t->offset+=2;
-					t->line_pos+=2;
-				} else {
-					return config_tokenizer_err(srv, __FILE__, __LINE__, t,
-							"invalid character in variable name");
-				}
-			}
-			break;
-		}
-	}
-
-	if (tid) {
-		*token_id = tid;
-		return 1;
-	} else if (t->offset < t->size) {
-		log_error(srv->errh, __FILE__, __LINE__, "%d, %s", tid, token->ptr);
-	}
-	return 0;
+                if (i && s[i]) {
+                    t->offset += i;
+                    buffer_copy_string_len(token, s, i);
+                    if (0 == strcmp(token->ptr, "include"))
+                        return TK_INCLUDE;
+                    else if (0 == strcmp(token->ptr, "include_shell"))
+                        return TK_INCLUDE_SHELL;
+                    else if (0 == strcmp(token->ptr, "global"))
+                        return TK_GLOBAL;
+                    else if (0 == strcmp(token->ptr, "else"))
+                        return TK_ELSE;
+                    else
+                        return TK_LKEY;
+                }
+                else if (0 == i
+                         && ((uint8_t *)s)[0] == 0xc2
+                         && ((uint8_t *)s)[1] == 0xa0) {
+                    /* treat U+00A0    (c2 a0) "NO-BREAK SPACE" as whitespace */
+                    /* http://www.fileformat.info/info/unicode/char/a0/index.htm */
+                    t->offset+=2;
+                }
+                else
+                    return config_tokenizer_err(t, __FILE__, __LINE__,
+                             "invalid character in variable name");
+            }
+            break;
+        }
+    }
+    return 0;
 }
 
-static int config_parse(server *srv, config_t *context, const char *source, const char *input, size_t isize) {
-	void *pParser;
-	buffer *token, *lasttoken;
-	int token_id = 0;
-	int ret;
+static int config_parse(server *srv, config_t *context, const char *source, const char *input, int isize) {
 	tokenizer_t t;
+	buffer * const lasttoken = buffer_init();
+	int ret;
 
 	t.source = source;
 	t.input = input;
 	t.size = isize;
 	t.offset = 0;
 	t.line = 1;
-	t.line_pos = 1;
+	t.line_pos = 0;
 
 	t.in_key = 1;
-	t.in_brace = 0;
+	t.parens = 0;
 	t.in_cond = 0;
 	t.simulate_eol = 0;
+	t.errh = srv->errh;
 
-	pParser = configparserAlloc( malloc );
+	void * const pParser = configparserAlloc( malloc );
 	force_assert(pParser);
-	lasttoken = buffer_init();
-	token = buffer_init();
-	while((1 == (ret = config_tokenizer(srv, &t, &token_id, token))) && context->ok) {
-		buffer_copy_buffer(lasttoken, token);
-		configparser(pParser, token_id, token, context);
-
-		token = buffer_init();
-	}
-	buffer_free(token);
+	do {
+		ret = config_tokenizer(&t, lasttoken);
+		if (__builtin_expect( (ret <= 0), 0))
+			break;
+		buffer * const token = buffer_init();
+		buffer_copy_buffer(token, lasttoken);
+		configparser(pParser, ret, token, context);
+		/*token = NULL;*/
+	} while (context->ok);
 
 	if (ret != -1 && context->ok) {
 		/* add an EOL at EOF, better than say sorry */
-		buffer_copy_string((token = buffer_init()), "(EOL)");
+		buffer * const token = buffer_init();
+		buffer_copy_string(token, "(EOL)");
 		configparser(pParser, TK_EOL, token, context);
+		/*token = NULL;*/
 		if (context->ok) {
 			configparser(pParser, 0, NULL, context);
 		}
@@ -2143,12 +2051,12 @@ static int config_parse(server *srv, config_t *context, const char *source, cons
 	configparserFree(pParser, free);
 
 	if (ret == -1) {
-		log_error(srv->errh, __FILE__, __LINE__,
+		log_error(t.errh, __FILE__, __LINE__,
 		          "configfile parser failed at: %s", lasttoken->ptr);
 	} else if (context->ok == 0) {
-		log_error(srv->errh, __FILE__, __LINE__, "source: %s line: %d pos: %d "
+		log_error(t.errh, __FILE__, __LINE__, "source: %s line: %d pos: %d "
 		          "parser failed somehow near here: %s",
-		          t.source, t.line, t.line_pos, lasttoken->ptr);
+		          t.source, t.line, t.offset - t.line_pos, lasttoken->ptr);
 		ret = -1;
 	}
 	buffer_free(lasttoken);
@@ -2179,7 +2087,7 @@ static int config_parse_stdin(server *srv, config_t *context) {
     } while (n > 0 || (n == -1 && errno == EINTR));
     int rc = -1;
     if (0 == n)
-        rc = dlen ? config_parse(srv, context, "-", b->ptr, dlen) : 0;
+        rc = dlen ? config_parse(srv, context, "-", b->ptr, (int)dlen) : 0;
     else
         log_perror(srv->errh, __FILE__, __LINE__, "config read from stdin");
 
@@ -2200,7 +2108,7 @@ static int config_parse_file_stream(server *srv, config_t *context, const char *
 
     int rc = 0;
     if (dlen) {
-        rc = config_parse(srv, context, fn, data, (size_t)dlen);
+        rc = config_parse(srv, context, fn, data, (int)dlen);
         ck_memzero(data, (size_t)dlen);
     }
     free(data);
