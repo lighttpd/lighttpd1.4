@@ -1510,7 +1510,7 @@ Accept-Encoding: bzip2, gzip, deflate
 Host: deflate-cache.example.org
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Encoding' => 'gzip', 'Content-Type' => "text/plain; charset=utf-8" } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Encoding' => 'gzip', 'Content-Type' => "text/plain" } ];
 ok($tf->handle_http($t) == 0, 'bzip2 requested but disabled');
 
 
