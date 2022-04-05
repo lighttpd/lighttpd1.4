@@ -21,9 +21,6 @@ $ENV{"env_test"} = "good_env";
 $tf->{CONFIGFILE} = 'condition.conf';
 ok($tf->start_proc == 0, "Starting lighttpd") or die();
 
-SKIP: {
-    skip "skipping tests requiring PCRE", 24 unless $has_pcre;
-
 $t->{REQUEST}  = ( <<EOF
 GET /index.html HTTP/1.0
 Host: www.example.org
@@ -92,6 +89,9 @@ ok($tf->handle_http($t) == 0, 'condition: handle if before else branches #2');
 $t->{REQUEST}  = ( "GET /index.html HTTP/1.0\r\nHost: www.example.org\r\n" );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => "/match_1" } ];
 ok($tf->handle_http($t) == 0, 'basic test');
+
+SKIP: {
+    skip "skipping tests requiring PCRE", 15 unless $has_pcre;
 
 $t->{REQUEST}  = ( <<EOF
 GET /rewrite/all/some+test%3axxx%20with%20space HTTP/1.0
