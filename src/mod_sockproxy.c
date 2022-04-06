@@ -163,6 +163,7 @@ static handler_t mod_sockproxy_connection_accept(connection *con, void *p_d) {
 		hctx->create_env = sockproxy_create_env_connect;
 		hctx->response = chunk_buffer_acquire();
 		r->http_status = -1; /*(skip HTTP processing)*/
+		r->http_version = HTTP_VERSION_UNSET;
 	}
 
 	return HANDLER_GO_ON;
