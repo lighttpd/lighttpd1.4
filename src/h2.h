@@ -22,6 +22,7 @@ typedef enum {
    ,H2_FTYPE_GOAWAY              = 0x07
    ,H2_FTYPE_WINDOW_UPDATE       = 0x08
    ,H2_FTYPE_CONTINUATION        = 0x09
+   ,H2_FTYPE_PRIORITY_UPDATE     = 0x10
 } request_h2ftype_t;
 
 typedef enum {
@@ -32,6 +33,7 @@ typedef enum {
    ,H2_SETTINGS_MAX_FRAME_SIZE             = 0x05
    ,H2_SETTINGS_MAX_HEADER_LIST_SIZE       = 0x06
    ,H2_SETTINGS_ENABLE_CONNECT_PROTOCOL    = 0x08
+   ,H2_SETTINGS_NO_RFC7540_PRIORITIES      = 0x09
 } request_h2settings_t;
 
 typedef enum {

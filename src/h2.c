@@ -572,6 +572,122 @@ h2_recv_ping (connection * const con, uint8_t * const s, const uint32_t len)
 
 
 static void
+h2_apply_priority_update (h2con * const h2c, request_st * const r, const uint32_t rpos)
+{
+    uint32_t npos = rpos;
+    while (npos && h2c->r[npos-1]->h2_prio > r->h2_prio) --npos;
+    if (rpos - npos) {
+        memmove(h2c->r+npos+1, h2c->r+npos, (rpos - npos)*sizeof(request_st *));
+    }
+    else {
+        while (npos+1 < h2c->rused && h2c->r[npos+1]->h2_prio <= r->h2_prio)
+            ++npos;
+        if (npos - rpos == 0)
+            return; /*(no movement)*/
+        memmove(h2c->r+rpos, h2c->r+rpos+1, (npos - rpos)*sizeof(request_st *));
+    }
+    h2c->r[npos] = r;
+}
+
+
+__attribute_noinline__
+__attribute_nonnull__()
+__attribute_pure__
+static uint8_t
+h2_parse_priority_update (const char * const prio, const uint32_t len)
+{
+    /* parse priority string (structured field values: dictionary)
+     * (resets urgency (u) and incremental (i) to defaults if len == 0)
+     * (upon parse error, cease parsing and use defaults for remaining items) */
+    int urg = 3, incr = 0;
+    for (uint32_t i = 0; i < len; ++i) {
+        if (prio[i] == ' ' || prio[i] == '\t' || prio[i] == ',') continue;
+        if (prio[i] == 'u') { /* value: 0 - 7 */
+            if (i+2 < len && prio[i+1] == '=') {
+                if ((uint32_t)(prio[i+2] - '0') < 8)
+                    urg = prio[i+2] - '0';
+                else
+                    break; /* cease parsing if invalid syntax */
+                i += 2;
+            }
+            else
+                break; /* cease parsing if invalid syntax */
+        }
+        if (prio[i] == 'i') { /* value: 0 or 1 (boolean) */
+            if (i+3 < len && prio[i+1] == '=' && prio[i+2] == '?') {
+                if ((uint32_t)(prio[i+3] - '0') <= 1) /* 0 or 1 */
+                    incr = prio[i+3] - '0';
+                else
+                    break; /* cease parsing if invalid syntax */
+                i += 3;
+            }
+            else if (i+1 == len
+                     || prio[i+1]==' ' || prio[i+1]=='\t' || prio[i+1]==',')
+                incr = 1;
+            else
+                break; /* cease parsing if invalid syntax */
+        }
+        do { ++i; } while (i < len && prio[i] != ','); /*advance to next token*/
+    }
+    /* combine priority 'urgency' value and invert 'incremental' boolean
+     * for easy (ascending) sorting by urgency and then incremental before
+     * non-incremental */
+    return (uint8_t)(urg << 1 | !incr);
+}
+
+
+static void
+h2_recv_priority_update (connection * const con, const uint8_t * const s, const uint32_t len)
+{
+    /*(s must be entire PRIORITY_UPDATE frame and len the frame length field)*/
+    /*assert(s[3] == H2_FTYPE_PRIORITY_UPDATE);*/
+    if (len < 4) {                   /*(PRIORITY_UPDATE frame len must be >=4)*/
+        h2_send_goaway_e(con, H2_E_FRAME_SIZE_ERROR);
+        return;
+    }
+    const uint32_t id = h2_u31(s+5);
+    if (0 != id) {                   /*(PRIORITY_UPDATE id must be 0)*/
+        h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
+        return;
+    }
+    const uint32_t prid = h2_u31(s+9);
+    if (0 == prid) {                 /*(prioritized stream id must not be 0)*/
+        h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
+        return;
+    }
+    h2con * const h2c = con->h2;
+    for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
+        request_st * const r = h2c->r[i];
+        if (r->h2id != prid) continue;
+        uint8_t prio = h2_parse_priority_update((char *)s+13, len-4);
+        if (r->h2_prio != prio) {
+            r->h2_prio = prio;
+            h2_apply_priority_update(h2c, r, i);
+        }
+        return;
+    }
+  #if 0
+    /*(note: not checking if prid applies to PUSH_PROMISE ids; unused in h2.c)*/
+    if (h2c->sent_goaway)
+        return;
+    if (h2c->h2_cid < prid) {
+        /* TODO: parse out urgency and incremental values,
+         *       and then save for prid of future stream
+         *       (see h2_recv_headers() for where to check and apply)
+         * (ignore for now; probably more worthwhile to do in HTTP/3;
+         *  in HTTP/2, client might sent PRIORITY_UPDATE before HEADERS,
+         *  but that is not handled here, and is not expected since the
+         *  Priority request header can be used instead.) */
+        return;
+    }
+  #endif
+    /*(choosing to ignore frames for unmatched prid)*/
+}
+
+
+__attribute_cold__
+__attribute_noinline__
+static void
 h2_recv_priority (connection * const con, const uint8_t * const s, const uint32_t len)
 {
     /*(s must be entire PRIORITY frame and len the frame length field)*/
@@ -588,7 +704,11 @@ h2_recv_priority (connection * const con, const uint8_t * const s, const uint32_
     const uint32_t prio = h2_u31(s+9);
   #if 0
     uint32_t exclusive_dependency = (s[9] & 0x80) ? 1 : 0;
-    uint32_t weight = s[13];
+    /*(ignore dependency prid and exclusive_dependency,
+     * and attempt to scale PRIORITY weight (weight+1 default is 16)
+     * to PRIORITY_UPDATE (default urgency 3) (see h2_init_stream()))*/
+    uint8_t weight = s[13] >> 2;
+    weight = ((weight < 8 ? weight : 7) << 1) | !0;
   #endif
     h2con * const h2c = con->h2;
     for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
@@ -599,6 +719,12 @@ h2_recv_priority (connection * const con, const uint8_t * const s, const uint32_
             h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
             return;
         }
+      #if 0
+        else if (r->h2_prio != weight) {
+            r->h2_prio = weight;
+            h2_apply_priority_update(h2c, r, i);
+        }
+      #endif
         return;
     }
     /* XXX: TODO: update priority info for unknown/inactive stream */
@@ -1434,7 +1560,11 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         }
       #if 0
         uint32_t exclusive_dependency = (psrc[0] & 0x80) ? 1 : 0;
-        uint32_t weight = psrc[4];
+        /*(ignore dependency prid and exclusive_dependency,
+         * and attempt to scale PRIORITY weight (weight+1 default is 16)
+         * to PRIORITY_UPDATE (default urgency 3) (see h2_init_stream()))*/
+        uint8_t weight = psrc[4] >> 2;
+        r->h2_prio = ((weight < 8 ? weight : 7) << 1) | !0;
       #endif
         psrc += 5;
         alen -= 5;
@@ -1473,6 +1603,31 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         }
       #endif
 
+        if (light_btst(r->rqst_htags, HTTP_HEADER_PRIORITY)) {
+            const buffer * const prio =
+              http_header_request_get(r, HTTP_HEADER_PRIORITY,
+                                      CONST_STR_LEN("priority"));
+            r->h2_prio = h2_parse_priority_update(BUF_PTR_LEN(prio));
+        }
+        else {
+          #if 0
+            /* TODO: might check to match saved prid if PRIORITY_UPDATE frame
+             * received prior to HEADERS, and apply urgency, incremental vals */
+            if (0)
+                r->h2_prio = x;
+            else
+          #endif
+            {   /*(quick peek at raw (non-normalized) r->target)*/
+                /*(bump .js and .css to urgency 2; see h2_init_stream())*/
+                const uint32_t len = buffer_clen(&r->target);
+                const char * const p = r->target.ptr+len-4;
+                if (len>=4 && (0==memcmp(p+1,".js",3) || 0==memcmp(p,".css",4)))
+                    r->h2_prio = (2 << 1) | !0; /*(urgency=2, incremental=0)*/
+            }
+        }
+        if (h2c->rused-1) /*(true if more than one active stream)*/
+            h2_apply_priority_update(h2c, r, h2c->rused-1);
+
         /* RFC 7540 Section 8. HTTP Message Exchanges
          * 8.1.2.6. Malformed Requests and Responses
          *   For malformed requests, a server MAY send an HTTP
@@ -1486,9 +1641,10 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
          * https://github.com/summerwind/h2spec/issues/122
          */
       #if 0
-        if (400 == r->http_status) {
+        if (__builtin_expect( (400 == r->http_status), 0)) {
             h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
             h2_retire_stream(r, con);
+            /*(h2_retire_stream() invalidates r; must not use r below)*/
         }
       #endif
     }
@@ -1615,8 +1771,8 @@ h2_parse_frames (connection * const con)
               case H2_FTYPE_WINDOW_UPDATE:
                 h2_recv_window_update(con, s, flen);
                 break;
-              case H2_FTYPE_PRIORITY:
-                h2_recv_priority(con, s, flen);
+              case H2_FTYPE_PRIORITY_UPDATE:
+                h2_recv_priority_update(con, s, flen);
                 break;
               case H2_FTYPE_SETTINGS:
                 h2_recv_settings(con, s, flen);
@@ -1629,6 +1785,9 @@ h2_parse_frames (connection * const con)
                 break;
               case H2_FTYPE_GOAWAY:
                 if (!h2_recv_goaway(con, s, flen)) return 0;
+                break;
+              case H2_FTYPE_PRIORITY:
+                h2_recv_priority(con, s, flen);
                 break;
               case H2_FTYPE_PUSH_PROMISE: /*not expected from client*/
               case H2_FTYPE_CONTINUATION: /*handled with HEADERS*/
@@ -1772,7 +1931,7 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
 
     static const uint8_t h2settings[] = { /*(big-endian numbers)*/
       /* SETTINGS */
-      0x00, 0x00, 0x12        /* frame length */ /* 6 * 3 for three settings */
+      0x00, 0x00, 0x12        /* frame length */ /* 3 * (6 bytes per setting) */
      ,H2_FTYPE_SETTINGS       /* frame type */
      ,0x00                    /* frame flags */
      ,0x00, 0x00, 0x00, 0x00  /* stream identifier */
@@ -1801,6 +1960,13 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
      ,0x00, 0x00, 0xFF, 0xFF  /* 65535 */
      ,0x00, H2_SETTINGS_ENABLE_CONNECT_PROTOCOL
      ,0x00, 0x00, 0x00, 0x01  /* 1 */
+
+     #if 0  /* omit sending unconditionally;
+             * some clients might not handle unrecognized setting */
+            /* (use of PRIORITY will probably die out on its own) */
+     ,0x00, H2_SETTINGS_NO_RFC7540_PRIORITIES
+     ,0x00, 0x00, 0x00, 0x01  /* 1 */
+     #endif
 
      #if 0
       /* WINDOW_UPDATE */
@@ -2573,6 +2739,10 @@ h2_init_stream (request_st * const h2r, connection * const con)
     h2c->r[h2c->rused++] = r;
     r->h2_rwin = 65535; /* must keep in sync with h2_init_con() */
     r->h2_swin = h2c->s_initial_window_size;
+    /* combine priority 'urgency' value and invert 'incremental' boolean
+     * for easy (ascending) sorting by urgency and then incremental before
+     * non-incremental */
+    r->h2_prio = (3 << 1) | !0; /*(default urgency=3, incremental=0)*/
     r->http_version = HTTP_VERSION_2;
 
     /* copy config state from h2r */

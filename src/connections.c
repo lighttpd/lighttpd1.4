@@ -1253,7 +1253,6 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
          * con->write_queue, consider setting limit on how much is staged
          * for sending on con->write_queue: adjusting max_bytes down */
 
-        /* XXX: TODO: process requests in stream priority order */
         for (uint32_t i = 0; i < h2c->rused; ++i) {
             request_st * const r = h2c->r[i];
             /* future: might track read/write interest per request
@@ -1276,8 +1275,10 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
                         || (r->conf.stream_response_body
                             & (FDEVENT_STREAM_RESPONSE
                               |FDEVENT_STREAM_RESPONSE_BUFMIN)))) {
-                    uint32_t dlen =
-                      max_bytes > 32768 ? 32768 : (uint32_t)max_bytes;
+                    /*(use smaller max per stream if marked 'incremental' (w/ 0)
+                     * to give more streams a chance to send in parallel)*/
+                    uint32_t dlen = (r->h2_prio & 1) ? 32768 : 8192;
+                    if (dlen > (uint32_t)max_bytes) dlen = (uint32_t)max_bytes;
                     dlen = h2_send_cqdata(r, con, &r->write_queue, dlen);
                     if (dlen) { /*(do not resched (spin) if swin empty window)*/
                         max_bytes -= (off_t)dlen;
