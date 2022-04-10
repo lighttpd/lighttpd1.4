@@ -459,7 +459,10 @@ h2_recv_goaway (connection * const con, const uint8_t * const s, uint32_t len)
 {
     /*(s must be entire GOAWAY frame and len the frame length field)*/
     /*assert(s[3] == H2_FTYPE_GOAWAY);*/
-    UNUSED(len);
+    if (len < 8) {          /*(GOAWAY frame length must be >= 8)*/
+        h2_send_goaway_e(con, H2_E_FRAME_SIZE_ERROR);
+        return 0;
+    }
     if (0 != h2_u31(s+5)) { /*(GOAWAY stream id must be 0)*/
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return 0;
