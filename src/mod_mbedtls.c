@@ -4170,6 +4170,7 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
 #endif /* MBEDTLS_VERSION_NUMBER >= 0x03010000 */ /* mbedtls 3.01.0 */
 
 
+#if MBEDTLS_VERSION_NUMBER < 0x03020000 /* mbedtls 3.02.0 */
 static void
 mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *b, int max)
 {
@@ -4253,6 +4254,40 @@ mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *
       ? mbedtls_ssl_conf_max_version(s->ssl_ctx,MBEDTLS_SSL_MAJOR_VERSION_3,v)
       : mbedtls_ssl_conf_min_version(s->ssl_ctx,MBEDTLS_SSL_MAJOR_VERSION_3,v);
 }
+#else /* MBEDTLS_VERSION_NUMBER >= 0x03020000 */ /* mbedtls 3.02.0 */
+static void
+mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *b, int max)
+{
+    int v = MBEDTLS_SSL_VERSION_TLS1_2; /* default: TLS v1.2 */
+    if (NULL == b) /* default: min TLSv1.2, max TLSv1.3 */
+        v = max ? MBEDTLS_SSL_VERSION_TLS1_3 : MBEDTLS_SSL_VERSION_TLS1_2;
+    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("None"))) /*"disable" limit*/
+        v = max ? MBEDTLS_SSL_VERSION_TLS1_3 : MBEDTLS_SSL_VERSION_TLS1_2;
+    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.2")))
+        v = MBEDTLS_SSL_VERSION_TLS1_2;
+    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.3")))
+        v = MBEDTLS_SSL_VERSION_TLS1_3;
+    else {
+        if (buffer_eq_icase_slen(b, CONST_STR_LEN("DTLSv1"))
+            || buffer_eq_icase_slen(b, CONST_STR_LEN("DTLSv1.2"))) {
+            log_error(srv->errh, __FILE__, __LINE__,
+                      "MTLS: ssl.openssl.ssl-conf-cmd %s %s ignored",
+                      max ? "MaxProtocol" : "MinProtocol", b->ptr);
+            return;
+        }
+        else {
+            log_error(srv->errh, __FILE__, __LINE__,
+                      "MTLS: ssl.openssl.ssl-conf-cmd %s %s invalid; ignored",
+                      max ? "MaxProtocol" : "MinProtocol", b->ptr);
+            return;
+        }
+    }
+
+    max
+      ? mbedtls_ssl_conf_max_tls_version(s->ssl_ctx, v)
+      : mbedtls_ssl_conf_min_tls_version(s->ssl_ctx, v);
+}
+#endif /* MBEDTLS_VERSION_NUMBER >= 0x03020000 */ /* mbedtls 3.02.0 */
 
 #if MBEDTLS_VERSION_NUMBER < 0x03000000 /* mbedtls 3.00.0 */
 #ifdef MBEDTLS_SSL_SERVER_NAME_INDICATION
