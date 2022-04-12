@@ -373,6 +373,7 @@ enum { /* opts bitflags */
   MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT      = 0x1
  ,MOD_WEBDAV_UNSAFE_PROPFIND_FOLLOW_SYMLINK = 0x2
  ,MOD_WEBDAV_PROPFIND_DEPTH_INFINITY        = 0x4
+ ,MOD_WEBDAV_CPYTMP_PARTIAL_PUT             = 0x8
 };
 
 typedef struct {
@@ -563,6 +564,12 @@ SETDEFAULTS_FUNC(mod_webdav_set_defaults) {
                               CONST_STR_LEN("unsafe-propfind-follow-symlink"))
                             && config_plugin_value_tobool((data_unset *)ds,0)) {
                             opts |= MOD_WEBDAV_UNSAFE_PROPFIND_FOLLOW_SYMLINK;
+                            continue;
+                        }
+                        if (buffer_eq_slen(&ds->key,
+                              CONST_STR_LEN("partial-put-copy-modify"))
+                            && config_plugin_value_tobool((data_unset *)ds,0)) {
+                            opts |= MOD_WEBDAV_CPYTMP_PARTIAL_PUT;
                             continue;
                         }
                         log_error(srv->errh, __FILE__, __LINE__,
@@ -2598,7 +2605,7 @@ webdav_copytmp_rename (const plugin_config * const pconf,
   #if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101200 /* 10.12+ */
     if (!(*flags & (WEBDAV_FLAG_COPY_XDEV
                    |WEBDAV_FLAG_MOVE_XDEV
-                   |WEBDAV_FLAG_NO_CLONE))) {
+                   |WEBDAV_FLAG_NO_CLONE)) && src != dst) {
         if (0==clonefile(src->path.ptr,dst->path.ptr,CLONE_NOFOLLOW))
             /* target did not exist; skip stat_cache_delete_entry() */
             return 0; /* copied */
@@ -2784,6 +2791,15 @@ webdav_copytmp_rename (const plugin_config * const pconf,
     } while (0);
 
     close(ifd);
+
+    if (src == dst && 0 == rc) {
+        /*(note: special-case (src == dst) to copy into tempfile w/o rename,
+         * expecting input flags = 0, returning open tmpfile fd in *flags
+         * (or -1 if not opened), and returning tmpfile name in pconf->tmpb) */
+        *flags = ofd;
+        return 0;
+    }
+
     const int wc = close(ofd);
     if (__builtin_expect( (0 != wc), 0) && 0 == rc)
         rc = errno;
@@ -2797,12 +2813,22 @@ webdav_copytmp_rename (const plugin_config * const pconf,
 
   } while (0);
 
+    if (src == dst) {
+        /*(note: special-case (src == dst) to copy into tempfile w/o rename,
+         * expecting input flags = 0, returning open tmpfile fd in *flags
+         * (or -1 if not opened), and returning tmpfile name in pconf->tmpb) */
+        *flags = -1;
+        return 0;
+    }
+
     const int overwrite = (*flags & WEBDAV_FLAG_OVERWRITE);
   #ifndef HAVE_RENAMEAT2
     if (!overwrite) {
         struct stat stb;
-        if (0 == lstat(dst->path.ptr, &stb) || errno != ENOENT)
+        if (0 == lstat(dst->path.ptr, &stb) || errno != ENOENT) {
+            unlink(tmpb->ptr);
             return 412; /* Precondition Failed */
+        }
         /* TOC-TOU race between lstat() and rename(),
          * but this is reasonable attempt to not overwrite existing entity */
     }
@@ -4548,7 +4574,8 @@ static handler_t
 mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
 {
     if (light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_RANGE)) {
-        if (pconf->opts & MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT)
+        if (pconf->opts & (MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT
+                          |MOD_WEBDAV_CPYTMP_PARTIAL_PUT))
             return HANDLER_GO_ON;
         /* [RFC7231] 4.3.4 PUT
          *   An origin server that allows PUT on a given target resource MUST
@@ -4687,10 +4714,9 @@ mod_webdav_put_linkat_rename (request_st * const r,
 #endif
 
 
-__attribute_cold__
 static handler_t
-mod_webdav_put_deprecated_unsafe_partial_put_compat (request_st * const r,
-                                                     const buffer * const h)
+mod_webdav_put_range (request_st * const r, const buffer * const h,
+                      const plugin_config * const pconf)
 {
     /* historical code performed very limited range parse (repeated here) */
     /* we only support <num>- ... */
@@ -4708,11 +4734,45 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (request_st * const r,
         return HANDLER_FINISHED;
     }
 
-    const int fd = fdevent_open_cloexec(r->physical.path.ptr, 0,
-                                        O_WRONLY, WEBDAV_FILE_MODE);
-    if (fd < 0) {
+    const int ifd = fdevent_open_cloexec(r->physical.path.ptr, 0,
+                                         O_WRONLY, WEBDAV_FILE_MODE);
+    if (ifd < 0) {
         http_status_set_error(r, (errno == ENOENT) ? 404 : 403);
         return HANDLER_FINISHED;
+    }
+    int fd = ifd;
+    struct stat st;
+
+    if ((pconf->opts & MOD_WEBDAV_CPYTMP_PARTIAL_PUT)
+        && (!(pconf->opts & MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT)
+            || 0 != fstat(ifd,&st) || st.st_size != offset || st.st_nlink > 1)){
+        /* open tmpfile and copy source for modify and rename (below this block)
+         * if cpytmp mode enabled and if unsafe partial put compat not enabled
+         * or if not appending or if nlink == 1 (modifying in-place is safe when
+         * appending and nlink == 1 since lighttpd is single-threaded) */
+        /* future: might rework for reuse since src is already open here in ifd,
+         * and might be opened again (and closed!) in webdav_copytmp_rename() */
+        fd = 0; /*(overloaded as input 'flags' to webdav_copytmp_rename())*/
+        int rc = webdav_copytmp_rename(pconf, &r->physical, &r->physical, &fd);
+        /*(fd may now be open to temporary file whose name is in pconf->tmpb
+         * since we passed webdav_copytmp_rename() with (src == dst))*/
+        if (0 != rc) {
+            close(ifd);
+            http_status_set_error(r, rc);
+            return HANDLER_FINISHED;
+        }
+        if (-1 == fd) {
+            /* open tmp file; file clone in webdav_copytmp_rename() did not */
+            fd = fdevent_open_cloexec(pconf->tmpb->ptr, 0,
+                                      O_WRONLY, WEBDAV_FILE_MODE);
+            if (fd < 0) {
+                close(ifd);
+                unlink(pconf->tmpb->ptr);
+                http_status_set_error(r, 403);
+                return HANDLER_FINISHED;
+            }
+        }
+        close(ifd); /*(close ifd after opening temporary file so (fd != ifd))*/
     }
 
   #ifdef HAVE_COPY_FILE_RANGE
@@ -4748,6 +4808,8 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (request_st * const r,
   {
     if (-1 == lseek(fd, offset, SEEK_SET)) {
         close(fd);
+        if (fd != ifd)
+            unlink(pconf->tmpb->ptr);
         http_status_set_error(r, 500); /* Internal Server Error */
         return HANDLER_FINISHED;
     }
@@ -4759,7 +4821,28 @@ mod_webdav_put_deprecated_unsafe_partial_put_compat (request_st * const r,
     mod_webdav_write_cq(r, &r->reqbody_queue, fd);
   }
 
-    struct stat st;
+    if (fd != ifd) {
+      #ifndef HAVE_RENAMEAT2
+        if (0 == rename(pconf->tmpb->ptr, r->physical.path.ptr))
+      #else
+        if (0 == renameat2(AT_FDCWD, pconf->tmpb->ptr,
+                           AT_FDCWD, r->physical.path.ptr, 0))
+      #endif
+        {
+            /* unconditional stat cache deletion */
+            stat_cache_delete_entry(BUF_PTR_LEN(&r->physical.path));
+        }
+        else {
+            switch (errno) {
+              case ENOENT:
+              case ENOTDIR:
+              case EISDIR: http_status_set_error(r, 409); break; /* Conflict */
+              default:     http_status_set_error(r, 403); break; /* Forbidden */
+            }
+            unlink(pconf->tmpb->ptr);
+        }
+    }
+
     if (0 != r->conf.etag_flags && !http_status_is_set(r)) {
         /*(skip sending etag if fstat() error; not expected)*/
         if (0 != fstat(fd, &st)) r->conf.etag_flags = 0;
@@ -4799,13 +4882,13 @@ mod_webdav_put (request_st * const r, const plugin_config * const pconf)
         return HANDLER_FINISHED;
     }
 
-    if (pconf->opts & MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT) {
+    if (pconf->opts & (MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT
+                      |MOD_WEBDAV_CPYTMP_PARTIAL_PUT)) {
         const buffer * const h =
           http_header_request_get(r, HTTP_HEADER_CONTENT_RANGE,
                                   CONST_STR_LEN("Content-Range"));
         if (NULL != h)
-            return
-              mod_webdav_put_deprecated_unsafe_partial_put_compat(r, h);
+            return mod_webdav_put_range(r, h, pconf);
     }
 
     /* construct temporary filename in same directory as target
@@ -4922,7 +5005,8 @@ mod_webdav_copymove_b (request_st * const r, const plugin_config * const pconf, 
                   : 0)
               | (r->http_method == HTTP_METHOD_MOVE
                   ? WEBDAV_FLAG_MOVE_RENAME
-                  : (pconf->opts & MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT)
+                  : ((pconf->opts & MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT)
+                     && !(pconf->opts & MOD_WEBDAV_CPYTMP_PARTIAL_PUT))
                       ? 0
                       : WEBDAV_FLAG_COPY_LINK);
 
