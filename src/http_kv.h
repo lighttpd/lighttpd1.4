@@ -19,6 +19,7 @@ typedef enum {
 	HTTP_METHOD_UNSET = -1,
 	HTTP_METHOD_GET,               /* [RFC2616], Section 9.3 */
 	HTTP_METHOD_HEAD,              /* [RFC2616], Section 9.4 */
+	HTTP_METHOD_QUERY,             /* [RFCxxxx], Section 2 */
 	HTTP_METHOD_POST,              /* [RFC2616], Section 9.5 */
 	HTTP_METHOD_PUT,               /* [RFC2616], Section 9.6 */
 	HTTP_METHOD_DELETE,            /* [RFC2616], Section 9.7 */
@@ -89,8 +90,9 @@ void http_status_append(buffer *b, int status);
 __attribute_nonnull__()
 void http_version_append(buffer *b, http_version_t version);
 
-#define http_method_get_or_head(method)   ((method) <= HTTP_METHOD_HEAD)
-#define http_method_get_head_post(method) ((method) <= HTTP_METHOD_POST)
+#define http_method_get_or_head(method)         ((method) <= HTTP_METHOD_HEAD)
+#define http_method_get_head_query(method)      ((method) <= HTTP_METHOD_QUERY)
+#define http_method_get_head_query_post(method) ((method) <= HTTP_METHOD_POST)
 
 __attribute_nonnull__()
 static inline void http_method_append (buffer * const b, const http_method_t method);

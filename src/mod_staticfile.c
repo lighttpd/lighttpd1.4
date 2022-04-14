@@ -134,7 +134,7 @@ mod_staticfile_process (request_st * const r, plugin_config * const pconf)
 
 URIHANDLER_FUNC(mod_staticfile_subrequest) {
     if (NULL != r->handler_module) return HANDLER_GO_ON;
-    if (!http_method_get_head_post(r->http_method)) return HANDLER_GO_ON;
+    if (!http_method_get_head_query_post(r->http_method)) return HANDLER_GO_ON;
     /* r->physical.path is non-empty for handle_subrequest_start */
     /*if (buffer_is_blank(&r->physical.path)) return HANDLER_GO_ON;*/
 

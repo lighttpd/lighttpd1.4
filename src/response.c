@@ -546,7 +546,7 @@ http_response_prepare (request_st * const r)
 					/* 405 Method Not Allowed */
 					return http_status_set_error_close(r, 405);
 					/*return http_response_prepare_connect(r);*/
-				else if (!http_method_get_head_post(r->http_method))
+				else if (!http_method_get_head_query_post(r->http_method))
 					r->http_status = 501;
 				else
 					r->http_status = 403;

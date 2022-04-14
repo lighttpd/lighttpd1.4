@@ -28,6 +28,7 @@ static const keyvalue http_versions[] = {
 static const buffer http_methods[] = {
 	{ CONST_STR_LEN("GET")+1, 0 },
 	{ CONST_STR_LEN("HEAD")+1, 0 },
+	{ CONST_STR_LEN("QUERY")+1, 0 },
 	{ CONST_STR_LEN("POST")+1, 0 },
 	{ CONST_STR_LEN("PUT")+1, 0 },
 	{ CONST_STR_LEN("DELETE")+1, 0 },

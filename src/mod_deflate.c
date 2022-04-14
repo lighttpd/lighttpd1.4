@@ -1959,7 +1959,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		    && if_none_match->ptr[etaglen-1] == '-'
 		    && 0 == strncmp(if_none_match->ptr+etaglen, label, strlen(label))) {
 
-			if (http_method_get_or_head(r->http_method)) {
+			if (http_method_get_head_query(r->http_method)) {
 				/* modify ETag response header in-place to remove '"' and append '-label"' */
 				vb->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
 				buffer_append_string(vb, label);

@@ -211,7 +211,7 @@ int http_response_handle_cachable(request_st * const r, const buffer *lmod, cons
 		/*(weak etag comparison must not be used for ranged requests)*/
 		int range_request = (0 != light_btst(r->rqst_htags, HTTP_HEADER_RANGE));
 		if (http_etag_matches(etag, vb->ptr, !range_request)) {
-			if (http_method_get_or_head(r->http_method)) {
+			if (http_method_get_head_query(r->http_method)) {
 				r->http_status = 304;
 				return HANDLER_FINISHED;
 			} else {
@@ -220,7 +220,7 @@ int http_response_handle_cachable(request_st * const r, const buffer *lmod, cons
 				return HANDLER_FINISHED;
 			}
 		}
-	} else if (http_method_get_or_head(r->http_method)
+	} else if (http_method_get_head_query(r->http_method)
 		   && (vb = http_header_request_get(r, HTTP_HEADER_IF_MODIFIED_SINCE,
 		                                    CONST_STR_LEN("If-Modified-Since")))
 		   && (lmod
