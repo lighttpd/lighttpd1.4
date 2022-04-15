@@ -1718,34 +1718,34 @@ mod_nss_set_defaults_sockets(server *srv, plugin_data *p)
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("ssl.engine"),
         T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.cipher-list"),
         T_CONFIG_STRING,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.honor-cipher-order"),
         T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.dh-file"),
         T_CONFIG_STRING,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.ec-curve"),
         T_CONFIG_STRING,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.openssl.ssl-conf-cmd"),
         T_CONFIG_ARRAY_KVSTRING,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.pemfile"), /* included to process global scope */
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.empty-fragments"),
         T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.use-sslv2"),
         T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.use-sslv3"),
         T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.stek-file"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_SERVER }

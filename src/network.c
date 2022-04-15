@@ -607,33 +607,28 @@ int network_init(server *srv, int stdin_fd) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("ssl.engine"),
         T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("server.listen-backlog"),
         T_CONFIG_INT,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("server.socket-perms"),
         T_CONFIG_STRING,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("server.bsd-accept-filter"),
         T_CONFIG_STRING,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("server.defer-accept"),
         T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("server.use-ipv6"),
         T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("server.set-v6only"),
         T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("server.v4mapped"),
         T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
-    #if 0 /* TODO: more integration needed ... */
-     ,{ CONST_STR_LEN("mbedtls.engine"),
-        T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
-    #endif
+        T_CONFIG_SCOPE_SOCKET }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }

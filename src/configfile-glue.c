@@ -307,8 +307,9 @@ int config_plugin_values_init(server * const srv, void *p_d, const config_plugin
     /* traverse config contexts twice: once to count, once to store matches */
 
     for (uint32_t u = 0; u < srv->config_context->used; ++u) {
-        const array *ca =
-          ((data_config const *)srv->config_context->data[u])->value;
+        const data_config * const dc =
+          (const data_config *)srv->config_context->data[u];
+        const array * const ca = dc->value;
 
         matches[n] = 0;
         for (int i = 0; cpk[i].ktype != T_CONFIG_UNSET; ++i) {
@@ -320,12 +321,19 @@ int config_plugin_values_init(server * const srv, void *p_d, const config_plugin
 
             array_set_key_value(touched,cpk[i].k,cpk[i].klen,CONST_STR_LEN(""));
 
-            if (cpk[i].scope == T_CONFIG_SCOPE_SERVER && 0 != u) {
+            if (cpk[i].scope == T_CONFIG_SCOPE_CONNECTION || 0 == u) continue;
+
+            if (cpk[i].scope == T_CONFIG_SCOPE_SERVER)
                 /* server scope options should be set only in server scope */
                 log_error(srv->errh, __FILE__, __LINE__,
                   "DEPRECATED: do not set server options in conditionals, "
                   "variable: %s", cpk[i].k);
-            }
+            if (cpk[i].scope == T_CONFIG_SCOPE_SOCKET
+                && (dc->comp!=COMP_SERVER_SOCKET || dc->cond!=CONFIG_COND_EQ))
+                /* socket options should be set in socket or global scope */
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "WARNING: %s must be in global scope or $SERVER[\"socket\"] "
+                  "with '==', or else is ignored", cpk[i].k);
         }
         if (matches[n]) contexts[n++] = (unsigned short)u;
     }

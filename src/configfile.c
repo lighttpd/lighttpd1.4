@@ -735,7 +735,7 @@ static int config_insert_srvconf(server *srv) {
         T_CONFIG_SCOPE_SERVER }
      ,{ CONST_STR_LEN("ssl.engine"),
         T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_CONNECTION }
+        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("debug.log-request-header-on-error"),
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_SERVER }

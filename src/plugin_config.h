@@ -103,7 +103,8 @@ typedef enum { T_CONFIG_UNSET,
 
 typedef enum { T_CONFIG_SCOPE_UNSET,
 		T_CONFIG_SCOPE_SERVER,
-		T_CONFIG_SCOPE_CONNECTION
+		T_CONFIG_SCOPE_CONNECTION,
+		T_CONFIG_SCOPE_SOCKET
 } config_scope_type_t;
 
 typedef struct config_plugin_value {
