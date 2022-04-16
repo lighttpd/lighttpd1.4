@@ -237,7 +237,7 @@ int config_plugin_values_init_block(server * const srv, const array * const ca, 
                     char *e;
                     long l = strtol(v, &e, 10);
                     if (e != v && !*e && l >= 0) {
-                        cpv->v.shrt = (unsigned int)l;
+                        cpv->v.u = (unsigned int)l;
                         break;
                     }
                 }
