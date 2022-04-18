@@ -1632,8 +1632,12 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
                 /*(bump .js and .css to urgency 2; see h2_init_stream())*/
                 const uint32_t len = buffer_clen(&r->target);
                 const char * const p = r->target.ptr+len-4;
-                if (len>=4 && (0==memcmp(p+1,".js",3) || 0==memcmp(p,".css",4)))
+                if (len>=4 && (0==memcmp(p+1,".js",3)||0==memcmp(p,".css",4))) {
                     r->h2_prio = (2 << 1) | !0; /*(urgency=2, incremental=0)*/
+                    http_header_response_set(r, HTTP_HEADER_PRIORITY,
+                                             CONST_STR_LEN("priority"),
+                                             CONST_STR_LEN("u=2"));
+                }
             }
         }
         if (h2c->rused-1) /*(true if more than one active stream)*/
