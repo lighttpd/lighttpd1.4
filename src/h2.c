@@ -575,21 +575,29 @@ h2_recv_ping (connection * const con, uint8_t * const s, const uint32_t len)
 
 
 static void
-h2_apply_priority_update (h2con * const h2c, request_st * const r, const uint32_t rpos)
+h2_apply_priority_update (h2con * const h2c, const request_st * const r, const uint32_t rpos)
 {
+    const request_st ** const rr = (const request_st **)h2c->r;
     uint32_t npos = rpos;
-    while (npos && h2c->r[npos-1]->h2_prio > r->h2_prio) --npos;
+    while (npos
+           && (rr[npos-1]->h2_prio > r->h2_prio
+               || (rr[npos-1]->h2_prio == r->h2_prio
+                   && rr[npos-1]->h2id > r->h2id)))
+        --npos;
     if (rpos - npos) {
-        memmove(h2c->r+npos+1, h2c->r+npos, (rpos - npos)*sizeof(request_st *));
+        memmove(rr+npos+1, rr+npos, (rpos - npos)*sizeof(request_st *));
     }
     else {
-        while (npos+1 < h2c->rused && h2c->r[npos+1]->h2_prio <= r->h2_prio)
+        while (npos+1 < h2c->rused
+               && (rr[npos+1]->h2_prio < r->h2_prio
+                   || (rr[npos+1]->h2_prio == r->h2_prio
+                       && rr[npos+1]->h2id < r->h2id)))
             ++npos;
         if (npos - rpos == 0)
             return; /*(no movement)*/
-        memmove(h2c->r+rpos, h2c->r+rpos+1, (npos - rpos)*sizeof(request_st *));
+        memmove(rr+rpos, rr+rpos+1, (npos - rpos)*sizeof(request_st *));
     }
-    h2c->r[npos] = r;
+    rr[npos] = r;
 }
 
 
