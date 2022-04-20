@@ -990,7 +990,7 @@ connection_log_state (const request_st * const r, const char * const tag)
 }
 
 
-static void connection_state_machine_h2 (request_st *h2r, connection *con);
+static void connection_state_machine_h2 (connection * const con);
 
 
 static void
@@ -1019,7 +1019,7 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 			if (!connection_handle_read_state(con)) {
 				if (r->http_version == HTTP_VERSION_2) {
 					connection_transition_h2(r, con);
-					connection_state_machine_h2(r, con);
+					connection_state_machine_h2(con);
 					return;
 				}
 				break;
@@ -1214,9 +1214,10 @@ connection_request_end_h2 (request_st * const h2r, connection * const con)
 
 
 static void
-connection_state_machine_h2 (request_st * const h2r, connection * const con)
+connection_state_machine_h2 (connection * const con)
 {
     h2con * const h2c = con->h2;
+    request_st * const h2r = &con->request;
 
     if (h2c->sent_goaway <= 0
         && (chunkqueue_is_empty(con->read_queue) || h2_parse_frames(con))
@@ -1364,8 +1365,9 @@ connection_state_machine_h2 (request_st * const h2r, connection * const con)
 
 
 static void
-connection_state_machine_h1 (request_st * const r, connection * const con)
+connection_state_machine_h1 (connection * const con)
 {
+	request_st * const r = &con->request;
 	connection_state_machine_loop(r, con);
 
 	if (r->conf.log_state_handling)
@@ -1378,11 +1380,10 @@ connection_state_machine_h1 (request_st * const r, connection * const con)
 void
 connection_state_machine (connection * const con)
 {
-    request_st * const r = &con->request;
-    if (r->http_version == HTTP_VERSION_2)
-        connection_state_machine_h2(r, con);
+    if (con->h2)
+        connection_state_machine_h2(con);
     else /* if (r->http_version <= HTTP_VERSION_1_1) */
-        connection_state_machine_h1(r, con);
+        connection_state_machine_h1(con);
 }
 
 
