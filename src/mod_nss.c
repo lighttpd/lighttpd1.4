@@ -1367,7 +1367,8 @@ mod_nss_alpn_select_cb (void *arg, PRFileDesc *ssl,
                   case 0:
                     if (!hctx->r->conf.h2proto) continue;
                     hctx->alpn = MOD_NSS_ALPN_H2;
-                    hctx->r->http_version = HTTP_VERSION_2;
+                    if (hctx->r->handler_module == NULL)/*(not mod_sockproxy)*/
+                        hctx->r->http_version = HTTP_VERSION_2;
                     break;
                   case 1:
                     hctx->alpn = MOD_NSS_ALPN_HTTP11;

@@ -1883,7 +1883,8 @@ mod_openssl_alpn_select_cb (SSL *ssl, const unsigned char **out, unsigned char *
             if (in[i] == 'h' && in[i+1] == '2') {
                 if (!hctx->r->conf.h2proto) continue;
                 proto = MOD_OPENSSL_ALPN_H2;
-                hctx->r->http_version = HTTP_VERSION_2;
+                if (hctx->r->handler_module == NULL)/*(e.g. not mod_sockproxy)*/
+                    hctx->r->http_version = HTTP_VERSION_2;
                 break;
             }
             continue;
