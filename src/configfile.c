@@ -1148,7 +1148,7 @@ static int config_insert(server *srv) {
     }
 
     p->defaults.errh = srv->errh;
-    p->defaults.max_keep_alive_requests = 100;
+    p->defaults.max_keep_alive_requests = 1000;
     p->defaults.max_keep_alive_idle = 5;
     p->defaults.max_read_idle = 60;
     p->defaults.max_write_idle = 360;
