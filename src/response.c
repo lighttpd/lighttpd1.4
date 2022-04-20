@@ -27,6 +27,18 @@
 #include <string.h>
 
 
+__attribute_cold__
+void
+http_response_delay (connection * const con)
+{
+    if (config_feature_bool(con->srv, "auth.delay-invalid-creds", 1)){
+        /*(delay sending response)*/
+        con->is_writable = 0;
+        con->traffic_limit_reached = 1;
+    }
+}
+
+
 int
 http_response_omit_header (request_st * const r, const data_string * const ds)
 {
@@ -97,6 +109,8 @@ http_response_write_header (request_st * const r)
 	    && r->http_version == HTTP_VERSION_1_1) {
 		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("upgrade"));
 	} else if (r->keep_alive <= 0) {
+		if (r->keep_alive < 0)
+			http_response_delay(r->con);
 		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("close"));
 	} else if (r->http_version == HTTP_VERSION_1_0) {/*(&& r->keep_alive > 0)*/
 		http_header_response_set(r, HTTP_HEADER_CONNECTION, CONST_STR_LEN("Connection"), CONST_STR_LEN("keep-alive"));

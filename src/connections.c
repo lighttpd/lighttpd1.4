@@ -1206,6 +1206,7 @@ connection_request_end_h2 (request_st * const h2r, connection * const con)
     if (h2r->keep_alive >= 0) {
         h2r->keep_alive = -1;
         h2_send_goaway(con, H2_E_NO_ERROR);
+        http_response_delay(con);
     }
     else /*(abort connection upon second request to close h2 connection)*/
         h2_send_goaway(con, H2_E_ENHANCE_YOUR_CALM);

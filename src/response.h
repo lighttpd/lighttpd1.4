@@ -59,6 +59,9 @@ void http_response_upgrade_read_body_unknown(request_st *r);
 int http_response_transfer_cqlen(request_st *r, struct chunkqueue *cq, size_t len);
 
 __attribute_cold__
+void http_response_delay(connection *con);
+
+__attribute_cold__
 int http_response_omit_header(request_st *r, const data_string *ds);
 
 void http_response_write_header(request_st *r);
