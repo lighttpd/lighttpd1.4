@@ -2510,6 +2510,9 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 		lua_createtable(L, 0, 1);                         /* (sp += 1) */
 		magnet_mainenv_metatable(L);                      /* (sp += 1) */
 		lua_setmetatable(L, -2);                          /* (sp -= 1) */
+		/* set script env in first upvalue (_ENV upvalue) for func */
+		lua_pushvalue(L, env_ndx);                        /* (sp += 1) */
+		magnet_setfenv_mainfn(L, func_ndx);               /* (sp -= 1) */
 		/* insert lighty table at index 4 (lighty_table_ndx = 4) */
 		magnet_init_lighty_table(L); /* lighty.*             (sp += 1) */
 	}
@@ -2544,16 +2547,10 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 	 */
 	lua_pushvalue(L, lighty_table_ndx);                       /* (sp += 1) */
 	lua_setfield(L, env_ndx, "lighty"); /* lighty.*              (sp -= 1) */
-	lua_pushvalue(L, env_ndx);                                /* (sp += 1) */
-	magnet_setfenv_mainfn(L, 1);                              /* (sp -= 1) */
 
 	/* pcall will destroy the func value, duplicate it */
 	lua_pushvalue(L, func_ndx);                               /* (sp += 1) */
 	int ret = lua_pcall(L, 0, 1, errfunc_ndx);       /* (sp -= 1; sp += 1) */
-
-		/* reset environment */
-		lua_pushglobaltable(L);                               /* (sp += 1) */
-		magnet_setfenv_mainfn(L, 1);                          /* (sp -= 1) */
 
 	handler_t result = HANDLER_GO_ON;
 	if (0 != ret) {
