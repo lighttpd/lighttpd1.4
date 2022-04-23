@@ -89,6 +89,33 @@ static void mod_setenv_prep_ext (const array * const ac) {
     for (uint32_t i = 0; i < a->used; ++i) {
         data_string * const ds = (data_string *)a->data[i];
         ds->ext = http_header_hkey_get(BUF_PTR_LEN(&ds->key));
+        /*(convenience: assume list, remove line ends, if line ends after ',')*/
+        for (char *s = ds->value.ptr; (s = strchr(s, ',')); ++s) {
+            if (s[1] == '\r') *++s = ' ';
+            if (s[1] == '\n') *++s = ' ';
+        }
+        /*(strip trailing and leading whitespace)*/
+        const char *s = ds->value.ptr;
+        uint32_t n = buffer_clen(&ds->value);
+        while (n-- && (s[n]==' ' || s[n]=='\t' || s[n]=='\r' || s[n]=='\n')) ;
+        buffer_truncate(&ds->value, ++n);
+        s = ds->value.ptr;
+        while (*s==' ' || *s=='\t' || *s=='\r' || *s=='\n') ++s;
+        if (s != ds->value.ptr) {
+            n -= (uint32_t)(s - ds->value.ptr);
+            memmove(ds->value.ptr, s, n);
+            buffer_truncate(&ds->value, n);
+        }
+        /*(warning if value contains '\r' or '\n';
+         * invalid in HTTP/2 and in updated HTTP/1.1 specs)*/
+        s = ds->value.ptr;
+        if (NULL != strchr(s, '\r') || NULL != strchr(s, '\n')) {
+            log_error(NULL, __FILE__, __LINE__,
+               "WARNING: setenv.*-header contains CR and/or NL (invalid): "
+               "%s: %s", ds->key.ptr, s);
+            log_error(NULL, __FILE__, __LINE__,
+              "Use mod_magnet for finer control of request, response headers.");
+        }
     }
 }
 
