@@ -30,10 +30,6 @@
 #include <lua.h>
 #include <lauxlib.h>
 
-#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
-#define LUA_RIDX_LIGHTTPD_REQUEST "lighty.request"
-#endif
-
 #define MAGNET_RESTART_REQUEST      99
 
 /* plugin config for all request/connections */
@@ -183,6 +179,12 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
     return HANDLER_GO_ON;
 }
 
+#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 504
+#define lua_newuserdata0(L, sz) lua_newuserdata((L),(sz))
+#else
+#define lua_newuserdata0(L, sz) lua_newuserdatauv((L),(sz),0)
+#endif
+
 #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
 #define lua_getfield_and_type(L,idx,k) \
        (lua_getfield((L),(idx),(k)), lua_type((L),-1))
@@ -301,14 +303,14 @@ static int magnet_readdir_iter(lua_State *L) {
 }
 
 static int magnet_readdir_gc(lua_State *L) {
-    /*DIR ** const d = ((DIR **)luaL_checkudata(L, 1, "lighty.DIR"));*/
+    /*DIR ** const d = ((DIR **)luaL_checkudata(L, 1, "li.DIR"));*/
     DIR ** const d = lua_touserdata(L, 1);
     if (*d) closedir(*d);
     return 0;
 }
 
 static void magnet_readdir_metatable(lua_State * const L) {
-    if (luaL_newmetatable(L, "lighty.DIR")) {                 /* (sp += 1) */
+    if (luaL_newmetatable(L, "li.DIR")) {                     /* (sp += 1) */
         lua_pushcclosure(L, magnet_readdir_gc, 0);            /* (sp += 1) */
         lua_setfield(L, -2, "__gc");                          /* (sp -= 1) */
         lua_pushboolean(L, 0);                                /* (sp += 1) */
@@ -320,12 +322,7 @@ static int magnet_readdir(lua_State *L) {
     const char * const s = luaL_checkstring(L, 1);
     DIR * const d = opendir(s);
     if (d) {
-      #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 504
-        DIR ** const dp = (DIR **)lua_newuserdata(L, sizeof(DIR *));
-      #else
-        DIR ** const dp = (DIR **)lua_newuserdatauv(L, sizeof(DIR *), 0);
-      #endif
-        *dp = d;
+        *(DIR **)lua_newuserdata0(L, sizeof(DIR *)) = d;
         magnet_readdir_metatable(L);
         lua_setmetatable(L, -2);
         lua_pushcclosure(L, magnet_readdir_iter, 1);
@@ -336,6 +333,7 @@ static int magnet_readdir(lua_State *L) {
 }
 
 
+__attribute_cold__
 static int magnet_newindex_readonly(lua_State *L) {
     lua_pushliteral(L, "lua table is read-only");
     return lua_error(L);
@@ -360,28 +358,21 @@ static int magnet_array_get_element(lua_State *L, const array *a) {
 }
 #endif
 
-/* Define a function that will iterate over an array* (in upval 1) using current position (upval 2) */
+/* Define a function that will iterate over an array* (in upval 2) using current position (upval 1) */
 static int magnet_array_next(lua_State *L) {
-	data_unset *du;
-	data_string *ds;
-	data_integer *di;
-
-	size_t pos = lua_tointeger(L, lua_upvalueindex(1));
-	array *a = lua_touserdata(L, lua_upvalueindex(2));
-
 	lua_settop(L, 0);
+	const uint32_t pos = lua_tointeger(L, lua_upvalueindex(1));
+	const array * const a = lua_touserdata(L, lua_upvalueindex(2));
+	const data_unset * const du = pos < a->used ? a->data[pos] : NULL;
+	if (NULL == du) return 0;
 
-	if (pos >= a->used) return 0;
-	if (NULL != (du = a->data[pos])) {
 		lua_pushlstring(L, BUF_PTR_LEN(&du->key));
 		switch (du->type) {
 			case TYPE_STRING:
-				ds = (data_string *)du;
-				magnet_push_buffer(L, &ds->value);
+				magnet_push_buffer(L, &((const data_string *)du)->value);
 				break;
 			case TYPE_INTEGER:
-				di = (data_integer *)du;
-				lua_pushinteger(L, di->value);
+				lua_pushinteger(L, ((const data_integer *)du)->value);
 				break;
 			default:
 				lua_pushnil(L);
@@ -389,17 +380,15 @@ static int magnet_array_next(lua_State *L) {
 		}
 
 		/* Update our positional upval to reflect our new current position */
-		pos++;
-		lua_pushinteger(L, pos);
+		lua_pushinteger(L, pos+1);
 		lua_replace(L, lua_upvalueindex(1));
 
 		/* Returning 2 items on the stack (key, value) */
 		return 2;
-	}
-	return 0;
 }
 
 /* Create the closure necessary to iterate over the array *a with the above function */
+__attribute_noinline__
 static int magnet_array_pairs(lua_State *L, array *a) {
 	lua_pushinteger(L, 0); /* Push our current pos (the start) into upval 1 */
 	lua_pushlightuserdata(L, a); /* Push our array *a into upval 2 */
@@ -407,6 +396,13 @@ static int magnet_array_pairs(lua_State *L, array *a) {
 	return 1;
 }
 
+#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
+#define LUA_RIDX_LIGHTTPD_REQUEST "li.request"
+#endif
+
+#if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
+__attribute_noinline__
+#endif
 static request_st * magnet_get_request(lua_State *L) {
      #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
 	lua_getfield(L, LUA_REGISTRYINDEX, LUA_RIDX_LIGHTTPD_REQUEST);
@@ -418,6 +414,18 @@ static request_st * magnet_get_request(lua_State *L) {
      #endif
 }
 
+static void magnet_set_request(lua_State *L, request_st * const r) {
+     #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
+	lua_pushlightuserdata(L, r);
+	lua_setfield(L, LUA_REGISTRYINDEX, LUA_RIDX_LIGHTTPD_REQUEST);
+     #else
+	*(request_st **)lua_getextraspace(L) = r;
+     #endif
+}
+
+#if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM >= 504
+__attribute_noinline__
+#endif
 static buffer * magnet_tmpbuf_acquire(lua_State *L)
 {
   #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
@@ -445,6 +453,7 @@ typedef struct {
 	size_t len;
 } const_buffer;
 
+__attribute_noinline__
 static const_buffer magnet_checkconstbuffer(lua_State *L, int idx) {
 	const_buffer cb;
 	if (!lua_isnoneornil(L, idx))
@@ -464,13 +473,6 @@ static const buffer* magnet_checkbuffer(lua_State *L, int idx, buffer *b) {
 	b->used = cb.len+1;
 	b->size = 0;
 	return b;
-}
-
-static int magnet_print(lua_State *L) {
-	const_buffer cb = magnet_checkconstbuffer(L, 1);
-	request_st * const r = magnet_get_request(L);
-	log_error(r->conf.errh, __FILE__, __LINE__, "(lua-print) %s", cb.ptr);
-	return 0;
 }
 
 
@@ -638,7 +640,7 @@ static int magnet_stat_pairs_noimpl(lua_State *L) {
 
 
 static void magnet_stat_metatable(lua_State *L) {
-    if (luaL_newmetatable(L, "lighty.stat")) {                  /* (sp += 1) */
+    if (luaL_newmetatable(L, "li.stat")) {                      /* (sp += 1) */
         lua_pushcfunction(L, magnet_stat_field);                /* (sp += 1) */
         lua_setfield(L, -2, "__index");                         /* (sp -= 1) */
         lua_pushcfunction(L, magnet_newindex_readonly);         /* (sp += 1) */
@@ -668,11 +670,7 @@ static int magnet_stat(lua_State *L) {
      * (If we did want sce to be persistent, then could increment sce refcnt,
      *  and set up __gc metatable method to decrement sce refcnt) */
     stat_cache_entry ** const udata =(struct stat_cache_entry**)/* (sp += 1) */
-     #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 504
-      lua_newuserdata(L, sizeof(stat_cache_entry *));
-     #else
-      lua_newuserdatauv(L, sizeof(stat_cache_entry *), 0);
-     #endif
+      lua_newuserdata0(L, sizeof(stat_cache_entry *));
     *udata = sce;
 
     magnet_stat_metatable(L);                                   /* (sp += 1) */
@@ -1362,30 +1360,20 @@ static int magnet_header_tokens(lua_State *L) {
     return 1;
 }
 
-static int magnet_atpanic(lua_State *L) {
-	request_st * const r = magnet_get_request(L);
-	log_error(r->conf.errh, __FILE__, __LINE__, "(lua-atpanic) %s",
-	          lua_isstring(L, 1) ? lua_tostring(L, 1) : "");
-	/*longjmp(exceptionjmp, 1);*//*(must be init with setjmp() elsewhere)*/
-	return 0;
-}
-
 static int magnet_reqhdr_get(lua_State *L) {
-    /* __index: param 1 is the (empty) table the value was not found in */
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
-    request_st * const r = magnet_get_request(L);
+    const request_st * const r = **(request_st ***)lua_touserdata(L, 1);
     const int id = http_header_hkey_get(k, (uint32_t)klen);
     magnet_push_buffer(L, http_header_request_get(r, id, k, klen));
     return 1;
 }
 
 static int magnet_reqhdr_set(lua_State *L) {
-    /* __newindex: param 1 is (empty) table in which value is to be set */
     const_buffer k = magnet_checkconstbuffer(L, 2);
     const_buffer v = magnet_checkconstbuffer(L, 3);
 
-    request_st * const r = magnet_get_request(L);
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
     enum http_header_e id = http_header_hkey_get(k.ptr, (uint32_t)k.len);
 
     switch (id) {
@@ -1445,17 +1433,16 @@ static int magnet_reqhdr_set(lua_State *L) {
 }
 
 static int magnet_reqhdr_pairs(lua_State *L) {
-	request_st * const r = magnet_get_request(L);
-	return magnet_array_pairs(L, &r->rqst_headers);
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
+    return magnet_array_pairs(L, &r->rqst_headers);
 }
 
 static int magnet_resphdr_get(lua_State *L) {
-    /* __index: param 1 is the (empty) table the value was not found in */
     /* Note: access to lighttpd r->resp_headers here is *independent* from
      * the (pending) changes in the (deprecated) lua lighty.headers[] table */
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
-    request_st * const r = magnet_get_request(L);
+    const request_st * const r = **(request_st ***)lua_touserdata(L, 1);
     const int id = http_header_hkey_get(k, (uint32_t)klen);
     magnet_push_buffer(L, http_header_response_get(r, id, k, klen));
     return 1;
@@ -1510,15 +1497,14 @@ static int magnet_resphdr_set_kv(lua_State *L, request_st * const r) {
 }
 
 static int magnet_resphdr_set(lua_State *L) {
-    /* __newindex: param 1 is (empty) table in which value is to be set */
     /*const_buffer k = magnet_checkconstbuffer(L, 2);*/
     /*const_buffer v = magnet_checkconstbuffer(L, 3);*/
-    request_st * const r = magnet_get_request(L);
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
     return magnet_resphdr_set_kv(L, r);
 }
 
 static int magnet_resphdr_pairs(lua_State *L) {
-    request_st * const r = magnet_get_request(L);
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
     return magnet_array_pairs(L, &r->resp_headers);
 }
 
@@ -1739,27 +1725,22 @@ static int magnet_env_get_id(const char * const key, const size_t klen) {
     return MAGNET_ENV_UNSET;
 }
 
-static buffer *magnet_env_get_buffer(request_st * const r, const char * const k, const size_t klen) {
-    return magnet_env_get_buffer_by_id(r, magnet_env_get_id(k, klen));
-}
-
 static int magnet_env_get(lua_State *L) {
-    /* __index: param 1 is the (empty) table the value was not found in */
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
-    request_st * const r = magnet_get_request(L);
-    magnet_push_buffer(L, magnet_env_get_buffer(r, k, klen));
+    const int env_id = magnet_env_get_id(k, klen);
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
+    magnet_push_buffer(L, magnet_env_get_buffer_by_id(r, env_id));
     return 1;
 }
 
 static int magnet_env_set(lua_State *L) {
-    /* __newindex: param 1 is the (empty) table the value is supposed to be set in */
     size_t klen;
     const char * const key = luaL_checklstring(L, 2, &klen);
     const_buffer val = magnet_checkconstbuffer(L, 3);
 
-    request_st * const r = magnet_get_request(L);
     const int env_id = magnet_env_get_id(key, klen);
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
 
     switch (env_id) {
       default:
@@ -1794,7 +1775,7 @@ static int magnet_env_set(lua_State *L) {
                 memcpy(&r->con->dst_addr, &saddr, sizeof(sock_addr));
             }
             else {
-                return luaL_error(L, "lighty.r.req_attr['%s'] invalid addr: %s",
+                return luaL_error(L, "r.req_attr['%s'] invalid addr: %s",
                                   key, val.ptr);
             }
         }
@@ -1807,12 +1788,12 @@ static int magnet_env_set(lua_State *L) {
       case MAGNET_ENV_RESPONSE_HTTP_STATUS:
       case MAGNET_ENV_RESPONSE_BODY_LENGTH:
       case MAGNET_ENV_RESPONSE_BODY:
-        return luaL_error(L, "lighty.r.req_attr['%s'] is read-only", key);
+        return luaL_error(L, "r.req_attr['%s'] is read-only", key);
     }
 
     buffer * const dest = magnet_env_get_buffer_by_id(r, env_id);
     if (NULL == dest)
-        return luaL_error(L, "couldn't store '%s' in lighty.r.req_attr[]", key);
+        return luaL_error(L, "couldn't store '%s' in r.req_attr[]", key);
 
     if (lua_isnoneornil(L, 3)) {
         if (env_id==MAGNET_ENV_URI_QUERY || env_id==MAGNET_ENV_PHYSICAL_PATH)
@@ -1849,10 +1830,9 @@ static int magnet_env_set(lua_State *L) {
 }
 
 static int magnet_env_next(lua_State *L) {
-	const int pos = lua_tointeger(L, lua_upvalueindex(1));
-
 	/* ignore previous key: use upvalue for current pos */
 	lua_settop(L, 0);
+	const int pos = lua_tointeger(L, lua_upvalueindex(1));
 
 	if (NULL == magnet_env[pos].name) return 0; /* end of list */
 	/* Update our positional upval to reflect our new current position */
@@ -1863,7 +1843,7 @@ static int magnet_env_next(lua_State *L) {
 	lua_pushlstring(L, magnet_env[pos].name, magnet_env[pos].nlen);
 
 	/* get value */
-	request_st * const r = magnet_get_request(L);
+	request_st * const r = lua_touserdata(L, lua_upvalueindex(2));
 	magnet_push_buffer(L, magnet_env_get_buffer_by_id(r, magnet_env[pos].type));
 
 	/* return 2 items on the stack (key, value) */
@@ -1871,43 +1851,42 @@ static int magnet_env_next(lua_State *L) {
 }
 
 static int magnet_env_pairs(lua_State *L) {
-	lua_pushinteger(L, 0); /* Push our current pos (the start) into upval 1 */
-	lua_pushcclosure(L, magnet_env_next, 1); /* Push our new closure with 1 upvals */
-	return 1;
+    lua_pushinteger(L, 0); /* Push our current pos (the start) into upval 1 */
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
+    lua_pushlightuserdata(L, r); /* Push request_st *r into upval 2 */
+    lua_pushcclosure(L, magnet_env_next, 2); /* Push new closure with 2 upvals*/
+    return 1;
 }
 
 static int magnet_envvar_get(lua_State *L) {
-    /* __index: param 1 is the (empty) table the value was not found in */
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
-    request_st * const r = magnet_get_request(L);
+    const request_st * const r = **(request_st ***)lua_touserdata(L, 1);
     magnet_push_buffer(L, http_header_env_get(r, k, klen));
     return 1;
 }
 
 static int magnet_envvar_set(lua_State *L) {
-    /* __newindex: param 1 is the (empty) table the value is supposed to be set in */
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
     const_buffer key = magnet_checkconstbuffer(L, 2);
     if (__builtin_expect( (lua_isnil(L, 3)), 0)) {
-        request_st * const r = magnet_get_request(L);
         buffer * const v = http_header_env_get(r, key.ptr, key.len);
         if (v) buffer_clear(v); /*(unset)*/
         return 0;
     }
     const_buffer val = magnet_checkconstbuffer(L, 3);
-    request_st * const r = magnet_get_request(L);
     http_header_env_set(r, key.ptr, key.len, val.ptr, val.len);
     return 0;
 }
 
 static int magnet_envvar_pairs(lua_State *L) {
-	request_st * const r = magnet_get_request(L);
-	return magnet_array_pairs(L, &r->env);
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
+    return magnet_array_pairs(L, &r->env);
 }
 
 
 static int magnet_respbody_add(lua_State *L) {
-    request_st * const r = magnet_get_request(L);
+    request_st * const r = lua_touserdata(L, lua_upvalueindex(1));
     if (lua_isstring(L, -1)) {
         const_buffer data = magnet_checkconstbuffer(L, -1);
         http_chunk_append_mem(r, data.ptr, data.len);
@@ -1986,22 +1965,33 @@ static int magnet_respbody_add(lua_State *L) {
 
 
 static int magnet_respbody(lua_State *L) {
-    /* __index: param 1 is the (empty) table the value was not found in */
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
     switch (k[0]) {
-      case 'a': /* add; lighty.r.resp_body.add */
+      case 'a': /* add; r.resp_body.add */
         if (k[1] == 'd' && k[2] == 'd' && k[3] == '\0') {
-            lua_pushcclosure(L, magnet_respbody_add, 0);
+            lua_pushlightuserdata(L, r);
+            lua_pushcclosure(L, magnet_respbody_add, 1);
+            return 1;
+        }
+        break;
+      case 'b':
+        if (klen == 8 && 0 == memcmp(k, "bytes_in", 8)) {
+            lua_pushinteger(L, r->write_queue.bytes_in);
+            return 1;
+        }
+        if (klen == 9 && 0 == memcmp(k, "bytes_out", 9)) {
+            lua_pushinteger(L, r->write_queue.bytes_out);
             return 1;
         }
         break;
      #if 0 /*(future: provide pairs() interface to iterate over chunkqueue)*/
            /*(might convert chunks into table of strings, {filename="..."})*/
            /*(what about c->offset into chunk?)*/
-      case 'g': /* get; lighty.r.resp_body.get */
+      case 'g': /* get; r.resp_body.get */
         if (k[1] == 'e' && k[2] == 't' && k[3] == '\0') {
-            /* equivalent to lighty.r.attr["response.body"] */
+            /* equivalent to r.attr["response.body"] */
             /* equivalent to lighty.env["response.body"] */
             if (r->resp_body_finished) {
                 chunkqueue * const cq = &r->write_queue;
@@ -2016,11 +2006,10 @@ static int magnet_respbody(lua_State *L) {
         }
         break;
      #endif
-      case 'l': /* len; lighty.r.resp_body.len */
+      case 'l': /* len; r.resp_body.len */
         if (k[1] == 'e' && k[2] == 'n' && k[3] == '\0') {
-            /* equivalent to lighty.r.req_attr["response.body-length"] */
+            /* equivalent to r.req_attr["response.body-length"] */
             /* equivalent to lighty.env["response.body-length"] */
-            request_st * const r = magnet_get_request(L);
             if (r->resp_body_finished)
                 lua_pushinteger(L, chunkqueue_length(&r->write_queue));
             else
@@ -2028,23 +2017,53 @@ static int magnet_respbody(lua_State *L) {
             return 1;
         }
         break;
-      case 's': /* set; lighty.r.resp_body.set */
+      case 's': /* set; r.resp_body.set */
         if (k[1] == 'e' && k[2] == 't' && k[3] == '\0') {
-            request_st * const r = magnet_get_request(L);
             http_response_body_clear(r, 0); /* clear respbody, then add */
-            lua_pushcclosure(L, magnet_respbody_add, 0);
+            lua_pushlightuserdata(L, r);
+            lua_pushcclosure(L, magnet_respbody_add, 1);
             return 1;
         }
         break;
       default:
         break;
     }
-    lua_pushliteral(L, "lighty.r.resp_body invalid method or param");
+    lua_pushliteral(L, "r.resp_body invalid method or param");
+    lua_error(L);
+    return 0;
+}
+
+static int magnet_reqbody(lua_State *L) {
+    const request_st * const r = **(request_st ***)lua_touserdata(L, 1);
+    size_t klen;
+    const char * const k = luaL_checklstring(L, 2, &klen);
+    switch (k[0]) {
+      case 'b':
+        if (klen == 8 && 0 == memcmp(k, "bytes_in", 8)) {
+            lua_pushinteger(L, r->reqbody_queue.bytes_in);
+            return 1;
+        }
+        if (klen == 9 && 0 == memcmp(k, "bytes_out", 9)) {
+            lua_pushinteger(L, r->reqbody_queue.bytes_out);
+            return 1;
+        }
+        break;
+      case 'l': /* len */
+        if (k[1] == 'e' && k[2] == 'n' && k[3] == '\0') {
+            lua_pushinteger(L, r->reqbody_length);
+            return 1;
+        }
+        break;
+      default:
+        break;
+    }
+    lua_pushliteral(L, "r.req_body invalid method or param");
     lua_error(L);
     return 0;
 }
 
 
+__attribute_cold__
 static int magnet_lighty_result_get(lua_State *L) {
     /* __index: param 1 is the lighty table the value was not found in */
     lua_getfield(L, 1, "result"); /* lighty.result */
@@ -2063,6 +2082,7 @@ static int magnet_lighty_result_get(lua_State *L) {
     return 1;
 }
 
+__attribute_cold__
 static int magnet_lighty_result_set(lua_State *L) {
     /* __newindex: param 1 is lighty table the value is supposed to be set in */
     /* assign value to table, replacing existing value, if any
@@ -2101,6 +2121,7 @@ static void magnet_copy_response_header(lua_State * const L, request_st * const 
  *     { "<html><body><pre>", { file = "/content" } , "</pre></body></html>" }
  *   return 200
  */
+__attribute_cold__
 __attribute_noinline__
 static void magnet_attach_content_table(lua_State * const L, request_st * const r) {
 		for (int i=1, end=0, n=(int)lua_rawlen(L,-1); !end && i <= n; ++i) {
@@ -2209,8 +2230,9 @@ static void magnet_attach_content(lua_State * const L, request_st * const r, con
     /*lua_pop(L, 2);*/ /* pop lighty.result.content and lighty.result */
 }
 
+__attribute_cold__
 static void magnet_mainenv_metatable(lua_State * const L) {
-    if (luaL_newmetatable(L, "lighty.mainenv")) {             /* (sp += 1) */
+    if (luaL_newmetatable(L, "li.mainenv")) {                 /* (sp += 1) */
         lua_pushglobaltable(L);                               /* (sp += 1) */
         lua_setfield(L, -2, "__index"); /* { __index = _G }      (sp -= 1) */
         lua_pushboolean(L, 0);                                /* (sp += 1) */
@@ -2218,9 +2240,173 @@ static void magnet_mainenv_metatable(lua_State * const L) {
     }
 }
 
+static void
+magnet_request_userdata_method (lua_State * const L, request_st ** const rr, const char *meta)
+{
+    /*(meta is name of cached metatable; meta must start w/ "li." prefix)*/
+    *(request_st ***)lua_newuserdata0(L, sizeof(request_st **)) = rr;
+    luaL_newmetatable(L, meta); /*(should not fail; init'd in script setup)*/
+    lua_setmetatable(L, -2);
+    lua_setfield(L, -2, meta+3); /*(meta+3 to skip over "li." prefix)*/
+}
+
+static void
+magnet_request_table (lua_State * const L, request_st ** const rr)
+{
+    /* r table
+     *
+     * r.req_header[]         HTTP request headers
+     * r.req_attr[]           HTTP request attributes / components (strings)
+     * r.req_env[]            HTTP request environment variables
+     * r.req_body.*           HTTP request body accessors
+     * r.req_body.bytes_in    HTTP request body chunkqueue bytes_in
+     * r.req_body.bytes_out   HTTP request body chunkqueue bytes_out
+     * r.resp_header[]        HTTP response headers
+     * r.resp_body.*          HTTP response body accessors
+     * r.resp_body.len        HTTP response body length
+     * r.resp_body.add()      HTTP response body add (string or table)
+     * r.resp_body.set()      HTTP response body set (string or table)
+     * r.resp_body.bytes_in   HTTP response body chunkqueue bytes_in
+     * r.resp_body.bytes_out  HTTP response body chunkqueue bytes_out
+     */
+    lua_createtable(L, 0, 6);                                 /* (sp += 1) */
+
+    /* userdata methods share ptr-ptr to external object userdata rr
+     * (similar functionality to that provided w/ luaL_setfuncs() in lua 5.2+)*/
+    magnet_request_userdata_method(L, rr, "li.req_header"); /* req_header */
+    magnet_request_userdata_method(L, rr, "li.req_attr");   /* req_attr */
+    magnet_request_userdata_method(L, rr, "li.req_env");    /* req_env */
+    magnet_request_userdata_method(L, rr, "li.resp_header");/* resp_header */
+    magnet_request_userdata_method(L, rr, "li.resp_body");  /* resp_body */
+    magnet_request_userdata_method(L, rr, "li.req_body");   /* req_body */
+
+    lua_createtable(L, 0, 2); /* metatable for r table           (sp += 1) */
+    lua_pushcfunction(L, magnet_newindex_readonly);           /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+    lua_setmetatable(L, -2); /* tie the metatable to r           (sp -= 1) */
+}
+
 __attribute_cold__
-__attribute_noinline__
-static void magnet_init_lighty_table(lua_State * const L) {
+static void
+magnet_req_header_metatable (lua_State * const L)
+{
+    if (luaL_newmetatable(L, "li.req_header") == 0)           /* (sp += 1) */
+        return;
+
+    lua_pushcfunction(L, magnet_reqhdr_get);                  /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_reqhdr_set);                  /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_reqhdr_pairs);                /* (sp += 1) */
+    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+}
+
+__attribute_cold__
+static void
+magnet_req_attr_metatable (lua_State * const L)
+{
+    if (luaL_newmetatable(L, "li.req_attr") == 0)             /* (sp += 1) */
+        return;
+
+    lua_pushcfunction(L, magnet_env_get);                     /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_env_set);                     /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_env_pairs);                   /* (sp += 1) */
+    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+}
+
+__attribute_cold__
+static void
+magnet_req_env_metatable (lua_State * const L)
+{
+    if (luaL_newmetatable(L, "li.req_env") == 0)              /* (sp += 1) */
+        return;
+
+    lua_pushcfunction(L, magnet_envvar_get);                  /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_envvar_set);                  /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_envvar_pairs);                /* (sp += 1) */
+    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+}
+
+__attribute_cold__
+static void
+magnet_resp_header_metatable (lua_State * const L)
+{
+    if (luaL_newmetatable(L, "li.resp_header") == 0)          /* (sp += 1) */
+        return;
+
+    lua_pushcfunction(L, magnet_resphdr_get);                 /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_resphdr_set);                 /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_resphdr_pairs);               /* (sp += 1) */
+    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+}
+
+__attribute_cold__
+static void
+magnet_resp_body_metatable (lua_State * const L)
+{
+    if (luaL_newmetatable(L, "li.resp_body") == 0)            /* (sp += 1) */
+        return;
+
+    lua_pushcfunction(L, magnet_respbody);                    /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_newindex_readonly);           /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+}
+
+__attribute_cold__
+static void
+magnet_req_body_metatable (lua_State * const L)
+{
+    if (luaL_newmetatable(L, "li.req_body") == 0)             /* (sp += 1) */
+        return;
+
+    lua_pushcfunction(L, magnet_reqbody);                     /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_newindex_readonly);           /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+}
+
+__attribute_cold__
+static int magnet_atpanic(lua_State *L) {
+	request_st * const r = magnet_get_request(L);
+	log_error(r->conf.errh, __FILE__, __LINE__, "(lua-atpanic) %s",
+	          lua_isstring(L, 1) ? lua_tostring(L, 1) : "");
+	/*longjmp(exceptionjmp, 1);*//*(must be init with setjmp() elsewhere)*/
+	return 0;
+}
+
+__attribute_cold__
+static int magnet_print(lua_State *L) {
+	const_buffer cb = magnet_checkconstbuffer(L, 1);
+	request_st * const r = magnet_get_request(L);
+	log_error(r->conf.errh, __FILE__, __LINE__, "(lua-print) %s", cb.ptr);
+	return 0;
+}
+
+__attribute_cold__
+static void
+magnet_init_lighty_table (lua_State * const L, request_st **rr)
+{
     /* init lighty table and other initial setup for global lua_State */
 
     lua_atpanic(L, magnet_atpanic);
@@ -2242,21 +2428,20 @@ static void magnet_init_lighty_table(lua_State * const L) {
 
     lua_pop(L, 1); /* pop global table */                     /* (sp -= 1) */
 
-    magnet_mainenv_metatable(L); /* init table for mem locality  (sp += 1) */
+    magnet_req_header_metatable(L);    /* init for mem locality  (sp += 1) */
+    magnet_req_attr_metatable(L);      /* init for mem locality  (sp += 1) */
+    magnet_req_env_metatable(L);       /* init for mem locality  (sp += 1) */
+    magnet_resp_header_metatable(L);   /* init for mem locality  (sp += 1) */
+    magnet_resp_body_metatable(L);     /* init for mem locality  (sp += 1) */
+    magnet_req_body_metatable(L);      /* init for mem locality  (sp += 1) */
     magnet_stat_metatable(L);    /* init table for mem locality  (sp += 1) */
     magnet_readdir_metatable(L); /* init table for mem locality  (sp += 1) */
-    lua_pop(L, 3);               /* pop init'd metatables        (sp -= 3) */
+    lua_pop(L, 8);               /* pop init'd metatables        (sp -= 8) */
 
     /* lighty table
      *
-     * lighty.r.req_header[]     HTTP request headers
-     * lighty.r.req_attr[]       HTTP request attributes / components
-     * lighty.r.req_env[]        HTTP request environment variables
-     * lighty.r.resp_header[]    HTTP response headers
-     * lighty.r.resp_body.*      HTTP response body accessors
-     * lighty.r.resp_body.len    HTTP response body length
-     * lighty.r.resp_body.add()  HTTP response body add (string or table)
-     * lighty.r.resp_body.set()  HTTP response body set (string or table)
+     * lighty.r.*                HTTP request object methods
+     * lighty.c.*                lighttpd C methods callable from lua
      *
      * (older interface)
      *
@@ -2276,77 +2461,7 @@ static void magnet_init_lighty_table(lua_State * const L) {
     /*(adjust the preallocation if more entries are added)*/
     lua_createtable(L, 0, 9); /* lighty.* (returned on stack)    (sp += 1) */
 
-    lua_createtable(L, 0, 5); /* lighty.r                        (sp += 1) */
-
-    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
-    lua_createtable(L, 0, 4); /* metatable for req_header table  (sp += 1) */
-    lua_pushcfunction(L, magnet_reqhdr_get);                  /* (sp += 1) */
-    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_reqhdr_set);                  /* (sp += 1) */
-    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_reqhdr_pairs);                /* (sp += 1) */
-    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
-    lua_pushboolean(L, 0);                                    /* (sp += 1) */
-    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
-    lua_setmetatable(L, -2); /* tie the metatable to req_header  (sp -= 1) */
-    lua_setfield(L, -2, "req_header"); /* req_header = {}        (sp -= 1) */
-
-    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
-    lua_createtable(L, 0, 4); /* metatable for req_attr table    (sp += 1) */
-    lua_pushcfunction(L, magnet_env_get);                     /* (sp += 1) */
-    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_env_set);                     /* (sp += 1) */
-    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_env_pairs);                   /* (sp += 1) */
-    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
-    lua_pushboolean(L, 0);                                    /* (sp += 1) */
-    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
-    lua_setmetatable(L, -2); /* tie the metatable to req_attr    (sp -= 1) */
-    lua_setfield(L, -2, "req_attr"); /* req_attr = {}            (sp -= 1) */
-
-    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
-    lua_createtable(L, 0, 4); /* metatable for req_env table     (sp += 1) */
-    lua_pushcfunction(L, magnet_envvar_get);                  /* (sp += 1) */
-    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_envvar_set);                  /* (sp += 1) */
-    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_envvar_pairs);                /* (sp += 1) */
-    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
-    lua_pushboolean(L, 0);                                    /* (sp += 1) */
-    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
-    lua_setmetatable(L, -2); /* tie the metatable to req_env     (sp -= 1) */
-    lua_setfield(L, -2, "req_env"); /* req_env = {}              (sp -= 1) */
-
-    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
-    lua_createtable(L, 0, 4); /* metatable for resp_header table (sp += 1) */
-    lua_pushcfunction(L, magnet_resphdr_get);                 /* (sp += 1) */
-    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_resphdr_set);                 /* (sp += 1) */
-    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_resphdr_pairs);               /* (sp += 1) */
-    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
-    lua_pushboolean(L, 0);                                    /* (sp += 1) */
-    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
-    lua_setmetatable(L, -2); /* tie the metatable to resp_header (sp -= 1) */
-    lua_setfield(L, -2, "resp_header"); /* resp_header = {}      (sp -= 1) */
-
-    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
-    lua_createtable(L, 0, 3); /* metatable for resp_body table   (sp += 1) */
-    lua_pushcfunction(L, magnet_respbody);                    /* (sp += 1) */
-    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_newindex_readonly);           /* (sp += 1) */
-    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-    lua_pushboolean(L, 0);                                    /* (sp += 1) */
-    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
-    lua_setmetatable(L, -2); /* tie the metatable to resp_body   (sp -= 1) */
-    lua_setfield(L, -2, "resp_body"); /* resp_body = {}          (sp -= 1) */
-
-    lua_createtable(L, 0, 2); /* metatable for r table           (sp += 1) */
-    lua_pushcfunction(L, magnet_newindex_readonly);           /* (sp += 1) */
-    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-    lua_pushboolean(L, 0);                                    /* (sp += 1) */
-    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
-    lua_setmetatable(L, -2); /* tie the metatable to r           (sp -= 1) */
+    magnet_request_table(L, rr); /* lighty.r                     (sp += 1) */
     lua_setfield(L, -2, "r"); /* lighty.r = {}                   (sp -= 1) */
 
     /* compatibility with previous mod_magnet interfaces in top of lighty.* */
@@ -2473,6 +2588,7 @@ static void magnet_reset_lighty_table(lua_State * const L, const int lighty_tabl
     /*lua_pop(L, 2);*/ /* defer to later */
 }
 
+__attribute_cold__
 static int magnet_traceback(lua_State *L) {
 	if (!lua_isstring(L, 1))  /* 'message' not a string? */
 		return 1;  /* keep it intact */
@@ -2490,31 +2606,32 @@ static int magnet_traceback(lua_State *L) {
 	return 1;
 }
 
-static handler_t magnet_attract(request_st * const r, plugin_data * const p, script * const sc) {
+__attribute_cold__
+__attribute_noinline__
+static int
+magnet_script_setup (request_st * const r, plugin_data * const p, script * const sc)
+{
 	lua_State * const L = sc->L;
 	const int func_ndx = 1;
-	const int errfunc_ndx = 2;
-	const int env_ndx = 3;
-	const int lighty_table_ndx = 4;
-
-	if (__builtin_expect( (lua_gettop(L) == 4), 1)) {
-		/*force_assert(lua_istable(L, -1));*//* lighty.* table */
-	}
-	else if (lua_isfunction(L, func_ndx)) {
-	        /*force_assert(lua_gettop(L) == 1);*/
+	if (lua_isfunction(L, func_ndx)) {
+		/*force_assert(lua_gettop(L) == 1);*/ /* errfunc_ndx = 2 */
 		lua_pushcfunction(L, magnet_traceback);/*errfunc*//* (sp += 1) */
 		/* create empty table for script environment (reused)
 		 *   setmetatable({}, {__index = _G})
 		 *     if a function symbol is not defined in our env,
 		 *     __index will lookup in the global env. */
-		lua_createtable(L, 0, 1);                         /* (sp += 1) */
+		lua_createtable(L, 0, 1); /* env_ndx = 3 */       /* (sp += 1) */
 		magnet_mainenv_metatable(L);                      /* (sp += 1) */
 		lua_setmetatable(L, -2);                          /* (sp -= 1) */
 		/* set script env in first upvalue (_ENV upvalue) for func */
-		lua_pushvalue(L, env_ndx);                        /* (sp += 1) */
+		lua_pushvalue(L, -1);                             /* (sp += 1) */
 		magnet_setfenv_mainfn(L, func_ndx);               /* (sp -= 1) */
-		/* insert lighty table at index 4 (lighty_table_ndx = 4) */
-		magnet_init_lighty_table(L); /* lighty.*             (sp += 1) */
+		/* shared userdata (ud_ndx = 4) */
+		request_st ** const r_userdata =                  /* (sp += 1) */
+		  (request_st **)lua_newuserdata0(L, sizeof(request_st *));
+		/* insert lighty table (lighty_table_ndx = 5) */
+		magnet_init_lighty_table(L, r_userdata); /* lighty.* (sp += 1) */
+		return 1;
 	}
 	else {
 		if (lua_isstring(L, func_ndx))
@@ -2531,24 +2648,37 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			r->handler_module = NULL;
 		}
 
-		return HANDLER_FINISHED;
+		return 0;
+	}
+}
+
+static handler_t
+magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
+{
+	lua_State * const L = sc->L;
+	const int func_ndx = 1;
+	const int errfunc_ndx = 2;
+	const int env_ndx = 3;
+	const int ud_ndx = 4;
+	const int lighty_table_ndx = 5;
+
+	if (__builtin_expect( (lua_gettop(L) != lighty_table_ndx), 0)) {
+		if (!magnet_script_setup(r, p, sc))
+			return HANDLER_FINISHED;
 	}
 
-     #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 503
-	lua_pushlightuserdata(L, r);
-	lua_setfield(L, LUA_REGISTRYINDEX, LUA_RIDX_LIGHTTPD_REQUEST);
-     #else
-	*(request_st **)lua_getextraspace(L) = r;
-     #endif
+	/* set r in global state for L for out-of-band access to r
+	 * (r-conf.errh and others) */
+        magnet_set_request(L, r);
+	/* set r in userdata shared by lighty.r object methods */
+	*(request_st **)lua_touserdata(L, ud_ndx) = r;
 
-	/**
-	 * all variables created in the script-env will be thrown
-	 * away at the end of the script run.
-	 */
+	/* add lighty table to script-env
+	 * script-env is cleared at the end of each script run */
 	lua_pushvalue(L, lighty_table_ndx);                       /* (sp += 1) */
 	lua_setfield(L, env_ndx, "lighty"); /* lighty.*              (sp -= 1) */
 
-	/* pcall will destroy the func value, duplicate it */
+	/* push script func; pcall will consume the func value */
 	lua_pushvalue(L, func_ndx);                               /* (sp += 1) */
 	int ret = lua_pcall(L, 0, 1, errfunc_ndx);       /* (sp -= 1; sp += 1) */
 
@@ -2557,8 +2687,9 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "lua_pcall(): %s", lua_tostring(L, -1));
 			/*lua_pop(L, 1);*/ /* pop error msg */ /* defer to later */
-			/* only func, errfunc, env, lighty table should remain on stack */
-			/*force_assert(lua_gettop(L) == 4);*//* lua_pop() deferred, so +1 */
+			/* only func,errfunc,env,ud,lighty table should remain on stack */
+			/*(lua_pop() deferred, so lighty_table_ndx+1)*/
+			/*force_assert(lua_gettop(L) == lighty_table_ndx);*/
 
 			if (p->conf.stage != -1) { /* skip for response-start */
 				r->http_status = 500;
@@ -2568,8 +2699,8 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 			result = HANDLER_FINISHED;
 	}
 	else {
-		/* should have func, errfunc, env, lighty table, return value on stack*/
-		/*force_assert(lua_gettop(L) == 5);*/
+		/* should have func,errfunc,env,ud,lighty table, return value on stack*/
+		/*force_assert(lua_gettop(L) == lighty_table_ndx+1);*/
 
 		/*(luaL_optinteger might raise error, which we want to avoid)*/
 		/*lua_return_value = (int) luaL_optinteger(L, -1, -1);*/
@@ -2629,7 +2760,7 @@ static handler_t magnet_attract(request_st * const r, plugin_data * const p, scr
 	}
 	magnet_clear_table(L, env_ndx);
 	magnet_reset_lighty_table(L, lighty_table_ndx);
-	/* reset stack to have only func, errfunc, env, lighty table */
+	/* reset stack to have only func, errfunc, env, ud, lighty table */
 	lua_settop(L, lighty_table_ndx); /*(handle deferred lua_pop()s)*/
 	return result;
 }
