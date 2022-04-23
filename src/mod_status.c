@@ -300,7 +300,8 @@ static void mod_status_html_rtable (request_st * const rq, const server * const 
     buffer_clear(b);
     for (const connection *con = srv->conns; con; con = con->next) {
         const request_st * const r = &con->request;
-        if (r->http_status <= HTTP_VERSION_1_1) {
+        h2con * const h2c = con->h2;
+        if (NULL == h2c) { /*(r->http_status <= HTTP_VERSION_1_1)*/
             if (buffer_string_space(b) < 4096) {
                 http_chunk_append_mem(rq, BUF_PTR_LEN(b));
                 buffer_clear(b);
@@ -308,7 +309,6 @@ static void mod_status_html_rtable (request_st * const rq, const server * const 
             mod_status_html_rtable_r(b, r, con, cur_ts);
         }
         else {
-            h2con * const h2c = con->h2;
             for (uint32_t j = 0, rused = h2c->rused; j < rused; ++j) {
                 if (buffer_string_space(b) < 4096) {
                     http_chunk_append_mem(rq, BUF_PTR_LEN(b));
