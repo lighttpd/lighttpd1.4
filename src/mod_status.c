@@ -30,20 +30,14 @@ typedef struct {
 	plugin_config defaults;
 	plugin_config conf;
 
-	double traffic_out;
-	double requests;
+	off_t bytes_written_1s;
+	off_t requests_1s;
+	off_t abs_traffic_out;
+	off_t abs_requests;
 
-	double mod_5s_traffic_out[5];
-	double mod_5s_requests[5];
-	size_t mod_5s_ndx;
-
-	double rel_traffic_out;
-	double rel_requests;
-
-	double abs_traffic_out;
-	double abs_requests;
-
-	double bytes_written;
+	off_t traffic_out_5s[5];
+	off_t requests_5s[5];
+	int ndx_5s;
 } plugin_data;
 
 INIT_FUNC(mod_status_init) {
@@ -249,7 +243,7 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
 
     buffer_append_int(b, r->write_queue.bytes_out);
     buffer_append_string_len(b, CONST_STR_LEN("/"));
-    buffer_append_int(b, r->write_queue.bytes_out + chunkqueue_length(&r->write_queue));
+    buffer_append_int(b, r->write_queue.bytes_in);
 
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
@@ -325,7 +319,6 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	buffer * const b = chunkqueue_append_buffer_open(&r->write_queue);
 	buffer_string_prepare_append(b, 8192-1);/*(status page base HTML is ~5.2k)*/
 	double avg;
-	uint32_t j;
 	unix_time64_t ts;
 	const unix_time64_t cur_ts = log_epoch_secs;
 
@@ -500,42 +493,41 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"
 	                                          "<tr><th colspan=\"2\">absolute (since start)</th></tr>\n"
 	                                          "<tr><td>Requests</td><td class=\"string\">"));
-	avg = p->abs_requests;
+	avg = (double)p->abs_requests;
 	mod_status_get_multiplier(b, avg, 1000);
 	buffer_append_string_len(b, CONST_STR_LEN("req</td></tr>\n"
 	                                          "<tr><td>Traffic</td><td class=\"string\">"));
-	avg = p->abs_traffic_out;
+	avg = (double)p->abs_traffic_out;
 	mod_status_get_multiplier(b, avg, 1024);
 	buffer_append_string_len(b, CONST_STR_LEN("byte</td></tr>\n"
 	                                          "<tr><th colspan=\"2\">average (since start)</th></tr>\n"
 	                                          "<tr><td>Requests</td><td class=\"string\">"));
-	avg = p->abs_requests / (cur_ts - srv->startup_ts);
+	avg = (double)p->abs_requests / (cur_ts - srv->startup_ts);
 	mod_status_get_multiplier(b, avg, 1000);
 	buffer_append_string_len(b, CONST_STR_LEN("req/s</td></tr>\n"
 	                                          "<tr><td>Traffic</td><td class=\"string\">"));
-	avg = p->abs_traffic_out / (cur_ts - srv->startup_ts);
+	avg = (double)p->abs_traffic_out / (cur_ts - srv->startup_ts);
 	mod_status_get_multiplier(b, avg, 1024);
 	buffer_append_string_len(b, CONST_STR_LEN("byte/s</td></tr>\n"
 	                                          "<tr><th colspan=\"2\">average (5s sliding average)</th></tr>\n"));
-	for (j = 0, avg = 0; j < 5; j++) {
-		avg += p->mod_5s_requests[j];
-	}
 
+	avg = (double)(p->requests_5s[0]
+	             + p->requests_5s[1]
+	             + p->requests_5s[2]
+	             + p->requests_5s[3]
+	             + p->requests_5s[4]);
 	avg /= 5;
-
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><td>Requests</td><td class=\"string\">"));
-
 	mod_status_get_multiplier(b, avg, 1000);
 	buffer_append_string_len(b, CONST_STR_LEN("req/s</td></tr>\n"));
 
-	for (j = 0, avg = 0; j < 5; j++) {
-		avg += p->mod_5s_traffic_out[j];
-	}
-
+	avg = (double)(p->traffic_out_5s[0]
+	             + p->traffic_out_5s[1]
+	             + p->traffic_out_5s[2]
+	             + p->traffic_out_5s[3]
+	             + p->traffic_out_5s[4]);
 	avg /= 5;
-
 	buffer_append_string_len(b, CONST_STR_LEN("<tr><td>Traffic</td><td class=\"string\">"));
-
 	mod_status_get_multiplier(b, avg, 1024);
 	buffer_append_string_len(b, CONST_STR_LEN("byte/s</td></tr>\n"
 	                                          "</table>\n"
@@ -569,7 +561,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	                                          "<tr><td style=\"text-align:right\">"));
 	buffer_append_int(b, cstates[CON_STATE_CLOSE+2]);
 	buffer_append_string_len(b, CONST_STR_LEN("<td>&nbsp;&nbsp;k = keep-alive</td></tr>\n"));
-	for (j = 0; j < CON_STATE_CLOSE+2; ++j) {
+	for (int j = 0; j < CON_STATE_CLOSE+2; ++j) {
 		/*(skip "unknown" state if there are none; there should not be any unknown)*/
 		if (0 == cstates[j] && j == CON_STATE_CLOSE+1) continue;
 		buffer_append_string_len(b, CONST_STR_LEN("<tr><td style=\"text-align:right\">"));
@@ -657,8 +649,7 @@ static handler_t mod_status_handle_server_status_text(server *srv, request_st * 
 
 static handler_t mod_status_handle_server_status_json(server *srv, request_st * const r, plugin_data *p) {
 	buffer *b = chunkqueue_append_buffer_open(&r->write_queue);
-	double avg;
-	uint32_t j;
+	off_t avg;
 	unsigned int jsonp = 0;
 
 	if (buffer_clen(&r->uri.query) >= sizeof("jsonp=")-1
@@ -691,20 +682,22 @@ static handler_t mod_status_handle_server_status_json(server *srv, request_st * 
 	buffer_append_int(b, srv->lim_conns); /*(could omit)*/
 	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
 
-	for (j = 0, avg = 0; j < 5; j++) {
-		avg += p->mod_5s_requests[j];
-	}
-
+	avg = p->requests_5s[0]
+	    + p->requests_5s[1]
+	    + p->requests_5s[2]
+	    + p->requests_5s[3]
+	    + p->requests_5s[4];
 	avg /= 5;
 
 	buffer_append_string_len(b, CONST_STR_LEN("\t\"RequestAverage5s\":"));
 	buffer_append_int(b, avg);
 	buffer_append_string_len(b, CONST_STR_LEN(",\n"));
 
-	for (j = 0, avg = 0; j < 5; j++) {
-		avg += p->mod_5s_traffic_out[j];
-	}
-
+	avg = p->traffic_out_5s[0]
+	    + p->traffic_out_5s[1]
+	    + p->traffic_out_5s[2]
+	    + p->traffic_out_5s[3]
+	    + p->traffic_out_5s[4];
 	avg /= 5;
 
 	buffer_append_string_len(b, CONST_STR_LEN("\t\"TrafficAverage5s\":"));
@@ -887,40 +880,35 @@ static handler_t mod_status_handler(request_st * const r, void *p_d) {
 }
 
 TRIGGER_FUNC(mod_status_trigger) {
-	plugin_data *p = p_d;
+    plugin_data * const p = p_d;
 
-	/* check all connections */
-	for (const connection *c = srv->conns; c; c = c->next)
-		p->bytes_written += c->bytes_written_cur_second;
+    /* check all connections */
+    for (const connection *c = srv->conns; c; c = c->next)
+        p->bytes_written_1s += c->bytes_written_cur_second;
 
-	/* a sliding average */
-	p->mod_5s_traffic_out[p->mod_5s_ndx] = p->bytes_written;
-	p->mod_5s_requests   [p->mod_5s_ndx] = p->requests;
+    /* used in calculating sliding average */
+    p->traffic_out_5s[p->ndx_5s] = p->bytes_written_1s;
+    p->requests_5s   [p->ndx_5s] = p->requests_1s;
+    if (++p->ndx_5s == 5) p->ndx_5s = 0;
 
-	p->mod_5s_ndx = (p->mod_5s_ndx+1) % 5;
+    p->abs_traffic_out += p->bytes_written_1s;
+    p->abs_requests += p->requests_1s;
 
-	p->abs_traffic_out += p->bytes_written;
-	p->rel_traffic_out += p->bytes_written;
+    p->bytes_written_1s = 0;
+    p->requests_1s = 0;
 
-	p->bytes_written = 0;
-
-	/* reset storage - second */
-	p->traffic_out = 0;
-	p->requests    = 0;
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
 REQUESTDONE_FUNC(mod_status_account) {
-	plugin_data *p = p_d;
+    plugin_data * const p = p_d;
+    const connection * const con = r->con;
 
-	p->requests++;
-	p->rel_requests++;
-	p->abs_requests++;
+    ++p->requests_1s;
+    if (r == &con->request) /*(HTTP/1.x or only HTTP/2 stream 0)*/
+        p->bytes_written_1s += con->bytes_written_cur_second;
 
-	p->bytes_written += r->con->bytes_written_cur_second;
-
-	return HANDLER_GO_ON;
+    return HANDLER_GO_ON;
 }
 
 
