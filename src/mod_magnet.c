@@ -1668,10 +1668,12 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	    {
 		const server_socket * const srv_socket = r->con->srv_socket;
 		const buffer * const srv_token = srv_socket->srv_token;
-		const uint32_t portoffset = srv_socket->srv_token_colon+1;
+		const uint32_t tlen = buffer_clen(srv_token);
+		uint32_t portoffset = srv_socket->srv_token_colon;
 		dest = r->tmp_buf;
+		portoffset = portoffset < tlen ? portoffset+1 : tlen;
 		buffer_copy_string_len(dest, srv_token->ptr+portoffset,
-		                       buffer_clen(srv_token)-portoffset);
+		                       tlen-portoffset);
 		break;
 	    }
 	case MAGNET_ENV_REQUEST_PROTOCOL:
