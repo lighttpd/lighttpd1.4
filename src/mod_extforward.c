@@ -1574,10 +1574,12 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
       case 0x31:  /* UNIX domain socket */
         {
             char *src_addr = (char *)hdr->v2.addr.unx.src_addr;
-            char *z = memchr(src_addr, '\0', UNIX_PATH_MAX);
+            char *z = memchr(src_addr, '\0', sizeof(hdr->v2.addr.unx.src_addr));
             if (NULL == z) return -1; /* invalid addr; too long */
-            len = (uint32_t)(z - src_addr + 1); /*(+1 for '\0')*/
-            sock_addr_assign(&con->dst_addr, AF_UNIX, 0, src_addr);
+            len = (uint32_t)(z - src_addr);
+            /*if (0 == len) return -1;*//* abstract socket not supported; err?*/
+            if (0 != sock_addr_assign(&con->dst_addr, AF_UNIX, 0, src_addr))
+                return -1; /* invalid addr; too long */
             buffer_copy_string_len(&con->dst_addr_buf, src_addr, len);
         }
        #if 0 /*(dst_addr should be identical to src_addr for AF_UNIX)*/
