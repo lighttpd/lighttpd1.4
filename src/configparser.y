@@ -292,7 +292,8 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
       else if (COMP_SERVER_SOCKET == dc->comp) {
         /*(redundant with parsing in network.c; not actually required here)*/
         if (rvalue->ptr[0] != ':' /*(network.c special-cases ":" and "[]")*/
-            && !(rvalue->ptr[0] == '[' && rvalue->ptr[1] == ']')) {
+            && !(rvalue->ptr[0] == '[' && rvalue->ptr[1] == ']')
+            && !(rvalue->ptr[0] == '/' || rvalue->ptr[0] == '\\')) { /*(UDS)*/
           if (http_request_host_normalize(rvalue, 0)) {
             fprintf(stderr, "invalid IP addr: %s\n", rvalue->ptr);
             ctx->ok = 0;
