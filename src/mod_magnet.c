@@ -1565,6 +1565,7 @@ typedef struct {
 	} type;
 } magnet_env_t;
 
+/*(NB: coordinate any changes with scan offsets in magnet_env_get_id())*/
 static const magnet_env_t magnet_env[] = {
     { CONST_STR_LEN("physical.path"),        MAGNET_ENV_PHYSICAL_PATH },
     { CONST_STR_LEN("physical.rel-path"),    MAGNET_ENV_PHYSICAL_REL_PATH },
@@ -1719,8 +1720,23 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	return dest;
 }
 
+__attribute_pure__
 static int magnet_env_get_id(const char * const key, const size_t klen) {
-    for (int i = 0; magnet_env[i].name; ++i) {
+    /*(NB: ensure offsets match position in magnet_env[])*/
+    int i; /* magnet_env[] scan offset */
+    switch (*key) {
+      case 'r': /* request.* or response.* */
+        i = klen > 7 && key[7] == '.' ? 9 : 19;
+        break;
+      case 'u': /* uri.* */
+      default:
+        i = 4;
+        break;
+      case 'p': /* physical.* */
+        i = 0;
+        break;
+    }
+    for (; i < (int)(sizeof(magnet_env)/sizeof(*magnet_env)); ++i) {
         if (klen == magnet_env[i].nlen
             && 0 == memcmp(key, magnet_env[i].name, klen))
             return magnet_env[i].type;
