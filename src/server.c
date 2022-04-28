@@ -328,6 +328,7 @@ static server *server_init(void) {
 	srv->loadavg[1] = 0.0;
 	srv->loadavg[2] = 0.0;
 	srv->stdin_fd = -1;
+	srv->default_server_tag = &default_server_tag;
 
 	log_con_jqueue = (connection *)(uintptr_t)&log_con_jqueue;/*(sentinel)*/
 

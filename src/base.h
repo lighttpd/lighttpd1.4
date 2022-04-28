@@ -195,6 +195,7 @@ struct server {
 	pid_t pid;
 	int stdin_fd;
 
+	const buffer *default_server_tag;
 	char **argv;
   #ifdef HAVE_PCRE2_H
 	void *match_data; /*(shared and reused)*/

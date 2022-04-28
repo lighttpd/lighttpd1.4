@@ -9,6 +9,7 @@
 #include "buffer.h"
 #include "chunk.h"
 #include "ck.h"
+#include "h2.h"
 #include "http_chunk.h"
 #include "http_etag.h"
 #include "http_header.h"
@@ -2290,6 +2291,118 @@ magnet_request_table (lua_State * const L, request_st ** const rr)
     lua_setmetatable(L, -2); /* tie the metatable to r           (sp -= 1) */
 }
 
+static int
+magnet_request_iter (lua_State *L)
+{
+    /* upvalue 1: (connection *) in linked list
+     * upvalue 2: index into h2con->r[]
+     * upvalue 3: request userdata
+     * upvalue 4: request table (references r in userdata) */
+    connection *con = lua_touserdata(L, lua_upvalueindex(1));
+
+    /* skip over HTTP/2 connections with no active requests */
+    while (con && con->h2 && 0 == con->h2->rused)
+        con = con->next;
+    if (NULL == con)
+        return 0;
+
+    /* set (request_st *)r */
+    int32_t i = -1;
+    if (con->h2) {
+        /* get index into h2con->r[] */
+        i = lua_tointeger(L, lua_upvalueindex(2));
+        /* set (request_st *)r in userdata */
+        if (-1 == i)
+            *(request_st **)lua_touserdata(L,lua_upvalueindex(3))=&con->request;
+        else
+            *(request_st **)lua_touserdata(L,lua_upvalueindex(3))=con->h2->r[i];
+        /* step to next index into h2con->r[] */
+        if ((uint32_t)++i == con->h2->rused)
+            i = -1;
+        lua_pushinteger(L, i);
+        lua_replace(L, lua_upvalueindex(2));
+    }
+    else {
+        /* set (request_st *) in userdata */
+        *(request_st **)lua_touserdata(L, lua_upvalueindex(3)) = &con->request;
+    }
+
+    if (-1 == i) {
+        /* step to next connection */
+        con = con->next;
+        lua_pushlightuserdata(L, con);
+        lua_replace(L, lua_upvalueindex(1));
+    }
+
+    /* return request object (which references (request_st *)r in userdata) */
+    lua_pushvalue(L, lua_upvalueindex(4));
+    return 1;
+}
+
+static int
+magnet_irequests (lua_State *L)
+{
+    /* NB: iterator request object *is invalid* outside of iteration
+     * For efficiency, r is stored in userdata as upvalue to iteration
+     * and is invalid (and may be cleaned up) outside of iterator loop.
+     * A C pointer into userdata is stored in iterator request object methods.
+     * The iterator request object is *reused* for each iteration loop and the
+     * upvalue to the userdata is changed each iteration to point to next r.
+     * The iterator request object *must not* be saved for use outside
+     * the iteration loop.  Extract data that must be saved and store data
+     * in a persistent object if data is to be used outside iterator loop.
+     * (Were it desirable to produce a persistent request object for use outside
+     *  the iteration loop, a future enhancement would be to add a method such
+     *  as lighty.server.irequests_clone(r) which creates a new request object
+     *  pointing into a new userdata, and saving that new userdata in the new
+     *  request object table as '_r_userdata')
+     * NB: iterator request objects should generally be treated read-only.
+     * Modifications may in some cases be unsafe and cause lighttpd to crash. */
+    request_st *r = magnet_get_request(L);
+    lua_pushlightuserdata(L, r->con->srv->conns);
+    lua_pushinteger(L, -1);
+    request_st ** const r_userdata =
+      (request_st **)lua_newuserdata0(L, sizeof(request_st *));
+    magnet_request_table(L, r_userdata);
+    lua_pushcclosure(L, magnet_request_iter, 4);
+    return 1;
+}
+
+static int
+magnet_server_stats_get (lua_State *L)
+{
+    size_t klen;
+    const char * const k = luaL_checklstring(L, 2, &klen);
+    const request_st * const r = magnet_get_request(L);
+    const server * const srv = r->con->srv;
+    switch (klen) {
+      case 6:
+        if (0 == memcmp(k, "uptime", 6)) {
+            lua_pushinteger(L, (lua_Integer)(log_epoch_secs - srv->startup_ts));
+            return 1;
+        }
+        break;
+      case 7:
+        if (0 == memcmp(k, "version", 7)) {
+            lua_pushlstring(L, BUF_PTR_LEN(srv->default_server_tag));
+            return 1;
+        }
+        break;
+      case 12:
+        /*(could calculate from irequests: ++count on remote-addr/port change)*/
+        if (0 == memcmp(k, "clients_open", 12)) {
+            lua_pushinteger(L, (lua_Integer)
+                            (srv->srvconf.max_conns - srv->lim_conns));
+            return 1;
+        }
+        break;
+      default:
+        break;
+    }
+    return luaL_error(L, "server.stats['%s'] invalid", k);
+}
+
+
 __attribute_cold__
 static void
 magnet_req_header_metatable (lua_State * const L)
@@ -2424,6 +2537,40 @@ magnet_plugin_stats_table (lua_State * const L)
 
 __attribute_cold__
 static void
+magnet_server_stats_table (lua_State * const L)
+{
+    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
+    lua_createtable(L, 0, 3); /* metatable for stats             (sp += 1) */
+    lua_pushcfunction(L, magnet_server_stats_get);            /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_newindex_readonly);           /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+    lua_setmetatable(L, -2);                                  /* (sp -= 1) */
+}
+
+__attribute_cold__
+static void
+magnet_server_table (lua_State * const L)
+{
+    lua_createtable(L, 0, 3); /* {}                              (sp += 1) */
+    lua_pushcfunction(L, magnet_irequests);                   /* (sp += 1) */
+    lua_setfield(L, -2, "irequests"); /* iterate over requests   (sp -= 1) */
+    magnet_plugin_stats_table(L);                             /* (sp += 1) */
+    lua_setfield(L, -2, "plugin_stats");                      /* (sp -= 1) */
+    magnet_server_stats_table(L);                             /* (sp += 1) */
+    lua_setfield(L, -2, "stats");                             /* (sp -= 1) */
+    lua_createtable(L, 0, 2); /* metatable for server table      (sp += 1) */
+    lua_pushcfunction(L, magnet_newindex_readonly);           /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+    lua_setmetatable(L, -2); /* tie the metatable to server      (sp -= 1) */
+}
+
+__attribute_cold__
+static void
 magnet_script_setup_global_state (lua_State * const L)
 {
     lua_atpanic(L, magnet_atpanic);
@@ -2459,6 +2606,7 @@ magnet_init_lighty_table (lua_State * const L, request_st **rr)
      *
      * lighty.r.*                HTTP request object methods
      * lighty.c.*                lighttpd C methods callable from lua
+     * lighty.server.*           lighttpd server object methods
      *
      * (older interface)
      *
@@ -2481,6 +2629,9 @@ magnet_init_lighty_table (lua_State * const L, request_st **rr)
     magnet_request_table(L, rr); /* lighty.r                     (sp += 1) */
     lua_setfield(L, -2, "r"); /* lighty.r = {}                   (sp -= 1) */
 
+    magnet_server_table(L); /* lighty.server                     (sp += 1) */
+    lua_setfield(L, -2, "server"); /* server = {}                (sp -= 1) */
+
     /* compatibility with previous mod_magnet interfaces in top of lighty.* */
     lua_getfield(L, -1, "r");                                 /* (sp += 1) */
     /* alias lighty.request -> lighty.r.req_header */
@@ -2494,12 +2645,16 @@ magnet_init_lighty_table (lua_State * const L, request_st **rr)
     lua_setfield(L, -3, "req_env"); /* req_env = {}              (sp -= 1) */
     lua_pop(L, 1);                                            /* (sp -= 1) */
 
-    magnet_plugin_stats_table(L);                             /* (sp += 1) */
-    lua_setfield(L, -2, "status"); /* status = {}                (sp -= 1) */
+    /* alias lighty.server.stats -> lighty.status */
+    lua_getfield(L, -1, "server");                            /* (sp += 1) */
+    lua_getfield(L, -1, "plugin_stats");                      /* (sp += 1) */
+    lua_setfield(L, -3, "status"); /* status = {}                (sp -= 1) */
+    lua_pop(L, 1);                                            /* (sp -= 1) */
 
     lua_pushinteger(L, MAGNET_RESTART_REQUEST);
     lua_setfield(L, -2, "RESTART_REQUEST");
 
+    /* alias lighty.c.stat -> lighty.stat */
     lua_pushcfunction(L, magnet_stat);                        /* (sp += 1) */
     lua_setfield(L, -2, "stat"); /* -1 is the env we want to set (sp -= 1) */
 
