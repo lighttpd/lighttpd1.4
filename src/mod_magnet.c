@@ -2407,6 +2407,23 @@ static int magnet_print(lua_State *L) {
 
 __attribute_cold__
 static void
+magnet_plugin_stats_table (lua_State * const L)
+{
+    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
+    lua_createtable(L, 0, 4); /* metatable for plugin_stats      (sp += 1) */
+    lua_pushcfunction(L, magnet_status_get);                  /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_status_set);                  /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_status_pairs);                /* (sp += 1) */
+    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+    lua_setmetatable(L, -2);                                  /* (sp -= 1) */
+}
+
+__attribute_cold__
+static void
 magnet_init_lighty_table (lua_State * const L, request_st **rr)
 {
     /* init lighty table and other initial setup for global lua_State */
@@ -2479,17 +2496,7 @@ magnet_init_lighty_table (lua_State * const L, request_st **rr)
     lua_setfield(L, -3, "req_env"); /* req_env = {}              (sp -= 1) */
     lua_pop(L, 1);                                            /* (sp -= 1) */
 
-    lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
-    lua_createtable(L, 0, 4); /* metatable for status table      (sp += 1) */
-    lua_pushcfunction(L, magnet_status_get);                  /* (sp += 1) */
-    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_status_set);                  /* (sp += 1) */
-    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_status_pairs);                /* (sp += 1) */
-    lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
-    lua_pushboolean(L, 0);                                    /* (sp += 1) */
-    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
-    lua_setmetatable(L, -2); /* tie the metatable to status      (sp -= 1) */
+    magnet_plugin_stats_table(L);                             /* (sp += 1) */
     lua_setfield(L, -2, "status"); /* status = {}                (sp -= 1) */
 
     lua_pushinteger(L, MAGNET_RESTART_REQUEST);
