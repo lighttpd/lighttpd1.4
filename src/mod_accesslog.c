@@ -900,7 +900,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			{
 				off_t bytes = r->http_version <= HTTP_VERSION_1_1
 				  ? con->bytes_read - r->bytes_read_ckpt
-				  : r->read_queue.bytes_in + (off_t)r->rqst_header_len;
+				  : r->read_queue.bytes_in;
 				if (bytes > 0) {
 					buffer_append_int(b, bytes);
 				} else {
