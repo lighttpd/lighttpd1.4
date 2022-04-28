@@ -2424,27 +2424,20 @@ magnet_plugin_stats_table (lua_State * const L)
 
 __attribute_cold__
 static void
-magnet_init_lighty_table (lua_State * const L, request_st **rr)
+magnet_script_setup_global_state (lua_State * const L)
 {
-    /* init lighty table and other initial setup for global lua_State */
-
     lua_atpanic(L, magnet_atpanic);
 
     lua_pushglobaltable(L);                                   /* (sp += 1) */
-
-    /* we have to overwrite the print function */
+    /* override default print() function */
     lua_pushcfunction(L, magnet_print);                       /* (sp += 1) */
-    lua_setfield(L, -2, "print"); /* -1 is the env we want to set(sp -= 1) */
-
+    lua_setfield(L, -2, "print");                             /* (sp -= 1) */
   #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
-    /* override the default pairs() function to our __pairs capable version;
-     * not needed for lua 5.2+
-     */
+    /* override default pairs() function to our __pairs capable version */
     lua_getglobal(L, "pairs"); /* push original pairs()          (sp += 1) */
-    lua_pushcclosure(L, magnet_pairs, 1);
+    lua_pushcclosure(L, magnet_pairs, 1);            /* (sp -= 1; sp += 1) */
     lua_setfield(L, -2, "pairs");                             /* (sp -= 1) */
   #endif
-
     lua_pop(L, 1); /* pop global table */                     /* (sp -= 1) */
 
     magnet_req_header_metatable(L);    /* init for mem locality  (sp += 1) */
@@ -2456,7 +2449,12 @@ magnet_init_lighty_table (lua_State * const L, request_st **rr)
     magnet_stat_metatable(L);    /* init table for mem locality  (sp += 1) */
     magnet_readdir_metatable(L); /* init table for mem locality  (sp += 1) */
     lua_pop(L, 8);               /* pop init'd metatables        (sp -= 8) */
+}
 
+__attribute_cold__
+static void
+magnet_init_lighty_table (lua_State * const L, request_st **rr)
+{
     /* lighty table
      *
      * lighty.r.*                HTTP request object methods
@@ -2623,6 +2621,8 @@ magnet_script_setup (request_st * const r, plugin_data * const p, script * const
 	lua_State * const L = sc->L;
 	const int func_ndx = 1;
 	if (lua_isfunction(L, func_ndx)) {
+		/* initial setup for global lua_State */
+		magnet_script_setup_global_state(L);
 		/*force_assert(lua_gettop(L) == 1);*/ /* errfunc_ndx = 2 */
 		lua_pushcfunction(L, magnet_traceback);/*errfunc*//* (sp += 1) */
 		/* create empty table for script environment (reused)
