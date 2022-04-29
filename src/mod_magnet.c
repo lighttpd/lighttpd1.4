@@ -1596,13 +1596,52 @@ static const magnet_env_t magnet_env[] = {
     { NULL, 0, MAGNET_ENV_UNSET }
 };
 
-static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
-	buffer *dest = NULL;
+__attribute_cold__
+__attribute_noinline__
+static buffer *
+magnet_env_get_laddr_by_id (request_st * const r, const int id)
+{
+    buffer * const dest = r->tmp_buf;
+    const server_socket * const srv_socket = r->con->srv_socket;
+    switch (id) {
+      case MAGNET_ENV_REQUEST_SERVER_ADDR: /* local IP without port */
+        if (sock_addr_is_addr_wildcard(&srv_socket->addr)) {
+            sock_addr addrbuf;
+            socklen_t addrlen = sizeof(addrbuf);
+            const int fd = r->con->fd;
+            if (0 == getsockname(fd,(struct sockaddr *)&addrbuf,&addrlen)) {
+                char buf[INET6_ADDRSTRLEN + 1];
+                const char *s = sock_addr_inet_ntop(&addrbuf, buf, sizeof(buf));
+                if (NULL != s) {
+                    buffer_copy_string_len(dest, s, strlen(s));
+                    break;
+                }
+            }
+        }
+        buffer_copy_string_len(dest, srv_socket->srv_token->ptr,
+                               srv_socket->srv_token_colon);
+        break;
+      case MAGNET_ENV_REQUEST_SERVER_PORT:
+      {
+        const buffer * const srv_token = srv_socket->srv_token;
+        const uint32_t tlen = buffer_clen(srv_token);
+        uint32_t portoffset = srv_socket->srv_token_colon;
+        portoffset = portoffset < tlen ? portoffset+1 : tlen;
+        buffer_copy_string_len(dest, srv_token->ptr+portoffset,
+                               tlen-portoffset);
+        break;
+      }
+      default:
+        break;
+    }
+    return dest;
+}
 
-	/**
-	 * map all internal variables to lua
-	 *
-	 */
+static buffer *
+magnet_env_get_buffer_by_id (request_st * const r, const int id)
+{
+	buffer *dest = r->tmp_buf;
+	buffer_clear(dest);
 
 	switch (id) {
 	case MAGNET_ENV_PHYSICAL_PATH: dest = &r->physical.path; break;
@@ -1613,8 +1652,6 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	case MAGNET_ENV_URI_PATH: dest = &r->uri.path; break;
 	case MAGNET_ENV_URI_PATH_RAW:
 	    {
-		dest = r->tmp_buf;
-		buffer_clear(dest);
 		uint32_t len = buffer_clen(&r->target);
 		char *qmark = memchr(r->target.ptr, '?', len);
 		buffer_copy_string_len(dest, r->target.ptr, qmark ? (uint32_t)(qmark - r->target.ptr) : len);
@@ -1625,8 +1662,6 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	case MAGNET_ENV_URI_QUERY: dest = &r->uri.query; break;
 
 	case MAGNET_ENV_REQUEST_METHOD:
-		dest = r->tmp_buf;
-		buffer_clear(dest);
 		http_method_append(dest, r->http_method);
 		break;
 	case MAGNET_ENV_REQUEST_URI:      dest = &r->target; break;
@@ -1634,87 +1669,32 @@ static buffer *magnet_env_get_buffer_by_id(request_st * const r, int id) {
 	case MAGNET_ENV_REQUEST_PATH_INFO: dest = &r->pathinfo; break;
 	case MAGNET_ENV_REQUEST_REMOTE_ADDR: dest = &r->con->dst_addr_buf; break;
 	case MAGNET_ENV_REQUEST_REMOTE_PORT:
-		dest = r->tmp_buf;
-		buffer_clear(dest);
 		buffer_append_int(dest, sock_addr_get_port(&r->con->dst_addr));
 		break;
 	case MAGNET_ENV_REQUEST_SERVER_ADDR: /* local IP without port */
-	    {
-		const server_socket * const srv_socket = r->con->srv_socket;
-		dest = r->tmp_buf;
-		buffer_clear(dest);
-		switch (sock_addr_get_family(&srv_socket->addr)) {
-		case AF_INET:
-		case AF_INET6:
-			if (sock_addr_is_addr_wildcard(&srv_socket->addr)) {
-				sock_addr addrbuf;
-				socklen_t addrlen = sizeof(addrbuf);
-				const int fd = r->con->fd;
-				if (0 == getsockname(fd,(struct sockaddr *)&addrbuf,&addrlen)) {
-					char buf[INET6_ADDRSTRLEN + 1];
-					const char *s = sock_addr_inet_ntop(&addrbuf, buf, sizeof(buf));
-					if (NULL != s)
-						buffer_copy_string_len(dest, s, strlen(s));
-				}
-			}
-			else
-				buffer_copy_string_len(dest, srv_socket->srv_token->ptr,
-				                       srv_socket->srv_token_colon);
-			break;
-		default:
-			break;
-		}
-		break;
-	    }
 	case MAGNET_ENV_REQUEST_SERVER_PORT:
-	    {
-		const server_socket * const srv_socket = r->con->srv_socket;
-		const buffer * const srv_token = srv_socket->srv_token;
-		const uint32_t tlen = buffer_clen(srv_token);
-		uint32_t portoffset = srv_socket->srv_token_colon;
-		dest = r->tmp_buf;
-		portoffset = portoffset < tlen ? portoffset+1 : tlen;
-		buffer_copy_string_len(dest, srv_token->ptr+portoffset,
-		                       tlen-portoffset);
-		break;
-	    }
+		return magnet_env_get_laddr_by_id(r, id);
 	case MAGNET_ENV_REQUEST_PROTOCOL:
-		dest = r->tmp_buf;
-		buffer_clear(dest);
 		http_version_append(dest, r->http_version);
 		break;
 	case MAGNET_ENV_RESPONSE_HTTP_STATUS:
-		dest = r->tmp_buf;
-		buffer_clear(dest);
 		buffer_append_int(dest, r->http_status);
 		break;
 	case MAGNET_ENV_RESPONSE_BODY_LENGTH:
-		dest = r->tmp_buf;
-		buffer_clear(dest);
 		if (!r->resp_body_finished)
-			break;
+			return NULL;
 		buffer_append_int(dest, chunkqueue_length(&r->write_queue));
 		break;
 	case MAGNET_ENV_RESPONSE_BODY:
 		if (!r->resp_body_finished)
-			break;
-		else {
-			chunkqueue * const cq = &r->write_queue;
-			off_t len = chunkqueue_length(cq);
-			if (0 == len) {
-				dest = r->tmp_buf;
-				buffer_copy_string_len(dest, CONST_STR_LEN(""));
-				break;
-			}
-			dest = chunkqueue_read_squash(cq, r->conf.errh);
-			if (NULL == dest) {
-				dest = r->tmp_buf;
-				buffer_clear(dest);
-			}
-		}
+			return NULL;
+		if (0 == chunkqueue_length(&r->write_queue)
+		    || !(dest = chunkqueue_read_squash(&r->write_queue,r->conf.errh)))
+			buffer_copy_string_len((dest = r->tmp_buf), CONST_STR_LEN(""));
 		break;
 
-	case MAGNET_ENV_UNSET: break;
+	case MAGNET_ENV_UNSET:
+		return NULL;
 	}
 
 	return dest;
