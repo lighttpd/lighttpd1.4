@@ -1558,6 +1558,7 @@ typedef struct {
 		MAGNET_ENV_REQUEST_SERVER_ADDR,
 		MAGNET_ENV_REQUEST_SERVER_PORT,
 		MAGNET_ENV_REQUEST_PROTOCOL,
+		MAGNET_ENV_REQUEST_STAGE,
 
 		MAGNET_ENV_RESPONSE_HTTP_STATUS,
 		MAGNET_ENV_RESPONSE_BODY_LENGTH,
@@ -1588,6 +1589,7 @@ static const magnet_env_t magnet_env[] = {
     { CONST_STR_LEN("request.server-addr"),  MAGNET_ENV_REQUEST_SERVER_ADDR },
     { CONST_STR_LEN("request.server-port"),  MAGNET_ENV_REQUEST_SERVER_PORT },
     { CONST_STR_LEN("request.protocol"),     MAGNET_ENV_REQUEST_PROTOCOL },
+    { CONST_STR_LEN("request.stage"),        MAGNET_ENV_REQUEST_STAGE },
 
     { CONST_STR_LEN("response.http-status"), MAGNET_ENV_RESPONSE_HTTP_STATUS },
     { CONST_STR_LEN("response.body-length"), MAGNET_ENV_RESPONSE_BODY_LENGTH },
@@ -1677,6 +1679,13 @@ magnet_env_get_buffer_by_id (request_st * const r, const int id)
 	case MAGNET_ENV_REQUEST_PROTOCOL:
 		http_version_append(dest, r->http_version);
 		break;
+	case MAGNET_ENV_REQUEST_STAGE:
+		if (http_request_state_is_keep_alive(r))
+			buffer_append_string_len(dest, CONST_STR_LEN("keep-alive"));
+		else
+			http_request_state_append(dest, r->state);
+		break;
+
 	case MAGNET_ENV_RESPONSE_HTTP_STATUS:
 		buffer_append_int(dest, r->http_status);
 		break;
@@ -1706,7 +1715,7 @@ static int magnet_env_get_id(const char * const key, const size_t klen) {
     int i; /* magnet_env[] scan offset */
     switch (*key) {
       case 'r': /* request.* or response.* */
-        i = klen > 7 && key[7] == '.' ? 9 : 19;
+        i = klen > 7 && key[7] == '.' ? 9 : 20;
         break;
       case 'u': /* uri.* */
       default:
@@ -1784,8 +1793,9 @@ static int magnet_env_set(lua_State *L) {
       case MAGNET_ENV_REQUEST_REMOTE_PORT:
         sock_addr_set_port(&r->con->dst_addr, (unsigned short)atoi(val.ptr));
         return 0;
-      case MAGNET_ENV_RESPONSE_HTTP_STATUS:
-      case MAGNET_ENV_RESPONSE_BODY_LENGTH:
+      /*case MAGNET_ENV_REQUEST_STAGE:*//*(change attempts silently ignored)*/
+      /*case MAGNET_ENV_RESPONSE_HTTP_STATUS:*/
+      /*case MAGNET_ENV_RESPONSE_BODY_LENGTH:*/
       case MAGNET_ENV_RESPONSE_BODY:
         return luaL_error(L, "r.req_attr['%s'] is read-only", key);
     }
