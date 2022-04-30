@@ -1580,6 +1580,10 @@ magnet_req_item_get (lua_State *L)
             lua_pushcclosure(L, magnet_return_upvalue2, 2);
             return 1;
         }
+        if (0 == memcmp(k, "keep_alive", 10)) {
+            lua_pushinteger(L, (lua_Integer)r->keep_alive);
+            return 1;
+        }
         break;
       case 11:
         if (0 == memcmp(k, "http_status", 11)) {
@@ -1614,6 +1618,12 @@ magnet_req_item_set (lua_State *L)
 
     request_st * const r = **(request_st ***)lua_touserdata(L, 1);
     switch (klen) {
+      case 10:
+        if (0 == memcmp(k, "keep_alive", 10)) {
+            if (v == 0 || v == -1) r->keep_alive = v;
+            return 0;
+        }
+        break;
       default:
         break;
     }
