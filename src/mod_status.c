@@ -135,59 +135,58 @@ SETDEFAULTS_FUNC(mod_status_set_defaults) {
 
 
 
+__attribute_noinline__
 static void
-mod_status_append_state (buffer * const b, request_state_t state)
+http_request_state_append (buffer * const b, request_state_t state)
 {
-    const char *s;
-    size_t n;
-    switch (state) {
-      case CON_STATE_CONNECT:
-        s = "connect";    n = sizeof("connect")-1;    break;
-      case CON_STATE_READ:
-        s = "read";       n = sizeof("read")-1;       break;
-      case CON_STATE_READ_POST:
-        s = "readpost";   n = sizeof("readpost")-1;   break;
-      case CON_STATE_WRITE:
-        s = "write";      n = sizeof("write")-1;      break;
-      case CON_STATE_CLOSE:
-        s = "close";      n = sizeof("close")-1;      break;
-      case CON_STATE_ERROR:
-        s = "error";      n = sizeof("error")-1;      break;
-      case CON_STATE_HANDLE_REQUEST:
-        s = "handle-req"; n = sizeof("handle-req")-1; break;
-      case CON_STATE_REQUEST_START:
-        s = "req-start";  n = sizeof("req-start")-1;  break;
-      case CON_STATE_REQUEST_END:
-        s = "req-end";    n = sizeof("req-end")-1;    break;
-      case CON_STATE_RESPONSE_START:
-        s = "resp-start"; n = sizeof("resp-start")-1; break;
-      case CON_STATE_RESPONSE_END:
-        s = "resp-end";   n = sizeof("resp-end")-1;   break;
-      default:
-        s = "(unknown)";  n = sizeof("(unknown)")-1;  break;
-    }
-    buffer_append_string_len(b, s, n);
+    static const struct sn { const char *s; uint32_t n; } states[] = {
+      { CONST_STR_LEN("connect") }
+     ,{ CONST_STR_LEN("req-start") }
+     ,{ CONST_STR_LEN("read") }
+     ,{ CONST_STR_LEN("req-end") }
+     ,{ CONST_STR_LEN("readpost") }
+     ,{ CONST_STR_LEN("handle-req") }
+     ,{ CONST_STR_LEN("resp-start") }
+     ,{ CONST_STR_LEN("write") }
+     ,{ CONST_STR_LEN("resp-end") }
+     ,{ CONST_STR_LEN("error") }
+     ,{ CONST_STR_LEN("close") }
+     ,{ CONST_STR_LEN("(unknown)") }
+    };
+    const struct sn * const p =
+      states + (state <= CON_STATE_CLOSE ? state : CON_STATE_CLOSE+1);
+    buffer_append_string_len(b, p->s, p->n);
 }
 
 
+__attribute_noinline__
+__attribute_pure__
 static const char *
-mod_status_get_short_state (request_state_t state)
+http_request_state_short (request_state_t state)
 {
-    switch (state) {
-      case CON_STATE_CONNECT:        return ".";
-      case CON_STATE_READ:           return "r";
-      case CON_STATE_READ_POST:      return "R";
-      case CON_STATE_WRITE:          return "W";
-      case CON_STATE_CLOSE:          return "C";
-      case CON_STATE_ERROR:          return "E";
-      case CON_STATE_HANDLE_REQUEST: return "h";
-      case CON_STATE_REQUEST_START:  return "q";
-      case CON_STATE_REQUEST_END:    return "Q";
-      case CON_STATE_RESPONSE_START: return "s";
-      case CON_STATE_RESPONSE_END:   return "S";
-      default:                       return "x";
-    }
+    /*((char *) returned, but caller must use only one char)*/
+    static const char sstates[] = ".qrQRhsWSECx";
+    return sstates + (state <= CON_STATE_CLOSE ? state : CON_STATE_CLOSE+1);
 }
+
+
+#define http_request_state_is_keep_alive(r) \
+  (CON_STATE_READ == (r)->state && !buffer_is_blank(&(r)->target_orig))
+
+#define http_con_state_is_keep_alive(con) \
+  ((con)->h2                              \
+   ? 0 == (con)->h2->rused                \
+   : http_request_state_is_keep_alive(&(con)->request))
+
+#define http_con_state_append(b, con)                            \
+   (http_con_state_is_keep_alive(con)                            \
+    ? buffer_append_string_len((b), CONST_STR_LEN("keep-alive")) \
+    : http_request_state_append((b), (con)->request.state))
+
+#define http_con_state_short(con)     \
+   (http_con_state_is_keep_alive(con) \
+    ? "k"                             \
+    : http_request_state_short((con)->request.state))
 
 
 static void mod_status_header_append_sort(buffer *b, plugin_data *p, const char* k, size_t klen)
@@ -247,11 +246,10 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
 
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
-    if (CON_STATE_READ == r->state && !buffer_is_blank(&r->target_orig)) {
+    if (http_request_state_is_keep_alive(r))
         buffer_append_string_len(b, CONST_STR_LEN("keep-alive"));
-    }
     else
-        mod_status_append_state(b, r->state);
+        http_request_state_append(b, r->state);
 
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 
@@ -537,24 +535,21 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	buffer_append_string_len(b, CONST_STR_LEN(" connections</b>\n"));
 
 	int per_line = 50;
+	char *s = buffer_extend(b, srv->srvconf.max_conns - srv->lim_conns
+	                         +(srv->srvconf.max_conns - srv->lim_conns)/50);
 	for (const connection *c = srv->conns; c; c = c->next) {
 		const request_st * const cr = &c->request;
-		const char *state;
-
-		if ((c->h2 && 0 == c->h2->rused)
-		    || (CON_STATE_READ == cr->state && !buffer_is_blank(&cr->target_orig))) {
-			state = "k";
+		if (http_con_state_is_keep_alive(c)) {
+			*s++ = 'k';
 			++cstates[CON_STATE_CLOSE+2];
 		} else {
-			state = mod_status_get_short_state(cr->state);
+			*s++ = *(http_request_state_short(cr->state));
 			++cstates[(cr->state <= CON_STATE_CLOSE ? cr->state : CON_STATE_CLOSE+1)];
 		}
 
-		buffer_append_string_len(b, state, 1);
-
 		if (0 == --per_line) {
 			per_line = 50;
-			buffer_append_string_len(b, CONST_STR_LEN("\n"));
+			*s++ = '\n';
 		}
 	}
 	buffer_append_string_len(b, CONST_STR_LEN("\n\n<table>\n"
@@ -567,9 +562,9 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 		buffer_append_string_len(b, CONST_STR_LEN("<tr><td style=\"text-align:right\">"));
 		buffer_append_int(b, cstates[j]);
 		buffer_append_str3(b, CONST_STR_LEN("</td><td>&nbsp;&nbsp;"),
-		                      mod_status_get_short_state(j), 1,
+		                      http_request_state_short(j), 1,
 		                      CONST_STR_LEN(" = "));
-		mod_status_append_state(b, j);
+		http_request_state_append(b, j);
 		buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"));
 	}
 	buffer_append_string_len(b, CONST_STR_LEN(
@@ -624,19 +619,12 @@ static handler_t mod_status_handle_server_status_text(server *srv, request_st * 
 	buffer_append_int(b, srv->lim_conns); /*(could omit)*/
 
 	buffer_append_string_len(b, CONST_STR_LEN("\nScoreboard: "));
-	for (const connection *c = srv->conns; c; c = c->next) {
-		const request_st * const cr = &c->request;
-		const char *state =
-		  ((c->h2 && 0 == c->h2->rused)
-		   || (CON_STATE_READ == cr->state && !buffer_is_blank(&cr->target_orig)))
-		    ? "k"
-		    : mod_status_get_short_state(cr->state);
-		buffer_append_string_len(b, state, 1);
-	}
-	for (uint32_t i = 0; i < srv->lim_conns; ++i) { /*(could omit)*/
-		buffer_append_string_len(b, CONST_STR_LEN("_"));
-	}
-	buffer_append_string_len(b, CONST_STR_LEN("\n"));
+	char *s = buffer_extend(b, srv->srvconf.max_conns+1);
+	for (const connection *c = srv->conns; c; c = c->next)
+		*s++ = *(http_con_state_short(c));
+	memset(s, '_', srv->lim_conns); /*(could omit)*/
+	s += srv->lim_conns;
+	*s = '\n';
 
 	chunkqueue_append_buffer_commit(&r->write_queue);
 
@@ -707,37 +695,34 @@ static handler_t mod_status_handle_server_status_json(server *srv, request_st * 
 	if (jsonp) buffer_append_string_len(b, CONST_STR_LEN(");"));
 
 	chunkqueue_append_buffer_commit(&r->write_queue);
-
-	/* set text/plain output */
-	http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("application/javascript"));
-
+	http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+	                         CONST_STR_LEN("Content-Type"),
+	                         CONST_STR_LEN("application/javascript"));
 	return 0;
 }
 
 
 static handler_t mod_status_handle_server_statistics(request_st * const r) {
-	buffer *b;
-	size_t i;
-	array *st = &plugin_stats;
+	http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
+	                         CONST_STR_LEN("Content-Type"),
+	                         CONST_STR_LEN("text/plain"));
 
+	const array * const st = &plugin_stats;
 	if (0 == st->used) {
 		/* we have nothing to send */
 		r->http_status = 204;
 		r->resp_body_finished = 1;
-
 		return HANDLER_FINISHED;
 	}
 
-	b = chunkqueue_append_buffer_open(&r->write_queue);
-	for (i = 0; i < st->used; i++) {
+	buffer * const b = chunkqueue_append_buffer_open(&r->write_queue);
+	for (uint32_t i = 0; i < st->used; ++i) {
 		buffer_append_str2(b, BUF_PTR_LEN(&st->sorted[i]->key),
 		                      CONST_STR_LEN(": "));
 		buffer_append_int(b, ((data_integer *)st->sorted[i])->value);
 		buffer_append_string_len(b, CONST_STR_LEN("\n"));
 	}
 	chunkqueue_append_buffer_commit(&r->write_queue);
-
-	http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/plain"));
 
 	r->http_status = 200;
 	r->resp_body_finished = 1;
