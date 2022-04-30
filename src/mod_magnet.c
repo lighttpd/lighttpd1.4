@@ -1742,6 +1742,46 @@ static int magnet_env_get(lua_State *L) {
     return 1;
 }
 
+__attribute_cold__
+static int
+magnet_env_set_raddr_by_id (lua_State *L, request_st * const r, const int id,
+                            const const_buffer * const val)
+{
+    connection * const con = r->con;
+    switch (id) {
+      case MAGNET_ENV_REQUEST_REMOTE_ADDR:
+       #ifdef HAVE_SYS_UN_H
+        if (val->len && *val->ptr == '/'
+            && 0 == sock_addr_assign(&con->dst_addr, AF_UNIX, 0, val->ptr)) {
+        }
+        else
+       #endif
+        {
+            sock_addr saddr;
+            saddr.plain.sa_family = AF_UNSPEC;
+            if (1 == sock_addr_from_str_numeric(&saddr, val->ptr, r->conf.errh)
+                && saddr.plain.sa_family != AF_UNSPEC) {
+                sock_addr_set_port(&saddr, 0);
+                memcpy(&con->dst_addr, &saddr, sizeof(sock_addr));
+            }
+            else {
+                return luaL_error(L,
+                                  "r.req_attr['remote-addr'] invalid addr: %s",
+                                  val->ptr);
+            }
+        }
+        buffer_copy_string_len(&con->dst_addr_buf, val->ptr, val->len);
+        config_cond_cache_reset_item(r, COMP_HTTP_REMOTE_IP);
+        break;
+      case MAGNET_ENV_REQUEST_REMOTE_PORT:
+        sock_addr_set_port(&con->dst_addr, (unsigned short)atoi(val->ptr));
+        break;
+      default:
+        break;
+    }
+    return 0;
+}
+
 static int magnet_env_set(lua_State *L) {
     size_t klen;
     const char * const key = luaL_checklstring(L, 2, &klen);
@@ -1768,31 +1808,8 @@ static int magnet_env_set(lua_State *L) {
         return 0;
       }
       case MAGNET_ENV_REQUEST_REMOTE_ADDR:
-       #ifdef HAVE_SYS_UN_H
-        if (val.len && *val.ptr == '/'
-            && 0 == sock_addr_assign(&r->con->dst_addr, AF_UNIX, 0, val.ptr)) {
-        }
-        else
-       #endif
-        {
-            sock_addr saddr;
-            saddr.plain.sa_family = AF_UNSPEC;
-            if (1 == sock_addr_from_str_numeric(&saddr, val.ptr, r->conf.errh)
-                && saddr.plain.sa_family != AF_UNSPEC) {
-                sock_addr_set_port(&saddr, 0);
-                memcpy(&r->con->dst_addr, &saddr, sizeof(sock_addr));
-            }
-            else {
-                return luaL_error(L, "r.req_attr['%s'] invalid addr: %s",
-                                  key, val.ptr);
-            }
-        }
-        buffer_copy_string_len(&r->con->dst_addr_buf, val.ptr, val.len);
-        config_cond_cache_reset_item(r, COMP_HTTP_REMOTE_IP);
-        return 0;
       case MAGNET_ENV_REQUEST_REMOTE_PORT:
-        sock_addr_set_port(&r->con->dst_addr, (unsigned short)atoi(val.ptr));
-        return 0;
+        return magnet_env_set_raddr_by_id(L, r, env_id, &val);
       /*case MAGNET_ENV_REQUEST_STAGE:*//*(change attempts silently ignored)*/
       /*case MAGNET_ENV_RESPONSE_HTTP_STATUS:*/
       /*case MAGNET_ENV_RESPONSE_BODY_LENGTH:*/
