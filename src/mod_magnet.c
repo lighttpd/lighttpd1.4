@@ -477,6 +477,13 @@ static const buffer* magnet_checkbuffer(lua_State *L, int idx, buffer *b) {
 }
 
 
+static int magnet_return_upvalue2(lua_State *L) {
+    /*(XXX: is there a better way to do this?)*/
+    lua_pushvalue(L, lua_upvalueindex(1));
+    lua_pushvalue(L, lua_upvalueindex(2));
+    return 2;
+}
+
 static int magnet_stat_field(lua_State *L) {
     if (lua_gettop(L) != 2)
         return 0; /*(should not happen; __index method in protected metatable)*/
@@ -1532,6 +1539,88 @@ static int magnet_status_pairs(lua_State *L) {
 	return magnet_array_pairs(L, &plugin_stats);
 }
 
+
+static int
+magnet_req_item_get (lua_State *L)
+{
+    size_t klen;
+    const char * const k = luaL_checklstring(L, 2, &klen);
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
+    switch (klen) {
+      case 8:
+        if (0 == memcmp(k, "bytes_in", 8)) {
+            off_t bytes = r->http_version <= HTTP_VERSION_1_1
+              ? r->con->bytes_read - r->bytes_read_ckpt
+              : r->read_queue.bytes_in;
+            lua_pushinteger(L, (lua_Integer)bytes);
+            return 1;
+        }
+        break;
+      case 9:
+        if (0 == memcmp(k, "bytes_out", 9)) {
+            off_t bytes = r->http_version <= HTTP_VERSION_1_1
+              ? r->con->bytes_written - r->bytes_written_ckpt
+              : r->write_queue.bytes_out;
+            lua_pushinteger(L, (lua_Integer)bytes);
+            return 1;
+        }
+        if (0 == memcmp(k, "stream_id", 9)) {
+            lua_pushinteger(L, (lua_Integer)r->h2id);
+            return 1;
+        }
+        if (0 == memcmp(k, "req_count", 9)) {
+            lua_pushinteger(L, (lua_Integer)r->con->request_count);
+            return 1;
+        }
+        break;
+      case 10:
+        if (0 == memcmp(k, "start_time", 10)) {
+            lua_pushinteger(L, (lua_Integer)r->start_hp.tv_sec);
+            lua_pushinteger(L, (lua_Integer)r->start_hp.tv_nsec);
+            lua_pushcclosure(L, magnet_return_upvalue2, 2);
+            return 1;
+        }
+        break;
+      case 11:
+        if (0 == memcmp(k, "http_status", 11)) {
+            lua_pushinteger(L, (lua_Integer)r->http_status);
+            return 1;
+        }
+        break;
+      case 14:
+        if (0 == memcmp(k, "req_header_len", 14)) {
+            lua_pushinteger(L, (lua_Integer)r->rqst_header_len);
+            return 1;
+        }
+        break;
+      case 15:
+        if (0 == memcmp(k, "resp_header_len", 15)) {
+            lua_pushinteger(L, (lua_Integer)r->resp_header_len);
+            return 1;
+        }
+        break;
+      default:
+        break;
+    }
+    return luaL_error(L, "r.req_item['%s'] invalid", k);
+}
+
+static int
+magnet_req_item_set (lua_State *L)
+{
+    size_t klen;
+    const char * const k = luaL_checklstring(L, 2, &klen);
+    int v = (int)luaL_checkinteger(L, 3);
+
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
+    switch (klen) {
+      default:
+        break;
+    }
+    return luaL_error(L, "r.req_item['%s'] invalid or read-only", k);
+}
+
+
 typedef struct {
 	const char *name;
 	uint32_t nlen;
@@ -2283,6 +2372,7 @@ magnet_request_table (lua_State * const L, request_st ** const rr)
      *
      * r.req_header[]         HTTP request headers
      * r.req_attr[]           HTTP request attributes / components (strings)
+     * r.req_item[]           HTTP request items (struct members, statistics)
      * r.req_env[]            HTTP request environment variables
      * r.req_body.*           HTTP request body accessors
      * r.req_body.bytes_in    HTTP request body chunkqueue bytes_in
@@ -2295,12 +2385,13 @@ magnet_request_table (lua_State * const L, request_st ** const rr)
      * r.resp_body.bytes_in   HTTP response body chunkqueue bytes_in
      * r.resp_body.bytes_out  HTTP response body chunkqueue bytes_out
      */
-    lua_createtable(L, 0, 6);                                 /* (sp += 1) */
+    lua_createtable(L, 0, 7);                                 /* (sp += 1) */
 
     /* userdata methods share ptr-ptr to external object userdata rr
      * (similar functionality to that provided w/ luaL_setfuncs() in lua 5.2+)*/
     magnet_request_userdata_method(L, rr, "li.req_header"); /* req_header */
     magnet_request_userdata_method(L, rr, "li.req_attr");   /* req_attr */
+    magnet_request_userdata_method(L, rr, "li.req_item");   /* req_item */
     magnet_request_userdata_method(L, rr, "li.req_env");    /* req_env */
     magnet_request_userdata_method(L, rr, "li.resp_header");/* resp_header */
     magnet_request_userdata_method(L, rr, "li.resp_body");  /* resp_body */
@@ -2462,6 +2553,21 @@ magnet_req_attr_metatable (lua_State * const L)
 
 __attribute_cold__
 static void
+magnet_req_item_metatable (lua_State * const L)
+{
+    if (luaL_newmetatable(L, "li.req_item") == 0)             /* (sp += 1) */
+        return;
+
+    lua_pushcfunction(L, magnet_req_item_get);                /* (sp += 1) */
+    lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+    lua_pushcfunction(L, magnet_req_item_set);                /* (sp += 1) */
+    lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+    lua_pushboolean(L, 0);                                    /* (sp += 1) */
+    lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */
+}
+
+__attribute_cold__
+static void
 magnet_req_env_metatable (lua_State * const L)
 {
     if (luaL_newmetatable(L, "li.req_env") == 0)              /* (sp += 1) */
@@ -2612,13 +2718,14 @@ magnet_script_setup_global_state (lua_State * const L)
 
     magnet_req_header_metatable(L);    /* init for mem locality  (sp += 1) */
     magnet_req_attr_metatable(L);      /* init for mem locality  (sp += 1) */
+    magnet_req_item_metatable(L);      /* init for mem locality  (sp += 1) */
     magnet_req_env_metatable(L);       /* init for mem locality  (sp += 1) */
     magnet_resp_header_metatable(L);   /* init for mem locality  (sp += 1) */
     magnet_resp_body_metatable(L);     /* init for mem locality  (sp += 1) */
     magnet_req_body_metatable(L);      /* init for mem locality  (sp += 1) */
     magnet_stat_metatable(L);    /* init table for mem locality  (sp += 1) */
     magnet_readdir_metatable(L); /* init table for mem locality  (sp += 1) */
-    lua_pop(L, 8);               /* pop init'd metatables        (sp -= 8) */
+    lua_pop(L, 9);               /* pop init'd metatables        (sp -= 9) */
 }
 
 __attribute_cold__
