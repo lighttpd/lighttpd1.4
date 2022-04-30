@@ -693,6 +693,16 @@ static int magnet_time(lua_State *L) {
 }
 
 
+static int magnet_hrtime(lua_State *L) {
+    unix_timespec64_t ts;
+    if (0 != log_clock_gettime_realtime(&ts))
+        return 0;
+    lua_pushinteger(L, (lua_Integer)ts.tv_sec);
+    lua_pushinteger(L, (lua_Integer)ts.tv_nsec);
+    return 2;
+}
+
+
 static int magnet_rand(lua_State *L) {
     lua_pushinteger(L, (lua_Integer)li_rand_pseudo());
     return 1;
@@ -2809,6 +2819,7 @@ magnet_init_lighty_table (lua_State * const L, request_st **rr)
     static const luaL_Reg cmethods[] = {
       { "stat",             magnet_stat }
      ,{ "time",             magnet_time }
+     ,{ "hrtime",           magnet_hrtime }
      ,{ "rand",             magnet_rand }
      ,{ "md",               magnet_md_once   } /* message digest */
      ,{ "hmac",             magnet_hmac_once } /* HMAC */
