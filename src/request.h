@@ -104,6 +104,7 @@ typedef struct {
 
 /* the order of the items should be the same as they are processed
  * read before write as we use this later e.g. <= CON_STATE_REQUEST_END */
+/* NB: must sync with http_request_state_short(), http_request_state_append() */
 typedef enum {
     CON_STATE_CONNECT,
     CON_STATE_REQUEST_START,
@@ -222,5 +223,32 @@ int http_request_host_normalize(buffer *b, int scheme_port);
 int http_request_host_policy(buffer *b, unsigned int http_parseopts, int scheme_port);
 
 int64_t li_restricted_strtoint64 (const char *v, const uint32_t vlen, const char ** const err);
+
+
+/* convenience macros/functions for display purposes */
+
+#define http_request_state_is_keep_alive(r) \
+  (CON_STATE_READ == (r)->state && !buffer_is_blank(&(r)->target_orig))
+
+#define http_con_state_is_keep_alive(con) \
+  ((con)->h2                              \
+   ? 0 == (con)->h2->rused                \
+   : http_request_state_is_keep_alive(&(con)->request))
+
+#define http_con_state_append(b, con)                            \
+   (http_con_state_is_keep_alive(con)                            \
+    ? buffer_append_string_len((b), CONST_STR_LEN("keep-alive")) \
+    : http_request_state_append((b), (con)->request.state))
+
+#define http_con_state_short(con)     \
+   (http_con_state_is_keep_alive(con) \
+    ? "k"                             \
+    : http_request_state_short((con)->request.state))
+
+__attribute_pure__
+const char * http_request_state_short (request_state_t state);
+
+void http_request_state_append (buffer *b, request_state_t state);
+
 
 #endif

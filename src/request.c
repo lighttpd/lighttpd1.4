@@ -19,6 +19,44 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+__attribute_cold__
+__attribute_noinline__
+void
+http_request_state_append (buffer * const b, request_state_t state)
+{
+    static const struct sn { const char *s; uint32_t n; } states[] = {
+      { CONST_STR_LEN("connect") }
+     ,{ CONST_STR_LEN("req-start") }
+     ,{ CONST_STR_LEN("read") }
+     ,{ CONST_STR_LEN("req-end") }
+     ,{ CONST_STR_LEN("readpost") }
+     ,{ CONST_STR_LEN("handle-req") }
+     ,{ CONST_STR_LEN("resp-start") }
+     ,{ CONST_STR_LEN("write") }
+     ,{ CONST_STR_LEN("resp-end") }
+     ,{ CONST_STR_LEN("error") }
+     ,{ CONST_STR_LEN("close") }
+     ,{ CONST_STR_LEN("(unknown)") }
+    };
+    const struct sn * const p =
+      states +((uint32_t)state <= CON_STATE_CLOSE ? state : CON_STATE_CLOSE+1);
+    buffer_append_string_len(b, p->s, p->n);
+}
+
+__attribute_cold__
+__attribute_noinline__
+__attribute_pure__
+const char *
+http_request_state_short (request_state_t state)
+{
+    /*((char *) returned, but caller must use only one char)*/
+    static const char sstates[] = ".qrQRhsWSECx";
+    return
+      sstates+((uint32_t)state <= CON_STATE_CLOSE ? state : CON_STATE_CLOSE+1);
+}
+
+
 __attribute_noinline__
 __attribute_nonnull__()
 __attribute_pure__

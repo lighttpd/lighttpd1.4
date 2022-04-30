@@ -134,61 +134,6 @@ SETDEFAULTS_FUNC(mod_status_set_defaults) {
 }
 
 
-
-__attribute_noinline__
-static void
-http_request_state_append (buffer * const b, request_state_t state)
-{
-    static const struct sn { const char *s; uint32_t n; } states[] = {
-      { CONST_STR_LEN("connect") }
-     ,{ CONST_STR_LEN("req-start") }
-     ,{ CONST_STR_LEN("read") }
-     ,{ CONST_STR_LEN("req-end") }
-     ,{ CONST_STR_LEN("readpost") }
-     ,{ CONST_STR_LEN("handle-req") }
-     ,{ CONST_STR_LEN("resp-start") }
-     ,{ CONST_STR_LEN("write") }
-     ,{ CONST_STR_LEN("resp-end") }
-     ,{ CONST_STR_LEN("error") }
-     ,{ CONST_STR_LEN("close") }
-     ,{ CONST_STR_LEN("(unknown)") }
-    };
-    const struct sn * const p =
-      states + (state <= CON_STATE_CLOSE ? state : CON_STATE_CLOSE+1);
-    buffer_append_string_len(b, p->s, p->n);
-}
-
-
-__attribute_noinline__
-__attribute_pure__
-static const char *
-http_request_state_short (request_state_t state)
-{
-    /*((char *) returned, but caller must use only one char)*/
-    static const char sstates[] = ".qrQRhsWSECx";
-    return sstates + (state <= CON_STATE_CLOSE ? state : CON_STATE_CLOSE+1);
-}
-
-
-#define http_request_state_is_keep_alive(r) \
-  (CON_STATE_READ == (r)->state && !buffer_is_blank(&(r)->target_orig))
-
-#define http_con_state_is_keep_alive(con) \
-  ((con)->h2                              \
-   ? 0 == (con)->h2->rused                \
-   : http_request_state_is_keep_alive(&(con)->request))
-
-#define http_con_state_append(b, con)                            \
-   (http_con_state_is_keep_alive(con)                            \
-    ? buffer_append_string_len((b), CONST_STR_LEN("keep-alive")) \
-    : http_request_state_append((b), (con)->request.state))
-
-#define http_con_state_short(con)     \
-   (http_con_state_is_keep_alive(con) \
-    ? "k"                             \
-    : http_request_state_short((con)->request.state))
-
-
 static void mod_status_header_append_sort(buffer *b, plugin_data *p, const char* k, size_t klen)
 {
     p->conf.sort

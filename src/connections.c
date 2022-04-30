@@ -957,36 +957,16 @@ connection *connection_accepted(server *srv, const server_socket *srv_socket, so
 
 
 __attribute_cold__
-__attribute_const__
-static const char *
-connection_get_state (request_state_t state)
-{
-    switch (state) {
-      case CON_STATE_CONNECT:        return "connect";
-      case CON_STATE_READ:           return "read";
-      case CON_STATE_READ_POST:      return "readpost";
-      case CON_STATE_WRITE:          return "write";
-      case CON_STATE_CLOSE:          return "close";
-      case CON_STATE_ERROR:          return "error";
-      case CON_STATE_HANDLE_REQUEST: return "handle-req";
-      case CON_STATE_REQUEST_START:  return "req-start";
-      case CON_STATE_REQUEST_END:    return "req-end";
-      case CON_STATE_RESPONSE_START: return "resp-start";
-      case CON_STATE_RESPONSE_END:   return "resp-end";
-      default:                       return "(unknown)";
-    }
-}
-
-
-__attribute_cold__
 __attribute_noinline__
 __attribute_nonnull__()
 static void
 connection_log_state (const request_st * const r, const char * const tag)
 {
+    buffer * const tb = r->tmp_buf;
+    buffer_clear(tb);
+    http_request_state_append(tb, r->state);
     log_error(r->conf.errh, __FILE__, __LINE__,
-      "fd:%d id:%d state:%s%s", r->con->fd, r->h2id,
-      connection_get_state(r->state), tag);
+      "fd:%d id:%d state:%s%s", r->con->fd, r->h2id, tb->ptr, tag);
 }
 
 
