@@ -3017,7 +3017,7 @@ magnet_script_setup (request_st * const r, plugin_data * const p, script * const
 			  "loading script %s failed", sc->name.ptr);
 		lua_settop(L, 0);
 
-		if (p->conf.stage != -1) { /* skip for response-start */
+		if (p->conf.stage >= 0) { /*(before response_start)*/
 			r->http_status = 500;
 			r->handler_module = NULL;
 		}
@@ -3067,14 +3067,13 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 			/*(lua_pop() deferred, so lighty_table_ndx+1)*/
 			/*force_assert(lua_gettop(L) == lighty_table_ndx);*/
 
-			if (p->conf.stage != -1) { /* skip for response-start */
+			if (p->conf.stage >= 0) { /*(before response_start)*/
 				r->http_status = 500;
 				r->handler_module = NULL;
+				result = HANDLER_FINISHED;
 			}
-
-			result = HANDLER_FINISHED;
 	}
-	else {
+	else do {
 		/* should have func,errfunc,env,ud,lighty table, return value on stack*/
 		/*force_assert(lua_gettop(L) == lighty_table_ndx+1);*/
 
@@ -3085,10 +3084,10 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 		  ? 0
 		  : (int) lua_tointegerx(L, -1, &isnum);
 		if (!isnum) {
-			lua_return_value = -1;
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "lua_pcall(): unexpected non-integer return type: %s",
 			  luaL_typename(L, -1));
+			break;
 		}
 		/*lua_pop(L, 1);*/ /* pop return value */ /* defer to later */
 		/*force_assert(lua_istable(sc->L, -1));*/
@@ -3104,8 +3103,9 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 				r->handler_module = p->self;
 			}
 			result = HANDLER_FINISHED;
-		} else if (lua_return_value >= 100 && p->conf.stage != -1) {
+		} else if (lua_return_value >= 100) {
 			/*(skip for response-start; send response as-is w/ added headers)*/
+			if (p->conf.stage < 0) break;
 			/*(custom lua code should not return 101 Switching Protocols)*/
 			r->http_status = lua_return_value;
 			result = http_response_send_1xx(r)
@@ -3132,8 +3132,7 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 				result = HANDLER_ERROR;
 			}
 		}
-
-	}
+	} while (0);
 	magnet_clear_table(L, env_ndx);
 	magnet_reset_lighty_table(L, lighty_table_ndx);
 	/* reset stack to have only func, errfunc, env, ud, lighty table */
