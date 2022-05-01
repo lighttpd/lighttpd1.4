@@ -2124,27 +2124,23 @@ static int magnet_respbody(lua_State *L) {
      #if 0 /*(future: provide pairs() interface to iterate over chunkqueue)*/
            /*(might convert chunks into table of strings, {filename="..."})*/
            /*(what about c->offset into chunk?)*/
+     #endif
       case 'g': /* get; r.resp_body.get */
         if (k[1] == 'e' && k[2] == 't' && k[3] == '\0') {
-            /* equivalent to r.attr["response.body"] */
-            /* equivalent to lighty.env["response.body"] */
             if (r->resp_body_finished) {
                 chunkqueue * const cq = &r->write_queue;
                 chunkqueue_length(cq)
                   ? magnet_push_buffer(L,
                                        chunkqueue_read_squash(cq,r->conf.errh))
-                  : lua_pushlstring(L, "", 0);
+                  : (void)lua_pushlstring(L, "", 0);
             }
             else
                 lua_pushnil(L); /*(?maybe return -1 instead if len unknown?)*/
             return 1;
         }
         break;
-     #endif
       case 'l': /* len; r.resp_body.len */
         if (k[1] == 'e' && k[2] == 'n' && k[3] == '\0') {
-            /* equivalent to r.req_attr["response.body-length"] */
-            /* equivalent to lighty.env["response.body-length"] */
             if (r->resp_body_finished)
                 lua_pushinteger(L, chunkqueue_length(&r->write_queue));
             else
