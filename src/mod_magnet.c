@@ -3058,8 +3058,10 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 
 	handler_t result = HANDLER_GO_ON;
 	if (0 != ret) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "lua_pcall(): %s", lua_tostring(L, -1));
+			size_t errlen;
+			const char * const err = lua_tolstring(L, -1, &errlen);
+			log_error_multiline(r->conf.errh, __FILE__, __LINE__,
+			                    err, errlen, "lua: ");
 			/*lua_pop(L, 1);*/ /* pop error msg */ /* defer to later */
 			/* only func,errfunc,env,ud,lighty table should remain on stack */
 			/*(lua_pop() deferred, so lighty_table_ndx+1)*/
