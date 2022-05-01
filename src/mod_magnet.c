@@ -573,10 +573,38 @@ static int magnet_stat_field(lua_State *L) {
                 lua_pushinteger(L, TIME64_CAST(sce->st.st_atime));
                 return 1;
             }
+            if (0 == strcmp(k.ptr, "st_atim")) {
+                lua_pushinteger(L, TIME64_CAST(sce->st.st_atime));
+              #ifdef st_atime /* high-precision timestamp if available */
+              #if defined(__APPLE__) && defined(__MACH__)
+                lua_pushinteger(L, sce->st.st_atimespec.tv_nsec);
+              #else
+                lua_pushinteger(L, sce->st.st_atim.tv_nsec);
+              #endif
+              #else
+                lua_pushinteger(L, 0);
+              #endif
+                lua_pushcclosure(L, magnet_return_upvalue2, 2);
+                return 1;
+            }
             break;
           case 'c': /* st_ctime */
             if (0 == strcmp(k.ptr, "st_ctime")) {
                 lua_pushinteger(L, TIME64_CAST(sce->st.st_ctime));
+                return 1;
+            }
+            if (0 == strcmp(k.ptr, "st_ctim")) {
+                lua_pushinteger(L, TIME64_CAST(sce->st.st_ctime));
+              #ifdef st_ctime /* high-precision timestamp if available */
+              #if defined(__APPLE__) && defined(__MACH__)
+                lua_pushinteger(L, sce->st.st_ctimespec.tv_nsec);
+              #else
+                lua_pushinteger(L, sce->st.st_ctim.tv_nsec);
+              #endif
+              #else
+                lua_pushinteger(L, 0);
+              #endif
+                lua_pushcclosure(L, magnet_return_upvalue2, 2);
                 return 1;
             }
             break;
@@ -589,6 +617,20 @@ static int magnet_stat_field(lua_State *L) {
           case 'm': /* st_mtime st_mode */
             if (0 == strcmp(k.ptr, "st_mtime")) {
                 lua_pushinteger(L, TIME64_CAST(sce->st.st_mtime));
+                return 1;
+            }
+            if (0 == strcmp(k.ptr, "st_mtim")) {
+                lua_pushinteger(L, TIME64_CAST(sce->st.st_mtime));
+              #ifdef st_mtime /* high-precision timestamp if available */
+              #if defined(__APPLE__) && defined(__MACH__)
+                lua_pushinteger(L, sce->st.st_mtimespec.tv_nsec);
+              #else
+                lua_pushinteger(L, sce->st.st_mtim.tv_nsec);
+              #endif
+              #else
+                lua_pushinteger(L, 0);
+              #endif
+                lua_pushcclosure(L, magnet_return_upvalue2, 2);
                 return 1;
             }
             if (0 == strcmp(k.ptr, "st_mode")) {
