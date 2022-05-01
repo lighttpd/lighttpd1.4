@@ -1669,6 +1669,7 @@ typedef struct {
 		MAGNET_ENV_REQUEST_PROTOCOL,
 		MAGNET_ENV_REQUEST_STAGE,
 
+		/* remove after lighttpd 1.4.65 */
 		MAGNET_ENV_RESPONSE_HTTP_STATUS,
 		MAGNET_ENV_RESPONSE_BODY_LENGTH,
 		MAGNET_ENV_RESPONSE_BODY
@@ -1795,17 +1796,24 @@ magnet_env_get_buffer_by_id (request_st * const r, const int id)
 			http_request_state_append(dest, r->state);
 		break;
 
+	/* remove after lighttpd 1.4.65 */
 	case MAGNET_ENV_RESPONSE_HTTP_STATUS:
 		buffer_append_int(dest, r->http_status);
 		break;
 	case MAGNET_ENV_RESPONSE_BODY_LENGTH:
 		if (!r->resp_body_finished)
 			return NULL;
+		log_error(r->conf.errh, __FILE__, __LINE__,
+		          "lighty.r.req_attr['response.body-length'] is deprecated "
+		          "and will be removed. Use lighty.r.resp_body.len instead.");
 		buffer_append_int(dest, chunkqueue_length(&r->write_queue));
 		break;
 	case MAGNET_ENV_RESPONSE_BODY:
 		if (!r->resp_body_finished)
 			return NULL;
+		log_error(r->conf.errh, __FILE__, __LINE__,
+		          "lighty.r.req_attr['response.body'] is deprecated "
+		          "and will be removed. Use lighty.r.resp_body.get instead.");
 		if (0 == chunkqueue_length(&r->write_queue)
 		    || !(dest = chunkqueue_read_squash(&r->write_queue,r->conf.errh)))
 			buffer_copy_string_len((dest = r->tmp_buf), CONST_STR_LEN(""));
@@ -1920,6 +1928,7 @@ static int magnet_env_set(lua_State *L) {
       case MAGNET_ENV_REQUEST_REMOTE_PORT:
         return magnet_env_set_raddr_by_id(L, r, env_id, &val);
       /*case MAGNET_ENV_REQUEST_STAGE:*//*(change attempts silently ignored)*/
+      /* remove after lighttpd 1.4.65 */
       /*case MAGNET_ENV_RESPONSE_HTTP_STATUS:*/
       /*case MAGNET_ENV_RESPONSE_BODY_LENGTH:*/
       case MAGNET_ENV_RESPONSE_BODY:
