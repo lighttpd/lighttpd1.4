@@ -1709,6 +1709,34 @@ static const magnet_env_t magnet_env[] = {
 };
 
 __attribute_cold__
+static void
+magnet_env_get_uri_path_raw (buffer * const dest, const buffer * const target)
+{
+    const uint32_t len = buffer_clen(target);
+    const char * const qmark = memchr(target->ptr, '?', len);
+    buffer_copy_string_len(dest, target->ptr,
+                           qmark ? (uint32_t)(qmark - target->ptr) : len);
+}
+
+__attribute_cold__
+static int
+magnet_env_set_uri_path_raw (request_st * const r,
+                             const const_buffer * const val)
+{
+    /* modify uri-path of r->target; preserve query-part, if present */
+    /* XXX: should we require that resulting path begin with '/' or %2F ? */
+    const uint32_t len = buffer_clen(&r->target);
+    const char * const qmark = memchr(r->target.ptr, '?', len);
+    if (NULL != qmark)
+        buffer_copy_string_len(r->tmp_buf, qmark,
+                               len - (uint32_t)(qmark - r->target.ptr));
+    buffer_copy_string_len(&r->target, val->ptr, val->len);
+    if (NULL != qmark)
+        buffer_append_string_buffer(&r->target, r->tmp_buf);
+    return 0;
+}
+
+__attribute_cold__
 __attribute_noinline__
 static buffer *
 magnet_env_get_laddr_by_id (request_st * const r, const int id)
@@ -1763,12 +1791,8 @@ magnet_env_get_buffer_by_id (request_st * const r, const int id)
 
 	case MAGNET_ENV_URI_PATH: dest = &r->uri.path; break;
 	case MAGNET_ENV_URI_PATH_RAW:
-	    {
-		uint32_t len = buffer_clen(&r->target);
-		char *qmark = memchr(r->target.ptr, '?', len);
-		buffer_copy_string_len(dest, r->target.ptr, qmark ? (uint32_t)(qmark - r->target.ptr) : len);
+		magnet_env_get_uri_path_raw(dest, &r->target);
 		break;
-	    }
 	case MAGNET_ENV_URI_SCHEME: dest = &r->uri.scheme; break;
 	case MAGNET_ENV_URI_AUTHORITY: dest = &r->uri.authority; break;
 	case MAGNET_ENV_URI_QUERY: dest = &r->uri.query; break;
@@ -1911,19 +1935,7 @@ static int magnet_env_set(lua_State *L) {
       default:
         break;
       case MAGNET_ENV_URI_PATH_RAW:
-      {
-        /* modify uri-path of r->target; preserve query-part, if present */
-        /* XXX: should we require that resulting path begin with '/' or %2F ? */
-        const uint32_t len = buffer_clen(&r->target);
-        const char * const qmark = memchr(r->target.ptr, '?', len);
-        if (NULL != qmark)
-            buffer_copy_string_len(r->tmp_buf, qmark,
-                                   len - (uint32_t)(qmark - r->target.ptr));
-        buffer_copy_string_len(&r->target, val.ptr, val.len);
-        if (NULL != qmark)
-            buffer_append_string_buffer(&r->target, r->tmp_buf);
-        return 0;
-      }
+        return magnet_env_set_uri_path_raw(r, &val);
       case MAGNET_ENV_REQUEST_REMOTE_ADDR:
       case MAGNET_ENV_REQUEST_REMOTE_PORT:
         return magnet_env_set_raddr_by_id(L, r, env_id, &val);
