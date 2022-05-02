@@ -315,13 +315,19 @@ static inline void buffer_blank(buffer *b) {
     b->ptr ? buffer_truncate(b, 0) : (void)buffer_extend(b, 0);
 }
 
+__attribute_nonnull__()
+static inline void buffer_append_char (buffer *b, char c);
+static inline void buffer_append_char (buffer *b, char c) {
+    *(buffer_extend(b, 1)) = c;
+}
+
 /* append '/' to non-empty strings not ending in '/' */
 __attribute_nonnull__()
 static inline void buffer_append_slash(buffer *b);
 static inline void buffer_append_slash(buffer *b) {
     const uint32_t len = buffer_clen(b);
     if (len > 0 && '/' != b->ptr[len-1])
-        buffer_append_string_len(b, CONST_STR_LEN("/"));
+        buffer_append_char(b, '/');
 }
 
 static inline void buffer_clear(buffer *b) {
