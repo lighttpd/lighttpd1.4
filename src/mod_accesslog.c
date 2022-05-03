@@ -478,17 +478,20 @@ static format_fields * mod_accesslog_process_format(const char * const format, c
 
 			uint32_t tcount = 0;
 			for (format_field *f = parsed_format->ptr; f->field != FORMAT_UNSET; ++f) {
-				const buffer * const fstr = &f->string;
+				buffer * const fstr = &f->string;
 				if (FORMAT_LITERAL == f->field) continue;
 				if (FORMAT_TIMESTAMP == f->field) {
 					if (!buffer_is_blank(fstr)) {
-						const char *ptr = fstr->ptr;
+						const char * const ptr = fstr->ptr;
+						uint32_t len = buffer_clen(fstr);
 						if (0 == strncmp(ptr, "begin:", sizeof("begin:")-1)) {
 							f->opt |= FORMAT_FLAG_TIME_BEGIN;
-							ptr += sizeof("begin:")-1;
+							memmove(fstr->ptr, fstr->ptr+6, len-6); /*"begin:"*/
+							buffer_truncate(fstr, len-6);
 						} else if (0 == strncmp(ptr, "end:", sizeof("end:")-1)) {
 							f->opt |= FORMAT_FLAG_TIME_END;
-							ptr += sizeof("end:")-1;
+							memmove(fstr->ptr, fstr->ptr+4, len-4); /*"end:"*/
+							buffer_truncate(fstr, len-4);
 						}
 						if      (0 == strcmp(ptr, "sec"))       f->opt |= FORMAT_FLAG_TIME_SEC;
 						else if (0 == strcmp(ptr, "msec"))      f->opt |= FORMAT_FLAG_TIME_MSEC;
