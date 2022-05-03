@@ -27,12 +27,8 @@
 typedef struct {
 	char key;
 	enum {
-		FORMAT_UNSET,
-			FORMAT_UNSUPPORTED,
-			FORMAT_PERCENT,
-			FORMAT_REMOTE_HOST,
-			FORMAT_REMOTE_IDENT,
-			FORMAT_REMOTE_USER,
+			FORMAT_UNSET,
+			FORMAT_LITERAL,
 			FORMAT_TIMESTAMP,
 			FORMAT_REQUEST_LINE,
 			FORMAT_STATUS,
@@ -42,7 +38,6 @@ typedef struct {
 			FORMAT_REMOTE_ADDR,
 			FORMAT_LOCAL_ADDR,
 			FORMAT_COOKIE,
-			FORMAT_TIME_USED_US,
 			FORMAT_ENV,
 			FORMAT_FILENAME,
 			FORMAT_REQUEST_PROTOCOL,
@@ -59,52 +54,58 @@ typedef struct {
 
 			FORMAT_KEEPALIVE_COUNT,
 			FORMAT_RESPONSE_HEADER,
-			FORMAT_NOTE
-	} type;
+			FORMAT_NOTE,        /* same as FORMAT_ENV */
+			FORMAT_REMOTE_HOST, /* same as FORMAT_REMOTE_ADDR */
+			FORMAT_REMOTE_USER, /* redirected to FORMAT_ENV */
+			FORMAT_TIME_USED_US,/* redirected to FORMAT_TIME_USED */
+			/*(parsed and replaced at startup)*/
+			FORMAT_REMOTE_IDENT,
+			FORMAT_PERCENT,
+
+			FORMAT_UNSUPPORTED
+	} tag;
 } format_mapping;
 
 /**
  *
  *
- * "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\""
+ * "%h %V %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\""
  *
  */
 
 static const format_mapping fmap[] =
 {
-	{ '%', FORMAT_PERCENT },
-	{ 'h', FORMAT_REMOTE_HOST },
-	{ 'l', FORMAT_REMOTE_IDENT },
-	{ 'u', FORMAT_REMOTE_USER },
-	{ 't', FORMAT_TIMESTAMP },
-	{ 'r', FORMAT_REQUEST_LINE },
-	{ 's', FORMAT_STATUS },
-	{ 'b', FORMAT_BYTES_OUT_NO_HEADER },
-	{ 'i', FORMAT_HEADER },
-
+	{ '%', FORMAT_PERCENT },      /*(parsed and replaced at startup)*/
 	{ 'a', FORMAT_REMOTE_ADDR },
 	{ 'A', FORMAT_LOCAL_ADDR },
+	{ 'b', FORMAT_BYTES_OUT_NO_HEADER },
 	{ 'B', FORMAT_BYTES_OUT_NO_HEADER },
 	{ 'C', FORMAT_COOKIE },
 	{ 'D', FORMAT_TIME_USED_US },
 	{ 'e', FORMAT_ENV },
 	{ 'f', FORMAT_FILENAME },
+	{ 'h', FORMAT_REMOTE_HOST },  /*(parsed and redirected at startup)*/
 	{ 'H', FORMAT_REQUEST_PROTOCOL },
+	{ 'i', FORMAT_HEADER },
+	{ 'I', FORMAT_BYTES_IN },
 	{ 'k', FORMAT_KEEPALIVE_COUNT },
+	{ 'l', FORMAT_REMOTE_IDENT }, /*(parsed and replaced at startup)*/
 	{ 'm', FORMAT_REQUEST_METHOD },
-	{ 'n', FORMAT_NOTE },
+	{ 'n', FORMAT_NOTE },         /*(parsed and redirected at startup)*/
+	{ 'o', FORMAT_RESPONSE_HEADER },
+	{ 'O', FORMAT_BYTES_OUT },
 	{ 'p', FORMAT_SERVER_PORT },
 	{ 'P', FORMAT_UNSUPPORTED }, /* we are only one process */
 	{ 'q', FORMAT_QUERY_STRING },
+	{ 'r', FORMAT_REQUEST_LINE },
+	{ 's', FORMAT_STATUS },
+	{ 't', FORMAT_TIMESTAMP },
 	{ 'T', FORMAT_TIME_USED },
+	{ 'u', FORMAT_REMOTE_USER },  /*(parsed and redirected at startup)*/
 	{ 'U', FORMAT_URL }, /* w/o querystring */
 	{ 'v', FORMAT_SERVER_NAME },
 	{ 'V', FORMAT_HTTP_HOST },
 	{ 'X', FORMAT_CONNECTION_STATUS },
-	{ 'I', FORMAT_BYTES_IN },
-	{ 'O', FORMAT_BYTES_OUT },
-
-	{ 'o', FORMAT_RESPONSE_HEADER },
 
 	{ '\0', FORMAT_UNSET }
 };
@@ -131,7 +132,6 @@ enum e_optflags_port {
 
 
 typedef struct {
-    enum { FIELD_UNSET, FIELD_STRING, FIELD_FORMAT } type;
     int field;
     int opt;
     buffer string;
@@ -150,6 +150,7 @@ typedef struct {
 typedef struct {
 	fdlog_st *fdlog;
 	char use_syslog; /* syslog has global buffer */
+	uint8_t escaping;
 	unsigned short syslog_level;
 
 	format_fields *parsed_format;
@@ -167,244 +168,108 @@ INIT_FUNC(mod_accesslog_init) {
     return calloc(1, sizeof(plugin_data));
 }
 
-static void accesslog_append_escaped_str(buffer * const dest, const char * const str, const size_t len) {
-	const char *ptr, *start, *end;
-
-	/* replaces non-printable chars with \xHH where HH is the hex representation of the byte */
-	/* exceptions: " => \", \ => \\, whitespace chars => \n \t etc. */
-	if (0 == len) return;
-	buffer_string_prepare_append(dest, len);
-
-	for (ptr = start = str, end = str+len; ptr < end; ++ptr) {
-		unsigned char const c = *(const unsigned char *)ptr;
-		if (c >= ' ' && c <= '~' && c != '"' && c != '\\') {
-			/* nothing to change, add later as one block */
-		} else {
-			/* copy previous part */
-			if (start < ptr) {
-				buffer_append_string_len(dest, start, ptr - start);
-			}
-			start = ptr + 1;
-
-			const char *h2;
-			switch (c) {
-			case '"':  h2 = "\\\""; break;
-			case '\\': h2 = "\\\\"; break;
-			case '\b': h2 = "\\b";  break;
-			case '\n': h2 = "\\n";  break;
-			case '\r': h2 = "\\r";  break;
-			case '\t': h2 = "\\t";  break;
-			case '\v': h2 = "\\v";  break;
-			default: {
-					/* non printable char => \xHH */
-					char hh[5] = {'\\','x',0,0,0};
-					char h = c >> 4;
-					hh[2] = (h > 9) ? (h - 10 + 'A') : (h + '0');
-					h = c & 0xFF;
-					hh[3] = (h > 9) ? (h - 10 + 'A') : (h + '0');
-					buffer_append_string_len(dest, hh, 4);
-					continue;
-				}
-			}
-			buffer_append_string_len(dest, h2, 2);
-		}
-	}
-
-	if (start < end) {
-		buffer_append_string_len(dest, start, end - start);
-	}
-}
-
-static void accesslog_append_escaped(buffer *dest, const buffer *str) {
-	accesslog_append_escaped_str(dest, BUF_PTR_LEN(str));
-}
-
 __attribute_cold__
 static format_fields * accesslog_parse_format_err(log_error_st *errh, const char *file, unsigned int line, format_field *f, const char *msg) {
     log_error(errh, file, line, "%s", msg);
-    for (; f->type != FIELD_UNSET; ++f) free(f->string.ptr);
+    for (; f->field != FORMAT_UNSET; ++f) free(f->string.ptr);
     return NULL;
 }
 
-static format_fields * accesslog_parse_format(const char * const format, const size_t flen, log_error_st * const errh) {
-	/* common log format (the default) results in 18 elements,
-	 * so 127 should be enough except for obscene custom usage */
-	size_t i, j, k = 0, start = 0;
-	uint32_t used = 0;
-	const uint32_t sz = 127;/* (sz+1 must match fptr[] num elts below) */
-	format_field *f;
-	format_field fptr[128]; /* (128 elements takes 4k on stack in 64-bit) */
-	memset(fptr, 0, sizeof(fptr));
-	if (0 != FIELD_UNSET) return NULL;
+static int accesslog_parse_format_token (const char c) {
+    const format_mapping *p = fmap;
+    while (p->key != c && p->key != '\0') ++p;
+    return p->tag;
+}
 
-	if (0 == flen) return NULL;
+static format_fields * accesslog_parse_format(const char * const format, const uint32_t flen, log_error_st * const errh) {
+    /* common log format (the default) results in 18 elements,
+     * so 127 should be enough except for obscene custom usage */
+    uint32_t used = 0;
+    const uint32_t sz = 127;/* (sz+1 must match fptr[] num elts below) */
+    format_field *f;
+    format_field fptr[128]; /* (128 elements takes 4k on stack in 64-bit) */
+    memset(fptr, 0, sizeof(fptr));
+    /*assert(FORMAT_UNSET == 0);*/
+    if (0 == flen) return NULL;
+    uint32_t i = 0;
+    do {
+        uint32_t start = i;
+        while (format[i] != '%' && ++i < flen) ;
+        if (start != i) {
+            /* save string from start to i */
+            if (used && (f = fptr+used-1)->field == FORMAT_LITERAL)
+                buffer_append_string_len(&f->string, format + start, i - start);
+            else {
+                if (used == sz)
+                    return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
+                             "too many fields (>= 127) in accesslog.format");
 
-	for (i = 0; i < flen; ++i) {
-		if (format[i] != '%') continue;
+                f = fptr + used++;
+                f->field = FORMAT_LITERAL;
+                buffer_copy_string_len(&f->string, format + start, i - start);
+            }
+        }
+        if (i == flen) break;
 
-			if (i > 0 && start != i) {
-				/* copy the string before this % */
-				if (used == sz)
-					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
-					         "too many fields (>= 127) in accesslog.format");
+        uint32_t k = ++i; /* step over '%' */
+        if (i == flen)
+            return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
+              "% must be followed by a format-specifier");
 
-				f = fptr+used;
-				f->type = FIELD_STRING;
-				memset(&f->string, 0, sizeof(buffer));
-				buffer_copy_string_len(&f->string, format + start, i - start);
+        /* we need a new field */
+        if (used == sz)
+            return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
+              "too many fields (>= 127) in accesslog.format");
 
-				++used;
-			}
+        /* search for the terminating command */
+        if (format[i] == '{') {
+            k = ++i;
+            while (i < flen && format[i] != '}') ++i;
+            if (i == flen || i == k) {
+                return accesslog_parse_format_err(errh,__FILE__,__LINE__,fptr,
+                  "%{...} must contain string and %{ must be terminated by }");
+            }
+            ++i;
+        }
+        else {
+            /* skip over (ignore) '<' or '>' */
+            if (format[i] == '<' || format[i] == '>') k = ++i;
 
-			/* we need a new field */
-			if (used == sz)
-				return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
-				         "too many fields (>= 127) in accesslog.format");
+            /* special-case "%%" and "%l" */
+            if (i < flen && (format[i] == '%' || format[i] == 'l')) {
+                /* replace "%%" with literal '%' */
+                /* replace "%l" with literal '-'; ignore remote ident */
+                if (0 == used || (f = fptr+used-1)->field != FORMAT_LITERAL) {
+                    f = fptr + used++;
+                    f->field = FORMAT_LITERAL;
+                }
+                buffer_append_char(&f->string, format[i] == '%' ? '%' : '-');
+                continue;
+            }
+        }
+        /* add field */
+        f = fptr + used++;
+        if (i != k) /* %{...} */
+            buffer_copy_string_len(&f->string, format + k, i - k - 1);
+        f->field = (i < flen)
+          ? accesslog_parse_format_token(format[i])
+          : FORMAT_UNSET;
 
-			/* search for the terminating command */
-			switch (format[i+1]) {
-			case '>':
-			case '<':
-				/* after the } has to be a character */
-				if (format[i+2] == '\0') {
-					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
-					         "%< and %> have to be followed by a format-specifier");
-				}
+        if (f->field == FORMAT_UNSET)
+            return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
+              "% or %{...} must be followed by a valid format-specifier");
+    } while (++i < flen);
 
-
-				for (j = 0; fmap[j].key != '\0'; j++) {
-					if (fmap[j].key != format[i+2]) continue;
-
-					/* found key */
-
-					f = fptr+used;
-					f->type = FIELD_FORMAT;
-					f->field = fmap[j].type;
-					f->opt = 0;
-					f->string.ptr = NULL;
-
-					++used;
-
-					break;
-				}
-
-				if (fmap[j].key == '\0') {
-					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
-					         "%< and %> have to be followed by a valid format-specifier");
-				}
-
-				start = i + 3;
-				i = start - 1; /* skip the string */
-
-				break;
-			case '{':
-				/* go forward to } */
-
-				for (k = i+2; k < flen; ++k) {
-					if (format[k] == '}') break;
-				}
-
-				if (k == flen) {
-					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
-					         "%{ has to be terminated by a }");
-				}
-
-				/* after the } has to be a character */
-				if (format[k+1] == '\0') {
-					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
-					         "%{...} has to be followed by a format-specifier");
-				}
-
-				if (k == i + 2) {
-					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
-					         "%{...} has to contain a string");
-				}
-
-				for (j = 0; fmap[j].key != '\0'; j++) {
-					if (fmap[j].key != format[k+1]) continue;
-
-					/* found key */
-
-					f = fptr+used;
-					f->type = FIELD_FORMAT;
-					f->field = fmap[j].type;
-					f->opt = 0;
-					memset(&f->string, 0, sizeof(buffer));
-					buffer_copy_string_len(&f->string, format + i + 2, k - (i + 2));
-
-					++used;
-
-					break;
-				}
-
-				if (fmap[j].key == '\0') {
-					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
-					         "%{...} has to be followed by a valid format-specifier");
-				}
-
-				start = k + 2;
-				i = start - 1; /* skip the string */
-
-				break;
-			default:
-				/* after the % has to be a character */
-				if (format[i+1] == '\0') {
-					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
-					         "% has to be followed by a format-specifier");
-				}
-
-				for (j = 0; fmap[j].key != '\0'; j++) {
-					if (fmap[j].key != format[i+1]) continue;
-
-					/* found key */
-
-					f = fptr+used;
-					f->type = FIELD_FORMAT;
-					f->field = fmap[j].type;
-					f->string.ptr = NULL;
-					f->opt = 0;
-
-					++used;
-
-					break;
-				}
-
-				if (fmap[j].key == '\0') {
-					return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
-					         "% has to be followed by a valid format-specifier");
-				}
-
-				start = i + 2;
-				i = start - 1; /* skip the string */
-
-				break;
-			}
-	}
-
-	if (start < i) {
-		/* copy the string */
-		if (used == sz)
-			return accesslog_parse_format_err(errh, __FILE__, __LINE__, fptr,
-			         "too many fields (>= 127) in accesslog.format");
-
-		f = fptr+used;
-		f->type = FIELD_STRING;
-		memset(&f->string, 0, sizeof(buffer));
-		buffer_copy_string_len(&f->string, format + start, i - start);
-
-		++used;
-	}
-
-	format_fields * const fields =
-	  malloc(sizeof(format_fields) + ((used+1) * sizeof(format_field)));
-	force_assert(fields);
-	memset(fields, 0, sizeof(format_fields));
-	memcpy(fields->ptr, fptr, (used+1) * sizeof(format_field));
-	return fields;
+    format_fields * const fields =
+      malloc(sizeof(format_fields) + ((used+1) * sizeof(format_field)));
+    force_assert(fields);
+    memset(fields, 0, sizeof(format_fields));
+    memcpy(fields->ptr, fptr, (used+1) * sizeof(format_field));
+    return fields;
 }
 
 static void mod_accesslog_free_format_fields(format_fields * const ff) {
-    for (format_field *f = ff->ptr; f->type != FIELD_UNSET; ++f)
+    for (format_field *f = ff->ptr; f->field != FORMAT_UNSET; ++f)
         free(f->string.ptr);
     free(ff->ts_accesslog_str.ptr);
     free(ff);
@@ -454,6 +319,10 @@ static void mod_accesslog_merge_config_cpv(plugin_config * const pconf, const co
       case 3: /* accesslog.syslog-level */
         pconf->syslog_level = cpv->v.shrt;
         break;
+      case 4: /* accesslog.escaping */
+        if (cpv->vtype != T_CONFIG_LOCAL) break;
+        pconf->escaping = (int)cpv->v.u;
+        break;
       default:/* should not happen */
         return;
     }
@@ -473,7 +342,7 @@ static void mod_accesslog_patch_config(request_st * const r, plugin_data * const
     }
 }
 
-static format_fields * mod_accesslog_process_format(const char * const format, const size_t flen, server * const srv);
+static format_fields * mod_accesslog_process_format(const char * const format, const uint32_t flen, server * const srv);
 
 SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
     static const config_plugin_keys_t cpk[] = {
@@ -488,6 +357,9 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("accesslog.syslog-level"),
         T_CONFIG_SHORT,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("accesslog.escaping"),
+        T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -548,6 +420,11 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
                 break;
               case 3: /* accesslog.syslog-level */
                 break;
+              case 4: /* accesslog.escaping */
+                /* quick parse: 0 == "default", 1 == "json" */
+                cpv->v.u = (0 == strcmp(cpv->v.b->ptr, "json"));
+                cpv->vtype = T_CONFIG_LOCAL;
+                break;
               default:/* should not happen */
                 break;
             }
@@ -590,7 +467,7 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-static format_fields * mod_accesslog_process_format(const char * const format, const size_t flen, server * const srv) {
+static format_fields * mod_accesslog_process_format(const char * const format, const uint32_t flen, server * const srv) {
 			format_fields * const parsed_format =
 			  accesslog_parse_format(format, flen, srv->errh);
 			if (NULL == parsed_format) {
@@ -600,9 +477,9 @@ static format_fields * mod_accesslog_process_format(const char * const format, c
 			}
 
 			uint32_t tcount = 0;
-			for (format_field *f = parsed_format->ptr; f->type != FIELD_UNSET; ++f) {
+			for (format_field *f = parsed_format->ptr; f->field != FORMAT_UNSET; ++f) {
 				const buffer * const fstr = &f->string;
-				if (FIELD_FORMAT != f->type) continue;
+				if (FORMAT_LITERAL == f->field) continue;
 				if (FORMAT_TIMESTAMP == f->field) {
 					if (!buffer_is_blank(fstr)) {
 						const char *ptr = fstr->ptr;
@@ -640,17 +517,19 @@ static format_fields * mod_accesslog_process_format(const char * const format, c
 					if (f->opt & FORMAT_FLAG_TIME_BEGIN) srv->srvconf.high_precision_timestamps = 1;
 				} else if (FORMAT_TIME_USED_US == f->field) {
 					f->opt |= FORMAT_FLAG_TIME_USEC;
+					f->field = FORMAT_TIME_USED;
 					srv->srvconf.high_precision_timestamps = 1;
 				} else if (FORMAT_TIME_USED == f->field) {
+					const char * const ptr = fstr->ptr;
 					if (buffer_is_blank(fstr)
-					      || buffer_is_equal_string(fstr, CONST_STR_LEN("s"))
-					      || buffer_is_equal_string(fstr, CONST_STR_LEN("sec")))  f->opt |= FORMAT_FLAG_TIME_SEC;
-					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("ms"))
-					      || buffer_is_equal_string(fstr, CONST_STR_LEN("msec"))) f->opt |= FORMAT_FLAG_TIME_MSEC;
-					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("us"))
-					      || buffer_is_equal_string(fstr, CONST_STR_LEN("usec"))) f->opt |= FORMAT_FLAG_TIME_USEC;
-					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("ns"))
-					      || buffer_is_equal_string(fstr, CONST_STR_LEN("nsec"))) f->opt |= FORMAT_FLAG_TIME_NSEC;
+					      || 0 == strcmp(ptr, "s")
+					      || 0 == strcmp(ptr, "sec"))  f->opt |= FORMAT_FLAG_TIME_SEC;
+					else if (0 == strcmp(ptr, "ms")
+					      || 0 == strcmp(ptr, "msec")) f->opt |= FORMAT_FLAG_TIME_MSEC;
+					else if (0 == strcmp(ptr, "us")
+					      || 0 == strcmp(ptr, "usec")) f->opt |= FORMAT_FLAG_TIME_USEC;
+					else if (0 == strcmp(ptr, "ns")
+					      || 0 == strcmp(ptr, "nsec")) f->opt |= FORMAT_FLAG_TIME_NSEC;
 					else {
 						log_error(srv->errh, __FILE__, __LINE__,
 							"invalid time unit in %%{UNIT}T: %s", format);
@@ -660,15 +539,16 @@ static format_fields * mod_accesslog_process_format(const char * const format, c
 
 					if (f->opt & ~(FORMAT_FLAG_TIME_SEC)) srv->srvconf.high_precision_timestamps = 1;
 				} else if (FORMAT_COOKIE == f->field) {
-					if (buffer_is_blank(fstr)) f->type = FIELD_STRING; /*(blank)*/
+					if (buffer_is_blank(fstr)) f->field = FORMAT_LITERAL; /*(blank)*/
 				} else if (FORMAT_SERVER_PORT == f->field) {
+					const char * const ptr = fstr->ptr;
 					if (buffer_is_blank(fstr))
 						f->opt |= FORMAT_FLAG_PORT_LOCAL;
-					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("canonical")))
+					else if (0 == strcmp(ptr, "canonical"))
 						f->opt |= FORMAT_FLAG_PORT_LOCAL;
-					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("local")))
+					else if (0 == strcmp(ptr, "local"))
 						f->opt |= FORMAT_FLAG_PORT_LOCAL;
-					else if (buffer_is_equal_string(fstr, CONST_STR_LEN("remote")))
+					else if (0 == strcmp(ptr, "remote"))
 						f->opt |= FORMAT_FLAG_PORT_REMOTE;
 					else {
 						log_error(srv->errh, __FILE__, __LINE__,
@@ -679,6 +559,13 @@ static format_fields * mod_accesslog_process_format(const char * const format, c
 				} else if (FORMAT_HEADER == f->field
 				           || FORMAT_RESPONSE_HEADER == f->field) {
 					f->opt = http_header_hkey_get(BUF_PTR_LEN(fstr));
+				} else if (FORMAT_REMOTE_HOST == f->field) {
+					f->field = FORMAT_REMOTE_ADDR;
+				} else if (FORMAT_REMOTE_USER == f->field) {
+					f->field = FORMAT_ENV;
+					buffer_copy_string_len(fstr, CONST_STR_LEN("REMOTE_USER"));
+				} else if (FORMAT_NOTE == f->field) {
+					f->field = FORMAT_ENV;
 				}
 			}
 
@@ -692,21 +579,119 @@ TRIGGER_FUNC(log_access_periodic_flush) {
     return HANDLER_GO_ON;
 }
 
-static int log_access_record (const request_st * const r, buffer * const b, format_fields * const parsed_format) {
-	const connection * const con = r->con;
-	const buffer *vb;
-	unix_timespec64_t ts = { 0, 0 };
-	int flush = 0;
+static void
+accesslog_append_escaped (buffer * const restrict dest,
+                          const char * restrict str,
+                          const uint32_t len, const int esc)
+{
+    /* replaces non-printable chars with escaped string
+     * default: \xHH where HH is the hex representation of the byte
+     * json: \u00HH where HH is the hex representation of the byte */
+    /* exceptions: " => \", \ => \\, whitespace chars => \n \t etc. */
+    buffer_string_prepare_append(dest, len);
+    for (const char * const end = str+len; str < end; ++str) {
+        unsigned int c;
+        const char * const ptr = str;
+        do {
+            c = *(const unsigned char *)str;
+        } while (c >= ' ' && c <= '~' && c != '"' && c != '\\' && ++str < end);
+        if (str - ptr) buffer_append_string_len(dest, ptr, str - ptr);
 
-	for (const format_field *f = parsed_format->ptr; f->type != FIELD_UNSET; ++f) {
-		switch(f->type) {
-		case FIELD_STRING:
-			buffer_append_string_buffer(b, &f->string);
-			break;
-		case FIELD_FORMAT:
-			switch(f->field) {
-			case FORMAT_TIMESTAMP:
+        if (str == end)
+            return;
 
+        char *s;
+        switch (c) {
+          case '\a':case '\b':case '\t':case '\n':case '\v':case '\f':case '\r':
+            c = "0000000abtnvfr"[c];
+            __attribute_fallthrough__
+          case '"': case '\\':
+            s = buffer_extend(dest, 2);
+            s[0] = '\\';
+            s[1] = c;
+            break;
+          default:
+            if (!esc) {
+                /* non printable char => \xHH */
+                s = buffer_extend(dest, 4);
+                s[0] = '\\';
+                s[1] = 'x';
+                s += 2;
+            }
+            else { /* json */
+                /*(technically do not have to escape DEL (\127) or higher)*/
+                s = buffer_extend(dest, 6);
+                s[0] = '\\';
+                s[1] = 'u';
+                s[2] = '0';
+                s[3] = '0';
+                s += 4;
+            }
+            s[0] = "0123456789ABCDEF"[c >> 4];
+            s[1] = "0123456789ABCDEF"[c & 0xF];
+            break;
+        }
+    }
+}
+
+static void
+accesslog_append_buffer (buffer * const restrict dest,
+                         const buffer * const restrict b, const int esc)
+{
+    if (!buffer_string_is_empty(b))
+        accesslog_append_escaped(dest, BUF_PTR_LEN(b), esc);
+    else
+        buffer_append_char(dest, '-');
+}
+
+static void
+accesslog_append_bytes (buffer * const dest, off_t bytes, const uint32_t adj)
+{
+    if (bytes > 0)
+        buffer_append_int(dest, (bytes -= (off_t)adj) > 0 ? bytes : 0);
+    else
+        buffer_append_char(dest, '-');
+}
+
+__attribute_cold__
+__attribute_noinline__
+static void
+accesslog_append_cookie (buffer * const restrict dest,
+                         const request_st * const restrict r,
+                         const buffer * const restrict name, const int esc)
+{
+    const buffer * const vb =
+      http_header_request_get(r, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie"));
+    if (NULL == vb) return;
+
+    char *str = vb->ptr;
+    size_t len = buffer_clen(name);
+    do {
+        while (*str == ' ' || *str == '\t') ++str;
+        if (0 == strncmp(str, name->ptr, len) && str[len] == '=') {
+            char *v = str+len+1;
+            for (str = v; *str != '\0' && *str != ';'; ++str) ;
+            if (str == v) break;
+            do { --str; } while (str > v && (*str == ' ' || *str == '\t'));
+            accesslog_append_escaped(dest, v, str - v + 1, esc);
+            break;
+        }
+        else {
+            while (*str != ';' && *str != ' ' && *str != '\t' && *str != '\0')
+                ++str;
+        }
+        while (*str == ' ' || *str == '\t') ++str;
+    } while (*str++ == ';');
+}
+
+static int
+accesslog_append_time (buffer * const b, const request_st * const r,
+                       const format_field * const f,
+                       unix_timespec64_t * const ts,
+                       format_fields * const parsed_format)
+{
+			int flush = 0;
+			if (f->field == FORMAT_TIMESTAMP) {
 				if (f->opt & ~(FORMAT_FLAG_TIME_BEGIN|FORMAT_FLAG_TIME_END)) {
 					if (f->opt & FORMAT_FLAG_TIME_SEC) {
 						unix_time64_t t = (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) ? log_epoch_secs : r->start_hp.tv_sec;
@@ -715,9 +700,9 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 						unix_time64_t t;
 						long ns;
 						if (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) {
-							if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
-							t = ts.tv_sec;
-							ns = ts.tv_nsec;
+							if (0 == ts->tv_sec) log_clock_gettime_realtime(ts);
+							t = ts->tv_sec;
+							ns = ts->tv_nsec;
 						} else {
 							t = r->start_hp.tv_sec;
 							ns = r->start_hp.tv_nsec;
@@ -737,8 +722,8 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 						long ns;
 						char *ptr;
 						if (!(f->opt & FORMAT_FLAG_TIME_BEGIN)) {
-							if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
-							ns = ts.tv_nsec;
+							if (0 == ts->tv_sec) log_clock_gettime_realtime(ts);
+							ns = ts->tv_nsec;
 						} else {
 							ns = r->start_hp.tv_nsec;
 						}
@@ -768,7 +753,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 						const unix_time64_t cur_ts = log_epoch_secs;
 						if (parsed_format->last_generated_accesslog_ts == cur_ts) {
 							buffer_append_string_buffer(b, ts_accesslog_str);
-							break;
+							return 0; /* flush == 0 */
 						}
 						t = parsed_format->last_generated_accesslog_ts = cur_ts;
 						flush = 1;
@@ -791,16 +776,15 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				      #endif /* HAVE_STRUCT_TM_GMTOFF */
 					buffer_append_string_buffer(b, ts_accesslog_str);
 				}
-				break;
-			case FORMAT_TIME_USED:
-			case FORMAT_TIME_USED_US:
+			}
+			else { /* FORMAT_TIME_USED or FORMAT_TIME_USED_US */
 				if (f->opt & FORMAT_FLAG_TIME_SEC) {
 					buffer_append_int(b, log_epoch_secs - r->start_hp.tv_sec);
 				} else {
 					const unix_timespec64_t * const bs = &r->start_hp;
 					off_t tdiff; /*(expected to be 64-bit since large file support enabled)*/
-					if (0 == ts.tv_sec) log_clock_gettime_realtime(&ts);
-					tdiff = (off_t)(ts.tv_sec - bs->tv_sec)*1000000000 + (ts.tv_nsec - bs->tv_nsec);
+					if (0 == ts->tv_sec) log_clock_gettime_realtime(ts);
+					tdiff = (off_t)(ts->tv_sec - bs->tv_sec)*1000000000 + (ts->tv_nsec - bs->tv_nsec);
 					if (tdiff <= 0) {
 						/* sanity check for time moving backwards
 						 * (daylight savings adjustment or leap seconds or ?) */
@@ -814,28 +798,52 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 					} /* else (f->opt & FORMAT_FLAG_TIME_NSEC) */
 					buffer_append_int(b, (intmax_t)tdiff);
 				}
+			}
+			return flush;
+}
+
+static int log_access_record (const request_st * const r, buffer * const b, format_fields * const parsed_format, const int esc) {
+	const connection * const con = r->con;
+	const buffer *vb;
+	unix_timespec64_t ts = { 0, 0 };
+	int flush = 0;
+
+	for (const format_field *f = parsed_format->ptr; f->field != FORMAT_UNSET; ++f) {
+			switch(f->field) {
+			case FORMAT_LITERAL:
+				buffer_append_string_buffer(b, &f->string);
 				break;
+			case FORMAT_TIMESTAMP:
+		  #if 0 /*(parsed and redirected at startup to FORMAT_TIME_USED)*/
+			case FORMAT_TIME_USED_US:
+		  #endif
+			case FORMAT_TIME_USED:
+				flush |= accesslog_append_time(b, r, f, &ts, parsed_format);
+				break;
+		  #if 0 /*(parsed and redirected at startup to FORMAT_REMOTE_ADDR)*/
+			/*case FORMAT_REMOTE_HOST:*/
+		  #endif
 			case FORMAT_REMOTE_ADDR:
-			case FORMAT_REMOTE_HOST:
 				buffer_append_string_buffer(b, &con->dst_addr_buf);
 				break;
+		  #if 0 /*(parsed and replaced at startup)*/
 			case FORMAT_REMOTE_IDENT:
 				/* ident */
-				buffer_append_string_len(b, CONST_STR_LEN("-"));
+				buffer_append_char(b, '-');
 				break;
+		  #endif
+		  #if 0 /*(parsed and redirected at startup to FORMAT_ENV "REMOTE_USER")*/
 			case FORMAT_REMOTE_USER:
-				if (NULL != (vb = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER")))) {
-					accesslog_append_escaped(b, vb);
-				} else {
-					buffer_append_string_len(b, CONST_STR_LEN("-"));
-				}
+				vb = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
+				accesslog_append_buffer(b, vb, esc);
 				break;
+		  #endif
 			case FORMAT_REQUEST_LINE:
 				/*(attempt to reconstruct request line)*/
 				http_method_append(b, r->http_method);
-				buffer_append_string_len(b, CONST_STR_LEN(" "));
-				accesslog_append_escaped(b, &r->target_orig);
-				buffer_append_string_len(b, CONST_STR_LEN(" "));
+				buffer_append_char(b, ' ');
+				accesslog_append_escaped(b, BUF_PTR_LEN(&r->target_orig), esc);
+				buffer_append_char(b, ' ');
 				http_version_append(b, r->http_version);
 				break;
 			case FORMAT_STATUS:
@@ -847,53 +855,33 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				off_t bytes = r->http_version <= HTTP_VERSION_1_1
 				  ? con->bytes_written - r->bytes_written_ckpt
 				  : r->write_queue.bytes_out;
-				if (bytes > 0) {
-					bytes -= (off_t)r->resp_header_len;
-					buffer_append_int(b, bytes > 0 ? bytes : 0);
-				} else {
-					buffer_append_string_len(b, CONST_STR_LEN("-"));
-				}
+				accesslog_append_bytes(b, bytes, r->resp_header_len);
 				break;
 			}
 			case FORMAT_HEADER:
-				if (NULL != (vb = http_header_request_get(r, f->opt, BUF_PTR_LEN(&f->string)))) {
-					accesslog_append_escaped(b, vb);
-				} else {
-					buffer_append_string_len(b, CONST_STR_LEN("-"));
-				}
+				vb = http_header_request_get(r, f->opt, BUF_PTR_LEN(&f->string));
+				accesslog_append_buffer(b, vb, esc);
 				break;
 			case FORMAT_RESPONSE_HEADER:
-				if (NULL != (vb = http_header_response_get(r, f->opt, BUF_PTR_LEN(&f->string)))) {
-					accesslog_append_escaped(b, vb);
-				} else {
-					buffer_append_string_len(b, CONST_STR_LEN("-"));
-				}
+				vb = http_header_response_get(r, f->opt, BUF_PTR_LEN(&f->string));
+				accesslog_append_buffer(b, vb, esc);
 				break;
+		  #if 0 /*(parsed and redirected at startup to FORMAT_ENV)*/
+			/*case FORMAT_NOTE:*/
+		  #endif
 			case FORMAT_ENV:
-			case FORMAT_NOTE:
-				if (NULL != (vb = http_header_env_get(r, BUF_PTR_LEN(&f->string)))) {
-					accesslog_append_escaped(b, vb);
-				} else {
-					buffer_append_string_len(b, CONST_STR_LEN("-"));
-				}
+				vb = http_header_env_get(r, BUF_PTR_LEN(&f->string));
+				accesslog_append_buffer(b, vb, esc);
 				break;
 			case FORMAT_FILENAME:
-				if (!buffer_is_blank(&r->physical.path)) {
-					buffer_append_string_buffer(b, &r->physical.path);
-				} else {
-					buffer_append_string_len(b, CONST_STR_LEN("-"));
-				}
+				accesslog_append_buffer(b, &r->physical.path, esc);
 				break;
 			case FORMAT_BYTES_OUT:
 			{
 				off_t bytes = r->http_version <= HTTP_VERSION_1_1
 				  ? con->bytes_written - r->bytes_written_ckpt
 				  : r->write_queue.bytes_out;
-				if (bytes > 0) {
-					buffer_append_int(b, bytes);
-				} else {
-					buffer_append_string_len(b, CONST_STR_LEN("-"));
-				}
+				accesslog_append_bytes(b, bytes, 0);
 				break;
 			}
 			case FORMAT_BYTES_IN:
@@ -901,26 +889,14 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				off_t bytes = r->http_version <= HTTP_VERSION_1_1
 				  ? con->bytes_read - r->bytes_read_ckpt
 				  : r->read_queue.bytes_in;
-				if (bytes > 0) {
-					buffer_append_int(b, bytes);
-				} else {
-					buffer_append_string_len(b, CONST_STR_LEN("-"));
-				}
+				accesslog_append_bytes(b, bytes, 0);
 				break;
 			}
 			case FORMAT_SERVER_NAME:
-				if (!buffer_is_blank(r->server_name)) {
-					buffer_append_string_buffer(b, r->server_name);
-				} else {
-					buffer_append_string_len(b, CONST_STR_LEN("-"));
-				}
+				accesslog_append_buffer(b, r->server_name, esc);
 				break;
 			case FORMAT_HTTP_HOST:
-				if (!buffer_is_blank(&r->uri.authority)) {
-					accesslog_append_escaped(b, &r->uri.authority);
-				} else {
-					buffer_append_string_len(b, CONST_STR_LEN("-"));
-				}
+				accesslog_append_buffer(b, &r->uri.authority, esc);
 				break;
 			case FORMAT_REQUEST_PROTOCOL:
 				http_version_append(b, r->http_version);
@@ -928,9 +904,11 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			case FORMAT_REQUEST_METHOD:
 				http_method_append(b, r->http_method);
 				break;
+		  #if 0 /*(parsed and replaced at startup)*/
 			case FORMAT_PERCENT:
-				buffer_append_string_len(b, CONST_STR_LEN("%"));
+				buffer_append_char(b, '%');
 				break;
+		  #endif
 			case FORMAT_LOCAL_ADDR:
 				{
 					/* (perf: not using getsockname() and
@@ -955,60 +933,33 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				}
 				break;
 			case FORMAT_QUERY_STRING:
-				accesslog_append_escaped(b, &r->uri.query);
+				accesslog_append_escaped(b, BUF_PTR_LEN(&r->uri.query), esc);
 				break;
 			case FORMAT_URL:
 				{
 					const uint32_t len = buffer_clen(&r->target);
 					const char * const qmark = memchr(r->target.ptr, '?', len);
-					accesslog_append_escaped_str(b, r->target.ptr, qmark ? (uint32_t)(qmark - r->target.ptr) : len);
+					accesslog_append_escaped(b, r->target.ptr, qmark ? (uint32_t)(qmark - r->target.ptr) : len, esc);
 				}
 				break;
 			case FORMAT_CONNECTION_STATUS:
-				if (r->state == CON_STATE_RESPONSE_END) {
-					if (r->keep_alive <= 0) {
-						buffer_append_string_len(b, CONST_STR_LEN("-"));
-					} else {
-						buffer_append_string_len(b, CONST_STR_LEN("+"));
-					}
-				} else { /* CON_STATE_ERROR */
-					buffer_append_string_len(b, CONST_STR_LEN("X"));
-				}
+				buffer_append_char(b, (r->state == CON_STATE_RESPONSE_END)
+				                      ? r->keep_alive <= 0 ? '-' : '+'
+				                      : 'X'); /* CON_STATE_ERROR */
 				break;
 			case FORMAT_KEEPALIVE_COUNT:
 				if (con->request_count > 1) {
 					buffer_append_int(b, (intmax_t)(con->request_count-1));
 				} else {
-					buffer_append_string_len(b, CONST_STR_LEN("0"));
+					buffer_append_char(b, '0');
 				}
 				break;
 			case FORMAT_COOKIE:
-				if (NULL != (vb = http_header_request_get(r, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie")))) {
-					char *str = vb->ptr;
-					size_t len = buffer_clen(&f->string);
-					do {
-						while (*str == ' ' || *str == '\t') ++str;
-						if (0 == strncmp(str, f->string.ptr, len) && str[len] == '=') {
-							char *v = str+len+1;
-							for (str = v; *str != '\0' && *str != ';'; ++str) ;
-							if (str == v) break;
-							do { --str; } while (str > v && (*str == ' ' || *str == '\t'));
-							accesslog_append_escaped_str(b, v, str - v + 1);
-							break;
-						} else {
-							while (*str != ';' && *str != ' ' && *str != '\t' && *str != '\0') ++str;
-						}
-						while (*str == ' ' || *str == '\t') ++str;
-					} while (*str++ == ';');
-				}
+				accesslog_append_cookie(b, r, &f->string, esc);
 				break;
 			default:
 				break;
 			}
-			break;
-		default:
-			break;
-		}
 	}
 
 	return flush;
@@ -1026,7 +977,8 @@ REQUESTDONE_FUNC(log_access_write) {
       ? (buffer_clear(r->tmp_buf), r->tmp_buf)
       : &fdlog->b;
 
-    const int flush = log_access_record(r, b, p->conf.parsed_format);
+    const int flush =
+      log_access_record(r, b, p->conf.parsed_format, p->conf.escaping);
 
   #ifdef HAVE_SYSLOG_H
     if (p->conf.use_syslog) {
@@ -1036,7 +988,7 @@ REQUESTDONE_FUNC(log_access_write) {
     }
   #endif
 
-    buffer_append_string_len(b, CONST_STR_LEN("\n"));
+    buffer_append_char(b, '\n');
 
     if (flush || fdlog->mode == FDLOG_PIPE || buffer_clen(b) >= 8192) {
         const ssize_t wr = write_all(fdlog->fd, BUF_PTR_LEN(b));
