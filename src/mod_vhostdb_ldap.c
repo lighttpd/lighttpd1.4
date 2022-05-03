@@ -74,7 +74,7 @@ static void mod_vhostdb_dbconf_add_scheme (server *srv, buffer *host)
             while (*e!=' '&&*e!='\t'&&*e!='\r'&&*e!='\n'&&*e!=','&&*e!='\0')
                 ++e;
             if (!buffer_is_blank(tb))
-                buffer_append_string_len(tb, CONST_STR_LEN(","));
+                buffer_append_char(tb, ',');
             for (j = 0; j < sizeof(schemes)/sizeof(char *); ++j) {
                 if (buffer_eq_icase_ssn(b, schemes[j], strlen(schemes[j]))) {
                     break;

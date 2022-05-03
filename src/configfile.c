@@ -1263,7 +1263,7 @@ int config_finalize(server *srv, const buffer *default_server_tag) {
                 b->ptr[0] = (dc->cond == CONFIG_COND_SUFFIX) ? '\\' : '^';
             }
             if (dc->cond != CONFIG_COND_PREFIX)
-                buffer_append_string_len(b, CONST_STR_LEN("$"));
+                buffer_append_char(b, '$');
             dc->cond = CONFIG_COND_MATCH;
             /*(config_pcre_keyvalue())*/
             const int pcre_jit = config_feature_bool(srv, "server.pcre_jit", 1);
@@ -2344,7 +2344,7 @@ int config_remoteip_normalize(buffer * const b, buffer * const tb) {
 
     uint32_t len = buffer_clen(b); /*(save len before adding CIDR mask)*/
     if (nm_bits) {
-        buffer_append_string_len(b, CONST_STR_LEN("/"));
+        buffer_append_char(b, '/');
         buffer_append_int(b, (int)nm_bits);
     }
 

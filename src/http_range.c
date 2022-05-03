@@ -246,9 +246,9 @@ http_range_multi (request_st * const r,
         /* generate boundary-header including Content-Type and Content-Range */
         buffer_truncate(tb, prefix_len);
         buffer_append_int(tb, ranges[i]);
-        buffer_append_string_len(tb, CONST_STR_LEN("-"));
+        buffer_append_char(tb, '-');
         buffer_append_int(tb, ranges[i+1]);
-        buffer_append_string_len(tb, CONST_STR_LEN("/"));
+        buffer_append_char(tb, '/');
         buffer_append_int(tb, complete_length);
         buffer_append_string_len(tb, CONST_STR_LEN("\r\n\r\n"));
         if (c) /* single MEM_CHUNK in original cq; not using mem_min */

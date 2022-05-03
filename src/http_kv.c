@@ -212,7 +212,7 @@ void http_status_append(buffer * const b, const int status) {
         buffer_append_string_len(b, kv->value, kv->vlen);
     else {
         buffer_append_int(b, status);
-        buffer_append_string_len(b, CONST_STR_LEN(" "));
+        buffer_append_char(b, ' ');
     }
 }
 

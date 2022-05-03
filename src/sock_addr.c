@@ -331,12 +331,12 @@ int sock_addr_stringify_append_buffer(buffer * const restrict b, const sock_addr
     switch (saddr->plain.sa_family) {
       case AF_INET:
         if (0 != sock_addr_inet_ntop_append_buffer(b, saddr)) return -1;
-        buffer_append_string_len(b, CONST_STR_LEN(":"));
+        buffer_append_char(b, ':');
         buffer_append_int(b, ntohs(saddr->ipv4.sin_port));
         return 0;
      #ifdef HAVE_IPV6
       case AF_INET6:
-        buffer_append_string_len(b, CONST_STR_LEN("["));
+        buffer_append_char(b, '[');
         if (0 != sock_addr_inet_ntop_append_buffer(b, saddr)) {
           #ifdef __COVERITY__
             force_assert(buffer_clen(b) > 0); /*(appended "[")*/
@@ -411,9 +411,9 @@ int sock_addr_nameinfo_append_buffer(buffer * const restrict b, const sock_addr 
               "NOTICE: getnameinfo failed; using ip-address instead: %s",
               gai_strerror(rc));
 
-            buffer_append_string_len(b, CONST_STR_LEN("["));
+            buffer_append_char(b, '[');
             sock_addr_inet_ntop_append_buffer(b, saddr);
-            buffer_append_string_len(b, CONST_STR_LEN("]"));
+            buffer_append_char(b, ']');
         } else {
             buffer_append_string(b, hbuf);
         }

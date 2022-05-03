@@ -1224,12 +1224,12 @@ static int magnet_urlenc_query(lua_State *L) {
     for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
         if (lua_isstring(L, -2)) {
             if (!buffer_is_blank(b))
-                buffer_append_string_len(b, CONST_STR_LEN("&"));
+                buffer_append_char(b, '&');
             s = magnet_checkconstbuffer(L, -2);
             magnet_urlenc_query_part(b, s.ptr, s.len, 1);
             if (!lua_isnil(L, -1)) {
                 s = magnet_checkconstbuffer(L, -1);
-                buffer_append_string_len(b, CONST_STR_LEN("="));
+                buffer_append_char(b, '=');
                 magnet_urlenc_query_part(b, s.ptr, s.len, 0);
             }
         }
@@ -3066,7 +3066,7 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 			if (NULL == vb) {
 				vb =
 				  http_header_env_set_ptr(r,CONST_STR_LEN("_L_MAGNET_RESTART"));
-				buffer_append_string_len(vb, "0", 1);
+				buffer_append_char(vb, '0');
 			}
 			result = HANDLER_COMEBACK;
 			if (++*vb->ptr-'0' >= 10) {

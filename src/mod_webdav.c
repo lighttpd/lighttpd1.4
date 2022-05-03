@@ -2515,8 +2515,8 @@ webdav_delete_dir (const plugin_config * const pconf,
       #endif
 
         if (s_isdir) {
-            buffer_append_string_len(&dst->path, CONST_STR_LEN("/"));
-            buffer_append_string_len(&dst->rel_path, CONST_STR_LEN("/"));
+            buffer_append_char(&dst->path, '/');
+            buffer_append_char(&dst->rel_path, '/');
             multi_status |= webdav_delete_dir(pconf, dst, r, flags);
         }
         else {
@@ -2570,9 +2570,9 @@ webdav_linktmp_rename (const plugin_config * const pconf,
     buffer_append_str2(tmpb, BUF_PTR_LEN(dst),
                              CONST_STR_LEN("."));
     buffer_append_int(tmpb, (long)getpid());
-    buffer_append_string_len(tmpb, CONST_STR_LEN("."));
+    buffer_append_char(tmpb, '.');
     buffer_append_uint_hex_lc(tmpb, (uintptr_t)pconf); /*(stack/heap addr)*/
-    buffer_append_string_len(tmpb, CONST_STR_LEN("~"));
+    buffer_append_char(tmpb, '~');
     if (buffer_clen(tmpb) < PATH_MAX
         && 0 == linkat(AT_FDCWD, src->ptr, AT_FDCWD, tmpb->ptr, 0)) {
 
@@ -2637,9 +2637,9 @@ webdav_copytmp_rename (const plugin_config * const pconf,
     buffer_append_str2(tmpb, BUF_PTR_LEN(&dst->path),
                              CONST_STR_LEN("."));
     buffer_append_int(tmpb, (long)getpid());
-    buffer_append_string_len(tmpb, CONST_STR_LEN("."));
+    buffer_append_char(tmpb, '.');
     buffer_append_uint_hex_lc(tmpb, (uintptr_t)pconf); /*(stack/heap addr)*/
-    buffer_append_string_len(tmpb, CONST_STR_LEN("~"));
+    buffer_append_char(tmpb, '~');
     if (buffer_clen(tmpb) >= PATH_MAX)
         return 414; /* URI Too Long */
 
@@ -3218,10 +3218,10 @@ webdav_copymove_dir (const plugin_config * const pconf,
       #endif
 
         if (S_ISDIR(d_type)) { /* recursive call; depth first */
-            buffer_append_string_len(&src->path,     CONST_STR_LEN("/"));
-            buffer_append_string_len(&dst->path,     CONST_STR_LEN("/"));
-            buffer_append_string_len(&src->rel_path, CONST_STR_LEN("/"));
-            buffer_append_string_len(&dst->rel_path, CONST_STR_LEN("/"));
+            buffer_append_char(&src->path,     '/');
+            buffer_append_char(&dst->path,     '/');
+            buffer_append_char(&src->rel_path, '/');
+            buffer_append_char(&dst->rel_path, '/');
             status = webdav_copymove_dir(pconf, src, dst, r, flags);
             if (0 != status)
                multi_status = 1;
@@ -3743,8 +3743,8 @@ webdav_propfind_dir (webdav_propfind_bufs * const restrict pb)
         }
       #endif
         if (S_ISDIR(pb->st.st_mode)) {
-            buffer_append_string_len(&dst->path,     CONST_STR_LEN("/"));
-            buffer_append_string_len(&dst->rel_path, CONST_STR_LEN("/"));
+            buffer_append_char(&dst->path,     '/');
+            buffer_append_char(&dst->rel_path, '/');
         }
 
         if (S_ISDIR(pb->st.st_mode) && -1 == pb->depth)
@@ -4206,8 +4206,8 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
             /* set "Content-Location" instead of sending 308 redirect to dir */
             if (!http_response_redirect_to_directory(r, 0))
                 return HANDLER_FINISHED;
-            buffer_append_string_len(&r->physical.path,    CONST_STR_LEN("/"));
-            buffer_append_string_len(&r->physical.rel_path,CONST_STR_LEN("/"));
+            buffer_append_char(&r->physical.path,     '/');
+            buffer_append_char(&r->physical.rel_path, '/');
         }
     }
     else if (buffer_has_pathsep_suffix(&r->physical.path)) {
@@ -4412,12 +4412,12 @@ mod_webdav_delete (request_st * const r, const plugin_config * const pconf)
              * and r->physical.rel_path, set Content-Location in
              * response headers, and continue to serve the request */
           #else
-            buffer_append_string_len(&r->physical.path,    CONST_STR_LEN("/"));
-            buffer_append_string_len(&r->physical.rel_path,CONST_STR_LEN("/"));
+            buffer_append_char(&r->physical.path,     '/');
+            buffer_append_char(&r->physical.rel_path, '/');
            #if 0 /*(Content-Location not very useful to client after DELETE)*/
             /*(? should it be target or target_orig ?)*/
             /*(should be url-encoded path)*/
-            buffer_append_string_len(&r->target, CONST_STR_LEN("/"));
+            buffer_append_char(&r->target, '/');
             http_header_response_set(r, HTTP_HEADER_CONTENT_LOCATION,
                                      CONST_STR_LEN("Content-Location"),
                                      BUF_PTR_LEN(&r->target));
@@ -4916,12 +4916,12 @@ mod_webdav_put (request_st * const r, const plugin_config * const pconf)
     buffer_append_str2(tmpb, BUF_PTR_LEN(&r->physical.path),
                              CONST_STR_LEN("."));
     buffer_append_int(tmpb, (long)getpid());
-    buffer_append_string_len(tmpb, CONST_STR_LEN("."));
+    buffer_append_char(tmpb, '.');
     if (c->type == MEM_CHUNK)
         buffer_append_uint_hex_lc(tmpb, (uintptr_t)pconf); /*(stack/heap addr)*/
     else
         buffer_append_int(tmpb, (long)c->file.fd);
-    buffer_append_string_len(tmpb, CONST_STR_LEN("~"));
+    buffer_append_char(tmpb, '~');
 
     if (buffer_clen(tmpb) >= PATH_MAX) { /*(temp file path too long)*/
         http_status_set_error(r, 500); /* Internal Server Error */
@@ -5425,8 +5425,8 @@ mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
             /* set "Content-Location" instead of sending 308 redirect to dir */
             if (!http_response_redirect_to_directory(r, 0))
                 return HANDLER_FINISHED;
-            buffer_append_string_len(&r->physical.path,    CONST_STR_LEN("/"));
-            buffer_append_string_len(&r->physical.rel_path,CONST_STR_LEN("/"));
+            buffer_append_char(&r->physical.path,     '/');
+            buffer_append_char(&r->physical.rel_path, '/');
         }
     }
     else if (buffer_has_pathsep_suffix(&r->physical.path)) {

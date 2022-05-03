@@ -165,7 +165,7 @@ static void mod_authn_add_scheme (server *srv, buffer *host)
             while (*e!=' '&&*e!='\t'&&*e!='\r'&&*e!='\n'&&*e!=','&&*e!='\0')
                 ++e;
             if (!buffer_is_blank(tb))
-                buffer_append_string_len(tb, CONST_STR_LEN(","));
+                buffer_append_char(tb, ',');
             for (j = 0; j < sizeof(schemes)/sizeof(char *); ++j) {
                 if (buffer_eq_icase_ssn(b, schemes[j], strlen(schemes[j]))) {
                     break;
@@ -374,7 +374,7 @@ static void mod_authn_append_ldap_dn_escape(buffer * const filter, const buffer 
 
     if (b[0] == ' ') { /* || b[0] == '#' handled below for MS Active Directory*/
         /* escape leading ' ' */
-        buffer_append_string_len(filter, CONST_STR_LEN("\\"));
+        buffer_append_char(filter, '\\');
     }
 
     for (size_t i = 0; i < rlen; ++i) {
@@ -406,8 +406,8 @@ static void mod_authn_append_ldap_dn_escape(buffer * const filter, const buffer 
         }
 
         if (bs) {
-            buffer_append_string_len(filter, CONST_STR_LEN("\\"));
-            buffer_append_string_len(filter, b+i, 1);
+            buffer_append_char(filter, '\\');
+            buffer_append_char(filter, b[i]);
         }
         else {
             /* escape NUL ('\0') (and all UTF-8 chars with high bit set) */
@@ -422,7 +422,7 @@ static void mod_authn_append_ldap_dn_escape(buffer * const filter, const buffer 
     if (rlen > 1 && b[rlen-1] == ' ') {
         /* escape trailing ' ' */
         filter->ptr[buffer_clen(filter)-1] = '\\';
-        buffer_append_string_len(filter, CONST_STR_LEN(" "));
+        buffer_append_char(filter, ' ');
     }
 }
 
@@ -681,16 +681,16 @@ static handler_t mod_authn_ldap_memberOf(log_error_st *errh, plugin_config *s, c
     buffer *filter = buffer_init();
     handler_t rc = HANDLER_ERROR;
 
-    buffer_copy_string_len(filter, CONST_STR_LEN("("));
+    buffer_append_char(filter, '(');
     buffer_append_string_buffer(filter, s->auth_ldap_groupmember);
-    buffer_append_string_len(filter, CONST_STR_LEN("="));
+    buffer_append_char(filter, '=');
     if (buffer_is_equal_string(s->auth_ldap_groupmember,
                                CONST_STR_LEN("member"))) {
         buffer_append_string(filter, userdn);
     } else { /*(assume "memberUid"; consider validating in SETDEFAULTS_FUNC)*/
         mod_authn_append_ldap_filter_escape(filter, username);
     }
-    buffer_append_string_len(filter, CONST_STR_LEN(")"));
+    buffer_append_char(filter, ')');
 
     plugin_config_ldap * const ldc = s->ldc;
     for (size_t i = 0; i < groups->used; ++i) {

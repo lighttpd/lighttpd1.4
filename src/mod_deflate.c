@@ -1963,7 +1963,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 				/* modify ETag response header in-place to remove '"' and append '-label"' */
 				vb->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
 				buffer_append_string(vb, label);
-				buffer_append_string_len(vb, CONST_STR_LEN("\""));
+				buffer_append_char(vb, '"');
 				r->http_status = 304;
 			} else {
 				r->http_status = 412;
@@ -1992,7 +1992,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		/* modify ETag response header in-place to remove '"' and append '-label"' */
 		vb->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
 		buffer_append_string(vb, label);
-		buffer_append_string_len(vb, CONST_STR_LEN("\""));
+		buffer_append_char(vb, '"');
 	}
 
 	/* set Content-Encoding to show selected compression type */

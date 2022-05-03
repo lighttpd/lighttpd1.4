@@ -981,7 +981,7 @@ static void
 mod_auth_append_nonce (buffer *b, unix_time64_t cur_ts, const struct http_auth_require_t *require, int dalgo, int *rndptr)
 {
     buffer_append_uint_hex(b, (uintmax_t)cur_ts);
-    buffer_append_string_len(b, CONST_STR_LEN(":"));
+    buffer_append_char(b, ':');
     const buffer * const nonce_secret = require->nonce_secret;
     int rnd;
     if (NULL == nonce_secret)
@@ -991,7 +991,7 @@ mod_auth_append_nonce (buffer *b, unix_time64_t cur_ts, const struct http_auth_r
           ? (void)(rnd = *rndptr)
           : li_rand_pseudo_bytes((unsigned char *)&rnd, sizeof(rnd));
         buffer_append_uint_hex(b, (uintmax_t)rnd);
-        buffer_append_string_len(b, CONST_STR_LEN(":"));
+        buffer_append_char(b, ':');
     }
 
     size_t n;
@@ -1115,7 +1115,7 @@ mod_auth_digest_authentication_info (buffer *b, unix_time64_t cur_ts, const stru
     buffer_clear(b);
     buffer_append_string_len(b, CONST_STR_LEN("nextnonce=\""));
     mod_auth_append_nonce(b, cur_ts, require, dalgo, NULL);
-    buffer_append_string_len(b, CONST_STR_LEN("\""));
+    buffer_append_char(b, '"');
 }
 
 

@@ -849,7 +849,7 @@ int network_init(server *srv, int stdin_fd) {
                 buffer_copy_buffer(b, srv->srvconf.bindhost);
             /*(skip adding port if unix socket path)*/
             if (!b->ptr || (b->ptr[0] != '/' && b->ptr[0] != '\\')) {
-                buffer_append_string_len(b, CONST_STR_LEN(":"));
+                buffer_append_char(b, ':');
                 buffer_append_int(b, srv->srvconf.port);
             }
           #ifdef __COVERITY__

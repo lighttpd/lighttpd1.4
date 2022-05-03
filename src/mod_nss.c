@@ -2584,7 +2584,7 @@ https_add_ssl_client_verify_err (buffer * const b, unsigned int status)
     const char *s = PR_ErrorToName(status);
     if (s)
         buffer_append_string_len(b, s, strlen(s));
-    buffer_append_string_len(b, CONST_STR_LEN(":"));
+    buffer_append_char(b, ':');
     s = PR_ErrorToString(status, PR_LANGUAGE_I_DEFAULT);
     buffer_append_string_len(b, s, strlen(s));
 }

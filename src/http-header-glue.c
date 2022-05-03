@@ -91,7 +91,7 @@ int http_response_buffer_append_authority(request_st * const r, buffer * const o
 			}
 			if (0 == listen_port) listen_port = r->con->srv->srvconf.port;
 			if (default_port != listen_port) {
-				buffer_append_string_len(o, CONST_STR_LEN(":"));
+				buffer_append_char(o, ':');
 				buffer_append_int(o, listen_port);
 			}
 		}
@@ -124,7 +124,7 @@ int http_response_redirect_to_directory(request_st * const r, int status) {
 	buffer_copy_buffer(vb, o);
 	buffer_append_string_encoded(vb, BUF_PTR_LEN(&r->uri.path),
 	                             ENCODING_REL_URI);
-	buffer_append_string_len(vb, CONST_STR_LEN("/"));
+	buffer_append_char(vb, '/');
 	if (!buffer_is_blank(&r->uri.query))
 		buffer_append_str2(vb, CONST_STR_LEN("?"),
 		                       BUF_PTR_LEN(&r->uri.query));

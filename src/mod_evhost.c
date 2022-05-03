@@ -256,7 +256,8 @@ static void mod_evhost_parse_host(buffer *key, array *host, buffer *authority) {
 			if(*ptr == '.') {
 				if (ptr != colon - 1) {
 					/* is something between the dots */
-					buffer_copy_string_len(key, CONST_STR_LEN("%"));
+					buffer_clear(key);
+					buffer_append_char(key, '%');
 					buffer_append_int(key, i++);
 					array_set_key_value(host, BUF_PTR_LEN(key), ptr+1, colon-ptr-1);
 				}
@@ -266,7 +267,8 @@ static void mod_evhost_parse_host(buffer *key, array *host, buffer *authority) {
 
 		/* if the . is not the first character of the hostname */
 		if (colon != ptr) {
-			buffer_copy_string_len(key, CONST_STR_LEN("%"));
+			buffer_clear(key);
+			buffer_append_char(key, '%');
 			buffer_append_int(key, i /* ++ */);
 			array_set_key_value(host, BUF_PTR_LEN(key), ptr, colon-ptr);
 		}
@@ -284,7 +286,7 @@ static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, buffer
 
 			if (*(ptr+1) == '%') {
 				/* %% */
-				buffer_append_string_len(b, CONST_STR_LEN("%"));
+				buffer_append_char(b, '%');
 			} else if (*(ptr+1) == '_' ) {
 				/* %_ == full hostname */
 				char *colon = strchr(authority->ptr, ':');
@@ -303,7 +305,7 @@ static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, buffer
 						buffer_append_string_buffer(b, &ds->value);
 					} else {
 						if ((size_t)(ptr[4]-'0') <= buffer_clen(&ds->value)) {
-							buffer_append_string_len(b, ds->value.ptr+(ptr[4]-'0')-1, 1);
+							buffer_append_char(b, ds->value.ptr[(ptr[4]-'0')-1]);
 						}
 					}
 				} else {

@@ -506,7 +506,7 @@ static void http_header_remap_uri (buffer *b, size_t off, http_header_remap_opts
         else {
             alen = buffer_clen(b) - off;
             if (0 == alen) return; /*(empty authority, e.g. "http:///")*/
-            buffer_append_string_len(b, CONST_STR_LEN("/"));
+            buffer_append_char(b, '/');
         }
 
         /* remap authority (if configured) and set offset to url-path */
@@ -669,11 +669,11 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
             int ipv6 = (NULL != strchr(efor->ptr, ':'));
             ipv6
               ? buffer_append_string_len(b, CONST_STR_LEN("\"["))
-              : buffer_append_string_len(b, CONST_STR_LEN("\""));
+              : buffer_append_char(b, '"');
             buffer_append_string_backslash_escaped(b, BUF_PTR_LEN(efor));
             ipv6
               ? buffer_append_string_len(b, CONST_STR_LEN("]\""))
-              : buffer_append_string_len(b, CONST_STR_LEN("\""));
+              : buffer_append_char(b, '"');
         } else if (family == AF_INET) {
             /*(Note: if :port is added, then must be quoted-string:
              * e.g. for="...:port")*/
@@ -683,10 +683,10 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
                                   BUF_PTR_LEN(&con->dst_addr_buf),
                                   CONST_STR_LEN("]\""));
         } else {
-            buffer_append_string_len(b, CONST_STR_LEN("\""));
+            buffer_append_char(b, '"');
             buffer_append_string_backslash_escaped(
               b, BUF_PTR_LEN(&con->dst_addr_buf));
-            buffer_append_string_len(b, CONST_STR_LEN("\""));
+            buffer_append_char(b, '"');
         }
         semicolon = 1;
     }
@@ -699,7 +699,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
          *   INADDR_ANY or in6addr_any, but must omit optional :port
          *   from con->srv_socket->srv_token for consistency */
 
-        if (semicolon) buffer_append_string_len(b, CONST_STR_LEN(";"));
+        if (semicolon) buffer_append_char(b, ';');
         buffer_append_string_len(b, CONST_STR_LEN("by=\""));
       #ifdef HAVE_SYS_UN_H
         /* special-case: might need to encode unix domain socket path */
@@ -716,7 +716,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
                 sock_addr_stringify_append_buffer(b, &addr);
             }
         }
-        buffer_append_string_len(b, CONST_STR_LEN("\""));
+        buffer_append_char(b, '"');
         semicolon = 1;
     }
 
@@ -726,7 +726,7 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
           : NULL;
         /* expecting "http" or "https"
          * (not checking if quoted-string and encoding needed) */
-        if (semicolon) buffer_append_string_len(b, CONST_STR_LEN(";"));
+        if (semicolon) buffer_append_char(b, ';');
         if (NULL != eproto) {
             buffer_append_str2(b, CONST_STR_LEN("proto="), BUF_PTR_LEN(eproto));
         } else if (con->srv_socket->is_ssl) {
@@ -743,19 +743,19 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
           : NULL;
         if (NULL != ehost) {
             if (semicolon)
-                buffer_append_string_len(b, CONST_STR_LEN(";"));
+                buffer_append_char(b, ';');
             buffer_append_string_len(b, CONST_STR_LEN("host=\""));
             buffer_append_string_backslash_escaped(
               b, BUF_PTR_LEN(ehost));
-            buffer_append_string_len(b, CONST_STR_LEN("\""));
+            buffer_append_char(b, '"');
             semicolon = 1;
         } else if (r->http_host && !buffer_is_blank(r->http_host)) {
             if (semicolon)
-                buffer_append_string_len(b, CONST_STR_LEN(";"));
+                buffer_append_char(b, ';');
             buffer_append_string_len(b, CONST_STR_LEN("host=\""));
             buffer_append_string_backslash_escaped(
               b, BUF_PTR_LEN(r->http_host));
-            buffer_append_string_len(b, CONST_STR_LEN("\""));
+            buffer_append_char(b, '"');
             semicolon = 1;
         }
     }
@@ -765,11 +765,11 @@ static void proxy_set_Forwarded(connection * const con, request_st * const r, co
           http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
         if (NULL != remote_user) {
             if (semicolon)
-                buffer_append_string_len(b, CONST_STR_LEN(";"));
+                buffer_append_char(b, ';');
             buffer_append_string_len(b, CONST_STR_LEN("remote_user=\""));
             buffer_append_string_backslash_escaped(
               b, BUF_PTR_LEN(remote_user));
-            buffer_append_string_len(b, CONST_STR_LEN("\""));
+            buffer_append_char(b, '"');
             /*semicolon = 1;*/
         }
     }

@@ -335,11 +335,11 @@ static int mod_rrd_write_data(server *srv, plugin_data *p, rrd_config *s) {
                             BUF_PTR_LEN(s->path_rrd),
                             CONST_STR_LEN(" N:"));
     buffer_append_int(cmd, s->bytes_read);
-    buffer_append_string_len(cmd, CONST_STR_LEN(":"));
+    buffer_append_char(cmd, ':');
     buffer_append_int(cmd, s->bytes_written);
-    buffer_append_string_len(cmd, CONST_STR_LEN(":"));
+    buffer_append_char(cmd, ':');
     buffer_append_int(cmd, s->requests);
-    buffer_append_string_len(cmd, CONST_STR_LEN("\n"));
+    buffer_append_char(cmd, '\n');
 
     if (-1 == safe_write(p->write_fd, BUF_PTR_LEN(cmd))) {
         log_error(srv->errh, __FILE__, __LINE__, "rrdtool-write: failed");

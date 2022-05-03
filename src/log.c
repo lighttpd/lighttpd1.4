@@ -230,7 +230,7 @@ static void
 log_error_write (const log_error_st * const errh, buffer * const restrict b)
 {
     if (errh->mode != FDLOG_SYSLOG) { /* FDLOG_FD FDLOG_FILE FDLOG_PIPE */
-        buffer_append_string_len(b, CONST_STR_LEN("\n"));
+        buffer_append_char(b, '\n');
         write_all(errh->fd, BUF_PTR_LEN(b));
     }
     else {

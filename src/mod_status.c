@@ -177,7 +177,7 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
 
     if (r->reqbody_length) {
         buffer_append_int(b, r->reqbody_queue.bytes_in);
-        buffer_append_string_len(b, CONST_STR_LEN("/"));
+        buffer_append_char(b, '/');
         buffer_append_int(b, r->reqbody_length);
     }
     else
@@ -186,7 +186,7 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"int\">"));
 
     buffer_append_int(b, r->write_queue.bytes_out);
-    buffer_append_string_len(b, CONST_STR_LEN("/"));
+    buffer_append_char(b, '/');
     buffer_append_int(b, r->write_queue.bytes_in);
 
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
@@ -213,14 +213,14 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
         buffer_append_string_encoded(b, BUF_PTR_LEN(&r->uri.path), ENCODING_HTML);
 
     if (!buffer_is_blank(&r->uri.query)) {
-        buffer_append_string_len(b, CONST_STR_LEN("?"));
+        buffer_append_char(b, '?');
         buffer_append_string_encoded(b, BUF_PTR_LEN(&r->uri.query), ENCODING_HTML);
     }
 
     if (!buffer_is_blank(&r->target_orig)) {
         buffer_append_string_len(b, CONST_STR_LEN(" ("));
         buffer_append_string_encoded(b, BUF_PTR_LEN(&r->target_orig), ENCODING_HTML);
-        buffer_append_string_len(b, CONST_STR_LEN(")"));
+        buffer_append_char(b, ')');
     }
     buffer_append_string_len(b, CONST_STR_LEN("</td><td class=\"string\">"));
 
@@ -391,7 +391,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	if (!buffer_is_blank(r->server_name) && r->server_name != &r->uri.authority) {
 		buffer_append_string_len(b, CONST_STR_LEN(" ("));
 		buffer_append_string_encoded(b, BUF_PTR_LEN(r->server_name), ENCODING_HTML);
-		buffer_append_string_len(b, CONST_STR_LEN(")"));
+		buffer_append_char(b, ')');
 	}
 	buffer_append_string_len(b, CONST_STR_LEN("</td></tr>\n"
 	                                          "<tr><td>Uptime</td><td class=\"string\">"));
@@ -665,7 +665,7 @@ static handler_t mod_status_handle_server_statistics(request_st * const r) {
 		buffer_append_str2(b, BUF_PTR_LEN(&st->sorted[i]->key),
 		                      CONST_STR_LEN(": "));
 		buffer_append_int(b, ((data_integer *)st->sorted[i])->value);
-		buffer_append_string_len(b, CONST_STR_LEN("\n"));
+		buffer_append_char(b, '\n');
 	}
 	chunkqueue_append_buffer_commit(&r->write_queue);
 

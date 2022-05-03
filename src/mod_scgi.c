@@ -209,11 +209,11 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 		scgi_env_add(b, CONST_STR_LEN("SCGI"), CONST_STR_LEN("1"));
 		buffer_clear(tb);
 		buffer_append_int(tb, buffer_clen(b)-10);
-		buffer_append_string_len(tb, CONST_STR_LEN(":"));
+		buffer_append_char(tb, ':');
 		len = buffer_clen(tb);
 		offset = 10 - len;
 		memcpy(b->ptr+offset, tb->ptr, len);
-		buffer_append_string_len(b, CONST_STR_LEN(","));
+		buffer_append_char(b, ',');
 	} else { /* LI_PROTOCOL_UWSGI */
 		/* http://uwsgi-docs.readthedocs.io/en/latest/Protocol.html */
 		size_t len = buffer_clen(b)-10;

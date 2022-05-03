@@ -1120,14 +1120,14 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 
 			buffer_append_str2(tb, BUF_PTR_LEN(&ds->key), CONST_STR_LEN("="));
 			buffer_append_string_encoded(tb, BUF_PTR_LEN(&ds->value), ENCODING_MINIMAL_XML);
-			buffer_append_string_len(tb, CONST_STR_LEN("\n"));
+			buffer_append_char(tb, '\n');
 		}
 		for (i = 0; i < p->ssi_cgi_env->used; i++) {
 			data_string *ds = (data_string *)p->ssi_cgi_env->sorted[i];
 
 			buffer_append_str2(tb, BUF_PTR_LEN(&ds->key), CONST_STR_LEN("="));
 			buffer_append_string_encoded(tb, BUF_PTR_LEN(&ds->value), ENCODING_MINIMAL_XML);
-			buffer_append_string_len(tb, CONST_STR_LEN("\n"));
+			buffer_append_char(tb, '\n');
 		}
 		chunkqueue_append_mem(cq, BUF_PTR_LEN(tb));
 		break;

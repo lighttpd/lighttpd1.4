@@ -1858,7 +1858,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     if (NULL == s->priority_base) s->priority_base = "NORMAL";
     buffer_copy_string_len(b, s->priority_base, strlen(s->priority_base));
     if (!buffer_is_blank(&s->priority_str)) {
-        buffer_append_string_len(b, CONST_STR_LEN(":"));
+        buffer_append_char(b, ':');
         uint32_t len = buffer_clen(&s->priority_str);
         if (s->priority_str.ptr[len-1] == ':')
             --len; /* remove trailing ':' */
@@ -3421,9 +3421,9 @@ mod_gnutls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *c
             continue;
         }
 
-        buffer_append_string_len(plist, CONST_STR_LEN("+"));
+        buffer_append_char(plist, '+');
         buffer_append_string_len(plist, names[i+1], strlen(names[i+1]));
-        buffer_append_string_len(plist, CONST_STR_LEN(":"));
+        buffer_append_char(plist, ':');
     }
 
     return 1;

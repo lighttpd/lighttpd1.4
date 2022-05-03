@@ -694,7 +694,7 @@ ajp13_expand_headers (buffer * const b, handler_ctx * const hctx, uint32_t plen)
         ptr += 2;
         if (plen < len+1) break;
         plen -= len+1; /* include -1 for ending '\0' */
-        buffer_append_string_len(b, " ", 1);
+        buffer_append_char(b, ' ');
         if (len) buffer_append_string_len(b, (char *)ptr, len);
         ptr += len+1;
 

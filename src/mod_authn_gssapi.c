@@ -167,7 +167,7 @@ static void mod_authn_gssapi_log_gss_error(log_error_st *errh, const char *file,
     gss_buffer_desc status_string;
 
     buffer_copy_string(msg, func);
-    buffer_append_string_len(msg, CONST_STR_LEN("("));
+    buffer_append_char(msg, '(');
     if (extra) buffer_append_string(msg, extra);
     buffer_append_string_len(msg, CONST_STR_LEN("):"));
 
@@ -185,7 +185,7 @@ static void mod_authn_gssapi_log_gss_error(log_error_st *errh, const char *file,
         if (!GSS_ERROR(maj_stat)) {
             buffer_append_string_len(msg, CONST_STR_LEN(" ("));
             buffer_append_string(msg, status_string.value);
-            buffer_append_string_len(msg, CONST_STR_LEN(")"));
+            buffer_append_char(msg, ')');
             gss_release_buffer(&min_stat, &status_string);
         }
     } while (!GSS_ERROR(maj_stat) && msg_ctx != 0);

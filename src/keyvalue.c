@@ -322,10 +322,10 @@ static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const 
             if (qs && !buffer_is_unset(qs)) {
                 if (NULL != strchr(b->ptr, '?')) {
                     if (!buffer_is_blank(qs))
-                        buffer_append_string_len(b, CONST_STR_LEN("&"));
+                        buffer_append_char(b, '&');
                 }
                 else {
-                    buffer_append_string_len(b, CONST_STR_LEN("?"));
+                    buffer_append_char(b, '?');
                 }
                 burl_append(b, BUF_PTR_LEN(qs), flags);
             }

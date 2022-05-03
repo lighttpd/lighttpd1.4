@@ -292,7 +292,7 @@ int http_request_host_normalize(buffer * const b, const int scheme_port) {
     } while (0);
 
     if (0 != port && port != scheme_port) {
-        buffer_append_string_len(b, CONST_STR_LEN(":"));
+        buffer_append_char(b, ':');
         buffer_append_int(b, (int)port);
     }
 

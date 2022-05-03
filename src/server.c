@@ -1564,7 +1564,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		buffer * const tb = srv->tmp_buf;
 		buffer_clear(tb);
 		buffer_append_int(tb, srv->pid);
-		buffer_append_string_len(tb, CONST_STR_LEN("\n"));
+		buffer_append_char(tb, '\n');
 		if (-1 == write_all(pid_fd, BUF_PTR_LEN(tb))) {
 			log_perror(srv->errh, __FILE__, __LINE__, "Couldn't write pid file");
 			close(pid_fd);

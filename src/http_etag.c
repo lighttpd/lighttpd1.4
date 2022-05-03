@@ -53,13 +53,16 @@ http_etag_remix (buffer * const etag, const char * const str, const uint32_t len
         h = dekhash(etag->ptr+1, elen-2, h);
         buffer_truncate(etag, 1);
     }
-    else
-        buffer_copy_string_len(etag, CONST_STR_LEN("\""));
+    else {
+        buffer_clear(etag);
+        buffer_append_char(etag, '"');
+    }
   #else
-    buffer_copy_string_len(etag, CONST_STR_LEN("\""));
+    /*buffer_clear(etag);*//*(currently always cleared in http_etag_create())*/
+    buffer_append_char(etag, '"');
   #endif
     buffer_append_int(etag, h);
-    buffer_append_string_len(etag, CONST_STR_LEN("\""));
+    buffer_append_char(etag, '"');
 }
 
 void
