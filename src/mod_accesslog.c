@@ -30,31 +30,30 @@ typedef struct {
 	enum {
 			FORMAT_UNSET,
 			FORMAT_LITERAL,
+			FORMAT_HEADER,
+			FORMAT_RESPONSE_HEADER,
+			FORMAT_ENV,
 			FORMAT_TIMESTAMP,
+			FORMAT_TIME_USED,
+			FORMAT_REMOTE_ADDR,
+			FORMAT_HTTP_HOST,
 			FORMAT_REQUEST_LINE,
 			FORMAT_STATUS,
 			FORMAT_BYTES_OUT_NO_HEADER,
-			FORMAT_HEADER,
-
-			FORMAT_REMOTE_ADDR,
-			FORMAT_LOCAL_ADDR,
-			FORMAT_COOKIE,
-			FORMAT_ENV,
-			FORMAT_FILENAME,
+			FORMAT_BYTES_OUT,
+			FORMAT_BYTES_IN,
+			FORMAT_SERVER_NAME,
 			FORMAT_REQUEST_PROTOCOL,
 			FORMAT_REQUEST_METHOD,
-			FORMAT_SERVER_PORT,
-			FORMAT_QUERY_STRING,
-			FORMAT_TIME_USED,
-			FORMAT_URL,
-			FORMAT_SERVER_NAME,
-			FORMAT_HTTP_HOST,
-			FORMAT_CONNECTION_STATUS,
-			FORMAT_BYTES_IN,
-			FORMAT_BYTES_OUT,
+			FORMAT_COOKIE,
 
+			FORMAT_SERVER_PORT,
+			FORMAT_LOCAL_ADDR,
 			FORMAT_KEEPALIVE_COUNT,
-			FORMAT_RESPONSE_HEADER,
+			FORMAT_URL,
+			FORMAT_QUERY_STRING,
+			FORMAT_FILENAME,
+			FORMAT_CONNECTION_STATUS,
 			FORMAT_NOTE,        /* same as FORMAT_ENV */
 			FORMAT_REMOTE_HOST, /* same as FORMAT_REMOTE_ADDR */
 			FORMAT_REMOTE_USER, /* redirected to FORMAT_ENV */
@@ -806,8 +805,82 @@ accesslog_append_time (buffer * const b, const request_st * const r,
 			return flush;
 }
 
+__attribute_cold__
+__attribute_noinline__
+static void
+log_access_record_cold (buffer * const b, const request_st * const r,
+                        const format_field * const f, const int esc)
+{
+    connection * const con = r->con;
+    switch (f->field) {
+      case FORMAT_SERVER_PORT:
+        if (f->opt & FORMAT_FLAG_PORT_REMOTE) {
+            buffer_append_int(b, sock_addr_get_port(&con->dst_addr));
+            break;
+        }
+        /* else if (f->opt & FORMAT_FLAG_PORT_LOCAL) *//*(default)*/
+        __attribute_fallthrough__
+      case FORMAT_LOCAL_ADDR:
+        {
+            const server_socket * const srv_sock = con->srv_socket;
+            const buffer * const srv_token = srv_sock->srv_token;
+            const uint32_t colon = srv_sock->srv_token_colon;
+            if (f->field == FORMAT_LOCAL_ADDR)
+                /* (perf: not using getsockname() and
+                 *  sock_addr_cache_inet_ntop_copy_buffer())
+                 * (still useful if admin has configured explicit listen IPs) */
+                buffer_append_string_len(b, srv_token->ptr, colon);
+            else { /* FORMAT_SERVER_PORT */
+                const uint32_t tlen = buffer_clen(srv_token);
+                if (colon < tlen) /*(colon != tlen)*/
+                    buffer_append_string_len(b, srv_token->ptr+colon+1,
+                                             tlen - (colon+1));
+            }
+        }
+        break;
+      case FORMAT_KEEPALIVE_COUNT:
+        if (con->request_count > 1)
+            buffer_append_int(b, (intmax_t)(con->request_count-1));
+        else
+            buffer_append_char(b, '0');
+        break;
+      case FORMAT_URL:
+        {
+            const uint32_t len = buffer_clen(&r->target);
+            const char * const qmark = memchr(r->target.ptr, '?', len);
+            accesslog_append_escaped(b, r->target.ptr,
+                                     qmark ? (uint32_t)(qmark - r->target.ptr)
+                                           : len, esc);
+        }
+        break;
+      case FORMAT_QUERY_STRING:
+        accesslog_append_escaped(b, BUF_PTR_LEN(&r->uri.query), esc);
+        break;
+      case FORMAT_FILENAME:
+        accesslog_append_buffer(b, &r->physical.path, esc);
+        break;
+      case FORMAT_CONNECTION_STATUS:
+        buffer_append_char(b, (r->state == CON_STATE_RESPONSE_END)
+                              ? r->keep_alive <= 0 ? '-' : '+'
+                              : 'X'); /* CON_STATE_ERROR */
+        break;
+     #if 0 /*(parsed and replaced at startup)*/
+      case FORMAT_REMOTE_IDENT:
+        /* ident */
+        buffer_append_char(b, '-');
+        break;
+     #endif
+     #if 0 /*(parsed and replaced at startup)*/
+      case FORMAT_PERCENT:
+        buffer_append_char(b, '%');
+        break;
+     #endif
+      default:
+        break;
+    }
+}
+
 static int log_access_record (const request_st * const r, buffer * const b, format_fields * const parsed_format, const int esc) {
-	const connection * const con = r->con;
 	const buffer *vb;
 	unix_timespec64_t ts = { 0, 0 };
 	int flush = 0;
@@ -816,6 +889,27 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			switch(f->field) {
 			case FORMAT_LITERAL:
 				buffer_append_string_buffer(b, &f->string);
+				break;
+			case FORMAT_HEADER:
+				vb = http_header_request_get(r, f->opt, BUF_PTR_LEN(&f->string));
+				accesslog_append_buffer(b, vb, esc);
+				break;
+			case FORMAT_RESPONSE_HEADER:
+				vb = http_header_response_get(r, f->opt, BUF_PTR_LEN(&f->string));
+				accesslog_append_buffer(b, vb, esc);
+				break;
+		  #if 0 /*(parsed and redirected at startup to FORMAT_ENV "REMOTE_USER")*/
+			case FORMAT_REMOTE_USER:
+				vb = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
+				accesslog_append_buffer(b, vb, esc);
+				break;
+		  #endif
+		  #if 0 /*(parsed and redirected at startup to FORMAT_ENV)*/
+			/*case FORMAT_NOTE:*/
+		  #endif
+			case FORMAT_ENV:
+				vb = http_header_env_get(r, BUF_PTR_LEN(&f->string));
+				accesslog_append_buffer(b, vb, esc);
 				break;
 			case FORMAT_TIMESTAMP:
 		  #if 0 /*(parsed and redirected at startup to FORMAT_TIME_USED)*/
@@ -828,20 +922,11 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			/*case FORMAT_REMOTE_HOST:*/
 		  #endif
 			case FORMAT_REMOTE_ADDR:
-				buffer_append_string_buffer(b, &con->dst_addr_buf);
+				buffer_append_string_buffer(b, &r->con->dst_addr_buf);
 				break;
-		  #if 0 /*(parsed and replaced at startup)*/
-			case FORMAT_REMOTE_IDENT:
-				/* ident */
-				buffer_append_char(b, '-');
+			case FORMAT_HTTP_HOST:
+				accesslog_append_buffer(b, &r->uri.authority, esc);
 				break;
-		  #endif
-		  #if 0 /*(parsed and redirected at startup to FORMAT_ENV "REMOTE_USER")*/
-			case FORMAT_REMOTE_USER:
-				vb = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
-				accesslog_append_buffer(b, vb, esc);
-				break;
-		  #endif
 			case FORMAT_REQUEST_LINE:
 				/*(attempt to reconstruct request line)*/
 				http_method_append(b, r->http_method);
@@ -853,28 +938,9 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			case FORMAT_STATUS:
 				buffer_append_int(b, r->http_status);
 				break;
-
 			case FORMAT_BYTES_OUT_NO_HEADER:
 				accesslog_append_bytes(b, http_request_stats_bytes_out(r),
 				                       r->resp_header_len);
-				break;
-			case FORMAT_HEADER:
-				vb = http_header_request_get(r, f->opt, BUF_PTR_LEN(&f->string));
-				accesslog_append_buffer(b, vb, esc);
-				break;
-			case FORMAT_RESPONSE_HEADER:
-				vb = http_header_response_get(r, f->opt, BUF_PTR_LEN(&f->string));
-				accesslog_append_buffer(b, vb, esc);
-				break;
-		  #if 0 /*(parsed and redirected at startup to FORMAT_ENV)*/
-			/*case FORMAT_NOTE:*/
-		  #endif
-			case FORMAT_ENV:
-				vb = http_header_env_get(r, BUF_PTR_LEN(&f->string));
-				accesslog_append_buffer(b, vb, esc);
-				break;
-			case FORMAT_FILENAME:
-				accesslog_append_buffer(b, &r->physical.path, esc);
 				break;
 			case FORMAT_BYTES_OUT:
 				accesslog_append_bytes(b, http_request_stats_bytes_out(r), 0);
@@ -885,69 +951,17 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			case FORMAT_SERVER_NAME:
 				accesslog_append_buffer(b, r->server_name, esc);
 				break;
-			case FORMAT_HTTP_HOST:
-				accesslog_append_buffer(b, &r->uri.authority, esc);
-				break;
 			case FORMAT_REQUEST_PROTOCOL:
 				http_version_append(b, r->http_version);
 				break;
 			case FORMAT_REQUEST_METHOD:
 				http_method_append(b, r->http_method);
 				break;
-		  #if 0 /*(parsed and replaced at startup)*/
-			case FORMAT_PERCENT:
-				buffer_append_char(b, '%');
-				break;
-		  #endif
-			case FORMAT_LOCAL_ADDR:
-				{
-					/* (perf: not using getsockname() and
-					 *  sock_addr_cache_inet_ntop_copy_buffer())
-					 * (still useful if admin has configured explicit listen IPs) */
-					const server_socket * const srv_sock = con->srv_socket;
-					buffer_append_string_len(b, srv_sock->srv_token->ptr,
-					                         srv_sock->srv_token_colon);
-				}
-				break;
-			case FORMAT_SERVER_PORT:
-				if (f->opt & FORMAT_FLAG_PORT_REMOTE) {
-					buffer_append_int(b, sock_addr_get_port(&con->dst_addr));
-				} else { /* if (f->opt & FORMAT_FLAG_PORT_LOCAL) *//*(default)*/
-					const server_socket * const srv_sock = con->srv_socket;
-					const buffer * const srv_token = srv_sock->srv_token;
-					const size_t tlen = buffer_clen(srv_token);
-					size_t colon = srv_sock->srv_token_colon;
-					if (colon < tlen) /*(colon != tlen)*/
-						buffer_append_string_len(b, srv_token->ptr+colon+1,
-						                         tlen - (colon+1));
-				}
-				break;
-			case FORMAT_QUERY_STRING:
-				accesslog_append_escaped(b, BUF_PTR_LEN(&r->uri.query), esc);
-				break;
-			case FORMAT_URL:
-				{
-					const uint32_t len = buffer_clen(&r->target);
-					const char * const qmark = memchr(r->target.ptr, '?', len);
-					accesslog_append_escaped(b, r->target.ptr, qmark ? (uint32_t)(qmark - r->target.ptr) : len, esc);
-				}
-				break;
-			case FORMAT_CONNECTION_STATUS:
-				buffer_append_char(b, (r->state == CON_STATE_RESPONSE_END)
-				                      ? r->keep_alive <= 0 ? '-' : '+'
-				                      : 'X'); /* CON_STATE_ERROR */
-				break;
-			case FORMAT_KEEPALIVE_COUNT:
-				if (con->request_count > 1) {
-					buffer_append_int(b, (intmax_t)(con->request_count-1));
-				} else {
-					buffer_append_char(b, '0');
-				}
-				break;
 			case FORMAT_COOKIE:
 				accesslog_append_cookie(b, r, &f->string, esc);
 				break;
 			default:
+				log_access_record_cold(b, r, f, esc);
 				break;
 			}
 	}
