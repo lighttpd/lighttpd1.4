@@ -36,9 +36,7 @@ struct connection {
 	chunkqueue *write_queue;      /* a large queue for low-level write ( HTTP response ) [ file, mem ] */
 	chunkqueue *read_queue;       /* a small queue for low-level read ( HTTP request ) [ mem ] */
 
-	off_t bytes_written;          /* used by mod_accesslog, mod_rrd */
-	off_t bytes_written_cur_second; /* used by mod_accesslog, mod_rrd */
-	off_t bytes_read;             /* used by mod_accesslog, mod_rrd */
+	off_t bytes_written_cur_second; /* used by rate-limiting and mod_status */
 
 	int (* network_write)(struct connection *con, chunkqueue *cq, off_t max_bytes);
 	int (* network_read)(struct connection *con, chunkqueue *cq, off_t max_bytes);

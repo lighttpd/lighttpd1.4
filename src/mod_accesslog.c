@@ -8,6 +8,7 @@
 #include "log.h"
 #include "buffer.h"
 #include "http_header.h"
+#include "response.h"
 #include "sock_addr.h"
 
 #include "plugin.h"
@@ -854,13 +855,9 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				break;
 
 			case FORMAT_BYTES_OUT_NO_HEADER:
-			{
-				off_t bytes = r->http_version <= HTTP_VERSION_1_1
-				  ? con->bytes_written - r->bytes_written_ckpt
-				  : r->write_queue.bytes_out;
-				accesslog_append_bytes(b, bytes, r->resp_header_len);
+				accesslog_append_bytes(b, http_request_stats_bytes_out(r),
+				                       r->resp_header_len);
 				break;
-			}
 			case FORMAT_HEADER:
 				vb = http_header_request_get(r, f->opt, BUF_PTR_LEN(&f->string));
 				accesslog_append_buffer(b, vb, esc);
@@ -880,21 +877,11 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				accesslog_append_buffer(b, &r->physical.path, esc);
 				break;
 			case FORMAT_BYTES_OUT:
-			{
-				off_t bytes = r->http_version <= HTTP_VERSION_1_1
-				  ? con->bytes_written - r->bytes_written_ckpt
-				  : r->write_queue.bytes_out;
-				accesslog_append_bytes(b, bytes, 0);
+				accesslog_append_bytes(b, http_request_stats_bytes_out(r), 0);
 				break;
-			}
 			case FORMAT_BYTES_IN:
-			{
-				off_t bytes = r->http_version <= HTTP_VERSION_1_1
-				  ? con->bytes_read - r->bytes_read_ckpt
-				  : r->read_queue.bytes_in;
-				accesslog_append_bytes(b, bytes, 0);
+				accesslog_append_bytes(b, http_request_stats_bytes_in(r), 0);
 				break;
-			}
 			case FORMAT_SERVER_NAME:
 				accesslog_append_buffer(b, r->server_name, esc);
 				break;

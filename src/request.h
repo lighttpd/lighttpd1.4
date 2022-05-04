@@ -245,6 +245,12 @@ int64_t li_restricted_strtoint64 (const char *v, const uint32_t vlen, const char
     ? "k"                             \
     : http_request_state_short((con)->request.state))
 
+#define http_request_stats_bytes_in(r) \
+   ((r)->read_queue.bytes_out - (r)->bytes_read_ckpt)
+
+#define http_request_stats_bytes_out(r) \
+   ((r)->write_queue.bytes_out - (r)->bytes_written_ckpt)
+
 __attribute_pure__
 const char * http_request_state_short (request_state_t state);
 

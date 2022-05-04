@@ -3,6 +3,7 @@
 #include "base.h"
 #include "fdevent.h"
 #include "log.h"
+#include "response.h"
 
 #include "plugin.h"
 #include <sys/types.h>
@@ -422,17 +423,11 @@ REQUESTDONE_FUNC(mod_rrd_account) {
 
     mod_rrd_patch_config(r, p);
     rrd_config * const rrd = p->conf.rrd;
-    if (NULL == rrd) return HANDLER_GO_ON;
-    ++rrd->requests;
-    if (r->http_version <= HTTP_VERSION_1_1) {
-        rrd->bytes_written += (r->con->bytes_written - r->bytes_written_ckpt);
-        rrd->bytes_read    += (r->con->bytes_read    - r->bytes_read_ckpt);
+    if (NULL != rrd) {
+        ++rrd->requests;
+        rrd->bytes_written += http_request_stats_bytes_out(r);
+        rrd->bytes_read    += http_request_stats_bytes_in(r);
     }
-    else {
-        rrd->bytes_written += r->write_queue.bytes_out;
-        rrd->bytes_read    += r->read_queue.bytes_in;
-    }
-
     return HANDLER_GO_ON;
 }
 

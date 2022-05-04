@@ -2846,7 +2846,6 @@ h2_retire_con (request_st * const h2r, connection * const con)
             con->network_write(con, cq, len);
             /*(optional accounting)*/
             written = cq->bytes_out - written;
-            con->bytes_written += written;
             con->bytes_written_cur_second += written;
             if (h2r->conf.global_bytes_per_second_cnt_ptr)
                 *(h2r->conf.global_bytes_per_second_cnt_ptr) += written;

@@ -207,8 +207,9 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 		request_reset(r);
 		con->is_readable = 1; /* potentially trigger optimistic read */
 		/*(accounting used by mod_accesslog for HTTP/1.0 and HTTP/1.1)*/
-		r->bytes_read_ckpt = con->bytes_read;
-		r->bytes_written_ckpt = con->bytes_written;
+		/*(overloaded to detect next bytes recv'd on keep-alive con)*/
+		r->bytes_read_ckpt = r->read_queue.bytes_in;
+		r->bytes_written_ckpt = r->write_queue.bytes_out;
 #if 0
 		r->start_hp.tv_sec = log_epoch_secs;
 		con->read_idle_ts = log_monotonic_secs;
@@ -314,7 +315,6 @@ connection_write_chunkqueue (connection * const con, chunkqueue * const restrict
   #endif
 
     written = cq->bytes_out - written;
-    con->bytes_written += written;
     con->bytes_written_cur_second += written;
     request_st * const r = &con->request;
     if (r->conf.global_bytes_per_second_cnt_ptr)
@@ -336,7 +336,6 @@ connection_write_1xx_info (request_st * const r, connection * const con)
     int rc = con->network_write(con, cq, MAX_WRITE_LIMIT);
 
     written = cq->bytes_out - written;
-    con->bytes_written += written;
     con->bytes_written_cur_second += written;
     if (r->conf.global_bytes_per_second_cnt_ptr)
         *(r->conf.global_bytes_per_second_cnt_ptr) += written;
@@ -353,6 +352,9 @@ connection_write_1xx_info (request_st * const r, connection * const con)
              * Note: sending of remainder of 1xx might be delayed
              * until next set of response headers are sent */
             con->write_queue = chunkqueue_init(NULL);
+            /* (copy bytes for accounting purposes in event of failure) */
+            con->write_queue->bytes_in = cq->bytes_out; /*(yes, bytes_out)*/
+            con->write_queue->bytes_out = cq->bytes_out;
             chunkqueue_append_chunkqueue(con->write_queue, cq);
         }
     }
@@ -559,10 +561,7 @@ static void connection_reset(connection *con) {
 	r->bytes_read_ckpt = 0;
 	r->bytes_written_ckpt = 0;
 	con->is_readable = 1;
-
-	con->bytes_written = 0;
 	con->bytes_written_cur_second = 0;
-	con->bytes_read = 0;
 }
 
 
@@ -656,7 +655,7 @@ static int connection_handle_read_state(connection * const con)  {
 
     if (con->request_count > 1) {
         discard_blank = 1;
-        if (con->bytes_read == r->bytes_read_ckpt) {
+        if (cq->bytes_in == r->bytes_read_ckpt) {
             keepalive_request_start = 1;
             if (NULL != c) { /* !chunkqueue_is_empty(cq)) */
                 pipelined_request_start = 1;
@@ -729,7 +728,7 @@ static int connection_handle_read_state(connection * const con)  {
     } while ((c = connection_read_header_more(con, cq, c, clen)));
 
     if (keepalive_request_start) {
-        if (con->bytes_read > r->bytes_read_ckpt) {
+        if (cq->bytes_in > r->bytes_read_ckpt) {
             /* update r->start_hp.tv_sec timestamp when first byte of
              * next request is received on a keep-alive connection */
             r->start_hp.tv_sec = log_epoch_secs;
@@ -751,6 +750,9 @@ static int connection_handle_read_state(connection * const con)  {
     char * const hdrs = c->mem->ptr + hoff[1];
 
     if (con->request_count > 1) {
+        /* adjust r->bytes_read_ckpt for http_request_stats_bytes_in()
+         * (headers_len is still in cq; marked written, bytes_out incr below) */
+        r->bytes_read_ckpt = cq->bytes_out;
         /* clear buffers which may have been kept for reporting on keep-alive,
          * (e.g. mod_status) */
         request_reset_ex(r);
@@ -781,6 +783,7 @@ static int connection_handle_read_state(connection * const con)  {
         /*(Upgrade: h2c over cleartext does not have SNI; no COMP_HTTP_HOST)*/
         r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
                                 | (1 << COMP_HTTP_REMOTE_IP);
+        r->bytes_read_ckpt = 0;
         /*connection_handle_write(r, con);*//* defer write to network */
         return 0;
     }
@@ -881,18 +884,9 @@ static int connection_read_cq(connection *con, chunkqueue *cq, off_t max_bytes) 
         if (len != (ssize_t)mem_len) {
             /* we got less then expected, wait for the next fd-event */
             con->is_readable = 0;
-
-            if (len > 0) {
-                con->bytes_read += len;
-                return 0;
-            }
-            else if (0 == len) /* other end close connection -> KEEP-ALIVE */
-                return -2;     /* (pipelining) */
-            else
-                return connection_read_cq_err(con);
+            return len > 0 ? 0 : 0 == len ? -2 : connection_read_cq_err(con);
         }
 
-        con->bytes_read += len;
         max_bytes -= len;
 
         int frd;
@@ -1505,7 +1499,8 @@ static void connection_check_timeout (connection * const con, const unix_time64_
                   "increase server.max-write-idle",
                   con->dst_addr_buf.ptr,
                   BUFFER_INTLEN_PTR(&r->target),
-                  (long long)con->bytes_written, (int)r->conf.max_write_idle);
+                  (long long)con->write_queue->bytes_out,
+                  (int)r->conf.max_write_idle);
             }
             connection_set_state_error(r, CON_STATE_ERROR);
             changed = 1;
@@ -1519,8 +1514,9 @@ static void connection_check_timeout (connection * const con, const unix_time64_
     if (0 == (t_diff = cur_ts - con->connection_start)) t_diff = 1;
 
     if (con->traffic_limit_reached &&
-        (r->conf.bytes_per_second == 0 ||
-         con->bytes_written < (off_t)r->conf.bytes_per_second * t_diff)) {
+        (r->conf.bytes_per_second == 0
+         || con->write_queue->bytes_out
+              < (off_t)r->conf.bytes_per_second * t_diff)) {
         /* enable connection again */
         con->traffic_limit_reached = 0;
 

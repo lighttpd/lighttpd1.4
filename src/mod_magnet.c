@@ -1601,19 +1601,13 @@ magnet_req_item_get (lua_State *L)
     switch (klen) {
       case 8:
         if (0 == memcmp(k, "bytes_in", 8)) {
-            off_t bytes = r->http_version <= HTTP_VERSION_1_1
-              ? r->con->bytes_read - r->bytes_read_ckpt
-              : r->read_queue.bytes_in;
-            lua_pushinteger(L, (lua_Integer)bytes);
+            lua_pushinteger(L, (lua_Integer)http_request_stats_bytes_in(r));
             return 1;
         }
         break;
       case 9:
         if (0 == memcmp(k, "bytes_out", 9)) {
-            off_t bytes = r->http_version <= HTTP_VERSION_1_1
-              ? r->con->bytes_written - r->bytes_written_ckpt
-              : r->write_queue.bytes_out;
-            lua_pushinteger(L, (lua_Integer)bytes);
+            lua_pushinteger(L, (lua_Integer)http_request_stats_bytes_out(r));
             return 1;
         }
         if (0 == memcmp(k, "stream_id", 9)) {

@@ -2364,12 +2364,7 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
         mem = chunkqueue_get_memory(cq, &mem_len);
 
         len = mbedtls_ssl_read(&hctx->ssl, (unsigned char *)mem, mem_len);
-        if (len > 0) {
-            chunkqueue_use_memory(cq, ckpt, len);
-            con->bytes_read += len;
-        } else {
-            chunkqueue_use_memory(cq, ckpt, 0);
-        }
+        chunkqueue_use_memory(cq, ckpt, len > 0 ? len : 0);
     } while (len > 0
              && mbedtls_ssl_check_pending(&hctx->ssl));
 
