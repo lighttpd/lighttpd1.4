@@ -183,7 +183,7 @@ configparser_simplify_regex(buffer * const b)
     /* translate simple regex anchored with ^ and/or $ to simpler match types
      * (note: skips if regex contains any '\\', even if some could be removed,
      *  though we special-case "\.ext"; skips if other '.' found in str)
-     * (currently assumes CONFIG_COND_NOMATCH input, not CONFIG_COND_NOMATCH) */
+     * (currently assumes CONFIG_COND_MATCH input, not CONFIG_COND_NOMATCH) */
     uint32_t len = buffer_clen(b);
     config_cond_t cond = CONFIG_COND_MATCH;
     int off = 0;
