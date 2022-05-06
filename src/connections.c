@@ -158,7 +158,6 @@ static void connection_handle_shutdown(connection *con) {
 	plugins_call_handle_connection_shut_wr(con);
 
 	connection_reset(con);
-	++con->srv->con_closed;
 
 	/* close the connection */
 	if (con->fd >= 0
@@ -189,8 +188,6 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 	/* call request_done hook if http_status set (e.g. to log request) */
 	/* (even if error, connection dropped, as long as http_status is set) */
 	if (r->http_status) plugins_call_handle_request_done(r);
-
-	if (r->state != CON_STATE_ERROR) ++con->srv->con_written;
 
 	if (r->reqbody_length != r->reqbody_queue.bytes_in
 	    || r->state == CON_STATE_ERROR) {
@@ -915,7 +912,6 @@ connection *connection_accepted(server *srv, const server_socket *srv_socket, so
 #if 0
 		log_error(srv->errh, __FILE__, __LINE__, "accepted() %d", cnt);
 #endif
-		srv->con_opened++;
 
 		con = connections_get_new_connection(srv);
 

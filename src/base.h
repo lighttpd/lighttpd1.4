@@ -153,12 +153,6 @@ struct server {
 	/* buffers */
 	buffer *tmp_buf;
 
-	/* counters */
-	int con_opened;
-	int con_read;
-	int con_written;
-	int con_closed;
-
 	int max_fds;    /* max possible fds */
 	int max_fds_lowat;/* low  watermark */
 	int max_fds_hiwat;/* high watermark */
