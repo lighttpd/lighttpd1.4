@@ -1703,6 +1703,7 @@ typedef struct {
 		MAGNET_ENV_REQUEST_SERVER_ADDR,
 		MAGNET_ENV_REQUEST_SERVER_PORT,
 		MAGNET_ENV_REQUEST_PROTOCOL,
+		MAGNET_ENV_REQUEST_SERVER_NAME,
 		MAGNET_ENV_REQUEST_STAGE,
 
 		/* remove after lighttpd 1.4.65 */
@@ -1735,6 +1736,7 @@ static const magnet_env_t magnet_env[] = {
     { CONST_STR_LEN("request.server-addr"),  MAGNET_ENV_REQUEST_SERVER_ADDR },
     { CONST_STR_LEN("request.server-port"),  MAGNET_ENV_REQUEST_SERVER_PORT },
     { CONST_STR_LEN("request.protocol"),     MAGNET_ENV_REQUEST_PROTOCOL },
+    { CONST_STR_LEN("request.server-name"),  MAGNET_ENV_REQUEST_SERVER_NAME },
     { CONST_STR_LEN("request.stage"),        MAGNET_ENV_REQUEST_STAGE },
 
     { CONST_STR_LEN("response.http-status"), MAGNET_ENV_RESPONSE_HTTP_STATUS },
@@ -1849,6 +1851,9 @@ magnet_env_get_buffer_by_id (request_st * const r, const int id)
 	case MAGNET_ENV_REQUEST_PROTOCOL:
 		http_version_append(dest, r->http_version);
 		break;
+	case MAGNET_ENV_REQUEST_SERVER_NAME:
+		buffer_copy_buffer(dest, r->server_name);
+		break;
 	case MAGNET_ENV_REQUEST_STAGE:
 		if (http_request_state_is_keep_alive(r))
 			buffer_append_string_len(dest, CONST_STR_LEN("keep-alive"));
@@ -1892,7 +1897,7 @@ static int magnet_env_get_id(const char * const key, const size_t klen) {
     int i; /* magnet_env[] scan offset */
     switch (*key) {
       case 'r': /* request.* or response.* */
-        i = klen > 7 && key[7] == '.' ? 9 : 20;
+        i = klen > 7 && key[7] == '.' ? 9 : 21;
         break;
       case 'u': /* uri.* */
       default:
@@ -1959,6 +1964,18 @@ magnet_env_set_raddr_by_id (lua_State *L, request_st * const r, const int id,
     return 0;
 }
 
+#if 0
+__attribute_cold__
+static int
+magnet_env_set_server_name (request_st * const r,
+                            const const_buffer * const val)
+{
+    r->server_name = &r->server_name_buf;
+    buffer_copy_string_len(&r->server_name_buf, val->ptr, val->len);
+    return 0;
+}
+#endif
+
 static int magnet_env_set(lua_State *L) {
     size_t klen;
     const char * const key = luaL_checklstring(L, 2, &klen);
@@ -1975,6 +1992,10 @@ static int magnet_env_set(lua_State *L) {
       case MAGNET_ENV_REQUEST_REMOTE_ADDR:
       case MAGNET_ENV_REQUEST_REMOTE_PORT:
         return magnet_env_set_raddr_by_id(L, r, env_id, &val);
+     #if 0 /*(leave read-only for now; change attempts silently ignored)*/
+      case MAGNET_ENV_REQUEST_SERVER_NAME:
+        return magnet_env_set_server_name(r, &val);
+     #endif
       /*case MAGNET_ENV_REQUEST_STAGE:*//*(change attempts silently ignored)*/
       /* remove after lighttpd 1.4.65 */
       /*case MAGNET_ENV_RESPONSE_HTTP_STATUS:*/
