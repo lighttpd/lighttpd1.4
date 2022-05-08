@@ -422,7 +422,9 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
                 break;
               case 4: /* accesslog.escaping */
                 /* quick parse: 0 == "default", 1 == "json" */
-                cpv->v.u = (0 == strcmp(cpv->v.b->ptr, "json"));
+                cpv->v.u = (0 == strcmp(cpv->v.b->ptr, "json"))
+                  ? BS_ESCAPE_JSON
+                  : BS_ESCAPE_DEFAULT;
                 cpv->vtype = T_CONFIG_LOCAL;
                 break;
               default:/* should not happen */
@@ -582,60 +584,7 @@ TRIGGER_FUNC(log_access_periodic_flush) {
     return HANDLER_GO_ON;
 }
 
-static void
-accesslog_append_escaped (buffer * const restrict dest,
-                          const char * restrict str,
-                          const uint32_t len, const int esc)
-{
-    /* replaces non-printable chars with escaped string
-     * default: \xHH where HH is the hex representation of the byte
-     * json: \u00HH where HH is the hex representation of the byte */
-    /* exceptions: " => \", \ => \\, whitespace chars => \n \t etc. */
-    buffer_string_prepare_append(dest, len);
-    for (const char * const end = str+len; str < end; ++str) {
-        unsigned int c;
-        const char * const ptr = str;
-        do {
-            c = *(const unsigned char *)str;
-        } while (c >= ' ' && c <= '~' && c != '"' && c != '\\' && ++str < end);
-        if (str - ptr) buffer_append_string_len(dest, ptr, str - ptr);
-
-        if (str == end)
-            return;
-
-        char *s;
-        switch (c) {
-          case '\a':case '\b':case '\t':case '\n':case '\v':case '\f':case '\r':
-            c = "0000000abtnvfr"[c];
-            __attribute_fallthrough__
-          case '"': case '\\':
-            s = buffer_extend(dest, 2);
-            s[0] = '\\';
-            s[1] = c;
-            break;
-          default:
-            if (!esc) {
-                /* non printable char => \xHH */
-                s = buffer_extend(dest, 4);
-                s[0] = '\\';
-                s[1] = 'x';
-                s += 2;
-            }
-            else { /* json */
-                /*(technically do not have to escape DEL (\127) or higher)*/
-                s = buffer_extend(dest, 6);
-                s[0] = '\\';
-                s[1] = 'u';
-                s[2] = '0';
-                s[3] = '0';
-                s += 4;
-            }
-            s[0] = "0123456789ABCDEF"[c >> 4];
-            s[1] = "0123456789ABCDEF"[c & 0xF];
-            break;
-        }
-    }
-}
+#define accesslog_append_escaped buffer_append_bs_escaped
 
 static void
 accesslog_append_buffer (buffer * const restrict dest,
@@ -880,7 +829,7 @@ log_access_record_cold (buffer * const b, const request_st * const r,
     }
 }
 
-static int log_access_record (const request_st * const r, buffer * const b, format_fields * const parsed_format, const int esc) {
+static int log_access_record (const request_st * const r, buffer * const b, format_fields * const parsed_format, const buffer_bs_escape_t esc) {
 	const buffer *vb;
 	unix_timespec64_t ts = { 0, 0 };
 	int flush = 0;
