@@ -664,8 +664,9 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 
 	/* count to-be-encoded-characters */
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
-		if ((*ds < 0x20) /* control character */
-				|| (*ds >= 0x7f)) { /* DEL + non-ASCII characters */
+		if (__builtin_expect( (*ds >= ' ' && *ds <= '~'), 1))
+			d_len++;
+		else { /* CTLs or non-ASCII characters */
 			switch (*ds) {
 			case '\t':
 			case '\r':
@@ -676,8 +677,6 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 				d_len += 4; /* \xCC */
 				break;
 			}
-		} else {
-			d_len++;
 		}
 	}
 
@@ -689,8 +688,9 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 	}
 
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
-		if ((*ds < 0x20) /* control character */
-				|| (*ds >= 0x7f)) { /* DEL + non-ASCII characters */
+		if (__builtin_expect( (*ds >= ' ' && *ds <= '~'), 1))
+			d[d_len++] = *ds;
+		else { /* CTLs or non-ASCII characters */
 			d[d_len++] = '\\';
 			switch (*ds) {
 			case '\t':
@@ -704,12 +704,10 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 				break;
 			default:
 				d[d_len++] = 'x';
-				d[d_len++] = hex_chars_lc[((*ds) >> 4) & 0x0F];
+				d[d_len++] = hex_chars_lc[(*ds) >> 4];
 				d[d_len++] = hex_chars_lc[(*ds) & 0x0F];
 				break;
 			}
-		} else {
-			d[d_len++] = *ds;
 		}
 	}
 }
