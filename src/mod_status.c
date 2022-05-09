@@ -176,7 +176,9 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
                           CONST_STR_LEN("</td><td class=\"int\">"));
 
     if (r->reqbody_length) {
-        buffer_append_int(b, r->reqbody_queue.bytes_in);
+        buffer_append_int(b, (r->http_version <= HTTP_VERSION_1_1 || r->h2id)
+                             ? r->reqbody_queue.bytes_in
+                             : http_request_stats_bytes_in(r));
         buffer_append_char(b, '/');
         buffer_append_int(b, r->reqbody_length);
     }
@@ -238,14 +240,14 @@ static void mod_status_html_rtable (request_st * const rq, const server * const 
     for (const connection *con = srv->conns; con; con = con->next) {
         const request_st * const r = &con->request;
         h2con * const h2c = con->h2;
-        if (NULL == h2c) { /*(r->http_status <= HTTP_VERSION_1_1)*/
+        { /*(r->http_version <= HTTP_VERSION_1_1 or HTTP/2 stream id 0)*/
             if (buffer_string_space(b) < 4096) {
                 http_chunk_append_mem(rq, BUF_PTR_LEN(b));
                 buffer_clear(b);
             }
             mod_status_html_rtable_r(b, r, con, cur_ts);
         }
-        else {
+        if (NULL != h2c) {
             for (uint32_t j = 0, rused = h2c->rused; j < rused; ++j) {
                 if (buffer_string_space(b) < 4096) {
                     http_chunk_append_mem(rq, BUF_PTR_LEN(b));
