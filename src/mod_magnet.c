@@ -1048,6 +1048,127 @@ static int magnet_quotedenc(lua_State *L) {
     return 1;
 }
 
+/*(future: might move to buffer.c:buffer_append_bs_unescaped())*/
+static void
+magnet_buffer_append_bsdec (buffer * const restrict b,
+                            const char * restrict s, const size_t len)
+{
+    /* decode backslash escapes */
+    /*(caller must check result for decoded '\0', if necessary)*/
+    char *d = buffer_string_prepare_append(b, len); /*(upper-bound len)*/
+    for (const char * const end = s+len; s < end; ++s) {
+        const char * const ptr = s;
+        while (__builtin_expect( (*s != '\\'), 1) && ++s < end) ;
+        if (s - ptr) {
+            memcpy(d, ptr, (size_t)(s - ptr));
+            d += (size_t)(s - ptr);
+        }
+
+        if (s == end)
+            break;
+
+        int c;
+        switch ((c = ++s != end ? *s : '\\')) { /*(preserve stray '\\' at end)*/
+          case '"': case '\\':
+          default:
+            break;
+          case 'x':
+            if (s+3 <= end) {
+                unsigned char hi = hex2int(((unsigned char *)s)[1]);
+                unsigned char lo = hex2int(((unsigned char *)s)[2]);
+                if (0xFF != hi && 0xFF != lo) {
+                    c = (hi << 4) | lo;
+                    s += 2;
+                }
+            }
+            break;
+          case 'a':case 'b':case 't':case 'n':case 'v':case 'f':case 'r':
+            c = "\a\bcde\fghijklm\nopq\rstu\vwxyz"[c-'a'];
+            break;
+          case 'u':
+            if (s+5 <= end) {
+                unsigned char hi = hex2int(((unsigned char *)s)[3]);
+                unsigned char lo = hex2int(((unsigned char *)s)[4]);
+                if (0xFF == hi || 0xFF == lo)
+                    break;
+                if (__builtin_expect( (s[1] != '0'), 0)
+                    || __builtin_expect( (s[2] != '0'), 0)) {
+                    unsigned char hhi = hex2int(((unsigned char *)s)[1]);
+                    unsigned char hlo = hex2int(((unsigned char *)s)[2]);
+                    if (0xFF == hhi || 0xFF == hlo)
+                        break;
+                    *d++ = (hhi << 4) | hlo;
+                }
+                c = (hi << 4) | lo;
+                s += 4;
+            }
+            break;
+          case '0': case '1': case '2': case '3':
+            if (s+3 <= end
+                /*&& ((unsigned char *)s)[0] - '0' < 4*//* 0-3 */
+                && ((unsigned char *)s)[1] - '0' < 8    /* 0-7 */
+                && ((unsigned char *)s)[2] - '0' < 8) { /* 0-7 */
+                c = ((s[0]-'0') << 6) | ((s[1]-'0') << 3) | (s[2]-'0');
+                s += 2;
+            }
+            else if (*s == '0')
+                c = '\0'; /*(special-case "\\0" not part of octal "\\ooo")*/
+            break;
+        }
+        *d++ = c;
+    }
+    buffer_truncate(b, d - b->ptr);
+}
+
+static int magnet_bsdec(lua_State *L) {
+    if (lua_isnoneornil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    const char *ptr = s.ptr;
+    size_t len = s.len;
+    if (ptr[0] == '"' && ptr[len-1] == '"') {
+        /*(ignore double-quotes ('"') surrounding string for convenience)*/
+        ++ptr;
+        len -= 2;
+    }
+    buffer * const b = magnet_tmpbuf_acquire(L);
+    magnet_buffer_append_bsdec(b, ptr, len);
+    lua_pushlstring(L, BUF_PTR_LEN(b));
+    magnet_tmpbuf_release(b);
+    return 1;
+}
+
+static int magnet_bsenc(lua_State *L, const buffer_bs_escape_t esc) {
+    if (lua_isnoneornil(L, -1)) {
+        lua_pushlstring(L, "", 0);
+        return 1;
+    }
+    const_buffer s = magnet_checkconstbuffer(L, -1);
+    if (0 == s.len) {
+        lua_pushvalue(L, -1);
+        return 1;
+    }
+    buffer * const b = magnet_tmpbuf_acquire(L);
+    buffer_append_bs_escaped(b, s.ptr, s.len, esc);
+    lua_pushlstring(L, BUF_PTR_LEN(b));
+    magnet_tmpbuf_release(b);
+    return 1;
+}
+
+static int magnet_bsenc_default(lua_State *L) {
+    return magnet_bsenc(L, BS_ESCAPE_DEFAULT);
+}
+
+static int magnet_bsenc_json(lua_State *L) {
+    return magnet_bsenc(L, BS_ESCAPE_JSON);
+}
+
 static int magnet_xmlenc(lua_State *L) {
     if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
@@ -2873,6 +2994,9 @@ magnet_init_lighty_table (lua_State * const L, request_st **rr,
      ,{ "readdir",          magnet_readdir } /* dir walk */
      ,{ "quoteddec",        magnet_quoteddec } /* quoted-string decode */
      ,{ "quotedenc",        magnet_quotedenc } /* quoted-string encode */
+     ,{ "bsdec",            magnet_bsdec } /* backspace-escape decode */
+     ,{ "bsenc",            magnet_bsenc_default } /* backspace-escape encode */
+     ,{ "bsenc_json",       magnet_bsenc_json } /* backspace-escape encode json */
      ,{ NULL, NULL }
     };
 
