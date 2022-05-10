@@ -1260,7 +1260,7 @@ static void mod_dirlisting_content_type (request_st * const r, const buffer * co
     if (NULL == encoding)
         buffer_copy_string_len(vb, CONST_STR_LEN("text/html"));
     else
-        buffer_append_str2(vb, CONST_STR_LEN("text/html; charset="),
+        buffer_append_str2(vb, CONST_STR_LEN("text/html;charset="),
                                BUF_PTR_LEN(encoding));
 }
 

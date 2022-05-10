@@ -9,7 +9,7 @@ use strict;
 my $verbose = 0;
 foreach (@ARGV) { $verbose = 1 if ($_ eq "-v"); }
 
-# text/* subtypes to serve as "text/...; charset=utf-8"
+# text/* subtypes to serve as "text/...;charset=utf-8"
 # text/html IS NOT INCLUDED: html has its own method for defining charset
 #   (<meta>), but the standards specify that content-type in HTTP wins over
 #   the setting in the html document.
@@ -147,7 +147,7 @@ sub add {
 sub print_type {
 	my ($extension, $mimetype) = @_;
 	if ($mimetype =~ /^text\/(.*)$/) {
-		$mimetype .= "; charset=utf-8" if $text_utf8{$1};
+		$mimetype .= ";charset=utf-8" if $text_utf8{$1};
 	}
 
 	print "\t\"${extension}\" => \"${mimetype}\",\n";

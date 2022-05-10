@@ -794,7 +794,7 @@ webdav_xml_doctype (buffer * const b, request_st * const r)
 {
     http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
       CONST_STR_LEN("Content-Type"),
-      CONST_STR_LEN("application/xml; charset=\"utf-8\""));
+      CONST_STR_LEN("application/xml;charset=utf-8"));
 
     buffer_copy_string_len(b, CONST_STR_LEN(
       "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"));
@@ -3432,7 +3432,7 @@ webdav_propfind_live_props (const webdav_propfind_bufs * const restrict pb,
          *   in [RFC2616], Section 4.2. Server implementors SHOULD strip
          *   LWS from these values before using as WebDAV property
          *   values.
-         * e.g. application/xml;charset="utf-8"
+         * e.g. application/xml;charset=utf-8
          *      instead of: application/xml; charset="utf-8"
          * (documentation-only; no check is done here to remove LWS)
          */
@@ -5598,7 +5598,7 @@ mod_webdav_lock (request_st * const r, const plugin_config * const pconf)
      * Accept: * / *\r\n
      * Depth: 0\r\n
      * Timeout: Second-600\r\n
-     * Content-Type: text/xml; charset=\"utf-8\"\r\n
+     * Content-Type: text/xml;charset=utf-8\r\n
      * Content-Length: 229\r\n
      * Connection: keep-alive\r\n
      * Host: 192.168.178.23:1025\r\n
