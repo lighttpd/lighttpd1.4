@@ -15,7 +15,6 @@ typedef gw_handler_ctx   handler_ctx;
 #include "http_chunk.h"
 #include "log.h"
 #include "request.h"
-#include "status_counter.h"
 
 #include "compat/fastcgi.h"
 
@@ -296,7 +295,7 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 	}
 	fcgi_stdin_append(hctx);
 
-	status_counter_inc(CONST_STR_LEN("fastcgi.requests"));
+	plugin_stats_inc("fastcgi.requests");
 	return HANDLER_GO_ON;
 }
 

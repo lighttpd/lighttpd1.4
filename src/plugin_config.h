@@ -193,9 +193,8 @@ int32_t config_feature_int (const server *srv, const char *feature, int32_t defa
 
 
 /**
- * The status array can carry all the status information you want
- * the key to the array is <module-prefix>.<name>
- * and the values are counters
+ * plugin statistics
+ * convention: key is <module-prefix>.<name>, value is counter
  *
  * example:
  *   fastcgi.backends        = 10
@@ -206,6 +205,21 @@ int32_t config_feature_int (const server *srv, const char *feature, int32_t defa
  *   fastcgi.backend.<key>.disconnects = ...
  */
 extern array plugin_stats;
+
+#define plugin_stats_get_ptr(s, len) \
+        array_get_int_ptr(&plugin_stats, (s), (len))
+
+#define plugin_stats_incr(s, len) \
+        (++(*array_get_int_ptr(&plugin_stats, (s), (len))))
+
+#define plugin_stats_inc(s) \
+        plugin_stats_incr((s), sizeof(s)-1)
+
+#define plugin_stats_decr(s, len) \
+        (--(*array_get_int_ptr(&plugin_stats, (s), (len))))
+
+#define plugin_stats_set(s, len, val) \
+        (*array_get_int_ptr(&plugin_stats, (s), (len)) = (val))
 
 
 #endif

@@ -421,7 +421,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	sys-crypto.h sys-crypto-md.h \
 	sys-endian.h sys-mmap.h sys-setjmp.h \
 	sys-socket.h sys-strings.h sys-time.h \
-	sock_addr.h status_counter.h \
+	sock_addr.h \
 	mod_auth_api.h \
 	mod_magnet_cache.h \
 	mod_vhostdb_api.h \

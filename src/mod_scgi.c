@@ -14,7 +14,6 @@ typedef gw_handler_ctx   handler_ctx;
 #include "buffer.h"
 #include "http_cgi.h"
 #include "log.h"
-#include "status_counter.h"
 
 enum { LI_PROTOCOL_SCGI, LI_PROTOCOL_UWSGI };
 
@@ -245,7 +244,7 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 			hctx->wb_reqlen = -hctx->wb_reqlen;
 	}
 
-	status_counter_inc(CONST_STR_LEN("scgi.requests"));
+	plugin_stats_inc("scgi.requests");
 	return HANDLER_GO_ON;
 }
 

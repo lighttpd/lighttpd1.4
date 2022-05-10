@@ -29,7 +29,6 @@ typedef gw_handler_ctx   handler_ctx;
 #include "http_header.h"
 #include "http_kv.h"
 #include "log.h"
-#include "status_counter.h"
 
 #define AJP13_MAX_PACKET_SIZE 8192
 
@@ -644,7 +643,7 @@ ajp13_create_env (handler_ctx * const hctx)
         ajp13_stdin_append_n(hctx, AJP13_MAX_PACKET_SIZE-4);
         hctx->request_id = 0; /* overloaded value; see ajp13_stdin_append_n() */
 
-        status_counter_inc(CONST_STR_LEN("ajp13.requests"));
+        plugin_stats_inc("ajp13.requests");
         return HANDLER_GO_ON;
     } while (0);
 

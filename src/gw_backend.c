@@ -40,8 +40,6 @@
 
 
 
-#include "status_counter.h"
-
 __attribute_noinline__
 static int * gw_status_get_counter(gw_host *host, gw_proc *proc, const char *tag, size_t tlen) {
     /*(At the cost of some memory, could prepare strings for host and for proc
@@ -70,7 +68,7 @@ static int * gw_status_get_counter(gw_host *host, gw_proc *proc, const char *tag
     llen += tlen;
     label[llen] = '\0';
 
-    return status_counter_get_counter(label, llen);
+    return plugin_stats_get_ptr(label, llen);
 }
 
 static void gw_proc_tag_inc(gw_host *host, gw_proc *proc, const char *tag, size_t len) {
@@ -117,7 +115,7 @@ static void gw_status_init_host(gw_host *host) {
       gw_status_get_counter(host, NULL, CONST_STR_LEN(".load"));
     *host->stats_load = 0;
     host->stats_global_active =
-      status_counter_get_counter(CONST_STR_LEN("gw.active-requests"));
+      plugin_stats_get_ptr("gw.active-requests",sizeof("gw.active-requests")-1);
 }
 
 

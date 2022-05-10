@@ -18,7 +18,6 @@ typedef gw_handler_ctx   handler_ctx;
 #include "array.h"
 #include "buffer.h"
 #include "log.h"
-#include "status_counter.h"
 
 /**
  *
@@ -136,7 +135,7 @@ static handler_t sockproxy_create_env_connect(handler_ctx *hctx) {
 	gw_set_transparent(hctx);
 	http_response_upgrade_read_body_unknown(r);
 
-	status_counter_inc(CONST_STR_LEN("sockproxy.requests"));
+	plugin_stats_inc("sockproxy.requests");
 	return HANDLER_GO_ON;
 }
 

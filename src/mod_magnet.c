@@ -21,7 +21,6 @@
 #include "mod_magnet_cache.h"
 #include "sock_addr.h"
 #include "stat_cache.h"
-#include "status_counter.h"
 
 #include <dirent.h>
 #include <stdlib.h>
@@ -1689,27 +1688,20 @@ static int magnet_resphdr_pairs(lua_State *L) {
     return magnet_array_pairs(L, &r->resp_headers);
 }
 
-static int magnet_status_get(lua_State *L) {
-	/* __index: param 1 is the (empty) table the value was not found in */
-	const_buffer key = magnet_checkconstbuffer(L, 2);
-	int *i = status_counter_get_counter(key.ptr, key.len);
-	lua_pushinteger(L, (lua_Integer)*i);
-
-	return 1;
+static int magnet_plugin_stats_get(lua_State *L) {
+    const_buffer k = magnet_checkconstbuffer(L, 2);
+    lua_pushinteger(L, (lua_Integer)*plugin_stats_get_ptr(k.ptr, k.len));
+    return 1;
 }
 
-static int magnet_status_set(lua_State *L) {
-	/* __newindex: param 1 is the (empty) table the value is supposed to be set in */
-	const_buffer key = magnet_checkconstbuffer(L, 2);
-	int counter = (int) luaL_checkinteger(L, 3);
-
-	status_counter_set(key.ptr, key.len, counter);
-
-	return 0;
+static int magnet_plugin_stats_set(lua_State *L) {
+    const_buffer k = magnet_checkconstbuffer(L, 2);
+    plugin_stats_set(k.ptr, k.len, luaL_checkinteger(L, 3));
+    return 0;
 }
 
-static int magnet_status_pairs(lua_State *L) {
-	return magnet_array_pairs(L, &plugin_stats);
+static int magnet_plugin_stats_pairs(lua_State *L) {
+    return magnet_array_pairs(L, &plugin_stats);
 }
 
 
@@ -2831,11 +2823,11 @@ magnet_plugin_stats_table (lua_State * const L)
 {
     lua_createtable(L, 0, 0); /* {}                              (sp += 1) */
     lua_createtable(L, 0, 4); /* metatable for plugin_stats      (sp += 1) */
-    lua_pushcfunction(L, magnet_status_get);                  /* (sp += 1) */
+    lua_pushcfunction(L, magnet_plugin_stats_get);            /* (sp += 1) */
     lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_status_set);                  /* (sp += 1) */
+    lua_pushcfunction(L, magnet_plugin_stats_set);            /* (sp += 1) */
     lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-    lua_pushcfunction(L, magnet_status_pairs);                /* (sp += 1) */
+    lua_pushcfunction(L, magnet_plugin_stats_pairs);          /* (sp += 1) */
     lua_setfield(L, -2, "__pairs");                           /* (sp -= 1) */
     lua_pushboolean(L, 0);                                    /* (sp += 1) */
     lua_setfield(L, -2, "__metatable"); /* protect metatable     (sp -= 1) */

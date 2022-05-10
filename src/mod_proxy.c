@@ -12,7 +12,6 @@
 #include "http_header.h"
 #include "log.h"
 #include "sock_addr.h"
-#include "status_counter.h"
 
 /**
  *
@@ -1036,7 +1035,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			chunkqueue_append_chunkqueue(&hctx->gw.wb, &r->reqbody_queue);
 	}
 
-	status_counter_inc(CONST_STR_LEN("proxy.requests"));
+	plugin_stats_inc("proxy.requests");
 	return HANDLER_GO_ON;
 }
 
@@ -1049,7 +1048,7 @@ static handler_t proxy_create_env_connect(gw_handler_ctx *gwhctx) {
 	gw_set_transparent(&hctx->gw);
 	http_response_upgrade_read_body_unknown(r);
 
-	status_counter_inc(CONST_STR_LEN("proxy.requests"));
+	plugin_stats_inc("proxy.requests");
 	return HANDLER_GO_ON;
 }
 
