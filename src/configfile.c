@@ -1196,7 +1196,9 @@ int config_finalize(server *srv, const buffer *default_server_tag) {
 
     /* settings might be enabled during plugins_call_set_defaults() */
     p->defaults.high_precision_timestamps =
-      srv->srvconf.high_precision_timestamps;
+      srv->srvconf.high_precision_timestamps =
+        config_feature_bool(srv, "server.metrics-high-precision",
+                            srv->srvconf.high_precision_timestamps);
 
     /* configure default server_tag if not set
      * (if configured to blank, unset server_tag)*/
