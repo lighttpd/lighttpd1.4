@@ -55,6 +55,9 @@
 
 #include <wolfssl/options.h>
 #include <wolfssl/ssl.h>
+#ifdef HAVE_OCSP
+#include <wolfssl/ocsp.h>
+#endif
 
 static char global_err_buf[WOLFSSL_MAX_ERROR_SZ];
 #undef ERR_error_string
@@ -617,7 +620,7 @@ mod_wolfssl_cert_is_active (const buffer *b)
     if (NULL == crt) return 0;
     const WOLFSSL_ASN1_TIME *notBefore = wolfSSL_X509_get_notBefore(crt);
     const WOLFSSL_ASN1_TIME *notAfter  = wolfSSL_X509_get_notAfter(crt);
-    const time_t now = (time_t)log_epoch_secs;
+    time_t now = (time_t)log_epoch_secs;
     /*(wolfSSL_X509_cmp_time() might return 0 (WOLFSSL_FAILURE) on failure
      * to convert WOLFSSL_ASN1_TIME to struct tm; should not happen but WTH?
      * Also might return -337 (GETTIME_ERROR))*/
@@ -1374,6 +1377,11 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 #define d2i_OCSP_RESPONSE_bio     wolfSSL_d2i_OCSP_RESPONSE_bio
 #define d2i_OCSP_RESPONSE         wolfSSL_d2i_OCSP_RESPONSE
 #define i2d_OCSP_RESPONSE         wolfSSL_i2d_OCSP_RESPONSE
+#define OCSP_response_get1_basic  wolfSSL_OCSP_response_get1_basic
+#define OCSP_single_get0_status   wolfSSL_OCSP_single_get0_status
+#define OCSP_resp_get0            wolfSSL_OCSP_resp_get0
+#define OCSP_BASICRESP            WOLFSSL_OCSP_BASICRESP
+#define OCSP_BASICRESP_free       wolfSSL_OCSP_BASICRESP_free
 
 static buffer *
 mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
