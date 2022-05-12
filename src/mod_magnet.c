@@ -2530,7 +2530,11 @@ magnet_request_userdata_method (lua_State * const L, request_st ** const rr, con
 {
     /*(meta is name of cached metatable; meta must start w/ "li." prefix)*/
     *(request_st ***)lua_newuserdata0(L, sizeof(request_st **)) = rr;
+  #ifdef __COVERITY__ /* shut up coverity; read the comment below */
+    if (luaL_newmetatable(L, meta)) { }
+  #else
     luaL_newmetatable(L, meta); /*(should not fail; init'd in script setup)*/
+  #endif
     lua_setmetatable(L, -2);
     lua_setfield(L, -2, meta+3); /*(meta+3 to skip over "li." prefix)*/
 }
