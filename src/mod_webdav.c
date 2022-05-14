@@ -2340,8 +2340,7 @@ webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
 
     if (NULL != inm) {
         if (NULL == st
-            ? buffer_eq_slen(inm, CONST_STR_LEN("*"))
-              || (errno != ENOENT && errno != ENOTDIR)
+            ? (errno != ENOENT && errno != ENOTDIR)
             : http_etag_matches(etagb, inm->ptr, 1))
             return 412; /* Precondition Failed */
     }
