@@ -9,6 +9,7 @@
 #include "buffer.h"
 #include "chunk.h"
 #include "ck.h"
+#include "fdevent.h"
 #include "h2.h"
 #include "http_chunk.h"
 #include "http_etag.h"
@@ -51,8 +52,11 @@ typedef struct {
     script_cache cache;
 } plugin_data;
 
+static plugin_data *plugin_data_singleton;
+
 INIT_FUNC(mod_magnet_init) {
-    return calloc(1, sizeof(plugin_data));
+    plugin_data_singleton = (plugin_data *)calloc(1, sizeof(plugin_data));
+    return plugin_data_singleton;
 }
 
 FREE_FUNC(mod_magnet_free) {
@@ -2355,11 +2359,69 @@ static int magnet_respbody(lua_State *L) {
     return 0;
 }
 
+
+static int magnet_reqbody_add(lua_State *L) {
+    request_st * const r = lua_touserdata(L, lua_upvalueindex(1));
+    chunkqueue * const cq = &r->reqbody_queue;
+    const int tempfile = (cq->last && cq->last->file.is_temp);
+    if (lua_isstring(L, -1)) {
+        const_buffer data = magnet_checkconstbuffer(L, -1);
+        r->reqbody_length += data.len;
+        if (r->reqbody_length <= 65536 && !tempfile)
+            chunkqueue_append_mem(cq, data.ptr, data.len);
+        else if (chunkqueue_append_mem_to_tempfile(cq, data.ptr, data.len,
+                                                   r->conf.errh))
+            return 0; /* boolean false */
+        return 1; /* boolean true */
+    }
+    else if (!lua_istable(L, -1))
+        return 0; /* boolean false */
+
+    for (int i=1, end=0, n=(int)lua_rawlen(L,-1); !end && i <= n; ++i) {
+        lua_rawgeti(L, -1, i);
+
+        if (lua_isstring(L, -1)) {
+            const_buffer data = magnet_checkconstbuffer(L, -1);
+            r->reqbody_length += data.len;
+            if (r->reqbody_length <= 65536 && !tempfile)
+                chunkqueue_append_mem(cq, data.ptr, data.len);
+            else if (chunkqueue_append_mem_to_tempfile(cq, data.ptr, data.len,
+                                                       r->conf.errh))
+                return 0; /* boolean false */
+        }
+        else if (lua_isnil(L, -1)) { /* end of list */
+            end = 1;
+        }
+        else {
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "body[%d] table must contain strings", i);
+            end = 1;
+        }
+
+        lua_pop(L, 1); /* pop the content[...] entry value */
+    }
+
+    return 1; /* boolean true */
+}
+
+
 static int magnet_reqbody(lua_State *L) {
-    const request_st * const r = **(request_st ***)lua_touserdata(L, 1);
+    request_st * const r = **(request_st ***)lua_touserdata(L, 1);
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
     switch (k[0]) {
+      case 'a': /* add; r.req_body.add */
+        if (k[1] == 'd' && k[2] == 'd' && k[3] == '\0') {
+            chunkqueue * const cq = &r->reqbody_queue;
+            if (cq->bytes_in == (off_t)r->reqbody_length) {
+                lua_pushlightuserdata(L, r);
+                lua_pushcclosure(L, magnet_reqbody_add, 1);
+            }
+            else /* reqbody not yet collected */
+                lua_pushnil(L);
+            return 1;
+        }
+        break;
       case 'b':
         if (klen == 8 && 0 == memcmp(k, "bytes_in", 8)) {
             lua_pushinteger(L, r->reqbody_queue.bytes_in);
@@ -2370,9 +2432,58 @@ static int magnet_reqbody(lua_State *L) {
             return 1;
         }
         break;
+      case 'c': /* collect; r.req_body.collect */
+        if (klen == 7 && 0 == memcmp(k, "collect", 7)) {
+            chunkqueue * const cq = &r->reqbody_queue;
+            if (cq->bytes_in == (off_t)r->reqbody_length)
+                lua_pushboolean(L, 1);
+            else if (NULL == r->handler_module) {
+                r->conf.stream_request_body &=
+                  ~(FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN);
+                r->handler_module = plugin_data_singleton->self;
+                lua_pushboolean(L, 0);
+            }
+            else {
+                log_error(r->conf.errh, __FILE__, __LINE__,
+                  "unable to collect request body (handler already set); "
+                  "(perhaps load mod_magnet earlier in server.modules, "
+                  "before mod_%s; or require r.req_env['REMOTE_USER'] before "
+                  "attempting r.req_body.collect?)", r->handler_module->name);
+                lua_pushnil(L);
+            }
+            return 1;
+        }
+        break;
+      case 'g': /* get; r.req_body.get */
+        if (k[1] == 'e' && k[2] == 't' && k[3] == '\0') {
+            chunkqueue * const cq = &r->reqbody_queue;
+            if (cq->bytes_in == (off_t)r->reqbody_length)
+                chunkqueue_length(cq)
+                  ? magnet_push_buffer(L,
+                                       chunkqueue_read_squash(cq, r->conf.errh))
+                  : (void)lua_pushlstring(L, "", 0);
+            else
+                lua_pushnil(L); /*(?maybe return -1 instead if len unknown?)*/
+            return 1;
+        }
+        break;
       case 'l': /* len */
         if (k[1] == 'e' && k[2] == 'n' && k[3] == '\0') {
             lua_pushinteger(L, r->reqbody_length);
+            return 1;
+        }
+        break;
+      case 's': /* set; r.req_body.set */
+        if (k[1] == 'e' && k[2] == 't' && k[3] == '\0') {
+            chunkqueue * const cq = &r->reqbody_queue;
+            if (cq->bytes_in == (off_t)r->reqbody_length) {
+                r->reqbody_length = 0;
+                chunkqueue_reset(&r->reqbody_queue);
+                lua_pushlightuserdata(L, r);
+                lua_pushcclosure(L, magnet_reqbody_add, 1);
+            }
+            else /* reqbody not yet collected */
+                lua_pushnil(L);
             return 1;
         }
         break;
@@ -3272,6 +3383,23 @@ URIHANDLER_FUNC(mod_magnet_response_start) {
 	return magnet_attract_array(r, p_d, -1);
 }
 
+SUBREQUEST_FUNC(mod_magnet_handle_subrequest) {
+    /* read entire request body from network and then restart request */
+    UNUSED(p_d);
+
+    if (r->state == CON_STATE_READ_POST) {
+        /*(streaming flags were removed when magnet installed this handler)*/
+        handler_t rc = r->con->reqbody_read(r);
+        if (rc != HANDLER_GO_ON) return rc;
+        if (r->state == CON_STATE_READ_POST)
+            return HANDLER_WAIT_FOR_EVENT;
+    }
+
+    buffer_clear(&r->physical.path);
+    r->handler_module = NULL;
+    return HANDLER_COMEBACK;
+}
+
 
 int mod_magnet_plugin_init(plugin *p);
 int mod_magnet_plugin_init(plugin *p) {
@@ -3282,6 +3410,7 @@ int mod_magnet_plugin_init(plugin *p) {
 	p->handle_uri_clean  = mod_magnet_uri_handler;
 	p->handle_physical   = mod_magnet_physical;
 	p->handle_response_start = mod_magnet_response_start;
+	p->handle_subrequest = mod_magnet_handle_subrequest;
 	p->set_defaults  = mod_magnet_set_defaults;
 	p->cleanup     = mod_magnet_free;
 
