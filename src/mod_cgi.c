@@ -639,6 +639,7 @@ static handler_t cgi_process_rd_revents(handler_ctx * const hctx, request_st * c
 			if (0 == r->http_status) r->http_status = 200; /* OK */
 		}
 		cgi_connection_close(hctx);
+		return HANDLER_FINISHED;
 	} else if (revents & FDEVENT_ERR) {
 		/* kill all connections to the cgi process */
 		cgi_connection_close(hctx);
