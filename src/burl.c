@@ -66,8 +66,8 @@ static int burl_normalize_basic_unreserved_fix (buffer *b, buffer *t, int i, int
     memcpy(p, s, (size_t)i);
     for (; i < used; ++i, ++j) {
         if (!encoded_chars_http_uri_reqd[s[i]]) {
-            if (s[i] == '?' && -1 == qs) qs = j;
             p[j] = s[i];
+            if (__builtin_expect( (s[i] == '?'), 0) && -1 == qs) qs = j;
         }
         else if (s[i]=='%' && li_cton(s[i+1], n1) && li_cton(s[i+2], n2)) {
             const unsigned int x = (n1 << 4) | n2;
@@ -104,7 +104,7 @@ static int burl_normalize_basic_unreserved (buffer *b, buffer *t)
 
     for (int i = 0; i < used; ++i) {
         if (!encoded_chars_http_uri_reqd[s[i]]) {
-            if (s[i] == '?' && -1 == qs) qs = i;
+            if (__builtin_expect( (s[i] == '?'), 0) && -1 == qs) qs = i;
         }
         else if (s[i]=='%' && li_cton(s[i+1], n1) && li_cton(s[i+2], n2)
                  && !burl_is_unreserved((x = (n1 << 4) | n2))) {
@@ -135,11 +135,12 @@ static int burl_normalize_basic_required_fix (buffer *b, buffer *t, int i, int q
     unsigned char * const p =
       (unsigned char *)buffer_string_prepare_copy(t,i+(used-i)*3+1);
     unsigned int n1, n2;
+    int invalid_utf8 = 0;
     memcpy(p, s, (size_t)i);
     for (; i < used; ++i, ++j) {
         if (!encoded_chars_http_uri_reqd[s[i]]) {
-            if (s[i] == '?' && -1 == qs) qs = j;
             p[j] = s[i];
+            if (__builtin_expect( (s[i] == '?'), 0)) qs = j;
         }
         else if (s[i]=='%' && li_cton(s[i+1], n1) && li_cton(s[i+2], n2)) {
             const unsigned int x = (n1 << 4) | n2;
@@ -153,7 +154,7 @@ static int burl_normalize_basic_required_fix (buffer *b, buffer *t, int i, int q
                 p[j]   = '%';
                 p[++j] = hex_chars_uc[n1]; /*(s[i+1] & 0xdf)*/
                 p[++j] = hex_chars_uc[n2]; /*(s[i+2] & 0xdf)*/
-                if (li_utf8_invalid_byte(x)) qs = -2;
+                invalid_utf8 |= li_utf8_invalid_byte(x);
             }
             i+=2;
         }
@@ -162,11 +163,11 @@ static int burl_normalize_basic_required_fix (buffer *b, buffer *t, int i, int q
             p[j]   = '%';
             p[++j] = hex_chars_uc[(s[i] >> 4) & 0xF];
             p[++j] = hex_chars_uc[s[i] & 0xF];
-            if (li_utf8_invalid_byte(s[i])) qs = -2;
+            invalid_utf8 |= li_utf8_invalid_byte(s[i]);
         }
     }
     buffer_copy_string_len(b, (char *)p, (size_t)j);
-    return qs;
+    return !invalid_utf8 ? qs : -2;
 }
 
 
@@ -176,17 +177,18 @@ static int burl_normalize_basic_required (buffer *b, buffer *t)
     const int used = (int)buffer_clen(b);
     unsigned int n1, n2, x;
     int qs = -1;
+    int invalid_utf8 = 0;
 
     for (int i = 0; i < used; ++i) {
         if (!encoded_chars_http_uri_reqd[s[i]]) {
-            if (s[i] == '?' && -1 == qs) qs = i;
+            if (s[i] == '?') qs = i;
         }
         else if (s[i]=='%' && li_cton(s[i+1], n1) && li_cton(s[i+2], n2)
                  && (encoded_chars_http_uri_reqd[(x = (n1 << 4) | n2)]
                      || (qs < 0
                          ? (x == '/' || x == '?')
                          : (x == '&' || x == '=' || x == ';' || x == '+')))) {
-            if (li_utf8_invalid_byte(x)) qs = -2;
+            invalid_utf8 |= li_utf8_invalid_byte(x);
             if (s[i+1] >= 'a') b->ptr[i+1] &= 0xdf; /* uppercase hex */
             if (s[i+2] >= 'a') b->ptr[i+2] &= 0xdf; /* uppercase hex */
             i+=2;
@@ -201,7 +203,7 @@ static int burl_normalize_basic_required (buffer *b, buffer *t)
         }
     }
 
-    return qs;
+    return !invalid_utf8 ? qs : -2;
 }
 
 
@@ -323,6 +325,15 @@ static int burl_normalize_path (buffer *b, buffer *t, int qs, int flags)
 }
 
 
+__attribute_cold__
+__attribute_noinline__
+__attribute_pure__
+static int burl_scan_qmark (const buffer * const b) {
+    const char * const qmark = strchr(b->ptr, '?');
+    return qmark ? (int)(qmark - b->ptr) : -1;
+}
+
+
 int burl_normalize (buffer *b, buffer *t, int flags)
 {
     int qs;
@@ -342,7 +353,10 @@ int burl_normalize (buffer *b, buffer *t, int flags)
     qs = (flags & HTTP_PARSEOPT_URL_NORMALIZE_REQUIRED)
       ? burl_normalize_basic_required(b, t)
       : burl_normalize_basic_unreserved(b, t);
-    if (-2 == qs) return -2;
+    if (-2 == qs) {
+        if (flags & HTTP_PARSEOPT_URL_NORMALIZE_INVALID_UTF8_REJECT) return -2;
+        qs = burl_scan_qmark(b);
+    }
 
     if (flags & HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT) {
         if (burl_contains_ctrls(b)) return -2;

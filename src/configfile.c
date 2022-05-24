@@ -574,6 +574,8 @@ static int config_http_parseopts (server *srv, const array *a) {
             opt = HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT;
         else if (buffer_eq_slen(k, CONST_STR_LEN("url-query-20-plus")))
             opt = HTTP_PARSEOPT_URL_NORMALIZE_QUERY_20_PLUS;
+        else if (buffer_eq_slen(k, CONST_STR_LEN("url-invalid-utf8-reject")))
+            opt = HTTP_PARSEOPT_URL_NORMALIZE_INVALID_UTF8_REJECT;
         else if (buffer_eq_slen(k, CONST_STR_LEN("header-strict"))) {
             srv->srvconf.http_header_strict = val;
             continue;
@@ -631,7 +633,8 @@ static int config_http_parseopts (server *srv, const array *a) {
         }
         if (!(opts & (HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED
                      |HTTP_PARSEOPT_URL_NORMALIZE_REQUIRED))) {
-            opts |= HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED;
+            opts |= HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED
+                 |  HTTP_PARSEOPT_URL_NORMALIZE_INVALID_UTF8_REJECT;
             if (decode_2f
                 && !(opts & HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_REJECT))
                 opts |= HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE;
@@ -1521,7 +1524,8 @@ void config_init(server *srv) {
       | HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED
       | HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT
       | HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE
-      | HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE;
+      | HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE
+      | HTTP_PARSEOPT_URL_NORMALIZE_INVALID_UTF8_REJECT;
 
     srv->srvconf.modules = array_init(16);
     srv->srvconf.modules_dir = LIBRARY_DIR;

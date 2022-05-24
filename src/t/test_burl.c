@@ -31,6 +31,11 @@ static void test_burl_normalize (void) {
     int flags;
 
     flags = HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED;
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/%C0"), CONST_STR_LEN("/%C0"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/\377"), CONST_STR_LEN("/%FF"));
+
+    flags = HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED
+          | HTTP_PARSEOPT_URL_NORMALIZE_INVALID_UTF8_REJECT;
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("no-slash"), CONST_STR_LEN("no-slash"));
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/"), CONST_STR_LEN("/"));
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/abc"), CONST_STR_LEN("/abc"));
@@ -53,11 +58,13 @@ static void test_burl_normalize (void) {
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/%3a"), CONST_STR_LEN("/%3A"));
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/%3A"), CONST_STR_LEN("/%3A"));
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/~test%20ä_"), CONST_STR_LEN("/~test%20%C3%A4_"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/%C0"),  "", (size_t)-2);
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/\375"), "", (size_t)-2);
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/\376"), "", (size_t)-2);
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/\377"), "", (size_t)-2);
 
-    flags = HTTP_PARSEOPT_URL_NORMALIZE_REQUIRED;
+    flags = HTTP_PARSEOPT_URL_NORMALIZE_REQUIRED
+          | HTTP_PARSEOPT_URL_NORMALIZE_INVALID_UTF8_REJECT;
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/"), CONST_STR_LEN("/"));
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/abc"), CONST_STR_LEN("/abc"));
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/abc/"), CONST_STR_LEN("/abc/"));
