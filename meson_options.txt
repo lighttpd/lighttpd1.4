@@ -51,7 +51,7 @@ option('with_libunwind',
 option('with_lua',
 	type: 'boolean',
 	value: false,
-	description: 'with lua 5.1 for mod_magnet [default: off]',
+	description: 'with lua for mod_magnet [default: off]',
 )
 option('with_maxminddb',
 	type: 'boolean',
