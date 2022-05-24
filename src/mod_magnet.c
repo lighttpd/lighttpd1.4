@@ -2443,6 +2443,10 @@ static int magnet_reqbody(lua_State *L) {
                 r->handler_module = plugin_data_singleton->self;
                 lua_pushboolean(L, 0);
             }
+            else if (0 == strcmp(r->handler_module->name, "security3")) {
+                /*(mod_security3 uses similar technique to collect req body)*/
+                lua_pushboolean(L, 0);
+            }
             else {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "unable to collect request body (handler already set); "
