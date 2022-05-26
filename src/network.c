@@ -425,6 +425,10 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	/* check if we already know this socket (after potential DNS resolution), and if yes, don't init it */
 	for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
 		if (0 == memcmp(&srv->srv_sockets.ptr[i]->addr, &addr, sizeof(addr))) {
+			if ((unsigned short)~0u == srv->srv_sockets.ptr[i]->sidx) {
+				srv->srv_sockets.ptr[i]->sidx = sidx;
+				srv->srv_sockets.ptr[i]->is_ssl = s->ssl_enabled;
+			}
 			return 0;
 		}
 	}
@@ -873,9 +877,18 @@ int network_init(server *srv, int stdin_fd) {
                 force_assert(NULL != srv_socket);
                 memcpy(srv_socket, srv->srv_sockets_inherited.ptr[i],
                        sizeof(server_socket));
+                srv_socket->is_ssl = p->defaults.ssl_enabled;
                 /*(note: re-inits srv_socket->srv_token to new buffer ptr)*/
                 network_srv_socket_init_token(srv_socket,srv_socket->srv_token);
                 network_srv_sockets_append(srv, srv_socket);
+            }
+        }
+
+        /* reset sidx of any graceful sockets not explicitly listed in config */
+        for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
+            if ((unsigned short)~0u == srv->srv_sockets.ptr[i]->sidx) {
+                srv->srv_sockets.ptr[i]->sidx = 0;
+                srv->srv_sockets.ptr[i]->is_ssl = p->defaults.ssl_enabled;
             }
         }
 

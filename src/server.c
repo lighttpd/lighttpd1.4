@@ -787,8 +787,10 @@ static void server_sockets_restore (server *srv) { /* graceful_restart */
     memset(&graceful_sockets, 0, sizeof(server_socket_array));
     memcpy(&srv->srv_sockets_inherited, &inherited_sockets, sizeof(server_socket_array));
     memset(&inherited_sockets, 0, sizeof(server_socket_array));
-    for (uint32_t i = 0; i < srv->srv_sockets.used; ++i)
+    for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
         srv->srv_sockets.ptr[i]->srv = srv;           /* update ptr */
+        srv->srv_sockets.ptr[i]->sidx= (unsigned short)~0u;
+    }
     for (uint32_t i = 0; i < srv->srv_sockets_inherited.used; ++i)
         srv->srv_sockets_inherited.ptr[i]->srv = srv; /* update ptr */
 }
