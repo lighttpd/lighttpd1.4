@@ -208,9 +208,21 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
                         buffer_truncate(&ds->key, klen-1);
                 }
                 a = cpv->v.a;
+                if (!array_get_element_klen(a, CONST_STR_LEN("text/javascript"))
+                    && !array_get_element_klen(a, CONST_STR_LEN("text/"))) {
+                    array *m;
+                    *(const array **)&m = a;
+                    data_unset * const du =
+                      array_extract_element_klen(m,
+                        CONST_STR_LEN("application/javascript"));
+                    if (du) {
+                        buffer_copy_string_len(&du->key, "text/javascript", 15);
+                        array_replace(m, du);
+                    }
+                }
                 break;
               default:/* should not happen */
-                break;
+                continue;
             }
 
             /* parse array values into structured data */

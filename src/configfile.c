@@ -1129,7 +1129,18 @@ static int config_insert(server *srv) {
                 break;
               }
               case 19:/* connection.kbytes-per-second */
-              case 20:/* mimetype.assign */
+                break;
+              case 20:{/* mimetype.assign */
+                /* translate "application/javascript" to "text/javascript" */
+                data_string * const ds = (data_string *)
+                  array_get_data_unset(cpv->v.a, CONST_STR_LEN(".js"));
+                if (NULL != ds /*(note: this does not catch w/ ";charset=...")*/
+                    && buffer_eq_slen(&ds->value,
+                                      CONST_STR_LEN("application/javascript")))
+                    buffer_copy_string_len(&ds->value,
+                                           CONST_STR_LEN("text/javascript"));
+                break;
+              }
               case 21:/* mimetype.use-xattr */
               case 22:/* etag.use-inode */
               case 23:/* etag.use-mtime */

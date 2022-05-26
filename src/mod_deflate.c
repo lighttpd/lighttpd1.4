@@ -751,6 +751,9 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                     size_t len = buffer_clen(mimetype);
                     if (len > 2 && mimetype->ptr[len-1] == '*')
                         buffer_truncate(mimetype, len-1);
+                    if (buffer_eq_slen(mimetype,
+                                       CONST_STR_LEN("application/javascript")))
+                        buffer_copy_string_len(mimetype, "text/javascript", 15);
                 }
                 if (0 == cpv->v.a->used) cpv->v.a = NULL;
                 break;

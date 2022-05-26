@@ -171,6 +171,10 @@ while (<MIMETYPES>) {
 # from http://www.iana.org/assignments/media-types/media-types.xhtml
 add(".dtd", "application/xml-dtd");
 
+# RFC 9239
+add(".js", "text/javascript");
+add(".mjs", "text/javascript");
+
 # other useful mappings
 my %useful = (
 	".tar.gz"  => "application/x-gtar-compressed",

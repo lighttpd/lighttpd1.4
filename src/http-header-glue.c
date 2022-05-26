@@ -962,6 +962,16 @@ static int http_response_process_headers(request_st * const restrict r, http_res
                 r->keep_alive = 0;
             if (r->http_version >= HTTP_VERSION_2) continue;
             break;
+          case HTTP_HEADER_CONTENT_TYPE:
+            if (end - value >= 22   /*(prefix match probably good enough)*/
+                && 0 == memcmp(value, "application/javascript", 22)) {
+                /* value = "text/javascript"; *//*(loses ";charset=...")*/
+                /* *(const char **)&end = value+sizeof("text/javascript")-1; */
+                /*(convert "application/javascript" to "text/javascript")*/
+                value += 7; /*(step over "applica", leaving "tion")*/
+                memcpy(s+(value-s)+1, "ext", 3);
+            }
+            break;
           case HTTP_HEADER_CONTENT_LENGTH:
             if (*value == '+') ++value;
             if (!r->resp_decode_chunked
