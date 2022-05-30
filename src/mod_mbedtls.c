@@ -1667,12 +1667,6 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
 
         plugin_config_socket conf;
         memcpy(&conf, &defaults, sizeof(conf));
-
-        /*(preserve prior behavior; not inherited)*/
-        /*(forcing inheritance might break existing configs where SSL is enabled
-         * by default in the global scope, but not $SERVER["socket"]=="*:80") */
-        conf.ssl_enabled = 0;
-
         config_plugin_value_t *cpv = ps->cvlist + ps->cvlist[i].v.u2[0];
         for (; -1 != cpv->k_id; ++cpv) {
             /* ignore ssl.pemfile (k_id=6); included to process global scope */
