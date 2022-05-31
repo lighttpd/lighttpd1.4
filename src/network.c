@@ -356,12 +356,13 @@ static void network_srv_socket_init_token (server_socket * const srv_socket, con
         srv_socket->srv_token_colon = network_srv_token_colon(srv_token);
 }
 
-static int network_server_init(server *srv, network_socket_config *s, buffer *host_token, size_t sidx, int stdin_fd) {
+static int network_server_init(server *srv, const network_socket_config *s, buffer *host_token, size_t sidx, int stdin_fd) {
 	server_socket *srv_socket;
 	const char *host;
 	socklen_t addr_len = sizeof(sock_addr);
 	sock_addr addr;
 	int family = 0;
+	int use_ipv6 = s->use_ipv6;
 	int set_v6only = 0;
 
 	if (buffer_is_blank(host_token)) {
@@ -380,13 +381,13 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 	}
 
 	host = host_token->ptr;
-	if ((s->use_ipv6 && (*host == '\0' || *host == ':')) || (host[0] == '[' && host[1] == ']')) {
+	if ((use_ipv6 && (*host == '\0' || *host == ':')) || (host[0] == '[' && host[1] == ']')) {
 		log_error(srv->errh, __FILE__, __LINE__,
 		  "warning: please use server.use-ipv6 only for hostnames, "
 		  "not without server.bind / empty address; your config will "
 		  "break if the kernel default for IPV6_V6ONLY changes");
 	}
-	if (*host == '[') s->use_ipv6 = 1;
+	if (*host == '[') use_ipv6 = 1;
 
 	memset(&addr, 0, sizeof(addr));
 	if (-1 != stdin_fd) {
@@ -394,7 +395,7 @@ static int network_server_init(server *srv, network_socket_config *s, buffer *ho
 			log_perror(srv->errh, __FILE__, __LINE__, "getsockname()");
 			return -1;
 		}
-	} else if (0 != network_host_parse_addr(srv, &addr, &addr_len, host_token, s->use_ipv6)) {
+	} else if (0 != network_host_parse_addr(srv, &addr, &addr_len, host_token, use_ipv6)) {
 		return -1;
 	}
 
@@ -670,7 +671,7 @@ void network_socket_activation_to_env (server * const srv) {
     setenv("LISTEN_PID", tb->ptr, 1);
 }
 
-static int network_socket_activation_nfds(server *srv, network_socket_config *s, int nfds) {
+static int network_socket_activation_nfds(server *srv, const network_socket_config *s, int nfds) {
     buffer *host = buffer_init();
     socklen_t addr_len;
     sock_addr addr;
@@ -694,7 +695,7 @@ static int network_socket_activation_nfds(server *srv, network_socket_config *s,
     return rc;
 }
 
-static int network_socket_activation_from_env(server *srv, network_socket_config *s) {
+static int network_socket_activation_from_env(server *srv, const network_socket_config *s) {
     char *listen_pid = getenv("LISTEN_PID");
     char *listen_fds = getenv("LISTEN_FDS");
     pid_t lpid = listen_pid ? (pid_t)strtoul(listen_pid,NULL,10) : 0;
