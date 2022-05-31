@@ -4186,24 +4186,8 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
     }
     else if (S_ISDIR(pb.st.st_mode)) {
         if (!buffer_has_pathsep_suffix(&r->physical.path)) {
-            const buffer *vb =
-              http_header_request_get(r, HTTP_HEADER_USER_AGENT,
-                                      CONST_STR_LEN("User-Agent"));
-            if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
-                                   sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
-                /* workaround Microsoft-WebDAV-MiniRedir bug */
-                /* (MS File Explorer unable to open folder if not redirected) */
-                http_response_redirect_to_directory(r, 308);
-                return HANDLER_FINISHED;
-            }
-            if (vb && 0 == strncmp(vb->ptr, "gvfs/", sizeof("gvfs/")-1)) {
-                /* workaround gvfs bug */
-                /* (gvfs unable to open folder if not redirected) */
-                http_response_redirect_to_directory(r, 308);
-                return HANDLER_FINISHED;
-            }
             /* set "Content-Location" instead of sending 308 redirect to dir */
-            if (!http_response_redirect_to_directory(r, 0))
+            if (0 != http_response_redirect_to_directory(r, 0))
                 return HANDLER_FINISHED;
             buffer_append_char(&r->physical.path,     '/');
             buffer_append_char(&r->physical.rel_path, '/');
@@ -5404,25 +5388,8 @@ mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
 
     if (S_ISDIR(st.st_mode)) {
         if (!buffer_has_pathsep_suffix(&r->physical.path)) {
-            const buffer *vb =
-              http_header_request_get(r, HTTP_HEADER_USER_AGENT,
-                                      CONST_STR_LEN("User-Agent"));
-            if (vb && 0 == strncmp(vb->ptr, "Microsoft-WebDAV-MiniRedir/",
-                                   sizeof("Microsoft-WebDAV-MiniRedir/")-1)) {
-                /* workaround Microsoft-WebDAV-MiniRedir bug */
-                /* (might not be necessary for PROPPATCH here,
-                 *  but match behavior in mod_webdav_propfind() for PROPFIND) */
-                http_response_redirect_to_directory(r, 308);
-                return HANDLER_FINISHED;
-            }
-            if (vb && 0 == strncmp(vb->ptr, "gvfs/", sizeof("gvfs/")-1)) {
-                /* workaround gvfs bug */
-                /* (gvfs unable to open folder if not redirected) */
-                http_response_redirect_to_directory(r, 308);
-                return HANDLER_FINISHED;
-            }
             /* set "Content-Location" instead of sending 308 redirect to dir */
-            if (!http_response_redirect_to_directory(r, 0))
+            if (0 != http_response_redirect_to_directory(r, 0))
                 return HANDLER_FINISHED;
             buffer_append_char(&r->physical.path,     '/');
             buffer_append_char(&r->physical.rel_path, '/');
