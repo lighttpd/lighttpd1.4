@@ -778,7 +778,8 @@ mod_mbedtls_SNI (void *arg, mbedtls_ssl_context *ssl, const unsigned char *serve
             hctx->conf.pc->need_chain = 0; /*(attempt once to complete chain)*/
             mbedtls_x509_crt *ssl_cred = &hctx->conf.pc->ssl_pemfile_x509;
             mbedtls_x509_crt *store = hctx->conf.ssl_ca_file;
-            if (!mod_mbedtls_construct_crt_chain(ssl_cred, store, r->conf.errh))
+            if (0 != mod_mbedtls_construct_crt_chain(ssl_cred, store,
+                                                     r->conf.errh))
                 return MBEDTLS_ERR_SSL_INTERNAL_ERROR;
         }
         /* reconfigure to use SNI-specific cert */
@@ -1496,8 +1497,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     /* if needed, attempt to construct certificate chain for server cert */
     if (s->pc->need_chain) {
         s->pc->need_chain = 0; /*(attempt once to complete chain)*/
-        if (!mod_mbedtls_construct_crt_chain(s->ssl_pemfile_x509,
-                                             s->ssl_ca_file, srv->errh))
+        if (0 != mod_mbedtls_construct_crt_chain(s->ssl_pemfile_x509,
+                                                 s->ssl_ca_file, srv->errh))
             return -1;
     }
 
