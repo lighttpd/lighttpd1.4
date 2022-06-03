@@ -1613,6 +1613,11 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
             r->http_status = 400; /* Bad Request */
         }
       #endif
+        /*(lighttpd.conf config conditions not yet applied to request,
+         * but do not increase window size if BUFMIN set in global config)*/
+        if (r->reqbody_length /*(see h2_init_con() for session window)*/
+            && !(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN))
+            h2_send_window_update(con, id, 131072); /*(add 128k)*/
 
         if (light_btst(r->rqst_htags, HTTP_HEADER_PRIORITY)) {
             const buffer * const prio =
@@ -1925,14 +1930,13 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
     con->read_idle_ts = log_monotonic_secs;
     con->keep_alive_idle = h2r->conf.max_keep_alive_idle;
 
-    /*(h2r->h2_rwin must match value assigned in h2_init_stream())*/
-    h2r->h2_rwin = 65535;                 /* h2 connection recv window */
+    h2r->h2_rwin = 262144;                /* h2 connection recv window (256k)*/
     h2r->h2_swin = 65535;                 /* h2 connection send window */
     /* settings sent from peer */         /* initial values */
     h2c->s_header_table_size     = 4096;  /* SETTINGS_HEADER_TABLE_SIZE      */
     h2c->s_enable_push           = 1;     /* SETTINGS_ENABLE_PUSH            */
     h2c->s_max_concurrent_streams= ~0u;   /* SETTINGS_MAX_CONCURRENT_STREAMS */
-    h2c->s_initial_window_size   = 65535; /* SETTINGS_INITIAL_WINDOW_SIZE    */
+    h2c->s_initial_window_size   = 65536; /* SETTINGS_INITIAL_WINDOW_SIZE    */
     h2c->s_max_frame_size        = 16384; /* SETTINGS_MAX_FRAME_SIZE         */
     h2c->s_max_header_list_size  = ~0u;   /* SETTINGS_MAX_HEADER_LIST_SIZE   */
     h2c->sent_settings           = log_monotonic_secs;/*(send SETTINGS below)*/
@@ -1946,7 +1950,7 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
 
     static const uint8_t h2settings[] = { /*(big-endian numbers)*/
       /* SETTINGS */
-      0x00, 0x00, 0x18        /* frame length */ /* 4 * (6 bytes per setting) */
+      0x00, 0x00, 0x1e        /* frame length */ /* 5 * (6 bytes per setting) */
      ,H2_FTYPE_SETTINGS       /* frame type */
      ,0x00                    /* frame flags */
      ,0x00, 0x00, 0x00, 0x00  /* stream identifier */
@@ -1963,10 +1967,8 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
      ,0x00, H2_SETTINGS_ENABLE_PUSH
      ,0x00, 0x00, 0x00, 0x00  /* 0 */
      #endif
-     #if 0  /* ? increase from default (65535) ? (and adjust frame length) */
-     ,0x00, H2_SETTINGS_INITIAL_WINDOW_SIZE
-     ,0x00, 0x02, 0x00, 0x00  /* 131072 */
-     #endif
+     ,0x00, H2_SETTINGS_INITIAL_WINDOW_SIZE /*(must match in h2_init_stream())*/
+     ,0x00, 0x01, 0x00, 0x00  /* 65536 *//*multiple of SETTINGS_MAX_FRAME_SIZE*/
      #if 0  /* ? increase from default (16384) ? (and adjust frame length) */
      ,0x00, H2_SETTINGS_MAX_FRAME_SIZE
      ,0x00, 0x00, 0x80, 0x00  /* 32768 */
@@ -1978,17 +1980,14 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
      ,0x00, H2_SETTINGS_NO_RFC7540_PRIORITIES
      ,0x00, 0x00, 0x00, 0x01  /* 1 */
 
-     #if 0
       /* WINDOW_UPDATE */
      ,0x00, 0x00, 0x04        /* frame length */
      ,H2_FTYPE_WINDOW_UPDATE  /* frame type */
      ,0x00                    /* frame flags */
      ,0x00, 0x00, 0x00, 0x00  /* stream identifier */
-     ,0x00, 0x01, 0x00, 0x01  /* 65537 */ /* increase connection rwin to 128k */
-     #endif
+     ,0x00, 0x01, 0x00, 0x01  /* 196609 *//*(increase connection rwin to 256k)*/
     };
 
-    /*h2r->h2_rwin += 65537;*//*(enable if WINDOWS_UPDATE is sent above)*/
     chunkqueue_append_mem(con->write_queue,
                           (const char *)h2settings, sizeof(h2settings));
 
@@ -2747,7 +2746,7 @@ h2_init_stream (request_st * const h2r, connection * const con)
     /* XXX: TODO: assign default priority, etc.
      *      Perhaps store stream id and priority in separate table */
     h2c->r[h2c->rused++] = r;
-    r->h2_rwin = 65535; /* must keep in sync with h2_init_con() */
+    r->h2_rwin = 65536; /* must keep in sync with h2_init_con() */
     r->h2_swin = h2c->s_initial_window_size;
     /* combine priority 'urgency' value and invert 'incremental' boolean
      * for easy (ascending) sorting by urgency and then incremental before
