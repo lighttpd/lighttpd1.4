@@ -1985,7 +1985,7 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
      ,H2_FTYPE_WINDOW_UPDATE  /* frame type */
      ,0x00                    /* frame flags */
      ,0x00, 0x00, 0x00, 0x00  /* stream identifier */
-     ,0x00, 0x01, 0x00, 0x01  /* 196609 *//*(increase connection rwin to 256k)*/
+     ,0x00, 0x03, 0x00, 0x01  /* 196609 *//*(increase connection rwin to 256k)*/
     };
 
     chunkqueue_append_mem(con->write_queue,
