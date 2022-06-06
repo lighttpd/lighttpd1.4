@@ -2624,6 +2624,9 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
     if ((int32_t)dlen > h2r->h2_swin) dlen = (uint32_t)h2r->h2_swin;
     const uint32_t cqlen = (uint32_t)chunkqueue_length(cq);
     if (dlen > cqlen) dlen = cqlen;
+    /*(note: must temporarily disable next line when running h2spec since
+     * some h2spec tests expect 1-byte DATA frame, not a deferred response)*/
+    else if (dlen < 2048 && cqlen >= 2048) return 0;
     if (0 == dlen) return 0;
 
     /* XXX: future: should have an interface which processes chunkqueue
