@@ -562,10 +562,10 @@ t_test_common_SOURCES = t/test_common.c \
                         t/test_base64.c \
                         t/test_buffer.c \
                         t/test_burl.c \
+                        t/test_http_header.c \
+                        t/test_http_kv.c \
                         t/test_keyvalue.c \
                         t/test_request.c \
-                        http_header.c \
-                        http_kv.c \
                         log.c \
                         fdlog.c \
                         sock_addr.c \
