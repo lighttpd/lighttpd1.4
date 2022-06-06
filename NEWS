@@ -3,7 +3,7 @@
 NEWS
 ====
 
-- 1.4.65 -
+- 1.4.65 - 2022-06-07
   * [build] meson: fix typo in variable name
   * [build] autoconf: report if building with zstd
   * [build] meson -Dlua_version=... to specify lua ver
@@ -58,6 +58,125 @@ NEWS
   * [core] isolate plugins_*() funcs to main server
   * [mod_wolfssl] wolfssl v5.0.0 defines DH_set0_pqg()
   * [mod_auth] save letter-case diff in require config
+  * [mod_magnet] magnet_push_quoted_string shared code
+  * [mod_magnet] lighty.c.header_tokens convenience fn
+  * [core] fill in un.sun_path after accept() (fixes #3147)
+  * [mod_extforward] adjust trust check for HTTP/2
+  * [mod_proxy] adjust handling of legacy X-* headers
+  * [core] permit env w/ blank value (fix regression)
+  * [TLS] consistent debug.log-ssl-noise config type
+  * [mod_magnet] allow removal of req_env elt via nil
+  * [core] compiler workarounds for very old gcc,glibc
+  * [mod_mbedtls] use newer mbedtls 3.2.0+ interfaces
+  * [mod_ssi] check http_chunk_transfer_cqlen for err
+  * [core] chunkqueue_steal() handle unexpected 0 len
+  * [core] discard DATA from REFUSED_STREAM at h2 init
+  * [multiple] WebSockets over HTTP/2 (fixes #3151)
+  * [multiple] immed connect to backend for streaming
+  * [core] ensure socket ready before checking connect
+  * [core] reduce trace on Upgrade backend connection
+  * [core] adjust when TCP_CORK used on TLS connection
+  * [mod_cgi] disable input optim if might Upgrade
+  * [mod_cgi] immed start CGI if Upgrade
+  * [mod_wolfssl] wolfssl v5.0.0 adds ASN1_TIME_diff()
+  * [mod_openssl] libressl v3.5.0 adds ASN1_TIME_diff
+  * [TLS] warn if leaf cert read is inactive/expired
+  * [core] stricter conformance w/ upcoming HTTP/2 rev
+  * [build] -D_DEFAULT_SOURCE consistency in builds
+  * [mod_extforward] support addtl IPv6 syntax w/ "[]"
+  * [core] build fix for cygwin and lmingw
+  * [core] short-circuit earlier parsing h2 trailers
+  * [core] reformat h2.h for cleaner enum additions
+  * [core] consolidate trace for log-state-handling
+  * [core] request_config bitmasks for smaller struct
+  * [core] prefix (=^), suffix (=$) config conditions (fixes #3153)
+  * [core] tighten config parsing loop
+  * [core] convert simple config cond regex to pre/sfx
+  * [tests] able to run tests when built w/o pcre
+  * [core] allow redirect,rewrite ext subst w/o pcre
+  * [mod_sockproxy] reset http vers, avoid rare crash (fixes #3152)
+  * [core] HTTP/2 PRIORITY_UPDATE frame (experimental)
+  * [core] send HTTP/2 SETTINGS_NO_RFC7540_PRIORITIES
+  * [core] stricter check of HTTP/2 GOAWAY frame size
+  * [mod_mbedtls] use newer mbedtls 3.2.0+ interfaces
+  * [mod_webdav] opt for partial PUT via copy/rename
+  * [core] quiet compiler warning
+  * [multiple] recognize HTTP QUERY method
+  * [multiple] limit scope of socket config options
+  * [core] fix config typo reading large int from str
+  * [core] h2 prio sort urgency, incr, then stream id
+  * [core] send Priority resp hdr w/ .css, .js re-prio
+  * [multiple] reset http vers, avoid rare crash (fixes #3152)
+  * [core] delay response to http auth invalid creds
+  * [core] connection_state_machine_h2 only if con->h2
+  * [core] default server.max-keep-alive-requests 1000
+  * [mod_magnet] set script env in func first upvalue
+  * [mod_magnet] rewrite lighty.r as table of userdata
+  * [mod_status] con->h2 instead of r->http_version
+  * [mod_setenv] cleanup user-provided hdr sloppiness
+  * [core] remove func decls duplicated in plugin.h
+  * [mod_status] fix counting of HTTP/2 bytes written
+  * [mod_magnet] no local server port on unix domain
+  * [mod_extforward] unix domain socket pedantic chks
+  * [core] sketch support for abstract sockets
+  * [mod_magnet] magnet_plugin_stats_table() fn
+  * [mod_magnet] magnet_script_setup_global_state() fn
+  * [mod_magnet] lighty.server.* table w/ new function
+  * [mod_accesslog] do not double-count hdr len in %I
+  * [mod_magnet] reduce magnet_env_get_id() scanning
+  * [mod_magnet] tighten magnet_env_get_buffer_by_id()
+  * [mod_status] reusable code for r->state strings
+  * [core] reusable code for r->state strings
+  * [mod_magnet] expose r->state to lua scripts
+  * [mod_magnet] tighten magnet_env_set()
+  * [mod_magnet] lighty.r.req_item[] accessors
+  * [mod_magnet] expose r->keep_alive to lua scripts
+  * [mod_magnet] lighty.c.hrtime high-resolution time
+  * [mod_magnet] lighty.r.resp_body.get
+  * [mod_magnet] deprecate r.req_attr["response.*]
+  * [mod_magnet] separate funcs for uri_path_raw
+  * [mod_magnet] lighty.c.stat high precision time
+  * [mod_magnet] format multiline err traceback
+  * [mod_magnet] adjust p->conf.stage checks
+  * [mod_magnet] further isolate legacy API result tbl
+  * [core] buffer_append_char() convenience func
+  * [mod_accesslog] accesslog.escaping = "json"
+  * [multiple] use buffer_append_char()
+  * [mod_accesslog] remove begin/end tags from %{}t
+  * [core] fix configparser_simplify_regex() comment
+  * [multiple] simplify bytes_in/bytes_out accounting
+  * [mod_accesslog] reorder fields in switch()
+  * [core] remove unused srv->con_* counters
+  * [mod_magnet] read-only access to r->server_name
+  * [core] buffer_append_bs_escaped()
+  * [core] buffer_append_string_c_escaped ASCII optim
+  * [mod_magnet] backspace-escape encode/decode
+  * [mod_status] display HTTP/2 control stream w/ reqs
+  * [multiple] use preferred syntax for Content-Type
+  * [doc] regenerate doc/config/conf.d/mime.conf
+  * [multiple] rename status_counter -> plugin_stats
+  * [core] feature-flag server.metrics-high-precision
+  * [mod_magnet] quiet coverity false positive
+  * [mod_wolfssl] compile fix for OpenWRT
+  * [mod_webdav] If-None-Match: * on non-existent
+  * [mod_magnet] r.req_body .collect .get .set .add
+  * [mod_cgi] fix detection of failing error handler (fixes #3157)
+  * [core] "url-invalid-utf8-reject" normalization opt
+  * [mod_magnet] skip req body collect warn if modsec3
+  * [build] update descriptions to remove old lua ver
+  * [core] use current dir if context->basedir blank
+  * [multiple] application/javascript text/javascript
+  * [core] reset internal flags after graceful restart
+  * [TLS] inherit ssl.engine from global scope
+  * [core] avoid server.use-ipv6 warning after SIGUSR1
+  * [mod_webdav] alt handling PROPFIND on collection
+  * [mod_mbedtls] fix crt chain construction logic
+  * [core] h2 SETTINGS_INITIAL_WINDOW_SIZE 64k (fixes #3089)
+  * [core] increase session window size to 256k
+  * [core] h2: avoid sending small WINDOW_UPDATE frames
+  * [core] h2: avoid sending tiny DATA frames
+  * [core] update cached tables with Priority header
+  * [tests] test stubs for http_header.c and http_kv.c
 
 - 1.4.64 - 2022-01-19
   * [core] fix trace issued for loading mod_auth (fixes #3121)
