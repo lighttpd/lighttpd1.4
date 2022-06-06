@@ -1101,8 +1101,8 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
         off_t n = max_request_size - dst->bytes_in - (off_t)alen;
         int32_t rwin = r->h2_rwin - (int32_t)len;
         if (rwin < 0) rwin = 0;
-        if (__builtin_expect( (n >= 0), 1)) /*(allow small overage with n+8)*/
-            wupd = n>=rwin ? (n-=rwin) > (int32_t)len ? len : (uint32_t)n+8 : 0;
+        if (__builtin_expect( (n >= 0), 1)) /*(force wupd below w/ +16384)*/
+            wupd=n>=rwin ? (n-=rwin)>(int32_t)len ? len : (uint32_t)n+16384 : 0;
         else if (-n > 65536 || 0 == r->http_status) {
             if (0 == r->http_status) {
                 r->http_status = 413; /* Payload Too Large */
@@ -1129,7 +1129,17 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
      * that too much data is detected, instead of waiting for read timeout. */
     /*r->h2_rwin -= (int32_t)len;*/
     /*r->h2_rwin += (int32_t)wupd;*/
-    h2_send_window_update(con, r->h2id, wupd);/*(r->h2_rwin)*//*noop if wupd=0*/
+    /* avoid sending small WINDOW_UPDATE frames
+     * Pre-emptively increase window size up to 16k (default max frame size)
+     * and then defer small window updates until the excess is utilized.
+     * This aims to reduce degenerative behavior from clients sending an
+     * increasing number of tiny DATA frames. */
+    /*(note: r->h2_rwin is not adjusted with fudge factor side-channel)*/
+    r->h2_rwin_fudge -= (int16_t)wupd;
+    if (r->h2_rwin_fudge < 0) {
+        r->h2_rwin_fudge += 16384;
+        h2_send_window_update(con, r->h2id, 16384); /*(r->h2_rwin)*/
+    }
 
     chunkqueue_mark_written(cq, 9 + ((s[4] & H2_FLAG_PADDED) ? 1 : 0));
 
@@ -2748,6 +2758,7 @@ h2_init_stream (request_st * const h2r, connection * const con)
     h2c->r[h2c->rused++] = r;
     r->h2_rwin = 65536; /* must keep in sync with h2_init_con() */
     r->h2_swin = h2c->s_initial_window_size;
+    r->h2_rwin_fudge = 0;
     /* combine priority 'urgency' value and invert 'incremental' boolean
      * for easy (ascending) sorting by urgency and then incremental before
      * non-incremental */

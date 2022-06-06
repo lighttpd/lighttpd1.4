@@ -126,6 +126,7 @@ struct request_st {
     uint32_t h2id;
      int32_t h2_rwin;
      int32_t h2_swin;
+     int16_t h2_rwin_fudge;
      uint8_t h2_prio;
 
     http_method_t http_method;
