@@ -808,7 +808,6 @@ h2_recv_window_update (connection * const con, const uint8_t * const s, const ui
 }
 
 
-__attribute_noinline__
 static void
 h2_send_window_update (connection * const con, uint32_t h2id, const uint32_t len)
 {
@@ -830,6 +829,18 @@ h2_send_window_update (connection * const con, uint32_t h2id, const uint32_t len
     window_upd.u[3] = htonl(len);
     chunkqueue_append_mem(con->write_queue,  /*(+3 to skip over align padding)*/
                           (const char *)window_upd.c+3, sizeof(window_upd)-3);
+}
+
+
+__attribute_noinline__
+static void
+h2_send_window_update_unit (connection * const con, request_st * const r, const uint32_t len)
+{
+    r->h2_rwin_fudge -= (int16_t)len;
+    if (r->h2_rwin_fudge < 0) {
+        r->h2_rwin_fudge += 16384;
+        h2_send_window_update(con, r->h2id, 16384); /*(r->h2_rwin)*/
+    }
 }
 
 
@@ -1030,7 +1041,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
          * connection is closed. */
         chunkqueue_mark_written(cq, 9+len);
         if (h2c->half_closed_ts + 2 >= log_monotonic_secs) {
-            h2_send_window_update(con, 0, len); /*(h2r->h2_rwin)*/
+            h2_send_window_update_unit(con, h2r, len); /*(h2r->h2_rwin)*/
             return 1;
         }
         else {
@@ -1044,7 +1055,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
         || r->h2state == H2_STATE_HALF_CLOSED_REMOTE) {
         h2_send_rst_stream_id(id, con, H2_E_STREAM_CLOSED);
         chunkqueue_mark_written(cq, 9+len);
-        h2_send_window_update(con, 0, len); /*(h2r->h2_rwin)*/
+        h2_send_window_update_unit(con, h2r, len); /*(h2r->h2_rwin)*/
         return 1;
     }
 
@@ -1064,8 +1075,12 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
      * since windows updated elsewhere and data is streamed to temp files if
      * not FDEVENT_STREAM_REQUEST_BUFMIN)*/
     /*r->h2_rwin -= (int32_t)len;*/
-    /*h2_send_window_update(con, r->h2id, len);*//*(r->h2_rwin)*//*(see below)*/
-    h2_send_window_update(con, 0, len);       /*(h2r->h2_rwin)*/
+    /*h2_send_window_update_unit(con, r, len);*//*(r->h2_rwin)*//*(see below)*/
+
+    /* avoid sending small WINDOW_UPDATE frames
+     * Pre-emptively increase window size up to 16k (default max frame size)
+     * and then defer small window updates until the excess is utilized. */
+    h2_send_window_update_unit(con, h2r, len); /*(h2r->h2_rwin)*/
 
     chunkqueue * const dst = &r->reqbody_queue;
 
@@ -1136,12 +1151,8 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
      * and then defer small window updates until the excess is utilized.
      * This aims to reduce degenerative behavior from clients sending an
      * increasing number of tiny DATA frames. */
-    /*(note: r->h2_rwin is not adjusted with fudge factor side-channel)*/
-    r->h2_rwin_fudge -= (int16_t)wupd;
-    if (r->h2_rwin_fudge < 0) {
-        r->h2_rwin_fudge += 16384;
-        h2_send_window_update(con, r->h2id, 16384); /*(r->h2_rwin)*/
-    }
+    /*(note: r->h2_rwin is not adjusted with r->h2_rwin_fudge factor)*/
+    h2_send_window_update_unit(con, r, wupd);
 
     chunkqueue_mark_written(cq, 9 + ((s[4] & H2_FLAG_PADDED) ? 1 : 0));
 
@@ -1944,6 +1955,7 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con, c
 
     h2r->h2_rwin = 262144;                /* h2 connection recv window (256k)*/
     h2r->h2_swin = 65535;                 /* h2 connection send window */
+    h2r->h2_rwin_fudge = 0;
     /* settings sent from peer */         /* initial values */
     h2c->s_header_table_size     = 4096;  /* SETTINGS_HEADER_TABLE_SIZE      */
     h2c->s_enable_push           = 1;     /* SETTINGS_ENABLE_PUSH            */
