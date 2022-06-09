@@ -517,6 +517,8 @@ static int magnet_stat_field(lua_State *L) {
       case 'h': { /* http-response-send-file */
         if (0 != strcmp(k.ptr, "http-response-send-file")) break;
         request_st * const r = magnet_get_request(L);
+        r->http_status = 0;
+        http_response_body_clear(r, 0);
         http_response_send_file(r, &sce->name, sce);
         lua_pushinteger(L, r->http_status);
         return 1;
