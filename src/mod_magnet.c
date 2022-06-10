@@ -1096,15 +1096,28 @@ magnet_buffer_append_bsdec (buffer * const restrict b,
                 unsigned char lo = hex2int(((unsigned char *)s)[4]);
                 if (0xFF == hi || 0xFF == lo)
                     break;
+                c = (hi << 4) | lo;
                 if (__builtin_expect( (s[1] != '0'), 0)
                     || __builtin_expect( (s[2] != '0'), 0)) {
                     unsigned char hhi = hex2int(((unsigned char *)s)[1]);
                     unsigned char hlo = hex2int(((unsigned char *)s)[2]);
                     if (0xFF == hhi || 0xFF == hlo)
                         break;
-                    *d++ = (hhi << 4) | hlo;
+                    c |= (int)((hhi << 12) | (hlo << 8));
+                    if ((unsigned int)c - 0xd800u < 0x800)
+                        break; /* 0xD800 - 0xDFFF ill-formed UTF-8 */
                 }
-                c = (hi << 4) | lo;
+                /* adapted from
+                 * https://stackoverflow.com/questions/4607413/is-there-a-c-library-to-convert-unicode-code-points-to-utf-8 */
+                if (__builtin_expect( (c > 0x7F), 0)) {
+                    if (c < 0x800)
+                        *d++ = 0xC0 | (c >> 6);
+                    else {
+                        *d++ = 0xE0 | (c >> 12);
+                        *d++ = 0x80 | ((c >> 6) & 0x3F);
+                    }
+                    c = 0x80 | (c & 0x3F);
+                }
                 s += 4;
             }
             break;

@@ -764,6 +764,11 @@ buffer_append_bs_escaped (buffer * const restrict b,
             }
             else {          /* BS_ESCAPE_JSON */
                 /*(technically do not have to escape DEL (\127) or higher)*/
+                /*(would be faster if handled in tighter do/while loop above)*/
+                if (c >= 127) {
+                    buffer_append_char(b, (char)c);
+                    break;
+                }
                 d = buffer_extend(b, 6);
                 d[0] = '\\';
                 d[1] = 'u';
