@@ -1162,7 +1162,7 @@ static int magnet_bsdec(lua_State *L) {
     return 1;
 }
 
-static int magnet_bsenc(lua_State *L, const buffer_bs_escape_t esc) {
+static int magnet_bsenc(lua_State *L, const int esc_json) {
     if (lua_isnoneornil(L, -1)) {
         lua_pushlstring(L, "", 0);
         return 1;
@@ -1173,18 +1173,21 @@ static int magnet_bsenc(lua_State *L, const buffer_bs_escape_t esc) {
         return 1;
     }
     buffer * const b = magnet_tmpbuf_acquire(L);
-    buffer_append_bs_escaped(b, s.ptr, s.len, esc);
+    if (esc_json)
+        buffer_append_bs_escaped(b, s.ptr, s.len);
+    else
+        buffer_append_bs_escaped_json(b, s.ptr, s.len);
     lua_pushlstring(L, BUF_PTR_LEN(b));
     magnet_tmpbuf_release(b);
     return 1;
 }
 
 static int magnet_bsenc_default(lua_State *L) {
-    return magnet_bsenc(L, BS_ESCAPE_DEFAULT);
+    return magnet_bsenc(L, 0);
 }
 
 static int magnet_bsenc_json(lua_State *L) {
-    return magnet_bsenc(L, BS_ESCAPE_JSON);
+    return magnet_bsenc(L, 1);
 }
 
 static int magnet_xmlenc(lua_State *L) {

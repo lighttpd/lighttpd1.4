@@ -183,13 +183,9 @@ void buffer_append_string_encoded(buffer * restrict b, const char * restrict s, 
 __attribute_nonnull__()
 void buffer_append_string_c_escaped(buffer * restrict b, const char * restrict s, size_t s_len);
 
-typedef enum {
-    BS_ESCAPE_DEFAULT
-   ,BS_ESCAPE_JSON
-} buffer_bs_escape_t;
-
 /* escape non-printable chars, '"', '\\', and chars which high bit set */
-void buffer_append_bs_escaped (buffer * restrict b, const char * restrict s, size_t len, buffer_bs_escape_t esc);
+void buffer_append_bs_escaped (buffer * restrict b, const char * restrict s, size_t len);
+void buffer_append_bs_escaped_json (buffer * restrict b, const char * restrict s, size_t len);
 
 __attribute_nonnull__()
 void buffer_urldecode_path(buffer *b);

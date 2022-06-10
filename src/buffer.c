@@ -715,12 +715,10 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 
 void
 buffer_append_bs_escaped (buffer * const restrict b,
-                          const char * restrict s, const size_t len,
-                          const buffer_bs_escape_t esc)
+                          const char * restrict s, const size_t len)
 {
     /* replaces non-printable chars with escaped string
      * default: \xHH where HH is the hex representation of the byte
-     * json: \u00HH where HH is the hex representation of the byte
      * exceptions: " => \", \ => \\, whitespace chars => \n \t etc. */
     /* Intended for use escaping string to be surrounded by double-quotes */
     /* Performs single pass over string and is optimized for ASCII;
@@ -755,29 +753,61 @@ buffer_append_bs_escaped (buffer * const restrict b,
             d[1] = c;
             break;
           default:
-            if (0 == esc) { /* BS_ESCAPE_DEFAULT */
-                /* non printable char => \xHH */
-                d = buffer_extend(b, 4);
-                d[0] = '\\';
-                d[1] = 'x';
-                d += 2;
-            }
-            else {          /* BS_ESCAPE_JSON */
-                /*(technically do not have to escape DEL (\127) or higher)*/
-                /*(would be faster if handled in tighter do/while loop above)*/
-                if (c >= 127) {
-                    buffer_append_char(b, (char)c);
-                    break;
-                }
-                d = buffer_extend(b, 6);
-                d[0] = '\\';
-                d[1] = 'u';
-                d[2] = '0';
-                d[3] = '0';
-                d += 4;
-            }
-            d[0] = hex_chars_uc[c >> 4];
-            d[1] = hex_chars_uc[c & 0xF];
+            /* non printable char => \xHH */
+            d = buffer_extend(b, 4);
+            d[0] = '\\';
+            d[1] = 'x';
+            d[2] = hex_chars_uc[c >> 4];
+            d[3] = hex_chars_uc[c & 0xF];
+            break;
+        }
+    }
+}
+
+
+void
+buffer_append_bs_escaped_json (buffer * const restrict b,
+                               const char * restrict s, const size_t len)
+{
+    /* replaces non-printable chars with escaped string
+     * json: \u00HH where HH is the hex representation of the byte
+     * exceptions: " => \", \ => \\, whitespace chars => \n \t etc. */
+    /* Intended for use escaping string to be surrounded by double-quotes */
+    buffer_string_prepare_append(b, len);
+    for (const char * const end = s+len; s < end; ++s) {
+        unsigned int c;
+        const char * const ptr = s;
+        do {
+            c = *(const unsigned char *)s;
+        } while (c >= ' ' && c != '"' && c != '\\' && ++s < end);
+        if (s - ptr) buffer_append_string_len(b, ptr, s - ptr);
+
+        if (s == end)
+            return;
+
+        /* ('\a', '\v' shortcuts are technically not json-escaping) */
+        /* ('\0' is also omitted due to the possibility of string corruption if
+         *  the receiver supports decoding octal escapes (\000) and the escaped
+         *  string contains \0 followed by two digits not part of escaping)*/
+
+        char *d;
+        switch (c) {
+          case '\a':case '\b':case '\t':case '\n':case '\v':case '\f':case '\r':
+            c = "0000000abtnvfr"[c];
+            __attribute_fallthrough__
+          case '"': case '\\':
+            d = buffer_extend(b, 2);
+            d[0] = '\\';
+            d[1] = c;
+            break;
+          default:
+            d = buffer_extend(b, 6);
+            d[0] = '\\';
+            d[1] = 'u';
+            d[2] = '0';
+            d[3] = '0';
+            d[4] = hex_chars_uc[c >> 4];
+            d[5] = hex_chars_uc[c & 0xF];
             break;
         }
     }

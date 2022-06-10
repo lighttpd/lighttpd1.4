@@ -1098,7 +1098,7 @@ static int http_read_directory(handler_ctx * const p) {
 				p->jcomma = 1;
 				buffer_append_string_len(p->jb, CONST_STR_LEN( "{\"name\":\""));
 			}
-			buffer_append_bs_escaped(p->jb, d_name, dsz, BS_ESCAPE_JSON);
+			buffer_append_bs_escaped_json(p->jb, d_name, dsz);
 
 			const char *t;
 			size_t tlen;

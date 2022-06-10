@@ -144,6 +144,41 @@ static void test_buffer_append_path_len(void) {
 	buffer_free(b);
 }
 
+static void test_buffer_append_bs_escaped(void) {
+    buffer *b = buffer_init();
+
+    buffer_append_bs_escaped_json(b, CONST_STR_LEN(" "));
+    assert(buffer_eq_slen(b, CONST_STR_LEN(" ")));
+    buffer_clear(b);
+    buffer_append_bs_escaped_json(b, CONST_STR_LEN("\0"));
+    assert(buffer_eq_slen(b, CONST_STR_LEN("\\u0000")));
+    buffer_clear(b);
+    buffer_append_bs_escaped_json(b, CONST_STR_LEN("\1"));
+    assert(buffer_eq_slen(b, CONST_STR_LEN("\\u0001")));
+    buffer_clear(b);
+    buffer_append_bs_escaped_json(b, CONST_STR_LEN("\n"));
+    assert(buffer_eq_slen(b, CONST_STR_LEN("\\n")));
+    buffer_clear(b);
+    buffer_append_bs_escaped_json(b, CONST_STR_LEN("é"));
+    assert(buffer_eq_slen(b, CONST_STR_LEN("é")));
+    buffer_clear(b);
+    buffer_append_bs_escaped_json(b, CONST_STR_LEN("ö"));
+    assert(buffer_eq_slen(b, CONST_STR_LEN("ö")));
+
+  #if 0
+    buffer_clear(b);
+    magnet_buffer_append_bsdec(b, CONST_STR_LEN("\\u00E9"));
+    assert(buffer_eq_slen(b, CONST_STR_LEN("é")));
+    buffer_clear(b);
+    magnet_buffer_append_bsdec(b, CONST_STR_LEN("\\u00F6"));
+    assert(buffer_eq_slen(b, CONST_STR_LEN("ö")));
+  #endif
+
+    /* TODO: more */
+
+    buffer_free(b);
+}
+
 void test_buffer (void);
 void test_buffer (void)
 {
@@ -151,4 +186,5 @@ void test_buffer (void)
 	test_buffer_to_lower_upper();
 	test_buffer_string_space();
 	test_buffer_append_path_len();
+	test_buffer_append_bs_escaped();
 }

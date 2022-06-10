@@ -164,6 +164,13 @@ typedef struct {
     format_fields *default_format;/* allocated if default format */
 } plugin_data;
 
+typedef void(esc_fn_t)(buffer * restrict b, const char * restrict s, size_t len);
+
+typedef enum {
+    BS_ESCAPE_DEFAULT
+   ,BS_ESCAPE_JSON
+} buffer_bs_escape_t;
+
 INIT_FUNC(mod_accesslog_init) {
     return calloc(1, sizeof(plugin_data));
 }
@@ -584,14 +591,12 @@ TRIGGER_FUNC(log_access_periodic_flush) {
     return HANDLER_GO_ON;
 }
 
-#define accesslog_append_escaped buffer_append_bs_escaped
-
 static void
 accesslog_append_buffer (buffer * const restrict dest,
-                         const buffer * const restrict b, const int esc)
+                         const buffer * const restrict b, esc_fn_t esc_fn)
 {
     if (!buffer_string_is_empty(b))
-        accesslog_append_escaped(dest, BUF_PTR_LEN(b), esc);
+        esc_fn(dest, BUF_PTR_LEN(b));
     else
         buffer_append_char(dest, '-');
 }
@@ -610,7 +615,8 @@ __attribute_noinline__
 static void
 accesslog_append_cookie (buffer * const restrict dest,
                          const request_st * const restrict r,
-                         const buffer * const restrict name, const int esc)
+                         const buffer * const restrict name,
+                         esc_fn_t esc_fn)
 {
     const buffer * const vb =
       http_header_request_get(r, HTTP_HEADER_COOKIE, CONST_STR_LEN("Cookie"));
@@ -625,7 +631,7 @@ accesslog_append_cookie (buffer * const restrict dest,
             for (str = v; *str != '\0' && *str != ';'; ++str) ;
             if (str == v) break;
             do { --str; } while (str > v && (*str == ' ' || *str == '\t'));
-            accesslog_append_escaped(dest, v, str - v + 1, esc);
+            esc_fn(dest, v, str - v + 1);
             break;
         }
         else {
@@ -758,7 +764,7 @@ __attribute_cold__
 __attribute_noinline__
 static void
 log_access_record_cold (buffer * const b, const request_st * const r,
-                        const format_field * const f, const int esc)
+                        const format_field * const f, esc_fn_t esc_fn)
 {
     connection * const con = r->con;
     switch (f->field) {
@@ -797,16 +803,15 @@ log_access_record_cold (buffer * const b, const request_st * const r,
         {
             const uint32_t len = buffer_clen(&r->target);
             const char * const qmark = memchr(r->target.ptr, '?', len);
-            accesslog_append_escaped(b, r->target.ptr,
-                                     qmark ? (uint32_t)(qmark - r->target.ptr)
-                                           : len, esc);
+            esc_fn(b, r->target.ptr,
+                   qmark ? (uint32_t)(qmark - r->target.ptr) : len);
         }
         break;
       case FORMAT_QUERY_STRING:
-        accesslog_append_escaped(b, BUF_PTR_LEN(&r->uri.query), esc);
+        esc_fn(b, BUF_PTR_LEN(&r->uri.query));
         break;
       case FORMAT_FILENAME:
-        accesslog_append_buffer(b, &r->physical.path, esc);
+        accesslog_append_buffer(b, &r->physical.path, esc_fn);
         break;
       case FORMAT_CONNECTION_STATUS:
         buffer_append_char(b, (r->state == CON_STATE_RESPONSE_END)
@@ -829,7 +834,7 @@ log_access_record_cold (buffer * const b, const request_st * const r,
     }
 }
 
-static int log_access_record (const request_st * const r, buffer * const b, format_fields * const parsed_format, const buffer_bs_escape_t esc) {
+static int log_access_record (const request_st * const r, buffer * const b, format_fields * const parsed_format, esc_fn_t esc) {
 	const buffer *vb;
 	unix_timespec64_t ts = { 0, 0 };
 	int flush = 0;
@@ -880,7 +885,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				/*(attempt to reconstruct request line)*/
 				http_method_append(b, r->http_method);
 				buffer_append_char(b, ' ');
-				accesslog_append_escaped(b, BUF_PTR_LEN(&r->target_orig), esc);
+				esc(b, BUF_PTR_LEN(&r->target_orig));
 				buffer_append_char(b, ' ');
 				http_version_append(b, r->http_version);
 				break;
@@ -930,8 +935,11 @@ REQUESTDONE_FUNC(log_access_write) {
       ? (buffer_clear(r->tmp_buf), r->tmp_buf)
       : &fdlog->b;
 
+    esc_fn_t * const esc_fn = !p->conf.escaping
+      ? buffer_append_bs_escaped
+      : buffer_append_bs_escaped_json;
     const int flush =
-      log_access_record(r, b, p->conf.parsed_format, p->conf.escaping);
+      log_access_record(r, b, p->conf.parsed_format, esc_fn);
 
   #ifdef HAVE_SYSLOG_H
     if (p->conf.use_syslog) {
