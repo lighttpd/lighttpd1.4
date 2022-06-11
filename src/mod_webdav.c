@@ -2319,6 +2319,22 @@ webdav_405_no_db (request_st * const r)
 #endif
 
 
+__attribute_pure__
+static int
+webdav_reqbody_type_xml (request_st * const r)
+{
+    const buffer * const vb =
+      http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE,
+                               CONST_STR_LEN("Content-Type"));
+    if (!vb) return 0;
+
+    const char * const semi = strchr(vb->ptr, ';');
+    uint32_t len = semi ? (uint32_t)(semi - vb->ptr) : buffer_clen(vb);
+    return ((len==15 && 0==memcmp(vb->ptr, "application/xml", 15))
+            || (len==8 && 0==memcmp(vb->ptr, "text/xml", 8)));
+}
+
+
 static int
 webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
 {
@@ -4151,6 +4167,10 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
             handler_t rc = r->con->reqbody_read(r);
             if (rc != HANDLER_GO_ON) return rc;
         }
+        if (!webdav_reqbody_type_xml(r)) {
+            http_status_set_error(r, 415); /* Unsupported Media Type */
+            return HANDLER_FINISHED;
+        }
       #else
         /* PROPFIND is idempotent and safe, so even if parsing XML input is not
          * supported, live properties can still be produced, so treat as allprop
@@ -5374,14 +5394,19 @@ mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
     if (!pconf->sql)
         return webdav_405_no_db(r);
 
+    if (r->state == CON_STATE_READ_POST) {
+        handler_t rc = r->con->reqbody_read(r);
+        if (rc != HANDLER_GO_ON) return rc;
+    }
+
     if (0 == r->reqbody_length) {
         http_status_set_error(r, 400); /* Bad Request */
         return HANDLER_FINISHED;
     }
 
-    if (r->state == CON_STATE_READ_POST) {
-        handler_t rc = r->con->reqbody_read(r);
-        if (rc != HANDLER_GO_ON) return rc;
+    if (!webdav_reqbody_type_xml(r)) {
+        http_status_set_error(r, 415); /* Unsupported Media Type */
+        return HANDLER_FINISHED;
     }
 
     struct stat st;
