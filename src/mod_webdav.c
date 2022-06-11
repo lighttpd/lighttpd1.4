@@ -2304,6 +2304,21 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
 }
 
 
+#ifdef USE_PROPPATCH
+__attribute_cold__
+__attribute_noinline__
+static handler_t
+webdav_405_no_db (request_st * const r)
+{
+    http_header_response_set(r, HTTP_HEADER_ALLOW,
+      CONST_STR_LEN("Allow"),
+      CONST_STR_LEN("GET, HEAD, PROPFIND, DELETE, MKCOL, PUT, MOVE, COPY"));
+    http_status_set_error(r, 405); /* Method Not Allowed */
+    return HANDLER_FINISHED;
+}
+#endif
+
+
 static int
 webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
 {
@@ -5356,14 +5371,8 @@ mod_webdav_copymove (request_st * const r, const plugin_config * const pconf)
 static handler_t
 mod_webdav_proppatch (request_st * const r, const plugin_config * const pconf)
 {
-    if (!pconf->sql) {
-        http_header_response_set(r, HTTP_HEADER_ALLOW,
-                                 CONST_STR_LEN("Allow"),
-                                 CONST_STR_LEN("GET, HEAD, PROPFIND, DELETE, "
-                                               "MKCOL, PUT, MOVE, COPY"));
-        http_status_set_error(r, 405); /* Method Not Allowed */
-        return HANDLER_FINISHED;
-    }
+    if (!pconf->sql)
+        return webdav_405_no_db(r);
 
     if (0 == r->reqbody_length) {
         http_status_set_error(r, 400); /* Bad Request */
