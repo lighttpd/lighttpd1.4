@@ -71,6 +71,8 @@ optional packages for optional features ::
   libdbi-dbd-mysql
   libdbi-dbd-pgsql
   libdbi-dbd-sqlite
+  libdeflate          # libdeflate ./configure --with-libdeflate
+  libdeflate-devel
   libmaxminddb        # MaxMindDB  ./configure --with-maxminddb
   libmaxminddb-devel
   libpq               # Postgresql ./configure --with-pgsql
