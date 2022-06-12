@@ -320,6 +320,24 @@ static void config_check_module_duplicates (server *srv) {
 }
 
 __attribute_pure__
+__attribute_noinline__
+static int config_has_opt_enabled (const server * const srv, const char * const opt, const uint32_t olen) {
+    for (uint32_t i = 0; i < srv->config_context->used; ++i) {
+        const data_config * const config =
+          (const data_config *)srv->config_context->data[i];
+        const data_unset * const du =
+          array_get_data_unset(config->value, opt, olen);
+        if (NULL == du) continue;
+        if (du->type == TYPE_ARRAY
+            ? ((data_array *)du)->value.used != 0
+            : config_plugin_value_tobool(du, 0))
+            return 1;
+    }
+    return 0;
+}
+
+__attribute_pure__
+__attribute_noinline__
 static const char * config_has_opt_and_value (const server * const srv, const char * const opt, const uint32_t olen, const char * const v, const uint32_t vlen) {
     for (uint32_t i = 0; i < srv->config_context->used; ++i) {
         const data_config * const config =
@@ -333,6 +351,21 @@ static const char * config_has_opt_and_value (const server * const srv, const ch
     return NULL;
 }
 
+__attribute_noinline__
+static void config_compat_module_remove (server *srv, const char *module, uint32_t len) {
+    array *modules = array_init(srv->srvconf.modules->used);
+
+    for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
+        const data_string *ds = (data_string *)srv->srvconf.modules->data[i];
+        if (!buffer_eq_slen(&ds->value, module, len))
+            array_insert_value(modules, BUF_PTR_LEN(&ds->value));
+    }
+
+    array_free(srv->srvconf.modules);
+    srv->srvconf.modules = modules;
+}
+
+__attribute_noinline__
 static void config_compat_module_prepend (server *srv, const char *module, uint32_t len) {
     array *modules = array_init(srv->srvconf.modules->used+4);
     array_insert_value(modules, module, len);
@@ -431,6 +464,24 @@ static void config_compat_module_load (server *srv) {
             if (NULL == dyn_name)
                 dyn_name = m->ptr;
         }
+    }
+
+    /* check if some default modules are used and enabled
+     * (Each dynamically loaded modules takes at least 20k memory,
+     *  so avoid loading some default modules unless used and enabled) */
+
+    if (!config_has_opt_enabled(srv, CONST_STR_LEN("index-file.names"))
+        && !config_has_opt_enabled(srv, CONST_STR_LEN("server.indexfiles"))) {
+        if (!prepend_mod_indexfile)
+            config_compat_module_remove(srv, CONST_STR_LEN("mod_indexfile"));
+        prepend_mod_indexfile = 0;
+    }
+
+    if (!config_has_opt_enabled(srv, CONST_STR_LEN("dir-listing.activate"))
+        && !config_has_opt_enabled(srv, CONST_STR_LEN("server.dir-listing"))) {
+        if (!append_mod_dirlisting)
+            config_compat_module_remove(srv, CONST_STR_LEN("mod_dirlisting"));
+        append_mod_dirlisting = 0;
     }
 
     /* prepend default modules */
