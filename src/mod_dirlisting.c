@@ -18,6 +18,7 @@
 #include "buffer.h"
 #include "fdevent.h"
 #include "http_chunk.h"
+#include "http_etag.h"
 #include "http_header.h"
 #include "keyvalue.h"
 #include "response.h"
@@ -1462,9 +1463,20 @@ REQUEST_FUNC(mod_dirlisting_reset) {
 }
 
 
+static void mod_dirlisting_cache_control (request_st * const r, unix_time64_t max_age) {
+    if (!light_btst(r->resp_htags, HTTP_HEADER_CACHE_CONTROL)) {
+        buffer * const vb =
+          http_header_response_set_ptr(r, HTTP_HEADER_CACHE_CONTROL,
+                                       CONST_STR_LEN("Cache-Control"));
+        buffer_append_string_len(vb, CONST_STR_LEN("max-age="));
+        buffer_append_int(vb, max_age);
+    }
+}
+
+
 static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data * const p) {
     /* optional: an external process can trigger a refresh by deleting the cache
-     * entry when the external process detects (or initiaties) changes to dir */
+     * entry when the external process detects (or initiates) changes to dir */
     buffer * const tb = r->tmp_buf;
     buffer_copy_path_len2(tb, BUF_PTR_LEN(p->conf.cache->path),
                               BUF_PTR_LEN(&r->physical.path));
@@ -1473,7 +1485,9 @@ static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data *
     stat_cache_entry * const sce = stat_cache_get_entry_open(tb, 1);
     if (NULL == sce || sce->fd == -1)
         return HANDLER_GO_ON;
-    if (TIME64_CAST(sce->st.st_mtime) + p->conf.cache->max_age < log_epoch_secs)
+    const unix_time64_t max_age =
+      TIME64_CAST(sce->st.st_mtime) + p->conf.cache->max_age - log_epoch_secs;
+    if (max_age < 0)
         return HANDLER_GO_ON;
 
     !p->conf.json
@@ -1503,6 +1517,16 @@ static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data *
                                    CONST_STR_LEN("Content-Type"));
         http_response_body_clear(r, 0);
         return HANDLER_GO_ON;
+    }
+
+    /* Cache-Control and ETag (also done in mod_dirlisting_cache_add())*/
+    mod_dirlisting_cache_control(r, max_age);
+    if (0 != r->conf.etag_flags) {
+        const buffer *etag = stat_cache_etag_get(sce, r->conf.etag_flags);
+        if (etag && !buffer_is_blank(etag))
+            http_header_response_set(r, HTTP_HEADER_ETAG,
+                                     CONST_STR_LEN("ETag"),
+                                     BUF_PTR_LEN(etag));
     }
 
     r->resp_body_finished = 1;
@@ -1581,8 +1605,20 @@ static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const 
     const int fd = fdevent_mkostemp(oldpath, 0);
     if (fd < 0) return;
     if (mod_dirlisting_write_cq(fd, &r->write_queue, r->conf.errh)
-        && 0 == rename(oldpath, newpath))
+        && 0 == rename(oldpath, newpath)) {
         stat_cache_invalidate_entry(newpath, len);
+        /* Cache-Control and ETag (also done in mod_dirlisting_cache_check())*/
+        mod_dirlisting_cache_control(r, hctx->conf.cache->max_age);
+        if (0 != r->conf.etag_flags) {
+            struct stat st;
+            if (0 == fstat(fd, &st)) {
+                buffer * const vb =
+                  http_header_response_set_ptr(r, HTTP_HEADER_ETAG,
+                                               CONST_STR_LEN("ETag"));
+                http_etag_create(vb, &st, r->conf.etag_flags);
+            }
+        }
+    }
     else
         unlink(oldpath);
     close(fd);
