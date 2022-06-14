@@ -1275,8 +1275,9 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 #endif
 
 
-#if defined(BORINGSSL_API_VERSION) \
- || defined(LIBRESSL_VERSION_NUMBER)
+#if OPENSSL_VERSION_NUMBER < 0x10101000L \
+ || defined(BORINGSSL_API_VERSION) \
+ || defined(LIBRESSL_VERSION_NUMBER) \
 static unix_time64_t
 mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time);
 #endif
@@ -1284,16 +1285,18 @@ mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time);
 static int
 mod_openssl_cert_is_active (const X509 *crt)
 {
-    const ASN1_TIME *notBefore = X509_get0_notBefore(crt);
-    const ASN1_TIME *notAfter  = X509_get0_notAfter(crt);
   #if OPENSSL_VERSION_NUMBER < 0x10101000L \
    || defined(BORINGSSL_API_VERSION) \
    || defined(LIBRESSL_VERSION_NUMBER)
+    const ASN1_TIME *notBefore = X509_get_notBefore(crt);
+    const ASN1_TIME *notAfter  = X509_get_notAfter(crt);   
     const unix_time64_t before = mod_openssl_asn1_time_to_posix(notBefore);
     const unix_time64_t after  = mod_openssl_asn1_time_to_posix(notAfter);
     const unix_time64_t now = log_epoch_secs;
     return (before <= now && now <= after);
   #else /*(-2 is an error from ASN1_TIME_cmp_time_t(); test cmp for -1, 0, 1)*/
+    const ASN1_TIME *notBefore = X509_get0_notBefore(crt);
+    const ASN1_TIME *notAfter  = X509_get0_notAfter(crt);
     const unix_time64_t now = log_epoch_secs;
     const int before_cmp = ASN1_TIME_cmp_time_t(notBefore, (time_t)now);
     const int after_cmp  = ASN1_TIME_cmp_time_t(notAfter,  (time_t)now);
