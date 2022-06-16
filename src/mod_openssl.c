@@ -1275,10 +1275,18 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 #endif
 
 
-#if defined(BORINGSSL_API_VERSION) \
+#if OPENSSL_VERSION_NUMBER < 0x10101000L \
+ || defined(BORINGSSL_API_VERSION) \
  || defined(LIBRESSL_VERSION_NUMBER)
 static unix_time64_t
 mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time);
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L \
+ && !defined(BORINGSSL_API_VERSION) \
+ && !defined(LIBRESSL_VERSION_NUMBER)
+#define X509_get0_notBefore X509_get_notBefore
+#define X509_get0_notAfter  X509_get_notAfter
 #endif
 
 static int
