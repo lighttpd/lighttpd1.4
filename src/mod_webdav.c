@@ -2319,13 +2319,14 @@ webdav_405_no_db (request_st * const r)
 #endif
 
 
+#ifdef USE_PROPPATCH
 __attribute_pure__
 static int
 webdav_reqbody_type_xml (request_st * const r)
 {
     const buffer * const vb =
-      http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE,
-                               CONST_STR_LEN("Content-Type"));
+      http_header_request_get(r, HTTP_HEADER_CONTENT_TYPE,
+                              CONST_STR_LEN("Content-Type"));
     if (!vb) return 0;
 
     const char * const semi = strchr(vb->ptr, ';');
@@ -2333,6 +2334,7 @@ webdav_reqbody_type_xml (request_st * const r)
     return ((len==15 && 0==memcmp(vb->ptr, "application/xml", 15))
             || (len==8 && 0==memcmp(vb->ptr, "text/xml", 8)));
 }
+#endif
 
 
 static int
