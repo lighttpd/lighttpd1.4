@@ -1414,7 +1414,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 			if (pwd->pw_uid == 0) {
 				log_error(srv->errh, __FILE__, __LINE__,
-				  "I will not set uid to 0\n");
+				  "I will not set uid to 0.  Perhaps you should comment out server.username in lighttpd.conf\n");
 				return -1;
 			}
 
@@ -1428,7 +1428,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		if (NULL != grp) {
 			if (grp->gr_gid == 0) {
 				log_error(srv->errh, __FILE__, __LINE__,
-				  "I will not set gid to 0\n");
+				  "I will not set gid to 0.  Perhaps you should comment out server.groupname in lighttpd.conf\n");
 				return -1;
 			}
 		}
