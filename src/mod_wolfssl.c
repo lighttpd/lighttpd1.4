@@ -1104,7 +1104,7 @@ mod_openssl_patch_config (request_st * const r, plugin_config * const pconf)
 static int
 safer_X509_NAME_oneline(X509_NAME *name, char *buf, size_t sz)
 {
-  #if LIBWOLFSSL_VERSION_HEX < 0x04003000
+  #if LIBWOLFSSL_VERSION_HEX < 0x04004000
     UNUSED(name);
     UNUSED(sz);
   #else
