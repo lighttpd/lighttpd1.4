@@ -43,6 +43,20 @@ static void check_all_len_3 (const base64_charset enc) {
 	}
 }
 
+static void check_decode_ws_3 (const base64_charset enc) {
+	buffer_clear(check);
+	force_assert(NULL != buffer_append_base64_decode(check, CONST_STR_LEN("YWJj"), enc));
+	force_assert(buffer_eq_slen(check, CONST_STR_LEN("abc")));
+
+	buffer_clear(check);
+	force_assert(NULL != buffer_append_base64_decode(check, CONST_STR_LEN("YWJj\r\n"), enc));
+	force_assert(buffer_eq_slen(check, CONST_STR_LEN("abc")));
+
+	buffer_clear(check);
+	force_assert(NULL != buffer_append_base64_decode(check, CONST_STR_LEN("YWJj\r\nYW\nJj\r\n"), enc));
+	force_assert(buffer_eq_slen(check, CONST_STR_LEN("abcabc")));
+}
+
 void test_base64 (void);
 void test_base64 (void)
 {
@@ -53,6 +67,7 @@ void test_base64 (void)
 		check_all_len_1(encs[enc]);
 		check_all_len_2(encs[enc]);
 		check_all_len_3(encs[enc]);
+		check_decode_ws_3(encs[enc]);
 	}
 
 	buffer_free(check);

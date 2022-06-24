@@ -38,17 +38,18 @@ static const signed char base64_url_reverse_table[] = {
 };
 
 size_t li_base64_dec(unsigned char * const result, const size_t out_length, const char * const in, const size_t in_length, const base64_charset charset) {
-    size_t i;
+    const unsigned char *un = (const unsigned char *)in;
+    const unsigned char * const end = un + in_length;
     const signed char * const base64_reverse_table = (charset)
       ? base64_url_reverse_table                     /* BASE64_URL */
       : base64_standard_reverse_table;               /* BASE64_STANDARD */
 
     int_fast32_t ch = 0;
     int_fast32_t out4 = 0;
+    size_t i = 0;
     size_t out_pos = 0;
-    for (i = 0; i < in_length; i++) {
-        const uint_fast32_t c = ((unsigned char *)in)[i];
-        ch = (c < 128) ? base64_reverse_table[c] : -1;
+    for (; un < end; ++un) {
+        ch = (*un < 128) ? base64_reverse_table[*un] : -1;
         if (__builtin_expect( (ch < 0), 0)) {
             /* skip formatted base64; skip whitespace ('\r' '\n' '\t' ' ')*/
             if (-2 == ch) /*(loose check; skip ' ', all ctrls not \127 or \0)*/
@@ -57,7 +58,7 @@ size_t li_base64_dec(unsigned char * const result, const size_t out_length, cons
         }
 
         out4 = (out4 << 6) | ch;
-        if ((i & 3) == 3) {
+        if ((++i & 3) == 0) {
             result[out_pos]   = (out4 >> 16) & 0xFF;
             result[out_pos+1] = (out4 >>  8) & 0xFF;
             result[out_pos+2] = (out4      ) & 0xFF;
@@ -68,8 +69,8 @@ size_t li_base64_dec(unsigned char * const result, const size_t out_length, cons
 
     /* permit base64 string ending with pad chars (ch == -3); not checking
      * for one or two pad chars + optional whitespace reaches in_length) */
-    /* permit base64 string truncated before in_length (in[i] == '\0') */
-    switch (i == in_length || ch == -3 || in[i] != '\0' ? (i & 3) : 1) {
+    /* permit base64 string truncated before in_length (*un == '\0') */
+    switch (un == end || ch == -3 || *un != '\0' ? (i & 3) : 1) {
       case 3:
         result[out_pos++] = (out4 >> 10);
         out4 <<= 2;
