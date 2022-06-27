@@ -397,13 +397,7 @@ int buffer_eq_icase_ssn(const char * const a, const char * const b, const size_t
     for (size_t i = 0; i < len; ++i) {
         unsigned int ca = ((unsigned char *)a)[i];
         unsigned int cb = ((unsigned char *)b)[i];
-        if (ca != cb) {
-            ca |= 0x20;
-            cb |= 0x20;
-            if (ca != cb) return 0;
-            if (!light_islower(ca)) return 0;
-            if (!light_islower(cb)) return 0;
-        }
+        if (ca != cb && ((ca ^ cb) != 0x20 || !light_isalpha(ca))) return 0;
     }
     return 1;
 }
