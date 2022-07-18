@@ -1540,8 +1540,8 @@ static int mod_deflate_using_libdeflate (handler_ctx * const hctx, const plugin_
         return mod_deflate_using_libdeflate_err(hctx, fn, fd);
     }
 
-    /*void *addr = mmap(NULL, sz, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);*/
-    void * const addr = mmap(NULL, sz, PROT_WRITE, MAP_PRIVATE, fd, 0);
+    /*void *addr = mmap(NULL, sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);*/
+    void * const addr = mmap(NULL, sz, PROT_WRITE, MAP_SHARED, fd, 0);
     if (MAP_FAILED == addr) {
         log_perror(hctx->r->conf.errh, __FILE__, __LINE__, "mmap");
         return mod_deflate_using_libdeflate_err(hctx, fn, fd);
