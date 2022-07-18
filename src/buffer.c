@@ -460,7 +460,7 @@ void buffer_substr_replace (buffer * const restrict b, const size_t offset,
     const size_t rlen = buffer_clen(replace);
 
     if (rlen > len) {
-        buffer_extend(b, blen-len+rlen);
+        buffer_extend(b, rlen-len);
         memmove(b->ptr+offset+rlen, b->ptr+offset+len, blen-offset-len);
     }
 
