@@ -189,7 +189,15 @@
 #include <unistd.h>     /* getpid() linkat() rmdir() unlinkat() */
 
 #ifdef RENAME_NOREPLACE /*(renameat2() not well-supported yet)*/
+#ifndef __ANDROID_API__ /*(not yet Android?)*/
 #define HAVE_RENAMEAT2
+#endif
+#endif
+
+#ifdef _DIRENT_HAVE_D_TYPE
+#ifndef DTTOIF /* missing on Android? */
+#define DTTOIF(dirtype) ((dirtype) << 12)
+#endif
 #endif
 
 #ifdef HAVE_COPY_FILE_RANGE
