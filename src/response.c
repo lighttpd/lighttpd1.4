@@ -773,7 +773,8 @@ http_response_write_prepare(request_st * const r)
 
     if (r->resp_body_finished) {
         /* check for Range request (current impl requires resp_body_finished) */
-        if (r->conf.range_requests && http_range_rfc7233(r) >= 400)
+        if (r->conf.range_requests && r->http_status == 200
+            && http_range_rfc7233(r) >= 400)
             http_response_static_errdoc(r); /* 416 Range Not Satisfiable */
 
         /* set content-length if length is known and not already set */
