@@ -376,6 +376,10 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 	 *  binary addresses are matched further below) */
 	for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
 		if (buffer_is_equal(srv->srv_sockets.ptr[i]->srv_token, host_token)) {
+			if ((unsigned short)~0u == srv->srv_sockets.ptr[i]->sidx) {
+				srv->srv_sockets.ptr[i]->sidx = sidx;
+				srv->srv_sockets.ptr[i]->is_ssl = s->ssl_enabled;
+			}
 			return 0;
 		}
 	}
