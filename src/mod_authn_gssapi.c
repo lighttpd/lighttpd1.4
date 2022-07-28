@@ -411,17 +411,14 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
         goto end;
     }
 
-    if (!(acc_flags & GSS_C_CONF_FLAG)) {
-        log_error(r->conf.errh, __FILE__, __LINE__, "No confidentiality for user: %s", (char *)token_out.value);
-        goto end;
-    }
-
     /* check the allow-rules */
     if (!http_auth_match_rules(require, token_out.value, NULL, NULL)) {
         goto end;
     }
 
     if (p->conf.auth_gssapi_store_creds) {
+        if (!(acc_flags & GSS_C_CONF_FLAG))
+            log_error(r->conf.errh, __FILE__, __LINE__, "No confidentiality for user: %s", (char *)token_out.value);
         if (!(acc_flags & GSS_C_DELEG_FLAG)) {
             log_error(r->conf.errh, __FILE__, __LINE__, "Unable to delegate credentials for user: %s", (char *)token_out.value);
             goto end;
