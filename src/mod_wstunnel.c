@@ -485,7 +485,10 @@ static handler_t wstunnel_handler_setup (request_st * const r, plugin_data * con
     hctx->errh = r->conf.errh;/*(for mod_wstunnel-specific DEBUG_* macros)*/
     hctx->conf = p->conf; /*(copies struct)*/
     hybivers = wstunnel_check_request(r, hctx);
-    if (hybivers < 0) return HANDLER_FINISHED;
+    if (hybivers < 0) {
+        r->handler_module = NULL;
+        return HANDLER_FINISHED;
+    }
     hctx->hybivers = hybivers;
     if (0 == hybivers) {
         DEBUG_LOG_INFO("WebSocket Version = %s", "hybi-00");
