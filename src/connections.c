@@ -1247,9 +1247,11 @@ connection_state_machine_h2 (connection * const con)
                         || (r->conf.stream_response_body
                             & (FDEVENT_STREAM_RESPONSE
                               |FDEVENT_STREAM_RESPONSE_BUFMIN)))) {
+                    /*(subtract 9 byte HTTP/2 frame overhead from each 16k DATA
+                     * frame for more efficient sending of large files)*/
                     /*(use smaller max per stream if marked 'incremental' (w/ 0)
                      * to give more streams a chance to send in parallel)*/
-                    uint32_t dlen = (r->h2_prio & 1) ? 32768 : 8192;
+                    uint32_t dlen = (r->h2_prio & 1) ? 32768-18 : 8192;
                     if (dlen > (uint32_t)max_bytes) dlen = (uint32_t)max_bytes;
                     dlen = h2_send_cqdata(r, con, &r->write_queue, dlen);
                     if (dlen) { /*(do not resched (spin) if swin empty window)*/
