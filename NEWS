@@ -3,6 +3,35 @@
 NEWS
 ====
 
+- 1.4.66 - 2022-08-07
+  * [core] h2: optim: send window update in 16k units
+  * [mod_magnet] reset for http-response-send-file
+  * [multiple] fix json encoding
+  * [core] buffer_append_bs_escaped_json()
+  * [autoconf] update ax_prog_cc_for_build.m4
+  * [doc] add libdeflate to INSTALL
+  * [mod_webdav] cold func if xml reqbody w/o db conf
+  * [mod_webdav] check reqbody Content-Type is XML
+  * [doc] more consistent use of vars in examples
+  * [core] do not load indexfile, dirlisting if unused
+  * [mod_dirlisting] send ETag, Cache-Control w/ cache
+  * [mod_openssl] compile compat w/ openssl < 1.1.0
+  * [mod_webdav] webdav_reqbody_type_xml() fixes
+  * [core] clarify server.username = "root" error msg
+  * [mod_wolfssl] compat with older wolfssl versions
+  * [core] fix li_base64_dec() on whitespace
+  * [core] perf tweak buffer_eq_icase_ssn()
+  * [mod_deflate] fix use of libdeflate for files>128k (fixes #3161)
+  * [core] fix buffer_substr_replace() extend (fixes #3160)
+  * [mod_webdav] build with Android NDK
+  * [core] check r->http_status before handling Range
+  * [core] preprocessor option to force crypto lib
+  * [core] fix SIGUSR1 graceful restart w/ TLS (fixes #3164)
+  * [mod_authn_gssapi] warn if no confidentiality flag (fixes #3163)
+  * [mod_wstunnel] fix crash with bad hybivers (fixes #3165)
+  * [core] perf: adjust max h2 stream send increment
+  * [core] fix HTTP/2 downloads >= 4GiB (fixes #3166)
+
 - 1.4.65 - 2022-06-07
   * [build] meson: fix typo in variable name
   * [build] autoconf: report if building with zstd
