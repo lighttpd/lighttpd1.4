@@ -544,7 +544,7 @@ int fdevent_is_tcp_half_closed(int fd) {
     return (0 == getsockopt(fd, IPPROTO_TCP, TCP_CONNECTION_INFO, &tcpi, &tlen)
             && tcpi.tcpi_state == TCPS_CLOSE_WAIT);
   #elif defined(TCP_INFO) && defined(TCPS_CLOSE_WAIT)
-    /* FreeBSD, NetBSD (not present in OpenBSD or DragonFlyBSD) */
+    /* FreeBSD, NetBSD, OpenBSD (not present in DragonFlyBSD) */
     struct tcp_info tcpi;
     socklen_t tlen = sizeof(tcpi);
     return (0 == getsockopt(fd, IPPROTO_TCP, TCP_INFO, &tcpi, &tlen)
