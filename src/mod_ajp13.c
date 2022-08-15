@@ -812,6 +812,12 @@ ajp13_recv_parse_loop (request_st * const r, handler_ctx * const hctx)
         switch(ptr[4]) {
         case AJP13_SEND_HEADERS:
             if (0 == r->resp_body_started) {
+                if (plen < 3) {
+                    log_error(errh, __FILE__, __LINE__,
+                      "AJP13: headers packet received with invalid length");
+                    return HANDLER_FINISHED;
+                }
+
                 buffer *hdrs = hctx->response;
                 if (NULL == hdrs) {
                     hdrs = r->tmp_buf;
