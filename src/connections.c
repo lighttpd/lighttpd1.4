@@ -1868,7 +1868,6 @@ connection_handle_read_post_state (request_st * const r)
             is_closed = 1;
     }
     else if (con->is_readable > 0) {
-        con->read_idle_ts = log_monotonic_secs;
         const off_t max_per_read =
           !(r->conf.stream_request_body /*(if not streaming request body)*/
             & (FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN))
@@ -1884,6 +1883,7 @@ connection_handle_read_post_state (request_st * const r)
             is_closed = 1;
             break;
         default:
+	    con->read_idle_ts = log_monotonic_secs;
             break;
         }
 
@@ -1920,7 +1920,7 @@ connection_handle_read_post_state (request_st * const r)
         chunkqueue_remove_finished_chunks(cq);
     }
 
-    if (dst_cq->bytes_in == (off_t)r->reqbody_length) {
+    if (r->reqbody_length > 0 && dst_cq->bytes_in == (off_t)r->reqbody_length) {
         /* Content is ready */
         r->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
         if (r->state == CON_STATE_READ_POST) {
