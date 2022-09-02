@@ -1071,7 +1071,7 @@ connection_revents_err (request_st * const r, connection * const con)
           ~(FDEVENT_STREAM_REQUEST_BUFMIN|FDEVENT_STREAM_REQUEST_POLLIN);
         r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLRDHUP;
         con->is_readable = 1; /*(can read 0 for end-of-stream)*/
-        if (chunkqueue_is_empty(con->read_queue)) r->keep_alive = 0;
+        r->keep_alive = 0;
         if (r->reqbody_length < -1)/*(transparent proxy mode; no more rd data)*/
             r->reqbody_length = r->reqbody_queue.bytes_in;
         if (sock_addr_get_family(&con->dst_addr) == AF_UNIX) {
@@ -1438,7 +1438,7 @@ static void connection_check_timeout (connection * const con, const unix_time64_
         if (changed)
             con->is_readable = 0;
     }
-    else if (waitevents & FDEVENT_IN) {
+    else if ((waitevents & FDEVENT_IN) || r->state == CON_STATE_READ_POST || r->state == CON_STATE_READ) {
         if (con->request_count == 1 || r->state != CON_STATE_READ) {
             /* e.g. CON_STATE_READ_POST || CON_STATE_WRITE */
             if (cur_ts - con->read_idle_ts > r->conf.max_read_idle) {
