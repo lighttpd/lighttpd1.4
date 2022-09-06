@@ -264,146 +264,46 @@ if not(get_option('build_static'))
 	endif
 endif
 
-libbrotli = []
-if get_option('with_brotli')
-	libbrotli = [ compiler.find_library('brotlienc') ]
-	if compiler.has_function('BrotliEncoderCreateInstance', args: defs, dependencies: libbrotli, prefix: '#include <brotli/encode.h>')
-		conf_data.set('HAVE_BROTLI_ENCODE_H', true)
-		conf_data.set('HAVE_BROTLI', true)
-	else
-		error('Couldn\'t find brotli header / library')
-	endif
-endif
+libbrotli = dependency('libbrotlienc', required: get_option('with_brotli'))
+conf_data.set('HAVE_BROTLI_ENCODE_H', libbrotli.found())
+conf_data.set('HAVE_BROTLI', libbrotli.found())
 
-libbz2 = []
-if get_option('with_bzip')
-	libbz2 = [ compiler.find_library('bz2') ]
-	if compiler.has_function('BZ2_bzCompress', args: defs, dependencies: libbz2, prefix: '#include <bzlib.h>')
-		conf_data.set('HAVE_BZLIB_H', true)
-		conf_data.set('HAVE_LIBBZ2', true)
-	else
-		error('Couldn\'t find bz2 header / library')
-	endif
-endif
+libbz2 = compiler.find_library('bz2', required: get_option('with_bzip'))
+conf_data.set('HAVE_BZLIB_H', libbz2.found())
+conf_data.set('HAVE_LIBBZ2', libbz2.found())
 
-if get_option('with_dbi')
-	libdbi = dependency('dbi', required: false)
-	if libdbi.found()
-		libdbi = [ libdbi ]
-	else
-		libdbi = [ compiler.find_library('dbi') ]
-		if not(compiler.has_function('dbi_conn_connect', args: defs, dependencies: libdbi, prefix: '#include <dbi/dbi.h>'))
-			error('Couldn\'t find dbi/dbi.h or dbi_conn_connect in lib dbi')
-		endif
-	endif
-	conf_data.set('HAVE_DBI', true)
-endif
+libdbi = dependency('dbi', required: get_option('with_dbi'))
+conf_data.set('HAVE_DBI', libdbi.found())
 
 libfam = []
-if get_option('with_fam') and not(conf_data.get('HAVE_SYS_INOTIFY_H'))
-	libfam = [ compiler.find_library('fam') ]
-	if not(compiler.has_function('FAMOpen2', args: defs, dependencies: libfam, prefix: '#include <fam.h>'))
-		error('Couldn\'t find fam.h or FAMOpen2 in lib fam')
-	endif
-	conf_data.set('HAVE_FAM_H', true)
+if not conf_data.get('HAVE_SYS_INOTIFY_H')
+	libfam = [ compiler.find_library('fam', required: get_option('with_fam')) ]
+	conf_data.set('HAVE_FAM_H', libfam.found())
 endif
 
-libdeflate = []
-if get_option('with_libdeflate')
-	libdeflate = [ compiler.find_library('deflate') ]
-	if compiler.has_function('libdeflate_alloc_compressor', args: defs, dependencies: libdeflate, prefix: '#include <libdeflate.h>')
-		conf_data.set('HAVE_LIBDEFLATE', true)
-	else
-		error('Couldn\'t find libdeflate header / library')
-	endif
-endif
+libdeflate = dependency('libdeflate', required: get_option('with_libdeflate'))
+conf_data.set('HAVE_LIBDEFLATE', libdeflate.found())
 
-libmaxminddb = []
-if get_option('with_maxminddb')
-	libmaxminddb = [ compiler.find_library('maxminddb') ]
-	if not(compiler.has_function('MMDB_open', args: defs, dependencies: libmaxminddb, prefix: '#include <maxminddb.h>'))
-		error('Couldn\'t find maxminddb.h or MMDB_open in lib maxminddb')
-	endif
-endif
+libmaxminddb = dependency('libmaxminddb', required: get_option('with_maxminddb'))
 
-libkrb5 = []
-libgssapi_krb5 = []
-if get_option('with_krb5')
-	libkrb5 = dependency('krb5', required: false)
-	if libkrb5.found()
-		libkrb5 = [ libkrb5 ]
-	else
-		libkrb5 = [ compiler.find_library('krb5') ]
-		if not(compiler.has_function('krb5_init_context', args: defs, dependencies: libkrb5))
-			error('Couldn\'t find krb5_init_context in lib krb5')
-		endif
-	endif
+libkrb5 = dependency('krb5', required: get_option('with_krb5'))
+libgssapi_krb5 = dependency('krb5-gssapi', required: get_option('with_krb5'))
+conf_data.set('HAVE_KRB5', libkrb5.found() and libgssapi_krb5.found())
 
-	libgssapi_krb5 = dependency('krb5-gssapi', required: false)
-	if libgssapi_krb5.found()
-		libgssapi_krb5 = [ libgssapi_krb5 ]
-	else
-		libgssapi_krb5 = [ compiler.find_library('gssapi_krb5') ]
-	endif
+libldap = compiler.find_library('ldap', required: get_option('with_ldap'))
+liblber = compiler.find_library('lber', required: get_option('with_ldap'))
+conf_data.set('HAVE_LDAP_H', libldap.found())
+conf_data.set('HAVE_LIBLDAP', libldap.found())
+conf_data.set('HAVE_LBER_H', liblber.found())
+conf_data.set('HAVE_LIBLBER', liblber.found())
 
-	conf_data.set('HAVE_KRB5', true)
-endif
+libpam = compiler.find_library('pam', required: get_option('with_pam'))
+conf_data.set('HAVE_PAM', libpam.found())
 
-libldap = []
-liblber = []
-if get_option('with_ldap')
-	libldap = [ compiler.find_library('ldap') ]
-	if not(compiler.has_function('ldap_sasl_bind_s',
-		args: defs,
-		dependencies: libldap,
-		prefix: '''
-			#include <ldap.h>
-		'''
-	))
-		error('Couldn\'t find ldap.h or ldap_bind in lib libldap')
-	endif
-	conf_data.set('HAVE_LDAP_H', true)
-	conf_data.set('HAVE_LIBLDAP', true)
-	liblber = [ compiler.find_library('lber') ]
-	if not(compiler.has_function('ber_printf', args: defs, dependencies: liblber, prefix: '#include <lber.h>'))
-		error('Couldn\'t find lber.h or ber_printf in lib liblber')
-	endif
-	conf_data.set('HAVE_LBER_H', true)
-	conf_data.set('HAVE_LIBLBER', true)
-endif
+libev = compiler.find_library('ev', required: get_option('with_libev'))
+conf_data.set('HAVE_LIBEV', libev.found())
 
-libpam = []
-if get_option('with_pam')
-	libpam = [ compiler.find_library('pam') ]
-	if not(compiler.has_function('pam_start',
-		args: defs,
-		dependencies: libpam,
-		prefix: '''
-			#include <security/pam_appl.h>
-		'''
-	))
-		error('Couldn\'t find security/pam_appl.h or pam_start in lib libpam')
-	endif
-	conf_data.set('HAVE_PAM', true)
-endif
-
-libev = []
-if get_option('with_libev')
-	libev = dependency('ev', required: false)
-	if libev.found()
-		libev = [ libev ]
-	elif compiler.has_header('ev.h') and compiler.has_function('ev_time', args: defs + ['-lev'])
-		libev = [ compiler.find_library('ev') ]
-	else
-		error('Couldn\'t find libev header / library')
-	endif
-	conf_data.set('HAVE_LIBEV', true)
-endif
-
-libunwind = []
-if get_option('with_libunwind')
-	libunwind = [ dependency('libunwind') ]
-endif
+libunwind = dependency('libunwind', required: get_option('with_libunwind'))
 
 liblua = []
 if get_option('with_lua')
@@ -438,16 +338,8 @@ if get_option('with_lua')
 	conf_data.set('HAVE_LUA_H', true)
 endif
 
-libmysqlclient = []
-if get_option('with_mysql')
-	# manual search: extend include path with 'mysql/'
-	# header: mysql.h
-	# function: mysql_real_connect (-lmariadb)
-	libmysqlclient = [ dependency('libmariadb') ]
-	#-# function: mysql_real_connect (-lmysqlclient)
-	#-libmysqlclient = [ dependency('mysqlclient') ]
-	conf_data.set('HAVE_MYSQL', true)
-endif
+libmysqlclient = dependency('libmariadb', required: get_option('with_mysql'))
+conf_data.set('HAVE_MYSQL', libmysqlclient.found())
 
 libssl = []
 libcrypto = []
@@ -559,111 +451,30 @@ elif get_option('with_pcre')
 	conf_data.set('HAVE_PCRE', true)
 endif
 
-libpq = []
-if get_option('with_pgsql')
-	# manual search:
-	# header: libpq-fe.h
-	# function: PQsetdbLogin (-lpq)
-	libpq = [ dependency('libpq') ]
-	conf_data.set('HAVE_PGSQL', true)
-endif
+libpq = dependency('libpq', required: get_option('with_pgsql'))
+conf_data.set('HAVE_PGSQL', libpq.found())
 
-if get_option('with_sasl')
-	libsasl = dependency('sasl2', required: false)
-	if libsasl.found()
-		libsasl = [ libsasl ]
-	else
-		libsasl = [ compiler.find_library('sasl2') ]
-		if not(compiler.has_function('sasl_server_init', args: defs, dependencies: libsasl, prefix: '#include <sasl/sasl.h>'))
-			error('Couldn\'t find sasl/sasl.h or sasl_server_init in libsasl2')
-		endif
-	endif
-	conf_data.set('HAVE_SASL', true)
-endif
+libsasl = dependency('libsasl2', required: get_option('with_sasl'))
+conf_data.set('HAVE_SASL', libsasl.found())
 
 #if get_option('with_valgrind')
 #endif
 
-libuuid = []
-if get_option('with_webdav_locks')
-	libuuid = dependency('uuid', required: false)
-	if libuuid.found()
-		libuuid = [ libuuid ]
-	elif compiler.has_function('uuid_generate', args: defs, prefix: '#include <uuid/uuid.h>')
-		# uuid_generate in libc, everything is fine, no lib needed
-		libuuid = []
-	else
-		libuuid = compiler.find_library('uuid')
-		if not(compiler.has_function('uuid_generate',
-			args: defs,
-			dependencies: libuuid,
-			prefix: '#include <uuid/uuid.h>'
-		))
-			error('Couldn\'t find uuid/uuid.h or uuid_generate in lib c and uuid')
-		endif
-	endif
-	conf_data.set('HAVE_LIBUUID', true)
-	conf_data.set('HAVE_UUID_UUID_H', true)
+uuid = compiler.has_function('uuid_generate', args: defs, prefix: '#include <uuid/uuid.h>')
+if uuid
+  libuuid = dependency('', required: false)
+else
+  libuuid = dependency('uuid', required: get_option('with_webdav_locks'))
 endif
 
-libxml2 = []
-libsqlite3 = []
-if get_option('with_webdav_props')
-	libxml2 = dependency('libxml-2.0', required: false)
-	if libxml2.found()
-		libxml2 = [ libxml2 ]
-	else
-		libxml2_includes = []
-		libxml2_includes_dep = []
-		libxml2_found_header = compiler.has_header('libxml/tree.h')
-		foreach i: include_base_paths
-			if not(libxml2_found_header)
-				message('Searching in ' + join_paths(i, 'libxml2'))
-				i = include_directories(join_paths(i, 'libxml2'))
-				if compiler.has_header('libxml/tree.h', include_directories: i)
-					libxml2_found_header = true
-					libxml2_includes = [ i ]
-					libxml2_includes_dep = [ declare_dependency(include_directories: i) ]
-				endif
-			endif
-		endforeach
-		if not(libxml2_found_header)
-			error('Couldn\'t find libxml/tree.h')
-		endif
-		libxml2 = [ compiler.find_library('xml2') ]
-		if not(compiler.has_function('xmlParseChunk',
-			args: defs,
-			dependencies: libxml2,
-			include_directories: libxml2_includes,
-			prefix: '''
-				#include <libxml/tree.h>
-			'''
-		))
-			error('Couldn\'t find xmlParseChunk in lib xml2')
-		endif
-		# has_function doesn't like "internal dependencies"
-		libxml2 += libxml2_includes_dep
-	endif
-	conf_data.set('HAVE_LIBXML2', true)
-	conf_data.set('HAVE_LIBXML_H', true)
+conf_data.set('HAVE_LIBUUID', uuid)
+conf_data.set('HAVE_UUID_UUID_H', uuid)
 
-	libsqlite3 = dependency('sqlite31', required: false)
-	if libsqlite3.found()
-		libsqlite3 = [ libsqlite3 ]
-	else
-		libsqlite3 = [ compiler.find_library('sqlite3') ]
-		if not(compiler.has_function('sqlite3_reset',
-			args: defs,
-			dependencies: libsqlite3,
-			prefix: '''
-				#include <sqlite3.h>
-			'''
-		))
-			error('Couldn\'t find sqlite3.h or sqlite3_reset in lib sqlite3')
-		endif
-	endif
-	conf_data.set('HAVE_SQLITE3_H', true)
-endif
+libxml2 = dependency('libxml-2.0', required: get_option('with_webdav_props'))
+libsqlite3 = dependency('sqlite3', required: get_option('with_webdav_props'))
+conf_data.set('HAVE_LIBXML2', libxml2.found())
+conf_data.set('HAVE_LIBXML_H', libxml2.found())
+conf_data.set('HAVE_SQLITE3_H', libsqlite3.found())
 
 libattr = []
 if get_option('with_xattr')
@@ -702,50 +513,16 @@ if get_option('with_xattr')
     endif
 endif
 
-libxxhash = []
-if get_option('with_xxhash')
-	libxxhash = dependency('libxxhash', required: false)
-	if libxxhash.found()
-		libxxhash = [ libxxhash ]
-	else
-		libxxhash = [ compiler.find_library('xxhash') ]
-		if not(compiler.has_function('XXH_versionNumber', args: defs, dependencies: libxxhash, prefix: '#include <xxhash.h>'))
-			error('Couldn\'t find xxhash/xxhash.h or XXH_versionNumber in lib xxhash')
-		endif
-	endif
-	conf_data.set('HAVE_XXHASH_H', true)
-endif
+libxxhash = dependency('libxxhash', required: get_option('with_xxhash'))
+conf_data.set('HAVE_XXHASH_H', libxxhash.found())
 
-libz = []
-if get_option('with_zlib')
-	libz = dependency('zlib', required: false)
-	if libz.found()
-		libz = [ libz ]
-	else
-		# windows alternative names? 'zlib', 'zdll'
-		libz = [ compiler.find_library('z') ]
-		if not(compiler.has_function('deflate', args: defs, dependencies: libz, prefix: '#include <zlib.h>'))
-			error('Couldn\'t find z header / library')
-		endif
-	endif
-	conf_data.set('HAVE_ZLIB_H', true)
-	conf_data.set('HAVE_LIBZ', true)
-endif
+libz = dependency('zlib', required: get_option('with_zlib'))
+conf_data.set('HAVE_ZLIB_H', libz.found())
+conf_data.set('HAVE_LIBZ', libz.found())
 
-libzstd = []
-if get_option('with_zstd')
-	libzstd = dependency('zstd', required: false)
-	if libzstd.found()
-		libzstd = [ libzstd ]
-	else
-		libzstd = [ compiler.find_library('zstd') ]
-		if not(compiler.has_function('ZSTD_versionNumber', args: defs, dependencies: libzstd, prefix: '#include <zstd.h>'))
-			error('Couldn\'t find zstd header / library')
-		endif
-	endif
-	conf_data.set('HAVE_ZSTD_H', true)
-	conf_data.set('HAVE_ZSTD', true)
-endif
+libzstd = dependency('libzstd', required: get_option('with_zstd'))
+conf_data.set('HAVE_ZSTD_H', libzstd.found())
+conf_data.set('HAVE_ZSTD', libzstd.found())
 
 configure_file(
 	output : 'config.h',
@@ -982,7 +759,7 @@ modules = [
 	[ 'mod_alias', [ 'mod_alias.c' ] ],
 	[ 'mod_auth', [ 'mod_auth.c', 'mod_auth_api.c' ], [ libcrypto ] ],
 	[ 'mod_authn_file', [ 'mod_authn_file.c' ], [ libcrypt, libcrypto ] ],
-	[ 'mod_deflate', [ 'mod_deflate.c' ], libbz2 + libz + libzstd + libbrotli + libdeflate ],
+	[ 'mod_deflate', [ 'mod_deflate.c' ], [ libbz2, libz, libzstd, libbrotli, libdeflate ] ],
 	[ 'mod_dirlisting', [ 'mod_dirlisting.c' ] ],
 	[ 'mod_evasive', [ 'mod_evasive.c' ] ],
 	[ 'mod_evhost', [ 'mod_evhost.c' ] ],
@@ -1006,7 +783,7 @@ modules = [
 	[ 'mod_userdir', [ 'mod_userdir.c' ] ],
 	[ 'mod_usertrack', [ 'mod_usertrack.c' ], libcrypto ],
 	[ 'mod_vhostdb', [ 'mod_vhostdb.c', 'mod_vhostdb_api.c' ] ],
-	[ 'mod_webdav', [ 'mod_webdav.c' ], libsqlite3 + libuuid + libxml2 + libelftc ],
+	[ 'mod_webdav', [ 'mod_webdav.c' ], [ libsqlite3, libuuid, libxml2, libelftc ] ],
 	[ 'mod_wstunnel', [ 'mod_wstunnel.c' ], libcrypto ],
 ]
 
@@ -1022,41 +799,41 @@ if get_option('with_lua')
 	]
 endif
 
-if get_option('with_maxminddb')
+if libmaxminddb.found()
 	modules += [
 		[ 'mod_maxminddb', [ 'mod_maxminddb.c' ], libmaxminddb ],
 	]
 endif
 
-if get_option('with_mysql')
+if libmysqlclient.found()
 	modules += [
 		[ 'mod_vhostdb_mysql', [ 'mod_vhostdb_mysql.c' ], libmysqlclient ],
 	]
 endif
 
-if get_option('with_pgsql')
+if libpq.found()
 	modules += [
 		[ 'mod_vhostdb_pgsql', [ 'mod_vhostdb_pgsql.c' ], libpq ],
 	]
 endif
 
-if get_option('with_dbi')
+if libdbi.found()
 	modules += [
-		[ 'mod_authn_dbi', [ 'mod_authn_dbi.c' ], libcrypt + libdbi + libcrypto ],
+		[ 'mod_authn_dbi', [ 'mod_authn_dbi.c' ], [ libcrypt, libdbi, libcrypto ] ],
 		[ 'mod_vhostdb_dbi', [ 'mod_vhostdb_dbi.c' ], libdbi ],
 	]
 endif
 
-if get_option('with_krb5')
+if libkrb5.found() and libgssapi_krb5.found()
 	modules += [
-		[ 'mod_authn_gssapi', [ 'mod_authn_gssapi.c' ], libkrb5 + libgssapi_krb5 ],
+		[ 'mod_authn_gssapi', [ 'mod_authn_gssapi.c' ], [ libkrb5, libgssapi_krb5 ] ],
 	]
 endif
 
-if get_option('with_ldap')
+if libldap.found() and liblber.found()
 	modules += [
-		[ 'mod_authn_ldap', [ 'mod_authn_ldap.c' ], libldap + liblber ],
-		[ 'mod_vhostdb_ldap', [ 'mod_vhostdb_ldap.c' ], libldap + liblber ],
+		[ 'mod_authn_ldap', [ 'mod_authn_ldap.c' ], [ libldap, liblber ] ],
+		[ 'mod_vhostdb_ldap', [ 'mod_vhostdb_ldap.c' ], [ libldap, liblber ] ],
 	]
 endif
 
@@ -1090,13 +867,13 @@ if get_option('with_gnutls')
 	]
 endif
 
-if get_option('with_pam')
+if libpam.found()
 	modules += [
 		[ 'mod_authn_pam', [ 'mod_authn_pam.c' ], libpam ],
 	]
 endif
 
-if get_option('with_sasl')
+if libsasl.found()
 	modules += [
 		[ 'mod_authn_sasl', [ 'mod_authn_sasl.c' ], libsasl ],
 	]
