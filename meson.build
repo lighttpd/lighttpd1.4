@@ -1,5 +1,10 @@
-project('lighttpd', 'c', version: '1.4.68', license: 'BSD-3-Clause',
-  default_options : ['c_std=c11']
+project(
+  'lighttpd',
+  'c',
+  version: '1.4.68',
+  license: 'BSD-3-Clause',
+  default_options: ['c_std=c11'],
+  meson_version: '>=0.40.0',
 )
 
 subdir('src')
