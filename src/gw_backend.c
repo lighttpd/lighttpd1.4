@@ -2228,7 +2228,7 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
                  *  and module is flagged to stream request body to backend) */
                 return (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
                   ? http_response_reqbody_read_error(r, 411)
-                  : HANDLER_WAIT_FOR_EVENT;
+                  : (rc == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : rc;
             }
 
             if (hctx->wb_reqlen < -1 && r->reqbody_length >= 0) {
