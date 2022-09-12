@@ -1912,6 +1912,11 @@ connection_handle_read_post_state (request_st * const r)
             /* don't buffer request bodies <= 64k on disk */
             chunkqueue_steal(dst_cq, cq, len);
         }
+        else if (chunkqueue_length(dst_cq) + len <= 64*1024
+                 && (!dst_cq->first || dst_cq->first->type == MEM_CHUNK)) {
+            /* avoid tempfiles when streaming request body to fast backend */
+            chunkqueue_steal(dst_cq, cq, len);
+        }
         else if (0 !=
                  chunkqueue_steal_with_tempfiles(dst_cq,cq,len,r->conf.errh)) {
             /* writing to temp file failed */ /* Internal Server Error */

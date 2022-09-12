@@ -1911,6 +1911,36 @@ static void gw_conditional_tcp_fin(gw_handler_ctx * const hctx, request_st * con
     fdevent_fdnode_event_clr(hctx->ev, hctx->fdn, FDEVENT_OUT);
 }
 
+static handler_t gw_write_refill_wb(gw_handler_ctx * const hctx, request_st * const r) {
+    if (chunkqueue_is_empty(&r->reqbody_queue))
+        return HANDLER_GO_ON;
+    if (hctx->stdin_append) {
+        if (chunkqueue_length(&hctx->wb) < 65536 - 16384)
+            return hctx->stdin_append(hctx);
+    }
+    else {
+        const chunk * const c = r->reqbody_queue.last;
+        const off_t qlen = chunkqueue_length(&r->reqbody_queue);
+        if (c->type == FILE_CHUNK) {
+            /*(move all but last chunk if reqbody_queue using tempfiles, unless
+             * hctx->wb is empty and only one chunk, then move last chunk)*/
+            if (c != r->reqbody_queue.first)
+                chunkqueue_steal(&hctx->wb, &r->reqbody_queue,
+                                 qlen - (c->file.length-c->offset));
+            else if (chunkqueue_is_empty(&hctx->wb))
+                chunkqueue_append_chunkqueue(&hctx->wb, &r->reqbody_queue);
+        }
+        else if (qlen + chunkqueue_length(&hctx->wb) > 65536) {
+            if (0 != chunkqueue_steal_with_tempfiles(&hctx->wb,
+                       &r->reqbody_queue, qlen, r->conf.errh))
+                return HANDLER_ERROR;
+        }
+        else
+            chunkqueue_append_chunkqueue(&hctx->wb, &r->reqbody_queue);
+    }
+    return HANDLER_GO_ON;
+}
+
 static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * const r) {
     switch(hctx->state) {
     case GW_STATE_INIT:
@@ -2046,12 +2076,8 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
             }
             else if (hctx->wb.bytes_out > bytes_out) {
                 hctx->write_ts = hctx->proc->last_used = log_monotonic_secs;
-                if (hctx->stdin_append
-                    && chunkqueue_length(&hctx->wb) < 65536 - 16384
-                    && !chunkqueue_is_empty(&r->reqbody_queue)) {
-                    handler_t rc = hctx->stdin_append(hctx);
-                    if (HANDLER_GO_ON != rc) return rc;
-                }
+                handler_t rc = gw_write_refill_wb(hctx, r);
+                if (HANDLER_GO_ON != rc) return rc;
             }
         }
 
@@ -2201,11 +2227,10 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
          * buffered to disk if too large and backend can not keep up */
         /*(64k - 4k to attempt to avoid temporary files
          * in conjunction with FDEVENT_STREAM_REQUEST_BUFMIN)*/
-        if (chunkqueue_length(&hctx->wb) > 65536 - 4096) {
-            if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN) {
-                r->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
-            }
-            if (0 != hctx->wb.bytes_in) return HANDLER_WAIT_FOR_EVENT;
+        if (chunkqueue_length(&hctx->wb) > 65536 - 4096
+            && (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)) {
+            r->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
+            return HANDLER_WAIT_FOR_EVENT;
         }
         else {
             handler_t rc = r->con->reqbody_read(r);
@@ -2238,18 +2263,13 @@ handler_t gw_handle_subrequest(request_st * const r, void *p_d) {
                     handler_t rca = hctx->stdin_append(hctx);
                     if (HANDLER_GO_ON != rca) return rca;
                 }
-            }
-
-            if ((0 != hctx->wb.bytes_in || -1 == hctx->wb_reqlen)
-                && !chunkqueue_is_empty(&r->reqbody_queue)) {
-                if (hctx->stdin_append) {
-                    if (chunkqueue_length(&hctx->wb) < 65536 - 16384) {
-                        handler_t rca = hctx->stdin_append(hctx);
-                        if (HANDLER_GO_ON != rca) return rca;
-                    }
-                }
                 else
                     chunkqueue_append_chunkqueue(&hctx->wb, &r->reqbody_queue);
+            }
+
+            if (0 != hctx->wb.bytes_in || -1 == hctx->wb_reqlen) {
+                handler_t rca = gw_write_refill_wb(hctx, r);
+                if (HANDLER_GO_ON != rca) return rca;
                 if (fdevent_fdnode_interest(hctx->fdn) & FDEVENT_OUT) {
                     return (rc == HANDLER_GO_ON) ? HANDLER_WAIT_FOR_EVENT : rc;
                 }
