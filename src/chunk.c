@@ -1011,6 +1011,8 @@ static ssize_t chunkqueue_append_cqmem_to_tempfile(chunkqueue * const restrict d
             chunkqueue_mark_written(dest, dlen);
         }
     }
+    else if (chunkqueue_append_tempfile_err(dest, errh, c))
+        wr = 0; /*(to trigger continue/retry in caller rather than error)*/
 
     return wr;
 }
