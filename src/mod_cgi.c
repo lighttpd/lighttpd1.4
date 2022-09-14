@@ -1028,7 +1028,8 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	    && !(r->conf.stream_request_body /*(if not streaming request body)*/
 	         & (FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN))) {
 		/* store request body in single tempfile if not streaming request body*/
-		r->reqbody_queue.upload_temp_file_size = INTMAX_MAX;
+		r->reqbody_queue.upload_temp_file_size =
+		  (off_t)((1uLL << (sizeof(off_t)*8-1))-1);
 	}
 
 	{

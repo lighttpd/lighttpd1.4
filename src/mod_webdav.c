@@ -4680,7 +4680,7 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
     force_assert(cq->last);
   #endif
     buffer_clear(cq->last->mem); /* file already unlink()ed */
-    cq->upload_temp_file_size = INTMAX_MAX;
+    cq->upload_temp_file_size = (off_t)((1uLL << (sizeof(off_t)*8-1))-1);
     cq->last->file.is_temp = 1;
 
     return HANDLER_GO_ON;
