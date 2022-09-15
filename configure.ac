@@ -1527,7 +1527,8 @@ AC_ARG_ENABLE([lfs],
   [
     case "${enableval}" in
     yes) ENABLE_LFS=yes ;;
-    no) ENABLE_LFS=no ;;
+    no) ENABLE_LFS=yes
+        AC_MSG_NOTICE([large file support forced; --disable-lfs ignored]) ;;
     *) AC_MSG_ERROR([bad value ${enableval} for --enable-lfs]) ;;
     esac
   ],
