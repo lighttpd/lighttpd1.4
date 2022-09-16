@@ -380,7 +380,7 @@ mod_mbedtls_session_ticket_key_check (plugin_data *p, const unix_time64_t cur_ts
         mbedtls_ssl_ticket_key *key = ctx->keys + ctx->active;
         /* set generation_time to cur_ts instead of stek->active_ts
          * since ctx->active was updated */
-        key->generation_time = cur_ts;
+        key->generation_time = (uint32_t)cur_ts;
         memcpy(key->name, stek->tick_key_name, sizeof(key->name));
         /* With GCM and CCM, same context can encrypt & decrypt */
         int rc = mbedtls_cipher_setkey(&key->ctx, stek->tick_aes_key,

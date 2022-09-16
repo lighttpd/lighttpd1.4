@@ -113,7 +113,8 @@ http_auth_cache_init (const array *opts)
     for (uint32_t i = 0, used = opts->used; i < used; ++i) {
         data_unset *du = opts->data[i];
         if (buffer_is_equal_string(&du->key, CONST_STR_LEN("max-age")))
-            ac->max_age = (time_t)config_plugin_value_to_int32(du, ac->max_age);
+            ac->max_age = (time_t)
+              config_plugin_value_to_int32(du, (int32_t)ac->max_age);
     }
     return ac;
 }

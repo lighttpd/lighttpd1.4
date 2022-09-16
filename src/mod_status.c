@@ -409,7 +409,7 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	mins = ts / (60);
 	ts %= (60);
 
-	seconds = ts;
+	seconds = (int)ts;
 
 	if (days) {
 		buffer_append_int(b, days);

@@ -90,7 +90,8 @@ vhostdb_cache_init (const array *opts)
     for (uint32_t i = 0, used = opts->used; i < used; ++i) {
         data_unset *du = opts->data[i];
         if (buffer_is_equal_string(&du->key, CONST_STR_LEN("max-age")))
-            vc->max_age = (time_t)config_plugin_value_to_int32(du, vc->max_age);
+            vc->max_age = (time_t)
+              config_plugin_value_to_int32(du, (int32_t)vc->max_age);
     }
     return vc;
 }
