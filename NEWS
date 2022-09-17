@@ -3,6 +3,17 @@
 NEWS
 ====
 
+- 1.4.67 - 2022-09-17
+  * Update comment about TCP_INFO on OpenBSD
+  * [mod_ajp13] fix crash with bad response headers (fixes #3170)
+  * [core] handle RDHUP when collecting chunked body
+  * [core] tweak streaming request body to backends
+  * [core] handle ENOSPC with pwritev() (#3171)
+  * [core] manually calculate off_t max (fixes #3171)
+  * [autoconf] force large file support (#3171)
+  * [multiple] quiet coverity warnings using casts
+  * [meson] add license keyword to project declaration
+
 - 1.4.66 - 2022-08-07
   * [core] h2: optim: send window update in 16k units
   * [mod_magnet] reset for http-response-send-file
