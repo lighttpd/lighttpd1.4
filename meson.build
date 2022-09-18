@@ -1,4 +1,4 @@
-project('lighttpd', 'c', version: '1.4.67', license: 'BSD-3-Clause',
+project('lighttpd', 'c', version: '1.4.68', license: 'BSD-3-Clause',
   default_options : ['c_std=c11']
 )
 
