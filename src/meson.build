@@ -35,29 +35,44 @@ endif
 
 conf_data = configuration_data()
 
-conf_data.set('HAVE_SYS_INOTIFY_H', compiler.has_header('sys/inotify.h'))
-conf_data.set('HAVE_SYS_LOADAVG_H', compiler.has_header('sys/loadavg.h'))
-conf_data.set('HAVE_SYS_POLL_H', compiler.has_header('sys/poll.h'))
-conf_data.set('HAVE_SYS_PRCTL_H', compiler.has_header('sys/prctl.h'))
-conf_data.set('HAVE_SYS_PROCCTL_H', compiler.has_header('sys/procctl.h'))
-conf_data.set('HAVE_SYS_SENDFILE_H', compiler.has_header('sys/sendfile.h'))
-conf_data.set('HAVE_SYS_UN_H', compiler.has_header('sys/un.h'))
-conf_data.set('HAVE_SYS_WAIT_H', compiler.has_header('sys/wait.h'))
-conf_data.set('HAVE_SYS_TIME_H', compiler.has_header('sys/time.h'))
-conf_data.set('HAVE_UNISTD_H', compiler.has_header('unistd.h'))
-conf_data.set('HAVE_PTHREAD_H', compiler.has_header('pthread.h'))
-conf_data.set('HAVE_DLFCN_H', compiler.has_header('dlfcn.h'))
-conf_data.set('HAVE_GETOPT_H', compiler.has_header('getopt.h'))
-conf_data.set('HAVE_INTTYPES_H', compiler.has_header('inttypes.h'))
-conf_data.set('HAVE_POLL_H', compiler.has_header('poll.h'))
-conf_data.set('HAVE_PWD_H', compiler.has_header('pwd.h'))
-conf_data.set('HAVE_STDINT_H', compiler.has_header('stdint.h'))
-conf_data.set('HAVE_STDLIB_H', compiler.has_header('stdlib.h'))
-conf_data.set('HAVE_STRINGS_H', compiler.has_header('strings.h'))
-conf_data.set('HAVE_SYSLOG_H', compiler.has_header('syslog.h'))
+headers = [
+  'sys/inotify.h',
+  'sys/loadavg.h',
+  'sys/poll.h',
+  'sys/prctl.h',
+  'sys/procctl.h',
+  'sys/sendfile.h',
+  'sys/un.h',
+  'sys/wait.h',
+  'sys/time.h',
+  'unistd.h',
+  'pthread.h',
+  'dlfcn.h',
+  'getopt.h',
+  'inttypes.h',
+  'poll.h',
+  'pwd.h',
+  'stdint.h',
+  'stdlib.h',
+  'strings.h',
+  'syslog.h',
+  'crypt.h',
+  'malloc.h',
+  'signal.h',
+  'sys/epoll.h',
+  'sys/event.h',
+  'sys/mman.h',
+  'sys/random.h',
+  'linux/random.h',
+  'sys/resource.h',
+  'sys/uio.h',
+]
+
+foreach h : headers
+  conf_data.set('HAVE_@0@'.format(h.underscorify().to_upper()), compiler.has_header(h))
+endforeach
 
 # will be needed for auth
-conf_data.set('HAVE_CRYPT_H', compiler.has_header('crypt.h'))
 if conf_data.get('HAVE_CRYPT_H')
 	# check if we need libcrypt for crypt_r / crypt
 
@@ -92,33 +107,28 @@ endif
 
 conf_data.set('HAVE_SOCKLEN_T', compiler.has_type('socklen_t', args: defs, prefix: '#include <sys/socket.h>'))
 
-conf_data.set('HAVE_MALLOC_H', compiler.has_header('malloc.h'))
 if conf_data.get('HAVE_MALLOC_H')
 conf_data.set('HAVE_MALLOC_TRIM', compiler.has_function('malloc_trim', args: defs))
 conf_data.set('HAVE_MALLOPT', compiler.has_function('mallopt', args: defs))
 endif
 
-if compiler.has_header('signal.h')
+if conf_data.get('HAVE_SIGNAL_H')
 conf_data.set('HAVE_SIGACTION', compiler.has_function('sigaction', args: defs))
 conf_data.set('HAVE_SIGNAL', compiler.has_function('signal', args: defs))
 endif
 
-conf_data.set('HAVE_SYS_EPOLL_H', compiler.has_header('sys/epoll.h'))
 if conf_data.get('HAVE_SYS_EPOLL_H')
 conf_data.set('HAVE_EPOLL_CTL', compiler.has_function('epoll_ctl', args: defs))
 endif
 
-conf_data.set('HAVE_SYS_EVENT_H', compiler.has_header('sys/event.h'))
 if conf_data.get('HAVE_SYS_EVENT_H')
 conf_data.set('HAVE_KQUEUE', compiler.has_function('kqueue', args: defs))
 endif
 
-conf_data.set('HAVE_SYS_MMAN_H', compiler.has_header('sys/mman.h'))
 if conf_data.get('HAVE_SYS_MMAN_H')
 conf_data.set('HAVE_MMAP', compiler.has_function('mmap', args: defs))
 endif
 
-conf_data.set('HAVE_SYS_RANDOM_H', compiler.has_header('sys/random.h'))
 if conf_data.get('HAVE_SYS_RANDOM_H')
 	conf_data.set('HAVE_GETENTROPY', compiler.has_function(
 		'getentropy',
@@ -127,7 +137,6 @@ if conf_data.get('HAVE_SYS_RANDOM_H')
 	))
 endif
 
-conf_data.set('HAVE_LINUX_RANDOM_H', compiler.has_header('linux/random.h'))
 if conf_data.get('HAVE_LINUX_RANDOM_H')
 	conf_data.set('HAVE_GETRANDOM', compiler.has_function(
 		'getrandom',
@@ -136,12 +145,10 @@ if conf_data.get('HAVE_LINUX_RANDOM_H')
 	))
 endif
 
-conf_data.set('HAVE_SYS_RESOURCE_H', compiler.has_header('sys/resource.h'))
 if conf_data.get('HAVE_SYS_RESOURCE_H')
 conf_data.set('HAVE_GETRLIMIT', compiler.has_function('getrlimit', args: defs))
 endif
 
-conf_data.set('HAVE_SYS_UIO_H', compiler.has_header('sys/uio.h'))
 if conf_data.get('HAVE_SYS_UIO_H')
 conf_data.set('HAVE_PREADV', compiler.has_function('preadv', args: defs))
 conf_data.set('HAVE_PWRITEV', compiler.has_function('pwritev', args: defs))
