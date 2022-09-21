@@ -879,7 +879,12 @@ if(WIN32)
 	set(COMMON_SRC ${COMMON_SRC} xgetopt.c)
 endif()
 
-add_executable(lemon lemon.c)
+if(CMAKE_CROSSCOMPILING)
+	find_program(LEMON_PARSER NAMES lemon)
+else()
+	add_executable(lemon lemon.c)
+	set(LEMON_PARSER "${CMAKE_CURRENT_BINARY_DIR}/lemon")
+endif()
 
 ## Build parsers by using lemon...
 lemon_parser(configparser.y)
