@@ -25,6 +25,8 @@ set(CPACK_SOURCE_IGNORE_FILES "/\\\\.;~$;/_;build/;CMakeFiles/;CMakeCache;gz$;Ma
 
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
 
+include(GNUInstallDirs)
+
 add_subdirectory(src build)
-#add_subdirectory(doc)
+add_subdirectory(doc)
 add_subdirectory(tests)
