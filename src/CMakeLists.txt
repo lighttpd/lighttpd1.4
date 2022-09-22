@@ -6,7 +6,7 @@ include(CheckVariableExists)
 include(CheckTypeSize)
 include(CheckLibraryExists)
 include(CMakeDetermineCCompiler)
-include(FindPkgConfig)
+find_package(PkgConfig)
 
 include(LighttpdMacros)
 
