@@ -248,7 +248,7 @@ conf_data.set('HAVE_STRUCT_TM_GMTOFF', compiler.compiles('''
 	args: defs
 ))
 
-conf_data.set('LIGHTTPD_VERSION_ID', 10400)
+conf_data.set('LIGHTTPD_VERSION_ID', ''.join(['0x104', meson.project_version().split('.')[2]]))
 conf_data.set_quoted('PACKAGE_NAME', meson.project_name())
 conf_data.set_quoted('PACKAGE_VERSION', meson.project_version())
 conf_data.set_quoted('LIBRARY_DIR', moduledir)
