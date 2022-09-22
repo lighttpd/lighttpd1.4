@@ -46,7 +46,6 @@ headers = [
   'sys/wait.h',
   'sys/time.h',
   'unistd.h',
-  'pthread.h',
   'dlfcn.h',
   'getopt.h',
   'inttypes.h',
