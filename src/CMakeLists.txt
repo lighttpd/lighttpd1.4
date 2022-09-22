@@ -393,27 +393,19 @@ endif()
 
 if(WITH_WOLFSSL)
 	pkg_check_modules(WOLFSSL QUIET wolfssl)
-	if(NOT ${WITH_WOLFSSL} EQUAL "")
-		find_path(WOLFSSL_INCLUDE_DIR wolfssl/ssl.h ${WITH_WOLFSSL}/include)
-	elseif(WOLFSSL_FOUND)
-		set(WOLFSSL_INCLUDE_DIR ${WOLFSSL_INCLUDE_DIRS})
-	elseif(APPLE)
-		find_path(WOLFSSL_INCLUDE_DIR wolfssl/ssl.h /opt/local/include)
-	else()
-		find_path(WOLFSSL_INCLUDE_DIR wolfssl/ssl.h /usr/local/include)
-	endif()
 
-	if(NOT ${WITH_WOLFSSL} EQUAL "")
-		find_library(WOLFSSL_LIBRARY
-			NAMES wolfssl
-			PATHS ${WITH_WOLFSSL}/lib
-		)
-	elseif(WOLFSSL_FOUND)
-		set(WOLFSSL_LIBRARY ${WOLFSSL_LIBRARY_DIRS})
+	if(WOLFSSL_FOUND)
+		set(WOLFSSL_INCLUDE_DIR ${WOLFSSL_INCLUDE_DIRS})
+		if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)
+			set(WOLFSSL_LIBRARY ${WOLFSSL_LINK_LIBRARIES})
+		else()
+			set(WOLFSSL_LIBRARY ${WOLFSSL_LIBRARIES})
+		endif()
 	else()
+		find_path(WOLFSSL_INCLUDE_DIR NAMES wolfssl/ssl.h PATHS ${WITH_WOLFSSL})
 		find_library(WOLFSSL_LIBRARY
 			NAMES wolfssl
-			PATHS /usr/local/lib /opt/local/lib /usr/lib
+			PATHS ${WITH_WOLFSSL}
 		)
 	endif()
 
@@ -441,7 +433,7 @@ if(WITH_WOLFSSL)
 		endif()
 		set(CMAKE_REQUIRED_INCLUDES)
 		set(CMAKE_REQUIRED_LIBRARIES)
-		include_directories(${WOLFSSL_INCLUDE_DIR} ${WOLFSSL_INCLUDE_DIR}/wolfssl)
+		include_directories(${WOLFSSL_INCLUDE_DIR})
 	endif()
 	unset(WOLFSSL_LIBRARY)
 	unset(WOLFSSL_INCLUDE_DIR)
