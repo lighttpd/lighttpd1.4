@@ -284,7 +284,7 @@ conf_data.set('HAVE_DBI', libdbi.found())
 
 libfam = []
 if not conf_data.get('HAVE_SYS_INOTIFY_H')
-	libfam = [ compiler.find_library('fam', required: get_option('with_fam')) ]
+	libfam = compiler.find_library('fam', required: get_option('with_fam'))
 	conf_data.set('HAVE_FAM_H', libfam.found())
 endif
 
