@@ -14,6 +14,7 @@ defs = [
 	'-D_LARGEFILE_SOURCE',
 	'-D_LARGE_FILES',
 	'-D_DEFAULT_SOURCE',
+	'-D_POSIX_C_SOURCE',
 	'-D_GNU_SOURCE',
 ]
 
@@ -128,11 +129,9 @@ functions = {
   'fork': 'unistd.h',
   'getloadavg': 'stdlib.h',
   'getuid': 'unistd.h',
-  'gmtime_r': 'time.h',
   'inet_aton': 'arpa/inet.h',
   'inet_pton': 'arpa/inet.h',
   'jrand48': 'stdlib.h',
-  'localtime_r': 'time.h',
   'lstat': 'sys/stat.h',
   'madvise': 'sys/mman.h',
   'mempcpy': 'string.h',
@@ -174,6 +173,8 @@ endif
 conf_data.set('SIZEOF_LONG', compiler.sizeof('long', args: defs))
 conf_data.set('SIZEOF_OFF_T', compiler.sizeof('off_t', args: defs))
 
+conf_data.set('HAVE_GMTIME_R', compiler.has_header_symbol('time.h', 'gmtime_r', args: defs))
+conf_data.set('HAVE_LOCALTIME_R', compiler.has_header_symbol('time.h', 'localtime_r', args: defs))
 conf_data.set('HAVE_CLOCK_GETTIME', compiler.has_header_symbol('time.h', 'clock_gettime', args: defs))
 clock_lib = []
 if not(conf_data.get('HAVE_CLOCK_GETTIME'))
