@@ -47,6 +47,7 @@ mod_ssi_exprparser.h
 scgi-responder
 sconsbuild/
 stamp-h1
+subprojects/
 test_common
 test_configfile
 test_mod
