@@ -425,30 +425,27 @@ if get_option('with_nss')
 endif
 
 libpcre = []
-if get_option('with_pcre2') and not(get_option('with_pcre'))
-	# manual search:
-	# header: pcre2.h
-	# function: pcre_match (-lpcre2-8)
-	libpcre = dependency('libpcre2-8', required: false)
-	if libpcre.found()
-		libpcre = [ libpcre ]
-	else
-		libpcre = [ compiler.find_library('pcre2-8', required: true) ]
+pcre = get_option('with_pcre')
+if pcre == 'auto' or get_option('with_pcre2')
+	 pcre = 'pcre2'
+endif
+
+if pcre == 'pcre2'
+	libpcre = dependency('libpcre2-8', required: get_option('with_pcre') == 'pcre2' or get_option('with_pcre2'))
+	conf_data.set('HAVE_PCRE2_H', libpcre.found())
+	conf_data.set('HAVE_PCRE', libpcre.found())
+	if not libpcre.found()
+		pcre = 'pcre'
 	endif
-	conf_data.set('HAVE_PCRE2_H', true)
-	conf_data.set('HAVE_PCRE', true)
-elif get_option('with_pcre')
-	# manual search:
-	# header: pcre.h
-	# function: pcre_exec (-lpcre)
-	libpcre = dependency('libpcre', required: false)
-	if libpcre.found()
-		libpcre = [ libpcre ]
-	else
-		libpcre = [ compiler.find_library('pcre', required: true) ]
+endif
+
+if pcre == 'pcre'
+	libpcre = dependency('libpcre', required: pcre == 'pcre')
+	conf_data.set('HAVE_PCRE_H', libpcre.found())
+	conf_data.set('HAVE_PCRE', libpcre.found())
+	if not libpcre.found()
+		error('Neither pcre2 nor pcre was found when with_pcre was not disabled')
 	endif
-	conf_data.set('HAVE_PCRE_H', true)
-	conf_data.set('HAVE_PCRE', true)
 endif
 
 libpq = dependency('libpq', required: get_option('with_pgsql'))

@@ -94,9 +94,10 @@ option('with_pcre2',
 	description: 'with regex support [default: on]',
 )
 option('with_pcre',
-	type: 'boolean',
-	value: false,
-	description: 'with regex support [default: off]',
+	type: 'combo',
+	choices: ['auto','pcre2','pcre','disabled'],
+	value: 'auto',
+	description: 'with regex support [default: auto]',
 )
 option('with_pgsql',
 	type: 'feature',
