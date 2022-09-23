@@ -107,55 +107,55 @@ endif
 
 conf_data.set('HAVE_SOCKLEN_T', compiler.has_type('socklen_t', args: defs, prefix: '#include <sys/socket.h>'))
 
-if conf_data.get('HAVE_MALLOC_H')
-conf_data.set('HAVE_MALLOC_TRIM', compiler.has_function('malloc_trim', args: defs))
-conf_data.set('HAVE_MALLOPT', compiler.has_function('mallopt', args: defs))
-endif
+functions = {
+  'malloc_trim': 'malloc.h',
+  'mallopt': 'malloc.h',
+  'sigaction': 'signal.h',
+  'signal': 'signal.h',
+  'epoll_ctl': 'sys/epoll.h',
+  'kqueue': 'sys/event.h',
+  'mmap': 'sys/mman.h',
+  'getentropy': 'sys/random.h',
+  'getrandom': 'linux/random.h',
+  'getrlimit': 'sys/resource.h',
+  'preadv': 'sys/uio.h',
+  'pwritev': 'sys/uio.h',
+  'writev': 'sys/uio.h',
+  'poll': 'poll.h',
+  'arc4random_buf': 'stdlib.h',
+  'chroot': 'unistd.h',
+  'copy_file_range': 'unistd.h',
+  'fork': 'unistd.h',
+  'getloadavg': 'stdlib.h',
+  'getuid': 'unistd.h',
+  'gmtime_r': 'time.h',
+  'inet_aton': 'arpa/inet.h',
+  'inet_pton': 'arpa/inet.h',
+  'jrand48': 'stdlib.h',
+  'localtime_r': 'time.h',
+  'lstat': 'sys/stat.h',
+  'madvise': 'sys/mman.h',
+  'mempcpy': 'string.h',
+  'mkostemp': 'stdlib.h',
+  'pipe2': 'unistd.h',
+  'pread': 'unistd.h',
+  'pwrite': 'unistd.h',
+  'sendfile': 'sys/sendfile.h',
+  'sendfile64': 'sys/socket.h',
+  'splice': 'fcntl.h',
+  'srandom': 'stdlib.h',
+  'strerror_r': 'string.h',
+  'timegm': 'time.h',
+  'issetugid': 'unistd.h',
+  'memset_s': 'string.h',
+  'explicit_bzero': 'strings.h',
+  'explicit_memset': 'string.h',
+}
 
-if conf_data.get('HAVE_SIGNAL_H')
-conf_data.set('HAVE_SIGACTION', compiler.has_function('sigaction', args: defs))
-conf_data.set('HAVE_SIGNAL', compiler.has_function('signal', args: defs))
-endif
+foreach f, h : functions
+  conf_data.set('HAVE_@0@'.format(f.underscorify().to_upper()), compiler.has_function(f, prefix: '#include <@0@>'.format(h), args: defs))
+endforeach
 
-if conf_data.get('HAVE_SYS_EPOLL_H')
-conf_data.set('HAVE_EPOLL_CTL', compiler.has_function('epoll_ctl', args: defs))
-endif
-
-if conf_data.get('HAVE_SYS_EVENT_H')
-conf_data.set('HAVE_KQUEUE', compiler.has_function('kqueue', args: defs))
-endif
-
-if conf_data.get('HAVE_SYS_MMAN_H')
-conf_data.set('HAVE_MMAP', compiler.has_function('mmap', args: defs))
-endif
-
-if conf_data.get('HAVE_SYS_RANDOM_H')
-	conf_data.set('HAVE_GETENTROPY', compiler.has_function(
-		'getentropy',
-		args: defs,
-		prefix: '#include <sys/random.h>'
-	))
-endif
-
-if conf_data.get('HAVE_LINUX_RANDOM_H')
-	conf_data.set('HAVE_GETRANDOM', compiler.has_function(
-		'getrandom',
-		args: defs,
-		prefix: '#include <linux/random.h>'
-	))
-endif
-
-if conf_data.get('HAVE_SYS_RESOURCE_H')
-conf_data.set('HAVE_GETRLIMIT', compiler.has_function('getrlimit', args: defs))
-endif
-
-if conf_data.get('HAVE_SYS_UIO_H')
-conf_data.set('HAVE_PREADV', compiler.has_function('preadv', args: defs))
-conf_data.set('HAVE_PWRITEV', compiler.has_function('pwritev', args: defs))
-conf_data.set('HAVE_WRITEV', compiler.has_function('writev', args: defs))
-endif
-
-conf_data.set('HAVE_POLL', compiler.has_function('poll', args: defs))
 if not(conf_data.get('HAVE_POLL'))
 conf_data.set('HAVE_SYS_SELECT_H', compiler.has_header('sys/select.h'))
 conf_data.set('HAVE_SELECT', compiler.has_function('select', args: defs))
@@ -174,36 +174,7 @@ endif
 conf_data.set('SIZEOF_LONG', compiler.sizeof('long', args: defs))
 conf_data.set('SIZEOF_OFF_T', compiler.sizeof('off_t', args: defs))
 
-conf_data.set('HAVE_ARC4RANDOM_BUF', compiler.has_function('arc4random_buf', args: defs))
-conf_data.set('HAVE_CHROOT', compiler.has_function('chroot', args: defs))
-conf_data.set('HAVE_COPY_FILE_RANGE', compiler.has_function('copy_file_range', args: defs))
-conf_data.set('HAVE_FORK', compiler.has_function('fork', args: defs))
-conf_data.set('HAVE_GETLOADAVG', compiler.has_function('getloadavg', args: defs))
-conf_data.set('HAVE_GETUID', compiler.has_function('getuid', args: defs))
-conf_data.set('HAVE_GMTIME_R', compiler.has_function('gmtime_r', args: defs))
-conf_data.set('HAVE_INET_ATON', compiler.has_function('inet_aton', args: defs))
-conf_data.set('HAVE_INET_PTON', compiler.has_function('inet_pton', args: defs))
-conf_data.set('HAVE_JRAND48', compiler.has_function('jrand48', args: defs))
-conf_data.set('HAVE_LOCALTIME_R', compiler.has_function('localtime_r', args: defs))
-conf_data.set('HAVE_LSTAT', compiler.has_function('lstat', args: defs))
-conf_data.set('HAVE_MADVISE', compiler.has_function('madvise', args: defs))
-conf_data.set('HAVE_MEMPCPY', compiler.has_function('mempcpy', args: defs, prefix: '#include <string.h>'))
-conf_data.set('HAVE_MKOSTEMP', compiler.has_function('mkostemp', args: defs))
-conf_data.set('HAVE_PIPE2', compiler.has_function('pipe2', args: defs))
-conf_data.set('HAVE_PREAD', compiler.has_function('pread', args: defs))
-conf_data.set('HAVE_PWRITE', compiler.has_function('pwrite', args: defs))
-conf_data.set('HAVE_SENDFILE', compiler.has_function('sendfile', args: defs))
-conf_data.set('HAVE_SENDFILE64', compiler.has_function('sendfile64', args: defs))
-conf_data.set('HAVE_SPLICE', compiler.has_function('splice', args: defs))
-conf_data.set('HAVE_SRANDOM', compiler.has_function('srandom', args: defs))
-conf_data.set('HAVE_STRERROR_R', compiler.has_function('strerror_r', args: defs))
-conf_data.set('HAVE_TIMEGM', compiler.has_function('timegm', args: defs))
-conf_data.set('HAVE_ISSETUGID', compiler.has_function('issetugid', args: defs))
-conf_data.set('HAVE_MEMSET_S', compiler.has_function('memset_s', args: defs))
-conf_data.set('HAVE_EXPLICIT_BZERO', compiler.has_function('explicit_bzero', args: defs))
-conf_data.set('HAVE_EXPLICIT_MEMSET', compiler.has_function('explicit_memset', args: defs))
-
-conf_data.set('HAVE_CLOCK_GETTIME', compiler.has_header_symbol('time.h', 'clock_gettime'))
+conf_data.set('HAVE_CLOCK_GETTIME', compiler.has_header_symbol('time.h', 'clock_gettime', args: defs))
 clock_lib = []
 if not(conf_data.get('HAVE_CLOCK_GETTIME'))
 	if compiler.has_function('clock_gettime', args: defs + ['-lrt'], prefix: '#include <time.h>')
