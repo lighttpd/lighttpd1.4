@@ -24,3 +24,10 @@ subdir('tests')
 
 # monolithic build (contains all plugins):
 # $ meson configure -D build_static=true -D buildtype=minsize
+
+# using https://wrapdb.mesonbuild.com/
+# $ mkdir subprojects
+# $ printf '/*/\n!packagefiles/\n' > subprojects/.gitignore
+# $ for i in liblzma libxml2 lua lz4 pcre pcre2 sqlite3 xxhash zlib zstd; do meson wrap install $i; done
+# $ for i in liblzma libxml2 lua lz4 pcre pcre2 sqlite3 xxhash zlib zstd; do meson wrap update $i; done
+# $ meson configure --wrap-mode=forcefallback ...
