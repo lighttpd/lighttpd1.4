@@ -879,7 +879,17 @@ if(WIN32)
 	set(COMMON_SRC ${COMMON_SRC} xgetopt.c)
 endif()
 
-add_executable(lemon lemon.c)
+if(CMAKE_CROSSCOMPILING)
+	# custom compile lemon using native compiler
+	add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lemon
+		COMMAND cc
+		ARGS    ${CMAKE_CURRENT_SOURCE_DIR}/lemon.c -o ${CMAKE_CURRENT_BINARY_DIR}/lemon
+		DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/lemon.c
+		COMMENT "Generating lemon from lemon.c using native compiler"
+	)
+else()
+	add_executable(lemon lemon.c)
+endif()
 
 ## Build parsers by using lemon...
 lemon_parser(configparser.y)
