@@ -32,8 +32,6 @@ static volatile pid_t pid = -1;
 #define UNUSED(x) ( (void)(x) )
 
 static void sigaction_handler(int sig, siginfo_t *si, void *context) {
-	int exitcode;
-
 	UNUSED(context);
 	switch (sig) {
 	case SIGINT: 
@@ -51,14 +49,10 @@ static void sigaction_handler(int sig, siginfo_t *si, void *context) {
 
 		/** do a graceful shutdown on the main process and start a new child */
 		kill(pid, SIGINT);
-
-		usleep(5 * 1000); /** wait 5 microsec */
-		
-		start_process = 1;
+		start_process = -1;/*(flag to waitpid(), then restart process)*/
 		break;
 	case SIGCHLD:
-		/** a child died, de-combie it */
-		wait(&exitcode);
+		/* defer handling to waitpid() in main() */
 		break;
 	}
 }
@@ -101,7 +95,7 @@ int main(int argc, char **argv) {
 	while (!is_shutdown) {
 		int exitcode = 0;
 
-		if (start_process) {
+		if (start_process == 1) {
 			pid = fork();
 
 			if (0 == pid) {
