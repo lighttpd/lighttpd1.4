@@ -300,7 +300,7 @@ macro(XCONFIG _package _link_FLAGS _cflags)
 	set(${_link_FLAGS})
 	set(${_cflags})
 
-	find_program(${_package}CONFIG_EXECUTABLE NAMES ${_package} PATHS /usr/local/bin )
+	find_program(${_package}CONFIG_EXECUTABLE NAMES ${_package})
 
 	# if pkg-config has been found
 	if(${_package}CONFIG_EXECUTABLE)
@@ -548,15 +548,11 @@ if(WITH_PCRE2)
 			check_library_exists(pcre2-8 pcre_match "" HAVE_PCRE)
 			set(PCRE_LDFLAGS -lpcre2-8)
 		else()
-			find_path(PCRE_INCLUDE_DIR pcre2.h
-			/usr/local/include
-			/usr/include
-			)
+			find_path(PCRE_INCLUDE_DIR pcre2.h)
 
 			set(PCRE_NAMES pcre2-8)
 			find_library(PCRE_LIBRARY
 			NAMES ${PCRE_NAMES}
-			PATHS /usr/lib /usr/local/lib
 			)
 
 			if(PCRE_INCLUDE_DIR AND PCRE_LIBRARY)
@@ -599,15 +595,11 @@ elseif(WITH_PCRE)
 			check_library_exists(pcre pcre_exec "" HAVE_PCRE)
 			set(PCRE_LDFLAGS -lpcre)
 		else()
-			find_path(PCRE_INCLUDE_DIR pcre.h
-			/usr/local/include
-			/usr/include
-			)
+			find_path(PCRE_INCLUDE_DIR pcre.h)
 
 			set(PCRE_NAMES pcre)
 			find_library(PCRE_LIBRARY
 			NAMES ${PCRE_NAMES}
-			PATHS /usr/lib /usr/local/lib
 			)
 
 			if(PCRE_INCLUDE_DIR AND PCRE_LIBRARY)
