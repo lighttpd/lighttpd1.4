@@ -295,10 +295,8 @@ check_c_source_compiles("
 	" HAVE_STRUCT_TM_GMTOFF)
 
 ## refactor me
-macro(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)
+macro(XCONFIG _package _link_FLAGS _cflags)
 # reset the variables at the beginning
-	set(${_include_DIR})
-	set(${_link_DIR})
 	set(${_link_FLAGS})
 	set(${_cflags})
 
@@ -320,7 +318,7 @@ macro(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)
 	else()
 		message(STATUS "found ${_package}: no")
 	endif()
-endmacro(XCONFIG _package _include_DIR _link_DIR _link_FLAGS _cflags)
+endmacro()
 
 if(WITH_XATTR)
 	check_include_files("sys/types.h;sys/xattr.h" HAVE_SYS_XATTR_H)
@@ -339,7 +337,7 @@ else()
 endif()
 
 if(WITH_MYSQL)
-	xconfig(mysql_config MYSQL_INCDIR MYSQL_LIBDIR MYSQL_LDFLAGS MYSQL_CFLAGS)
+	xconfig(mysql_config MYSQL_LDFLAGS MYSQL_CFLAGS)
 
 	set(CMAKE_REQUIRED_INCLUDES /usr/include/mysql)
 	check_include_files(mysql.h HAVE_MYSQL_H)
@@ -532,7 +530,7 @@ if(WITH_PCRE2)
 		set(PCRE_CFLAGS "${PCRE2_CFLAGS}")
 	else()
 		## if we have pcre2-config, use it
-		xconfig(pcre2-config PCRE_INCDIR PCRE_LIBDIR PCRE_LDFLAGS PCRE_CFLAGS)
+		xconfig(pcre2-config PCRE_LDFLAGS PCRE_CFLAGS)
 	endif()
 	if(PCRE_LDFLAGS OR PCRE_CFLAGS)
 		message(STATUS "found pcre2 at: LDFLAGS: ${PCRE_LDFLAGS} CFLAGS: ${PCRE_CFLAGS}")
@@ -581,7 +579,7 @@ if(WITH_PCRE2)
 	endif()
 elseif(WITH_PCRE)
 	## if we have pcre-config, use it
-	xconfig(pcre-config PCRE_INCDIR PCRE_LIBDIR PCRE_LDFLAGS PCRE_CFLAGS)
+	xconfig(pcre-config PCRE_LDFLAGS PCRE_CFLAGS)
 	if(PCRE_LDFLAGS OR PCRE_CFLAGS)
 		message(STATUS "found pcre at: LDFLAGS: ${PCRE_LDFLAGS} CFLAGS: ${PCRE_CFLAGS}")
 
@@ -644,7 +642,7 @@ endif()
 
 
 if(WITH_XML)
-	xconfig(xml2-config XML2_INCDIR XML2_LIBDIR XML2_LDFLAGS XML2_CFLAGS)
+	xconfig(xml2-config XML2_LDFLAGS XML2_CFLAGS)
 	if(XML2_LDFLAGS OR XML2_CFLAGS)
 		message(STATUS "found xml2 at: LDFLAGS: ${XML2_LDFLAGS} CFLAGS: ${XML2_CFLAGS}")
 
