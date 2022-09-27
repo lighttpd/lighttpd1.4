@@ -704,37 +704,15 @@ else()
 endif()
 
 if(WITH_ZLIB)
-	if(NOT WIN32)
-		check_include_files(zlib.h HAVE_ZLIB_H)
-		check_library_exists(z deflate "" HAVE_LIBZ)
-		set(ZLIB_LIBRARY z)
-	else()
-		find_path(ZLIB_INCLUDE_DIR zlib.h
-			/usr/local/include
-			/usr/include
-		)
-
-		set(ZLIB_NAMES z zlib zdll)
-			find_library(ZLIB_LIBRARY
-			NAMES ${ZLIB_NAMES}
-			PATHS /usr/lib /usr/local/lib
-		)
-
-		if(ZLIB_INCLUDE_DIR AND ZLIB_LIBRARY)
-			set(CMAKE_REQUIRED_INCLUDES ${ZLIB_INCLUDE_DIR})
-			set(CMAKE_REQUIRED_LIBRARIES ${ZLIB_LIBRARY})
-			get_filename_component(ZLIB_NAME ${ZLIB_LIBRARY} NAME)
-			check_include_files(zlib.h HAVE_ZLIB_H)
-			check_library_exists(${ZLIB_NAME} deflate "" HAVE_LIBZ)
-			set(CMAKE_REQUIRED_INCLUDES)
-			set(CMAKE_REQUIRED_LIBRARIES)
-			include_directories(${ZLIB_INCLUDE_DIR})
-		endif()
+	find_package(ZLIB)
+	if(ZLIB_FOUND)
+		set(ZLIB_LIBRARY ZLIB::ZLIB)
+		set(HAVE_ZLIB_H TRUE)
+		set(HAVE_LIBZ TRUE)
 	endif()
 else()
 	unset(HAVE_ZLIB_H)
 	unset(HAVE_LIBZ)
-	unset(ZLIB_INCLUDE_DIR)
 	unset(ZLIB_LIBRARY)
 endif()
 
