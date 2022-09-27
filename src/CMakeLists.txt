@@ -578,8 +578,11 @@ if(WITH_PCRE2)
 		message(FATAL_ERROR "libpcre2-8 couldn't be found")
 	endif()
 elseif(WITH_PCRE)
-	## if we have pcre-config, use it
-	xconfig(pcre-config PCRE_LDFLAGS PCRE_CFLAGS)
+	pkg_check_modules(PCRE libpcre)
+	if(NOT PCRE_FOUND)
+		## if we have pcre-config, use it
+		xconfig(pcre-config PCRE_LDFLAGS PCRE_CFLAGS)
+	endif()
 	if(PCRE_LDFLAGS OR PCRE_CFLAGS)
 		message(STATUS "found pcre at: LDFLAGS: ${PCRE_LDFLAGS} CFLAGS: ${PCRE_CFLAGS}")
 
