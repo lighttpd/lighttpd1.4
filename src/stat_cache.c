@@ -580,7 +580,15 @@ static stat_cache_fam * stat_cache_init_fam(fdevents *ev, log_error_st *errh) {
 	scf->errh = errh;
 
   #ifdef HAVE_SYS_INOTIFY_H
+   #if !defined(IN_NONBLOCK) || !defined(IN_CLOEXEC)
+	scf->fd = inotify_init();
+	if (scf->fd >= 0 && 0 != fdevent_fcntl_set_nb_cloexec(scf->fd)) {
+		close(scf->fd);
+		scf->fd = -1;
+	}
+   #else
 	scf->fd = inotify_init1(IN_NONBLOCK|IN_CLOEXEC);
+   #endif
 	if (scf->fd < 0) {
 		log_perror(errh, __FILE__, __LINE__, "inotify_init1()");
 		free(scf);
