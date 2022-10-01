@@ -1332,6 +1332,10 @@ static int
 mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *curvelist);
 
 
+static int
+mod_mbedtls_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const buffer *dhparameters);
+
+
 static void
 mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *b, int max);
 
@@ -1355,6 +1359,12 @@ mod_mbedtls_ssl_conf_cmd (server *srv, plugin_config_socket *s)
               || buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Groups"))) {
             if (!mod_mbedtls_ssl_conf_curves(srv, s, &ds->value))
                 rc = -1;
+        }
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("DHParameters"))){
+            if (!buffer_is_blank(&ds->value)) {
+                if (!mod_mbedtls_ssl_conf_dhparameters(srv, s, &ds->value))
+                    rc = -1;
+            }
         }
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("MaxProtocol")))
             mod_mbedtls_ssl_conf_proto(srv, s, &ds->value, 1); /* max */
@@ -1472,20 +1482,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     }
 
     if (s->ssl_dh_file) {
-        mbedtls_dhm_context dhm;
-        mbedtls_dhm_init(&dhm);
-        rc = mbedtls_dhm_parse_dhmfile(&dhm, s->ssl_dh_file->ptr);
-        if (0 != rc)
-            elogf(srv->errh, __FILE__,__LINE__, rc,
-                 "mbedtls_dhm_parse_dhmfile() %s", s->ssl_dh_file->ptr);
-        else {
-            rc = mbedtls_ssl_conf_dh_param_ctx(s->ssl_ctx, &dhm);
-            if (0 != rc)
-                elogf(srv->errh, __FILE__,__LINE__, rc,
-                     "mbedtls_ssl_conf_dh_param_ctx() %s", s->ssl_dh_file->ptr);
-        }
-        mbedtls_dhm_free(&dhm);
-        if (0 != rc)
+        if (!mod_mbedtls_ssl_conf_dhparameters(srv, s, s->ssl_dh_file))
             return -1;
     }
 
@@ -4160,6 +4157,26 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     return 1;
 }
 #endif /* MBEDTLS_VERSION_NUMBER >= 0x03010000 */ /* mbedtls 3.01.0 */
+
+
+static int
+mod_mbedtls_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const buffer *dhparameters)
+{
+    mbedtls_dhm_context dhm;
+    mbedtls_dhm_init(&dhm);
+    int rc = mbedtls_dhm_parse_dhmfile(&dhm, dhparameters->ptr);
+    if (0 != rc)
+        elogf(srv->errh, __FILE__,__LINE__, rc,
+             "mbedtls_dhm_parse_dhmfile() %s", dhparameters->ptr);
+    else {
+        rc = mbedtls_ssl_conf_dh_param_ctx(s->ssl_ctx, &dhm);
+        if (0 != rc)
+            elogf(srv->errh, __FILE__,__LINE__, rc,
+                 "mbedtls_ssl_conf_dh_param_ctx() %s", dhparameters->ptr);
+    }
+    mbedtls_dhm_free(&dhm);
+    return (0 == rc);
+}
 
 
 #if MBEDTLS_VERSION_NUMBER < 0x03020000 /* mbedtls 3.02.0 */

@@ -2092,6 +2092,86 @@ static DH *get_dh2048(void)
 
 
 static int
+mod_openssl_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const buffer *dhparameters)
+{
+  #ifndef OPENSSL_NO_DH
+   #if OPENSSL_VERSION_NUMBER < 0x30000000L
+    DH *dh;
+    /* Support for Diffie-Hellman key exchange */
+    if (dhparameters) {
+        /* DH parameters from file */
+        BIO *bio;
+        bio = BIO_new_file((char *) dhparameters->ptr, "r");
+        if (bio == NULL) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: Unable to open file %s", dhparameters->ptr);
+            return 0;
+        }
+        dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+        BIO_free(bio);
+        if (dh == NULL) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: PEM_read_bio_DHparams failed %s", dhparameters->ptr);
+            return 0;
+        }
+        SSL_CTX_set_tmp_dh(s->ssl_ctx, dh);
+        DH_free(dh);
+    }
+    else {
+        dh = get_dh2048();
+        if (dh == NULL) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: get_dh2048() failed");
+            return 0;
+        }
+        SSL_CTX_set_tmp_dh(s->ssl_ctx, dh);
+        DH_free(dh);
+    }
+   #else
+    /* OSSL_STORE_open() available in openssl 1.1.1, but might
+     * not be present in alt TLS libs (libressl or boringssl) */
+    EVP_PKEY *dhpkey = NULL;
+    if (dhparameters) {
+        OSSL_STORE_CTX *ctx = NULL;
+        ctx = OSSL_STORE_open(dhparameters->ptr, NULL, NULL, NULL, NULL);
+        if (NULL != ctx) {
+            if (OSSL_STORE_expect(ctx, OSSL_STORE_INFO_PARAMS)) {
+                while (!OSSL_STORE_eof(ctx)) {
+                    OSSL_STORE_INFO *info = OSSL_STORE_load(ctx);
+                    if (info) {
+                        dhpkey = OSSL_STORE_INFO_get1_PARAMS(info);
+                        OSSL_STORE_INFO_free(info);
+                    }
+                    break;
+                }
+            }
+            OSSL_STORE_close(ctx);
+        }
+        if (!dhpkey || !EVP_PKEY_is_a(dhpkey, "DH")
+            || !SSL_CTX_set0_tmp_dh_pkey(s->ssl_ctx, dhpkey)) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "Unable to load DH params from %s", dhparameters->ptr);
+            EVP_PKEY_free(dhpkey);
+            dhpkey = NULL;
+        } /*(else dhpkey ownership transferred upon success)*/
+    }
+    if (NULL == dhpkey)
+        SSL_CTX_set_dh_auto(s->ssl_ctx, 1);
+   #endif
+    SSL_CTX_set_options(s->ssl_ctx, SSL_OP_SINGLE_DH_USE);
+  #else
+    if (dhparameters) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: openssl compiled without DH support, "
+          "can't load parameters from %s", dhparameters->ptr);
+    }
+  #endif
+
+    return 1;
+}
+
+
+static int
 mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *ssl_ec_curve)
 {
   #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
@@ -2260,80 +2340,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             SSL_CTX_set_options(s->ssl_ctx, SSL_OP_PRIORITIZE_CHACHA);
       #endif
 
-      #ifndef OPENSSL_NO_DH
-      {
-       #if OPENSSL_VERSION_NUMBER < 0x30000000L
-        DH *dh;
-        /* Support for Diffie-Hellman key exchange */
-        if (s->ssl_dh_file) {
-            /* DH parameters from file */
-            BIO *bio;
-            bio = BIO_new_file((char *) s->ssl_dh_file->ptr, "r");
-            if (bio == NULL) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "SSL: Unable to open file %s", s->ssl_dh_file->ptr);
-                return -1;
-            }
-            dh = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
-            BIO_free(bio);
-            if (dh == NULL) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "SSL: PEM_read_bio_DHparams failed %s", s->ssl_dh_file->ptr);
-                return -1;
-            }
-            SSL_CTX_set_tmp_dh(s->ssl_ctx,dh);
-            DH_free(dh);
-        }
-        else {
-            dh = get_dh2048();
-            if (dh == NULL) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "SSL: get_dh2048() failed");
-                return -1;
-            }
-            SSL_CTX_set_tmp_dh(s->ssl_ctx,dh);
-            DH_free(dh);
-        }
-       #else
-        /* OSSL_STORE_open() available in openssl 1.1.1, but might
-         * not be present in alt TLS libs (libressl or boringssl) */
-        EVP_PKEY *dhpkey = NULL;
-        if (s->ssl_dh_file) {
-            OSSL_STORE_CTX *ctx = NULL;
-            ctx = OSSL_STORE_open(s->ssl_dh_file->ptr, NULL, NULL, NULL, NULL);
-            if (NULL != ctx) {
-                if (OSSL_STORE_expect(ctx, OSSL_STORE_INFO_PARAMS)) {
-                    while (!OSSL_STORE_eof(ctx)) {
-                        OSSL_STORE_INFO *info = OSSL_STORE_load(ctx);
-                        if (info) {
-                            dhpkey = OSSL_STORE_INFO_get1_PARAMS(info);
-                            OSSL_STORE_INFO_free(info);
-                        }
-                        break;
-                    }
-                }
-                OSSL_STORE_close(ctx);
-            }
-            if (!dhpkey || !EVP_PKEY_is_a(dhpkey, "DH")
-                || !SSL_CTX_set0_tmp_dh_pkey(s->ssl_ctx, dhpkey)) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "Unable to load DH params from %s", s->ssl_dh_file->ptr);
-                EVP_PKEY_free(dhpkey);
-                dhpkey = NULL;
-            } /*(else dhpkey ownership transferred upon success)*/
-        }
-        if (NULL == dhpkey)
-            SSL_CTX_set_dh_auto(s->ssl_ctx, 1);
-       #endif
-        SSL_CTX_set_options(s->ssl_ctx,SSL_OP_SINGLE_DH_USE);
-      }
-      #else
-        if (s->ssl_dh_file) {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: openssl compiled without DH support, "
-              "can't load parameters from %s", s->ssl_dh_file->ptr);
-        }
-      #endif
+        if (!mod_openssl_ssl_conf_dhparameters(srv, s, s->ssl_dh_file))
+            return -1;
 
         if (!mod_openssl_ssl_conf_curves(srv, s, s->ssl_ec_curve))
             return -1;
@@ -3767,7 +3775,7 @@ static int
 mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
 {
     /* reference:
-     * https://www.openssl.org/docs/man1.1.1/man3/SSL_CONF_cmd.html */
+     * https://www.openssl.org/docs/manmaster/man3/SSL_CONF_cmd.html */
     int rc = 0;
     buffer *cipherstring = NULL;
     buffer *ciphersuites = NULL;
@@ -3784,6 +3792,12 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Curves"))
               || buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Groups")))
             curves = &ds->value;
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("DHParameters"))){
+            if (!buffer_is_blank(&ds->value)) {
+                if (!mod_openssl_ssl_conf_dhparameters(srv, s, &ds->value))
+                    rc = -1;
+            }
+        }
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("MaxProtocol")))
             maxb = &ds->value;
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("MinProtocol")))

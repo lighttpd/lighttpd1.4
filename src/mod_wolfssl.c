@@ -1952,6 +1952,52 @@ static DH *get_dh2048(void)
 
 
 static int
+mod_openssl_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const buffer *dhparameters)
+{
+  #ifndef NO_DH
+    DH *dh;
+    /* Support for Diffie-Hellman key exchange */
+    if (dhparameters) {
+        const char *fn = dhparameters->ptr;
+        off_t dlen = 1*1024*1024;/*(arbitrary limit: 1 MB; expect < 1 KB)*/
+        char *data = fdevent_load_file(fn, &dlen, srv->errh, malloc, free);
+        int rc = (NULL != data) ? 0 : -1;
+        if (0 == rc)
+            wolfSSL_CTX_SetTmpDH_buffer(s->ssl_ctx, (unsigned char *)data,
+                                        (long)dlen, WOLFSSL_FILETYPE_PEM);
+        if (dlen) ck_memzero(data, dlen);
+        free(data);
+        if (rc < 0) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: Unable to read DH params from file %s",
+              dhparameters->ptr);
+            return 0;
+        }
+    }
+    else {
+        dh = get_dh2048();
+        if (dh == NULL) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "SSL: get_dh2048() failed");
+            return 0;
+        }
+        SSL_CTX_set_tmp_dh(s->ssl_ctx, dh);
+        DH_free(dh);
+    }
+    SSL_CTX_set_options(s->ssl_ctx, SSL_OP_SINGLE_DH_USE);
+  #else
+    if (dhparameters) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: wolfssl compiled without DH support, "
+          "can't load parameters from %s", dhparameters->ptr);
+    }
+  #endif
+
+    return 1;
+}
+
+
+static int
 mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *ssl_ec_curve)
 {
     /* Support for Elliptic-Curve Diffie-Hellman key exchange */
@@ -2074,46 +2120,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             SSL_CTX_set_options(s->ssl_ctx, SSL_OP_PRIORITIZE_CHACHA);
       #endif
 
-      #ifndef NO_DH
-      {
-        DH *dh;
-        /* Support for Diffie-Hellman key exchange */
-        if (s->ssl_dh_file) {
-            const char *fn = s->ssl_dh_file->ptr;
-            off_t dlen = 1*1024*1024;/*(arbitrary limit: 1 MB; expect < 1 KB)*/
-            char *data = fdevent_load_file(fn, &dlen, srv->errh, malloc, free);
-            int rc = (NULL != data) ? 0 : -1;
-            if (0 == rc)
-                  wolfSSL_CTX_SetTmpDH_buffer(s->ssl_ctx, (unsigned char *)data,
-                                              (long)dlen, WOLFSSL_FILETYPE_PEM);
-            if (dlen) ck_memzero(data, dlen);
-            free(data);
-            if (rc < 0) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "SSL: Unable to read DH params from file %s",
-                  s->ssl_dh_file->ptr);
-                return -1;
-            }
-        }
-        else {
-            dh = get_dh2048();
-            if (dh == NULL) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "SSL: get_dh2048() failed");
-                return -1;
-            }
-            SSL_CTX_set_tmp_dh(s->ssl_ctx,dh);
-            DH_free(dh);
-        }
-        SSL_CTX_set_options(s->ssl_ctx,SSL_OP_SINGLE_DH_USE);
-      }
-      #else
-        if (s->ssl_dh_file) {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: openssl compiled without DH support, "
-              "can't load parameters from %s", s->ssl_dh_file->ptr);
-        }
-      #endif
+        if (!mod_openssl_ssl_conf_dhparameters(srv, s, s->ssl_dh_file))
+            return -1;
 
         if (!mod_openssl_ssl_conf_curves(srv, s, s->ssl_ec_curve))
             return -1;
@@ -3532,6 +3540,12 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Curves"))
               || buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Groups")))
             curves = &ds->value;
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("DHParameters"))){
+            if (!buffer_is_blank(&ds->value)) {
+                if (!mod_openssl_ssl_conf_dhparameters(srv, s, &ds->value))
+                    rc = -1;
+            }
+        }
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("MaxProtocol")))
             maxb = &ds->value;
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("MinProtocol")))

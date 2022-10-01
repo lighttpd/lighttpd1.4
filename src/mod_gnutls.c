@@ -1632,6 +1632,12 @@ static int
 mod_gnutls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *ciphersuites, const buffer *cipherstring);
 
 
+#if GNUTLS_VERSION_NUMBER < 0x030600
+static int
+mod_gnutls_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const buffer *dhparameters);
+#endif
+
+
 static int
 mod_gnutls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *curvelist);
 
@@ -1661,6 +1667,14 @@ mod_gnutls_ssl_conf_cmd (server *srv, plugin_config_socket *s)
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Curves"))
               || buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Groups")))
             curves = &ds->value;
+      #if GNUTLS_VERSION_NUMBER < 0x030600
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("DHParameters"))){
+            if (!buffer_is_blank(&ds->value)) {
+                if (!mod_gnutls_ssl_conf_dhparameters(srv, s, &ds->value))
+                    rc = -1;
+            }
+        }
+      #endif
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("MaxProtocol")))
             maxb = &ds->value;
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("MinProtocol")))
@@ -1778,47 +1792,11 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     }
 
   #if GNUTLS_VERSION_NUMBER < 0x030600
-    if (s->ssl_dh_file) {
-        /* "Prior to GnuTLS 3.6.0 for the ephemeral or anonymous Diffie-Hellman
-         * (DH) TLS ciphersuites the application was required to generate or
-         * provide DH parameters. That is no longer necessary as GnuTLS utilizes
-         * DH parameters and negotiation from [RFC7919]."
-         */
-        /* In other words, the following should not be used in 3.6.0 or later:
-         *   gnutls_certificate_set_dh_params()
-         *   gnutls_certificate_set_known_dh_params()
-         * However, if support is implemented in mod_gnutls, must also free in
-         * mod_gnutls_free_config() as gnutls_certificate_free_credentials()
-         * does not free RSA or DH params manually associated with credential */
-        gnutls_datum_t f = { NULL, 0 };
-        rc = gnutls_dh_params_init(&s->dh_params);
-        if (rc < 0) return -1;
-        rc = mod_gnutls_load_file(s->ssl_dh_file->ptr, &f, srv->errh);
-        if (rc < 0) return -1;
-        rc = gnutls_dh_params_import_pkcs3(s->dh_params,&f,GNUTLS_X509_FMT_PEM);
-        mod_gnutls_datum_wipe(&f);
-        if (rc < 0) {
-            elogf(srv->errh, __FILE__, __LINE__, rc,
-                  "gnutls_dh_params_import_pkcs3() %s", s->ssl_dh_file->ptr);
+    {
+        if (!mod_gnutls_ssl_conf_dhparameters(srv, s, NULL, s->ssl_dh_file))
             return -1;
-        }
     }
-    else {
-      #if GNUTLS_VERSION_NUMBER < 0x030506
-        /* (this might take a while; you should upgrade to newer gnutls) */
-        rc = gnutls_dh_params_init(&s->dh_params);
-        if (rc < 0) return -1;
-        unsigned int bits =
-          gnutls_sec_param_to_pk_bits(GNUTLS_PK_DH, GNUTLS_SEC_PARAM_HIGH);
-        rc = gnutls_dh_params_generate2(s->dh_params, bits);
-        if (rc < 0) {
-            elogf(srv->errh, __FILE__, __LINE__, rc,
-                  "gnutls_dh_params_generate2()");
-            return -1;
-        }
-      #endif
-    }
-  #endif /* GNUTLS_VERSION_NUMBER < 0x030600 */
+  #endif
 
     if (s->ssl_ec_curve) {
         buffer_append_string_len(&s->priority_str,
@@ -3366,6 +3344,56 @@ mod_gnutls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *
 
     return 1;
 }
+
+
+#if GNUTLS_VERSION_NUMBER < 0x030600
+static int
+mod_gnutls_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const buffer *dhparameters)
+{
+    if (dhparameters) {
+        /* "Prior to GnuTLS 3.6.0 for the ephemeral or anonymous Diffie-Hellman
+         * (DH) TLS ciphersuites the application was required to generate or
+         * provide DH parameters. That is no longer necessary as GnuTLS utilizes
+         * DH parameters and negotiation from [RFC7919]."
+         */
+        /* In other words, the following should not be used in 3.6.0 or later:
+         *   gnutls_certificate_set_dh_params()
+         *   gnutls_certificate_set_known_dh_params()
+         * However, if support is implemented in mod_gnutls, must also free in
+         * mod_gnutls_free_config() as gnutls_certificate_free_credentials()
+         * does not free RSA or DH params manually associated with credential */
+        gnutls_datum_t f = { NULL, 0 };
+        rc = gnutls_dh_params_init(&s->dh_params);
+        if (rc < 0) return 0;
+        rc = mod_gnutls_load_file(dhparameters->ptr, &f, srv->errh);
+        if (rc < 0) return 0;
+        rc = gnutls_dh_params_import_pkcs3(s->dh_params,&f,GNUTLS_X509_FMT_PEM);
+        mod_gnutls_datum_wipe(&f);
+        if (rc < 0) {
+            elogf(srv->errh, __FILE__, __LINE__, rc,
+                  "gnutls_dh_params_import_pkcs3() %s", dhparameters->ptr);
+            return 0;
+        }
+    }
+    else {
+      #if GNUTLS_VERSION_NUMBER < 0x030506
+        /* (this might take a while; you should upgrade to newer gnutls) */
+        rc = gnutls_dh_params_init(&s->dh_params);
+        if (rc < 0) return 0;
+        unsigned int bits =
+          gnutls_sec_param_to_pk_bits(GNUTLS_PK_DH, GNUTLS_SEC_PARAM_HIGH);
+        rc = gnutls_dh_params_generate2(s->dh_params, bits);
+        if (rc < 0) {
+            elogf(srv->errh, __FILE__, __LINE__, rc,
+                  "gnutls_dh_params_generate2()");
+            return 0;
+        }
+      #endif
+    }
+
+    return 1;
+}
+#endif /* GNUTLS_VERSION_NUMBER < 0x030600 */
 
 
 static int
