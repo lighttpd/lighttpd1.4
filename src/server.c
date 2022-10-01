@@ -882,20 +882,6 @@ static int server_graceful_state_bg (server *srv) {
         ? argv[0][0] != '/'
         : NULL == strchr(argv[0], '/')) return 0;
 
-  #if 0
-    /* disabled; not fully implemented
-     * srv->srvconf.systemd_socket_activation might be cleared in network_init()
-     * leading to issuing a false warning
-     */
-    /* warn if server.systemd-socket-activation not enabled
-     * (While this warns on existing config rather than new config,
-     *  it is probably a decent predictor for presence in new config) */
-    if (!srv->srvconf.systemd_socket_activation)
-        log_error(srv->errh, __FILE__, __LINE__,
-          "[note] server.systemd-socket-activation not enabled; "
-          "listen sockets will be closed and reopened");
-  #endif
-
     /* flush log buffers to avoid potential duplication of entries
      * server_handle_sighup(srv) does the following, but skip logging */
     plugins_call_handle_sighup(srv);

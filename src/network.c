@@ -783,6 +783,9 @@ int network_init(server *srv, int stdin_fd) {
             network_merge_config(&p->defaults, cpv);
     }
 
+    if (config_feature_bool(srv, "server.graceful-restart-bg", 0))
+        srv->srvconf.systemd_socket_activation = 1;
+
     int rc = 0;
     do {
 
