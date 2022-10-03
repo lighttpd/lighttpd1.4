@@ -83,6 +83,7 @@ WOLFSSL_API WOLFSSL_ASN1_OBJECT * wolfSSL_X509_NAME_ENTRY_get_object(WOLFSSL_X50
 WOLFSSL_API WOLFSSL_X509_NAME_ENTRY *wolfSSL_X509_NAME_get_entry(WOLFSSL_X509_NAME *name, int loc);
 #endif
 
+#if LIBWOLFSSL_VERSION_HEX < 0x04005000
 #if !defined(OPENSSL_ALL) || LIBWOLFSSL_VERSION_HEX < 0x04002000
 /*(invalid; but centralize making these calls no-ops)*/
 #define wolfSSL_sk_X509_NAME_num(a)          0
@@ -93,6 +94,7 @@ WOLFSSL_API WOLFSSL_X509_NAME_ENTRY *wolfSSL_X509_NAME_get_entry(WOLFSSL_X509_NA
         ((WOLFSSL_X509_NAME *)1) /* ! NULL */
 #define wolfSSL_sk_X509_NAME_new(a) \
         ((WOLF_STACK_OF(WOLFSSL_X509_NAME) *)1) /* ! NULL */
+#endif
 #endif
 
 #if LIBWOLFSSL_VERSION_HEX < 0x04006000 || defined(WOLFSSL_NO_FORCE_ZERO)
@@ -1578,8 +1580,8 @@ mod_openssl_refresh_stapling_files (server *srv, const plugin_data *p, const uni
 static int
 mod_openssl_crt_must_staple (const WOLFSSL_X509 *crt)
 {
-    /* XXX: TODO: not implemented */
-  #if 1
+  #if LIBWOLFSSL_VERSION_HEX < 0x05000000 /*(stub func filled in v5.0.0)*/
+    /* wolfSSL_ASN1_INTEGER_get() is a stub func < v5.0.0; always returns 0 */
     UNUSED(crt);
     return 0;
   #else
@@ -1595,8 +1597,6 @@ mod_openssl_crt_must_staple (const WOLFSSL_X509 *crt)
     #define wolfSSL_sk_ASN1_INTEGER_num(sk) wolfSSL_sk_num(sk)
     #define wolfSSL_sk_ASN1_INTEGER_value(sk, i) wolfSSL_sk_value(sk, i)
     #define wolfSSL_sk_ASN1_INTEGER_pop_free(sk, fn) wolfSSL_sk_pop_free(sk, fn)
-
-    /* wolfSSL_ASN1_INTEGER_get() is a stub func <= 4.6.0; always returns 0 */
 
     for (int i = 0; i < wolfSSL_sk_ASN1_INTEGER_num(tlsf); ++i) {
         WOLFSSL_ASN1_INTEGER *ai = wolfSSL_sk_ASN1_INTEGER_value(tlsf, i);
@@ -1638,7 +1638,8 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
         return NULL;
     }
 
-    /* X509_check_private_key() is a stub func (not implemented) in WolfSSL */
+    /* wolfSSL_X509_check_private_key() is a stub func (not implemented) in
+     * WolfSSL prior to v4.6.0, and still no-op #ifdef NO_CHECK_PRIVATE_KEY */
 
     plugin_cert *pc = malloc(sizeof(plugin_cert));
     force_assert(pc);
@@ -1652,10 +1653,13 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     pc->ssl_stapling_loadts = 0;
     pc->ssl_stapling_nextts = 0;
   #ifdef HAVE_OCSP
-    /*(not implemented for WolfSSL, though could convert the DER to (X509 *),
-     * check Must-Staple, and then destroy (X509 *))*/
-    (void)mod_openssl_crt_must_staple(NULL);
-    pc->must_staple = 0;
+    WOLFSSL_X509 *crt =
+      wolfSSL_X509_load_certificate_buffer((const unsigned char *)
+                                             ssl_pemfile_x509->ptr,
+                                           (int)buffer_clen(ssl_pemfile_x509),
+                                           WOLFSSL_FILETYPE_ASN1);
+    pc->must_staple = mod_openssl_crt_must_staple(crt);
+    wolfSSL_X509_free(crt);
   #else
     pc->must_staple = 0;
   #endif
