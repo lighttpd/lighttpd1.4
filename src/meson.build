@@ -505,7 +505,7 @@ configure_file(
 	configuration : conf_data,
 )
 
-common_src = [
+common_src = files(
 	'algo_md5.c',
 	'algo_sha1.c',
 	'algo_splaytree.c',
@@ -536,11 +536,11 @@ common_src = [
 	'stat_cache.c',
 	'sys-setjmp.c',
 	'vector.c',
-]
+)
 if target_machine.system() == 'windows'
-	common_src += [ 'xgetopt.c' ]
+	common_src += files('xgetopt.c')
 endif
-main_src = [
+main_src = files(
 	'configfile.c',
 	'connections.c',
 	'data_config.c',
@@ -556,7 +556,7 @@ main_src = [
 	'reqpool.c',
 	'response.c',
 	'server.c',
-]
+)
 
 lemon = executable('lemon',
 	sources: 'lemon.c',
