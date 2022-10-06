@@ -25,7 +25,7 @@ option('with_fam',
 )
 option('with_gnutls',
 	type: 'boolean',
-	value: 'false',
+	value: false,
 	description: 'with GnuTLS-support [default: off]',
 )
 option('with_krb5',
@@ -60,7 +60,7 @@ option('with_maxminddb',
 )
 option('with_mbedtls',
 	type: 'boolean',
-	value: 'false',
+	value: false,
 	description: 'with mbedTLS-support [default: off]',
 )
 option('with_mysql',
@@ -75,7 +75,7 @@ option('with_nettle',
 )
 option('with_nss',
 	type: 'boolean',
-	value: 'false',
+	value: false,
 	description: 'with NSS-crypto-support [default: off]',
 )
 option('with_openssl',
@@ -126,7 +126,7 @@ option('with_webdav_props',
 )
 option('with_wolfssl',
 	type: 'boolean',
-	value: 'false',
+	value: false,
 	description: 'with wolfSSL-support [default: off]',
 )
 option('with_xattr',
