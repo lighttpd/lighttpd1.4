@@ -80,6 +80,9 @@ static void mod_proxy_free_config(plugin_data * const p)
         config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
+              case 0: /* proxy.server */
+                if (cpv->vtype == T_CONFIG_LOCAL) gw_plugin_config_free(cpv->v.v);
+                break;
               case 5: /* proxy.header */
                 if (cpv->vtype == T_CONFIG_LOCAL) free(cpv->v.v);
                 break;
@@ -94,7 +97,6 @@ static void mod_proxy_free_config(plugin_data * const p)
 FREE_FUNC(mod_proxy_free) {
     plugin_data * const p = p_d;
     mod_proxy_free_config(p);
-    gw_free(p);
 }
 
 static void mod_proxy_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv)
