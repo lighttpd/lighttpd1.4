@@ -68,7 +68,7 @@ static int mod_alias_check_order(server * const srv, const array * const a) {
             while (*data != dj && *data != dk) ++data;
             if (*data == dj) {
                 log_error(srv->errh, __FILE__, __LINE__,
-                  "url.alias: `%s' will never match as `%s' matched first",
+                  "alias.url: `%s' will never match as `%s' matched first",
                   key->ptr, prefix->ptr);
                 return 0;
             }
