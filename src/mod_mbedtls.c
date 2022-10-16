@@ -2459,13 +2459,12 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
     /* (mbedtls_ssl_config *) is shared across multiple connections, which may
      * overlap, and so renegotiation setting is not reset upon connection close.
      * Once enabled, renegotiation will remain so for this mbedtls_ssl_config.
-     * mbedtls defaults to disable client renegotiation
-     *   (MBEDTLS_LEGACY_SSL_RENEGOTIATION_DISABLED)
+     * mbedtls defaults to disable client renegotiation (unless secure)
      * and it is recommended to leave it disabled (lighttpd mbedtls default) */
-  #ifdef MBEDTLS_LEGACY_SSL_RENEGOTIATION_ENABLED
+  #ifdef MBEDTLS_SSL_RENEGOTIATION
     if (!hctx->conf.ssl_disable_client_renegotiation)
-        mbedtls_legacy_ssl_conf_renegotiation(hctx->ssl_ctx,
-                                      MBEDTLS_LEGACY_SSL_RENEGOTIATION_ENABLED);
+        mbedtls_ssl_conf_legacy_renegotiation(hctx->ssl_ctx,
+                                        MBEDTLS_SSL_LEGACY_ALLOW_RENEGOTIATION);
   #endif
 
     return HANDLER_GO_ON;
