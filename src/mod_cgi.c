@@ -874,7 +874,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 			if (!http_header_request_get(r, HTTP_HEADER_OTHER,
 			                             CONST_STR_LEN("Sec-WebSocket-Key")))
 				cgi_env_add(env, CONST_STR_LEN("HTTP_SEC_WEBSOCKET_KEY"),
-				                 CONST_STR_LEN("MDAwMDAwMDAwMDAwMDAwMAo="));
+				                 CONST_STR_LEN("MDAwMDAwMDAwMDAwMDAwMA=="));
 			/*(Upgrade and Connection should not exist for HTTP/2 request)*/
 			cgi_env_add(env, CONST_STR_LEN("HTTP_UPGRADE"), CONST_STR_LEN("websocket"));
 			cgi_env_add(env, CONST_STR_LEN("HTTP_CONNECTION"), CONST_STR_LEN("upgrade"));
