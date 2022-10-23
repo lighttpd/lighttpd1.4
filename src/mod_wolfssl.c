@@ -144,12 +144,7 @@ typedef struct {
     /*(used only during startup; not patched)*/
     unsigned char ssl_enabled; /* only interesting for setting up listening sockets. don't use at runtime */
     unsigned char ssl_honor_cipher_order; /* determine SSL cipher in server-preferred order, not client-order */
-    unsigned char ssl_empty_fragments; /* whether to not set SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS */
-    unsigned char ssl_use_sslv2;
-    unsigned char ssl_use_sslv3;
     const buffer *ssl_cipher_list;
-    const buffer *ssl_dh_file;
-    const buffer *ssl_ec_curve;
     array *ssl_conf_cmd;
 
     /*(copied from plugin_data for socket ssl_ctx config)*/
@@ -161,7 +156,6 @@ typedef struct {
     unsigned char ssl_verifyclient_enforce;
     unsigned char ssl_verifyclient_depth;
     unsigned char ssl_read_ahead;
-    unsigned char ssl_disable_client_renegotiation;
 } plugin_config_socket; /*(used at startup during configuration)*/
 
 typedef struct {
@@ -177,7 +171,6 @@ typedef struct {
     unsigned char ssl_verifyclient_export_cert;
     unsigned char ssl_read_ahead;
     unsigned char ssl_log_noise;
-    unsigned char ssl_disable_client_renegotiation;
     const buffer *ssl_verifyclient_username;
     const buffer *ssl_acme_tls_1;
 } plugin_config;
@@ -1064,7 +1057,7 @@ mod_openssl_merge_config_cpv (plugin_config * const pconf, const config_plugin_v
         pconf->ssl_read_ahead = (0 != cpv->v.u);
         break;
       case 6: /* ssl.disable-client-renegotiation */
-        pconf->ssl_disable_client_renegotiation = (0 != cpv->v.u);
+        /*(ignored; unsafe renegotiation disabled by default)*/
         break;
       case 7: /* ssl.verifyclient.activate */
         pconf->ssl_verifyclient = (0 != cpv->v.u);
@@ -2061,9 +2054,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                         | SSL_OP_NO_COMPRESSION;
 
       #if LIBWOLFSSL_VERSION_HEX >= 0x04002000
-        s->ssl_ctx = (!s->ssl_use_sslv2 && !s->ssl_use_sslv3)
-          ? SSL_CTX_new(TLS_server_method())
-          : SSL_CTX_new(SSLv23_server_method());
+        s->ssl_ctx = SSL_CTX_new(TLS_server_method());
       #else
         s->ssl_ctx = SSL_CTX_new(SSLv23_server_method());
       #endif
@@ -2074,8 +2065,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         }
 
       #ifdef SSL_OP_NO_RENEGOTIATION /* openssl 1.1.0 */
-        if (s->ssl_disable_client_renegotiation)
-            ssloptions |= SSL_OP_NO_RENEGOTIATION;
+        ssloptions |= SSL_OP_NO_RENEGOTIATION;
       #endif
 
         /* completely useless identifier;
@@ -2099,23 +2089,12 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                                            | SSL_SESS_CACHE_NO_INTERNAL);
       #endif
 
-        if (s->ssl_empty_fragments) {
-          #ifdef SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS
-            ssloptions &= ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS;
-          #else
-            ssloptions &= ~0x00000800L; /* hardcode constant */
-            log_error(srv->errh, __FILE__, __LINE__,
-              "WARNING: SSL: 'insert empty fragments' not supported by the "
-              "openssl version used to compile lighttpd with");
-          #endif
-        }
-
         SSL_CTX_set_options(s->ssl_ctx, ssloptions);
         SSL_CTX_set_info_callback(s->ssl_ctx, ssl_info_callback);
 
         /*(wolfSSL does not support SSLv2)*/
 
-        if (!s->ssl_use_sslv3 && 0 != SSL_OP_NO_SSLv3) {
+        if (0 != SSL_OP_NO_SSLv3) {
             /* disable SSLv3 */
             if ((SSL_OP_NO_SSLv3
                  & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv3))
@@ -2144,10 +2123,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             SSL_CTX_set_options(s->ssl_ctx, SSL_OP_PRIORITIZE_CHACHA);
       #endif
 
-        if (!mod_openssl_ssl_conf_dhparameters(srv, s, s->ssl_dh_file))
-            return -1;
-
-        if (!mod_openssl_ssl_conf_curves(srv, s, s->ssl_ec_curve))
+        if (!mod_openssl_ssl_conf_dhparameters(srv, s, NULL))
             return -1;
 
       #ifdef HAVE_SESSION_TICKET
@@ -2272,8 +2248,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
        #endif
       #endif
 
-        if (!s->ssl_use_sslv3 && !s->ssl_use_sslv2
-            && wolfSSL_CTX_SetMinVersion(s->ssl_ctx, WOLFSSL_TLSV1_2)
+        if (wolfSSL_CTX_SetMinVersion(s->ssl_ctx, WOLFSSL_TLSV1_2)
                != WOLFSSL_SUCCESS)
             return -1;
 
@@ -2302,30 +2277,12 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
      ,{ CONST_STR_LEN("ssl.cipher-list"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_SOCKET }
-     ,{ CONST_STR_LEN("ssl.honor-cipher-order"),
-        T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_SOCKET }
-     ,{ CONST_STR_LEN("ssl.dh-file"),
-        T_CONFIG_STRING,
-        T_CONFIG_SCOPE_SOCKET }
-     ,{ CONST_STR_LEN("ssl.ec-curve"),
-        T_CONFIG_STRING,
-        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.openssl.ssl-conf-cmd"),
         T_CONFIG_ARRAY_KVSTRING,
         T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.pemfile"), /* included to process global scope */
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
-     ,{ CONST_STR_LEN("ssl.empty-fragments"),
-        T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_SOCKET }
-     ,{ CONST_STR_LEN("ssl.use-sslv2"),
-        T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_SOCKET }
-     ,{ CONST_STR_LEN("ssl.use-sslv3"),
-        T_CONFIG_BOOL,
-        T_CONFIG_SCOPE_SOCKET }
      ,{ CONST_STR_LEN("ssl.stek-file"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_SERVER }
@@ -2348,7 +2305,6 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
 
     plugin_config_socket defaults;
     memset(&defaults, 0, sizeof(defaults));
-    defaults.ssl_honor_cipher_order = 1;
     defaults.ssl_cipher_list = &default_ssl_cipher_list;
 
     /* process and validate config directives for global and $SERVER["socket"]
@@ -2377,61 +2333,25 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                 --count_not_engine;
                 break;
               case 1: /* ssl.cipher-list */
-                if (!buffer_is_blank(cpv->v.b))
+                if (!buffer_is_blank(cpv->v.b)) {
                     conf.ssl_cipher_list = cpv->v.b;
+                    /*(historical use might list non-PFS ciphers)*/
+                    conf.ssl_honor_cipher_order = 1;
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "%s is deprecated.  "
+                      "Please prefer lighttpd secure TLS defaults, or use "
+                      "ssl.openssl.ssl-conf-cmd \"CipherString\" to set custom "
+                      "cipher list.", cpk[cpv->k_id].k);
+                }
                 break;
-              case 2: /* ssl.honor-cipher-order */
-                conf.ssl_honor_cipher_order = (0 != cpv->v.u);
-                break;
-              case 3: /* ssl.dh-file */
-                if (!buffer_is_blank(cpv->v.b))
-                    conf.ssl_dh_file = cpv->v.b;
-                break;
-              case 4: /* ssl.ec-curve */
-                if (!buffer_is_blank(cpv->v.b))
-                    conf.ssl_ec_curve = cpv->v.b;
-                break;
-              case 5: /* ssl.openssl.ssl-conf-cmd */
+              case 2: /* ssl.openssl.ssl-conf-cmd */
                 *(const array **)&conf.ssl_conf_cmd = cpv->v.a;
                 break;
-              case 6: /* ssl.pemfile */
+              case 3: /* ssl.pemfile */
                 /* ignore here; included to process global scope when
                  * ssl.pemfile is set, but ssl.engine is not "enable" */
                 break;
-              case 7: /* ssl.empty-fragments */
-                conf.ssl_empty_fragments = (0 != cpv->v.u);
-                log_error(srv->errh, __FILE__, __LINE__, "SSL: "
-                  "ssl.empty-fragments is deprecated and will soon be "
-                  "removed.  It is disabled by default.");
-                if (conf.ssl_empty_fragments)
-                    log_error(srv->errh, __FILE__, __LINE__, "SSL: "
-                      "If needed, use: ssl.openssl.ssl-conf-cmd = "
-                      "(\"Options\" => \"EmptyFragments\")");
-                log_error(srv->errh, __FILE__, __LINE__, "SSL: "
-                  "ssl.empty-fragments is a "
-                  "counter-measure against a SSL 3.0/TLS 1.0 protocol "
-                  "vulnerability affecting CBC ciphers, which cannot be handled"
-                  " by some broken (Microsoft) SSL implementations.");
-                break;
-              case 8: /* ssl.use-sslv2 */
-                conf.ssl_use_sslv2 = (0 != cpv->v.u);
-                log_error(srv->errh, __FILE__, __LINE__, "SSL: "
-                  "ssl.use-sslv2 is deprecated and will soon be removed.  "
-                  "It is disabled by default.  "
-                  "Many modern TLS libraries no longer support SSLv2.");
-                break;
-              case 9: /* ssl.use-sslv3 */
-                conf.ssl_use_sslv3 = (0 != cpv->v.u);
-                log_error(srv->errh, __FILE__, __LINE__, "SSL: "
-                  "ssl.use-sslv3 is deprecated and will soon be removed.  "
-                  "It is disabled by default.  "
-                  "Many modern TLS libraries no longer support SSLv3.");
-                if (conf.ssl_use_sslv3)
-                    log_error(srv->errh, __FILE__, __LINE__, "SSL: "
-                      "If needed, use: ssl.openssl.ssl-conf-cmd = "
-                      "(\"MinProtocol\" => \"SSLv3\")");
-                break;
-              case 10:/* ssl.stek-file */
+              case 4: /* ssl.stek-file */
                 if (!buffer_is_blank(cpv->v.b))
                     p->ssl_stek_file = cpv->v.b->ptr;
                 break;
@@ -2484,7 +2404,7 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                     conf.ssl_read_ahead = (0 != cpv->v.u);
                     break;
                   case 6: /* ssl.disable-client-renegotiation */
-                    conf.ssl_disable_client_renegotiation = (0 != cpv->v.u);
+                    /*(ignored; unsafe renegotiation disabled by default)*/
                     break;
                   case 7: /* ssl.verifyclient.activate */
                     conf.ssl_verifyclient = (0 != cpv->v.u);
@@ -2580,7 +2500,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.disable-client-renegotiation"),
-        T_CONFIG_BOOL,
+        T_CONFIG_BOOL, /*(directive ignored)*/
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.verifyclient.activate"),
         T_CONFIG_BOOL,
@@ -2702,12 +2622,8 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                 if (0 == i) default_ssl_ca_crl_file = cpv->v.b;
                 break;
               case 5: /* ssl.read-ahead */
-                break;
               case 6: /* ssl.disable-client-renegotiation */
-                /* (force disabled, the default, if HTTP/2 enabled in server) */
-                if (srv->srvconf.h2proto)
-                    cpv->v.u = 1; /* disable client renegotiation */
-                break;
+                /*(ignored; unsafe renegotiation disabled by default)*/
               case 7: /* ssl.verifyclient.activate */
               case 8: /* ssl.verifyclient.enforce */
                 break;
@@ -2789,7 +2705,6 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
     p->defaults.ssl_verifyclient_enforce = 1;
     p->defaults.ssl_verifyclient_depth = 9;
     p->defaults.ssl_verifyclient_export_cert = 0;
-    p->defaults.ssl_disable_client_renegotiation = 1;
     p->defaults.ssl_read_ahead = 0;
 
     /* initialize p->defaults from global config context */
@@ -2858,8 +2773,7 @@ connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t ma
         ERR_clear_error();
         wr = SSL_write(ssl, data, data_len);
 
-        if (__builtin_expect( (hctx->renegotiations > 1), 0)
-            && hctx->conf.ssl_disable_client_renegotiation) {
+        if (__builtin_expect( (hctx->renegotiations > 1), 0)) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: renegotiation initiated by client, killing connection");
             return -1;
@@ -2950,8 +2864,7 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
         len = SSL_read(hctx->ssl, mem, mem_len);
         chunkqueue_use_memory(cq, ckpt, len > 0 ? len : 0);
 
-        if (hctx->renegotiations > 1
-            && hctx->conf.ssl_disable_client_renegotiation) {
+        if (hctx->renegotiations > 1) {
             log_error(hctx->errh, __FILE__, __LINE__,
               "SSL: renegotiation initiated by client, killing connection");
             return -1;
@@ -3514,16 +3427,12 @@ int mod_wolfssl_plugin_init (plugin *p)
 
 
 static int
-mod_openssl_ssl_conf_proto_val (server *srv, plugin_config_socket *s, const buffer *b, int max)
+mod_openssl_ssl_conf_proto_val (server *srv, const buffer *b, int max)
 {
     if (NULL == b) /* default: min TLSv1.2, max TLSv1.3 */
         return max ? WOLFSSL_TLSV1_3 : WOLFSSL_TLSV1_2;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("None"))) /*"disable" limit*/
-        return max
-          ? WOLFSSL_TLSV1_3
-          : (s->ssl_use_sslv3 ? WOLFSSL_SSLV3 : WOLFSSL_TLSV1);
-    else if (buffer_eq_icase_slen(b, CONST_STR_LEN("SSLv3")))
-        return WOLFSSL_SSLV3;
+        return max ? WOLFSSL_TLSV1_3 : WOLFSSL_TLSV1;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.0")))
         return WOLFSSL_TLSV1;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.1")))
@@ -3660,7 +3569,7 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
     }
 
     if (minb) {
-        int n = mod_openssl_ssl_conf_proto_val(srv, s, minb, 0);
+        int n = mod_openssl_ssl_conf_proto_val(srv, minb, 0);
         if (wolfSSL_CTX_SetMinVersion(s->ssl_ctx, n) != WOLFSSL_SUCCESS)
             rc = -1;
     }
@@ -3670,7 +3579,7 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
       #if LIBWOLFSSL_VERSION_HEX >= 0x04002000
         /*(could use SSL_OP_NO_* before 4.2.0)*/
         /*(wolfSSL_CTX_set_max_proto_version() 4.6.0 uses different defines)*/
-        int n = mod_openssl_ssl_conf_proto_val(srv, s, maxb, 1);
+        int n = mod_openssl_ssl_conf_proto_val(srv, maxb, 1);
         switch (n) {
           case WOLFSSL_SSLV3:
             wolfSSL_CTX_set_options(s->ssl_ctx, WOLFSSL_OP_NO_TLSv1);
