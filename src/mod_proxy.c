@@ -1013,7 +1013,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		if (!http_header_request_get(r, HTTP_HEADER_OTHER,
 		                             CONST_STR_LEN("Sec-WebSocket-Key")))
 			buffer_append_string_len(b, CONST_STR_LEN(
-			  "\r\nSec-WebSocket-Key: MDAwMDAwMDAwMDAwMDAwMAo="));
+			  "\r\nSec-WebSocket-Key: MDAwMDAwMDAwMDAwMDAwMA=="));
 		buffer_append_string_len(b, CONST_STR_LEN(
 		                              "\r\nUpgrade: websocket"
 		                              "\r\nConnection: close, upgrade\r\n\r\n"));
