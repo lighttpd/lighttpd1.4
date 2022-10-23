@@ -1596,6 +1596,12 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 }
 
 
+#define LIGHTTPD_DEFAULT_CIPHER_LIST \
+"EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384"
+
+/*"TLS1-3-AES-256-GCM-SHA384:TLS1-3-CHACHA20-POLY1305-SHA256:TLS1-3-AES-128-GCM-SHA256:TLS1-3-AES-128-CCM-SHA256:TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-ECDSA-WITH-CHACHA20-POLY1305-SHA256:TLS-ECDHE-RSA-WITH-CHACHA20-POLY1305-SHA256:TLS-ECDHE-ECDSA-WITH-AES-128-GCM-SHA256:TLS-ECDHE-RSA-WITH-AES-128-GCM-SHA256:TLS-ECDHE-ECDSA-WITH-AES-256-CCM:TLS-ECDHE-ECDSA-WITH-AES-256-CCM-8:TLS-DHE-RSA-WITH-CHACHA20-POLY1305-SHA256"*/
+
+
 static int
 mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
 {
@@ -1637,7 +1643,8 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
     };
-    static const buffer default_ssl_cipher_list = { CONST_STR_LEN("HIGH"), 0 };
+    static const buffer default_ssl_cipher_list =
+      { CONST_STR_LEN(LIGHTTPD_DEFAULT_CIPHER_LIST), 0 };
 
     p->ssl_ctxs = calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
     force_assert(p->ssl_ctxs);
@@ -3665,6 +3672,30 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
                      "Init of ssl config context SUITEB defaults failed");
                 return 0;
             }
+            if (0 == strncmp_const(e, "SUITEB192")) {
+                static const int ssl_preset_suiteb192[] = {
+                    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+                    0
+                };
+                static const mbedtls_x509_crt_profile crt_profile_suiteb192 = {
+                    /* Only SHA-384 */
+                    MBEDTLS_X509_ID_FLAG( MBEDTLS_MD_SHA384 ),
+                    /* Only ECDSA */
+                    MBEDTLS_X509_ID_FLAG( MBEDTLS_PK_ECDSA ) |
+                    MBEDTLS_X509_ID_FLAG( MBEDTLS_PK_ECKEY ),
+                  #if defined(MBEDTLS_ECP_C)
+                    /* Only NIST P-384 */
+                    MBEDTLS_X509_ID_FLAG( MBEDTLS_ECP_DP_SECP384R1 ),
+                  #else
+                    0,
+                  #endif
+                    3072,
+                };
+                mbedtls_ssl_conf_ciphersuites(s->ssl_ctx, ssl_preset_suiteb192);
+                mbedtls_ssl_conf_cert_profile(s->ssl_ctx,
+                                              &crt_profile_suiteb192);
+                mbedtls_ssl_conf_dhm_min_bitlen(s->ssl_ctx, 3072);
+            }
             e += (0 == strncmp_const(e, "SUITEB128ONLY"))
                  ? sizeof("SUITEB128ONLY")-1
                  : sizeof("SUITEB128")-1;
@@ -3679,11 +3710,22 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
                   "EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384")) {
             e += sizeof(
                   "EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384")-1;
-            if (nids + 9 >= idsz) {
+          #if defined(MBEDTLS_SSL_PROTO_TLS1_3)
+            if (nids + 13 >= idsz)
+          #else
+            if (nids + 9 >= idsz)
+          #endif
+            {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "MTLS: error: too many ciphersuites during list expand");
                 return 0;
             }
+          #if defined(MBEDTLS_SSL_PROTO_TLS1_3)
+            ids[++nids] = MBEDTLS_TLS1_3_AES_256_GCM_SHA384;
+            ids[++nids] = MBEDTLS_TLS1_3_CHACHA20_POLY1305_SHA256;
+            ids[++nids] = MBEDTLS_TLS1_3_AES_128_GCM_SHA256;
+            ids[++nids] = MBEDTLS_TLS1_3_AES_128_CCM_SHA256;
+          #endif
             ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384;
             ids[++nids] = MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384;
             ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
@@ -3774,17 +3816,26 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
             }
           #endif
 
-            /* handle a popular recommendations
+            /* handle popular recommendations
              *   ssl.cipher-list = "EECDH+AESGCM:EDH+AESGCM"
              *   ssl.cipher-list = "AES256+EECDH:AES256+EDH"
              * which uses AES hardware acceleration built into popular CPUs */
             if (buffer_eq_icase_ss(n, nlen, CONST_STR_LEN("ECDHE+AESGCM"))
              || buffer_eq_icase_ss(n, nlen, CONST_STR_LEN("EECDH+AESGCM"))) {
-                if (nids + 4 >= idsz) {
+              #if defined(MBEDTLS_SSL_PROTO_TLS1_3)
+                if (nids + 6 >= idsz)
+              #else
+                if (nids + 4 >= idsz)
+              #endif
+                {
                     log_error(srv->errh, __FILE__, __LINE__,
                       "MTLS: error: too many ciphersuites during list expand");
                     return 0;
                 }
+              #if defined(MBEDTLS_SSL_PROTO_TLS1_3)
+                ids[++nids] = MBEDTLS_TLS1_3_AES_256_GCM_SHA384;
+                ids[++nids] = MBEDTLS_TLS1_3_AES_128_GCM_SHA256;
+              #endif
                 ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384;
                 ids[++nids] = MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384;
                 ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
@@ -3803,11 +3854,19 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
                 continue;
             }
             if (buffer_eq_icase_ss(n, nlen, CONST_STR_LEN("AES256+EECDH"))) {
-                if (nids + 8 >= idsz) {
+              #if defined(MBEDTLS_SSL_PROTO_TLS1_3)
+                if (nids + 9 >= idsz)
+              #else
+                if (nids + 8 >= idsz)
+              #endif
+                {
                     log_error(srv->errh, __FILE__, __LINE__,
                       "MTLS: error: too many ciphersuites during list expand");
                     return 0;
                 }
+              #if defined(MBEDTLS_SSL_PROTO_TLS1_3)
+                ids[++nids] = MBEDTLS_TLS1_3_AES_256_GCM_SHA384;
+              #endif
                 ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384;
                 ids[++nids] = MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384;
                 ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_CCM;
@@ -3992,6 +4051,19 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
                          suite_null,
                          (int)(sizeof(suite_null)/sizeof(*suite_null)));
                 if (-1 == nids) return 0;
+                continue;
+            }
+
+            const mbedtls_ssl_ciphersuite_t *info =
+              mbedtls_ssl_ciphersuite_from_string(n);
+            if (info) {
+                if (nids + 1 >= idsz) {
+                    log_error(srv->errh, __FILE__, __LINE__,
+                      "MTLS: error: too many ciphersuites during list expand");
+                    return 0;
+                }
+                /* WTH?  why private and no accessor func? */
+                ids[++nids] = info->MBEDTLS_PRIVATE(id);
                 continue;
             }
 

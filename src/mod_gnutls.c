@@ -1891,6 +1891,10 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 }
 
 
+#define LIGHTTPD_DEFAULT_CIPHER_LIST \
+"EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384"
+
+
 static int
 mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
 {
@@ -1932,7 +1936,8 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
     };
-    static const buffer default_ssl_cipher_list = { CONST_STR_LEN("HIGH"), 0 };
+    static const buffer default_ssl_cipher_list =
+      { CONST_STR_LEN(LIGHTTPD_DEFAULT_CIPHER_LIST), 0 };
 
     p->ssl_ctxs = calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
     force_assert(p->ssl_ctxs);
