@@ -683,6 +683,14 @@ mod_wolfssl_load_pem_file (const char *fn, log_error_st *errh, buffer ***chain)
             ++count;
         if (0 == count) {
             rc = 0;
+            if (NULL == strstr(data, "-----")) {
+                /* does not look like PEM, treat as DER format */
+                certs = malloc(2 * sizeof(buffer *));
+                force_assert(NULL != certs);
+                certs[0] = buffer_init();
+                certs[1] = NULL;
+                buffer_copy_string_len(certs[0], data, dlen);
+            }
             break;
         }
 
@@ -773,6 +781,13 @@ mod_wolfssl_evp_pkey_load_pem_file (const char *fn, log_error_st *errh)
         else if ((b = strstr(data, PEM_BEGIN_ANY_PKEY))
                  && (e = strstr(b, PEM_END_ANY_PKEY)))
             b += sizeof(PEM_BEGIN_ANY_PKEY)-1;
+        else if (NULL == strstr(data, "-----")) {
+            /* does not look like PEM, treat as DER format */
+            pkey = buffer_init();
+            buffer_copy_string_len(pkey, data, dlen);
+            rc = 0;
+            break;
+        }
         else
             break;
         if (*b == '\r') ++b;
@@ -811,9 +826,13 @@ mod_wolfssl_CTX_use_certificate_chain_file (WOLFSSL_CTX *ssl_ctx, const char *fn
     char *data = fdevent_load_file(fn, &dlen, errh, malloc, free);
     if (NULL == data) return -1;
 
-    int rc = wolfSSL_CTX_use_certificate_chain_buffer(ssl_ctx,
-                                                      (unsigned char *)data,
-                                                      (long)dlen);
+    int rc = (NULL != strstr(data, "-----"))
+      ? wolfSSL_CTX_use_certificate_chain_buffer(ssl_ctx, (unsigned char *)data,
+                                                 (long)dlen)
+      : wolfSSL_CTX_use_certificate_chain_buffer_format(ssl_ctx,
+                                                        (unsigned char *)data,
+                                                        (long)dlen,
+                                                        WOLFSSL_FILETYPE_ASN1);
 
     if (dlen) ck_memzero(data, dlen);
     free(data);

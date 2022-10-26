@@ -464,8 +464,9 @@ static void mod_gnutls_free_gnutls (void)
 }
 
 
+__attribute_noinline__
 static void
-mod_gnutls_free_config_crts (gnutls_datum_t *d)
+mod_gnutls_free_config_crts_data (gnutls_datum_t *d)
 {
     if (NULL == d) return;
     gnutls_x509_crt_t *crts = (gnutls_x509_crt_t *)(void *)d->data;
@@ -473,6 +474,13 @@ mod_gnutls_free_config_crts (gnutls_datum_t *d)
     for (unsigned int i = 0; i < u; ++i)
         gnutls_x509_crt_deinit(crts[i]);
     gnutls_free(crts);
+}
+
+
+static void
+mod_gnutls_free_config_crts (gnutls_datum_t *d)
+{
+    mod_gnutls_free_config_crts_data(d);
     gnutls_free(d);
 }
 
@@ -519,6 +527,15 @@ mod_gnutls_load_config_crts (const char *fn, log_error_st *errh)
     rc = gnutls_x509_crt_list_import2((gnutls_x509_crt_t **)&d->data, &d->size,
                                       &f, GNUTLS_X509_FMT_PEM,
                                       GNUTLS_X509_CRT_LIST_SORT);
+    if (rc < 0) {
+        mod_gnutls_free_config_crts_data(d);
+        d->data = NULL;
+        d->size = 0;
+        if (0 == gnutls_x509_crt_list_import2((gnutls_x509_crt_t **)&d->data,
+                                              &d->size, &f, GNUTLS_X509_FMT_DER,
+                                              GNUTLS_X509_CRT_LIST_SORT))
+            rc = 0;
+    }
     mod_gnutls_datum_wipe(&f);
     if (rc < 0) {
         elogf(errh, __FILE__, __LINE__, rc,
@@ -582,6 +599,13 @@ mod_gnutls_load_config_pkey (const char *fn, log_error_st *errh)
         return NULL;
     }
     rc = gnutls_privkey_import_x509_raw(pkey, &f, GNUTLS_X509_FMT_PEM, NULL, 0);
+    if (rc < 0) {
+        gnutls_privkey_deinit(pkey);
+        if (0 == gnutls_privkey_init(&pkey)
+            && 0 == gnutls_privkey_import_x509_raw(pkey, &f,
+                                                   GNUTLS_X509_FMT_DER,NULL,0))
+            rc = 0;
+    }
     mod_gnutls_datum_wipe(&f);
     if (rc < 0) {
         elogf(errh, __FILE__, __LINE__, rc,

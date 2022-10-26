@@ -484,8 +484,11 @@ mod_nss_load_pem_file (const char *fn, log_error_st *errh)
                 b += sizeof(PEM_BEGIN_TRUSTED_CERT)-1)
             ++count;
         if (0 == count) {
-            rc = 0;
-            break;
+            if (NULL != strstr((char *)f.data, "-----")) {
+                rc = 0;
+                break;
+            }
+            /*(fall through and treat as DER)*/
         }
 
         PLArenaPool *arena = PORT_NewArena(4096);
@@ -500,10 +503,22 @@ mod_nss_load_pem_file (const char *fn, log_error_st *errh)
         }
 
         chain->arena = arena;
-        chain->len = count;
-        chain->certs = (SECItem *)PORT_ArenaAlloc(arena, count*sizeof(SECItem));
+        chain->len = count ? count : 1;
+        chain->certs = (SECItem *)PORT_ArenaZAlloc(arena,
+                                                   chain->len*sizeof(SECItem));
         if (NULL == chain->certs)
             break;
+
+        if (0 == count) {
+            /* treat as DER */
+            if (NULL == SECITEM_AllocItem(arena, chain->certs+0, f.len)) {
+                PORT_SetError(SEC_ERROR_IO);
+                break;
+            }
+            memcpy(chain->certs[0].data, f.data, (chain->certs[0].len = f.len));
+            rc = 0;
+            break;
+        }
 
         int i = 0;
         for (char *e = (char *)f.data; (b = strstr(e, PEM_BEGIN_CERT)); ++i) {
@@ -514,9 +529,6 @@ mod_nss_load_pem_file (const char *fn, log_error_st *errh)
             if (NULL == e) break;
             uint32_t len = (uint32_t)(e - b);
             e += sizeof(PEM_END_CERT)-1;
-            chain->certs[i].type = 0;
-            chain->certs[i].data = NULL;
-            chain->certs[i].len  = 0;
             if (NULL == NSSBase64_DecodeBuffer(arena, chain->certs+i, b, len))
                 break;
         }
@@ -528,9 +540,6 @@ mod_nss_load_pem_file (const char *fn, log_error_st *errh)
             if (NULL == e) break;
             uint32_t len = (uint32_t)(e - b);
             e += sizeof(PEM_END_TRUSTED_CERT)-1;
-            chain->certs[i].type = 0;
-            chain->certs[i].data = NULL;
-            chain->certs[i].len  = 0;
             if (NULL == NSSBase64_DecodeBuffer(arena, chain->certs+i, b, len))
                 break;
         }
@@ -776,12 +785,20 @@ mod_nss_load_config_pkey (const char *fn, CERTCertificate *cert, log_error_st *e
         else if ((b = strstr((char *)f.data, PEM_BEGIN_ANY_PKEY))
                  && (e = strstr(b, PEM_END_ANY_PKEY)))
             b += sizeof(PEM_BEGIN_ANY_PKEY)-1;
+        else if (NULL == strstr((char *)f.data, "-----")) {
+            der = f; /*(copy struct)*/
+            f.type = 0;
+            f.data = NULL;
+            f.len = 0;
+            b = (char *)der.data;
+        }
         else
             break;
         if (*b == '\r') ++b;
         if (*b == '\n') ++b;
 
-        if (NULL == NSSBase64_DecodeBuffer(NULL, &der, b, (uint32_t)(e - b)))
+        if (NULL == der.data
+            && NULL == NSSBase64_DecodeBuffer(NULL, &der, b, (uint32_t)(e - b)))
             break;
 
         slot = PK11_GetInternalKeySlot();

@@ -1328,12 +1328,15 @@ mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) 
         return NULL;
     }
 
-    X509 *x = PEM_read_bio_X509_AUX_secmem(in, NULL, NULL, NULL);
+    int is_pem = (NULL != strstr(data, "-----"));
+    X509 *x = is_pem
+      ? PEM_read_bio_X509_AUX_secmem(in, NULL, NULL, NULL)
+      : d2i_X509_bio(in, NULL);
     if (NULL == x) {
         log_error(errh, __FILE__, __LINE__,
           "SSL: couldn't read X509 certificate from '%s'", file);
     }
-    else if (!mod_openssl_load_X509_sk(file, errh, chain, in)) {
+    else if (is_pem && !mod_openssl_load_X509_sk(file, errh, chain, in)) {
         X509_free(x);
         x = NULL;
     }
@@ -1358,7 +1361,9 @@ mod_openssl_evp_pkey_load_pem_file (const char *file, log_error_st *errh)
     EVP_PKEY *x = NULL;
     BIO *in = BIO_new_mem_buf(data, (int)dlen);
     if (NULL != in) {
-        x = PEM_read_bio_PrivateKey(in, NULL, NULL, NULL);
+        x = (NULL != strstr(data, "-----"))
+          ? PEM_read_bio_PrivateKey(in, NULL, NULL, NULL)
+          : d2i_PrivateKey_bio(in, NULL);
         BIO_free(in);
     }
     if (dlen) ck_memzero(data, dlen);
