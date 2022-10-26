@@ -1607,7 +1607,8 @@ mod_openssl_crt_must_staple (const WOLFSSL_X509 *crt)
         }
     }
 
-    wolfSSL_sk_ASN1_INTEGER_pop_free(tlsf, wolfSSL_ASN1_INTEGER_free);
+    wolfSSL_sk_ASN1_INTEGER_pop_free(tlsf, (wolfSSL_sk_freefunc)
+                                           wolfSSL_ASN1_INTEGER_free);
     return rc; /* 1 if OCSP Must-Staple found; 0 if not */
   #endif
 }
