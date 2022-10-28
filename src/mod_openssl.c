@@ -667,6 +667,9 @@ PEM_ASN1_read_bio_secmem(d2i_of_void *d2i, const char *name, BIO *bp, void **x,
     if (ret == NULL)
         PEMerr(PEM_F_PEM_ASN1_READ_BIO, ERR_R_ASN1_LIB);
   #endif
+    /* boringssl provides OPENSSL_secure_clear_free() in commit
+     * 8a1542fc41b43bdcd67cd341c1d332d2e05e2340 (not yet in a release)
+     * (note: boringssl already calls OPENSSL_cleanse() in OPENSSL_free()) */
   #if OPENSSL_VERSION_NUMBER >= 0x10101000L \
    && !defined(BORINGSSL_API_VERSION) \
    && !defined(LIBRESSL_VERSION_NUMBER)
@@ -1277,7 +1280,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 
 #if OPENSSL_VERSION_NUMBER < 0x10101000L \
  || defined(BORINGSSL_API_VERSION) \
- || defined(LIBRESSL_VERSION_NUMBER)
+ ||(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3060000fL)
 static unix_time64_t
 mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time);
 #endif
@@ -1296,7 +1299,7 @@ mod_openssl_cert_is_active (const X509 *crt)
     const ASN1_TIME *notAfter  = X509_get0_notAfter(crt);
   #if OPENSSL_VERSION_NUMBER < 0x10101000L \
    || defined(BORINGSSL_API_VERSION) \
-   || defined(LIBRESSL_VERSION_NUMBER)
+   ||(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3060000fL)
     const unix_time64_t before = mod_openssl_asn1_time_to_posix(notBefore);
     const unix_time64_t after  = mod_openssl_asn1_time_to_posix(notAfter);
     const unix_time64_t now = log_epoch_secs;
