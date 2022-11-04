@@ -2021,6 +2021,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	 * must not be chunkqueue temporary file
 	 * must be whole file, not partial content
 	 * must not be HTTP status 206 Partial Content
+	 * must not have Cache-Control 'private' or 'no-store'
 	 * Note: small files (< 32k (see http_chunk.c)) will have been read into
 	 *       memory (if streaming HTTP/1.1 chunked response) and will end up
 	 *       getting stream-compressed rather than cached on disk as compressed
@@ -2035,7 +2036,14 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	    && r->write_queue.first->type == FILE_CHUNK
 	    && r->write_queue.first->offset == 0
 	    && !r->write_queue.first->file.is_temp
-	    && r->http_status != 206) {
+	    && r->http_status != 206
+	    && (!(vbro = http_header_response_get(r, HTTP_HEADER_CACHE_CONTROL,
+	                                          CONST_STR_LEN("Cache-Control")))
+	        || (!http_header_str_contains_token(BUF_PTR_LEN(vbro),
+	                                            CONST_STR_LEN("private"))
+	            && !http_header_str_contains_token(BUF_PTR_LEN(vbro),
+	                                               CONST_STR_LEN("no-store"))))
+	   ) {
 		tb = mod_deflate_cache_file_name(r, p->conf.cache_dir, vb);
 		/*(checked earlier and skipped if Transfer-Encoding had been set)*/
 		stat_cache_entry *sce = stat_cache_get_entry_open(tb, 1);
