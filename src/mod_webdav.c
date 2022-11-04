@@ -2429,6 +2429,8 @@ static int
 webdav_parse_Depth (const request_st * const r)
 {
     /* Depth = "Depth" ":" ("0" | "1" | "infinity") */
+    /* check first char only;
+     * ignore MS-WDVSE "noroot" extensions "1,noroot" and "infinity,noroot" */
     const buffer * const h =
       http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Depth"));
     if (NULL != h) {
@@ -4601,6 +4603,12 @@ mod_webdav_put_0 (request_st * const r, const plugin_config * const pconf)
 static handler_t
 mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
 {
+    if (buffer_has_pathsep_suffix(&r->physical.path)) {
+        /* disallow PUT on a collection (path ends in '/') */
+        http_status_set_error(r, 400); /* Bad Request */
+        return HANDLER_FINISHED;
+    }
+
     if (light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_RANGE)) {
         if (pconf->opts & (MOD_WEBDAV_UNSAFE_PARTIAL_PUT_COMPAT
                           |MOD_WEBDAV_CPYTMP_PARTIAL_PUT))
@@ -4612,13 +4620,6 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
          *   payload is likely to be partial content that has been mistakenly
          *   PUT as a full representation.
          */
-        http_status_set_error(r, 400); /* Bad Request */
-        return HANDLER_FINISHED;
-    }
-
-    const uint32_t used = r->physical.path.used;
-    char *slash = r->physical.path.ptr + used - 2;
-    if (*slash == '/') { /* disallow PUT on a collection (path ends in '/') */
         http_status_set_error(r, 400); /* Bad Request */
         return HANDLER_FINISHED;
     }
@@ -4635,7 +4636,7 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
     int fd;
     size_t len = buffer_clen(&r->physical.path);
   #if (defined(__linux__) || defined(__CYGWIN__)) && defined(O_TMPFILE)
-    slash = memrchr(r->physical.path.ptr, '/', len);
+    char *slash = memrchr(r->physical.path.ptr, '/', len);
     if (slash == r->physical.path.ptr) slash = NULL;
     if (slash) *slash = '\0';
     fd = fdevent_open_cloexec(r->physical.path.ptr, 1,
@@ -4831,6 +4832,9 @@ mod_webdav_put_range (request_st * const r, const buffer * const h,
         } while (wr > 0 && (cqlen -= wr));
         /*(ignore if c->file.fd truncated (wr == 0 && cqlen != 0); fail below)*/
     }
+    off_t wrote = chunkqueue_length(cq) - cqlen;
+    offset += wrote;
+    chunkqueue_mark_written(cq, wrote);
     if (0 != cqlen) /* fallback, retry if copy_file_range() did not finish */
   #endif
   {
@@ -6078,7 +6082,7 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
       mod_webdav_subrequest_handler(r, p_d); /*p->handle_subrequest()*/
     if (rc == HANDLER_FINISHED || rc == HANDLER_ERROR)
         r->plugin_ctx[((plugin_data *)p_d)->id] = NULL;
-    else {  /* e.g. HANDLER_WAIT_FOR_RD */
+    else {  /* e.g. HANDLER_WAIT_FOR_EVENT */
         plugin_config * const save_pconf =
           (plugin_config *)malloc(sizeof(pconf));
         force_assert(save_pconf);
