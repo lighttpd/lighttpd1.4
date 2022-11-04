@@ -906,12 +906,8 @@ http_response_call_error_handler (request_st * const r, const buffer * const err
         }
 
         r->con->is_writable = 1;
-        r->resp_body_finished = 0;
-        r->resp_body_started = 0;
-
         r->error_handler_saved_status = r->http_status;
         r->error_handler_saved_method = r->http_method;
-
         r->http_method = HTTP_METHOD_GET;
     }
     else { /*(preserve behavior for server.error-handler-404)*/

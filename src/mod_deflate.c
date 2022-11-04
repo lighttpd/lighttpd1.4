@@ -2008,6 +2008,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	if (HTTP_METHOD_HEAD == r->http_method) {
 		/* ensure that uncompressed Content-Length is not sent in HEAD response */
 		http_response_body_clear(r, 0);
+		r->resp_body_finished = 1;
 		return HANDLER_GO_ON;
 	}
 

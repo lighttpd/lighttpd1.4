@@ -3305,7 +3305,6 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 
 		if (lua_return_value >= 200) {
 			r->http_status = lua_return_value;
-			r->resp_body_finished = 1;
 			/*(note: body may already have been set via lighty.r.resp_body.*)*/
 			if (lua_getfield_and_type(L, result_ndx, "content") == LUA_TTABLE) {
 				magnet_attach_content(L, r); /* deprecated legacy API */
@@ -3314,6 +3313,7 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 			if (!chunkqueue_is_empty(&r->write_queue)) {
 				r->handler_module = p->self;
 			}
+			r->resp_body_finished = 1;
 			result = HANDLER_FINISHED;
 		} else if (lua_return_value >= 100) {
 			/*(skip for response-start; send response as-is w/ added headers)*/
