@@ -1150,6 +1150,9 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		return -1;
 	}
 
+	if (1 == srv->srvconf.max_worker)
+		srv->srvconf.max_worker = 0;
+
 	if (print_config) {
 		config_print(srv);
 		puts(srv->tmp_buf->ptr);
