@@ -46,7 +46,14 @@ ocsp_status="$(printf %s "$OCSP_RESP" | head -1)"
 next_update="$(printf %s "$OCSP_RESP" | grep 'Next Update:')"
 next_date="$(printf %s "$next_update" | sed 's/.*Next Update: //')"
 [ -n "$next_date" ] || errexit
-ocsp_expire=$(date -d "$next_date" +%s)
+sysname=$(uname -s)
+if [ "$sysname" = "FreeBSD" ] || \
+   [ "$sysname" = "OpenBSD" ] || \
+   [ "$sysname" = "DragonFly" ]; then
+    ocsp_expire=$(date -j -f "%b %e %T %Y %Z" "$next_date" "+%s")
+else
+    ocsp_expire=$(date -d "$next_date" +%s)
+fi
 
 # validate OCSP response
 ocsp_verify=$(openssl ocsp -issuer "$CHAIN_PEM" -verify_other "$CHAIN_PEM" -cert "$CERT_PEM" -respin "$OCSP_TMP" -no_nonce -out /dev/null 2>&1)
