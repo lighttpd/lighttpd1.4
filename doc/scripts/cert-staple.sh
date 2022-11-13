@@ -5,6 +5,7 @@ CHAIN_PEM="$2"  # input (chain.pem)
 OCSP_DER="$3"   # output symlink (staple.der)
 
 OCSP_TMP=""     # temporary file
+next_delta=90000  # 25 hours
 
 if [ -z "$CERT_PEM" ] || [ -z "$CHAIN_PEM" ] || [ -z "$OCSP_DER" ] \
    || [ ! -f "$CERT_PEM" ] || [ ! -f "$CHAIN_PEM" ]; then
@@ -16,6 +17,17 @@ errexit() {
     [ -n "$OCSP_TMP" ] && rm -f "$OCSP_TMP"
     exit 1
 }
+
+# short-circuit if Next Update is > $next_delta in the future
+next_ts=$(readlink "$OCSP_DER" 2>/dev/null)
+if [ -n "$next_ts" ]; then
+    next_ts="${next_ts##*.}"
+    ts=$(date +%s)
+    ts=$(( $ts + $next_delta ))
+    if [ -n "$next_ts" ] && [ "$next_ts" -gt "$ts" ]; then
+        exit 0
+    fi
+fi
 
 # get URI of OCSP responder from certificate
 OCSP_URI=$(openssl x509 -in "$CERT_PEM" -ocsp_uri -noout)
