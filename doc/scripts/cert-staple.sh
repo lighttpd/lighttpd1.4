@@ -1,4 +1,9 @@
 #!/bin/sh
+#
+# cert-staple.sh - retrieve from CA and manage OCSP stapling info for leaf cert
+#
+# Copyright(c) 2022 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+# License: BSD 3-clause (same as lighttpd)
 
 CERT_PEM="$1"   # input (cert.pem)
 CHAIN_PEM="$2"  # input (chain.pem)
