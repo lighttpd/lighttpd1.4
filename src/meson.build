@@ -543,9 +543,7 @@ common_src = files(
 	'sys-setjmp.c',
 	'vector.c',
 )
-if target_machine.system() == 'windows'
-	common_src += files('xgetopt.c')
-endif
+
 main_src = files(
 	'configfile.c',
 	'connections.c',
