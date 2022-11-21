@@ -737,7 +737,7 @@ context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expressio
   B = NULL;
   buffer_free(C);
   C = NULL;
-  D->fn->free(D);
+  if (D) D->fn->free(D);
   D = NULL;
 }
 
