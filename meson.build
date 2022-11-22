@@ -17,7 +17,7 @@ subdir('tests')
 # $ ninja
 
 # full build:
-# $ meson configure -D build_extra_warnings=true -D buildtype=debugoptimized -D with_bzip=true -D with_dbi=true -D with_fam=true -D with_krb5=true -D with_ldap=true -D with_libev=true -D with_libunwind=true -D with_lua=true -D with_mysql=true -D with_openssl=true -D with_pcre2=true -D with_pgsql=true -D with_sasl=true -D with_webdav_locks=true -D with_webdav_props=true -D with_xattr=true -D with_zlib=true
+# $ meson configure -D build_extra_warnings=true -D buildtype=debugoptimized -D with_bzip=enabled -D with_dbi=enabled -D with_fam=enabled -D with_krb5=enabled -D with_ldap=enabled -D with_libev=enabled -D with_libunwind=enabled -D with_lua=true -D with_mysql=enabled -D with_openssl=true -D with_pcre2=true -D with_pgsql=enabled -D with_sasl=enabled -D with_webdav_locks=enabled -D with_webdav_props=enabled -D with_xattr=true -D with_zlib=enabled
 
 # optimized build:
 # $ meson configure -D b_lto=true -D buildtype=debugoptimized
