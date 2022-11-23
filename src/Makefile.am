@@ -108,11 +108,6 @@ mod_maxminddb_la_LDFLAGS = $(common_module_ldflags)
 mod_maxminddb_la_LIBADD = $(common_libadd) $(MAXMINDDB_LIB)
 endif
 
-lib_LTLIBRARIES += mod_evasive.la
-mod_evasive_la_SOURCES = mod_evasive.c
-mod_evasive_la_LDFLAGS = $(common_module_ldflags)
-mod_evasive_la_LIBADD = $(common_libadd)
-
 lib_LTLIBRARIES += mod_webdav.la
 mod_webdav_la_SOURCES = mod_webdav.c
 mod_webdav_la_CFLAGS = $(AM_CFLAGS) $(XML_CFLAGS) $(SQLITE_CFLAGS) 
@@ -211,11 +206,6 @@ mod_rrdtool_la_SOURCES = mod_rrdtool.c
 mod_rrdtool_la_LDFLAGS = $(common_module_ldflags)
 mod_rrdtool_la_LIBADD = $(common_libadd)
 
-lib_LTLIBRARIES += mod_usertrack.la
-mod_usertrack_la_SOURCES = mod_usertrack.c
-mod_usertrack_la_LDFLAGS = $(common_module_ldflags)
-mod_usertrack_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
-
 lib_LTLIBRARIES += mod_proxy.la
 mod_proxy_la_SOURCES = mod_proxy.c
 mod_proxy_la_LDFLAGS = $(common_module_ldflags)
@@ -230,16 +220,6 @@ lib_LTLIBRARIES += mod_ssi.la
 mod_ssi_la_SOURCES = mod_ssi.c
 mod_ssi_la_LDFLAGS = $(common_module_ldflags)
 mod_ssi_la_LIBADD = $(common_libadd)
-
-lib_LTLIBRARIES += mod_secdownload.la
-mod_secdownload_la_SOURCES = mod_secdownload.c algo_hmac.c
-mod_secdownload_la_LDFLAGS = $(common_module_ldflags)
-mod_secdownload_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
-
-#lib_LTLIBRARIES += mod_httptls.la
-#mod_httptls_la_SOURCES = mod_httptls.c
-#mod_httptls_la_LDFLAGS = $(common_module_ldflags)
-#mod_httptls_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_expire.la
 mod_expire_la_SOURCES = mod_expire.c
@@ -391,11 +371,6 @@ mod_accesslog_la_SOURCES = mod_accesslog.c
 mod_accesslog_la_LDFLAGS = $(common_module_ldflags)
 mod_accesslog_la_LIBADD = $(common_libadd)
 
-lib_LTLIBRARIES += mod_uploadprogress.la
-mod_uploadprogress_la_SOURCES = mod_uploadprogress.c
-mod_uploadprogress_la_LDFLAGS = $(common_module_ldflags)
-mod_uploadprogress_la_LIBADD = $(common_libadd)
-
 lib_LTLIBRARIES += mod_wstunnel.la
 mod_wstunnel_la_SOURCES = mod_wstunnel.c
 mod_wstunnel_la_LDFLAGS = $(common_module_ldflags)
@@ -450,7 +425,6 @@ lighttpd_SOURCES = \
   mod_cgi.c \
   mod_deflate.c \
   mod_dirlisting.c \
-  mod_evasive.c \
   mod_expire.c \
   mod_extforward.c \
   mod_fastcgi.c \
@@ -460,15 +434,12 @@ lighttpd_SOURCES = \
   mod_rewrite.c \
   mod_rrdtool.c \
   mod_scgi.c \
-  mod_secdownload.c algo_hmac.c \
   mod_setenv.c \
   mod_simple_vhost.c \
   mod_ssi.c \
   mod_staticfile.c \
   mod_status.c \
-  mod_uploadprogress.c \
   mod_userdir.c \
-  mod_usertrack.c \
   mod_vhostdb.c \
   mod_vhostdb_api.c \
   mod_webdav.c
@@ -578,7 +549,6 @@ t_test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 t_test_mod_SOURCES = $(common_src) t/test_mod.c \
                      t/test_mod_access.c \
                      t/test_mod_alias.c \
-                     t/test_mod_evasive.c \
                      t/test_mod_evhost.c \
                      t/test_mod_indexfile.c \
                      t/test_mod_simple_vhost.c \
