@@ -847,11 +847,6 @@ set(COMMON_SRC
 	ck.c
 )
 
-if(WIN32)
-	message(STATUS "Adding local getopt implementation.")
-	set(COMMON_SRC ${COMMON_SRC} xgetopt.c)
-endif()
-
 if(CMAKE_CROSSCOMPILING)
 	# custom compile lemon using native compiler
 	add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lemon
