@@ -2274,6 +2274,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         if (s->ssl_disable_client_renegotiation)
             ssloptions |= SSL_OP_NO_RENEGOTIATION;
       #endif
+      #ifdef SSL_OP_ENABLE_KTLS /* openssl 3.0.0 */
+        ssloptions |= SSL_OP_ENABLE_KTLS;
+      #endif
 
         /* completely useless identifier;
          * required for client cert verification to work with sessions */
@@ -3165,6 +3168,44 @@ connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t ma
 }
 
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+static int
+connection_write_cq_ssl_ktls (connection * const con, chunkqueue * const cq, off_t max_bytes)
+{
+    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+
+    if (__builtin_expect( (0 != hctx->close_notify), 0))
+        return mod_openssl_close_notify(hctx);
+
+    /* not done: scan cq for FILE_CHUNK within first max_bytes rather than
+     * only using SSL_sendfile() if the first chunk is FILE_CHUNK.
+     * Checking first chunk for FILE_CHUNK means that initial response headers
+     * and beginning of file will be read into memory before subsequent writes
+     * use SSL_sendfile().  TBD: possible to be further optimized? */
+
+    for (chunk *c; (c = cq->first) && c->type == FILE_CHUNK; ) {
+        off_t len = c->file.length - c->offset;
+        if (len > max_bytes) len = max_bytes;
+        if (0 == len) break; /*(FILE_CHUNK or max_bytes should not be 0)*/
+        if (-1 == c->file.fd && 0 != chunkqueue_open_file_chunk(cq, hctx->errh))
+            return -1;
+
+        ossl_ssize_t wr =
+          SSL_sendfile(hctx->ssl, c->file.fd, c->offset, (size_t)len, 0);
+        if (wr < 0)
+            return mod_openssl_write_err(hctx->ssl, (int)wr, con, hctx->errh);
+
+        chunkqueue_mark_written(cq, wr);
+        max_bytes -= wr;
+
+        if (wr < len) return 0; /* try again later */
+    }
+
+    return connection_write_cq_ssl(con, cq, max_bytes);
+}
+#endif
+
+
 static int
 connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
@@ -3196,11 +3237,23 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
             return -1;
         }
 
+      #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        /* ideally should be done only once, after handshake completes,
+         * so check each time for HTTP/2 so that we do not re-enable */
+        if (hctx->r->http_version < HTTP_VERSION_2
+            && BIO_get_ktls_send(SSL_get_wbio(hctx->ssl)) > 0)
+            con->network_write = connection_write_cq_ssl_ktls;
+      #endif
       #ifdef TLSEXT_TYPE_application_layer_protocol_negotiation
         if (hctx->alpn) {
             if (hctx->alpn == MOD_OPENSSL_ALPN_H2) {
                 if (0 != mod_openssl_alpn_h2_policy(hctx))
                     return -1;
+              #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+                /*(not expecting FILE_CHUNKs in write_queue with h2,
+                 * so skip ktls and SSL_sendfile; reset to default)*/
+                con->network_write = connection_write_cq_ssl;
+              #endif
             }
             else if (hctx->alpn == MOD_OPENSSL_ALPN_ACME_TLS_1) {
                 chunkqueue_reset(cq);
@@ -3836,6 +3889,19 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
                 }
                 for (e = v; light_isalpha(*e); ++e) ;
                 switch ((int)(e-v)) {
+                 #ifdef SSL_OP_ENABLE_KTLS
+                  case 4:
+                    if (buffer_eq_icase_ssn(v, "KTLS", 4)) {
+                        if (flag)
+                            SSL_CTX_set_options(s->ssl_ctx,
+                                                SSL_OP_ENABLE_KTLS);
+                        else
+                            SSL_CTX_clear_options(s->ssl_ctx,
+                                                  SSL_OP_ENABLE_KTLS);
+                        continue;
+                    }
+                    break;
+                 #endif
                   case 11:
                     if (buffer_eq_icase_ssn(v, "Compression", 11)) {
                         /* (force disabled, the default, if HTTP/2 enabled) */
