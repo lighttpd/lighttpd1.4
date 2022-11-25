@@ -48,6 +48,7 @@
 #include <gnutls/x509.h>
 #include <gnutls/x509-ext.h>
 #include <gnutls/abstract.h>
+#include <gnutls/socket.h>
 
 #ifdef GNUTLS_SKIP_GLOBAL_INIT
 GNUTLS_SKIP_GLOBAL_INIT
@@ -2522,6 +2523,63 @@ connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t ma
 }
 
 
+#if GNUTLS_VERSION_NUMBER >= 0x030704
+static int
+connection_write_cq_ssl_ktls (connection * const con, chunkqueue * const cq, off_t max_bytes)
+{
+    /* gnutls_record_send_file() interface has non-intuitive behavior if
+     * gnutls_transport_is_ktls_enabled() *is not* enabled for GNUTLS_KTLS_SEND
+     * (If not enabled, offset is *relative* to current underlying file pointer,
+     *  which is different from sendfile())
+     * Therefore, callers should ensure GNUTLS_KTLS_SEND is enabled before
+     * configuring: con->network_write = connection_write_cq_ssl_ktls */
+
+    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    if (!hctx->handshake) return 0;
+
+    if (hctx->pending_write) {
+        int wr = gnutls_record_send(hctx->ssl, NULL, 0);
+        if (wr <= 0)
+            return mod_gnutls_write_err(con, hctx, wr, hctx->pending_write);
+        max_bytes -= wr;
+        hctx->pending_write = 0;
+        chunkqueue_mark_written(cq, wr);
+    }
+
+    if (__builtin_expect( (0 != hctx->close_notify), 0))
+        return mod_gnutls_close_notify(hctx);
+
+    /* not done: scan cq for FILE_CHUNK within first max_bytes rather than
+     * only using gnutls_record_send_file() if the first chunk is FILE_CHUNK.
+     * Checking first chunk for FILE_CHUNK means that initial response headers
+     * and beginning of file will be read into memory before subsequent writes
+     * use gnutls_record_send_file().  TBD: possible to be further optimized? */
+
+    for (chunk *c; (c = cq->first) && c->type == FILE_CHUNK; ) {
+        off_t len = c->file.length - c->offset;
+        if (len > max_bytes) len = max_bytes;
+        if (0 == len) break; /*(FILE_CHUNK or max_bytes should not be 0)*/
+        if (-1 == c->file.fd && 0 != chunkqueue_open_file_chunk(cq, hctx->errh))
+            return -1;
+
+        ssize_t wr =
+          gnutls_record_send_file(hctx->ssl, c->file.fd, &c->offset, (size_t)len);
+        if (wr < 0)
+            return mod_gnutls_write_err(con, hctx, (int)wr, 0);
+        /* undo gnutls_record_send_file before chunkqueue_mark_written redo */
+        c->offset -= wr;
+
+        chunkqueue_mark_written(cq, wr);
+        max_bytes -= wr;
+
+        if (wr < len) return 0; /* try again later */
+    }
+
+    return connection_write_cq_ssl(con, cq, max_bytes);
+}
+#endif
+
+
 static int
 mod_gnutls_ssl_handshake (handler_ctx *hctx)
 {
@@ -2532,10 +2590,21 @@ mod_gnutls_ssl_handshake (handler_ctx *hctx)
     /*(rc == GNUTLS_E_SUCCESS)*/
 
     hctx->handshake = 1;
+  #if GNUTLS_VERSION_NUMBER >= 0x030704
+    gnutls_transport_ktls_enable_flags_t kflags =
+      gnutls_transport_is_ktls_enabled(hctx->ssl);
+    if (kflags == GNUTLS_KTLS_SEND || kflags == GNUTLS_KTLS_DUPLEX)
+        hctx->con->network_write = connection_write_cq_ssl_ktls;
+  #endif
   #if GNUTLS_VERSION_NUMBER >= 0x030200
     if (hctx->alpn == MOD_GNUTLS_ALPN_H2) {
         if (0 != mod_gnutls_alpn_h2_policy(hctx))
             return -1;
+      #if GNUTLS_VERSION_NUMBER >= 0x030704
+        /*(not expecting FILE_CHUNKs in write_queue with h2,
+         * so skip ktls and gnutls_record_send_file; reset to default)*/
+        hctx->con->network_write = connection_write_cq_ssl;
+      #endif
     }
     else if (hctx->alpn == MOD_GNUTLS_ALPN_ACME_TLS_1) {
         /* Once TLS handshake is complete, return -1 to result in
