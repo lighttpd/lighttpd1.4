@@ -3887,6 +3887,8 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
                     flag = 0;
                     ++v;
                 }
+                else if (*v == '+')
+                    ++v;
                 for (e = v; light_isalpha(*e); ++e) ;
                 switch ((int)(e-v)) {
                  #ifdef SSL_OP_ENABLE_KTLS
