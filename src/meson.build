@@ -284,9 +284,6 @@ conf_data.set('HAVE_LIBLBER', liblber.found())
 libpam = compiler.find_library('pam', required: get_option('with_pam'))
 conf_data.set('HAVE_PAM', libpam.found())
 
-libev = compiler.find_library('ev', required: get_option('with_libev'))
-conf_data.set('HAVE_LIBEV', libev.found())
-
 libunwind = dependency('libunwind', required: get_option('with_libunwind'))
 
 liblua = []
@@ -642,7 +639,6 @@ executable('lighttpd', configparser,
 		, libattr
 		, libcrypto
 		, libdl
-		, libev
 		, libfam
 		, libpcre
 		, libunwind
@@ -720,7 +716,6 @@ test('test_mod', executable('test_mod',
 		, libattr
 		, libcrypto
 		, libdl
-		, libev
 		, libfam
 		, libpcre
 		, libunwind

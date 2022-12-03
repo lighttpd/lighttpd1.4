@@ -184,36 +184,7 @@ AC_ARG_WITH([libev],
   [WITH_LIBEV=no]
 )
 AC_MSG_RESULT([$WITH_LIBEV])
-
-LIBEV_CFLAGS=
-LIBEV_LIBS=
-
-if test "$WITH_LIBEV" != no; then
-  PKG_CHECK_MODULES([LIBEV], [libev], [], [
-    dnl no pkg-config for libev, searching manually:
-
-    if test "$WITH_LIBEV" != yes; then
-      LIBEV_CFLAGS="-I$WITH_LIBEV/include"
-      LIBEV_LIBS="-L$WITH_LIBEV/lib -lev"
-    else
-      AC_CHECK_HEADERS([ev.h],
-        [AC_CHECK_LIB([ev], [ev_time],
-          [
-            LIBEV_CFLAGS=
-            LIBEV_LIBS="-lev"
-          ],
-          [AC_MSG_ERROR([libev not found])]
-        )],
-        [AC_MSG_ERROR([libev header not found])]
-      )
-    fi
-  ])
-
-  AC_DEFINE([HAVE_LIBEV], [1], [libev support])
-fi
-
-AC_SUBST([LIBEV_CFLAGS])
-AC_SUBST([LIBEV_LIBS])
+dnl ignore WITH_LIBEV
 
 dnl Checks for mysql
 AC_MSG_NOTICE([----------------------------------------])

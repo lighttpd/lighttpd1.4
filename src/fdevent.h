@@ -15,9 +15,6 @@ struct fdnode_st {
     int fd;
     int events;
     int fde_ndx;
-  #ifdef HAVE_LIBEV
-    void *handler_ctx;
-  #endif
 };
 
 /* These must match POLL* values from operating system headers */

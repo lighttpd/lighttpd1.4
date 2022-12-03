@@ -208,9 +208,6 @@
 #cmakedefine  HAVE_CRYPT
 #cmakedefine  HAVE_CRYPT_R
 
-/* libev */
-#cmakedefine HAVE_LIBEV
-
 /* libunwind */
 #cmakedefine HAVE_LIBUNWIND
 

@@ -1771,13 +1771,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		srv->lim_conns = srv->srvconf.max_conns = srv->max_fds/3;
 	}
 
-	/* libev backend overwrites our SIGCHLD handler and calls waitpid on SIGCHLD; we want our own SIGCHLD handling. */
-#ifdef HAVE_SIGACTION
-	sigaction(SIGCHLD, &act, NULL);
-#elif defined(HAVE_SIGNAL)
-	signal(SIGCHLD,  signal_handler);
-#endif
-
 	/*
 	 * kqueue() is called here, select resets its internals,
 	 * all server sockets get their handlers

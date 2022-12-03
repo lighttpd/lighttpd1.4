@@ -20,7 +20,7 @@ case "${build}" in
 		--with-ldap --with-pcre2 \
 		--with-zlib --with-zstd --with-brotli --with-bzip2 \
 		--with-webdav-props --with-webdav-locks \
-		--with-lua --with-libev --with-libunwind \
+		--with-lua --with-libunwind \
 		--with-krb5 \
 		--with-nettle \
 		--with-gnutls \
@@ -41,7 +41,7 @@ case "${build}" in
 		--with-ldap --with-pcre2 \
 		--with-zlib --with-zstd --with-brotli --with-bzip2 \
 		--with-webdav-props --with-webdav-locks \
-		--with-lua --with-libev --with-libunwind \
+		--with-lua --with-libunwind \
 		--with-krb5 --with-sasl \
 		--with-nettle \
 		--with-gnutls \
@@ -66,7 +66,6 @@ case "${build}" in
 		-DWITH_BROTLI=ON \
 		-DWITH_BZIP=ON \
 		-DWITH_LDAP=ON \
-		-DWITH_LIBEV=ON \
 		-DWITH_LIBUNWIND=ON \
 		-DWITH_LUA=ON \
 		-DWITH_DBI=ON \

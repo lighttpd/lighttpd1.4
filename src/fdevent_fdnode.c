@@ -33,9 +33,6 @@ fdevent_register (fdevents *ev, int fd, fdevent_handler handler, void *ctx)
     fdn->ctx     = ctx;
     fdn->events  = 0;
     fdn->fde_ndx = -1;
-  #ifdef FDEVENT_USE_LIBEV
-    fdn->handler_ctx = NULL;
-  #endif
     return fdn;
 }
 

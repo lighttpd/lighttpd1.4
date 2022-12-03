@@ -45,11 +45,6 @@ struct pollfd;          /* declaration */
 struct kevent;          /* declaration */
 #endif
 
-#if defined HAVE_LIBEV
-# define FDEVENT_USE_LIBEV
-struct ev_loop;         /* declaration */
-#endif
-
 #include "base_decls.h"
 #include "fdevent.h"    /* (*fdevent_handler) */
 
@@ -60,8 +55,7 @@ typedef enum {
     FDEVENT_HANDLER_LINUX_SYSEPOLL,
     FDEVENT_HANDLER_SOLARIS_DEVPOLL,
     FDEVENT_HANDLER_SOLARIS_PORT,
-    FDEVENT_HANDLER_FREEBSD_KQUEUE,
-    FDEVENT_HANDLER_LIBEV
+    FDEVENT_HANDLER_FREEBSD_KQUEUE
 } fdevent_handler_t;
 
 /**
@@ -104,9 +98,6 @@ struct fdevents {
   #ifdef FDEVENT_USE_FREEBSD_KQUEUE
     int kq_fd;
     struct kevent *kq_results;
-  #endif
-  #ifdef FDEVENT_USE_LIBEV
-    struct ev_loop *libev_loop;
   #endif
   #ifdef FDEVENT_USE_POLL
     struct pollfd *pollfds;
