@@ -1839,12 +1839,7 @@ typedef struct {
 		MAGNET_ENV_REQUEST_SERVER_PORT,
 		MAGNET_ENV_REQUEST_PROTOCOL,
 		MAGNET_ENV_REQUEST_SERVER_NAME,
-		MAGNET_ENV_REQUEST_STAGE,
-
-		/* remove after lighttpd 1.4.65 */
-		MAGNET_ENV_RESPONSE_HTTP_STATUS,
-		MAGNET_ENV_RESPONSE_BODY_LENGTH,
-		MAGNET_ENV_RESPONSE_BODY
+		MAGNET_ENV_REQUEST_STAGE
 	} type;
 } magnet_env_t;
 
@@ -1873,10 +1868,6 @@ static const magnet_env_t magnet_env[] = {
     { CONST_STR_LEN("request.protocol"),     MAGNET_ENV_REQUEST_PROTOCOL },
     { CONST_STR_LEN("request.server-name"),  MAGNET_ENV_REQUEST_SERVER_NAME },
     { CONST_STR_LEN("request.stage"),        MAGNET_ENV_REQUEST_STAGE },
-
-    { CONST_STR_LEN("response.http-status"), MAGNET_ENV_RESPONSE_HTTP_STATUS },
-    { CONST_STR_LEN("response.body-length"), MAGNET_ENV_RESPONSE_BODY_LENGTH },
-    { CONST_STR_LEN("response.body"),        MAGNET_ENV_RESPONSE_BODY },
 
     { NULL, 0, MAGNET_ENV_UNSET }
 };
@@ -1996,29 +1987,6 @@ magnet_env_get_buffer_by_id (request_st * const r, const int id)
 			http_request_state_append(dest, r->state);
 		break;
 
-	/* remove after lighttpd 1.4.65 */
-	case MAGNET_ENV_RESPONSE_HTTP_STATUS:
-		buffer_append_int(dest, r->http_status);
-		break;
-	case MAGNET_ENV_RESPONSE_BODY_LENGTH:
-		if (!r->resp_body_finished)
-			return NULL;
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		          "lighty.r.req_attr['response.body-length'] is deprecated "
-		          "and will be removed. Use lighty.r.resp_body.len instead.");
-		buffer_append_int(dest, chunkqueue_length(&r->write_queue));
-		break;
-	case MAGNET_ENV_RESPONSE_BODY:
-		if (!r->resp_body_finished)
-			return NULL;
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		          "lighty.r.req_attr['response.body'] is deprecated "
-		          "and will be removed. Use lighty.r.resp_body.get instead.");
-		if (0 == chunkqueue_length(&r->write_queue)
-		    || !(dest = chunkqueue_read_squash(&r->write_queue,r->conf.errh)))
-			buffer_copy_string_len((dest = r->tmp_buf), CONST_STR_LEN(""));
-		break;
-
 	case MAGNET_ENV_UNSET:
 		return NULL;
 	}
@@ -2132,11 +2100,6 @@ static int magnet_env_set(lua_State *L) {
         return magnet_env_set_server_name(r, &val);
      #endif
       /*case MAGNET_ENV_REQUEST_STAGE:*//*(change attempts silently ignored)*/
-      /* remove after lighttpd 1.4.65 */
-      /*case MAGNET_ENV_RESPONSE_HTTP_STATUS:*/
-      /*case MAGNET_ENV_RESPONSE_BODY_LENGTH:*/
-      case MAGNET_ENV_RESPONSE_BODY:
-        return luaL_error(L, "r.req_attr['%s'] is read-only", key);
     }
 
     buffer * const dest = magnet_env_get_buffer_by_id(r, env_id);
