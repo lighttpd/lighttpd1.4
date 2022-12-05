@@ -180,6 +180,18 @@ int plugins_load(server *srv) {
 		const buffer * const module = &((data_string *)srv->srvconf.modules->data[i])->value;
 		void *lib = NULL;
 
+		/* check if module is built-in to main executable */
+		buffer_clear(tb);
+		buffer_append_str2(tb, BUF_PTR_LEN(module),
+		                       CONST_STR_LEN("_plugin_init"));
+	  #ifdef _WIN32
+		init = (int(WINAPI *)(plugin *))(intptr_t)
+		  GetProcAddress(GetModuleHandle(NULL), tb->ptr);
+	  #else
+		init = (int (*)(plugin *))(intptr_t)dlsym(RTLD_DEFAULT, tb->ptr);
+	  #endif
+
+	  if (NULL == init) {
 		buffer_copy_string(tb, srv->srvconf.modules_dir);
 		buffer_append_path_len(tb, BUF_PTR_LEN(module));
 
@@ -233,6 +245,7 @@ int plugins_load(server *srv) {
 			return -1;
 		}
 	  #endif
+	  }
 
 		plugin *p = plugin_init();
 		p->lib = lib;
