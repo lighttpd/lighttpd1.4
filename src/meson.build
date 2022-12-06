@@ -558,6 +558,25 @@ main_src = files(
 	'server.c',
 )
 
+builtin_mods = files(
+  'mod_rewrite.c',
+  'mod_redirect.c',
+  'mod_access.c',
+  'mod_alias.c',
+  'mod_indexfile.c',
+  'mod_staticfile.c',
+  'mod_setenv.c',
+  'mod_expire.c',
+  'mod_simple_vhost.c',
+  'mod_evhost.c',
+  'mod_fastcgi.c',
+  'mod_scgi.c',
+)
+
+if get_option('build_static')
+	main_src += builtin_mods
+endif
+
 lemon = executable('lemon',
 	sources: 'lemon.c',
 	native: true,

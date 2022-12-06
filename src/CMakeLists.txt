@@ -842,6 +842,25 @@ set(COMMON_SRC
 	ck.c
 )
 
+if(LIGHTTPD_STATIC)
+  unset(BUILTIN_MODS)
+else()
+  set(BUILTIN_MODS
+    mod_rewrite.c
+    mod_redirect.c
+    mod_access.c
+    mod_alias.c
+    mod_indexfile.c
+    mod_staticfile.c
+    mod_setenv.c
+    mod_expire.c
+    mod_simple_vhost.c
+    mod_evhost.c
+    mod_fastcgi.c
+    mod_scgi.c
+  )
+endif()
+
 if(CMAKE_CROSSCOMPILING)
 	# custom compile lemon using native compiler
 	add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lemon
@@ -882,6 +901,7 @@ add_executable(lighttpd
 	configfile.c
 	configparser.c
 	${COMMON_SRC}
+	${BUILTIN_MODS}
 )
 set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd)
 

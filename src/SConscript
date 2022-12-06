@@ -86,6 +86,21 @@ src = Split("server.c response.c connections.c h2.c reqpool.c \
 	vector.c \
 	configfile.c configparser.c")
 
+builtin_mods = Split(" \
+  mod_rewrite.c \
+  mod_redirect.c \
+  mod_access.c \
+  mod_alias.c \
+  mod_indexfile.c \
+  mod_staticfile.c \
+  mod_setenv.c \
+  mod_expire.c \
+  mod_simple_vhost.c \
+  mod_evhost.c \
+  mod_fastcgi.c \
+  mod_scgi.c \
+  ")
+
 lemon = env.Program('lemon', 'lemon.c', LIBS = GatherLibs(env))
 
 def Lemon(env, input):
@@ -287,7 +302,7 @@ else:
 	else:
 		bin_linkflags += [ '-Wl,--export-dynamic' ]
 
-instbin = env.Program(bin_targets, src, LINKFLAGS = bin_linkflags,
+instbin = env.Program(bin_targets, src + builtin_mods, LINKFLAGS = bin_linkflags,
 	LIBS = GatherLibs(
 		env,
 		common_lib,

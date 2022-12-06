@@ -78,6 +78,24 @@ src = server.c response.c connections.c h2.c reqpool.c \
 	vector.c \
 	configfile.c configparser.c
 
+builtin_mods = \
+  mod_rewrite.c \
+  mod_redirect.c \
+  mod_access.c \
+  mod_alias.c \
+  mod_indexfile.c \
+  mod_staticfile.c \
+  mod_setenv.c \
+  mod_expire.c \
+  mod_simple_vhost.c \
+  mod_evhost.c \
+  mod_fastcgi.c \
+  mod_scgi.c
+
+if !LIGHTTPD_STATIC
+src += $(builtin_mods)
+endif
+
 lib_LTLIBRARIES =
 
 if NO_RDYNAMIC
@@ -436,6 +454,7 @@ lighttpd_SOURCES = \
   mod_scgi.c \
   mod_setenv.c \
   mod_simple_vhost.c \
+  mod_sockproxy.c \
   mod_ssi.c \
   mod_staticfile.c \
   mod_status.c \
