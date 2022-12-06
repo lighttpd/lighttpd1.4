@@ -132,6 +132,8 @@ URIHANDLER_FUNC(mod_echo_handle_uri_clean) {
     return HANDLER_GO_ON;
 }
 
+
+__attribute_cold__
 int mod_echo_plugin_init(plugin *p);
 int mod_echo_plugin_init(plugin *p) {
     p->version                 = LIGHTTPD_VERSION_ID;

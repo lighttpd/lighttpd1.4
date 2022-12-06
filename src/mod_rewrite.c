@@ -351,6 +351,8 @@ URIHANDLER_FUNC(mod_rewrite_uri_handler) {
     return process_rewrite_rules(r, p, p->conf.rewrite);
 }
 
+
+__attribute_cold__
 int mod_rewrite_plugin_init(plugin *p);
 int mod_rewrite_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

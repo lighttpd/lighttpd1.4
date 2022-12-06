@@ -2732,6 +2732,7 @@ TRIGGER_FUNC(mod_mbedtls_handle_trigger) {
 }
 
 
+__attribute_cold__
 int mod_mbedtls_plugin_init (plugin *p);
 int mod_mbedtls_plugin_init (plugin *p)
 {

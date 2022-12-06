@@ -1667,6 +1667,7 @@ static void mod_dirlisting_cache_json (request_st * const r, handler_ctx * const
 }
 
 
+__attribute_cold__
 int mod_dirlisting_plugin_init(plugin *p);
 int mod_dirlisting_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

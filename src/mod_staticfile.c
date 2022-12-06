@@ -145,6 +145,7 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
 }
 
 
+__attribute_cold__
 int mod_staticfile_plugin_init(plugin *p);
 int mod_staticfile_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

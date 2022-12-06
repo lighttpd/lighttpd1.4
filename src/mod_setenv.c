@@ -281,6 +281,8 @@ REQUEST_FUNC(mod_setenv_handle_request_reset) {
     return HANDLER_GO_ON;
 }
 
+
+__attribute_cold__
 int mod_setenv_plugin_init(plugin *p);
 int mod_setenv_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

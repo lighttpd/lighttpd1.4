@@ -1674,6 +1674,7 @@ static handler_t mod_ssi_handle_request_reset(request_st * const r, void *p_d) {
 }
 
 
+__attribute_cold__
 int mod_ssi_plugin_init(plugin *p);
 int mod_ssi_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

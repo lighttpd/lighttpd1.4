@@ -844,6 +844,7 @@ REQUESTDONE_FUNC(mod_status_account) {
 }
 
 
+__attribute_cold__
 int mod_status_plugin_init(plugin *p);
 int mod_status_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

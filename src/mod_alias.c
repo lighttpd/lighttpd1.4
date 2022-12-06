@@ -181,6 +181,7 @@ PHYSICALPATH_FUNC(mod_alias_physical_handler) {
 }
 
 
+__attribute_cold__
 int mod_alias_plugin_init(plugin *p);
 int mod_alias_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

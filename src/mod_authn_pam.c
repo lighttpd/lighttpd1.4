@@ -171,6 +171,8 @@ static handler_t mod_authn_pam_basic(request_st * const r, void *p_d, const http
       : HANDLER_ERROR;
 }
 
+
+__attribute_cold__
 int mod_authn_pam_plugin_init(plugin *p);
 int mod_authn_pam_plugin_init(plugin *p) {
     p->version     = LIGHTTPD_VERSION_ID;

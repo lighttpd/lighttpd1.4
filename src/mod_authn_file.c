@@ -737,6 +737,7 @@ static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, 
 }
 
 
+__attribute_cold__
 int mod_authn_file_plugin_init(plugin *p);
 int mod_authn_file_plugin_init(plugin *p) {
     p->version     = LIGHTTPD_VERSION_ID;

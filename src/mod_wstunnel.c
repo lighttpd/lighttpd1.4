@@ -635,6 +635,8 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
     return HANDLER_GO_ON;
 }
 
+
+__attribute_cold__
 int mod_wstunnel_plugin_init(plugin *p);
 int mod_wstunnel_plugin_init(plugin *p) {
     p->version           = LIGHTTPD_VERSION_ID;

@@ -2189,6 +2189,8 @@ static handler_t mod_deflate_cleanup(request_st * const r, void *p_d) {
 	return HANDLER_GO_ON;
 }
 
+
+__attribute_cold__
 int mod_deflate_plugin_init(plugin *p);
 int mod_deflate_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

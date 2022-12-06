@@ -1173,6 +1173,7 @@ static handler_t mod_proxy_check_extension(request_st * const r, void *p_d) {
 }
 
 
+__attribute_cold__
 int mod_proxy_plugin_init(plugin *p);
 int mod_proxy_plugin_init(plugin *p) {
 	p->version      = LIGHTTPD_VERSION_ID;

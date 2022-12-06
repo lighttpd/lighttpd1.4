@@ -3687,6 +3687,7 @@ TRIGGER_FUNC(mod_openssl_handle_trigger) {
 }
 
 
+__attribute_cold__
 int mod_openssl_plugin_init (plugin *p);
 int mod_openssl_plugin_init (plugin *p)
 {

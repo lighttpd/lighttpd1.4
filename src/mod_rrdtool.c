@@ -431,6 +431,8 @@ REQUESTDONE_FUNC(mod_rrd_account) {
     return HANDLER_GO_ON;
 }
 
+
+__attribute_cold__
 int mod_rrdtool_plugin_init(plugin *p);
 int mod_rrdtool_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

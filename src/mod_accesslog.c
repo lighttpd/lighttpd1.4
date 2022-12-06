@@ -963,6 +963,7 @@ REQUESTDONE_FUNC(log_access_write) {
 }
 
 
+__attribute_cold__
 int mod_accesslog_plugin_init(plugin *p);
 int mod_accesslog_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
