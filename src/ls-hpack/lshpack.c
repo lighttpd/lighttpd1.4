@@ -29,7 +29,9 @@ SOFTWARE.
 #ifndef LS_HPACK_USE_LARGE_TABLES
 #define LS_HPACK_USE_LARGE_TABLES 0
 #endif
+#ifndef NDEBUG
 #define NDEBUG
+#endif
 
 #include <assert.h>
 #include <stdint.h>
