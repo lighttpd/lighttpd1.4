@@ -6,7 +6,6 @@
 #include "plugin_config.h"
 #include "array.h"
 #include "buffer.h"
-#include "vector.h"
 
 /* $HTTP["host"] ==    "incremental.home.kneschke.de" { ... }
  * for print:   comp_key      op    string
@@ -20,7 +19,12 @@ struct pcre_extra;      /* declaration */
 #endif
 
 typedef struct data_config data_config;
-DEFINE_TYPED_VECTOR_NO_RELEASE(config_weak, data_config*);
+
+typedef struct data_config_list {
+  data_config **data;
+  uint32_t used;
+  uint32_t size;
+} data_config_list;
 
 struct data_config {
 	DATA_UNSET;
@@ -48,7 +52,7 @@ struct data_config {
 	buffer comp_tag;
 	const char *comp_key;
 
-	vector_config_weak children;
+	data_config_list children;
 	array *value;
 };
 
@@ -65,7 +69,7 @@ typedef struct {
 	server *srv;
 	int     ok;
 	array  *all_configs;
-	vector_config_weak configs_stack; /* to parse nested block */
+	data_config_list configs_stack; /* to parse nested block */
 	data_config *current; /* current started with { */
 	buffer *basedir;
 } config_t;

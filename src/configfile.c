@@ -2437,12 +2437,14 @@ int config_remoteip_normalize(buffer * const b, buffer * const tb) {
 static void context_init(server *srv, config_t *context) {
 	context->srv = srv;
 	context->ok = 1;
-	vector_config_weak_init(&context->configs_stack);
+	context->configs_stack.data = NULL;
+	context->configs_stack.used = 0;
+	context->configs_stack.size = 0;
 	context->basedir = buffer_init();
 }
 
 static void context_free(config_t *context) {
-	vector_config_weak_clear(&context->configs_stack);
+	free(context->configs_stack.data);
 	buffer_free(context->basedir);
 }
 

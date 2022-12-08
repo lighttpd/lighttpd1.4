@@ -22,25 +22,35 @@ static data_config * configparser_get_data_config(const array *a, const char *k,
   return (data_config *)array_get_data_unset(a, k, klen);
 }
 
+__attribute_noinline__
+static void configparser_push_data_config_list(data_config_list *v, data_config *dc) {
+    if (v->size == v->used) {
+        ck_realloc_u32((void **)&v->data, v->size, 4, sizeof(*v->data));
+        v->size += 4;
+    }
+    v->data[v->used++] = dc;
+}
+
 static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
   if (isnew) {
     dc->context_ndx = ctx->all_configs->used;
     force_assert(dc->context_ndx > ctx->current->context_ndx);
     array_insert_unique(ctx->all_configs, (data_unset *)dc);
     dc->parent = ctx->current;
-    vector_config_weak_push(&dc->parent->children, dc);
+    configparser_push_data_config_list(&dc->parent->children, dc);
   }
   if (ctx->configs_stack.used > 0 && ctx->current->context_ndx == 0) {
     fprintf(stderr, "Cannot use conditionals inside a global { ... } block\n");
     exit(-1);
   }
-  vector_config_weak_push(&ctx->configs_stack, ctx->current);
+  configparser_push_data_config_list(&ctx->configs_stack, ctx->current);
   ctx->current = dc;
 }
 
 static data_config *configparser_pop(config_t *ctx) {
   data_config *old = ctx->current;
-  ctx->current = vector_config_weak_pop(&ctx->configs_stack);
+  force_assert(ctx->configs_stack.used);
+  ctx->current = ctx->configs_stack.data[--ctx->configs_stack.used];
   force_assert(old && ctx->current);
   return old;
 }
