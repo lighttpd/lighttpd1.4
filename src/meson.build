@@ -537,7 +537,6 @@ common_src = files(
 	'sock_addr.c',
 	'stat_cache.c',
 	'sys-setjmp.c',
-	'vector.c',
 )
 
 main_src = files(
@@ -702,7 +701,6 @@ test('test_configfile', executable('test_configfile',
 		'data_config.c',
 		'http_header.c',
 		'http_kv.c',
-		'vector.c',
 		'log.c',
 		'fdlog.c',
 		'sock_addr.c',

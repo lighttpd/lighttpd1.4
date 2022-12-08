@@ -75,7 +75,6 @@ src = server.c response.c connections.c h2.c reqpool.c \
 	fdevent_impl.c \
 	http_range.c \
 	data_config.c \
-	vector.c \
 	configfile.c configparser.c
 
 builtin_mods = \
@@ -406,7 +405,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	http_header.h http_range.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h plugins.h plugin_config.h \
-	http_etag.h array.h vector.h \
+	http_etag.h array.h \
 	fdevent_impl.h network_write.h configfile.h \
 	sock_addr_cache.h \
 	configparser.h \
@@ -562,7 +561,7 @@ t_test_common_SOURCES = t/test_common.c \
                         ck.c
 t_test_common_LDADD   = $(LIBUNWIND_LIBS) $(PCRE_LIB)
 
-t_test_configfile_SOURCES = t/test_configfile.c buffer.c array.c data_config.c http_header.c http_kv.c vector.c log.c fdlog.c sock_addr.c ck.c
+t_test_configfile_SOURCES = t/test_configfile.c buffer.c array.c data_config.c http_header.c http_kv.c log.c fdlog.c sock_addr.c ck.c
 t_test_configfile_LDADD = $(PCRE_LIB) $(LIBUNWIND_LIBS)
 
 t_test_mod_SOURCES = $(common_src) t/test_mod.c \

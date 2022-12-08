@@ -897,7 +897,6 @@ add_executable(lighttpd
 	network.c
 	network_write.c
 	data_config.c
-	vector.c
 	configfile.c
 	configparser.c
 	${COMMON_SRC}
@@ -944,7 +943,6 @@ add_executable(test_configfile
 	data_config.c
 	http_header.c
 	http_kv.c
-	vector.c
 	log.c
 	fdlog.c
 	sock_addr.c

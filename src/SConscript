@@ -83,7 +83,6 @@ src = Split("server.c response.c connections.c h2.c reqpool.c \
 	network.c \
 	network_write.c \
 	data_config.c \
-	vector.c \
 	configfile.c configparser.c")
 
 builtin_mods = Split(" \
