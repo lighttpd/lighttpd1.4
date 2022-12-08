@@ -1235,11 +1235,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	int print_config = 0;
 	int test_config = 0;
 	int i_am_root = 0;
-	int o;
-#ifdef HAVE_FORK
-	int num_childs = 0;
-#endif
-	uint32_t i;
 #ifdef HAVE_FORK
 	int parent_pipe_fd = -1;
 #endif
@@ -1264,7 +1259,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	/*pid_fd = -1;*/
 	srv->argv = argv;
 
-	while(-1 != (o = getopt(argc, argv, "f:m:i:hvVD1pt"))) {
+	for (int o; -1 != (o = getopt(argc, argv, "f:m:i:hvVD1pt")); ) {
 		switch(o) {
 		case 'f':
 			if (srv->config_data_base) {
@@ -1461,12 +1456,13 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 
 	/* mod_indexfile should be listed in server.modules prior to dynamic handlers */
-	i = 0;
+	uint32_t i = 0;
 	for (const char *pname = NULL; i < srv->plugins.used; ++i) {
 		plugin *p = ((plugin **)srv->plugins.ptr)[i];
-		if (NULL != pname && 0 == strcmp(p->name, "indexfile")) {
-			log_error(srv->errh, __FILE__, __LINE__,
-			  "Warning: mod_indexfile should be listed in server.modules prior to mod_%s", pname);
+		if (0 == strcmp(p->name, "indexfile")) {
+			if (pname)
+				log_error(srv->errh, __FILE__, __LINE__,
+				  "Warning: mod_indexfile should be listed in server.modules prior to mod_%s", pname);
 			break;
 		}
 		if (p->handle_subrequest_start && p->handle_subrequest) {
