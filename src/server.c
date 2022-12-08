@@ -193,6 +193,59 @@ static void signal_handler(int sig) {
 }
 #endif
 
+
+static void server_main_setup_signals (void) {
+  #ifdef HAVE_SIGACTION
+    struct sigaction act;
+    memset(&act, 0, sizeof(act));
+    sigemptyset(&act.sa_mask);
+
+    act.sa_handler = SIG_IGN;
+    sigaction(SIGPIPE, &act, NULL);
+
+   #ifndef _MSC_VER
+    act.sa_flags = SA_NODEFER;
+    act.sa_handler = sys_setjmp_sigbus;
+    sigaction(SIGBUS, &act, NULL);
+    act.sa_flags = 0;
+   #endif
+
+   #if defined(SA_SIGINFO)
+    last_sighup_info.si_uid = 0,
+    last_sighup_info.si_pid = 0;
+    last_sigterm_info.si_uid = 0,
+    last_sigterm_info.si_pid = 0;
+    act.sa_sigaction = sigaction_handler;
+    act.sa_flags = SA_SIGINFO;
+   #else
+    act.sa_handler = signal_handler;
+    act.sa_flags = 0;
+   #endif
+    sigaction(SIGINT,  &act, NULL);
+    sigaction(SIGTERM, &act, NULL);
+    sigaction(SIGHUP,  &act, NULL);
+    sigaction(SIGALRM, &act, NULL);
+    sigaction(SIGUSR1, &act, NULL);
+
+    /* it should be safe to restart syscalls after SIGCHLD */
+    act.sa_flags |= SA_RESTART | SA_NOCLDSTOP;
+    sigaction(SIGCHLD, &act, NULL);
+  #elif defined(HAVE_SIGNAL)
+    /* ignore the SIGPIPE from sendfile() */
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGALRM, signal_handler);
+    signal(SIGTERM, signal_handler);
+    signal(SIGHUP,  signal_handler);
+    signal(SIGCHLD, signal_handler);
+    signal(SIGINT,  signal_handler);
+    signal(SIGUSR1, signal_handler);
+   #ifndef _MSC_VER
+    signal(SIGBUS,  sys_setjmp_sigbus);
+   #endif
+  #endif
+}
+
+
 #ifdef HAVE_FORK
 static int daemonize(void) {
 	int pipefd[2];
@@ -1063,10 +1116,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	int num_childs = 0;
 #endif
 	uint32_t i;
-#ifdef HAVE_SIGACTION
-	struct sigaction act;
-#endif
-
 #ifdef HAVE_FORK
 	int parent_pipe_fd = -1;
 #endif
@@ -1501,55 +1550,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	graceful_restart = 0;/*(reset here after avoiding further daemonizing)*/
 	if (0 == oneshot_fd) graceful_shutdown = 0;
 
-
-#ifdef HAVE_SIGACTION
-	memset(&act, 0, sizeof(act));
-	sigemptyset(&act.sa_mask);
-
-	act.sa_handler = SIG_IGN;
-	sigaction(SIGPIPE, &act, NULL);
-
-#ifndef _MSC_VER
-	act.sa_flags = SA_NODEFER;
-	act.sa_handler = sys_setjmp_sigbus;
-	sigaction(SIGBUS, &act, NULL);
-	act.sa_flags = 0;
-#endif
-
-# if defined(SA_SIGINFO)
-	last_sighup_info.si_uid = 0,
-	last_sighup_info.si_pid = 0;
-	last_sigterm_info.si_uid = 0,
-	last_sigterm_info.si_pid = 0;
-	act.sa_sigaction = sigaction_handler;
-	act.sa_flags = SA_SIGINFO;
-# else
-	act.sa_handler = signal_handler;
-	act.sa_flags = 0;
-# endif
-	sigaction(SIGINT,  &act, NULL);
-	sigaction(SIGTERM, &act, NULL);
-	sigaction(SIGHUP,  &act, NULL);
-	sigaction(SIGALRM, &act, NULL);
-	sigaction(SIGUSR1, &act, NULL);
-
-	/* it should be safe to restart syscalls after SIGCHLD */
-	act.sa_flags |= SA_RESTART | SA_NOCLDSTOP;
-	sigaction(SIGCHLD, &act, NULL);
-#elif defined(HAVE_SIGNAL)
-	/* ignore the SIGPIPE from sendfile() */
-	signal(SIGPIPE, SIG_IGN);
-	signal(SIGALRM, signal_handler);
-	signal(SIGTERM, signal_handler);
-	signal(SIGHUP,  signal_handler);
-	signal(SIGCHLD,  signal_handler);
-	signal(SIGINT,  signal_handler);
-	signal(SIGUSR1, signal_handler);
-#ifndef _MSC_VER
-	signal(SIGBUS,  sys_setjmp_sigbus);
-#endif
-#endif
-
+	server_main_setup_signals();
 
 	srv->gid = getgid();
 	srv->uid = getuid();
