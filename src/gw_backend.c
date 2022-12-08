@@ -175,6 +175,8 @@ static gw_proc *gw_proc_init(gw_host *host) {
     return proc;
 }
 
+__attribute_cold__
+__attribute_noinline__
 static void gw_proc_free(gw_proc *proc) {
     if (!proc) return;
 
