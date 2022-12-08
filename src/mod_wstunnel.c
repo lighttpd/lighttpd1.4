@@ -714,8 +714,11 @@ static int create_MD5_sum(request_st * const r) {
     (s)[1]=((u)>>16);    \
     (s)[2]=((u)>>8);     \
     (s)[3]=((u))
-    ws_htole32((unsigned char *)(buf+0), buf[0]);
-    ws_htole32((unsigned char *)(buf+1), buf[1]);
+    uint32_t u;
+    u = buf[0];
+    ws_htole32((unsigned char *)(buf+0), u);
+    u = buf[1];
+    ws_htole32((unsigned char *)(buf+1), u);
   #endif
     /*(overwrite buf[] with result)*/
     MD5_once((unsigned char *)buf, buf, sizeof(buf));
