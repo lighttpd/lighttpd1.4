@@ -1105,6 +1105,130 @@ static void server_load_check (server *srv) {
         server_sockets_disable(srv);
 }
 
+__attribute_noinline__
+static int server_main_setup_workers (server * const srv, const int npids) {
+    pid_t pid;
+    int num_childs = npids;
+    int child = 0;
+    unsigned int timer = 0;
+    pid_t pids[npids];
+    for (int n = 0; n < npids; ++n) pids[n] = -1;
+    server_graceful_signal_prev_generation();
+    while (!child && !srv_shutdown && !graceful_shutdown) {
+        if (num_childs > 0) {
+            switch ((pid = fork())) {
+              case -1:
+                return -1;
+              case 0:
+                child = 1;
+                alarm(0);
+                break;
+              default:
+                num_childs--;
+                for (int n = 0; n < npids; ++n) {
+                    if (-1 == pids[n]) {
+                        pids[n] = pid;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+        else {
+            int status;
+            unix_time64_t mono_ts;
+            if (-1 != (pid = fdevent_waitpid_intr(-1, &status))) {
+                mono_ts = log_monotonic_secs;
+                log_monotonic_secs = server_monotonic_secs();
+                log_epoch_secs =
+                  server_epoch_secs(srv, log_monotonic_secs - mono_ts);
+                if (plugins_call_handle_waitpid(srv, pid, status)
+                    != HANDLER_GO_ON) {
+                    if (!timer) alarm((timer = 5));
+                    continue;
+                }
+                switch (fdlog_pipes_waitpid_cb(pid)) {
+                  default: break;
+                  case -1: if (!timer) alarm((timer = 5));
+                           __attribute_fallthrough__
+                  case  1: continue;
+                }
+                /**
+                 * check if one of our workers went away
+                 */
+                for (int n = 0; n < npids; ++n) {
+                    if (pid == pids[n]) {
+                        pids[n] = -1;
+                        num_childs++;
+                        break;
+                    }
+                }
+            }
+            else if (errno == EINTR) {
+                mono_ts = log_monotonic_secs;
+                log_monotonic_secs = server_monotonic_secs();
+                log_epoch_secs =
+                  server_epoch_secs(srv, log_monotonic_secs - mono_ts);
+                /* On SIGHUP, cycle logs (periodic maint runs in children) */
+                if (handle_sig_hup) {
+                    handle_sig_hup = 0;
+                    fdlog_files_cycle(srv->errh);/*reopen log files, not pipes*/
+                    /* forward SIGHUP to workers */
+                    for (int n = 0; n < npids; ++n) {
+                        if (pids[n] > 0) kill(pids[n], SIGHUP);
+                    }
+                }
+                if (handle_sig_alarm) {
+                    handle_sig_alarm = 0;
+                    timer = 0;
+                    plugins_call_handle_trigger(srv);
+                    fdlog_pipes_restart(log_monotonic_secs);
+                }
+            }
+        }
+    }
+
+    if (!child) {
+        /* exit point for parent monitoring workers;
+         * signal children, too */
+        if (graceful_shutdown || graceful_restart) {
+            /* flag to ignore one SIGINT if graceful_restart */
+            if (graceful_restart) graceful_restart = 2;
+            kill(0, SIGINT);
+            server_graceful_state(srv);
+        }
+        else if (srv_shutdown)
+            kill(0, SIGTERM);
+
+        return 0;
+    }
+
+    /* ignore SIGUSR1 in workers; only parent directs graceful restart */
+  #ifdef HAVE_SIGACTION
+    struct sigaction actignore;
+    memset(&actignore, 0, sizeof(actignore));
+    actignore.sa_handler = SIG_IGN;
+    sigaction(SIGUSR1, &actignore, NULL);
+  #elif defined(HAVE_SIGNAL)
+    signal(SIGUSR1, SIG_IGN);
+  #endif
+
+    /**
+     * make sure workers do not muck with pid-file
+     */
+    if (0 <= pid_fd) {
+        close(pid_fd);
+        pid_fd = -1;
+    }
+    srv->srvconf.pid_file = NULL;
+
+    fdlog_pipes_abandon_pids();
+    srv->pid = getpid();
+    li_rand_reseed();
+
+    return 1; /* child worker */
+}
+
 __attribute_cold__
 __attribute_noinline__
 static int server_main_setup (server * const srv, int argc, char **argv) {
@@ -1615,138 +1739,10 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 
 	/* start watcher and workers */
-	num_childs = srv->srvconf.max_worker;
-	if (num_childs > 0) {
-		pid_t pids[num_childs];
-		pid_t pid;
-		const int npids = num_childs;
-		int child = 0;
-		unsigned int timer = 0;
-		for (int n = 0; n < npids; ++n) pids[n] = -1;
-		server_graceful_signal_prev_generation();
-		while (!child && !srv_shutdown && !graceful_shutdown) {
-			if (num_childs > 0) {
-				switch ((pid = fork())) {
-				case -1:
-					return -1;
-				case 0:
-					child = 1;
-					alarm(0);
-					break;
-				default:
-					num_childs--;
-					for (int n = 0; n < npids; ++n) {
-						if (-1 == pids[n]) {
-							pids[n] = pid;
-							break;
-						}
-					}
-					break;
-				}
-			} else {
-				int status;
-				unix_time64_t mono_ts;
-
-				if (-1 != (pid = fdevent_waitpid_intr(-1, &status))) {
-					mono_ts = log_monotonic_secs;
-					log_monotonic_secs = server_monotonic_secs();
-					log_epoch_secs = server_epoch_secs(srv, log_monotonic_secs - mono_ts);
-					if (plugins_call_handle_waitpid(srv, pid, status) != HANDLER_GO_ON) {
-						if (!timer) alarm((timer = 5));
-						continue;
-					}
-					switch (fdlog_pipes_waitpid_cb(pid)) {
-					  default: break;
-					  case -1: if (!timer) alarm((timer = 5));
-						   __attribute_fallthrough__
-					  case  1: continue;
-					}
-					/** 
-					 * check if one of our workers went away
-					 */
-					for (int n = 0; n < npids; ++n) {
-						if (pid == pids[n]) {
-							pids[n] = -1;
-							num_childs++;
-							break;
-						}
-					}
-				} else {
-					switch (errno) {
-					case EINTR:
-						mono_ts = log_monotonic_secs;
-						log_monotonic_secs = server_monotonic_secs();
-						log_epoch_secs = server_epoch_secs(srv, log_monotonic_secs - mono_ts);
-						/**
-						 * if we receive a SIGHUP we have to close our logs ourself as we don't 
-						 * have the mainloop who can help us here
-						 */
-						if (handle_sig_hup) {
-							handle_sig_hup = 0;
-							fdlog_files_cycle(srv->errh); /* reopen log files, not pipes */
-
-							/* forward SIGHUP to workers */
-							for (int n = 0; n < npids; ++n) {
-								if (pids[n] > 0) kill(pids[n], SIGHUP);
-							}
-						}
-						if (handle_sig_alarm) {
-							handle_sig_alarm = 0;
-							timer = 0;
-							plugins_call_handle_trigger(srv);
-							fdlog_pipes_restart(log_monotonic_secs);
-						}
-						break;
-					default:
-						break;
-					}
-				}
-			}
-		}
-
-		/**
-		 * for the parent this is the exit-point 
-		 */
-		if (!child) {
-			/** 
-			 * kill all children too 
-			 */
-			if (graceful_shutdown || graceful_restart) {
-				/* flag to ignore one SIGINT if graceful_restart */
-				if (graceful_restart) graceful_restart = 2;
-				kill(0, SIGINT);
-				server_graceful_state(srv);
-			} else if (srv_shutdown) {
-				kill(0, SIGTERM);
-			}
-
-			return 0;
-		}
-
-		/* ignore SIGUSR1 in workers; only parent directs graceful restart */
-	      #ifdef HAVE_SIGACTION
-		{
-			struct sigaction actignore;
-			memset(&actignore, 0, sizeof(actignore));
-			actignore.sa_handler = SIG_IGN;
-			sigaction(SIGUSR1, &actignore, NULL);
-		}
-	      #elif defined(HAVE_SIGNAL)
-			signal(SIGUSR1, SIG_IGN);
-	      #endif
-
-		/**
-		 * make sure workers do not muck with pid-file
-		 */
-		if (0 <= pid_fd) {
-			close(pid_fd);
-			pid_fd = -1;
-		}
-		srv->srvconf.pid_file = NULL;
-
-		fdlog_pipes_abandon_pids();
-		srv->pid = getpid();
-		li_rand_reseed();
+	if (srv->srvconf.max_worker > 0) {
+		int rc = server_main_setup_workers(srv, srv->srvconf.max_worker);
+		if (rc != 1) /* 1 for worker; 0 for worker parent done; -1 for error */
+			return rc;
 	}
 #endif
 
