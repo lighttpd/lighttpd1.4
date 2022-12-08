@@ -110,10 +110,10 @@ typedef struct {
 typedef struct {
 	dirls_entry_t **ent;
 	uint32_t used;
-	uint32_t size;
 } dirls_list_t;
 
 #define DIRLIST_ENT_NAME(ent)  ((char*)(ent) + sizeof(dirls_entry_t))
+/* DIRLIST_BLOB_SIZE must be power of 2 for current internal usage */
 #define DIRLIST_BLOB_SIZE      16
 
 typedef struct {
@@ -1023,15 +1023,9 @@ static int http_open_directory(request_st * const r, handler_ctx * const hctx) {
 
     dirls_list_t * const dirs = &hctx->dirs;
     dirls_list_t * const files = &hctx->files;
-    dirs->ent   =
-      (dirls_entry_t**) malloc(sizeof(dirls_entry_t*) * DIRLIST_BLOB_SIZE);
-    force_assert(dirs->ent);
-    dirs->size  = DIRLIST_BLOB_SIZE;
+    dirs->ent   = NULL;
     dirs->used  = 0;
-    files->ent  =
-      (dirls_entry_t**) malloc(sizeof(dirls_entry_t*) * DIRLIST_BLOB_SIZE);
-    force_assert(files->ent);
-    files->size = DIRLIST_BLOB_SIZE;
+    files->ent  = NULL;
     files->used = 0;
 
     return 0;
@@ -1125,11 +1119,9 @@ static int http_read_directory(handler_ctx * const p) {
 		}
 
 		dirls_list_t * const list = !S_ISDIR(st.st_mode) ? &p->files : &p->dirs;
-		if (list->used == list->size) {
-			list->size += DIRLIST_BLOB_SIZE;
-			list->ent   = (dirls_entry_t**) realloc(list->ent, sizeof(dirls_entry_t*) * list->size);
-			force_assert(list->ent);
-		}
+		if (!(list->used & (DIRLIST_BLOB_SIZE-1)))
+			ck_realloc_u32((void **)&list->ent, list->used,
+			               DIRLIST_BLOB_SIZE, sizeof(*list->ent));
 		dirls_entry_t * const tmp = list->ent[list->used++] =
 		  (dirls_entry_t*) malloc(sizeof(dirls_entry_t) + 1 + dsz);
 		force_assert(tmp);

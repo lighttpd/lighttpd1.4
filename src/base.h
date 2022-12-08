@@ -136,8 +136,6 @@ typedef struct server_socket {
 
 typedef struct {
 	server_socket **ptr;
-
-	uint32_t size;
 	uint32_t used;
 } server_socket_array;
 
@@ -177,7 +175,7 @@ struct server {
 
 	server_socket_array srv_sockets;
 	server_socket_array srv_sockets_inherited;
-	struct { void *ptr; uint32_t used; uint32_t size; } plugins;
+	struct { void *ptr; uint32_t used; } plugins;
 
 	unix_time64_t startup_ts;
 	unix_time64_t graceful_expire_ts;

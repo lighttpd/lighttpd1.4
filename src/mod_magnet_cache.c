@@ -102,11 +102,8 @@ static script *script_cache_new_script(script_cache * const cache, const buffer 
 {
     script * const sc = script_init();
 
-    if (cache->used == cache->size) {
-        cache->size += 16;
-        cache->ptr = realloc(cache->ptr, cache->size * sizeof(*(cache->ptr)));
-        force_assert(cache->ptr);
-    }
+    if (!(cache->used & (16-1)))
+        ck_realloc_u32((void **)&cache->ptr,cache->used,16,sizeof(*cache->ptr));
     cache->ptr[cache->used++] = sc;
 
     buffer_copy_buffer(&sc->name, name);

@@ -763,10 +763,9 @@ fdevent_poll_event_del (fdevents *ev, fdnode *fdn)
     /* ev->pollfds[k].revents = 0; */
 
     if (ev->unused.size == ev->unused.used) {
+        ck_realloc_u32((void **)&ev->unused.ptr, ev->unused.size,
+                       16, sizeof(*ev->unused.ptr));
         ev->unused.size += 16;
-        ev->unused.ptr = realloc(ev->unused.ptr,
-                                 sizeof(*(ev->unused.ptr)) * ev->unused.size);
-        force_assert(NULL != ev->unused.ptr);
     }
 
     ev->unused.ptr[ev->unused.used++] = k;
@@ -796,9 +795,9 @@ fdevent_poll_event_set (fdevents *ev, fdnode *fdn, int events)
     }
     else {
         if (ev->size == ev->used) {
+            ck_realloc_u32((void **)&ev->pollfds, ev->size,
+                           16, sizeof(*ev->pollfds));
             ev->size += 16;
-            ev->pollfds = realloc(ev->pollfds, sizeof(*ev->pollfds) * ev->size);
-            force_assert(NULL != ev->pollfds);
         }
 
         k = ev->used++;

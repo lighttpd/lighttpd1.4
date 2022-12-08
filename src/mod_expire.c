@@ -227,8 +227,8 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
 
             /* parse array values into structured data */
             if (NULL != a && a->used) {
-                p->toffsets =
-                  realloc(p->toffsets, sizeof(time_t) * (p->tused + a->used*2));
+                ck_realloc_u32((void **)&p->toffsets, p->tused,
+                               a->used*2, sizeof(*p->toffsets));
                 time_t *toff = p->toffsets + p->tused;
                 for (uint32_t k = 0; k < a->used; ++k, toff+=2, p->tused+=2) {
                     buffer *v = &((data_string *)a->data[k])->value;

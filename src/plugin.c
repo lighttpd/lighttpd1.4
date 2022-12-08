@@ -81,18 +81,6 @@ static void plugin_free(plugin *p) {
     free(p);
 }
 
-static void plugins_register(server *srv, plugin *p) {
-	plugin **ps;
-	if (srv->plugins.used == srv->plugins.size) {
-		srv->plugins.size += 4;
-		srv->plugins.ptr   = realloc(srv->plugins.ptr, srv->plugins.size * sizeof(*ps));
-		force_assert(NULL != srv->plugins.ptr);
-	}
-
-	ps = srv->plugins.ptr;
-	ps[srv->plugins.used++] = p;
-}
-
 #ifdef _WIN32
 __attribute_cold__
 static void
@@ -140,6 +128,9 @@ static const plugin_load_functions load_functions[] = {
 };
 
 int plugins_load(server *srv) {
+	ck_realloc_u32(&srv->plugins.ptr, 0,
+	               srv->srvconf.modules->used, sizeof(plugin *));
+
 	for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
 		data_string *ds = (data_string *)srv->srvconf.modules->data[i];
 		char *module = ds->value.ptr;
@@ -153,7 +144,7 @@ int plugins_load(server *srv) {
 					plugin_free(p);
 					return -1;
 				}
-				plugins_register(srv, p);
+				((plugin **)srv->plugins.ptr)[srv->plugins.used++] = p;
 				break;
 			}
 		}
@@ -173,6 +164,9 @@ int plugins_load(server *srv) {
 #else /* defined(LIGHTTPD_STATIC) */
 
 int plugins_load(server *srv) {
+	ck_realloc_u32(&srv->plugins.ptr, 0,
+	               srv->srvconf.modules->used, sizeof(plugin *));
+
 	buffer * const tb = srv->tmp_buf;
 	int (*init)(plugin *pl);
 
@@ -254,7 +248,7 @@ int plugins_load(server *srv) {
 			plugin_free(p);
 			return -1;
 		}
-		plugins_register(srv, p);
+		((plugin **)srv->plugins.ptr)[srv->plugins.used++] = p;
 	}
 
 	return 0;
@@ -576,6 +570,5 @@ void plugins_free(server *srv) {
 	free(srv->plugins.ptr);
 	srv->plugins.ptr = NULL;
 	srv->plugins.used = 0;
-	srv->plugins.size = 0;
 	array_free_data(&plugin_stats);
 }

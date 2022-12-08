@@ -116,10 +116,8 @@ static void array_extend(array * const a, uint32_t n) {
     /* This data structure should not be used for nearly so many entries */
     force_assert(a->size <= INT32_MAX-n);
     a->size  += n;
-    a->data   = realloc(a->data,   sizeof(*a->data)   * a->size);
-    a->sorted = realloc(a->sorted, sizeof(*a->sorted) * a->size);
-    force_assert(a->data);
-    force_assert(a->sorted);
+    a->data   = ck_realloc_u32((void**)&a->data,  a->size,0,sizeof(*a->data));
+    a->sorted = ck_realloc_u32((void**)&a->sorted,a->size,0,sizeof(*a->sorted));
     memset(a->data+a->used, 0, (a->size-a->used)*sizeof(*a->data));
 }
 

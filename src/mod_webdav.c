@@ -722,7 +722,6 @@ typedef struct {
 typedef struct {
     webdav_property_name *ptr;
     int used;
-    int size;
 } webdav_property_names;
 
 /*
@@ -3924,7 +3923,6 @@ webdav_parse_chunkqueue (request_st * const r,
 struct webdav_lock_token_submitted_st {
   buffer *tokens;
   int used;
-  int size;
   const buffer *authn_user;
   buffer *b;
   request_st *r;
@@ -4005,7 +4003,6 @@ webdav_has_lock (request_st * const r,
     cbdata.r = r;
     cbdata.tokens = NULL;
     cbdata.used  = 0;
-    cbdata.size  = 0;
     cbdata.nlocks = 0;
     cbdata.slocks = 0;
     cbdata.smatch = 0;
@@ -4101,16 +4098,14 @@ webdav_has_lock (request_st * const r,
                  *   ; No linear whitespace (LWS) allowed in Coded-URL
                  *   ; absolute-URI defined in RFC 3986, Section 4.3
                  */
-                if (cbdata.size == cbdata.used) {
-                    if (cbdata.size == 16) { /* arbitrary limit */
+                if (!(cbdata.used & (16-1))) {
+                    if (cbdata.used == 16) { /* arbitrary limit */
                         http_status_set_error(r, 400); /* Bad Request */
                         chunk_buffer_release(cbdata.b);
                         return 0;
                     }
-                    cbdata.size = 16;
-                    cbdata.tokens =
-                      realloc(cbdata.tokens, sizeof(*(cbdata.tokens)) * 16);
-                    force_assert(cbdata.tokens); /*(see above limit)*/
+                    ck_realloc_u32((void **)&cbdata.tokens, (uint32_t)cbdata.used,
+                                   16, sizeof(*cbdata.tokens));
                 }
                 cbdata.tokens[cbdata.used].ptr = p+1;
 
@@ -4251,7 +4246,6 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
 
     pb.proplist.ptr  = NULL;
     pb.proplist.used = 0;
-    pb.proplist.size = 0;
 
   #ifdef USE_PROPPATCH
     xmlDocPtr xml = NULL;
@@ -4292,8 +4286,8 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
                 }
 
                 /* add property to requested list */
-                if (pb.proplist.size == pb.proplist.used) {
-                    if (pb.proplist.size == 32) {
+                if (!(pb.proplist.used & (32-1))) {
+                    if (pb.proplist.used == 32) {
                         /* arbitrarily chosen limit of 32 */
                         log_error(r->conf.errh, __FILE__, __LINE__,
                                   "too many properties in request (> 32)");
@@ -4302,10 +4296,9 @@ mod_webdav_propfind (request_st * const r, const plugin_config * const pconf)
                         xmlFreeDoc(xml);
                         return HANDLER_FINISHED;
                     }
-                    pb.proplist.size = 32;
-                    pb.proplist.ptr =
-                      realloc(pb.proplist.ptr, sizeof(*(pb.proplist.ptr)) * 32);
-                    force_assert(pb.proplist.ptr); /*(see above limit)*/
+                    ck_realloc_u32((void **)&pb.proplist.ptr,
+                                   (uint32_t)pb.proplist.used,
+                                   32, sizeof(*pb.proplist.ptr));
                 }
 
                 const size_t namelen = strlen((char *)prop->name);

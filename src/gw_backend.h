@@ -11,8 +11,6 @@
 
 typedef struct {
     char **ptr;
-
-    uint32_t size;
     uint32_t used;
 } char_array;
 
@@ -248,7 +246,6 @@ typedef struct {
     int last_used_ndx;
 
     gw_host **hosts;
-
     uint32_t used;
     uint32_t size;
 } gw_extension;

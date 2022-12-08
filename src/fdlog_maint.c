@@ -29,7 +29,6 @@
 struct fdlog_files_t {
     fdlog_st **ptr;
     uint32_t used;
-    uint32_t size;
 };
 
 static struct fdlog_files_t fdlog_files;
@@ -48,7 +47,6 @@ typedef struct fdlog_pipe {
 struct fdlog_pipes_t {
     fdlog_pipe *ptr;
     uint32_t used;
-    uint32_t size;
 };
 
 static struct fdlog_pipes_t fdlog_pipes;
@@ -136,7 +134,6 @@ fdlog_pipes_close (fdlog_st * const retain)
     free(fdlog_pipes.ptr);
     fdlog_pipes.ptr = NULL;
     fdlog_pipes.used = 0;
-    fdlog_pipes.size = 0;
 }
 
 
@@ -166,12 +163,9 @@ fdlog_pipe_serrh (const int fd)
 static fdlog_st *
 fdlog_pipe_init (const char * const fn, const int fds[2], const pid_t pid)
 {
-    if (fdlog_pipes.used == fdlog_pipes.size) {
-        fdlog_pipes.size += 4;
-        fdlog_pipes.ptr =
-          realloc(fdlog_pipes.ptr, fdlog_pipes.size * sizeof(fdlog_pipe));
-        force_assert(fdlog_pipes.ptr);
-    }
+    if (!(fdlog_pipes.used & (4-1)))
+        ck_realloc_u32((void **)&fdlog_pipes.ptr, fdlog_pipes.used,
+                       4, sizeof(*fdlog_pipes.ptr));
     fdlog_pipe * const fdp = fdlog_pipes.ptr + fdlog_pipes.used++;
     fdp->fd = fds[0];
     fdp->pid = pid;
@@ -212,12 +206,9 @@ fdlog_pipe_open (const char * const fn)
 static fdlog_st *
 fdlog_file_init (const char * const fn, const int fd)
 {
-    if (fdlog_files.used == fdlog_files.size) {
-        fdlog_files.size += 4;
-        fdlog_files.ptr =
-          realloc(fdlog_files.ptr, fdlog_files.size * sizeof(fdlog_st *));
-        force_assert(fdlog_files.ptr);
-    }
+    if (!(fdlog_files.used & (4-1)))
+        ck_realloc_u32((void **)&fdlog_files.ptr, fdlog_files.used,
+                       4, sizeof(*fdlog_files.ptr));
     return (fdlog_files.ptr[fdlog_files.used++] = fdlog_init(fn,fd,FDLOG_FILE));
 }
 
@@ -311,7 +302,6 @@ fdlog_files_close (fdlog_st * const retain)
     free(fdlog_files.ptr);
     fdlog_files.ptr = NULL;
     fdlog_files.used = 0;
-    fdlog_files.size = 0;
 }
 
 
