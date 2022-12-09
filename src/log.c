@@ -179,13 +179,15 @@ log_buffer_vsprintf (buffer * const restrict b,
     size_t blen = buffer_clen(b);
     size_t bsp  = buffer_string_space(b)+1;
     char *s = b->ptr + blen;
-    size_t n;
+    unsigned int n;
 
     va_list aptry;
     va_copy(aptry, ap);
-    n = (size_t)vsnprintf(s, bsp, fmt, aptry);
+    n = (unsigned int)vsnprintf(s, bsp, fmt, aptry);
     va_end(aptry);
 
+    if ((int)n <= 0)
+        return;
     if (n < bsp)
         buffer_truncate(b, blen+n); /*buffer_commit(b, n);*/
     else {
@@ -193,16 +195,17 @@ log_buffer_vsprintf (buffer * const restrict b,
         vsnprintf(s, n+1, fmt, ap);
     }
 
-    size_t i;
+    unsigned int i;
     for (i = 0; i < n && ' ' <= s[i] && s[i] <= '~'; ++i) ;/*(ASCII isprint())*/
     if (i == n) return; /* common case; nothing to encode */
 
     /* need to encode log line
      * copy original line fragment, append encoded line to buffer, free copy */
+    n -= i;
     char * const src = (char *)malloc(n);
     ck_assert(src);
-    memcpy(src, s, n); /*(note: not '\0'-terminated)*/
-    buffer_truncate(b, blen);
+    memcpy(src, s+i, n); /*(note: not '\0'-terminated)*/
+    buffer_truncate(b, blen+i);
     buffer_append_string_c_escaped(b, src, n);
     free(src);
 }
