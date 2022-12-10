@@ -65,6 +65,27 @@ __attribute_nonnull__()
 int ck_memeq_const_time_fixed_len (const void *a, const void *b, size_t len);
 
 
+/*(ck_malloc() is not from C11 Annex K)
+ * ck_malloc() performs malloc() on args and aborts if malloc() fails */
+__attribute_malloc__
+__attribute_returns_nonnull__
+void * ck_malloc (size_t nbytes);
+
+/*(ck_calloc() is not from C11 Annex K)
+ * ck_calloc() performs calloc() on args and aborts if calloc() fails */
+__attribute_malloc__
+__attribute_returns_nonnull__
+void * ck_calloc (size_t nmemb, size_t elt_sz);
+
+/*(ck_realloc_u32() is not from C11 Annex K)
+ * ck_realloc_u32() performs realloc() on *list or aborts
+ * extends *list with n used elements by x elements of elt_sz
+ * and ensures n + x <= UINT32_MAX */
+__attribute_nonnull__()
+__attribute_returns_nonnull__
+void * ck_realloc_u32 (void **list, size_t n, size_t x, size_t elt_sz);
+
+
 /*(ck_bt() is not from C11 Annex K)
  * ck_bt() prints backtrace to stderr */
 __attribute_cold__

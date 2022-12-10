@@ -25,7 +25,8 @@
 
 #include "ck.h"
 
-#include <stdlib.h>     /* abort() getenv() getenv_s() */
+#include <stdlib.h>     /* abort() getenv() getenv_s()
+                         * calloc() malloc() realloc() */
 #include <string.h>     /* memcpy() memset() memset_s() explicit_bzero()
                          * strerror() strerror_r() strerror_s() strlen() */
 
@@ -307,6 +308,39 @@ ck_memeq_const_time_fixed_len (const void *a, const void *b, const size_t len)
         diff |= (av[i] ^ bv[i]);
     }
     return (0 == diff);
+}
+
+
+void *
+ck_malloc (size_t nbytes)
+{
+    void *ptr = malloc(nbytes);
+    ck_assert(NULL != ptr);
+    return ptr;
+}
+
+
+void *
+ck_calloc (size_t nmemb, size_t elt_sz)
+{
+    void *ptr = calloc(nmemb, elt_sz);
+    ck_assert(NULL != ptr);
+    return ptr;
+}
+
+
+void *
+ck_realloc_u32 (void **list, size_t n, size_t x, size_t elt_sz)
+{
+  #ifdef HAVE_REALLOCARRAY /*(not currently detected by build)*/
+    ck_assert(x <= UINT32_MAX && n <= UINT32_MAX - x);
+    void *ptr = reallocarray(*list, n + x, elt_sz);
+  #else
+    ck_assert(x <= UINT32_MAX && n <= UINT32_MAX - x && n+x <= SIZE_MAX/elt_sz);
+    void *ptr = realloc(*list, (n + x) * elt_sz);
+  #endif
+    ck_assert(NULL != ptr);
+    return (*list = ptr);
 }
 
 
