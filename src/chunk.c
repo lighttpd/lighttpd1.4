@@ -83,7 +83,7 @@ void chunkqueue_set_tempdirs_default_reset (void)
     chunkqueue_default_tempdirs = NULL;
     chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
 
-  #ifdef HAVE_MMAP /*(abuse this func to initialize statics as startup)*/
+  #ifdef HAVE_MMAP /*(extend this func to initialize statics at startup)*/
     if (0 == chunk_pagemask)
         chunk_pagemask = mmap_pagemask();
     chunk_mmap_flags = MAP_SHARED;
@@ -632,7 +632,7 @@ char * chunkqueue_get_memory(chunkqueue * const restrict cq, size_t * const rest
 void chunkqueue_use_memory(chunkqueue * const restrict cq, chunk *ckpt, size_t len) {
     buffer *b = cq->last->mem;
 
-    if (len > 0) {
+    if (__builtin_expect( (len > 0), 1)) {
         buffer_commit(b, len);
         cq->bytes_in += len;
         if (cq->last == ckpt || NULL == ckpt || MEM_CHUNK != ckpt->type
@@ -1349,10 +1349,8 @@ static int chunk_open_file_chunk(chunk * const restrict c, log_error_st * const 
 		return -1;
 	}
 
-	const off_t offset = c->offset;
-	const off_t len = c->file.length - c->offset;
-	force_assert(offset >= 0 && len >= 0);
-	if (offset > st.st_size - len) {
+	/*(ok if file grew, e.g. a log file)*/
+	if (c->file.length > st.st_size) {
 		log_error(errh, __FILE__, __LINE__, "file shrunk: %s", c->mem->ptr);
 		return -1;
 	}
