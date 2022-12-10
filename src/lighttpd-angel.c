@@ -13,12 +13,9 @@
 
 #include <sys/wait.h>
 
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <unistd.h>
-#include <time.h>
 #include <signal.h>
 
 #define BINPATH SBIN_DIR"/lighttpd"
