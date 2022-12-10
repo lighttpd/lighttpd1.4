@@ -24,7 +24,7 @@ typedef struct {
 } plugin_data;
 
 INIT_FUNC(mod_redirect_init) {
-    return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 FREE_FUNC(mod_redirect_free) {

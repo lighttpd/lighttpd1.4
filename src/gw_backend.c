@@ -158,8 +158,7 @@ __attribute_cold__
 __attribute_noinline__
 __attribute_returns_nonnull__
 static gw_proc *gw_proc_init(gw_host *host) {
-    gw_proc *proc = calloc(1, sizeof(*proc));
-    force_assert(proc);
+    gw_proc *proc = ck_calloc(1, sizeof(*proc));
 
     /*proc->unixsocket = buffer_init();*//*(init on demand)*/
     proc->connection_name = buffer_init();
@@ -192,9 +191,7 @@ static void gw_proc_free(gw_proc *proc) {
 __attribute_malloc__
 __attribute_returns_nonnull__
 static gw_host *gw_host_init(void) {
-    gw_host *f = calloc(1, sizeof(*f));
-    force_assert(f);
-    return f;
+    return ck_calloc(1, sizeof(gw_host));
 }
 
 static void gw_host_free(gw_host *h) {
@@ -215,9 +212,7 @@ static void gw_host_free(gw_host *h) {
 __attribute_malloc__
 __attribute_returns_nonnull__
 static gw_exts *gw_extensions_init(void) {
-    gw_exts *f = calloc(1, sizeof(*f));
-    force_assert(f);
-    return f;
+    return ck_calloc(1, sizeof(gw_exts));
 }
 
 static void gw_extensions_free(gw_exts *f) {
@@ -455,8 +450,7 @@ static int gw_proc_sockaddr_init(gw_host * const host, gw_proc * const proc, log
         proc->saddr = NULL;
     }
     if (NULL == proc->saddr) {
-        proc->saddr = (struct sockaddr *)malloc(addrlen);
-        force_assert(proc->saddr);
+        proc->saddr = (struct sockaddr *)ck_malloc(addrlen);
     }
     proc->saddrlen = addrlen;
     memcpy(proc->saddr, &addr, addrlen);
@@ -468,8 +462,7 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 
     if (!key || !val) return -1;
 
-    dst = malloc(key_len + val_len + 3);
-    force_assert(dst);
+    dst = ck_malloc(key_len + val_len + 3);
     memcpy(dst, key, key_len);
     dst[key_len] = '=';
     memcpy(dst + key_len + 1, val, val_len + 1); /* add the \0 from the value */
@@ -1088,8 +1081,7 @@ static handler_t gw_process_fdevent(gw_handler_ctx *hctx, request_st *r, int rev
 
 __attribute_returns_nonnull__
 static gw_handler_ctx * handler_ctx_init(size_t sz) {
-    gw_handler_ctx *hctx = calloc(1, 0 == sz ? sizeof(*hctx) : sz);
-    force_assert(hctx);
+    gw_handler_ctx *hctx = ck_calloc(1, 0 == sz ? sizeof(*hctx) : sz);
 
     /*hctx->response = chunk_buffer_acquire();*//*(allocated when needed)*/
 
@@ -1152,7 +1144,7 @@ static void handler_ctx_clear(gw_handler_ctx *hctx) {
 
 
 void * gw_init(void) {
-    return calloc(1, sizeof(gw_plugin_data));
+    return ck_calloc(1, sizeof(gw_plugin_data));
 }
 
 
@@ -1602,18 +1594,14 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                         free(host->args.ptr[m]);
                     free(host->args.ptr);
 
-                    host->args.ptr = calloc(4, sizeof(char *));
-                    force_assert(host->args.ptr);
+                    host->args.ptr = ck_calloc(4, sizeof(char *));
                     host->args.used = 3;
-                    host->args.ptr[0] = malloc(sizeof("/bin/sh"));
-                    force_assert(host->args.ptr[0]);
+                    host->args.ptr[0] = ck_malloc(sizeof("/bin/sh"));
                     memcpy(host->args.ptr[0], "/bin/sh", sizeof("/bin/sh"));
-                    host->args.ptr[1] = malloc(sizeof("-c"));
-                    force_assert(host->args.ptr[1]);
+                    host->args.ptr[1] = ck_malloc(sizeof("-c"));
                     memcpy(host->args.ptr[1], "-c", sizeof("-c"));
-                    host->args.ptr[2] =
-                      malloc(sizeof("exec ")-1+buffer_clen(host->bin_path)+1);
-                    force_assert(host->args.ptr[2]);
+                    host->args.ptr[2] = ck_malloc(sizeof("exec ")-1
+                                              + buffer_clen(host->bin_path)+1);
                     memcpy(host->args.ptr[2], "exec ", sizeof("exec ")-1);
                     memcpy(host->args.ptr[2]+sizeof("exec ")-1,
                            host->bin_path->ptr, buffer_clen(host->bin_path)+1);

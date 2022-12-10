@@ -186,9 +186,7 @@ typedef struct {
 static handler_ctx *
 handler_ctx_init (void)
 {
-    handler_ctx *hctx = calloc(1, sizeof(*hctx));
-    force_assert(hctx);
-    return hctx;
+    return ck_calloc(1, sizeof(handler_ctx));
 }
 
 
@@ -499,7 +497,7 @@ ssl_tlsext_status_cb(SSL *ssl, void *arg)
 
 INIT_FUNC(mod_openssl_init)
 {
-    plugin_data_singleton = (plugin_data *)calloc(1, sizeof(plugin_data));
+    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
     return plugin_data_singleton;
 }
 
@@ -529,9 +527,7 @@ static int mod_openssl_init_once_openssl (server *srv)
         return 0;
     }
 
-    local_send_buffer = malloc(LOCAL_SEND_BUFSIZE);
-    force_assert(NULL != local_send_buffer);
-
+    local_send_buffer = ck_malloc(LOCAL_SEND_BUFSIZE);
     return 1;
 }
 
@@ -765,8 +761,7 @@ mod_openssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
         return NULL;
     }
 
-    plugin_cacerts *cacerts = malloc(sizeof(plugin_cacerts));
-    force_assert(cacerts);
+    plugin_cacerts *cacerts = ck_malloc(sizeof(plugin_cacerts));
 
     /* (would be more efficient to walk the X509_STORE and build the list,
      *  but this works for now and matches how ssl.ca-dn-file is handled) */
@@ -1713,8 +1708,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
         return NULL;
     }
 
-    plugin_cert *pc = malloc(sizeof(plugin_cert));
-    force_assert(pc);
+    plugin_cert *pc = ck_malloc(sizeof(plugin_cert));
     pc->ssl_pemfile_pkey = ssl_pemfile_pkey;
     pc->ssl_pemfile_x509 = ssl_pemfile_x509;
     pc->ssl_pemfile_chain= ssl_pemfile_chain;
@@ -2508,8 +2502,7 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
     static const buffer default_ssl_cipher_list =
       { CONST_STR_LEN(LIGHTTPD_DEFAULT_CIPHER_LIST), 0 };
 
-    p->ssl_ctxs = calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
-    force_assert(p->ssl_ctxs);
+    p->ssl_ctxs = ck_calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
 
     int rc = HANDLER_GO_ON;
     plugin_data_base srvplug;

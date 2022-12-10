@@ -71,8 +71,7 @@ typedef struct {
 } handler_ctx;
 
 static handler_ctx * handler_ctx_init(plugin_data *p, log_error_st *errh) {
-	handler_ctx *hctx = calloc(1, sizeof(*hctx));
-	force_assert(hctx);
+	handler_ctx *hctx = ck_calloc(1, sizeof(*hctx));
 	hctx->errh = errh;
 	hctx->timefmt = &p->timefmt;
 	hctx->stat_fn = &p->stat_fn;
@@ -91,14 +90,9 @@ static void handler_ctx_free(handler_ctx *hctx) {
 static volatile unix_time64_t include_file_last_mtime = 0;
 
 INIT_FUNC(mod_ssi_init) {
-	plugin_data *p;
-
-	p = calloc(1, sizeof(*p));
-	force_assert(p);
-
+	plugin_data * const p = ck_calloc(1, sizeof(*p));
 	p->ssi_vars = array_init(8);
 	p->ssi_cgi_env = array_init(32);
-
 	return p;
 }
 
@@ -1410,7 +1404,7 @@ static void mod_ssi_parse_ssi_stmt(request_st * const r, handler_ctx * const p, 
       #if 0
 	/* dup s and then modify s */
 	/*(l[0] is no longer used; was previously used in only one place for error reporting)*/
-	l[0] = malloc((size_t)(len+1));
+	l[0] = ck_malloc((size_t)(len+1));
 	memcpy(l[0], s, (size_t)len);
 	(l[0])[len] = '\0';
       #endif

@@ -1947,9 +1947,7 @@ h2_read_client_connection_preface (struct connection * const con, chunkqueue * c
 void
 h2_init_con (request_st * const restrict h2r, connection * const restrict con, const buffer * const restrict http2_settings)
 {
-    h2con * const h2c = calloc(1, sizeof(h2con));
-    force_assert(h2c);
-    con->h2 = h2c;
+    h2con * const h2c = con->h2 = ck_calloc(1, sizeof(h2con));
     con->read_idle_ts = log_monotonic_secs;
     con->keep_alive_idle = h2r->conf.max_keep_alive_idle;
 

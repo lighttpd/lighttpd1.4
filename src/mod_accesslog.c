@@ -172,7 +172,7 @@ typedef enum {
 } buffer_bs_escape_t;
 
 INIT_FUNC(mod_accesslog_init) {
-    return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 __attribute_cold__
@@ -268,8 +268,7 @@ static format_fields * accesslog_parse_format(const char * const format, const u
     } while (++i < flen);
 
     format_fields * const fields =
-      malloc(sizeof(format_fields) + ((used+1) * sizeof(format_field)));
-    force_assert(fields);
+      ck_malloc(sizeof(format_fields) + ((used+1) * sizeof(format_field)));
     memset(fields, 0, sizeof(format_fields));
     memcpy(fields->ptr, fptr, (used+1) * sizeof(format_field));
     return fields;

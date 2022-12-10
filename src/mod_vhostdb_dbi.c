@@ -141,7 +141,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
             }
         }
 
-        dbconf = (vhostdb_config *)calloc(1, sizeof(*dbconf));
+        dbconf = (vhostdb_config *)ck_calloc(1, sizeof(*dbconf));
         dbconf->dbinst = dbinst;
         dbconf->dbconn = dbconn;
         dbconf->sqlquery = sqlquery;
@@ -228,7 +228,7 @@ static int mod_vhostdb_dbi_query(request_st * const r, void *p_d, buffer *docroo
 INIT_FUNC(mod_vhostdb_init) {
     static http_vhostdb_backend_t http_vhostdb_backend_dbi =
       { "dbi", mod_vhostdb_dbi_query, NULL };
-    plugin_data *p = calloc(1, sizeof(*p));
+    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_vhostdb_backend_dbi */
     http_vhostdb_backend_dbi.p_d = p;

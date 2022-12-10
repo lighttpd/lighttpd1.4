@@ -37,7 +37,7 @@ typedef struct {
 } plugin_data;
 
 INIT_FUNC(mod_userdir_init) {
-    return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 FREE_FUNC(mod_userdir_free) {

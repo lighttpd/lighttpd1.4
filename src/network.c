@@ -436,8 +436,7 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 		}
 	}
 
-	srv_socket = calloc(1, sizeof(*srv_socket));
-	force_assert(NULL != srv_socket);
+	srv_socket = ck_calloc(1, sizeof(*srv_socket));
 	memcpy(&srv_socket->addr, &addr, addr_len);
 	srv_socket->fd = -1;
 	srv_socket->sidx = sidx;
@@ -877,8 +876,7 @@ int network_init(server *srv, int stdin_fd) {
                         != srv->srv_sockets_inherited.ptr[i]->sidx)
                         continue;
                     srv->srv_sockets_inherited.ptr[i]->sidx = 0;
-                srv_socket = calloc(1, sizeof(server_socket));
-                force_assert(NULL != srv_socket);
+                srv_socket = ck_calloc(1, sizeof(server_socket));
                 memcpy(srv_socket, srv->srv_sockets_inherited.ptr[i],
                        sizeof(server_socket));
                 srv_socket->is_ssl = p->defaults.ssl_enabled;

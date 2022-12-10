@@ -1006,8 +1006,7 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             }
             /*(assumes "Transfer-Encoding: chunked"; does not verify)*/
             r->resp_decode_chunked = 1;
-            r->gw_dechunk = calloc(1, sizeof(response_dechunk));
-            force_assert(r->gw_dechunk);
+            r->gw_dechunk = ck_calloc(1, sizeof(response_dechunk));
             continue;
           case HTTP_HEADER_HTTP2_SETTINGS:
             /* RFC7540 3.2.1

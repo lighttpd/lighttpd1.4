@@ -161,9 +161,7 @@ typedef struct {
 static handler_ctx *
 handler_ctx_init (void)
 {
-    handler_ctx *hctx = calloc(1, sizeof(*hctx));
-    force_assert(hctx);
-    return hctx;
+    return ck_calloc(1, sizeof(handler_ctx));
 }
 
 
@@ -418,7 +416,7 @@ mod_gnutls_session_ticket_key_check (server *srv, const plugin_data *p, const un
 
 INIT_FUNC(mod_gnutls_init)
 {
-    plugin_data_singleton = (plugin_data *)calloc(1, sizeof(plugin_data));
+    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
     return plugin_data_singleton;
 }
 
@@ -437,9 +435,7 @@ static int mod_gnutls_init_once_gnutls (void)
     if (gnutls_global_init() != GNUTLS_E_SUCCESS)
         return 0;
 
-    local_send_buffer = malloc(LOCAL_SEND_BUFSIZE);
-    force_assert(NULL != local_send_buffer);
-
+    local_send_buffer = ck_malloc(LOCAL_SEND_BUFSIZE);
     return 1;
 }
 
@@ -1204,8 +1200,7 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
         return NULL;
     }
 
-    plugin_cert *pc = malloc(sizeof(plugin_cert));
-    force_assert(pc);
+    plugin_cert *pc = ck_malloc(sizeof(plugin_cert));
     pc->ssl_cred = ssl_cred;
     pc->trust_inited = 0;
 
@@ -1226,8 +1221,7 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
         return NULL;
     }
 
-    plugin_cert *pc = malloc(sizeof(plugin_cert));
-    force_assert(pc);
+    plugin_cert *pc = ck_malloc(sizeof(plugin_cert));
     pc->ssl_cred = NULL;
     pc->trust_inited = 0;
     pc->ssl_pemfile_x509 = d;
@@ -1900,8 +1894,7 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
     static const buffer default_ssl_cipher_list =
       { CONST_STR_LEN(LIGHTTPD_DEFAULT_CIPHER_LIST), 0 };
 
-    p->ssl_ctxs = calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
-    force_assert(p->ssl_ctxs);
+    p->ssl_ctxs = ck_calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
 
     int rc = HANDLER_GO_ON;
     plugin_data_base srvplug;

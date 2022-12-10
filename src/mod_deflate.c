@@ -240,12 +240,9 @@ typedef struct {
 } handler_ctx;
 
 static handler_ctx *handler_ctx_init() {
-	handler_ctx *hctx;
-
-	hctx = calloc(1, sizeof(*hctx));
+	handler_ctx * const hctx = ck_calloc(1, sizeof(*hctx));
 	chunkqueue_init(&hctx->in_queue);
 	hctx->cache_fd = -1;
-
 	return hctx;
 }
 
@@ -266,7 +263,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 }
 
 INIT_FUNC(mod_deflate_init) {
-    plugin_data * const p = calloc(1, sizeof(plugin_data));
+    plugin_data * const p = ck_calloc(1, sizeof(plugin_data));
   #ifdef USE_ZSTD
     buffer_string_prepare_copy(&p->tmp_buf, ZSTD_CStreamOutSize());
   #else
@@ -336,8 +333,7 @@ static void mod_deflate_cache_file_open (handler_ctx * const hctx, const buffer 
      * file at same time if requested at same time, but this is unlikely
      * and resolves itself by atomic rename into place when done */
     const uint32_t fnlen = buffer_clen(fn);
-    hctx->cache_fn = malloc(fnlen+1+LI_ITOSTRING_LENGTH+1);
-    force_assert(hctx->cache_fn);
+    hctx->cache_fn = ck_malloc(fnlen+1+LI_ITOSTRING_LENGTH+1);
     memcpy(hctx->cache_fn, fn->ptr, fnlen);
     hctx->cache_fn[fnlen] = '.';
     const size_t ilen =
@@ -433,8 +429,7 @@ static void mod_deflate_patch_config(request_st * const r, plugin_data * const p
 }
 
 static encparms * mod_deflate_parse_params(const array * const a, log_error_st * const errh) {
-    encparms * params = calloc(1, sizeof(encparms));
-    force_assert(params);
+    encparms * const params = ck_calloc(1, sizeof(encparms));
 
     /* set defaults */
   #ifdef USE_ZLIB
@@ -613,8 +608,7 @@ static encparms * mod_deflate_parse_params(const array * const a, log_error_st *
 
 static uint16_t * mod_deflate_encodings_to_flags(const array *encodings) {
     if (encodings->used) {
-        uint16_t * const x = calloc(encodings->used+1, sizeof(short));
-        force_assert(x);
+        uint16_t * const x = ck_calloc(encodings->used+1, sizeof(short));
         int i = 0;
         for (uint32_t j = 0; j < encodings->used; ++j) {
           #if defined(USE_ZLIB) || defined(USE_BZ2LIB) || defined(USE_BROTLI) \
@@ -651,8 +645,7 @@ static uint16_t * mod_deflate_encodings_to_flags(const array *encodings) {
     }
     else {
         /* default encodings */
-        uint16_t * const x = calloc(4+1, sizeof(short));
-        force_assert(x);
+        uint16_t * const x = ck_calloc(4+1, sizeof(short));
         int i = 0;
       #ifdef USE_ZSTD
         x[i++] = HTTP_ACCEPT_ENCODING_ZSTD;

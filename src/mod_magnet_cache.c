@@ -14,9 +14,7 @@
 __attribute_cold__
 static script *script_init(void)
 {
-    script *const sc = calloc(1, sizeof(*sc));
-    force_assert(sc);
-    return sc;
+    return ck_calloc(1, sizeof(script));
 }
 
 __attribute_cold__
@@ -32,9 +30,7 @@ static void script_free(script *sc)
 #if 0
 script_cache *script_cache_init(void)
 {
-    script_cache *p = calloc(1, sizeof(script_cache));
-    force_assert(p);
-    return p;
+    return ck_calloc(1, sizeof(script_cache));
 }
 #endif
 
@@ -65,8 +61,7 @@ static lua_State *script_cache_load_script(script * const sc, int etag_flags)
         buffer_copy_buffer(&sc->etag, etag);
 
     const off_t sz = sce->st.st_size;
-    char * const buf = malloc(sz+1);
-    force_assert(buf);
+    char * const buf = ck_malloc(sz+1);
 
     ssize_t rd = 0;
     off_t off = 0;

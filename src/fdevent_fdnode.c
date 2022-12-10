@@ -13,9 +13,7 @@ __attribute_returns_nonnull__
 static fdnode *
 fdnode_init (void)
 {
-    fdnode * const restrict fdn = calloc(1, sizeof(fdnode));
-    force_assert(NULL != fdn);
-    return fdn;
+    return ck_calloc(1, sizeof(fdnode));
 }
 
 static void

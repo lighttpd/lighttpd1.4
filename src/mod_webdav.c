@@ -403,7 +403,7 @@ typedef struct {
 
 
 INIT_FUNC(mod_webdav_init) {
-    return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 
@@ -1458,7 +1458,7 @@ SERVER_FUNC(mod_webdav_worker_init)
               case 0: /* webdav.sqlite-db-name */
                 if (!buffer_is_blank(cpv->v.b)) {
                     const char * const dbname = cpv->v.b->ptr;
-                    cpv->v.v = calloc(1, sizeof(sql_config));
+                    cpv->v.v = ck_calloc(1, sizeof(sql_config));
                     cpv->vtype = T_CONFIG_LOCAL;
                     if (!mod_webdav_sqlite3_prep(cpv->v.v, dbname, srv->errh))
                         return HANDLER_ERROR;
@@ -6076,13 +6076,9 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
       mod_webdav_subrequest_handler(r, p_d); /*p->handle_subrequest()*/
     if (rc == HANDLER_FINISHED || rc == HANDLER_ERROR)
         r->plugin_ctx[((plugin_data *)p_d)->id] = NULL;
-    else {  /* e.g. HANDLER_WAIT_FOR_EVENT */
-        plugin_config * const save_pconf =
-          (plugin_config *)malloc(sizeof(pconf));
-        force_assert(save_pconf);
-        memcpy(save_pconf, &pconf, sizeof(pconf));
-        r->plugin_ctx[((plugin_data *)p_d)->id] = save_pconf;
-    }
+    else  /* e.g. HANDLER_WAIT_FOR_EVENT */
+        r->plugin_ctx[((plugin_data *)p_d)->id] = /* save pconf */
+          memcpy(ck_malloc(sizeof(pconf)), &pconf, sizeof(pconf));
     return rc;
 }
 

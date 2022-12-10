@@ -7,8 +7,6 @@
 
 #include "plugin.h"
 
-#include <stdlib.h>
-
 typedef struct {
     const array *access_allow;
     const array *access_deny;
@@ -21,7 +19,7 @@ typedef struct {
 } plugin_data;
 
 INIT_FUNC(mod_access_init) {
-    return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 static void mod_access_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

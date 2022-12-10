@@ -67,9 +67,7 @@ void http_auth_dumbdata_reset (void)
 
 http_auth_require_t * http_auth_require_init (void)
 {
-    http_auth_require_t *require = calloc(1, sizeof(http_auth_require_t));
-    force_assert(NULL != require);
-    return require;
+    return ck_calloc(1, sizeof(http_auth_require_t));
 }
 
 void http_auth_require_free (http_auth_require_t * const require)

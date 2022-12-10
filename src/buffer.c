@@ -12,9 +12,14 @@ static const char hex_chars_uc[] = "0123456789ABCDEF";
 
 __attribute_noinline__
 buffer* buffer_init(void) {
+  #if 0 /* buffer_init() and chunk_init() can be hot,
+	 * so avoid the additional hop of indirection */
+	return ck_calloc(1, sizeof(buffer));
+  #else
 	buffer * const b = calloc(1, sizeof(*b));
 	force_assert(b);
 	return b;
+  #endif
 }
 
 void buffer_free(buffer *b) {

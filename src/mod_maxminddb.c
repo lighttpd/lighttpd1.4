@@ -110,7 +110,7 @@ typedef struct {
 
 INIT_FUNC(mod_maxminddb_init)
 {
-    return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 
@@ -162,7 +162,7 @@ mod_maxminddb_open_db (server *srv, const buffer *db_name)
         return NULL;
     }
 
-    MMDB_s * const mmdb = (MMDB_s *)calloc(1, sizeof(MMDB_s));
+    MMDB_s * const mmdb = (MMDB_s *)ck_calloc(1, sizeof(MMDB_s));
     int rc = MMDB_open(db_name->ptr, MMDB_MODE_MMAP, mmdb);
     if (MMDB_SUCCESS == rc)
         return mmdb;
@@ -184,8 +184,7 @@ static plugin_config_env *
 mod_maxminddb_prep_cenv (server *srv, const array * const env)
 {
     data_string ** const data = (data_string **)env->data;
-    char *** const cenv = calloc(env->used, sizeof(char **));
-    force_assert(cenv);
+    char *** const cenv = ck_calloc(env->used, sizeof(char **));
     for (uint32_t j = 0, used = env->used; j < used; ++j) {
         if (data[j]->type != TYPE_STRING) {
             log_error(srv->errh, __FILE__, __LINE__,
@@ -208,8 +207,8 @@ mod_maxminddb_prep_cenv (server *srv, const array * const env)
         /* XXX: should strings be lowercased? */
         unsigned int k = 2;
         for (char *t = value->ptr; (t = strchr(t, '/')); ++t) ++k;
-        const char **keys = (const char **)(cenv[j] = calloc(k,sizeof(char *)));
-        force_assert(keys);
+        const char **keys =
+          (const char **)(cenv[j] = ck_calloc(k, sizeof(char *)));
         k = 0;
         keys[k] = value->ptr;
         for (char *t = value->ptr; (t = strchr(t, '/')); ) {
@@ -219,8 +218,7 @@ mod_maxminddb_prep_cenv (server *srv, const array * const env)
         keys[++k] = NULL;
     }
 
-    plugin_config_env * const pcenv = malloc(sizeof(plugin_config_env));
-    force_assert(pcenv);
+    plugin_config_env * const pcenv = ck_malloc(sizeof(plugin_config_env));
     pcenv->env = env;
     pcenv->cenv = (const char ***)cenv;
     return pcenv;

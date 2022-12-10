@@ -2,6 +2,7 @@
 
 #include "array.h"
 #include "buffer.h"
+#include "ck.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -42,8 +43,7 @@ data_string *array_data_string_init(void) {
         array_data_string_free,
         array_data_string_insert_dup,
     };
-    data_string *ds = calloc(1, sizeof(*ds));
-    force_assert(NULL != ds);
+    data_string *ds = ck_calloc(1, sizeof(*ds));
     ds->type = TYPE_STRING;
     ds->fn = &string_fn;
     return ds;
@@ -72,8 +72,7 @@ data_integer *array_data_integer_init(void) {
         array_data_integer_free,
         NULL
     };
-    data_integer *di = calloc(1, sizeof(*di));
-    force_assert(NULL != di);
+    data_integer *di = ck_calloc(1, sizeof(*di));
     di->type = TYPE_INTEGER;
     di->fn = &integer_fn;
     return di;
@@ -103,8 +102,7 @@ data_array *array_data_array_init(void) {
         array_data_array_free,
         NULL
     };
-    data_array *da = calloc(1, sizeof(*da));
-    force_assert(NULL != da);
+    data_array *da = ck_calloc(1, sizeof(*da));
     da->type = TYPE_ARRAY;
     da->fn = &array_fn;
     return da;
@@ -122,12 +120,8 @@ static void array_extend(array * const a, uint32_t n) {
 }
 
 array *array_init(uint32_t n) {
-	array *a;
-
-	a = calloc(1, sizeof(*a));
-	force_assert(a);
+	array *a = ck_calloc(1, sizeof(*a));
 	if (n) array_extend(a, n);
-
 	return a;
 }
 

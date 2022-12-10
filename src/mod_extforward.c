@@ -119,10 +119,7 @@ typedef struct {
 
 
 static handler_ctx * handler_ctx_init(void) {
-	handler_ctx * hctx;
-	hctx = calloc(1, sizeof(*hctx));
-	force_assert(hctx);
-	return hctx;
+    return ck_calloc(1, sizeof(handler_ctx));
 }
 
 static void handler_ctx_free(handler_ctx *hctx) {
@@ -131,7 +128,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 }
 
 INIT_FUNC(mod_extforward_init) {
-	return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 FREE_FUNC(mod_extforward_free) {
@@ -227,10 +224,8 @@ static void * mod_extforward_parse_forwarder(server *srv, const array *forwarder
     }
 
     struct forwarder_cfg * const fwd =
-      malloc(sizeof(struct forwarder_cfg)+sizeof(struct sock_addr_mask)*nmasks);
-    force_assert(fwd);
-    memset(fwd, 0,
-           sizeof(struct forwarder_cfg) + sizeof(struct sock_addr_mask)*nmasks);
+      ck_calloc(1, sizeof(struct forwarder_cfg)
+                 + sizeof(struct sock_addr_mask)*nmasks);
     fwd->forwarder = forwarder;
     fwd->forward_all = forward_all;
     fwd->addrs_used = 0;

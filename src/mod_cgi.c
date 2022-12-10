@@ -99,14 +99,10 @@ typedef struct cgi_pid_t {
 } cgi_pid_t;
 
 static handler_ctx * cgi_handler_ctx_init(void) {
-	handler_ctx *hctx = calloc(1, sizeof(*hctx));
-
-	force_assert(hctx);
-
+	handler_ctx *hctx = ck_calloc(1, sizeof(*hctx));
 	hctx->response = chunk_buffer_acquire();
 	hctx->fd = -1;
 	hctx->fdtocgi = -1;
-
 	return hctx;
 }
 
@@ -116,12 +112,8 @@ static void cgi_handler_ctx_free(handler_ctx *hctx) {
 }
 
 INIT_FUNC(mod_cgi_init) {
-	plugin_data *p;
+	plugin_data * const p = ck_calloc(1, sizeof(*p));
 	const char *s;
-
-	p = calloc(1, sizeof(*p));
-
-	force_assert(p);
 
 	/* for valgrind */
 	s = getenv("LD_PRELOAD");
@@ -271,8 +263,7 @@ static int mod_cgi_str_to_signal (const char *s, int default_sig) {
 }
 
 static cgi_limits * mod_cgi_parse_limits(const array * const a, log_error_st * const errh) {
-    cgi_limits * const limits = calloc(1, sizeof(cgi_limits));
-    force_assert(limits);
+    cgi_limits * const limits = ck_calloc(1, sizeof(cgi_limits));
     for (uint32_t i = 0; i < a->used; ++i) {
         const data_unset * const du = a->data[i];
         int32_t v = config_plugin_value_to_int32(du, -1);
@@ -385,8 +376,7 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
 
 
 static cgi_pid_t * cgi_pid_add(plugin_data *p, pid_t pid, handler_ctx *hctx) {
-    cgi_pid_t *cgi_pid = malloc(sizeof(cgi_pid_t));
-    force_assert(cgi_pid);
+    cgi_pid_t *cgi_pid = ck_malloc(sizeof(cgi_pid_t));
     cgi_pid->pid = pid;
     cgi_pid->signal_sent = 0;
     cgi_pid->hctx = hctx;

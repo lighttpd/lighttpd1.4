@@ -202,8 +202,7 @@ log_buffer_vsprintf (buffer * const restrict b,
     /* need to encode log line
      * copy original line fragment, append encoded line to buffer, free copy */
     n -= i;
-    char * const src = (char *)malloc(n);
-    ck_assert(src);
+    char * const src = (char *)ck_malloc(n);
     memcpy(src, s+i, n); /*(note: not '\0'-terminated)*/
     buffer_truncate(b, blen+i);
     buffer_append_string_c_escaped(b, src, n);

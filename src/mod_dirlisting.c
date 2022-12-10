@@ -137,8 +137,7 @@ static int dirlist_max_in_progress;
 
 
 static handler_ctx * mod_dirlisting_handler_ctx_init (plugin_data * const p) {
-    handler_ctx *hctx = calloc(1, sizeof(*hctx));
-    force_assert(hctx);
+    handler_ctx *hctx = ck_calloc(1, sizeof(*hctx));
     memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
     return hctx;
 }
@@ -210,8 +209,8 @@ static struct dirlist_cache * mod_dirlisting_parse_cache(server *srv, const arra
         }
     }
 
-    struct dirlist_cache * const cache = calloc(1, sizeof(struct dirlist_cache));
-    force_assert(cache);
+    struct dirlist_cache * const cache =
+      ck_calloc(1, sizeof(struct dirlist_cache));
     cache->max_age = max_age;
     cache->path = path;
     return cache;
@@ -261,7 +260,7 @@ static int mod_dirlisting_exclude(pcre_keyvalue_buffer * const kvb, const char *
 
 
 INIT_FUNC(mod_dirlisting_init) {
-    return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 FREE_FUNC(mod_dirlisting_free) {
@@ -996,8 +995,7 @@ static int http_open_directory(request_st * const r, handler_ctx * const hctx) {
     /* allocate based on PATH_MAX rather than pathconf() to get _PC_NAME_MAX */
     hctx->name_max = PATH_MAX - dlen - 1;
 #endif
-    hctx->path = malloc(dlen + hctx->name_max + 1);
-    force_assert(NULL != hctx->path);
+    hctx->path = ck_malloc(dlen + hctx->name_max + 1);
     memcpy(hctx->path, r->physical.path.ptr, dlen+1);
   #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) || !defined(_ATFILE_SOURCE)
     hctx->path_file = hctx->path + dlen;
@@ -1123,8 +1121,7 @@ static int http_read_directory(handler_ctx * const p) {
 			ck_realloc_u32((void **)&list->ent, list->used,
 			               DIRLIST_BLOB_SIZE, sizeof(*list->ent));
 		dirls_entry_t * const tmp = list->ent[list->used++] =
-		  (dirls_entry_t*) malloc(sizeof(dirls_entry_t) + 1 + dsz);
-		force_assert(tmp);
+		  (dirls_entry_t*) ck_malloc(sizeof(dirls_entry_t) + 1 + dsz);
 		tmp->mtime = st.st_mtime;
 		tmp->size  = st.st_size;
 		tmp->namelen = dsz;
@@ -1633,8 +1630,7 @@ static void mod_dirlisting_cache_json_init (request_st * const r, handler_ctx * 
     if (fd < 0) return;
     hctx->jfn_len = buffer_clen(tb);
     hctx->jfd = fd;
-    hctx->jfn = malloc(hctx->jfn_len+1);
-    force_assert(hctx->jfn);
+    hctx->jfn = ck_malloc(hctx->jfn_len+1);
     memcpy(hctx->jfn, tb->ptr, hctx->jfn_len+1); /*(include '\0')*/
 }
 

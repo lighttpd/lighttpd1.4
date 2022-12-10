@@ -55,7 +55,7 @@ typedef struct {
 static plugin_data *plugin_data_singleton;
 
 INIT_FUNC(mod_magnet_init) {
-    plugin_data_singleton = (plugin_data *)calloc(1, sizeof(plugin_data));
+    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
     return plugin_data_singleton;
 }
 
@@ -149,8 +149,7 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
                 }
                 else {
                     script ** const a =
-                      malloc(sizeof(script *)*(cpv->v.a->used+1));
-                    force_assert(a);
+                      ck_malloc((cpv->v.a->used+1)*sizeof(script *));
                     for (uint32_t j = 0; j < cpv->v.a->used; ++j) {
                         data_string *ds = (data_string *)cpv->v.a->data[j];
                         if (buffer_is_blank(&ds->value)) {

@@ -89,8 +89,7 @@ SETDEFAULTS_FUNC(mod_sockproxy_set_defaults) {
         for (; -1 != cpv->k_id; ++cpv) {
             switch (cpv->k_id) {
               case 0: /* sockproxy.server */
-                gw = calloc(1, sizeof(gw_plugin_config));
-                force_assert(gw);
+                gw = ck_calloc(1, sizeof(gw_plugin_config));
                 if (!gw_set_defaults_backend(srv, p, cpv->v.a, gw, 0,
                                              cpk[cpv->k_id].k)) {
                     gw_plugin_config_free(gw);

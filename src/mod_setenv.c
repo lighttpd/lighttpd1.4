@@ -31,9 +31,7 @@ typedef struct {
 } handler_ctx;
 
 static handler_ctx * handler_ctx_init(void) {
-    handler_ctx * const hctx = calloc(1, sizeof(handler_ctx));
-    force_assert(hctx);
-    return hctx;
+    return ck_calloc(1, sizeof(handler_ctx));
 }
 
 static void handler_ctx_free(handler_ctx *hctx) {
@@ -41,7 +39,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 }
 
 INIT_FUNC(mod_setenv_init) {
-    return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 static void mod_setenv_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

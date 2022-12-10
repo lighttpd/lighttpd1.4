@@ -42,7 +42,7 @@ static handler_t mod_authn_pam_basic(request_st *r, void *p_d, const http_auth_r
 INIT_FUNC(mod_authn_pam_init) {
     static http_auth_backend_t http_auth_backend_pam =
       { "pam", mod_authn_pam_basic, NULL, NULL };
-    plugin_data *p = calloc(1, sizeof(*p));
+    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_auth_backend_pam */
     http_auth_backend_pam.p_d = p;
@@ -128,7 +128,7 @@ SETDEFAULTS_FUNC(mod_authn_pam_set_defaults) {
 static int mod_authn_pam_fn_conv(int num_msg, const struct pam_message **msg, struct pam_response **resp, void *appdata_ptr)  {
     const char * const pw = (char *)appdata_ptr;
     struct pam_response * const pr = *resp =
-      (struct pam_response *)malloc(num_msg * sizeof(struct pam_response));
+      (struct pam_response *)ck_malloc(num_msg * sizeof(struct pam_response));
     for (int i = 0; i < num_msg; ++i) {
         const int style = msg[i]->msg_style;
         pr[i].resp_retcode = 0;

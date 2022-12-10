@@ -59,19 +59,15 @@ request_init_data (request_st * const r, connection * const con, server * const 
     r->server_name = &r->uri.authority;
 
     /* init plugin-specific per-request structures */
-    r->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
-    force_assert(NULL != r->plugin_ctx);
-
-    r->cond_cache = calloc(srv->config_context->used, sizeof(cond_cache_t));
-    force_assert(NULL != r->cond_cache);
+    r->plugin_ctx = ck_calloc(srv->plugins.used + 1, sizeof(void *));
+    r->cond_cache = ck_calloc(srv->config_context->used, sizeof(cond_cache_t));
 
   #ifdef HAVE_PCRE
     if (srv->config_captures) {
         r->cond_captures = srv->config_captures;
-        r->cond_match = calloc(srv->config_captures, sizeof(cond_match_t *));
-        force_assert(NULL != r->cond_match);
-        r->cond_match_data = calloc(srv->config_captures, sizeof(cond_match_t));
-        force_assert(NULL != r->cond_match_data);
+        r->cond_match = ck_calloc(srv->config_captures, sizeof(cond_match_t *));
+        r->cond_match_data = ck_calloc(srv->config_captures,
+                                       sizeof(cond_match_t));
     }
   #endif
 
@@ -297,8 +293,7 @@ request_acquire (connection * const con)
         reqpool = (request_st *)r->con; /*(reuse r->con as next ptr)*/
     }
     else {
-        r = calloc(1, sizeof(request_st));
-        force_assert(r);
+        r = ck_calloc(1, sizeof(request_st));
         request_init_data(r, con, con->srv);
     }
 

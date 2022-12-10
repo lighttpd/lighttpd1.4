@@ -175,7 +175,7 @@ mod_authn_dbi_dbconf_setup (server *srv, const array *opts, void **vdata)
             }
         }
 
-        dbconf = (dbi_config *)calloc(1, sizeof(*dbconf));
+        dbconf = (dbi_config *)ck_calloc(1, sizeof(*dbconf));
         dbconf->dbinst = dbinst;
         dbconf->dbconn = dbconn;
         dbconf->sqlquery = sqlquery;
@@ -205,7 +205,7 @@ static handler_t mod_authn_dbi_digest(request_st *r, void *p_d, http_auth_info_t
 INIT_FUNC(mod_authn_dbi_init) {
     static http_auth_backend_t http_auth_backend_dbi =
       { "dbi", mod_authn_dbi_basic, mod_authn_dbi_digest, NULL };
-    plugin_data *p = calloc(1, sizeof(*p));
+    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_auth_backend_dbi */
     http_auth_backend_dbi.p_d = p;
@@ -352,8 +352,7 @@ mod_authn_crypt_cmp (const char *reqpw, const char *userpw, unsigned long userpw
 
   #if defined(HAVE_CRYPT_R)
    #if 1 /* (must free() before returning if allocated here) */
-    struct crypt_data *crypt_tmp_data = malloc(sizeof(struct crypt_data));
-    force_assert(crypt_tmp_data);
+    struct crypt_data *crypt_tmp_data = ck_malloc(sizeof(struct crypt_data));
    #else /* safe if sizeof(struct crypt_data) <= 32768 */
     struct crypt_data crypt_tmp_data_stack;
     struct crypt_data *crypt_tmp_data = &crypt_tmp_data_stack;

@@ -149,7 +149,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
          * (still race between creation of socket and fcntl FD_CLOEXEC)
          * (YMMV with other LDAP client libraries) */
 
-        dbconf = (vhostdb_config *)calloc(1, sizeof(*dbconf));
+        dbconf = (vhostdb_config *)ck_calloc(1, sizeof(*dbconf));
         dbconf->ldap     = NULL;
         dbconf->filter   = filter;
         dbconf->attr     = attr;
@@ -471,7 +471,7 @@ static int mod_vhostdb_ldap_query(request_st * const r, void *p_d, buffer *docro
 INIT_FUNC(mod_vhostdb_init) {
     static http_vhostdb_backend_t http_vhostdb_backend_ldap =
       { "ldap", mod_vhostdb_ldap_query, NULL };
-    plugin_data *p = calloc(1, sizeof(*p));
+    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_vhostdb_backend_ldap */
     http_vhostdb_backend_ldap.p_d = p;

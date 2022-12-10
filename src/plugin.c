@@ -55,12 +55,7 @@ typedef enum {
 __attribute_malloc__
 __attribute_returns_nonnull__
 static plugin *plugin_init(void) {
-	plugin *p;
-
-	p = calloc(1, sizeof(*p));
-	force_assert(NULL != p);
-
-	return p;
+	return ck_calloc(1, sizeof(plugin));
 }
 
 static void plugin_free(plugin *p) {
@@ -501,8 +496,7 @@ handler_t plugins_call_init(server *srv) {
 	}
 
 	/* allocate and fill slots of two dimensional array */
-	srv->plugin_slots = calloc(nslots, sizeof(plugin_fn_data));
-	force_assert(NULL != srv->plugin_slots);
+	srv->plugin_slots = ck_calloc(nslots, sizeof(plugin_fn_data));
 	memcpy(srv->plugin_slots, offsets, sizeof(offsets));
 
 	/* add handle_uri_raw before handle_uri_clean, but in same slot */

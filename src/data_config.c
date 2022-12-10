@@ -62,10 +62,7 @@ data_config *data_config_init(void) {
 		data_config_free,
 		NULL
 	};
-	data_config *ds;
-
-	ds = calloc(1, sizeof(*ds));
-	force_assert(ds);
+	data_config *ds = ck_calloc(1, sizeof(*ds));
 
 	ds->comp_key = "";
 	ds->value = array_init(4);

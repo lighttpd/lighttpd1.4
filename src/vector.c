@@ -7,8 +7,6 @@
 
 void vector_free(void *data) { free(data); }
 
-void *vector_malloc(size_t sz) { return malloc(sz); }
-
 void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used) {
 	const size_t total_size = elem_size * size;
 	const size_t used_size = elem_size * used;

@@ -62,7 +62,7 @@ INIT_FUNC(mod_authn_file_init) {
       { "htpasswd", mod_authn_file_htpasswd_basic, NULL, NULL };
     static http_auth_backend_t http_auth_backend_plain =
       { "plain", mod_authn_file_plain_basic, mod_authn_file_plain_digest, NULL };
-    plugin_data *p = calloc(1, sizeof(*p));
+    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_auth_backend_htdigest */
     http_auth_backend_htdigest.p_d = p;

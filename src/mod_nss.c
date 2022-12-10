@@ -203,9 +203,7 @@ typedef struct {
 static handler_ctx *
 handler_ctx_init (void)
 {
-    handler_ctx *hctx = calloc(1, sizeof(*hctx));
-    force_assert(hctx);
-    return hctx;
+    return ck_calloc(1, sizeof(handler_ctx));
 }
 
 
@@ -360,7 +358,7 @@ mod_nss_secitem_wipe (SECItem * const d)
 
 INIT_FUNC(mod_nss_init)
 {
-    plugin_data_singleton = (plugin_data *)calloc(1, sizeof(plugin_data));
+    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
     return plugin_data_singleton;
 }
 
@@ -402,9 +400,7 @@ static int mod_nss_init_once_nss (void)
     if (NSS_SetDomesticPolicy() < 0)
         return 0;
 
-    local_send_buffer = malloc(LOCAL_SEND_BUFSIZE);
-    force_assert(NULL != local_send_buffer);
-
+    local_send_buffer = ck_malloc(LOCAL_SEND_BUFSIZE);
     return 1;
 }
 
@@ -1190,8 +1186,7 @@ network_nss_load_pemfile (server *srv, const buffer *pemfile, const buffer *priv
                                                    certUsageSSLServer,
                                                    PR_FALSE);
 
-    plugin_cert *pc = calloc(1, sizeof(plugin_cert));
-    force_assert(pc);
+    plugin_cert *pc = ck_calloc(1, sizeof(plugin_cert));
     pc->ssl_pemfile_pkey = pkey;
     pc->ssl_pemfile_x509 = ssl_pemfile_x509;
     pc->ssl_credex.certChain = ssl_pemfile_chain;
@@ -1743,8 +1738,7 @@ mod_nss_set_defaults_sockets(server *srv, plugin_data *p)
     static const buffer default_ssl_cipher_list =
       { CONST_STR_LEN(LIGHTTPD_DEFAULT_CIPHER_LIST), 0 };
 
-    p->ssl_ctxs = calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
-    force_assert(p->ssl_ctxs);
+    p->ssl_ctxs = ck_calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
 
     int rc = HANDLER_GO_ON;
     plugin_data_base srvplug;

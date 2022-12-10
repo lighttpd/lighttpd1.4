@@ -38,7 +38,7 @@ typedef struct {
 } plugin_data;
 
 INIT_FUNC(mod_evhost_init) {
-    return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 static void mod_evhost_free_path_pieces(const buffer *path_pieces) {
@@ -125,9 +125,7 @@ static buffer * mod_evhost_parse_pattern(const char *ptr) {
 		++used;
 	}
 
-	buffer * const path_pieces =
-	  malloc(sizeof(bptr) + ((used+1) * sizeof(buffer)));
-	force_assert(path_pieces);
+	buffer * const path_pieces = ck_malloc((used+1) * sizeof(buffer));
 	return memcpy(path_pieces, bptr, (used+1) * sizeof(buffer));
 }
 

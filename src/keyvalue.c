@@ -42,12 +42,7 @@ typedef struct pcre_keyvalue {
 } pcre_keyvalue;
 
 pcre_keyvalue_buffer *pcre_keyvalue_buffer_init(void) {
-	pcre_keyvalue_buffer *kvb;
-
-	kvb = calloc(1, sizeof(*kvb));
-	force_assert(NULL != kvb);
-
-	return kvb;
+	return ck_calloc(1, sizeof(pcre_keyvalue_buffer));
 }
 
 int pcre_keyvalue_buffer_append(log_error_st *errh, pcre_keyvalue_buffer *kvb, const buffer *key, const buffer *value, const int pcre_jit) {

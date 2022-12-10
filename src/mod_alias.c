@@ -21,7 +21,7 @@ typedef struct {
 } plugin_data;
 
 INIT_FUNC(mod_alias_init) {
-    return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 static void mod_alias_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {

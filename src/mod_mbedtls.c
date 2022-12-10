@@ -209,9 +209,7 @@ typedef struct {
 static handler_ctx *
 handler_ctx_init (void)
 {
-    handler_ctx *hctx = calloc(1, sizeof(*hctx));
-    force_assert(hctx);
-    return hctx;
+    return ck_calloc(1, sizeof(handler_ctx));
 }
 
 
@@ -396,7 +394,7 @@ mod_mbedtls_session_ticket_key_check (plugin_data *p, const unix_time64_t cur_ts
 
 INIT_FUNC(mod_mbedtls_init)
 {
-    plugin_data_singleton = (plugin_data *)calloc(1, sizeof(plugin_data));
+    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
   #if defined(MBEDTLS_SSL_SESSION_TICKETS)
     mbedtls_ssl_ticket_init(&plugin_data_singleton->ticket_ctx);
   #endif
@@ -425,9 +423,7 @@ static int mod_mbedtls_init_once_mbedtls (server *srv)
         return 0;
     }
 
-    local_send_buffer = malloc(LOCAL_SEND_BUFSIZE);
-    force_assert(NULL != local_send_buffer);
-
+    local_send_buffer = ck_malloc(LOCAL_SEND_BUFSIZE);
     return 1;
 }
 
@@ -1043,8 +1039,7 @@ network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *
         return NULL;
     }
 
-    plugin_cert *pc = malloc(sizeof(plugin_cert));
-    force_assert(pc);
+    plugin_cert *pc = ck_malloc(sizeof(plugin_cert));
     pc->ssl_pemfile_pkey = ssl_pemfile_pkey;
     pc->ssl_pemfile_x509 = ssl_pemfile_x509;
     pc->ssl_pemfile = pemfile;
@@ -1105,8 +1100,7 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
 
     do {
         buffer_append_string_len(b, CONST_STR_LEN(".crt.pem"));
-        ssl_pemfile_x509 = malloc(sizeof(*ssl_pemfile_x509));
-        force_assert(ssl_pemfile_x509);
+        ssl_pemfile_x509 = ck_malloc(sizeof(*ssl_pemfile_x509));
         mbedtls_x509_crt_init(ssl_pemfile_x509); /* init cert structure */
       #if MBEDTLS_VERSION_NUMBER >= 0x02170000 /* mbedtls 2.23.0 */
         rc = mod_mbedtls_x509_crt_parse_acme(ssl_pemfile_x509, b->ptr);
@@ -1121,8 +1115,7 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
 
         buffer_truncate(b, len); /*(remove ".crt.pem")*/
         buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
-        ssl_pemfile_pkey = malloc(sizeof(*ssl_pemfile_pkey));
-        force_assert(ssl_pemfile_pkey);
+        ssl_pemfile_pkey = ck_malloc(sizeof(*ssl_pemfile_pkey));
         mbedtls_pk_init(ssl_pemfile_pkey);  /* init private key context */
         rc = mod_mbedtls_pk_parse_keyfile(ssl_pemfile_pkey, b->ptr, NULL);
         if (0 != rc) {
@@ -1440,8 +1433,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 {
     int rc;
 
-    s->ssl_ctx = malloc(sizeof(mbedtls_ssl_config));
-    force_assert(s->ssl_ctx);
+    s->ssl_ctx = ck_malloc(sizeof(mbedtls_ssl_config));
     mbedtls_ssl_config_init(s->ssl_ctx);
 
     /* set the RNG in the ssl config context, using the default random func */
@@ -1589,8 +1581,7 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
     static const buffer default_ssl_cipher_list =
       { CONST_STR_LEN(LIGHTTPD_DEFAULT_CIPHER_LIST), 0 };
 
-    p->ssl_ctxs = calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
-    force_assert(p->ssl_ctxs);
+    p->ssl_ctxs = ck_calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
 
     int rc = HANDLER_GO_ON;
     plugin_data_base srvplug;
@@ -1873,8 +1864,7 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
                 if (!mod_mbedtls_init_once_mbedtls(srv)) return HANDLER_ERROR;
                #endif
                 if (!buffer_is_blank(cpv->v.b)) {
-                    mbedtls_x509_crt *cacert = calloc(1, sizeof(*cacert));
-                    force_assert(cacert);
+                    mbedtls_x509_crt *cacert = ck_calloc(1, sizeof(*cacert));
                     mbedtls_x509_crt_init(cacert);
                     int rc =
                       mod_mbedtls_x509_crt_parse_file(cacert, cpv->v.b->ptr);
@@ -1896,8 +1886,7 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
                 __attribute_fallthrough__
               case 4: /* ssl.ca-crl-file */
                 if (!buffer_is_blank(cpv->v.b)) {
-                    mbedtls_x509_crl *crl = malloc(sizeof(*crl));
-                    force_assert(crl);
+                    mbedtls_x509_crl *crl = ck_malloc(sizeof(*crl));
                     mbedtls_x509_crl_init(crl);
                     int rc =
                       mod_mbedtls_x509_crl_parse_file(crl, cpv->v.b->ptr);
@@ -3962,8 +3951,7 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
 
     /* ciphersuites list must be persistent for lifetime of mbedtls_ssl_config*/
     free(s->ciphersuites);
-    s->ciphersuites = malloc(nids * sizeof(int));
-    force_assert(s->ciphersuites);
+    s->ciphersuites = ck_malloc(nids * sizeof(int));
     memcpy(s->ciphersuites, ids, nids * sizeof(int));
 
     mbedtls_ssl_conf_ciphersuites(s->ssl_ctx, s->ciphersuites);
@@ -4022,8 +4010,7 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     ++nids;
 
     /* curves list must be persistent for lifetime of mbedtls_ssl_config */
-    s->curves = malloc(nids * sizeof(mbedtls_ecp_group_id));
-    force_assert(s->curves);
+    s->curves = ck_malloc(nids * sizeof(mbedtls_ecp_group_id));
     memcpy(s->curves, ids, nids * sizeof(mbedtls_ecp_group_id));
 
     mbedtls_ssl_conf_curves(s->ssl_ctx, s->curves);
@@ -4080,8 +4067,7 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     ++nids;
 
     /* curves list must be persistent for lifetime of mbedtls_ssl_config */
-    s->curves = malloc(nids * sizeof(uint16_t));
-    force_assert(s->curves);
+    s->curves = ck_malloc(nids * sizeof(uint16_t));
     memcpy(s->curves, ids, nids * sizeof(uint16_t));
 
     mbedtls_ssl_conf_groups(s->ssl_ctx, s->curves);

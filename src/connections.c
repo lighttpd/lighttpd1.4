@@ -498,8 +498,7 @@ static int connection_handle_write_state(request_st * const r, connection * cons
 
 __attribute_cold__
 static connection *connection_init(server *srv) {
-	connection * const con = calloc(1, sizeof(*con));
-	force_assert(NULL != con);
+	connection * const con = ck_calloc(1, sizeof(*con));
 
 	con->srv = srv;
 	con->plugin_slots = srv->plugin_slots;
@@ -511,8 +510,7 @@ static connection *connection_init(server *srv) {
 	con->read_queue = &r->read_queue;
 
 	/* init plugin-specific per-connection structures */
-	con->plugin_ctx = calloc(1, (srv->plugins.used + 1) * sizeof(void *));
-	force_assert(NULL != con->plugin_ctx);
+	con->plugin_ctx = ck_calloc(srv->plugins.used + 1, sizeof(void *));
 
 	return con;
 }

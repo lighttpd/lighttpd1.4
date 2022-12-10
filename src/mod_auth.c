@@ -65,9 +65,8 @@ http_auth_cache_entry_init (const struct http_auth_require_t * const require, co
      *(store pointer to http_auth_require_t, which is persistent
      * and will be different for each realm + permissions combo)*/
     http_auth_cache_entry * const ae =
-      malloc(sizeof(http_auth_cache_entry) + ulen + pwlen
-             + (k == username ? 0 : klen));
-    force_assert(ae);
+      ck_malloc(sizeof(http_auth_cache_entry) + ulen + pwlen
+                + (k == username ? 0 : klen));
     ae->require = require;
     ae->ctime = log_monotonic_secs;
     ae->dalgo = dalgo;
@@ -106,8 +105,7 @@ http_auth_cache_free (http_auth_cache *ac)
 static http_auth_cache *
 http_auth_cache_init (const array *opts)
 {
-    http_auth_cache *ac = malloc(sizeof(http_auth_cache));
-    force_assert(ac);
+    http_auth_cache *ac = ck_malloc(sizeof(http_auth_cache));
     ac->sptree = NULL;
     ac->max_age = 600; /* 10 mins */
     for (uint32_t i = 0, used = opts->used; i < used; ++i) {
@@ -224,8 +222,7 @@ INIT_FUNC(mod_auth_init) {
 	static http_auth_scheme_t http_auth_scheme_basic  = { "basic",  mod_auth_check_basic,  NULL };
 	static http_auth_scheme_t http_auth_scheme_digest = { "digest", mod_auth_check_digest, NULL };
 	static const http_auth_scheme_t http_auth_scheme_extern = { "extern", mod_auth_check_extern, NULL };
-	plugin_data *p = calloc(1, sizeof(*p));
-	force_assert(p);
+	plugin_data *p = ck_calloc(1, sizeof(*p));
 
 	/* register http_auth_scheme_* */
 	http_auth_scheme_basic.p_d = p;
@@ -283,8 +280,7 @@ static data_auth *data_auth_init(void)
       data_auth_free,
       NULL, /* insert_dup must not be called on this data */
     };
-    data_auth * const dauth = calloc(1, sizeof(*dauth));
-    force_assert(NULL != dauth);
+    data_auth * const dauth = ck_calloc(1, sizeof(*dauth));
     dauth->type       = TYPE_OTHER;
     dauth->fn         = &fn;
 

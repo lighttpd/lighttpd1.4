@@ -2,7 +2,7 @@
 #define LI_VECTOR_H
 #include "first.h"
 
-#include "ck.h"         /* ck_assert() */
+#include "ck.h"         /* ck_assert() ck_calloc() */
 
 static inline size_t vector_align_size(size_t s) {
 	size_t a = (s + 15) & ~(size_t)15uL;
@@ -10,9 +10,6 @@ static inline size_t vector_align_size(size_t s) {
 }
 
 void vector_free(void *data);
-
-__attribute_malloc__
-void *vector_malloc(size_t sz);
 
 __attribute_returns_nonnull__
 void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
@@ -30,10 +27,7 @@ void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 	__attribute_malloc__ \
 	__attribute_returns_nonnull__ \
 	static inline vector_ ## name *vector_ ## name ## _alloc() { \
-		vector_ ## name *v = vector_malloc(sizeof(*v)); \
-		ck_assert(NULL != v); \
-		vector_ ## name ## _init(v); \
-		return v; \
+		return ck_calloc(1, sizeof(*v)); \
 	} \
 	static inline void vector_ ## name ## _clear(vector_ ## name *v) { \
 		if (release) for (size_t i = 0; i < v->used; ++i) release(v->data[i]); \

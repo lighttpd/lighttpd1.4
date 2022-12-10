@@ -186,18 +186,11 @@ fdevent_init (const char *event_handler, int *max_fds, int *cur_fds, log_error_s
     *max_fds = (int)maxfds;
     ++maxfds; /*(+1 for event-handler fd)*/
 
-    ev = calloc(1, sizeof(*ev));
-    force_assert(NULL != ev);
+    ev = ck_calloc(1, sizeof(*ev));
     ev->errh = errh;
     ev->cur_fds = cur_fds;
     ev->event_handler = event_handler;
-    ev->fdarray = calloc(maxfds, sizeof(*ev->fdarray));
-    if (NULL == ev->fdarray) {
-        log_error(ev->errh, __FILE__, __LINE__,
-          "server.max-fds too large? (%u)", maxfds-1);
-        free(ev);
-        return NULL;
-    }
+    ev->fdarray = ck_calloc(maxfds, sizeof(*ev->fdarray));
     ev->maxfds = maxfds;
 
     switch(type) {
@@ -401,8 +394,7 @@ fdevent_linux_sysepoll_init (fdevents *ev)
     fdevent_setfd_cloexec(ev->epoll_fd);
   #endif
 
-    ev->epoll_events = malloc(ev->maxfds * sizeof(*ev->epoll_events));
-    force_assert(NULL != ev->epoll_events);
+    ev->epoll_events = ck_calloc(ev->maxfds, sizeof(*ev->epoll_events));
 
     return 0;
 }
@@ -533,8 +525,7 @@ fdevent_freebsd_kqueue_init (fdevents *ev)
     ev->reset      = fdevent_freebsd_kqueue_reset;
     ev->free       = fdevent_freebsd_kqueue_free;
     ev->kq_fd      = -1;
-    ev->kq_results = calloc(ev->maxfds, sizeof(*ev->kq_results));
-    force_assert(NULL != ev->kq_results);
+    ev->kq_results = ck_calloc(ev->maxfds, sizeof(*ev->kq_results));
     return 0;
 }
 
@@ -633,8 +624,7 @@ fdevent_solaris_port_init (fdevents *ev)
     ev->event_del   = fdevent_solaris_port_event_del;
     ev->poll        = fdevent_solaris_port_poll;
     ev->free        = fdevent_solaris_port_free;
-    ev->port_events = malloc(ev->maxfds * sizeof(*ev->port_events));
-    force_assert(NULL != ev->port_events);
+    ev->port_events = ck_calloc(ev->maxfds, sizeof(*ev->port_events));
 
     if ((ev->port_fd = port_create()) < 0) return -1;
 
@@ -734,8 +724,7 @@ fdevent_solaris_devpoll_init (fdevents *ev)
     ev->reset      = fdevent_solaris_devpoll_reset;
     ev->free       = fdevent_solaris_devpoll_free;
     ev->devpoll_fd = -1;
-    ev->devpollfds = malloc(sizeof(*ev->devpollfds) * ev->maxfds);
-    force_assert(NULL != ev->devpollfds);
+    ev->devpollfds = ck_calloc(ev->maxfds, sizeof(*ev->devpollfds));
     return 0;
 }
 

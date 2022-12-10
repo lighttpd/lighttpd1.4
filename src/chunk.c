@@ -92,13 +92,13 @@ void chunkqueue_set_tempdirs_default_reset (void)
 
 chunkqueue *chunkqueue_init(chunkqueue *cq) {
 	/* (if caller passes non-NULL cq, it must be 0-init) */
-	if (NULL == cq) {
-		cq = calloc(1, sizeof(*cq));
-		force_assert(NULL != cq);
-	}
+	if (NULL == cq)
+		cq = ck_calloc(1, sizeof(*cq));
 
+      #if 0 /*(zeroed by calloc())*/
 	cq->first = NULL;
 	cq->last = NULL;
+      #endif
 
 	cq->tempdirs              = chunkqueue_default_tempdirs;
 	cq->upload_temp_file_size = chunkqueue_default_tempfile_size;
@@ -108,8 +108,7 @@ chunkqueue *chunkqueue_init(chunkqueue *cq) {
 
 __attribute_returns_nonnull__
 static chunk *chunk_init(void) {
-	chunk * const restrict c = calloc(1, sizeof(*c));
-	force_assert(NULL != c);
+	chunk * const restrict c = ck_calloc(1, sizeof(*c));
 
       #if 0 /*(zeroed by calloc())*/
 	c->type = MEM_CHUNK;
@@ -138,8 +137,7 @@ static chunk *chunk_init_sz(size_t sz) {
 __attribute_malloc__
 __attribute_returns_nonnull__
 static void * chunk_file_view_init (void) {
-    chunk_file_view * const restrict cfv = calloc(1, sizeof(*cfv));
-    force_assert(NULL != cfv);
+    chunk_file_view * const restrict cfv = ck_calloc(1, sizeof(*cfv));
     cfv->mptr = MAP_FAILED;
   #if 0 /*(zeroed by calloc())*/
     cfv->mlen = 0;

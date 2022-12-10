@@ -207,9 +207,7 @@ typedef struct {
 static handler_ctx *
 handler_ctx_init (void)
 {
-    handler_ctx *hctx = calloc(1, sizeof(*hctx));
-    force_assert(hctx);
-    return hctx;
+    return ck_calloc(1, sizeof(handler_ctx));
 }
 
 
@@ -485,7 +483,7 @@ ssl_tlsext_status_cb(SSL *ssl, void *arg)
 
 INIT_FUNC(mod_openssl_init)
 {
-    plugin_data_singleton = (plugin_data *)calloc(1, sizeof(plugin_data));
+    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
   #ifdef DEBUG_WOLFSSL
     wolfSSL_Debugging_ON();
   #endif
@@ -510,9 +508,7 @@ static int mod_openssl_init_once_openssl (server *srv)
         return 0;
     }
 
-    local_send_buffer = malloc(LOCAL_SEND_BUFSIZE);
-    force_assert(NULL != local_send_buffer);
-
+    local_send_buffer = ck_malloc(LOCAL_SEND_BUFSIZE);
     return 1;
 }
 
@@ -678,8 +674,7 @@ mod_wolfssl_load_pem_file (const char *fn, log_error_st *errh, buffer ***chain)
             rc = 0;
             if (NULL == strstr(data, "-----")) {
                 /* does not look like PEM, treat as DER format */
-                certs = malloc(2 * sizeof(buffer *));
-                force_assert(NULL != certs);
+                certs = ck_malloc(2 * sizeof(buffer *));
                 certs[0] = buffer_init();
                 certs[1] = NULL;
                 buffer_copy_string_len(certs[0], data, dlen);
@@ -687,8 +682,7 @@ mod_wolfssl_load_pem_file (const char *fn, log_error_st *errh, buffer ***chain)
             break;
         }
 
-        certs = malloc((count+1) * sizeof(buffer *));
-        force_assert(NULL != certs);
+        certs = ck_malloc((count+1) * sizeof(buffer *));
         certs[count] = NULL;
         for (int i = 0; i < count; ++i)
             certs[i] = buffer_init();
@@ -943,9 +937,7 @@ mod_wolfssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
 
     mod_wolfssl_free_der_certs(certs);
 
-    plugin_cacerts *cacerts = malloc(sizeof(plugin_cacerts));
-    force_assert(cacerts);
-
+    plugin_cacerts *cacerts = ck_malloc(sizeof(plugin_cacerts));
     cacerts->names = canames;
     cacerts->certs = castore;
     return cacerts;
@@ -1654,8 +1646,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     /* wolfSSL_X509_check_private_key() is a stub func (not implemented) in
      * WolfSSL prior to v4.6.0, and still no-op #ifdef NO_CHECK_PRIVATE_KEY */
 
-    plugin_cert *pc = malloc(sizeof(plugin_cert));
-    force_assert(pc);
+    plugin_cert *pc = ck_malloc(sizeof(plugin_cert));
     pc->ssl_pemfile_pkey = ssl_pemfile_pkey;
     pc->ssl_pemfile_x509 = ssl_pemfile_x509;
     pc->ssl_pemfile_chain= ssl_pemfile_chain;
@@ -2293,8 +2284,7 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
     static const buffer default_ssl_cipher_list =
       { CONST_STR_LEN(LIGHTTPD_DEFAULT_CIPHER_LIST), 0 };
 
-    p->ssl_ctxs = calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
-    force_assert(p->ssl_ctxs);
+    p->ssl_ctxs = ck_calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
 
     int rc = HANDLER_GO_ON;
     plugin_data_base srvplug;

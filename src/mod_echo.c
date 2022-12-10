@@ -25,7 +25,7 @@ typedef struct {
 } plugin_data;
 
 INIT_FUNC(mod_echo_init) {
-    return calloc(1, sizeof(plugin_data));
+    return ck_calloc(1, sizeof(plugin_data));
 }
 
 #if 1 /*(would be simpler if not supporting streaming w/ bufmin)*/

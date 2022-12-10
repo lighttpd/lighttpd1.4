@@ -344,8 +344,7 @@ int config_plugin_values_init(server * const srv, void *p_d, const config_plugin
     /*(+1 to include global scope, whether or not any directives exist)*/
     /*(+n for extra element to end each list)*/
     p->cvlist = (config_plugin_value_t *)
-      calloc(1+n+n+elts, sizeof(config_plugin_value_t));
-    force_assert(p->cvlist);
+      ck_calloc(1+n+n+elts, sizeof(config_plugin_value_t));
 
     elts = 1+n;
     /* shift past first element if no directives in global scope */
@@ -714,8 +713,7 @@ static int config_pcre_match(request_st * const r, const data_config * const dc,
       r->cond_match[capture_offset] = r->cond_match_data + capture_offset;
     if (__builtin_expect( (NULL == cond_match->matches), 0)) {
         /*(allocate on demand)*/
-        cond_match->matches = malloc(dc->ovec_nelts * sizeof(int));
-        force_assert(cond_match->matches);
+        cond_match->matches = ck_malloc(dc->ovec_nelts * sizeof(int));
     }
     cond_match->comp_value = b; /*holds pointer to b (!) for pattern subst*/
     cond_match->captures =

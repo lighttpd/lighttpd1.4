@@ -1086,8 +1086,7 @@ static int config_insert(server *srv) {
     };
 
     int rc = 0;
-    config_data_base * const p = calloc(1, sizeof(config_data_base));
-    force_assert(p);
+    config_data_base * const p = ck_calloc(1, sizeof(config_data_base));
     srv->config_data_base = p;
 
     if (!config_plugin_values_init(srv, p, cpk, "base"))
@@ -1171,8 +1170,7 @@ static int config_insert(server *srv) {
                     cpv->v.shrt |=FDEVENT_STREAM_RESPONSE;
                 break;
               case 18:{/*server.kbytes-per-second */
-                off_t * const cnt = malloc(2*sizeof(off_t));
-                force_assert(cnt);
+                off_t * const cnt = ck_malloc(2*sizeof(off_t));
                 cnt[0] = 0;
                 cnt[1] = (off_t)cpv->v.shrt << 10;
                 cpv->v.v = cnt;

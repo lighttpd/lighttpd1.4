@@ -9,8 +9,7 @@
 fdlog_st *
 fdlog_init (const char * const fn, const int fd, const int mode)
 {
-    fdlog_st * const fdlog = calloc(1, sizeof(fdlog_st));
-    ck_assert(fdlog);
+    fdlog_st * const fdlog = ck_calloc(1, sizeof(fdlog_st));
     fdlog->fn = fn; /* note: fn must persist in memory (or else copy here) */
     fdlog->fd = fd >= 0 ? fd : STDERR_FILENO;
     fdlog->mode = mode;

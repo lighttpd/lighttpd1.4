@@ -96,7 +96,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
 
         /* Postgres sets FD_CLOEXEC on database socket descriptors */
 
-        dbconf = (vhostdb_config *)calloc(1, sizeof(*dbconf));
+        dbconf = (vhostdb_config *)ck_calloc(1, sizeof(*dbconf));
         dbconf->dbconn = dbconn;
         dbconf->sqlquery = sqlquery;
         *vdata = dbconf;
@@ -169,7 +169,7 @@ static int mod_vhostdb_pgsql_query(request_st * const r, void *p_d, buffer *docr
 INIT_FUNC(mod_vhostdb_init) {
     static http_vhostdb_backend_t http_vhostdb_backend_pgsql =
       { "pgsql", mod_vhostdb_pgsql_query, NULL };
-    plugin_data *p = calloc(1, sizeof(*p));
+    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_vhostdb_backend_pgsql */
     http_vhostdb_backend_pgsql.p_d = p;
