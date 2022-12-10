@@ -4,15 +4,10 @@
 
 #include "ck.h"         /* ck_assert() ck_calloc() */
 
-static inline size_t vector_align_size(size_t s) {
-	size_t a = (s + 15) & ~(size_t)15uL;
-	return (a < s) ? s : a;
-}
-
 void vector_free(void *data);
 
 __attribute_returns_nonnull__
-void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
+void *vector_resize(void *data, size_t elem_size, size_t *size, size_t used, size_t x);
 
 #define DEFINE_TYPED_VECTOR(name, entry, release) \
 	typedef struct vector_ ## name { \
@@ -41,11 +36,8 @@ void *vector_realloc(void *data, size_t elem_size, size_t size, size_t used);
 		} \
 	} \
 	static inline void vector_ ## name ## _reserve(vector_ ## name *v, size_t p) { \
-		if (v->size - v->used < p) { \
-			ck_assert(v->used < SIZE_MAX - p); \
-			v->size = vector_align_size(v->used + p); \
-			v->data = vector_realloc(v->data, sizeof(entry), v->size, v->used); \
-		} \
+		if (v->size - v->used < p) \
+			v->data = vector_resize(v->data, sizeof(entry), &v->size, v->used, p); \
 	} \
 	static inline void vector_ ## name ## _push(vector_ ## name *v, entry e) { \
 		vector_ ## name ## _reserve(v, 1); \
