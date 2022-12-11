@@ -484,7 +484,7 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 static cond_result_t config_check_cond_nocache_eval(request_st * const r, const data_config * const dc, const int debug_cond, cond_cache_t * const cache) {
 	/* pass the rules */
 
-	static struct const_char_buffer {
+	static const struct const_char_buffer {
 	  const char *ptr;
 	  uint32_t used;
 	  uint32_t size;
@@ -512,7 +512,6 @@ static cond_result_t config_check_cond_nocache_eval(request_st * const r, const 
 		break;
 	case COMP_HTTP_REQUEST_HEADER:
 		l = http_header_request_get(r, dc->ext, BUF_PTR_LEN(&dc->comp_tag));
-		if (NULL == l) l = (buffer *)&empty_string;
 		break;
 	case COMP_HTTP_REQUEST_METHOD:
 		l = http_method_buf(r->http_method);
@@ -521,7 +520,7 @@ static cond_result_t config_check_cond_nocache_eval(request_st * const r, const 
 		return (cache->local_result = COND_RESULT_FALSE);
 	}
 
-	if (__builtin_expect( (buffer_is_blank(l)), 0))
+	if (__builtin_expect( (buffer_is_empty(l)), 0))
 		l = (buffer *)&empty_string;
 
 	if (debug_cond)
