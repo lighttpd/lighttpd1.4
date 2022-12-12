@@ -3241,11 +3241,15 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
         case SSL_ERROR_ZERO_RETURN:
             /* clean shutdown on the remote side */
 
-            if (rc == 0) {
-                /* FIXME: later */
-            }
+            /* future: might set flag to record that we received CLOSE_NOTIFY
+             * TLS alert from peer, then have future calls to this func return
+             * the equivalent of EOF, but we also want to remove read interest
+             * on fd, perhaps by setting RDHUP.  If setting is_readable, ensure
+             * that callers avoid spinning if we return EOF while is_readable.
+             *
+             * Should we treat this like len == 0 below and return -2 ? */
 
-            __attribute_fallthrough__
+            /*__attribute_fallthrough__*/
         default:
             while((ssl_err = ERR_get_error())) {
                 switch (ERR_GET_REASON(ssl_err)) {
@@ -3417,33 +3421,27 @@ mod_openssl_close_notify(handler_ctx *hctx)
             }
 
             switch ((ssl_r = SSL_get_error(hctx->ssl, ret))) {
-            case SSL_ERROR_ZERO_RETURN:
             case SSL_ERROR_WANT_WRITE:
             case SSL_ERROR_WANT_READ:
+            case SSL_ERROR_ZERO_RETURN: /*(unexpected here)*/
                 hctx->close_notify = -1;
                 return 0; /* try again later */
             case SSL_ERROR_SYSCALL:
-                /* perhaps we have error waiting in our error-queue */
-                errh = hctx->r->conf.errh;
-                if (0 != (err = ERR_get_error())) {
-                    do {
-                        log_error(errh, __FILE__, __LINE__,
-                          "SSL: %d %d %s",ssl_r,ret,ERR_error_string(err,NULL));
-                    } while((err = ERR_get_error()));
-                } else if (errno != 0) {
-                    /*ssl bug (see lighttpd ticket #2213): sometimes errno==0*/
+                if (0 == ERR_peek_error()) {
                     switch(errno) {
+                    case 0: /*ssl bug (see lighttpd ticket #2213)*/
                     case EPIPE:
                     case ECONNRESET:
-                        break;
+                        mod_openssl_detach(hctx);
+                        return -2;
                     default:
-                        log_perror(errh, __FILE__, __LINE__,
+                        log_perror(hctx->r->conf.errh, __FILE__, __LINE__,
                           "SSL (error): %d %d", ssl_r, ret);
                         break;
                     }
+                    break;
                 }
-
-                break;
+                __attribute_fallthrough__
             default:
                 errh = hctx->r->conf.errh;
                 while((err = ERR_get_error())) {
