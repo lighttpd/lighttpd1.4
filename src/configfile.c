@@ -1279,6 +1279,10 @@ int config_finalize(server *srv, const buffer *default_server_tag) {
             /* all var.* is known as user defined variable */
             if (strncmp(k->ptr, "var.", sizeof("var.") - 1) == 0)
                 continue;
+            /* mod_dirlisting not loaded if dir-listing.activate not enabled */
+            if (strncmp(k->ptr, "dir-listing.", sizeof("dir-listing.") - 1) == 0
+                && strcmp(k->ptr, "dir-listing.activate") != 0)
+                continue;
 
             if (!array_get_element_klen(srv->srvconf.config_touched,
                                         BUF_PTR_LEN(k)))
