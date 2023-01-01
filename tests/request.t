@@ -1443,7 +1443,7 @@ Accept-Encoding: deflate
 Host: deflate.example.org
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Length' => '1288', '+Content-Encoding' => '' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Length' => '1294', '+Content-Encoding' => '' } ];
 ok($tf->handle_http($t) == 0, 'deflate - Content-Length and Content-Encoding is set');
 
 $t->{REQUEST}  = ( <<EOF
@@ -1452,7 +1452,7 @@ Accept-Encoding: deflate
 Host: deflate-cache.example.org
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Length' => '1288', '+Content-Encoding' => '' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Length' => '1294', '+Content-Encoding' => '' } ];
 ok($tf->handle_http($t) == 0, 'deflate - Content-Length and Content-Encoding is set');
 
 $t->{REQUEST}  = ( <<EOF
