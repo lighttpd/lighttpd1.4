@@ -897,7 +897,7 @@ static int stream_deflate_init(handler_ctx *hctx) {
 				 Z_DEFLATED,
 				 (hctx->compression_type == HTTP_ACCEPT_ENCODING_GZIP)
 				  ? (wbits | 16) /*(0x10 flags gzip header, trailer)*/
-				  : -wbits,      /*(negate to suppress zlib header)*/
+				  :  wbits,
 				 params ? params->gzip.memLevel : 8,/*default memLevel*/
 				 params ? params->gzip.strategy : Z_DEFAULT_STRATEGY)) {
 		return -1;
@@ -1463,7 +1463,7 @@ static int mod_deflate_using_libdeflate_sm (handler_ctx * const hctx, const plug
     size_t sz = buffer_string_space(addrb)+1;
     sz = (hctx->compression_type == HTTP_ACCEPT_ENCODING_GZIP)
       ? libdeflate_gzip_compress(compressor, in, in_nbytes, addrb->ptr, sz)
-      : libdeflate_deflate_compress(compressor, in, in_nbytes, addrb->ptr, sz);
+      : libdeflate_zlib_compress(compressor, in, in_nbytes, addrb->ptr, sz);
     libdeflate_free_compressor(compressor);
 
     if (0 == sz) {
@@ -1502,8 +1502,8 @@ static off_t mod_deflate_using_libdeflate_setjmp_cb (void *dst, const void *src,
     return (off_t)((hctx->compression_type == HTTP_ACCEPT_ENCODING_GZIP)
       ? libdeflate_gzip_compress(params->compressor, in, (size_t)len,
                                  params->out, params->outsz)
-      : libdeflate_deflate_compress(params->compressor, in, (size_t)len,
-                                    params->out, params->outsz));
+      : libdeflate_zlib_compress(params->compressor, in, (size_t)len,
+                                 params->out, params->outsz));
 }
 
 
@@ -1525,7 +1525,7 @@ static int mod_deflate_using_libdeflate (handler_ctx * const hctx, const plugin_
     }
 
     const size_t sz =
-      libdeflate_deflate_compress_bound(NULL, (size_t)hctx->bytes_in);
+      libdeflate_zlib_compress_bound(NULL, (size_t)hctx->bytes_in);
     /*(XXX: consider trying posix_fallocate() first,
      * with fallback to ftrunctate() if EOPNOTSUPP)*/
     if (0 != ftruncate(fd, (off_t)sz)) {
