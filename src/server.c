@@ -1104,6 +1104,7 @@ static void server_load_check (server *srv) {
         server_sockets_disable(srv);
 }
 
+#ifdef HAVE_FORK
 __attribute_noinline__
 static int server_main_setup_workers (server * const srv, const int npids) {
     pid_t pid;
@@ -1227,6 +1228,7 @@ static int server_main_setup_workers (server * const srv, const int npids) {
 
     return 1; /* child worker */
 }
+#endif
 
 __attribute_cold__
 __attribute_noinline__
