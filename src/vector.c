@@ -18,7 +18,8 @@ void *vector_resize(void *data, size_t elem_size, size_t *size, size_t used, siz
 	ck_assert(*size <= SIZE_MAX / elem_size);
 	const size_t total_size = elem_size * *size;
 	const size_t used_size = elem_size * used;
-	data = realloc(data, total_size);
+	void *odata = data; /*(save ptr to avoid static analyzer realloc warn)*/
+	data = realloc(odata, total_size);
 	ck_assert(NULL != data);
 
 	/* clear new memory */
