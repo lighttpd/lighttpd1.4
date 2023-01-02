@@ -171,6 +171,10 @@ int fdevent_dup_cloexec (int fd) {
 #endif
 
 int fdevent_open_cloexec(const char *pathname, int symlinks, int flags, mode_t mode) {
+#ifdef __CYGWIN__ /* broken in current cygwin; fixed in cygwin test */
+#undef  O_NOFOLLOW
+#define O_NOFOLLOW 0
+#endif
 	if (!symlinks) flags |= O_NOFOLLOW;
 #ifdef O_CLOEXEC
 	return open(pathname, flags | O_CLOEXEC | FDEVENT_O_FLAGS, mode);
