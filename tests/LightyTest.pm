@@ -274,40 +274,30 @@ sub handle_http {
 	}
 
 	$remote->autoflush(1);
+	my $ipproto_tcp = defined &Socket::IPPROTO_TCP ? Socket::IPPROTO_TCP : 6;
+	my $tcp_nodelay = defined &Socket::TCP_NODELAY ? Socket::TCP_NODELAY : 1;
+	$remote->setsockopt($ipproto_tcp, $tcp_nodelay, 1); # (ignore rc)
 
-	if (!$slow) {
-		diag("\nsending request header to ".$host.":".$self->{PORT}) if $is_debug;
-		foreach(@request) {
-			# pipeline requests
-			s/\r//g;
-			s/\n/$EOL/g;
+	diag("\nsending request header to ".$host.":".$self->{PORT}) if $is_debug;
+	foreach(@request) {
+		# pipeline requests
+		chomp;
+		s/\r//g;
+		s/\n/$EOL/g;
 
-			print $remote $_.$BLANK;
-			diag("\n<< ".$_) if $is_debug;
+		diag("<< ".$_."\n") if $is_debug;
+		if (!$slow) {
+			print $remote $_,$BLANK;
 		}
-		shutdown($remote, 1) if ($^O ne "openbsd" && $^O ne "dragonfly"); # I've stopped writing data
-	} else {
-		diag("\nsending request header to ".$host.":".$self->{PORT}) if $is_debug;
-		foreach(@request) {
-			# pipeline requests
-			chomp;
-			s/\r//g;
-			s/\n/$EOL/g;
-
+		else {
 			print $remote $_;
-			diag("<< ".$_."\n") if $is_debug;
-			select(undef, undef, undef, 0.0001);
 			print $remote "\015";
-			select(undef, undef, undef, 0.0001);
 			print $remote "\012";
-			select(undef, undef, undef, 0.0001);
 			print $remote "\015";
-			select(undef, undef, undef, 0.0001);
 			print $remote "\012";
-			select(undef, undef, undef, 0.0001);
 		}
-
 	}
+	shutdown($remote, 1) if ($^O ne "openbsd" && $^O ne "dragonfly"); # I've stopped writing data
 	diag("\n... done") if $is_debug;
 
 	my $lines = "";
