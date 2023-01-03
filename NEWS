@@ -3,6 +3,97 @@
 NEWS
 ====
 
+- 1.4.68 - 2023-01-03
+  * [cmake] compile lemon with native cc for x-compile
+  * [cmake] install man pages with CMake
+  * [cmake] let CMake handle the version number
+  * [cmake] set LIGHTTPD_VERSION_ID per version
+  * [meson] set LIGHTTPD_VERSION_ID per version
+  * [meson] add missing meson_version
+  * [meson] use feature options
+  * [meson] turn pcre into a combo option
+  * [meson] simplify header checking
+  * [meson] add wrapdb instructions
+  * [lighttpd-angel] waitpid after HUP before restart
+  * [core] use inotify_init() if missing IN_* defines
+  * [core] keep sockets w/ server.graceful-restart-bg
+  * [TLS] ssl.openssl.ssl-conf-cmd "DHParameters"
+  * [mod_wolfssl] check for cert must_staple
+  * [mod_mbedtls] config renegotiation;not recommended
+  * [mod_alias] fix typo in config error message
+  * [mod_proxy,mod_cgi] fix dummy Sec-WebSocket-Key
+  * [mod_wolfssl] cast to fix compile error
+  * [TLS] try DER format if reading PEM format fails
+  * [mod_openssl] libressl 3.6.0 ASN1_TIME_cmp_time_t
+  * [mod_deflate] skip cache for Cache-Control: private,no-store
+  * [mod_webdav] minor cleanups and adjustments
+  * [core] http_response_body_clear clears body flags
+  * [core] ignore server.max-worker = 1
+  * [doc/scripts/cert-staple.sh] *BSD date portability
+  * [doc/scripts/cert-staple.sh] short-circuit checks
+  * [doc/scripts/cert-staple.sh] add copyright header
+  * [meson] fix wrong array
+  * [meson] replace most has_function calls with loop
+  * [meson] use non string true/false
+  * [meson] use files()
+  * [meson] remove use of non-existent win32 xgetopt.c
+  * [meson] update comment for opts w/ type 'feature'
+  * [core] fix crash for invalid lighttpd.conf (fixes #3175)
+  * [build] do not check for pthread.h
+  * [cmake] use find_package() to include the PkgConfig module
+  * [cmake] use GNUInstallDirs to set defaults for several directories
+  * [cmake] use FindOpenSSL cmake module to search for OpenSSL
+  * [cmake] remove wolfssl code that would already be handled by CMake
+  * [cmake] improve searching for PostgreSQL
+  * [cmake] remove needless arguments from xconfig macro
+  * [cmake] prefer libpcre.pc over pcre-config
+  * [cmake] use CMake's provided FindZLIB
+  * [cmake] use CMake's provided FindBZip2
+  * [cmake] remove path hints where CMake searches by default
+  * [cmake] remove use of non-existent win32 xgetopt.c
+  * [mod_openssl] mod_openssl_write_err() shared code
+  * [mod_openssl] use SSL_sendfile() if KTLS available
+  * [mod_gnutls] use gnutls_record_send_file() if KTLS
+  * [TLS] handle '+' on ssl-conf-cmd "Options"
+  * [TLS] upgrade default cipher list to stronger set
+  * [TLS] simplify TLS config; remove deprecated opts
+  * [multiple] remove deprecated modules
+  * [mod_magnet] remove lighty.r.req_attr["response.*"]
+  * [core] remove libev fdevent option (ignore)
+  * [core] _WIN32 impl of plugins_load()
+  * [core] check for built-in plugins before dlopen
+  * [core] build core modules into lighttpd executable
+  * [core] reduce M_TOP_PAD to default on small system
+  * [multiple] mark mod_*_plugin_init() funcs cold
+  * [core] check ifndef NDEBUG before setting NDEBUG
+  * [core] server_main_setup_signals() separate func
+  * [core] server_main_setup_workers() separate func
+  * [core] server_main_setup() variable scoping
+  * [core] ck_calloc() ck_malloc() ck_realloc_u32()
+  * [multiple] employ ck_realloc_u32() shared code
+  * [core] mark gw_proc_free() cold
+  * [core] use data_config_list for config
+  * [build] omit unused vector.[ch] from build
+  * [mod_wstunnel] store value in tmp before byteswap
+  * [core] log_buffer_vsprintf tweaks
+  * [multiple] employ ck_calloc, ck_malloc shared code
+  * [core] create non-inlined vector_resize()
+  * [lighttpd-angel] remove unused includes
+  * [core] chunk.c tweaks
+  * [core] config_check_cond_nocache_eval() tweak
+  * [mod_openssl] CLOSE_NOTIFY handling with KTLS
+  * [mod_wolfssl] match mod_openssl CLOSE_NOTIFY
+  * [core] ignore config dir-listing.* if not enabled
+  * [doc] default lighttpd.conf: omit server.use-ipv6
+  * [lighttpd-angel] simplify
+  * [tests] disable auth.delay-invalid-creds for tests
+  * [mod_deflate] "deflate" should include zlib header
+  * [tests] fix "deflate" tests for added zlib header
+  * [tests] disable Nagle on client, remove sleeps
+  * [core] save ptr to avoid static analyzer realloc warn
+  * [core] wrap server_main_setup_workers w/ HAVE_FORK
+  * [core] temporarily disable O_NOFOLLOW on Cygwin
+
 - 1.4.67 - 2022-09-17
   * Update comment about TCP_INFO on OpenBSD
   * [mod_ajp13] fix crash with bad response headers (fixes #3170)
