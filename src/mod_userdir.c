@@ -260,9 +260,7 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
      * and some special handling for trailing '.', ' ' and '/' on windows
      * we assume that no docroot/physical handler changed this
      * (docroot should only set the docroot/server name, physical should only
-     *  change the physical.path;
-     *  the exception mod_secdownload doesn't work with userdir anyway)
-     */
+     *  change the physical.path) */
     buffer_append_slash(&r->physical.path);
     /* if no second '/' is found, we assume that it was stripped from the
      * uri.path for the special handling on windows.  we do not care about the

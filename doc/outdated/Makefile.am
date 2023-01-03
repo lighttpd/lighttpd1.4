@@ -12,7 +12,6 @@ plugins.txt \
 proxy.txt \
 redirect.txt \
 rewrite.txt \
-secdownload.txt \
 security.txt \
 simple-vhost.txt \
 skeleton.txt \
@@ -47,7 +46,6 @@ HTMLDOCS=accesslog.html \
 	 proxy.html \
 	 redirect.html \
 	 rewrite.html \
-	 secdownload.html \
 	 security.html \
 	 simple-vhost.html \
 	 skeleton.html \

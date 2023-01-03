@@ -13,7 +13,6 @@ EXTRA_DIST=access_log.conf \
 	proxy.conf \
 	rrdtool.conf \
 	scgi.conf \
-	secdownload.conf \
 	simple_vhost.conf \
 	ssi.conf \
 	status.conf \

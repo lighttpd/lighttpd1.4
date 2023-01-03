@@ -196,7 +196,3 @@ build using CMake and Xcode on Mac OS X with MacPorts
   $ cmake -Wno-dev -DWITH_PCRE2=1 -DWITH_OPENSSL=1 -DWITH_LUA=1 -DWITH_ZLIB=1 -DWITH_ZSTD=1 -DWITH_BROTLI=1 -DWITH_WEBDAV_PROPS=1 .
   $ make -j 4
   $ make test
-
-  # Note: many tests fail if not built with openssl
-  # lighttpd will not start up with tests/lighttpd.conf
-  #   (mod_secdownload fails to configure hmac-sha1 and hmac-sha256)

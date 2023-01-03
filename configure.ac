@@ -1678,7 +1678,6 @@ do_build="\
   mod_rewrite \
   mod_rrdtool \
   mod_scgi \
-  mod_secdownload \
   mod_setenv \
   mod_simple_vhost \
   mod_sockproxy \
@@ -1686,7 +1685,6 @@ do_build="\
   mod_staticfile \
   mod_status \
   mod_userdir \
-  mod_usertrack \
   mod_vhostdb \
   mod_webdav \
   mod_wstunnel \

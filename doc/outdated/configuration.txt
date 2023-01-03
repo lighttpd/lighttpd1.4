@@ -369,13 +369,11 @@ server.modules
 				"mod_simple_vhost",
 				"mod_evhost",
 				"mod_userdir",
-				"mod_secdownload",
 				"mod_fastcgi",
 				"mod_proxy",
 				"mod_cgi",
                                 "mod_ssi",
 				"mod_deflate",
-                                "mod_usertrack",
 				"mod_expire",
  				"mod_rrdtool",
 				"mod_accesslog" )

@@ -107,7 +107,7 @@
  * Update: li_rand_init() is now deferred until first use so that installations
  * that do not use modules which use these routines do need to potentially block
  * at startup.  Current use by core lighttpd modules is in mod_auth HTTP Digest
- * auth and in mod_usertrack.  Deferring collection of random data until first
+ * auth.  Deferring collection of random data until first
  * use may allow sufficient entropy to be collected by kernel before first use,
  * helping reduce or avoid situations in low-entropy-generating embedded devices
  * which might otherwise block lighttpd for minutes at device startup.
