@@ -1,7 +1,7 @@
 project(
   'lighttpd',
   'c',
-  version: '1.4.68',
+  version: '1.4.69',
   license: 'BSD-3-Clause',
   default_options: ['c_std=c11'],
   meson_version: '>=0.47.0',
