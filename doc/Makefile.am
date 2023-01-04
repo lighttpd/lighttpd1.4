@@ -5,5 +5,6 @@ GNUMAKEFLAGS=--no-print-directory -s
 EXTRA_DIST= \
 	CMakeLists.txt \
 	initscripts.txt \
+	meson.build \
 	newstyle.css \
 	oldstyle.css

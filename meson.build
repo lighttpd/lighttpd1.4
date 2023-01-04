@@ -7,6 +7,7 @@ project(
   meson_version: '>=0.47.0',
 )
 
+subdir('doc')
 subdir('src')
 subdir('tests')
 
