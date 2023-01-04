@@ -1,5 +1,5 @@
 compiler = meson.get_compiler('c')
-sbinddir = join_paths(get_option('prefix'), get_option('sbindir'))
+sbindir = join_paths(get_option('prefix'), get_option('sbindir'))
 moduledir = join_paths(get_option('prefix'), get_option('moduledir'))
 
 include_base_paths = [
@@ -646,9 +646,9 @@ endif
 executable('lighttpd-angel',
 	sources: 'lighttpd-angel.c',
 	dependencies: common_flags + lighttpd_angel_flags,
-	c_args: ['-DSBIN_DIR="' + sbinddir + '"'],
+	c_args: ['-DSBIN_DIR="' + sbindir + '"'],
 	install: true,
-	install_dir: sbinddir,
+	install_dir: sbindir,
 )
 
 executable('lighttpd', configparser,
@@ -665,7 +665,7 @@ executable('lighttpd', configparser,
 		, clock_lib
 	],
 	install: true,
-	install_dir: sbinddir,
+	install_dir: sbindir,
 )
 
 test('test_common', executable('test_common',
