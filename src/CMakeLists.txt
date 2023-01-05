@@ -771,7 +771,7 @@ else()
 	unset(HAVE_LUA_H)
 endif()
 
-if(WITH_FAM AND NOT HAVE_SYS_INOTIFY_H)
+if(WITH_FAM AND NOT HAVE_SYS_INOTIFY_H AND NOT HAVE_KQUEUE)
 	check_include_files(fam.h HAVE_FAM_H)
 	check_library_exists(fam FAMOpen2 "" HAVE_LIBFAM)
 	if(HAVE_LIBFAM)
