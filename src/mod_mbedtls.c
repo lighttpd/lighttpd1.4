@@ -1607,8 +1607,8 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
         memcpy(&conf, &defaults, sizeof(conf));
         config_plugin_value_t *cpv = ps->cvlist + ps->cvlist[i].v.u2[0];
         for (; -1 != cpv->k_id; ++cpv) {
-            /* ignore ssl.pemfile (k_id=6); included to process global scope */
-            if (!is_socket_scope && cpv->k_id != 6) {
+            /* ignore ssl.pemfile (k_id=3); included to process global scope */
+            if (!is_socket_scope && cpv->k_id != 3) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "MTLS: %s is valid only in global scope or "
                   "$SERVER[\"socket\"] condition", cpk[cpv->k_id].k);
