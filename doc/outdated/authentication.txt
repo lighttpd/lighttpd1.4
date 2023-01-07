@@ -29,7 +29,7 @@ https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_ModAuth
 Supported Methods
 -----------------
 
-lighttpd supportes both authentication method described by
+lighttpd supports both authentication method described by
 RFC 2617:
 
 basic

@@ -2878,7 +2878,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         }
         else if (ca_store && (ssl_ca_crl_file || default_ssl_ca_crl_file)) {
             /* prior behavior in lighttpd allowed ssl.ca-crl-file only in global
-             * scope or $SERVER["socket"], so this inheritence from global scope
+             * scope or $SERVER["socket"], so this inheritance from global scope
              * is reasonable.  This code does not implement inheritance of
              * ssl.ca-crl-file from $SERVER["socket"] into nested $HTTP["host"],
              * but the solution is to repeat ssl.ca-crl-file where ssl.ca-file

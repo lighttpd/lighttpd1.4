@@ -1304,7 +1304,7 @@ The following types have already been registered for the <type> field :
 #define PP2_TYPE_NETNS            0x30
 
 /*
-For the type PP2_TYPE_SSL, the value is itselv a defined like this :
+For the type PP2_TYPE_SSL, the value is itself defined like this :
  */
 
 struct pp2_tlv_ssl {

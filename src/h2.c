@@ -1286,8 +1286,8 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
         /* set padding to 0 since we will overwrite padding in merge below */
         /* (alternatively, could memmove() 9 bytes of frame header over the
          *  pad length octet, remove PADDED flag, add 1 to c->offset,
-         *  add 1 to s, subtract 1 from clen and substract 1 from cqlen,
-         *  substract 1 from n, add 1 to cq->bytes_out) */
+         *  add 1 to s, subtract 1 from clen and subtract 1 from cqlen,
+         *  subtract 1 from n, add 1 to cq->bytes_out) */
         s[9] = 0;
         /* set offset to beginning of padding at end of first frame */
         m -= plen;
@@ -2050,7 +2050,7 @@ h2_send_hpack (request_st * const r, connection * const con, const char *data, u
     /*(approximate space needed for frames (header + payload)
      * with slight over-estimate of 16 bytes per frame header (> 9)
      * and minimum SETTING_MAX_FRAME_SIZE of 16k (could be larger)
-     * (dlen >> 14)+1 is num 16k frames needed, multipled by 16 bytes
+     * (dlen >> 14)+1 is num 16k frames needed, multiplied by 16 bytes
      *  per frame can be appoximated with (dlen>>10) + 9)*/
     buffer * const b =
       chunkqueue_append_buffer_open_sz(con->write_queue, dlen + (dlen>>10) + 9);
@@ -2571,7 +2571,7 @@ h2_send_data (request_st * const r, connection * const con, const char *data, ui
     /*(approximate space needed for frames (header + payload)
      * with slight over-estimate of 16 bytes per frame header (> 9)
      * and minimum SETTING_MAX_FRAME_SIZE of 16k (could be larger)
-     * (dlen >> 14)+1 is num 16k frames needed, multipled by 16 bytes
+     * (dlen >> 14)+1 is num 16k frames needed, multiplied by 16 bytes
      *  per frame can be appoximated with (dlen>>10) + 9)*/
     buffer * const b =
       chunkqueue_append_buffer_open_sz(con->write_queue, dlen + (dlen>>10) + 9);

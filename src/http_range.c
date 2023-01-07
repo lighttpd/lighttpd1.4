@@ -81,7 +81,7 @@ static const char *
 http_range_parse_next (const char * restrict s, const off_t len,
                        off_t * const restrict ranges)
 {
-    /*(caller must check retured ranges[1] != -1, or else range was invalid)*/
+    /*(caller must check returned ranges[1] != -1, or else range was invalid)*/
 
     /*assert(len > 0);*//*(caller must ensure len > 0)*/
     char *e;

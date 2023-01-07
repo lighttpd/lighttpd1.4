@@ -115,7 +115,7 @@ enum http_header_e http_header_hkey_get(const char * const s, const size_t slen)
 
 enum http_header_e http_header_hkey_get_lc(const char * const s, const size_t slen) {
     /* XXX: might not provide much real performance over http_header_hkey_get()
-     *      (since the first-char comparision optimization was added)
+     *      (since the first-char comparison optimization was added)
      *      (and since well-known h2 headers are already mapped to hkey) */
     if (__builtin_expect( (slen < sizeof(http_headers_off)), 1)) {
         const int i = http_headers_off[slen];

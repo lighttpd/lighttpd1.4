@@ -85,7 +85,7 @@ soon as the header is parsed and we know how much data we expect.
 Pipelining
 ----------
 
-HTTP/1.1 supportes pipelining (sending multiple requests without waiting
+HTTP/1.1 supports pipelining (sending multiple requests without waiting
 for the response of the first request). This is handled transparently by
 the 'read' state.
 
