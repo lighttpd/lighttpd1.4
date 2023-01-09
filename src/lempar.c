@@ -239,6 +239,7 @@ struct yyParser {
 };
 typedef struct yyParser yyParser;
 
+#include "first.h"
 #include <assert.h>
 #ifndef NDEBUG
 #include <stdio.h>
@@ -461,9 +462,11 @@ void ParseFinalize(void *p){
         yyTokenName[yytos->major]);
     }
 #endif
+#if YY_MIN_DSTRCTR > 0
     if( yytos->major>=YY_MIN_DSTRCTR ){
       yy_destructor(pParser, yytos->major, &yytos->minor);
     }
+#endif
     yytos--;
   }
 
@@ -821,6 +824,8 @@ static void yy_syntax_error(
   int yymajor,                   /* The major type of the error token */
   ParseTOKENTYPE yyminor         /* The minor type of the error token */
 ){
+  (void)yymajor;
+  (void)yyminor;
   ParseARG_FETCH
   ParseCTX_FETCH
 #define TOKEN yyminor
