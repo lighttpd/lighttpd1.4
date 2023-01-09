@@ -3,6 +3,7 @@
 %name configparser
 
 %include {
+#define NDEBUG
 #include "first.h"
 #include "base.h"
 #include "configfile.h"
@@ -16,6 +17,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+/*(missing declarations in generated configparser.c)*/
+static void configparserInit(void *yypRawParser);
+static void configparserFinalize(void *p);
+/*(missing declarations in generated configparser.c; defined but not used)*/
+static inline int configparserFallback(int iToken)
+  __attribute_unused__;
+#ifndef NDEBUG
+static inline void configparserTrace(FILE *TraceFILE, char *zTracePrompt)
+  __attribute_unused__;
+#endif
 
 __attribute_pure__
 static data_config * configparser_get_data_config(const array *a, const char *k, const size_t klen) {
@@ -384,7 +396,7 @@ metaline ::= EOL.
 %destructor stringop               { buffer_free($$); }
 
 %token_type                        {buffer *}
-%token_destructor                  { buffer_free($$); }
+%token_destructor                  { buffer_free($$); UNUSED(ctx); }
 
 varline ::= key(A) ASSIGN expression(B). {
   if (ctx->ok) {

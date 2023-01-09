@@ -785,6 +785,8 @@ static void yy_syntax_error(
   int yymajor,                   /* The major type of the error token */
   ParseTOKENTYPE yyminor         /* The minor type of the error token */
 ){
+  (void)yymajor;
+  (void)yyminor;
   ParseARG_FETCH
   ParseCTX_FETCH
 #define TOKEN yyminor
