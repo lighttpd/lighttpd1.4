@@ -4,7 +4,7 @@ Running tests
   $ make check
 
 If run from tests/ dir, tests will fail to run tests if lighttpd not built.
-If run from top level, 'make' will build lighttpd exectuable if not yet built,
+If run from top level, 'make' will build lighttpd executable if not yet built,
 and then will run tests.
 
 

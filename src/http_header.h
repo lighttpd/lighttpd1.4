@@ -22,7 +22,7 @@
  *       as extending the bitmap greater than 64-bits may make quick bitmasks
  *       check more expensive, and the cost for looking up unmarked headers
  *       (HTTP_HEADER_OTHER) is not substantially more.  In the future, this
- *       list may be revisitied and reviewed, and less frequent headers removed
+ *       list may be revisited and reviewed, and less frequent headers removed
  *       or replaced.
  */
 enum http_header_h2_e { /* pseudo-headers */

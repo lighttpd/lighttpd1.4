@@ -11,7 +11,7 @@ Module: mod_skeleton
 :Revision: $Revision: 1.2 $
 
 :abstract:
-  a nice, short abstrace about the module
+  a nice, short abstract about the module
 
 .. meta::
   :keywords: lighttpd, skeleton

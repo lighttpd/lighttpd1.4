@@ -2615,7 +2615,7 @@ int config_set_defaults(server *srv) {
 
 			if (is_lower && buffer_is_equal(tb, s->document_root)) {
 				/* lower-casing and upper-casing didn't result in
-				 * an other filename, no need to stat(),
+				 * another filename, no need to stat(),
 				 * just assume it is case-sensitive. */
 
 				s->force_lowercase_filenames = 0;
@@ -2623,10 +2623,10 @@ int config_set_defaults(server *srv) {
 
 				/* upper case exists too, doesn't the FS handle this ? */
 
-				/* upper and lower have the same inode -> case-insensitve FS */
+				/* upper and lower have the same inode -> case-insensitive FS */
 
 				if (st1.st_ino == st2.st_ino) {
-					/* upper and lower have the same inode -> case-insensitve FS */
+					/* upper and lower have the same inode -> case-insensitive FS */
 
 					s->force_lowercase_filenames = 1;
 				}

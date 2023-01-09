@@ -3829,7 +3829,7 @@ static xmlDoc *
 webdav_parse_chunkqueue (request_st * const r,
                          const plugin_config * const pconf)
 {
-    /* read the chunks in to the XML document */
+    /* parse the XML document */
     xmlParserCtxtPtr ctxt = xmlCreatePushParserCtxt(NULL, NULL, NULL, 0, NULL);
     /* XXX: evaluate adding more xmlParserOptions */
     xmlCtxtUseOptions(ctxt, XML_PARSE_NOERROR | XML_PARSE_NOWARNING

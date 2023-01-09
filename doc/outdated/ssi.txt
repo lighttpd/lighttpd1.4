@@ -12,7 +12,7 @@ Module: mod_ssi
 
 :abstract:
   The module for server-side includes provides a compatibility
-  layer for NSCA/Apache SSI.
+  layer for NCSA/Apache SSI.
 
 .. meta::
   :keywords: lighttpd, ssi, Server-Side Includes

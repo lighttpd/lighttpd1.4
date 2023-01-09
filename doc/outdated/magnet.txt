@@ -63,7 +63,7 @@ order. If one of them a returning a status-code, the following scripts will not 
 Tables
 ======
 
-Most of the interaction between between mod_magnet and lighty is done through tables. Tables in lua are hashes (Perl), dictionaries (Java), arrays (PHP), ...
+Most of the interaction between mod_magnet and lighty is done through tables. Tables in lua are hashes (Perl), dictionaries (Java), arrays (PHP), ...
 
 Request-Environment
 -------------------

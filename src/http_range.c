@@ -446,7 +446,7 @@ http_range_rfc7233 (request_st * const r)
             return http_status;
 
       #if 0 /*(questionable utility; not deemed worthwhile)*/
-        /* (In a modular server, the following RFC recommentation might be
+        /* (In a modular server, the following RFC recommendation might be
          *  expensive and invasive to implement perfectly, so only making an
          *  effort here to comply with known headers added within this routine
          *  and within the purview of Range requests)

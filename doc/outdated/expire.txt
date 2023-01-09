@@ -11,7 +11,7 @@ Module: mod_expire
 :Revision: $Revision: 1.2 $
 
 :abstract:
-  mod_expire controls the setting of the the Expire Response header
+  mod_expire controls the setting of the Expires response header
 
 .. meta::
   :keywords: lighttpd, expire
@@ -21,7 +21,7 @@ Module: mod_expire
 Description
 ===========
 
-mod_expire controls the Expire header in the Response Header of HTTP/1.0
+mod_expire controls the Expires header in the Response Header of HTTP/1.0
 messages. It is useful to set it for static files which should be cached
 aggressivly like images, stylesheets or similar.
 

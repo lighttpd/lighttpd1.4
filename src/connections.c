@@ -877,7 +877,7 @@ static int connection_read_cq(connection *con, chunkqueue *cq, off_t max_bytes) 
         chunkqueue_use_memory(cq, ckpt, len > 0 ? len : 0);
 
         if (len != (ssize_t)mem_len) {
-            /* we got less then expected, wait for the next fd-event */
+            /* we got less than expected, wait for the next fd-event */
             con->is_readable = 0;
             return len > 0 ? 0 : 0 == len ? -2 : connection_read_cq_err(con);
         }
