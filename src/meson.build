@@ -585,7 +585,7 @@ lemon = executable('lemon',
 configparser = custom_target('configparser',
 	input:  ['configparser.y', 'lempar.c'],
 	output: ['configparser.c', 'configparser.h'],
-	command: [lemon, '-q', 'o=@OUTDIR@', '@INPUT0@', '@INPUT1@'],
+	command: [lemon, '-q', '-d@OUTDIR@', '-T@INPUT1@', '@INPUT0@'],
 )
 
 common_cflags = defs + [

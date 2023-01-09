@@ -103,7 +103,7 @@ builtin_mods = Split(" \
 lemon = env.Program('lemon', 'lemon.c', LIBS = GatherLibs(env))
 
 def Lemon(env, input):
-	parser = env.Command([input.replace('.y', '.c'),input.replace('.y', '.h')], input, '(cd sconsbuild/build; ../../' + lemon[0].path + ' -q ../../$SOURCE ../../src/lempar.c)')
+	parser = env.Command([input.replace('.y', '.c'),input.replace('.y', '.h')], input, lemon[0].path + ' -q -dsconsbuild/build -Tsrc/lempar.c $SOURCE')
 	env.Depends(parser, lemon)
 
 configparser = Lemon(env, 'configparser.y')
