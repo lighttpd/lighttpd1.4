@@ -283,6 +283,20 @@ int fdevent_mkostemp(char *path, int flags) {
 }
 
 
+/* accept4() added in Linux x86 in kernel 2.6.28, but not in arm until 2.6.36
+ * https://lwn.net/Articles/789961/ */
+#if defined(__linux__) \
+ && (defined(__arm__) || defined(__thumb__) || defined(__arm64__))
+#ifdef __has_include
+#if __has_include(<sys/syscall.h>)
+#include <sys/syscall.h>
+#endif
+#endif
+#ifndef SYS_accept4
+#define accept4(a,b,c,d) ((errno = ENOTSUP), -1)
+#endif
+#endif
+
 int fdevent_accept_listenfd(int listenfd, struct sockaddr *addr, size_t *addrlen) {
 	int fd;
 	socklen_t len = (socklen_t) *addrlen;
