@@ -882,7 +882,7 @@ add_executable(lighttpd-angel lighttpd-angel.c)
 set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd-angel)
 add_target_properties(lighttpd-angel COMPILE_FLAGS "-DSBIN_DIR=\\\\\"${CMAKE_INSTALL_FULL_SBINDIR}\\\\\"")
 
-add_executable(lighttpd
+set(SERVER_SRC
 	server.c
 	response.c
 	connections.c
@@ -899,9 +899,9 @@ add_executable(lighttpd
 	data_config.c
 	configfile.c
 	configparser.c
-	${COMMON_SRC}
-	${BUILTIN_MODS}
 )
+
+add_executable(lighttpd ${SERVER_SRC} ${COMMON_SRC} ${BUILTIN_MODS})
 set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd)
 
 add_and_install_library(mod_access mod_access.c)
