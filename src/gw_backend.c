@@ -240,7 +240,7 @@ static int gw_extension_insert(gw_exts *ext, const buffer *key, gw_host *fh) {
     if (NULL == fe) {
         if (!(ext->used & (8-1))) {
             ck_realloc_u32((void **)&ext->exts,ext->used,8,sizeof(*ext->exts));
-            memset(ext->exts + ext->used, 0, 8 * sizeof(*ext->exts));
+            memset((void *)(ext->exts + ext->used), 0, 8 * sizeof(*ext->exts));
         }
         fe = ext->exts + ext->used++;
         fe->last_used_ndx = -1;

@@ -257,7 +257,7 @@ ck_strerror_s (char * const s, const rsize_t maxsize, const errno_t errnum)
 
     /*(not enough space to store entire error string)*/
     if (maxsize > 3)
-        memcpy(s+maxsize-4, "...", 3);
+        memcpy(s+maxsize-4, "...", 4);
     return ERANGE;
 
   #endif
