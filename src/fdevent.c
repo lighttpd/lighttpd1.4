@@ -447,6 +447,7 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
     signal(SIGTSTP, SIG_DFL);
   #endif
     signal(SIGPIPE, SIG_DFL);
+    signal(SIGUSR1, SIG_DFL);
 
     execve(name, argv, envp ? envp : environ);
 
