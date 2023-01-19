@@ -63,7 +63,7 @@ struct plugin {
 	handler_t (* handle_sighup)          (server *srv, void *p_d);        /* at a sighup */
 	handler_t (* handle_waitpid)         (server *srv, void *p_d, pid_t pid, int status); /* upon a child process exit */
 
-	void *(* init)                       ();
+	void *(* init)                       (void);
 	handler_t (* priv_defaults)          (server *srv, void *p_d);
 	handler_t (* set_defaults)           (server *srv, void *p_d);
 	handler_t (* worker_init)            (server *srv, void *p_d); /* at server startup (each worker after fork()) */

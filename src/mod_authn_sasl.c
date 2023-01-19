@@ -258,8 +258,8 @@ static handler_t mod_authn_sasl_query(request_st * const r, void *p_d, const buf
     plugin_data *p = (plugin_data *)p_d;
     sasl_conn_t *sc;
     sasl_callback_t const cb[] = {
-      { SASL_CB_GETOPT,   (int(*)())mod_authn_sasl_cb_getopt, (void *) p },
-      { SASL_CB_LOG,      (int(*)())mod_authn_sasl_cb_log, (void *) r },
+      { SASL_CB_GETOPT,   (int(*)(void))(uintptr_t)mod_authn_sasl_cb_getopt, (void *) p },
+      { SASL_CB_LOG,      (int(*)(void))(uintptr_t)mod_authn_sasl_cb_log, (void *) r },
       { SASL_CB_LIST_END, NULL, NULL }
     };
     int rc;

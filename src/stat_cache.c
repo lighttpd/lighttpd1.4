@@ -294,7 +294,7 @@ static void fam_dir_tag_refcnt(splay_tree *t, int *keys, int *ndx)
 }
 
 __attribute_noinline__
-static void fam_dir_periodic_cleanup() {
+static void fam_dir_periodic_cleanup(void) {
     stat_cache_fam * const scf = sc.scf;
     int max_ndx, i;
     int keys[512]; /* 2k size on stack */

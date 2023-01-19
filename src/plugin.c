@@ -251,17 +251,41 @@ int plugins_load(server *srv) {
 
 #endif /* defined(LIGHTTPD_STATIC) */
 
+typedef handler_t(*pl_cb_t)(void *, void *);
+
+/*(alternative to multiple structs would be union for fn ptr type)*/
+
 typedef struct {
-  handler_t(*fn)();
+  pl_cb_t fn;
   plugin_data_base *data;
 } plugin_fn_data;
+
+typedef struct {
+  handler_t(*fn)(request_st *, void *);
+  plugin_data_base *data;
+} plugin_fn_req_data;
+
+typedef struct {
+  handler_t(*fn)(connection *, void *);
+  plugin_data_base *data;
+} plugin_fn_con_data;
+
+typedef struct {
+  handler_t(*fn)(server *, void *);
+  plugin_data_base *data;
+} plugin_fn_srv_data;
+
+typedef struct {
+  handler_t(*fn)(server *, void *, pid_t, int);
+  plugin_data_base *data;
+} plugin_fn_waitpid_data;
 
 __attribute_hot__
 static handler_t plugins_call_fn_req_data(request_st * const r, const int e) {
     const void * const plugin_slots = r->con->plugin_slots;
     const uint32_t offset = ((const uint16_t *)plugin_slots)[e];
     if (0 == offset) return HANDLER_GO_ON;
-    const plugin_fn_data *plfd = (const plugin_fn_data *)
+    const plugin_fn_req_data *plfd = (const plugin_fn_req_data *)
       (((uintptr_t)plugin_slots) + offset);
     handler_t rc = HANDLER_GO_ON;
     while (plfd->fn && (rc = plfd->fn(r, plfd->data)) == HANDLER_GO_ON)
@@ -274,7 +298,7 @@ static handler_t plugins_call_fn_con_data(connection * const con, const int e) {
     const void * const plugin_slots = con->plugin_slots;
     const uint32_t offset = ((const uint16_t *)plugin_slots)[e];
     if (0 == offset) return HANDLER_GO_ON;
-    const plugin_fn_data *plfd = (const plugin_fn_data *)
+    const plugin_fn_con_data *plfd = (const plugin_fn_con_data *)
       (((uintptr_t)plugin_slots) + offset);
     handler_t rc = HANDLER_GO_ON;
     while (plfd->fn && (rc = plfd->fn(con, plfd->data)) == HANDLER_GO_ON)
@@ -285,7 +309,7 @@ static handler_t plugins_call_fn_con_data(connection * const con, const int e) {
 static handler_t plugins_call_fn_srv_data(server * const srv, const int e) {
     const uint32_t offset = ((const uint16_t *)srv->plugin_slots)[e];
     if (0 == offset) return HANDLER_GO_ON;
-    const plugin_fn_data *plfd = (const plugin_fn_data *)
+    const plugin_fn_srv_data *plfd = (const plugin_fn_srv_data *)
       (((uintptr_t)srv->plugin_slots) + offset);
     handler_t rc = HANDLER_GO_ON;
     while (plfd->fn && (rc = plfd->fn(srv,plfd->data)) == HANDLER_GO_ON)
@@ -296,7 +320,7 @@ static handler_t plugins_call_fn_srv_data(server * const srv, const int e) {
 static void plugins_call_fn_srv_data_all(server * const srv, const int e) {
     const uint32_t offset = ((const uint16_t *)srv->plugin_slots)[e];
     if (0 == offset) return;
-    const plugin_fn_data *plfd = (const plugin_fn_data *)
+    const plugin_fn_srv_data *plfd = (const plugin_fn_srv_data *)
       (((uintptr_t)srv->plugin_slots) + offset);
     for (; plfd->fn; ++plfd)
         plfd->fn(srv, plfd->data);
@@ -368,7 +392,7 @@ handler_t plugins_call_handle_waitpid(server *srv, pid_t pid, int status) {
     const uint32_t offset =
       ((const uint16_t *)srv->plugin_slots)[PLUGIN_FUNC_HANDLE_WAITPID];
     if (0 == offset) return HANDLER_GO_ON;
-    const plugin_fn_data *plfd = (const plugin_fn_data *)
+    const plugin_fn_waitpid_data *plfd = (const plugin_fn_waitpid_data *)
       (((uintptr_t)srv->plugin_slots) + offset);
     handler_t rc = HANDLER_GO_ON;
     while (plfd->fn&&(rc=plfd->fn(srv,plfd->data,pid,status))==HANDLER_GO_ON)
@@ -407,7 +431,7 @@ static void plugins_call_init_reverse(server *srv, const uint32_t offset) {
 }
 
 __attribute_cold__
-static void plugins_call_init_slot(server *srv, handler_t(*fn)(), void *data, const uint32_t offset) {
+static void plugins_call_init_slot(server *srv, pl_cb_t fn, void *data, const uint32_t offset) {
     if (fn) {
         plugin_fn_data *plfd = (plugin_fn_data *)
           (((uintptr_t)srv->plugin_slots) + offset);
@@ -502,7 +526,7 @@ handler_t plugins_call_init(server *srv) {
 	/* add handle_uri_raw before handle_uri_clean, but in same slot */
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
 		plugin * const p = ps[i];
-		plugins_call_init_slot(srv, p->handle_uri_raw, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_uri_raw, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_URI_CLEAN]);
 	}
 
@@ -510,37 +534,37 @@ handler_t plugins_call_init(server *srv) {
 		plugin * const p = ps[i];
 
 		if (!p->handle_uri_raw)
-			plugins_call_init_slot(srv, p->handle_uri_clean, p->data,
+			plugins_call_init_slot(srv, (pl_cb_t)p->handle_uri_clean, p->data,
 						offsets[PLUGIN_FUNC_HANDLE_URI_CLEAN]);
-		plugins_call_init_slot(srv, p->handle_request_env, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_request_env, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_REQUEST_ENV]);
-		plugins_call_init_slot(srv, p->handle_request_done, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_request_done, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_REQUEST_DONE]);
-		plugins_call_init_slot(srv, p->handle_connection_accept, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_connection_accept, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_CONNECTION_ACCEPT]);
-		plugins_call_init_slot(srv, p->handle_connection_shut_wr, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_connection_shut_wr, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_CONNECTION_SHUT_WR]);
-		plugins_call_init_slot(srv, p->handle_connection_close, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_connection_close, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE]);
-		plugins_call_init_slot(srv, p->handle_trigger, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_trigger, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_TRIGGER]);
-		plugins_call_init_slot(srv, p->handle_sighup, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_sighup, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_SIGHUP]);
-		plugins_call_init_slot(srv, p->handle_waitpid, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)(uintptr_t)p->handle_waitpid, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_WAITPID]);
-		plugins_call_init_slot(srv, p->handle_subrequest_start, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_subrequest_start, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_SUBREQUEST_START]);
-		plugins_call_init_slot(srv, p->handle_response_start, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_response_start, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_RESPONSE_START]);
-		plugins_call_init_slot(srv, p->handle_docroot, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_docroot, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_DOCROOT]);
-		plugins_call_init_slot(srv, p->handle_physical, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_physical, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_PHYSICAL]);
-		plugins_call_init_slot(srv, p->handle_request_reset, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_request_reset, p->data,
 					offsets[PLUGIN_FUNC_HANDLE_REQUEST_RESET]);
-		plugins_call_init_slot(srv, p->set_defaults, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->set_defaults, p->data,
 					offsets[PLUGIN_FUNC_SET_DEFAULTS]);
-		plugins_call_init_slot(srv, p->worker_init, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->worker_init, p->data,
 					offsets[PLUGIN_FUNC_WORKER_INIT]);
 	}
 

@@ -12,7 +12,7 @@ void test_http_kv (void);
 void test_keyvalue (void);
 void test_request (void);
 
-int main() {
+int main(void) {
     test_array();
     test_base64();
     test_buffer();

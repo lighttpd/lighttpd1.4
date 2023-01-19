@@ -12,7 +12,7 @@ void test_mod_ssi (void);
 void test_mod_staticfile (void);
 void test_mod_userdir (void);
 
-int main() {
+int main(void) {
     test_mod_access();
     test_mod_alias();
     test_mod_evhost();

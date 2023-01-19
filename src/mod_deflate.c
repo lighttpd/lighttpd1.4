@@ -239,7 +239,7 @@ typedef struct {
 	chunkqueue in_queue;
 } handler_ctx;
 
-static handler_ctx *handler_ctx_init() {
+static handler_ctx *handler_ctx_init(void) {
 	handler_ctx * const hctx = ck_calloc(1, sizeof(*hctx));
 	chunkqueue_init(&hctx->in_queue);
 	hctx->cache_fd = -1;
