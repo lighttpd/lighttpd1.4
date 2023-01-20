@@ -623,14 +623,16 @@ URIHANDLER_FUNC(mod_webdav_uri_handler)
     if (!pconf.enabled) return HANDLER_GO_ON;
 
     /* [RFC4918] 18 DAV Compliance Classes */
-    http_header_response_set(r, HTTP_HEADER_OTHER,
-      CONST_STR_LEN("DAV"),
-     #ifdef USE_LOCKS
-      CONST_STR_LEN("1,2,3")
-     #else
-      CONST_STR_LEN("1,3")
-     #endif
-    );
+  #ifdef USE_LOCKS
+    if (pconf.sql)
+        http_header_response_set(r, HTTP_HEADER_OTHER,
+                                 CONST_STR_LEN("DAV"),
+                                 CONST_STR_LEN("1,2,3"));
+    else
+  #endif
+        http_header_response_set(r, HTTP_HEADER_OTHER,
+                                 CONST_STR_LEN("DAV"),
+                                 CONST_STR_LEN("1,3"));
 
     /* instruct MS Office Web Folders to use DAV
      * (instead of MS FrontPage Extensions)
@@ -643,10 +645,10 @@ URIHANDLER_FUNC(mod_webdav_uri_handler)
         http_header_response_append(r, HTTP_HEADER_ALLOW,
           CONST_STR_LEN("Allow"),
           CONST_STR_LEN("PROPFIND"));
-    else
+  #ifdef USE_PROPPATCH
+    else if (pconf.sql)
         http_header_response_append(r, HTTP_HEADER_ALLOW,
           CONST_STR_LEN("Allow"),
-      #ifdef USE_PROPPATCH
        #ifdef USE_LOCKS
           CONST_STR_LEN(
             "PROPFIND, DELETE, MKCOL, PUT, MOVE, COPY, PROPPATCH, LOCK, UNLOCK")
@@ -654,10 +656,13 @@ URIHANDLER_FUNC(mod_webdav_uri_handler)
           CONST_STR_LEN(
             "PROPFIND, DELETE, MKCOL, PUT, MOVE, COPY, PROPPATCH")
        #endif
-      #else
+        );
+  #endif
+    else
+        http_header_response_append(r, HTTP_HEADER_ALLOW,
+          CONST_STR_LEN("Allow"),
           CONST_STR_LEN(
             "PROPFIND, DELETE, MKCOL, PUT, MOVE, COPY")
-      #endif
         );
 
     return HANDLER_GO_ON;
