@@ -245,6 +245,7 @@ typedef off_t loff_t;
 #define PATH_MAX 4096
 #endif
 
+#ifndef MOD_WEBDAV_BUILD_MINIMAL
 #if defined(HAVE_LIBXML_H) && defined(HAVE_SQLITE3_H)
 
 #define USE_PROPPATCH
@@ -259,6 +260,7 @@ typedef off_t loff_t;
 #endif
 
 #endif /* defined(HAVE_LIBXML_H) && defined(HAVE_SQLITE3_H) */
+#endif /* MOD_WEBDAV_BUILD_MINIMAL */
 
 #include "base.h"
 #include "buffer.h"
