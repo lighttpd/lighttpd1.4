@@ -903,9 +903,9 @@ int network_init(server *srv, int stdin_fd) {
 void network_unregister_sock(server *srv, server_socket *srv_socket) {
 	fdnode *fdn = srv_socket->fdn;
 	if (NULL == fdn) return;
-	fdevent_fdnode_event_del(srv->ev, fdn);
-	fdevent_unregister(srv->ev, fdn->fd);
 	srv_socket->fdn = NULL;
+	fdevent_fdnode_event_del(srv->ev, fdn);
+	fdevent_unregister(srv->ev, fdn);
 }
 
 int network_register_fdevents(server *srv) {

@@ -90,7 +90,7 @@ static void connection_close(connection *con) {
 	con->revents_err = 0;
 
 	fdevent_fdnode_event_del(srv->ev, con->fdn);
-	fdevent_unregister(srv->ev, con->fd);
+	fdevent_unregister(srv->ev, con->fdn);
 	con->fdn = NULL;
 #ifdef __WIN32
 	if (0 == closesocket(con->fd))

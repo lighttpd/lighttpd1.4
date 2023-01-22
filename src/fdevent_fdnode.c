@@ -35,20 +35,20 @@ fdevent_register (fdevents *ev, int fd, fdevent_handler handler, void *ctx)
 }
 
 void
-fdevent_unregister (fdevents *ev, int fd)
+fdevent_unregister (fdevents *ev, fdnode *fdn)
 {
-    fdnode *fdn = ev->fdarray[fd];
-    if ((uintptr_t)fdn & 0x3) return; /*(should not happen)*/
-    ev->fdarray[fd] = NULL;
+    fdnode **fdn_slot = &ev->fdarray[fdn->fd];
+    if ((uintptr_t)*fdn_slot & 0x3) return; /*(should not happen)*/
+    *fdn_slot = NULL;
     fdnode_free(fdn);
 }
 
 void
-fdevent_sched_close (fdevents *ev, int fd, int issock)
+fdevent_sched_close (fdevents *ev, fdnode *fdn)
 {
-    fdnode *fdn = ev->fdarray[fd];
-    if ((uintptr_t)fdn & 0x3) return;
-    ev->fdarray[fd] = (fdnode *)((uintptr_t)fdn | (issock ? 0x1 : 0x2));
+    fdnode **fdn_slot = &ev->fdarray[fdn->fd];
+    if ((uintptr_t)*fdn_slot & 0x3) return;
+    *fdn_slot = (fdnode *)((uintptr_t)fdn | 0x3);
     fdn->handler = (fdevent_handler)NULL;
     fdn->ctx = ev->pendclose;
     ev->pendclose = fdn;

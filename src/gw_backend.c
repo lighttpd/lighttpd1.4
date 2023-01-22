@@ -1800,8 +1800,8 @@ static void gw_host_hctx_deq(gw_handler_ctx * const hctx) {
 static void gw_backend_close(gw_handler_ctx * const hctx, request_st * const r) {
     if (hctx->fd >= 0) {
         fdevent_fdnode_event_del(hctx->ev, hctx->fdn);
-        /*fdevent_unregister(ev, hctx->fd);*//*(handled below)*/
-        fdevent_sched_close(hctx->ev, hctx->fd, 1);
+        /*fdevent_unregister(ev, hctx->fdn);*//*(handled below)*/
+        fdevent_sched_close(hctx->ev, hctx->fdn);
         hctx->fdn = NULL;
         hctx->fd = -1;
         gw_host_hctx_deq(hctx);

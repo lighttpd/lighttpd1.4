@@ -73,8 +73,8 @@ int fdevent_poll(fdevents *ev, int timeout_ms);
 __attribute_returns_nonnull__
 fdnode * fdevent_register(fdevents *ev, int fd, fdevent_handler handler, void *ctx);
 
-void fdevent_unregister(fdevents *ev, int fd);
-void fdevent_sched_close(fdevents *ev, int fd, int issock);
+void fdevent_unregister(fdevents *ev, fdnode *fdn);
+void fdevent_sched_close(fdevents *ev, fdnode *fdn);
 
 void fdevent_setfd_cloexec(int fd);
 void fdevent_clrfd_cloexec(int fd);

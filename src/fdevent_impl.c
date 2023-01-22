@@ -276,35 +276,21 @@ static void
 fdevent_sched_run (fdevents * const ev)
 {
     for (fdnode *fdn = ev->pendclose; fdn; ) {
-        int fd, rc;
+        int fd = fdn->fd;
       #ifdef _WIN32
-        rc = (uintptr_t)fdn & 0x3;
-      #endif
-        fdn = (fdnode *)((uintptr_t)fdn & ~0x3);
-        fd = fdn->fd;
-      #ifdef _WIN32
-        if (rc == 0x1) {
-            rc = closesocket(fd);
-        }
-        else if (rc == 0x2) {
-            rc = close(fd);
-        }
+        if (0 != closesocket(fd)) /* WSAPoll() valid only on SOCKET */
       #else
-        rc = close(fd);
+        if (0 != close(fd))
       #endif
-
-        if (0 != rc) {
             log_perror(ev->errh, __FILE__, __LINE__, "close failed %d", fd);
-        }
-        else {
+        else
             --(*ev->cur_fds);
-        }
 
         fdnode * const fdn_tmp = fdn;
         fdn = (fdnode *)fdn->ctx; /* next */
         /*(fdevent_unregister)*/
-        free(fdn_tmp); /*fdnode_free(fdn_tmp);*/
         ev->fdarray[fd] = NULL;
+        free(fdn_tmp); /*fdnode_free(fdn_tmp);*/
     }
     ev->pendclose = NULL;
 }

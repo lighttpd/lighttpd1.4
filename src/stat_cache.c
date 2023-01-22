@@ -560,7 +560,7 @@ static handler_t stat_cache_handle_fdevent(void *ctx, int revent)
 		 *  do not change here so that periodic jobs clean up memory)*/
 		/*sc.stat_cache_engine = STAT_CACHE_ENGINE_NONE; */
 		fdevent_fdnode_event_del(scf->ev, scf->fdn);
-		fdevent_unregister(scf->ev, scf->fd);
+		fdevent_unregister(scf->ev, scf->fdn);
 		scf->fdn = NULL;
 
 		FAMClose(&scf->fam);

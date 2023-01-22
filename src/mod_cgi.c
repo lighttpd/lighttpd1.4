@@ -409,8 +409,8 @@ static void cgi_connection_close_fdtocgi(handler_ctx *hctx) {
 	if (-1 == hctx->fdtocgi) return;
 	struct fdevents * const ev = hctx->ev;
 	fdevent_fdnode_event_del(ev, hctx->fdntocgi);
-	/*fdevent_unregister(ev, hctx->fdtocgi);*//*(handled below)*/
-	fdevent_sched_close(ev, hctx->fdtocgi, 0);
+	/*fdevent_unregister(ev, hctx->fdntocgi);*//*(handled below)*/
+	fdevent_sched_close(ev, hctx->fdntocgi);
 	hctx->fdntocgi = NULL;
 	hctx->fdtocgi = -1;
 }
@@ -426,8 +426,8 @@ static void cgi_connection_close(handler_ctx *hctx) {
 		struct fdevents * const ev = hctx->ev;
 		/* close connection to the cgi-script */
 		fdevent_fdnode_event_del(ev, hctx->fdn);
-		/*fdevent_unregister(ev, hctx->fd);*//*(handled below)*/
-		fdevent_sched_close(ev, hctx->fd, 0);
+		/*fdevent_unregister(ev, hctx->fdn);*//*(handled below)*/
+		fdevent_sched_close(ev, hctx->fdn);
 		hctx->fdn = NULL;
 	}
 

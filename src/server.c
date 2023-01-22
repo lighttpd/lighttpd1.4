@@ -393,7 +393,7 @@ static void server_free(server *srv) {
 	if (oneshot_fd > 0) {
 		if (oneshot_fdn) {
 			fdevent_fdnode_event_del(srv->ev, oneshot_fdn);
-			fdevent_unregister(srv->ev, oneshot_fd);
+			fdevent_unregister(srv->ev, oneshot_fdn);
 			oneshot_fdn = NULL;
 		}
 		close(oneshot_fd);
