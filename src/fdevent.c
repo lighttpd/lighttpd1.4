@@ -545,10 +545,17 @@ int fdevent_connect_status(int fd) {
 
 
 #include <netinet/tcp.h>
-#if (defined(__APPLE__) && defined(__MACH__)) \
-  || defined(__FreeBSD__) || defined(__NetBSD__) \
+#if  defined(__FreeBSD__) || defined(__NetBSD__) \
   || defined(__OpenBSD__) || defined(__DragonFly__)
 #include <netinet/tcp_fsm.h>
+#endif
+#if defined(__APPLE__) && defined(__MACH__)
+#include <TargetConditionals.h> /* TARGET_OS_IPHONE, TARGET_OS_MAC */
+#if TARGET_OS_IPHONE            /* iOS, tvOS, or watchOS device */
+/*#define TCPS_CLOSE_WAIT 5*/   /* ??? which header contains this, if any ??? */
+#elif TARGET_OS_MAC             /* MacOS */
+#include <netinet/tcp_fsm.h>
+#endif
 #endif
 
 /* fd must be TCP socket (AF_INET, AF_INET6), end-of-stream recv() 0 bytes */
