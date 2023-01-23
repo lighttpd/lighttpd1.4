@@ -41,6 +41,17 @@
 # define NETWORK_WRITE_USE_DARWIN_SENDFILE
 #endif
 
+#if defined(__APPLE__) && defined(__MACH__)
+/* sendfile() on iOS/tvOS sendfile() raises SIGSYS insead of returning ENOSYS
+ * https://github.com/ndfred/iperf-ios/issues/17
+ * https://github.com/dotnet/runtime/pull/69436 */
+#include <TargetConditionals.h> /* TARGET_OS_IPHONE, TARGET_OS_MAC */
+#if TARGET_OS_IPHONE            /* iOS, tvOS, or watchOS device */
+#undef NETWORK_WRITE_USE_SENDFILE
+#undef NETWORK_WRITE_USE_DARWIN_SENDFILE
+#endif
+#endif
+
 #if defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILEV && defined(__sun)
 # ifdef NETWORK_WRITE_USE_SENDFILE
 #  error "can't have more than one sendfile implementation"
