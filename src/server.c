@@ -1553,6 +1553,9 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 
 	if (srv->srvconf.bindhost && buffer_is_equal_string(srv->srvconf.bindhost, CONST_STR_LEN("/dev/stdin"))) {
+		/* XXX: to potentially support on _WIN32,
+		 *      (SOCKET)GetStdHandle(STD_INPUT_HANDLE) and
+		 *      WSADuplicateSocket() instead of dup() */
 		if (-1 == srv->stdin_fd)
 			srv->stdin_fd = dup(STDIN_FILENO);
 		if (srv->stdin_fd <= STDERR_FILENO) {
@@ -1563,6 +1566,27 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 
 	/* close stdin and stdout, as they are not needed */
+  #ifdef _WIN32
+	/* _WIN32 file descriptors are not allocated lowest first.
+	 * Open NUL in binary mode and as (default) inheritable handle
+	 * https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/dup-dup2?view=msvc-170
+	 *
+	 * A stream is associated with a file descriptor (_fileno(stream)).
+	 * An open file descriptor has an underlying operating system HANDLE.
+	 * However, standard handles are cached at program startup,
+	 * so we try to match them all back up after redirection. */
+	if (   NULL == freopen("nul:", "rb", stdin)
+	    || NULL == freopen("nul:", "wb", stdout)
+	    || (_fileno(stderr) == -2
+		&& NULL == freopen("nul:", "wb", stderr))) {
+		log_perror(srv->errh, __FILE__, __LINE__, "freopen() NUL");
+		return -1;
+	}
+	SetStdHandle(STD_INPUT_HANDLE, (HANDLE)_get_osfhandle(_fileno(stdin)));
+	SetStdHandle(STD_OUTPUT_HANDLE,(HANDLE)_get_osfhandle(_fileno(stdout)));
+	SetStdHandle(STD_ERROR_HANDLE, (HANDLE)_get_osfhandle(_fileno(stderr)));
+	fdevent_setfd_cloexec(STDERR_FILENO);
+  #else
 	{
 		struct stat st;
 		int devnull;
@@ -1594,6 +1618,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		if (devnull != errfd) close(devnull);
 	      #endif
 	}
+  #endif
 
 	http_range_config_allow_http10(config_feature_bool(srv, "http10.range", 0));
 

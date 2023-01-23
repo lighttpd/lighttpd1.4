@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "sys-unistd.h" /* <unistd.h> */
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "fdevent.h"
 #include "ck.h"
@@ -155,6 +158,9 @@ fdlog_pipe_serrh (const int fd)
         if (fdlog->fd != fd) continue;
 
         fdlog->fd = STDERR_FILENO;
+      #ifdef _WIN32
+        SetStdHandle(STD_ERROR_HANDLE, (HANDLE)_get_osfhandle(STDERR_FILENO));
+      #endif
         break;
     }
 }
@@ -279,6 +285,10 @@ fdlog_files_cycle (fdlog_st * const errh)
                     log_perror(errh, __FILE__, __LINE__,
                       "dup2() %s to %d", fdlog->fn, fdlog->fd);
                 close(fd);
+              #ifdef _WIN32
+                SetStdHandle(STD_ERROR_HANDLE,
+                             (HANDLE)_get_osfhandle(STDERR_FILENO));
+              #endif
             }
         }
         else {

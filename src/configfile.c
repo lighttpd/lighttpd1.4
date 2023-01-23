@@ -1790,7 +1790,19 @@ int config_log_error_open(server *srv) {
         errfd = -1;
     }
 
-    if (0 != fdevent_set_stdin_stdout_stderr(-1, -1, errfd)) {
+  #ifdef _WIN32
+    if (-1 == errfd) {
+    }
+    else if (-1 != _dup2(errfd, STDERR_FILENO)
+             && SetStdHandle(STD_ERROR_HANDLE,
+                             (HANDLE)_get_osfhandle(STDERR_FILENO))) {
+        fdevent_setfd_cloexec(STDERR_FILENO);
+    }
+    else
+  #else
+    if (0 != fdevent_set_stdin_stdout_stderr(-1, -1, errfd))
+  #endif
+    {
         log_perror(srv->errh, __FILE__, __LINE__, "setting stderr failed");
       #ifdef FD_CLOEXEC
         if (-1 != errfd && NULL == serrh) close(errfd);
