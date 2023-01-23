@@ -270,6 +270,9 @@ log_error_write (const log_error_st * const errh, buffer * const restrict b)
 
 
 #ifdef _WIN32
+#include <winsock2.h>   /* WSAGetLastError() */
+
+__attribute_noinline__
 static void
 log_error_append_winerror (buffer * const b, DWORD dwMessageId)
 {
@@ -319,6 +322,8 @@ log_error_va_list_impl (const log_error_st *errh,
       case 1: log_error_append_winerror(b, GetLastError());
               if (errnum) log_error_append_strerror(b, errnum);
               break;
+      case 2: log_error_append_winerror(b, WSAGetLastError());
+              break;
     }
   #else
     if (perr)
@@ -354,6 +359,20 @@ log_perror (log_error_st * const errh,
     log_error_va_list_impl(errh, filename, line, fmt, ap, 1);
     va_end(ap);
 }
+
+
+#ifdef _WIN32
+void
+log_serror (log_error_st * const errh,
+            const char * const filename, const unsigned int line,
+            const char * const fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    log_error_va_list_impl(errh, filename, line, fmt, ap, 2);
+    va_end(ap);
+}
+#endif
 
 
 void
