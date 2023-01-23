@@ -1325,7 +1325,7 @@ handler_t http_response_read(request_st * const r, http_response_opts * const op
                 }
                 __attribute_fallthrough__
               default:
-                log_perror(r->conf.errh, __FILE__, __LINE__,
+                log_serror(r->conf.errh, __FILE__, __LINE__,
                   "recv() %d %d", r->con->fd, fd);
                 return HANDLER_ERROR;
             }

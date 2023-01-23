@@ -84,8 +84,7 @@
 __attribute_cold__
 static int network_write_error(int fd, log_error_st *errh) {
   #ifdef _WIN32
-    int lastError = WSAGetLastError();
-    switch (lastError) {
+    switch (WSAGetLastError()) {
       case WSAEINTR:
       case WSAEWOULDBLOCK:
         return -3;
@@ -94,7 +93,7 @@ static int network_write_error(int fd, log_error_st *errh) {
       case WSAECONNABORTED:
         return -2;
       default:
-        log_error(errh,__FILE__,__LINE__,"send failed: %d %d",lastError,fd);
+        log_serror(errh, __FILE__, __LINE__, "send() %d", fd);
         return -1;
     }
   #else
@@ -106,7 +105,7 @@ static int network_write_error(int fd, log_error_st *errh) {
       case ECONNRESET:
         return -2;
       default:
-        log_perror(errh,__FILE__,__LINE__,"write failed: %d",fd);
+        log_perror(errh, __FILE__, __LINE__, "write() %d", fd);
         return -1;
     }
   #endif

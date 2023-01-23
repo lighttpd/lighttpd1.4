@@ -287,7 +287,7 @@ fdevent_sched_run (fdevents * const ev)
       #else
         if (0 != close(fd))
       #endif
-            log_perror(ev->errh, __FILE__, __LINE__, "close failed %d", fd);
+            log_serror(ev->errh, __FILE__, __LINE__, "close() %d", fd);
         else
             --(*ev->cur_fds);
 
@@ -314,7 +314,7 @@ fdevent_poll (fdevents * const ev, const int timeout_ms)
     if (n >= 0)
         fdevent_sched_run(ev);
     else if (errno != EINTR)
-        log_perror(ev->errh, __FILE__, __LINE__, "fdevent_poll failed");
+        log_serror(ev->errh, __FILE__, __LINE__, "fdevent_poll()");
     return n;
 }
 

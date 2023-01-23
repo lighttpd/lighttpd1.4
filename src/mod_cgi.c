@@ -836,14 +836,14 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 
   #ifdef _WIN32
 	if (0 != fdevent_socketpair_cloexec(AF_INET,SOCK_STREAM,0,from_cgi_fds)) {
-		log_perror(r->conf.errh, __FILE__, __LINE__, "socketpair()");
+		log_serror(r->conf.errh, __FILE__, __LINE__, "socketpair()");
 		if (0 == r->reqbody_length)
 			fdio_close_file(to_cgi_fds[0]);
 		return -1;
 	}
 	if (-1 == to_cgi_fds[0]) {
 		if (0 != fdevent_socketpair_cloexec(AF_INET,SOCK_STREAM,0,to_cgi_fds)) {
-			log_perror(r->conf.errh, __FILE__, __LINE__, "socketpair()");
+			log_serror(r->conf.errh, __FILE__, __LINE__, "socketpair()");
 			fdio_close_socket(from_cgi_fds[0]);
 			fdio_close_socket(from_cgi_fds[1]);
 			return -1;

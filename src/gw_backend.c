@@ -272,8 +272,13 @@ __attribute_cold__
 static void gw_proc_connect_error(request_st * const r, gw_host *host, gw_proc *proc, pid_t pid, int errnum, int debug) {
     const unix_time64_t cur_ts = log_monotonic_secs;
     log_error_st * const errh = r->conf.errh;
-    errno = errnum; /*(for log_perror())*/
-    log_perror(errh, __FILE__, __LINE__,
+  #ifdef _WIN32
+    WSASetLastError(errnum); /*(for log_perror()/log_serror())*/
+    if (errnum == WSAEWOULDBLOCK) errnum = EAGAIN;
+  #else
+    errno = errnum; /*(for log_perror()/log_serror())*/
+  #endif
+    log_serror(errh, __FILE__, __LINE__,
       "establishing connection failed: socket: %s", proc->connection_name->ptr);
 
     if (!proc->is_local) {
@@ -500,7 +505,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
 
     gw_fd = fdevent_socket_cloexec(proc->saddr->sa_family, SOCK_STREAM, 0);
     if (-1 == gw_fd) {
-        log_perror(errh, __FILE__, __LINE__, "socket()");
+        log_serror(errh, __FILE__, __LINE__, "socket()");
         return -1;
     }
 
@@ -517,8 +522,8 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
      * or might not indicate presence of socket, so try to unlink unixsocket */
 
     if (-1 == status && errno != ENOENT && proc->unixsocket) {
-        log_perror(errh, __FILE__, __LINE__,
-          "connect %s", proc->unixsocket->ptr);
+        log_serror(errh, __FILE__, __LINE__,
+          "connect() %s", proc->unixsocket->ptr);
         unlink(proc->unixsocket->ptr);
     }
 
@@ -540,26 +545,26 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
         gw_fd = fdevent_socket_cloexec(proc->saddr->sa_family, SOCK_STREAM, 0);
       #endif
         if (-1 == gw_fd) {
-            log_perror(errh, __FILE__, __LINE__, "socket()");
+            log_serror(errh, __FILE__, __LINE__, "socket()");
             return -1;
         }
 
         if (fdevent_set_so_reuseaddr(gw_fd, 1) < 0) {
-            log_perror(errh, __FILE__, __LINE__, "socketsockopt()");
+            log_serror(errh, __FILE__, __LINE__, "socketsockopt()");
             fdio_close_socket(gw_fd);
             return -1;
         }
 
         /* create socket */
         if (-1 == bind(gw_fd, proc->saddr, proc->saddrlen)) {
-            log_perror(errh, __FILE__, __LINE__,
-              "bind failed for: %s", proc->connection_name->ptr);
+            log_serror(errh, __FILE__, __LINE__,
+              "bind() %s", proc->connection_name->ptr);
             fdio_close_socket(gw_fd);
             return -1;
         }
 
         if (-1 == listen(gw_fd, host->listen_backlog)) {
-            log_perror(errh, __FILE__, __LINE__, "listen()");
+            log_serror(errh, __FILE__, __LINE__, "listen()");
             fdio_close_socket(gw_fd);
             return -1;
         }

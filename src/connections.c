@@ -91,7 +91,7 @@ static void connection_close(connection *con) {
 	if (0 == fdio_close_socket(con->fd))
 		--srv->cur_fds;
 	else
-		log_perror(r->conf.errh, __FILE__, __LINE__,
+		log_serror(r->conf.errh, __FILE__, __LINE__,
 		  "(warning) close: %d", con->fd);
 
 	if (r->conf.log_state_handling) {
@@ -865,8 +865,7 @@ __attribute_cold__
 static int connection_read_cq_err(connection *con) {
     request_st * const r = &con->request;
   #ifdef _WIN32
-    int lastError = WSAGetLastError();
-    switch (lastError) {
+    switch (WSAGetLastError()) {
       case WSAEWOULDBLOCK:
         return 0;
       case WSAEINTR:
@@ -877,8 +876,8 @@ static int connection_read_cq_err(connection *con) {
         /* suppress logging for this error, expected for keep-alive */
         break;
     default:
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "connection closed - recv failed: %d", lastError);
+        log_serror(r->conf.errh, __FILE__, __LINE__,
+          "connection closed - recv failed");
         break;
     }
   #else
