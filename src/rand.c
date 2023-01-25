@@ -4,6 +4,12 @@
  * Copyright(c) 2016 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
  * License: BSD 3-clause (same as lighttpd)
  */
+
+#ifdef _WIN32
+/* _WIN32 rand_s() requires _CRT_RAND_S defined prior to #include <stdlib.h> */
+#define _CRT_RAND_S
+#endif
+
 #include "first.h"
 
 #include "rand.h"
@@ -133,6 +139,22 @@ static int li_getentropy (void *buf, size_t buflen)
 {
   #ifdef HAVE_GETENTROPY
     return getentropy(buf, buflen);
+  #elif defined(_WIN32)
+    for (unsigned int rnum; buflen; buflen -= 4) {
+        if (0 != rand_s(&rnum) || 0 == rnum) {
+            errno = EIO;
+            return -1;
+        }
+        if (buflen > 4) {
+            memcpy(buf, &rnum, 4);
+            buf = (char *)buf + 4;
+        }
+        else {
+            memcpy(buf, &rnum, buflen);
+            break;
+        }
+    }
+    return 0;
   #else
     /*(see NOTES section in 'man getrandom' on Linux)*/
    #if defined(HAVE_GETRANDOM) || defined(SYS_getrandom)
