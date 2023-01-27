@@ -269,6 +269,24 @@ log_error_write (const log_error_st * const errh, buffer * const restrict b)
 }
 
 
+#ifdef _WIN32
+static void
+log_error_append_winerror (buffer * const b, DWORD dwMessageId)
+{
+    if (0 == dwMessageId) return; /* The operation completed successfully. */
+    TCHAR lpMsgBuf[1024];
+    lpMsgBuf[0] = '\0';
+    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                  NULL, dwMessageId, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                  (LPTSTR)lpMsgBuf, sizeof(lpMsgBuf)/sizeof(TCHAR), NULL);
+    size_t len = strlen(lpMsgBuf);
+    if (len && lpMsgBuf[len-1] == '\n') --len;
+    if (len && lpMsgBuf[len-1] == '\r') --len;
+    buffer_append_str2(b, CONST_STR_LEN(": "), lpMsgBuf, len);
+}
+#endif
+
+
 __attribute_noinline__
 static void
 log_error_append_strerror (buffer * const b, const int errnum)
@@ -295,8 +313,17 @@ log_error_va_list_impl (const log_error_st *errh,
     if (NULL == b) return; /*(errno not modified if errh->fd == -1)*/
 
     log_buffer_vsprintf(b, fmt, ap);
+  #ifdef _WIN32
+    switch (perr) {
+      case 0: default: break;
+      case 1: log_error_append_winerror(b, GetLastError());
+              if (errnum) log_error_append_strerror(b, errnum);
+              break;
+    }
+  #else
     if (perr)
         log_error_append_strerror(b, errnum);
+  #endif
 
     log_error_write(errh, b);
 

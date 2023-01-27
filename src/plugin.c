@@ -76,19 +76,6 @@ static void plugin_free(plugin *p) {
     free(p);
 }
 
-#ifdef _WIN32
-__attribute_cold__
-static void
-log_w32_syserror_2 (log_error_st *const errh, const char *file, const int line, const char * const str1, const char * const str2)
-{
-    TCHAR lpMsgBuf[1024];
-    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-                  0, /* MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT) */
-                  (LPTSTR)lpMsgBuf, sizeof(lpMsgBuf)/sizeof(TCHAR), NULL);
-    log_error(errh, file, line, "%s for %s: %s", str1, str2, (char *)lpMsgBuf);
-}
-#endif
-
 /**
  *
  *
@@ -187,8 +174,8 @@ int plugins_load(server *srv) {
 	  #ifdef _WIN32
 		buffer_append_string_len(tb, CONST_STR_LEN(".dll"));
 		if (NULL == (lib = LoadLibrary(tb->ptr))) {
-			log_w32_syserror_2(srv->errh, __FILE__, __LINE__,
-			                   "LoadLibrary()", tb->ptr);
+			log_perror(srv->errh, __FILE__, __LINE__,
+			  "LoadLibrary() %s", tb->ptr);
 			if (srv->srvconf.compat_module_load) {
 				if (buffer_eq_slen(module, CONST_STR_LEN("mod_deflate")))
 					continue;
@@ -199,8 +186,8 @@ int plugins_load(server *srv) {
 		buffer_append_string_len(tb, CONST_STR_LEN("_plugin_init"));
 		init = (int(WINAPI *)(plugin *))(intptr_t)GetProcAddress(lib, tb->ptr);
 		if (init == NULL) {
-			log_w32_syserror_2(srv->errh, __FILE__, __LINE__,
-			                   "GetProcAddress()", tb->ptr);
+			log_perror(srv->errh, __FILE__, __LINE__,
+			  "GetProcAddress() %s", tb->ptr);
 		        FreeLibrary(lib);
 			return -1;
 		}
