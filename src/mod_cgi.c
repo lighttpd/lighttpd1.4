@@ -414,11 +414,7 @@ static cgi_pid_t * cgi_pid_add(plugin_data *p, pid_t pid, handler_ctx *hctx) {
 
 static void cgi_pid_kill(cgi_pid_t *cgi_pid, int sig) {
     cgi_pid->signal_sent = sig; /*(save last signal sent)*/
-  #ifdef HAVE_FORK
-    /* XXX: future: revisit on _WIN32
-     * (perhaps use pid_t as process handle) */
-    kill(cgi_pid->pid, sig);
-  #endif
+    fdevent_kill(cgi_pid->pid, sig);
 }
 
 static void cgi_pid_del(plugin_data *p, cgi_pid_t *cgi_pid) {

@@ -754,9 +754,7 @@ static void gw_proc_kill(gw_host *host, gw_proc *proc) {
         host->unused_procs->prev = proc;
     host->unused_procs = proc;
 
-  #ifdef HAVE_FORK
-    kill(proc->pid, host->kill_signal);
-  #endif
+    fdevent_kill(proc->pid, host->kill_signal);
 
     gw_proc_set_state(host, proc, PROC_STATE_KILLED);
 }
@@ -1047,12 +1045,10 @@ static void gw_restart_dead_proc(gw_host * const host, log_error_st * const errh
             break;
         case PROC_STATE_KILLED:
             if (trigger && ++proc->disabled_until > 4) {
-              #ifdef HAVE_FORK
                 int sig = (proc->disabled_until <= 8)
                   ? host->kill_signal
                   : proc->disabled_until <= 16 ? SIGTERM : SIGKILL;
-                kill(proc->pid, sig);
-              #endif
+                fdevent_kill(proc->pid, sig);
             }
             break;
         case PROC_STATE_DIED_WAIT_FOR_PID:
@@ -1205,11 +1201,8 @@ void gw_plugin_config_free(gw_plugin_config *s) {
 
                 for (proc = host->first; proc; proc = proc->next) {
                     if (proc->pid > 0) {
-                      #ifdef HAVE_FORK
-                        kill(proc->pid, host->kill_signal);
-                      #endif
+                        fdevent_kill(proc->pid, host->kill_signal);
                     }
-
                     if (proc->is_local && proc->unixsocket) {
                         unlink(proc->unixsocket->ptr);
                     }
@@ -1217,9 +1210,7 @@ void gw_plugin_config_free(gw_plugin_config *s) {
 
                 for (proc = host->unused_procs; proc; proc = proc->next) {
                     if (proc->pid > 0) {
-                      #ifdef HAVE_FORK
-                        kill(proc->pid, host->kill_signal);
-                      #endif
+                        fdevent_kill(proc->pid, host->kill_signal);
                     }
                     if (proc->is_local && proc->unixsocket) {
                         unlink(proc->unixsocket->ptr);
