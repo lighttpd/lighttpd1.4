@@ -118,6 +118,7 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
 #endif
 int fdevent_waitpid(pid_t pid, int *status, int nb);
 int fdevent_waitpid_intr(pid_t pid, int *status);
+int fdevent_kill(pid_t pid, int sig);
 
 #ifdef _WIN32
 __attribute_cold__

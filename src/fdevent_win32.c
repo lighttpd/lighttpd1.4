@@ -330,7 +330,11 @@ int fdevent_fcntl_set_nb_cloexec_sock (int fd)
 
 
 #include <windows.h>
-#include <signal.h>     /* sig_atomic_t */
+#include <signal.h>     /* sig_atomic_t SIGKILL */
+
+#ifndef SIGKILL
+#define SIGKILL 9
+#endif
 
 #ifndef INFINITE
 #define INFINITE      0xFFFFFFFF
@@ -374,6 +378,29 @@ void fdevent_win32_cleanup (void)
             CloseHandle(pi->hProcess);
         free(pi);
     }
+}
+
+
+int fdevent_kill (pid_t pid, int sig)
+{
+    /* fdevent_createprocess() uses CREATE_NEW_PROCESS_GROUP flag */
+    if (sig != SIGKILL)
+        return GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, pid) ? 0 : -1;
+
+    /* note: not thread-safe; not efficient with many processes (O(n)) */
+    struct pilist *pi;
+    struct pilist **next = &pilist;
+    while ((pi = *next) && pid != pi->pid)
+        next = &pi->next;
+    if (pi)
+        return TerminateProcess(pi->hProcess, SIGKILL) ? 0 : -1;
+
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+    if (!hProcess)
+        return -1;
+    int rc = TerminateProcess(hProcess, SIGKILL) ? 0 : -1;/*(SIGKILL ExitCode)*/
+    CloseHandle(hProcess);
+    return rc;
 }
 
 
