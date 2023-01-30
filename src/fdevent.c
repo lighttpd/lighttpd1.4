@@ -1,8 +1,6 @@
 #include "first.h"
 
 #include "fdevent.h"
-#include "buffer.h"
-#include "log.h"
 
 #include <sys/types.h>
 #include "sys-socket.h"
@@ -19,6 +17,9 @@
 #include <share.h>      /* _SH_DENYRW */
 #include <winsock2.h>
 #endif
+
+#include "ck.h"
+#define force_assert(x) ck_assert(x)
 
 #ifdef SOCK_CLOEXEC
 static int use_sock_cloexec;
@@ -600,6 +601,7 @@ int fdevent_set_so_reuseaddr (const int fd, const int opt)
 
 #include <sys/stat.h>
 #include "ck.h"
+#include "log.h"
 __attribute_cold__ /*(convenience routine for use at config at startup)*/
 char *
 fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *(malloc_fn)(size_t), void(free_fn)(void *))
