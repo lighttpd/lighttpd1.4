@@ -2363,7 +2363,8 @@ int config_parse_file(server *srv, config_t *context, const char *fn) {
 	if (buffer_is_blank(context->basedir) ||
 	    (fn[0] == '/' || fn[0] == '\\') ||
 	    (fn[0] == '.' && (fn[1] == '/' || fn[1] == '\\')) ||
-	    (fn[0] == '.' && fn[1] == '.' && (fn[2] == '/' || fn[2] == '\\'))) {
+	    (fn[0] == '.' && fn[1] == '.' && (fn[2] == '/' || fn[2] == '\\')) ||
+	    (light_isalpha(fn[0]) && fn[1] == ':' && (fn[2] == '/' || fn[2] == '\\'))) {
 		buffer_copy_string_len(filename, fn, fnlen);
 	} else {
 		buffer_copy_path_len2(filename, BUF_PTR_LEN(context->basedir),
@@ -2595,11 +2596,11 @@ int config_read(server *srv, const char *fn) {
 	context_init(srv, &context);
 	context.all_configs = srv->config_context;
 
-#ifdef __WIN32
-	pos = strrchr(fn, '\\');
-#else
 	pos = strrchr(fn, '/');
-#endif
+  #ifdef _WIN32
+	char * const spos = strrchr(fn, '\\');
+	if (spos > pos) pos = spos;
+  #endif
 	if (pos) {
 		buffer_copy_string_len(context.basedir, fn, pos - fn + 1);
 	}

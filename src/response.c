@@ -224,14 +224,20 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 			break;
 		case EACCES:
 			return http_response_physical_path_error(r, 403, NULL);
-		case ENAMETOOLONG:
-			/* file name to be read was too long. return 404 */
 		case ENOENT:
 			if (r->http_method == HTTP_METHOD_OPTIONS
 			    && light_btst(r->resp_htags, HTTP_HEADER_ALLOW)) {
 				r->http_status = 200;
 				return HANDLER_FINISHED;
 			}
+		  #ifdef _WIN32
+			/* _WIN32 returns ENOENT instead of ENOTDIR for PATH_INFO */
+			break;
+		  #else
+			__attribute_fallthrough__
+		  #endif
+		case ENAMETOOLONG:
+			/* file name to be read was too long. return 404 */
 			return http_response_physical_path_error(r, 404, NULL);
 		default:
 			/* we have no idea what happened. let's tell the user so. */
