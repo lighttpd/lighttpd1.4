@@ -462,7 +462,7 @@ static int env_add(char_array *env, const char *key, size_t key_len, const char 
 
     if (!key || !val) return -1;
 
-    dst = ck_malloc(key_len + val_len + 3);
+    dst = ck_malloc(key_len + val_len + 2);
     memcpy(dst, key, key_len);
     dst[key_len] = '=';
     memcpy(dst + key_len + 1, val, val_len + 1); /* add the \0 from the value */
