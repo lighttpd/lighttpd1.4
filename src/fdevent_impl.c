@@ -885,34 +885,9 @@ fdevent_select_event_set (fdevents *ev, fdnode *fdn, int events)
 }
 
 static int
-fdevent_select_event_get_revent (const fdevents *ev, int ndx)
-{
-    int revents = 0;
-    if (FD_ISSET(ndx, &ev->select_read))  revents |= FDEVENT_IN;
-    if (FD_ISSET(ndx, &ev->select_write)) revents |= FDEVENT_OUT;
-    if (FD_ISSET(ndx, &ev->select_error)) revents |= FDEVENT_ERR;
-    return revents;
-}
-
-static int
-fdevent_select_event_next_fdndx (const fdevents *ev, int ndx)
-{
-    const int max_fd = ev->select_max_fd + 1;
-    for (int i = (ndx < 0) ? 0 : ndx + 1; i < max_fd; ++i) {
-        if (FD_ISSET(i, &(ev->select_read)))  return i;
-        if (FD_ISSET(i, &(ev->select_write))) return i;
-        if (FD_ISSET(i, &(ev->select_error))) return i;
-    }
-
-    return -1;
-}
-
-static int
 fdevent_select_poll (fdevents *ev, int timeout_ms)
 {
-    int n;
     struct timeval tv;
-
     tv.tv_sec =  timeout_ms / 1000;
     tv.tv_usec = (timeout_ms % 1000) * 1000;
 
@@ -920,16 +895,21 @@ fdevent_select_poll (fdevents *ev, int timeout_ms)
     ev->select_write = ev->select_set_write;
     ev->select_error = ev->select_set_error;
 
-    n = select(ev->select_max_fd + 1,
-               &ev->select_read, &ev->select_write, &ev->select_error, &tv);
-    for (int ndx = -1, i = 0; i < n; ++i) {
-        fdnode *fdn;
-        ndx = fdevent_select_event_next_fdndx(ev, ndx);
-        if (-1 == ndx) break;
-        fdn = ev->fdarray[ndx];
-        if (0 == ((uintptr_t)fdn & 0x3)) {
-            int revents = fdevent_select_event_get_revent(ev, ndx);
-            (*fdn->handler)(fdn->ctx, revents);
+    const int nfds = ev->select_max_fd + 1;
+    const int n =
+      select(nfds, &ev->select_read, &ev->select_write, &ev->select_error, &tv);
+    if (n <= 0) return n;
+    for (int ndx = -1, i = n; ++ndx < nfds; ) {
+        int revents = 0;
+        if (FD_ISSET(ndx, &ev->select_read))  revents |= FDEVENT_IN;
+        if (FD_ISSET(ndx, &ev->select_write)) revents |= FDEVENT_OUT;
+        if (FD_ISSET(ndx, &ev->select_error)) revents |= FDEVENT_ERR;
+        if (revents) {
+            const fdnode *fdn = ev->fdarray[ndx];
+            if (0 == ((uintptr_t)fdn & 0x3))
+                (*fdn->handler)(fdn->ctx, revents);
+            if (0 == --i)
+                break;
         }
     }
     return n;
