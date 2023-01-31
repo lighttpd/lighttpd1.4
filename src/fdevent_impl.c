@@ -788,15 +788,14 @@ fdevent_poll_event_set (fdevents *ev, fdnode *fdn, int events)
 static int
 fdevent_poll_poll (fdevents *ev, int timeout_ms)
 {
-    struct pollfd * const restrict pfds = ev->pollfds;
+    const int n = poll(ev->pollfds, ev->used, timeout_ms);
     fdnode ** const fdarray = ev->fdarray;
-    const int n = poll(pfds, ev->used, timeout_ms);
-    for (int i = 0, m = 0; m < n; ++i) {
-        if (0 == pfds[i].revents) continue;
+    for (int i = 0, m = 0; m < n; ++i, ++m) {
+        struct pollfd * const restrict pfds = ev->pollfds;
+        while (0 == pfds[i].revents) ++i;
         fdnode *fdn = fdarray[pfds[i].fd];
         if (0 == ((uintptr_t)fdn & 0x3))
             (*fdn->handler)(fdn->ctx, pfds[i].revents);
-        ++m;
     }
     return n;
 }
