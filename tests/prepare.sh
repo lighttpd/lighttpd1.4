@@ -48,7 +48,7 @@ touch "${tmpdir}/servers/www.example.org/pages/image.jpg" \
 echo "12345" > "${tmpdir}/servers/123.example.org/pages/12345.txt"
 echo "12345" > "${tmpdir}/servers/123.example.org/pages/12345.html"
 echo "12345" > "${tmpdir}/servers/123.example.org/pages/dummyfile.bla"
-echo "12345" > "${tmpdir}/servers/123.example.org/pages/range.pdf"
+echo "12345" > "${tmpdir}/servers/123.example.org/pages/range.disabled"
 cat - <<HERE > "${tmpdir}/servers/123.example.org/pages/100.txt"
 123456789
 123456789

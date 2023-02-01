@@ -439,7 +439,7 @@ ok($tf->handle_http($t) == 0, 'GET, Range start out of range');
 
 
 $t->{REQUEST}  = ( <<EOF
-GET /range.pdf HTTP/1.1
+GET /range.disabled HTTP/1.1
 Host: 123.example.org
 Range: bytes=0-
 Connection: close
