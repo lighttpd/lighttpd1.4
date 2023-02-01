@@ -304,11 +304,13 @@ static int mkdir_for_file (char *fn) {
     return 0;
 }
 
+#ifndef _WIN32 /* disable on _WIN32 */
 static int mkdir_recursive (char *dir) {
     return 0 == mkdir_for_file(dir) && (0 == mkdir(dir,0700) || errno == EEXIST)
       ? 0
       : -1;
 }
+#endif
 
 static buffer * mod_deflate_cache_file_name(request_st * const r, const buffer *cache_dir, const buffer * const etag) {
     /* XXX: future: for shorter paths into the cache, we could checksum path,
@@ -384,7 +386,9 @@ static void mod_deflate_merge_config_cpv(plugin_config * const pconf, const conf
         pconf->max_loadavg = cpv->v.d;
         break;
       case 8: /* deflate.cache-dir */
+       #ifndef _WIN32 /* disable on _WIN32 */
         pconf->cache_dir = cpv->v.b;
+       #endif
         break;
     #if 0 /*(cpv->k_id remapped in mod_deflate_set_defaults())*/
       case 9: /* compress.filetype */
@@ -798,6 +802,7 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                 cpv->k_id = 8; /* deflate.cache-dir */
                 __attribute_fallthrough__
               case 8: /* deflate.cache-dir */
+               #ifndef _WIN32 /* disable on _WIN32 */
                 if (!buffer_is_blank(cpv->v.b)) {
                     buffer *b;
                     *(const buffer **)&b = cpv->v.b;
@@ -812,6 +817,7 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
                     }
                 }
                 else
+               #endif
                     cpv->v.b = NULL;
                 break;
              #if 0    /*(handled further above)*/
