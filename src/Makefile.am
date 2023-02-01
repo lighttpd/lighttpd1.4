@@ -442,6 +442,7 @@ lighttpd_SOURCES = \
   mod_cgi.c \
   mod_deflate.c \
   mod_dirlisting.c \
+  mod_evhost.c \
   mod_expire.c \
   mod_extforward.c \
   mod_fastcgi.c \
