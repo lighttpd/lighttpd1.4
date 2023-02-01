@@ -207,7 +207,7 @@ sub cygpath_alm {
     my $result = <$FH>;
     close $FH;
     chomp $result;
-    $result =~ s/^[A-Z]://i; # remove volume (C:)
+    $result =~ s/^[A-Z]://i unless $_[1]; # remove volume (C:)
     return $result;
 }
 
@@ -236,6 +236,11 @@ sub start_proc {
 		$testdir            = cygpath_alm($testdir);
 		$conf               = cygpath_alm($conf);
 		$modules_path       = cygpath_alm($modules_path);
+
+		$ENV{CYGROOT}       = cygpath_alm("/", 1);
+		$ENV{CYGVOL}        = $ENV{CYGROOT} =~ m%^([a-z]):%i
+		                      ? "/cygdrive/$1"
+		                      : "/cygdrive/c";
 	}
 
 	my @cmdline = ($self->{LIGHTTPD_PATH}, "-D", "-f", $conf, "-m", $modules_path);
@@ -272,6 +277,8 @@ sub start_proc {
 server.systemd-socket-activation := "disable"
 server.bind = "127.0.0.1"
 server.port = $$self{'PORT'}
+server.modules += ("mod_setenv")
+setenv.set-environment += ("CYGROOT" => "$ENV{CYGROOT}")
 BIND_OVERRIDE
 		}
 		else {

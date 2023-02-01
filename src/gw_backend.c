@@ -825,6 +825,19 @@ static void parse_binpath(char_array *env, const buffer *b) {
         ck_realloc_u32((void **)&env->ptr, env->used, 2, sizeof(*env->ptr));
     env->ptr[env->used++] = strdup(start);
     env->ptr[env->used] = NULL;
+
+  #ifdef _WIN32
+    /* lighttpd cygwin test environment does not include ".exe" extension */
+    if (NULL == getenv("CYGROOT")) return; /* set in tests/Lighttpd.pm */
+    struct stat st;
+    char *arg0 = env->ptr[0];
+    size_t len = strlen(arg0);
+    if ((len < 4 || 0 != memcmp(arg0+len-4, ".exe", 4))
+        && 0 != stat(arg0, &st) && errno == ENOENT) {
+        ck_realloc_u32((void **)&env->ptr[0], len, 5, 1);
+        memcpy(env->ptr[0]+len, ".exe", 5);
+    }
+  #endif
 }
 
 enum {

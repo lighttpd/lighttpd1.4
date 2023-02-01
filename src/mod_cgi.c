@@ -43,6 +43,9 @@ typedef struct {
       #if defined(__CYGWIN__) || defined(_WIN32)
 	buffer *systemroot;
       #endif
+      #if defined(_WIN32)
+	buffer *cygvol;
+      #endif
 } env_accum;
 
 typedef struct {
@@ -130,6 +133,10 @@ INIT_FUNC(mod_cgi_init) {
 	s = getenv("SYSTEMROOT");
 	if (s) buffer_copy_string((p->env.systemroot = buffer_init()), s);
       #endif
+      #if defined(_WIN32)
+	s = getenv("CYGVOL");
+	if (s) buffer_copy_string((p->env.cygvol = buffer_init()), s);
+      #endif
 
 	return p;
 }
@@ -141,6 +148,9 @@ FREE_FUNC(mod_cgi_free) {
 	buffer_free(p->env.ld_library_path);
       #if defined(__CYGWIN__) || defined(_WIN32)
 	buffer_free(p->env.systemroot);
+      #endif
+      #if defined(_WIN32)
+	buffer_free(p->env.cygvol);
       #endif
 
     for (cgi_pid_t *cgi_pid = p->cgi_pid, *next; cgi_pid; cgi_pid = next) {
@@ -953,8 +963,18 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		if (!buffer_is_blank(cgi_handler)) {
 			args[i++] = cgi_handler->ptr;
 		}
-		args[i++] = r->physical.path.ptr;
-		args[i  ] = NULL;
+	  #ifdef _WIN32
+		/* adjust path to scripts run via cygwin program if CYGVOL env is set */
+		if (p->env.cygvol) {
+			buffer *tb = r->tmp_buf;
+			buffer_copy_buffer(tb, p->env.cygvol); /* e.g. "/cygdrive/c" */
+			buffer_append_path_len(tb, BUF_PTR_LEN(&r->physical.path));
+			args[i++] = tb->ptr;
+		}
+		else
+	  #endif
+			args[i++] = r->physical.path.ptr;
+		args[i] = NULL;
 	}
 
   #ifdef _WIN32
