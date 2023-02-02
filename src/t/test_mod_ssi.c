@@ -50,6 +50,9 @@ test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
     buffer_copy_path_len2(&fnb, tmpdir, tmpdirlen,
                           CONST_STR_LEN("lighttpd_mod_ssi.XXXXXX"));
     if (fnb.ptr[tmpdirlen] == '/') ++tmpdirlen;
+  #ifdef _WIN32
+    else if (fnb.ptr[tmpdirlen] == '\\') ++tmpdirlen;
+  #endif
     char * const fn = fnb.ptr;
     int fd = fdevent_mkostemp(fn, 0);
     if (fd < 0) {
@@ -62,8 +65,6 @@ test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
         buffer_free_ptr(&fnb);
         exit(1);
     }
-    unlink(fn);
-    buffer_free_ptr(&fnb);
 
     const char ssi_simple[] =
       "<!--#echo var=\"SCRIPT_NAME\" -->";
@@ -85,6 +86,7 @@ test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
     mod_ssi_read_fd(r, hctx, &st, fd);
     assert(NULL == cq->first);
 
+  #ifndef _WIN32 /* TODO: command for cmd.exe */
     hctx->conf.ssi_exec = 1;
     test_mod_ssi_write_testfile(fd, ssi_exec, sizeof(ssi_exec)-1);
     test_mod_ssi_reset(r, hctx);
@@ -100,11 +102,13 @@ test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
     }
     assert(0 == memcmp(buf, "2\n", 2));
     hctx->conf.ssi_exec = 0;
+  #endif
 
-    buffer_copy_path_len2(&fnb, tmpdir, tmpdirlen,
+    buffer fnib = { NULL, 0, 0 };
+    buffer_copy_path_len2(&fnib, tmpdir, strlen(tmpdir),
                           CONST_STR_LEN("lighttpd_mod_ssi_inc.XXXXXX"));
-    char * const fni = fnb.ptr;
-    const size_t fnilen = buffer_clen(&fnb);
+    char * const fni = fnib.ptr;
+    const size_t fnilen = buffer_clen(&fnib);
     int fdi = fdevent_mkostemp(fni, 0);
     if (fdi < 0) {
         perror("mkstemp()");
@@ -133,10 +137,11 @@ test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
     array_set_key_value(hctx->ssi_cgi_env,
                         CONST_STR_LEN("SCRIPT_NAME"),
                         CONST_STR_LEN("/ssi-include.shtml"));
-    buffer_copy_string_len(&r->physical.doc_root, CONST_STR_LEN("/tmp"));
+    buffer_copy_string_len(&r->physical.doc_root, tmpdir, strlen(tmpdir));
     buffer_copy_string_len(&r->uri.path, CONST_STR_LEN("/ssi-include.shtml"));
     buffer_copy_string_len(&r->physical.rel_path, CONST_STR_LEN("/ssi-include.shtml"));
-    buffer_copy_string_len(&r->physical.path, CONST_STR_LEN("/tmp/ssi-include.shtml"));
+    buffer_copy_path_len2(&r->physical.path, tmpdir, strlen(tmpdir),
+                          CONST_STR_LEN("ssi-include.shtml"));
     mod_ssi_read_fd(r, hctx, &st, fd);
     chunkqueue_read_squash(cq, r->conf.errh);
     assert(buffer_eq_slen(cq->first->mem,
@@ -147,10 +152,12 @@ test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
                                         "ssi-include\n")));
 
     unlink(fni);
-    buffer_free_ptr(&fnb);
+    buffer_free_ptr(&fnib);
 
     test_mod_ssi_reset(r, hctx);
     close(fd);
+    unlink(fn);
+    buffer_free_ptr(&fnb);
 }
 
 void test_mod_ssi (void);

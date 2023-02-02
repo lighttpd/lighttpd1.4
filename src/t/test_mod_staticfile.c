@@ -441,6 +441,7 @@ void test_mod_staticfile (void)
 
     free(p);
     stat_cache_free();
+    close(fd);
     unlink(fn);
     buffer_free_ptr(&fnb);
 }

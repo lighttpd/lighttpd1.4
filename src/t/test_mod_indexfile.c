@@ -94,6 +94,7 @@ test_mod_indexfile_tryfiles (request_st * const r)
     test_mod_indexfile_reset(r, fn, tmpdirlen);
 
     array_free(indexfiles);
+    close(fd);
     unlink(fn);
     buffer_free_ptr(&fnb);
 }
