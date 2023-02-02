@@ -173,12 +173,12 @@ static void mod_dirlisting_handler_ctx_free (handler_ctx *hctx) {
     }
     if (hctx->jb) {
         chunk_buffer_release(hctx->jb);
+        if (-1 != hctx->jfd)
+            close(hctx->jfd);
         if (hctx->jfn) {
             unlink(hctx->jfn);
             free(hctx->jfn);
         }
-        if (-1 != hctx->jfd)
-            close(hctx->jfd);
     }
     free(hctx->path);
     free(hctx);
@@ -1385,11 +1385,11 @@ static void mod_dirlisting_json_append (request_st * const r, handler_ctx * cons
     if (hctx->jfn) {
         if (__builtin_expect( (write_all(hctx->jfd, BUF_PTR_LEN(jb)) < 0), 0)) {
             /*(cleanup, cease caching if error occurs writing to cache file)*/
+            close(hctx->jfd);
+            hctx->jfd = -1;
             unlink(hctx->jfn);
             free(hctx->jfn);
             hctx->jfn = NULL;
-            close(hctx->jfd);
-            hctx->jfd = -1;
         }
         /* Note: writing cache file is separate from the response so that if an
          * error occurs with cache, the response still proceeds.  While this is
@@ -1700,8 +1700,9 @@ static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const 
     memcpy(oldpath, tb->ptr, len+7+1); /*(include '\0')*/
     const int fd = fdevent_mkostemp(oldpath, 0);
     if (fd < 0) return;
-    if (mod_dirlisting_write_cq(fd, &r->write_queue, r->conf.errh)
-        && 0 == fdevent_rename(oldpath, newpath)) {
+    int rc = mod_dirlisting_write_cq(fd, &r->write_queue, r->conf.errh);
+    close(fd);
+    if (rc && 0 == fdevent_rename(oldpath, newpath)) {
         stat_cache_invalidate_entry(newpath, len);
         /* Cache-Control and ETag (also done in mod_dirlisting_cache_check())*/
         mod_dirlisting_cache_control(r, hctx->conf.cache->max_age);
@@ -1717,7 +1718,6 @@ static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const 
     }
     else
         unlink(oldpath);
-    close(fd);
 }
 
 
@@ -1753,6 +1753,8 @@ static void mod_dirlisting_cache_json (request_st * const r, handler_ctx * const
     force_assert(len < PATH_MAX);
     memcpy(newpath, hctx->jfn, len);
     newpath[len] = '\0';
+    close(hctx->jfd);
+    hctx->jfd = -1;
     if (0 == fdevent_rename(hctx->jfn, newpath))
         stat_cache_invalidate_entry(newpath, len);
     else
