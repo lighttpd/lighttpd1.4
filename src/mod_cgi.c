@@ -765,7 +765,6 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	}
 
 	to_cgi_fds[0] = -1;
-  #ifndef __CYGWIN__
 	if (0 == r->reqbody_length) {
 		/* future: might keep fd open in p->devnull for reuse
 		 * and dup() here, or do not close() (later in this func) */
@@ -797,7 +796,6 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 			to_cgi_fds[1] = -1;
 		}
 	}
-  #endif
 
 	unsigned int bufsz_hint = 16384;
   #ifdef _WIN32
