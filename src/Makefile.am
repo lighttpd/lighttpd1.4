@@ -118,6 +118,8 @@ common_libadd =
 endif
 common_module_ldflags = -module -export-dynamic $(common_ldflags)
 
+if !LIGHTTPD_STATIC
+
 if BUILD_WITH_MAXMINDDB
 lib_LTLIBRARIES += mod_maxminddb.la
 mod_maxminddb_la_SOURCES = mod_maxminddb.c
@@ -392,6 +394,8 @@ lib_LTLIBRARIES += mod_wstunnel.la
 mod_wstunnel_la_SOURCES = mod_wstunnel.c
 mod_wstunnel_la_LDFLAGS = $(common_module_ldflags)
 mod_wstunnel_la_LIBADD = $(common_libadd) $(CRYPTO_LIB)
+
+endif # !LIGHTTPD_STATIC
 
 
 hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
