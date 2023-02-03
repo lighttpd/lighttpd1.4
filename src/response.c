@@ -540,9 +540,8 @@ http_response_prepare (request_st * const r)
 			log_error(r->conf.errh, __FILE__, __LINE__,
 			  "URI          : %s", r->uri.path.ptr);
 			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "Pathinfo     : %s", r->pathinfo.ptr
-			                     ? r->pathinfo.ptr
-			                     : "");
+			  "Pathinfo     : %.*s",
+			  BUFFER_INTLEN_PTR(&r->pathinfo));
 		}
 
 		/* call the handlers */
