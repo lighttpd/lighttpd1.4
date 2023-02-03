@@ -1571,7 +1571,6 @@ static int mkdir_recursive (char *dir, size_t off) {
 }
 
 
-#include <stdio.h>      /* rename() */
 __attribute_noinline__
 static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const hctx) {
   #ifndef PATH_MAX
@@ -1594,7 +1593,7 @@ static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const 
     const int fd = fdevent_mkostemp(oldpath, 0);
     if (fd < 0) return;
     if (mod_dirlisting_write_cq(fd, &r->write_queue, r->conf.errh)
-        && 0 == rename(oldpath, newpath)) {
+        && 0 == fdevent_rename(oldpath, newpath)) {
         stat_cache_invalidate_entry(newpath, len);
         /* Cache-Control and ETag (also done in mod_dirlisting_cache_check())*/
         mod_dirlisting_cache_control(r, hctx->conf.cache->max_age);
@@ -1646,7 +1645,7 @@ static void mod_dirlisting_cache_json (request_st * const r, handler_ctx * const
     force_assert(len < PATH_MAX);
     memcpy(newpath, hctx->jfn, len);
     newpath[len] = '\0';
-    if (0 == rename(hctx->jfn, newpath))
+    if (0 == fdevent_rename(hctx->jfn, newpath))
         stat_cache_invalidate_entry(newpath, len);
     else
         unlink(hctx->jfn);
