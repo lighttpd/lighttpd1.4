@@ -16,14 +16,12 @@ struct epoll_event;     /* declaration */
 struct pollfd;          /* declaration */
 #endif
 
-#if 0 /*(disabled; needs further development for stability of results)*/
 #ifdef _WIN32
 # define FDEVENT_USE_POLL
 struct pollfd;          /* declaration */
 #endif
-#endif
 
-#ifndef FDEVENT_USE_POLL
+#if !defined(FDEVENT_USE_POLL) || defined(_WIN32)
 #if defined HAVE_SELECT
 # ifdef _WIN32
 #  ifdef _MSC_VER

@@ -361,7 +361,10 @@ sub handle_http {
 			print $remote "\012";
 		}
 	}
-	shutdown($remote, 1) if ($^O ne "openbsd" && $^O ne "dragonfly"); # I've stopped writing data
+	if ($^O ne "openbsd" && $^O ne "dragonfly" && !$self->{"win32native"}) {
+		# (avoid on OS where TCP half-close may be reported as POLLHUP)
+		shutdown($remote, 1); # I've stopped writing data
+	}
 	diag("\n... done") if $is_debug;
 
 	my $lines = "";
