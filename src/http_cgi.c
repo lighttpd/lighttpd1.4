@@ -65,6 +65,7 @@ http_cgi_local_redir (request_st * const r)
         }
 
         buffer_copy_buffer(&r->target, vb);
+        buffer_clear(&r->pathinfo);
 
         if (r->reqbody_length) {
             if (r->reqbody_length != r->reqbody_queue.bytes_in)
