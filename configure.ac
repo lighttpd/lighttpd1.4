@@ -890,7 +890,7 @@ AC_MSG_RESULT([$WITH_PCRE2])
 if test "$WITH_PCRE2" != no && test "$WITH_PCRE" = "no"; then
   if test "$WITH_PCRE2" != yes; then
     PCRE_LIB="-L$WITH_PCRE2/lib -lpcre2-8"
-    CPPFLAGS="$CPPFLAGS -I$WITH_PCRE/include"
+    CPPFLAGS="$CPPFLAGS -I$WITH_PCRE2/include"
   else
     PKG_CHECK_MODULES([PCRE2],[libpcre2-8],[
       PCRE_LIB="$PCRE2_LIBS"
