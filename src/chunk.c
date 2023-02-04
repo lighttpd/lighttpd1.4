@@ -193,6 +193,12 @@ chunk_file_pread (int fd, void *buf, size_t count, off_t offset)
 static void chunk_reset_file_chunk(chunk *c) {
 	if (c->file.is_temp) {
 		c->file.is_temp = 0;
+	  #ifdef _WIN32 /*(not expecting c->file.refchg w/ .is_temp)*/
+		if (!c->file.refchg && c->file.fd != -1) {
+			fdio_close_file(c->file.fd);
+			c->file.fd = -1;
+		}
+	  #endif
 		if (!buffer_is_blank(c->mem))
 			unlink(c->mem->ptr);
 	}
