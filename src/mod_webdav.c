@@ -4652,7 +4652,15 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
         buffer_truncate(&r->physical.path, len);
     }
     if (fd < 0) {
-        http_status_set_error(r, 500); /* Internal Server Error */
+        switch (errno) {
+          case ENOENT:  /* parent collection does not exist */
+          case ENOTDIR:
+            http_status_set_error(r, 409); /* Conflict */
+            break;
+          default:
+            http_status_set_error(r, 500); /* Internal Server Error */
+            break;
+        }
         return HANDLER_FINISHED;
     }
 
