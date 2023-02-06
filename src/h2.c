@@ -1585,8 +1585,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
     }
     if (s[4] & H2_FLAG_PRIORITY) {
         /* XXX: TODO: handle PRIORITY (prio fields start at *psrc) */
-        const uint32_t prio = h2_u31(psrc);
-        if (prio == id) {
+        if (alen < 5 || (/*prio = */h2_u32(psrc)) == id) {
             h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
             if (!trailers)
                 h2_retire_stream(r, con);
