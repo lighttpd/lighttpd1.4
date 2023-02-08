@@ -1569,7 +1569,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
     if (s[4] & H2_FLAG_PADDED) {
         ++psrc;
         const uint32_t pad = s[9];
-        if (flen < 1 + pad + ((s[4] & H2_FLAG_PRIORITY) ? 5 : 0)) {
+        if (alen < 1 + pad) {
             /* Padding that exceeds the size remaining for the header block
              * fragment MUST be treated as a PROTOCOL_ERROR. */
             h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
