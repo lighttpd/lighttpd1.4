@@ -40,6 +40,7 @@ versionstamp:
 configparser.h: configparser.c
 configparser.c: $(srcdir)/configparser.y $(srcdir)/lempar.c lemon$(BUILD_EXEEXT)
 	rm -f configparser.h
+	chmod u+w $(srcdir)/configparser.c 2>/dev/null || true
 	$(LEMON) -q -T$(srcdir)/lempar.c $(srcdir)/configparser.y
 
 parsers: configparser.c
