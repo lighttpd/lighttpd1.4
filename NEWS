@@ -3,6 +3,55 @@
 NEWS
 ====
 
+- 1.4.69 - 2023-02-10
+  * [meson] remove t/test_mod_evasive.c
+  * [doc] remove references to removed modules
+  * [cmake] add doc/CMakeLists.txt to dist tar ball (#3181)
+  * [meson] add meson.build to install man pages (fixes #3181)
+  * [meson] fix typo in sbindir
+  * [core] update ls-hpack
+  * [cmake] remove -I/usr/include/mysql for mysql.h (#3181)
+  * [cmake] add -DWITH_LUA_VERSION= to specify lua ver (#3181)
+  * [cmake] use mysql_config cflags and ldflags (#3181)
+  * [cmake] do not link with fam if inotify or kqueue
+  * [TLS] fix spurious warning trace (fixes #3182)
+  * [multiple] codespell: correct spelling in comments
+  * [multiple] spelling: github action check-spelling
+  * [lemon] upgrade LEMON parser to SQLite maint ver
+  * [build] modify arguments to updated LEMON parser
+  * [core] build configparser.y w/ -Werror workarounds
+  * [lemon] fix -Wpendantic warnings for bad casts
+  * [core] avoid accept4() on ARM unless detected
+  * [cmake] use CMAKE_CURRENT_SOURCE_DIR
+  * [cmake] SERVER_SRC variable
+  * [multiple] quiet some coverity false positives
+  * [cmake] use LIGHTTPD_MODULES_DIR as relative path (fixes #3185)
+  * [core] add missed h2 state transition (fixes #3186)
+  * [core] remove cygwin O_NOFOLLOW workaround
+  * [multiple] clang -Wstrict-prototypes for C2x
+  * [core] reset SIGUSR1 to SIG_DFL before execve()
+  * [mod_webdav] modify OPTIONS response if no db cfg
+  * [mod_webdav] MOD_WEBDAV_BUILD_MINIMAL preproc opt
+  * [core] pass fdn to fdevent_sched_close,_unregister
+  * [core] disable sendfile() on TARGET_OS_IPHONE
+  * [core] iOS does not provide netinet/tcp_fsm.h
+  * [core] move headers to help isolate fdevent layer
+  * [core] avoid select() FD_ISSET repeat on active fds
+  * [core] gw_backend more precise backend env alloc
+  * [core] fdevent_poll_poll avoid potential race
+  * [tests] quickly exit tests/request.t if GET / fail
+  * [tests] adjust outdated opt in tests/lighttpd.conf
+  * [autotools] add mod_evhost to static build list
+  * [autotools] skip modules build if LIGHTTPD_STATIC
+  * [mod_cgi] cygwin supports CGI file I/O redirection
+  * [mod_dirlisting] use fdevent_rename() wrapper
+  * [core] path-info in debug trace may be unset
+  * [core] reset path-info for cgi.local-redir
+  * [autotools] fix typo in -I used --with-pcre2=/path (fixes #3190)
+  * [mod_webdav] send 409 Conflict if PUT miss parent
+  * [core] fix HTTP/2 HEADERS frame parsing bug
+  * [core] remove extra HTTP/2 HEADERS frame len check
+
 - 1.4.68 - 2023-01-03
   * [cmake] compile lemon with native cc for x-compile
   * [cmake] install man pages with CMake
