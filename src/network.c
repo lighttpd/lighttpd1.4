@@ -787,15 +787,6 @@ int network_init(server *srv, int stdin_fd) {
         T_CONFIG_SCOPE_UNSET }
     };
 
-  #ifdef _WIN32
-    WSADATA wsaData;
-    WORD wVersionRequested = MAKEWORD(2, 2);
-    if (0 != WSAStartup(wVersionRequested, &wsaData)) {
-        /* Tell the user that we could not find a usable WinSock DLL */
-        return -1;
-    }
-  #endif
-
     if (0 != network_write_init(srv)) return -1;
 
     network_plugin_data np;

@@ -172,7 +172,6 @@ static size_t malloc_top_pad;
 /*#define unsetenv(name)                SetEnvironmentVariable((name),NULL)*/
 #define setenv(name,value,overwrite)  _putenv_s((name), strdup(value))
 #define unsetenv(name)                _putenv_s((name), "")
-void fdevent_win32_init (volatile sig_atomic_t *ptr);
 #endif
 
 #if 1 /*(until switch to mod_h2)*/
@@ -198,6 +197,9 @@ static volatile sig_atomic_t handle_sig_alarm = 1;
 static volatile sig_atomic_t handle_sig_hup = 0;
 static int idle_limit = 0;
 
+__attribute_cold__
+int server_main (int argc, char ** argv);
+
 #ifdef _WIN32
 #ifndef SIGBREAK
 #define SIGBREAK 21
@@ -206,6 +208,7 @@ static int idle_limit = 0;
 #ifndef SIGUSR1
 #define SIGUSR1 SIGBREAK
 #endif
+#include "server_win32.c"
 #endif
 
 #if defined(HAVE_SIGACTION) && defined(SA_SIGINFO)
@@ -1185,6 +1188,10 @@ static void server_graceful_shutdown_maint (server *srv) {
     connection_graceful_shutdown_maint(srv);
 }
 
+#ifndef server_status_stopping
+#define server_status_stopping(srv) do { } while (0)
+#endif
+
 __attribute_cold__
 __attribute_noinline__
 static void server_graceful_state (server *srv) {
@@ -1198,6 +1205,8 @@ static void server_graceful_state (server *srv) {
         }
         server_graceful_shutdown_maint(srv);
     }
+
+    server_status_stopping(srv);/*might be called multiple times; intentional*/
 
     if (2 == srv->sockets_disabled || 3 == srv->sockets_disabled) {
         if (oneshot_fd) graceful_restart = 0;
@@ -1392,16 +1401,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 #ifdef HAVE_GETUID
 	i_am_root = (0 == getuid());
-#endif
-
-#ifdef _WIN32
-	/* https://docs.microsoft.com/en-us/cpp/c-runtime-library/fmode?view=msvc-160 */
-	/* https://sourceforge.net/p/mingw-w64/bugs/857/ */
-	/*_set_fmode(_O_BINARY);*/
-	_fmode = _O_BINARY;
-	(void)_setmode(_fileno(stdin),  _O_BINARY);
-	(void)_setmode(_fileno(stdout), _O_BINARY);
-	(void)_setmode(_fileno(stderr), _O_BINARY);
 #endif
 
 	/* initialize globals (including file-scoped static globals) */
@@ -2256,15 +2255,19 @@ static int main_init_once (void) {
     setlocale(LC_TIME, "C");
     tzset();
 
-  #ifdef _WIN32
-    fdevent_win32_init(&handle_sig_child);
-  #endif
-
     return 1;
 }
 
+#ifndef server_status_running
+#define server_status_running(srv) do { } while (0)
+#endif
+
+#ifndef main
+#define server_main main
+#endif
+
 __attribute_cold__
-int main (int argc, char ** argv) {
+int server_main (int argc, char ** argv) {
     if (!main_init_once()) return -1;
 
     int rc;
@@ -2279,6 +2282,7 @@ int main (int argc, char ** argv) {
 
         rc = server_main_setup(srv, argc, argv);
         if (rc > 0) {
+            server_status_running(srv);
 
             server_main_loop(srv);
 
