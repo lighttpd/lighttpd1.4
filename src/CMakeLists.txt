@@ -841,9 +841,6 @@ set(COMMON_SRC
 	ck.c
 )
 
-if(LIGHTTPD_STATIC)
-  unset(BUILTIN_MODS)
-else()
   set(BUILTIN_MODS
     mod_rewrite.c
     mod_redirect.c
@@ -858,7 +855,6 @@ else()
     mod_fastcgi.c
     mod_scgi.c
   )
-endif()
 
 if(CMAKE_CROSSCOMPILING)
 	# custom compile lemon using native compiler
@@ -903,10 +899,8 @@ set(SERVER_SRC
 add_executable(lighttpd ${SERVER_SRC} ${COMMON_SRC} ${BUILTIN_MODS})
 set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd)
 
-add_and_install_library(mod_access mod_access.c)
 add_and_install_library(mod_accesslog mod_accesslog.c)
 add_and_install_library(mod_ajp13 mod_ajp13.c)
-add_and_install_library(mod_alias mod_alias.c)
 add_and_install_library(mod_auth "mod_auth.c;mod_auth_api.c")
 add_and_install_library(mod_authn_file "mod_authn_file.c")
 if(NOT WIN32)
@@ -914,21 +908,11 @@ if(NOT WIN32)
 endif()
 add_and_install_library(mod_deflate mod_deflate.c)
 add_and_install_library(mod_dirlisting mod_dirlisting.c)
-add_and_install_library(mod_evhost mod_evhost.c)
-add_and_install_library(mod_expire mod_expire.c)
 add_and_install_library(mod_extforward mod_extforward.c)
-add_and_install_library(mod_fastcgi mod_fastcgi.c)
-add_and_install_library(mod_indexfile mod_indexfile.c)
 add_and_install_library(mod_proxy mod_proxy.c)
-add_and_install_library(mod_redirect mod_redirect.c)
-add_and_install_library(mod_rewrite mod_rewrite.c)
 add_and_install_library(mod_rrdtool mod_rrdtool.c)
-add_and_install_library(mod_scgi mod_scgi.c)
-add_and_install_library(mod_setenv mod_setenv.c)
-add_and_install_library(mod_simple_vhost mod_simple_vhost.c)
 add_and_install_library(mod_sockproxy mod_sockproxy.c)
 add_and_install_library(mod_ssi mod_ssi.c)
-add_and_install_library(mod_staticfile mod_staticfile.c)
 add_and_install_library(mod_status mod_status.c)
 add_and_install_library(mod_userdir mod_userdir.c)
 add_and_install_library(mod_vhostdb "mod_vhostdb.c;mod_vhostdb_api.c")
@@ -1133,8 +1117,6 @@ if(WIN32)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNVALGRIND")
 	add_target_properties(lighttpd COMPILE_FLAGS "-DLI_DECLARE_EXPORTS")
 	target_link_libraries(mod_proxy ws2_32)
-	target_link_libraries(mod_fastcgi ws2_32)
-	target_link_libraries(mod_scgi ws2_32)
 	target_link_libraries(mod_ssi ws2_32)
 
 	if(MINGW)

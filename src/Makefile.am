@@ -186,35 +186,10 @@ mod_cgi_la_SOURCES = mod_cgi.c
 mod_cgi_la_LDFLAGS = $(common_module_ldflags)
 mod_cgi_la_LIBADD = $(common_libadd)
 
-lib_LTLIBRARIES += mod_scgi.la
-mod_scgi_la_SOURCES = mod_scgi.c
-mod_scgi_la_LDFLAGS = $(common_module_ldflags)
-mod_scgi_la_LIBADD = $(common_libadd)
-
-lib_LTLIBRARIES += mod_staticfile.la
-mod_staticfile_la_SOURCES = mod_staticfile.c
-mod_staticfile_la_LDFLAGS = $(common_module_ldflags)
-mod_staticfile_la_LIBADD = $(common_libadd)
-
 lib_LTLIBRARIES += mod_dirlisting.la
 mod_dirlisting_la_SOURCES = mod_dirlisting.c
 mod_dirlisting_la_LDFLAGS = $(common_module_ldflags)
 mod_dirlisting_la_LIBADD = $(common_libadd)
-
-lib_LTLIBRARIES += mod_indexfile.la
-mod_indexfile_la_SOURCES = mod_indexfile.c
-mod_indexfile_la_LDFLAGS = $(common_module_ldflags)
-mod_indexfile_la_LIBADD = $(common_libadd)
-
-lib_LTLIBRARIES += mod_setenv.la
-mod_setenv_la_SOURCES = mod_setenv.c
-mod_setenv_la_LDFLAGS = $(common_module_ldflags)
-mod_setenv_la_LIBADD = $(common_libadd)
-
-lib_LTLIBRARIES += mod_alias.la
-mod_alias_la_SOURCES = mod_alias.c
-mod_alias_la_LDFLAGS = $(common_module_ldflags)
-mod_alias_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_userdir.la
 mod_userdir_la_SOURCES = mod_userdir.c
@@ -241,40 +216,15 @@ mod_ssi_la_SOURCES = mod_ssi.c
 mod_ssi_la_LDFLAGS = $(common_module_ldflags)
 mod_ssi_la_LIBADD = $(common_libadd)
 
-lib_LTLIBRARIES += mod_expire.la
-mod_expire_la_SOURCES = mod_expire.c
-mod_expire_la_LDFLAGS = $(common_module_ldflags)
-mod_expire_la_LIBADD = $(common_libadd)
-
-lib_LTLIBRARIES += mod_evhost.la
-mod_evhost_la_SOURCES = mod_evhost.c
-mod_evhost_la_LDFLAGS = $(common_module_ldflags)
-mod_evhost_la_LIBADD = $(common_libadd)
-
-lib_LTLIBRARIES += mod_simple_vhost.la
-mod_simple_vhost_la_SOURCES = mod_simple_vhost.c
-mod_simple_vhost_la_LDFLAGS = $(common_module_ldflags)
-mod_simple_vhost_la_LIBADD = $(common_libadd)
-
 lib_LTLIBRARIES += mod_ajp13.la
 mod_ajp13_la_SOURCES = mod_ajp13.c
 mod_ajp13_la_LDFLAGS = $(common_module_ldflags)
 mod_ajp13_la_LIBADD = $(common_libadd)
 
-lib_LTLIBRARIES += mod_fastcgi.la
-mod_fastcgi_la_SOURCES = mod_fastcgi.c
-mod_fastcgi_la_LDFLAGS = $(common_module_ldflags)
-mod_fastcgi_la_LIBADD = $(common_libadd)
-
 lib_LTLIBRARIES += mod_extforward.la
 mod_extforward_la_SOURCES = mod_extforward.c
 mod_extforward_la_LDFLAGS = $(common_module_ldflags)
 mod_extforward_la_LIBADD = $(common_libadd)
-
-lib_LTLIBRARIES += mod_access.la
-mod_access_la_SOURCES = mod_access.c
-mod_access_la_LDFLAGS = $(common_module_ldflags)
-mod_access_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_deflate.la
 mod_deflate_la_SOURCES = mod_deflate.c
@@ -369,17 +319,6 @@ mod_wolfssl_la_LDFLAGS = $(common_module_ldflags)
 mod_wolfssl_la_LIBADD = $(WOLFSSL_LIBS) $(common_libadd)
 mod_wolfssl_la_CPPFLAGS = $(WOLFSSL_CFLAGS)
 endif
-
-
-lib_LTLIBRARIES += mod_rewrite.la
-mod_rewrite_la_SOURCES = mod_rewrite.c
-mod_rewrite_la_LDFLAGS = $(common_module_ldflags)
-mod_rewrite_la_LIBADD = $(common_libadd)
-
-lib_LTLIBRARIES += mod_redirect.la
-mod_redirect_la_SOURCES = mod_redirect.c
-mod_redirect_la_LDFLAGS = $(common_module_ldflags)
-mod_redirect_la_LIBADD = $(common_libadd)
 
 lib_LTLIBRARIES += mod_status.la
 mod_status_la_SOURCES = mod_status.c
