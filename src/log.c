@@ -25,7 +25,10 @@
 
 static fdlog_st log_stderrh = { FDLOG_FD, STDERR_FILENO, { NULL, 0, 0 }, NULL };
 static fdlog_st *log_errh = &log_stderrh;
-static unix_time64_t log_tlast = 0;
+static unix_time64_t tlast;
+static uint32_t thp;
+static uint32_t tlen;
+static char tstr[24]; /* 20 "%F %T" incl '\0' +2 ": " */
 
 /* log_con_jqueue instance here to be defined in shared object (see base.h) */
 connection *log_con_jqueue;
@@ -95,42 +98,45 @@ ssize_t write_all(int fd, const void * const buf, size_t count) {
 }
 
 
+static void
+log_buffer_tstr (const unix_time64_t t)
+{
+    /* cache the generated timestamp */
+    struct tm tm;
+    tlast = t;
+    tlen = (uint32_t) strftime(tstr, sizeof(tstr), "%F %T",
+                               localtime64_r(&tlast, &tm));
+}
+
+
 __attribute_nonnull__()
 static void
 log_buffer_timestamp (buffer * const restrict b)
 {
-    if (-2 == log_tlast) { /* -2 is value to flag high-precision timestamp */
+    if (thp) { /* high-precision timestamp */
         unix_timespec64_t ts = { 0, 0 };
         log_clock_gettime_realtime(&ts);
       #if 0
         buffer_append_int(b, TIME64_CAST(ts.tv_sec));
-      #else /*(closer to syslog time format RFC 3339)*/
-        struct tm tm;
-        buffer_append_strftime(b, "%F %T",
-                               localtime64_r(&ts.tv_sec, &tm));
-      #endif
         buffer_append_string_len(b, CONST_STR_LEN(".000000000: "));
+      #else /*(closer to syslog time format RFC 3339)*/
+        if (__builtin_expect( (tlast != ts.tv_sec), 0))
+            log_buffer_tstr(ts.tv_sec);
+        buffer_append_str2(b, tstr, tlen, CONST_STR_LEN(".000000000: "));
+      #endif
         char n[LI_ITOSTRING_LENGTH];
         const size_t nlen =
           li_utostrn(n, sizeof(n), (unsigned long)ts.tv_nsec);
         memcpy(b->ptr+buffer_clen(b)-nlen-2, n, nlen);
     }
     else {
-        /* cache the generated timestamp */
-        static uint32_t tlen;
-        static char tstr[24]; /* 20 "%F %T" incl '\0' +2 ": " */
-        if (__builtin_expect( (log_tlast != log_epoch_secs), 0)) {
-            struct tm tm;
-            log_tlast = log_epoch_secs;
-            tlen = (uint32_t)
-                     strftime(tstr, sizeof(tstr), "%F %T",
-                              localtime64_r(&log_tlast, &tm));
+        if (__builtin_expect( (tlast != log_epoch_secs), 0)) {
+            log_buffer_tstr(log_epoch_secs);
             tstr[  tlen] = ':';
             tstr[++tlen] = ' ';
             /*tstr[++tlen] = '\0';*//*(not necessary for our use)*/
                    ++tlen;
         }
-
         buffer_copy_string_len(b, tstr, tlen);
     }
 }
@@ -344,11 +350,12 @@ log_error_multiline (log_error_st *errh,
 log_error_st *
 log_set_global_errh (log_error_st * const errh, const int ts_high_precision)
 {
-    /* reset log_tlast
+    /* reset tlast
      * -1 for cached timestamp to not match log_epoch_secs
      *    (e.g. if realtime clock init at 0)
-     * -2 for high precision timestamp */
-    log_tlast = ts_high_precision ? -2 : -1;
+     */
+    tlast = -1;
+    thp = ts_high_precision;
 
     buffer_free_ptr(&log_stderrh.b);
     return (log_errh = errh ? errh : &log_stderrh);
