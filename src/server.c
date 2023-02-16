@@ -41,6 +41,9 @@ static const buffer default_server_tag =
 #include <stdlib.h>
 #include <signal.h>
 #include <locale.h>
+#ifdef _WIN32
+#include <mbctype.h>    /* _setmbcp() */
+#endif
 
 #include <stdio.h>
 
@@ -2252,7 +2255,16 @@ static int main_init_once (void) {
   #endif
 
     /* for nice %b handling in strftime() */
+  #ifdef _WIN32
+    setlocale(LC_ALL, "C.UTF-8");
+   #ifdef __MINGW32__
+    _setmbcp(_MB_CP_LOCALE);
+   #else
+    _setmbcp(_MB_CP_UTF8);
+   #endif
+  #else
     setlocale(LC_TIME, "C");
+  #endif
     tzset();
 
     return 1;
