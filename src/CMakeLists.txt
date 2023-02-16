@@ -865,6 +865,28 @@ endif()
     mod_scgi.c
   )
 
+if(BUILD_STATIC)
+  set(BUILTIN_MODS ${BUILTIN_MODS}
+    mod_accesslog.c
+    mod_ajp13.c
+    mod_auth.c mod_auth_api.c
+    mod_authn_file.c
+    mod_cgi.c
+    mod_deflate.c
+    mod_dirlisting.c
+    mod_extforward.c
+    mod_proxy.c
+    mod_rrdtool.c
+    mod_sockproxy.c
+    mod_ssi.c
+    mod_status.c
+    mod_userdir.c
+    mod_vhostdb.c mod_vhostdb_api.c
+    mod_webdav.c
+    mod_wstunnel.c
+  )
+endif()
+
 if(CMAKE_CROSSCOMPILING)
 	# custom compile lemon using native compiler
 	add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lemon
@@ -1031,6 +1053,9 @@ if(HAVE_UUID_UUID_H)
 endif()
 
 target_link_libraries(mod_webdav ${L_MOD_WEBDAV})
+if(BUILD_STATIC)
+	target_link_libraries(lighttpd ${L_MOD_WEBDAV} ${XML2_LDFLAGS})
+endif()
 
 set(L_MOD_AUTHN_FILE)
 if(HAVE_LIBCRYPT)
@@ -1043,6 +1068,8 @@ if(BUILD_SANITIZE_ADDRESS AND HAVE_LIBCRYPT)
 	# if libcrypt isn't loaded at that time calling crypt later ends up
 	# calling a nullptr.
 	# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=103930
+	target_link_libraries(lighttpd crypt)
+elseif(BUILD_STATIC AND HAVE_LIBCRYPT)
 	target_link_libraries(lighttpd crypt)
 endif()
 
@@ -1090,6 +1117,9 @@ if(HAVE_ZLIB_H OR HAVE_ZSTD_H OR HAVE_BZLIB_H OR HAVE_BROTLI OR HAVE_LIBDEFLATE)
 		set(L_MOD_DEFLATE ${L_MOD_DEFLATE} deflate)
 	endif()
 	target_link_libraries(mod_deflate ${L_MOD_DEFLATE})
+	if(BUILD_STATIC)
+		target_link_libraries(lighttpd ${L_MOD_DEFLATE})
+	endif()
 endif()
 
 if(HAVE_LIBFAM)
