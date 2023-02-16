@@ -1321,35 +1321,18 @@ stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
 	}
 
 	struct stat st;
-  #ifdef _WIN32
-	if (final_slash && len < 4096) {
-		char buf[4096];
-		memcpy(buf, name->ptr, len);
-		buf[len] = '\0';
-		if (-1 == stat(buf, &st)) {
-			return NULL;
-		}
-		/* must check since stat() w/o trailing '/' above */
-		if (S_ISREG(st.st_mode)) {
-			errno = ENOTDIR;
-			return NULL;
-		}
-	}
-	else
-  #endif
 	if (-1 == stat(name->ptr, &st)) {
 		return NULL;
 	}
 
 	if (NULL == sce) {
 
-	  #ifdef _WIN32 /*(already checked above)*/
 		/* fix broken stat/open for symlinks to reg files with appended slash on freebsd,osx */
+		/* (local fs_win32_stati64UTF8() checks, but repeat since not obvious)*/
 		if (final_slash && S_ISREG(st.st_mode)) {
 			errno = ENOTDIR;
 			return NULL;
 		}
-	  #endif
 
 		sce = stat_cache_entry_init();
 		buffer_copy_string_len(&sce->name, name->ptr, len);

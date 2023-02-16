@@ -142,6 +142,12 @@
 
 #endif /* _WIN32 */
 
+#ifdef _WIN32
+/* local overrides to support UTF-8 path strings */
+/* note: redefines stat, fstat, mkdir, ... */
+#include "fs_win32.h"
+#endif
+
 
 #ifndef S_ISFIFO
 #define S_ISFIFO(mode) 0

@@ -847,7 +847,7 @@ set(COMMON_SRC
 	ck.c
 )
 if(WIN32)
-	set(COMMON_SRC ${COMMON_SRC} fdevent_win32.c)
+	set(COMMON_SRC ${COMMON_SRC} fdevent_win32.c fs_win32.c)
 endif()
 
   set(BUILTIN_MODS

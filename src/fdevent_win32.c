@@ -776,11 +776,12 @@ int fdevent_dup_cloexec (int fd)
 
 
 #include <fcntl.h>
+#include "fs_win32.h"
 
 int fdevent_open_cloexec (const char *pathname, int symlinks, int flags, mode_t mode)
 {
     UNUSED(symlinks);
-    return _open(pathname, flags | _O_BINARY | _O_NOINHERIT, mode);
+    return fs_win32_openUTF8(pathname, flags | _O_BINARY | _O_NOINHERIT, mode);
 }
 
 

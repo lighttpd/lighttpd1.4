@@ -66,7 +66,7 @@ common_src=base64.c buffer.c burl.c log.c \
 	sys-setjmp.c \
 	ck.c
 
-common_src += fdevent_win32.c
+common_src += fdevent_win32.c fs_win32.c
 
 src = server.c response.c connections.c h2.c reqpool.c \
 	plugin.c \
