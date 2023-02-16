@@ -1154,14 +1154,6 @@ set_target_properties(lighttpd PROPERTIES CMAKE_INSTALL_PREFIX ${CMAKE_INSTALL_P
 
 if(WIN32)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNVALGRIND")
-	add_target_properties(lighttpd COMPILE_FLAGS "-DLI_DECLARE_EXPORTS")
-	target_link_libraries(mod_proxy ws2_32)
-	target_link_libraries(mod_ssi ws2_32)
-
-	if(MINGW)
-		target_link_libraries(lighttpd msvcr70)
-		add_target_properties(lighttpd LINK_FLAGS "-Wl,-subsystem,console")
-	endif()
 endif()
 
 if(NOT BUILD_STATIC)
