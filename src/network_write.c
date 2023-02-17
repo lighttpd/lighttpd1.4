@@ -73,6 +73,9 @@
 #if defined HAVE_SYS_UIO_H && defined HAVE_WRITEV
 # define NETWORK_WRITE_USE_WRITEV
 #endif
+#ifdef _WIN32
+# define NETWORK_WRITE_USE_WRITEV
+#endif
 
 #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
 #ifdef ENABLE_MMAP
@@ -234,6 +237,8 @@ static int network_write_file_chunk_mmap(const int fd, chunkqueue * const cq, of
 #elif defined(_XOPEN_IOV_MAX)
 /* minimum value for sysconf(_SC_IOV_MAX); posix requires this to be at least 16, which is good enough - no need to call sysconf() */
 # define SYS_MAX_CHUNKS _XOPEN_IOV_MAX
+#elif defined(_WIN32)
+# define SYS_MAX_CHUNKS 32
 #else
 # error neither UIO_MAXIOV nor IOV_MAX nor _XOPEN_IOV_MAX are defined
 #endif
@@ -247,6 +252,13 @@ static int network_write_file_chunk_mmap(const int fd, chunkqueue * const cq, of
 # define MAX_CHUNKS STACK_MAX_ALLOC_CHUNKS
 #else
 # define MAX_CHUNKS SYS_MAX_CHUNKS
+#endif
+
+#ifdef _WIN32
+/* rewrite iov to WSABUF */
+#define iovec _WSABUF
+#define iov_len len
+#define iov_base buf
 #endif
 
 /* next chunk must be MEM_CHUNK. send multiple mem chunks using writev() */
@@ -270,7 +282,13 @@ static int network_writev_mem_chunks(const int fd, chunkqueue * const cq, off_t 
     }
     if (0 == num_chunks) return network_remove_finished_chunks(cq, 0);
 
+  #ifdef _WIN32
+    DWORD dw;
+    ssize_t wr = WSASend(fd, chunks, num_chunks, &dw, 0, NULL, NULL);
+    if (0 == wr) wr = (ssize_t)dw;
+  #else
     ssize_t wr = writev(fd, chunks, num_chunks);
+  #endif
     return network_write_accounting(fd, cq, p_max_bytes, errh, wr, toSend);
 }
 
