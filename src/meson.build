@@ -539,6 +539,13 @@ common_src = files(
 	'sys-setjmp.c',
 )
 
+if target_machine.system() == 'windows'
+common_src += files(
+	'fdevent_win32.c',
+	'fs_win32.c',
+)
+endif
+
 main_src = files(
 	'configfile.c',
 	'connections.c',
@@ -573,6 +580,25 @@ builtin_mods = files(
 )
 
 if get_option('build_static')
+        builtin_mods += files(
+          'mod_accesslog.c',
+          'mod_ajp13.c',
+          'mod_auth.c', 'mod_auth_api.c',
+          'mod_authn_file.c',
+          'mod_cgi.c',
+          'mod_deflate.c',
+          'mod_dirlisting.c',
+          'mod_extforward.c',
+          'mod_proxy.c',
+          'mod_rrdtool.c',
+          'mod_sockproxy.c',
+          'mod_ssi.c',
+          'mod_status.c',
+          'mod_userdir.c',
+          'mod_vhostdb.c', 'mod_vhostdb_api.c',
+          'mod_webdav.c',
+          'mod_wstunnel.c',
+        )
 	main_src += builtin_mods
 endif
 
@@ -614,28 +640,21 @@ common_flags = [ declare_dependency(
 
 lighttpd_flags = []
 lighttpd_angel_flags = []
-if target_machine.system() == 'windows'
-	lighttpd_flags += [ declare_dependency(
-		compile_args: [
-			'-DLI_DECLARE_EXPORTS',
-		],
-	) ]
-	if compiler.get_id() == 'gcc'
-		libmsvcr70 = [ compiler.find_library('msvcr70') ]
-		lighttpd_flags += libmsvcr70 + [ declare_dependency(
-			link_args: [
-				'-Wl,-subsystem,console',
-			],
-		) ]
-		lighttpd_angel_flags += libmsvcr70 + [ declare_dependency(
-			link_args: [
-				'-Wl,-subsystem,console',
-			],
-		) ]
+
+if get_option('build_static')
+	lighttpd_flags += [ libcrypt, libbz2, libz, libzstd, libbrotli, libdeflate, libelftc ]
+else
+	if target_machine.system() == 'windows' or target_machine.system() == 'cygwin'
+		if (compiler.get_id() == 'gcc' or compiler.get_id() == 'clang')
+			lighttpd_flags += [ declare_dependency(
+				link_args: [
+					'-Wl,--export-all-symbols',
+				],
+			) ]
+		endif
 	endif
 endif
-
-if (compiler.get_id() == 'gcc' or compiler.get_id() == 'clang') and target_machine.system() != 'darwin' and target_machine.system() != 'sunos'
+if (compiler.get_id() == 'gcc' or compiler.get_id() == 'clang') and target_machine.system() != 'darwin' and target_machine.system() != 'sunos' and target_machine.system() != 'windows' and target_machine.system() != 'cygwin'
 	lighttpd_flags += [ declare_dependency(
 		link_args: [
 			'-Wl,-export-dynamic',
@@ -742,11 +761,15 @@ test('test_mod', executable('test_mod',
 	build_by_default: false,
 ))
 
+if get_option('build_static')
+modules = []
+else
 modules = [
 	[ 'mod_accesslog', [ 'mod_accesslog.c' ] ],
 	[ 'mod_ajp13', [ 'mod_ajp13.c' ] ],
 	[ 'mod_auth', [ 'mod_auth.c', 'mod_auth_api.c' ], [ libcrypto ] ],
 	[ 'mod_authn_file', [ 'mod_authn_file.c' ], [ libcrypt, libcrypto ] ],
+	[ 'mod_cgi', [ 'mod_cgi.c' ] ],
 	[ 'mod_deflate', [ 'mod_deflate.c' ], [ libbz2, libz, libzstd, libbrotli, libdeflate ] ],
 	[ 'mod_dirlisting', [ 'mod_dirlisting.c' ] ],
 	[ 'mod_extforward', [ 'mod_extforward.c' ] ],
@@ -761,11 +784,6 @@ modules = [
 	[ 'mod_webdav', [ 'mod_webdav.c' ], [ libsqlite3, libuuid, libxml2, libelftc ] ],
 	[ 'mod_wstunnel', [ 'mod_wstunnel.c' ], libcrypto ],
 ]
-
-if target_machine.system() != 'windows'
-	modules += [
-		[ 'mod_cgi', [ 'mod_cgi.c' ] ],
-	]
 endif
 
 if get_option('with_lua')
