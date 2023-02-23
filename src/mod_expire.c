@@ -341,6 +341,7 @@ REQUEST_FUNC(mod_expire_handler) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_expire_plugin_init(plugin *p);
 int mod_expire_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

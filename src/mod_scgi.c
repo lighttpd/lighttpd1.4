@@ -282,6 +282,7 @@ static handler_t scgi_check_extension_2(request_st * const r, void *p_d) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_scgi_plugin_init(plugin *p);
 int mod_scgi_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

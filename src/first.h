@@ -27,6 +27,23 @@
 #define __STDC_WANT_LIB_EXT1__ 1
 #endif
 
+#ifndef LIGHTTPD_STATIC
+#ifdef _MSC_VER
+#ifndef __declspec_dllexport__
+#define __declspec_dllexport__  __declspec(dllexport)
+#endif
+#ifndef __declspec_dllimport__
+#define __declspec_dllimport__  __declspec(dllimport)
+#endif
+#endif
+#endif
+#ifndef __declspec_dllexport__
+#define __declspec_dllexport__
+#endif
+#ifndef __declspec_dllimport__
+#define __declspec_dllimport__
+#endif
+
 #ifdef _WIN32
 /* https://learn.microsoft.com/en-us/windows/win32/winprog/using-the-windows-headers */
 /* http://web.archive.org/web/20121219084749/http://support.microsoft.com/kb/166474 */

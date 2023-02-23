@@ -135,6 +135,7 @@ URIHANDLER_FUNC(mod_echo_handle_uri_clean) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_echo_plugin_init(plugin *p);
 int mod_echo_plugin_init(plugin *p) {
     p->version                 = LIGHTTPD_VERSION_ID;

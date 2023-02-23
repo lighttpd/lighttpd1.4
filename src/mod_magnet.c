@@ -3393,6 +3393,7 @@ SUBREQUEST_FUNC(mod_magnet_handle_subrequest) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_magnet_plugin_init(plugin *p);
 int mod_magnet_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

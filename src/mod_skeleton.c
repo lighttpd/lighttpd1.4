@@ -133,6 +133,7 @@ URIHANDLER_FUNC(mod_skeleton_uri_handler) {
 
 /* this function is called at dlopen() time and inits the callbacks */
 __attribute_cold__
+__declspec_dllexport__
 int mod_skeleton_plugin_init(plugin *p);
 int mod_skeleton_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

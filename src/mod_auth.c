@@ -692,6 +692,7 @@ static handler_t mod_auth_uri_handler(request_st * const r, void *p_d) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_auth_plugin_init(plugin *p);
 int mod_auth_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

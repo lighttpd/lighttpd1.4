@@ -299,6 +299,7 @@ SUBREQUEST_FUNC(mod_webdav_subrequest_handler);
 REQUEST_FUNC(mod_webdav_handle_reset);
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_webdav_plugin_init(plugin *p);
 int mod_webdav_plugin_init(plugin *p) {
     p->version           = LIGHTTPD_VERSION_ID;

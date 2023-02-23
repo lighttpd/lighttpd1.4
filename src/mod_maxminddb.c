@@ -77,6 +77,7 @@ REQUEST_FUNC(mod_maxminddb_request_env_handler);
 CONNECTION_FUNC(mod_maxminddb_handle_con_close);
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_maxminddb_plugin_init(plugin *p);
 int mod_maxminddb_plugin_init(plugin *p) {
     p->version                   = LIGHTTPD_VERSION_ID;

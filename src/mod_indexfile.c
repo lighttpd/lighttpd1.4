@@ -159,6 +159,7 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_indexfile_plugin_init(plugin *p);
 int mod_indexfile_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

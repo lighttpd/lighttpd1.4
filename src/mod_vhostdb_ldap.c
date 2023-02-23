@@ -584,6 +584,7 @@ SETDEFAULTS_FUNC(mod_vhostdb_set_defaults) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_vhostdb_ldap_plugin_init (plugin *p);
 int mod_vhostdb_ldap_plugin_init (plugin *p)
 {

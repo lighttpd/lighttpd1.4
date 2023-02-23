@@ -2722,6 +2722,7 @@ TRIGGER_FUNC(mod_mbedtls_handle_trigger) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_mbedtls_plugin_init (plugin *p);
 int mod_mbedtls_plugin_init (plugin *p)
 {

@@ -281,6 +281,7 @@ REQUEST_FUNC(mod_setenv_handle_request_reset) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_setenv_plugin_init(plugin *p);
 int mod_setenv_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

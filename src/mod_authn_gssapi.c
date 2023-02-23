@@ -796,6 +796,7 @@ REQUEST_FUNC(mod_authn_gssapi_handle_reset) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_authn_gssapi_plugin_init(plugin *p);
 int mod_authn_gssapi_plugin_init(plugin *p) {
     p->version     = LIGHTTPD_VERSION_ID;

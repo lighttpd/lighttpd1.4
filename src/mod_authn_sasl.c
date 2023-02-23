@@ -294,6 +294,7 @@ static handler_t mod_authn_sasl_basic(request_st * const r, void *p_d, const htt
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_authn_sasl_plugin_init(plugin *p);
 int mod_authn_sasl_plugin_init(plugin *p) {
     p->version     = LIGHTTPD_VERSION_ID;

@@ -331,6 +331,7 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_userdir_plugin_init(plugin *p);
 int mod_userdir_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;

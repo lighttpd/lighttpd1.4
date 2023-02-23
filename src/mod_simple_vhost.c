@@ -197,6 +197,7 @@ static handler_t mod_simple_vhost_docroot(request_st * const r, void *p_data) {
 
 
 __attribute_cold__
+__declspec_dllexport__
 int mod_simple_vhost_plugin_init(plugin *p);
 int mod_simple_vhost_plugin_init(plugin *p) {
 	p->version     = LIGHTTPD_VERSION_ID;
