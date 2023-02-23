@@ -74,22 +74,20 @@ EOF
     # skip timing-sensitive test during CI testing, but run for user 'gps'
     my $user = `id -un`;
     chomp($user) if $user;
-    if (($user || "") eq "gps") {
+    SKIP: {
+	skip "skip timing-sensitive restart test", 2
+	  unless (($user || "") eq "gps");
+
 	$t->{REQUEST}  = ( <<EOF
 GET /index.scgi?die-at-end HTTP/1.0
 Host: www.example.org
 EOF
  );
-    }
-    else {
-	$t->{REQUEST}  = ( <<EOF
-GET /index.scgi?crlf HTTP/1.0
-Host: www.example.org
-EOF
- );
-    }
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'killing scgi and wait for restart');
+
+	# (Windows is slooooow)
+	sleep 1 if $tf->{'win32native'};
 
 	# (might take lighttpd 1 sec to detect backend exit)
 	for (my $c = 2*30; $c && 0 == $tf->listening_on($ephemeral_port); --$c) {
@@ -102,6 +100,7 @@ EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'test123' } ];
 	ok($tf->handle_http($t) == 0, 'regular response of after restart');
+    }
 
 
 	ok($tf->stop_proc == 0, "Stopping lighttpd");
