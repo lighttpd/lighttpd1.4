@@ -78,6 +78,7 @@ struct connection {
 
 /* log_con_jqueue is in log.c to be defined in shared object */
 #define joblist_append(con) connection_jq_append(con)
+__declspec_dllimport__
 extern connection *log_con_jqueue;
 static inline void connection_jq_append(connection * const restrict con);
 static inline void connection_jq_append(connection * const restrict con)

@@ -13,7 +13,7 @@ macro(ADD_AND_INSTALL_LIBRARY LIBNAME SRCFILES)
 		set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} ${LIBNAME})
 		## Windows likes to link it this way back to app!
 		if(WIN32)
-			set_target_properties(${LIBNAME} PROPERTIES LINK_FLAGS lighttpd.lib)
+			target_link_libraries(${LIBNAME} lighttpd)
 		endif()
 
 		if(APPLE)

@@ -7,12 +7,16 @@
 #include "http_header.h"
 #include "sock_addr.h"
 
+#undef __declspec_dllimport__
+#define __declspec_dllimport__  __declspec_dllexport__
+
 #include "configfile.h"
 #include "plugin.h"
 
 #include <string.h>
 #include <stdlib.h>     /* strtol */
 
+__declspec_dllexport__
 array plugin_stats; /* global */
 
 /**

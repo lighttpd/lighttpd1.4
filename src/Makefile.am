@@ -108,7 +108,7 @@ common_ldflags = -avoid-version -no-undefined
 lib_LTLIBRARIES += liblightcomp.la
 liblightcomp_la_SOURCES=$(common_src)
 liblightcomp_la_CFLAGS=$(AM_CFLAGS) $(LIBEV_CFLAGS)
-liblightcomp_la_LDFLAGS = $(common_ldflags)
+liblightcomp_la_LDFLAGS = $(common_ldflags) --export-all-symbols
 liblightcomp_la_LIBADD = $(PCRE_LIB) $(CRYPTO_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(ATTR_LIB) $(WS2_32_LIB)
 common_libadd = liblightcomp.la
 if !LIGHTTPD_STATIC

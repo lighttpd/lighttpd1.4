@@ -5,6 +5,9 @@
 
 #include "first.h"
 
+#undef __declspec_dllimport__
+#define __declspec_dllimport__  __declspec_dllexport__
+
 #include "log.h"
 
 #include <sys/types.h>
@@ -31,9 +34,12 @@ static uint32_t tlen;
 static char tstr[24]; /* 20 "%F %T" incl '\0' +2 ": " */
 
 /* log_con_jqueue instance here to be defined in shared object (see base.h) */
+__declspec_dllexport__
 connection *log_con_jqueue;
 
+__declspec_dllexport__
 unix_time64_t log_epoch_secs = 0;
+__declspec_dllexport__
 unix_time64_t log_monotonic_secs = 0;
 
 #if !defined(HAVE_CLOCK_GETTIME) || !HAS_TIME_BITS64

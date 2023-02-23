@@ -5,7 +5,9 @@
 #include "base_decls.h"
 #include "buffer.h"
 
+__declspec_dllimport__
 extern unix_time64_t log_epoch_secs;
+__declspec_dllimport__
 extern unix_time64_t log_monotonic_secs;
 
 #if defined(HAVE_CLOCK_GETTIME) && HAS_TIME_BITS64

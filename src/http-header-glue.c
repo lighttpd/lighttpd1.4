@@ -13,9 +13,13 @@
 #include "http_date.h"
 #include "http_etag.h"
 #include "http_header.h"
-#include "response.h"
 #include "sock_addr.h"
 #include "stat_cache.h"
+
+#undef __declspec_dllimport__
+#define __declspec_dllimport__  __declspec_dllexport__
+
+#include "response.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -31,6 +35,7 @@
 #define MAX_HTTP_RESPONSE_FIELD_SIZE 65535
 
 /* http_dispatch instance here to be defined in shared object (see base.h)*/
+__declspec_dllexport__
 struct http_dispatch http_dispatch[4];
 
 

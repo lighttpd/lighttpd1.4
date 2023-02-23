@@ -204,6 +204,7 @@ int32_t config_feature_int (const server *srv, const char *feature, int32_t defa
  *
  *   fastcgi.backend.<key>.disconnects = ...
  */
+__declspec_dllimport__
 extern array plugin_stats;
 
 #define plugin_stats_get_ptr(s, len) \

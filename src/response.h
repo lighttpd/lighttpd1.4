@@ -24,6 +24,7 @@ struct http_dispatch {
 };
 
 /* http_dispatch is in http-header-glue.c to be defined in shared object */
+__declspec_dllimport__
 extern struct http_dispatch http_dispatch[4]; /*(index by http_version_t)*/
 
 int http_response_parse(server *srv, request_st *r);

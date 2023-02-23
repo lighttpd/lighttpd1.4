@@ -2200,7 +2200,10 @@ static void server_main_loop (server * const srv) {
 			server_load_check(srv);
 		}
 
-		static connection * const sentinel =
+	  #ifndef _MSC_VER
+		static
+	  #endif
+		connection * const sentinel =
 		  (connection *)(uintptr_t)&log_con_jqueue;
 		connection * const joblist = log_con_jqueue;
 		log_con_jqueue = sentinel;
