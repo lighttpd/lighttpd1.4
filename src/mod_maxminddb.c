@@ -108,6 +108,15 @@ typedef struct {
     const char ***cenv;
 } plugin_config_env;
 
+typedef struct {
+  #ifdef HAVE_IPV6
+    struct sockaddr_in6 addr;
+  #else
+    struct sockaddr_in addr;
+  #endif
+    array *env;
+} handler_ctx;
+
 INIT_FUNC(mod_maxminddb_init)
 {
     return ck_calloc(1, sizeof(plugin_data));
@@ -261,9 +270,9 @@ mod_maxminddb_merge_config (plugin_config * const pconf,
 
 
 static void
-mod_maxmind_patch_config (request_st * const r,
-                          const plugin_data * const p,
-                          plugin_config * const pconf)
+mod_maxminddb_patch_config (request_st * const r,
+                            const plugin_data * const p,
+                            plugin_config * const pconf)
 {
     *pconf = p->defaults; /* copy small struct instead of memcpy() */
     /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
@@ -335,8 +344,8 @@ SETDEFAULTS_FUNC(mod_maxminddb_set_defaults)
 
 
 static void
-geoip2_env_set (array * const env, const char * const k,
-                const size_t klen, MMDB_entry_data_s * const data)
+geoip2_env_set (request_st * const r, array * const env,
+                const buffer * const kb, MMDB_entry_data_s * const data)
 {
     /* GeoIP2 database interfaces return pointers directly into database,
      * and these are valid until the database is closed.
@@ -391,13 +400,16 @@ geoip2_env_set (array * const env, const char * const k,
         return;
     }
 
-    array_set_key_value(env, k, klen, v, vlen);
+    http_header_env_set(r, BUF_PTR_LEN(kb), v, vlen);
+    if (env)
+        array_set_key_value(env, BUF_PTR_LEN(kb), v, vlen);
 }
 
 
 static void
-mod_maxmind_geoip2 (array * const env, const struct sockaddr * const dst_addr,
-                    plugin_config * const pconf)
+mod_maxminddb_geoip2 (request_st * const r, array * const env,
+                      const struct sockaddr * const dst_addr,
+                      plugin_config * const pconf)
 {
     MMDB_lookup_result_s res;
     MMDB_entry_data_s data;
@@ -412,7 +424,7 @@ mod_maxmind_geoip2 (array * const env, const struct sockaddr * const dst_addr,
     for (size_t i = 0, used = pconf->env->used; i < used; ++i) {
         if (MMDB_SUCCESS == MMDB_aget_value(entry, &data, cenv[i])
             && data.has_data) {
-            geoip2_env_set(env, BUF_PTR_LEN(&names[i]->key), &data);
+            geoip2_env_set(r, env, &names[i]->key, &data);
         }
     }
 }
@@ -420,30 +432,68 @@ mod_maxmind_geoip2 (array * const env, const struct sockaddr * const dst_addr,
 
 REQUEST_FUNC(mod_maxminddb_request_env_handler)
 {
-    connection * const con = r->con;
-    const sock_addr * const dst_addr = &con->dst_addr;
-    const int sa_family = sock_addr_get_family(dst_addr);
-    if (sa_family != AF_INET && sa_family != AF_INET6) return HANDLER_GO_ON;
-
     plugin_config pconf;
     plugin_data *p = p_d;
-    mod_maxmind_patch_config(r, p, &pconf);
-    /* check that mod_maxmind is activated and env fields were requested */
-    if (!pconf.activate || NULL == pconf.env) return HANDLER_GO_ON;
+    mod_maxminddb_patch_config(r, p, &pconf);
+    /* check mod_maxminddb activated, env fields requested, and db is open */
+    if (!pconf.activate || NULL == pconf.env || NULL == pconf.mmdb)
+        return HANDLER_GO_ON;
 
-    array *env = con->plugin_ctx[p->id];
-    if (NULL == env) {
-        env = con->plugin_ctx[p->id] = array_init(pconf.env->used);
-        if (pconf.mmdb)
-            mod_maxmind_geoip2(env, (const struct sockaddr *)dst_addr, &pconf);
+    const sock_addr * const dst_addr = &r->con->dst_addr;
+
+  #if 0
+    /* future: if mod_extforward is (future) extended for HTTP/2 and
+     * load balancers configured to reuse an HTTP/2 connection for more
+     * than one client, then might add a configuration option to bypass
+     * allocating and caching the db lookup results in env, even for the
+     * initial request env */
+    if (!pconf.cache) { /*(not implemented)*/
+        const int sa_family = sock_addr_get_family(dst_addr);
+        if (sa_family == AF_INET && sa_family == AF_INET6)
+            mod_maxminddb_geoip2(r, NULL,
+                                 (const struct sockaddr *)dst_addr, &pconf);
+        return HANDLER_GO_ON;
+    }
+  #endif
+
+    handler_ctx ** const hctx = (handler_ctx **)&r->con->plugin_ctx[p->id];
+
+    if (*hctx && sock_addr_is_addr_eq((sock_addr *)&(*hctx)->addr, dst_addr)) {
+        const array * const env = (*hctx)->env;
+        for (uint32_t i = 0; i < env->used; ++i) {
+            /* note: replaces values which may have been set by mod_openssl
+             *(when mod_extforward listed after mod_openssl in server.modules)*/
+            const data_string * const ds = (data_string *)env->data[i];
+            http_header_env_set(r, BUF_PTR_LEN(&ds->key),
+                                   BUF_PTR_LEN(&ds->value));
+        }
+        return HANDLER_GO_ON;
     }
 
-    for (uint32_t i = 0; i < env->used; ++i) {
-        /* note: replaces values which may have been set by mod_openssl
-         * (when mod_extforward is listed after mod_openssl in server.modules)*/
-        data_string *ds = (data_string *)env->data[i];
-        http_header_env_set(r, BUF_PTR_LEN(&ds->key), BUF_PTR_LEN(&ds->value));
+    array *env = NULL;
+    if (*hctx && r->http_version <= HTTP_VERSION_1_1) {
+        env = (*hctx)->env;
+        /*array_reset_data_strings(env);*/ /* reuse string allocations */
+        env->used = 0;
     }
+    else if ((*hctx) == NULL) {
+        (*hctx) = ck_malloc(sizeof(handler_ctx));
+        (*hctx)->env = env = array_init(pconf.env->used);
+    }
+
+    if (env) { /* then (env == (*hctx)->env) else (env == NULL) */
+        const int sa_family = sock_addr_get_family(dst_addr);
+        if (sa_family != AF_INET && sa_family != AF_INET6)
+            return HANDLER_GO_ON;
+        if (sa_family == AF_INET)
+            memcpy(&(*hctx)->addr, dst_addr, sizeof(dst_addr->ipv4));
+      #ifdef HAVE_IPV6
+        else
+            memcpy(&(*hctx)->addr, dst_addr, sizeof(dst_addr->ipv6));
+      #endif
+    }
+
+    mod_maxminddb_geoip2(r, env, (const struct sockaddr *)dst_addr, &pconf);
 
     return HANDLER_GO_ON;
 }
@@ -451,11 +501,12 @@ REQUEST_FUNC(mod_maxminddb_request_env_handler)
 
 CONNECTION_FUNC(mod_maxminddb_handle_con_close)
 {
-    plugin_data *p = p_d;
-    array *env = con->plugin_ctx[p->id];
-    if (NULL != env) {
-        array_free(env);
-        con->plugin_ctx[p->id] = NULL;
+    handler_ctx **hctx =
+      (handler_ctx **)&con->plugin_ctx[((plugin_data *)p_d)->id];
+    if (NULL != *hctx) {
+        array_free((*hctx)->env);
+        free(*hctx);
+        *hctx = NULL;
     }
 
     return HANDLER_GO_ON;
