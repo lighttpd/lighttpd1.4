@@ -590,7 +590,7 @@ ajp13_create_env (handler_ctx * const hctx)
         n = ajp13_enc_string(x, n, BUF_PTR_LEN(&r->uri.path));
         if (0 == n) break;
         /* remote_addr */
-        n = ajp13_enc_string(x, n, BUF_PTR_LEN(&r->con->dst_addr_buf));
+        n = ajp13_enc_string(x, n, BUF_PTR_LEN(r->dst_addr_buf));
         if (0 == n) break;
         /* remote_host *//*(skip DNS lookup)*/
         n = ajp13_enc_string(x, n, NULL, 0);

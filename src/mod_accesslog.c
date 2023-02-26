@@ -769,7 +769,7 @@ log_access_record_cold (buffer * const b, const request_st * const r,
     switch (f->field) {
       case FORMAT_SERVER_PORT:
         if (f->opt & FORMAT_FLAG_PORT_REMOTE) {
-            buffer_append_int(b, sock_addr_get_port(&con->dst_addr));
+            buffer_append_int(b, sock_addr_get_port(r->dst_addr));
             break;
         }
         /* else if (f->opt & FORMAT_FLAG_PORT_LOCAL) *//*(default)*/
@@ -875,7 +875,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			/*case FORMAT_REMOTE_HOST:*/
 		  #endif
 			case FORMAT_REMOTE_ADDR:
-				buffer_append_string_buffer(b, &r->con->dst_addr_buf);
+				buffer_append_string_buffer(b, r->dst_addr_buf);
 				break;
 			case FORMAT_HTTP_HOST:
 				accesslog_append_buffer(b, &r->uri.authority, esc);

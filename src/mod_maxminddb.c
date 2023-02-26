@@ -439,7 +439,7 @@ REQUEST_FUNC(mod_maxminddb_request_env_handler)
     if (!pconf.activate || NULL == pconf.env || NULL == pconf.mmdb)
         return HANDLER_GO_ON;
 
-    const sock_addr * const dst_addr = &r->con->dst_addr;
+    const sock_addr * const dst_addr = r->dst_addr;
 
   #if 0
     /* future: if mod_extforward is (future) extended for HTTP/2 and

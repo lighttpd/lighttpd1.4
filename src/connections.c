@@ -1409,7 +1409,7 @@ static void connection_check_timeout (connection * const con, const unix_time64_
                               "after writing %lld bytes. We waited %d seconds. "
                               "If this is a problem, increase "
                               "server.max-write-idle",
-                              con->dst_addr_buf.ptr,
+                              r->dst_addr_buf->ptr,
                               BUFFER_INTLEN_PTR(&r->target),
                               (long long)r->write_queue.bytes_out,
                               (int)r->conf.max_write_idle);
@@ -1493,7 +1493,7 @@ static void connection_check_timeout (connection * const con, const unix_time64_
                   "NOTE: a request from %s for %.*s timed out after writing "
                   "%lld bytes. We waited %d seconds. If this is a problem, "
                   "increase server.max-write-idle",
-                  con->dst_addr_buf.ptr,
+                  r->dst_addr_buf->ptr,
                   BUFFER_INTLEN_PTR(&r->target),
                   (long long)con->write_queue->bytes_out,
                   (int)r->conf.max_write_idle);

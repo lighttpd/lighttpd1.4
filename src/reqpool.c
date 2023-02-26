@@ -57,6 +57,8 @@ request_init_data (request_st * const r, connection * const con, server * const 
     r->tmp_buf = srv->tmp_buf;
     r->resp_body_scratchpad = -1;
     r->server_name = &r->uri.authority;
+    r->dst_addr = &con->dst_addr;
+    r->dst_addr_buf = &con->dst_addr_buf;
 
     /* init plugin-specific per-request structures */
     r->plugin_ctx = ck_calloc(srv->plugins.used + 1, sizeof(void *));

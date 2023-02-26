@@ -1966,9 +1966,9 @@ magnet_env_get_buffer_by_id (request_st * const r, const int id)
 	case MAGNET_ENV_REQUEST_URI:      dest = &r->target; break;
 	case MAGNET_ENV_REQUEST_ORIG_URI: dest = &r->target_orig; break;
 	case MAGNET_ENV_REQUEST_PATH_INFO: dest = &r->pathinfo; break;
-	case MAGNET_ENV_REQUEST_REMOTE_ADDR: dest = &r->con->dst_addr_buf; break;
+	case MAGNET_ENV_REQUEST_REMOTE_ADDR: dest = r->dst_addr_buf; break;
 	case MAGNET_ENV_REQUEST_REMOTE_PORT:
-		buffer_append_int(dest, sock_addr_get_port(&r->con->dst_addr));
+		buffer_append_int(dest, sock_addr_get_port(r->dst_addr));
 		break;
 	case MAGNET_ENV_REQUEST_SERVER_ADDR: /* local IP without port */
 	case MAGNET_ENV_REQUEST_SERVER_PORT:
@@ -2031,12 +2031,11 @@ static int
 magnet_env_set_raddr_by_id (lua_State *L, request_st * const r, const int id,
                             const const_buffer * const val)
 {
-    connection * const con = r->con;
     switch (id) {
       case MAGNET_ENV_REQUEST_REMOTE_ADDR:
        #ifdef HAVE_SYS_UN_H
         if (val->len && *val->ptr == '/'
-            && 0 == sock_addr_assign(&con->dst_addr, AF_UNIX, 0, val->ptr)) {
+            && 0 == sock_addr_assign(r->dst_addr, AF_UNIX, 0, val->ptr)) {
         }
         else
        #endif
@@ -2046,7 +2045,7 @@ magnet_env_set_raddr_by_id (lua_State *L, request_st * const r, const int id,
             if (1 == sock_addr_from_str_numeric(&saddr, val->ptr, r->conf.errh)
                 && saddr.plain.sa_family != AF_UNSPEC) {
                 sock_addr_set_port(&saddr, 0);
-                memcpy(&con->dst_addr, &saddr, sizeof(sock_addr));
+                memcpy(r->dst_addr, &saddr, sizeof(sock_addr));
             }
             else {
                 return luaL_error(L,
@@ -2054,11 +2053,11 @@ magnet_env_set_raddr_by_id (lua_State *L, request_st * const r, const int id,
                                   val->ptr);
             }
         }
-        buffer_copy_string_len(&con->dst_addr_buf, val->ptr, val->len);
+        buffer_copy_string_len(r->dst_addr_buf, val->ptr, val->len);
         config_cond_cache_reset_item(r, COMP_HTTP_REMOTE_IP);
         break;
       case MAGNET_ENV_REQUEST_REMOTE_PORT:
-        sock_addr_set_port(&con->dst_addr, (unsigned short)atoi(val->ptr));
+        sock_addr_set_port(r->dst_addr, (unsigned short)atoi(val->ptr));
         break;
       default:
         break;

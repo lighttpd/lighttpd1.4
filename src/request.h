@@ -166,6 +166,9 @@ struct request_st {
     buffer pathinfo;
     buffer server_name_buf;
 
+    void *dst_addr;
+    buffer *dst_addr_buf;
+
     /* response */
     uint32_t resp_header_len;
     uint64_t resp_htags; /*bitfield of flagged headers present in response*/

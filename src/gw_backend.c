@@ -891,7 +891,7 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
        }
       case GW_BALANCE_STICKY:
        { /* source sticky balancing */
-        const buffer * const dst_addr_buf = &r->con->dst_addr_buf;
+        const buffer * const dst_addr_buf = r->dst_addr_buf;
         const uint32_t base_hash =
           gw_hash(BUF_PTR_LEN(dst_addr_buf), DJBHASH_INIT);
         uint32_t last_max = UINT32_MAX;

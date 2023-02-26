@@ -496,7 +496,7 @@ static cond_result_t config_check_cond_nocache_eval(request_st * const r, const 
 		l = &r->uri.authority;
 		break;
 	case COMP_HTTP_REMOTE_IP:
-		l = &r->con->dst_addr_buf;
+		l = r->dst_addr_buf;
 		break;
 	case COMP_HTTP_SCHEME:
 		l = &r->uri.scheme;
@@ -556,8 +556,8 @@ static cond_result_t config_check_cond_nocache_eval(request_st * const r, const 
 			  (((uintptr_t)dc->string.ptr + dc->string.used + 1 + 7) & ~7);
 			int bits = ((unsigned char *)dc->string.ptr)[dc->string.used];
 			match ^= (bits)
-			  ? sock_addr_is_addr_eq_bits(addr, &r->con->dst_addr, bits)
-			  : sock_addr_is_addr_eq(addr, &r->con->dst_addr);
+			  ? sock_addr_is_addr_eq_bits(addr, r->dst_addr, bits)
+			  : sock_addr_is_addr_eq(addr, r->dst_addr);
 			break;
 		}
 		match ^= (buffer_is_equal(l, &dc->string));
