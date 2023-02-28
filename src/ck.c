@@ -28,6 +28,7 @@
 #include <stdlib.h>     /* abort() getenv() getenv_s()
                          * calloc() malloc() realloc() */
 #include <string.h>     /* memcpy() memset() memset_s() explicit_bzero()
+                         * memset_explicit()
                          * strerror() strerror_r() strerror_s() strlen() */
 
 #ifdef __STDC_LIB_EXT1__
@@ -40,6 +41,12 @@
 #endif
 
 #ifndef HAVE_MEMSET_S
+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__-0 >= 202311L /* C23 */
+#ifndef HAVE_MEMSET_EXPLICIT
+#define HAVE_MEMSET_EXPLICIT 1
+#endif
+#endif
 
 #ifdef _WIN32
 #define VC_EXTRALEAN
@@ -60,6 +67,7 @@ typedef int sig_atomic_t;
 
 
 #if !defined(HAVE_MEMSET_S)        \
+ && !defined(HAVE_MEMSET_EXPLICIT) \
  && !defined(HAVE_EXPLICIT_BZERO)  \
  && !defined(HAVE_EXPLICIT_MEMSET) \
  && !defined(HAVE_SECUREZEROMEMORY)
@@ -141,6 +149,8 @@ ck_memclear_s (void * const s, const rsize_t smax, rsize_t n)
 
    #if defined(HAVE_EXPLICIT_BZERO)
     explicit_bzero(s, n);
+   #elif defined(HAVE_MEMSET_EXPLICIT)
+    memset_explicit(s, 0, n);
    #elif defined(HAVE_EXPLICIT_MEMSET)
     explicit_memset(s, 0, n);
    #elif defined(HAVE_SECUREZEROMEMORY)
