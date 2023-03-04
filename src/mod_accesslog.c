@@ -877,16 +877,43 @@ log_access_record_cold (buffer * const b, const request_st * const r,
     }
 }
 
-static void mask(void * what, int32_t bytes, uint32_t mask_bits) {
-	while (--bytes >= 0 && mask_bits > 0) {
+static int mask(sock_addr * addr, buffer * dest, uint32_t bits) {
+	sock_addr masked;
+	int len;
+	int mask_bits;
+	unsigned char * what;
+	switch (addr->plain.sa_family) {
+	  case AF_INET:
+		len = 4;
+		what = (unsigned char*)&masked.ipv4.sin_addr.s_addr;
+		mask_bits = bits & 0xff;
+		break;
+	 #ifdef HAVE_IPV6
+	  case AF_INET6:
+		len = 16;
+		what = masked.ipv6.sin6_addr.s6_addr;
+		mask_bits = (bits >> 8) & 0xff;
+		break;
+	 #endif
+	  default:
+		return -1;
+	}
+	if (0 == mask_bits) {
+		return -1;
+	}
+
+	masked = *addr;
+	while (--len >= 0 && mask_bits > 0) {
 		if (mask_bits >= 8) {
-			((char*) what)[bytes] = 0;
+			what[len] = 0;
 			mask_bits -= 8;
 		} else {
-			((char*) what)[bytes] &= ~((1 << mask_bits) - 1);
+			what[len] &= ~((1 << mask_bits) - 1);
 			mask_bits = 0;
 		}
 	}
+
+	return sock_addr_cache_inet_ntop_copy_buffer(dest, &masked);
 }
 
 static int log_access_record (const request_st * const r, buffer * const b, format_fields * const parsed_format, esc_fn_t esc) {
@@ -934,33 +961,15 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			case FORMAT_REMOTE_ADDR:
 				switch (((struct sockaddr*)r->dst_addr)->sa_family) {
 				  case AF_INET:
-				    if (f->opt & 255) {
-					sock_addr masked = *(sock_addr*)r->dst_addr;
-					mask(&masked.ipv4.sin_addr.s_addr, 4, f->opt & 255);
-					if (0 == sock_addr_cache_inet_ntop_copy_buffer(&tmp, &masked)) {
-						buffer_append_string_buffer(b, &tmp);
-					} else {
-						buffer_append_string_buffer(b, r->dst_addr_buf);
-					}
-				    } else {
-					buffer_append_string_buffer(b, r->dst_addr_buf);
-				    }
-				    break;
 				 #ifdef HAVE_IPV6
 				  case AF_INET6:
-				    if (f->opt & (255<<8)) {
-					sock_addr masked = *(sock_addr*)r->dst_addr;
-					mask(&masked.ipv6.sin6_addr.s6_addr, 16, (f->opt & (255<<8)) >> 8);
-					if (0 == sock_addr_cache_inet_ntop_copy_buffer(&tmp, &masked)) {
-						buffer_append_string_buffer(b, &tmp);
-					} else {
-						buffer_append_string_buffer(b, r->dst_addr_buf);
-					}
+				 #endif
+				    if (0 == mask((sock_addr*)r->dst_addr, &tmp, f->opt)) {
+					buffer_append_string_buffer(b, &tmp);
 				    } else {
 					buffer_append_string_buffer(b, r->dst_addr_buf);
 				    }
 				    break;
-				 #endif
 				  default:
 				    buffer_append_string_buffer(b, r->dst_addr_buf);
 				}
