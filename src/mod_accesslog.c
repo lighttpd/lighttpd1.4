@@ -877,6 +877,7 @@ log_access_record_cold (buffer * const b, const request_st * const r,
     }
 }
 
+static unsigned char MAPPED_V4_PREFIX[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 static int mask(sock_addr * addr, buffer * dest, uint32_t bits) {
 	sock_addr masked;
 	int len;
@@ -892,7 +893,16 @@ static int mask(sock_addr * addr, buffer * dest, uint32_t bits) {
 	  case AF_INET6:
 		len = 16;
 		what = masked.ipv6.sin6_addr.s6_addr;
-		mask_bits = (bits >> 8) & 0xff;
+		if (0 == memcmp(addr->ipv6.sin6_addr.s6_addr, MAPPED_V4_PREFIX, sizeof(MAPPED_V4_PREFIX))) {
+			// mapped v4 address -> apply v4 mask
+			mask_bits = bits & 0xff;
+		} else if (addr->ipv6.sin6_addr.s6_addr[0] == 0x20 && addr->ipv6.sin6_addr.s6_addr[0] == 0x02) {
+			// 6to4 address - apply v4 mask to 6to4 prefix, unless v4 mask is 0 then use v6 mask
+			mask_bits = (bits & 0xff) != 0 ? 80 + (bits & 0xff) : (bits >> 8) & 0xff;
+		} else {
+			// normal v6
+			mask_bits = (bits >> 8) & 0xff;
+		}
 		break;
 	 #endif
 	  default:
