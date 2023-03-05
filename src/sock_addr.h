@@ -50,6 +50,8 @@ int sock_addr_is_addr_port_eq (const sock_addr *saddr1, const sock_addr *saddr2)
 __attribute_pure__
 int sock_addr_is_addr_eq_bits(const sock_addr * restrict a, const sock_addr * restrict b, int bits);
 
+int sock_addr_mask_lower_bits(sock_addr * dest, const sock_addr * src, unsigned int v4bits, unsigned int v6bits);
+
 void sock_addr_set_port (sock_addr * restrict saddr, unsigned short port);
 
 int sock_addr_assign (sock_addr * restrict saddr, int family, unsigned short nport, const void * restrict naddr);

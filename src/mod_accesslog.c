@@ -1,6 +1,5 @@
 #include "first.h"
 
-#include "sys-socket.h"
 #include "sys-time.h"
 
 #include "base.h"
@@ -877,57 +876,31 @@ log_access_record_cold (buffer * const b, const request_st * const r,
     }
 }
 
-static unsigned char MAPPED_V4_PREFIX[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
-static int mask(sock_addr * addr, buffer * dest, uint32_t bits) {
+static void
+accesslog_append_addr (buffer * const b, const request_st * const r,
+                       const format_field * const f)
+{
+	buffer tmp = {0};
 	sock_addr masked;
-	int len;
-	int mask_bits;
-	unsigned char * what;
-	switch (addr->plain.sa_family) {
+
+	switch (((struct sockaddr*)r->dst_addr)->sa_family) {
 	  case AF_INET:
-		len = 4;
-		what = (unsigned char*)&masked.ipv4.sin_addr.s_addr;
-		mask_bits = bits & 0xff;
-		break;
 	 #ifdef HAVE_IPV6
 	  case AF_INET6:
-		len = 16;
-		what = masked.ipv6.sin6_addr.s6_addr;
-		if (0 == memcmp(addr->ipv6.sin6_addr.s6_addr, MAPPED_V4_PREFIX, sizeof(MAPPED_V4_PREFIX))) {
-			// mapped v4 address -> apply v4 mask
-			mask_bits = bits & 0xff;
-		} else if (addr->ipv6.sin6_addr.s6_addr[0] == 0x20 && addr->ipv6.sin6_addr.s6_addr[0] == 0x02) {
-			// 6to4 address - apply v4 mask to 6to4 prefix, unless v4 mask is 0 then use v6 mask
-			mask_bits = (bits & 0xff) != 0 ? 80 + (bits & 0xff) : (bits >> 8) & 0xff;
-		} else {
-			// normal v6
-			mask_bits = (bits >> 8) & 0xff;
-		}
-		break;
 	 #endif
+	    if (0 != sock_addr_mask_lower_bits(&masked, (sock_addr*)r->dst_addr, f->opt & 0xff, (f->opt >> 8) & 0xff)
+			&& 0 == sock_addr_cache_inet_ntop_copy_buffer(&tmp, &masked)) {
+		buffer_append_string_buffer(b, &tmp);
+		buffer_free_ptr(&tmp);
+		break;
+	    }
+	    // else fallthrough
 	  default:
-		return -1;
+	    buffer_append_string_buffer(b, r->dst_addr_buf);
 	}
-	if (0 == mask_bits) {
-		return -1;
-	}
-
-	masked = *addr;
-	while (--len >= 0 && mask_bits > 0) {
-		if (mask_bits >= 8) {
-			what[len] = 0;
-			mask_bits -= 8;
-		} else {
-			what[len] &= ~((1 << mask_bits) - 1);
-			mask_bits = 0;
-		}
-	}
-
-	return sock_addr_cache_inet_ntop_copy_buffer(dest, &masked);
 }
 
 static int log_access_record (const request_st * const r, buffer * const b, format_fields * const parsed_format, esc_fn_t esc) {
-	buffer tmp = {0};
 	const buffer *vb;
 	unix_timespec64_t ts = { 0, 0 };
 	int flush = 0;
@@ -969,20 +942,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			/*case FORMAT_REMOTE_HOST:*/
 		  #endif
 			case FORMAT_REMOTE_ADDR:
-				switch (((struct sockaddr*)r->dst_addr)->sa_family) {
-				  case AF_INET:
-				 #ifdef HAVE_IPV6
-				  case AF_INET6:
-				 #endif
-				    if (0 == mask((sock_addr*)r->dst_addr, &tmp, f->opt)) {
-					buffer_append_string_buffer(b, &tmp);
-				    } else {
-					buffer_append_string_buffer(b, r->dst_addr_buf);
-				    }
-				    break;
-				  default:
-				    buffer_append_string_buffer(b, r->dst_addr_buf);
-				}
+				accesslog_append_addr(b, r, f);
 				break;
 			case FORMAT_HTTP_HOST:
 				accesslog_append_buffer(b, &r->uri.authority, esc);
@@ -1025,7 +985,6 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 				break;
 			}
 	}
-	buffer_free_ptr(&tmp);
 
 	return flush;
 }
