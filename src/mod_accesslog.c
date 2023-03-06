@@ -875,9 +875,10 @@ log_access_record_cold (buffer * const b, const request_st * const r,
     }
 }
 
+__attribute_noinline__
 static void
-accesslog_append_addr (buffer * const b, const request_st * const r,
-                       const format_field * const f)
+accesslog_append_addr_masked (buffer * const b, const request_st * const r,
+			      int bits)
 {
 	buffer tmp = {0};
 	sock_addr masked;
@@ -887,7 +888,7 @@ accesslog_append_addr (buffer * const b, const request_st * const r,
 	 #ifdef HAVE_IPV6
 	  case AF_INET6:
 	 #endif
-	    if (0 != sock_addr_mask_lower_bits(&masked, (sock_addr*)r->dst_addr, f->opt & 0xff, (f->opt >> 8) & 0xff)
+	    if (0 != sock_addr_mask_lower_bits(&masked, (sock_addr*)r->dst_addr, bits & 0xff, (bits >> 8) & 0xff)
 			&& 0 == sock_addr_inet_ntop_copy_buffer(&tmp, &masked)) {
 		buffer_append_string_buffer(b, &tmp);
 		buffer_free_ptr(&tmp);
@@ -941,7 +942,10 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 			/*case FORMAT_REMOTE_HOST:*/
 		  #endif
 			case FORMAT_REMOTE_ADDR:
-				accesslog_append_addr(b, r, f);
+				if (!f->opt)
+					buffer_append_string_buffer(b, r->dst_addr_buf);
+				else
+					accesslog_append_addr_masked(b, r, f->opt);
 				break;
 			case FORMAT_HTTP_HOST:
 				accesslog_append_buffer(b, &r->uri.authority, esc);
