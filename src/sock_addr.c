@@ -191,10 +191,16 @@ int sock_addr_is_addr_eq_bits(const sock_addr *a, const sock_addr *b, int bits) 
 }
 
 #ifdef HAVE_IPV6
-static const sock_addr SIXTO4_PREFIX = { .ipv6 = {
-	.sin6_family = AF_INET6,
-	.sin6_addr.s6_addr = {0x20, 0x02}
-}};
+static const sock_addr * SIXTO4_PREFIX()
+{
+	static sock_addr prefix = {0};
+	if (0 == sock_addr_get_family(&prefix)) {
+		prefix.ipv6.sin6_family = AF_INET6;
+		prefix.ipv6.sin6_addr.s6_addr[0] = 0x20;
+		prefix.ipv6.sin6_addr.s6_addr[1] = 0x02;
+	}
+	return &prefix;
+}
 #endif
 /** Masks (i. e. zeroes out) the rightmost bits of the given source
  *  address, putting the result into the given dest address.
@@ -220,7 +226,7 @@ int sock_addr_mask_lower_bits(sock_addr * dest, const sock_addr * source,
 		if (IN6_IS_ADDR_V4MAPPED(&source->ipv6.sin6_addr)) {
 			// mapped v4 address -> apply v4 mask
 			mask_bits = v4bits;
-		} else if (sock_addr_is_addr_eq_bits(source, &SIXTO4_PREFIX, 16)) {
+		} else if (sock_addr_is_addr_eq_bits(source, SIXTO4_PREFIX(), 16)) {
 			// 6to4 address - apply v4 mask to 6to4 prefix, unless v4 mask is 0 then use v6 mask
 			mask_bits = v4bits != 0 ? 80 + v4bits : v6bits;
 		} else {
