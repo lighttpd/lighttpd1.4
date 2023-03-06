@@ -10,7 +10,6 @@
 #include "http_header.h"
 #include "response.h"
 #include "sock_addr.h"
-#include "sock_addr_cache.h"
 
 #include "plugin.h"
 
@@ -889,7 +888,7 @@ accesslog_append_addr (buffer * const b, const request_st * const r,
 	  case AF_INET6:
 	 #endif
 	    if (0 != sock_addr_mask_lower_bits(&masked, (sock_addr*)r->dst_addr, f->opt & 0xff, (f->opt >> 8) & 0xff)
-			&& 0 == sock_addr_cache_inet_ntop_copy_buffer(&tmp, &masked)) {
+			&& 0 == sock_addr_inet_ntop_copy_buffer(&tmp, &masked)) {
 		buffer_append_string_buffer(b, &tmp);
 		buffer_free_ptr(&tmp);
 		break;
