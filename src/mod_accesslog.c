@@ -785,7 +785,7 @@ accesslog_append_remote_addr_masked (buffer * const b, const request_st * const 
      #ifdef HAVE_IPV6
       case AF_INET6:
         if (__builtin_expect( (s[0] != ':'), 1)
-            || !IN6_IS_ADDR_V4MAPPED(&r->dst_addr->ipv6.sin6_addr)
+            || !IN6_IS_ADDR_V4MAPPED(&((sock_addr*)r->dst_addr)->ipv6.sin6_addr)
             || NULL == strchr(s, '.')) {
             /* IPv6: mask final 10 octets (80 bits) of address; keep 6 octets */
             /* Note: treat string starting w/ "::..." as "::" even if "::x:..."
