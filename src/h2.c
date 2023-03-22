@@ -1203,6 +1203,7 @@ h2_frame_cq_compact (chunkqueue * const cq, uint32_t len)
 
 
 __attribute_cold__
+__attribute_noinline__
 static uint32_t
 h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue * const cq, connection * const con)
 {
@@ -1499,6 +1500,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
 }
 
 
+__attribute_noinline__
 static int
 h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
 {
@@ -1715,7 +1717,7 @@ h2_parse_frames (connection * const con)
      * (XXX: If SETTINGS_MAX_FRAME_SIZE were increased and then decreased,
      *       should accept the larger frame size until SETTINGS is ACK'd) */
     const uint32_t fsize = h2c->s_max_frame_size;
-    for (off_t cqlen = chunkqueue_length(cq); cqlen >= 9; ) {
+    for (off_t cqlen; (cqlen = chunkqueue_length(cq)) >= 9; ) {
         chunk *c = cq->first;
         /*assert(c->type == MEM_CHUNK);*/
         /* copy data if frame header crosses chunk boundary
@@ -1731,12 +1733,12 @@ h2_parse_frames (connection * const con)
             h2_send_goaway_e(con, H2_E_FRAME_SIZE_ERROR);
             return 0;
         }
+        if (cqlen < 9+flen) return 1; /* incomplete frame; go on */
 
         /*(handle PUSH_PROMISE as connection error further below)*/
         /*if (s[3] == H2_FTYPE_HEADERS || s[3] == H2_FTYPE_PUSH_PROMISE)*/
 
         if (s[3] == H2_FTYPE_HEADERS) {
-            if (cqlen < 9+flen) return 1; /* incomplete frame; go on */
             if (clen < 9+flen) {
                 clen = h2_frame_cq_compact(cq, 9+flen);
                 c = cq->first; /*(reload after h2_frame_cq_compact())*/
@@ -1756,7 +1758,7 @@ h2_parse_frames (connection * const con)
                  * exceed SETTINGS_MAX_FRAME_SIZE, so do not test fsize again */
                 flen = h2_u24(s);
                 /* recalculate after CONTINUATION removed */
-                cqlen = chunkqueue_length(cq);
+                /*cqlen = chunkqueue_length(cq);*/
             }
 
           #ifdef __COVERITY__
@@ -1768,7 +1770,6 @@ h2_parse_frames (connection * const con)
           #endif
 
             int rc = h2_recv_headers(con, s, flen);
-            cqlen -= (9+flen);
             if (rc >= 0)
                 chunkqueue_mark_written(cq, 9+flen);
             if (rc <= 0)
@@ -1782,12 +1783,10 @@ h2_parse_frames (connection * const con)
              * Since well-behaved clients do not intentionally send partial
              * frames, and try to resend if socket buffers are full, this is
              * probably not a big concern in practice. */
-            if (cqlen < 9+flen) return 1; /* incomplete frame; go on */
             con->read_idle_ts = log_monotonic_secs;
             /*(h2_recv_data() must consume frame from cq or else return 0)*/
             if (!h2_recv_data(con, s, flen))
                 return 0;
-            cqlen -= (9+flen);
         }
         else {
             /* frame types below are expected to be small
@@ -1803,7 +1802,6 @@ h2_parse_frames (connection * const con)
              *      before waiting to read partial frame
              *      (fsize limit is still enforced above for all frames)
              */
-            if (cqlen < 9+flen) return 1; /* incomplete frame; go on */
             if (clen < 9+flen) {
                 clen = h2_frame_cq_compact(cq, 9+flen); UNUSED(clen);
                 c = cq->first; /*(reload after h2_frame_cq_compact())*/
@@ -1838,7 +1836,6 @@ h2_parse_frames (connection * const con)
               default: /* ignore unknown frame types */
                 break;
             }
-            cqlen -= (9+flen);
             chunkqueue_mark_written(cq, 9+flen);
         }
 
