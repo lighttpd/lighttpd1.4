@@ -278,6 +278,20 @@ h2_u16 (const uint8_t * const s)
 }
 
 
+__attribute_noinline__
+__attribute_nonnull__()
+__attribute_pure__
+static request_st *
+h2_get_stream_req (const h2con * const h2c, const uint32_t h2id)
+{
+    for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
+        request_st * const r = h2c->r[i];
+        if (r->h2id == h2id) return r;
+    }
+    return NULL;
+}
+
+
 static void
 h2_send_settings_ack (connection * const con)
 {
@@ -507,9 +521,8 @@ h2_recv_rst_stream (connection * const con, const uint8_t * const s, const uint3
         return;
     }
     h2con * const h2c = con->h2;
-    for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
-        request_st * const r = h2c->r[i];
-        if (r->h2id != id) continue;
+    request_st * const r = h2_get_stream_req(h2c, id);
+    if (r) {
         if (r->h2state == H2_STATE_IDLE) {
             /*(RST_STREAM must not be for stream in "idle" state)*/
             h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
@@ -724,9 +737,8 @@ h2_recv_priority (connection * const con, const uint8_t * const s, const uint32_
     weight = ((weight < 8 ? weight : 7) << 1) | !0;
   #endif
     h2con * const h2c = con->h2;
-    for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
-        request_st * const r = h2c->r[i];
-        if (r->h2id != id) continue;
+    request_st * const r = h2_get_stream_req(h2c, id);
+    if (r) {
         /* XXX: TODO: update priority info */
         if (prio == id) {
             h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
@@ -765,12 +777,7 @@ h2_recv_window_update (connection * const con, const uint8_t * const s, const ui
         r = &con->request;
     else {
         h2con * const h2c = con->h2;
-        for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
-            request_st * const rr = h2c->r[i];
-            if (rr->h2id != id) continue;
-            r = rr;
-            break;
-        }
+        r = h2_get_stream_req(h2c, id);
         /* peer should not send WINDOW_UPDATE for an inactive stream,
          * but RFC 7540 does not explicitly call this out.  On the other hand,
          * since there may be a temporary mismatch in stream state between
@@ -1019,13 +1026,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
      * SETTINGS_MAX_CONCURRENT_STREAMS is small (h2c->r[8]))*/
     /*h2r->h2_rwin -= (int32_t)len;*//* update connection recv window (below) */
 
-    request_st *r = NULL;
-    for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
-        request_st * const rr = h2c->r[i];
-        if (rr->h2id != id) continue;
-        r = rr;
-        break;
-    }
+    request_st * const r = h2_get_stream_req(h2c, id);
     chunkqueue * const cq = con->read_queue;
     if (NULL == r) {
         /* simplistic heuristic to discard additional DATA from recently-closed
@@ -1350,13 +1351,7 @@ h2_recv_trailers_r (connection * const con, h2con * const h2c, const uint32_t id
      * been more straightforward to implement than overloading and having to
      * handle multiple cases for HEADERS.  TRAILERS support could then also
      * be optional, like in HTTP/1.1 */
-    request_st *r = NULL;
-    for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
-        request_st * const rr = h2c->r[i];
-        if (rr->h2id != id) continue;
-        r = rr;
-        break;
-    }
+    request_st * const r = h2_get_stream_req(h2c, id);
     if (NULL == r) {
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return NULL;
