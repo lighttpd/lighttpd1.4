@@ -2139,6 +2139,7 @@ h2_send_headers (request_st * const r, connection * const con)
     lsx.name_len = 7;
     lsx.val_offset = 9;
     lsx.val_len = 3;
+    lsx.flags = LSXPACK_HPACK_VAL_MATCHED;
     if (__builtin_expect( (200 == r->http_status), 1)) {
         lsx.hpack_index = LSHPACK_HDR_STATUS_200;
     }
@@ -2153,6 +2154,7 @@ h2_send_headers (request_st * const r, connection * const con)
           case 404: lsx.hpack_index = LSHPACK_HDR_STATUS_404; break;
           case 500: lsx.hpack_index = LSHPACK_HDR_STATUS_500; break;
           default:
+            lsx.flags = 0;
             break;
         }
         int nx;
