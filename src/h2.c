@@ -1399,13 +1399,6 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
       ? tb->size
       : LSXPACK_MAX_STRLEN;
 
-    /* note: #define LSHPACK_DEC_HTTP1X_OUTPUT 1 (default) configures
-     * decoder to produce output in format: "field-name: value\r\n"
-     * future: modify build system to define value to 0 in lshpack.h
-     * against which lighttpd builds (or define value in build systems)
-     * Then adjust code below to not use the HTTP/1.x compatibility,
-     * as it is less efficient to copy into HTTP/1.1 request and reparse
-     * than it is to directly parse each decoded header line. */
     lsxpack_header_t lsx;
     while (psrc < endp) {
         memset(&lsx, 0, sizeof(lsxpack_header_t));
