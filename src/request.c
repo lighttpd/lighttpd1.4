@@ -669,7 +669,7 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
             /* (note: relies on implementation details using ls-hpack in h2.c)
              * (hpctx->id mapped from lsxpack_header_t hpack_index, which only
              *  matches key, not also value, if lsxpack_header_t flags does not
-             *  have LSXPACK_HPACK_VAL_MATCHED set, so HTTP_HEADER_H2_METHOD_GET
+             *  have LSXPACK_HPACK_VAL_MATCHED set, so HTTP_HEADER_H2_METHOD
              *  below indicates any method, not only "GET") */
             if (__builtin_expect( (hpctx->id == HTTP_HEADER_H2_UNKNOWN), 0)) {
                 switch (klen-1) {
@@ -679,9 +679,9 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                     break;
                   case 6:
                     if (0 == memcmp(k+1, "method", 6))
-                        hpctx->id = HTTP_HEADER_H2_METHOD_GET;
+                        hpctx->id = HTTP_HEADER_H2_METHOD;
                     else if (0 == memcmp(k+1, "scheme", 6))
-                        hpctx->id = HTTP_HEADER_H2_SCHEME_HTTP;
+                        hpctx->id = HTTP_HEADER_H2_SCHEME;
                     break;
                   case 8:
                     if (0 == memcmp(k+1, "protocol", 8))
@@ -709,8 +709,7 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                 /* insert as "Host" header */
                 http_request_header_set_Host(r, v, vlen);
                 return 0;
-              case HTTP_HEADER_H2_METHOD_GET:  /*(any method, not only "GET")*/
-              case HTTP_HEADER_H2_METHOD_POST:
+              case HTTP_HEADER_H2_METHOD:
                 if (__builtin_expect( (HTTP_METHOD_UNSET != r->http_method), 0))
                     break;
                 r->http_method = get_http_method_key(v, vlen);
@@ -718,14 +717,12 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                     return http_request_header_line_invalid(r, 501,
                       "unknown http-method -> 501");
                 return 0;
-              case HTTP_HEADER_H2_PATH:            /*(any path, not only "/")*/
-              case HTTP_HEADER_H2_PATH_INDEX_HTML:
+              case HTTP_HEADER_H2_PATH:
                 if (__builtin_expect( (!buffer_is_blank(&r->target)), 0))
                     break;
                 buffer_copy_string_len(&r->target, v, vlen);
                 return 0;
-              case HTTP_HEADER_H2_SCHEME_HTTP: /*(any scheme, not only "http")*/
-              case HTTP_HEADER_H2_SCHEME_HTTPS:
+              case HTTP_HEADER_H2_SCHEME:
                 if (__builtin_expect( (hpctx->scheme), 0))
                     break;
                 hpctx->scheme = 1; /*(marked present, but otherwise ignored)*/

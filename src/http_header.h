@@ -28,13 +28,10 @@
 enum http_header_h2_e { /* pseudo-headers */
   HTTP_HEADER_H2_UNKNOWN         = -1
  ,HTTP_HEADER_H2_AUTHORITY       = -2
- ,HTTP_HEADER_H2_METHOD_GET      = -3
- ,HTTP_HEADER_H2_METHOD_POST     = -4
- ,HTTP_HEADER_H2_PATH            = -5
- ,HTTP_HEADER_H2_PATH_INDEX_HTML = -6
- ,HTTP_HEADER_H2_SCHEME_HTTP     = -7
- ,HTTP_HEADER_H2_SCHEME_HTTPS    = -8
- ,HTTP_HEADER_H2_PROTOCOL        = -9
+ ,HTTP_HEADER_H2_METHOD          = -3
+ ,HTTP_HEADER_H2_PATH            = -4
+ ,HTTP_HEADER_H2_SCHEME          = -5
+ ,HTTP_HEADER_H2_PROTOCOL        = -6
 };
 enum http_header_e {
   HTTP_HEADER_OTHER = 0
