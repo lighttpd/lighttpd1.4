@@ -610,31 +610,75 @@ fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *
     off_t sz = 0;
     char *buf = NULL;
     do {
+      #if 0
+        /* /dev/fd/ and /proc/self/fd/ might be special-cased, but then would
+         * be close()d at end of func before returning.  Then again, that might
+         * be desirable since otherwise those fds do not have FD_CLOEXEC set. */
+        fd = 0 == memcmp(fn, "/dev/fd/", sizeof("/dev/fd/")-1)
+           ? atoi(fn + sizeof("/dev/fd/")-1)
+           : 0 == memcmp(fn, "/proc/self/fd/", sizeof("/proc/self/fd/")-1)
+           ? atoi(fn + sizeof("/proc/self/fd/")-1)
+           : fdevent_open_cloexec(fn, 1, O_RDONLY, 0); /*(1: follows symlinks)*/
+      #else
         fd = fdevent_open_cloexec(fn, 1, O_RDONLY, 0); /*(1: follows symlinks)*/
+      #endif
         if (fd < 0) break;
 
         struct stat st;
         if (0 != fstat(fd, &st)) break;
-        if ((sizeof(off_t) > sizeof(size_t) && st.st_size >= (off_t)~(size_t)0u)
-            || (*lim != 0 && st.st_size >= *lim)) {
-            errno = EOVERFLOW;
-            break;
-        }
-
-        sz = st.st_size;
-        buf = malloc_fn((size_t)sz+1);/*+1 trailing '\0' for str funcs on data*/
-        if (NULL == buf) break;
-
-        if (sz) {
-            ssize_t rd = 0;
-            off_t off = 0;
-            do {
-                rd = read(fd, buf+off, (size_t)(sz-off));
-            } while (rd > 0 ? (off += rd) != sz : rd < 0 && errno == EINTR);
-            if (off != sz) { /*(file truncated?)*/
-                if (rd >= 0) errno = EIO;
+        if (S_ISREG(st.st_mode)) {
+            sz = st.st_size;
+            if ((sizeof(off_t) > sizeof(size_t) && sz >= (off_t)~(size_t)0u)
+                || (*lim != 0 && sz >= *lim)) {
+                errno = EOVERFLOW;
                 break;
             }
+            buf = malloc_fn((size_t)sz+1); /* +1 trailing '\0' for str funcs */
+            if (NULL == buf) break;
+
+            if (sz) {
+                ssize_t rd = 0;
+                off_t off = 0;
+                do {
+                    rd = read(fd, buf+off, (size_t)(sz-off));
+                } while (rd > 0 ? (off += rd) != sz : rd < 0 && errno == EINTR);
+                if (off != sz) { /*(file truncated?)*/
+                    if (rd >= 0) errno = EIO;
+                    break;
+                }
+            }
+        }
+        else {
+            /* attempt to read from non-regular file
+             * e.g. FIFO/pipe from shell HERE doc (turns into e.g. "/dev/fd/63")
+             * Note: read() might block! */
+          #ifndef _WIN32
+          #ifdef O_NONBLOCK
+            /*(else read() might err EAGAIN Resource temporarily unavailable)*/
+            fcntl(fd, F_SETFL, (O_RDONLY | FDEVENT_O_FLAGS) & ~O_NONBLOCK);
+          #endif
+          #endif
+            ssize_t rd;
+            off_t bsz = 0;
+            if (*lim == 0)
+                *lim = 32*1024*1024; /* set arbitrary limit, if not specified */
+            do {
+                if (bsz <= sz+2) {
+                    if (bsz == *lim) { rd = -1; errno = EOVERFLOW; break; }
+                    bsz = bsz ? (bsz << 1) : 65536;
+                    if (bsz > *lim) bsz = *lim;
+                    char *nbuf = malloc_fn((size_t)bsz);
+                    if (NULL == nbuf) { rd = -1; break; }
+                    if (buf) {
+                        memcpy(nbuf, buf, sz);
+                        ck_memzero(buf, (size_t)sz);
+                        free_fn(buf);
+                    }
+                    buf = nbuf;
+                }
+                rd = read(fd, buf+sz, (size_t)(bsz-sz-1));
+            } while (rd > 0 ? (sz += rd) : rd < 0 && errno == EINTR);
+            if (rd != 0) break;
         }
 
         buf[sz] = '\0';
