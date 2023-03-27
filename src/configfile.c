@@ -755,7 +755,7 @@ static int config_insert_srvconf(server *srv) {
         T_CONFIG_SHORT,
         T_CONFIG_SCOPE_SERVER }
      ,{ CONST_STR_LEN("server.max-request-field-size"),
-        T_CONFIG_INT,
+        T_CONFIG_SHORT,
         T_CONFIG_SCOPE_SERVER }
      ,{ CONST_STR_LEN("server.chunkqueue-chunk-sz"),
         T_CONFIG_INT,
@@ -882,7 +882,7 @@ static int config_insert_srvconf(server *srv) {
                 srv->srvconf.max_conns = (unsigned short)cpv->v.u;
                 break;
               case 19:/* server.max-request-field-size */
-                srv->srvconf.max_request_field_size = cpv->v.u;
+                srv->srvconf.max_request_field_size = cpv->v.shrt;
                 break;
               case 20:/* server.chunkqueue-chunk-sz */
                 chunkqueue_set_chunk_size(cpv->v.u);
