@@ -58,7 +58,13 @@ typedef enum {
 	HTTP_METHOD_VERSION_CONTROL    /* [RFC3253], Section 3.5 */
 } http_method_t;
 
-typedef enum { HTTP_VERSION_UNSET = -1, HTTP_VERSION_1_0, HTTP_VERSION_1_1, HTTP_VERSION_2 } http_version_t;
+typedef enum {
+    HTTP_VERSION_UNSET = -1
+   ,HTTP_VERSION_1_0
+   ,HTTP_VERSION_1_1
+   ,HTTP_VERSION_2
+   ,HTTP_VERSION_3
+} http_version_t;
 
 #if 0 /*(unused)*/
 __attribute_pure__

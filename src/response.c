@@ -808,8 +808,8 @@ http_response_write_prepare(request_st * const r)
             }
         }
     }
-    else if (r->http_version == HTTP_VERSION_2) {
-        /* handled by HTTP/2 framing */
+    else if (r->http_version >= HTTP_VERSION_2) {
+        /* handled by HTTP/2 or HTTP/3 framing */
     }
     else {
         /**

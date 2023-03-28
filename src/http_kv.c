@@ -20,6 +20,7 @@ typedef struct {
 
 static const keyvalue http_versions[] = {
 	{ HTTP_VERSION_2,   CONST_LEN_STR("HTTP/2.0") }, /* SERVER_PROTOCOL */
+	{ HTTP_VERSION_3,   CONST_LEN_STR("HTTP/3.0") },
 	{ HTTP_VERSION_1_1, CONST_LEN_STR("HTTP/1.1") },
 	{ HTTP_VERSION_1_0, CONST_LEN_STR("HTTP/1.0") },
 	{ HTTP_VERSION_UNSET, 0, NULL }
@@ -117,6 +118,7 @@ static const keyvalue http_status[] = {
 	{ 422, CONST_LEN_STR("422 Unprocessable Entity") }, /* WebDAV */
 	{ 423, CONST_LEN_STR("423 Locked") }, /* WebDAV */
 	{ 424, CONST_LEN_STR("424 Failed Dependency") }, /* WebDAV */
+	{ 425, CONST_LEN_STR("425 Too Early") },
 	{ 426, CONST_LEN_STR("426 Upgrade Required") }, /* TLS */
 	{ 428, CONST_LEN_STR("428 Precondition Required") },
 	{ 429, CONST_LEN_STR("429 Too Many Requests") },

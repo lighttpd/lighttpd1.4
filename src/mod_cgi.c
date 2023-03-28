@@ -832,6 +832,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 
 		/* create environment */
 
+		http_version_t http_version = r->http_version;
 		if (r->h2_connect_ext) {
 			/*(SERVER_PROTOCOL=HTTP/1.1 instead of HTTP/2.0)*/
 			r->http_version = HTTP_VERSION_1_1;
@@ -848,7 +849,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		if (hctx->conf.upgrade)
 			r->reqbody_length = -1;
 		if (r->h2_connect_ext) {
-			r->http_version = HTTP_VERSION_2;
+			r->http_version = http_version; /*(restore from above)*/
 			r->http_method = HTTP_METHOD_CONNECT;
 			/* https://datatracker.ietf.org/doc/html/rfc6455#section-4.1
 			 * 7. The request MUST include a header field with the name
