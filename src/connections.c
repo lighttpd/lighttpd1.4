@@ -1005,7 +1005,7 @@ connection_log_state (const request_st * const r, const char * const tag)
     buffer_clear(tb);
     http_request_state_append(tb, r->state);
     log_error(r->conf.errh, __FILE__, __LINE__,
-      "fd:%d id:%d state:%s%s", r->con->fd, r->h2id, tb->ptr, tag);
+      "fd:%d id:%d state:%s%s", r->con->fd, r->x.h2.id, tb->ptr, tag);
 }
 
 

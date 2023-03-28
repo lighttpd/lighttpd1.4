@@ -286,7 +286,7 @@ h2_get_stream_req (const h2con * const h2c, const uint32_t h2id)
 {
     for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
         request_st * const r = h2c->r[i];
-        if (r->h2id == h2id) return r;
+        if (r->x.h2.id == h2id) return r;
     }
     return NULL;
 }
@@ -336,13 +336,13 @@ __attribute_cold__
 static void
 h2_send_rst_stream_state (request_st * const r, h2con * const h2c)
 {
-    if (r->h2state != H2_STATE_HALF_CLOSED_REMOTE
-        && r->h2state != H2_STATE_CLOSED) {
+    if (r->x.h2.state != H2_STATE_HALF_CLOSED_REMOTE
+        && r->x.h2.state != H2_STATE_CLOSED) {
         /* set timestamp for comparison; not tracking individual stream ids */
         h2c->half_closed_ts = log_monotonic_secs;
     }
     r->state = CON_STATE_ERROR;
-    r->h2state = H2_STATE_CLOSED;
+    r->x.h2.state = H2_STATE_CLOSED;
 }
 
 
@@ -350,8 +350,8 @@ __attribute_cold__
 static void
 h2_send_rst_stream (request_st * const r, connection * const con, const request_h2error_t e)
 {
-    h2_send_rst_stream_state(r, con->h2);/*(sets r->h2state = H2_STATE_CLOSED)*/
-    h2_send_rst_stream_id(r->h2id, con, e);
+    h2_send_rst_stream_state(r, con->h2);/*(set r->x.h2.state=H2_STATE_CLOSED)*/
+    h2_send_rst_stream_id(r->x.h2.id, con, e);
 }
 
 
@@ -363,11 +363,11 @@ h2_send_goaway_rst_stream (connection * const con)
     const int sent_goaway = h2c->sent_goaway;
     for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
         request_st * const r = h2c->r[i];
-        if (r->h2state == H2_STATE_CLOSED) continue;
-        h2_send_rst_stream_state(r, h2c);/*(sets r->h2state = H2_STATE_CLOSED)*/
+        if (r->x.h2.state == H2_STATE_CLOSED) continue;
+        h2_send_rst_stream_state(r, h2c);/*(set r->x.h2.state=H2_STATE_CLOSED)*/
         /*(XXX: might consider always sending RST_STREAM)*/
         if (sent_goaway)
-            h2_send_rst_stream_id(r->h2id, con, H2_E_PROTOCOL_ERROR);
+            h2_send_rst_stream_id(r->x.h2.id, con, H2_E_PROTOCOL_ERROR);
     }
 }
 
@@ -523,14 +523,14 @@ h2_recv_rst_stream (connection * const con, const uint8_t * const s, const uint3
     h2con * const h2c = con->h2;
     request_st * const r = h2_get_stream_req(h2c, id);
     if (r) {
-        if (r->h2state == H2_STATE_IDLE) {
+        if (r->x.h2.state == H2_STATE_IDLE) {
             /*(RST_STREAM must not be for stream in "idle" state)*/
             h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
             return;
         }
         /* XXX: ? add debug trace including error code from RST_STREAM ? */
         r->state = CON_STATE_ERROR;
-        r->h2state = H2_STATE_CLOSED;
+        r->x.h2.state = H2_STATE_CLOSED;
         return;
     }
     /* unknown/inactive stream id
@@ -595,18 +595,18 @@ h2_apply_priority_update (h2con * const h2c, const request_st * const r, const u
     const request_st ** const rr = (const request_st **)h2c->r;
     uint32_t npos = rpos;
     while (npos
-           && (rr[npos-1]->h2_prio > r->h2_prio
-               || (rr[npos-1]->h2_prio == r->h2_prio
-                   && rr[npos-1]->h2id > r->h2id)))
+           && (rr[npos-1]->x.h2.prio > r->x.h2.prio
+               || (rr[npos-1]->x.h2.prio == r->x.h2.prio
+                   && rr[npos-1]->x.h2.id > r->x.h2.id)))
         --npos;
     if (rpos - npos) {
         memmove(rr+npos+1, rr+npos, (rpos - npos)*sizeof(request_st *));
     }
     else {
         while (npos+1 < h2c->rused
-               && (rr[npos+1]->h2_prio < r->h2_prio
-                   || (rr[npos+1]->h2_prio == r->h2_prio
-                       && rr[npos+1]->h2id < r->h2id)))
+               && (rr[npos+1]->x.h2.prio < r->x.h2.prio
+                   || (rr[npos+1]->x.h2.prio == r->x.h2.prio
+                       && rr[npos+1]->x.h2.id < r->x.h2.id)))
             ++npos;
         if (npos - rpos == 0)
             return; /*(no movement)*/
@@ -684,10 +684,10 @@ h2_recv_priority_update (connection * const con, const uint8_t * const s, const 
     h2con * const h2c = con->h2;
     for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
         request_st * const r = h2c->r[i];
-        if (r->h2id != prid) continue;
+        if (r->x.h2.id != prid) continue;
         uint8_t prio = h2_parse_priority_update((char *)s+13, len-4);
-        if (r->h2_prio != prio) {
-            r->h2_prio = prio;
+        if (r->x.h2.prio != prio) {
+            r->x.h2.prio = prio;
             h2_apply_priority_update(h2c, r, i);
         }
         return;
@@ -745,8 +745,8 @@ h2_recv_priority (connection * const con, const uint8_t * const s, const uint32_
             return;
         }
       #if 0
-        else if (r->h2_prio != weight) {
-            r->h2_prio = weight;
+        else if (r->x.h2.prio != weight) {
+            r->x.h2.prio = weight;
             h2_apply_priority_update(h2c, r, i);
         }
       #endif
@@ -798,10 +798,10 @@ h2_recv_window_update (connection * const con, const uint8_t * const s, const ui
             return;
         }
         /* MUST NOT be treated as error if stream is in closed state; ignore */
-        if (r->h2state == H2_STATE_CLOSED
-            || r->h2state == H2_STATE_HALF_CLOSED_LOCAL) return;
+        if (r->x.h2.state == H2_STATE_CLOSED
+            || r->x.h2.state == H2_STATE_HALF_CLOSED_LOCAL) return;
     }
-    if (0 == v || r->h2_swin > INT32_MAX - v) {
+    if (0 == v || r->x.h2.swin > INT32_MAX - v) {
         request_h2error_t e = (0 == v)
           ? H2_E_PROTOCOL_ERROR
           : H2_E_FLOW_CONTROL_ERROR;
@@ -811,7 +811,7 @@ h2_recv_window_update (connection * const con, const uint8_t * const s, const ui
             h2_send_rst_stream(r, con, e);
         return;
     }
-    r->h2_swin += v;
+    r->x.h2.swin += v;
 }
 
 
@@ -843,10 +843,10 @@ __attribute_noinline__
 static void
 h2_send_window_update_unit (connection * const con, request_st * const r, const uint32_t len)
 {
-    r->h2_rwin_fudge -= (int16_t)len;
-    if (r->h2_rwin_fudge < 0) {
-        r->h2_rwin_fudge += 16384;
-        h2_send_window_update(con, r->h2id, 16384); /*(r->h2_rwin)*/
+    r->x.h2.rwin_fudge -= (int16_t)len;
+    if (r->x.h2.rwin_fudge < 0) {
+        r->x.h2.rwin_fudge += 16384;
+        h2_send_window_update(con, r->x.h2.id, 16384); /*(r->x.h2.rwin)*/
     }
 }
 
@@ -894,16 +894,16 @@ h2_parse_frame_settings (connection * const con, const uint8_t *s, uint32_t len)
                   (int32_t)((uint32_t)v - (uint32_t)h2c->s_initial_window_size);
                 for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
                     request_st * const r = h2c->r[i];
-                    const int32_t swin = r->h2_swin;
-                    if (r->h2state == H2_STATE_HALF_CLOSED_LOCAL
-                        || r->h2state == H2_STATE_CLOSED) continue;
+                    const int32_t swin = r->x.h2.swin;
+                    if (r->x.h2.state == H2_STATE_HALF_CLOSED_LOCAL
+                        || r->x.h2.state == H2_STATE_CLOSED) continue;
                     if (diff >= 0
                         ? swin > INT32_MAX - diff
                         : swin < INT32_MIN - diff) {
                         h2_send_rst_stream(r, con, H2_E_FLOW_CONTROL_ERROR);
                         continue;
                     }
-                    r->h2_swin += diff;
+                    r->x.h2.swin += diff;
                 }
             }
             h2c->s_initial_window_size = (int32_t)v;
@@ -969,7 +969,7 @@ static int
 h2_recv_end_data (request_st * const r, connection * const con, const uint32_t alen)
 {
     chunkqueue * const reqbody_queue = &r->reqbody_queue;
-    r->h2state = (r->h2state == H2_STATE_OPEN)
+    r->x.h2.state = (r->x.h2.state == H2_STATE_OPEN)
       ? H2_STATE_HALF_CLOSED_REMOTE
       : H2_STATE_CLOSED;
     if (r->reqbody_length == -1)
@@ -1013,18 +1013,18 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     }
 
     request_st * const h2r = &con->request;
-    if (h2r->h2_rwin <= 0 && 0 != alen) { /*(always proceed if 0 == alen)*/
+    if (h2r->x.h2.rwin <= 0 && 0 != alen) { /*(always proceed if 0 == alen)*/
         /*(h2_process_streams() must ensure con is rescheduled,
          * when backends consume data if con->read_queue is not empty,
          * whether or not con->fd has data to read from the network)*/
         /*(leave frame in cq to be re-read later)*/
         return 0;
     }
-    /*(allow h2r->h2_rwin to dip below 0 so that entire frame is processed)*/
+    /*(allow h2r->x.h2.rwin to dip below 0 so that entire frame is processed)*/
     /*(not worried about underflow while
      * SETTINGS_MAX_FRAME_SIZE is small (e.g. 16k or 32k) and
      * SETTINGS_MAX_CONCURRENT_STREAMS is small (h2c->r[8]))*/
-    /*h2r->h2_rwin -= (int32_t)len;*//* update connection recv window (below) */
+    /*h2r->x.h2.rwin -= (int32_t)len;*//*update connection recv window (below)*/
 
     request_st * const r = h2_get_stream_req(h2c, id);
     chunkqueue * const cq = con->read_queue;
@@ -1042,7 +1042,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
          * connection is closed. */
         chunkqueue_mark_written(cq, 9+len);
         if (h2c->half_closed_ts + 2 >= log_monotonic_secs) {
-            h2_send_window_update_unit(con, h2r, len); /*(h2r->h2_rwin)*/
+            h2_send_window_update_unit(con, h2r, len); /*(h2r->x.h2.rwin)*/
             return 1;
         }
         else {
@@ -1052,16 +1052,16 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
         }
     }
 
-    if (r->h2state == H2_STATE_CLOSED
-        || r->h2state == H2_STATE_HALF_CLOSED_REMOTE) {
+    if (r->x.h2.state == H2_STATE_CLOSED
+        || r->x.h2.state == H2_STATE_HALF_CLOSED_REMOTE) {
         h2_send_rst_stream_id(id, con, H2_E_STREAM_CLOSED);
         chunkqueue_mark_written(cq, 9+len);
-        h2_send_window_update_unit(con, h2r, len); /*(h2r->h2_rwin)*/
+        h2_send_window_update_unit(con, h2r, len); /*(h2r->x.h2.rwin)*/
         return 1;
     }
 
-    if (r->h2_rwin <= 0 && 0 != alen) {/*(always proceed if 0==alen)*/
-        /* note: r->h2_rwin is not adjusted (below) if max_request_size exceeded
+    if (r->x.h2.rwin <= 0 && 0 != alen) {/*(always proceed if 0==alen)*/
+        /* note: r->x.h2.rwin is not adjusted (below) if max_request_size exceeded
          *       in order to read and discard h2_rwin amount of data (below) */
         if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN) {
             /*(h2_process_streams() must ensure con is rescheduled,
@@ -1071,17 +1071,17 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
             return 0;
         }
     }
-    /*(allow r->h2_rwin to dip below 0 so that entire frame is processed)*/
+    /*(allow r->x.h2.rwin to dip below 0 so that entire frame is processed)*/
     /*(underflow will not occur (with reasonable SETTINGS_MAX_FRAME_SIZE used)
      * since windows updated elsewhere and data is streamed to temp files if
      * not FDEVENT_STREAM_REQUEST_BUFMIN)*/
-    /*r->h2_rwin -= (int32_t)len;*/
-    /*h2_send_window_update_unit(con, r, len);*//*(r->h2_rwin)*//*(see below)*/
+    /*r->x.h2.rwin -= (int32_t)len;*/
+    /*h2_send_window_update_unit(con,r,len);*//*(r->x.h2.rwin)*//*(see below)*/
 
     /* avoid sending small WINDOW_UPDATE frames
      * Pre-emptively increase window size up to 16k (default max frame size)
      * and then defer small window updates until the excess is utilized. */
-    h2_send_window_update_unit(con, h2r, len); /*(h2r->h2_rwin)*/
+    h2_send_window_update_unit(con, h2r, len); /*(h2r->x.h2.rwin)*/
 
     chunkqueue * const dst = &r->reqbody_queue;
 
@@ -1117,7 +1117,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
         /* r->conf.max_request_size is in kBytes */
         const off_t max_request_size = (off_t)r->conf.max_request_size << 10;
         off_t n = max_request_size - dst->bytes_in - (off_t)alen;
-        int32_t rwin = r->h2_rwin - (int32_t)len;
+        int32_t rwin = r->x.h2.rwin - (int32_t)len;
         if (rwin < 0) rwin = 0;
         if (__builtin_expect( (n >= 0), 1)) /*(force wupd below w/ +16384)*/
             wupd=n>=rwin ? (n-=rwin)>(int32_t)len ? len : (uint32_t)n+16384 : 0;
@@ -1139,20 +1139,20 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
             return 1;
         }
     }
-    /* r->h2_rwin is intentionally unmodified here so that some data in excess
-     * of max_request_size received and discarded.  If r->h2_rwin use is changed
+    /* r->x.h2.rwin is intentionally unmodified here so that some data in excess
+     * of max_request_size received and discarded.  If r->x.h2.rwin use changes
      * in future and might reach 0, then also need to make sure that we do not
      * spin re-processing con while waiting for backend to consume request body.
      * stream rwin is always updated, potentially more than max_request_size so
      * that too much data is detected, instead of waiting for read timeout. */
-    /*r->h2_rwin -= (int32_t)len;*/
-    /*r->h2_rwin += (int32_t)wupd;*/
+    /*r->x.h2.rwin -= (int32_t)len;*/
+    /*r->x.h2.rwin += (int32_t)wupd;*/
     /* avoid sending small WINDOW_UPDATE frames
      * Pre-emptively increase window size up to 16k (default max frame size)
      * and then defer small window updates until the excess is utilized.
      * This aims to reduce degenerative behavior from clients sending an
      * increasing number of tiny DATA frames. */
-    /*(note: r->h2_rwin is not adjusted with r->h2_rwin_fudge factor)*/
+    /*(note: r->x.h2.rwin is not adjusted with r->x.h2.rwin_fudge factor)*/
     h2_send_window_update_unit(con, r, wupd);
 
     chunkqueue_mark_written(cq, 9 + ((s[4] & H2_FLAG_PADDED) ? 1 : 0));
@@ -1208,7 +1208,7 @@ h2_recv_reqbody (request_st * const r)
             request_set_state(r, CON_STATE_HANDLE_REQUEST);
         return HANDLER_GO_ON;
     }
-    else if (r->h2state >= H2_STATE_HALF_CLOSED_REMOTE) {
+    else if (r->x.h2.state >= H2_STATE_HALF_CLOSED_REMOTE) {
         /*(H2_STATE_HALF_CLOSED_REMOTE or H2_STATE_CLOSED)*/
         return HANDLER_ERROR;
     }
@@ -1389,8 +1389,8 @@ h2_recv_trailers_r (connection * const con, h2con * const h2c, const uint32_t id
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return NULL;
     }
-    if (r->h2state != H2_STATE_OPEN
-        && r->h2state != H2_STATE_HALF_CLOSED_LOCAL) {
+    if (r->x.h2.state != H2_STATE_OPEN
+        && r->x.h2.state != H2_STATE_HALF_CLOSED_LOCAL) {
         h2_send_rst_stream(r, con, H2_E_STREAM_CLOSED);
         return NULL;
     }
@@ -1453,7 +1453,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
 
             if (hpctx.log_request_header)
                 log_error(r->conf.errh, __FILE__, __LINE__,
-                  "fd:%d id:%u rqst: %.*s: %.*s", r->con->fd, r->h2id,
+                  "fd:%d id:%u rqst: %.*s: %.*s", r->con->fd, r->x.h2.id,
                   (int)hpctx.klen, hpctx.k, (int)hpctx.vlen, hpctx.v);
 
             const int http_status = http_request_parse_header(r, &hpctx);
@@ -1472,8 +1472,8 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
             /* XXX: TODO if (r->conf.log_request_header_on_error) */
             r->http_status = 431; /* Request Header Fields Too Large */
             /*(try to avoid reading/buffering more data for this request)*/
-            r->h2_rwin = 0; /*(out-of-sync with peer, but is error case)*/
-            /*r->h2state = H2_STATE_HALF_CLOSED_REMOTE*/
+            r->x.h2.rwin = 0; /*(out-of-sync with peer, but is error case)*/
+            /*r->x.h2.state = H2_STATE_HALF_CLOSED_REMOTE*/
             /* psrc was not advanced if LSHPACK_ERR_MORE_BUF;
              * processing must stop (since not retrying w/ larger buf)*/
             break;
@@ -1492,7 +1492,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
                 h2_send_rst_stream(r, r->con, err);
             }
             if (!h2c->sent_goaway && !hpctx.trailers)
-                h2c->h2_cid = r->h2id;
+                h2c->h2_cid = r->x.h2.id;
             h2_send_goaway_e(r->con, err);
             if (!hpctx.trailers) {
                 h2_retire_stream(r, r->con);
@@ -1500,7 +1500,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
             }
             else {
                 r->state = CON_STATE_ERROR;
-                r->h2state = H2_STATE_CLOSED;
+                r->x.h2.state = H2_STATE_CLOSED;
             }
             break;
         }
@@ -1563,8 +1563,8 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
          * XXX: future might try to reduce other processing done if sent
          *      GOAWAY, e.g. might avoid allocating (request_st *r) */
         r = h2_init_stream(h2r, con);
-        r->h2id = id;
-        r->h2state = (s[4] & H2_FLAG_END_STREAM)
+        r->x.h2.id = id;
+        r->x.h2.state = (s[4] & H2_FLAG_END_STREAM)
           ? H2_STATE_HALF_CLOSED_REMOTE
           : H2_STATE_OPEN;
         r->state = (0 == r->reqbody_length)
@@ -1605,7 +1605,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
                 h2_retire_stream(r, con);
             else {
                 r->state = CON_STATE_ERROR;
-                r->h2state = H2_STATE_CLOSED;
+                r->x.h2.state = H2_STATE_CLOSED;
             }
             return 0;
         }
@@ -1625,7 +1625,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
          * and attempt to scale PRIORITY weight (weight+1 default is 16)
          * to PRIORITY_UPDATE (default urgency 3) (see h2_init_stream()))*/
         uint8_t weight = psrc[4] >> 2;
-        r->h2_prio = ((weight < 8 ? weight : 7) << 1) | !0;
+        r->x.h2.prio = ((weight < 8 ? weight : 7) << 1) | !0;
       #endif
         psrc += 5;
         alen -= 5;
@@ -1673,14 +1673,14 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
             const buffer * const prio =
               http_header_request_get(r, HTTP_HEADER_PRIORITY,
                                       CONST_STR_LEN("priority"));
-            r->h2_prio = h2_parse_priority_update(BUF_PTR_LEN(prio));
+            r->x.h2.prio = h2_parse_priority_update(BUF_PTR_LEN(prio));
         }
         else {
           #if 0
             /* TODO: might check to match saved prid if PRIORITY_UPDATE frame
              * received prior to HEADERS, and apply urgency, incremental vals */
             if (0)
-                r->h2_prio = x;
+                r->x.h2.prio = x;
             else
           #endif
             {   /*(quick peek at raw (non-normalized) r->target)*/
@@ -1688,7 +1688,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
                 const uint32_t len = buffer_clen(&r->target);
                 const char * const p = r->target.ptr+len-4;
                 if (len>=4 && (0==memcmp(p+1,".js",3)||0==memcmp(p,".css",4))) {
-                    r->h2_prio = (2 << 1) | !0; /*(urgency=2, incremental=0)*/
+                    r->x.h2.prio = (2 << 1) | !0; /*(urgency=2, incremental=0)*/
                     http_header_response_set(r, HTTP_HEADER_PRIORITY,
                                              CONST_STR_LEN("priority"),
                                              CONST_STR_LEN("u=2"));
@@ -1994,9 +1994,9 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con)
     con->read_idle_ts = log_monotonic_secs;
     con->keep_alive_idle = h2r->conf.max_keep_alive_idle;
 
-    h2r->h2_rwin = 262144;                /* h2 connection recv window (256k)*/
-    h2r->h2_swin = 65535;                 /* h2 connection send window */
-    h2r->h2_rwin_fudge = 0;
+    h2r->x.h2.rwin = 262144;              /* h2 connection recv window (256k)*/
+    h2r->x.h2.swin = 65535;               /* h2 connection send window */
+    h2r->x.h2.rwin_fudge = 0;
     /* settings sent from peer */         /* initial values */
     h2c->s_header_table_size     = 4096;  /* SETTINGS_HEADER_TABLE_SIZE      */
     h2c->s_enable_push           = 1;     /* SETTINGS_ENABLE_PUSH            */
@@ -2080,17 +2080,17 @@ h2_send_hpack (request_st * const r, connection * const con, const char *data, u
      ,0x00, 0x00, 0x00, 0x00  /* stream identifier (fill in below) */
     } };
 
-    headers.u[2] = htonl(r->h2id);
+    headers.u[2] = htonl(r->x.h2.id);
 
     if (flags & H2_FLAG_END_STREAM) {
-        /* step r->h2state
+        /* step r->x.h2.state
          *   H2_STATE_OPEN -> H2_STATE_HALF_CLOSED_LOCAL
          * or
          *   H2_STATE_HALF_CLOSED_REMOTE -> H2_STATE_CLOSED */
       #if 1
-        ++r->h2state;
+        ++r->x.h2.state;
       #else
-        r->h2state = (r->h2state == H2_STATE_HALF_CLOSED_REMOTE)
+        r->x.h2.state = (r->x.h2.state == H2_STATE_HALF_CLOSED_REMOTE)
           ? H2_STATE_CLOSED
           : H2_STATE_HALF_CLOSED_LOCAL;
       #endif
@@ -2144,7 +2144,7 @@ static void
 h2_log_response_header_lsx(request_st * const r, const lsxpack_header_t * const lsx)
 {
     log_error(r->conf.errh, __FILE__, __LINE__,
-      "fd:%d id:%u resp: %.*s: %.*s", r->con->fd, r->h2id,
+      "fd:%d id:%u resp: %.*s: %.*s", r->con->fd, r->x.h2.id,
       (int)lsx->name_len, lsx->buf + lsx->name_offset,
       (int)lsx->val_len,  lsx->buf + lsx->val_offset);
 }
@@ -2155,7 +2155,7 @@ static void
 h2_log_response_header(request_st * const r, const int len, const char * const hdr)
 {
     log_error(r->conf.errh, __FILE__, __LINE__,
-      "fd:%d id:%u resp: %.*s", r->con->fd, r->h2id, len, hdr);
+      "fd:%d id:%u resp: %.*s", r->con->fd, r->x.h2.id, len, hdr);
 }
 
 
@@ -2625,7 +2625,7 @@ h2_send_data (request_st * const r, connection * const con, const char *data, ui
      ,0x00, 0x00, 0x00, 0x00  /* stream identifier (fill in below) */
     } };
 
-    dataframe.u[2] = htonl(r->h2id);
+    dataframe.u[2] = htonl(r->x.h2.id);
 
     /* XXX: does not provide an optimization to send final set of data with
      *      END_STREAM flag; see h2_send_end_stream_data() to end stream */
@@ -2633,13 +2633,13 @@ h2_send_data (request_st * const r, connection * const con, const char *data, ui
     /* adjust stream and connection windows */
     /*assert(dlen <= INT32_MAX);*//* dlen should be <= MAX_WRITE_LIMIT */
     request_st * const h2r = &con->request;
-    if (r->h2_swin   < 0) return 0;
-    if (h2r->h2_swin < 0) return 0;
-    if ((int32_t)dlen > r->h2_swin)   dlen = (uint32_t)r->h2_swin;
-    if ((int32_t)dlen > h2r->h2_swin) dlen = (uint32_t)h2r->h2_swin;
+    if (r->x.h2.swin   < 0) return 0;
+    if (h2r->x.h2.swin < 0) return 0;
+    if ((int32_t)dlen > r->x.h2.swin)   dlen = (uint32_t)r->x.h2.swin;
+    if ((int32_t)dlen > h2r->x.h2.swin) dlen = (uint32_t)h2r->x.h2.swin;
     if (0 == dlen) return 0;
-    r->h2_swin   -= (int32_t)dlen;
-    h2r->h2_swin -= (int32_t)dlen;
+    r->x.h2.swin   -= (int32_t)dlen;
+    h2r->x.h2.swin -= (int32_t)dlen;
 
     /* XXX: future: should have an interface which processes chunkqueue
      * and takes string refs to mmap FILE_CHUNK to avoid extra copying
@@ -2699,7 +2699,7 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
      ,0x00, 0x00, 0x00, 0x00  /* stream identifier (fill in below) */
     } };
 
-    dataframe.u[2] = htonl(r->h2id);
+    dataframe.u[2] = htonl(r->x.h2.id);
 
     /* XXX: does not provide an optimization to send final set of data with
      *      END_STREAM flag; see h2_send_end_stream_data() to end stream */
@@ -2707,10 +2707,10 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
     /* adjust stream and connection windows */
     /*assert(dlen <= INT32_MAX);*//* dlen should be <= MAX_WRITE_LIMIT */
     request_st * const h2r = &con->request;
-    if (r->h2_swin   < 0) return 0;
-    if (h2r->h2_swin < 0) return 0;
-    if ((int32_t)dlen > r->h2_swin)   dlen = (uint32_t)r->h2_swin;
-    if ((int32_t)dlen > h2r->h2_swin) dlen = (uint32_t)h2r->h2_swin;
+    if (r->x.h2.swin   < 0) return 0;
+    if (h2r->x.h2.swin < 0) return 0;
+    if ((int32_t)dlen > r->x.h2.swin)   dlen = (uint32_t)r->x.h2.swin;
+    if ((int32_t)dlen > h2r->x.h2.swin) dlen = (uint32_t)h2r->x.h2.swin;
     const off_t cqlen = chunkqueue_length(cq);
     if ((int32_t)dlen > cqlen) dlen = (uint32_t)cqlen;
     /*(note: must temporarily disable next line when running h2spec since
@@ -2772,8 +2772,8 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
                               (const char *)dataframe.c+3, sizeof(dataframe)-3);
         chunkqueue_steal(con->write_queue, cq, (off_t)len);
     } while (dlen);
-    r->h2_swin   -= (int32_t)sent;
-    h2r->h2_swin -= (int32_t)sent;
+    r->x.h2.swin   -= (int32_t)sent;
+    h2r->x.h2.swin -= (int32_t)sent;
     return sent;
 }
 
@@ -2782,7 +2782,7 @@ __attribute_noinline__
 static void
 h2_send_end_stream_data (request_st * const r, connection * const con)
 {
-  if (r->h2state != H2_STATE_HALF_CLOSED_LOCAL) {
+  if (r->x.h2.state != H2_STATE_HALF_CLOSED_LOCAL) {
     union {
       uint8_t c[12];
       uint32_t u[3];          /*(alignment)*/
@@ -2795,27 +2795,27 @@ h2_send_end_stream_data (request_st * const r, connection * const con)
      ,0x00, 0x00, 0x00, 0x00  /* stream identifier (fill in below) */
     } };
 
-    dataframe.u[2] = htonl(r->h2id);
+    dataframe.u[2] = htonl(r->x.h2.id);
     /*(ignore window updates when sending 0-length DATA frame with END_STREAM)*/
     chunkqueue_append_mem(con->write_queue,  /*(+3 to skip over align pad)*/
                           (const char *)dataframe.c+3, sizeof(dataframe)-3);
   }
 
-    if (r->h2state != H2_STATE_HALF_CLOSED_REMOTE) {
+    if (r->x.h2.state != H2_STATE_HALF_CLOSED_REMOTE) {
         /* set timestamp for comparison; not tracking individual stream ids */
         h2con * const h2c = con->h2;
         h2c->half_closed_ts = log_monotonic_secs;
         /* indicate to peer that no more DATA should be sent from peer */
-        h2_send_rst_stream_id(r->h2id, con, H2_E_NO_ERROR);
+        h2_send_rst_stream_id(r->x.h2.id, con, H2_E_NO_ERROR);
     }
-    r->h2state = H2_STATE_CLOSED;
+    r->x.h2.state = H2_STATE_CLOSED;
 }
 
 
 static void
 h2_send_end_stream (request_st * const r, connection * const con)
 {
-    if (r->h2state == H2_STATE_CLOSED) return;
+    if (r->x.h2.state == H2_STATE_CLOSED) return;
     if (r->state != CON_STATE_ERROR && r->resp_body_finished) {
         /* CON_STATE_RESPONSE_END */
         if (r->gw_dechunk && r->gw_dechunk->done
@@ -2851,13 +2851,13 @@ h2_init_stream (request_st * const h2r, connection * const con)
     /* XXX: TODO: assign default priority, etc.
      *      Perhaps store stream id and priority in separate table */
     h2c->r[h2c->rused++] = r;
-    r->h2_rwin = 65536; /* must keep in sync with h2_init_con() */
-    r->h2_swin = h2c->s_initial_window_size;
-    r->h2_rwin_fudge = 0;
+    r->x.h2.rwin = 65536; /* must keep in sync with h2_init_con() */
+    r->x.h2.swin = h2c->s_initial_window_size;
+    r->x.h2.rwin_fudge = 0;
     /* combine priority 'urgency' value and invert 'incremental' boolean
      * for easy (ascending) sorting by urgency and then incremental before
      * non-incremental */
-    r->h2_prio = (3 << 1) | !0; /*(default urgency=3, incremental=0)*/
+    r->x.h2.prio = (3 << 1) | !0; /*(default urgency=3, incremental=0)*/
     r->http_version = HTTP_VERSION_2;
 
     /* copy config state from h2r */
@@ -3010,8 +3010,8 @@ h2_con_upgrade_h2c (request_st * const h2r, connection * const con)
     r->state = CON_STATE_WRITE; /* require 0 == r->reqbody_length */
     r->http_status = 0;
     r->http_method = h2r->http_method;
-    r->h2state = H2_STATE_HALF_CLOSED_REMOTE;
-    r->h2id = 1;
+    r->x.h2.state = H2_STATE_HALF_CLOSED_REMOTE;
+    r->x.h2.id = 1;
     r->rqst_htags = h2r->rqst_htags;
     h2r->rqst_htags = 0;
     r->rqst_header_len = h2r->rqst_header_len;
@@ -3248,7 +3248,7 @@ h2_process_streams (connection * const con,
                      * frame for more efficient sending of large files)*/
                     /*(use smaller max per stream if marked 'incremental' (w/ 0)
                      * to give more streams a chance to send in parallel)*/
-                    uint32_t dlen = (r->h2_prio & 1) ? 32768-18 : 8192;
+                    uint32_t dlen = (r->x.h2.prio & 1) ? 32768-18 : 8192;
                     if (dlen > (uint32_t)max_bytes) dlen = (uint32_t)max_bytes;
                     dlen = h2_send_cqdata(r, con, &r->write_queue, dlen);
                     if (dlen) { /*(do not resched (spin) if swin empty window)*/
@@ -3296,7 +3296,7 @@ h2_process_streams (connection * const con,
          * implementation above, where doing so would mess up the iterator */
         for (uint32_t i = 0; i < h2c->rused; ++i) {
             request_st * const r = h2c->r[i];
-            /*assert(r->h2state == H2_STATE_CLOSED);*/
+            /*assert(r->x.h2.state == H2_STATE_CLOSED);*/
             h2_retire_stream(r, con);/*r invalidated;removed from h2c->r[]*/
             --i;/* adjust loop i; h2c->rused was modified to retire r */
         }

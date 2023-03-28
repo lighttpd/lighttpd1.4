@@ -176,7 +176,10 @@ static void mod_status_html_rtable_r (buffer * const b, const request_st * const
                           CONST_STR_LEN("</td><td class=\"int\">"));
 
     if (r->reqbody_length) {
-        buffer_append_int(b, (r->http_version <= HTTP_VERSION_1_1 || r->h2id)
+        buffer_append_int(b, (r->http_version <= HTTP_VERSION_1_1
+                              || (r->http_version == HTTP_VERSION_2
+                                  && r->x.h2.id)
+                             )
                              ? r->reqbody_queue.bytes_in
                              : http_request_stats_bytes_in(r));
         buffer_append_char(b, '/');

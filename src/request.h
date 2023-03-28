@@ -122,14 +122,16 @@ typedef enum {
 struct request_st {
     request_state_t state; /*(modules should not modify request state)*/
     int http_status;
-    uint32_t h2state;      /*(modules should not modify request h2state)*/
-    uint32_t h2id;
-     int32_t h2_rwin;
-     int32_t h2_swin;
-     int16_t h2_rwin_fudge;
-     uint8_t h2_prio;
 
     union {
+      struct {
+        uint32_t state;    /*(modules should not modify request state)*/
+        uint32_t id;
+         int32_t rwin;
+         int32_t swin;
+         int16_t rwin_fudge;
+         uint8_t prio;
+      } h2;
       struct {
            off_t bytes_written_ckpt; /*used by http_request_stats_bytes_out()*/
            off_t bytes_read_ckpt;    /*used by http_request_stats_bytes_in() */

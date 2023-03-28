@@ -1752,7 +1752,7 @@ magnet_req_item_get (lua_State *L)
             return 1;
         }
         if (0 == memcmp(k, "stream_id", 9)) {
-            lua_pushinteger(L, (lua_Integer)r->h2id);
+            lua_pushinteger(L, (lua_Integer)r->x.h2.id);
             return 1;
         }
         if (0 == memcmp(k, "req_count", 9)) {
