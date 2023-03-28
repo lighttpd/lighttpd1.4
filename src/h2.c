@@ -1385,9 +1385,9 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
     hpctx.pseudo   = 1; /*(XXX: should be !trailers if handling trailers)*/
     hpctx.scheme   = 0;
     hpctx.trailers = trailers;
+    hpctx.log_request_header = r->conf.log_request_header;
     hpctx.max_request_field_size = r->conf.max_request_field_size;
     hpctx.http_parseopts = r->conf.http_parseopts;
-    const int log_request_header = r->conf.log_request_header;
     int rc = LSHPACK_OK;
     /*buffer_clear(&r->target);*//*(initial state)*/
 
@@ -1415,7 +1415,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
             /*assert(lsx.hpack_index < sizeof(lshpack_idx_http_header));*/
             hpctx.id = lshpack_idx_http_header[lsx.hpack_index];
 
-            if (log_request_header)
+            if (hpctx.log_request_header)
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "fd:%d id:%u rqst: %.*s: %.*s", r->con->fd, r->h2id,
                   (int)hpctx.klen, hpctx.k, (int)hpctx.vlen, hpctx.v);
@@ -1455,10 +1455,10 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
                 err = H2_E_PROTOCOL_ERROR;
                 h2_send_rst_stream(r, r->con, err);
             }
-            if (!h2c->sent_goaway && !trailers)
+            if (!h2c->sent_goaway && !hpctx.trailers)
                 h2c->h2_cid = r->h2id;
             h2_send_goaway_e(r->con, err);
-            if (!trailers) {
+            if (!hpctx.trailers) {
                 h2_retire_stream(r, r->con);
                 return;
             }
@@ -1477,7 +1477,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
     rq->bytes_in  += (off_t)hpctx.hlen;
     rq->bytes_out += (off_t)hpctx.hlen;
 
-    if (0 == r->http_status && LSHPACK_OK == rc && !trailers) {
+    if (0 == r->http_status && LSHPACK_OK == rc && !hpctx.trailers) {
         if (hpctx.pseudo)
             r->http_status =
               http_request_validate_pseudohdrs(r, hpctx.scheme,
