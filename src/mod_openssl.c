@@ -2243,7 +2243,14 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       #ifndef SSL_MODE_RELEASE_BUFFERS    /* OpenSSL >= 1.0.0 */
       #define SSL_MODE_RELEASE_BUFFERS 0
       #endif
-        long ssloptions = SSL_OP_ALL
+      #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        uint64_t ssloptions =
+      #elif defined(BORINGSSL_API_VERSION)
+        uint32_t ssloptions =
+      #else
+        long ssloptions =
+      #endif
+                          SSL_OP_ALL
                         | SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION
                         | SSL_OP_NO_COMPRESSION;
 
