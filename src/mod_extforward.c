@@ -1074,7 +1074,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 
 	if (NULL == p->conf.headers) return HANDLER_GO_ON;
 
-	/* Do not reparse headers for same request, e.g. after HANDER_COMEBACK
+	/* Do not reparse headers for same request, e.g. after HANDLER_COMEBACK
 	 * from mod_rewrite, mod_magnet MAGNET_RESTART_REQUEST, mod_cgi
 	 * cgi.local-redir, or gw_backend reconnect.  This has the implication
 	 * that mod_magnet and mod_cgi with local-redir should not modify
