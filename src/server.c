@@ -6,7 +6,6 @@
 #include "log.h"
 #include "rand.h"
 #include "chunk.h"
-#include "h2.h"             /* h2_send_1xx() */
 #include "http_range.h"     /* http_range_config_allow_http10() */
 #include "fdevent.h"
 #include "fdlog.h"
@@ -18,7 +17,7 @@
 #include "plugin_config.h"  /* config_plugin_value_tobool() */
 #include "network_write.h"  /* network_write_show_handlers() */
 #include "reqpool.h"        /* request_pool_init() request_pool_free() */
-#include "response.h"       /* http_response_send_1xx_cb_set() strftime_cache_reset() */
+#include "response.h"       /* http_dispatch[] strftime_cache_reset() */
 
 #ifdef HAVE_VERSIONSTAMP_H
 # include "versionstamp.h"
@@ -104,6 +103,12 @@ static size_t malloc_top_pad;
 /* IRIX doesn't like the alarm based time() optimization */
 /* #define USE_ALARM */
 #endif
+
+extern const struct http_dispatch h2_dispatch_table; /* declaration */
+
+static const struct http_dispatch h1_1_dispatch_table = {
+  .send_1xx          = connection_send_1xx
+};
 
 static int oneshot_fd = 0;
 static int oneshot_fdout = -1;
@@ -383,6 +388,7 @@ static server *server_init(void) {
 	srv->default_server_tag = &default_server_tag;
 
 	log_con_jqueue = (connection *)(uintptr_t)&log_con_jqueue;/*(sentinel)*/
+	memset(http_dispatch, 0, sizeof(http_dispatch));
 
 	return srv;
 }
@@ -1428,14 +1434,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	      #endif
 	}
 
-	http_response_send_1xx_cb_set(NULL, HTTP_VERSION_2);
-	if (!config_feature_bool(srv, "server.h2-discard-backend-1xx", 0))
-		http_response_send_1xx_cb_set(h2_send_1xx, HTTP_VERSION_2);
-
-	http_response_send_1xx_cb_set(NULL, HTTP_VERSION_1_1);
-	if (!config_feature_bool(srv, "server.h1-discard-backend-1xx", 0))
-		http_response_send_1xx_cb_set(connection_send_1xx, HTTP_VERSION_1_1);
-
 	http_range_config_allow_http10(config_feature_bool(srv, "http10.range", 0));
 
 	if (0 != config_set_defaults(srv)) {
@@ -1454,6 +1452,21 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		log_error(srv->errh, __FILE__, __LINE__,
 		  "Initialization of plugins failed. Going down.");
 		return -1;
+	}
+
+	http_dispatch[HTTP_VERSION_1_1] = h1_1_dispatch_table; /* copy struct */
+	http_dispatch[HTTP_VERSION_2]   = h2_dispatch_table;   /* copy struct */
+
+	if (config_feature_bool(srv, "server.h2-discard-backend-1xx", 0))
+		http_dispatch[HTTP_VERSION_2].send_1xx = 0;
+
+	if (config_feature_bool(srv, "server.h1-discard-backend-1xx", 0))
+		http_dispatch[HTTP_VERSION_1_1].send_1xx = 0;
+
+	if (config_feature_bool(srv, "server.discard-backend-1xx", 0)) {
+		http_dispatch[HTTP_VERSION_3].send_1xx = 0;
+		http_dispatch[HTTP_VERSION_2].send_1xx = 0;
+		http_dispatch[HTTP_VERSION_1_1].send_1xx = 0;
 	}
 
 	/* mod_indexfile should be listed in server.modules prior to dynamic handlers */

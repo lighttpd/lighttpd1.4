@@ -20,7 +20,7 @@
 #include "http_header.h"
 #include "log.h"
 #include "request.h"
-#include "response.h"   /* http_response_omit_header() */
+#include "response.h"   /* http_dispatch[] http_response_omit_header() */
 
 
 /* lowercased field-names
@@ -1971,7 +1971,7 @@ h2_read_client_connection_preface (struct connection * const con, chunkqueue * c
 
 
 __attribute_cold__
-int
+static int
 h2_send_goaway_graceful (connection * const con)
 {
     request_st * const h2r = &con->request;
@@ -1986,10 +1986,12 @@ h2_send_goaway_graceful (connection * const con)
 }
 
 
-void
+static void
 h2_init_con (request_st * const restrict h2r, connection * const restrict con)
 {
-    h2con * const h2c = con->h2 = ck_calloc(1, sizeof(h2con));
+    h2con * const h2c = ck_calloc(1, sizeof(h2con));
+    con->hx = (hxcon *)h2c;
+    con->fn = &http_dispatch[HTTP_VERSION_2];
     con->reqbody_read = h2_recv_reqbody;
     con->read_idle_ts = log_monotonic_secs;
     con->keep_alive_idle = h2r->conf.max_keep_alive_idle;
@@ -2480,7 +2482,7 @@ h2_send_1xx_block (request_st * const r, connection * const con, const char * co
 }
 
 
-int
+static int
 h2_send_1xx (request_st * const r, connection * const con)
 {
     buffer * const b = chunk_buffer_acquire();
@@ -2500,7 +2502,7 @@ h2_send_1xx (request_st * const r, connection * const con)
     h2_send_1xx_block(r, con, BUF_PTR_LEN(b));
 
     chunk_buffer_release(b);
-    return 1; /* for http_response_send_1xx_cb */
+    return 1; /* for http_response_send_1xx */
 }
 
 
@@ -2965,6 +2967,9 @@ h2_retire_con (request_st * const h2r, connection * const con)
 
     con->h2 = NULL;
 
+    /*(use HTTP/1.x dispatch table for connection shutdown and close)*/
+    con->fn = NULL;
+
     /* future: might keep a pool of reusable (h2con *) */
     lshpack_enc_cleanup(&h2c->encoder);
     lshpack_dec_cleanup(&h2c->decoder);
@@ -3128,7 +3133,7 @@ h2_send_goaway_delayed (connection * const con)
 
 #include "plugin.h"     /* const plugin * const p = r->handler_module; */
 
-int
+static int
 h2_process_streams (connection * const con,
                     handler_t(*http_response_loop)(request_st *),
                     int(*connection_handle_write)(request_st *, connection *))
@@ -3337,7 +3342,7 @@ h2_process_streams (connection * const con,
 }
 
 
-int
+static int
 h2_check_timeout (connection * const con, const unix_time64_t cur_ts)
 {
     h2con * const h2c = con->h2;
@@ -3414,3 +3419,13 @@ h2_check_timeout (connection * const con, const unix_time64_t cur_ts)
 
     return changed;
 }
+
+
+const struct http_dispatch h2_dispatch_table = {
+  .process_streams   = h2_process_streams
+ ,.upgrade_h2        = h2_init_con
+ ,.upgrade_h2c       = h2_upgrade_h2c
+ ,.send_1xx          = h2_send_1xx
+ ,.check_timeout     = h2_check_timeout
+ ,.goaway_graceful   = h2_send_goaway_graceful
+};

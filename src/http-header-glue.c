@@ -30,6 +30,9 @@
  */
 #define MAX_HTTP_RESPONSE_FIELD_SIZE 65535
 
+/* http_dispatch instance here to be defined in shared object (see base.h)*/
+struct http_dispatch http_dispatch[4];
+
 
 __attribute_cold__
 int http_response_buffer_append_authority(request_st * const r, buffer * const o) {
@@ -956,11 +959,11 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             break;
           case HTTP_HEADER_CONNECTION:
             if (opts->backend == BACKEND_PROXY) continue;
+            if (r->http_version >= HTTP_VERSION_2) continue;
             /*(simplistic attempt to honor backend request to close)*/
             if (http_header_str_contains_token(value, end - value,
                                                CONST_STR_LEN("close")))
                 r->keep_alive = 0;
-            if (r->http_version >= HTTP_VERSION_2) continue;
             break;
           case HTTP_HEADER_CONTENT_TYPE:
             if (end - value >= 22   /*(prefix match probably good enough)*/
@@ -1038,29 +1041,11 @@ static int http_response_process_headers(request_st * const restrict r, http_res
 }
 
 
-static http_response_send_1xx_cb http_response_send_1xx_h1;
-static http_response_send_1xx_cb http_response_send_1xx_h2;
-
-void
-http_response_send_1xx_cb_set (http_response_send_1xx_cb fn, int vers)
-{
-    if (vers >= HTTP_VERSION_2)
-        http_response_send_1xx_h2 = fn;
-    else if (vers == HTTP_VERSION_1_1)
-        http_response_send_1xx_h1 = fn;
-}
-
-
 int
 http_response_send_1xx (request_st * const r)
 {
-    http_response_send_1xx_cb http_response_send_1xx_fn = NULL;
-    if (r->http_version >= HTTP_VERSION_2)
-        http_response_send_1xx_fn = http_response_send_1xx_h2;
-    else if (r->http_version == HTTP_VERSION_1_1)
-        http_response_send_1xx_fn = http_response_send_1xx_h1;
-
-    if (http_response_send_1xx_fn && !http_response_send_1xx_fn(r, r->con))
+    if (    http_dispatch[r->http_version].send_1xx
+        && !http_dispatch[r->http_version].send_1xx(r, r->con))
         return 0; /* error occurred */
 
     http_response_header_clear(r);

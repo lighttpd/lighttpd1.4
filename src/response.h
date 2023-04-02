@@ -11,6 +11,21 @@
 struct stat_cache_entry;/* declaration */
 struct chunkqueue;      /* declaration */
 
+struct http_dispatch {
+    int  (*process_streams)  (connection *,
+                              handler_t(*http_response_handler)(request_st *),
+                              int(*)(request_st *, connection *));
+    void (*upgrade_h2)       (request_st *, connection *);
+    void (*upgrade_h2c)      (request_st *, connection *);
+    int  (*send_100_continue)(request_st *, connection *);
+    int  (*send_1xx)         (request_st *, connection *);
+    int  (*check_timeout)    (connection *, unix_time64_t);
+    int  (*goaway_graceful)  (connection *);  /* graceful restart/shutdown */
+};
+
+/* http_dispatch is in http-header-glue.c to be defined in shared object */
+extern struct http_dispatch http_dispatch[4]; /*(index by http_version_t)*/
+
 int http_response_parse(server *srv, request_st *r);
 
 enum {
@@ -35,9 +50,6 @@ typedef struct http_response_opts_t {
   handler_t(*headers)(request_st *, struct http_response_opts_t *);
 } http_response_opts;
 
-typedef int (*http_response_send_1xx_cb)(request_st *r, connection *con);
-__attribute_cold__
-void http_response_send_1xx_cb_set (http_response_send_1xx_cb fn, int vers);
 int http_response_send_1xx (request_st *r);
 
 handler_t http_response_parse_headers(request_st *r, http_response_opts *opts, buffer *hdrs);

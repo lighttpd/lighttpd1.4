@@ -7,7 +7,6 @@
 #include "log.h"
 #include "connections.h"
 #include "fdevent.h"
-#include "h2.h"
 #include "http_header.h"
 
 #include "reqpool.h"
@@ -558,6 +557,7 @@ static void connection_reset(connection *con) {
 	request_reset(r);
 	con->is_readable = 1;
 	con->bytes_written_cur_second = 0;
+	con->fn = NULL;
 }
 
 
@@ -628,8 +628,10 @@ connection_transition_h2 (request_st * const h2r, connection * const con)
     con->fdn->handler = connection_handle_fdevent_h2;
   #endif
 
+    /* r->conf.h2proto must be checked prior to setting r->http_version to
+     * HTTP_VERSION_2, so if we get here, http_dispatch[HTTP_VERSION_2] inited*/
     if (NULL == con->h2) /*(not yet transitioned to HTTP/2; not Upgrade: h2c)*/
-        h2_init_con(h2r, con);
+        http_dispatch[HTTP_VERSION_2].upgrade_h2(h2r, con);
 }
 
 
@@ -663,7 +665,8 @@ connection_check_upgrade (request_st * const r, connection * const con)
 
         if (http_header_str_contains_token(BUF_PTR_LEN(http_connection),
                                            CONST_STR_LEN("HTTP2-Settings"))) {
-            h2_upgrade_h2c(r, con);
+            if (http_dispatch[HTTP_VERSION_2].upgrade_h2c)
+                http_dispatch[HTTP_VERSION_2].upgrade_h2c(r, con);
         } /*else ignore Upgrade: h2c; HTTP2-Settings required for Upgrade: h2c*/
         /*(remove "HTTP2-Settings", even if not listed in "Connection")*/
         http_header_request_unset(r, HTTP_HEADER_HTTP2_SETTINGS,
@@ -1211,8 +1214,8 @@ connection_set_fdevent_interest (request_st * const r, connection * const con)
 void
 connection_state_machine (connection * const con)
 {
-    int rc = !con->h2 || h2_process_streams(con, http_response_handler,
-                                                 connection_handle_write);
+    int rc = !con->fn || con->fn->process_streams(con, http_response_handler,
+                                                       connection_handle_write);
     request_st * const r = &con->request;
     if (rc)
         connection_state_machine_loop(r, con);
@@ -1231,8 +1234,8 @@ static void connection_check_timeout (connection * const con, const unix_time64_
             changed = 1;
         }
     }
-    else if (con->h2 && r->state == CON_STATE_WRITE) {
-        changed = h2_check_timeout(con, cur_ts);
+    else if (con->fn && r->state == CON_STATE_WRITE) {
+        changed = con->fn->check_timeout(con, cur_ts);
     }
     else if (waitevents & FDEVENT_IN) {
         if (con->request_count == 1 || r->state != CON_STATE_READ) {
@@ -1348,8 +1351,8 @@ void connection_graceful_shutdown_maint (server *srv) {
             if (log_monotonic_secs - con->close_timeout_ts > HTTP_LINGER_TIMEOUT)
                 changed = 1;
         }
-        else if (con->h2 && r->state == CON_STATE_WRITE) {
-            if (h2_send_goaway_graceful(con))
+        else if (con->fn) {
+            if (con->fn->goaway_graceful(con))
                 changed = 1;
         }
         else if (r->state == CON_STATE_READ && con->request_count > 1

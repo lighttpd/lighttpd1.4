@@ -14,6 +14,7 @@
 
 struct fdevents;        /* declaration */
 struct server_socket;   /* declaration */
+struct http_dispatch;   /* declaration */
 
 
 struct connection {
@@ -41,6 +42,7 @@ struct connection {
 	int (* network_write)(struct connection *con, chunkqueue *cq, off_t max_bytes);
 	int (* network_read)(struct connection *con, chunkqueue *cq, off_t max_bytes);
 	handler_t (* reqbody_read)(struct request_st *r);
+	const struct http_dispatch *fn;
 
 	server *srv;
 	void *plugin_slots;
