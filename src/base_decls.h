@@ -31,8 +31,8 @@ typedef struct fdlog_st log_error_st;
 enum handler_t {
   HANDLER_GO_ON,
   HANDLER_FINISHED,
-  HANDLER_COMEBACK,
   HANDLER_WAIT_FOR_EVENT,
+  HANDLER_COMEBACK,
   HANDLER_ERROR
 };
 typedef enum handler_t handler_t;
