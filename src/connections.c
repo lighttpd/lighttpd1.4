@@ -176,6 +176,19 @@ static void connection_handle_shutdown(connection *con) {
 }
 
 
+static void
+connection_handle_request_start_state (request_st * const r, connection * const con)
+{
+    /*connection_set_state(r, CON_STATE_REQUEST_START);*/
+    ++con->request_count;
+    con->read_idle_ts = log_monotonic_secs;
+    r->start_hp.tv_sec = log_epoch_secs;
+    r->loops_per_request = 0;
+    if (r->conf.high_precision_timestamps)
+        log_clock_gettime_realtime(&r->start_hp);
+}
+
+
 static void connection_handle_response_end_state(request_st * const r, connection * const con) {
 	if (r->http_version > HTTP_VERSION_1_1) {
 		h2_retire_con(r, con);
@@ -972,14 +985,7 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 		switch ((ostate = r->state)) {
 		case CON_STATE_REQUEST_START: /* transient */
 			/*(should not be reached by HTTP/2 streams)*/
-			r->start_hp.tv_sec = log_epoch_secs;
-			con->read_idle_ts = log_monotonic_secs;
-			if (r->conf.high_precision_timestamps)
-				log_clock_gettime_realtime(&r->start_hp);
-
-			con->request_count++;
-			r->loops_per_request = 0;
-
+			connection_handle_request_start_state(r, con);
 			connection_set_state(r, CON_STATE_READ);
 			__attribute_fallthrough__
 		case CON_STATE_READ:
