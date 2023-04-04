@@ -1705,6 +1705,9 @@ const chunk_file_view *
 chunkqueue_chunk_file_viewadj (chunk * const c, off_t n, log_error_st * restrict errh)
 {
     /*assert(c->type == FILE_CHUNK);*/
+    if (c->file.fd < 0 && 0 != chunk_open_file_chunk(c, errh))
+        return NULL;
+
     chunk_file_view * restrict cfv = c->file.view;
 
     if (NULL == cfv) {
@@ -1714,11 +1717,6 @@ chunkqueue_chunk_file_viewadj (chunk * const c, off_t n, log_error_st * restrict
     else if (MAP_FAILED != cfv->mptr)
         munmap(cfv->mptr, (size_t)cfv->mlen);
         /*cfv->mptr= MAP_FAILED;*//*(assigned below)*/
-
-    if (c->file.fd < 0 && 0 != chunk_open_file_chunk(c, errh)) {
-        c->file.view = chunk_file_view_failed(cfv);
-        return NULL;
-    }
 
     cfv->foff = mmap_align_offset(c->offset);
 
