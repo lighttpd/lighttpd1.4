@@ -246,6 +246,7 @@ static void * mod_extforward_parse_forwarder(server *srv, const array *forwarder
         data_string * const ds = (data_string *)forwarder->data[j];
         char * const nm_slash = strchr(ds->key.ptr, '/');
         if (NULL == nm_slash) continue;
+        if (ds->key.ptr[0] == '/') continue; /*no mask for unix domain sockets*/
         if (buffer_is_blank(&ds->value)) continue; /* ignored */
 
         char *err;
