@@ -1046,8 +1046,8 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 				break;
 			}
 			/*connection_set_state(r, CON_STATE_REQUEST_END);*/
-			__attribute_fallthrough__
-		case CON_STATE_REQUEST_END: /* transient */
+			/*__attribute_fallthrough__*/
+		/*case CON_STATE_REQUEST_END:*//* transient */
 			connection_set_state(r,
 			  (0 == r->reqbody_length)
 			  ? CON_STATE_HANDLE_REQUEST

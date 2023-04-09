@@ -1531,7 +1531,9 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         r->h2state = (s[4] & H2_FLAG_END_STREAM)
           ? H2_STATE_HALF_CLOSED_REMOTE
           : H2_STATE_OPEN;
-        r->state = CON_STATE_REQUEST_END;
+        r->state = (0 == r->reqbody_length)
+          ? CON_STATE_HANDLE_REQUEST
+          : CON_STATE_READ_POST;
         /* Note: timestamps here are updated only after receipt of entire header
          * (HEADERS frame might have been sent in multiple packets
          *  and CONTINUATION frames may have been sent in multiple packets)
