@@ -3430,3 +3430,25 @@ const struct http_dispatch h2_dispatch_table = {
  ,.check_timeout     = h2_check_timeout
  ,.goaway_graceful   = h2_send_goaway_graceful
 };
+
+
+#include "plugin.h"
+
+typedef struct {
+    PLUGIN_DATA;
+} plugin_data;
+
+INIT_FUNC(mod_h2_init) {
+    http_dispatch[HTTP_VERSION_2] = h2_dispatch_table; /* copy struct */
+    return ck_calloc(1, sizeof(plugin_data));
+}
+
+
+__attribute_cold__
+int mod_h2_plugin_init (plugin *p);
+int mod_h2_plugin_init (plugin *p) {
+    p->version     = LIGHTTPD_VERSION_ID;
+    p->name        = "h2";
+    p->init        = mod_h2_init;
+    return 0;
+}

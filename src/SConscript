@@ -118,6 +118,7 @@ modules = {
 	'mod_deflate' : { 'src' : [ 'mod_deflate.c' ], 'lib' : [ env['LIBZ'], env['LIBZSTD'], env['LIBBZ2'], env['LIBBROTLI'], env['LIBDEFLATE'], 'm' ] },
 	'mod_dirlisting' : { 'src' : [ 'mod_dirlisting.c' ] },
 	'mod_extforward' : { 'src' : [ 'mod_extforward.c' ] },
+	'mod_h2' : { 'src' : [ 'h2.c', 'ls-hpack/lshpack.c', 'algo_xxhash.c' ], 'lib' : [ env['LIBXXHASH'] ] },
 	'mod_proxy' : { 'src' : [ 'mod_proxy.c' ] },
 	'mod_rrdtool' : { 'src' : [ 'mod_rrdtool.c' ] },
 	'mod_sockproxy' : { 'src' : [ 'mod_sockproxy.c' ] },

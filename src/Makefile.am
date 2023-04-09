@@ -121,6 +121,11 @@ common_module_ldflags = -module -export-dynamic $(common_ldflags)
 
 if !LIGHTTPD_STATIC
 
+lib_LTLIBRARIES += mod_h2.la
+mod_h2_la_SOURCES = h2.c ls-hpack/lshpack.c algo_xxhash.c
+mod_h2_la_LDFLAGS = $(common_module_ldflags)
+mod_h2_la_LIBADD = $(common_libadd) $(XXHASH_LIBS)
+
 if BUILD_WITH_MAXMINDDB
 lib_LTLIBRARIES += mod_maxminddb.la
 mod_maxminddb_la_SOURCES = mod_maxminddb.c
@@ -480,6 +485,9 @@ lighttpd_SOURCES += mod_wolfssl.c
 lighttpd_CPPFLAGS += $(WOLFSSL_CFLAGS)
 lighttpd_LDADD += $(WOLFSSL_LIBS)
 endif
+#(until switch to mod_h2)
+#lighttpd_SOURCES += h2.c ls-hpack/lshpack.c algo_xxhash.c
+#lighttpd_LDADD += $(XXHASH_LIBS)
 
 else
 

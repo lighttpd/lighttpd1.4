@@ -750,6 +750,7 @@ modules = [
 	[ 'mod_deflate', [ 'mod_deflate.c' ], [ libbz2, libz, libzstd, libbrotli, libdeflate ] ],
 	[ 'mod_dirlisting', [ 'mod_dirlisting.c' ] ],
 	[ 'mod_extforward', [ 'mod_extforward.c' ] ],
+	[ 'mod_h2', [ 'h2.c', 'ls-hpack/lshpack.c', 'algo_xxhash.c' ], [ libxxhash ] ],
 	[ 'mod_proxy', [ 'mod_proxy.c' ], socket_libs ],
 	[ 'mod_rrdtool', [ 'mod_rrdtool.c' ] ],
 	[ 'mod_sockproxy', [ 'mod_sockproxy.c' ] ],
