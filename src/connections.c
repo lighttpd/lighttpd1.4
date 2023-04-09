@@ -32,12 +32,9 @@
 
 #define HTTP_LINGER_TIMEOUT 5
 
-#define connection_set_state(r, n) ((r)->state = (n))
+#define connection_set_state(r,state)       request_set_state((r),(state))
+#define connection_set_state_error(r,state) request_set_state_error((r),(state))
 
-__attribute_cold__
-static void connection_set_state_error(request_st * const r, const request_state_t state) {
-    connection_set_state(r, state);
-}
 
 __attribute_cold__
 static connection *connection_init(server *srv);

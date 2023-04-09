@@ -203,6 +203,20 @@ struct request_st {
 };
 
 
+/* intended only for use by lighttpd base code, not by modules */
+#define request_set_state(r, n) ((r)->state = (n))
+
+/* intended only for use by lighttpd base code, not by modules */
+__attribute_cold__
+static inline void
+request_set_state_error(request_st * const r, const request_state_t state);
+static inline void
+request_set_state_error(request_st * const r, const request_state_t state)
+{
+    request_set_state(r, state);
+}
+
+
 typedef struct http_header_parse_ctx {
     char *k;
     char *v;
