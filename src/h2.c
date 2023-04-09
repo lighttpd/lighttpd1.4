@@ -1930,6 +1930,26 @@ h2_read_client_connection_preface (struct connection * const con, chunkqueue * c
 }
 
 
+#define connection_set_state(r,state)       request_set_state((r),(state))
+#define connection_set_state_error(r,state) request_set_state_error((r),(state))
+
+
+__attribute_cold__
+int
+h2_send_goaway_graceful (connection * const con)
+{
+    request_st * const h2r = &con->request;
+    if (h2r->state == CON_STATE_WRITE) {
+        h2_send_goaway(con, H2_E_NO_ERROR);
+        if (0 == con->h2->rused && chunkqueue_is_empty(con->write_queue)) {
+            connection_set_state(h2r, CON_STATE_RESPONSE_END);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+
 void
 h2_init_con (request_st * const restrict h2r, connection * const restrict con)
 {

@@ -1601,11 +1601,8 @@ void connection_graceful_shutdown_maint (server *srv) {
                 changed = 1;
         }
         else if (con->h2 && r->state == CON_STATE_WRITE) {
-            h2_send_goaway(con, H2_E_NO_ERROR);
-            if (0 == con->h2->rused && chunkqueue_is_empty(con->write_queue)) {
-                connection_set_state(r, CON_STATE_RESPONSE_END);
+            if (h2_send_goaway_graceful(con))
                 changed = 1;
-            }
         }
         else if (r->state == CON_STATE_READ && con->request_count > 1
                  && chunkqueue_is_empty(con->read_queue)) {

@@ -116,4 +116,6 @@ __attribute_cold__
 __attribute_noinline__
 void h2_upgrade_h2c (request_st *r, connection *con);
 
+int h2_send_goaway_graceful (connection *con);
+
 #endif
