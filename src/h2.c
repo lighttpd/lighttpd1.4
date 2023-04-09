@@ -3031,7 +3031,7 @@ h2_con_upgrade_h2c (request_st * const h2r, connection * const con)
   #endif
   #if 0 /* expect empty request body */
     r->reqbody_length = h2r->reqbody_length; /* currently always 0 */
-    r->te_chunked = h2r->te_chunked;         /* must be 0 */
+    r->x.h1.te_chunked = h2r->x.h1.te_chunked;/*must be 0 before r->x.h2 above*/
     r->resp_body_scratchpad = h2r->resp_body_scratchpad; /*(not started yet)*/
     swap(&r->reqbody_queue,&h2r->reqbody_queue);/*currently always empty queue*/
   #endif

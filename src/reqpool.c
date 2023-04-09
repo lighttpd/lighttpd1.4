@@ -87,8 +87,14 @@ request_reset (request_st * const r)
     r->loops_per_request = 0;
     r->keep_alive = 0;
 
-    r->h2state = 0; /* H2_STATE_IDLE */
-    r->h2id = 0;
+    memset(&r->x, 0, sizeof(r->x));
+    /* clear initial members of r->x union */
+    /*r->x.h1.bytes_written_ckpt = 0;*/
+    /*r->x.h1.bytes_read_ckpt = 0;*/
+    /*r->x.h1.te_chunked = 0;*/
+    /*r->x.h2.state = 0;*/ /* H2_STATE_IDLE */
+    /*r->x.h2.id = 0;*/
+
     r->http_method = HTTP_METHOD_UNSET;
     r->http_version = HTTP_VERSION_UNSET;
 
@@ -96,7 +102,6 @@ request_reset (request_st * const r)
 
     r->http_host = NULL;
     r->reqbody_length = 0;
-    r->te_chunked = 0;
     r->resp_body_scratchpad = -1;
     r->rqst_htags = 0;
 

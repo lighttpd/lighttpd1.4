@@ -214,8 +214,8 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 		con->is_readable = 1; /* potentially trigger optimistic read */
 		/*(accounting used by mod_accesslog for HTTP/1.0 and HTTP/1.1)*/
 		/*(overloaded to detect next bytes recv'd on keep-alive con)*/
-		r->bytes_read_ckpt = r->read_queue.bytes_in;
-		r->bytes_written_ckpt = r->write_queue.bytes_out;
+		r->x.h1.bytes_read_ckpt = r->read_queue.bytes_in;
+		r->x.h1.bytes_written_ckpt = r->write_queue.bytes_out;
 #if 0
 		r->start_hp.tv_sec = log_epoch_secs;
 		con->read_idle_ts = log_monotonic_secs;
@@ -556,8 +556,6 @@ void connections_free(server *srv) {
 static void connection_reset(connection *con) {
 	request_st * const r = &con->request;
 	request_reset(r);
-	r->bytes_read_ckpt = 0;
-	r->bytes_written_ckpt = 0;
 	con->is_readable = 1;
 	con->bytes_written_cur_second = 0;
 }
@@ -684,7 +682,6 @@ connection_check_upgrade (request_st * const r, connection * const con)
     /*(Upgrade: h2c over cleartext does not have SNI; no COMP_HTTP_HOST)*/
     r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
                             | (1 << COMP_HTTP_REMOTE_IP);
-    r->bytes_read_ckpt = 0;
     /*connection_handle_write(r, con);*//* defer write to network */
     return 1;
 }
@@ -710,7 +707,7 @@ static int connection_handle_read_state(connection * const con)  {
 
     if (con->request_count > 1) {
         discard_blank = 1;
-        if (cq->bytes_in == r->bytes_read_ckpt) {
+        if (cq->bytes_in == r->x.h1.bytes_read_ckpt) {
             keepalive_request_start = 1;
             if (NULL != c) { /* !chunkqueue_is_empty(cq)) */
                 pipelined_request_start = 1;
@@ -783,7 +780,7 @@ static int connection_handle_read_state(connection * const con)  {
     } while ((c = connection_read_header_more(con, cq, c, clen)));
 
     if (keepalive_request_start) {
-        if (cq->bytes_in > r->bytes_read_ckpt) {
+        if (cq->bytes_in > r->x.h1.bytes_read_ckpt) {
             /* update r->start_hp.tv_sec timestamp when first byte of
              * next request is received on a keep-alive connection */
             r->start_hp.tv_sec = log_epoch_secs;
@@ -805,9 +802,9 @@ static int connection_handle_read_state(connection * const con)  {
     char * const hdrs = c->mem->ptr + hoff[1];
 
     if (con->request_count > 1) {
-        /* adjust r->bytes_read_ckpt for http_request_stats_bytes_in()
+        /* adjust r->x.h1.bytes_read_ckpt for http_request_stats_bytes_in()
          * (headers_len is still in cq; marked written, bytes_out incr below) */
-        r->bytes_read_ckpt = cq->bytes_out;
+        r->x.h1.bytes_read_ckpt = cq->bytes_out;
         /* clear buffers which may have been kept for reporting on keep-alive,
          * (e.g. mod_status) */
         request_reset_ex(r);
@@ -1440,7 +1437,7 @@ connection_handle_read_post_chunked (request_st * const r, chunkqueue * const cq
 {
     /* r->conf.max_request_size is in kBytes */
     const off_t max_request_size = (off_t)r->conf.max_request_size << 10;
-    off_t te_chunked = r->te_chunked;
+    off_t te_chunked = r->x.h1.te_chunked;
     do {
         off_t len = chunkqueue_length(cq);
 
@@ -1594,7 +1591,7 @@ connection_handle_read_post_chunked (request_st * const r, chunkqueue * const cq
 
     } while (!chunkqueue_is_empty(cq));
 
-    r->te_chunked = te_chunked;
+    r->x.h1.te_chunked = te_chunked;
     return HANDLER_GO_ON;
 }
 

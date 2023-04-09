@@ -129,6 +129,14 @@ struct request_st {
      int16_t h2_rwin_fudge;
      uint8_t h2_prio;
 
+    union {
+      struct {
+           off_t bytes_written_ckpt; /*used by http_request_stats_bytes_out()*/
+           off_t bytes_read_ckpt;    /*used by http_request_stats_bytes_in() */
+           off_t te_chunked;
+      } h1;
+    } x;
+
     http_method_t http_method;
     http_version_t http_version;
 
@@ -154,7 +162,6 @@ struct request_st {
     array env; /* used to pass lighttpd internal stuff */
 
     off_t reqbody_length; /* request Content-Length */
-    off_t te_chunked;
     off_t resp_body_scratchpad;
 
     buffer *http_host; /* copy of array value buffer ptr; not alloc'ed */
@@ -186,8 +193,6 @@ struct request_st {
     buffer *tmp_buf;                    /* shared; same as srv->tmp_buf */
     response_dechunk *gw_dechunk;
 
-    off_t bytes_written_ckpt; /* used by mod_accesslog */
-    off_t bytes_read_ckpt;    /* used by mod_accesslog */
     unix_timespec64_t start_hp;
 
     int error_handler_saved_status; /* error-handler */
@@ -265,10 +270,12 @@ int64_t li_restricted_strtoint64 (const char *v, const uint32_t vlen, const char
     : http_request_state_short((con)->request.state))
 
 #define http_request_stats_bytes_in(r) \
-   ((r)->read_queue.bytes_out - (r)->bytes_read_ckpt)
+   ((r)->read_queue.bytes_out          \
+    - ((r)->http_version > HTTP_VERSION_1_1 ? 0 : (r)->x.h1.bytes_read_ckpt))
 
 #define http_request_stats_bytes_out(r) \
-   ((r)->write_queue.bytes_out - (r)->bytes_written_ckpt)
+   ((r)->write_queue.bytes_out          \
+    - ((r)->http_version > HTTP_VERSION_1_1 ? 0 : (r)->x.h1.bytes_written_ckpt))
 
 __attribute_pure__
 const char * http_request_state_short (request_state_t state);
