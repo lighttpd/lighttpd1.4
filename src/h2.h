@@ -90,27 +90,11 @@ struct h2con {
     unix_time64_t half_closed_ts;
 };
 
-void h2_send_goaway (connection *con, request_h2error_t e);
-
-int h2_parse_frames (connection *con);
-
-int h2_want_read (connection *con);
-
 void h2_init_con (request_st * restrict h2r, connection * restrict con);
 
 int h2_send_1xx (request_st *r, connection *con);
 
 void h2_send_100_continue (request_st *r, connection *con);
-
-void h2_send_headers (request_st *r, connection *con);
-
-uint32_t h2_send_cqdata (request_st *r, connection *con, struct chunkqueue *cq, uint32_t dlen);
-
-void h2_send_end_stream (request_st *r, connection *con);
-
-void h2_retire_stream (request_st *r, connection *con);
-
-void h2_retire_con (request_st *h2r, connection *con);
 
 __attribute_cold__
 __attribute_noinline__
@@ -119,5 +103,7 @@ void h2_upgrade_h2c (request_st *r, connection *con);
 int h2_send_goaway_graceful (connection *con);
 
 int h2_check_timeout (connection *con, unix_time64_t cur_ts);
+
+int h2_process_streams (connection *con, handler_t(*http_response_loop)(request_st *), int(*connection_handle_write)(request_st *, connection *));
 
 #endif

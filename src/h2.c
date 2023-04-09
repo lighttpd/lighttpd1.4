@@ -372,7 +372,7 @@ h2_send_goaway_rst_stream (connection * const con)
 }
 
 
-void
+static void
 h2_send_goaway (connection * const con, const request_h2error_t e)
 {
     /* future: RFC 7540 Section 6.8 notes that server initiating graceful
@@ -1014,7 +1014,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
 
     request_st * const h2r = &con->request;
     if (h2r->h2_rwin <= 0 && 0 != alen) { /*(always proceed if 0 == alen)*/
-        /*(connection_state_machine_h2() must ensure con is rescheduled,
+        /*(h2_process_streams() must ensure con is rescheduled,
          * when backends consume data if con->read_queue is not empty,
          * whether or not con->fd has data to read from the network)*/
         /*(leave frame in cq to be re-read later)*/
@@ -1064,7 +1064,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
         /* note: r->h2_rwin is not adjusted (below) if max_request_size exceeded
          *       in order to read and discard h2_rwin amount of data (below) */
         if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN) {
-            /*(connection_state_machine_h2() must ensure con is rescheduled,
+            /*(h2_process_streams() must ensure con is rescheduled,
              * when backends consume data if con->read_queue is not empty,
              * whether or not con->fd has data to read from the network)*/
             /*(leave frame in cq to be re-read later)*/
@@ -1372,6 +1372,9 @@ h2_recv_trailers_r (connection * const con, h2con * const h2c, const uint32_t id
 
     return h2_recv_end_data(r, con, 0) ? r : NULL;
 }
+
+
+static void h2_retire_stream (request_st *r, connection * const con);
 
 
 static void
@@ -1695,7 +1698,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
 }
 
 
-int
+static int
 h2_parse_frames (connection * const con)
 {
     /* read and process HTTP/2 frames from socket */
@@ -1836,7 +1839,7 @@ h2_parse_frames (connection * const con)
 }
 
 
-int
+static int
 h2_want_read (connection * const con)
 {
     chunkqueue * const cq = con->read_queue;
@@ -2122,7 +2125,7 @@ h2_log_response_header(request_st * const r, const int len, const char * const h
 }
 
 
-void
+static void
 h2_send_headers (request_st * const r, connection * const con)
 {
     /*(set keep_alive_idle; out-of-place and non-event for most configs,
@@ -2624,7 +2627,7 @@ h2_send_data (request_st * const r, connection * const con, const char *data, ui
 #endif
 
 
-uint32_t
+static uint32_t
 h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const cq, uint32_t dlen)
 {
     /* Note: dlen should be <= MAX_WRITE_LIMIT in order to share resources */
@@ -2754,7 +2757,7 @@ h2_send_end_stream_data (request_st * const r, connection * const con)
 }
 
 
-void
+static void
 h2_send_end_stream (request_st * const r, connection * const con)
 {
     if (r->h2state == H2_STATE_CLOSED) return;
@@ -2847,7 +2850,7 @@ h2_release_stream (request_st * const r, connection * const con)
 }
 
 
-void
+static void
 h2_retire_stream (request_st *r, connection * const con)
 {
     if (r == NULL) return; /*(should not happen)*/
@@ -2867,11 +2870,10 @@ h2_retire_stream (request_st *r, connection * const con)
 }
 
 
-void
+static void
 h2_retire_con (request_st * const h2r, connection * const con)
 {
     h2con * const h2c = con->h2;
-    if (NULL == h2c) return;
 
     if (h2r->state != CON_STATE_ERROR) { /*(CON_STATE_RESPONSE_END)*/
         h2_send_goaway(con, H2_E_NO_ERROR);
@@ -3050,6 +3052,232 @@ h2_upgrade_h2c (request_st * const r, connection * const con)
             h2_parse_frame_settings(con, (uint8_t *)BUF_PTR_LEN(b));
         else
             h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
+    }
+}
+
+
+__attribute_cold__
+static void
+h2_send_goaway_delayed (connection * const con)
+{
+    request_st * const h2r = &con->request;
+    if (h2r->keep_alive >= 0) {
+        h2r->keep_alive = -1;
+        h2_send_goaway(con, H2_E_NO_ERROR);
+        http_response_delay(con);
+    }
+    else /*(abort connection upon second request to close h2 connection)*/
+        h2_send_goaway(con, H2_E_ENHANCE_YOUR_CALM);
+}
+
+
+#include "plugin.h"     /* const plugin * const p = r->handler_module; */
+
+int
+h2_process_streams (connection * const con,
+                    handler_t(*http_response_loop)(request_st *),
+                    int(*connection_handle_write)(request_st *, connection *))
+{
+    h2con * const h2c = con->h2;
+
+    if (h2c->sent_goaway <= 0
+        && (chunkqueue_is_empty(con->read_queue) || h2_parse_frames(con))
+        && con->is_readable > 0) {
+        chunkqueue * const cq = con->read_queue;
+        const off_t mark = cq->bytes_in;
+        if (0 == con->network_read(con, cq, MAX_READ_LIMIT)) {
+            if (mark < cq->bytes_in)
+                h2_parse_frames(con);
+        }
+        else {
+            /* network error; do not send GOAWAY, but pretend that we did */
+            h2c->sent_goaway = H2_E_CONNECT_ERROR; /*any error (not NO_ERROR)*/
+            request_st * const h2r = &con->request;
+            request_set_state_error(h2r, CON_STATE_ERROR); /*connection error*/
+        }
+    }
+
+    /* process requests on HTTP/2 streams */
+    int resched = 0;
+    if (h2c->sent_goaway <= 0 && h2c->rused) {
+      #if 0
+        /* coarse check for write throttling
+         * (connection.kbytes-per-second, server.kbytes-per-second)
+         * obtain an approximate limit, not refreshed per request_st,
+         * even though we are not calculating response HEADERS frames
+         * or frame overhead here */
+        off_t max_bytes = con->is_writable > 0
+          ? connection_write_throttle(con, MAX_WRITE_LIMIT)
+          : 0;
+      #else
+        /*(throttle further when writing to network, defer 'precise' throttle)*/
+        off_t max_bytes = con->is_writable > 0 && !con->traffic_limit_reached
+          ? MAX_WRITE_LIMIT
+          : 0;
+      #endif
+        const off_t cqlen = chunkqueue_length(con->write_queue);
+        if (cqlen > 8192 && max_bytes > 65536) max_bytes = 65536;
+        max_bytes -= cqlen;
+        if (max_bytes < 0) max_bytes = 0;
+
+        /* XXX: to avoid buffer bloat due to staging too much data in
+         * con->write_queue, consider setting limit on how much is staged
+         * for sending on con->write_queue: adjusting max_bytes down */
+
+        for (uint32_t i = 0; i < h2c->rused; ++i) {
+            request_st * const r = h2c->r[i];
+            /* future: might track read/write interest per request
+             * to avoid iterating through all active requests */
+            /* specialized connection_state_machine_loop() for h2 streams */
+          #if 0
+            if (r->conf.log_state_handling)
+                connection_log_state(r, "");
+          #endif
+            switch (r->state) {
+              case CON_STATE_READ_POST:
+              case CON_STATE_HANDLE_REQUEST:
+                if (http_response_loop(r) > HANDLER_WAIT_FOR_EVENT) {
+                    /* HANDLER_ERROR or HANDLER_COMEBACK (not expected) */
+                    request_set_state_error(r, CON_STATE_ERROR);
+                    break;
+                }
+                /*__attribute_fallthrough__*/
+              /*case CON_STATE_RESPONSE_START:*//*occurred;transient*/
+                h2_send_headers(r, con);
+                request_set_state(r, CON_STATE_WRITE);
+                __attribute_fallthrough__
+              case CON_STATE_WRITE:
+                /* specialized connection_handle_write_state() */
+                if (r->resp_body_finished) {
+                    if (chunkqueue_is_empty(&r->write_queue))
+                        request_set_state(r, CON_STATE_RESPONSE_END);
+                }
+                else if (r->handler_module) {
+                    const plugin * const p = r->handler_module;
+                    if (p->handle_subrequest(r, p->data)
+                        > HANDLER_WAIT_FOR_EVENT) {
+                     #if 0
+                      case HANDLER_WAIT_FOR_EVENT:
+                      case HANDLER_FINISHED:
+                      case HANDLER_GO_ON:
+                        break;
+                      /*case HANDLER_COMEBACK:*//*error after send resp hdrs*/
+                      /*case HANDLER_ERROR:*/
+                      default:
+                     #endif
+                        request_set_state_error(r, CON_STATE_ERROR);
+                        break;
+                    }
+                }
+                break;
+              default:
+                break;
+            }
+
+          #if 0
+            if (r->conf.log_state_handling)
+                connection_log_state(r, " at loop exit");
+          #endif
+
+            if (r->state < CON_STATE_WRITE)
+                continue;
+            /* else CON_STATE_WRITE, CON_STATE_RESPONSE_END, CON_STATE_ERROR */
+            else if (r->state == CON_STATE_WRITE) {
+                if (__builtin_expect((!chunkqueue_is_empty(&r->write_queue)), 1)
+                    && max_bytes
+                    && (r->resp_body_finished
+                        || (r->conf.stream_response_body
+                            & (FDEVENT_STREAM_RESPONSE
+                              |FDEVENT_STREAM_RESPONSE_BUFMIN)))) {
+                    /*(subtract 9 byte HTTP/2 frame overhead from each 16k DATA
+                     * frame for more efficient sending of large files)*/
+                    /*(use smaller max per stream if marked 'incremental' (w/ 0)
+                     * to give more streams a chance to send in parallel)*/
+                    uint32_t dlen = (r->h2_prio & 1) ? 32768-18 : 8192;
+                    if (dlen > (uint32_t)max_bytes) dlen = (uint32_t)max_bytes;
+                    dlen = h2_send_cqdata(r, con, &r->write_queue, dlen);
+                    if (dlen) { /*(do not resched (spin) if swin empty window)*/
+                        max_bytes -= (off_t)dlen;
+                        if (!chunkqueue_is_empty(&r->write_queue))
+                            resched |= 1;
+                    }
+                }
+                if (!chunkqueue_is_empty(&r->write_queue)
+                    || !r->resp_body_finished)
+                    continue;
+
+                request_set_state(r, CON_STATE_RESPONSE_END);
+              #if 0
+                if (__builtin_expect( (r->conf.log_state_handling), 0))
+                    connection_log_state(r, "");
+              #endif
+            }
+
+            {/*(r->state==CON_STATE_RESPONSE_END || r->state==CON_STATE_ERROR)*/
+                /*(trigger reschedule of con if frames pending)*/
+                if (h2c->rused == sizeof(h2c->r)/sizeof(*h2c->r)
+                    && !chunkqueue_is_empty(con->read_queue))
+                    resched |= 2;
+                h2_send_end_stream(r, con);
+                const int alive = r->keep_alive;
+                h2_retire_stream(r, con);/*r invalidated;removed from h2c->r[]*/
+                --i;/* adjust loop i; h2c->rused was modified to retire r */
+                /*(special-case: allow *stream* to set r->keep_alive = -1 to
+                 * trigger goaway on h2 connection, e.g. after mod_auth failure
+                 * in attempt to mitigate brute force attacks by forcing a
+                 * reconnect and (somewhat) slowing down retries)*/
+                if (alive < 0)
+                    h2_send_goaway_delayed(con);
+            }
+        }
+
+        if (0 == max_bytes) resched |= 1;
+    }
+
+    if (h2c->sent_goaway > 0 && h2c->rused) {
+        /* retire streams if an error has occurred
+         * note: this is not done to other streams in the loop above
+         * (besides the current stream in the loop) due to the specific
+         * implementation above, where doing so would mess up the iterator */
+        for (uint32_t i = 0; i < h2c->rused; ++i) {
+            request_st * const r = h2c->r[i];
+            /*assert(r->h2state == H2_STATE_CLOSED);*/
+            h2_retire_stream(r, con);/*r invalidated;removed from h2c->r[]*/
+            --i;/* adjust loop i; h2c->rused was modified to retire r */
+        }
+        /* XXX: ? should we discard con->write_queue
+         *        and change h2r->state to CON_STATE_RESPONSE_END ? */
+    }
+
+    request_st * const h2r = &con->request;
+    if (h2r->state == CON_STATE_WRITE) {
+        /* write HTTP/2 frames to socket */
+        if (!chunkqueue_is_empty(con->write_queue))
+            connection_handle_write(h2r, con);
+
+        if (chunkqueue_is_empty(con->write_queue)
+            && 0 == h2c->rused && h2c->sent_goaway)
+            connection_set_state(h2r, CON_STATE_RESPONSE_END);
+    }
+
+    if (h2r->state == CON_STATE_WRITE) {
+        /* (resched & 1) more data is available to write, if still able to write
+         * (resched & 2) resched to read deferred frames from con->read_queue */
+        /*(con->is_writable set to 0 if !chunkqueue_is_empty(con->write_queue)
+         * after trying to write in connection_handle_write() above)*/
+        if (((resched & 1) && con->is_writable>0 && !con->traffic_limit_reached)
+            || (resched & 2))
+            joblist_append(con);
+
+        if (h2_want_read(con))
+            h2r->conf.stream_request_body |=  FDEVENT_STREAM_REQUEST_POLLIN;
+        else
+            h2r->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
+        return 0;
+    }
+    else { /* e.g. CON_STATE_RESPONSE_END or CON_STATE_ERROR */
+        h2_retire_con(h2r, con);
+        return 1;
     }
 }
 
