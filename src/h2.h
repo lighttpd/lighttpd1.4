@@ -96,7 +96,7 @@ int h2_parse_frames (connection *con);
 
 int h2_want_read (connection *con);
 
-void h2_init_con (request_st * restrict h2r, connection * restrict con, const buffer * restrict http2_settings);
+void h2_init_con (request_st * restrict h2r, connection * restrict con);
 
 int h2_send_1xx (request_st *r, connection *con);
 
@@ -114,6 +114,6 @@ void h2_retire_con (request_st *h2r, connection *con);
 
 __attribute_cold__
 __attribute_noinline__
-int h2_check_con_upgrade_h2c (request_st *r);
+void h2_upgrade_h2c (request_st *r, connection *con);
 
 #endif

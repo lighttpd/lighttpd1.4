@@ -625,17 +625,74 @@ connection_transition_h2 (request_st * const h2r, connection * const con)
     /* (h2r->state == CON_STATE_READ) for transition by ALPN
      *   or starting cleartext HTTP/2 with Prior Knowledge
      *   (e.g. via HTTP Alternative Services)
-     * (h2r->state == CON_STATE_REQUEST_END) for Upgrade: h2c */
+     * (h2r->state == CON_STATE_WRITE) for Upgrade: h2c */
 
-    if (h2r->state != CON_STATE_ERROR)
-        connection_set_state(h2r, CON_STATE_WRITE);
+    if (h2r->state == CON_STATE_ERROR) /*(CON_STATE_ERROR unexpected here)*/
+        return;
+
+    connection_set_state(h2r, CON_STATE_WRITE);
 
   #if 0 /* ... if it turns out we need a separate fdevent handler for HTTP/2 */
     con->fdn->handler = connection_handle_fdevent_h2;
   #endif
 
     if (NULL == con->h2) /*(not yet transitioned to HTTP/2; not Upgrade: h2c)*/
-        h2_init_con(h2r, con, NULL);
+        h2_init_con(h2r, con);
+}
+
+
+__attribute_cold__
+static int
+connection_check_upgrade (request_st * const r, connection * const con)
+{
+    buffer *upgrade = http_header_request_get(r, HTTP_HEADER_UPGRADE,
+                                              CONST_STR_LEN("Upgrade"));
+    /*if (NULL == upgrade) return 0;*//*(checked by caller)*/
+
+    buffer * const http_connection =
+      http_header_request_get(r, HTTP_HEADER_CONNECTION,
+                              CONST_STR_LEN("Connection"));
+    if (NULL == http_connection) {
+        http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+                                  CONST_STR_LEN("Upgrade"));
+        return 0;
+    }
+
+    if (r->http_version == HTTP_VERSION_1_1) {
+        /* Upgrade: websocket (not handled here)
+         * (potentially handled by modules elsewhere) */
+
+        if (!http_header_str_contains_token(BUF_PTR_LEN(upgrade),
+                                            CONST_STR_LEN("h2c")))
+            return 0; /*(preserve Connection and Upgrade as-is)*/
+
+        /* Upgrade: h2c
+         * RFC7540 3.2 Starting HTTP/2 for "http" URIs */
+
+        if (http_header_str_contains_token(BUF_PTR_LEN(http_connection),
+                                           CONST_STR_LEN("HTTP2-Settings"))) {
+            h2_upgrade_h2c(r, con);
+        } /*else ignore Upgrade: h2c; HTTP2-Settings required for Upgrade: h2c*/
+        /*(remove "HTTP2-Settings", even if not listed in "Connection")*/
+        http_header_request_unset(r, HTTP_HEADER_HTTP2_SETTINGS,
+                                  CONST_STR_LEN("HTTP2-Settings"));
+        http_header_remove_token(http_connection,
+                                 CONST_STR_LEN("HTTP2-Settings"));
+    } /*(else invalid with HTTP/1.0; remove Connection and Upgrade)*/
+
+    http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+                              CONST_STR_LEN("Upgrade"));
+    http_header_remove_token(http_connection, CONST_STR_LEN("Upgrade"));
+
+    if (r->http_version != HTTP_VERSION_2)
+        return 0;
+
+    /*(Upgrade: h2c over cleartext does not have SNI; no COMP_HTTP_HOST)*/
+    r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
+                            | (1 << COMP_HTTP_REMOTE_IP);
+    r->bytes_read_ckpt = 0;
+    /*connection_handle_write(r, con);*//* defer write to network */
+    return 1;
 }
 
 
@@ -783,14 +840,8 @@ static int connection_handle_read_state(connection * const con)  {
 
     if (light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE)
         && 0 == r->http_status
-        && h2_check_con_upgrade_h2c(r)) {
-        /*(Upgrade: h2c over cleartext does not have SNI; no COMP_HTTP_HOST)*/
-        r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
-                                | (1 << COMP_HTTP_REMOTE_IP);
-        r->bytes_read_ckpt = 0;
-        /*connection_handle_write(r, con);*//* defer write to network */
+        && connection_check_upgrade(r, con))
         return 0;
-    }
 
     return 1;
 }
