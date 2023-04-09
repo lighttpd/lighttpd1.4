@@ -489,13 +489,9 @@ static int connection_handle_write_state(request_st * const r, connection * cons
             case HANDLER_FINISHED:
             case HANDLER_GO_ON:
                 break;
-            case HANDLER_COMEBACK:
+            /*case HANDLER_COMEBACK:*/
+            /*case HANDLER_ERROR:*/
             default:
-                log_error(r->conf.errh, __FILE__, __LINE__,
-                  "unexpected subrequest handler ret-value: %d %d",
-                  con->fd, rc);
-                __attribute_fallthrough__
-            case HANDLER_ERROR:
                 connection_set_state_error(r, CON_STATE_ERROR);
                 return CON_STATE_ERROR;
             }
