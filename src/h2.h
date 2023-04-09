@@ -118,4 +118,6 @@ void h2_upgrade_h2c (request_st *r, connection *con);
 
 int h2_send_goaway_graceful (connection *con);
 
+int h2_check_timeout (connection *con, unix_time64_t cur_ts);
+
 #endif
