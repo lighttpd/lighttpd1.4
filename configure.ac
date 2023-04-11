@@ -1330,7 +1330,11 @@ AC_MSG_RESULT([$WITH_LUA])
 if test "$WITH_LUA" != no; then
   found_lua=0
   if test "$WITH_LUA" != yes; then
-    PKG_CHECK_MODULES([LUA], [$WITH_LUA >= 5.1],
+    lua_min_ver=5.1
+    if test "$WITH_LUA" = "luajit"; then
+      lua_min_ver=0
+    fi
+    PKG_CHECK_MODULES([LUA], [$WITH_LUA >= $lua_min_ver],
       [found_lua=1],
       [AC_MSG_NOTICE([Couldn\'t find requested lua pkg-config module $WITH_LUA])]
     )

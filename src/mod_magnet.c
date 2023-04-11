@@ -201,6 +201,12 @@ SETDEFAULTS_FUNC(mod_magnet_set_defaults) {
 #endif
 
 #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
+#ifdef __has_include
+#if __has_include(<luajit.h>)
+#include <luajit.h>
+#endif
+#endif
+#if !defined(LUAJIT_VERSION_NUM) || LUAJIT_VERSION_NUM < 20005
 static lua_Integer
 lua_tointegerx (lua_State * const L, int idx, int *isnum)
 {
@@ -209,6 +215,7 @@ lua_tointegerx (lua_State * const L, int idx, int *isnum)
     *isnum = lua_isnumber(L, idx);
     return *isnum ? lua_tointeger(L, idx) : 0;
 }
+#endif
 #endif
 
 #if !defined(LUA_VERSION_NUM) || LUA_VERSION_NUM < 502
