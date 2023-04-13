@@ -350,7 +350,8 @@ __attribute_cold__
 static void
 h2_send_rst_stream (request_st * const r, connection * const con, const request_h2error_t e)
 {
-    h2_send_rst_stream_state(r, con->h2);/*(set r->x.h2.state=H2_STATE_CLOSED)*/
+    /*(set r->x.h2.state=H2_STATE_CLOSED)*/
+    h2_send_rst_stream_state(r, (h2con *)con->hx);
     h2_send_rst_stream_id(r->x.h2.id, con, e);
 }
 
@@ -359,7 +360,7 @@ __attribute_cold__
 static void
 h2_send_goaway_rst_stream (connection * const con)
 {
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     const int sent_goaway = h2c->sent_goaway;
     for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
         request_st * const r = h2c->r[i];
@@ -386,7 +387,7 @@ h2_send_goaway (connection * const con, const request_h2error_t e)
         h2_send_goaway_rst_stream(con);
     /*XXX: else should send RST_STREAM w/ CANCEL for any active PUSH_PROMISE */
 
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     if (h2c->sent_goaway && (h2c->sent_goaway > 0 || e == H2_E_NO_ERROR))
         return;
     h2c->sent_goaway = (e == H2_E_NO_ERROR) ? -1 : (int32_t)e;
@@ -427,7 +428,7 @@ __attribute_cold__
 static int
 h2_send_refused_stream (uint32_t h2id, connection * const con)
 {
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
 
     if (h2c->sent_settings) { /*(see h2_recv_settings() comments)*/
         /* client connected and immediately sent flurry of request streams
@@ -500,7 +501,7 @@ h2_recv_goaway (connection * const con, const uint8_t * const s, uint32_t len)
     /* send PROTOCOL_ERROR back to peer if peer sent an error code
      * (i.e. not NO_ERROR) in order to terminate connection more quickly */
     h2_send_goaway(con, e==H2_E_NO_ERROR ? H2_E_NO_ERROR : H2_E_PROTOCOL_ERROR);
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     if (0 == h2c->rused) return 0;
     return 1;
 }
@@ -520,7 +521,7 @@ h2_recv_rst_stream (connection * const con, const uint8_t * const s, const uint3
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return;
     }
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     request_st * const r = h2_get_stream_req(h2c, id);
     if (r) {
         if (r->x.h2.state == H2_STATE_IDLE) {
@@ -681,7 +682,7 @@ h2_recv_priority_update (connection * const con, const uint8_t * const s, const 
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return;
     }
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
         request_st * const r = h2c->r[i];
         if (r->x.h2.id != prid) continue;
@@ -736,7 +737,7 @@ h2_recv_priority (connection * const con, const uint8_t * const s, const uint32_
     uint8_t weight = s[13] >> 2;
     weight = ((weight < 8 ? weight : 7) << 1) | !0;
   #endif
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     request_st * const r = h2_get_stream_req(h2c, id);
     if (r) {
         /* XXX: TODO: update priority info */
@@ -776,7 +777,7 @@ h2_recv_window_update (connection * const con, const uint8_t * const s, const ui
     if (0 == id)
         r = &con->request;
     else {
-        h2con * const h2c = con->h2;
+        h2con * const h2c = (h2con *)con->hx;
         r = h2_get_stream_req(h2c, id);
         /* peer should not send WINDOW_UPDATE for an inactive stream,
          * but RFC 7540 does not explicitly call this out.  On the other hand,
@@ -856,7 +857,7 @@ h2_parse_frame_settings (connection * const con, const uint8_t *s, uint32_t len)
 {
     /*(s and len must be SETTINGS frame payload)*/
     /*(caller must validate frame len, frame type == 0x04, frame id == 0)*/
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     for (; len >= 6; len -= 6, s += 6) {
         uint32_t v = h2_u32(s+2);
         switch (h2_u16(s)) {
@@ -944,7 +945,7 @@ h2_recv_settings (connection * const con, const uint8_t * const s, const uint32_
         return;
     }
 
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     if (!(s[4] & H2_FLAG_ACK)) {
         h2_parse_frame_settings(con, s+9, len);
         if (h2c->sent_goaway <= 0)
@@ -994,7 +995,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     /* future: consider string refs rather than copying DATA from chunkqueue
      * or try to consume entire chunk, or to split chunks with less copying */
 
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     const uint32_t id = h2_u31(s+5);
     if (0 == id || h2c->h2_cid < id) { /*(RST_STREAM id must not be 0)*/
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
@@ -1245,7 +1246,7 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
     uint8_t *s = (uint8_t *)(c->mem->ptr + c->offset);
     uint32_t m = n;
     uint32_t flags;
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     const uint32_t fsize = h2c->s_max_frame_size;
     const uint32_t id = h2_u31(s+5);
     do {
@@ -1413,7 +1414,7 @@ static void h2_retire_stream (request_st *r, connection * const con);
 static void
 h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc, const uint32_t plen, const int trailers)
 {
-    h2con * const h2c = r->con->h2;
+    h2con * const h2c = (h2con *)r->con->hx;
     struct lshpack_dec * const restrict decoder = &h2c->decoder;
     const unsigned char * const endp = psrc + plen;
     http_header_parse_ctx hpctx;
@@ -1536,7 +1537,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
     __coverity_tainted_data_sink__(s);
   #endif
     request_st *r = NULL;
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     const uint32_t id = h2_u31(s+5);
   #if 0 /*(included in (!(id & 1)) below)*/
     if (0 == id) { /* HEADERS, PUSH_PROMISE stream id must != 0 */
@@ -1735,7 +1736,7 @@ static int
 h2_parse_frames (connection * const con)
 {
     /* read and process HTTP/2 frames from socket */
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     chunkqueue * const cq = con->read_queue;
     /* initial max frame size is the minimum: 16k
      * (lighttpd does not currently increase max frame size)
@@ -1955,7 +1956,7 @@ h2_read_client_connection_preface (struct connection * const con, chunkqueue * c
       (int(*)(struct connection *, chunkqueue *, off_t))(uintptr_t)(*hctx);
     if (max_bytes < 24) max_bytes = 24; /*(should not happen)*/
     int rc = (network_read)(con, cq, max_bytes);
-    if (NULL == con->h2) return rc; /*(unexpected; already cleaned up)*/
+    if (NULL == con->hx) return rc; /*(unexpected; already cleaned up)*/
     if (-1 != rc && h2_recv_client_connection_preface(con)) {
         con->network_read = network_read;
         *hctx = NULL;
@@ -1977,7 +1978,7 @@ h2_send_goaway_graceful (connection * const con)
     request_st * const h2r = &con->request;
     if (h2r->state == CON_STATE_WRITE) {
         h2_send_goaway(con, H2_E_NO_ERROR);
-        if (0 == con->h2->rused && chunkqueue_is_empty(con->write_queue)) {
+        if (0 == con->hx->rused && chunkqueue_is_empty(con->write_queue)) {
             connection_set_state(h2r, CON_STATE_RESPONSE_END);
             return 1;
         }
@@ -2111,7 +2112,7 @@ h2_send_hpack (request_st * const r, connection * const con, const char *data, u
     buffer * const b =
       chunkqueue_append_buffer_open_sz(con->write_queue, dlen + (dlen>>10) + 9);
     char * restrict ptr = b->ptr;
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     const uint32_t fsize = h2c->s_max_frame_size;
     do {
         const uint32_t len = dlen < fsize ? dlen : fsize;
@@ -2182,7 +2183,7 @@ h2_send_headers (request_st * const r, connection * const con)
     unsigned char *dst = (unsigned char *)tb->ptr;
     unsigned char * const dst_end = (unsigned char *)tb->ptr + tb->size;
 
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     struct lshpack_enc * const encoder = &h2c->encoder;
     lsxpack_header_t lsx;
     uint32_t alen = 7+3+4; /* ":status: xxx\r\n" */
@@ -2410,7 +2411,7 @@ h2_send_headers_block (request_st * const r, connection * const con, const char 
     unsigned char *dst = (unsigned char *)tb->ptr;
     unsigned char * const dst_end = (unsigned char *)tb->ptr + tb->size;
 
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     struct lshpack_enc * const encoder = &h2c->encoder;
     lsxpack_header_t lsx;
 
@@ -2655,7 +2656,7 @@ h2_send_data (request_st * const r, connection * const con, const char *data, ui
     buffer * const b =
       chunkqueue_append_buffer_open_sz(con->write_queue, dlen + (dlen>>10) + 9);
     char * restrict ptr = b->ptr;
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     const uint32_t fsize = h2c->s_max_frame_size;
     uint32_t sent = 0;
     do {
@@ -2724,7 +2725,7 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
      * and takes string refs to mmap FILE_CHUNK to avoid extra copying
      * since the result is likely to be consumed by TLS modules */
 
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     const uint32_t fsize = h2c->s_max_frame_size;
     uint32_t sent = 0;
     do {
@@ -2805,7 +2806,7 @@ h2_send_end_stream_data (request_st * const r, connection * const con)
 
     if (r->x.h2.state != H2_STATE_HALF_CLOSED_REMOTE) {
         /* set timestamp for comparison; not tracking individual stream ids */
-        h2con * const h2c = con->h2;
+        h2con * const h2c = (h2con *)con->hx;
         h2c->half_closed_ts = log_monotonic_secs;
         /* indicate to peer that no more DATA should be sent from peer */
         h2_send_rst_stream_id(r->x.h2.id, con, H2_E_NO_ERROR);
@@ -2845,7 +2846,7 @@ h2_send_end_stream (request_st * const r, connection * const con)
 static request_st *
 h2_init_stream (request_st * const h2r, connection * const con)
 {
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     ++con->request_count;
     force_assert(h2c->rused < sizeof(h2c->r)/sizeof(*h2c->r));
     /* initialize stream as subrequest (request_st *) */
@@ -2911,7 +2912,7 @@ static void
 h2_retire_stream (request_st *r, connection * const con)
 {
     if (r == NULL) return; /*(should not happen)*/
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     request_st ** const ar = h2c->r;
     uint32_t i = 0, rused = h2c->rused;
     while (i < rused && ar[i] != r) ++i;
@@ -2930,7 +2931,7 @@ h2_retire_stream (request_st *r, connection * const con)
 static void
 h2_retire_con (request_st * const h2r, connection * const con)
 {
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
 
     if (h2r->state != CON_STATE_ERROR) { /*(CON_STATE_RESPONSE_END)*/
         h2_send_goaway(con, H2_E_NO_ERROR);
@@ -2965,7 +2966,7 @@ h2_retire_con (request_st * const h2r, connection * const con)
         /* XXX: perhaps attempt to send GOAWAY?  Not when CON_STATE_ERROR */
     }
 
-    con->h2 = NULL;
+    con->hx = NULL;
 
     /*(use HTTP/1.x dispatch table for connection shutdown and close)*/
     con->fn = NULL;
@@ -3001,9 +3002,9 @@ h2_con_upgrade_h2c (request_st * const h2r, connection * const con)
   #endif
 
     h2_init_con(h2r, con);
-    if (con->h2->sent_goaway) return;
+    if (((h2con *)con->hx)->sent_goaway) return;
 
-    con->h2->h2_cid = 1; /* stream id 1 is assigned to h2c upgrade */
+    ((h2con *)con->hx)->h2_cid = 1; /* stream id 1 is assigned to h2c upgrade */
 
     /* copy request state from &con->request to subrequest r
      * XXX: would be nice if there were a cleaner way to do this
@@ -3138,7 +3139,7 @@ h2_process_streams (connection * const con,
                     handler_t(*http_response_loop)(request_st *),
                     int(*connection_handle_write)(request_st *, connection *))
 {
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
 
     if (h2c->sent_goaway <= 0
         && (chunkqueue_is_empty(con->read_queue) || h2_parse_frames(con))
@@ -3345,7 +3346,7 @@ h2_process_streams (connection * const con,
 static int
 h2_check_timeout (connection * const con, const unix_time64_t cur_ts)
 {
-    h2con * const h2c = con->h2;
+    h2con * const h2c = (h2con *)con->hx;
     request_st * const r = &con->request;
     int changed = (r->state != CON_STATE_WRITE); /*(e.g. CON_STATE_ERROR)*/
 

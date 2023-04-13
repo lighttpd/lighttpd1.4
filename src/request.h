@@ -251,14 +251,21 @@ int http_request_host_policy(buffer *b, unsigned int http_parseopts, int scheme_
 int64_t li_restricted_strtoint64 (const char *v, const uint32_t vlen, const char ** const err);
 
 
+/* "base class" for h2con, h3con, ... */
+typedef struct hxcon {
+    request_st *r[8];
+    uint32_t rused;
+} hxcon;
+
+
 /* convenience macros/functions for display purposes */
 
 #define http_request_state_is_keep_alive(r) \
   (CON_STATE_READ == (r)->state && !buffer_is_blank(&(r)->target_orig))
 
 #define http_con_state_is_keep_alive(con) \
-  ((con)->h2                              \
-   ? 0 == (con)->h2->rused                \
+  ((con)->hx                              \
+   ? 0 == (con)->hx->rused                \
    : http_request_state_is_keep_alive(&(con)->request))
 
 #define http_con_state_append(b, con)                            \

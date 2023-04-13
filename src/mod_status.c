@@ -2,7 +2,6 @@
 
 #include "base.h"
 #include "fdevent.h"
-#include "h2.h"
 #include "http_chunk.h"
 #include "http_header.h"
 #include "log.h"
@@ -242,7 +241,7 @@ static void mod_status_html_rtable (request_st * const rq, const server * const 
     buffer_clear(b);
     for (const connection *con = srv->conns; con; con = con->next) {
         const request_st * const r = &con->request;
-        h2con * const h2c = con->h2;
+        hxcon * const h2c = con->hx;
         { /*(r->http_version <= HTTP_VERSION_1_1 or HTTP/2 stream id 0)*/
             if (buffer_string_space(b) < 4096) {
                 http_chunk_append_mem(rq, BUF_PTR_LEN(b));

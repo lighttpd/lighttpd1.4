@@ -72,7 +72,7 @@ typedef enum {
 } request_h2state_t;
 
 struct h2con {
-    request_st *r[8];
+    request_st *r[8]; /* must match request.h:struct hxcon */
     uint32_t rused;
 
     uint32_t h2_cid;
@@ -89,5 +89,6 @@ struct h2con {
     struct lshpack_enc encoder;
     unix_time64_t half_closed_ts;
 };
+typedef struct h2con h2con;
 
 #endif

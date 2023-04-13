@@ -10,7 +10,6 @@
 #include "chunk.h"
 #include "ck.h"
 #include "fdevent.h"
-#include "h2.h"
 #include "http_chunk.h"
 #include "http_etag.h"
 #include "http_header.h"
@@ -2684,30 +2683,32 @@ static int
 magnet_request_iter (lua_State *L)
 {
     /* upvalue 1: (connection *) in linked list
-     * upvalue 2: index into h2con->r[]
+     * upvalue 2: index into hxcon->r[]
      * upvalue 3: request userdata
      * upvalue 4: request table (references r in userdata) */
     connection *con = lua_touserdata(L, lua_upvalueindex(1));
 
-    /* skip over HTTP/2 connections with no active requests */
-    while (con && con->h2 && 0 == con->h2->rused)
+    /* skip over HTTP/2 and HTTP/3 connections with no active requests */
+    while (con && con->hx && 0 == con->hx->rused)
         con = con->next;
     if (NULL == con)
         return 0;
 
     /* set (request_st *)r */
     int32_t i = -1;
-    if (con->h2) {
-        /* get index into h2con->r[] */
+    if (con->hx) {
+        /* get index into hxcon->r[] */
         i = lua_tointeger(L, lua_upvalueindex(2));
         /* set (request_st *)r in userdata */
-        if (-1 == i)
+        /* step to next index into hxcon->r[] */
+        if (-1 == i) {
             *(request_st **)lua_touserdata(L,lua_upvalueindex(3))=&con->request;
-        else
-            *(request_st **)lua_touserdata(L,lua_upvalueindex(3))=con->h2->r[i];
-        /* step to next index into h2con->r[] */
-        if ((uint32_t)++i == con->h2->rused)
-            i = -1;
+            ++i; /*(rused != 0 checked above)*/
+        }
+        else {
+            *(request_st **)lua_touserdata(L,lua_upvalueindex(3))=con->hx->r[i];
+            if ((uint32_t)++i == con->hx->rused) i = -1;
+        }
         lua_pushinteger(L, i);
         lua_replace(L, lua_upvalueindex(2));
     }

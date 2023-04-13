@@ -630,7 +630,7 @@ connection_transition_h2 (request_st * const h2r, connection * const con)
 
     /* r->conf.h2proto must be checked prior to setting r->http_version to
      * HTTP_VERSION_2, so if we get here, http_dispatch[HTTP_VERSION_2] inited*/
-    if (NULL == con->h2) /*(not yet transitioned to HTTP/2; not Upgrade: h2c)*/
+    if (NULL == con->hx) /*(not yet transitioned to HTTP/2; not Upgrade: h2c)*/
         http_dispatch[HTTP_VERSION_2].upgrade_h2(h2r, con);
 }
 

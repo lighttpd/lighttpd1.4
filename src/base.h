@@ -20,7 +20,7 @@ struct http_dispatch;   /* declaration */
 struct connection {
 
 	request_st request;
-	h2con *h2;
+	hxcon *hx;
 
 	int fd;                      /* the FD for this connection */
 	fdnode *fdn;                 /* fdevent (fdnode *) object */
