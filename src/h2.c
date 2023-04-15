@@ -1189,6 +1189,39 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
 
 
 __attribute_cold__
+static void h2_recv_expect_100 (request_st * const r);
+
+static handler_t
+h2_recv_reqbody (request_st * const r)
+{
+    /* h2 r->con->reqbody_read() */
+
+    /* Check for Expect: 100-continue in request headers */
+    if (light_btst(r->rqst_htags, HTTP_HEADER_EXPECT))
+        h2_recv_expect_100(r);
+
+    /* h2_recv_data() places frame payload directly into r->reqbody_queue */
+
+    if (r->reqbody_queue.bytes_in == (off_t)r->reqbody_length) {
+        /*r->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;*/
+        if (r->state == CON_STATE_READ_POST) /* content is ready */
+            request_set_state(r, CON_STATE_HANDLE_REQUEST);
+        return HANDLER_GO_ON;
+    }
+    else if (r->h2state >= H2_STATE_HALF_CLOSED_REMOTE) {
+        /*(H2_STATE_HALF_CLOSED_REMOTE or H2_STATE_CLOSED)*/
+        return HANDLER_ERROR;
+    }
+    else {
+        /*r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;*/
+        return (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
+          ? HANDLER_GO_ON
+          : HANDLER_WAIT_FOR_EVENT;
+    }
+}
+
+
+__attribute_cold__
 static uint32_t
 h2_frame_cq_compact (chunkqueue * const cq, uint32_t len)
 {
@@ -1957,6 +1990,7 @@ void
 h2_init_con (request_st * const restrict h2r, connection * const restrict con)
 {
     h2con * const h2c = con->h2 = ck_calloc(1, sizeof(h2con));
+    con->reqbody_read = h2_recv_reqbody;
     con->read_idle_ts = log_monotonic_secs;
     con->keep_alive_idle = h2r->conf.max_keep_alive_idle;
 
@@ -2470,7 +2504,7 @@ h2_send_1xx (request_st * const r, connection * const con)
 }
 
 
-void
+static void
 h2_send_100_continue (request_st * const r, connection * const con)
 {
     /* 100 Continue is small and will always fit in SETTING_MAX_FRAME_SIZE;
@@ -2485,6 +2519,27 @@ h2_send_100_continue (request_st * const r, connection * const con)
      * rather than adding something specific for ls-hpack here */
 
     h2_send_1xx_block(r, con, CONST_STR_LEN(":status: 100\r\n\r\n"));
+}
+
+
+__attribute_cold__
+static void
+h2_recv_expect_100 (request_st * const r)
+{
+    const buffer * const vb =
+      http_header_request_get(r, HTTP_HEADER_EXPECT,
+                              CONST_STR_LEN("Expect"));
+
+    /* send 100 Continue only if no request body data received yet
+     * and response has not yet started */
+    if (vb && buffer_eq_icase_slen(vb, CONST_STR_LEN("100-continue"))
+        && 0 == r->reqbody_queue.bytes_in
+        && chunkqueue_is_empty(&r->write_queue))
+        h2_send_100_continue(r, r->con);
+
+    /* (always unset Expect header so that check is not repeated for request */
+    http_header_request_unset(r, HTTP_HEADER_EXPECT,
+                              CONST_STR_LEN("Expect"));
 }
 
 

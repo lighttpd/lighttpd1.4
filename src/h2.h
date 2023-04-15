@@ -94,8 +94,6 @@ void h2_init_con (request_st * restrict h2r, connection * restrict con);
 
 int h2_send_1xx (request_st *r, connection *con);
 
-void h2_send_100_continue (request_st *r, connection *con);
-
 __attribute_cold__
 __attribute_noinline__
 void h2_upgrade_h2c (request_st *r, connection *con);

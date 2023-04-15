@@ -1635,17 +1635,13 @@ connection_check_expect_100 (request_st * const r, connection * const con)
     if (!rc
         || 0 != r->reqbody_queue.bytes_in
         || !chunkqueue_is_empty(&r->read_queue)
-        || !chunkqueue_is_empty(&r->write_queue))
+        || !chunkqueue_is_empty(&r->write_queue)
+        || r->http_version == HTTP_VERSION_1_0)
         return 1;
 
     /* send 100 Continue only if no request body data received yet
      * and response has not yet started (checked above) */
-    if (r->http_version > HTTP_VERSION_1_1)
-        h2_send_100_continue(r, con);
-    else if (r->http_version == HTTP_VERSION_1_1)
-        return connection_write_100_continue(r, con);
-
-    return 1;
+    return connection_write_100_continue(r, con);
 }
 
 
@@ -1658,12 +1654,7 @@ connection_handle_read_post_state (request_st * const r)
 
     int is_closed = 0;
 
-    if (r->http_version > HTTP_VERSION_1_1) {
-        /*(H2_STATE_HALF_CLOSED_REMOTE or H2_STATE_CLOSED)*/
-        if (r->h2state >= H2_STATE_HALF_CLOSED_REMOTE)
-            is_closed = 1;
-    }
-    else if (con->is_readable > 0) {
+    if (con->is_readable > 0) {
         con->read_idle_ts = log_monotonic_secs;
         const off_t max_per_read =
           !(r->conf.stream_request_body /*(if not streaming request body)*/
@@ -1691,10 +1682,7 @@ connection_handle_read_post_state (request_st * const r)
         && !connection_check_expect_100(r, con))
         return HANDLER_ERROR;
 
-    if (r->http_version > HTTP_VERSION_1_1) {
-        /* h2_recv_data() places frame payload directly into r->reqbody_queue */
-    }
-    else if (r->reqbody_length < 0) {
+    if (r->reqbody_length < 0) {
         /*(-1: Transfer-Encoding: chunked, -2: unspecified length)*/
         handler_t rc = (-1 == r->reqbody_length)
                      ? connection_handle_read_post_chunked(r, cq, dst_cq)
