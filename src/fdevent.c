@@ -655,7 +655,8 @@ fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *
           #ifndef _WIN32
           #ifdef O_NONBLOCK
             /*(else read() might err EAGAIN Resource temporarily unavailable)*/
-            fcntl(fd, F_SETFL, (O_RDONLY | FDEVENT_O_FLAGS) & ~O_NONBLOCK);
+            if (fcntl(fd, F_SETFL, (O_RDONLY|FDEVENT_O_FLAGS) & ~O_NONBLOCK)) {}
+            /*(ignore fcntl() error; not expected and detected later if err)*/
           #endif
           #endif
             ssize_t rd;
