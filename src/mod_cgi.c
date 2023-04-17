@@ -728,7 +728,8 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 			/*(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)*/
 			if (!(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_POLLIN)) {
 				r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
-				r->con->is_readable = 1; /* trigger optimistic read from client */
+				if (r->http_version <= HTTP_VERSION_1_1)
+					r->con->is_readable = 1;/* trigger optimistic client read */
 			}
 		}
 		struct fdevents * const ev = hctx->ev;

@@ -2054,7 +2054,8 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
                       & FDEVENT_STREAM_REQUEST_POLLIN)) {
                     r->conf.stream_request_body |=
                         FDEVENT_STREAM_REQUEST_POLLIN;
-                    r->con->is_readable = 1; /* trigger optimistic client read */
+                    if (r->http_version <= HTTP_VERSION_1_1)
+                        r->con->is_readable = 1;/*trigger optimistic client rd*/
                 }
             }
             if (0 == wblen) {
