@@ -178,6 +178,8 @@
 #cmakedefine  HAVE_MMAP
 #cmakedefine  HAVE_PIPE2
 #cmakedefine  HAVE_POLL
+#cmakedefine  HAVE_POSIX_SPAWN
+#cmakedefine  HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP
 #cmakedefine  HAVE_PORT_CREATE
 #cmakedefine  HAVE_PREAD
 #cmakedefine  HAVE_PREADV

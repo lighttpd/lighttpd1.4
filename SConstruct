@@ -431,6 +431,8 @@ if 1:
 		'mmap',
 		'pipe2',
 		'poll',
+		'posix_spawn',
+		'posix_spawn_file_actions_addfchdir_np',
 		'pread',
 		'preadv',
 		'pwrite',

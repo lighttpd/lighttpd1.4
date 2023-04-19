@@ -209,6 +209,12 @@ check_include_files(sys/select.h HAVE_SYS_SELECT_H)
 check_function_exists(select HAVE_SELECT)
 endif()
 
+check_include_files(spawn.h HAVE_SPAWN_H)
+if(HAVE_SPAWN_H)
+check_function_exists(posix_spawn HAVE_POSIX_SPAWN)
+check_function_exists(posix_spawn_file_actions_addfchdir_np HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP)
+endif()
+
 set(CMAKE_EXTRA_INCLUDE_FILES time.h)
 check_function_exists(timegm HAVE_TIMEGM)
 set(CMAKE_EXTRA_INCLUDE_FILES)

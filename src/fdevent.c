@@ -432,6 +432,9 @@ int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr) {
 
 #include <stdio.h>      /* perror() rename() */
 #include <signal.h>     /* signal() kill() */
+#ifdef HAVE_POSIX_SPAWN
+#include <spawn.h>      /* posix_spawn*() */
+#endif
 
 
 int fdevent_rename(const char *oldpath, const char *newpath) {
@@ -440,7 +443,101 @@ int fdevent_rename(const char *oldpath, const char *newpath) {
 
 
 pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd) {
- #ifdef HAVE_FORK
+ #ifdef HAVE_POSIX_SPAWN
+
+    /* Caller must ensure that all fd* args are >= 3, i.e. > STDERR_FILENO (2),
+     * unless fd* arg is -1, in which case we preserve existing target fd, or
+     * unless fd does not have FD_CLOEXEC set *and* is not being replaced,
+     * e.g. if fd 1 is open to /dev/null and fdout is -1 and fderr is 1 so
+     * that fd 1 (STDOUT_FILENO) to /dev/null is dup2() to fd 2 (STDERR_FILENO).
+     * Caller must handle so that if any dup() is required to make fd* >= 3,
+     * then the caller has access to the new fds.  The reason fd* args >= 3
+     * is required is that we set FD_CLOEXEC on all fds (thread-safety) and
+     * a dup2() in child is used for dup2() side effect of removing FD_CLOEXEC.
+     * (posix_spawn() provides posix_spawn_file_actions_adddup2() whereas
+     *  it does not provide a means to use fcntl() to remove FD_CLOEXEC) */
+
+    sigset_t sigs;
+    posix_spawn_file_actions_t file_actions;
+    posix_spawnattr_t attr;
+    int rc;
+    pid_t pid = -1;
+    if (0 != (rc = posix_spawn_file_actions_init(&file_actions)))
+        return pid;
+    if (0 != (rc = posix_spawnattr_init(&attr))) {
+        posix_spawn_file_actions_destroy(&file_actions);
+        return pid;
+    }
+    if (   0 == (rc = (fdin  >= 0)
+                    ? posix_spawn_file_actions_adddup2(
+                        &file_actions, fdin,  STDIN_FILENO)
+                    : 0)
+        && 0 == (rc = (fdout >= 0)
+                    ? posix_spawn_file_actions_adddup2(
+                        &file_actions, fdout, STDOUT_FILENO)
+                    : 0)
+        && 0 == (rc = (fderr >= 0)
+                    ? posix_spawn_file_actions_adddup2(
+                        &file_actions, fderr, STDERR_FILENO)
+                    : 0)
+       #ifdef HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP
+        && 0 == (rc = (-1 != dfd)
+                    ? posix_spawn_file_actions_addfchdir_np(
+                        &file_actions, dfd)
+                    : 0)
+       #endif
+        && 0 == (rc = posix_spawnattr_setflags(
+                        &attr, POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
+        && 0 == (rc = sigemptyset(&sigs))
+        && 0 == (rc = posix_spawnattr_setsigmask(&attr, &sigs))
+        /*(force reset signals to SIG_DFL if server.c set to SIG_IGN)*/
+       #ifdef SIGTTOU
+        && 0 == (rc = sigaddset(&sigs, SIGTTOU))
+       #endif
+       #ifdef SIGTTIN
+        && 0 == (rc = sigaddset(&sigs, SIGTTIN))
+       #endif
+       #ifdef SIGTSTP
+        && 0 == (rc = sigaddset(&sigs, SIGTSTP))
+       #endif
+        && 0 == (rc = sigaddset(&sigs, SIGPIPE))
+        && 0 == (rc = sigaddset(&sigs, SIGUSR1))
+        && 0 == (rc = posix_spawnattr_setsigdefault(&attr, &sigs))) {
+
+          #ifndef HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP
+            /* not thread-safe, but ok since lighttpd not (currently) threaded
+             * (alternatively, check HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP
+             *  along with HAVE_POSIX_SPAWN at top of block and use HAVE_FORK
+             *  below if HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP not avail)*/
+            if (-1 != dfd) {
+                int ndfd = dfd;
+                dfd = fdevent_open_dirname(".", 1); /* reuse dfd for cwd fd */
+                if (-1 == dfd || 0 != fchdir(ndfd))
+                    rc = -1; /*(or could set to errno for posix consistency)*/
+            }
+            if (0 == rc)
+          #endif
+
+                 rc = posix_spawn(&pid, name, &file_actions, &attr,
+                                  argv, envp ? envp : environ);
+
+            if (0 != rc)
+                pid = -1;
+
+          #ifndef HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP
+            if (-1 != dfd) {
+                if (0 != fchdir(dfd)) { /* ignore error; best effort */
+                    /*rc = errno;*/
+                }
+                close(dfd);
+            }
+          #endif
+    }
+    posix_spawn_file_actions_destroy(&file_actions);
+    posix_spawnattr_destroy(&attr);
+    return pid;
+
+ #elif defined(HAVE_FORK)
 
     pid_t pid = fork();
     if (0 != pid) return pid; /* parent (pid > 0) or fork() error (-1 == pid) */
