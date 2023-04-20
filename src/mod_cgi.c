@@ -985,7 +985,24 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	  fdevent_createprocess(args, envp, (intptr_t)to_cgi_fds[0],
 	                        (intptr_t)from_cgi_fds[1], serrh_fd, dfd);
   #else
+   #if 0 /*(if cache used, then must skip fdio_close_dirfd(dfd) further below)*/
+	/*(similar to fdevent_open_dirname(), but leveraging stat_cache)*/
+	/*(would need specialized routine to also pass O_DIRECTORY)*/
+	/*(if not for r->conf.follow_symlink policy (of dubious benefit itself),
+	 * the target dir could be handled in fdevent_fork_execve() similarly
+	 * to how target dir is handled in fdevent_createprocess())*/
+	/*(handle special cases of no dirname or dirname is root directory)*/
+	const char * const path = r->physical.path.ptr;
+	char * const c = strrchr(path, '/');
+	const char * const dname = (NULL != c ? c != path ? path : "/" : ".");
+	buffer * const tb = r->tmp_buf;
+	buffer_copy_string_len(tb, dname, dname == path ? (uint32_t)(c - path) : 1);
+	const stat_cache_entry * const sce =
+	  stat_cache_get_entry_open(tb, r->conf.follow_symlink);
+	int dfd = sce ? sce->fd : -1;
+   #else
 	int dfd = fdevent_open_dirname(r->physical.path.ptr,r->conf.follow_symlink);
+   #endif
 	if (-1 == dfd) {
 		log_perror(r->conf.errh, __FILE__, __LINE__, "open dirname %s failed", r->physical.path.ptr);
 	}
