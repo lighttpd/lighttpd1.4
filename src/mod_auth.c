@@ -531,6 +531,18 @@ static handler_t mod_auth_require_parse_array(const array *value, array * const 
 				return HANDLER_ERROR;
 			}
 
+			for (uint32_t o = 0; o < n; ++o) {
+				const buffer *k = &((data_array *)value->data[o])->key;
+				if (buffer_clen(&da_file->key) >= buffer_clen(k)
+				    && 0 == strncmp(da_file->key.ptr, k->ptr, buffer_clen(k))) {
+					log_error(errh, __FILE__, __LINE__,
+					  "auth.require path (\"%s\") will never match due to "
+					  "earlier match (\"%s\"); fix by sorting longer paths "
+					  "before shorter paths", da_file->key.ptr, k->ptr);
+					break;
+				}
+			}
+
 			if (require) { /*(always true at this point)*/
 				data_auth * const dauth = data_auth_init();
 				buffer_copy_buffer(&dauth->key, &da_file->key);
