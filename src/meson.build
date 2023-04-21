@@ -360,15 +360,19 @@ if get_option('with_mbedtls')
 	libmbedtls = [ compiler.find_library('mbedtls') ]
 	libmbedx509 = [ compiler.find_library('mbedx509') ]
 	libmbedcrypto = [ compiler.find_library('mbedcrypto') ]
-	libcrypto = [ compiler.find_library('mbedcrypto') ]
+	if compiler.get_define('FORCE_WOLFSSL_CRYPTO') == ''
+	  libcrypto = [ compiler.find_library('mbedcrypto') ]
+	endif
 	conf_data.set('HAVE_LIBMBEDCRYPTO', true)
 endif
 if get_option('with_nettle')
 	# manual search:
 	# header: nettle/nettle-types.h
 	# function: nettle_md5_init (-lnettle)
-	libcrypto = [ dependency('nettle') ]
-	conf_data.set('HAVE_NETTLE_NETTLE_TYPES_H', true)
+	if compiler.get_define('FORCE_WOLFSSL_CRYPTO') == '' and compiler.get_define('FORCE_MBEDTLS_CRYPTO') == ''
+	  libcrypto = [ dependency('nettle') ]
+	  conf_data.set('HAVE_NETTLE_NETTLE_TYPES_H', true)
+	endif
 endif
 if get_option('with_gnutls')
 	# manual search:
