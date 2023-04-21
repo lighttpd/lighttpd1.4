@@ -556,6 +556,7 @@ main_src = files(
 	'configfile.c',
 	'connections.c',
 	'data_config.c',
+	'h1.c',
 	'h2.c',
 	'plugin.c',
 	'sock_addr_cache.c',

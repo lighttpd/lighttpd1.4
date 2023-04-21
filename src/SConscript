@@ -73,7 +73,7 @@ common_src = Split("base64.c buffer.c burl.c log.c \
 	ck.c \
 ")
 
-src = Split("server.c response.c connections.c h2.c reqpool.c \
+src = Split("server.c response.c connections.c h1.c h2.c reqpool.c \
 	plugin.c \
 	sock_addr_cache.c \
 	ls-hpack/lshpack.c \

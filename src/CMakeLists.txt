@@ -918,6 +918,7 @@ set(SERVER_SRC
 	server.c
 	response.c
 	connections.c
+	h1.c
 	h2.c
 	reqpool.c
 	plugin.c

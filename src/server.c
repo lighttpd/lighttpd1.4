@@ -181,8 +181,9 @@ static size_t malloc_top_pad;
 extern const struct http_dispatch h2_dispatch_table; /* declaration */
 #endif
 
+#include "h1.h"
 static const struct http_dispatch h1_1_dispatch_table = {
-  .send_1xx          = connection_send_1xx
+  .send_1xx          = h1_send_1xx
 };
 
 static int oneshot_fd = 0;

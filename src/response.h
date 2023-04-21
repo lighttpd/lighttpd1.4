@@ -77,7 +77,6 @@ void http_response_delay(connection *con);
 __attribute_cold__
 int http_response_omit_header(request_st *r, const data_string *ds);
 
-void http_response_write_header(request_st *r);
 handler_t http_response_handler(request_st *r);
 
 __attribute_cold__

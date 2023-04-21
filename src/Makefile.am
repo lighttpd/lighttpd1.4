@@ -68,7 +68,7 @@ common_src=base64.c buffer.c burl.c log.c \
 
 common_src += fdevent_win32.c fs_win32.c
 
-src = server.c response.c connections.c h2.c reqpool.c \
+src = server.c response.c connections.c h1.c h2.c reqpool.c \
 	plugin.c \
 	sock_addr_cache.c \
 	network.c \
@@ -346,7 +346,7 @@ endif # !LIGHTTPD_STATIC
 
 
 hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
-	response.h request.h reqpool.h chunk.h h2.h \
+	response.h request.h reqpool.h chunk.h h1.h h2.h \
 	first.h http_chunk.h \
 	algo_hmac.h \
 	algo_md.h algo_md5.h algo_sha1.h algo_splaytree.h algo_xxhash.h \
