@@ -37,6 +37,7 @@
 __attribute_cold__
 static connection *connection_init(server *srv);
 
+__attribute_noinline__
 static void connection_reset(connection *con);
 
 static connection *connections_get_new_connection(server *srv) {
@@ -186,6 +187,10 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 		/* set a status so that mod_accesslog, mod_rrdtool hooks are called
 		 * in plugins_call_handle_request_done() (XXX: or set to 0 to omit) */
 		r->http_status = 100; /* XXX: what if con->state == CON_STATE_ERROR? */
+		/*if (r->http_status)*/
+			plugins_call_handle_request_done(r);
+		connection_handle_shutdown(con);
+		return;
 	}
 
 	/* call request_done hook if http_status set (e.g. to log request) */
