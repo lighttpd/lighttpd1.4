@@ -2333,6 +2333,7 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
     buffer_blank(&r->uri.authority);
 
     hctx->ssl_ctx = p->ssl_ctxs[srv_sock->sidx].ssl_ctx;
+    if (NULL == hctx->ssl_ctx) hctx->ssl_ctx = p->ssl_ctxs[0].ssl_ctx;
     mbedtls_ssl_init(&hctx->ssl);
     int rc = mbedtls_ssl_setup(&hctx->ssl, hctx->ssl_ctx);
     if (0 == rc) {

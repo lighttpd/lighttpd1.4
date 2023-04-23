@@ -2308,7 +2308,8 @@ CONNECTION_FUNC(mod_nss_handle_con_accept)
     con->plugin_ctx[p->id] = hctx;
     buffer_blank(&r->uri.authority);
 
-    plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
+    plugin_ssl_ctx *s = p->ssl_ctxs + srv_sock->sidx;
+    if (NULL == s->model) s = p->ssl_ctxs; /*(inherit from global scope)*/
     hctx->ssl_session_ticket = s->ssl_session_ticket;
 
     con->network_read = connection_read_cq_ssl;

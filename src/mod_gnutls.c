@@ -2605,7 +2605,8 @@ CONNECTION_FUNC(mod_gnutls_handle_con_accept)
     con->plugin_ctx[p->id] = hctx;
     buffer_blank(&r->uri.authority);
 
-    plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
+    plugin_ssl_ctx *s = p->ssl_ctxs + srv_sock->sidx;
+    if (NULL == s->priority_cache) s = p->ssl_ctxs; /*(inherit from global)*/
     hctx->ssl_session_ticket = s->ssl_session_ticket;
     int flags = GNUTLS_SERVER | GNUTLS_NO_SIGNAL | GNUTLS_NONBLOCK;
              /* ??? add feature: GNUTLS_ENABLE_EARLY_START ??? */

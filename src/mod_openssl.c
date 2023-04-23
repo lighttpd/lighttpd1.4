@@ -2694,6 +2694,30 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
   #endif
 
     free(srvplug.cvlist);
+
+  #if 0 /*(alt: inherit from global scope in mod_openssl_handle_con_accept()*/
+    if (defaults.ssl_enabled) {
+      #if 0 /* used == 0; priv_defaults hook is called before network_init() */
+        for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
+            if (!srv->srv_sockets.ptr[i]->is_ssl) continue;
+            plugin_ssl_ctx *s = p->ssl_ctxs + srv->srv_sockets.ptr[i]->sidx;
+            if (!s->ssl_ctx)/*(no ssl.* directives; inherit from global scope)*/
+                *s = *p->ssl_ctxs;/*(copy struct of ssl_ctx from global scope)*/
+        }
+      #endif
+        for (uint32_t i = 1; i < srv->config_context->used; ++i) {
+            config_cond_info cfginfo;
+            config_get_config_cond_info(&cfginfo, (uint32_t)i);
+            if (cfginfo.comp != COMP_SERVER_SOCKET) continue;
+            plugin_ssl_ctx * const s = p->ssl_ctxs + i;
+            if (!s->ssl_ctx)
+                *s = *p->ssl_ctxs;/*(copy struct of ssl_ctx from global scope)*/
+                /* note: copied even when ssl.engine = "disabled",
+                 * even though config will not be used when disabled */
+        }
+    }
+  #endif
+
     return rc;
 }
 
@@ -3318,7 +3342,8 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
     con->plugin_ctx[p->id] = hctx;
     buffer_blank(&r->uri.authority);
 
-    plugin_ssl_ctx * const s = p->ssl_ctxs + srv_sock->sidx;
+    plugin_ssl_ctx *s = p->ssl_ctxs + srv_sock->sidx;
+    if (NULL == s->ssl_ctx) s = p->ssl_ctxs; /*(inherit from global scope)*/
     hctx->ssl = SSL_new(s->ssl_ctx);
     if (NULL != hctx->ssl
         && SSL_set_app_data(hctx->ssl, hctx)
