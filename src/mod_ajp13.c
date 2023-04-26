@@ -583,8 +583,8 @@ ajp13_create_env (handler_ctx * const hctx)
         if (0 == method_byte) break;
         x[5] = method_byte;
         /* protocol */
-        const char * const proto = get_http_version_name(r->http_version);
-        n = ajp13_enc_string(x, n, proto, strlen(proto));
+        const buffer * const proto = http_version_buf(r->http_version);
+        n = ajp13_enc_string(x, n, BUF_PTR_LEN(proto));
         if (0 == n) break;
         /* req_uri */
         n = ajp13_enc_string(x, n, BUF_PTR_LEN(&r->uri.path));

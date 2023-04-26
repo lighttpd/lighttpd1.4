@@ -716,7 +716,7 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
               case HTTP_HEADER_H2_METHOD:
                 if (__builtin_expect( (HTTP_METHOD_UNSET != r->http_method), 0))
                     break;
-                r->http_method = get_http_method_key(v, vlen);
+                r->http_method = http_method_key_get(v, vlen);
                 if (HTTP_METHOD_UNSET >= r->http_method)
                     return http_request_header_line_invalid(r, 501,
                       "unknown http-method -> 501");
@@ -914,7 +914,7 @@ static int http_request_parse_reqline(request_st * const restrict r, const char 
         return http_request_header_line_invalid(r, 400, "incomplete request line -> 400");
   #endif
 
-    r->http_method = get_http_method_key(ptr, i);
+    r->http_method = http_method_key_get(ptr, i);
     if (HTTP_METHOD_UNSET >= r->http_method)
         return http_request_header_line_invalid(r, 501, "unknown http-method -> 501");
 

@@ -8,9 +8,10 @@
 #include "http_kv.c"
 
 static void test_http_kv_tables (void) {
-    assert(0 == strcmp(get_http_version_name(HTTP_VERSION_2),   "HTTP/2.0"));
-    assert(0 == strcmp(get_http_version_name(HTTP_VERSION_1_1), "HTTP/1.1"));
-    assert(0 == strcmp(get_http_version_name(HTTP_VERSION_1_0), "HTTP/1.0"));
+    assert(0 == strcmp(http_version_buf(HTTP_VERSION_3)->ptr,   "HTTP/3.0"));
+    assert(0 == strcmp(http_version_buf(HTTP_VERSION_2)->ptr,   "HTTP/2.0"));
+    assert(0 == strcmp(http_version_buf(HTTP_VERSION_1_1)->ptr, "HTTP/1.1"));
+    assert(0 == strcmp(http_version_buf(HTTP_VERSION_1_0)->ptr, "HTTP/1.0"));
 
     /* TODO (more) */
 }

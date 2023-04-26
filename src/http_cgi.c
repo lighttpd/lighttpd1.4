@@ -224,9 +224,8 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
     const buffer * const m = http_method_buf(r->http_method);
     rc |= cb(vdata, CONST_STR_LEN("REQUEST_METHOD"), BUF_PTR_LEN(m));
 
-    s = get_http_version_name(r->http_version);
-    force_assert(s);
-    rc |= cb(vdata, CONST_STR_LEN("SERVER_PROTOCOL"), s, strlen(s));
+    const buffer * const v = http_version_buf(r->http_version);
+    rc |= cb(vdata, CONST_STR_LEN("SERVER_PROTOCOL"), BUF_PTR_LEN(v));
 
     if (r->conf.server_tag) {
         s = r->conf.server_tag->ptr;

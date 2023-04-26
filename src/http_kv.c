@@ -18,12 +18,13 @@ typedef struct {
 	const char *value;
 } keyvalue;
 
-static const keyvalue http_versions[] = {
-	{ HTTP_VERSION_2,   CONST_LEN_STR("HTTP/2.0") }, /* SERVER_PROTOCOL */
-	{ HTTP_VERSION_3,   CONST_LEN_STR("HTTP/3.0") },
-	{ HTTP_VERSION_1_1, CONST_LEN_STR("HTTP/1.1") },
-	{ HTTP_VERSION_1_0, CONST_LEN_STR("HTTP/1.0") },
-	{ HTTP_VERSION_UNSET, 0, NULL }
+/* HTTP version string as SERVER_PROTOCOL string */
+static const buffer http_versions[] = { /*(must by ordered by enum)*/
+    { CONST_STR_LEN("HTTP/1.0")+1, 0 } /* HTTP_VERSION_1_0 */
+   ,{ CONST_STR_LEN("HTTP/1.1")+1, 0 } /* HTTP_VERSION_1_1 */
+   ,{ CONST_STR_LEN("HTTP/2.0")+1, 0 } /* HTTP_VERSION_2 */
+   ,{ CONST_STR_LEN("HTTP/3.0")+1, 0 } /* HTTP_VERSION_3 */
+   ,{ "", 0, 0 }
 };
 
 static const buffer http_methods[] = {
@@ -140,7 +141,17 @@ static const keyvalue http_status[] = {
 };
 
 
-const buffer *http_method_buf (http_method_t i)
+const buffer *
+http_version_buf (http_version_t i)
+{
+    return ((unsigned int)i < sizeof(http_versions)/sizeof(*http_versions))
+      ? http_versions+i
+      : http_versions+sizeof(http_versions)/sizeof(*http_versions)-1;
+}
+
+
+const buffer *
+http_method_buf (http_method_t i)
 {
     return ((unsigned int)i < sizeof(http_methods)/sizeof(*http_methods)-2)
       ? http_methods+i
@@ -149,9 +160,9 @@ const buffer *http_method_buf (http_method_t i)
 }
 
 
-__attribute_noinline__
 __attribute_pure__
-static const keyvalue * keyvalue_from_key (const keyvalue *kv, const int k)
+static const keyvalue *
+keyvalue_from_key (const keyvalue *kv, const int k)
 {
     /*(expects sentinel to have key == -1 and value == NULL)*/
     while (kv->key != k && kv->key != -1) ++kv;
@@ -159,35 +170,9 @@ static const keyvalue * keyvalue_from_key (const keyvalue *kv, const int k)
 }
 
 
-#if 0 /*(unused)*/
-__attribute_pure__
-static int keyvalue_get_key(const keyvalue *kv, const char * const s, const unsigned int slen)
+http_method_t
+http_method_key_get (const char *s, const size_t slen)
 {
-    /*(expects sentinel to have key == -1 and vlen == 0)*/
-    while (kv->vlen && (kv->vlen != slen || 0 != memcmp(kv->value, s, slen)))
-        ++kv;
-    return kv->key;
-}
-#endif
-
-
-const char *get_http_version_name(int i) {
-    return keyvalue_from_key(http_versions, i)->value;
-}
-
-#if 0 /*(unused)*/
-const char *get_http_status_name(int i) {
-    return keyvalue_from_key(http_status, i)->value;
-}
-#endif
-
-#if 0 /*(unused)*/
-int get_http_version_key(const char *s, size_t slen) {
-    return keyvalue_get_key(http_versions, s, (unsigned int)slen);
-}
-#endif
-
-http_method_t get_http_method_key(const char *s, const size_t slen) {
     if (slen == 3 && s[0] == 'G' && s[1] == 'E' && s[2] == 'T')
         return HTTP_METHOD_GET;
     const buffer *kv = http_methods+1; /*(step over http_methods[0] ("GET"))*/
@@ -203,7 +188,9 @@ http_method_t get_http_method_key(const char *s, const size_t slen) {
 }
 
 
-void http_status_append(buffer * const b, const int status) {
+void
+http_status_append (buffer * const b, const int status)
+{
     if (200 == status) { /*(short-circuit common case)*/
         buffer_append_string_len(b, CONST_STR_LEN("200 OK"));
         return;
@@ -216,10 +203,4 @@ void http_status_append(buffer * const b, const int status) {
         buffer_append_int(b, status);
         buffer_append_char(b, ' ');
     }
-}
-
-void http_version_append(buffer * const b, const http_version_t version) {
-    const keyvalue * const kv = keyvalue_from_key(http_versions, version);
-    if (__builtin_expect( (0 != kv->vlen), 1))
-        buffer_append_string_len(b, kv->value, kv->vlen);
 }
