@@ -50,6 +50,7 @@ typedef struct stat_cache {
 static stat_cache sc;
 
 
+__attribute_noinline__
 static void * stat_cache_sptree_find(splay_tree ** const sptree,
                                      const char * const name,
                                      uint32_t len)
