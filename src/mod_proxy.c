@@ -402,7 +402,7 @@ static const buffer * http_header_remap_host_match (buffer *b, size_t off, http_
                  * (If no Host in client request, then matching against empty
                  *  string will probably not match, and no remap will be
                  *  performed) */
-                k = is_req
+                k = is_req || NULL == remap_hdrs->forwarded_host
                   ? remap_hdrs->http_host
                   : remap_hdrs->forwarded_host;
                 if (NULL == k) continue;
