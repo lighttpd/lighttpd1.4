@@ -757,13 +757,7 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 	if (cq->bytes_out == (off_t)r->reqbody_length && !hctx->conf.upgrade) {
 		/* sent all request body input */
 		/* close connection to the cgi-script */
-		if (-1 == hctx->fdtocgi) { /*(received request body sent in initial send to pipe buffer)*/
-			--r->con->srv->cur_fds;
-			if (fdio_close_pipe(fd))
-				log_perror(r->conf.errh, __FILE__, __LINE__, "cgi stdin close %d failed", fd);
-		} else {
-			cgi_connection_close_fdtocgi(hctx); /*(closes only hctx->fdtocgi)*/
-		}
+		cgi_connection_close_fdtocgi(hctx); /*(closes only hctx->fdtocgi)*/
 	} else {
 		off_t cqlen = chunkqueue_length(cq);
 		if (cq->bytes_in != r->reqbody_length && cqlen < 65536 - 16384) {
@@ -1049,8 +1043,11 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		}
 		else if (0 == fdevent_fcntl_set_nb(to_cgi_fds[1])
 		         && 0 == cgi_write_request(hctx, to_cgi_fds[1])) {
+			if (-1 == hctx->fdtocgi) /*(body fully sent in initial write)*/
+				fdio_close_pipe(to_cgi_fds[1]);
+			else /*(fdevent_register() was called on fd opened further above)*/
+				++r->con->srv->cur_fds;
 			fdio_close_pipe(to_cgi_fds[0]);
-			++r->con->srv->cur_fds;
 		}
 		else {
 			fdio_close_pipe(to_cgi_fds[0]);
