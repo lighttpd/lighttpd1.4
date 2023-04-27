@@ -730,15 +730,23 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 		else if (wr < 0) {
 				switch(errno) {
 				case EAGAIN:
+			  #ifdef EWOULDBLOCK
+			  #if EAGAIN != EWOULDBLOCK
+				case EWOULDBLOCK:
+			  #endif
+			  #endif
 				case EINTR:
 					/* ignore and try again later */
 					break;
 				case EPIPE:
 				case ECONNRESET:
 					/* connection closed */
+				   #if 0 /*(not necessarily an error for CGI to close input)*/
 					log_error(r->conf.errh, __FILE__, __LINE__,
 					  "failed to send post data to cgi, connection closed by CGI");
+				   #endif
 					/* skip all remaining data */
+					/*(this may repeat if streaming and more data is received)*/
 					chunkqueue_mark_written(cq, chunkqueue_length(cq));
 					break;
 				default:
