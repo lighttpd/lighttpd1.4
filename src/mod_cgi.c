@@ -440,13 +440,13 @@ static void cgi_pid_del(plugin_data *p, cgi_pid_t *cgi_pid) {
 }
 
 
+__attribute_noinline__
 static void cgi_connection_close_fdtocgi(handler_ctx *hctx) {
 	/*(closes only hctx->fdtocgi)*/
 	if (-1 == hctx->fdtocgi) return;
-	struct fdevents * const ev = hctx->ev;
-	fdevent_fdnode_event_del(ev, hctx->fdntocgi);
+	fdevent_fdnode_event_del(hctx->ev, hctx->fdntocgi);
 	/*fdevent_unregister(ev, hctx->fdntocgi);*//*(handled below)*/
-	fdevent_sched_close(ev, hctx->fdntocgi);
+	fdevent_sched_close(hctx->ev, hctx->fdntocgi);
 	hctx->fdntocgi = NULL;
 	hctx->fdtocgi = -1;
 }
@@ -459,11 +459,10 @@ static void cgi_connection_close(handler_ctx *hctx) {
 	 */
 
 	if (hctx->fd != -1) {
-		struct fdevents * const ev = hctx->ev;
 		/* close connection to the cgi-script */
-		fdevent_fdnode_event_del(ev, hctx->fdn);
+		fdevent_fdnode_event_del(hctx->ev, hctx->fdn);
 		/*fdevent_unregister(ev, hctx->fdn);*//*(handled below)*/
-		fdevent_sched_close(ev, hctx->fdn);
+		fdevent_sched_close(hctx->ev, hctx->fdn);
 		hctx->fdn = NULL;
 	}
 
@@ -593,7 +592,6 @@ static handler_t cgi_response_headers(request_st * const r, struct http_response
 
 
 __attribute_cold__
-__attribute_noinline__
 static handler_t cgi_local_redir(request_st * const r, handler_ctx * const hctx) {
     buffer_clear(hctx->response);
     chunk_buffer_yield(hctx->response);
@@ -788,10 +786,8 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 }
 
 static int cgi_create_env(request_st * const r, plugin_data * const p, handler_ctx * const hctx, buffer * const cgi_handler) {
-	char *args[3];
 	int to_cgi_fds[2];
 	int from_cgi_fds[2];
-	UNUSED(p);
 
 	if (!buffer_is_blank(cgi_handler)) {
 		if (NULL == stat_cache_path_stat(cgi_handler)) {
@@ -879,6 +875,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	env->b = chunk_buffer_acquire();
 	env->boffsets = chunk_buffer_acquire();
 	buffer_truncate(env->b, 0);
+	char *args[3];
 	char **envp;
 	{
 		size_t i = 0;
@@ -1329,11 +1326,13 @@ static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
                   "CGI pid %d died with signal %d", pid, WTERMSIG(status));
             }
         }
+      #if 0 /*(should not happen; lighttpd not catching STOP or CONT)*/
         else {
             log_error_st *errh = hctx ? hctx->r->conf.errh : srv->errh;
             log_error(errh, __FILE__, __LINE__,
               "CGI pid %d ended unexpectedly", pid);
         }
+      #endif
 
         cgi_pid_del(p, cgi_pid);
         return HANDLER_FINISHED;
