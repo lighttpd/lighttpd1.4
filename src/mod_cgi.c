@@ -793,27 +793,54 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 	return 0;
 }
 
-static int cgi_create_env(request_st * const r, plugin_data * const p, handler_ctx * const hctx, buffer * const cgi_handler) {
-	int to_cgi_fds[2];
-	int from_cgi_fds[2];
+__attribute_cold__
+static int cgi_create_err (request_st * const r, int cgi_fds[4], const char *msg)
+{
+    /* log error with errno prior to calling close() (might change errno) */
+  #ifdef _WIN32
+    if (msg && (0 == strcmp(msg,"socketpair()") || 0 == strcmp(msg,"fcntl()")))
+        log_serror(r->conf.errh, __FILE__, __LINE__, "%s", msg);
+    else
+  #endif
+    if (msg)
+        log_perror(r->conf.errh, __FILE__, __LINE__, "%s", msg);
 
+    int * const to_cgi_fds = cgi_fds; /* some fd might be -1; not checking */
+    if (0 == r->reqbody_length) {
+        fdio_close_file(to_cgi_fds[0]); /* /dev/null */
+    }
+    else if (-1 != to_cgi_fds[1]) { /* not (shared) open file in chunkqueue */
+        fdio_close_pipe(to_cgi_fds[0]);
+        fdio_close_pipe(to_cgi_fds[1]);
+    }
+
+    int * const from_cgi_fds = cgi_fds+2;/* some fd might be -1; not checking */
+    fdio_close_pipe(from_cgi_fds[0]);
+    fdio_close_pipe(from_cgi_fds[1]);
+
+    return -1;
+}
+
+static int cgi_create_env(request_st * const r, plugin_data * const p, handler_ctx * const hctx, buffer * const cgi_handler) {
+	int cgi_fds[4] = { -1, -1, -1, -1 };
+	int * const to_cgi_fds = cgi_fds;
+	int * const from_cgi_fds = to_cgi_fds+2;
+
+  #if 0
+	/*(posix_spawn() should return error if exec target does not exist)*/
 	if (!buffer_is_blank(cgi_handler)) {
 		if (NULL == stat_cache_path_stat(cgi_handler)) {
-			log_perror(r->conf.errh, __FILE__, __LINE__,
-			  "stat for cgi-handler %s", cgi_handler->ptr);
-			return -1;
+			return cgi_create_err(r, cgi_fds, cgi_handler->ptr);
 		}
 	}
+  #endif
 
-	to_cgi_fds[0] = -1;
-	to_cgi_fds[1] = -1;
 	if (0 == r->reqbody_length) {
 		/* future: might keep fd open in p->devnull for reuse
 		 * and dup() here, or do not close() (later in this func) */
 		to_cgi_fds[0] = fdevent_open_devnull();
 		if (-1 == to_cgi_fds[0]) {
-			log_perror(r->conf.errh, __FILE__, __LINE__, "open /dev/null");
-			return -1;
+			return cgi_create_err(r, cgi_fds, "open() /dev/null");
 		}
 	}
 	else if (!(r->conf.stream_request_body /*(if not streaming request body)*/
@@ -825,34 +852,26 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 			/* request body in single tempfile if not streaming req body */
 			if (-1 == c->file.fd
 			    && 0 != chunkqueue_open_file_chunk(cq, r->conf.errh))
-				return -1;
+				return cgi_create_err(r, cgi_fds, NULL);
 		  #ifdef __COVERITY__
 			force_assert(-1 != c->file.fd);
 		  #endif
 			if (-1 == lseek(c->file.fd, 0, SEEK_SET)) {
-				log_perror(r->conf.errh, __FILE__, __LINE__,
-				  "lseek %s", c->mem->ptr);
-				return -1;
+				return cgi_create_err(r, cgi_fds, c->mem->ptr);
 			}
 			to_cgi_fds[0] = c->file.fd;
 		}
 	}
 
   #ifdef _WIN32
-	if (0 != fdevent_socketpair_cloexec(AF_INET,SOCK_STREAM,0,from_cgi_fds)) {
-		log_serror(r->conf.errh, __FILE__, __LINE__, "socketpair()");
-		if (0 == r->reqbody_length)
-			fdio_close_file(to_cgi_fds[0]);
-		return -1;
-	}
 	if (-1 == to_cgi_fds[0]) {
-		if (0 != fdevent_socketpair_cloexec(AF_INET,SOCK_STREAM,0,to_cgi_fds)) {
-			log_serror(r->conf.errh, __FILE__, __LINE__, "socketpair()");
-			fdio_close_socket(from_cgi_fds[0]);
-			fdio_close_socket(from_cgi_fds[1]);
-			return -1;
-		}
+		if (0 != fdevent_socketpair_cloexec(AF_INET,SOCK_STREAM,0,to_cgi_fds))
+			return cgi_create_err(r, cgi_fds, "socketpair()");
+		if (0 != fdevent_fcntl_set_nb(to_cgi_fds[1]))
+			return cgi_create_err(r, cgi_fds, "fcntl()");
 	}
+	if (0 != fdevent_socketpair_cloexec(AF_INET,SOCK_STREAM,0,from_cgi_fds))
+		return cgi_create_err(r, cgi_fds, "socketpair()");
 	/* fdevent_socketpair_cloexec() creates a pair of connected sockets with
 	 * one socket (sv[0]) non-overlapped, and one socket (sv[1]) overlapped.
 	 * The socket used for redirected I/O in child must be non-overlapped,
@@ -862,22 +881,17 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	from_cgi_fds[1] = tmpfd;
   #else
 	unsigned int bufsz_hint = 16384;
-	if (-1 == to_cgi_fds[0] && fdevent_pipe_cloexec(to_cgi_fds, bufsz_hint)) {
-		log_perror(r->conf.errh, __FILE__, __LINE__, "pipe()");
-		return -1;
+	if (-1 == to_cgi_fds[0]) {
+		if (0 != fdevent_pipe_cloexec(to_cgi_fds, bufsz_hint))
+			return cgi_create_err(r, cgi_fds, "pipe()");
+		if (0 != fdevent_fcntl_set_nb(to_cgi_fds[1]))
+			return cgi_create_err(r, cgi_fds, "fcntl()");
 	}
-	if (fdevent_pipe_cloexec(from_cgi_fds, bufsz_hint)) {
-		log_perror(r->conf.errh, __FILE__, __LINE__, "pipe()");
-		if (0 == r->reqbody_length) {
-			fdio_close_file(to_cgi_fds[0]);
-		}
-		else if (-1 != to_cgi_fds[1]) {
-			fdio_close_pipe(to_cgi_fds[0]);
-			fdio_close_pipe(to_cgi_fds[1]);
-		}
-		return -1;
-	}
+	if (fdevent_pipe_cloexec(from_cgi_fds, bufsz_hint))
+		return cgi_create_err(r, cgi_fds, "pipe()");
   #endif
+	if (-1 == fdevent_fcntl_set_nb(from_cgi_fds[0]))
+		return cgi_create_err(r, cgi_fds, "fcntl()");
 
 	env_accum * const env = &p->env;
 	env->b = chunk_buffer_acquire();
@@ -1020,23 +1034,13 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 
 	if (-1 == pid) {
 		/* log error with errno prior to calling close() (might change errno) */
-		log_perror(r->conf.errh, __FILE__, __LINE__, "fork failed");
+		log_perror(r->conf.errh, __FILE__, __LINE__, "fork/spawn %s", args[0]);
 		if (dfd >= 0) fdio_close_dirfd(dfd);
-		fdio_close_pipe(from_cgi_fds[0]);
-		fdio_close_pipe(from_cgi_fds[1]);
-		if (0 == r->reqbody_length) {
-			fdio_close_file(to_cgi_fds[0]);
-		}
-		else if (-1 != to_cgi_fds[1]) {
-			fdio_close_pipe(to_cgi_fds[0]);
-			fdio_close_pipe(to_cgi_fds[1]);
-		}
-		return -1;
-	} else {
-		if (dfd >= 0) fdio_close_dirfd(dfd);
-		fdio_close_pipe(from_cgi_fds[1]);
+		return cgi_create_err(r, cgi_fds, NULL);
+	}
 
-		hctx->fd = from_cgi_fds[0];
+	{
+		if (dfd >= 0) fdio_close_dirfd(dfd);
 		hctx->cgi_pid = cgi_pid_add(p, pid, hctx);
 
 		if (0 == r->reqbody_length) {
@@ -1046,37 +1050,24 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 			chunkqueue * const cq = &r->reqbody_queue;
 			chunkqueue_mark_written(cq, chunkqueue_length(cq));
 		}
-		else if (0 == fdevent_fcntl_set_nb(to_cgi_fds[1])
-		         && 0 == cgi_write_request(hctx, to_cgi_fds[1])) {
+		else if (0 != cgi_write_request(hctx, to_cgi_fds[1])) {
+			return cgi_create_err(r, cgi_fds, NULL);
+		}
+		else {
 			if (-1 == hctx->fdtocgi) /*(body fully sent in initial write)*/
 				fdio_close_pipe(to_cgi_fds[1]);
 			else /*(fdevent_register() was called on fd opened further above)*/
 				++r->con->srv->cur_fds;
 			fdio_close_pipe(to_cgi_fds[0]);
 		}
-		else {
-			fdio_close_pipe(to_cgi_fds[0]);
-			fdio_close_pipe(to_cgi_fds[1]);
-			/*(hctx->fd not yet registered with fdevent, so manually
-			 * cleanup here; see fdevent_register() further below)*/
-			fdio_close_pipe(hctx->fd);
-			hctx->fd = -1;
-			cgi_connection_close(hctx);
-			return -1;
-		}
 
+		fdio_close_pipe(from_cgi_fds[1]);
 		++r->con->srv->cur_fds;
-
+		hctx->fd = from_cgi_fds[0];
 		struct fdevents * const ev = hctx->ev;
 		hctx->fdn = fdevent_register(ev, hctx->fd, cgi_handle_fdevent, hctx);
-		if (-1 == fdevent_fcntl_set_nb(hctx->fd)) {
-			log_perror(r->conf.errh, __FILE__, __LINE__, "fcntl failed");
-			cgi_connection_close(hctx);
-			return -1;
-		}
 		hctx->read_ts = log_monotonic_secs;
 		fdevent_fdnode_event_set(ev, hctx->fdn, FDEVENT_IN | FDEVENT_RDHUP);
-
 		return 0;
 	}
 }
