@@ -282,14 +282,15 @@ fdevent_sched_run (fdevents * const ev)
 {
     for (fdnode *fdn = ev->pendclose; fdn; ) {
         int fd = fdn->fd;
+        /*(inlined fdio_close_socket() for tighter loop; worthwhile?)*/
       #ifdef _WIN32
         if (0 != closesocket(fd)) /* WSAPoll() valid only on SOCKET */
       #else
         if (0 != close(fd))
       #endif
             log_serror(ev->errh, __FILE__, __LINE__, "close() %d", fd);
-        else
-            --(*ev->cur_fds);
+
+        --(*ev->cur_fds);
 
         fdnode * const fdn_tmp = fdn;
         fdn = (fdnode *)fdn->ctx; /* next */

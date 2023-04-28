@@ -88,9 +88,7 @@ static void connection_close(connection *con) {
 	fdevent_fdnode_event_del(srv->ev, con->fdn);
 	fdevent_unregister(srv->ev, con->fdn);
 	con->fdn = NULL;
-	if (0 == fdio_close_socket(con->fd))
-		--srv->cur_fds;
-	else
+	if (0 != fdio_close_socket(con->fd))
 		log_serror(r->conf.errh, __FILE__, __LINE__,
 		  "(warning) close: %d", con->fd);
 
@@ -100,6 +98,7 @@ static void connection_close(connection *con) {
 	}
 	con->fd = -1;
 
+	--srv->cur_fds;
 	connection_del(srv, con);
 }
 
