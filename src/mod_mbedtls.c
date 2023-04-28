@@ -2358,8 +2358,10 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
      * overlap, and so this debug setting is not reset upon connection close.
      * Once enabled, debug hook will remain so for this mbedtls_ssl_config */
     if (hctx->conf.ssl_log_noise) {/* volume level for debug message callback */
+      #ifdef MBEDTLS_DEBUG_C
       #if MBEDTLS_VERSION_NUMBER >= 0x02000000 /* mbedtls 2.0.0 */
         mbedtls_debug_set_threshold(hctx->conf.ssl_log_noise);
+      #endif
       #endif
         mbedtls_ssl_conf_dbg(hctx->ssl_ctx, mod_mbedtls_debug_cb,
                              (void *)(intptr_t)hctx->conf.ssl_log_noise);
