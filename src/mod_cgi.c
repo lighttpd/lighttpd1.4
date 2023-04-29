@@ -418,6 +418,8 @@ static cgi_pid_t * cgi_pid_add(plugin_data *p, pid_t pid, handler_ctx *hctx) {
     cgi_pid->hctx = hctx;
     cgi_pid->prev = NULL;
     cgi_pid->next = p->cgi_pid;
+    if (cgi_pid->next)
+        cgi_pid->next->prev = cgi_pid;
     p->cgi_pid = cgi_pid;
     return cgi_pid;
 }
