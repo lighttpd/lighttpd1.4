@@ -601,14 +601,14 @@ int fdevent_kill (pid_t pid, int sig) {
 
 #include "sys-wait.h"
 
-int fdevent_waitpid(pid_t pid, int * const status, int nb) {
+pid_t fdevent_waitpid(pid_t pid, int * const status, int nb) {
     const int flags = nb ? WNOHANG : 0;
     pid_t rv;
     do { rv = waitpid(pid, status, flags); } while (-1 == rv && errno == EINTR);
     return rv;
 }
 
-int fdevent_waitpid_intr(pid_t pid, int * const status) {
+pid_t fdevent_waitpid_intr(pid_t pid, int * const status) {
     return waitpid(pid, status, 0);
 }
 

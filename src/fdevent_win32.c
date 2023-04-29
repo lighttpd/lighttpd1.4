@@ -404,7 +404,7 @@ int fdevent_kill (pid_t pid, int sig)
 }
 
 
-int fdevent_waitpid (pid_t pid, int * const status, int nb)
+pid_t fdevent_waitpid (pid_t pid, int * const status, int nb)
 {
 
   #if 0
@@ -492,7 +492,7 @@ int fdevent_waitpid (pid_t pid, int * const status, int nb)
 }
 
 
-int fdevent_waitpid_intr (pid_t pid, int * const status)
+pid_t fdevent_waitpid_intr (pid_t pid, int * const status)
 {
     return fdevent_waitpid(pid, status, 0);
 }

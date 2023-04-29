@@ -116,8 +116,8 @@ int fdevent_open_dirname(char *path, int symlinks);
 int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr);
 pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd);
 #endif
-int fdevent_waitpid(pid_t pid, int *status, int nb);
-int fdevent_waitpid_intr(pid_t pid, int *status);
+pid_t fdevent_waitpid(pid_t pid, int *status, int nb);
+pid_t fdevent_waitpid_intr(pid_t pid, int *status);
 int fdevent_kill(pid_t pid, int sig);
 
 #ifdef _WIN32

@@ -383,7 +383,8 @@ static void gw_proc_waitpid_log(const gw_host * const host, const gw_proc * cons
 }
 
 static int gw_proc_waitpid(gw_host *host, gw_proc *proc, log_error_st *errh) {
-    int rc, status;
+    pid_t rc;
+    int status;
 
     if (!proc->is_local) return 0;
     if (proc->pid <= 0) return 0;
