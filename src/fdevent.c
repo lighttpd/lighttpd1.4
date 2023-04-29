@@ -717,7 +717,7 @@ int fdevent_set_so_reuseaddr (const int fd, const int opt)
 }
 
 
-#include <sys/stat.h>
+#include "sys-stat.h"
 #include "ck.h"
 #include "log.h"
 __attribute_cold__ /*(convenience routine for use at config at startup)*/
