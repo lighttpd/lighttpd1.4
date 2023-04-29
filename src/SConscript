@@ -64,6 +64,8 @@ common_src = Split("base64.c buffer.c burl.c log.c \
 	http-header-glue.c \
 	http_cgi.c \
 	http_date.c \
+	plugin.c \
+	reqpool.c \
 	request.c \
 	sock_addr.c \
 	rand.c \
@@ -73,8 +75,7 @@ common_src = Split("base64.c buffer.c burl.c log.c \
 	ck.c \
 ")
 
-src = Split("server.c response.c connections.c h1.c h2.c reqpool.c \
-	plugin.c \
+src = Split("server.c response.c connections.c h1.c h2.c \
 	sock_addr_cache.c \
 	ls-hpack/lshpack.c \
 	algo_xxhash.c \

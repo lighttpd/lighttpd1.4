@@ -58,9 +58,11 @@ common_src=base64.c buffer.c burl.c log.c \
 	http-header-glue.c \
 	http_cgi.c \
 	http_date.c \
-	rand.c \
+	plugin.c \
+	reqpool.c \
 	request.c \
 	sock_addr.c \
+	rand.c \
 	fdlog_maint.c \
 	fdlog.c \
 	sys-setjmp.c \
@@ -68,8 +70,7 @@ common_src=base64.c buffer.c burl.c log.c \
 
 common_src += fdevent_win32.c fs_win32.c
 
-src = server.c response.c connections.c h1.c h2.c reqpool.c \
-	plugin.c \
+src = server.c response.c connections.c h1.c h2.c \
 	sock_addr_cache.c \
 	network.c \
 	network_write.c \

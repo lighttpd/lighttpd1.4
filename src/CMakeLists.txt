@@ -844,6 +844,8 @@ set(COMMON_SRC
 	http-header-glue.c
 	http_cgi.c
 	http_date.c
+	plugin.c
+	reqpool.c
 	request.c
 	sock_addr.c
 	rand.c
@@ -920,8 +922,6 @@ set(SERVER_SRC
 	connections.c
 	h1.c
 	h2.c
-	reqpool.c
-	plugin.c
 	sock_addr_cache.c
 	ls-hpack/lshpack.c
 	algo_xxhash.c
