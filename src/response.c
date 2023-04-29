@@ -27,44 +27,6 @@
 
 
 __attribute_cold__
-void
-http_response_delay (connection * const con)
-{
-    if (config_feature_bool(con->srv, "auth.delay-invalid-creds", 1)){
-        /*(delay sending response)*/
-        con->is_writable = 0;
-        con->traffic_limit_reached = 1;
-    }
-}
-
-
-int
-http_response_omit_header (request_st * const r, const data_string * const ds)
-{
-    const size_t klen = buffer_clen(&ds->key);
-    if (klen == sizeof("X-Sendfile")-1
-        && buffer_eq_icase_ssn(ds->key.ptr, CONST_STR_LEN("X-Sendfile")))
-        return 1;
-    if (klen >= sizeof("X-LIGHTTPD-")-1
-        && buffer_eq_icase_ssn(ds->key.ptr, CONST_STR_LEN("X-LIGHTTPD-"))) {
-        if (klen == sizeof("X-LIGHTTPD-KBytes-per-second")-1
-            && buffer_eq_icase_ssn(ds->key.ptr+sizeof("X-LIGHTTPD-")-1,
-                                   CONST_STR_LEN("KBytes-per-second"))) {
-            /* "X-LIGHTTPD-KBytes-per-second" */
-            off_t limit = strtol(ds->value.ptr, NULL, 10) << 10; /*(*=1024)*/
-            if (limit > 0
-                && (limit < r->conf.bytes_per_second
-                    || 0 == r->conf.bytes_per_second)) {
-                r->conf.bytes_per_second = limit;
-            }
-        }
-        return 1;
-    }
-    return 0;
-}
-
-
-__attribute_cold__
 static handler_t
 http_response_physical_path_error (request_st * const r, const int code, const char * const msg)
 {
