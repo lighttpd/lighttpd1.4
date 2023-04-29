@@ -606,7 +606,6 @@ if get_option('build_static')
           'mod_webdav.c',
           'mod_wstunnel.c',
         )
-	main_src += builtin_mods
 endif
 
 lemon = executable('lemon',
@@ -678,7 +677,7 @@ executable('lighttpd-angel',
 )
 
 executable('lighttpd', configparser,
-	sources: common_src + main_src,
+	sources: common_src + main_src + builtin_mods,
 	dependencies: [ common_flags, lighttpd_flags
 		, libattr
 		, libcrypto
