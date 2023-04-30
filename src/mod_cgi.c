@@ -795,6 +795,9 @@ static int cgi_write_request(handler_ctx *hctx, int fd) {
 	return 0;
 }
 
+/* lighttpd STDIN_FILENO is reopened to /dev/null, inheritable by children */
+#define MOD_CGI_INHERIT_STDIN_DEV_NULL
+
 __attribute_cold__
 static int cgi_create_err (request_st * const r, int cgi_fds[4], const char *msg)
 {
@@ -809,7 +812,9 @@ static int cgi_create_err (request_st * const r, int cgi_fds[4], const char *msg
 
     int * const to_cgi_fds = cgi_fds; /* some fd might be -1; not checking */
     if (0 == r->reqbody_length) {
+      #ifndef MOD_CGI_INHERIT_STDIN_DEV_NULL
         fdio_close_file(to_cgi_fds[0]); /* /dev/null */
+      #endif
     }
     else if (-1 != to_cgi_fds[1]) { /* not (shared) open file in chunkqueue */
         fdio_close_pipe(to_cgi_fds[0]);
@@ -838,12 +843,12 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
   #endif
 
 	if (0 == r->reqbody_length) {
-		/* future: might keep fd open in p->devnull for reuse
-		 * and dup() here, or do not close() (later in this func) */
+	  #ifndef MOD_CGI_INHERIT_STDIN_DEV_NULL
 		to_cgi_fds[0] = fdevent_open_devnull();
 		if (-1 == to_cgi_fds[0]) {
 			return cgi_create_err(r, cgi_fds, "open() /dev/null");
 		}
+	  #endif
 	}
 	else if (!(r->conf.stream_request_body /*(if not streaming request body)*/
 	           & (FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN))
@@ -866,7 +871,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	}
 
   #ifdef _WIN32
-	if (-1 == to_cgi_fds[0]) {
+	if (-1 == to_cgi_fds[0] && 0 != r->reqbody_length) {
 		if (0 != fdevent_socketpair_cloexec(AF_INET,SOCK_STREAM,0,to_cgi_fds))
 			return cgi_create_err(r, cgi_fds, "socketpair()");
 		if (0 != fdevent_fcntl_set_nb(to_cgi_fds[1]))
@@ -883,7 +888,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	from_cgi_fds[1] = tmpfd;
   #else
 	unsigned int bufsz_hint = 16384;
-	if (-1 == to_cgi_fds[0]) {
+	if (-1 == to_cgi_fds[0] && 0 != r->reqbody_length) {
 		if (0 != fdevent_pipe_cloexec(to_cgi_fds, bufsz_hint))
 			return cgi_create_err(r, cgi_fds, "pipe()");
 		if (0 != fdevent_fcntl_set_nb(to_cgi_fds[1]))
@@ -1046,7 +1051,9 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		hctx->cgi_pid = cgi_pid_add(p, pid, hctx);
 
 		if (0 == r->reqbody_length) {
+		  #ifndef MOD_CGI_INHERIT_STDIN_DEV_NULL
 			fdio_close_file(to_cgi_fds[0]);
+		  #endif
 		}
 		else if (-1 == to_cgi_fds[1]) {
 			chunkqueue * const cq = &r->reqbody_queue;
