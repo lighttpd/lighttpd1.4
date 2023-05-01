@@ -482,6 +482,12 @@ static void cgi_connection_close(handler_ctx *hctx) {
 	}
 	cgi_handler_ctx_free(hctx);
 
+	/* (r->reqbody_queue.upload_temp_file_size might have been changed even
+	 *  with 0 == r->reqbody_length, if hctx->conf.upgrade is set) */
+	if (p->tempfile_accum) /*(and if not streaming)*/
+		chunkqueue_set_tempdirs(&r->reqbody_queue, /* reset sz */
+		                        r->reqbody_queue.tempdirs, 0);
+
 	/* finish response (if not already r->resp_body_started, r->resp_body_finished) */
 	if (r->handler_module == p->self) {
 		http_response_backend_done(r);
@@ -491,8 +497,6 @@ static void cgi_connection_close(handler_ctx *hctx) {
 static handler_t cgi_connection_close_callback(request_st * const r, void *p_d) {
     handler_ctx *hctx = r->plugin_ctx[((plugin_data *)p_d)->id];
     if (hctx) {
-        chunkqueue_set_tempdirs(&r->reqbody_queue, /* reset sz */
-                                r->reqbody_queue.tempdirs, 0);
         cgi_connection_close(hctx);
     }
     return HANDLER_GO_ON;
