@@ -34,6 +34,12 @@ cp "${srcdir}/docroot/"*.html \
    "${srcdir}/docroot/"*.txt \
    "${tmpdir}/servers/www.example.org/pages/"
 
+cp -n "${srcdir}/"*.conf \
+      "${srcdir}/lighttpd.user" \
+      "${srcdir}/lighttpd.htpasswd" \
+      "${srcdir}/var-include-sub.conf" \
+      "${top_builddir}/tests/" || true
+
 # create some content
 touch "${tmpdir}/servers/www.example.org/pages/image.jpg" \
       "${tmpdir}/servers/www.example.org/pages/image.JPG" \
