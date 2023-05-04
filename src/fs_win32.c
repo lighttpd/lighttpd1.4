@@ -6,9 +6,9 @@
  */
 #include "first.h"
 
-#include "fs_win32.h"
-
 #ifdef _WIN32
+
+#include "fs_win32.h"
 
 /* MS filesystem API does not support UTF-8?  WTH?  write our own; not hard */
 

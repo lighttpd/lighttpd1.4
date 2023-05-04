@@ -358,7 +358,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h plugins.h plugin_config.h \
 	http_etag.h array.h \
-	fdevent_impl.h fs_win32.h network_write.h configfile.h \
+	fdevent_impl.h network_write.h configfile.h \
 	sock_addr_cache.h \
 	configparser.h \
 	rand.h \
