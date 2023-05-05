@@ -1701,14 +1701,22 @@ static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const 
     const int fd = fdevent_mkostemp(oldpath, 0);
     if (fd < 0) return;
     int rc = mod_dirlisting_write_cq(fd, &r->write_queue, r->conf.errh);
-    close(fd);
+  #ifdef _WIN32
+    close(fd); /*(rename fails if file is open; MS filesystem limitation)*/
+    fd = -1;
+  #endif
     if (rc && 0 == fdevent_rename(oldpath, newpath)) {
         stat_cache_invalidate_entry(newpath, len);
         /* Cache-Control and ETag (also done in mod_dirlisting_cache_check())*/
         mod_dirlisting_cache_control(r, hctx->conf.cache->max_age);
         if (0 != r->conf.etag_flags) {
             struct stat st;
-            if (0 == fstat(fd, &st)) {
+          #ifdef _WIN32
+            if (0 == stat(newpath, &st))
+          #else
+            if (0 == fstat(fd, &st))
+          #endif
+            {
                 buffer * const vb =
                   http_header_response_set_ptr(r, HTTP_HEADER_ETAG,
                                                CONST_STR_LEN("ETag"));
@@ -1718,6 +1726,9 @@ static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const 
     }
     else
         unlink(oldpath);
+  #ifndef _WIN32
+    close(fd);
+  #endif
 }
 
 
