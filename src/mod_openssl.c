@@ -2276,6 +2276,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       #endif
       #ifdef SSL_OP_ENABLE_KTLS /* openssl 3.0.0 */
         ssloptions |= SSL_OP_ENABLE_KTLS;
+      #ifdef SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE
+        ssloptions |= SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE;
+      #endif
       #endif
 
         /* completely useless identifier;
