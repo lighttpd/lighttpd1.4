@@ -312,7 +312,9 @@ h1_check_upgrade (request_st * const r, connection * const con)
 {
     buffer *upgrade = http_header_request_get(r, HTTP_HEADER_UPGRADE,
                                               CONST_STR_LEN("Upgrade"));
-    /*if (NULL == upgrade) return 0;*//*(checked by caller)*/
+  #ifdef __COVERITY__
+    if (NULL == upgrade) return 0; /*(checked by caller)*/
+  #endif
 
     buffer * const http_connection =
       http_header_request_get(r, HTTP_HEADER_CONNECTION,
