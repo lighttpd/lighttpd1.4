@@ -37,6 +37,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __linux__        /* uname() */
+#include <sys/utsname.h>
+#endif
 #ifdef __FreeBSD__
 #include <sys/sysctl.h> /* sysctlbyname() */
 #endif
@@ -174,7 +177,7 @@ typedef struct {
 } plugin_data;
 
 static int ssl_is_init;
-#ifdef __FreeBSD__
+#ifdef SSL_OP_ENABLE_KTLS /* openssl 3.0.0 */
 static int ktls_enable;
 #endif
 /* need assigned p->id for deep access of module handler_ctx for connection
@@ -2282,11 +2285,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         ssloptions |= SSL_OP_NO_RENEGOTIATION;
       #endif
       #ifdef SSL_OP_ENABLE_KTLS /* openssl 3.0.0 */
-        ssloptions |= SSL_OP_ENABLE_KTLS;
-       #ifdef __FreeBSD__
-        if (!ktls_enable)
-            ssloptions &= ~SSL_OP_ENABLE_KTLS;
-       #endif
+        if (ktls_enable)
+            ssloptions |= SSL_OP_ENABLE_KTLS;
       #ifdef SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE
         ssloptions |= SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE;
       #endif
@@ -2997,6 +2997,17 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
   #endif
 
   #ifdef SSL_OP_ENABLE_KTLS /* openssl 3.0.0 */
+   #ifdef __linux__
+    struct utsname uts;
+    if (0 == uname(&uts)) {
+      /* check two or more digit linux major kernel version or >= kernel 4.17 */
+      /* (avoid #include <stdio.h> for scanf("%d.%d.%d"); limit stdio.h use) */
+      const char * const v = uts.release;
+      ktls_enable = v[1] != '.' || v[0]-'0' > 4
+                 || (v[0]-'0' == 4 && v[3] != '.' /*(last 4.x.x was 4.20.x)*/
+                     && (v[2]-'0' > 1 || (v[2]-'0' == 1 && v[3]-'0' >= 7)));
+    }
+   #endif
    #ifdef __FreeBSD__
     size_t ktls_sz = sizeof(ktls_enable);
     if (0 != sysctlbyname("kern.ipc.tls.enable",
