@@ -3201,10 +3201,14 @@ h2_process_streams (connection * const con,
             switch (r->state) {
               case CON_STATE_READ_POST:
               case CON_STATE_HANDLE_REQUEST:
-                if (http_response_loop(r) > HANDLER_WAIT_FOR_EVENT) {
-                    /* HANDLER_ERROR or HANDLER_COMEBACK (not expected) */
-                    request_set_state_error(r, CON_STATE_ERROR);
-                    break;
+                {
+                    const handler_t rc = http_response_loop(r);
+                    if (rc >= HANDLER_WAIT_FOR_EVENT) {
+                        if (rc > HANDLER_WAIT_FOR_EVENT)
+                            /*HANDLER_ERROR or HANDLER_COMEBACK (not expected)*/
+                            request_set_state_error(r, CON_STATE_ERROR);
+                        break;
+                    }
                 }
                 /*__attribute_fallthrough__*/
               /*case CON_STATE_RESPONSE_START:*//*occurred;transient*/
