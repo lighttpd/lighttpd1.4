@@ -37,6 +37,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __FreeBSD__
+#include <sys/sysctl.h> /* sysctlbyname() */
+#endif
+
 /*(not needed)*/
 /* correction; needed for:
  *   SSL_load_client_CA_file()
@@ -170,6 +174,9 @@ typedef struct {
 } plugin_data;
 
 static int ssl_is_init;
+#ifdef __FreeBSD__
+static int ktls_enable;
+#endif
 /* need assigned p->id for deep access of module handler_ctx for connection
  *   i.e. handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id]; */
 static plugin_data *plugin_data_singleton;
@@ -2276,6 +2283,10 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       #endif
       #ifdef SSL_OP_ENABLE_KTLS /* openssl 3.0.0 */
         ssloptions |= SSL_OP_ENABLE_KTLS;
+       #ifdef __FreeBSD__
+        if (!ktls_enable)
+            ssloptions &= ~SSL_OP_ENABLE_KTLS;
+       #endif
       #ifdef SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE
         ssloptions |= SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE;
       #endif
@@ -2983,6 +2994,19 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
       "openssl library version is outdated and has reached end-of-life.  "
       "As of 1 Jan 2020, only openssl 1.1.1 and later continue to receive "
       "security patches from openssl.org");
+  #endif
+
+  #ifdef SSL_OP_ENABLE_KTLS /* openssl 3.0.0 */
+   #ifdef __FreeBSD__
+    size_t ktls_sz = sizeof(ktls_enable);
+    if (0 != sysctlbyname("kern.ipc.tls.enable",
+                          &ktls_enable, &ktls_sz, NULL, 0)) {
+      #if 0 /*(not present on kernels < FreeBSD 13 unless backported)*/
+        log_perror(srv->errh, __FILE__, __LINE__,
+          "sysctl(\"kern.ipc.tls.enable\")");
+      #endif
+    }
+   #endif
   #endif
 
     return mod_openssl_set_defaults_sockets(srv, p);
