@@ -1703,7 +1703,6 @@ static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const 
     int rc = mod_dirlisting_write_cq(fd, &r->write_queue, r->conf.errh);
   #ifdef _WIN32
     close(fd); /*(rename fails if file is open; MS filesystem limitation)*/
-    fd = -1;
   #endif
     if (rc && 0 == fdevent_rename(oldpath, newpath)) {
         stat_cache_invalidate_entry(newpath, len);
