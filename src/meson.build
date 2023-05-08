@@ -137,6 +137,7 @@ functions = {
   'pipe2': 'unistd.h',
   'poll': 'poll.h',
   'posix_spawn': 'spawn.h',
+  'posix_spawn_file_actions_addclosefrom_np': 'spawn.h',
   'posix_spawn_file_actions_addfchdir_np': 'spawn.h',
   'pread': 'unistd.h',
   'preadv': 'sys/uio.h',

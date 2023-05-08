@@ -512,6 +512,18 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
         && 0 == (rc = sigaddset(&sigs, SIGUSR1))
         && 0 == (rc = posix_spawnattr_setsigdefault(&attr, &sigs))) {
 
+            /* optional: potentially improve performance when many fds open
+             * (might create new file descriptor table containing only 0,1,2
+             *  instead of close() on all other fds with O_CLOEXEC flag set)
+             * optional: disable manually and externally via gdb or other
+             *   debugger by setting trace_children to non-zero value */
+            static volatile sig_atomic_t trace_children;
+            if (!trace_children) {
+              #ifdef HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCLOSEFROM_NP
+                posix_spawn_file_actions_addclosefrom_np(&file_actions, 3);
+              #endif
+            }
+
           #if !defined(HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP) \
            && !defined(HAVE_POSIX_SPAWNATTR_SETCWD_NP)
             /* not thread-safe, but ok since lighttpd not (currently) threaded

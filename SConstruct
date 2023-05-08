@@ -432,6 +432,7 @@ if 1:
 		'pipe2',
 		'poll',
 		'posix_spawn',
+		'posix_spawn_file_actions_addclosefrom_np',
 		'posix_spawn_file_actions_addfchdir_np',
 		'pread',
 		'preadv',

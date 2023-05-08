@@ -212,6 +212,7 @@ endif()
 check_include_files(spawn.h HAVE_SPAWN_H)
 if(HAVE_SPAWN_H)
 check_function_exists(posix_spawn HAVE_POSIX_SPAWN)
+check_function_exists(posix_spawn_file_actions_addclosefrom_np HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCLOSEFROM_NP)
 check_function_exists(posix_spawn_file_actions_addfchdir_np HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP)
 endif()
 
