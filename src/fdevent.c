@@ -486,8 +486,16 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
                         &file_actions, dfd)
                     : 0)
        #endif
+       #ifdef HAVE_POSIX_SPAWNATTR_SETCWD_NP /* (QNX Neutrino 7.1 or later) */
+        && 0 == (rc = posix_spawnattr_setcwd_np(&attr, dfd))
+        && 0 == (rc = posix_spawnattr_setxflags(&spawnattr,
+                                                  POSIX_SPAWN_SETCWD
+                                                | POSIX_SPAWN_SETSIGDEF
+                                                | POSIX_SPAWN_SETSIGMASK))
+       #else
         && 0 == (rc = posix_spawnattr_setflags(
                         &attr, POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
+       #endif
         && 0 == (rc = sigemptyset(&sigs))
         && 0 == (rc = posix_spawnattr_setsigmask(&attr, &sigs))
         /*(force reset signals to SIG_DFL if server.c set to SIG_IGN)*/
@@ -504,7 +512,8 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
         && 0 == (rc = sigaddset(&sigs, SIGUSR1))
         && 0 == (rc = posix_spawnattr_setsigdefault(&attr, &sigs))) {
 
-          #ifndef HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP
+          #if !defined(HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP) \
+           && !defined(HAVE_POSIX_SPAWNATTR_SETCWD_NP)
             /* not thread-safe, but ok since lighttpd not (currently) threaded
              * (alternatively, check HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP
              *  along with HAVE_POSIX_SPAWN at top of block and use HAVE_FORK
@@ -524,7 +533,8 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
             if (0 != rc)
                 pid = -1;
 
-          #ifndef HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP
+          #if !defined(HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP) \
+           && !defined(HAVE_POSIX_SPAWNATTR_SETCWD_NP)
             if (-1 != dfd) {
                 if (0 != fchdir(dfd)) { /* ignore error; best effort */
                     /*rc = errno;*/
