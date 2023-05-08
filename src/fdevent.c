@@ -442,6 +442,24 @@ int fdevent_rename(const char *oldpath, const char *newpath) {
 }
 
 
+#if !defined(HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCLOSEFROM_NP) \
+ && defined(POSIX_SPAWN_CLOEXEC_DEFAULT) /* Mac OS */
+__attribute_noinline__
+static int fdevent_cloexec_default_prep (posix_spawn_file_actions_t *file_actions, int fd, int stdfd) {
+    /* (other file actions already prepped in caller,
+     *  so ok to dup2() and overwrite 3+stdfd) */
+    int rc;
+    if (fd < 0) fd = stdfd;
+    rc = posix_spawn_file_actions_adddup2(file_actions, fd, 3+stdfd);
+    if (0 != rc) return rc;
+    rc = posix_spawn_file_actions_adddup2(file_actions, 3+stdfd, stdfd);
+    if (0 != rc) return rc;
+    rc = posix_spawn_file_actions_addclose(file_actions, 3+stdfd);
+    return rc;
+}
+#endif
+
+
 pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin, int fdout, int fderr, int dfd) {
  #ifdef HAVE_POSIX_SPAWN
 
@@ -512,6 +530,8 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
         && 0 == (rc = sigaddset(&sigs, SIGUSR1))
         && 0 == (rc = posix_spawnattr_setsigdefault(&attr, &sigs))) {
 
+          #if defined(HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCLOSEFROM_NP) \
+           || defined(POSIX_SPAWN_CLOEXEC_DEFAULT) /* Mac OS */
             /* optional: potentially improve performance when many fds open
              * (might create new file descriptor table containing only 0,1,2
              *  instead of close() on all other fds with O_CLOEXEC flag set)
@@ -521,8 +541,29 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
             if (!trace_children) {
               #ifdef HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCLOSEFROM_NP
                 posix_spawn_file_actions_addclosefrom_np(&file_actions, 3);
+              #elif defined(POSIX_SPAWN_CLOEXEC_DEFAULT) /* Mac OS */
+                /* Apple: this workaround should not be necessary.
+                 * Please implement posix_spawn_file_actions_addclosefrom_np()*/
+                if (fdin  < 3) /* <= STDERR_FILENO */
+                    rc |= fdevent_cloexec_default_prep(&file_actions,
+                                                       fdin,  STDIN_FILENO);
+                if (fdout < 3) /* <= STDERR_FILENO */
+                    rc |= fdevent_cloexec_default_prep(&file_actions,
+                                                       fdout, STDOUT_FILENO);
+                if (fderr < 3) /* <= STDERR_FILENO */
+                    rc |= fdevent_cloexec_default_prep(&file_actions,
+                                                       fderr, STDERR_FILENO);
+                /* (not expecting any failures above and these are on fds that
+                 *  are inherited, so not cleaning up excess fds from previous
+                 *  adddup2 if any error occurs in this block) */
+                if (0 == rc)
+                    posix_spawnattr_setflags(&attr, POSIX_SPAWN_CLOEXEC_DEFAULT
+                                                  | POSIX_SPAWN_SETSIGDEF
+                                                  | POSIX_SPAWN_SETSIGMASK);
+                rc = 0;
               #endif
             }
+          #endif
 
           #if !defined(HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDFCHDIR_NP) \
            && !defined(HAVE_POSIX_SPAWNATTR_SETCWD_NP)
