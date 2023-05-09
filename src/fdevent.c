@@ -855,7 +855,7 @@ fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *
                 *lim = 32*1024*1024; /* set arbitrary limit, if not specified */
             do {
                 if (bsz <= sz+2) {
-                    if (bsz == *lim) { rd = -1; errno = EOVERFLOW; break; }
+                    if (bsz >= *lim) { rd = -1; errno = EOVERFLOW; break; }
                     bsz = bsz ? (bsz << 1) : 65536;
                     if (bsz > *lim) bsz = *lim;
                     char *nbuf = malloc_fn((size_t)bsz);
