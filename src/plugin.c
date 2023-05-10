@@ -136,7 +136,7 @@ int plugins_load(server *srv) {
 				if (buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_deflate")))
 					continue;
 			}
-			if (buffer_eq_slen(module, CONST_STR_LEN("mod_h2")))
+			if (buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_h2")))
 				continue;
 			return -1;
 		}
