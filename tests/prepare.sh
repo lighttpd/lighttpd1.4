@@ -34,11 +34,14 @@ cp "${srcdir}/docroot/"*.html \
    "${srcdir}/docroot/"*.txt \
    "${tmpdir}/servers/www.example.org/pages/"
 
+# copy configs to alternate build root, if alternate build root is used
+# (tests will fail to run from an alternate build root on platforms
+#  on which cp -n is not supported, such as NetBSD and OpenBSD)
 cp -n "${srcdir}/"*.conf \
       "${srcdir}/lighttpd.user" \
       "${srcdir}/lighttpd.htpasswd" \
       "${srcdir}/var-include-sub.conf" \
-      "${top_builddir}/tests/" || true
+      "${top_builddir}/tests/" 2>/dev/null || true
 
 # create some content
 touch "${tmpdir}/servers/www.example.org/pages/image.jpg" \
