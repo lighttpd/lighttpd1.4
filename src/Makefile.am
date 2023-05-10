@@ -70,12 +70,10 @@ common_src=base64.c buffer.c burl.c log.c \
 
 common_src += fdevent_win32.c fs_win32.c
 
-src = server.c response.c connections.c h1.c h2.c \
+src = server.c response.c connections.c h1.c \
 	sock_addr_cache.c \
 	network.c \
 	network_write.c \
-	ls-hpack/lshpack.c \
-	algo_xxhash.c \
 	fdevent_impl.c \
 	http_range.c \
 	data_config.c \
@@ -428,6 +426,8 @@ lighttpd_LDADD = \
   $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS)
 lighttpd_LDFLAGS = -export-dynamic
 
+lighttpd_SOURCES += h2.c ls-hpack/lshpack.c algo_xxhash.c
+lighttpd_LDADD += $(XXHASH_LIBS)
 if BUILD_WITH_MAXMINDDB
 lighttpd_SOURCES += mod_maxminddb.c
 lighttpd_LDADD += $(MAXMINDDB_LIB)
@@ -489,9 +489,6 @@ lighttpd_SOURCES += mod_wolfssl.c
 lighttpd_CPPFLAGS += $(WOLFSSL_CFLAGS)
 lighttpd_LDADD += $(WOLFSSL_LIBS)
 endif
-#(until switch to mod_h2)
-#lighttpd_SOURCES += h2.c ls-hpack/lshpack.c algo_xxhash.c
-#lighttpd_LDADD += $(XXHASH_LIBS)
 
 else
 

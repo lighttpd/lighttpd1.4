@@ -922,10 +922,7 @@ set(SERVER_SRC
 	response.c
 	connections.c
 	h1.c
-	h2.c
 	sock_addr_cache.c
-	ls-hpack/lshpack.c
-	algo_xxhash.c
 	fdevent_impl.c
 	http_range.c
 	network.c
