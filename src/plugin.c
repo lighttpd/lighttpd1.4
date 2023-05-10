@@ -135,9 +135,9 @@ int plugins_load(server *srv) {
 			if (srv->srvconf.compat_module_load) {
 				if (buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_deflate")))
 					continue;
-				if (buffer_eq_slen(&ds->value, CONST_STR_LEN("mod_h2")))
-					continue;
 			}
+			if (buffer_eq_slen(module, CONST_STR_LEN("mod_h2")))
+				continue;
 			return -1;
 		}
 	}
@@ -182,6 +182,8 @@ int plugins_load(server *srv) {
 				if (buffer_eq_slen(module, CONST_STR_LEN("mod_deflate")))
 					continue;
 			}
+			if (buffer_eq_slen(module, CONST_STR_LEN("mod_h2")))
+				continue;
 			return -1;
 		}
 		buffer_copy_buffer(tb, module);
@@ -206,6 +208,8 @@ int plugins_load(server *srv) {
 				if (buffer_eq_slen(module, CONST_STR_LEN("mod_deflate")))
 					continue;
 			}
+			if (buffer_eq_slen(module, CONST_STR_LEN("mod_h2")))
+				continue;
 			return -1;
 		}
 		buffer_clear(tb);
