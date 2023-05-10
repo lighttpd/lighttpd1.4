@@ -177,10 +177,6 @@ static size_t malloc_top_pad;
 #define unsetenv(name)                _putenv_s((name), "")
 #endif
 
-#if 1 /*(until switch to mod_h2)*/
-extern const struct http_dispatch h2_dispatch_table; /* declaration */
-#endif
-
 #include "h1.h"
 static const struct http_dispatch h1_1_dispatch_table = {
   .send_1xx          = h1_send_1xx
@@ -1644,9 +1640,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 
 	http_dispatch[HTTP_VERSION_1_1] = h1_1_dispatch_table; /* copy struct */
-  #if 1 /*(until switch to mod_h2)*/
-	http_dispatch[HTTP_VERSION_2]   = h2_dispatch_table;   /* copy struct */
-  #endif
 
 	if (config_feature_bool(srv, "server.h2-discard-backend-1xx", 0))
 		http_dispatch[HTTP_VERSION_2].send_1xx = 0;
