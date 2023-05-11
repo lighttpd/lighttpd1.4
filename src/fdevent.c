@@ -516,12 +516,12 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
        #endif
         && 0 == (rc = sigemptyset(&sigs))
         && 0 == (rc = posix_spawnattr_setsigmask(&attr, &sigs))
-      #ifdef __linux__
-        /* linux appears to walk all signals and to query and preserve some
+      #if defined(__GLIBC__) \
+       && (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 24 && __GLIBC_MINOR__ <= 37)
+        /* glibc appears to walk all signals and to query and preserve some
          * sigaction flags even if setting to SIG_DFL, though if specified
          * in posix_spawnattr_setsigdefault(), resets to SIG_DFL without query.
-         * Therefore, resetting all signals results in about 1/2 the syscalls.
-         * (FreeBSD appears more efficient.  Unverified on other platforms.) */
+         * Therefore, resetting all signals results in about 1/2 the syscalls.*/
         && 0 == (rc = sigfillset(&sigs))
       #else
         /*(force reset signals to SIG_DFL if server.c set to SIG_IGN)*/
