@@ -433,8 +433,7 @@ lighttpd_SOURCES += mod_maxminddb.c
 lighttpd_LDADD += $(MAXMINDDB_LIB)
 endif
 if BUILD_WITH_LUA
-lighttpd_SOURCES += mod_magnet.c mod_magnet_cache.c
-                    #algo_hmac.c
+lighttpd_SOURCES += mod_magnet.c mod_magnet_cache.c algo_hmac.c
 lighttpd_CPPFLAGS += $(LUA_CFLAGS)
 lighttpd_LDADD += $(LUA_LIBS) -lm
 endif
