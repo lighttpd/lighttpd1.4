@@ -68,11 +68,9 @@
 #define _POSIX
 #define __USE_MINGW_ALARM 1
 /* https://sourceforge.net/p/mingw-w64/wiki2/gnu%20printf/ */
-#define __USE_MINGW_ANSI_STDIO 1
-/*#include <stdio.h>*/
+#include <stdio.h>
 #undef __printf__
-/*#define __printf__ __MINGW_PRINTF_FORMAT*/
-#define __printf__ __gnu_printf__
+#define __printf__ __MINGW_PRINTF_FORMAT
 /* override pid_t before <sys/types.h> is included; modified from:
  * /usr/x86_64-w64-mingw32/sys-root/mingw/include/sys/types.h */
 #ifndef _PID_T_
