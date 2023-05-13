@@ -161,12 +161,6 @@ option('warn_cflags',
 	description: 'CFLAGS to use when build_extra_warnings is active',
 )
 
-option('build_static',
-	type: 'boolean',
-	value: false,
-	description: 'build a static lighttpd with all modules added',
-)
-
 option('moduledir',
 	type: 'string',
 	value: 'lib/lighttpd',

@@ -238,9 +238,9 @@ conf_data.set_quoted('PACKAGE_NAME', meson.project_name())
 conf_data.set_quoted('PACKAGE_VERSION', meson.project_version())
 conf_data.set_quoted('LIBRARY_DIR', moduledir)
 
-conf_data.set('LIGHTTPD_STATIC', get_option('build_static'))
+conf_data.set('LIGHTTPD_STATIC', get_option('default_library') == 'static')
 libdl = []
-if not(get_option('build_static'))
+if get_option('default_library') != 'static'
 	if target_machine.system() != 'windows'
 		libdl = [ compiler.find_library('dl', required: false) ]
 		if not(compiler.has_function('dlopen', args: defs, dependencies: libdl, prefix: '#include <dlfcn.h>'))
@@ -582,7 +582,7 @@ builtin_mods = files(
   'mod_scgi.c',
 )
 
-if get_option('build_static')
+if get_option('default_library') == 'static'
         builtin_mods += files(
           'mod_accesslog.c',
           'mod_ajp13.c',
@@ -643,7 +643,7 @@ common_flags = [ declare_dependency(
 lighttpd_flags = []
 lighttpd_angel_flags = []
 
-if get_option('build_static')
+if get_option('default_library') == 'static'
 	lighttpd_flags += [ libcrypt, libbz2, libz, libzstd, libbrotli, libdeflate, libelftc ]
 else
 	if target_machine.system() == 'windows' or target_machine.system() == 'cygwin'
@@ -765,7 +765,7 @@ test('test_mod', executable('test_mod',
 	build_by_default: false,
 ))
 
-if get_option('build_static')
+if get_option('default_library') == 'static'
 modules = []
 else
 modules = [
