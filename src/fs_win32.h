@@ -22,14 +22,14 @@ int fs_win32_openUTF8 (const char *path, int oflag, int pmode);
 #define mkdir(a,b)    fs_win32_mkdirUTF8((a),(b))
 int fs_win32_mkdirUTF8 (const char *path, mode_t mode);
 
-#undef stat
-#undef fstat
-#define stat          fs_win32_stati64UTF8
-#define fstat(fd,st)  _fstati64((fd),(struct _stati64 *)(st))
+//#undef stat
+//#undef fstat
+//#define stat          fs_win32_stati64UTF8
+//#define fstat(fd,st)  _fstati64((fd),(struct _stati64 *)(st))
 
 /*('#define stat fs_win32_stati64UTF8' must handle 'struct stat' definitions)*/
 struct fs_win32_stati64UTF8 {
-#if 1 /*(?non-standard?) (appears to work)*/
+#if 0 /*(?non-standard?) (appears to work)*/
     struct _stati64; /*(intentionally unnamed for transparent struct)*/
 #else
 /* /usr/x86_64-w64-mingw32/sys-root/mingw/include/_mingw_stat64.h */
