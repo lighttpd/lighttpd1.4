@@ -208,7 +208,7 @@ int http_request_host_normalize(buffer * const b, const int scheme_port) {
             if (colon[1] != '\0') {
                 char *e;
                 port = strtol(colon+1, &e, 0); /*(allow decimal, octal, hex)*/
-                if (0 < port && port <= USHRT_MAX && *e == '\0') {
+                if (0 < port && port <= (long)USHRT_MAX && *e == '\0') {
                     /* valid port */
                 } else {
                     return -1;
@@ -250,7 +250,7 @@ int http_request_host_normalize(buffer * const b, const int scheme_port) {
             if (bracket[2] != '\0') { /*(ignore stray colon at string end)*/
                 char *e;
                 port = strtol(bracket+2, &e, 0); /*(allow decimal, octal, hex)*/
-                if (0 < port && port <= USHRT_MAX && *e == '\0') {
+                if (0 < port && port <= (long)USHRT_MAX && *e == '\0') {
                     /* valid port */
                 } else {
                     return -1;

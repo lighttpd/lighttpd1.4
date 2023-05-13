@@ -125,8 +125,7 @@ gmtime_y2038_kludge32 (unix_time64_t t, struct tm *result)
          * Thu, 01 Jan 1970 00:00:00 GMT)
          *(returning NULL not expected by lighttpd and might crash)*/
         tt = 0;
-        gmtime_r(&tt, result);
-        return result;
+        return gmtime_r(&tt, result);
     }
 }
 
@@ -161,8 +160,7 @@ localtime_y2038_kludge32 (unix_time64_t t, struct tm *result)
          * Thu, 01 Jan 1970 00:00:00 GMT)
          *(returning NULL not expected by lighttpd and might crash)*/
         tt = 0;
-        localtime_r(&tt, result);
-        return result;
+        return localtime_r(&tt, result);
     }
 }
 

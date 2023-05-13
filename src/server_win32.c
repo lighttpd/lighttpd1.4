@@ -239,6 +239,7 @@ static void lighttpd_ServiceMain (DWORD dwNumServicesArgs, LPSTR *lpServiceArgVe
 {
     /* service thread; not main(); params are not program startup argc, argv */
     hStatus = RegisterServiceCtrlHandlerA("lighttpd",
+                                          (LPHANDLER_FUNCTION)
                                           lighttpd_ServiceCtrlHandler);
     if (!hStatus) return; /*(unexpected; can not continue)*/
     lighttpd_ServiceStatus(SERVICE_START_PENDING, NO_ERROR, 1000);
@@ -281,7 +282,7 @@ static void lighttpd_ServiceCtrlDispatcher (int argc, char ** argv)
     svc_main_argv = argv;
 
     static const SERVICE_TABLE_ENTRYA lighttpd_ServiceDispatchTable[] = {
-      { "lighttpd", lighttpd_ServiceMain },
+      { "lighttpd", (LPSERVICE_MAIN_FUNCTIONA)lighttpd_ServiceMain },
       { NULL, NULL }
     };
     UINT rc = StartServiceCtrlDispatcherA(lighttpd_ServiceDispatchTable)

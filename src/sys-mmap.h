@@ -40,13 +40,21 @@ mmap (void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 
     HANDLE mh = CreateFileMapping((HANDLE) _get_osfhandle(fd),
                                   NULL, PAGE_READONLY,
+                                 #ifdef _WIN64
                                   (sizeof(size_t) > 4) ? length >> 32 : 0,
+                                 #else
+                                  0,
+                                 #endif
                                   length & 0xffffffff, NULL);
     if (NULL == mh)
         return MAP_FAILED;
 
     LPVOID p = MapViewOfFileEx(mh, FILE_MAP_READ,
+                              #ifdef _WIN64
                                (sizeof(off_t) > 4) ? offset >> 32 : 0,
+                              #else
+                               0,
+                              #endif
                                offset & 0xffffffff, length, addr);
     CloseHandle(mh);
     return (NULL != p) ? (void *)p : MAP_FAILED;

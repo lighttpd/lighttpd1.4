@@ -152,7 +152,11 @@ int plugins_load(server *srv) {
 	               srv->srvconf.modules->used, sizeof(plugin *));
 
 	buffer * const tb = srv->tmp_buf;
+  #ifdef _WIN32
+	int (WINAPI *init)(plugin *pl);
+  #else
 	int (*init)(plugin *pl);
+  #endif
 
 	for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
 		const buffer * const module = &((data_string *)srv->srvconf.modules->data[i])->value;
