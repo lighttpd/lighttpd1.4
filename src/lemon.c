@@ -52,7 +52,7 @@ extern int access(const char *path, int mode);
 #define MAXRHS 1000
 #endif
 
-extern void memory_error();
+extern void memory_error(void);
 static int showPrecedenceConflict = 0;
 static char *msort(char*,char**,int(*)(const char*,const char*));
 
@@ -202,7 +202,7 @@ struct s_options {
   enum option_type type;
   const char *label;
   char *arg;
-  void(*fn)();
+  void(*fn)(char *);
   const char *message;
 };
 int    OptInit(char**,struct s_options*,FILE*);
@@ -435,7 +435,7 @@ struct lemon {
 };
 
 #define MemoryCheck(X) if((X)==0){ \
-  extern void memory_error(); \
+  extern void memory_error(void); \
   memory_error(); \
 }
 
@@ -1999,7 +1999,7 @@ static int handleflags(int i, FILE *err)
   }else if( op[j].type==OPT_FLAG ){
     *((int*)op[j].arg) = v;
   }else if( op[j].type==OPT_FFLAG ){
-    op[j].fn(v);
+    ((void(*)(int))op[j].fn)(v);
   }else if( op[j].type==OPT_FSTR ){
     op[j].fn(&g_argv[i][2]);
   }else{
@@ -2083,13 +2083,13 @@ static int handleswitch(int i, FILE *err)
         *(double*)(op[j].arg) = dv;
         break;
       case OPT_FDBL:
-        op[j].fn(dv);
+        ((void(*)(double))op[j].fn)(dv);
         break;
       case OPT_INT:
         *(int*)(op[j].arg) = lv;
         break;
       case OPT_FINT:
-        op[j].fn((int)lv);
+        ((void(*)(int))op[j].fn)((int)lv);
         break;
       case OPT_STR:
         *(char**)(op[j].arg) = sv;
@@ -5560,7 +5560,7 @@ struct symbol *Symbol_Nth(int n)
 }
 
 /* Return the size of the array */
-int Symbol_count()
+int Symbol_count(void)
 {
   return x2a ? x2a->count : 0;
 }
@@ -5568,7 +5568,7 @@ int Symbol_count()
 /* Return an array of pointers to all data in the table.
 ** The array is obtained from malloc.  Return NULL if memory allocation
 ** problems, or if the array is empty. */
-struct symbol **Symbol_arrayof()
+struct symbol **Symbol_arrayof(void)
 {
   struct symbol **array;
   int i,arrSize;
@@ -5619,7 +5619,7 @@ PRIVATE unsigned statehash(struct config *a)
 }
 
 /* Allocate a new state structure */
-struct state *State_new()
+struct state *State_new(void)
 {
   struct state *newstate;
   newstate = (struct state *)calloc(1, sizeof(struct state) );
