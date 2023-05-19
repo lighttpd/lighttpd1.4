@@ -430,6 +430,15 @@ int fdevent_set_stdin_stdout_stderr(int fdin, int fdout, int fderr) {
 }
 
 
+/* iOS does not allow subprocess creation; avoid compiling advanced interfaces*/
+#if defined(__APPLE__) && defined(__MACH__)
+#include <TargetConditionals.h> /* TARGET_OS_IPHONE, TARGET_OS_MAC */
+#if TARGET_OS_IPHONE            /* iOS, tvOS, or watchOS device */
+#undef HAVE_POSIX_SPAWN
+#endif
+#endif
+
+
 #include <stdio.h>      /* perror() rename() */
 #include <signal.h>     /* signal() kill() */
 #ifdef HAVE_POSIX_SPAWN
@@ -442,6 +451,7 @@ int fdevent_rename(const char *oldpath, const char *newpath) {
 }
 
 
+#ifdef HAVE_POSIX_SPAWN
 #if !defined(HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCLOSEFROM_NP) \
  && defined(POSIX_SPAWN_CLOEXEC_DEFAULT) /* Mac OS */
 __attribute_noinline__
@@ -457,6 +467,7 @@ static int fdevent_cloexec_default_prep (posix_spawn_file_actions_t *file_action
     rc = posix_spawn_file_actions_addclose(file_actions, 3+stdfd);
     return rc;
 }
+#endif
 #endif
 
 
