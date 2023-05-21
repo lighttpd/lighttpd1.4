@@ -305,6 +305,8 @@ request_acquire (connection * const con)
     }
 
     r->con = con;
+    r->dst_addr = &con->dst_addr;
+    r->dst_addr_buf = &con->dst_addr_buf;
     r->tmp_buf = con->srv->tmp_buf;
     return r;
 }
