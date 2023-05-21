@@ -77,6 +77,17 @@ request_init_data (request_st * const r, connection * const con, server * const 
 }
 
 
+__attribute_cold__
+__attribute_noinline__
+static request_st *
+request_init (connection * const con)
+{
+    request_st * const r = ck_calloc(1, sizeof(request_st));
+    request_init_data(r, con, con->srv);
+    return r;
+}
+
+
 void
 request_reset (request_st * const r)
 {
@@ -300,13 +311,12 @@ request_acquire (connection * const con)
         reqpool = (request_st *)r->con; /*(reuse r->con as next ptr)*/
     }
     else {
-        r = ck_calloc(1, sizeof(request_st));
-        request_init_data(r, con, con->srv);
+        return request_init(con);
     }
 
     r->con = con;
     r->dst_addr = &con->dst_addr;
     r->dst_addr_buf = &con->dst_addr_buf;
-    r->tmp_buf = con->srv->tmp_buf;
+    /*r->tmp_buf = con->srv->tmp_buf;*/
     return r;
 }
