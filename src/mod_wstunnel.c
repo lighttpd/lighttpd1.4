@@ -87,7 +87,6 @@
 #include "array.h"
 #include "buffer.h"
 #include "chunk.h"
-#include "fdevent.h"
 #include "http_header.h"
 #include "log.h"
 

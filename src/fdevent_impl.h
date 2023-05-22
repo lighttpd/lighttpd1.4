@@ -54,7 +54,6 @@ struct kevent;          /* declaration */
 #endif
 
 #include "base_decls.h"
-#include "fdevent.h"    /* (*fdevent_handler) */
 
 typedef enum {
     FDEVENT_HANDLER_UNSET,

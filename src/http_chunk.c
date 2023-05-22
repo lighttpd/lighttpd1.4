@@ -10,16 +10,11 @@
 #include "http_chunk.h"
 #include "chunk.h"
 #include "stat_cache.h"
-#include "fdevent.h"
 #include "log.h"
 #include "request.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
 #include "sys-unistd.h" /* <unistd.h> */
 
-#include <errno.h>
-#include <stdlib.h>
 #include <string.h>
 
 __attribute_noinline__
