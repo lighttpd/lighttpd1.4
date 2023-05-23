@@ -323,7 +323,7 @@ int config_plugin_values_init(server * const srv, void *p_d, const config_plugin
 
             ++matches[n];
 
-            array_set_key_value(touched,cpk[i].k,cpk[i].klen,CONST_STR_LEN(""));
+            array_get_buf_ptr(touched, cpk[i].k, cpk[i].klen); /*(empty value)*/
 
             if (cpk[i].scope == T_CONFIG_SCOPE_CONNECTION || 0 == u) continue;
 
