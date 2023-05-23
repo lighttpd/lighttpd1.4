@@ -936,6 +936,48 @@ static int config_insert_srvconf(server *srv) {
     return rc;
 }
 
+__attribute_cold__
+static void config_mimetypes_default(array * const a) {
+    static const char * const mimetypes_default[] = {
+        ".html",  "text/html"
+       ,".htm",   "text/html"
+       ,".txt",   "text/plain;charset=utf-8"
+       ,".text",  "text/plain;charset=utf-8"
+       ,".css",   "text/css;charset=utf-8"
+       ,".js",    "text/javascript"
+       ,".mjs",   "text/javascript"
+       ,".xml",   "text/xml"
+       ,".jpg",   "image/jpeg"
+       ,".jpeg",  "image/jpeg"
+       ,".png",   "image/png"
+       ,".gif",   "image/gif"
+       ,".svg",   "image/svg+xml"
+       ,".svgz",  "image/svg+xml"
+       ,".json",  "application/json"
+       ,".dtd",   "application/xml-dtd"
+       ,".pdf",   "application/pdf"
+       ,".woff",  "font/woff"
+       ,".woff2", "font/woff2"
+       ,".md",    "text/markdown;charset=utf-8"
+       ,".ico",   "image/x-icon" /* alt: "image/vnd.microsoft.icon" */
+       ,"README", "text/plain;charset=utf-8"
+
+      #if 0
+        /* intentionally omit catch-all to signal elsewhere internally
+         * to omit sending caching headers such as ETag, Last-Modified */
+       ,"",       "application/octet-stream"
+      #endif
+    };
+
+    uint32_t i = 0;
+    do {
+        array_set_key_value(a, mimetypes_default[i],
+                               strlen(mimetypes_default[i]),
+                               mimetypes_default[i+1],
+                               strlen(mimetypes_default[i+1]));
+    } while ((i+=2) < sizeof(mimetypes_default)/sizeof(*mimetypes_default));
+}
+
 static int config_insert(server *srv) {
     static const config_plugin_keys_t cpk[] = {
       { CONST_STR_LEN("server.document-root"),
@@ -1192,7 +1234,7 @@ static int config_insert(server *srv) {
       | (srv->srvconf.http_host_normalize  ?  HTTP_PARSEOPT_HOST_NORMALIZE  :0)
       | (srv->srvconf.http_method_get_body ?  HTTP_PARSEOPT_METHOD_GET_BODY :0);
     p->defaults.http_parseopts |= srv->srvconf.http_url_normalize;
-    p->defaults.mimetypes = &srv->srvconf.empty_array; /*(must not be NULL)*/
+    p->defaults.mimetypes = &srv->srvconf.mimetypes_default;/*must not be NULL*/
     p->defaults.h2proto = srv->srvconf.h2proto;
 
     /* initialize p->defaults from global config context */
@@ -1201,6 +1243,9 @@ static int config_insert(server *srv) {
         if (-1 != cpv->k_id)
             config_merge_config(&p->defaults, cpv);
     }
+
+    if (p->defaults.mimetypes == &srv->srvconf.mimetypes_default)
+        config_mimetypes_default(&srv->srvconf.mimetypes_default);
 
     /* (after processing config defaults) */
     p->defaults.max_request_field_size = srv->srvconf.max_request_field_size;
@@ -1524,6 +1569,7 @@ void config_free(server *srv) {
     array_free(srv->srvconf.config_touched);
     array_free(srv->srvconf.modules);
     array_free(srv->srvconf.upload_tempdirs);
+    array_free_data(&srv->srvconf.mimetypes_default);
   #ifdef HAVE_PCRE2_H
     if (NULL == srv->match_data) pcre2_match_data_free(srv->match_data);
   #endif

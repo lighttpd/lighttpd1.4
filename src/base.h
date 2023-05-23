@@ -131,7 +131,7 @@ typedef struct {
 	buffer *pid_file;
 	array *modules;
 	array *config_touched;
-	array empty_array;
+	array mimetypes_default;
 } server_config;
 
 typedef struct server_socket {
