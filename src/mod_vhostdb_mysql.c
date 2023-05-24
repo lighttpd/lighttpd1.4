@@ -114,7 +114,11 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
             return -1;
         }
 
+      #ifdef LIBMARIADB
         my_socket sfd = mysql_get_socket(dbconn);
+      #else
+        my_socket sfd = dbconn->net.fd;
+      #endif
         (void)fdevent_socket_set_cloexec(sfd);
 
         dbconf = (vhostdb_config *)ck_calloc(1, sizeof(*dbconf));
