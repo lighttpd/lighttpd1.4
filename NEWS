@@ -3,6 +3,25 @@
 NEWS
 ====
 
+- 1.4.71 - 2023-05-27
+  * [mod_h2] HTTP/2 separate module; no longer builtin
+  * [mod_magnet] fix static build using autoconf (fixes #3203)
+  * [core] fix new use of posix_spawn with some glibc (fixes #3201)
+  * [core] _WIN32 quiet compiler warnings 32-bit build
+  * [core] check getaddrinfo EAI_ADDRFAMILY w/ glibc
+  * [core] quiet lemon.c clang C2x warnings
+  * [core] compile w/o posix_spawn() on iOS
+  * [core] fix crash due to missing initialization (fixes #3207)
+  * [core] request_init() separate static func
+  * [multiple] remove some unused/redundant includes
+  * [core] server.modules s/mod_compress/mod_deflate/
+  * [core] preproc consistency #pragma GCC diagnostic
+  * [core] update ls-hpack
+  * [core] use empty value in srvconf.config_touched
+  * [core] provide mimetype.assign default if unset
+  * [mod_vhostdb_mysql] MySQL missing mysql_get_socket (fixes #3208)
+  * [core] clarify comment
+
 - 1.4.70 - 2023-05-10
   * [autotools] chmod u+w configparser.c for lemon
   * [build] skip build separate modules for built-ins
