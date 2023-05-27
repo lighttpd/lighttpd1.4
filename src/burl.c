@@ -44,8 +44,8 @@ static const char encoded_chars_http_uri_reqd[] = {
 
 /* b (byte) MUST be unsigned integer type
  * https://en.wikipedia.org/wiki/UTF-8
- * reject overlong encodings of 7-byte ASCII and invalid UTF-8
- * (but does not detect other overlong multi-byte encodings) */
+ * detect invalid UTF-8 byte and byte in overlong encoding of 7-bit ASCII
+ * (but does not detect other invalid/overlong multibyte encoding sequences) */
 #define li_utf8_invalid_byte(b) ((b) >= 0xF5 || ((b)|0x1) == 0xC1)
 
 
