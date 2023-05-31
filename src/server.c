@@ -1398,6 +1398,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 #ifdef HAVE_FORK
 	int parent_pipe_fd = -1;
 #endif
+	const char *conffile = NULL;
 
 #ifdef HAVE_GETUID
 	i_am_root = (0 == getuid());
@@ -1430,6 +1431,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			if (config_read(srv, optarg)) {
 				return -1;
 			}
+			conffile = optarg;
 			break;
 		case 'm':
 			srv->srvconf.modules_dir = optarg;
@@ -1868,6 +1870,18 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 #ifdef HAVE_FORK
 	/* network is up, let's daemonize ourself */
 	if (0 == srv->srvconf.dont_daemonize && 0 == graceful_restart) {
+		if (conffile && *conffile != '/'
+		    && (conffile[0] != '-' || conffile[1] != '\0')/*(special-case "-")*/
+		   #if defined(_WIN32)
+                    && *conffile != '\\'
+                    && conffile[0] && conffile[1] != ':'
+		   #endif
+		    /*(might perform similar checks on srv->srvconf.modules_dir)*/
+		    ) {
+			log_error(srv->errh, __FILE__, __LINE__,
+			  "(warning) daemonizing without absolute path command line args"
+			  " (graceful restart may fail)");
+		}
 		parent_pipe_fd = daemonize();
 	}
 #endif
