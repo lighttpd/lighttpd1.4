@@ -821,7 +821,9 @@ fdevent_load_file (const char * const fn, off_t *lim, log_error_st *errh, void *
            ? atoi(fn + sizeof("/proc/self/fd/")-1)
            : fdevent_open_cloexec(fn, 1, O_RDONLY, 0); /*(1: follows symlinks)*/
       #else
-        fd = fdevent_open_cloexec(fn, 1, O_RDONLY, 0); /*(1: follows symlinks)*/
+        fd = (0 != strcmp(fn, "/dev/stdin"))
+           ? fdevent_open_cloexec(fn, 1, O_RDONLY, 0)  /*(1: follows symlinks)*/
+           : STDIN_FILENO;
       #endif
         if (fd < 0) break;
 

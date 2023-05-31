@@ -2197,35 +2197,24 @@ static int config_parse(server *srv, config_t *context, const char *source, cons
 
 __attribute_cold__
 static int config_parse_stdin(server *srv, config_t *context) {
-    buffer * const b = chunk_buffer_acquire();
-    size_t dlen;
-    ssize_t n = -1;
-    do {
-        if (n > 0)
-            buffer_commit(b, n);
-        size_t avail = buffer_string_space(b);
-        dlen = buffer_clen(b);
-        if (__builtin_expect( (avail < 1024), 0)) {
-            /*(arbitrary limit: 32 MB file; expect < 1 MB)*/
-            if (dlen >= 32*1024*1024) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "config read from stdin is way too large");
-                break;
-            }
-            avail = chunk_buffer_prepare_append(b, b->size+avail);
+    /* config_mem is preserved across graceful restart
+     * and will leak mem at program exit (no big deal).
+     * Preserving config_mem allows graceful restart in order
+     * to trigger re-read of config files such as TLS certificates. */
+    static char *config_mem;
+    static off_t lim;
+    if (NULL == config_mem) {
+        lim = 32*1024*1024; /*(arbitrary limit: 32 MB file; expect < 1 MB)*/
+        config_mem = fdevent_load_file("/dev/stdin",&lim,srv->errh,malloc,free);
+        if (!config_mem) {
+            log_perror(srv->errh, __FILE__, __LINE__, "config read from stdin");
+            return -1;
         }
-        n = read(STDIN_FILENO, b->ptr+dlen, avail);
-    } while (n > 0 || (n == -1 && errno == EINTR));
-    int rc = -1;
-    if (0 == n)
-        rc = dlen ? config_parse(srv, context, "-", b->ptr, (int)dlen) : 0;
-    else
-        log_perror(srv->errh, __FILE__, __LINE__, "config read from stdin");
-
-    if (dlen)
-        ck_memzero(b->ptr, dlen);
-    chunk_buffer_release(b);
-    return rc;
+        int fd = fdevent_open_devnull();
+        if (fd > STDIN_FILENO) /*(STDIN_FILENO closed by fdevent_load_file()*/
+            close(fd);
+    }
+    return lim ? config_parse(srv, context, "-", config_mem, (int)lim) : 0;
 }
 
 static int config_parse_file_stream(server *srv, config_t *context, const char *fn) {
