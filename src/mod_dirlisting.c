@@ -654,6 +654,16 @@ static void http_list_directory_include_file(request_st * const r, const handler
     }
 }
 
+static void http_dirlist_link (request_st * const r, const buffer *b, const char *params, size_t plen) {
+    /*(params must be at least ">" to close Link url-reference)*/
+    buffer * const tb = r->tmp_buf;
+    buffer_clear(tb);
+    buffer_append_str3(tb, CONST_STR_LEN("<"), BUF_PTR_LEN(b), params, plen);
+    http_header_response_insert(r, HTTP_HEADER_LINK,
+                                CONST_STR_LEN("Link"),
+                                BUF_PTR_LEN(tb));
+}
+
 /* portions copied from mod_status
  * modified and specialized for stable dirlist sorting by name */
 static const char js_simple_table_resort[] = \
@@ -881,6 +891,8 @@ static void http_list_directory_header(request_st * const r, const handler_ctx *
 			                "<link rel=\"stylesheet\" type=\"text/css\" href=\""),
 			  BUF_PTR_LEN(p->conf.external_css),
 			  CONST_STR_LEN("\">\n"));
+			http_dirlist_link(r, p->conf.external_css,
+			  CONST_STR_LEN(">; rel=\"preload\"; as=\"style\""));
 		} else {
 			buffer_append_string_len(out, CONST_STR_LEN(
 				"<style type=\"text/css\">\n"
@@ -915,6 +927,10 @@ static void http_list_directory_header(request_st * const r, const handler_ctx *
 				"}\n"
 				"</style>\n"
 			));
+		}
+		if (p->conf.external_js) {
+			http_dirlist_link(r, p->conf.external_js,
+			  CONST_STR_LEN(">; rel=\"preload\"; as=\"script\""));
 		}
 
 		buffer_append_string_len(out, CONST_STR_LEN("</head>\n<body>\n"));
@@ -1626,6 +1642,14 @@ static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data *
             http_header_response_set(r, HTTP_HEADER_ETAG,
                                      CONST_STR_LEN("ETag"),
                                      BUF_PTR_LEN(etag));
+    }
+    if (p->conf.auto_layout) {
+        if (p->conf.external_css)
+            http_dirlist_link(r, p->conf.external_css,
+              CONST_STR_LEN(">; rel=\"preload\"; as=\"style\""));
+        if (p->conf.external_js)
+            http_dirlist_link(r, p->conf.external_js,
+              CONST_STR_LEN(">; rel=\"preload\"; as=\"script\""));
     }
 
     r->resp_body_finished = 1;
