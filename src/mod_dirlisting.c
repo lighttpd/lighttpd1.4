@@ -19,6 +19,7 @@
 #include "base.h"
 #include "log.h"
 #include "buffer.h"
+#include "chunk.h"
 #include "fdevent.h"
 #include "http_chunk.h"
 #include "http_etag.h"
@@ -633,8 +634,10 @@ static void http_list_directory_include_file(request_st * const r, const handler
         buffer_clear(out);
         const int fd = sce->fd;
         ssize_t rd;
+        off_t off = 0;
         char buf[8192];
-        while ((rd = read(fd, buf, sizeof(buf))) > 0) {
+        while ((rd = chunk_file_pread(fd, buf, sizeof(buf), off)) > 0) {
+            off += rd;
             buffer_append_string_encoded(out, buf, (size_t)rd, ENCODING_MINIMAL_XML);
             if (out == tb) {
                 if (0 != chunkqueue_append_mem_to_tempfile(cq,
