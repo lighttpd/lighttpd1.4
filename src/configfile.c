@@ -2213,6 +2213,10 @@ static int config_parse_stdin(server *srv, config_t *context) {
         int fd = fdevent_open_devnull();
         if (fd > STDIN_FILENO) /*(STDIN_FILENO closed by fdevent_load_file()*/
             close(fd);
+      #ifdef __COVERITY__/*(ignore leak; intentionally want open STDIN_FILENO)*/
+        else
+            close(fd);
+      #endif
     }
     return lim ? config_parse(srv, context, "-", config_mem, (int)lim) : 0;
 }
