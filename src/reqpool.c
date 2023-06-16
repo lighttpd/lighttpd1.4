@@ -290,6 +290,24 @@ request_pool_free (void)
 }
 
 
+static void
+request_pool_push (request_st * const r)
+{
+    r->con = (connection *)reqpool; /*(reuse r->con as next ptr)*/
+    reqpool = r;
+}
+
+
+static request_st *
+request_pool_pop (void)
+{
+    /*assert(reqpool);*//*(caller should check non-NULL)*/
+    request_st * const r = reqpool;
+    reqpool = (request_st *)r->con; /*(reuse r->con as next ptr)*/
+    return r;
+}
+
+
 void
 request_release (request_st * const r)
 {
@@ -307,22 +325,17 @@ request_release (request_st * const r)
     request_reset_ex(r);
     r->state = CON_STATE_CONNECT;
 
-    r->con = (connection *)reqpool; /*(reuse r->con as next ptr)*/
-    reqpool = r;
+    request_pool_push(r);
 }
 
 
 request_st *
 request_acquire (connection * const con)
 {
-    request_st *r = reqpool;
-    if (r) {
-        reqpool = (request_st *)r->con; /*(reuse r->con as next ptr)*/
-    }
-    else {
+    if (!reqpool)
         return request_init(con);
-    }
 
+    request_st * const r = request_pool_pop();
     request_set_con(r, con);
     return r;
 }
