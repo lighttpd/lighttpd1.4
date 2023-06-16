@@ -56,9 +56,6 @@ void
 request_init_data (request_st * const r, connection * const con, server * const srv)
 {
     request_set_con(r, con);
-    chunkqueue_init(&r->write_queue);
-    chunkqueue_init(&r->read_queue);
-    chunkqueue_init(&r->reqbody_queue);
 
     r->http_method = HTTP_METHOD_UNSET;
     r->http_version = HTTP_VERSION_UNSET;
@@ -80,6 +77,10 @@ request_init_data (request_st * const r, connection * const con, server * const 
                                        sizeof(cond_match_t));
     }
   #endif
+
+    chunkqueue_init(&r->write_queue);
+    chunkqueue_init(&r->read_queue);
+    chunkqueue_init(&r->reqbody_queue);
 
     request_config_reset(r);
 }
