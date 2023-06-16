@@ -42,9 +42,20 @@ request_config_reset (request_st * const r)
 }
 
 
+static void
+request_set_con (request_st * const r, connection * const con)
+{
+    r->con = con;
+    r->dst_addr = &con->dst_addr;
+    r->dst_addr_buf = &con->dst_addr_buf;
+    /*r->tmp_buf = con->srv->tmp_buf;*/
+}
+
+
 void
 request_init_data (request_st * const r, connection * const con, server * const srv)
 {
+    request_set_con(r, con);
     chunkqueue_init(&r->write_queue);
     chunkqueue_init(&r->read_queue);
     chunkqueue_init(&r->reqbody_queue);
@@ -53,12 +64,9 @@ request_init_data (request_st * const r, connection * const con, server * const 
     r->http_version = HTTP_VERSION_UNSET;
     r->resp_header_len = 0;
     r->loops_per_request = 0;
-    r->con = con;
     r->tmp_buf = srv->tmp_buf;
     r->resp_body_scratchpad = -1;
     r->server_name = &r->uri.authority;
-    r->dst_addr = &con->dst_addr;
-    r->dst_addr_buf = &con->dst_addr_buf;
 
     /* init plugin-specific per-request structures */
     r->plugin_ctx = ck_calloc(srv->plugins.used + 1, sizeof(void *));
@@ -314,9 +322,6 @@ request_acquire (connection * const con)
         return request_init(con);
     }
 
-    r->con = con;
-    r->dst_addr = &con->dst_addr;
-    r->dst_addr_buf = &con->dst_addr_buf;
-    /*r->tmp_buf = con->srv->tmp_buf;*/
+    request_set_con(r, con);
     return r;
 }
