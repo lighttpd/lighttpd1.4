@@ -673,7 +673,6 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
              *  below indicates any method, not only "GET") */
             if (__builtin_expect( (hpctx->id == HTTP_HEADER_H2_UNKNOWN), 0)) {
                 switch (klen-1) {
-                 #if 0
                   case 4:
                     if (0 == memcmp(k+1, "path", 4))
                         hpctx->id = HTTP_HEADER_H2_PATH;
@@ -684,17 +683,14 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                     else if (0 == memcmp(k+1, "scheme", 6))
                         hpctx->id = HTTP_HEADER_H2_SCHEME;
                     break;
-                 #endif
                   case 8:
                     if (0 == memcmp(k+1, "protocol", 8))
                         hpctx->id = HTTP_HEADER_H2_PROTOCOL;
                     break;
-                 #if 0
                   case 9:
                     if (0 == memcmp(k+1, "authority", 9))
                         hpctx->id = HTTP_HEADER_H2_AUTHORITY;
                     break;
-                 #endif
                   default:
                     break;
                 }
