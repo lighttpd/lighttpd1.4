@@ -1,5 +1,21 @@
 /* mod_deflate
  *
+ * New feature in lighttpd-1.4.72 : support for precompressed files
+ *   If deflate.use_precomp is set to a positive number, then, when a
+ *   static file at path X is requested, a file named X.gz (or X.br)
+ *   is checked; if it exists, it is used as gzip (or brotli) compressed data
+ *   instead of "dynamically" compressed data (or deflate cache).
+ *   This happens even if gzip/brotli support is not compiled in, or if these
+ *   encodings are not listed in deflate.allowed_encodings or the MIME type is
+ *   not in deflate.mimetypes, and without consideration for system load.
+ *   The conditions for using the precompressed file are:
+ *      - deflate.use_precomp is enabled in configuration,
+ *      - client supports the encoding,
+ *      - the request has a single write chunk, of type file, and no range
+ *        has been specified,
+ *      - precompressed file exists.
+ *   If gz and br files exists, and client supports both, then brotli is used
+ *   preferentially.
  *
  * bug fix on Robert Jakabosky from alphatrade.com's lighttp 1.4.10 mod_deflate patch
  *
@@ -202,6 +218,7 @@ typedef struct {
 	uint16_t *	allowed_encodings;
 	double		max_loadavg;
 	const encparms *params;
+	unsigned short use_precomp;
 } plugin_config;
 
 typedef struct {
@@ -412,6 +429,9 @@ static void mod_deflate_merge_config_cpv(plugin_config * const pconf, const conf
         if (cpv->vtype == T_CONFIG_LOCAL)
             pconf->params = cpv->v.v;
         break;
+		case 15:/* deflate.use_precomp */
+			pconf->use_precomp = cpv->v.shrt;
+			break;
       default:/* should not happen */
         return;
     }
@@ -717,6 +737,9 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
      ,{ CONST_STR_LEN("deflate.params"),
         T_CONFIG_ARRAY_KVANY,
         T_CONFIG_SCOPE_CONNECTION }
+	  ,{ CONST_STR_LEN("deflate.use_precomp"),
+		  T_CONFIG_INT,
+		  T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -1872,6 +1895,57 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
 	}
 }
 
+/* checks if encoding encname (with code enc) can be handled with a precompressed file:
+ * 1) client must support encname,
+ * and 2) file suffixed by "." ext must exist
+ * returns 0 if one of these conditions is not met,
+ * else sets label to encname, precomp_sce and returns selected encoding code (enc)
+ */
+int mod_deflate_try_precomp(request_st *r, char *ext, int enc, char *encname, const char **label, stat_cache_entry **precomp_sce) {
+	const buffer *vbro;
+	char *enc_search;
+	size_t vbrolen;
+	size_t encnamelen;
+	size_t pathlen;
+	size_t extlen;
+	buffer * tb;
+
+	/* check if client supports this encoding */
+	vbro = http_header_request_get(r, HTTP_HEADER_ACCEPT_ENCODING, CONST_STR_LEN("Accept-Encoding"));
+	if (NULL == vbro)
+		return 0;
+	vbrolen = strlen(vbro->ptr);
+	encnamelen = strlen(encname);
+	enc_search = vbro->ptr;
+	while (enc_search < vbro->ptr + vbrolen) {
+		enc_search = strstr(enc_search, encname);
+		if (NULL == enc_search )
+			return 0;
+		if ((enc_search == vbro->ptr ||  enc_search[-1] == ' ' || enc_search[-1] == ',' )
+			&& (enc_search + encnamelen == vbro->ptr + vbrolen || enc_search[encnamelen] == ' ' || enc_search[encnamelen] == ','))
+			break;
+		enc_search += encnamelen;
+	}
+	if (enc_search == vbro->ptr + vbrolen)
+		return 0;
+
+	/* check if precompressed file exists */
+	tb = r->tmp_buf;
+	pathlen=strlen((&r->physical.path)->ptr);
+	extlen=strlen(ext);
+	buffer_string_prepare_copy(tb, pathlen+extlen+1);
+	buffer_copy_string_len(tb, (&r->physical.path)->ptr, pathlen);
+	buffer_append_string_len(tb, ".", 1);
+	buffer_append_string_len(tb, ext, extlen);
+	*precomp_sce = stat_cache_get_entry_open(tb, 1);
+	if (NULL != precomp_sce) {
+		*label = encname;
+		return enc;
+	} else {
+		return 0;
+	}
+}
+
 REQUEST_FUNC(mod_deflate_handle_response_start) {
 	plugin_data *p = p_d;
 	const buffer *vbro;
@@ -1880,9 +1954,10 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	const char *label;
 	off_t len;
 	uint32_t etaglen;
-	int compression_type;
+	int compression_type = 0;
 	handler_t rc;
 	int had_vary = 0;
+	stat_cache_entry *precomp_sce = NULL;
 
 	/*(current implementation requires response be complete)*/
 	if (!r->resp_body_finished) return HANDLER_GO_ON;
@@ -1923,17 +1998,33 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	vbro = http_header_request_get(r, HTTP_HEADER_ACCEPT_ENCODING, CONST_STR_LEN("Accept-Encoding"));
 	if (NULL == vbro) return HANDLER_GO_ON;
 
+	/* Check for precompressed file */
+	if (p->conf.use_precomp
+		 && r->resp_body_finished
+	    && r->write_queue.first == r->write_queue.last
+	    && r->write_queue.first->type == FILE_CHUNK
+	    && r->write_queue.first->offset == 0
+	    && !r->write_queue.first->file.is_temp
+	    && r->http_status != 206) {
+		compression_type = mod_deflate_try_precomp(r, "br", HTTP_ACCEPT_ENCODING_BR, "br", &label, &precomp_sce);
+		if (!compression_type)
+			  compression_type = mod_deflate_try_precomp(r, "gz", HTTP_ACCEPT_ENCODING_GZIP, "gzip", &label, &precomp_sce);
+	}
+
 	/* find matching encodings */
-	compression_type = mod_deflate_choose_encoding(vbro->ptr, p, &label);
+	if (!precomp_sce)
+		compression_type = mod_deflate_choose_encoding(vbro->ptr, p, &label);
 	if (!compression_type) return HANDLER_GO_ON;
 
 	/* Check mimetype in response header "Content-Type" */
-	if (NULL != (vbro = http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type")))) {
-		if (NULL == array_match_value_prefix(p->conf.mimetypes, vbro)) return HANDLER_GO_ON;
-	} else {
-		/* If no Content-Type set, compress only if first p->conf.mimetypes value is "" */
-		data_string *mimetype = (data_string *)p->conf.mimetypes->data[0];
-		if (!buffer_is_blank(&mimetype->value)) return HANDLER_GO_ON;
+	if (!precomp_sce) {
+		if (NULL != (vbro = http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type")))) {
+			if (NULL == array_match_value_prefix(p->conf.mimetypes, vbro)) return HANDLER_GO_ON;
+		} else {
+			/* If no Content-Type set, compress only if first p->conf.mimetypes value is "" */
+			data_string *mimetype = (data_string *)p->conf.mimetypes->data[0];
+			if (!buffer_is_blank(&mimetype->value)) return HANDLER_GO_ON;
+		}
 	}
 
 	/* Vary: Accept-Encoding (response might change according to request Accept-Encoding) */
@@ -1984,7 +2075,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		}
 	}
 
-	if (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < r->con->srv->loadavg[0]) {
+	if (!precomp_sce && (0.0 < p->conf.max_loadavg && p->conf.max_loadavg < r->con->srv->loadavg[0])) {
 		return HANDLER_GO_ON;
 	}
 
@@ -2010,6 +2101,16 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		return HANDLER_GO_ON;
 	}
 
+	/* send precomp output if found */
+	if (NULL != precomp_sce) {
+		chunkqueue_reset(&r->write_queue);
+		if (precomp_sce->fd < 0 || 0 != http_chunk_append_file_ref(r, precomp_sce))
+			return HANDLER_ERROR;
+		if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH))
+			http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
+												CONST_STR_LEN("Content-Length"));
+		return HANDLER_GO_ON;
+	}
 	/* restrict items eligible for cache of compressed responses
 	 * (This module does not aim to be a full caching proxy)
 	 * response must be complete (not streaming response)
