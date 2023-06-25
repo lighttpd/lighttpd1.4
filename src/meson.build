@@ -381,7 +381,7 @@ if get_option('with_gnutls')
 	# function: gnutls_check_version (-lgnutls)
 	libgnutls = [ dependency('gnutls') ]
 	conf_data.set('HAVE_GNUTLS_CRYPTO_H', true)
-	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(getoption('with_nettle'))
+	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(get_option('with_nettle'))
 	  libcrypto = [ dependency('gnutls') ]
 	endif
 endif
@@ -402,7 +402,7 @@ if get_option('with_nss')
 	#libnss3 = [ compiler.find_library('nss3') ]
 	#libnssutil3 = [ compiler.find_library('nssutil3') ]
 	conf_data.set('HAVE_NSS3_NSS_H', true)
-	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(getoption('with_nettle')) and not(getoption('with_gnutls'))
+	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(get_option('with_nettle')) and not(get_option('with_gnutls'))
 	  libcrypto = [ dependency('nss') ]
 	endif
 endif
