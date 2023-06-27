@@ -91,7 +91,8 @@ builtin_mods = \
   mod_simple_vhost.c \
   mod_evhost.c \
   mod_fastcgi.c \
-  mod_scgi.c
+  mod_scgi.c \
+  mod_earlyhints.c
 
 if !LIGHTTPD_STATIC
 src += $(builtin_mods)
@@ -412,6 +413,7 @@ lighttpd_SOURCES = \
   mod_userdir.c \
   mod_vhostdb.c \
   mod_vhostdb_api.c \
+  mod_earlyhints.c \
   mod_webdav.c
 lighttpd_CPPFLAGS = \
   -DLIGHTTPD_STATIC \
