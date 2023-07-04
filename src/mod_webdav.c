@@ -3743,7 +3743,8 @@ webdav_propfind_dir (webdav_propfind_bufs * const restrict pb)
     const int dfd = -1;
     DIR * const dir = opendir(dst->path.ptr);
   #else
-    const int dfd = fdevent_open_dirname(dst->path.ptr, 0);
+    const int dfd = fdevent_open_dirname(dst->path.ptr,
+                                         (pb->atflags != AT_SYMLINK_NOFOLLOW));
     DIR * const dir = (dfd >= 0) ? fdopendir(dfd) : NULL;
   #endif
     if (NULL == dir) {
