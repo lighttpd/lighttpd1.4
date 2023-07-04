@@ -466,6 +466,11 @@ connection_transition_h2 (request_st * const h2r, connection * const con)
     buffer_copy_string_len(&h2r->target_orig, CONST_STR_LEN("*"));
     buffer_copy_string_len(&h2r->uri.path,    CONST_STR_LEN("*"));
     h2r->http_method = HTTP_METHOD_PRI;
+    /*(setting all bits might break existing lighttpd.conf,
+     * which e.g. might make assumptions in configs for "OPTIONS *",
+     * so probably better to leave other conditions unset)*/
+    /*h2r->conditional_is_valid = ~0u;*/
+    h2r->conditional_is_valid |= (1 << COMP_HTTP_REQUEST_METHOD);
     h2r->reqbody_length = -1; /*(unnecessary for h2r?)*/
     h2r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_POLLIN;
 
