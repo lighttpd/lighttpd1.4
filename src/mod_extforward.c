@@ -380,6 +380,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
                 cpv->v.u = mod_extforward_parse_opts(srv, cpv->v.a);
                 if (UINT_MAX == cpv->v.u)
                     return HANDLER_ERROR;
+                cpv->vtype = T_CONFIG_LOCAL;
                 break;
               case 3: /* extforward.hap-PROXY */
                 if (cpv->v.u) hap_PROXY = 1;
