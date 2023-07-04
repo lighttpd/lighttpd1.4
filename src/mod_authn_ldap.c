@@ -693,7 +693,7 @@ static handler_t mod_authn_ldap_memberOf(log_error_st *errh, plugin_config *s, c
 
     plugin_config_ldap * const ldc = s->ldc;
     for (size_t i = 0; i < groups->used; ++i) {
-        const char *base = groups->data[i]->key.ptr;
+        const char *base = ((data_string *)groups->data[i])->value.ptr;
         LDAPMessage *lm = mod_authn_ldap_search(errh, ldc, base, filter->ptr);
         if (NULL != lm) {
             int count = ldap_count_entries(ldc->ldap, lm);
