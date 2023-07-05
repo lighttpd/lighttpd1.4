@@ -464,7 +464,8 @@ static int http_request_parse_single_header(request_st * const restrict r, const
             off_t clen = (off_t)li_restricted_strtoint64(v, vlen, &err);
             if (err == v+vlen) {
                 /* (set only if not set to -1 by Transfer-Encoding: chunked) */
-                if (0 == r->reqbody_length) r->reqbody_length = clen;
+                if (r->http_version > HTTP_VERSION_1_1 || 0==r->reqbody_length)
+                    r->reqbody_length = clen;
             }
             else {
                 return http_request_header_line_invalid(r, 400, "invalid Content-Length header -> 400");

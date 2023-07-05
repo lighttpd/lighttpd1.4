@@ -1569,12 +1569,16 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
          *      GOAWAY, e.g. might avoid allocating (request_st *r) */
         r = h2_init_stream(h2r, con);
         r->x.h2.id = id;
-        r->x.h2.state = (s[4] & H2_FLAG_END_STREAM)
-          ? H2_STATE_HALF_CLOSED_REMOTE
-          : H2_STATE_OPEN;
-        r->state = (0 == r->reqbody_length)
-          ? CON_STATE_HANDLE_REQUEST
-          : CON_STATE_READ_POST;
+        if (s[4] & H2_FLAG_END_STREAM) {
+            r->x.h2.state = H2_STATE_HALF_CLOSED_REMOTE;
+            r->state = CON_STATE_HANDLE_REQUEST;
+            r->reqbody_length = 0;
+        }
+        else {
+            r->x.h2.state = H2_STATE_OPEN;
+            r->state = CON_STATE_READ_POST;
+            r->reqbody_length = -1;
+        }
         /* Note: timestamps here are updated only after receipt of entire header
          * (HEADERS frame might have been sent in multiple packets
          *  and CONTINUATION frames may have been sent in multiple packets)
@@ -1659,15 +1663,6 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
 
     if (!h2c->sent_goaway) {
         h2c->h2_cid = id;
-        if (!light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_LENGTH))
-            r->reqbody_length = (s[4] & H2_FLAG_END_STREAM) ? 0 : -1;
-      #if 0
-        else if (r->reqbody_length > 0 && (s[4] & H2_FLAG_END_STREAM)) {
-            /*(handled in connection_handle_read_post_state())*/
-            /* XXX: TODO if (r->conf.log_request_header_on_error) */
-            r->http_status = 400; /* Bad Request */
-        }
-      #endif
         /*(lighttpd.conf config conditions not yet applied to request,
          * but do not increase window size if BUFMIN set in global config)*/
         if (r->reqbody_length /*(see h2_init_con() for session window)*/
