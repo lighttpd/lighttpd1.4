@@ -1677,7 +1677,7 @@ chunkqueue_read_data (chunkqueue * const cq,
 }
 
 
-buffer *
+chunk *
 chunkqueue_read_squash (chunkqueue * const restrict cq, log_error_st * const restrict errh)
 {
     /* read and replace chunkqueue contents with single MEM_CHUNK.
@@ -1687,7 +1687,7 @@ chunkqueue_read_squash (chunkqueue * const restrict cq, log_error_st * const res
     if (cqlen >= UINT32_MAX) return NULL;
 
     if (cq->first && NULL == cq->first->next && cq->first->type == MEM_CHUNK)
-        return cq->first->mem;
+        return cq->first;
 
     chunk * const c = chunk_acquire((uint32_t)cqlen+1);
     char *data = c->mem->ptr;
@@ -1701,7 +1701,7 @@ chunkqueue_read_squash (chunkqueue * const restrict cq, log_error_st * const res
 
     chunkqueue_release_chunks(cq);
     chunkqueue_append_chunk(cq, c);
-    return c->mem;
+    return c;
 }
 
 

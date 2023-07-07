@@ -162,7 +162,7 @@ ssize_t chunkqueue_write_chunk_to_pipe (int fd, chunkqueue * restrict cq, log_er
 int chunkqueue_peek_data (chunkqueue *cq, char **data, uint32_t *dlen, log_error_st * restrict errh);
 int chunkqueue_read_data (chunkqueue *cq, char *data, uint32_t dlen, log_error_st * restrict errh);
 
-buffer * chunkqueue_read_squash (chunkqueue * restrict cq, log_error_st * restrict errh);
+chunk * chunkqueue_read_squash (chunkqueue * restrict cq, log_error_st * restrict errh);
 
 __attribute_pure__
 __attribute_nonnull__()
