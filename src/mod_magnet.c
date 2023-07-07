@@ -348,6 +348,19 @@ static int magnet_newindex_readonly(lua_State *L) {
     return lua_error(L);
 }
 
+static void magnet_push_cq(lua_State *L, chunkqueue * const cq, log_error_st * const errh) {
+    const off_t cqlen = chunkqueue_length(cq);
+    if (cqlen) {
+        const chunk * const c = chunkqueue_read_squash(cq, errh);
+        if (c)
+            lua_pushlstring(L, c->mem->ptr+c->offset, cqlen);
+        else
+            lua_pushnil(L);
+    }
+    else
+        lua_pushlstring(L, "", 0);
+}
+
 static void magnet_push_buffer(lua_State *L, const buffer *b) {
     if (b && !buffer_is_unset(b))
         lua_pushlstring(L, BUF_PTR_LEN(b));
@@ -2307,13 +2320,8 @@ static int magnet_respbody(lua_State *L) {
      #endif
       case 'g': /* get; r.resp_body.get */
         if (k[1] == 'e' && k[2] == 't' && k[3] == '\0') {
-            if (r->resp_body_finished) {
-                chunkqueue * const cq = &r->write_queue;
-                chunkqueue_length(cq)
-                  ? magnet_push_buffer(L,
-                                       chunkqueue_read_squash(cq,r->conf.errh))
-                  : (void)lua_pushlstring(L, "", 0);
-            }
+            if (r->resp_body_finished)
+                magnet_push_cq(L, &r->write_queue, r->conf.errh);
             else
                 lua_pushnil(L); /*(?maybe return -1 instead if len unknown?)*/
             return 1;
@@ -2447,10 +2455,7 @@ static int magnet_reqbody(lua_State *L) {
         if (k[1] == 'e' && k[2] == 't' && k[3] == '\0') {
             chunkqueue * const cq = &r->reqbody_queue;
             if (cq->bytes_in == (off_t)r->reqbody_length)
-                chunkqueue_length(cq)
-                  ? magnet_push_buffer(L,
-                                       chunkqueue_read_squash(cq, r->conf.errh))
-                  : (void)lua_pushlstring(L, "", 0);
+                magnet_push_cq(L, cq, r->conf.errh);
             else
                 lua_pushnil(L); /*(?maybe return -1 instead if len unknown?)*/
             return 1;
