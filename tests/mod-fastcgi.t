@@ -84,16 +84,16 @@ SKIP: {
 	$t->{REQUEST}  = ( <<EOF
 GET /get-server-env.php?env=REMOTE_USER HTTP/1.0
 Host: auth.example.org
-Authorization: Basic ZGVzOmRlcw==
+Authorization: Basic c2hhOnNoYQ==
 EOF
  );
-	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'des' } ];
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'sha' } ];
 	ok($tf->handle_http($t) == 0, '$_SERVER["REMOTE_USER"]');
 
 	$t->{REQUEST}  = ( <<EOF
 GET /get-server-env.php?env=AUTH_TYPE HTTP/1.0
 Host: auth.example.org
-Authorization: Basic ZGVzOmRlcw==
+Authorization: Basic c2hhOnNoYQ==
 EOF
  );
 	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'Basic' } ];
