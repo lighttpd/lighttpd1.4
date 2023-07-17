@@ -1132,7 +1132,6 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 		const char *cmd = NULL;
 		pid_t pid;
 		chunk *c;
-		char *args[4];
 		log_error_st *errh = p->errh;
 
 		if (!p->conf.ssi_exec) { /* <!--#exec ... --> disabled by config */
@@ -1160,17 +1159,12 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 		if (0 != chunkqueue_append_mem_to_tempfile(cq, "", 0, errh)) break;
 		c = cq->last;
 
-		*(const char **)&args[0] = "/bin/sh";
-		*(const char **)&args[1] = "-c";
-		*(const char **)&args[2] = cmd;
-		args[3] = NULL;
-
 		int status = 0;
 		struct stat stb;
 		stb.st_size = 0;
 		/*(expects STDIN_FILENO open to /dev/null)*/
 		int serrh_fd = r->conf.serrh ? r->conf.serrh->fd : -1;
-		pid = fdevent_fork_execve(args[0], args, NULL, -1, c->file.fd, serrh_fd, -1);
+		pid = fdevent_sh_exec(cmd, NULL, -1, c->file.fd, serrh_fd);
 		if (-1 == pid) {
 			log_perror(errh, __FILE__, __LINE__, "spawning exec failed: %s", cmd);
 		} else if (fdevent_waitpid(pid, &status, 0) < 0) {

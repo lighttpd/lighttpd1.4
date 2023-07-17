@@ -1667,7 +1667,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
               #ifdef _WIN32
                 UNUSED(sh_exec); /*(no "exec " in cmd.exe; skip)*/
               #else
-                if (sh_exec) {
+                if (sh_exec && host->args.used != 1) {
                     /*(preserve prior behavior for SCGI exec of command)*/
                     /*(admin should really prefer to put
                      * any complex command into a script)*/

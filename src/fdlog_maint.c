@@ -58,20 +58,12 @@ static struct fdlog_pipes_t fdlog_pipes;
 static pid_t
 fdlog_pipe_spawn (const char * const fn, const int rfd)
 {
-    char *args[4];
     int devnull = fdevent_open_devnull();
-    pid_t pid;
-
     if (-1 == devnull) {
         return -1;
     }
 
-    *(const char **)&args[0] = "/bin/sh";
-    *(const char **)&args[1] = "-c";
-    *(const char **)&args[2] = fn;
-    args[3] = NULL;
-
-    pid = fdevent_fork_execve(args[0], args, NULL, rfd, devnull, devnull, -1);
+    const pid_t pid = fdevent_sh_exec(fn, NULL, rfd, devnull, devnull);
 
     if (pid > 0) {
         close(devnull);

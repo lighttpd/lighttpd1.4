@@ -2430,18 +2430,7 @@ int config_parse_cmd(server *srv, config_t *context, const char *cmd) {
 		ret = -1;
 	}
 	else {
-		char *shell = getenv("SHELL");
-		char *args[4];
-		pid_t pid;
-		if (shell && (0 == strcmp(shell, "/usr/bin/false")
-		              || 0 == strcmp(shell, "/bin/false")))
-			shell = NULL;
-		*(const char **)&args[0] = shell ? shell : "/bin/sh";
-		*(const char **)&args[1] = "-c";
-		*(const char **)&args[2] = cmd;
-		args[3] = NULL;
-
-		pid = fdevent_fork_execve(args[0], args, NULL, -1, fds[1], -1, -1);
+		pid_t pid = fdevent_sh_exec(cmd, NULL, -1, fds[1], -1);
 		if (-1 == pid) {
 			log_perror(srv->errh, __FILE__, __LINE__, "fork/exec(%s)", cmd);
 			ret = -1;

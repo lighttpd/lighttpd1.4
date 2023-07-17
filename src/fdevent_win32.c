@@ -767,6 +767,18 @@ pid_t fdevent_createprocess (char *argv[], char *envp[], intptr_t fdin, intptr_t
 }
 
 
+pid_t fdevent_sh_exec (const char *cmdstr, char *envp[], intptr_t fdin, intptr_t fdout, int fderr)
+{
+    char *args[4];
+    const char *shell = getenv("SHELL");
+    *(const char **)&args[0] = shell ? shell : "/bin/sh";
+    *(const char **)&args[1] = "-c";
+    *(const char **)&args[2] = cmdstr;
+    args[3] = NULL;
+    return fdevent_createprocess(args, envp, fdin, fdout, fderr, -1);
+}
+
+
 int fdevent_dup_cloexec (int fd)
 {
     const int newfd = _dup(fd);

@@ -677,6 +677,56 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
 }
 
 
+/* Check if cmd string can bypass shell expansion
+ *
+ * Commands in lighttpd.conf are trusted; lighttpd.conf is controlled by admin.
+ * As an optimization, skip running command via "/bin/sh -c ..." if the command
+ * begins with '/' and does not contain shell metacharacters which might need
+ * to be interpretted by the shell.  Assume that IFS is set to shell defaults.
+ * Allows 8-bit UTF-8, but does not validate UTF-8.  Does not flag CTL
+ * characters besides IFS defaults.  cmd must be '\0'-terminated.
+ *
+ * An alternative approach could pass cmd through wordexp() using WRDE_NOCMD
+ * and compare input cmd to match wordexp() output, if single word returned.
+ * Another alternative would be to prepend <cmd> with "exec <cmd>" on stack
+ * to try to have the shell 'exec' the result of shell expansion (if cmd did
+ * not already begin with "exec ").
+ *
+ * For portability with older systems without wordexp(), instead use strcspn()
+ * on list of known characters which might be processed during shell expansion.
+ * With the goal of correctness, err on side of continuing to call the shell
+ * rather than potentially incorrectly skipping shell expansion.
+ *
+ * Allow %+,-./:=_~^@ and alphanumeric, as well as 8-bit for UTF-8.
+ * Tilde '~' allowed since not first char, as first char is checked to be '/'.
+ * Equal '=' allowed since string is checked to contain no whitespace, so no
+ * variable assignment preceding command.
+ */
+#define fdevent_cmd_might_bypass_shell_expansion(cmd) \
+  (*cmd == '/' && (cmd)[strcspn((cmd), "\t\n !\"#$&'()*;<>?[\\]`{|}")] == '\0')
+
+__attribute_cold__
+pid_t fdevent_sh_exec(const char *cmdstr, char *envp[], int fdin, int fdout, int fderr) {
+    char *args[4];
+    if (fdevent_cmd_might_bypass_shell_expansion(cmdstr)) {
+        *(const char **)&args[0] = cmdstr;
+        args[1] = NULL;
+    }
+    else {
+        const char *shell = getenv("SHELL");
+        if (shell && (0 == strcmp(shell, "/usr/bin/false")
+                      || 0 == strcmp(shell, "/bin/false")))
+            shell = NULL;
+        *(const char **)&args[0] = shell ? shell : "/bin/sh";
+        *(const char **)&args[1] = "-c";
+        *(const char **)&args[2] = cmdstr;
+        args[3] = NULL;
+    }
+
+    return fdevent_fork_execve(args[0], args, envp, fdin, fdout, fderr, -1);
+}
+
+
 int fdevent_kill (pid_t pid, int sig) {
     return kill(pid, sig);
 }
