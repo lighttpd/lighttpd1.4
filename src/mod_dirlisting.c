@@ -1472,11 +1472,29 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	}
   #endif
 
-	/* TODO: add option/mechanism to enable json output */
   #if 0 /* XXX: ??? might this be enabled accidentally by clients ??? */
+	/* XXX: would have to add "Vary: Accept" response header, too */
 	const buffer * const vb =
 	  http_header_request_get(r, HTTP_HEADER_ACCEPT, CONST_STR_LEN("Accept"));
 	p->conf.json = (vb && strstr(vb->ptr, "application/json")); /*(coarse)*/
+	if (p->conf.json) p->conf.auto_layout = 0;
+  #else
+	/* check URL for /<path>/?json to enable json output */
+	if (buffer_clen(&r->uri.query) == sizeof("json")-1
+	    && 0 == memcmp(r->uri.query.ptr, CONST_STR_LEN("json")-1)) {
+	  #if 0
+		/* streaming response not set here for mod_deflate (which
+		 * currently does not compress incomlete streaming responses),
+		 * since json response is generally highly compressible.
+		 * Admin should enable streaming response in lighttpd.conf,
+		 * if desired. */
+		if (!(r->conf.stream_response_body
+		      & (FDEVENT_STREAM_RESPONSE|FDEVENT_STREAM_RESPONSE_BUFMIN)))
+			r->conf.stream_response_body |= FDEVENT_STREAM_RESPONSE;
+	  #endif
+		p->conf.json = 1;
+		p->conf.auto_layout = 0;
+	}
   #endif
 
 	if (p->conf.cache) {
