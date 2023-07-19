@@ -667,6 +667,15 @@ static void http_dirlist_link (request_st * const r, const buffer *b, const char
                                 BUF_PTR_LEN(tb));
 }
 
+static void http_dirlist_auto_layout_early_hints (request_st * const r, const plugin_data * const p) {
+    if (p->conf.external_css)
+        http_dirlist_link(r, p->conf.external_css,
+          CONST_STR_LEN(">; rel=\"preload\"; as=\"style\""));
+    if (p->conf.external_js)
+        http_dirlist_link(r, p->conf.external_js,
+          CONST_STR_LEN(">; rel=\"preload\"; as=\"script\""));
+}
+
 /* portions copied from mod_status
  * modified and specialized for stable dirlist sorting by name */
 static const char js_simple_table_resort[] = \
@@ -894,8 +903,6 @@ static void http_list_directory_header(request_st * const r, const handler_ctx *
 			                "<link rel=\"stylesheet\" type=\"text/css\" href=\""),
 			  BUF_PTR_LEN(p->conf.external_css),
 			  CONST_STR_LEN("\">\n"));
-			http_dirlist_link(r, p->conf.external_css,
-			  CONST_STR_LEN(">; rel=\"preload\"; as=\"style\""));
 		} else {
 			buffer_append_string_len(out, CONST_STR_LEN(
 				"<style type=\"text/css\">\n"
@@ -930,10 +937,6 @@ static void http_list_directory_header(request_st * const r, const handler_ctx *
 				"}\n"
 				"</style>\n"
 			));
-		}
-		if (p->conf.external_js) {
-			http_dirlist_link(r, p->conf.external_js,
-			  CONST_STR_LEN(">; rel=\"preload\"; as=\"script\""));
 		}
 
 		buffer_append_string_len(out, CONST_STR_LEN("</head>\n<body>\n"));
@@ -1529,6 +1532,8 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 		r->http_status = 200;
 		r->resp_body_started = 1;
 	}
+	else if (p->conf.auto_layout)
+		http_dirlist_auto_layout_early_hints(r, p);
 
 	r->plugin_ctx[p->id] = hctx;
 	r->handler_module = p->self;
@@ -1646,14 +1651,8 @@ static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data *
                                      CONST_STR_LEN("ETag"),
                                      BUF_PTR_LEN(etag));
     }
-    if (p->conf.auto_layout) {
-        if (p->conf.external_css)
-            http_dirlist_link(r, p->conf.external_css,
-              CONST_STR_LEN(">; rel=\"preload\"; as=\"style\""));
-        if (p->conf.external_js)
-            http_dirlist_link(r, p->conf.external_js,
-              CONST_STR_LEN(">; rel=\"preload\"; as=\"script\""));
-    }
+    if (p->conf.auto_layout)
+        http_dirlist_auto_layout_early_hints(r, p);
 
     r->resp_body_finished = 1;
     return HANDLER_FINISHED;
