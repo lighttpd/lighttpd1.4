@@ -1625,6 +1625,20 @@ static void mod_dirlisting_cache_control (request_st * const r, unix_time64_t ma
 }
 
 
+static void mod_dirlisting_cache_etag (request_st * const r, int fd)
+{
+    if (0 != r->conf.etag_flags) {
+        struct stat st;
+        if (0 == fstat(fd, &st)) {
+            buffer * const vb =
+              http_header_response_set_ptr(r, HTTP_HEADER_ETAG,
+                                           CONST_STR_LEN("ETag"));
+            http_etag_create(vb, &st, r->conf.etag_flags);
+        }
+    }
+}
+
+
 static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data * const p) {
     /* optional: an external process can trigger a refresh by deleting the cache
      * entry when the external process detects (or initiates) changes to dir */
@@ -1755,33 +1769,15 @@ static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const 
     const int fd = fdevent_mkostemp(oldpath, 0);
     if (fd < 0) return;
     int rc = mod_dirlisting_write_cq(fd, &r->write_queue, r->conf.errh);
-  #ifdef _WIN32
-    close(fd); /*(rename fails if file is open; MS filesystem limitation)*/
-  #endif
+    if (rc)
+        mod_dirlisting_cache_etag(r, fd);
+    close(fd); /*(_WIN32 rename fails if file open; MS filesystem limitation)*/
     if (rc && 0 == fdevent_rename(oldpath, newpath)) {
         stat_cache_invalidate_entry(newpath, len);
-        /* Cache-Control and ETag (also done in mod_dirlisting_cache_check())*/
         mod_dirlisting_cache_control(r, hctx->conf.cache->max_age);
-        if (0 != r->conf.etag_flags) {
-            struct stat st;
-          #ifdef _WIN32
-            if (0 == stat(newpath, &st))
-          #else
-            if (0 == fstat(fd, &st))
-          #endif
-            {
-                buffer * const vb =
-                  http_header_response_set_ptr(r, HTTP_HEADER_ETAG,
-                                               CONST_STR_LEN("ETag"));
-                http_etag_create(vb, &st, r->conf.etag_flags);
-            }
-        }
     }
     else
         unlink(oldpath);
-  #ifndef _WIN32
-    close(fd);
-  #endif
 }
 
 
@@ -1817,10 +1813,15 @@ static void mod_dirlisting_cache_json (request_st * const r, handler_ctx * const
     force_assert(len < PATH_MAX);
     memcpy(newpath, hctx->jfn, len);
     newpath[len] = '\0';
-    close(hctx->jfd);
+    if (0 == r->resp_header_len) /*(response headers not yet sent)*/
+        mod_dirlisting_cache_etag(r, hctx->jfd);
+    close(hctx->jfd); /*(_WIN32 rename fails if file open; MS fs limitation)*/
     hctx->jfd = -1;
-    if (0 == fdevent_rename(hctx->jfn, newpath))
+    if (0 == fdevent_rename(hctx->jfn, newpath)) {
         stat_cache_invalidate_entry(newpath, len);
+        if (0 == r->resp_header_len) /*(response headers not yet sent)*/
+            mod_dirlisting_cache_control(r, hctx->conf.cache->max_age);
+    }
     else
         unlink(hctx->jfn);
     free(hctx->jfn);
