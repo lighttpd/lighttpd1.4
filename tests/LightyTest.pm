@@ -5,40 +5,9 @@ use IO::Socket ();
 use Test::More; # diag()
 use Socket;
 use Cwd 'abs_path';
+use Config;
 
-sub find_program {
-	my @DEFAULT_PATHS = ('/usr/bin/', '/usr/local/bin/');
-	my ($envname, $program) = @_;
-	my $location;
-
-	if (defined $ENV{$envname}) {
-		$location = $ENV{$envname};
-	} else {
-		$location = `which "$program" 2>/dev/null`;
-		chomp $location;
-		if (! -x $location) {
-			for my $path (@DEFAULT_PATHS) {
-				$location = $path . $program;
-				last if -x $location;
-			}
-		}
-	}
-
-	if (-x $location) {
-		$ENV{$envname} = $location;
-		return 1;
-	} else {
-		delete $ENV{$envname};
-		return 0;
-	}
-}
-
-BEGIN {
-	our $HAVE_PERL = find_program('PERL', 'perl');
-	if (!$HAVE_PERL) {
-		die "Couldn't find path to perl, but it obviously seems to be running";
-	}
-}
+$ENV{PERL} = $Config{perlpath} . $Config{_exe};
 
 sub mtime {
 	my $file = shift;
