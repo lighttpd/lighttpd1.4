@@ -69,6 +69,7 @@ static chunk *chunk_buffers;
 static int chunks_oversized_n;
 static const array *chunkqueue_default_tempdirs = NULL;
 static off_t chunkqueue_default_tempfile_size = DEFAULT_TEMPFILE_SIZE;
+static const char *env_tmpdir = NULL;
 
 void chunkqueue_set_chunk_size (size_t sz)
 {
@@ -669,6 +670,12 @@ void chunkqueue_set_tempdirs_default (const array *tempdirs, off_t upload_temp_f
         upload_temp_file_size = DEFAULT_TEMPFILE_SIZE;
     chunkqueue_default_tempdirs = tempdirs;
     chunkqueue_default_tempfile_size = upload_temp_file_size;
+
+    env_tmpdir = getenv("TMPDIR");
+    #ifdef _WIN32
+    if (NULL == env_tmpdir) env_tmpdir = getenv("TEMP");
+    #endif
+    if (NULL == env_tmpdir) env_tmpdir = "/var/tmp";
 }
 
 void chunkqueue_set_tempdirs(chunkqueue * const restrict cq, const array * const restrict tempdirs, off_t upload_temp_file_size) {
@@ -677,6 +684,11 @@ void chunkqueue_set_tempdirs(chunkqueue * const restrict cq, const array * const
     cq->tempdirs = tempdirs;
     cq->upload_temp_file_size = upload_temp_file_size;
     cq->tempdir_idx = 0;
+}
+
+const char *chunkqueue_env_tmpdir(void) {
+    /*(chunkqueue_set_tempdirs_default() must have been called at startup)*/
+    return env_tmpdir;
 }
 
 __attribute_noinline__
@@ -775,8 +787,9 @@ static chunk *chunkqueue_get_append_newtempfile(chunkqueue * const restrict cq, 
         }
     }
     else {
+        const char *tmpdir = chunkqueue_env_tmpdir();
         c->file.fd =
-          chunkqueue_get_append_mkstemp(template, CONST_STR_LEN("/var/tmp"));
+          chunkqueue_get_append_mkstemp(template, tmpdir, strlen(tmpdir));
         if (-1 != c->file.fd) return c;
     }
 

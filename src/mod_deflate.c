@@ -1523,7 +1523,7 @@ static int mod_deflate_using_libdeflate (handler_ctx * const hctx, const plugin_
             buffer_copy_string_len(fn, BUF_PTR_LEN(&ds->value));
         }
         else
-            buffer_copy_string_len(fn, CONST_STR_LEN("/var/tmp"));
+            buffer_copy_string(fn, chunkqueue_env_tmpdir());
         buffer_append_path_len(fn, CONST_STR_LEN("lighttpd-XXXXXX"));
         fd = fdevent_mkostemp(fn->ptr, 0);
         if (-1 == fd) return 0;

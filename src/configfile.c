@@ -2664,13 +2664,13 @@ int config_set_defaults(server *srv) {
 		}
 	}
 
+	chunkqueue_set_tempdirs_default(
+		srv->srvconf.upload_tempdirs,
+		srv->srvconf.upload_temp_file_size);
+
 	if (!srv->srvconf.upload_tempdirs->used) {
-		const char *tmpdir = getenv("TMPDIR");
-	  #ifdef _WIN32
-		if (NULL == tmpdir) tmpdir = getenv("TEMP");
-	  #endif
-		if (NULL == tmpdir) tmpdir = "/var/tmp";
-		array_insert_value(srv->srvconf.upload_tempdirs, tmpdir, strlen(tmpdir));
+		const char *tmpdir = chunkqueue_env_tmpdir();
+		array_insert_value(srv->srvconf.upload_tempdirs,tmpdir,strlen(tmpdir));
 	}
 
 	if (srv->srvconf.upload_tempdirs->used) {
@@ -2698,10 +2698,6 @@ int config_set_defaults(server *srv) {
 			}
 		}
 	}
-
-	chunkqueue_set_tempdirs_default(
-		srv->srvconf.upload_tempdirs,
-		srv->srvconf.upload_temp_file_size);
 
 	if (!s->document_root || buffer_is_blank(s->document_root)) {
 		log_error(srv->errh, __FILE__, __LINE__, "server.document-root is not set");
