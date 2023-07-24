@@ -403,6 +403,9 @@ void test_mod_staticfile (void)
     request_st r;
 
     memset(&r, 0, sizeof(request_st));
+    chunkqueue_init(&r.write_queue);
+    chunkqueue_init(&r.read_queue);
+    chunkqueue_init(&r.reqbody_queue);
     r.http_method            = HTTP_METHOD_GET;
     r.http_version           = HTTP_VERSION_1_1;
     r.tmp_buf                = buffer_init();

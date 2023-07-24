@@ -105,6 +105,9 @@ void test_mod_indexfile (void)
     request_st r;
 
     memset(&r, 0, sizeof(request_st));
+    chunkqueue_init(&r.write_queue);
+    chunkqueue_init(&r.read_queue);
+    chunkqueue_init(&r.reqbody_queue);
     r.conf.errh              = fdlog_init(NULL, -1, FDLOG_FD);
     r.conf.errh->fd          = -1; /* (disable) */
     r.conf.follow_symlink    = 1;

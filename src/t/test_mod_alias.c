@@ -11,6 +11,9 @@
 static void test_mod_alias_check(void) {
     request_st r;
     memset(&r, 0, sizeof(request_st));
+    chunkqueue_init(&r.write_queue);
+    chunkqueue_init(&r.read_queue);
+    chunkqueue_init(&r.reqbody_queue);
     array * const aliases = array_init(3);
 
     /*(empty list; should not happen in practice)*/

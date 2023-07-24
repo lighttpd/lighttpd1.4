@@ -173,6 +173,9 @@ void test_mod_userdir (void)
     memset(&r, 0, sizeof(request_st));
     memset(&con, 0, sizeof(connection));
     memset(&srv, 0, sizeof(server));
+    chunkqueue_init(&r.write_queue);
+    chunkqueue_init(&r.read_queue);
+    chunkqueue_init(&r.reqbody_queue);
     r.tmp_buf                = buffer_init();
     r.conf.errh              = fdlog_init(NULL, -1, FDLOG_FD);
     r.conf.errh->fd          = -1; /* (disable) */
