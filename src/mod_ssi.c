@@ -75,6 +75,7 @@ static handler_ctx * handler_ctx_init(plugin_data *p, log_error_st *errh) {
 	hctx->stat_fn = &p->stat_fn;
 	hctx->ssi_vars = p->ssi_vars;
 	hctx->ssi_cgi_env = p->ssi_cgi_env;
+	chunkqueue_init(&hctx->wq);
 	memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
 	return hctx;
 }
