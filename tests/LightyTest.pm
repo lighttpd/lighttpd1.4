@@ -76,6 +76,11 @@ sub new {
 		$self->{LIGHTTPD_PATH} = $ENV{LIGHTTPD_EXE_PATH};
 	}
 
+	# test for cygwin w/ _WIN32 native lighttpd.exe (not linked w/ cygwin1.dll)
+	#   ($^O eq "MSWin32") is untested; not supported
+	$self->{"win32native"} = $^O eq "cygwin"
+	                      && 0 != system("ldd '$$self{LIGHTTPD_PATH}' | grep -q cygwin");
+
 	my ($name, $aliases, $addrtype, $net) = gethostbyaddr(inet_aton("127.0.0.1"), AF_INET);
 
 	$self->{HOSTNAME} = $name;
@@ -220,42 +225,6 @@ sub start_proc {
 	my $SOCK;
 	($SOCK, $self->{PORT}) = bind_ephemeral_tcp_socket();
 
-	my $testdir      = $self->{TESTDIR};
-	my $conf         = $self->{TESTDIR}.'/'.$self->{CONFIGFILE};
-	my $modules_path = $self->{MODULES_PATH};
-
-	# test for cygwin w/ _WIN32 native lighttpd.exe (not linked w/ cygwin1.dll)
-	#   ($^O eq "MSWin32") is untested; not supported
-	my $win32native = $^O eq "cygwin"
-	               && 0 != system("ldd '$$self{LIGHTTPD_PATH}' | grep -q cygwin");
-	$self->{"win32native"} = $win32native;
-
-	if ($win32native) {
-		$ENV{SHELL}         = "/bin/sh";
-		$ENV{PERL}          = cygpath_alm($ENV{PERL});
-		$testdir            = cygpath_alm($testdir);
-		$conf               = cygpath_alm($conf);
-		$modules_path       = cygpath_alm($modules_path);
-
-		$ENV{CYGROOT}       = cygpath_alm("/", 1);
-		$ENV{CYGVOL}        = $ENV{CYGROOT} =~ m%^([a-z]):%i
-		                      ? "/cygdrive/$1"
-		                      : "/cygdrive/c";
-	}
-
-	my @cmdline = ($self->{LIGHTTPD_PATH}, "-D", "-f", $conf, "-m", $modules_path);
-	splice(@cmdline, -2) if exists $ENV{LIGHTTPD_EXE_PATH};
-	if (!defined $ENV{"TRACEME"}) {
-	} elsif ($ENV{"TRACEME"} eq 'strace') {
-		@cmdline = (qw(strace -tt -s 4096 -o strace -f -v), @cmdline);
-	} elsif ($ENV{"TRACEME"} eq 'truss') {
-		@cmdline = (qw(truss -a -l -w all -v all -o strace), @cmdline);
-	} elsif ($ENV{"TRACEME"} eq 'gdb') {
-		@cmdline = ('gdb', '--batch', '--ex', 'run', '--ex', 'bt full', '--args', @cmdline);
-	} elsif ($ENV{"TRACEME"} eq 'valgrind') {
-		@cmdline = (qw(valgrind --tool=memcheck --track-origins=yes --show-reachable=yes --leak-check=yes --log-file=valgrind.%p), @cmdline);
-	}
-	# diag("\nstarting lighttpd at :$$self{PORT}, cmdline: @cmdline");
 	my $child = fork();
 	if (not defined $child) {
 		diag("\nFork failed");
@@ -263,8 +232,23 @@ sub start_proc {
 		return -1;
 	}
 	if ($child == 0) {
-		$ENV{'SRCDIR'} = $testdir;
-		if ($win32native) {
+
+		my $testdir      = $self->{TESTDIR};
+		my $conf         = $self->{TESTDIR}.'/'.$self->{CONFIGFILE};
+		my $modules_path = $self->{MODULES_PATH};
+
+		if ($self->{"win32native"}) {
+			$ENV{SHELL}         = "/bin/sh";
+			$ENV{PERL}          = cygpath_alm($ENV{PERL});
+			$testdir            = cygpath_alm($testdir);
+			$conf               = cygpath_alm($conf);
+			$modules_path       = cygpath_alm($modules_path);
+
+			$ENV{CYGROOT}       = cygpath_alm("/", 1);
+			$ENV{CYGVOL}        = $ENV{CYGROOT} =~ m%^([a-z]):%i
+			                      ? "/cygdrive/$1"
+			                      : "/cygdrive/c";
+
 			# On platforms where systemd socket activation is not supported
 			# or inconvenient for testing (i.e. cygwin <-> native Windows exe),
 			# there is a race condition with close() before server start,
@@ -299,6 +283,22 @@ BIND_OVERRIDE
 				fcntl($SOCK, Fcntl::F_SETFD(), 0); # clr FD_CLOEXEC
 			}
 		}
+
+		$ENV{'SRCDIR'} = $testdir;
+
+		my @cmdline = ($self->{LIGHTTPD_PATH}, "-D", "-f", $conf, "-m", $modules_path);
+		splice(@cmdline, -2) if exists $ENV{LIGHTTPD_EXE_PATH};
+		if (!defined $ENV{"TRACEME"}) {
+		} elsif ($ENV{"TRACEME"} eq 'strace') {
+			@cmdline = (qw(strace -tt -s 4096 -o strace -f -v), @cmdline);
+		} elsif ($ENV{"TRACEME"} eq 'truss') {
+			@cmdline = (qw(truss -a -l -w all -v all -o strace), @cmdline);
+		} elsif ($ENV{"TRACEME"} eq 'gdb') {
+			@cmdline = ('gdb', '--batch', '--ex', 'run', '--ex', 'bt full', '--args', @cmdline);
+		} elsif ($ENV{"TRACEME"} eq 'valgrind') {
+			@cmdline = (qw(valgrind --tool=memcheck --track-origins=yes --show-reachable=yes --leak-check=yes --log-file=valgrind.%p), @cmdline);
+		}
+		#diag("\nstarting lighttpd at :$$self{PORT}, cmdline: @cmdline");
 		#diag(sprintf('\ncmd: %s', "@cmdline"));
 		exec @cmdline or die($?);
 	}
