@@ -906,6 +906,9 @@ int chunkqueue_append_mem_to_tempfile(chunkqueue * const restrict dest, const ch
 	      #ifdef __COVERITY__
 		if (dst_c->file.fd < 0) return -1;
 	      #endif
+		/* (0 == len) for creation of empty tempfile, but caller should
+		 * take pains to avoid leaving 0-length chunk in chunkqueue */
+		if (0 == len) return 0;
 	      #ifdef HAVE_PWRITE
 		/* coverity[negative_returns : FALSE] */
 		const ssize_t written =pwrite(dst_c->file.fd, mem, len, dst_c->file.length);
