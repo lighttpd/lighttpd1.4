@@ -1517,16 +1517,24 @@ static int mod_deflate_using_libdeflate (handler_ctx * const hctx, const plugin_
     buffer * const fn = hctx->output; /*(&p->tmp_buf)*/
     int fd = hctx->cache_fd;
     if (-1 == fd) {
+        /* create temp file in temp chunkqueue and pluck from chunkqueue */
+        #if 0
+        chunkqueue tq = {0,0,0,0,0,0,0}; /*(fake cq for tempfile creation)*/
+        chunkqueue_init(&tq);
+        #else
         chunkqueue * const cq = &hctx->r->write_queue;
-        if (cq->tempdirs && cq->tempdir_idx < cq->tempdirs->used) {
-            data_string *ds =(data_string *)cq->tempdirs->data[cq->tempdir_idx];
-            buffer_copy_string_len(fn, BUF_PTR_LEN(&ds->value));
-        }
-        else
-            buffer_copy_string(fn, chunkqueue_env_tmpdir());
-        buffer_append_path_len(fn, CONST_STR_LEN("lighttpd-XXXXXX"));
-        fd = fdevent_mkostemp(fn->ptr, 0);
-        if (-1 == fd) return 0;
+        chunkqueue tq = *cq; /* copy struct, including tempdir state */
+        tq.first = tq.last = NULL; /* discard duplicated chunks from orig cq */
+        #endif
+        if (0 != chunkqueue_append_mem_to_tempfile(&tq,"",0,hctx->r->conf.errh))
+            return 0;
+        /* copy temp file fd and fn from temp chunkqueue tq and then reset tq */
+        chunk * const c = tq.last;
+        fd = c->file.fd;
+        c->file.fd = -1;
+        buffer_copy_buffer(fn, c->mem);
+        buffer_clear(c->mem);
+        chunkqueue_reset(&tq);
     }
 
     const size_t sz =
