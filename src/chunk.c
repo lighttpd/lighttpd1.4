@@ -774,13 +774,14 @@ static chunk *chunkqueue_get_append_newtempfile(chunkqueue * const restrict cq, 
     static const buffer emptyb = { "", 0, 0 };
     chunk * const restrict last = cq->last;
     chunk * const restrict c = chunkqueue_append_file_chunk(cq, &emptyb, 0, 0);
+    const array * const restrict tempdirs = cq->tempdirs;
     buffer * const restrict template = c->mem;
     c->file.is_temp = 1;
 
-    if (cq->tempdirs && cq->tempdirs->used) {
+    if (tempdirs && tempdirs->used) {
         /* we have several tempdirs, only if all of them fail we jump out */
-        for (errno = EIO; cq->tempdir_idx < cq->tempdirs->used; ++cq->tempdir_idx) {
-            data_string *ds = (data_string *)cq->tempdirs->data[cq->tempdir_idx];
+        for (errno = EIO; cq->tempdir_idx < tempdirs->used; ++cq->tempdir_idx) {
+            data_string *ds = (data_string *)tempdirs->data[cq->tempdir_idx];
             c->file.fd =
               chunkqueue_get_append_mkstemp(template, BUF_PTR_LEN(&ds->value));
             if (-1 != c->file.fd) return c;
@@ -839,8 +840,9 @@ static int chunkqueue_append_tempfile_err(chunkqueue * const cq, log_error_st * 
     const int errnum = errno;
     if (errnum == EINTR) return 1; /* retry */
 
-    int retry = (errnum == ENOSPC && cq->tempdirs
-                 && ++cq->tempdir_idx < cq->tempdirs->used);
+    const array * const tempdirs = cq->tempdirs;
+    int retry = (errnum == ENOSPC && tempdirs
+                 && ++cq->tempdir_idx < tempdirs->used);
     if (!retry)
         log_perror(errh, __FILE__, __LINE__,
           "write() temp-file %s failed", c->mem->ptr);
