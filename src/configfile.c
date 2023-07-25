@@ -2641,108 +2641,96 @@ int config_read(server *srv, const char *fn) {
 	return 0;
 }
 
-int config_set_defaults(server *srv) {
-	size_t i;
-	request_config *s = &((config_data_base *)srv->config_data_base)->defaults;
-	struct stat st1, st2;
+/* stat_cache_path_isdir() not used since if srv->srvconf.changeroot is set,
+ * then the stat cache entries would be invalid after the chroot occurs */
+__attribute_noinline__
+static int
+config_stat_isdir (const char * const path, struct stat * const st)
+{
+    return
+      !(-1 == stat(path, st) || (!S_ISDIR(st->st_mode) && (errno = ENOTDIR)));
+}
 
-	if (fdevent_config(&srv->srvconf.event_handler, srv->errh) <= 0)
-		return -1;
+int
+config_set_defaults (server * const srv)
+{
+    struct stat st;
 
-	if (srv->srvconf.changeroot) {
-		if (-1 == stat(srv->srvconf.changeroot->ptr, &st1)) {
-			log_error(srv->errh, __FILE__, __LINE__,
-			  "server.chroot doesn't exist: %s",
-			  srv->srvconf.changeroot->ptr);
-			return -1;
-		}
-		if (!S_ISDIR(st1.st_mode)) {
-			log_error(srv->errh, __FILE__, __LINE__,
-			  "server.chroot isn't a directory: %s",
-			  srv->srvconf.changeroot->ptr);
-			return -1;
-		}
-	}
+    if (fdevent_config(&srv->srvconf.event_handler, srv->errh) <= 0)
+        return -1;
 
-	chunkqueue_set_tempdirs_default(
-		srv->srvconf.upload_tempdirs,
-		srv->srvconf.upload_temp_file_size);
+    chunkqueue_set_tempdirs_default(
+        srv->srvconf.upload_tempdirs,
+        srv->srvconf.upload_temp_file_size);
 
-	if (!srv->srvconf.upload_tempdirs->used) {
-		const char *tmpdir = chunkqueue_env_tmpdir();
-		array_insert_value(srv->srvconf.upload_tempdirs,tmpdir,strlen(tmpdir));
-	}
+    if (!srv->srvconf.upload_tempdirs->used) {
+        const char *tmpdir = chunkqueue_env_tmpdir();
+        array_insert_value(srv->srvconf.upload_tempdirs,tmpdir,strlen(tmpdir));
+    }
 
-	if (srv->srvconf.upload_tempdirs->used) {
-		buffer * const tb = srv->tmp_buf;
-		buffer_clear(tb);
-		if (srv->srvconf.changeroot) {
-			buffer_copy_buffer(tb, srv->srvconf.changeroot);
-		}
-		const size_t len = buffer_clen(tb);
+    {
+        buffer * const tb = srv->tmp_buf;
+        buffer_clear(tb);
+        if (srv->srvconf.changeroot) {
+            buffer_copy_buffer(tb, srv->srvconf.changeroot);
+            if (!config_stat_isdir(tb->ptr, &st)) {
+                log_perror(srv->errh, __FILE__, __LINE__,
+                  "server.chroot %s", tb->ptr);
+                return -1;
+            }
+        }
+        const uint_fast32_t len = buffer_clen(tb);
 
-		for (i = 0; i < srv->srvconf.upload_tempdirs->used; ++i) {
-			const data_string * const ds = (data_string *)srv->srvconf.upload_tempdirs->data[i];
-			if (len) {
-				buffer_truncate(tb, len);
-				buffer_append_path_len(tb, BUF_PTR_LEN(&ds->value));
-			} else {
-				buffer_copy_buffer(tb, &ds->value);
-			}
-			if (-1 == stat(tb->ptr, &st1)) {
-				log_error(srv->errh, __FILE__, __LINE__,
-				  "server.upload-dirs doesn't exist: %s", tb->ptr);
-			} else if (!S_ISDIR(st1.st_mode)) {
-				log_error(srv->errh, __FILE__, __LINE__,
-				  "server.upload-dirs isn't a directory: %s", tb->ptr);
-			}
-		}
-	}
+        for (uint_fast32_t i = 0; i < srv->srvconf.upload_tempdirs->used; ++i) {
+            const buffer *value =
+              &((data_string *)srv->srvconf.upload_tempdirs->data[i])->value;
+            if (len) { /* (srv->srvconf.changeroot) */
+                buffer_truncate(tb, len);
+                buffer_append_path_len(tb, BUF_PTR_LEN(value));
+                value = tb;
+            }
+            if (!config_stat_isdir(value->ptr, &st))
+                log_perror(srv->errh, __FILE__, __LINE__,
+                  "server.upload-dirs %s", value->ptr);
+        }
+    }
 
-	if (!s->document_root || buffer_is_blank(s->document_root)) {
-		log_error(srv->errh, __FILE__, __LINE__, "server.document-root is not set");
-		return -1;
-	}
+    request_config * const s =
+      &((config_data_base *)srv->config_data_base)->defaults;
 
-	if (2 == s->force_lowercase_filenames) { /* user didn't configure it in global section? */
-		s->force_lowercase_filenames = 0; /* default to 0 */
+    if (!s->document_root || buffer_is_blank(s->document_root)) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "server.document-root is not set");
+        return -1;
+    }
 
-		buffer * const tb = srv->tmp_buf;
-		buffer_copy_string_len_lc(tb, BUF_PTR_LEN(s->document_root));
+    if (2 == s->force_lowercase_filenames) { /*(not configured in global conf)*/
+        s->force_lowercase_filenames = 0; /* default to case-sensitive */
 
-		if (0 == stat(tb->ptr, &st1)) {
-			int is_lower = 0;
+        /* simplistic test on global s->document_root
+         * (stat() uppercase/lowercase of *entire* path)
+         * (ignores srv->srvconf.changeroot; no chroot on _WIN32)*/
+        buffer * const tb = srv->tmp_buf;
+        buffer_copy_buffer(tb, s->document_root);
+        buffer_to_upper(tb);
+        if (0 == stat(tb->ptr, &st)) {
+            /* uppercase exists; check lowercase */
+            const ino_t st_ino = st.st_ino;
+            const int is_upper_eq = buffer_is_equal(tb, s->document_root);
+            buffer_to_lower(tb);
+            if (is_upper_eq && buffer_is_equal(tb, s->document_root)) {
+                /* uppercasing and lowercasing did not result in different
+                 * filenames (e.g. "/" or "/12345/"), so unable to determine
+                 * case sensitivity here; assume case-sensitive filesystem. */
+                s->force_lowercase_filenames = 0;
+            }
+            else if (0 == stat(tb->ptr, &st)) {
+                /* uppercase exists, too;
+                 * case-insensitive if upper and lower stat have same inode */
+                s->force_lowercase_filenames = (st_ino == st.st_ino);
+            }
+        }
+    }
 
-			is_lower = buffer_is_equal(tb, s->document_root);
-
-			/* lower-case existed, check upper-case */
-			buffer_copy_buffer(tb, s->document_root);
-
-			buffer_to_upper(tb);
-
-			/* we have to handle the special case that upper and lower-casing results in the same filename
-			 * as in server.document-root = "/" or "/12345/" */
-
-			if (is_lower && buffer_is_equal(tb, s->document_root)) {
-				/* lower-casing and upper-casing didn't result in
-				 * another filename, no need to stat(),
-				 * just assume it is case-sensitive. */
-
-				s->force_lowercase_filenames = 0;
-			} else if (0 == stat(tb->ptr, &st2)) {
-
-				/* upper case exists too, doesn't the FS handle this ? */
-
-				/* upper and lower have the same inode -> case-insensitive FS */
-
-				if (st1.st_ino == st2.st_ino) {
-					/* upper and lower have the same inode -> case-insensitive FS */
-
-					s->force_lowercase_filenames = 1;
-				}
-			}
-		}
-	}
-
-	return 0;
+    return 0;
 }
