@@ -817,7 +817,10 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue * const restrict cq, log
     chunk * const c = cq->last;
     if (NULL != c && c->file.is_temp && c->file.fd >= 0) {
 
-        if (c->file.length < (off_t)cq->upload_temp_file_size)
+        off_t upload_temp_file_size = cq->upload_temp_file_size
+                                    ? cq->upload_temp_file_size
+                                    : chunkqueue_default_tempfile_size;
+        if (c->file.length < upload_temp_file_size)
             return c; /* ok, take the last chunk for our job */
 
         /* the chunk is too large now, close it */
