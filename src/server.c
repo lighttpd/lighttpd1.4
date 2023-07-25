@@ -1397,8 +1397,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	int i_am_root = 0;
 #ifdef HAVE_FORK
 	int parent_pipe_fd = -1;
-#endif
 	const char *conffile = NULL;
+#endif
 
 #ifdef HAVE_GETUID
 	i_am_root = (0 == getuid());
@@ -1431,7 +1431,9 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			if (config_read(srv, optarg)) {
 				return -1;
 			}
+#ifdef HAVE_FORK
 			conffile = optarg;
+#endif
 			break;
 		case 'm':
 			srv->srvconf.modules_dir = optarg;
