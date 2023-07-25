@@ -49,7 +49,6 @@ typedef struct chunkqueue {
 
 	off_t bytes_in, bytes_out;
 
-	const array *tempdirs;
 	off_t upload_temp_file_size;
 	unsigned int tempdir_idx;
 } chunkqueue;
@@ -81,7 +80,7 @@ void chunkqueue_set_tempdirs_default_reset (void);
 __attribute_cold__
 void chunkqueue_set_tempdirs_default (const array *tempdirs, off_t upload_temp_file_size);
 
-void chunkqueue_set_tempdirs(chunkqueue * restrict cq, const array * restrict tempdirs, off_t upload_temp_file_size);
+void chunkqueue_set_tempdirs(chunkqueue * restrict cq, off_t upload_temp_file_size);
 
 __attribute_cold__
 const char *chunkqueue_env_tmpdir(void);

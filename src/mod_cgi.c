@@ -485,8 +485,7 @@ static void cgi_connection_close(handler_ctx *hctx) {
 	/* (r->reqbody_queue.upload_temp_file_size might have been changed even
 	 *  with 0 == r->reqbody_length, if hctx->conf.upgrade is set) */
 	if (p->tempfile_accum) /*(and if not streaming)*/
-		chunkqueue_set_tempdirs(&r->reqbody_queue, /* reset sz */
-		                        r->reqbody_queue.tempdirs, 0);
+		chunkqueue_set_tempdirs(&r->reqbody_queue, 0); /* reset sz */
 
 	/* finish response (if not already r->resp_body_started, r->resp_body_finished) */
 	if (r->handler_module == p->self) {

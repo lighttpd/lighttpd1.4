@@ -101,7 +101,6 @@ chunkqueue *chunkqueue_init(chunkqueue *cq) {
 	cq->last = NULL;
       #endif
 
-	cq->tempdirs              = chunkqueue_default_tempdirs;
 	cq->upload_temp_file_size = chunkqueue_default_tempfile_size;
 
 	return cq;
@@ -678,10 +677,9 @@ void chunkqueue_set_tempdirs_default (const array *tempdirs, off_t upload_temp_f
     if (NULL == env_tmpdir) env_tmpdir = "/var/tmp";
 }
 
-void chunkqueue_set_tempdirs(chunkqueue * const restrict cq, const array * const restrict tempdirs, off_t upload_temp_file_size) {
+void chunkqueue_set_tempdirs(chunkqueue * const restrict cq, off_t upload_temp_file_size) {
     if (upload_temp_file_size == 0)
         upload_temp_file_size = chunkqueue_default_tempfile_size;
-    cq->tempdirs = tempdirs;
     cq->upload_temp_file_size = upload_temp_file_size;
     cq->tempdir_idx = 0;
 }
@@ -774,7 +772,7 @@ static chunk *chunkqueue_get_append_newtempfile(chunkqueue * const restrict cq, 
     static const buffer emptyb = { "", 0, 0 };
     chunk * const restrict last = cq->last;
     chunk * const restrict c = chunkqueue_append_file_chunk(cq, &emptyb, 0, 0);
-    const array * const restrict tempdirs = cq->tempdirs;
+    const array * const restrict tempdirs = chunkqueue_default_tempdirs;
     buffer * const restrict template = c->mem;
     c->file.is_temp = 1;
 
@@ -840,7 +838,7 @@ static int chunkqueue_append_tempfile_err(chunkqueue * const cq, log_error_st * 
     const int errnum = errno;
     if (errnum == EINTR) return 1; /* retry */
 
-    const array * const tempdirs = cq->tempdirs;
+    const array * const tempdirs = chunkqueue_default_tempdirs;
     int retry = (errnum == ENOSPC && tempdirs
                  && ++cq->tempdir_idx < tempdirs->used);
     if (!retry)
@@ -1408,7 +1406,7 @@ chunkqueue_write_chunk_file_intermed (const int fd, chunk * const restrict c, lo
     char *data = buf;
     const off_t len = c->file.length - c->offset;
     uint32_t dlen = len < (off_t)sizeof(buf) ? (uint32_t)len : sizeof(buf);
-    chunkqueue cq = {c,c,0,0,0,0,0}; /*(fake cq for chunkqueue_peek_data())*/
+    chunkqueue cq = {c,c,0,0,0,0}; /*(fake cq for chunkqueue_peek_data())*/
     if (0 != chunkqueue_peek_data(&cq, &data, &dlen, errh) && 0 == dlen)
         return -1;
     return chunkqueue_write_data(fd, data, dlen);

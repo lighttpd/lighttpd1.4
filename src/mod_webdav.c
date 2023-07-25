@@ -6104,8 +6104,7 @@ REQUEST_FUNC(mod_webdav_handle_reset) {
     if (*dptr) {
         free(*dptr);
         *dptr = NULL;
-        chunkqueue_set_tempdirs(&r->reqbody_queue, /* reset sz */
-                                r->reqbody_queue.tempdirs, 0);
+        chunkqueue_set_tempdirs(&r->reqbody_queue, 0); /* reset sz */
     }
     return HANDLER_GO_ON;
 }

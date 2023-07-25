@@ -1519,7 +1519,7 @@ static int mod_deflate_using_libdeflate (handler_ctx * const hctx, const plugin_
     if (-1 == fd) {
         /* create temp file in temp chunkqueue and pluck from chunkqueue */
         #if 0
-        chunkqueue tq = {0,0,0,0,0,0,0}; /*(fake cq for tempfile creation)*/
+        chunkqueue tq = {0,0,0,0,0,0}; /*(fake cq for tempfile creation)*/
         chunkqueue_init(&tq);
         #else
         chunkqueue * const cq = &hctx->r->write_queue;
