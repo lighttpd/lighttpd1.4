@@ -11,43 +11,33 @@ compiler="${3:-gcc}"    # might want to overwrite a compiler
 # - access coverity binaries with export PATH="${COVERITY_PATH}"
 
 case "${build}" in
-"coverity")
+"autobuild"|"coverity")
 	mkdir -p m4
 	autoreconf --force --install
-	./configure \
+	./configure -C \
 		--with-pic --enable-extra-warnings \
 		--with-dbi --with-mysql --with-pgsql \
 		--with-ldap --with-pcre2 \
-		--with-zlib --with-zstd --with-brotli --with-bzip2 \
+		--with-zlib --with-zstd --with-brotli --with-libdeflate \
 		--with-webdav-props --with-webdav-locks \
 		--with-lua --with-libunwind \
-		--with-krb5 \
+		--with-krb5 --with-sasl \
 		--with-nettle \
 		--with-gnutls \
 		--with-mbedtls \
 		--with-nss \
 		--with-openssl \
 		--with-wolfssl
-	make clean
-	export PATH="${COVERITY_PATH}"
-	cov-build --dir "cov-int" make
-	;;
-"autobuild")
-	mkdir -p m4
-	autoreconf --force --install
-	./configure \
-		--with-pic --enable-extra-warnings \
-		--with-dbi --with-mysql --with-pgsql \
-		--with-ldap --with-pcre2 \
-		--with-zlib --with-zstd --with-brotli --with-bzip2 \
-		--with-webdav-props --with-webdav-locks \
-		--with-lua --with-libunwind \
-		--with-krb5 --with-sasl \
-		--with-nettle \
-		--with-gnutls \
-		--with-openssl
-	make -j 2
-	make check
+	case "${build}" in
+	"autobuild")
+		make -j 2
+		make check
+		;;
+	"coverity")
+		[ -z "${COVERITY_PATH}" ] || export PATH="${COVERITY_PATH}"
+		cov-build --dir "cov-int" make
+		;;
+	esac
 	;;
 "cmake"|"cmake-asan")
 	mkdir cmakebuild
@@ -62,23 +52,59 @@ case "${build}" in
 		${asan_opts} \
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
 		-DWITH_PCRE2=ON \
+		-DWITH_ZLIB=ON \
 		-DWITH_ZSTD=ON \
 		-DWITH_BROTLI=ON \
-		-DWITH_BZIP=ON \
+		-DWITH_LIBDEFLATE=ON \
 		-DWITH_LDAP=ON \
 		-DWITH_LIBUNWIND=ON \
 		-DWITH_LUA=ON \
 		-DWITH_DBI=ON \
 		-DWITH_MYSQL=ON \
 		-DWITH_PGSQL=ON \
+		-DWITH_KRB5=ON \
+		-DWITH_SASL=ON \
 		-DWITH_GNUTLS=ON \
 		-DWITH_NETTLE=ON \
+		-DWITH_NSS=ON \
 		-DWITH_OPENSSL=ON \
+		-DWITH_WOLFSSL=ON \
 		-DWITH_WEBDAV_LOCKS=ON \
 		-DWITH_WEBDAV_PROPS=ON \
 		..
 	make -j 2
 	ctest -V
+	;;
+"meson")
+	meson setup --buildtype debugoptimized \
+	  -Dbuild_extra_warnings=true \
+	  -Dwith_brotli=enabled \
+	  -Dwith_dbi=enabled \
+	  -Dwith_gnutls=true \
+	  -Dwith_krb5=enabled \
+	  -Dwith_ldap=enabled \
+	  -Dwith_libdeflate=enabled \
+	  -Dwith_libunwind=enabled \
+	  -Dwith_lua=true \
+	  -Dwith_mbedtls=true \
+	  -Dwith_mysql=enabled \
+	  -Dwith_nettle=true \
+	  -Dwith_nss=true \
+	  -Dwith_openssl=true \
+	  -Dwith_pam=enabled \
+	  -Dwith_pcre2=true \
+	  -Dwith_pgsql=enabled \
+	  -Dwith_sasl=enabled \
+	  -Dwith_webdav_locks=enabled \
+	  -Dwith_webdav_props=enabled \
+	  -Dwith_wolfssl=true \
+	  -Dwith_zlib=enabled \
+	  -Dwith_zstd=disabled \
+	  build
+	meson setup --reconfigure build
+	cd build
+	meson compile
+	meson test
 	;;
 "scons")
 	case "${label}" in
