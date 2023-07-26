@@ -79,12 +79,27 @@
 #ifdef __has_include
 #if __has_include(<nss3/nss.h>)
 #define NSS_VER_INCLUDE
+#if __has_include(<nspr4/nspr.h>)
+#define NSS_NSPR_INCLUDE_PREFIX
+#include <nspr4/nspr.h>
+#include <nspr4/private/pprio.h> /* see mod_nss_io_ctor() comments */
+#endif
+#else
+#if __has_include(<nspr/nspr.h>)
+#define NSS_NSPR_INCLUDE_PREFIX
+#include <nspr/nspr.h>
+#include <nspr/private/pprio.h> /* see mod_nss_io_ctor() comments */
+#endif
+#endif
+#ifndef NSS_NSPR_INCLUDE_PREFIX
+#if __has_include(<nspr.h>)
+#include <nspr.h>
+#include <private/pprio.h> /* see mod_nss_io_ctor() comments */
+#endif
 #endif
 #endif
 
 #ifndef NSS_VER_INCLUDE
-#include <nspr/nspr.h>
-#include <nspr/private/pprio.h> /* see mod_nss_io_ctor() comments */
 #include <nss/nss.h>
 #include <nss/nssb64.h>
 #include <nss/keyhi.h>
@@ -94,8 +109,6 @@
 #include <nss/ssl.h>
 #include <nss/sslproto.h>
 #else
-#include <nspr4/nspr.h>
-#include <nspr4/private/pprio.h> /* see mod_nss_io_ctor() comments */
 #include <nss3/nss.h>
 #include <nss3/nssb64.h>
 #include <nss3/keyhi.h>
