@@ -23,7 +23,6 @@ case "${build}" in
 		--with-krb5 --with-sasl \
 		--with-nettle \
 		--with-gnutls \
-		--with-mbedtls \
 		--with-openssl \
 		--with-webdav-props --with-webdav-locks
 	case "${build}" in
