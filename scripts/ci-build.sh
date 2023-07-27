@@ -19,7 +19,6 @@ case "${build}" in
 		--with-dbi --with-mysql --with-pgsql \
 		--with-ldap --with-pcre2 \
 		--with-zlib --with-zstd --with-brotli --with-libdeflate \
-		--with-webdav-props --with-webdav-locks \
 		--with-lua --with-libunwind \
 		--with-krb5 --with-sasl \
 		--with-nettle \
@@ -27,7 +26,7 @@ case "${build}" in
 		--with-mbedtls \
 		--with-nss \
 		--with-openssl \
-		--with-wolfssl
+		--with-webdav-props --with-webdav-locks
 	case "${build}" in
 	"autobuild")
 		make -j 2
