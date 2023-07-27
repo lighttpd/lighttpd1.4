@@ -77,29 +77,46 @@
 #include <string.h>
 
 #ifdef __has_include
-#if __has_include(<nss3/nss.h>)
-#define NSS_VER_INCLUDE
 #if __has_include(<nspr4/nspr.h>)
-#define NSS_NSPR_INCLUDE_PREFIX
-#include <nspr4/nspr.h>
-#include <nspr4/private/pprio.h> /* see mod_nss_io_ctor() comments */
-#endif
+#define NSS_NSPR_INCLUDE_PREFIX_VER
 #else
 #if __has_include(<nspr/nspr.h>)
 #define NSS_NSPR_INCLUDE_PREFIX
-#include <nspr/nspr.h>
-#include <nspr/private/pprio.h> /* see mod_nss_io_ctor() comments */
 #endif
 #endif
-#ifndef NSS_NSPR_INCLUDE_PREFIX
-#if __has_include(<nspr.h>)
-#include <nspr.h>
-#include <private/pprio.h> /* see mod_nss_io_ctor() comments */
+#if __has_include(<nss3/nss.h>)
+#define NSS_INCLUDE_PREFIX_VER
+#else
+#if __has_include(<nss/nss.h>)
+#define NSS_INCLUDE_PREFIX
 #endif
 #endif
 #endif
 
-#ifndef NSS_VER_INCLUDE
+#ifdef NSS_NSPR_INCLUDE_PREFIX_VER
+#include <nspr4/nspr.h>
+#include <nspr4/private/pprio.h> /* see mod_nss_io_ctor() comments */
+#else
+#ifdef NSS_NSPR_INCLUDE_PREFIX
+#include <nspr/nspr.h>
+#include <nspr/private/pprio.h> /* see mod_nss_io_ctor() comments */
+#else
+#include <nspr.h>
+#include <private/pprio.h> /* see mod_nss_io_ctor() comments */
+#endif
+#endif
+
+#ifdef NSS_INCLUDE_PREFIX_VER
+#include <nss3/nss.h>
+#include <nss3/nssb64.h>
+#include <nss3/keyhi.h>
+#include <nss3/pk11pub.h>
+#include <nss3/secder.h>
+#include <nss3/secerr.h>
+#include <nss3/ssl.h>
+#include <nss3/sslproto.h>
+#else
+#ifdef NSS_INCLUDE_PREFIX
 #include <nss/nss.h>
 #include <nss/nssb64.h>
 #include <nss/keyhi.h>
@@ -109,14 +126,15 @@
 #include <nss/ssl.h>
 #include <nss/sslproto.h>
 #else
-#include <nss3/nss.h>
-#include <nss3/nssb64.h>
-#include <nss3/keyhi.h>
-#include <nss3/pk11pub.h>
-#include <nss3/secder.h>
-#include <nss3/secerr.h>
-#include <nss3/ssl.h>
-#include <nss3/sslproto.h>
+#include <nss.h>
+#include <nssb64.h>
+#include <keyhi.h>
+#include <pk11pub.h>
+#include <secder.h>
+#include <secerr.h>
+#include <ssl.h>
+#include <sslproto.h>
+#endif
 #endif
 
 #include "base.h"
@@ -2953,10 +2971,14 @@ int countciphers(PRBool cipher_state[ciphernum], int version);
 #include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifndef NSS_VER_INCLUDE
+#ifdef NSS_INCLUDE_PREFIX_VER
+#include <nss3/sslproto.h>
+#else
+#ifdef NSS_INCLUDE_PREFIX
 #include <nss/sslproto.h>
 #else
-#include <nss3/sslproto.h>
+#include <sslproto.h>
+#endif
 #endif
 
 /* Cipher actions */
