@@ -24,7 +24,6 @@ case "${build}" in
 		--with-nettle \
 		--with-gnutls \
 		--with-mbedtls \
-		--with-nss \
 		--with-openssl \
 		--with-webdav-props --with-webdav-locks
 	case "${build}" in
