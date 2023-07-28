@@ -21,7 +21,6 @@ case "${build}" in
 		--with-zlib --with-zstd --with-brotli --with-libdeflate \
 		--with-lua --with-libunwind \
 		--with-krb5 --with-pam --with-sasl \
-		--with-maxminddb \
 		--with-nettle \
 		--with-gnutls \
 		--with-openssl \
@@ -57,7 +56,6 @@ case "${build}" in
 		-DWITH_LDAP=ON \
 		-DWITH_LIBUNWIND=ON \
 		-DWITH_LUA=ON \
-		-DWITH_MAXMINDDB=ON \
 		-DWITH_DBI=ON \
 		-DWITH_MYSQL=ON \
 		-DWITH_PGSQL=ON \
