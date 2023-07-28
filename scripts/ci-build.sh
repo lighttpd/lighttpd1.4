@@ -20,7 +20,8 @@ case "${build}" in
 		--with-ldap --with-pcre2 \
 		--with-zlib --with-zstd --with-brotli --with-libdeflate \
 		--with-lua --with-libunwind \
-		--with-krb5 --with-sasl \
+		--with-krb5 --with_pam --with-sasl \
+		--with-maxminddb \
 		--with-nettle \
 		--with-gnutls \
 		--with-openssl \
@@ -37,7 +38,7 @@ case "${build}" in
 	esac
 	;;
 "cmake"|"cmake-asan")
-	mkdir cmakebuild
+	mkdir -p cmakebuild
 	cd cmakebuild
 	if [ "${build}" = "cmake-asan" ]; then
 		asan_opts="-DBUILD_SANITIZE_ADDRESS=ON -DBUILD_SANITIZE_UNDEFINED=ON"
@@ -56,10 +57,12 @@ case "${build}" in
 		-DWITH_LDAP=ON \
 		-DWITH_LIBUNWIND=ON \
 		-DWITH_LUA=ON \
+		-DWITH_MAXMINDDB=ON \
 		-DWITH_DBI=ON \
 		-DWITH_MYSQL=ON \
 		-DWITH_PGSQL=ON \
 		-DWITH_KRB5=ON \
+		-DWITH_PAM=ON \
 		-DWITH_SASL=ON \
 		-DWITH_GNUTLS=ON \
 		-DWITH_NETTLE=ON \
@@ -73,7 +76,8 @@ case "${build}" in
 	ctest -V
 	;;
 "meson")
-	meson setup --buildtype debugoptimized \
+	[ -d build ] || meson setup build
+	meson configure --buildtype debugoptimized \
 	  -Dbuild_extra_warnings=true \
 	  -Dwith_brotli=enabled \
 	  -Dwith_dbi=enabled \
@@ -83,6 +87,7 @@ case "${build}" in
 	  -Dwith_libdeflate=enabled \
 	  -Dwith_libunwind=enabled \
 	  -Dwith_lua=true \
+	  -Dwith_maxminddb=enabled \
 	  -Dwith_mbedtls=true \
 	  -Dwith_mysql=enabled \
 	  -Dwith_nettle=true \
@@ -96,9 +101,8 @@ case "${build}" in
 	  -Dwith_webdav_props=enabled \
 	  -Dwith_wolfssl=true \
 	  -Dwith_zlib=enabled \
-	  -Dwith_zstd=disabled \
+	  -Dwith_zstd=enabled \
 	  build
-	meson setup --reconfigure build
 	cd build
 	meson compile
 	meson test
