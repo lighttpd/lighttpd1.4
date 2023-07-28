@@ -20,7 +20,7 @@ case "${build}" in
 		--with-ldap --with-pcre2 \
 		--with-zlib --with-zstd --with-brotli --with-libdeflate \
 		--with-lua --with-libunwind \
-		--with-krb5 --with_pam --with-sasl \
+		--with-krb5 --with-pam --with-sasl \
 		--with-maxminddb \
 		--with-nettle \
 		--with-gnutls \
