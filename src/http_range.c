@@ -17,7 +17,9 @@
 
 /* arbitrary limit for max num ranges (additional ranges are ignored) */
 #undef  RMAX
-#define RMAX 10
+#define RMAX 128
+#undef  RMAX_UNSORTED
+#define RMAX_UNSORTED 10
 
 /* RFC 7233 Hypertext Transfer Protocol (HTTP/1.1): Range Requests
  * https://tools.ietf.org/html/rfc7233
@@ -35,17 +37,18 @@ void http_range_config_allow_http10 (int flag)
 }
 
 
+__attribute_cold__
 __attribute_noinline__
 static int
-http_range_coalesce (off_t * const restrict ranges, int n)
+http_range_coalesce_unsorted (off_t * const restrict ranges, int n)
 {
     /* coalesce/combine overlapping ranges and ranges separated by a
      * gap which is smaller than the overhead of sending multiple parts
      * (typically around 80 bytes) ([RFC7233] 4.1 206 Partial Content)
      * (ranges are known to be positive, so subtract 80 instead of add 80
      *  to avoid any chance of integer overflow)
-     * (n is limited to RMAX ranges (RMAX pairs of off_t) since a malicious set
-     *  of ranges has n^2 cost for this simplistic algorithm)
+     * (n is limited to RMAX_UNSORTED ranges (pairs of off_t) since a malicious
+     *  set of ranges has n^2 cost for this simplistic algorithm)
      * (sorting the ranges and then combining would lower the cost, but the
      *  cost should not be an issue since client should not send many ranges
      *  and we restrict the max number of ranges to limit abuse)
@@ -130,21 +133,44 @@ http_range_parse (const char * restrict s, const off_t content_length,
      * transfer than a single range that encompasses the same data.
      */
     int n = 0;
+    int lim = RMAX*2;
     do {
         s = http_range_parse_next(s, content_length, ranges+n);
-        if ((*s == '\0' || *s == ',') && ranges[n+1] != -1)
+        if ((*s == '\0' || *s == ',') && ranges[n+1] != -1) {
             n += 2;
-        else
+            if (n < 4)
+                continue;
+            /* track if ranges are sorted and check coalesce with prior range */
+            /* (specialized case of http_range_coalesce_unsorted())*/
+            if (ranges[n-4] <= ranges[n-2]) { /* range1_begin <= range2_begin */
+                if (ranges[n-3] < ranges[n-2]-80)/* range1_end < range2_begin */
+                    continue;
+                /* ranges close or overlap, so combine into first range */
+                if (ranges[n-3] < ranges[n-1])   /* range1_end < range2_end */
+                    ranges[n-3] = ranges[n-1];
+                n -= 2;
+            }
+            else {
+                /* reduce limit on num of ranges if unsorted */
+                if (n > RMAX_UNSORTED*2) {
+                    n -= 2;
+                    break;
+                }
+                lim = RMAX_UNSORTED*2;
+            }
+        }
+        else if (__builtin_expect(1, 0)) /*(cold branch)*/
             while (*s != '\0' && *s != ',') ++s; /*ignore invalid ranges*/
-    } while (*s++ != '\0' && n < RMAX*2);
+    } while (*s++ != '\0' && n < lim);
           /*(*s++ for multipart, increment to char after ',')*/
 
     if (n <= 2)
         return n;
 
     /* error if n == 0 (no valid ranges)
+     * (if n >= RMAX_UNSORTED*2 (additional unsorted ranges may be ignored))
      * (if n == RMAX*2 (additional ranges > RMAX limit, if any, were ignored))*/
-    return http_range_coalesce(ranges, n);
+    return lim == RMAX*2 ? n : http_range_coalesce_unsorted(ranges, n);
 }
 
 
