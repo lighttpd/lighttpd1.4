@@ -2648,7 +2648,7 @@ static int
 config_stat_isdir (const char * const path, struct stat * const st)
 {
     return
-      !(-1 == stat(path, st) || (!S_ISDIR(st->st_mode) && (errno = ENOTDIR)));
+      !(-1 == stat(path, st) || (S_ISDIR(st->st_mode) ? 0 : (errno = ENOTDIR)));
 }
 
 int
