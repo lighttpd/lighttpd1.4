@@ -21,9 +21,13 @@ case "${build}" in
 		--with-zlib --with-zstd --with-brotli --with-libdeflate \
 		--with-lua --with-libunwind \
 		--with-krb5 --with-pam --with-sasl \
+		--with-maxminddb \
 		--with-nettle \
 		--with-gnutls \
+		--with-mbedtls \
+		--with-nss \
 		--with-openssl \
+		--with-wolfssl \
 		--with-webdav-props --with-webdav-locks
 	case "${build}" in
 	"autobuild")
@@ -56,6 +60,7 @@ case "${build}" in
 		-DWITH_LDAP=ON \
 		-DWITH_LIBUNWIND=ON \
 		-DWITH_LUA=ON \
+		-DWITH_MAXMINDDB=ON \
 		-DWITH_DBI=ON \
 		-DWITH_MYSQL=ON \
 		-DWITH_PGSQL=ON \
@@ -63,6 +68,7 @@ case "${build}" in
 		-DWITH_PAM=ON \
 		-DWITH_SASL=ON \
 		-DWITH_GNUTLS=ON \
+		-DWITH_MBEDTLS=ON \
 		-DWITH_NETTLE=ON \
 		-DWITH_NSS=ON \
 		-DWITH_OPENSSL=ON \
