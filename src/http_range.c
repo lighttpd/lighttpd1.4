@@ -1,7 +1,7 @@
 /*
  * http_range - HTTP Range (RFC 7233)
  *
- * Copyright(c) 2015,2021 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * Copyright(c) 2015,2021,2023 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
  * License: BSD 3-clause (same as lighttpd)
  */
 #include "http_range.h"
@@ -286,6 +286,7 @@ http_range_not_satisfiable (request_st * const r, const off_t content_length)
 }
 
 
+__attribute_cold__
 __attribute_noinline__
 static int
 http_range_process (request_st * const r, const buffer * const http_range)
