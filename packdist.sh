@@ -70,60 +70,56 @@ genchanges() {
 # generate links in old textile format "text":url
 genlinks_changes() {
 	local repourl ticketurl inf out
-	repourl="https://redmine.lighttpd.net/projects/lighttpd/repository/revisions/"
+	#repourl="https://redmine.lighttpd.net/projects/lighttpd/repository/svn/revisions/"
 	ticketurl="https://redmine.lighttpd.net/issues/"
 	inf="$1"
 	outf="$1".links
 	(
-		sed -e 's%\(https://[a-zA-Z0-9.:_/\-]\+\)%"\1":\1%g' |
-		sed -e 's%#\([0-9]\+\)%"#\1":'"${ticketurl}"'\1%g' |
-		sed -e 's%r\([0-9]\+\)%"r\1":'"${repourl}"'\1%g' |
-		sed -e 's%\(CVE-[0-9\-]\+\)%"\1":https://cve.mitre.org/cgi-bin/cvename.cgi?name=\1%g' |
-		cat
+		sed -e 's%\(\[\|\]\)%\\\1%g' \
+		    -e 's%\(.\)\*%\1\\*%g' \
+		    -e 's% _% \\_%g' \
+		    -e 's%\(https://[a-zA-Z0-9.:_/\-]\+\)%[\1](\1)%g' \
+		    -e 's%#\([0-9]\+\)%[#\1]('"${ticketurl}"'\1)%g' \
+		    -e 's%\(CVE-[0-9\-]\+\)%[\1](https://cve.mitre.org/cgi-bin/cvename.cgi?name=\1)%g'
+		#(svn-historical) sed -e 's%r\([0-9]\+\)%[r\1]('"${repourl}"'\1)%g' |
 	) < "$inf" > "$outf"
 }
-genlinks_downloads() {
-	local repourl ticketurl inf out
-	repourl="https://redmine.lighttpd.net/projects/lighttpd/repository/revisions/"
-	ticketurl="https://redmine.lighttpd.net/issues/"
-	inf="$1"
-	outf="$1".links
-	(
-		sed -e 's%\(https://[a-zA-Z0-9.:_/\-]\+\)%"\1":\1%g' |
-		cat
-	) < "$inf" > "$outf"
-}
+#genlinks_downloads() {
+#	local inf out
+#	inf="$1"
+#	outf="$1".links
+#	(
+#		sed -e 's%\(https://[a-zA-Z0-9.:_/\-]\+\)%[\1](\1)%g'
+#	) < "$inf" > "$outf"
+#}
 
-blog_post() {
+www_l_n_post() {
 	if [ -z "${append}" ]; then
 		# release
 		cat <<EOF
 ---
-layout: post
 title: ${version}
 author: $AUTHOR
 author_email: ${AUTHOR}@lighttpd.net
-categories:
-- download
 tags:
 - ${version}
 - lighttpd
 - releases
 ---
-{% excerpt %}
+{% excerpt -%}
 
-h2. Important changes
+## Important changes
 
 TODO
 
-h2. Downloads
+## Downloads
 
 EOF
 		cat DOWNLOADS.links
 		cat <<EOF
 
-{% endexcerpt %}
-h2. Changes from ${prevversion}
+{%- endexcerpt %}
+## Changes from ${prevversion}
 
 EOF
 		cat CHANGES.links
@@ -131,17 +127,15 @@ EOF
 		# pre release
 		cat <<EOF
 ---
-layout: post
 title: 'PRE-RELEASE: lighttpd ${version}${append}'
-categories:
-- lighttpd
+author: $AUTHOR
+author_email: ${AUTHOR}@lighttpd.net
 tags:
-- '1.4'
 - ${version}
 - lighttpd
 - prerelease
 ---
-{% excerpt %}
+{% excerpt -%}
 We would like to draw your attention to the latest pre-release of the stable 1.4 branch of lighttpd.
 
 You can get the pre-release from these urls:
@@ -154,20 +148,20 @@ A lot of testing ensures a good release.
 
 <!-- TODO: describe major changes -->
 
-{% endexcerpt %}
+{%- endexcerpt %}
 
-h4. Changes from ${prevversion}
+#### Changes from ${prevversion}
 
 EOF
 		cat CHANGES.links
 
 		cat <<EOF
 
-If you want to get the latest source for any branch, you can get it from our svn repository.
-Documentation to do so can be obtained from this page: "DevelSubversion":https://redmine.lighttpd.net/projects/lighttpd/wiki/DevelSubversion
-Bug reports or feature requests can be filed in our ticket system: "New Issue":https://redmine.lighttpd.net/projects/lighttpd/issues/new
-Please make sure to check if there isn't a ticket already here: "Issues":https://redmine.lighttpd.net/projects/lighttpd/issues
-Perhaps you also want to have a look at our "download site":https://download.lighttpd.net/lighttpd/
+If you want to get the latest source for any branch, you can get it from our git repository.
+Documentation to do so can be obtained from this page: [InstallFromSource](https://redmine.lighttpd.net/projects/lighttpd/wiki/InstallFromSource)
+Bug reports or feature requests can be filed in our ticket system: [New Issue](https://redmine.lighttpd.net/projects/lighttpd/issues/new)
+Please make sure to check if there isn't a ticket already here: [Issues](https://redmine.lighttpd.net/projects/lighttpd/issues)
+Perhaps you also want to have a look at our [download site](https://download.lighttpd.net/lighttpd/)
 
 Thank you for flying light.
 EOF
@@ -225,12 +219,12 @@ force gpg ${KEYID:+-u "${KEYID}"} -a --output "${name}.tar.xz.asc" --detach-sig 
 ) > DOWNLOADS
 
 (
-	echo "* \"${name}.tar.gz\":${BASEDOWNLOADURL}/${name}.tar.gz (\"GPG signature\":${BASEDOWNLOADURL}/${name}.tar.gz.asc)"
-	echo "** SHA256: @$(sha256sum ${name}.tar.gz | cut -d' ' -f1)@"
-	echo "* \"${name}.tar.xz\":${BASEDOWNLOADURL}/${name}.tar.xz (\"GPG signature\":${BASEDOWNLOADURL}/${name}.tar.xz.asc)"
-	echo "** SHA256: @$(sha256sum ${name}.tar.xz | cut -d' ' -f1)@"
-	echo "* \"SHA256 checksums\":${BASEDOWNLOADURL}/${name}.sha256sum"
-	echo "* \"SHA512 checksums\":${BASEDOWNLOADURL}/${name}.sha512sum"
+	echo "* [${name}.tar.gz](${BASEDOWNLOADURL}/${name}.tar.gz) ([GPG signature](${BASEDOWNLOADURL}/${name}.tar.gz.asc))"
+	echo "  * SHA256: \`$(sha256sum ${name}.tar.gz | cut -d' ' -f1)\`"
+	echo "* [${name}.tar.xz](${BASEDOWNLOADURL}/${name}.tar.xz) ([GPG signature](${BASEDOWNLOADURL}/${name}.tar.xz.asc))"
+	echo "  * SHA256: \`$(sha256sum ${name}.tar.xz | cut -d' ' -f1)\`"
+	echo "* [SHA256 checksums](${BASEDOWNLOADURL}/${name}.sha256sum)"
+	echo "* [SHA512 checksums](${BASEDOWNLOADURL}/${name}.sha512sum)"
 ) > DOWNLOADS.links
 
 force genchanges
@@ -238,6 +232,7 @@ force genlinks_changes CHANGES
 #force genlinks_downloads DOWNLOADS
 
 prevversion="${version%.*}.$((${version##*.} - 1))"
+isodate=$(date +"%Y-%m-%d")
 
 if [ -z "${append}" ]; then
 	# only for Releases
@@ -251,7 +246,7 @@ h1. Release Info
 * Status: stable
 * Release Purpose: bug fixes
 * Release manager: $AUTHOR
-* Released date: $(date +"%Y-%m-%d")
+* Released date: ${isodate}
 
 h1. Important changes from ${prevversion}
 
@@ -283,10 +278,7 @@ echo
 echo -------
 echo
 
-
-
-blog_post > $(date +"%Y-%m-%d")-"${version}.textile"
-cat $(date +"%Y-%m-%d")-"${version}.textile"
+www_l_n_post | tee ${isodate}-"${version}.md"
 
 echo
 echo -------
