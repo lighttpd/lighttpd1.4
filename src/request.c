@@ -477,6 +477,13 @@ static int http_request_parse_single_header(request_st * const restrict r, const
         break;
       case HTTP_HEADER_TRANSFER_ENCODING:
         if (HTTP_VERSION_1_1 != r->http_version) {
+            /* RFC9112 HTTP/1.1 Section 6.1. Transfer-Encoding
+             * https://httpwg.org/specs/rfc9112.html#rfc.section.6.1.p.16
+             * A server or client that receives an HTTP/1.0 message containing a
+             * Transfer-Encoding header field MUST treat the message as if the
+             * framing is faulty, even if a Content-Length is present, and close
+             * the connection after processing the message. */
+            r->keep_alive = 0;
             return http_request_header_line_invalid(r, 400,
               HTTP_VERSION_1_0 == r->http_version
                 ? "HTTP/1.0 with Transfer-Encoding (bad HTTP/1.0 proxy?) -> 400"
@@ -1249,6 +1256,14 @@ http_request_parse (request_st * const restrict r, const int scheme_port)
         /* (-1 == r->reqbody_length when Transfer-Encoding: chunked)*/
         if (-1 == r->reqbody_length
             && light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_LENGTH)) {
+            /* RFC9112 HTTP/1.1 Section 6.1. Transfer-Encoding
+             * https://httpwg.org/specs/rfc9112.html#rfc.section.6.1.p.15
+             * A server MAY reject a request that contains both Content-Length
+             * and Transfer-Encoding or process such a request in accordance
+             * with the Transfer-Encoding alone. Regardless, the server MUST
+             * close the connection after responding to such a request to
+             * avoid the potential attacks. */
+            r->keep_alive = 0;
             /* RFC7230 Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
              * 3.3.3.  Message Body Length
              * [...]
