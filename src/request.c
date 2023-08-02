@@ -800,15 +800,14 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
 
             if (__builtin_expect( (hpctx->id == HTTP_HEADER_H2_UNKNOWN), 0)) {
                 uint32_t j = 0;
-                while (j < klen && (light_islower(k[j]) || k[j] == '-'))
-                    ++j;
-
+                while ((light_islower(k[j]) || k[j] == '-') && ++j < klen) ;
                 if (__builtin_expect( (j != klen), 0)) {
-                    if (light_isupper(k[j]))
-                        return 400;
                     if (0 != http_request_parse_header_other(r, k+j, klen-j,
                                                             http_header_strict))
                         return 400;
+                    do {
+                        if (light_isupper(k[j])) return 400;
+                    } while (++j < klen);
                 }
 
                 hpctx->id = http_header_hkey_get_lc(k, klen);
