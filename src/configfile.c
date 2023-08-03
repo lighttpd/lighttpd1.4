@@ -463,6 +463,10 @@ static void config_compat_module_load (server *srv) {
                                          sizeof("mod_wstunnel")-1)) {
             if (NULL == dyn_name)
                 dyn_name = m->ptr;
+            if (!append_mod_staticfile)
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "Warning: %s should be listed in server.modules"
+                  " before mod_staticfile", m->ptr);
         }
     }
 
