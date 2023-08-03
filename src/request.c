@@ -1196,8 +1196,11 @@ static int http_request_parse_headers(request_st * const restrict r, char * cons
         do { --end; } while (end[-1] == ' ' || end[-1] == '\t');
 
         const int vlen = (int)(end - v);
-        /* empty header-fields are not allowed by HTTP-RFC, we just ignore them */
-        if (vlen <= 0) continue; /* ignore header */
+        if (__builtin_expect( (vlen <= 0), 0)) {
+            if (id == HTTP_HEADER_CONTENT_LENGTH)
+                return http_request_header_line_invalid(r, 400, "invalid Content-Length header -> 400");
+            continue; /* ignore empty header */
+        }
 
         if (http_header_strict) {
             const char * const x = http_request_check_line_strict(v, vlen);

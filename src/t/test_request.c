@@ -301,7 +301,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "Content-Length: -2\r\n"
                     "\r\n"));
 
-    run_http_request_parse(r, __LINE__, 411,
+    run_http_request_parse(r, __LINE__, 400,
       "Content-Length is empty",
       CONST_STR_LEN("POST /12345.txt HTTP/1.0\r\n"
                     "Host: 123.example.org\r\n"
