@@ -671,8 +671,7 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 			  case HANDLER_FINISHED:
 				break;
 			  case HANDLER_WAIT_FOR_EVENT:
-				ostate = r->state;
-				continue; /*(end outer loop)*/
+				return;
 			  /*case HANDLER_COMEBACK:*//*(not expected)*/
 			  /*case HANDLER_ERROR:*/
 			  default:
@@ -686,7 +685,7 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 			__attribute_fallthrough__
 		case CON_STATE_WRITE:
 			if (connection_handle_write_state(r, con) == CON_STATE_WRITE)
-				continue; /*(end outer loop)*/
+				return;
 			__attribute_fallthrough__
 		case CON_STATE_RESPONSE_END: /* transient */
 		case CON_STATE_ERROR:        /* transient */
@@ -697,11 +696,11 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 		case CON_STATE_CLOSE:
 			/*(should not be reached by HTTP/2 streams)*/
 			connection_handle_close_state(con);
-			break;
+			return;
 		case CON_STATE_CONNECT:
-			break;
+			return;
 		default:/*(should not happen)*/
-			break;
+			return;
 		}
 	} while (ostate != r->state);
 }
