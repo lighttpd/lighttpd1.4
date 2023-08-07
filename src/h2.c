@@ -3189,10 +3189,6 @@ h2_process_streams (connection * const con,
             /* future: might track read/write interest per request
              * to avoid iterating through all active requests */
             /* specialized connection_state_machine_loop() for h2 streams */
-          #if 0
-            if (r->conf.log_state_handling)
-                connection_log_state(r, "");
-          #endif
             switch (r->state) {
               case CON_STATE_READ_POST:
               case CON_STATE_HANDLE_REQUEST:
@@ -3238,11 +3234,6 @@ h2_process_streams (connection * const con,
                 break;
             }
 
-          #if 0
-            if (r->conf.log_state_handling)
-                connection_log_state(r, " at loop exit");
-          #endif
-
             if (r->state < CON_STATE_WRITE)
                 continue;
             /* else CON_STATE_WRITE, CON_STATE_RESPONSE_END, CON_STATE_ERROR */
@@ -3271,10 +3262,6 @@ h2_process_streams (connection * const con,
                     continue;
 
                 request_set_state(r, CON_STATE_RESPONSE_END);
-              #if 0
-                if (__builtin_expect( (r->conf.log_state_handling), 0))
-                    connection_log_state(r, "");
-              #endif
             }
 
             {/*(r->state==CON_STATE_RESPONSE_END || r->state==CON_STATE_ERROR)*/

@@ -91,11 +91,6 @@ static void connection_close(connection *con) {
 	if (0 != fdio_close_socket(con->fd))
 		log_serror(r->conf.errh, __FILE__, __LINE__,
 		  "(warning) close: %d", con->fd);
-
-	if (r->conf.log_state_handling) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "connection closed for fd %d", con->fd);
-	}
 	con->fd = -1;
 
 	--srv->cur_fds;
@@ -154,13 +149,8 @@ static void connection_handle_shutdown(connection *con) {
 	if (con->fd >= 0
 	    && (con->is_ssl_sock || 0 == shutdown(con->fd, SHUT_WR))) {
 		con->close_timeout_ts = log_monotonic_secs;
-
 		request_st * const r = &con->request;
 		connection_set_state(r, CON_STATE_CLOSE);
-		if (r->conf.log_state_handling) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "shutdown for fd %d", con->fd);
-		}
 	} else {
 		connection_close(con);
 	}
@@ -611,11 +601,6 @@ connection *connection_accepted(server *srv, const server_socket *srv_socket, so
 
 		srv->cur_fds++;
 
-		/* ok, we have the connection, register it */
-#if 0
-		log_error(srv->errh, __FILE__, __LINE__, "accepted() %d", cnt);
-#endif
-
 		con = connections_get_new_connection(srv);
 
 		con->fd = cnt;
@@ -649,28 +634,11 @@ connection *connection_accepted(server *srv, const server_socket *srv_socket, so
 }
 
 
-__attribute_cold__
-__attribute_noinline__
-__attribute_nonnull__()
-static void
-connection_log_state (const request_st * const r, const char * const tag)
-{
-    buffer * const tb = r->tmp_buf;
-    buffer_clear(tb);
-    http_request_state_append(tb, r->state);
-    log_error(r->conf.errh, __FILE__, __LINE__,
-      "fd:%d id:%d state:%s%s", r->con->fd, r->x.h2.id, tb->ptr, tag);
-}
-
-
 static void
 connection_state_machine_loop (request_st * const r, connection * const con)
 {
 	request_state_t ostate;
 	do {
-		if (r->conf.log_state_handling)
-			connection_log_state(r, "");
-
 		switch ((ostate = r->state)) {
 		case CON_STATE_REQUEST_START: /* transient */
 			/*(should not be reached by HTTP/2 streams)*/
@@ -733,13 +701,9 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 		case CON_STATE_CONNECT:
 			break;
 		default:/*(should not happen)*/
-			/*connection_log_state(r, "");*/ /*(unknown state)*/
 			break;
 		}
 	} while (ostate != r->state);
-
-        if (r->conf.log_state_handling)
-            connection_log_state(r, " at loop exit");
 }
 
 
