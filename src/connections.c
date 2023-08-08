@@ -218,10 +218,12 @@ static void connection_handle_response_end_state(request_st * const r, connectio
 
 __attribute_pure__
 static off_t
-connection_write_throttled (const connection * const con, off_t max_bytes)
+connection_write_throttle (const connection * const con, off_t max_bytes)
 {
+    /*assert(max_bytes > 0);*/
     const request_config * const restrict rconf = &con->request.conf;
-    if (0 == rconf->global_bytes_per_second && 0 == rconf->bytes_per_second)
+    if (__builtin_expect(
+          (0 == (rconf->global_bytes_per_second | rconf->bytes_per_second)), 1))
         return max_bytes;
 
     if (rconf->global_bytes_per_second) {
@@ -242,16 +244,6 @@ connection_write_throttled (const connection * const con, off_t max_bytes)
 }
 
 
-static off_t
-connection_write_throttle (connection * const con, off_t max_bytes)
-{
-    /*assert(max_bytes > 0);*/
-    max_bytes = connection_write_throttled(con, max_bytes);
-    if (0 == max_bytes) con->traffic_limit_reached = 1;
-    return max_bytes;
-}
-
-
 static int
 connection_write_chunkqueue (connection * const con, chunkqueue * const restrict cq, off_t max_bytes)
 {
@@ -260,7 +252,8 @@ connection_write_chunkqueue (connection * const con, chunkqueue * const restrict
     con->write_request_ts = log_monotonic_secs;
 
     max_bytes = connection_write_throttle(con, max_bytes);
-    if (0 == max_bytes) return 1;
+    if (__builtin_expect( (0 == max_bytes), 0))
+        return (con->traffic_limit_reached = 1);
 
     off_t written = cq->bytes_out;
     int ret;
@@ -297,9 +290,6 @@ connection_write_chunkqueue (connection * const con, chunkqueue * const restrict
     }
 
     ret = con->network_write(con, cq, max_bytes);
-    if (ret >= 0) {
-        ret = chunkqueue_is_empty(cq) ? 0 : 1;
-    }
 
   #ifdef TCP_CORK
     if (corked) {
@@ -315,7 +305,7 @@ connection_write_chunkqueue (connection * const con, chunkqueue * const restrict
     if (r->conf.global_bytes_per_second_cnt_ptr)
         *(r->conf.global_bytes_per_second_cnt_ptr) += written;
 
-    return ret;
+    return (ret >= 0) ? !chunkqueue_is_empty(cq) : ret;
 }
 
 
