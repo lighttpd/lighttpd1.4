@@ -83,6 +83,7 @@ static void connection_close(connection *con) {
 	chunkqueue_reset(con->read_queue);
 	con->request_count = 0;
 	con->is_ssl_sock = 0;
+	con->traffic_limit_reached = 0;
 	con->revents_err = 0;
 
 	fdevent_fdnode_event_del(srv->ev, con->fdn);
@@ -617,6 +618,10 @@ connection *connection_accepted(server *srv, const server_socket *srv_socket, so
 		sock_addr_cache_inet_ntop_copy_buffer(&con->dst_addr_buf,
 		                                      &con->dst_addr);
 		con->srv_socket = srv_socket;
+		/* recv() immediately after accept() fails (on default Linux for TCP);
+		 * so skip optimistic read.  (might revisit with HTTP/3 UDP) */
+		/*con->is_readable = 1;*/
+		con->is_writable = 1;
 		con->is_ssl_sock = srv_socket->is_ssl;
 		con->proto_default_port = 80; /* "http" */
 

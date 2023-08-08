@@ -336,7 +336,6 @@ static void http_response_header_clear (request_st * const r) {
 
 void http_response_reset (request_st * const r) {
     r->http_status = 0;
-    r->con->is_writable = 1;
     r->handler_module = NULL;
     if (r->physical.path.ptr) { /*(skip for mod_fastcgi authorizer)*/
         buffer_clear(&r->physical.doc_root);

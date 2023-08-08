@@ -744,7 +744,6 @@ http_response_call_error_handler (request_st * const r, const buffer * const err
             chunkqueue_reset(&r->reqbody_queue);
         }
 
-        r->con->is_writable = 1;
         r->error_handler_saved_status = r->http_status;
         r->error_handler_saved_method = r->http_method;
         r->http_method = HTTP_METHOD_GET;
