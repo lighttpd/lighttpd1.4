@@ -305,7 +305,10 @@ connection_write_chunkqueue (connection * const con, chunkqueue * const restrict
     if (r->conf.global_bytes_per_second_cnt_ptr)
         *(r->conf.global_bytes_per_second_cnt_ptr) += written;
 
-    return (ret >= 0) ? !chunkqueue_is_empty(cq) : ret;
+    /* return 1 for caller to set con->is_writable = 0 when cq not empty *and*
+     * bytes have been sent from cq in order to not spin trying to send HTTP/2
+     * server Connection Preface while waiting for TLS negotiation to complete*/
+    return (ret >= 0) ? !chunkqueue_is_empty(cq) && cq->bytes_out : ret;
 }
 
 
@@ -316,10 +319,6 @@ static int connection_handle_write(request_st * const r, connection * const con)
 	int rc = connection_write_chunkqueue(con, con->write_queue, MAX_WRITE_LIMIT);
 	switch (rc) {
 	case 0:
-		if (r->resp_body_finished) {
-			connection_set_state(r, CON_STATE_RESPONSE_END);
-			return CON_STATE_RESPONSE_END;
-		}
 		break;
 	case -1: /* error on our side */
 		log_error(r->conf.errh, __FILE__, __LINE__,
@@ -329,12 +328,7 @@ static int connection_handle_write(request_st * const r, connection * const con)
 		connection_set_state_error(r, CON_STATE_ERROR);
 		return CON_STATE_ERROR;
 	case 1:
-		/* do not spin trying to send HTTP/2 server Connection Preface
-		 * while waiting for TLS negotiation to complete */
-		if (con->write_queue->bytes_out)
-			con->is_writable = 0;
-
-		/* not finished yet -> WRITE */
+		con->is_writable = 0;
 		break;
 	}
 
