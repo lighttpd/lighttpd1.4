@@ -3280,12 +3280,16 @@ h2_process_streams (connection * const con,
          * note: this is not done to other streams in the loop above
          * (besides the current stream in the loop) due to the specific
          * implementation above, where doing so would mess up the iterator */
+        #if 0
         for (uint32_t i = 0; i < h2c->rused; ++i) {
             request_st * const r = h2c->r[i];
             /*assert(r->x.h2.state == H2_STATE_CLOSED);*/
             h2_retire_stream(r, con);/*r invalidated;removed from h2c->r[]*/
             --i;/* adjust loop i; h2c->rused was modified to retire r */
         }
+        #else
+        do { h2_retire_stream(h2c->r[0], con); } while (h2c->rused);
+        #endif
         /* XXX: ? should we discard con->write_queue
          *        and change h2r->state to CON_STATE_RESPONSE_END ? */
     }
