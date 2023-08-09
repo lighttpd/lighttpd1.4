@@ -3195,11 +3195,14 @@ h2_process_streams (connection * const con,
                 {
                     const handler_t rc = http_response_loop(r);
                     if (rc >= HANDLER_WAIT_FOR_EVENT) {
-                        if (rc > HANDLER_WAIT_FOR_EVENT)
+                        if (rc > HANDLER_WAIT_FOR_EVENT) {
                             /*HANDLER_ERROR or HANDLER_COMEBACK (not expected)*/
                             request_set_state_error(r, CON_STATE_ERROR);
-                        break;
+                            break;
+                        }
+                        continue; /* HANDLER_WAIT_FOR_EVENT */
                     }
+                    /* HANDLER_GO_ON or HANDLER_FINISHED */
                 }
                 /*__attribute_fallthrough__*/
               /*case CON_STATE_RESPONSE_START:*//*occurred;transient*/
@@ -3208,37 +3211,19 @@ h2_process_streams (connection * const con,
                 __attribute_fallthrough__
               case CON_STATE_WRITE:
                 /* specialized connection_handle_write_state() */
-                if (r->resp_body_finished) {
-                    if (chunkqueue_is_empty(&r->write_queue))
-                        request_set_state(r, CON_STATE_RESPONSE_END);
-                }
-                else if (r->handler_module) {
+
+                if (r->handler_module && !r->resp_body_finished) {
                     const plugin * const p = r->handler_module;
                     if (p->handle_subrequest(r, p->data)
                         > HANDLER_WAIT_FOR_EVENT) {
-                     #if 0
-                      case HANDLER_WAIT_FOR_EVENT:
-                      case HANDLER_FINISHED:
-                      case HANDLER_GO_ON:
-                        break;
                       /*case HANDLER_COMEBACK:*//*error after send resp hdrs*/
                       /*case HANDLER_ERROR:*/
-                      default:
-                     #endif
                         request_set_state_error(r, CON_STATE_ERROR);
                         break;
                     }
                 }
-                break;
-              default:
-                break;
-            }
 
-            if (r->state < CON_STATE_WRITE)
-                continue;
-            /* else CON_STATE_WRITE, CON_STATE_RESPONSE_END, CON_STATE_ERROR */
-            else if (r->state == CON_STATE_WRITE) {
-                if (__builtin_expect((!chunkqueue_is_empty(&r->write_queue)), 1)
+                if (!chunkqueue_is_empty(&r->write_queue)
                     && max_bytes
                     && (r->resp_body_finished
                         || (r->conf.stream_response_body
@@ -3253,8 +3238,10 @@ h2_process_streams (connection * const con,
                     dlen = h2_send_cqdata(r, con, &r->write_queue, dlen);
                     if (dlen) { /*(do not resched (spin) if swin empty window)*/
                         max_bytes -= (off_t)dlen;
-                        if (!chunkqueue_is_empty(&r->write_queue))
+                        if (!chunkqueue_is_empty(&r->write_queue)) {
                             resched |= 1;
+                            continue;
+                        }
                     }
                 }
                 if (!chunkqueue_is_empty(&r->write_queue)
@@ -3262,6 +3249,9 @@ h2_process_streams (connection * const con,
                     continue;
 
                 request_set_state(r, CON_STATE_RESPONSE_END);
+                break;
+              default:
+                break;
             }
 
             {/*(r->state==CON_STATE_RESPONSE_END || r->state==CON_STATE_ERROR)*/
