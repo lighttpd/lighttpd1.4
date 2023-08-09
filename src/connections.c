@@ -336,6 +336,7 @@ static int connection_handle_write(request_st * const r, connection * const con)
 }
 
 static int connection_handle_write_state(request_st * const r, connection * const con) {
+    int loop_once = 0;
     do {
         /* only try to write if we have something in the queue */
         if (!chunkqueue_is_empty(&r->write_queue)) {
@@ -349,22 +350,21 @@ static int connection_handle_write_state(request_st * const r, connection * cons
 
         if (r->handler_module && !r->resp_body_finished) {
             const plugin * const p = r->handler_module;
-            int rc = p->handle_subrequest(r, p->data);
-            switch(rc) {
-            case HANDLER_WAIT_FOR_EVENT:
-            case HANDLER_FINISHED:
-            case HANDLER_GO_ON:
-                break;
-            /*case HANDLER_COMEBACK:*/
-            /*case HANDLER_ERROR:*/
-            default:
+            if (p->handle_subrequest(r, p->data) > HANDLER_WAIT_FOR_EVENT) {
                 connection_set_state_error(r, CON_STATE_ERROR);
                 return CON_STATE_ERROR;
             }
         }
+
     } while (!chunkqueue_is_empty(&r->write_queue)
              ? con->is_writable > 0 && 0 == con->traffic_limit_reached
+               && 1 == ++loop_once
              : r->resp_body_finished);
+
+    /* yield to handle other connections or else TLS on a slow, embedded device
+     * might loop here and monopolize resources */
+    if (2 == loop_once)
+        joblist_append(con);
 
     return CON_STATE_WRITE;
 }
