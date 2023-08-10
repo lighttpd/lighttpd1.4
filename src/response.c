@@ -20,10 +20,88 @@
 #include "sys-stat.h"
 #include "sys-time.h"
 
-#include <limits.h>
 #include <errno.h>
-#include <stdlib.h>
 #include <string.h>
+
+
+static stat_cache_entry *
+http_response_physical_pathinfo (request_st * const r)
+{
+    /* Caller must already have checked full path does not exist in filesystem*/
+
+    char *pathinfo = r->physical.path.ptr
+                   + buffer_clen(&r->physical.basedir)
+                   - (buffer_has_pathsep_suffix(&r->physical.basedir));
+    if ('/' != *pathinfo)
+        pathinfo = NULL;
+    else if (pathinfo == r->physical.path.ptr) /*(basedir is "/")*/
+        pathinfo = strchr(pathinfo+1, '/');
+    /* Note: basedir might be "/" (containers) and basedir should not be empty.
+     * basedir in config is allowed to end with '/', especially for basedir "/".
+     * Current implmentation below requires that pathinfo follow a regular file
+     * (S_ISREG()) which is why if pathinfo matches beginning of path, pathinfo
+     * is stepped to next path component.
+     *   https://redmine.lighttpd.net/issues/2911
+     */
+
+    stat_cache_entry *sce = NULL;
+    const uint32_t pathused = r->physical.path.used;
+    for (char *pprev = pathinfo;
+         pathinfo;
+         pprev = pathinfo, pathinfo = strchr(pathinfo+1, '/')) {
+        /*(temporarily modify r->physical.path in-place)*/
+        r->physical.path.used = pathinfo - r->physical.path.ptr + 1;
+        *pathinfo = '\0';
+        stat_cache_entry * const nsce = stat_cache_get_entry(&r->physical.path);
+        *pathinfo = '/';
+        r->physical.path.used = pathused;
+        if (NULL == nsce) {
+            pathinfo = pathinfo != pprev ? pprev : NULL;
+            break;
+        }
+        sce = nsce;
+        if (!S_ISDIR(sce->st.st_mode)) break;
+    }
+
+    /* Note: historical lighttpd behavior checks S_ISREG(), permitting
+     * pathinfo only on regular files, not dirs or special files.
+     *
+     * Were this code to be extended to permit pathinfo following a dir, the
+     * trailing slash indicating dir would have to be duplicated to start
+     * pathinfo and would need to be special-cased in the two calls to
+     * buffer_truncate() below.  Additionally, basedir "/" and entire rest of
+     * path as pathinfo would have to be special-cased here before returning,
+     * including sce = stat_cache_get_entry() "/".  However, supporting pathinfo
+     * on dirs -- at this point in lighttpd request processing -- would have the
+     * effect of every request for a non-existent file being pathinfo on a dir
+     * (assuming "/" exists), instead of returning the traditional 404 Not Found
+     * in such cases.  Fully virtual paths are handled elsewhere,
+     * e.g. with gw_backend "check-local" => "disable" in lighttpd.conf */
+
+    if (NULL == pathinfo || !S_ISREG(sce->st.st_mode))
+        return NULL;
+
+    /* pathinfo */
+    size_t len = r->physical.path.ptr+pathused-1-pathinfo, reqlen;
+    const char * const ptr =
+       (r->conf.force_lowercase_filenames
+        && len <= (reqlen = buffer_clen(&r->target))
+        && buffer_eq_icase_ssn(r->target.ptr + reqlen - len, pathinfo, len))
+        /* attempt to preserve case-insensitive PATH_INFO
+         * (works in common case where mod_alias, mod_magnet, and other modules
+         *  have not modified the PATH_INFO portion of request URI, or did so
+         *  with exactly the PATH_INFO desired) */
+      ? r->target.ptr + reqlen - len
+      : pathinfo;
+    buffer_copy_string_len(&r->pathinfo, ptr, len);
+
+    /* remove pathinfo from paths */
+    buffer_truncate(&r->uri.path, buffer_clen(&r->uri.path) - len);
+    buffer_truncate(&r->physical.path,
+                    (uint32_t)(pathinfo - r->physical.path.ptr));
+
+    return sce;
+}
 
 
 __attribute_cold__
@@ -72,6 +150,12 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 		  #endif
 		case ENAMETOOLONG:
 			/* file name to be read was too long. return 404 */
+			/* Note: URIs can be very long and this initial check on the
+			 * entire path imposes limits use of pathinfo in URIs to
+			 * (typically) 255 byte path segments and (typically) 4k total len,
+			 * though these limits can be avoided by configuring some modules
+			 * to use virtual paths and to skip the filesystem check,
+			 * e.g. w/ gw_backend "check-local" => "disable" in lighttpd.conf */
 			return http_response_physical_path_error(r, 404, NULL);
 		default:
 			/* we have no idea what happened. let's tell the user so. */
@@ -80,65 +164,9 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 
 		/* not found, perhaps PATHINFO */
 
-		char *pathinfo;
-		{
-			/*(might check at startup that s->document_root does not end in '/')*/
-			size_t len = buffer_clen(&r->physical.basedir)
-			           - (buffer_has_pathsep_suffix(&r->physical.basedir));
-			pathinfo = r->physical.path.ptr + len;
-			if ('/' != *pathinfo) {
-				pathinfo = NULL;
-			}
-			else if (pathinfo == r->physical.path.ptr) { /*(basedir is "/")*/
-				pathinfo = strchr(pathinfo+1, '/');
-			}
-		}
-
-		const uint32_t pathused = r->physical.path.used;
-		for (char *pprev = pathinfo; pathinfo; pprev = pathinfo, pathinfo = strchr(pathinfo+1, '/')) {
-			/*(temporarily modify r->physical.path in-place)*/
-			r->physical.path.used = pathinfo - r->physical.path.ptr + 1;
-			*pathinfo = '\0';
-			stat_cache_entry * const nsce = stat_cache_get_entry(&r->physical.path);
-			*pathinfo = '/';
-			r->physical.path.used = pathused;
-			if (NULL == nsce) {
-				pathinfo = pathinfo != pprev ? pprev : NULL;
-				break;
-			}
-			sce = nsce;
-			if (!S_ISDIR(sce->st.st_mode)) break;
-		}
-
-		if (NULL == pathinfo || !S_ISREG(sce->st.st_mode)) {
-			/* no it really doesn't exists */
+		sce = http_response_physical_pathinfo(r);
+		if (NULL == sce)
 			return http_response_physical_path_error(r, 404, "-- file not found");
-		}
-		/* note: historical behavior checks S_ISREG() above, permitting
-		 * path-info only on regular files, not dirs or special files */
-
-		/* we have a PATHINFO */
-		if (pathinfo) {
-			size_t len = r->physical.path.ptr+pathused-1-pathinfo, reqlen;
-			if (r->conf.force_lowercase_filenames
-			    && len <= (reqlen = buffer_clen(&r->target))
-			    && buffer_eq_icase_ssn(r->target.ptr + reqlen - len, pathinfo, len)) {
-				/* attempt to preserve case-insensitive PATH_INFO
-				 * (works in common case where mod_alias, mod_magnet, and other modules
-				 *  have not modified the PATH_INFO portion of request URI, or did so
-				 *  with exactly the PATH_INFO desired) */
-				buffer_copy_string_len(&r->pathinfo, r->target.ptr + reqlen - len, len);
-			} else {
-				buffer_copy_string_len(&r->pathinfo, pathinfo, len);
-			}
-
-			/*
-			 * shorten uri.path
-			 */
-
-			buffer_truncate(&r->uri.path, buffer_clen(&r->uri.path) - len);
-			buffer_truncate(&r->physical.path, (size_t)(pathinfo - r->physical.path.ptr));
-		}
 	}
 
 	if (!r->conf.follow_symlink
