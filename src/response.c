@@ -258,31 +258,38 @@ http_response_prepare (request_st * const r)
 {
     handler_t rc;
 
-	/* looks like someone has already made a decision */
+	/* abort processing if error status, e.g. while parsing request hdrs */
 	if (__builtin_expect( (r->http_status > 200), 0)) { /* yes, > 200 */
+		/*(since this func no longer runs subrequest_handler,
+		 * status code check could be >= 400 for idiom where
+		 * r->http_status is set and r->handler_module is set NULL
+		 * to set up for error doc handler)*/
 		if (0 == r->resp_body_finished)
 			http_response_body_clear(r, 0);
 		return HANDLER_FINISHED;
 	}
 
-	/* no decision yet, build conf->filename */
-	if (buffer_is_unset(&r->physical.path)) {
+	/* initial request processing and following HANDLER_COMEBACK generally
+	 * should reprocess the request, including resetting config, but this
+	 * might be skipped after plugins have been run and path is set,
+	 * e.g. for gw_backend authorizer mode where gw_backend docroot is set
+	 * and plugin sets up handling in subrequest_handler and then returns
+	 * HANDLER_COMEBACK after auth.
+	 * (elide reprocessing request following gw_backend authorizer when
+	 *  gw_backend sets physical.path to gw_backend docroot (if set) in
+	 *  gw_authorizer_ok() before calling http_response_reset()) */
+	if (__builtin_expect( (buffer_is_unset(&r->physical.path)), 1)) {
 
+		#if 0 /*(r->async_callback currently unused)*/
 		if (__builtin_expect( (!r->async_callback), 1)) {
+		#endif
 			rc = http_response_config(r);
 			if (HANDLER_GO_ON != rc) return rc;
+		#if 0 /*(r->async_callback currently unused)*/
 		}
 		else
 			r->async_callback = 0; /* reset */
-
-		/* we only come here when we have the parse the full request again
-		 *
-		 * a HANDLER_COMEBACK from mod_rewrite and mod_fastcgi might be a
-		 * problem here as mod_setenv might get called multiple times
-		 *
-		 * fastcgi-auth might lead to a COMEBACK too
-		 * fastcgi again dead server too
-		 */
+		#endif
 
 		if (r->conf.log_request_handling) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
@@ -327,7 +334,12 @@ http_response_prepare (request_st * const r)
 
 
 		/* transform r->uri.path to r->physical.rel_path (relative file path) */
-		buffer_copy_buffer(&r->physical.rel_path, &r->uri.path);
+		/* (MacOS X and Windows (typically) have case-insensitive filesystems)*/
+		__builtin_expect( (!r->conf.force_lowercase_filenames), 1)
+		  ? buffer_copy_buffer(&r->physical.rel_path, &r->uri.path)
+		  : buffer_copy_string_len_lc(&r->physical.rel_path,
+		                              BUF_PTR_LEN(&r->uri.path));
+
 #if defined(_WIN32) || defined(__CYGWIN__)
 		/* strip dots from the end and spaces
 		 *
@@ -356,11 +368,6 @@ http_response_prepare (request_st * const r)
 			buffer_truncate(b, len);
 		}
 #endif
-		/* MacOS X and Windows (typically) case-insensitive filesystems */
-		if (r->conf.force_lowercase_filenames) {
-			buffer_to_lower(&r->physical.rel_path);
-		}
-
 
 		/* compose physical filename: physical.path = doc_root + rel_path */
 		if (buffer_is_unset(&r->physical.doc_root))
@@ -389,16 +396,9 @@ http_response_prepare (request_st * const r)
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-	/*
-	 * No module grabbed the request yet (like mod_access)
-	 *
-	 * Go on and check if the file exists at all
-	 */
-
+		/* check if r->physical.path exists in the filesystem */
 		rc = http_response_physical_path_check(r);
 		if (HANDLER_GO_ON != rc) return rc;
-
-		/* r->physical.path is non-empty and exists in the filesystem */
 
 		if (r->conf.log_request_handling) {
 			log_error(r->conf.errh, __FILE__, __LINE__,
@@ -412,11 +412,12 @@ http_response_prepare (request_st * const r)
 			  BUFFER_INTLEN_PTR(&r->pathinfo));
 		}
 
-		/* call the handlers */
+		/* request handler selection */
 		rc = plugins_call_handle_subrequest_start(r);
 		if (HANDLER_GO_ON != rc) return rc;
 
-		if (__builtin_expect( (NULL == r->handler_module), 0)) {
+		if (NULL != r->handler_module) return HANDLER_GO_ON;
+
 			/* no handler; finish request */
 			if (__builtin_expect( (0 == r->http_status), 0)) {
 				if (r->http_method == HTTP_METHOD_OPTIONS) {
@@ -433,9 +434,6 @@ http_response_prepare (request_st * const r)
 					r->http_status = 403;
 			}
 			return HANDLER_FINISHED;
-		}
-
-		return HANDLER_GO_ON;
 }
 
 
@@ -633,9 +631,7 @@ http_response_write_prepare(request_st * const r)
       case HANDLER_FINISHED:
         break;
       default:
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "response_start plugin failed");
-        return HANDLER_ERROR;
+        return HANDLER_ERROR; /*(unexpected; plugin mis-coded)*/
     }
 
     if (r->resp_body_finished) {
@@ -684,7 +680,7 @@ http_response_write_prepare(request_st * const r)
          * response is not yet finished, but we have all headers
          *
          * keep-alive requires one of:
-         * - Content-Length: ... (HTTP/1.0 and HTTP/1.0)
+         * - Content-Length: ... (HTTP/1.1 and HTTP/1.0)
          * - Transfer-Encoding: chunked (HTTP/1.1)
          * - Upgrade: ... (lighttpd then acts as transparent proxy)
          */
