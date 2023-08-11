@@ -841,8 +841,13 @@ static int stat_cache_attr_get(const char *name) {
   #if defined(HAVE_XATTR)
    #if defined(HAVE_SYS_XATTR_H)
     ssize_t attrlen;
+   #if defined(__APPLE__) && defined(__MACH__)
+    if (0 < (attrlen = getxattr(name, attrname,
+                                attrval, sizeof(attrval)-1, 0, 0)))
+   #else
     if (0 < (attrlen = getxattr(name, attrname,
                                 attrval, sizeof(attrval)-1)))
+   #endif
    #else
     int attrlen = sizeof(attrval)-1;
     if (0 == attr_get(name, attrname, attrval, &attrlen, 0))
