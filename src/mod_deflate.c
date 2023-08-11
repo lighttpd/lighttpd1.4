@@ -1901,16 +1901,17 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		return HANDLER_GO_ON;
 
 	/* disable compression for some http status types. */
+	if (r->http_status < 200)
+		return HANDLER_GO_ON; /* r->http_status is 1xx intermed response */
 	switch(r->http_status) {
-	case 100:
-	case 101:
+	case 200: /* common case */
+	default:
+		break;
 	case 204:
 	case 205:
 	case 304:
 		/* disable compression as we have no response entity */
 		return HANDLER_GO_ON;
-	default:
-		break;
 	}
 
 	mod_deflate_patch_config(r, p);
