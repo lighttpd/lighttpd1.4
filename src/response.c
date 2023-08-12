@@ -607,12 +607,17 @@ http_response_write_prepare(request_st * const r)
         break;
       case 204: /* class: header only */
       case 205:
-      case 304:
-        /* disable chunked encoding again as we have no body */
-        http_response_body_clear(r, 1);
-        /* no Content-Body, no Content-Length */
+        /* RFC9110
+         * https://www.rfc-editor.org/rfc/rfc9110#name-content-length
+         *  A server MUST NOT send a Content-Length header field in any response
+         *  with a status code of 1xx (Informational) or 204 (No Content)
+         * (done for 205, too, only as sanity check; 205 has no content.
+         *  Content-Length: 0 will subsequently be set for 205 further below) */
         http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
                                    CONST_STR_LEN("Content-Length"));
+        __attribute_fallthrough__
+      case 304: /* cooperate with http_response_304() */
+        http_response_body_clear(r, 1);
         r->resp_body_finished = 1;
         break;
       default: /* class: header + body */

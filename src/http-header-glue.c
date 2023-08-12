@@ -236,6 +236,38 @@ static int http_response_maybe_cachable (const request_st * const r) {
 }
 
 
+static handler_t http_response_304 (request_st * const r) {
+  #if 0 /* option: could set Content-Length with 304 if content known */
+    /* RFC9110
+     * https://www.rfc-editor.org/rfc/rfc9110#name-content-length */
+    /*assert(r->resp_body_finished);*/
+    off_t qlen = chunkqueue_length(&r->write_queue);
+    if (qlen > 0)
+        buffer_append_int(
+          http_header_response_set_ptr(r, HTTP_HEADER_CONTENT_LENGTH,
+                                       CONST_STR_LEN("Content-Length")),
+          qlen);
+  #endif
+
+  #if 0 /* performed in http_response_write_prepare() */
+    http_response_body_clear(r, 1);
+    r->resp_body_finished = 1;
+  #endif
+    r->http_status = 304;
+    return HANDLER_FINISHED;
+}
+
+
+__attribute_cold__
+static handler_t http_response_412 (request_st * const r) {
+    /* http_response_reqbody_read_error() without setting r->keep_alive = 0 */
+    http_response_body_clear(r, 0);
+    r->handler_module = NULL;
+    r->http_status = 412;
+    return HANDLER_FINISHED;
+}
+
+
 int http_response_handle_cachable(request_st * const r, const buffer *lmod, const unix_time64_t lmtime) {
 	if (!http_response_maybe_cachable(r))
 		return HANDLER_GO_ON;
@@ -259,14 +291,9 @@ int http_response_handle_cachable(request_st * const r, const buffer *lmod, cons
 		/*(weak etag comparison must not be used for ranged requests)*/
 		int range_request = (0 != light_btst(r->rqst_htags, HTTP_HEADER_RANGE));
 		if (http_etag_matches(etag, vb->ptr, !range_request)) {
-			if (http_method_get_head_query(r->http_method)) {
-				r->http_status = 304;
-				return HANDLER_FINISHED;
-			} else {
-				r->http_status = 412;
-				r->handler_module = NULL;
-				return HANDLER_FINISHED;
-			}
+			return http_method_get_head_query(r->http_method)
+			  ? http_response_304(r)
+			  : http_response_412(r);
 		}
 	} else if (http_method_get_head_query(r->http_method)
 		   && (vb = http_header_request_get(r, HTTP_HEADER_IF_MODIFIED_SINCE,
@@ -277,8 +304,7 @@ int http_response_handle_cachable(request_st * const r, const buffer *lmod, cons
 		/* last-modified handling */
 		if (buffer_is_equal(lmod, vb)
 		    || !http_date_if_modified_since(BUF_PTR_LEN(vb), lmtime)) {
-			r->http_status = 304;
-			return HANDLER_FINISHED;
+			return http_response_304(r);
 		}
 	}
 

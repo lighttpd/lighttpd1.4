@@ -1601,12 +1601,7 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 		http_header_response_set(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), BUF_PTR_LEN(r->tmp_buf));
 
 		const buffer * const mtime = http_response_set_last_modified(r, st.st_mtime);
-		if (HANDLER_FINISHED == http_response_handle_cachable(r, mtime, st.st_mtime)) {
-			/* ok, the client already has our content,
-			 * no need to send it again */
-
-			chunkqueue_reset(&r->write_queue);
-		}
+		http_response_handle_cachable(r, mtime, st.st_mtime);
 	}
 
 	/* Reset the modified time of included files */
