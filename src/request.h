@@ -43,6 +43,8 @@ typedef struct request_config {
     unsigned int error_intercept:1;
 
     unsigned int h2proto:2; /*(global setting copied for convenient access)*/
+    unsigned int http_pathinfo:1;
+    unsigned int http_dummy:2; /*(padding)*/
 
     /* debug */
     unsigned int log_request_handling:1;

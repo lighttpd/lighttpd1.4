@@ -164,8 +164,8 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 
 		/* not found, perhaps PATHINFO */
 
-		sce = http_response_physical_pathinfo(r);
-		if (NULL == sce)
+		if (!r->conf.http_pathinfo
+		    || NULL == (sce = http_response_physical_pathinfo(r)))
 			return http_response_physical_path_error(r, 404, "-- file not found");
 	}
 
