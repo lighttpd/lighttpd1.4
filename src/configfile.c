@@ -940,9 +940,25 @@ static int config_insert_srvconf(server *srv) {
     return rc;
 }
 
+/* common media types for the web
+ *
+ * references:
+ *
+ * lighttpd doc/scripts/create-mime.pl
+ * https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types
+ * https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types
+ * https://docs.w3cub.com/http/basics_of_http/mime_types
+ * http://www.iana.org/assignments/media-types/media-types.xhtml
+ * https://salsa.debian.org/debian/media-types/-/blob/master/mime.types
+ * https://src.fedoraproject.org/rpms/mailcap/tree/rawhide
+ *   https://pagure.io/mailcap/blob/master/f/mime.types
+ *
+ */
 __attribute_cold__
 static void config_mimetypes_default(array * const a) {
     static const char * const mimetypes_default[] = {
+        /*(order not important)*/
+
         ".html",  "text/html"
        ,".htm",   "text/html"
        ,".txt",   "text/plain;charset=utf-8"
@@ -951,19 +967,92 @@ static void config_mimetypes_default(array * const a) {
        ,".js",    "text/javascript"
        ,".mjs",   "text/javascript"
        ,".xml",   "text/xml"
-       ,".jpg",   "image/jpeg"
-       ,".jpeg",  "image/jpeg"
-       ,".png",   "image/png"
+
+       ,".aac",   "audio/aac"
+       ,".flac",  "audio/flac" /* alt: "audio/x-flac" */
+       ,".m4a",   "audio/mp4"
+       ,".mp3",   "audio/mpeg"
+       ,".oga",   "audio/ogg"
+       ,".ogg",   "audio/ogg"
+       ,".opus",  "audio/opus"
+       ,".wav",   "audio/x-wav"
+       ,".weba",  "audio/webm"
+       ,".ogx",   "application/ogg"
+
+       ,".apng",  "image/apng" /* alt: "image/vnd.mozilla.apng" */
+       ,".avif",  "image/avif"
+       ,".bmp",   "image/bmp"
        ,".gif",   "image/gif"
+       ,".jpeg",  "image/jpeg"
+       ,".jpg",   "image/jpeg"
+       ,".png",   "image/png"
        ,".svg",   "image/svg+xml"
        ,".svgz",  "image/svg+xml"
+       ,".tiff",  "image/tiff"
+       ,".webp",  "image/webp"
+
+       ,".avi",   "video/x-msvideo"
+       ,".m4v",   "video/mp4"
+       ,".mp4",   "video/mp4"
+       ,".mpeg",  "video/mpeg"
+       ,".ogv",   "video/ogg"
+       ,".mov",   "video/quicktime"
+       ,".qt",    "video/quicktime"
+       ,".webm",  "video/webm"
+
        ,".json",  "application/json"
        ,".dtd",   "application/xml-dtd"
        ,".pdf",   "application/pdf"
+       ,".xhtml", "application/xhtml+xml"
+
+       ,".eot",   "application/vnd.ms-fontobject"
+       ,".otf",   "font/otf"
+       ,".sfnt",  "font/sfnt"
+       ,".ttc",   "font/collection"
+       ,".ttf",   "font/ttf"
        ,".woff",  "font/woff"
        ,".woff2", "font/woff2"
+
+       ,".conf",  "text/plain"
+       ,".log",   "text/plain"
+       ,".csv",   "text/csv"
+       ,".rtf",   "text/rtf"
+       ,".ics",   "text/calendar"
        ,".md",    "text/markdown;charset=utf-8"
-       ,".ico",   "image/x-icon" /* alt: "image/vnd.microsoft.icon" */
+       ,".ico",   "image/vnd.microsoft.icon" /* alt: "image/x-icon" */
+
+        /* "application/octet-stream" okay to trigger download for archives,
+         * but providing type (even if explicit "application/octet-stream")
+         * allows http_response_send_file() to send ETag and Last-Modified.
+         * (implicit "application/octet-stream" skips sending caching headers
+         *  when type is not found in mimetype.assign (or xattr, if enabled)) */
+
+       ,".7z",    "application/x-7z-compressed"
+       ,".bz2",   "application/x-bzip2"
+       ,".gz",    "application/gzip" /* alt: "application/x-gzip" */
+       ,".rar",   "application/vnd.rar"
+       ,".tar",   "application/x-tar"
+       ,".tar.gz","application/x-gtar-compressed"
+       ,".tgz",   "application/x-gtar-compressed"
+       ,".xz",    "application/x-xz"
+       ,".zip",   "application/zip"
+       ,".zst",   "application/zstd"
+
+       ,".bin",   "application/octet-stream"
+       ,".class", "application/java-vm"
+       ,".dll",   "application/x-msdos-program"
+       ,".exe",   "application/x-msdos-program"
+       ,".img",   "application/octet-stream"
+       ,".iso",   "application/x-iso9660-image"
+       ,".jar",   "application/java-archive"
+       ,".lha",   "application/x-lha"
+       ,".lhz",   "application/x-lzh"
+       ,".so",    "application/octet-stream"
+
+       ,".deb",   "application/vnd.debian.binary-package"
+       ,".dmg",   "application/x-apple-diskimage"
+       ,".rpm","application/x-redhat-package-manager"/*alt:"application/x-rpm"*/
+
        ,"README", "text/plain;charset=utf-8"
 
       #if 0

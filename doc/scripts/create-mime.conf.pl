@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
-# Based on create-mime.assign.pl in debian lighttpd (1.4.x) package
 # Creates an example mime.conf from /etc/mime.types
+# Based on create-mime.assign.pl originally in Debian lighttpd (1.4.x) package
 
 use strict;
 
@@ -168,7 +168,7 @@ while (<MIMETYPES>) {
 }
 
 # missing in /etc/mime.types;
-# from http://www.iana.org/assignments/media-types/media-types.xhtml
+# from https://www.iana.org/assignments/media-types/media-types.xhtml
 add(".dtd", "application/xml-dtd");
 
 # RFC 9239
@@ -178,10 +178,10 @@ add(".mjs", "text/javascript");
 # other useful mappings
 my %useful = (
 	".tar.gz"  => "application/x-gtar-compressed",
-	".gz"      => "application/x-gzip",
+	".gz"      => "application/gzip",
 	".tbz"     => "application/x-gtar-compressed",
 	".tar.bz2" => "application/x-gtar-compressed",
-	".bz2"     => "application/x-bzip",
+	".bz2"     => "application/x-bzip2",
 	".log"     => "text/plain",
 	".conf"    => "text/plain",
 	".spec"    => "text/plain",
@@ -217,7 +217,8 @@ print <<EOF;
 
 ##
 ## Use extended attribute named in mimetype.xattr-name (default "Content-Type")
-## to obtain mime type if possible
+## to obtain mime type if possible.  Note: this feature is generally not used
+## and is not recommended for high-traffic sites.
 ##
 ## Disabled by default
 ##
