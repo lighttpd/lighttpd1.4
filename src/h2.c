@@ -3117,13 +3117,16 @@ h2_upgrade_h2c (request_st * const r, connection * const con)
 
 
 __attribute_cold__
+__attribute_noinline__
 static void
 h2_send_goaway_delayed (connection * const con)
 {
     request_st * const h2r = &con->request;
     if (h2r->keep_alive >= 0) {
-        h2r->keep_alive = -1;
-        h2_send_goaway(con, H2_E_NO_ERROR);
+        if (config_feature_bool(con->srv, "auth.http-goaway-invalid-creds", 1)){
+            h2r->keep_alive = -1;
+            h2_send_goaway(con, H2_E_NO_ERROR);
+        }
         http_response_delay(con);
     }
     else /*(abort connection upon second request to close h2 connection)*/
