@@ -507,6 +507,7 @@ static int http_request_parse_single_header(request_st * const restrict r, const
 }
 
 __attribute_cold__
+__attribute_noinline__
 static int http_request_parse_proto_loose(request_st * const restrict r, const char * const restrict ptr, const size_t len, const unsigned int http_parseopts) {
     const char * proto = memchr(ptr, ' ', len);
     if (NULL == proto)
@@ -537,6 +538,7 @@ static int http_request_parse_proto_loose(request_st * const restrict r, const c
 }
 
 __attribute_cold__
+__attribute_noinline__
 static const char * http_request_parse_reqline_uri(request_st * const restrict r, const char * const restrict uri, const size_t len, const unsigned int http_parseopts) {
     const char *nuri;
     if ((len > 7 && buffer_eq_icase_ssn(uri, "http://", 7)
