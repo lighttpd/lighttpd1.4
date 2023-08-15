@@ -913,10 +913,18 @@ static void show_features (void) {
 #else
       "\t- PAM support\n"
 #endif
+#if !defined(HAVE_SYS_INOTIFY_H) && !defined(HAVE_KQUEUE)
 #ifdef HAVE_FAM_H
       "\t+ FAM support\n"
 #else
       "\t- FAM support\n"
+#endif
+#endif
+#ifdef HAVE_SYS_INOTIFY_H
+      "\t+ inotify support\n"
+#endif
+#ifdef HAVE_KQUEUE
+      "\t+ kqueue support\n"
 #endif
 #ifdef HAVE_LUA_H
       "\t+ LUA support\n"
