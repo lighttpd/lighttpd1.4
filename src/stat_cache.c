@@ -1250,147 +1250,129 @@ void stat_cache_delete_dir(const char *name, uint32_t len)
   #endif
 }
 
-/***
- *
- *
- *
- * returns:
- *  - HANDLER_FINISHED on cache-miss (don't forget to reopen the file)
- *  - HANDLER_ERROR on stat() failed -> see errno for problem
- */
-
-stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
-	stat_cache_entry *sce = NULL;
-
-	/* consistency: ensure lookup name does not end in '/' unless root "/"
-	 * (but use full path given with stat(), even with trailing '/') */
-	int final_slash = 0;
-	size_t len = buffer_clen(name);
-	force_assert(0 != len);
-	if (name->ptr[len-1] == '/') { final_slash = 1; if (0 == --len) len = 1; }
-	/* Note: paths are expected to be normalized before calling stat_cache,
-	 * e.g. without repeated '/' */
+__attribute_cold__
+__attribute_noinline__
+static stat_cache_entry * stat_cache_refresh_entry(const buffer * const name, uint32_t len, stat_cache_entry *sce, const int file_ndx, const int refresh) {
 
   #ifndef _WIN32
-	if (name->ptr[0] != '/') {
-		errno = EINVAL;
-		return NULL;
-	}
+    /* sanity check; should not happen; should not be called with rel paths */
+    if (__builtin_expect( (name->ptr[0] != '/'), 0)) {
+        errno = EINVAL;
+        return NULL;
+    }
   #endif
 
-	/*
-	 * check if the directory for this file has changed
-	 */
+    /* use full path w/ stat(), even w/ trailing '/' ('len' may be shorter) */
+    struct stat st;
+    if (-1 == stat(name->ptr, &st))
+        return NULL;
 
-	const unix_time64_t cur_ts = log_monotonic_secs;
+    if (NULL == sce || !stat_cache_stat_eq(&sce->st, &st)) {
+        if (NULL != sce && sce->fd >= 0) {
+            /* close fd when refresh needed */
+            if (1 == sce->refcnt) {
+                close(sce->fd);
+                sce->fd = -1;
+            }
+            else {
+                --sce->refcnt; /* stat_cache_entry_free(sce); */
+                sce = NULL;
+            }
+        }
 
-	const int file_ndx = splaytree_djbhash(name->ptr, len);
-	splay_tree *sptree = sc.files = splaytree_splay(sc.files, file_ndx);
+        if (NULL == sce) {
+            sce = stat_cache_entry_init();
+            buffer_copy_string_len(&sce->name, name->ptr, len);
 
-	if (sptree && (sptree->key == file_ndx)) {
-		/* we have seen this file already and
-		 * don't stat() it again in the same second */
+            /* sptree already splayed to file_ndx in stat_cache_get_entry() */
+            splay_tree * const sptree = sc.files;
+            if (NULL != sptree && sptree->key == file_ndx) {
+                if (refresh < 0) { /* hash collision: replace old entry */
+                    stat_cache_entry_free(sptree->data);
+                } /* else prior sce refcnt was > 1 and decremented above */
+                sptree->data = sce;
+            }
+            else
+                /*sptree =*/ sc.files = splaytree_insert(sptree, file_ndx, sce);
+        }
+        else {
+            buffer_clear(&sce->etag);
+          #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
+            buffer_clear(&sce->content_type);
+          #endif
+        }
 
-		sce = sptree->data;
+        sce->st = st; /*(copy prior to calling fam_dir_monitor())*/
 
-		/* check if the name is the same, we might have a collision */
+      #ifdef HAVE_FAM_H
+        if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
+            if (sce->fam_dir) --((fam_dir_entry *)sce->fam_dir)->refcnt;
+            sce->fam_dir = fam_dir_monitor(sc.scf, name->ptr, len, &st);
+          #if 0 /*(performed below)*/
+            if (NULL != sce->fam_dir)
+                /*(may have been invalidated by dir change)*/
+                sce->stat_ts = log_monotonic_secs;
+          #endif
+        }
+      #endif
+    }
 
-		if (buffer_is_equal_string(&sce->name, name->ptr, len)) {
-			if (sc.stat_cache_engine == STAT_CACHE_ENGINE_SIMPLE) {
-				if (sce->stat_ts == cur_ts) {
-					if (final_slash && !S_ISDIR(sce->st.st_mode)) {
-						errno = ENOTDIR;
-						return NULL;
-					}
-					return sce;
-				}
-			}
-		      #ifdef HAVE_FAM_H
-			else if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FAM
-				 && sce->fam_dir) { /* entry is in monitored dir */
-				/* re-stat() periodically, even if monitoring for changes
-				 * (due to limitations in stat_cache.c use of FAM)
-				 * (gaps due to not continually monitoring an entire tree) */
-				if (cur_ts - sce->stat_ts < 16) {
-					if (final_slash && !S_ISDIR(sce->st.st_mode)) {
-						errno = ENOTDIR;
-						return NULL;
-					}
-					return sce;
-				}
-			}
-		      #endif
-		} else {
-			/* collision, forget about the entry */
-			sce = NULL;
-		}
-	}
+    sce->stat_ts = log_monotonic_secs;
+    return sce;
+}
 
-	struct stat st;
-	if (-1 == stat(name->ptr, &st)) {
-		return NULL;
-	}
+stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
 
-	if (NULL == sce) {
+    /* consistency: ensure name in cache does not end in '/' unless root "/"
+     * (but use full path given with stat(), even with trailing '/') */
+    uint32_t len = buffer_clen(name);
+    int final_slash = 0;
+    force_assert(0 != len);
+    if (name->ptr[len-1] == '/') { final_slash = 1; if (0 == --len) len = 1; }
+    /* Note: paths are expected to be normalized before calling stat_cache,
+     * e.g. without repeated '/' */
 
-		/* fix broken stat/open for symlinks to reg files with appended slash on freebsd,osx */
-		/* (local fs_win32_stati64UTF8() checks, but repeat since not obvious)*/
-		if (final_slash && S_ISREG(st.st_mode)) {
-			errno = ENOTDIR;
-			return NULL;
-		}
+    /* check if stat cache entry exists, matches name, and is fresh */
+    const int file_ndx = splaytree_djbhash(name->ptr, len);
+    splay_tree * const sptree = sc.files = splaytree_splay(sc.files, file_ndx);
+    stat_cache_entry *sce = NULL;
+    int refresh = -1;/* -1 stat cache entry does not exist, or hash collision */
+    if (sptree && sptree->key == file_ndx) {
+        /* check if the name is the same; we might have a hash collision */
+        sce = sptree->data;
+        if (buffer_is_equal_string(&sce->name, name->ptr, len)) {
+            const unix_time64_t cur_ts = log_monotonic_secs;
+            refresh = 1; /* 1 stat cache entry exists, but might need refresh */
+            if (sc.stat_cache_engine == STAT_CACHE_ENGINE_SIMPLE)
+                refresh = (sce->stat_ts != cur_ts);      /* 0 if fresh */
+          #ifdef HAVE_FAM_H
+            else if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FAM
+                     && sce->fam_dir) /* entry is in monitored dir */
+                /* re-stat() periodically, even if monitoring for changes
+                 * (due to limitations in stat_cache.c use of FAM)
+                 * (gaps due to not continually monitoring an entire tree) */
+                refresh = !(cur_ts - sce->stat_ts < 16); /* 0 if fresh */
+          #endif
+        }
+        else /* hash collision; forget about entry */
+            sce = NULL;
+    }
 
-		sce = stat_cache_entry_init();
-		buffer_copy_string_len(&sce->name, name->ptr, len);
+    if (refresh) {
+        sce = stat_cache_refresh_entry(name, len, sce, file_ndx, refresh);
+        if (NULL == sce) return NULL;
+    }
 
-		/* already splayed file_ndx */
-		if (NULL != sptree && sptree->key == file_ndx) {
-			/* hash collision: replace old entry */
-			stat_cache_entry_free(sptree->data);
-			sptree->data = sce;
-		} else {
-			/*sptree =*/ sc.files = splaytree_insert(sptree, file_ndx, sce);
-		}
+    /* fix broken stat/open for symlinks to reg files with appended slash on
+     * old freebsd, osx; fixed in freebsd around 2009:
+     *   https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=21768 */
+    /* (local fs_win32_stati64UTF8() checks, but repeat since not obvious) */
+    if (final_slash && !S_ISDIR(sce->st.st_mode)) {
+        errno = ENOTDIR;
+        return NULL;
+    }
 
-	} else {
-
-		buffer_clear(&sce->etag);
-	      #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
-		buffer_clear(&sce->content_type);
-	      #endif
-
-		/* close fd if file changed */
-		if (sce->fd >= 0 && !stat_cache_stat_eq(&sce->st, &st)) {
-			if (1 == sce->refcnt) {
-				close(sce->fd);
-				sce->fd = -1;
-			}
-			else {
-				--sce->refcnt; /* stat_cache_entry_free(sce); */
-				sptree->data = sce = stat_cache_entry_init();
-				buffer_copy_string_len(&sce->name, name->ptr, len);
-			}
-		}
-	}
-
-	sce->st = st; /*(copy prior to calling fam_dir_monitor())*/
-
-#ifdef HAVE_FAM_H
-	if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
-		if (sce->fam_dir) --((fam_dir_entry *)sce->fam_dir)->refcnt;
-		sce->fam_dir =
-		  fam_dir_monitor(sc.scf, name->ptr, len, &st);
-	      #if 0 /*(performed below)*/
-		if (NULL != sce->fam_dir) {
-			/*(may have been invalidated by dir change)*/
-			sce->stat_ts = cur_ts;
-		}
-	      #endif
-	}
-#endif
-
-	sce->stat_ts = cur_ts;
-	return sce;
+    return sce;
 }
 
 stat_cache_entry * stat_cache_get_entry_open(const buffer * const name, const int symlinks) {

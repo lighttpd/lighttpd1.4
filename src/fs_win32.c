@@ -57,7 +57,7 @@ int fs_win32_stati64UTF8 (const char *path, struct fs_win32_stati64UTF8 *st)
     if (-1 == _wstati64(wbuf, (struct _stati64 *)st))
         return -1;
     /* must check since stat() w/o trailing '/' above */
-    if (final_slash && (st->st_mode & _S_IFMT) == _S_IFREG) { /* S_ISREG() */
+    if (final_slash && (st->st_mode & _S_IFMT) != _S_IFDIR) { /* S_ISDIR() */
         errno = ENOTDIR;
         return -1;
     }
