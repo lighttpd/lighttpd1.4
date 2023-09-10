@@ -62,17 +62,15 @@
  */
 splay_tree * splaytree_splay (splay_tree *t, int i) {
     splay_tree N, *l, *r, *y;
-    int comp;
 
     if (t == NULL) return t;
     N.left = N.right = NULL;
     l = r = &N;
 
     for (;;) {
-        comp = compare(i, t->key);
-        if (comp < 0) {
+        if (i < t->key) {
             if (t->left == NULL) break;
-            if (compare(i, t->left->key) < 0) {
+            if (i < t->left->key) {
                 y = t->left;                           /* rotate right */
                 t->left = y->right;
                 y->right = t;
@@ -82,9 +80,9 @@ splay_tree * splaytree_splay (splay_tree *t, int i) {
             r->left = t;                               /* link right */
             r = t;
             t = t->left;
-        } else if (comp > 0) {
+        } else if (i > t->key) {
             if (t->right == NULL) break;
-            if (compare(i, t->right->key) > 0) {
+            if (i > t->right->key) {
                 y = t->right;                          /* rotate left */
                 t->right = y->left;
                 y->left = t;
@@ -114,7 +112,7 @@ splay_tree * splaytree_insert(splay_tree * t, int i, void *data) {
 
     if (t != NULL) {
 	t = splaytree_splay(t, i);
-	if (compare(i, t->key)==0) {
+	if (i == t->key) {
 	    return t;  /* it's already there */
 	}
     }
@@ -122,7 +120,7 @@ splay_tree * splaytree_insert(splay_tree * t, int i, void *data) {
     assert(new);
     if (t == NULL) {
 	new->left = new->right = NULL;
-    } else if (compare(i, t->key) < 0) {
+    } else if (i < t->key) {
 	new->left = t->left;
 	new->right = t;
 	t->left = NULL;
@@ -139,10 +137,9 @@ splay_tree * splaytree_insert(splay_tree * t, int i, void *data) {
 splay_tree * splaytree_delete(splay_tree *t, int i) {
 /* Deletes i from the tree if it's there.               */
 /* Return a pointer to the resulting tree.              */
-    splay_tree * x;
-    if (t==NULL) return NULL;
     t = splaytree_splay(t, i);
-    if (compare(i, t->key) == 0) {               /* found it */
+    if (t != NULL && i == t->key) {              /* found it */
+	splay_tree * x;
 	if (t->left == NULL) {
 	    x = t->right;
 	} else {
