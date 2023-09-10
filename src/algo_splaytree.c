@@ -52,9 +52,10 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#define compare(i,j) ((i)-(j))
+#define compare(i,j) ((int)(((unsigned int)i)-((unsigned int)j)))
 /* This is the comparison.                                       */
 /* Returns <0 if i<j, =0 if i=j, and >0 if i>j                   */
+/* (cast to unsigned int for underflow/overflow defined behavior)*/
 
 /* Splay using the key i (which may or may not be in the tree.)
  * The starting root is t, and the tree used is defined by rat

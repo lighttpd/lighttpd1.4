@@ -20,8 +20,7 @@ __attribute_pure__
 static inline int32_t splaytree_djbhash(const char *str, const uint32_t len);
 static inline int32_t splaytree_djbhash(const char *str, const uint32_t len)
 {
-    /* strip highest bit of hash value for splaytree */
-    return (int32_t)(djbhash(str,len,DJBHASH_INIT) & ~(((uint32_t)1) << 31));
+    return (int32_t)djbhash(str, len, DJBHASH_INIT);
 }
 
 

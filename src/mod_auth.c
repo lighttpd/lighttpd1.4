@@ -117,14 +117,15 @@ http_auth_cache_init (const array *opts)
     return ac;
 }
 
+__attribute_pure__
 static int
 http_auth_cache_hash (const struct http_auth_require_t * const require, const char *username, const uint32_t ulen)
 {
+    /* (similar to splaytree_djbhash(), but with two strings hashed) */
     uint32_t h = /*(hash pointer value, which includes realm and permissions)*/
       djbhash((char *)(intptr_t)require, sizeof(intptr_t), DJBHASH_INIT);
     h = djbhash(username, ulen, h);
-    /* strip highest bit of hash value for splaytree (see splaytree_djbhash())*/
-    return (int32_t)(h & ~(((uint32_t)1) << 31));
+    return (int32_t)h;
 }
 
 static http_auth_cache_entry *
