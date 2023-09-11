@@ -51,13 +51,22 @@ static stat_cache sc;
 
 
 __attribute_noinline__
+static void * stat_cache_sptree_ndx(splay_tree ** const sptree,
+                                    int * const ndxp,
+                                    const char * const name,
+                                    uint32_t len)
+{
+    const int ndx = splaytree_djbhash(name, len);
+    if (ndxp) *ndxp = ndx;
+    *sptree = splaytree_splay(*sptree, ndx);
+    return (*sptree && (*sptree)->key == ndx) ? (*sptree)->data : NULL;
+}
+
 static void * stat_cache_sptree_find(splay_tree ** const sptree,
                                      const char * const name,
                                      uint32_t len)
 {
-    const int ndx = splaytree_djbhash(name, len);
-    *sptree = splaytree_splay(*sptree, ndx);
-    return (*sptree && (*sptree)->key == ndx) ? (*sptree)->data : NULL;
+    return stat_cache_sptree_ndx(sptree, NULL, name, len);
 }
 
 
@@ -670,12 +679,11 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
         while (fn[--dirlen] != '/') ;
         if (0 == dirlen) dirlen = 1; /*(should not happen for file)*/
     }
-    int dir_ndx = splaytree_djbhash(fn, dirlen);
-    fam_dir_entry *fam_dir = NULL;
+    int dir_ndx;
+    fam_dir_entry *fam_dir =
+      stat_cache_sptree_ndx(&scf->dirs, &dir_ndx, fn, dirlen);
 
-    scf->dirs = splaytree_splay(scf->dirs, dir_ndx);
-    if (NULL != scf->dirs && scf->dirs->key == dir_ndx) {
-        fam_dir = scf->dirs->data;
+    if (NULL != fam_dir) {
         if (!buffer_eq_slen(&fam_dir->name, fn, dirlen)) {
             /* hash collision; preserve existing
              * do not monitor new to avoid cache thrashing */
@@ -1333,13 +1341,12 @@ stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
      * e.g. without repeated '/' */
 
     /* check if stat cache entry exists, matches name, and is fresh */
-    const int file_ndx = splaytree_djbhash(name->ptr, len);
-    splay_tree * const sptree = sc.files = splaytree_splay(sc.files, file_ndx);
-    stat_cache_entry *sce = NULL;
+    int file_ndx;
+    stat_cache_entry *sce =
+      stat_cache_sptree_ndx(&sc.files, &file_ndx, name->ptr, len);
     int refresh = -1;/* -1 stat cache entry does not exist, or hash collision */
-    if (sptree && sptree->key == file_ndx) {
+    if (NULL != sce) {
         /* check if the name is the same; we might have a hash collision */
-        sce = sptree->data;
         if (buffer_is_equal_string(&sce->name, name->ptr, len)) {
             const unix_time64_t cur_ts = log_monotonic_secs;
             refresh = 1; /* 1 stat cache entry exists, but might need refresh */
