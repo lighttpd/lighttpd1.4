@@ -310,7 +310,8 @@ static void fam_dir_periodic_cleanup(void) {
         fam_dir_tag_refcnt(scf->dirs, keys, &max_ndx);
         for (i = 0; i < max_ndx; ++i) {
             const int ndx = keys[i];
-            splay_tree *node = scf->dirs = splaytree_splay(scf->dirs, ndx);
+            splay_tree * const node = scf->dirs =
+              splaytree_splay_nonnull(scf->dirs, ndx);
             if (node && node->key == ndx) {
                 fam_dir_entry *fam_dir = node->data;
                 scf->dirs = splaytree_delete(scf->dirs, ndx);
@@ -1225,7 +1226,7 @@ static void stat_cache_prune_dir_tree(const char *name, size_t len)
         stat_cache_tag_dir_tree(sptree, name, len, keys, &max_ndx);
         for (i = 0; i < max_ndx; ++i) {
             const int ndx = keys[i];
-            splay_tree *node = sptree = splaytree_splay(sptree, ndx);
+            splay_tree *node = sptree = splaytree_splay_nonnull(sptree, ndx);
             if (node && node->key == ndx) {
                 stat_cache_entry_free(node->data);
                 sptree = splaytree_delete(sptree, ndx);
@@ -1499,7 +1500,7 @@ static void stat_cache_periodic_cleanup(const time_t max_age, const unix_time64_
         stat_cache_tag_old_entries(sptree, keys, &max_ndx, max_age, cur_ts);
         for (i = 0; i < max_ndx; ++i) {
             int ndx = keys[i];
-            sptree = splaytree_splay(sptree, ndx);
+            sptree = splaytree_splay_nonnull(sptree, ndx);
             if (sptree && sptree->key == ndx) {
                 stat_cache_entry_free(sptree->data);
                 sptree = splaytree_delete(sptree, ndx);
