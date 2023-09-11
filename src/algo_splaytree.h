@@ -8,8 +8,16 @@ typedef struct tree_node {
     void *data;
 } splay_tree;
 
+__attribute_nonnull__()
+__attribute_returns_nonnull__
+splay_tree * splaytree_splay_nonnull (splay_tree *t, int key);
 
-splay_tree * splaytree_splay (splay_tree *t, int key);
+static inline splay_tree * splaytree_splay (splay_tree *t, int key);
+static inline splay_tree * splaytree_splay (splay_tree *t, int key) {
+    if (t == NULL || key == t->key) return t;
+    return splaytree_splay_nonnull(t, key);
+}
+
 splay_tree * splaytree_insert(splay_tree *t, int key, void *data);
 splay_tree * splaytree_delete(splay_tree *t, int key);
 

@@ -60,10 +60,12 @@
 /* Splay using the key i (which may or may not be in the tree.)
  * The starting root is t, and the tree used is defined by rat
  */
-splay_tree * splaytree_splay (splay_tree *t, int i) {
+__attribute_noinline__
+__attribute_nonnull__()
+__attribute_returns_nonnull__
+splay_tree * splaytree_splay_nonnull (splay_tree *t, int i) {
     splay_tree N, *l, *r, *y;
 
-    if (t == NULL) return t;
     N.left = N.right = NULL;
     l = r = &N;
 
@@ -111,7 +113,9 @@ splay_tree * splaytree_insert(splay_tree * t, int i, void *data) {
     splay_tree * new;
 
     if (t != NULL) {
-	t = splaytree_splay(t, i);
+	/*(caller likely already verified that entry does not exist,
+	 * so skip splaytree_splay() short-circuit check)*/
+	t = splaytree_splay_nonnull(t, i);
 	if (i == t->key) {
 	    return t;  /* it's already there */
 	}
@@ -137,13 +141,14 @@ splay_tree * splaytree_insert(splay_tree * t, int i, void *data) {
 splay_tree * splaytree_delete(splay_tree *t, int i) {
 /* Deletes i from the tree if it's there.               */
 /* Return a pointer to the resulting tree.              */
-    t = splaytree_splay(t, i);
+    if (t != NULL)
+	t = splaytree_splay_nonnull(t, i);
     if (t != NULL && i == t->key) {              /* found it */
 	splay_tree * x;
 	if (t->left == NULL) {
 	    x = t->right;
 	} else {
-	    x = splaytree_splay(t->left, i);
+	    x = splaytree_splay_nonnull(t->left, i);
 	    x->right = t->right;
 	}
 	free(t);
