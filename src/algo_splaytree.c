@@ -138,22 +138,24 @@ splay_tree * splaytree_insert(splay_tree * t, int i, void *data) {
     return new;
 }
 
+__attribute_noinline__
+__attribute_nonnull__()
+splay_tree * splaytree_delete_splayed_node(splay_tree *t) {
+/* Deletes (already) splayed node at the root of tree.  */
+/* Return a pointer to the resulting tree.              */
+    splay_tree * x = t->right;
+    if (t->left != NULL) {
+        x = splaytree_splay_nonnull(t->left, t->key);
+	x->right = t->right;
+    }
+    free(t);
+    return x;
+}
+
 splay_tree * splaytree_delete(splay_tree *t, int i) {
 /* Deletes i from the tree if it's there.               */
 /* Return a pointer to the resulting tree.              */
-    if (t != NULL)
-	t = splaytree_splay_nonnull(t, i);
-    if (t != NULL && i == t->key) {              /* found it */
-	splay_tree * x;
-	if (t->left == NULL) {
-	    x = t->right;
-	} else {
-	    x = splaytree_splay_nonnull(t->left, i);
-	    x->right = t->right;
-	}
-	free(t);
-	return x;
-    } else {
-	return t;                         /* It wasn't there */
-    }
+    return (t != NULL && (t = splaytree_splay_nonnull(t, i))->key == i)
+      ? splaytree_delete_splayed_node(t)
+      : t;
 }
