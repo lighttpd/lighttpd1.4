@@ -142,7 +142,7 @@ http_auth_cache_insert (splay_tree ** const sptree, const int ndx, void * const 
      * and splaytree has not been modified since http_auth_cache_query())*/
     /* *sptree = splaytree_splay(*sptree, ndx); */
     if (NULL == *sptree || (*sptree)->key != ndx)
-        *sptree = splaytree_insert(*sptree, ndx, data);
+        *sptree = splaytree_insert_splayed(*sptree, ndx, data);
     else { /* collision; replace old entry */
         data_free_fn((*sptree)->data);
         (*sptree)->data = data;

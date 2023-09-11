@@ -118,7 +118,7 @@ mod_vhostdb_cache_insert (request_st * const r, plugin_data * const p, vhostdb_c
      * and splaytree has not been modified since mod_vhostdb_cache_query())*/
     /* *sptree = splaytree_splay(*sptree, ndx); */
     if (NULL == *sptree || (*sptree)->key != ndx)
-        *sptree = splaytree_insert(*sptree, ndx, ve);
+        *sptree = splaytree_insert_splayed(*sptree, ndx, ve);
     else { /* collision; replace old entry */
         vhostdb_cache_entry_free((*sptree)->data);
         (*sptree)->data = ve;

@@ -736,7 +736,7 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
             fam_dir->st_dev = st->st_dev;
             fam_dir->st_ino = st->st_ino;
           #ifdef HAVE_SYS_INOTIFY_H
-            scf->wds = splaytree_insert(scf->wds, fam_dir->req, fam_dir);
+            scf->wds = splaytree_insert_splayed(scf->wds,fam_dir->req,fam_dir);
           #endif
         }
         fam_dir->stat_ts = cur_ts;
@@ -761,7 +761,7 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
             return NULL;
         }
 
-        scf->dirs = splaytree_insert(scf->dirs, dir_ndx, fam_dir);
+        scf->dirs = splaytree_insert_splayed(scf->dirs, dir_ndx, fam_dir);
       #ifdef HAVE_SYS_INOTIFY_H
         scf->wds = splaytree_insert(scf->wds, fam_dir->req, fam_dir);
       #endif
@@ -1298,7 +1298,7 @@ static stat_cache_entry * stat_cache_refresh_entry(const buffer * const name, ui
                 sptree->data = sce;
             }
             else
-                /*sptree =*/ sc.files = splaytree_insert(sptree, file_ndx, sce);
+                sc.files = splaytree_insert_splayed(sptree, file_ndx, sce);
         }
         else {
             buffer_clear(&sce->etag);
