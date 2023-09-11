@@ -107,20 +107,10 @@ splay_tree * splaytree_splay_nonnull (splay_tree *t, int i) {
     return t;
 }
 
-splay_tree * splaytree_insert(splay_tree * t, int i, void *data) {
-/* Insert key i into the tree t, if it is not already there. */
+splay_tree * splaytree_insert_splayed(splay_tree * t, int i, void *data) {
+/* Insert key i into (already) splayed tree t.               */
 /* Return a pointer to the resulting tree.                   */
-    splay_tree * new;
-
-    if (t != NULL) {
-	/*(caller likely already verified that entry does not exist,
-	 * so skip splaytree_splay() short-circuit check)*/
-	t = splaytree_splay_nonnull(t, i);
-	if (i == t->key) {
-	    return t;  /* it's already there */
-	}
-    }
-    new = (splay_tree *) malloc (sizeof (splay_tree));
+    splay_tree * const new = (splay_tree *) malloc (sizeof (splay_tree));
     assert(new);
     if (t == NULL) {
 	new->left = new->right = NULL;
@@ -136,6 +126,14 @@ splay_tree * splaytree_insert(splay_tree * t, int i, void *data) {
     new->key = i;
     new->data = data;
     return new;
+}
+
+splay_tree * splaytree_insert(splay_tree * t, int i, void *data) {
+/* Insert key i into the tree t, if it is not already there. */
+/* Return a pointer to the resulting tree.                   */
+    return (t != NULL && (t = splaytree_splay_nonnull(t, i))->key == i)
+      ? t
+      : splaytree_insert_splayed(t, i, data);
 }
 
 __attribute_noinline__

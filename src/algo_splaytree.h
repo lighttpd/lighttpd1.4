@@ -19,6 +19,9 @@ static inline splay_tree * splaytree_splay (splay_tree *t, int key) {
 }
 
 __attribute_returns_nonnull__
+splay_tree * splaytree_insert_splayed(splay_tree * t, int key, void *data);
+
+__attribute_returns_nonnull__
 splay_tree * splaytree_insert(splay_tree *t, int key, void *data);
 
 __attribute_nonnull__()
