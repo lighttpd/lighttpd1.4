@@ -2000,6 +2000,10 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
           #endif
             continue;
         }
+      #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("DHParameters")))
+            SSL_CTX_set_dh_auto(s->ssl_ctx, 0);
+      #endif
         ERR_clear_error();
         if (SSL_CONF_cmd(cctx, ds->key.ptr, ds->value.ptr) <= 0) {
             log_error(srv->errh, __FILE__, __LINE__,
