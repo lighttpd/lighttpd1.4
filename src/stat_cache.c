@@ -309,12 +309,10 @@ static void fam_dir_periodic_cleanup(void) {
         max_ndx = 0;
         fam_dir_tag_refcnt(scf->dirs, keys, &max_ndx);
         for (i = 0; i < max_ndx; ++i) {
-            const int ndx = keys[i];
-            splay_tree * const node = scf->dirs =
-              splaytree_splay_nonnull(scf->dirs, ndx);
-            if (node && node->key == ndx) {
-                fam_dir_entry *fam_dir = node->data;
-                scf->dirs = splaytree_delete(scf->dirs, ndx);
+            {
+                scf->dirs = splaytree_splay_nonnull(scf->dirs, keys[i]);
+                fam_dir_entry *fam_dir = scf->dirs->data;
+                scf->dirs = splaytree_delete_splayed_node(scf->dirs);
               #ifdef HAVE_SYS_INOTIFY_H
                 scf->wds = splaytree_delete(scf->wds, fam_dir->req);
               #elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
@@ -640,8 +638,7 @@ static void stat_cache_free_fam(stat_cache_fam *scf) {
 
       #ifdef HAVE_SYS_INOTIFY_H
 	while (scf->wds) {
-		splay_tree *node = scf->wds;
-		scf->wds = splaytree_delete(scf->wds, node->key);
+		scf->wds = splaytree_delete_splayed_node(scf->wds);
 	}
       #elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
 	/*(quicker cleanup to close kqueue() before cancel per entry)*/
@@ -650,9 +647,8 @@ static void stat_cache_free_fam(stat_cache_fam *scf) {
       #endif
 	while (scf->dirs) {
 		/*(skip entry invalidation and FAMCancelMonitor())*/
-		splay_tree *node = scf->dirs;
-		fam_dir_entry_free((fam_dir_entry *)node->data);
-		scf->dirs = splaytree_delete(scf->dirs, node->key);
+		fam_dir_entry_free((fam_dir_entry *)scf->dirs->data);
+		scf->dirs = splaytree_delete_splayed_node(scf->dirs);
 	}
 
 	if (-1 != scf->fd) {
@@ -840,6 +836,12 @@ void stat_cache_entry_refchg(void *data, int mod) {
         sce->refcnt += mod;
 }
 
+__attribute_nonnull__()
+static splay_tree * stat_cache_sptree_node_free(splay_tree *sptree) {
+    stat_cache_entry_free(sptree->data);
+    return splaytree_delete_splayed_node(sptree);
+}
+
 #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR)
 
 static const char *attrname = "Content-Type";
@@ -893,8 +895,7 @@ int stat_cache_init(fdevents *ev, log_error_st *errh) {
 void stat_cache_free(void) {
     splay_tree *sptree = sc.files;
     while (sptree) {
-        stat_cache_entry_free(sptree->data);
-        sptree = splaytree_delete(sptree, sptree->key);
+        sptree = stat_cache_sptree_node_free(sptree);
     }
     sc.files = NULL;
 
@@ -1147,8 +1148,7 @@ void stat_cache_delete_entry(const char *name, uint32_t len)
     splay_tree **sptree = &sc.files;
     stat_cache_entry *sce = stat_cache_sptree_find(sptree, name, len);
     if (sce && buffer_is_equal_string(&sce->name, name, len)) {
-        stat_cache_entry_free(sce);
-        *sptree = splaytree_delete(*sptree, (*sptree)->key);
+        *sptree = stat_cache_sptree_node_free(*sptree);
     }
 }
 
@@ -1225,12 +1225,8 @@ static void stat_cache_prune_dir_tree(const char *name, size_t len)
         max_ndx = 0;
         stat_cache_tag_dir_tree(sptree, name, len, keys, &max_ndx);
         for (i = 0; i < max_ndx; ++i) {
-            const int ndx = keys[i];
-            splay_tree *node = sptree = splaytree_splay_nonnull(sptree, ndx);
-            if (node && node->key == ndx) {
-                stat_cache_entry_free(node->data);
-                sptree = splaytree_delete(sptree, ndx);
-            }
+            sptree = splaytree_splay_nonnull(sptree, keys[i]);
+            sptree = stat_cache_sptree_node_free(sptree);
         }
     } while (max_ndx == sizeof(keys)/sizeof(int));
     sc.files = sptree;
@@ -1499,12 +1495,8 @@ static void stat_cache_periodic_cleanup(const time_t max_age, const unix_time64_
         max_ndx = 0;
         stat_cache_tag_old_entries(sptree, keys, &max_ndx, max_age, cur_ts);
         for (i = 0; i < max_ndx; ++i) {
-            int ndx = keys[i];
-            sptree = splaytree_splay_nonnull(sptree, ndx);
-            if (sptree && sptree->key == ndx) {
-                stat_cache_entry_free(sptree->data);
-                sptree = splaytree_delete(sptree, ndx);
-            }
+            sptree = splaytree_splay_nonnull(sptree, keys[i]);
+            sptree = stat_cache_sptree_node_free(sptree);
         }
     } while (max_ndx == sizeof(keys)/sizeof(int));
     sc.files = sptree;

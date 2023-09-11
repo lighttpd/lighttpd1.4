@@ -74,7 +74,7 @@ vhostdb_cache_free (vhostdb_cache *vc)
     splay_tree *sptree = vc->sptree;
     while (sptree) {
         vhostdb_cache_entry_free(sptree->data);
-        sptree = splaytree_delete(sptree, sptree->key);
+        sptree = splaytree_delete_splayed_node(sptree);
     }
     free(vc);
 }
@@ -344,12 +344,9 @@ mod_vhostdb_periodic_cleanup(splay_tree **sptree_ptr, const time_t max_age, cons
         max_ndx = 0;
         mod_vhostdb_tag_old_entries(sptree, keys, &max_ndx, max_age, cur_ts);
         for (i = 0; i < max_ndx; ++i) {
-            int ndx = keys[i];
-            sptree = splaytree_splay_nonnull(sptree, ndx);
-            if (sptree && sptree->key == ndx) {
-                vhostdb_cache_entry_free(sptree->data);
-                sptree = splaytree_delete(sptree, ndx);
-            }
+            sptree = splaytree_splay_nonnull(sptree, keys[i]);
+            vhostdb_cache_entry_free(sptree->data);
+            sptree = splaytree_delete_splayed_node(sptree);
         }
     } while (max_ndx == sizeof(keys)/sizeof(int));
     *sptree_ptr = sptree;
