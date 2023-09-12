@@ -22,6 +22,12 @@
 #include "sock_addr.h"
 #include "stat_cache.h"
 
+#ifdef _WIN32
+#include "fs_win32.h"   /* readlink() */
+#else
+#include "sys-unistd.h" /* readlink() */
+#endif
+
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1580,6 +1586,18 @@ static int magnet_header_tokens(lua_State *L) {
     return 1;
 }
 
+static int magnet_readlink(lua_State *L) {
+    const char * const path = luaL_checkstring(L, 1);
+    buffer * const b = magnet_tmpbuf_acquire(L);
+    ssize_t rd = readlink(path, b->ptr, buffer_string_space(b));
+    if (rd > 0 && rd < buffer_string_space(b))
+        lua_pushlstring(L, b->ptr, (size_t)rd);
+    else
+        lua_pushnil(L);
+    magnet_tmpbuf_release(b);
+    return 1;
+}
+
 static int magnet_reqhdr_get(lua_State *L) {
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
@@ -3095,6 +3113,7 @@ magnet_init_lighty_table (lua_State * const L, request_st **rr,
      ,{ "cookie_tokens",    magnet_cookie_tokens } /* parse cookie tokens */
      ,{ "header_tokens",    magnet_header_tokens } /* parse header tokens seq */
      ,{ "readdir",          magnet_readdir } /* dir walk */
+     ,{ "readlink",         magnet_readlink } /* symlink target */
      ,{ "quoteddec",        magnet_quoteddec } /* quoted-string decode */
      ,{ "quotedenc",        magnet_quotedenc } /* quoted-string encode */
      ,{ "bsdec",            magnet_bsdec } /* backspace-escape decode */
