@@ -64,4 +64,45 @@ int fs_win32_stati64UTF8 (const char *path, struct fs_win32_stati64UTF8 *st)
     return 0;
 }
 
+int fs_win32_readlinkUTF8 (const char *path, char *result, size_t rsz)
+{
+    WCHAR wbuf[4096];
+    int wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1,
+                                   wbuf, sizeof(wbuf)/sizeof(*wbuf));
+    if (0 == wlen) {
+        errno = (GetLastError() == ERROR_INSUFFICIENT_BUFFER) ? ENOSPC : EINVAL;
+        return -1;
+    }
+    HANDLE h = CreateFileW(wbuf,0,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0);
+    DWORD rd = (h != INVALID_HANDLE_VALUE) /*(reuse wbuf for result)*/
+      ? GetFinalPathNameByHandleW(h, wbuf, sizeof(wbuf)/sizeof(*wbuf),
+                                  FILE_NAME_NORMALIZED | VOLUME_NAME_NT)
+      : 0;
+    CloseHandle(h);
+    if (0 == rd) {
+        errno = (GetLastError() == ERROR_PATH_NOT_FOUND) ? ENOENT : EINVAL;
+        return -1;
+    }
+    if (rd >= sizeof(wbuf)/sizeof(*wbuf) || 0 == rsz) {
+        errno = ENOSPC;
+        return -1;
+    }
+    int mlen =
+     #if 0 /*(???: should we strip "\\?\" from result?)*/
+      (StrCmpNW(wbuf, L"\\\\?\\", 4) == 0)
+      ? WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                            wbuf+4, rd-4, result, rsz-1, NULL, NULL);
+      :
+     #endif
+        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                            wbuf, rd, result, rsz-1, NULL, NULL);
+    if (0 == mlen) {
+        errno = (GetLastError() == ERROR_INSUFFICIENT_BUFFER) ? ENOSPC : EINVAL;
+        return -1;
+    }
+    /*(???: should we translate '\\' to '/' in result?)*/
+    result[mlen] = '\0';
+    return mlen;
+}
+
 #endif /* _WIN32 */
