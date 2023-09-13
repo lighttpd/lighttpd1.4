@@ -1330,7 +1330,7 @@ static int config_insert(server *srv) {
     p->defaults.mimetypes = &srv->srvconf.mimetypes_default;/*must not be NULL*/
     p->defaults.h2proto = srv->srvconf.h2proto;
     p->defaults.http_pathinfo =
-      config_feature_bool(srv, "server.http_pathinfo", 1);
+      config_feature_bool(srv, "server.http-pathinfo", 1);
 
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
