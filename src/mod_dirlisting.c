@@ -1558,7 +1558,10 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	handler_t rc = mod_dirlisting_subrequest(r, p);
 
 	if (rc == HANDLER_WAIT_FOR_EVENT && p->conf.auto_layout
-	    && (p->conf.external_js || p->conf.external_css)) {
+	    && (p->conf.external_js || p->conf.external_css)
+	      /* (paranoia: do not send 103 for HTTP/1.x; only for HTTP/2 +)
+	       *  https://www.rfc-editor.org/rfc/rfc8297.html#section-3 */
+	    && r->http_version >= HTTP_VERSION_2) {
 		/* send 103 Early Hints intermediate response (send once only)*/
 		r->http_status = 103; /* 103 Early Hints */
 		if (!http_response_send_1xx(r))
