@@ -187,8 +187,6 @@ staticsrc += builtin_mods
 for module in builtin_mods:
 	staticinit += "PLUGIN_INIT(%s)\n"%module[0:-2]
 for module in modules.keys():
-	if module == "mod_h2":
-		continue
 	staticsrc += modules[module]['src']
 	staticinit += "PLUGIN_INIT(%s)\n"%module
 	if 'lib' in modules[module]:
