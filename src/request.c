@@ -1392,9 +1392,11 @@ http_request_headers_process_h2 (request_st * const restrict r, const int scheme
         }
     }
 
+  #if 0 /*(redundant; Upgrade rejected in http_request_parse() if present)*/
     /* ignore Upgrade if using HTTP/2 */
     if (light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE))
         http_header_request_unset(r, HTTP_HEADER_UPGRADE,
                                   CONST_STR_LEN("upgrade"));
+  #endif
     /* XXX: should filter out other hop-by-hop connection headers, too */
 }
