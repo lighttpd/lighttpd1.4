@@ -788,6 +788,11 @@ http_response_call_error_handler (request_st * const r, const buffer * const err
     buffer_copy_buffer(&r->target, error_handler);
     http_response_errdoc_init(r);
     r->http_status = 0; /*(after http_response_errdoc_init())*/
+    /* paranoia; mistake if error handler does not ignore "upgrade" */
+    if (light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE))
+        http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+                                  CONST_STR_LEN("upgrade"));
+    r->h2_connect_ext = 0;
     return 1;
 }
 
