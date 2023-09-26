@@ -584,6 +584,8 @@ http_request_validate_pseudohdrs (request_st * const restrict r, const int schem
         return http_request_header_line_invalid(r, 400,
           "missing pseudo-header method -> 400");
 
+    /* ignore :protocol unless :method is CONNECT
+     * (:protocol may have been received prior to :method, so check here) */
     if (HTTP_METHOD_CONNECT != r->http_method)
         r->h2_connect_ext = 0;
 
