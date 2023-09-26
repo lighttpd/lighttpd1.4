@@ -791,7 +791,7 @@ h2_recv_window_update (connection * const con, const uint8_t * const s, const ui
         if (NULL == r) {
             if (h2c->h2_cid < id && 0 == h2c->sent_goaway)
                 h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
-          #if 0
+          #ifdef H2SPEC
             /*(needed for h2spec if testing with response < 16k+1 over TLS
              * or response <= socket send buffer size over cleartext, due to
              * completing response too quickly for the test frame sequence) */
@@ -1526,6 +1526,25 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
           http_request_validate_pseudohdrs(r, hpctx.scheme,
                                            hpctx.http_parseopts);
 
+  #ifdef H2SPEC
+    /* RFC 7540 Section 8. HTTP Message Exchanges
+     * 8.1.2.6. Malformed Requests and Responses
+     * RFC 9113 Section 8. Expressing HTTP Semantics in HTTP/2
+     * 8.1.1. Malformed Messages
+     *   For malformed requests, a server MAY send an HTTP
+     *   response prior to closing or resetting the stream.
+     * However, h2spec expects stream PROTOCOL_ERROR.
+     * (This is unfortunate, since we would rather send
+     *  400 Bad Request which tells client *do not* retry
+     *  the bad request without modification)
+     * https://github.com/summerwind/h2spec/issues/120
+     * https://github.com/summerwind/h2spec/issues/121
+     * https://github.com/summerwind/h2spec/issues/122
+     */
+    if (__builtin_expect( (400 == r->http_status), 0))
+        h2_send_rst_stream(r, r->con, H2_E_PROTOCOL_ERROR);
+  #endif
+
     http_request_headers_process_h2(r, r->con->proto_default_port);
 }
 
@@ -1698,26 +1717,6 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         }
         if (h2c->rused-1) /*(true if more than one active stream)*/
             h2_apply_priority_update(h2c, r, h2c->rused-1);
-
-        /* RFC 7540 Section 8. HTTP Message Exchanges
-         * 8.1.2.6. Malformed Requests and Responses
-         *   For malformed requests, a server MAY send an HTTP
-         *   response prior to closing or resetting the stream.
-         * However, h2spec expects stream PROTOCOL_ERROR.
-         * (This is unfortunate, since we would rather send
-         *  400 Bad Request which tells client *do not* retry
-         *  the bad request without modification)
-         * https://github.com/summerwind/h2spec/issues/120
-         * https://github.com/summerwind/h2spec/issues/121
-         * https://github.com/summerwind/h2spec/issues/122
-         */
-      #if 0
-        if (__builtin_expect( (400 == r->http_status), 0)) {
-            h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
-            h2_retire_stream(r, con);
-            /*(h2_retire_stream() invalidates r; must not use r below)*/
-        }
-      #endif
     }
     else if (h2c->h2_cid < id) {
         /* Had to process HPACK to keep HPACK tables sync'd with peer
@@ -2716,9 +2715,11 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
     if ((int32_t)dlen > h2r->x.h2.swin) dlen = (uint32_t)h2r->x.h2.swin;
     const off_t cqlen = chunkqueue_length(cq);
     if ((int32_t)dlen > cqlen) dlen = (uint32_t)cqlen;
+  #ifndef H2SPEC
     /*(note: must temporarily disable next line when running h2spec since
      * some h2spec tests expect 1-byte DATA frame, not a deferred response)*/
     else if (dlen < 2048 && cqlen >= 2048) return 0;
+  #endif
     if (0 == dlen) return 0;
 
     /* XXX: future: should have an interface which processes chunkqueue
@@ -2808,8 +2809,12 @@ h2_send_end_stream_data (request_st * const r, connection * const con)
         /* set timestamp for comparison; not tracking individual stream ids */
         h2con * const h2c = (h2con *)con->hx;
         h2c->half_closed_ts = log_monotonic_secs;
+      #ifndef H2SPEC
         /* indicate to peer that no more DATA should be sent from peer */
+        /*(note: must temporarily disable next line when running h2spec since
+         * some h2spec tests do not expect multiple RST_STREAM frames)*/
         h2_send_rst_stream_id(r->x.h2.id, con, H2_E_NO_ERROR);
+      #endif
     }
     r->x.h2.state = H2_STATE_CLOSED;
 }
