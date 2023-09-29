@@ -1518,14 +1518,15 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
     rq->bytes_in  += (off_t)hpctx.hlen;
     rq->bytes_out += (off_t)hpctx.hlen;
 
-    if (0 == r->http_status && LSHPACK_OK == rc && !hpctx.trailers) {
-        if (hpctx.pseudo)
-            r->http_status =
-              http_request_validate_pseudohdrs(r, hpctx.scheme,
-                                               hpctx.http_parseopts);
-        if (0 == r->http_status)
-            http_request_headers_process_h2(r, r->con->proto_default_port);
-    }
+    if (hpctx.trailers)
+        return;
+
+    if (hpctx.pseudo && 0 == r->http_status)
+        r->http_status =
+          http_request_validate_pseudohdrs(r, hpctx.scheme,
+                                           hpctx.http_parseopts);
+
+    http_request_headers_process_h2(r, r->con->proto_default_port);
 }
 
 
