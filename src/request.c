@@ -445,6 +445,9 @@ static int http_request_parse_single_header(request_st * const restrict r, const
             return http_request_parse_duplicate(r, id, k, klen, v, vlen);
         break;
       case HTTP_HEADER_CONNECTION:
+        if (HTTP_VERSION_1_1 < r->http_version)
+            return http_request_header_line_invalid(r, 400,
+              "invalid Connection header with HTTP/2 or later -> 400");
         /* "Connection: close" is common case if header is present */
         if ((vlen == 5 && buffer_eq_icase_ssn(v, CONST_STR_LEN("close")))
             || http_header_str_contains_token(v,vlen,CONST_STR_LEN("close"))) {
@@ -1372,12 +1375,6 @@ http_request_headers_process_h2 (request_st * const restrict r, const int scheme
 {
     if (0 == r->http_status)
         r->http_status = http_request_parse(r, scheme_port);
-
-    if (0 == r->http_status) {
-        if (light_btst(r->rqst_htags, HTTP_HEADER_CONNECTION))
-            r->http_status = http_request_header_line_invalid(r, 400,
-              "invalid Connection header with HTTP/2 -> 400");
-    }
 
     http_request_headers_fin(r);
 
