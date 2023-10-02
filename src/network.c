@@ -540,6 +540,16 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 #endif
 	{
 		if (-1 == (srv_socket->fd = fdevent_socket_nb_cloexec(family, SOCK_STREAM, IPPROTO_TCP))) {
+		  #ifndef _WIN32
+			/* some configs might always include IPv6 addresses,
+			 * but some containers might not support IPv6 */
+			if (family == AF_INET6 && errno == EAFNOSUPPORT) {
+				log_serror(srv->errh, __FILE__, __LINE__,
+				  "ignoring $SERVER[\"socket\"] == \"%s\"; socket(AF_INET6)",
+				  host);
+				return 0;
+			}
+		  #endif
 			log_serror(srv->errh, __FILE__, __LINE__, "socket()");
 			return -1;
 		}
@@ -949,6 +959,7 @@ int network_register_fdevents(server *srv) {
 	/* register fdevents after reset */
 	for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
 		server_socket *srv_socket = srv->srv_sockets.ptr[i];
+		if (srv_socket->fd == -1) continue;
 
 		srv_socket->fdn = fdevent_register(srv->ev, srv_socket->fd, network_server_handle_fdevent, srv_socket);
 		fdevent_fdnode_event_set(srv->ev, srv_socket->fdn, FDEVENT_IN);
