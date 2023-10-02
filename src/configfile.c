@@ -995,6 +995,7 @@ static void config_mimetypes_default(array * const a) {
        ,".m4v",   "video/mp4"
        ,".mp4",   "video/mp4"
        ,".mpeg",  "video/mpeg"
+       ,".mpg",   "video/mpeg"
        ,".ogv",   "video/ogg"
        ,".mov",   "video/quicktime"
        ,".qt",    "video/quicktime"
@@ -1052,6 +1053,7 @@ static void config_mimetypes_default(array * const a) {
        ,".deb",   "application/vnd.debian.binary-package"
        ,".dmg",   "application/x-apple-diskimage"
        ,".rpm","application/x-redhat-package-manager"/*alt:"application/x-rpm"*/
+       ,".sig",   "application/pgp-signature"
 
        ,"README", "text/plain;charset=utf-8"
 
