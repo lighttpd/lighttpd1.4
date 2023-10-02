@@ -30,6 +30,8 @@ typedef struct {
     plugin_config conf;
 } handler_ctx;
 
+__attribute_malloc__
+__attribute_returns_nonnull__
 static handler_ctx * handler_ctx_init(void) {
     return ck_calloc(1, sizeof(handler_ctx));
 }

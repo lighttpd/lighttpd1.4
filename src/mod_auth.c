@@ -271,6 +271,7 @@ static void data_auth_free(data_unset *d)
     free(dauth);
 }
 
+__attribute_returns_nonnull__
 static data_auth *data_auth_init(void)
 {
     static const struct data_methods fn = {

@@ -342,6 +342,7 @@ typedef struct gw_handler_ctx {
 
 __attribute_cold__
 __attribute_malloc__
+__attribute_returns_nonnull__
 void * gw_init(void);
 
 __attribute_cold__

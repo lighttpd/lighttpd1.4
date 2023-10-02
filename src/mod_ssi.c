@@ -68,6 +68,7 @@ typedef struct {
 	plugin_config conf;
 } handler_ctx;
 
+__attribute_returns_nonnull__
 static handler_ctx * handler_ctx_init(plugin_data *p, log_error_st *errh) {
 	handler_ctx *hctx = ck_calloc(1, sizeof(*hctx));
 	hctx->errh = errh;

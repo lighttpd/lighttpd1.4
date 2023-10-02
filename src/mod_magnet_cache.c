@@ -12,6 +12,8 @@
 #include <lauxlib.h>
 
 __attribute_cold__
+__attribute_malloc__
+__attribute_returns_nonnull__
 static script *script_init(void)
 {
     return ck_calloc(1, sizeof(script));

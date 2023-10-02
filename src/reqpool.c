@@ -88,6 +88,7 @@ request_init_data (request_st * const r, connection * const con, server * const 
 
 __attribute_cold__
 __attribute_noinline__
+__attribute_returns_nonnull__
 static request_st *
 request_init (connection * const con)
 {

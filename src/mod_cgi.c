@@ -106,6 +106,7 @@ typedef struct cgi_pid_t {
 	struct cgi_pid_t *prev;
 } cgi_pid_t;
 
+__attribute_returns_nonnull__
 static handler_ctx * cgi_handler_ctx_init(void) {
 	handler_ctx *hctx = ck_calloc(1, sizeof(*hctx));
 	hctx->response = chunk_buffer_acquire();

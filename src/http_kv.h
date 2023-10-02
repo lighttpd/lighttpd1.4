@@ -67,9 +67,11 @@ typedef enum {
 } http_version_t;
 
 __attribute_pure__
+__attribute_returns_nonnull__
 const buffer *http_version_buf (http_version_t i);
 
 __attribute_pure__
+__attribute_returns_nonnull__
 const buffer *http_method_buf (http_method_t i);
 
 __attribute_nonnull__()

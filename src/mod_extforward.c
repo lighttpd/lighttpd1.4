@@ -121,6 +121,8 @@ typedef struct {
 } handler_ctx;
 
 
+__attribute_malloc__
+__attribute_returns_nonnull__
 static handler_rctx * handler_rctx_init(void) {
     return ck_calloc(1, sizeof(handler_rctx));
 }
@@ -130,6 +132,8 @@ static void handler_rctx_free(handler_rctx *rctx) {
     free(rctx);
 }
 
+__attribute_malloc__
+__attribute_returns_nonnull__
 static handler_ctx * handler_ctx_init(void) {
     return ck_calloc(1, sizeof(handler_ctx));
 }

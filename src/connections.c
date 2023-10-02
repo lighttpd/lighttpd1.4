@@ -35,6 +35,7 @@
 
 
 __attribute_cold__
+__attribute_returns_nonnull__
 static connection *connection_init(server *srv);
 
 __attribute_noinline__
@@ -371,6 +372,7 @@ static int connection_handle_write_state(request_st * const r, connection * cons
 
 
 __attribute_cold__
+__attribute_returns_nonnull__
 static connection *connection_init(server *srv) {
 	connection * const con = ck_calloc(1, sizeof(*con));
 

@@ -49,6 +49,7 @@ typedef struct http_auth_require_t {
 
 __attribute_cold__
 __attribute_malloc__
+__attribute_returns_nonnull__
 http_auth_require_t * http_auth_require_init (void);
 
 __attribute_cold__

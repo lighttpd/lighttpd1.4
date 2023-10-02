@@ -233,6 +233,7 @@ static const int8_t lshpack_idx_http_header[] = {
 };
 
 
+__attribute_returns_nonnull__
 static request_st * h2_init_stream (request_st * const h2r, connection * const con);
 
 
@@ -2848,6 +2849,7 @@ h2_send_end_stream (request_st * const r, connection * const con)
 #include "reqpool.h"
 
 
+__attribute_returns_nonnull__
 static request_st *
 h2_init_stream (request_st * const h2r, connection * const con)
 {

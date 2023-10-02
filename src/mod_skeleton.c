@@ -41,6 +41,7 @@ typedef struct {
     size_t foo;
 } handler_ctx;
 
+__attribute_returns_nonnull__
 static handler_ctx * handler_ctx_init(void) {
     return ck_calloc(1, sizeof(handler_ctx));
 }

@@ -143,6 +143,7 @@ typedef struct {
 static int dirlist_max_in_progress;
 
 
+__attribute_returns_nonnull__
 static handler_ctx * mod_dirlisting_handler_ctx_init (plugin_data * const p) {
     handler_ctx *hctx = ck_calloc(1, sizeof(*hctx));
   #ifdef _WIN32
