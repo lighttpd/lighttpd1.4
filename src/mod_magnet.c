@@ -1590,7 +1590,7 @@ static int magnet_readlink(lua_State *L) {
     const char * const path = luaL_checkstring(L, 1);
     buffer * const b = magnet_tmpbuf_acquire(L);
     ssize_t rd = readlink(path, b->ptr, buffer_string_space(b));
-    if (rd > 0 && rd < buffer_string_space(b))
+    if (rd > 0 && (size_t)rd < buffer_string_space(b))
         lua_pushlstring(L, b->ptr, (size_t)rd);
     else
         lua_pushnil(L);
