@@ -1,6 +1,6 @@
 #include "first.h"
 
-#include "base.h"
+#include "request.h"
 #include "burl.h"       /* HTTP_PARSEOPT_HOST_STRICT */
 #include "plugin.h"
 #include "log.h"
@@ -181,7 +181,7 @@ SETDEFAULTS_FUNC(mod_evhost_set_defaults) {
                     const char * const ptr = cpv->v.b->ptr;
                     cpv->v.v = mod_evhost_parse_pattern(ptr);
                     if (NULL == cpv->v.v) {
-                        log_error(srv->errh, __FILE__, __LINE__,
+                        log_error(NULL, __FILE__, __LINE__,
                           "invalid evhost.path-pattern: %s", ptr);
                         return HANDLER_ERROR;
                     }
@@ -213,7 +213,7 @@ SETDEFAULTS_FUNC(mod_evhost_set_defaults) {
  * - ...
  */
 
-static void mod_evhost_parse_host(buffer *key, array *host, buffer *authority) {
+static void mod_evhost_parse_host(buffer *key, array *host, const buffer *authority) {
 	char *ptr = authority->ptr + buffer_clen(authority);
 	char *colon = ptr; /* needed to filter out the colon (if exists) */
 	int first = 1;
@@ -274,7 +274,7 @@ static void mod_evhost_parse_host(buffer *key, array *host, buffer *authority) {
 	}
 }
 
-static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, buffer *authority, const buffer *path_pieces) {
+static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, const buffer *authority, const buffer *path_pieces) {
 	array_reset_data_strings(parsed_host);
 	mod_evhost_parse_host(b, parsed_host, authority);
 	buffer_clear(b);
@@ -288,14 +288,10 @@ static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, buffer
 				buffer_append_char(b, '%');
 			} else if (*(ptr+1) == '_' ) {
 				/* %_ == full hostname */
-				char *colon = strchr(authority->ptr, ':');
-
-				if(colon == NULL) {
-					buffer_append_string_buffer(b, authority); /* adds fqdn */
-				} else {
-					/* strip the port out of the authority-part of the URI scheme */
-					buffer_append_string_len(b, authority->ptr, colon - authority->ptr); /* adds fqdn */
-				}
+				/* add fqdn; strip port out of authority-part of URI scheme */
+				const char * const colon = strchr(authority->ptr, ':');
+				buffer_append_string_len(b, authority->ptr,
+				                         colon ? (size_t)(colon - authority->ptr) : buffer_clen(authority));
 			} else if (ptr[1] == '{' ) {
 				char s[3] = "% ";
 				s[1] = ptr[2]; /*(assumes single digit before '.', and, optionally, '.' and single digit after '.')*/
@@ -326,12 +322,9 @@ static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, buffer
 static handler_t mod_evhost_uri_handler(request_st * const r, void *p_d) {
 	plugin_data *p = p_d;
 
-	/* not authority set */
 	if (buffer_is_blank(&r->uri.authority)) return HANDLER_GO_ON;
 
 	mod_evhost_patch_config(r, p);
-
-	/* missing even default(global) conf */
 	if (NULL == p->conf.path_pieces) return HANDLER_GO_ON;
 
 	if (__builtin_expect(

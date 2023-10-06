@@ -8,7 +8,6 @@
 
 #include "plugin.h"
 
-#include <stdlib.h>
 #include <string.h>
 
 typedef struct {
@@ -32,7 +31,7 @@ INIT_FUNC(mod_simple_vhost_init) {
 
 FREE_FUNC(mod_simple_vhost_free) {
     plugin_data *p = p_d;
-    free(p->last_root.ptr);
+    buffer_free_ptr(&p->last_root);
 }
 
 static void mod_simple_vhost_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -134,15 +133,9 @@ static void build_doc_root_path(buffer *out, const buffer *sroot, const buffer *
 	buffer_copy_buffer(out, sroot);
 
 	if (host) {
-		/* a hostname has to start with a alpha-numerical character
-		 * and must not contain a slash "/"
-		 */
-		char *dp;
-		if (NULL == (dp = strchr(host->ptr, ':'))) {
-			buffer_append_string_buffer(out, host);
-		} else {
-			buffer_append_string_len(out, host->ptr, dp - host->ptr);
-		}
+		const char * const colon = strchr(host->ptr, ':');
+		buffer_append_string_len(out, host->ptr,
+		                         colon ? (size_t)(colon - host->ptr) : buffer_clen(host));
 	}
 
 	if (droot) {
