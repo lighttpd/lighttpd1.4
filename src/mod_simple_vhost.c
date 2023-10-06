@@ -2,6 +2,7 @@
 
 #include "log.h"
 #include "buffer.h"
+#include "burl.h"       /* HTTP_PARSEOPT_HOST_STRICT */
 #include "request.h"
 #include "stat_cache.h"
 
@@ -183,7 +184,11 @@ static handler_t mod_simple_vhost_docroot(request_st * const r, void *p_data) {
     /* build document-root */
     buffer * const b = r->tmp_buf;/*(tmp_buf cleared before use in call below)*/
     const buffer *host = &r->uri.authority;
-    if ((!buffer_is_blank(host) && build_doc_root(r, p, b, host))
+    if ((!buffer_is_blank(host)
+         && (__builtin_expect(
+              (r->conf.http_parseopts & HTTP_PARSEOPT_HOST_STRICT), 1)
+             || (*host->ptr != '.' && NULL == strchr(host->ptr, '/')))
+         && build_doc_root(r, p, b, host))
         || build_doc_root(r, p, b, (host = p->conf.default_host))) {
         if (host) {
             r->server_name = &r->server_name_buf;

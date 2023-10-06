@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "base.h"
+#include "burl.h"       /* HTTP_PARSEOPT_HOST_STRICT */
 #include "plugin.h"
 #include "log.h"
 #include "stat_cache.h"
@@ -332,6 +333,12 @@ static handler_t mod_evhost_uri_handler(request_st * const r, void *p_d) {
 
 	/* missing even default(global) conf */
 	if (NULL == p->conf.path_pieces) return HANDLER_GO_ON;
+
+	if (__builtin_expect(
+	     (!(r->conf.http_parseopts & HTTP_PARSEOPT_HOST_STRICT)), 0)) {
+		const char * const h = r->uri.authority.ptr;
+		if (*h == '.' || strchr(h, '/')) return HANDLER_GO_ON;
+	}
 
 	buffer * const b = r->tmp_buf;/*(tmp_buf cleared before use in call below)*/
 	mod_evhost_build_doc_root_path(b, &p->split_vals, &r->uri.authority, p->conf.path_pieces);
