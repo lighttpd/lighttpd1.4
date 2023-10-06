@@ -3,6 +3,116 @@
 NEWS
 ====
 
+- 1.4.72 - 2023-10-06
+  * [core] save config read from stdin across restart
+  * [core] warn if daemonize w/o absolute config path
+  * [mod_dirlisting] send Link w/ external css or js
+  * [mod_dirlisting] fix missing header/readme (fixes #3211)
+  * [core] ignore coverity warning
+  * [core] ignore coverity warning
+  * [core] reqpool.c:request_set_con()
+  * [core] request_init_data() minor optim
+  * [core] request.c:request_pool_{push,pop}
+  * Revert "[core] h2 http_request_parse_header() tweak"
+  * [core] enable config conditions on HTTP/2 PRI
+  * [mod_webdav] extend symlink support (non-standard)
+  * [mod_extforward] fix extforward.params config opt
+  * [mod_authn_ldap] fix config auth.require group=... (fixes #3216)
+  * [core] set CON_STATE_READ_POST for HTTP/2 reqbody
+  * [core] chunkqueue_read_squash() returns cq->first
+  * [core] get body from cq at offset in chunk
+  * [doc] update stbuehler address
+  * [tests] use sha crypt for fastcgi auth environment tests
+  * [tests] drop des-crypt and crypt-md5 auth tests - deprecated/not available on various platforms
+  * [core] code size: xxhash XXH_NO_STREAM
+  * [core] fdevent_sh_exec()
+  * [mod_dirlisting] http_dirlist_auto_layout_early_hints()
+  * [mod_dirlisting] send 103 w/ external css or js
+  * [mod_dirlisting] json output for /<path>/?json
+  * [mod_dirlisting] include ETag with cached result
+  * [core] import xxHash v0.8.2
+  * [tests] move %ENV modifications into forked child
+  * [mod_ssi] init hctx->wq to init alt cq tempdirs
+  * [tests] initialize request_st cqs in tests
+  * [core] chunkqueue_env_tmpdir()
+  * [core] config_set_defaults() reduce code size
+  * [tests] use current perl interpreter path for env.PERL in lighttpd.conf
+  * [mod_deflate] code reuse to create temp file
+  * [core] skip pwrite() to temp file if 0 len write
+  * [core] store cq->tempdirs in stack var
+  * [core] remove tempdirs ptr from struct chunkqueue
+  * [core] treat upload_temp_file_size=0 as default sz
+  * [core] hide unused var on _WIN32 compiler warning
+  * [mod_nss] nspr include prefix portability(attempt)
+  * [CI] scripts/ci-build.sh arg consistency;add meson
+  * [CI] remove wolfssl from autobuild; let rest build
+  * [CI] remove NSS from autobuild; let rest build
+  * [CI] remove mbedtls from autobuild; let rest build
+  * [mod_nss] nspr include prefix portability(attempt)
+  * [CI] ci-build.sh: adjust meson; add pam, maxminddb
+  * [CI] ci-build.sh: fix typo --with-pam
+  * [CI] remove maxminddb from autobuild,cmake; let rest build
+  * [CI] ci-build.sh re-enable additional dependencies
+  * [core] optimize for non-Range requests
+  * [core] allow larger number of Ranges if sorted
+  * [tests] test_http_range.c
+  * [core] attempt to quiet coverity warning
+  * [build] packdist.sh now produces .md for www.l.n
+  * [core] disable keep-alive if HTTP/1.1 CL and TE
+  * [core] reject empty Content-Length for HTTP/1.x
+  * [core] reject uppercase in unrecognized HTTP/2 hdr
+  * [core] warn dynamic mods listed before staticfile
+  * [core] dev-only internal request state debugging
+  * [core] short-circuit connection_state_machine_loop
+  * [core] reset connection-level state at con level
+  * [core] optim for non-throttle writes
+  * [core] remove connection_handle_write HTTP/1.x opt
+  * [core] yield writing large HTTP/1.x on slow device
+  * [core] tighten h2_process_streams()
+  * [core] h2_process_streams() simpler loop to retire
+  * [core] http_response_physical_pathinfo()
+  * [core] http_response_prepare() tweaks
+  * [meson] Fix 'getoption' meson typo
+  * [core] use different getxattr() prototype on MacOS
+  * [mod_deflate] do not compress any 1xx status
+  * [core] http_response_304(), http_response_412()
+  * [core] add config option to reject pathinfo
+  * [core] expand mimetype.assign builtin defaults
+  * [core] mark some cold routines noinline
+  * [core] add config opt to send GOAWAY for bad auth
+  * [core] show_features() show inotify or kqueue
+  * [core] stat_cache_refresh_entry()
+  * [core] splaytree: use all 32-bits of hash value
+  * [core] splaytree: compare keys directly
+  * [core] splaytree: splaytree_splay_nonnull()
+  * [core] stat_cache: stat_cache_sptree_ndx()
+  * [multiple] use splaytree_splay_nonnull()
+  * [h2] comment struct h2con h2_sid member is unused
+  * [mod_openssl] disable DH auto if DHParameters set
+  * [mod_openssl] replace deprecated openssl funcs
+  * [core] splaytree: splaytree_delete_splayed_node()
+  * [multiple] use splaytree_delete_splayed_node()
+  * [core] splaytree: splaytree_insert_splayed()
+  * [multiple] use splaytree_insert_splayed()
+  * [core] _WIN32 fs_win32_readlinkUTF8() (#3223)
+  * [mod_magnet] lighty.c.readlink() (fixes #3223)
+  * [core] add config option to reject pathinfo
+  * [mod_dirlisting] send 103 Early Hints only for h2+
+  * [mod_webdav] reject non-identity Content-Encoding
+  * [scons] include mod_h2 in static builds (fixes #3224)
+  * [core] http_request_validate_pseudohdrs comment
+  * [core] comment out redundant code
+  * [core] reset addtl state b4 dynamic error handler
+  * [core] reject Connection hdr in h2 as soon as seen
+  * [mod_h2] process headers for debug
+  * [mod_h2] comments and behavior for h2spec tests
+  * [multiple] mark func __attribute_returns_nonnull__
+  * [core] expand mimetype.assign builtin defaults
+  * [core] warn if IPv6 socket not supported
+  * [mod_simple_vhost,mod_evhost] check host strict
+  * [mod_simple_vhost,mod_evhost] minor code transform
+  * [mod_magnet] quiet 32-bit compiler warning
+
 - 1.4.71 - 2023-05-27
   * [mod_h2] HTTP/2 separate module; no longer builtin
   * [mod_magnet] fix static build using autoconf (fixes #3203)
