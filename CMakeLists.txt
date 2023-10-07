@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.7.0 FATAL_ERROR)
 
-project(lighttpd VERSION 1.4.72 LANGUAGES C)
+project(lighttpd VERSION 1.4.73 LANGUAGES C)
 
 # use C11 with CMake >= 3.1
 set(CMAKE_C_STANDARD 11)
