@@ -992,6 +992,7 @@ static void config_mimetypes_default(array * const a) {
        ,".webp",  "image/webp"
 
        ,".avi",   "video/x-msvideo"
+       ,".mkv",   "video/x-matroska"
        ,".m4v",   "video/mp4"
        ,".mp4",   "video/mp4"
        ,".mpeg",  "video/mpeg"
