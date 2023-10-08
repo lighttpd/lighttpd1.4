@@ -2191,7 +2191,8 @@ mod_openssl_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const bu
 
 
 #if defined(BORINGSSL_API_VERSION) \
- || defined(LIBRESSL_VERSION_NUMBER)
+ || defined(LIBRESSL_VERSION_NUMBER) \
+ || OPENSSL_VERSION_NUMBER < 0x10100000L
 static int
 mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *ssl_ec_curve)
 {
@@ -2254,6 +2255,7 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     return 1;
 }
 #endif /* BORINGSSL_API_VERSION || LIBRESSL_VERSION_NUMBER */
+       /* || OPENSSL_VERSION_NUMBER < 0x10100000L */
 
 
 static int
@@ -2364,6 +2366,11 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 
         if (!mod_openssl_ssl_conf_dhparameters(srv, s, NULL))
             return -1;
+
+      #if OPENSSL_VERSION_NUMBER < 0x10100000L
+        if (!mod_openssl_ssl_conf_curves(srv, s, NULL))
+            return -1;
+      #endif
 
       #ifdef TLSEXT_TYPE_session_ticket
        #if OPENSSL_VERSION_NUMBER < 0x30000000L
