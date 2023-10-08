@@ -197,10 +197,6 @@ int config_plugin_values_init_block(server * const srv, const array * const ca, 
             break;
           case T_CONFIG_SHORT:
             switch(du->type) {
-              case TYPE_INTEGER:
-                cpv->v.shrt =
-                  (unsigned short)((const data_integer *)du)->value;
-                break;
               case TYPE_STRING: {
                 /* If the value came from an environment variable, then it is
                  * a data_string, although it may contain a number in ASCII
@@ -218,10 +214,17 @@ int config_plugin_values_init_block(server * const srv, const array * const ca, 
                     }
                 }
                 log_error(srv->errh, __FILE__, __LINE__,
-                  "got a string but expected a short: %s %s", cpk[i].k, v);
+                  "got a string but expected a short integer: %s %s", cpk[i].k, v);
                 rc = 0;
                 continue;
               }
+              case TYPE_INTEGER:
+                cpv->v.shrt =
+                  (unsigned short)((const data_integer *)du)->value;
+                if (((const data_integer *)du)->value >= 0
+                    && ((const data_integer *)du)->value <= 65535)
+                    break;
+                __attribute_fallthrough__
               default:
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected type for key: %s %d expected a short integer, "
