@@ -1575,6 +1575,48 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         return 0;
     }
 
+    const unsigned char *psrc = s + 9;
+    uint32_t alen = flen;
+    if (s[4] & H2_FLAG_PADDED) {
+        ++psrc;
+        const uint32_t pad = s[9];
+        if (alen < 1 + pad) {
+            /* Padding that exceeds the size remaining for the header block
+             * fragment MUST be treated as a PROTOCOL_ERROR. */
+            h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
+            return 0;
+        }
+        alen -= (1 + pad); /*(alen is adjusted for PRIORITY below)*/
+    }
+    if (s[4] & H2_FLAG_PRIORITY) {
+        if (alen < 5) {
+            h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
+            return 0;
+        }
+        if (((/*prio = */h2_u32(psrc)) == id) & (id > h2c->h2_cid)) {
+            /*(ignore dep if HEADERS frame is trailers (id <= h2c->h2_cid)*/
+            /* https://www.rfc-editor.org/rfc/rfc7540#section-5.3.1
+             * A stream cannot depend on itself.  An endpoint MUST treat this
+             * as a stream error (Section 5.4.2) of type PROTOCOL_ERROR.*/
+            h2_send_rst_stream_id(id, con, H2_E_PROTOCOL_ERROR);
+            /* PRIORITY is deprecated in RFC9113.  As this mistake is now more
+             * likely an attack, follow with goaway error since HEADERS frame
+             * is not HPACK decoded here to maintain HPACK decoder state. */
+            h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
+            return 0;
+        }
+      #if 0
+        uint32_t exclusive_dependency = (psrc[0] & 0x80) ? 1 : 0;
+        /*(ignore dependency prid and exclusive_dependency,
+         * and attempt to scale PRIORITY weight (weight+1 default is 16)
+         * to PRIORITY_UPDATE (default urgency 3) (see h2_init_stream()))*/
+        uint8_t weight = psrc[4] >> 2;
+        r->x.h2.prio = ((weight < 8 ? weight : 7) << 1) | !0;
+      #endif
+        psrc += 5;
+        alen -= 5;
+    }
+
     request_st * const h2r = &con->request;
     int trailers = 0;
 
@@ -1620,45 +1662,6 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         if (NULL == r)
             return (h2c->sent_goaway > 0) ? 0 : 1;
         trailers = 1;
-    }
-
-    const unsigned char *psrc = s + 9;
-    uint32_t alen = flen;
-    if (s[4] & H2_FLAG_PADDED) {
-        ++psrc;
-        const uint32_t pad = s[9];
-        if (alen < 1 + pad) {
-            /* Padding that exceeds the size remaining for the header block
-             * fragment MUST be treated as a PROTOCOL_ERROR. */
-            h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
-            if (!trailers)
-                h2_retire_stream(r, con);
-            else {
-                r->state = CON_STATE_ERROR;
-                r->x.h2.state = H2_STATE_CLOSED;
-            }
-            return 0;
-        }
-        alen -= (1 + pad); /*(alen is adjusted for PRIORITY below)*/
-    }
-    if (s[4] & H2_FLAG_PRIORITY) {
-        /* XXX: TODO: handle PRIORITY (prio fields start at *psrc) */
-        if (alen < 5 || (/*prio = */h2_u32(psrc)) == id) {
-            h2_send_rst_stream(r, con, H2_E_PROTOCOL_ERROR);
-            if (!trailers)
-                h2_retire_stream(r, con);
-            return 1;
-        }
-      #if 0
-        uint32_t exclusive_dependency = (psrc[0] & 0x80) ? 1 : 0;
-        /*(ignore dependency prid and exclusive_dependency,
-         * and attempt to scale PRIORITY weight (weight+1 default is 16)
-         * to PRIORITY_UPDATE (default urgency 3) (see h2_init_stream()))*/
-        uint8_t weight = psrc[4] >> 2;
-        r->x.h2.prio = ((weight < 8 ? weight : 7) << 1) | !0;
-      #endif
-        psrc += 5;
-        alen -= 5;
     }
 
     h2_parse_headers_frame(r, psrc, alen, trailers);
