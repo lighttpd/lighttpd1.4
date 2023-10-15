@@ -450,6 +450,11 @@ h2_send_refused_stream (uint32_t h2id, connection * const con)
         for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
             const request_st * const r = h2c->r[i];
             if (r->reqbody_length == r->reqbody_queue.bytes_in) {
+                /* check that stream response will not be blocked waiting
+                 * for stream WINDOW_UPDATE or connection WINDOW_UPDATE */
+                request_st * const h2r = &con->request;
+                if (r->x.h2.swin <= 0 || h2r->x.h2.swin <= 0) continue;
+
                 /* no pending request body; at least this request may proceed,
                  * though others waiting for request body may block until new
                  * request streams become active if new request streams precede
