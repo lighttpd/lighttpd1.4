@@ -443,7 +443,20 @@ h2_send_refused_stream (uint32_t h2id, connection * const con)
          * server Connection Preface, so a well-behaved client will
          * adjust after it sends its initial requests.
          *   (e.g. h2load -n 100 -m 100 sends 100 requests upon connect)
-         *
+         */
+
+        /* Send GOAWAY if too many requests (> 100) sent prior to SETTINGS ackn
+         *   (and if we reach here checking to refuse excess stream).
+         * (lighttpd currently sends SETTINGS once, following server preface) */
+        if (h2id > 200) {
+            log_error(NULL, __FILE__, __LINE__,
+              "h2: %s too many refused requests before SETTINGS ackn",
+              con->request.dst_addr_buf->ptr);
+            h2_send_goaway_e(con, H2_E_ENHANCE_YOUR_CALM);
+            return 0;
+        }
+
+        /*
          * Check if active streams have pending request body.  If all active
          * streams have pending request body, then must refuse new stream as
          * progress might be blocked if active streams all wait for DATA. */
