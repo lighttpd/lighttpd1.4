@@ -1435,11 +1435,8 @@ static void h2_retire_stream (request_st *r, connection * const con);
 
 
 static void
-h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc, const uint32_t plen, const int trailers)
+h2_parse_headers_frame (struct lshpack_dec * const restrict decoder, const unsigned char **psrc, const unsigned char * const endp, request_st * const restrict r, const int trailers)
 {
-    h2con * const h2c = (h2con *)r->con->hx;
-    struct lshpack_dec * const restrict decoder = &h2c->decoder;
-    const unsigned char * const endp = psrc + plen;
     http_header_parse_ctx hpctx;
     hpctx.hlen     = 0;
     hpctx.pseudo   = 1; /*(XXX: should be !trailers if handling trailers)*/
@@ -1460,11 +1457,11 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
       : LSXPACK_MAX_STRLEN;
 
     lsxpack_header_t lsx;
-    while (psrc < endp) {
+    while (*psrc < endp) {
         memset(&lsx, 0, sizeof(lsxpack_header_t));
         lsx.buf = tbptr;
         lsx.val_len = tbsz;
-        rc = lshpack_dec_decode(decoder, &psrc, endp, &lsx);
+        rc = lshpack_dec_decode(decoder, psrc, endp, &lsx);
         if (0 == lsx.name_len)
             rc = LSHPACK_ERR_BAD_DATA;
         if (__builtin_expect( (rc == LSHPACK_OK), 1)) {
@@ -1515,6 +1512,7 @@ h2_parse_headers_frame (request_st * const restrict r, const unsigned char *psrc
                 err = H2_E_PROTOCOL_ERROR;
                 h2_send_rst_stream(r, r->con, err);
             }
+            h2con * const h2c = (h2con *)r->con->hx;
             if (!h2c->sent_goaway && !hpctx.trailers)
                 h2c->h2_cid = r->x.h2.id;
             h2_send_goaway_e(r->con, err);
@@ -1682,7 +1680,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         trailers = 1;
     }
 
-    h2_parse_headers_frame(r, psrc, alen, trailers);
+    h2_parse_headers_frame(&h2c->decoder, &psrc, psrc+alen, r, trailers);
 
     if (__builtin_expect( (trailers), 0))
         return 1;
