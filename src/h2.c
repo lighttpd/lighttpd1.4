@@ -490,6 +490,30 @@ h2_send_refused_stream (uint32_t h2id, connection * const con)
     /* too many active streams; refuse new stream */
     h2c->h2_cid = h2id;
     h2_send_rst_stream_id(h2id, con, H2_E_REFUSED_STREAM);
+
+    /* mitigate request floods pipelining streams in excess of concurrency limit
+     *
+     * excess streams opened after SETTINGS_MAX_CONCURRENT_STREAMS 8 sent may
+     * indicate an attack, or may indicate an impatient and ill-behaved client
+     * (SETTINGS_MAX_CONCURRENT_STREAMS >= 100 recommended by RFC 9113)
+     * If client sends more than 100 requests before sending SETTINGS ackn,
+     * then lighttpd treats that as excessive (above).  It could be accidental,
+     * but could be malicious since an attacker might intentionally omit sending
+     * SETTINGS ackn.  Note: SETTINGS_MAX_CONCURRENT_STREAMS is not currently
+     * sent by lighttpd after SETTINGS following HTTP/2 server preface, so this
+     * stream concurrency limit does not change after connection initiation.
+     * Here, either SETTINGS ackn has been received, and still too many requests
+     * (more than concurrenty limit of 8) *or* fall through from above if active
+     *  requests might block/timeout waiting for later frames).  Well-behaved
+     * clients should not fall afoul of server SETTINGS_MAX_CONCURRENT_STREAMS*/
+    if (++h2c->n_refused_stream > 16) {
+        log_error(NULL, __FILE__, __LINE__,
+          "h2: %s too many refused requests",
+          con->request.dst_addr_buf->ptr);
+        h2_send_goaway_e(con, H2_E_NO_ERROR);
+        /*(return 0 if sending H2_E_ENHANCE_YOUR_CALM instead)*/
+    }
+
     return 1;
 }
 

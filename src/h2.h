@@ -88,6 +88,7 @@ struct h2con {
     struct lshpack_dec decoder;
     struct lshpack_enc encoder;
     unix_time64_t half_closed_ts;
+    uint8_t n_refused_stream;
 };
 typedef struct h2con h2con;
 
