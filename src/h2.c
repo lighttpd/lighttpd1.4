@@ -1577,7 +1577,6 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
      * might be made to the code in the future. */
     __coverity_tainted_data_sink__(s);
   #endif
-    request_st *r = NULL;
     h2con * const h2c = (h2con *)con->hx;
     const uint32_t id = h2_u31(s+5);
   #if 0 /*(included in (!(id & 1)) below)*/
@@ -1633,10 +1632,14 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         alen -= 5;
     }
 
-    request_st * const h2r = &con->request;
-    int trailers = 0;
+    if (id <= h2c->h2_cid) { /* (trailers; cold code path) */
+        request_st * const r = h2_recv_trailers_r(con, h2c, id, s[4]);
+        if (NULL == r)
+            return (h2c->sent_goaway > 0) ? 0 : 1;
+        h2_parse_headers_frame(&h2c->decoder,&psrc,psrc+alen,r,1);/*(trailers)*/
+        return 1;
+    }
 
-    if (id > h2c->h2_cid) {
         if (h2c->rused == sizeof(h2c->r)/sizeof(*h2c->r))
             return h2_send_refused_stream(id, con);
         /* Note: MUST process HPACK decode even if already sent GOAWAY.
@@ -1646,7 +1649,8 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
          * frame with trailers, for which the decoder state is required.
          * XXX: future might try to reduce other processing done if sent
          *      GOAWAY, e.g. might avoid allocating (request_st *r) */
-        r = h2_init_stream(h2r, con);
+        request_st * const h2r = &con->request;
+        request_st * const r = h2_init_stream(h2r, con);
         r->x.h2.id = id;
         if (s[4] & H2_FLAG_END_STREAM) {
             r->x.h2.state = H2_STATE_HALF_CLOSED_REMOTE;
@@ -1672,18 +1676,8 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         r->start_hp.tv_sec = log_epoch_secs;
         if (r->conf.high_precision_timestamps)
             log_clock_gettime_realtime(&r->start_hp);
-    }
-    else {
-        r = h2_recv_trailers_r(con, h2c, id, s[4]); /* (cold code path) */
-        if (NULL == r)
-            return (h2c->sent_goaway > 0) ? 0 : 1;
-        trailers = 1;
-    }
 
-    h2_parse_headers_frame(&h2c->decoder, &psrc, psrc+alen, r, trailers);
-
-    if (__builtin_expect( (trailers), 0))
-        return 1;
+    h2_parse_headers_frame(&h2c->decoder, &psrc, psrc+alen, r, 0); /*(headers)*/
 
   #if 0 /*(handled in h2_parse_frames() as a connection error)*/
     /* not handled here:
