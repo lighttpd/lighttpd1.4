@@ -1434,6 +1434,11 @@ h2_recv_trailers_r (connection * const con, h2con * const h2c, const uint32_t id
      * be optional, like in HTTP/1.1 */
     request_st * const r = h2_get_stream_req(h2c, id);
     if (NULL == r) {
+        /* Note: sending GOAWAY here might be too strict.  With the introduction
+         * of h2_discard_headers(), the GOAWAY can now safely be commented out
+         * if this causes any issue with legitimate use in the field due to
+         * lighttpd responding to a stream, closing and forgetting about the
+         * stream, and then receiving trailers from the client for the stream.*/
         h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
         return NULL;
     }
@@ -1452,6 +1457,36 @@ h2_recv_trailers_r (connection * const con, h2con * const h2c, const uint32_t id
     }
 
     return h2_recv_end_data(r, con, 0) ? r : NULL;
+}
+
+
+__attribute_cold__
+static void
+h2_discard_headers_frame (struct lshpack_dec * const restrict decoder, const unsigned char **psrc, const unsigned char * const restrict endp, const request_st * const restrict r)
+{
+    /* HPACK decode and discard; stripped down from h2_parse_headers_frame().
+     * If HEADERS frame is received, HEADERS frame must be HPACK-decoded to
+     * maintain HPACK decoder state consistency for the connection, unless
+     * GOAWAY has been sent and no new streams will be opened.  Even then,
+     * if GOAWAY was sent with H2_E_NO_ERROR, there is still chance that
+     * trailers sent later on active streams will fail to be decoded unless
+     * all HEADERS frames are HPACK-decoded in the order received. */
+
+    /*(h2_init_con() resized h2r->tmp_buf to 64k; shared with r->tmp_buf)*/
+    buffer * const tb = r->tmp_buf;
+    char * const tbptr = tb->ptr;
+    const lsxpack_strlen_t tbsz = (tb->size <= LSXPACK_MAX_STRLEN)
+      ? tb->size
+      : LSXPACK_MAX_STRLEN;
+
+    lsxpack_header_t lsx;
+    while (*psrc < endp) {
+        memset(&lsx, 0, sizeof(lsxpack_header_t));
+        lsx.buf = tbptr;
+        lsx.val_len = tbsz;
+        if (lshpack_dec_decode(decoder, psrc, endp, &lsx) != LSHPACK_OK)
+            break; /* HPACK decode failed; should probably send GOAWAY? */
+    }
 }
 
 
@@ -1505,6 +1540,9 @@ h2_parse_headers_frame (struct lshpack_dec * const restrict decoder, const unsig
             if (__builtin_expect( (0 != http_status), 0)) {
                 if (r->http_status == 0) /*might be set if processing trailers*/
                     r->http_status = http_status;
+                /* Note: hpctx.hlen is not adjusted for rest of headers, nor
+                 * debug printing of headers if hpctx.log_request_header */
+                h2_discard_headers_frame(decoder, psrc, endp, r);
                 break;
             }
         }
@@ -1592,6 +1630,41 @@ h2_parse_headers_frame (struct lshpack_dec * const restrict decoder, const unsig
 }
 
 
+__attribute_cold__
+static int
+h2_discard_headers (struct lshpack_dec * const restrict decoder, const unsigned char **psrc, const unsigned char * const restrict endp, const request_st * const restrict r, h2con * const h2c)
+{
+    /* If GOAWAY was sent with an error, return quickly without decoding;
+     * choose *to not keep* HPACK decoder state in sync, since
+     * h2_send_rst_stream_state() set r->state = CON_STATE_ERROR and
+     * r->x.h2.state = H2_STATE_CLOSED for previously active streams. */
+    if (h2c->sent_goaway > 0) return 0;
+
+    /* Send error if too many discarded HEADERS frames.
+     * (similar to h2_send_refused_stream())
+     * Note: this could legitimately be triggered by a client sending trailers
+     * after lighttpd has responded to and closed a stream, so no longer tracked
+     * by lighttpd, but that is not expected to be a common scenario.  (Also, if
+     * this were permitted without limit, it could be abused to bypass limit.)*/
+    if (++h2c->n_discarded_headers > 32) {
+        connection * const con = r->con;
+        log_error(NULL, __FILE__, __LINE__,
+          "h2: %s too many discarded requests",
+          con->request.dst_addr_buf->ptr);
+        h2_send_goaway_e(con, H2_E_ENHANCE_YOUR_CALM);
+    }
+
+    h2_discard_headers_frame(decoder, psrc, endp, r);
+
+    /* return 1 to continue processing HTTP/2 frames
+     * Note: if returning 0 to defer processing additional frames and
+     * yield to other connections, must also joblist_append(con) unless
+     * all h2c->r slots are full and next frame is HEADERS (which could
+     * be passed in as a flag depending on the calling location) */
+    return 1;
+}
+
+
 __attribute_noinline__
 static int
 h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
@@ -1661,20 +1734,44 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
     if (id <= h2c->h2_cid) { /* (trailers; cold code path) */
         request_st * const r = h2_recv_trailers_r(con, h2c, id, s[4]);
         if (NULL == r)
-            return (h2c->sent_goaway > 0) ? 0 : 1;
+            return h2_discard_headers(&h2c->decoder, &psrc, psrc+alen,
+                                      &con->request, h2c);
         h2_parse_headers_frame(&h2c->decoder,&psrc,psrc+alen,r,1);/*(trailers)*/
         return 1;
     }
 
+    /* Note: MUST process HPACK decode even if already sent GOAWAY.
+     * This is necessary since there may be active streams not in
+     * H2_STATE_HALF_CLOSED_REMOTE, e.g. H2_STATE_OPEN, still possibly
+     * receiving DATA and, more relevantly, still might receive HEADERS
+     * frame with trailers, for which the decoder state may be required. */
+
+    if (h2c->sent_goaway)
+        return h2_discard_headers(&h2c->decoder, &psrc, psrc+alen,
+                                  &con->request, h2c);
+
+  #if 0 /*(handled in h2_parse_frames() as a connection error)*/
+    if (s[3] == H2_FTYPE_PUSH_PROMISE) {
+        /* discard the request if PUSH_PROMISE, since not expected, as this code
+         * is running as a server, not as a client. */
+        /* note: h2_parse_headers_frame() sets h2c->h2_cid on HPACK decode error
+         * and would need to be changed for code to be shared by PUSH_PROMISE */
+        /* rant: PUSH_PROMISE could have been a flag on HEADERS frame
+         *       instead of an independent frame type */
+        h2c->h2_sid = id;
+        return h2_discard_headers(&h2c->decoder, &psrc, psrc+alen,
+                                  &con->request, h2c);
+    }
+  #endif
+
+    /* new stream */
+
         if (h2c->rused == sizeof(h2c->r)/sizeof(*h2c->r))
-            return h2_send_refused_stream(id, con);
-        /* Note: MUST process HPACK decode even if already sent GOAWAY.
-         * This is necessary since there may be active streams not in
-         * H2_STATE_HALF_CLOSED_REMOTE, e.g. H2_STATE_OPEN, still possibly
-         * receiving DATA and, more relevantly, still might receive HEADERS
-         * frame with trailers, for which the decoder state is required.
-         * XXX: future might try to reduce other processing done if sent
-         *      GOAWAY, e.g. might avoid allocating (request_st *r) */
+            return h2_send_refused_stream(id, con) == -1
+              ? -1
+              : h2_discard_headers(&h2c->decoder, &psrc, psrc+alen,
+                                   &con->request, h2c);
+
         request_st * const h2r = &con->request;
         request_st * const r = h2_init_stream(h2r, con);
         r->x.h2.id = id;
@@ -1704,20 +1801,6 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
             log_clock_gettime_realtime(&r->start_hp);
 
     h2_parse_headers_frame(&h2c->decoder, &psrc, psrc+alen, r, 0); /*(headers)*/
-
-  #if 0 /*(handled in h2_parse_frames() as a connection error)*/
-    if (s[3] == H2_FTYPE_PUSH_PROMISE) {
-        /* Had to process HPACK to keep HPACK tables sync'd with peer but now
-         * discard the request if PUSH_PROMISE, since not expected, as this code
-         * is running as a server, not as a client.
-         * XXX: future might try to reduce other processing done if
-         * discarding, e.g. might avoid allocating (request_st *r) */
-        /* rant: PUSH_PROMISE could have been a flag on HEADERS frame
-         *       instead of an independent frame type */
-        r->http_status = 0;
-        h2_retire_stream(r, con);
-    }
-  #endif
 
     if (!h2c->sent_goaway) {
         h2c->h2_cid = id;
