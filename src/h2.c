@@ -1534,20 +1534,22 @@ h2_parse_headers_frame (struct lshpack_dec * const restrict decoder, const unsig
             if (rc != LSHPACK_ERR_BAD_DATA) {
                 /* LSHPACK_ERR_TOO_LARGE, LSHPACK_ERR_MORE_BUF */
                 err = H2_E_PROTOCOL_ERROR;
+              #if 0
+                /* redundant: h2_send_goaway_e() sends RST_STREAM with
+                 * H2_E_PROTOCOL_ERROR if GOAWAY not already sent.
+                 * (If GOAWAY were sent with higher id, we would want
+                 *  to send RST_STREAM here, but that is not the case) */
                 h2_send_rst_stream(r, r->con, err);
+              #endif
             }
-            h2con * const h2c = (h2con *)r->con->hx;
-            if (!h2c->sent_goaway && !hpctx.trailers)
-                h2c->h2_cid = r->x.h2.id;
-            h2_send_goaway_e(r->con, err);
             if (!hpctx.trailers) {
-                h2_retire_stream(r, r->con);
+                h2con * const h2c = (h2con *)r->con->hx;
+                if (!h2c->sent_goaway)
+                    h2c->h2_cid = r->x.h2.id;
+                h2_send_goaway_e(r->con, err);
                 return;
             }
-            else {
-                r->state = CON_STATE_ERROR;
-                r->x.h2.state = H2_STATE_CLOSED;
-            }
+            h2_send_goaway_e(r->con, err);
             break;
         }
     }
@@ -1704,8 +1706,6 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
     h2_parse_headers_frame(&h2c->decoder, &psrc, psrc+alen, r, 0); /*(headers)*/
 
   #if 0 /*(handled in h2_parse_frames() as a connection error)*/
-    /* not handled here:
-     * r is invalid if h2_parse_headers_frame() HPACK decode error */
     if (s[3] == H2_FTYPE_PUSH_PROMISE) {
         /* Had to process HPACK to keep HPACK tables sync'd with peer but now
          * discard the request if PUSH_PROMISE, since not expected, as this code
@@ -1756,11 +1756,9 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         if (h2c->rused-1) /*(true if more than one active stream)*/
             h2_apply_priority_update(h2c, r, h2c->rused-1);
     }
-    else if (h2c->h2_cid < id) {
+    else {
         /* Had to process HPACK to keep HPACK tables sync'd with peer
-         * but now discard the request if id is after id sent in GOAWAY.
-         * XXX: future might try to reduce other processing done if
-         * discarding, e.g. might avoid allocating (request_st *r) */
+         * but now discard the request */
         r->http_status = 0;
         h2_retire_stream(r, con);
     }
