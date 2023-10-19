@@ -1370,6 +1370,9 @@ int config_finalize(server *srv, const buffer *default_server_tag) {
         config_feature_bool(srv, "server.metrics-high-precision",
                             srv->srvconf.high_precision_timestamps);
 
+    /* disable h2proto if mod_h2 was not found during plugin load */
+    p->defaults.h2proto = srv->srvconf.h2proto;
+
     /* configure default server_tag if not set
      * (if configured to blank, unset server_tag)*/
     if (!p->defaults.server_tag)
