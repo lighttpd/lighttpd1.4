@@ -554,7 +554,8 @@ static void config_deprecate_module_compress (server *srv) {
 
 static int config_http_parseopts (server *srv, const array *a) {
     unsigned short int opts = srv->srvconf.http_url_normalize;
-    unsigned short int decode_2f = 1;
+    uint8_t decode_2f = 1;
+    uint8_t url_normalize = 1;
     int rc = 1;
     for (size_t i = 0; i < a->used; ++i) {
         const data_string * const ds = (const data_string *)a->data[i];
@@ -616,14 +617,15 @@ static int config_http_parseopts (server *srv, const array *a) {
         else {
             opts &= ~opt;
             if (opt == HTTP_PARSEOPT_URL_NORMALIZE) {
-                opts = 0;
-                break;
+                url_normalize = 0;
             }
             if (opt == HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE) {
                 decode_2f = 0;
             }
         }
     }
+    if (!url_normalize)
+        opts = 0;
     if (opts != 0) {
         opts |= HTTP_PARSEOPT_URL_NORMALIZE;
         if ((opts & (HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE
