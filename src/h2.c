@@ -1863,6 +1863,11 @@ h2_parse_frames (connection * const con)
      *       should accept the larger frame size until SETTINGS is ACK'd) */
     const uint32_t fsize = h2c->s_max_frame_size;
     for (off_t cqlen; (cqlen = chunkqueue_length(cq)) >= 9; ) {
+
+        /* defer parsing additional frames if large output queue pending write*/
+        if (__builtin_expect( (chunkqueue_length(con->write_queue) > 65536), 0))
+            return 0;
+
         chunk *c = cq->first;
         /*assert(c->type == MEM_CHUNK);*/
         /* copy data if frame header crosses chunk boundary
@@ -3426,8 +3431,19 @@ h2_process_streams (connection * const con,
     request_st * const h2r = &con->request;
     if (h2r->state == CON_STATE_WRITE) {
         /* write HTTP/2 frames to socket */
-        if (!chunkqueue_is_empty(con->write_queue))
+        if (!chunkqueue_is_empty(con->write_queue)) {
             connection_handle_write(h2r, con);
+            /* check if might need to resched to process more frames
+             * (could be more precise duplicating parts of h2_want_read(),
+             *  though prefer to check here when write_queue has been emptied)
+             * need to resched if still CON_STATE_WRITE, write_queue empty,
+             * full frame pending, and frame is not HEADERS or h2c->r not full,
+             * which might happen if parsing frames was deferred if write_queue
+             * grew too large generating HTTP/2 replies to various frame types*/
+            if (chunkqueue_is_empty(con->write_queue)
+                && !chunkqueue_is_empty(con->read_queue))
+                resched |= 2;
+        }
 
         if (chunkqueue_is_empty(con->write_queue)
             && 0 == h2c->rused && h2c->sent_goaway)
