@@ -435,6 +435,22 @@ h2_send_refused_stream (uint32_t h2id, connection * const con)
 {
     h2con * const h2c = (h2con *)con->hx;
 
+    /* avoid sending REFUSED_STREAM if an existing stream is ready to be
+     * cleaned up, better handling edge case where stream concurrency limit
+     * has been reached and client sends RST_STREAM followed by HEADERS to
+     * cancel an existing stream and create a new, different stream.
+     * Note: this handles HTTP/2 rapid reset attack (CVE-2023-44487)
+     * slightly better than prior behavior by avoiding the minor overhead
+     * of responding with RST_STREAM REFUSED_STREAM */
+    for (uint32_t i = 0, rused = h2c->rused; i < rused; ++i) {
+        const request_st * const r = h2c->r[i];
+        if (r->state > CON_STATE_WRITE)
+            /* (CON_STATE_RESPONSE_END or CON_STATE_ERROR)
+             * request will be cleaned up shortly, releasing a slot;
+             * defer processing frame rather than sending REFUSED_STREAM */
+            return -1;
+    }
+
     if (h2c->sent_settings) { /*(see h2_recv_settings() comments)*/
         /* client connected and immediately sent flurry of request streams
          * (h2c->sent_settings is non-zero if sent SETTINGS frame to
