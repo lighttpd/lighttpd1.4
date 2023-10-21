@@ -595,6 +595,24 @@ h2_recv_rst_stream (connection * const con, const uint8_t * const s, const uint3
         /* XXX: ? add debug trace including error code from RST_STREAM ? */
         r->state = CON_STATE_ERROR;
         r->x.h2.state = H2_STATE_CLOSED;
+
+        /* attempt to detect HTTP/2 rapid reset attack (CVE-2023-44487)
+         * Send GOAWAY if 15 or more requests in recent batch of up to 32
+         * requests have been cancelled by client sending RST_STREAM.
+         * Note: this can legitimately occur, but less likely in a couple secs.
+         * Still, send GOAWAY NO_ERROR instead of sending ENHANCE_YOUR_CALM. */
+        if (!h2c->sent_goaway && r->start_hp.tv_sec+2 > log_epoch_secs) {
+            ++h2c->n_recv_rst_stream;
+            uint8_t n_recv_rst_stream =
+              (h2c->n_recv_rst_stream >> 4) + (h2c->n_recv_rst_stream & 0x7f);
+            if (n_recv_rst_stream >= 15) {/*4 bits max is 15 for lower counter*/
+                log_error(NULL, __FILE__, __LINE__,
+                  "h2: %s sent too many RST_STREAM too quickly",
+                  con->request.dst_addr_buf->ptr);
+                h2_send_goaway_e(con, H2_E_NO_ERROR);
+            }
+        }
+
         return;
     }
     /* unknown/inactive stream id
@@ -1820,6 +1838,12 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
 
     if (!h2c->sent_goaway) {
         h2c->h2_cid = id;
+
+        /* counter to detect HTTP/2 rapid reset attack (CVE-2023-44487)
+         * HTTP/2 client ids are odds, so use mask 0x1f
+         * in order to reset lower counter every 16 requests */
+        if ((id & 0x1f) == 0x1) h2c->n_recv_rst_stream <<= 4;
+
         /*(lighttpd.conf config conditions not yet applied to request,
          * but do not increase window size if BUFMIN set in global config)*/
         if (r->reqbody_length /*(see h2_init_con() for session window)*/

@@ -90,6 +90,7 @@ struct h2con {
     unix_time64_t half_closed_ts;
     uint8_t n_refused_stream;
     uint8_t n_discarded_headers;
+    uint8_t n_recv_rst_stream;
 };
 typedef struct h2con h2con;
 
