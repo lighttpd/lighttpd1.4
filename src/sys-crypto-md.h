@@ -153,6 +153,102 @@ SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
 #include <mbedtls/version.h>
 /*#include <mbedtls/compat-2.x.h>*//*(func renames ifdef'd below)*/
 
+#if defined(MBEDTLS_USE_PSA_CRYPTO)
+#include "psa/crypto.h"
+/* Note: psa_crypto_init() MUST be called once before use
+ * (see lighttpd src/rand.c for overload where this is done in lighttpd) */
+#include <string.h>     /* memset() */
+
+#ifdef PSA_WANT_ALG_MD5
+#define USE_LIB_CRYPTO_MD5
+typedef psa_hash_operation_t MD5_CTX;
+static inline int
+MD5_Init(MD5_CTX *ctx)
+{
+    memset(ctx, 0, sizeof(MD5_CTX));
+    return (PSA_SUCCESS == psa_hash_setup(ctx, PSA_ALG_MD5));
+}
+static inline int
+MD5_Final(unsigned char *digest, MD5_CTX *ctx)
+{
+    size_t n;        /* PSA_HASH_LENGTH(PSA_ALG_MD5) == 16 */
+    return (PSA_SUCCESS == psa_hash_finish(ctx, digest, 16, &n));
+}
+static inline int
+MD5_Update(MD5_CTX *ctx, const void *data, size_t length)
+{
+    return (PSA_SUCCESS == psa_hash_update(ctx, data, length));
+}
+#endif
+
+#ifdef PSA_WANT_ALG_SHA_1
+#define USE_LIB_CRYPTO_SHA1
+typedef psa_hash_operation_t SHA_CTX;
+static inline int
+SHA1_Init(SHA_CTX *ctx)
+{
+    memset(ctx, 0, sizeof(SHA_CTX));
+    return (PSA_SUCCESS == psa_hash_setup(ctx, PSA_ALG_SHA_1));
+}
+static inline int
+SHA1_Final(unsigned char *digest, SHA_CTX *ctx)
+{
+    size_t n;      /* PSA_HASH_LENGTH(PSA_ALG_SHA_1) == 20 */
+    return (PSA_SUCCESS == psa_hash_finish(ctx, digest, 20, &n));
+}
+static inline int
+SHA1_Update(SHA_CTX *ctx, const void *data, size_t length)
+{
+    return (PSA_SUCCESS == psa_hash_update(ctx, data, length));
+}
+#endif
+
+#ifdef PSA_WANT_ALG_SHA_256
+#define USE_LIB_CRYPTO_SHA256
+typedef psa_hash_operation_t SHA256_CTX;
+static inline int
+SHA256_Init(SHA256_CTX *ctx)
+{
+    memset(ctx, 0, sizeof(SHA256_CTX));
+    return (PSA_SUCCESS == psa_hash_setup(ctx, PSA_ALG_SHA_256));
+}
+static inline int
+SHA256_Final(unsigned char *digest, SHA256_CTX *ctx)
+{
+    size_t n;    /* PSA_HASH_LENGTH(PSA_ALG_SHA_256) == 32 */
+    return (PSA_SUCCESS == psa_hash_finish(ctx, digest, 32, &n));
+}
+static inline int
+SHA256_Update(SHA256_CTX *ctx, const void *data, size_t length)
+{
+    return (PSA_SUCCESS == psa_hash_update(ctx, data, length));
+}
+#endif
+
+#ifdef PSA_WANT_ALG_SHA_512
+#define USE_LIB_CRYPTO_SHA512
+typedef psa_hash_operation_t SHA512_CTX;
+static inline int
+SHA512_Init(SHA512_CTX *ctx)
+{
+    memset(ctx, 0, sizeof(SHA512_CTX));
+    return (PSA_SUCCESS == psa_hash_setup(ctx, PSA_ALG_SHA_512));
+}
+static inline int
+SHA512_Final(unsigned char *digest, SHA512_CTX *ctx)
+{
+    size_t n;    /* PSA_HASH_LENGTH(PSA_ALG_SHA_512) == 64 */
+    return (PSA_SUCCESS == psa_hash_finish(ctx, digest, 64, &n));
+}
+static inline int
+SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
+{
+    return (PSA_SUCCESS == psa_hash_update(ctx, data, length));
+}
+#endif
+
+#else /* !MBEDTLS_USE_PSA_CRYPTO */
+
 #ifdef MBEDTLS_MD4_C
 #define USE_LIB_CRYPTO_MD4
 #include <mbedtls/md4.h>
@@ -320,6 +416,8 @@ SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
   #endif
 }
 #endif
+
+#endif /* !MBEDTLS_USE_PSA_CRYPTO */
 
 #elif defined(USE_WOLFSSL_CRYPTO)
 
@@ -912,8 +1010,34 @@ typedef SHA_CTX SHA1_CTX;  /*(naming consistency with other algos)*/
 /* message digest wrappers operating on single ptr, and on const_iovec */
 
 
+#if defined(USE_MBEDTLS_CRYPTO)
+#if defined(MBEDTLS_USE_PSA_CRYPTO)
+
+#define li_md_once(algo, alg)                                             \
+  static inline int                                                       \
+  algo##_once (unsigned char * const digest,                              \
+               const void * const data, const size_t n)                   \
+  {                                                                       \
+      size_t x;                                                           \
+      return PSA_SUCCESS                                                  \
+          == psa_hash_compute(alg,data,n,digest,PSA_HASH_LENGTH(alg),&x); \
+  }
+li_md_once(MD5,        PSA_ALG_MD5)
+li_md_once(SHA1,       PSA_ALG_SHA_1)
+li_md_once(SHA256,     PSA_ALG_SHA_256)
+li_md_once(SHA256_512, PSA_ALG_SHA_512_256)
+li_md_once(SHA512,     PSA_ALG_SHA_512)
+
+#endif
+#endif
+
+
 typedef void(*li_md_once_fn)(unsigned char *digest, const void *data, size_t n);
 
+#ifdef li_md_once
+#undef li_md_once
+#define li_md_once(algo)
+#else
 #define li_md_once(algo)                                            \
   static inline void                                                \
   algo##_once (unsigned char * const digest,                        \
@@ -924,6 +1048,7 @@ typedef void(*li_md_once_fn)(unsigned char *digest, const void *data, size_t n);
       algo##_Update(&ctx, data, n);                                 \
       algo##_Final(digest, &ctx);                                   \
   }
+#endif
 
 #ifndef LI_CONST_IOVEC
 #define LI_CONST_IOVEC

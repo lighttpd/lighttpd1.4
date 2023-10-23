@@ -41,8 +41,12 @@
 #undef USE_OPENSSL_CRYPTO
 #undef USE_GNUTLS_CRYPTO
 #undef USE_NSS_CRYPTO
+#if defined(MBEDTLS_USE_PSA_CRYPTO)
+#include <mbedtls/psa_util.h>
+#else
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
+#endif
 #endif
 #ifdef USE_WOLFSSL_CRYPTO
 #undef USE_OPENSSL_CRYPTO
@@ -219,10 +223,12 @@ static int li_rand_device_bytes (unsigned char *buf, int num)
 static int li_rand_inited;
 static unsigned short xsubi[3];
 #ifdef USE_MBEDTLS_CRYPTO
+#if !defined(MBEDTLS_USE_PSA_CRYPTO)
 #ifdef MBEDTLS_ENTROPY_C
 static mbedtls_entropy_context entropy;
 #ifdef MBEDTLS_CTR_DRBG_C
 static mbedtls_ctr_drbg_context ctr_drbg;
+#endif
 #endif
 #endif
 #endif
@@ -334,6 +340,11 @@ static void li_rand_init (void)
     RAND_seed(xsubi, (int)sizeof(xsubi));
   #endif
   #ifdef USE_MBEDTLS_CRYPTO
+  #if defined(MBEDTLS_USE_PSA_CRYPTO)
+    psa_status_t ps = psa_crypto_init();
+    if (ps != PSA_SUCCESS)
+        ck_bt_abort(__FILE__, __LINE__, "psa_crypto_init() failed");
+  #else
   #ifdef MBEDTLS_ENTROPY_C
     mbedtls_entropy_init(&entropy);
   #ifdef MBEDTLS_CTR_DRBG_C
@@ -343,6 +354,7 @@ static void li_rand_init (void)
                             (unsigned char *)xsubi, sizeof(xsubi));
     if (0 != rc) /*(not expecting built-in entropy function to fail)*/
         ck_bt_abort(__FILE__, __LINE__, "mbedtls_ctr_drbg_seed() failed");
+  #endif
   #endif
   #endif
   #endif
@@ -382,13 +394,28 @@ void li_rand_reseed (void)
   #endif
   #ifdef USE_MBEDTLS_CRYPTO
     if (li_rand_inited) {
+      #if defined(MBEDTLS_USE_PSA_CRYPTO)
+        mbedtls_psa_crypto_free();
+      #else
       #ifdef MBEDTLS_ENTROPY_C
       #ifdef MBEDTLS_CTR_DRBG_C
         mbedtls_ctr_drbg_free(&ctr_drbg);
       #endif
         mbedtls_entropy_free(&entropy);
       #endif
+      #endif
     }
+   #if defined(MBEDTLS_USE_PSA_CRYPTO) && defined(PSA_CRYPTO_DRIVER_TEST)
+    else {
+        /*(kludge to call psa_crypto_init() for sys-crypto-md.h from server.c)*/
+        /*(However, we prefer to defer RNG initialization, and the builtin hash
+         * functions do not require psa_crypto_init(), so skip unless hash func
+         * might use an accelerated crypto driver)*/
+        psa_status_t ps = psa_crypto_init();
+        if (ps != PSA_SUCCESS)
+            ck_bt_abort(__FILE__, __LINE__, "psa_crypto_init() failed");
+    }
+   #endif
   #endif
     if (li_rand_inited) li_rand_init();
 }
@@ -420,10 +447,17 @@ int li_rand_pseudo (void)
     if (i) return i; /*(cond to avoid compiler warning for code after return)*/
   #endif
   #ifdef USE_MBEDTLS_CRYPTO
+  #if defined(MBEDTLS_USE_PSA_CRYPTO)
+    int i;
+    if (0 == mbedtls_psa_get_random(MBEDTLS_PSA_RANDOM_STATE,
+                                    (unsigned char *)&i, sizeof(i)))
+        return i;
+  #else
   #ifdef MBEDTLS_CTR_DRBG_C
     int i;
     if (0 == mbedtls_ctr_drbg_random(&ctr_drbg, (unsigned char *)&i, sizeof(i)))
         return i;
+  #endif
   #endif
   #endif
   #ifdef USE_NSS_CRYPTO
@@ -466,8 +500,12 @@ void li_rand_pseudo_bytes (unsigned char *buf, int num)
     if (SECSuccess == PK11_GenerateRandom(buf, num)) return;
   #endif
   #ifdef USE_MBEDTLS_CRYPTO
+  #if defined(MBEDTLS_USE_PSA_CRYPTO)
+    if (0 == psa_generate_random(buf, (size_t)num)) return;
+  #else
   #ifdef MBEDTLS_CTR_DRBG_C
     if (0 == mbedtls_ctr_drbg_random(&ctr_drbg, buf, (size_t)num)) return;
+  #endif
   #endif
   #endif
   #ifdef USE_WOLFSSL_CRYPTO
@@ -516,11 +554,16 @@ int li_rand_bytes (unsigned char *buf, int num)
   #endif
   #ifdef USE_MBEDTLS_CRYPTO
   #ifdef MBEDTLS_ENTROPY_C
+  #if defined(MBEDTLS_USE_PSA_CRYPTO)
+    if (0 == psa_generate_random(buf, (size_t)num))
+        return 1;
+  #else
     /*(each call <= MBEDTLS_ENTROPY_BLOCK_SIZE; could implement loop here)*/
     if (num <= MBEDTLS_ENTROPY_BLOCK_SIZE
         && 0 == mbedtls_entropy_func(&entropy, buf, (size_t)num)) {
         return 1;
     }
+  #endif
   #endif
   #endif
     if (1 == li_rand_device_bytes(buf, num)) {
@@ -549,6 +592,9 @@ void li_rand_cleanup (void)
   #endif
   #endif
   #ifdef USE_MBEDTLS_CRYPTO
+  #if defined(MBEDTLS_USE_PSA_CRYPTO)
+    mbedtls_psa_crypto_free();
+  #else
   #ifdef MBEDTLS_ENTROPY_C
   #ifdef MBEDTLS_CTR_DRBG_C
     mbedtls_ctr_drbg_free(&ctr_drbg);
@@ -556,5 +602,7 @@ void li_rand_cleanup (void)
     mbedtls_entropy_free(&entropy);
   #endif
   #endif
+    li_rand_inited = 0;
+  #endif /* USE_MBEDTLS_CRYPTO */
     ck_memzero(xsubi, sizeof(xsubi));
 }
