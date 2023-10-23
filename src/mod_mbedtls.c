@@ -2037,6 +2037,9 @@ mod_mbedtls_ssl_write_err(connection *con, handler_ctx *hctx, int wr, size_t wr_
         break; /* try again later */
       case MBEDTLS_ERR_SSL_WANT_WRITE:
         con->is_writable = -1;
+       #if MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.00.0 */
+        hctx->pending_write = wr_len; /* partial write; save attempted wr_len */
+       #endif
         break; /* try again later */
       case MBEDTLS_ERR_SSL_CRYPTO_IN_PROGRESS:
       case MBEDTLS_ERR_SSL_ASYNC_IN_PROGRESS:
@@ -2053,8 +2056,8 @@ mod_mbedtls_ssl_write_err(connection *con, handler_ctx *hctx, int wr, size_t wr_
 
   #if MBEDTLS_VERSION_NUMBER < 0x03000000 /* mbedtls 3.00.0 */
     if (0 != hctx->ssl.out_left)  /* partial write; save attempted wr_len */
-  #endif
         hctx->pending_write = wr_len;
+  #endif
 
     return 0; /* try again later */
 }
