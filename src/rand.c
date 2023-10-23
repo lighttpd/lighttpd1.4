@@ -517,6 +517,7 @@ void li_rand_pseudo_bytes (unsigned char *buf, int num)
         buf[i] = li_rand_pseudo() & 0xFF;
 }
 
+#if 0 /*(unused)*/
 int li_rand_bytes (unsigned char *buf, int num)
 {
   #ifdef USE_GNUTLS_CRYPTO /* should use GNUTLS_RND_KEY for long-term keys */
@@ -576,6 +577,7 @@ int li_rand_bytes (unsigned char *buf, int num)
         return 0;
     }
 }
+#endif
 
 void li_rand_cleanup (void)
 {
