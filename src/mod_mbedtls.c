@@ -62,11 +62,15 @@
 #define MBEDTLS_ALLOW_PRIVATE_ACCESS
 #endif
 #endif
+#if defined(MBEDTLS_USE_PSA_CRYPTO)
+#include <mbedtls/psa_util.h>
+#else
 #include <mbedtls/ctr_drbg.h>
+#include <mbedtls/entropy.h>
+#endif
 #include <mbedtls/debug.h>
 #include <mbedtls/dhm.h>
 #include <mbedtls/error.h>
-#include <mbedtls/entropy.h>
 #include <mbedtls/oid.h>
 #include <mbedtls/pem.h>
 #include <mbedtls/ssl.h>
@@ -168,10 +172,12 @@ typedef struct {
     plugin_ssl_ctx *ssl_ctxs;
     plugin_config defaults;
     server *srv;
+  #if !defined(MBEDTLS_USE_PSA_CRYPTO)
     /* NIST counter-mode deterministic random byte generator */
     mbedtls_ctr_drbg_context ctr_drbg;
     /* entropy collection and state management */
     mbedtls_entropy_context entropy;
+  #endif
   #if defined(MBEDTLS_SSL_SESSION_TICKETS)
     mbedtls_ssl_ticket_context ticket_ctx;
     const char *ssl_stek_file;
@@ -407,6 +413,14 @@ static int mod_mbedtls_init_once_mbedtls (server *srv)
     if (ssl_is_init) return 1;
     ssl_is_init = 1;
 
+  #if defined(MBEDTLS_USE_PSA_CRYPTO)
+    psa_status_t ps = psa_crypto_init();
+    if (ps != PSA_SUCCESS) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "MTLS: %s: (-0x%04x)", "psa_crypto_init()", ps);
+        return 0;
+    }
+  #else
     plugin_data * const p = plugin_data_singleton;
     mbedtls_ctr_drbg_init(&p->ctr_drbg); /* init empty NSIT random num gen */
     mbedtls_entropy_init(&p->entropy);   /* init empty entropy collection struct
@@ -422,6 +436,7 @@ static int mod_mbedtls_init_once_mbedtls (server *srv)
              "Init of random number generator failed");
         return 0;
     }
+  #endif
 
     local_send_buffer = ck_malloc(LOCAL_SEND_BUFSIZE);
     return 1;
@@ -438,8 +453,12 @@ static void mod_mbedtls_free_mbedtls (void)
   #endif
 
     plugin_data * const p = plugin_data_singleton;
+  #if defined(MBEDTLS_USE_PSA_CRYPTO)
+    mbedtls_psa_crypto_free();
+  #else
     mbedtls_ctr_drbg_free(&p->ctr_drbg);
     mbedtls_entropy_free(&p->entropy);
+  #endif
   #if defined(MBEDTLS_SSL_SESSION_TICKETS)
     mbedtls_ssl_ticket_free(&p->ticket_ctx);
   #endif
@@ -977,11 +996,18 @@ mod_mbedtls_pk_parse_keyfile (mbedtls_pk_context *ctx, const char *fn, const cha
     if (NULL == data) return rc;
 
   #if MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.00.0 */
+   #if defined(MBEDTLS_USE_PSA_CRYPTO)
+    rc = mbedtls_pk_parse_key(ctx, (unsigned char *)data, (size_t)dlen+1,
+                              (const unsigned char *)pwd,
+                              pwd ? strlen(pwd) : 0,
+                              mbedtls_psa_get_random, MBEDTLS_PSA_RANDOM_STATE);
+   #else
     plugin_data * const p = plugin_data_singleton;
     rc = mbedtls_pk_parse_key(ctx, (unsigned char *)data, (size_t)dlen+1,
                               (const unsigned char *)pwd,
                               pwd ? strlen(pwd) : 0,
                               mbedtls_ctr_drbg_random, &p->ctr_drbg);
+   #endif
   #else
     rc = mbedtls_pk_parse_key(ctx, (unsigned char *)data, (size_t)dlen+1,
                               (const unsigned char *)pwd,
@@ -1024,9 +1050,14 @@ network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     }
 
   #if MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.00.0 */
+   #if defined(MBEDTLS_USE_PSA_CRYPTO)
+    rc = mbedtls_pk_check_pair(&ssl_pemfile_x509.pk, &ssl_pemfile_pkey,
+                               mbedtls_psa_get_random,MBEDTLS_PSA_RANDOM_STATE);
+   #else
     plugin_data * const p = plugin_data_singleton;
     rc = mbedtls_pk_check_pair(&ssl_pemfile_x509.pk, &ssl_pemfile_pkey,
                                mbedtls_ctr_drbg_random, &p->ctr_drbg);
+   #endif
   #else
     rc = mbedtls_pk_check_pair(&ssl_pemfile_x509.pk, &ssl_pemfile_pkey);
   #endif
@@ -1437,7 +1468,12 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     mbedtls_ssl_config_init(s->ssl_ctx);
 
     /* set the RNG in the ssl config context, using the default random func */
+  #if defined(MBEDTLS_USE_PSA_CRYPTO)
+    mbedtls_ssl_conf_rng(s->ssl_ctx,
+                         mbedtls_psa_get_random, MBEDTLS_PSA_RANDOM_STATE);
+  #else
     mbedtls_ssl_conf_rng(s->ssl_ctx, mbedtls_ctr_drbg_random, &p->ctr_drbg);
+  #endif
 
     /* mbedtls defaults to disable client renegotiation
      * mbedtls defaults to no record compression unless mbedtls is built
@@ -1527,9 +1563,17 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
   #if defined(MBEDTLS_SSL_SESSION_TICKETS)
     if (s->ssl_session_ticket            /*(.ticket_lifetime is private)*/
         && !*(unsigned char *)&p->ticket_ctx) { /*init once*/
+      #if defined(MBEDTLS_USE_PSA_CRYPTO)
+        rc = mbedtls_ssl_ticket_setup(&p->ticket_ctx,
+                                      mbedtls_psa_get_random,
+                                      MBEDTLS_PSA_RANDOM_STATE,
+                                      MBEDTLS_CIPHER_AES_256_GCM,
+                                      43200); /* ticket timeout: 12 hours */
+      #else
         rc = mbedtls_ssl_ticket_setup(&p->ticket_ctx, mbedtls_ctr_drbg_random,
                                       &p->ctr_drbg, MBEDTLS_CIPHER_AES_256_GCM,
                                       43200); /* ticket timeout: 12 hours */
+      #endif
         if (0 != rc) {
             elog(srv->errh,__FILE__,__LINE__,rc,"mbedtls_ssl_ticket_setup()");
             return -1;
