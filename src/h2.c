@@ -599,12 +599,14 @@ h2_recv_rst_stream (connection * const con, const uint8_t * const s, const uint3
         /* attempt to detect HTTP/2 rapid reset attack (CVE-2023-44487)
          * Send GOAWAY if 15 or more requests in recent batch of up to 32
          * requests have been cancelled by client sending RST_STREAM.
-         * Note: this can legitimately occur, but less likely in a couple secs.
+         * Note: this can legitimately occur, but is less likely for RST_STREAM
+         * in < 2 secs in which request was sent, repeated 15 times within
+         * the next 32 requests, w/ SETTINGS_MAX_CONCURRENT_STREAMS only 8.
          * Still, send GOAWAY NO_ERROR instead of sending ENHANCE_YOUR_CALM. */
         if (!h2c->sent_goaway && r->start_hp.tv_sec+2 > log_epoch_secs) {
             ++h2c->n_recv_rst_stream;
             uint8_t n_recv_rst_stream =
-              (h2c->n_recv_rst_stream >> 4) + (h2c->n_recv_rst_stream & 0x7f);
+              (h2c->n_recv_rst_stream >> 4) + (h2c->n_recv_rst_stream & 0xf);
             if (n_recv_rst_stream >= 15) {/*4 bits max is 15 for lower counter*/
                 log_error(NULL, __FILE__, __LINE__,
                   "h2: %s sent too many RST_STREAM too quickly",
