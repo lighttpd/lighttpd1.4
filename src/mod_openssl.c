@@ -82,6 +82,7 @@
 #include <openssl/ocsp.h>
 #endif
 #ifdef BORINGSSL_API_VERSION
+#include <openssl/hmac.h>
 /* BoringSSL purports to have some OCSP support */
 #undef OPENSSL_NO_OCSP
 #endif
