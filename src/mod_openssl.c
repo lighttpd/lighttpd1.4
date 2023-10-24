@@ -3003,11 +3003,12 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
             mod_openssl_merge_config(&p->defaults, cpv);
     }
 
-  #if OPENSSL_VERSION_NUMBER < 0x10101000L \
+  #if OPENSSL_VERSION_NUMBER < 0x30000000L \
+   && !defined(BORINGSSL_API_VERSION) \
    && !defined(LIBRESSL_VERSION_NUMBER)
     log_error(srv->errh, __FILE__, __LINE__, "SSL:"
       "openssl library version is outdated and has reached end-of-life.  "
-      "As of 1 Jan 2020, only openssl 1.1.1 and later continue to receive "
+      "As of 11 Sep 2023, only openssl 3.0.0 and later continue to receive "
       "security patches from openssl.org");
   #endif
 
