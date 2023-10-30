@@ -3,6 +3,34 @@
 NEWS
 ====
 
+- 1.4.73 - 2023-10-30
+  * [core] add .mkv to mimetype.assign builtin defaults
+  * [core] warn if out-of-range value for config short
+  * [mod_openssl] set default curves for ossl < 1.1.0
+  * [mod_h2] parse HEADERS flags sooner
+  * [mod_h2] check send window before defer frame rd
+  * [mod_h2] send GOAWAY to excessive request flood
+  * [mod_h2] h2_parse_headers_frame() adjust args
+  * [mod_h2] h2_recv_headers() parse trailers earlier
+  * [mod_h2] send GOAWAY to excessive request flood
+  * [mod_h2] discard new streams after GOAWAY sent
+  * [mod_h2] h2_discard_headers() to HPACK-decode hdrs
+  * [core] parse entire server.http-parseopts list
+  * [mod_wstunnel] Sec-WebSocket-Protocol only if req hdr
+  * [mod_h2] disable h2proto if mod_h2 was not found
+  * [core] omit dlopen trace for mod_h2, mod_deflate
+  * [mod_h2] defer input parsing if large output queue
+  * [mod_h2] defer frame handling if stream pend close
+  * [mod_h2] detect and log HTTP/2 rapid reset attack
+  * [core] honor MBEDTLS_USE_PSA_CRYPTO for hash,rand
+  * [mod_mbedtls] honor MBEDTLS_USE_PSA_CRYPTO for rand
+  * [core] comment out li_rand_bytes() (unused)
+  * [mod_mbedtls] handle mbedtls 3.x partial write
+  * [mod_h2] detect and log HTTP/2 rapid reset attack
+  * [mod_h2] detect and log HTTP/2 rapid reset attack
+  * [mod_openssl] warn if openssl version < 3.0.0
+  * [mod_openssl] include openssl/hmac.h for boringssl
+
 - 1.4.72 - 2023-10-06
   * [core] save config read from stdin across restart
   * [core] warn if daemonize w/o absolute config path
