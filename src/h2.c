@@ -2552,7 +2552,7 @@ h2_send_headers (request_st * const r, connection * const con)
 __attribute_cold__
 __attribute_noinline__
 static void
-h2_send_headers_block (request_st * const r, connection * const con, const char * const hdrs, const uint32_t hlen, uint32_t flags)
+h2_send_headers_block (request_st * const r, connection * const con, const char *hdrs, const uint32_t hlen, uint32_t flags)
 {
     unsigned short hoff[8192]; /* max num header lines + 3; 16k on stack */
     hoff[0] = 1;                         /* number of lines */
@@ -2564,11 +2564,17 @@ h2_send_headers_block (request_st * const r, connection * const con, const char 
         /* error if headers incomplete or too many header fields */
         log_error(r->conf.errh, __FILE__, __LINE__,
                   "oversized response-header");
+      #if 0 /*(recursive call might add additional 16k stack use)*/
+        h2_send_headers_block(r, con, CONST_STR_LEN(":status: 500\r\n\r\n"), flags);
+        return;
+      #else
         hoff[0] = 1;
         hoff[1] = 0;
+        hdrs = ":status: 500\r\n\r\n";
         if (http_header_parse_hoff(CONST_STR_LEN(":status: 500\r\n\r\n"),hoff)){
             /*(ignore for coverity; static string is successfully parsed)*/
         }
+      #endif
     }
 
     /*(h2_init_con() resized h2r->tmp_buf to 64k; shared with r->tmp_buf)*/
