@@ -2667,7 +2667,15 @@ h2_send_1xx (request_st * const r, connection * const con)
         const uint32_t klen = buffer_clen(&ds->key);
         const uint32_t vlen = buffer_clen(&ds->value);
         if (0 == klen || 0 == vlen) continue;
-        buffer_append_str2(b, CONST_STR_LEN("\r\n"), ds->key.ptr, klen);
+        /* HTTP/2 requires lowercase keys */
+        const char *k;
+        if (__builtin_expect( (ds->ext != HTTP_HEADER_OTHER), 1))
+            k = http_header_lc[ds->ext];
+        else {
+            buffer_copy_string_len_lc(r->tmp_buf, ds->key.ptr, klen);
+            k = r->tmp_buf->ptr;
+        }
+        buffer_append_str2(b, CONST_STR_LEN("\r\n"), k, klen);
         buffer_append_str2(b, CONST_STR_LEN(": "), ds->value.ptr, vlen);
     }
     buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
