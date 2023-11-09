@@ -63,9 +63,10 @@
  * - basic alphabetical sorting (in C locale) is done on server side
  *   in case client does not execute javascript
  *   (otherwise, response could be streamed, which is not done)
- *      (possible future dir-listing.* config option)
+ *   (disable server-side sorting with dir-listing.sort = "disable")
  * - reading entire directory into memory for sorting large directory
  *   can lead to large memory usage if many simultaneous requests occur
+ *   (disable server-side sorting with dir-listing.sort = "disable")
  */
 
 struct dirlist_cache {
@@ -76,6 +77,7 @@ struct dirlist_cache {
 typedef struct {
 	char dir_listing;
 	char json;
+	char sort;
 	char hide_dot_files;
 	char hide_readme_file;
 	char encode_readme;
@@ -126,6 +128,7 @@ typedef struct {
 	char *path_file;
 	int dfd; /*(dirfd() owned by (DIR *))*/
 	uint32_t name_max;
+	buffer *hb;
 	buffer *jb;
 	int jcomma;
 	int jfd;
@@ -175,8 +178,11 @@ static void mod_dirlisting_handler_ctx_free (handler_ctx *hctx) {
             free(ent[i]);
         free(ent);
     }
-    if (hctx->jb) {
-        chunk_buffer_release(hctx->jb);
+    if (hctx->jb || hctx->hb) {
+        if (hctx->jb)
+            chunk_buffer_release(hctx->jb);
+        else /* (hctx->hb) */
+            chunk_buffer_release(hctx->hb);
         if (-1 != hctx->jfd)
             close(hctx->jfd);
         if (hctx->jfn) {
@@ -354,6 +360,9 @@ static void mod_dirlisting_merge_config_cpv(plugin_config * const pconf, const c
         if (cpv->vtype == T_CONFIG_LOCAL)
             pconf->cache = cpv->v.v;
         break;
+      case 16:/* dir-listing.sort */
+        pconf->sort = (char)cpv->v.u;
+        break;
       default:/* should not happen */
         return;
     }
@@ -422,6 +431,9 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("dir-listing.cache"),
         T_CONFIG_ARRAY_KVANY,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("dir-listing.sort"),
+        T_CONFIG_BOOL,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
@@ -499,6 +511,8 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
                 }
                 cpv->vtype = T_CONFIG_LOCAL;
                 break;
+              case 16:/* dir-listing.sort */
+                break;
               default:/* should not happen */
                 break;
             }
@@ -516,6 +530,7 @@ SETDEFAULTS_FUNC(mod_dirlisting_set_defaults) {
     p->defaults.encode_readme = 1;
     p->defaults.encode_header = 1;
     p->defaults.auto_layout = 1;
+    p->defaults.sort = 1;
 
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
@@ -1290,6 +1305,14 @@ static int http_read_directory(handler_ctx * const p) {
 			continue;
 		}
 
+		if (p->hb) { /* html output **unsorted** */
+			if (isdir)
+				http_list_directory_dirname(p->hb, &ent, d_name);
+			else
+				http_list_directory_filename(p->hb, &ent, d_name, p);
+			continue;
+		}
+
 		dirls_list_t * const list = !isdir ? &p->files : &p->dirs;
 		if (!(list->used & (DIRLIST_BLOB_SIZE-1)))
 			ck_realloc_u32((void **)&list->ent, list->used,
@@ -1396,16 +1419,12 @@ static void mod_dirlisting_response (request_st * const r, handler_ctx * const h
     http_list_directory(r, hctx);
     http_list_directory_footer(r, hctx);
     mod_dirlisting_content_type(r, hctx->conf.encoding);
-
-    r->resp_body_finished = 1;
 }
 
 
-static void mod_dirlisting_json_append (request_st * const r, handler_ctx * const hctx, const int fin) {
-    buffer * const jb = hctx->jb;
-    if (fin)
-        buffer_append_string_len(jb, CONST_STR_LEN("]}"));
-    else if (buffer_clen(jb) < 16384-1024)
+static void mod_dirlisting_stream_append (request_st * const r, handler_ctx * const hctx, const int fin) {
+    buffer * const jb = hctx->jb ? hctx->jb : hctx->hb;
+    if (!fin && buffer_clen(jb) < 16384-1024)
         return; /* aggregate bunches of entries, even if streaming response */
 
     if (hctx->jfn) {
@@ -1423,9 +1442,7 @@ static void mod_dirlisting_json_append (request_st * const r, handler_ctx * cons
          * files, it is expected that only very large directories will spill to
          * temporary files, and even then most responses will be less than 1 MB.
          * The cache path can be different from server.upload-dirs.
-         * Note: since responses are not expected to be large, no effort is
-         * currently made here to handle FDEVENT_STREAM_RESPONSE_BUFMIN and to
-         * defer reading more from directory while data is sent to client */
+         */
     }
 
     http_chunk_append_buffer(r, jb); /* clears jb */
@@ -1438,9 +1455,11 @@ static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data *
 __attribute_noinline__
 static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const hctx);
 __attribute_noinline__
-static void mod_dirlisting_cache_json_init (request_st * const r, handler_ctx * const hctx);
+static void mod_dirlisting_cache_stream_add_footer (request_st * const r, handler_ctx * const hctx);
 __attribute_noinline__
-static void mod_dirlisting_cache_json (request_st * const r, handler_ctx * const hctx);
+static void mod_dirlisting_cache_stream_init (request_st * const r, handler_ctx * const hctx);
+__attribute_noinline__
+static void mod_dirlisting_cache_stream (request_st * const r, handler_ctx * const hctx);
 
 
 URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
@@ -1488,7 +1507,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	    && 0 == memcmp(r->uri.query.ptr, CONST_STR_LEN("json")-1)) {
 	  #if 0
 		/* streaming response not set here for mod_deflate (which
-		 * currently does not compress incomlete streaming responses),
+		 * currently does not compress incomplete streaming responses),
 		 * since json response is generally highly compressible.
 		 * Admin should enable streaming response in lighttpd.conf,
 		 * if desired. */
@@ -1545,19 +1564,29 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	++p->processing;
 
 	if (p->conf.json) {
-		hctx->jfd = -1;
 		hctx->jb = chunk_buffer_acquire();
 		buffer_append_string_len(hctx->jb, CONST_STR_LEN("{["));
-		if (p->conf.cache)
-			mod_dirlisting_cache_json_init(r, hctx);
 		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
 		                         CONST_STR_LEN("Content-Type"),
 		                         CONST_STR_LEN("application/json"));
+	}
+	else {
+		if (p->conf.auto_layout)
+			http_dirlist_auto_layout_early_hints(r, p);
+		if (!p->conf.sort) {
+			mod_dirlisting_content_type(r, hctx->conf.encoding);
+			http_list_directory_header(r, hctx);
+			hctx->hb = chunk_buffer_acquire();
+		}
+	}
+
+	if (hctx->jb || hctx->hb) {
+		hctx->jfd = -1;
+		if (p->conf.cache)
+			mod_dirlisting_cache_stream_init(r, hctx);
 		r->http_status = 200;
 		r->resp_body_started = 1;
 	}
-	else if (p->conf.auto_layout)
-		http_dirlist_auto_layout_early_hints(r, p);
 
 	r->plugin_ctx[p->id] = hctx;
 	r->handler_module = p->self;
@@ -1565,6 +1594,10 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 
 	if (rc == HANDLER_WAIT_FOR_EVENT && p->conf.auto_layout
 	    && (p->conf.external_js || p->conf.external_css)
+              /*(skip if might stream unsorted since r->http_status and
+               * Content-Type would have to be saved/restored for response,
+               * as well as any partial response body of html dir header)*/
+	    && 0 == r->resp_body_started
 	      /* (paranoia: do not send 103 for HTTP/1.x; only for HTTP/2 +)
 	       *  https://www.rfc-editor.org/rfc/rfc8297.html#section-3 */
 	    && r->http_version >= HTTP_VERSION_2) {
@@ -1579,6 +1612,10 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 
 
 SUBREQUEST_FUNC(mod_dirlisting_subrequest) {
+    /* Note: since responses are not expected to be large, no effort is
+     * currently made here to handle FDEVENT_STREAM_RESPONSE_BUFMIN and to
+     * defer reading more from directory while data is sent to client */
+
     plugin_data * const p = p_d;
     handler_ctx * const hctx = r->plugin_ctx[p->id];
     if (NULL == hctx) return HANDLER_GO_ON; /*(should not happen)*/
@@ -1586,22 +1623,26 @@ SUBREQUEST_FUNC(mod_dirlisting_subrequest) {
     handler_t rc = http_read_directory(hctx);
     switch (rc) {
       case HANDLER_FINISHED:
-        if (hctx->jb) { /* (hctx->conf.json) */
-            mod_dirlisting_json_append(r, hctx, 1);
-            r->resp_body_finished = 1;
+        if (hctx->jb || hctx->hb) { /* (hctx->conf.json || !hctx->conf.sort) */
+            if (hctx->jb)
+                buffer_append_string_len(hctx->jb, CONST_STR_LEN("]}"));
+            mod_dirlisting_stream_append(r, hctx, 1);
+            if (hctx->hb)
+                mod_dirlisting_cache_stream_add_footer(r, hctx);
             if (hctx->jfn) /* (also (hctx->conf.cache) */
-                mod_dirlisting_cache_json(r, hctx);
+                mod_dirlisting_cache_stream(r, hctx);
         }
         else {
             mod_dirlisting_response(r, hctx);
             if (hctx->conf.cache)
                 mod_dirlisting_cache_add(r, hctx);
         }
+        r->resp_body_finished = 1;
         mod_dirlisting_reset(r, p); /*(release resources, including hctx)*/
         break;
       case HANDLER_WAIT_FOR_EVENT: /*(used here to mean 'yield')*/
-        if (hctx->jb)   /* (hctx->conf.json) */
-            mod_dirlisting_json_append(r, hctx, 0);
+        if (hctx->jb || hctx->hb)  /* (hctx->conf.json || !hctx->conf.sort) */
+            mod_dirlisting_stream_append(r, hctx, 0);
         joblist_append(r->con);
         break;
       default:
@@ -1791,7 +1832,53 @@ static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const 
 
 
 __attribute_noinline__
-static void mod_dirlisting_cache_json_init (request_st * const r, handler_ctx * const hctx) {
+static void mod_dirlisting_cache_stream_append_cq (request_st * const r, handler_ctx * const hctx) {
+    if (chunkqueue_is_empty(&r->write_queue) || hctx->jfd == -1) return;
+
+    /* append HTML in r->write_queue to cache file
+     * (but must abort cache file if streaming response and sending HTTP/1.1
+     *  chunked response due to http_list_directory_footer() writing directly
+     *  to r->write_queue, which will be written in HTTP chunked format) */
+    if (r->resp_send_chunked
+        || !mod_dirlisting_write_cq(hctx->jfd, &r->write_queue, r->conf.errh)) {
+        close(hctx->jfd);
+        hctx->jfd = -1;
+        unlink(hctx->jfn);
+        free(hctx->jfn);
+        hctx->jfn = NULL;
+    }
+}
+
+
+static void mod_dirlisting_cache_stream_add_header (request_st * const r, handler_ctx * const hctx) {
+    mod_dirlisting_cache_stream_append_cq(r, hctx);
+}
+
+
+__attribute_noinline__
+static void mod_dirlisting_cache_stream_add_footer (request_st * const r, handler_ctx * const hctx) {
+    /* save and restore r->write_queue around adding footer and updating cache
+     * (due to http_list_directory_footer() appending to r->write_queue)*/
+    chunkqueue * const cq = &r->write_queue;
+    chunkqueue in;
+    memset(&in, 0, sizeof(in));
+    chunkqueue_append_chunkqueue(&in, cq);
+    cq->bytes_in  -= in.bytes_in;
+    cq->bytes_out -= in.bytes_in;
+
+    http_list_directory_footer(r, hctx);
+    mod_dirlisting_cache_stream_append_cq(r, hctx);
+
+    off_t len = chunkqueue_length(cq);
+    chunkqueue_append_chunkqueue(&in, cq);
+    cq->bytes_in  -= len;
+    cq->bytes_out -= len;
+    chunkqueue_append_chunkqueue(cq, &in);
+}
+
+
+__attribute_noinline__
+static void mod_dirlisting_cache_stream_init (request_st * const r, handler_ctx * const hctx) {
   #ifndef PATH_MAX
   #define PATH_MAX 4096
   #endif
@@ -1801,18 +1888,23 @@ static void mod_dirlisting_cache_json_init (request_st * const r, handler_ctx * 
     if (!stat_cache_path_isdir(tb)
         && 0 != mkdir_recursive(tb->ptr, buffer_clen(hctx->conf.cache->path)))
         return;
-    buffer_append_string_len(tb, CONST_STR_LEN("dirlist.json.XXXXXX"));
+    buffer_append_string_len(tb, hctx->jb
+                                  ? "dirlist.json.XXXXXX"
+                                  : "dirlist.html.XXXXXX",
+                             sizeof("dirlist.json.XXXXXX")-1);
     const int fd = fdevent_mkostemp(tb->ptr, 0);
     if (fd < 0) return;
     hctx->jfn_len = buffer_clen(tb);
     hctx->jfd = fd;
     hctx->jfn = ck_malloc(hctx->jfn_len+1);
     memcpy(hctx->jfn, tb->ptr, hctx->jfn_len+1); /*(include '\0')*/
+    if (hctx->hb)
+        mod_dirlisting_cache_stream_add_header(r, hctx);
 }
 
 
 __attribute_noinline__
-static void mod_dirlisting_cache_json (request_st * const r, handler_ctx * const hctx) {
+static void mod_dirlisting_cache_stream (request_st * const r, handler_ctx * const hctx) {
   #ifndef PATH_MAX
   #define PATH_MAX 4096
   #endif
