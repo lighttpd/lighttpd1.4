@@ -131,6 +131,8 @@ typedef struct {
 	int jfd;
 	char *jfn;
 	uint32_t jfn_len;
+	int use_xattr;
+	const array *mimetypes;
 	plugin_config conf;
   #ifdef _WIN32
 	HANDLE hFind;
@@ -978,6 +980,76 @@ static void http_list_directory_header(request_st * const r, const handler_ctx *
 	chunkqueue_append_buffer_commit(cq);
 }
 
+static void http_list_directory_mtime(buffer * const out, const dirls_entry_t * const ent) {
+	struct tm tm;
+  #ifdef __MINGW32__
+	buffer_append_strftime(out, "%Y-%b-%d %H:%M:%S", localtime64_r(&ent->mtime, &tm));
+  #else
+	buffer_append_strftime(out, "%Y-%b-%d %T", localtime64_r(&ent->mtime, &tm));
+  #endif
+}
+
+static void http_list_directory_ent(buffer * const out, const dirls_entry_t * const ent, const char * const name) {
+	buffer_append_string_encoded(out, name, ent->namelen, ENCODING_REL_URI_PART);
+	buffer_append_string_len(out, CONST_STR_LEN("/\">"));
+	buffer_append_string_encoded(out, name, ent->namelen, ENCODING_MINIMAL_XML);
+	buffer_append_string_len(out, CONST_STR_LEN("</a>/</td><td class=\"m\">"));
+
+	http_list_directory_mtime(out, ent);
+}
+
+__attribute_noinline__
+static void http_list_directory_dirname(buffer * const out, const dirls_entry_t * const ent, const char * const name) {
+	buffer_append_string_len(out, CONST_STR_LEN("<tr class=\"d\"><td class=\"n\"><a href=\""));
+
+	http_list_directory_ent(out, ent, name);
+
+	buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n"));
+}
+
+static void http_list_directory_filename(buffer * const out, const dirls_entry_t * const ent, const char * const name, handler_ctx * const hctx) {
+	buffer_append_string_len(out, CONST_STR_LEN("<tr><td class=\"n\"><a href=\""));
+
+	http_list_directory_ent(out, ent, name);
+
+	const buffer *content_type;
+  #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) /*(pass full path)*/
+	content_type = NULL;
+	if (hctx->use_xattr) {
+		memcpy(hctx->path_file, name, ent->namelen + 1);
+		content_type = stat_cache_mimetype_by_xattr(hctx->path);
+	}
+	if (NULL == content_type)
+  #endif
+		content_type = stat_cache_mimetype_by_ext(hctx->mimetypes, name, ent->namelen);
+	if (NULL == content_type) {
+		static const buffer octet_stream =
+		  { "application/octet-stream",
+		    sizeof("application/octet-stream"), 0 };
+		content_type = &octet_stream;
+	}
+
+	char sizebuf[sizeof("999.9K")];
+	size_t buflen =
+	  http_list_directory_sizefmt(sizebuf, sizeof(sizebuf), ent->size);
+	struct const_iovec iov[] = {
+	  { CONST_STR_LEN("</td><td class=\"s\">") }
+	 ,{ sizebuf, buflen }
+	 ,{ CONST_STR_LEN("</td><td class=\"t\">") }
+	 ,{ BUF_PTR_LEN(content_type) }
+	 ,{ CONST_STR_LEN("</td></tr>\n") }
+	};
+	buffer_append_iovec(out, iov, sizeof(iov)/sizeof(*iov));
+}
+
+static void http_list_directory_dir(buffer * const out, const dirls_entry_t * const ent) {
+	http_list_directory_dirname(out, ent, DIRLIST_ENT_NAME(ent));
+}
+
+static void http_list_directory_file(buffer * const out, const dirls_entry_t * const ent, handler_ctx * const hctx) {
+	http_list_directory_filename(out, ent, DIRLIST_ENT_NAME(ent), hctx);
+}
+
 static void http_list_directory_footer(request_st * const r, const handler_ctx * const p) {
 
 	chunkqueue * const cq = &r->write_queue;
@@ -1019,6 +1091,38 @@ static void http_list_directory_footer(request_st * const r, const handler_ctx *
 		));
 		chunkqueue_append_buffer_commit(cq);
 	}
+}
+
+__attribute_noinline__
+static void http_list_directory_jsonname(buffer * const out, const dirls_entry_t * const ent, const char * const name, handler_ctx * const hctx, const int isdir) {
+	if (__builtin_expect( (hctx->jcomma), 1))/*(to avoid excess comma)*/
+		buffer_append_string_len(out, CONST_STR_LEN(",{\"name\":\""));
+	else {
+		hctx->jcomma = 1;
+		buffer_append_string_len(out, CONST_STR_LEN( "{\"name\":\""));
+	}
+	buffer_append_bs_escaped_json(out, name, ent->namelen);
+
+	const char *t;
+	size_t tlen;
+	if (!isdir) {
+		t =           "\",\"type\":\"file\",\"size\":";
+		tlen = sizeof("\",\"type\":\"file\",\"size\":")-1;
+	}
+	else {
+		t =           "\",\"type\":\"dir\",\"size\":";
+		tlen = sizeof("\",\"type\":\"dir\",\"size\":")-1;
+	}
+	char sstr[LI_ITOSTRING_LENGTH];
+	char mstr[LI_ITOSTRING_LENGTH];
+	struct const_iovec iov[] = {
+	  { t, tlen }
+	 ,{ sstr, li_itostrn(sstr, sizeof(sstr), ent->size) }
+	 ,{ CONST_STR_LEN(",\"mtime\":") }
+	 ,{ mstr, li_itostrn(mstr, sizeof(mstr), ent->mtime) }
+	 ,{ CONST_STR_LEN("}") }
+	};
+	buffer_append_iovec(out, iov, sizeof(iov)/sizeof(*iov));
 }
 
 static int http_open_directory(request_st * const r, handler_ctx * const hctx) {
@@ -1088,8 +1192,6 @@ static int http_open_directory(request_st * const r, handler_ctx * const hctx) {
 }
 
 static int http_read_directory(handler_ctx * const p) {
-	const int hide_dotfiles = p->conf.hide_dot_files;
-	const uint32_t name_max = p->name_max;
   #ifdef _WIN32
 	int count = 0;
 	if (INVALID_HANDLE_VALUE == p->hFind) {
@@ -1118,7 +1220,7 @@ static int http_read_directory(handler_ctx * const p) {
 		const uint32_t dsz = (uint32_t) _D_EXACT_NAMLEN(dent);
 	  #endif
 		if (d_name[0] == '.') {
-			if (hide_dotfiles)
+			if (p->conf.hide_dot_files)
 				continue;
 			if (d_name[1] == '\0')
 				continue;
@@ -1145,7 +1247,7 @@ static int http_read_directory(handler_ctx * const p) {
 		/* NOTE: the manual says, d_name is never more than NAME_MAX
 		 *       so this should actually not be a buffer-overflow-risk
 		 */
-		if (dsz > name_max) continue;
+		if (dsz > p->name_max) continue;
 	  #ifdef __COVERITY__
 		/* For some reason, Coverity overlooks the strlen() performed
 		 * a few lines above and thinks memcpy() below might access
@@ -1165,81 +1267,37 @@ static int http_read_directory(handler_ctx * const p) {
 	  #endif
 	  #endif
 
-		if (p->jb) { /* json output */
-			if (__builtin_expect( (p->jcomma), 1))/*(to avoid excess comma)*/
-				buffer_append_string_len(p->jb, CONST_STR_LEN(",{\"name\":\""));
-			else {
-				p->jcomma = 1;
-				buffer_append_string_len(p->jb, CONST_STR_LEN( "{\"name\":\""));
-			}
-			buffer_append_bs_escaped_json(p->jb, d_name, dsz);
+		/* const dirls_entry_t ent = { namelen, mtime, size } */
+	  #ifdef _WIN32 /*(convert 100ns ticks since 1 Jan 1601 to unix time_t)*/
+		/*(future: preserve FILETIME here and use Windows fn to format time
+		 * below instead of localtime_r() and buffer_append_strftime())*/
+		const dirls_entry_t ent = {
+		  dsz,
+		  (unix_time64_t)
+		    ((((int64_t)p->ffd.ftLastWriteTime.dwHighDateTime << 32)
+		              | p->ffd.ftLastWriteTime.dwLowDateTime)
+		    / 10000000 - 11644473600LL),
+		  ((int64_t)p->ffd.nFileSizeHigh << 32) | p->ffd.nFileSizeLow
+		};
+		const int isdir = (p->ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+	  #else
+		const dirls_entry_t ent = { dsz, TIME64_CAST(st.st_mtime), st.st_size };
+		const int isdir = S_ISDIR(st.st_mode);
+	  #endif
 
-			const char *t;
-			size_t tlen;
-		  #ifndef _WIN32
-			if (!S_ISDIR(st.st_mode))
-		  #else
-			if (!(p->ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-		  #endif
-			{
-				t =           "\",\"type\":\"file\",\"size\":";
-				tlen = sizeof("\",\"type\":\"file\",\"size\":")-1;
-			}
-			else {
-				t =           "\",\"type\":\"dir\",\"size\":";
-				tlen = sizeof("\",\"type\":\"dir\",\"size\":")-1;
-			}
-			char sstr[LI_ITOSTRING_LENGTH];
-			char mstr[LI_ITOSTRING_LENGTH];
-			struct const_iovec iov[] = {
-			  { t, tlen }
-			 #ifndef _WIN32
-			 ,{ sstr, li_itostrn(sstr, sizeof(sstr), st.st_size) }
-			 ,{ CONST_STR_LEN(",\"mtime\":") }
-			 ,{ mstr, li_itostrn(mstr, sizeof(mstr), TIME64_CAST(st.st_mtime)) }
-			 #else
-			 ,{ sstr, li_itostrn(sstr, sizeof(sstr),
-			                     ((int64_t)p->ffd.nFileSizeHigh << 32)
-			                             | p->ffd.nFileSizeLow) }
-			 ,{ CONST_STR_LEN(",\"mtime\":") }
-			 ,{ mstr, li_itostrn(mstr, sizeof(mstr),
-			            ((((int64_t)p->ffd.ftLastWriteTime.dwHighDateTime << 32)
-			                      | p->ffd.ftLastWriteTime.dwLowDateTime)
-			            / 10000000 - 11644473600LL)) }
-			 #endif
-			 ,{ CONST_STR_LEN("}") }
-			};
-			buffer_append_iovec(p->jb, iov, sizeof(iov)/sizeof(*iov));
+		if (p->jb) { /* json output */
+			http_list_directory_jsonname(p->jb, &ent, d_name, p, isdir);
 			continue;
 		}
 
-	  #ifndef _WIN32
-		dirls_list_t * const list = !S_ISDIR(st.st_mode) ? &p->files : &p->dirs;
-	  #else  /* _WIN32 */
-		dirls_list_t * const list =
-		  !(p->ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-		    ? &p->files
-		    : &p->dirs;
-	  #endif /* _WIN32 */
+		dirls_list_t * const list = !isdir ? &p->files : &p->dirs;
 		if (!(list->used & (DIRLIST_BLOB_SIZE-1)))
 			ck_realloc_u32((void **)&list->ent, list->used,
 			               DIRLIST_BLOB_SIZE, sizeof(*list->ent));
 		dirls_entry_t * const tmp = list->ent[list->used++] =
-		  (dirls_entry_t*) ck_malloc(sizeof(dirls_entry_t) + 1 + dsz);
-	  #ifdef _WIN32 /*(convert 100ns ticks since 1 Jan 1601 to unix time_t)*/
-		/*(future: preserve FILETIME here and use Windows fn to format time
-		 * below instead of localtime_r() and buffer_append_strftime())*/
-		tmp->mtime = (time_t)
-                  ((((int64_t)p->ffd.ftLastWriteTime.dwHighDateTime << 32)
-		            | p->ffd.ftLastWriteTime.dwLowDateTime)
-                  / 10000000 - 11644473600LL);
-		tmp->size = ((int64_t)p->ffd.nFileSizeHigh << 32) | p->ffd.nFileSizeLow;
-	  #else
-		tmp->mtime = st.st_mtime;
-		tmp->size  = st.st_size;
-	  #endif
-		tmp->namelen = dsz;
-		memcpy(DIRLIST_ENT_NAME(tmp), d_name, dsz + 1);
+		  (dirls_entry_t*) ck_malloc(sizeof(dirls_entry_t) + 1 + ent.namelen);
+		*tmp = ent; /* copy struct */
+		memcpy(DIRLIST_ENT_NAME(tmp), d_name, ent.namelen + 1);
 	}
   #ifdef _WIN32
 	  while (++count < DIRLIST_BATCH && FindNextFileW(p->hFind, &p->ffd) != 0);
@@ -1267,9 +1325,6 @@ static void http_list_directory(request_st * const r, handler_ctx * const hctx) 
 	if (dirs->used) http_dirls_sort(dirs->ent, dirs->used);
 	if (files->used) http_dirls_sort(files->ent, files->used);
 
-	char sizebuf[sizeof("999.9K")];
-	struct tm tm;
-
 	/* generate large directory listings into tempfiles
 	 * (estimate approx 200-256 bytes of HTML per item; could be up to ~512) */
 	chunkqueue * const cq = &r->write_queue;
@@ -1283,20 +1338,7 @@ static void http_list_directory(request_st * const r, handler_ctx * const hctx) 
 	/* directories */
 	dirls_entry_t ** const dirs_ent = dirs->ent;
 	for (uint32_t i = 0, used = dirs->used; i < used; ++i) {
-		dirls_entry_t * const tmp = dirs_ent[i];
-
-		buffer_append_string_len(out, CONST_STR_LEN("<tr class=\"d\"><td class=\"n\"><a href=\""));
-		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);
-		buffer_append_string_len(out, CONST_STR_LEN("/\">"));
-		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_MINIMAL_XML);
-		buffer_append_string_len(out, CONST_STR_LEN("</a>/</td><td class=\"m\">"));
-	  #ifdef __MINGW32__
-		buffer_append_strftime(out, "%Y-%b-%d %H:%M:%S", localtime64_r(&tmp->mtime, &tm));
-	  #else
-		buffer_append_strftime(out, "%Y-%b-%d %T", localtime64_r(&tmp->mtime, &tm));
-	  #endif
-		buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n"));
-
+		http_list_directory_dir(out, dirs_ent[i]);
 		if (buffer_string_space(out) < 256) {
 			if (out == tb) {
 				if (0 != chunkqueue_append_mem_to_tempfile(cq,
@@ -1309,48 +1351,9 @@ static void http_list_directory(request_st * const r, handler_ctx * const hctx) 
 	}
 
 	/* files */
-	const array * const mimetypes = r->conf.mimetypes;
 	dirls_entry_t ** const files_ent = files->ent;
 	for (uint32_t i = 0, used = files->used; i < used; ++i) {
-		dirls_entry_t * const tmp = files_ent[i];
-		const buffer *content_type;
-	  #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) /*(pass full path)*/
-		content_type = NULL;
-		if (r->conf.use_xattr) {
-			memcpy(hctx->path_file, DIRLIST_ENT_NAME(tmp), tmp->namelen + 1);
-			content_type = stat_cache_mimetype_by_xattr(hctx->path);
-		}
-		if (NULL == content_type)
-	  #endif
-			content_type = stat_cache_mimetype_by_ext(mimetypes, DIRLIST_ENT_NAME(tmp), tmp->namelen);
-		if (NULL == content_type) {
-			static const buffer octet_stream =
-			  { "application/octet-stream",
-			    sizeof("application/octet-stream"), 0 };
-			content_type = &octet_stream;
-		}
-
-		buffer_append_string_len(out, CONST_STR_LEN("<tr><td class=\"n\"><a href=\""));
-		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_REL_URI_PART);
-		buffer_append_string_len(out, CONST_STR_LEN("\">"));
-		buffer_append_string_encoded(out, DIRLIST_ENT_NAME(tmp), tmp->namelen, ENCODING_MINIMAL_XML);
-		buffer_append_string_len(out, CONST_STR_LEN("</a></td><td class=\"m\">"));
-	  #ifdef __MINGW32__
-		buffer_append_strftime(out, "%Y-%b-%d %H:%M:%S", localtime64_r(&tmp->mtime, &tm));
-	  #else
-		buffer_append_strftime(out, "%Y-%b-%d %T", localtime64_r(&tmp->mtime, &tm));
-	  #endif
-		size_t buflen =
-		  http_list_directory_sizefmt(sizebuf, sizeof(sizebuf), tmp->size);
-		struct const_iovec iov[] = {
-		  { CONST_STR_LEN("</td><td class=\"s\">") }
-		 ,{ sizebuf, buflen }
-		 ,{ CONST_STR_LEN("</td><td class=\"t\">") }
-		 ,{ BUF_PTR_LEN(content_type) }
-		 ,{ CONST_STR_LEN("</td></tr>\n") }
-		};
-		buffer_append_iovec(out, iov, sizeof(iov)/sizeof(*iov));
-
+		http_list_directory_file(out, files_ent[i], hctx);
 		if (buffer_string_space(out) < 256) {
 			if (out == tb) {
 				if (0 != chunkqueue_append_mem_to_tempfile(cq,
@@ -1517,6 +1520,8 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	}
 
 	handler_ctx * const hctx = mod_dirlisting_handler_ctx_init(p);
+	hctx->use_xattr = r->conf.use_xattr;
+	hctx->mimetypes = r->conf.mimetypes;
 
 	/* future: might implement a queue to limit max number of dirlisting
 	 * requests being serviced in parallel (increasing disk I/O), and if
