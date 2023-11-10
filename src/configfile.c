@@ -802,8 +802,10 @@ static int config_insert_srvconf(server *srv) {
                     srv->srvconf.network_backend = cpv->v.b;
                 break;
               case 6: /* server.chroot */
+               #ifdef HAVE_CHROOT
                 if (!buffer_is_blank(cpv->v.b))
                     srv->srvconf.changeroot = cpv->v.b;
+               #endif
                 break;
               case 7: /* server.username */
                 if (!buffer_is_blank(cpv->v.b))

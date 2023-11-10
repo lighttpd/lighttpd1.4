@@ -465,6 +465,11 @@ server_epoch_secs (server * const srv, unix_time64_t mono_ts_delta)
         log_error(srv->errh, __FILE__, __LINE__,
           "warning: clock jumped %lld secs",
           (long long)((int64_t)new_ts_adj - (int64_t)cur_ts));
+
+        /* graceful restart not available if chroot'ed */
+        if (srv->srvconf.changeroot)
+            return new_ts;
+
         int delta =                             /*(30 mins default)*/
           config_feature_int(srv, "server.clock-jump-restart", 1800);
         if (delta && (new_ts_adj > cur_ts
