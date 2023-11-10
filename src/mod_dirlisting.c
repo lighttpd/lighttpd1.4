@@ -1612,9 +1612,13 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 
 
 SUBREQUEST_FUNC(mod_dirlisting_subrequest) {
-    /* Note: since responses are not expected to be large, no effort is
-     * currently made here to handle FDEVENT_STREAM_RESPONSE_BUFMIN and to
-     * defer reading more from directory while data is sent to client */
+    if ((r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE_BUFMIN)
+        && chunkqueue_length(&r->write_queue) > 65536 - 4096
+        && !r->con->is_writable)
+        /* defer reading more from directory while data is sent to client
+         * (must check !r->con->is_writable or else r may not be rescheduled to
+         *  run and produce more output since r->write_queue sent out later) */
+        return HANDLER_WAIT_FOR_EVENT;
 
     plugin_data * const p = p_d;
     handler_ctx * const hctx = r->plugin_ctx[p->id];
