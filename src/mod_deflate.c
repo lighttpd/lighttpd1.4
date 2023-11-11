@@ -847,6 +847,26 @@ SETDEFAULTS_FUNC(mod_deflate_set_defaults) {
     p->defaults.max_loadavg = 0.0;
     p->defaults.sync_flush = 0;
 
+    static const uint16_t available_encodings[] = {
+      #ifdef USE_ZSTD
+        HTTP_ACCEPT_ENCODING_ZSTD,
+      #endif
+      #ifdef USE_BROTLI
+        HTTP_ACCEPT_ENCODING_BR,
+      #endif
+      #ifdef USE_ZLIB
+        HTTP_ACCEPT_ENCODING_GZIP,
+        HTTP_ACCEPT_ENCODING_X_GZIP,
+        HTTP_ACCEPT_ENCODING_DEFLATE,
+      #endif
+      #ifdef USE_BZ2LIB
+        HTTP_ACCEPT_ENCODING_BZIP2,
+        HTTP_ACCEPT_ENCODING_X_BZIP2,
+      #endif
+        0
+    };
+    *(const uint16_t **)&p->defaults.allowed_encodings = available_encodings;
+
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
         const config_plugin_value_t *cpv = p->cvlist + p->cvlist->v.u2[0];
