@@ -657,14 +657,14 @@ static uint16_t * mod_deflate_encodings_to_flags(const array *encodings) {
       #ifdef USE_BROTLI
         x[i++] = HTTP_ACCEPT_ENCODING_BR;
       #endif
-      #ifdef USE_BZ2LIB
-        x[i++] = HTTP_ACCEPT_ENCODING_BZIP2
-               | HTTP_ACCEPT_ENCODING_X_BZIP2;
-      #endif
       #ifdef USE_ZLIB
         x[i++] = HTTP_ACCEPT_ENCODING_GZIP
                | HTTP_ACCEPT_ENCODING_X_GZIP
                | HTTP_ACCEPT_ENCODING_DEFLATE;
+      #endif
+      #ifdef USE_BZ2LIB
+        x[i++] = HTTP_ACCEPT_ENCODING_BZIP2
+               | HTTP_ACCEPT_ENCODING_X_BZIP2;
       #endif
         x[i] = 0; /* end of list */
         return x;
@@ -1853,15 +1853,6 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
 		return HTTP_ACCEPT_ENCODING_BR;
 	} else
 #endif
-#ifdef USE_BZ2LIB
-	if (accept_encoding & HTTP_ACCEPT_ENCODING_BZIP2) {
-		*label = "bzip2";
-		return HTTP_ACCEPT_ENCODING_BZIP2;
-	} else if (accept_encoding & HTTP_ACCEPT_ENCODING_X_BZIP2) {
-		*label = "x-bzip2";
-		return HTTP_ACCEPT_ENCODING_BZIP2;
-	} else
-#endif
 #ifdef USE_ZLIB
 	if (accept_encoding & HTTP_ACCEPT_ENCODING_GZIP) {
 		*label = "gzip";
@@ -1872,6 +1863,15 @@ static int mod_deflate_choose_encoding (const char *value, plugin_data *p, const
 	} else if (accept_encoding & HTTP_ACCEPT_ENCODING_DEFLATE) {
 		*label = "deflate";
 		return HTTP_ACCEPT_ENCODING_DEFLATE;
+	} else
+#endif
+#ifdef USE_BZ2LIB
+	if (accept_encoding & HTTP_ACCEPT_ENCODING_BZIP2) {
+		*label = "bzip2";
+		return HTTP_ACCEPT_ENCODING_BZIP2;
+	} else if (accept_encoding & HTTP_ACCEPT_ENCODING_X_BZIP2) {
+		*label = "x-bzip2";
+		return HTTP_ACCEPT_ENCODING_BZIP2;
 	} else
 #endif
 	if (0 == accept_encoding) {
