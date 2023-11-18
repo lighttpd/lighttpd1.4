@@ -1567,6 +1567,7 @@ static void config_print_config(const data_unset *d, buffer * const b, int depth
     }
     else {
         if (dc->cond != CONFIG_COND_ELSE) {
+            buffer_append_string(b, "if ");
             buffer_append_string(b, dc->comp_key);
             buffer_append_string(b, " ");
         }
@@ -2222,6 +2223,18 @@ static int config_tokenizer(tokenizer_t *t, buffer *token) {
                         return TK_INCLUDE_SHELL;
                     else if (0 == strcmp(token->ptr, "global"))
                         return TK_GLOBAL;
+                    else if (0 == strcmp(token->ptr, "if")) {
+                        /* ignore 'if' immediately prior to condition
+                         * ('if <condition>' or 'else if <condition>') */
+                        int j = i;
+                        while (s[j] == ' ' || s[j] == '\t') ++j;
+                        if (s[j] == '$')
+                            continue;
+                    }
+                    else if (0 == strcmp(token->ptr, "elif")
+                             || 0 == strcmp(token->ptr, "elsif")
+                             || 0 == strcmp(token->ptr, "elseif"))
+                        return TK_ELSE;
                     else if (0 == strcmp(token->ptr, "else"))
                         return TK_ELSE;
                     else
