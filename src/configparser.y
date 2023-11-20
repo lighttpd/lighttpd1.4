@@ -290,7 +290,7 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
       dc->comp_key = dc->key.ptr + comp_offset;
 
       if (COMP_UNSET == dc->comp) {
-          fprintf(stderr, "error comp_key %s", dc->comp_key);
+          fprintf(stderr, "error comp_key %s\n", dc->comp_key);
           ctx->ok = 0;
       }
       else if (COMP_HTTP_LANGUAGE == dc->comp) {
@@ -747,7 +747,7 @@ cond_else(A) ::= context_else LCURLY metalines RCURLY. {
 context ::= DOLLAR SRVVARNAME(B) LBRACKET stringop(C) RBRACKET cond(E) expression(D). {
 
   if (ctx->ok && D->type != TYPE_STRING) {
-    fprintf(stderr, "rvalue must be string");
+    fprintf(stderr, "rvalue must be string\n");
     ctx->ok = 0;
   }
 
@@ -797,7 +797,7 @@ stringop(A) ::= expression(B). {
       A = buffer_init();
       buffer_append_int(A, ((data_integer *)B)->value);
     } else {
-      fprintf(stderr, "operand must be string");
+      fprintf(stderr, "operand must be string\n");
       ctx->ok = 0;
     }
   }
