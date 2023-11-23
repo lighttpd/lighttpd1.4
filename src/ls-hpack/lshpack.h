@@ -219,13 +219,19 @@ lshpack_dec_set_max_capacity (struct lshpack_dec *, unsigned);
  * These structures are not very complicated.
  */
 
-#ifdef _WIN32
-#include "../compat/_WIN32/sys/queue.h"
-#else
+#ifdef __has_include
+#if __has_include(<sys/queue.h>)
 #include <sys/queue.h>
 #endif
+#endif
 
-#ifdef __OpenBSD__
+#ifndef SIMPLEQ_FOREACH
+#include "../compat/sys/queue.h"
+#endif
+
+/* OpenBSD and older MacOSX might not define STAILQ,
+ * but ls-hpack usage could use SIMPLEQ as alternative */
+#ifndef STAILQ_FOREACH
 #define STAILQ_HEAD             SIMPLEQ_HEAD
 #define STAILQ_ENTRY            SIMPLEQ_ENTRY
 #define STAILQ_INIT             SIMPLEQ_INIT
