@@ -1021,10 +1021,10 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             break;
           case HTTP_HEADER_UPGRADE:
             /*(technically, should also verify Connection: upgrade)*/
-            /*(flag only for mod_proxy and mod_cgi (for now))*/
-            if (opts->backend != BACKEND_PROXY && opts->backend != BACKEND_CGI)
-                continue;
-            if (r->http_version >= HTTP_VERSION_2 && !r->h2_connect_ext)
+            /* likely broken behavior if backend thinks connection is being
+             * upgraded but client does not receive Upgrade, but if policy
+             * disallowed Upgrade, strip out Upgrade response header */
+            if (!opts->upgrade || r->http_status != 101)
                 continue;
             break;
           case HTTP_HEADER_CONNECTION:
@@ -1235,6 +1235,31 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
     }
 
     if (NULL == r->handler_module) {
+        return HANDLER_FINISHED;
+    }
+
+    if (!opts->authorizer && light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) {
+        /*(already checked in http_response_process_headers())*/
+        /*if (opts->upgrade && r->http_status == 101)*/
+        {
+            /* 101 Switching Protocols; transition to transparent proxy */
+            opts->upgrade = 2;
+            if (r->h2_connect_ext) {
+                r->http_status = 200; /* OK (response status for CONNECT) */
+                http_header_response_unset(r, HTTP_HEADER_UPGRADE,
+                                           CONST_STR_LEN("Upgrade"));
+                http_header_response_unset(r, HTTP_HEADER_OTHER,
+                                         CONST_STR_LEN("Sec-WebSocket-Accept"));
+            }
+            http_response_upgrade_read_body_unknown(r);
+        }
+    }
+    else if (__builtin_expect( (r->h2_connect_ext != 0), 0)
+             && r->http_status < 300) {
+        /*(not handling other 1xx intermediate responses here; not expected)*/
+        http_response_body_clear(r, 0);
+        r->handler_module = NULL;
+        r->http_status = 405; /* Method Not Allowed */
         return HANDLER_FINISHED;
     }
 

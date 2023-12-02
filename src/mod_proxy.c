@@ -125,6 +125,7 @@ static void mod_proxy_merge_config_cpv(plugin_config * const pconf, const config
       case 5: /* proxy.header */
         /*if (cpv->vtype == T_CONFIG_LOCAL)*//*always true here for this param*/
         pconf->header = *(http_header_remap_opts *)cpv->v.v; /*(copies struct)*/
+        pconf->gw.upgrade = pconf->header.upgrade;
         break;
       case 6: /* proxy.replace-http-host */
         pconf->replace_http_host = cpv->v.u;
@@ -933,10 +934,8 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			te = &ds->value; /*("trailers")*/
 			break;
 		case HTTP_HEADER_UPGRADE:
-			if (hctx->conf.header.force_http10
-			    || (r->http_version != HTTP_VERSION_1_1 && !r->h2_connect_ext))
-				continue;
-			if (!hctx->conf.header.upgrade) continue;
+			/*(already unset in gw_check_extension if not allowed)*/
+			if (hctx->conf.header.force_http10) continue;
 			if (!buffer_is_blank(&ds->value)) upgrade = &ds->value;
 			break;
 		case HTTP_HEADER_CONNECTION:
@@ -1056,38 +1055,9 @@ static handler_t proxy_response_headers(request_st * const r, struct http_respon
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
     http_header_remap_opts * const remap_hdrs = &hctx->conf.header;
 
-    if (light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) {
-        if (remap_hdrs->upgrade && r->http_status == 101) {
-            /* 101 Switching Protocols; transition to transparent proxy */
-            if (r->h2_connect_ext) {
-                r->http_status = 200; /* OK (response status for CONNECT) */
-                http_header_response_unset(r, HTTP_HEADER_UPGRADE,
-                                           CONST_STR_LEN("Upgrade"));
-                http_header_response_unset(r, HTTP_HEADER_OTHER,
-                                         CONST_STR_LEN("Sec-WebSocket-Accept"));
-            }
-            gw_set_transparent(&hctx->gw);
-            http_response_upgrade_read_body_unknown(r);
-        }
-        else {
-            light_bclr(r->resp_htags, HTTP_HEADER_UPGRADE);
-          #if 0
-            /* preserve prior questionable behavior; likely broken behavior
-             * anyway if backend thinks connection is being upgraded but client
-             * does not receive Connection: upgrade */
-            http_header_response_unset(r, HTTP_HEADER_UPGRADE,
-                                       CONST_STR_LEN("Upgrade"))
-          #endif
-        }
-    }
-    else if (__builtin_expect( (r->h2_connect_ext != 0), 0)
-             && r->http_status < 300) {
-        /*(not handling other 1xx intermediate responses here; not expected)*/
-        http_response_body_clear(r, 0);
-        r->handler_module = NULL;
-        r->http_status = 405; /* Method Not Allowed */
-        return HANDLER_FINISHED;
-    }
+    /*(see gw_response_headers_upgrade())*/
+    if (opts->upgrade == 2)
+        gw_set_transparent(&hctx->gw);
 
     /* rewrite paths, if needed */
 
@@ -1136,8 +1106,6 @@ static handler_t mod_proxy_check_extension(request_st * const r, void *p_d) {
 
 		hctx->conf = p->conf; /*(copies struct)*/
 		hctx->conf.header.http_host = r->http_host;
-		hctx->conf.header.upgrade  &=
-                  (r->http_version == HTTP_VERSION_1_1 || r->h2_connect_ext);
 		/* mod_proxy currently sends all backend requests as http.
 		 * https-remap is a flag since it might not be needed if backend
 		 * honors Forwarded or X-Forwarded-Proto headers, e.g. by using

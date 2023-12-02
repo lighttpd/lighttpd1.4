@@ -221,11 +221,38 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
                         BUF_PTR_LEN(&r->physical.basedir));
     }
 
-    const buffer * const m = http_method_buf(r->http_method);
-    rc |= cb(vdata, CONST_STR_LEN("REQUEST_METHOD"), BUF_PTR_LEN(m));
+    if (!r->h2_connect_ext) {
+        const buffer * const m = http_method_buf(r->http_method);
+        rc |= cb(vdata, CONST_STR_LEN("REQUEST_METHOD"), BUF_PTR_LEN(m));
 
-    const buffer * const v = http_version_buf(r->http_version);
-    rc |= cb(vdata, CONST_STR_LEN("SERVER_PROTOCOL"), BUF_PTR_LEN(v));
+        const buffer * const v = http_version_buf(r->http_version);
+        rc |= cb(vdata, CONST_STR_LEN("SERVER_PROTOCOL"), BUF_PTR_LEN(v));
+    }
+    else {
+        /*(SERVER_PROTOCOL=HTTP/1.1 instead of HTTP/2.0)*/
+        rc |= cb(vdata, CONST_STR_LEN("REQUEST_METHOD"),
+                        CONST_STR_LEN("GET"));
+        rc |= cb(vdata, CONST_STR_LEN("SERVER_PROTOCOL"),
+                        CONST_STR_LEN("HTTP/1.1"));
+        /* https://datatracker.ietf.org/doc/html/rfc6455#section-4.1
+         * 7. The request MUST include a header field with the name
+         *    |Sec-WebSocket-Key|.  The value of this header field MUST be a
+         *    nonce consisting of a randomly selected 16-byte value that has
+         *    been base64-encoded (see Section 4 of [RFC4648]).  The nonce
+         *    MUST be selected randomly for each connection.
+         * Note: Sec-WebSocket-Key is not used in RFC8441;
+         *       include Sec-WebSocket-Key for HTTP/1.1 compatibility;
+         *       !!not random!! base64-encoded "0000000000000000" */
+        if (!http_header_request_get(r, HTTP_HEADER_OTHER,
+                                     CONST_STR_LEN("Sec-WebSocket-Key")))
+            rc |= cb(vdata, CONST_STR_LEN("HTTP_SEC_WEBSOCKET_KEY"),
+                            CONST_STR_LEN("MDAwMDAwMDAwMDAwMDAwMA=="));
+        /*(Upgrade and Connection should not exist for HTTP/2 request)*/
+        rc |= cb(vdata, CONST_STR_LEN("HTTP_UPGRADE"),
+                        CONST_STR_LEN("websocket"));
+        rc |= cb(vdata, CONST_STR_LEN("HTTP_CONNECTION"),
+                        CONST_STR_LEN("upgrade"));
+    }
 
     if (r->conf.server_tag) {
         s = r->conf.server_tag->ptr;

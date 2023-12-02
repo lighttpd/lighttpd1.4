@@ -214,11 +214,13 @@ static handler_t fcgi_stdin_append(handler_ctx *hctx) {
 		/*(hctx->wb_reqlen already includes reqbody_length)*/
 	}
 
-	if (hctx->wb.bytes_in == hctx->wb_reqlen) {
+	if (hctx->wb.bytes_in == hctx->wb_reqlen && !hctx->opts.upgrade) {
 		/* terminate STDIN */
-		/* (future: must defer ending FCGI_STDIN
-		 *  if might later upgrade protocols
-		 *  and then have more data to send) */
+		/* (defer ending FCGI_STDIN if might later upgrade protocols
+		 *  and then have more data to send (hctx->opts.upgrade))
+		 * (upgrade should not be enabled in lighttpd.conf for FastCGI
+		 *  backends such as fcgiwrap which wait for end of FCGI_STDIN
+		 *  before starting to process the request) (better: fcgi-cgi)*/
 		fcgi_header(&(header), FCGI_STDIN, request_id, 0, 0);
 		chunkqueue_append_mem(&hctx->wb, (const char *)&header, sizeof(header));
 		hctx->wb_reqlen += (int)sizeof(header);
@@ -472,6 +474,32 @@ static handler_t fcgi_recv_parse(request_st * const r, struct http_response_opts
     return fcgi_recv_parse_loop(r, hctx);
 }
 
+static handler_t fcgi_response_headers(request_st * const r, struct http_response_opts_t *opts) {
+    /* response headers just completed */
+    handler_ctx *hctx = (handler_ctx *)opts->pdata;
+    UNUSED(r);
+
+    /*(see gw_response_headers_upgrade())*/
+    switch (opts->upgrade) {
+      default:
+      case 0:
+        break;
+      case 1:
+        /* (If this were done in gw_response_headers_upgrade()
+         *  if hctx->stdin_append were set and (opts->upgrade == 1),
+         *  then fcgi_response_headers() would not be needed) */
+        opts->upgrade = 0;
+        if (hctx->wb.bytes_in == hctx->wb_reqlen)
+            fcgi_stdin_append(hctx); /* send end FCGI_STDIN */
+        break;
+      case 2:
+        gw_set_transparent(hctx);
+        break;
+    }
+
+    return HANDLER_GO_ON;
+}
+
 static handler_t fcgi_check_extension(request_st * const r, void *p_d, int uri_path_handler) {
 	plugin_data *p = p_d;
 	handler_t rc;
@@ -488,6 +516,7 @@ static handler_t fcgi_check_extension(request_st * const r, void *p_d, int uri_p
 		handler_ctx *hctx = r->plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_FASTCGI;
 		hctx->opts.parse = fcgi_recv_parse;
+		hctx->opts.headers = fcgi_response_headers;
 		hctx->opts.pdata = hctx;   /*(skip +255 for potential padding)*/
 		hctx->opts.max_per_read = sizeof(FCGI_Header)+FCGI_MAX_LENGTH+1;
 		hctx->stdin_append = fcgi_stdin_append;

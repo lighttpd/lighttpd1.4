@@ -44,6 +44,7 @@ typedef struct http_response_opts_t {
   int authorizer; /* bool *//*(maybe overloaded w/ response streaming flags)*/
   uint8_t simple_accum; /* bool */
   uint8_t local_redir; /* 0,1,2 */
+  uint8_t upgrade; /* 0,1,2 */
   uint8_t xsendfile_allow; /* bool */
   const array *xsendfile_docroot;
   void *pdata;

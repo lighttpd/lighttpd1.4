@@ -1352,6 +1352,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
      ,{ CONST_STR_LEN("read-timeout"),
         T_CONFIG_INT,
         T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("upgrade"),
+        T_CONFIG_BOOL,
+        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -1562,6 +1565,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     break;
                   case 25:/* read-timeout */
                     host->read_timeout = cpv->v.u;
+                    break;
+                  case 26:/* upgrade */
+                    host->upgrade = (0 != cpv->v.u);
                     break;
                   default:
                     break;
@@ -2553,6 +2559,23 @@ static handler_t gw_process_fdevent(gw_handler_ctx * const hctx, request_st * co
     return HANDLER_GO_ON;
 }
 
+static handler_t gw_response_headers_upgrade(request_st * const r, struct http_response_opts_t *opts) {
+    /* response headers just completed */
+    UNUSED(r);
+
+    /* modules setting custom func for hctx->opts.headers should duplicate
+     * steps performed here to support upgrade. */
+
+    /* check if http-header-glue.c:http_response_parse_headers() detected
+     * Upgrade in response headers received from backend */
+    /* gw_handler_ctx must be first member of structure in opts->pdata)
+     * if calling module extends its handler context (hctx) */
+    if (opts->upgrade == 2)
+        gw_set_transparent((gw_handler_ctx *)opts->pdata);
+
+    return HANDLER_GO_ON;
+}
+
 handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int uri_path_handler, size_t hctx_sz) {
   #if 0 /*(caller must handle)*/
     if (NULL != r->handler_module) return HANDLER_GO_ON;
@@ -2722,6 +2745,24 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
         }
     }
 
+    /*(combine host upgrade setting with that of mod_proxy, mod_wstunnel)*/
+    p->conf.upgrade |= host->upgrade;
+
+    if (__builtin_expect( (r->h2_connect_ext != 0), 0)) {
+        if (!p->conf.upgrade && gw_mode != GW_AUTHORIZER) {
+            r->http_status = 405; /* Method Not Allowed */
+            return HANDLER_FINISHED;
+        }
+    }
+    else if (!light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE))
+        p->conf.upgrade = 0;
+    else if (!p->conf.upgrade || r->http_version != HTTP_VERSION_1_1) {
+        p->conf.upgrade = 0;
+        if (gw_mode != GW_AUTHORIZER)
+            http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+                                      CONST_STR_LEN("Upgrade"));
+    }
+
     if (!hctx) hctx = handler_ctx_init(hctx_sz);
 
     hctx->ev               = r->con->srv->ev;
@@ -2745,7 +2786,16 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
     hctx->conf.balance     = p->conf.balance;
     hctx->conf.proto       = p->conf.proto;
     hctx->conf.debug       = p->conf.debug;
+    /*hctx->conf.upgrade     = p->conf.upgrade;*//*(use hctx->opts.upgrade)*/
 
+    if (p->conf.upgrade) {
+        hctx->opts.upgrade = p->conf.upgrade;
+        hctx->opts.pdata   = hctx;
+        hctx->opts.headers = gw_response_headers_upgrade;
+        /* if a module using gw_backend does not support upgrade, then upon
+         * return from gw_check_extension(), set hctx->opts.upgrade = 0 and also
+         * HANDLER_FINISHED r->http_status = 405 if (r->h2_connect_ext != 0) */
+    }
     hctx->opts.max_per_read =
       !(r->conf.stream_response_body /*(if not streaming response body)*/
         & (FDEVENT_STREAM_RESPONSE|FDEVENT_STREAM_RESPONSE_BUFMIN))

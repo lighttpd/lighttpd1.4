@@ -497,6 +497,7 @@ static handler_t wstunnel_handler_setup (request_st * const r, plugin_data * con
 
     hctx->gw.opts.backend     = BACKEND_PROXY; /*(act proxy-like)*/
     hctx->gw.opts.pdata       = hctx;
+    hctx->gw.opts.headers     = 0; /*(should not be necessary to unset)*/
     hctx->gw.opts.parse       = wstunnel_recv_parse;
     hctx->gw.stdin_append     = wstunnel_stdin_append;
     hctx->gw.create_env       = wstunnel_create_env;
@@ -587,6 +588,7 @@ static handler_t mod_wstunnel_check_extension(request_st * const r, void *p_d) {
 
     mod_wstunnel_patch_config(r, p);
     if (NULL == p->conf.gw.exts) return HANDLER_GO_ON;
+    p->conf.gw.upgrade = 1;
 
     rc = gw_check_extension(r, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
     return (HANDLER_GO_ON == rc && r->handler_module == p->self)
