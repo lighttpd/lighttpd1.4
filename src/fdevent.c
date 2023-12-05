@@ -26,6 +26,7 @@ static int use_sock_nonblock;
 void fdevent_socket_nb_cloexec_init (void)
 {
       #ifdef SOCK_CLOEXEC
+	if (use_sock_cloexec) return; /* init once (if successful) */
 	/* Test if SOCK_CLOEXEC is supported by kernel.
 	 * Linux kernels < 2.6.27 might return EINVAL if SOCK_CLOEXEC used
 	 * https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=529929
