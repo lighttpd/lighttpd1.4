@@ -1793,7 +1793,7 @@ lighty_track_feature "auth-crypt" "" \
   'test "$found_crypt" != no'
 
 lighty_track_feature "network-ipv6" "" \
-  'test "$ac_cv_ipv6_support" != no'
+  'test "$ipv6" != false'
 
 lighty_track_feature "large-files" "" \
   'test "$ENABLE_LFS" = yes'
