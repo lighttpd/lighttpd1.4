@@ -534,11 +534,10 @@ http_response_static_errdoc (request_st * const r)
     /* build default error-page */
     buffer * const b = chunkqueue_append_buffer_open(&r->write_queue);
     buffer_copy_string_len(b, CONST_STR_LEN(
-      "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
-      "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
-      "         \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
-      "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n"
+      "<!DOCTYPE html>\n"
+      "<html lang=\"en\">\n"
       " <head>\n"
+      "  <meta charset=\"UTF-8\" />\n"
       "  <title>"));
     http_status_append(b, r->http_status);
     buffer_append_string_len(b, CONST_STR_LEN(
