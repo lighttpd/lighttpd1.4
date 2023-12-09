@@ -2143,9 +2143,9 @@ h2_send_goaway_graceful (connection * const con)
 {
     request_st * const h2r = &con->request;
     if (h2r->state == CON_STATE_WRITE) {
-        h2_send_goaway(con, H2_E_NO_ERROR);
-        if (0 == con->hx->rused && chunkqueue_is_empty(con->write_queue)) {
-            connection_set_state(h2r, CON_STATE_RESPONSE_END);
+        h2con * const h2c = (h2con *)con->hx;
+        if (!h2c->sent_goaway) {
+            h2_send_goaway(con, H2_E_NO_ERROR);
             return 1;
         }
     }
