@@ -37,13 +37,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __linux__        /* uname() */
-#include <sys/utsname.h>
-#endif
-#ifdef __FreeBSD__
-#include <sys/sysctl.h> /* sysctlbyname() */
-#endif
-
 /*(not needed)*/
 /* correction; needed for:
  *   SSL_load_client_CA_file()
@@ -631,6 +624,108 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
         }
     }
 }
+
+
+#ifdef SSL_OP_ENABLE_KTLS /* openssl 3.0.0 */
+
+#ifdef __linux__
+#include <sys/utsname.h>/* uname() */
+#include "sys-unistd.h" /* read() close() getuid() */
+__attribute_cold__
+static int
+mod_tls_linux_has_ktls (void)
+{
+    /* file in special proc filesystem returns 0 size to stat(),
+     * so unable to use fdevent_load_file() */
+    static const char file[] = "/proc/sys/net/ipv4/tcp_available_ulp";
+    char buf[1024];
+    int fd = fdevent_open_cloexec(file, 1, O_RDONLY, 0);
+    if (-1 == fd) return -1; /*(/proc not mounted?)*/
+    ssize_t rd = read(fd, buf, sizeof(buf)-1);
+    close(fd);
+    if (-1 == rd) return -1;
+    int has_ktls = 0;
+    if (rd > 0) {
+        buf[rd] = '\0';
+        char *p = buf;
+        has_ktls =
+          (0 == strncmp(p, "tls", 3) ? (p+=3)
+           : (p = strstr(p, " tls")) ? (p+=4) : NULL)
+          && (*p == ' ' || *p == '\n' || *p == '\0');
+    }
+    return has_ktls; /* false if kernel tls module not loaded */
+}
+
+__attribute_cold__
+static int
+mod_tls_linux_modprobe_tls (void)
+{
+    if (0 == getuid()) {
+          char *argv[3];
+          *(const char **)&argv[0] = "/usr/sbin/modprobe";
+          *(const char **)&argv[1] = "tls";
+          *(const char **)&argv[2] = NULL;
+          pid_t pid = /*(send input and output to /dev/null)*/
+            fdevent_fork_execve(argv[0], argv, NULL, -1, -1, STDOUT_FILENO, -1);
+          if (pid > 0)
+            fdevent_waitpid(pid, NULL, 0);
+          return mod_tls_linux_has_ktls();
+    }
+    return 0;
+}
+#endif /* __linux__ */
+
+#ifdef __FreeBSD__
+#include <sys/sysctl.h> /* sysctlbyname() */
+#endif
+
+__attribute_cold__
+static int
+mod_tls_check_kernel_ktls (void)
+{
+    int has_ktls = 0;
+
+   #ifdef __linux__
+    struct utsname uts;
+    if (0 == uname(&uts)) {
+        /* check two or more digit linux major kernel ver or >= kernel 4.13 */
+        /* (avoid #include <stdio.h> for scanf("%d.%d.%d"); limit stdio.h use)*/
+        const char * const v = uts.release;
+        int rv = v[1] != '.' || v[0]-'0' > 4
+              || (v[0]-'0' == 4 && v[3] != '.' /*(last 4.x.x was 4.20.x)*/
+                  && (v[2]-'0' > 1 || (v[2]-'0' == 1 && v[3]-'0' >= 3)));
+        if (rv && 0 == (rv = mod_tls_linux_has_ktls()))
+            rv = mod_tls_linux_modprobe_tls();
+        has_ktls = rv;
+    }
+   #endif
+   #ifdef __FreeBSD__
+    size_t ktls_sz = sizeof(has_ktls);
+    if (0 != sysctlbyname("kern.ipc.tls.enable",
+                          &has_ktls, &ktls_sz, NULL, 0)) {
+      #if 0 /*(not present on kernels < FreeBSD 13 unless backported)*/
+        log_perror(srv->errh, __FILE__, __LINE__,
+          "sysctl(\"kern.ipc.tls.enable\")");
+      #endif
+        has_ktls = -1;
+    }
+   #endif
+
+    /* has_ktls = 1:enabled; 0:disabled; -1:unable to determine */
+    return has_ktls;
+}
+
+__attribute_cold__
+static void
+mod_openssl_check_ktls (void)
+{
+    int rv = mod_tls_check_kernel_ktls();
+
+    /* disable ktls if ktls not available or if unable to determine */
+    ktls_enable = (rv > 0);
+}
+
+#endif /* SSL_OP_ENABLE_KTLS */
 
 
 /* use memory from openssl secure heap for temporary buffers, returned storage
@@ -3014,27 +3109,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
   #endif
 
   #ifdef SSL_OP_ENABLE_KTLS /* openssl 3.0.0 */
-   #ifdef __linux__
-    struct utsname uts;
-    if (0 == uname(&uts)) {
-      /* check two or more digit linux major kernel version or >= kernel 4.17 */
-      /* (avoid #include <stdio.h> for scanf("%d.%d.%d"); limit stdio.h use) */
-      const char * const v = uts.release;
-      ktls_enable = v[1] != '.' || v[0]-'0' > 4
-                 || (v[0]-'0' == 4 && v[3] != '.' /*(last 4.x.x was 4.20.x)*/
-                     && (v[2]-'0' > 1 || (v[2]-'0' == 1 && v[3]-'0' >= 7)));
-    }
-   #endif
-   #ifdef __FreeBSD__
-    size_t ktls_sz = sizeof(ktls_enable);
-    if (0 != sysctlbyname("kern.ipc.tls.enable",
-                          &ktls_enable, &ktls_sz, NULL, 0)) {
-      #if 0 /*(not present on kernels < FreeBSD 13 unless backported)*/
-        log_perror(srv->errh, __FILE__, __LINE__,
-          "sysctl(\"kern.ipc.tls.enable\")");
-      #endif
-    }
-   #endif
+    mod_openssl_check_ktls();
   #endif
 
     return mod_openssl_set_defaults_sockets(srv, p);
