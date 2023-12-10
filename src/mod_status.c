@@ -276,11 +276,10 @@ static handler_t mod_status_handle_server_status_html(server *srv, request_st * 
 	memset(cstates, 0, sizeof(cstates));
 
 	buffer_copy_string_len(b, CONST_STR_LEN(
-				 "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
-				 "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
-				 "         \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
-				 "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n"
+				 "<!DOCTYPE html>\n"
+				 "<html lang=\"en\">\n"
 				 " <head>\n"
+				 "  <meta charset=\"UTF-8\" />\n"
 				 "  <title>Status</title>\n"
 
 				   "  <style type=\"text/css\">\n"
@@ -743,11 +742,10 @@ static handler_t mod_status_handle_server_config(request_st * const r) {
 	 * but this routine is not expected to be under high load)*/
 
 	buffer_append_string_len(b, CONST_STR_LEN(
-			   "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n"
-			   "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n"
-			   "         \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n"
-			   "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\">\n"
+			   "<!DOCTYPE html>\n"
+			   "<html lang=\"en\">\n"
 			   " <head>\n"
+			   "  <meta charset=\"UTF-8\" />\n"
 			   "  <title>Status</title>\n"
 			   " </head>\n"
 			   " <body>\n"));
