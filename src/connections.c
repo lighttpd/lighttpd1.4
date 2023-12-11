@@ -899,6 +899,15 @@ connection_graceful_shutdown_maint (server * const srv)
             connection_set_state_error(r, CON_STATE_ERROR);
             changed = 1;
         }
+        else if (r->reqbody_length == -2
+                 && !(r->conf.stream_request_body
+                      & FDEVENT_STREAM_REQUEST_TCP_FIN)) {
+            /* For requests in transparent proxy mode, trigger behavior as if
+             * TCP FIN received from client, as tunnels (e.g. websockets) are
+             * otherwise opaque */
+            r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_TCP_FIN;
+            changed = 1;
+        }
 
         if (graceful_expire) {
             connection_set_state_error(r, CON_STATE_ERROR);

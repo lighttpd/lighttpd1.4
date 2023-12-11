@@ -2142,14 +2142,33 @@ static int
 h2_send_goaway_graceful (connection * const con)
 {
     request_st * const h2r = &con->request;
+    int changed = 0;
     if (h2r->state == CON_STATE_WRITE) {
         h2con * const h2c = (h2con *)con->hx;
         if (!h2c->sent_goaway) {
             h2_send_goaway(con, H2_E_NO_ERROR);
-            return 1;
+            changed = 1;
         }
+      #if 0
+        /* XXX: (disabled for now)
+         * well-behaved clients should close websocket streams after GOAWAY
+         * (might enable this if that turns out not to be the case) */
+
+        /* For streams in transparent proxy mode, trigger behavior as if
+         * TCP FIN received from client, as tunnels (e.g. websockets) are
+         * otherwise opaque */
+        for (uint32_t i = 0; i < h2c->rused; ++i) {
+            request_st * const r = h2c->r[i];
+            if (r->reqbody_length != -2)
+                continue;
+            if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_TCP_FIN)
+                continue;
+            r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_TCP_FIN;
+            changed = 1;
+        }
+      #endif
     }
-    return 0;
+    return changed;
 }
 
 

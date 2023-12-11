@@ -1852,6 +1852,7 @@ void gw_set_transparent(gw_handler_ctx *hctx) {
             /*(error, but not critical)*/
         }
     }
+    hctx->host->tcp_fin_propagate = 1; /*(force setting enabled for host)*/
     hctx->wb_reqlen = -1;
     gw_set_state(hctx, GW_STATE_WRITE);
 }
@@ -1955,7 +1956,8 @@ static void gw_conditional_tcp_fin(gw_handler_ctx * const hctx, request_st * con
     /* propagate shutdown SHUT_WR to backend if TCP half-close on con->fd */
     r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_BACKEND_SHUT_WR;
     r->conf.stream_request_body &= ~FDEVENT_STREAM_REQUEST_POLLIN;
-    r->con->is_readable = 0;
+    if (r->http_version <= HTTP_VERSION_1_1)
+        r->con->is_readable = 0;
     shutdown(hctx->fd, SHUT_WR);
     fdevent_fdnode_event_clr(hctx->ev, hctx->fdn, FDEVENT_OUT);
 }
