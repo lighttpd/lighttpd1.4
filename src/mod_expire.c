@@ -265,7 +265,16 @@ mod_expire_set_header (request_st * const r, const time_t * const off)
         expires += cur_ts;
     }
     else {             /* modification */
+      #if 1
         const stat_cache_st * const st = stat_cache_path_stat(&r->physical.path);
+      #else
+        /* do not use r->tmp_sce here; r->tmp_sce could have been
+         * invalidated between request start and response start */
+        const stat_cache_st * const st =
+	  (r->tmp_sce && buffer_is_equal(&r->tmp_sce->name, &r->physical.path))
+	  ? &r->tmp_sce->st
+	  : stat_cache_path_stat(&r->physical.path);
+      #endif
         /* can't set modification-based expire if mtime is not available */
         if (NULL == st) return HANDLER_GO_ON;
         expires += TIME64_CAST(st->st_mtime);
