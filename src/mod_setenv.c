@@ -228,7 +228,7 @@ REQUEST_FUNC(mod_setenv_handle_request_env) {
     const array * const as = hctx->conf.set_environment;
 
     if (aa) {
-        for (uint32_t k = 0; k < hctx->conf.environment->used; ++k) {
+        for (uint32_t k = 0; k < aa->used; ++k) {
             const data_string * const ds = (const data_string *)aa->data[k];
             http_header_env_append(r, BUF_PTR_LEN(&ds->key),
                                       BUF_PTR_LEN(&ds->value));
