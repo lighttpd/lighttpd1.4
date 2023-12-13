@@ -312,8 +312,8 @@ REQUEST_FUNC(mod_expire_handler) {
 	/* Add caching headers only to GET, HEAD, QUERY requests */
 	if (!http_method_get_head_query(r->http_method)) return HANDLER_GO_ON;
 	/* Add caching headers only if not already present */
-	vb = http_header_response_get(r, HTTP_HEADER_CACHE_CONTROL, CONST_STR_LEN("Cache-Control"));
-	if (NULL != vb) return HANDLER_GO_ON;
+	if (light_btst(r->resp_htags, HTTP_HEADER_CACHE_CONTROL))
+		return HANDLER_GO_ON;
 
 	mod_expire_patch_config(r, p);
 
