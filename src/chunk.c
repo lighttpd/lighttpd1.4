@@ -116,6 +116,7 @@ static chunk *chunk_init(void) {
 	c->offset = 0;
 	c->file.length = 0;
 	c->file.is_temp = 0;
+	c->file.busy = 0;
 	c->file.view = NULL;
       #endif
 	c->file.fd = -1;
@@ -216,6 +217,7 @@ static void chunk_reset_file_chunk(chunk *c) {
   #endif
 	c->file.fd = -1;
 	c->file.length = 0;
+	c->file.busy = 0;
 	c->type = MEM_CHUNK;
 }
 

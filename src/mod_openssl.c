@@ -3142,6 +3142,12 @@ mod_openssl_write_err (SSL * const ssl, int wr, connection * const con,
         else if (wr == -1) {
             /* no, but we have errno */
             switch (errno) {
+              case EAGAIN:
+              case EINTR:
+             #if defined(__FreeBSD__) && defined(SF_NODISKIO)
+              case EBUSY:
+             #endif
+                return 0; /* try again later */
               case EPIPE:
               case ECONNRESET:
                 return -2;
@@ -3270,10 +3276,28 @@ connection_write_cq_ssl_ktls (connection * const con, chunkqueue * const cq, off
         if (-1 == c->file.fd && 0 != chunkqueue_open_file_chunk(cq, hctx->errh))
             return -1;
 
+      #if defined(__FreeBSD__) && defined(SF_NODISKIO)
+
+        int flags = !c->file.busy ? SF_NODISKIO : 0;
+       #ifdef SF_FLAGS
+        flags = SF_FLAGS(32, flags);
+       #endif
+        ossl_ssize_t wr =
+          SSL_sendfile(hctx->ssl, c->file.fd, c->offset, (size_t)len, flags);
+        if (wr < 0) {
+            c->file.busy = (errno == EBUSY);
+            return mod_openssl_write_err(hctx->ssl, (int)wr, con, hctx->errh);
+        }
+        c->file.busy = 0;
+
+      #else
+
         ossl_ssize_t wr =
           SSL_sendfile(hctx->ssl, c->file.fd, c->offset, (size_t)len, 0);
         if (wr < 0)
             return mod_openssl_write_err(hctx->ssl, (int)wr, con, hctx->errh);
+
+      #endif
 
         chunkqueue_mark_written(cq, wr);
         max_bytes -= wr;

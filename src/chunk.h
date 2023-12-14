@@ -34,7 +34,8 @@ typedef struct chunk {
 		off_t  length; /* end pos + 1 in file (octets to send: file.length - c->offset) */
 
 		int    fd;
-		int is_temp; /* file is temporary and will be deleted if on cleanup */
+		uint8_t is_temp; /* file is temporary and will be deleted if on cleanup */
+		uint8_t busy;    /* file chunk not in page cache; reading might block */
 	  #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
 		chunk_file_view *view;
 	  #endif

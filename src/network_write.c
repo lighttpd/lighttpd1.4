@@ -339,8 +339,17 @@ static int network_write_file_chunk_sendfile(const int fd, chunkqueue * const cq
 
   #elif defined(NETWORK_WRITE_USE_FREEBSD_SENDFILE)
 
-    wr = sendfile(c->file.fd, fd, offset, toSend, NULL, &written, 0);
-    /* (for EAGAIN/EINTR written still contains the sent bytes) */
+   #if defined(__FreeBSD__) && defined(SF_NODISKIO)
+    int flags = !c->file.busy ? SF_NODISKIO : 0;
+    c->file.busy = 0;
+    #ifdef SF_FLAGS
+    flags = SF_FLAGS(32, flags);
+    #endif
+   #else /* defined(__DragonFly__) */
+    const int flags = 0;
+   #endif
+    wr = sendfile(c->file.fd, fd, offset, toSend, NULL, &written, flags);
+    /* (for EAGAIN/EINTR/EBUSY written still contains the sent bytes) */
 
   #elif defined(NETWORK_WRITE_USE_SOLARIS_SENDFILEV)
     {
@@ -363,6 +372,11 @@ static int network_write_file_chunk_sendfile(const int fd, chunkqueue * const cq
 
     if (-1 == wr) {
         switch(errno) {
+         #if defined(__FreeBSD__) && defined(SF_NODISKIO)
+          case EBUSY:
+            c->file.busy = 1;
+            break; /* try again later */
+         #endif
           case EAGAIN:
           case EINTR:
             break; /* try again later */
