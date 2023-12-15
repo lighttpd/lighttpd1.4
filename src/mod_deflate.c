@@ -1664,7 +1664,7 @@ static off_t mod_deflate_file_chunk_no_mmap(request_st * const r, handler_ctx * 
 }
 
 
-#ifdef ENABLE_MMAP
+#if 0
 
 static off_t mod_deflate_file_chunk_setjmp_cb (void *dst, const void *src, off_t len)
 {
@@ -1709,7 +1709,7 @@ static off_t mod_deflate_file_chunk(request_st * const r, handler_ctx * const hc
             return -1;
         }
     }
-  #ifdef ENABLE_MMAP
+  #if 0
     return mod_deflate_file_chunk_mmap(r, hctx, c, n);
   #else
     return mod_deflate_file_chunk_no_mmap(r, hctx, c, n);
