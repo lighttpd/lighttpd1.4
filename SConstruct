@@ -437,9 +437,7 @@ if 1:
 		'posix_spawn_file_actions_addclosefrom_np',
 		'posix_spawn_file_actions_addfchdir_np',
 		'pread',
-		'preadv',
 		'pwrite',
-		'pwritev',
 		'select',
 		'sendfile',
 		'sendfile64',
@@ -449,8 +447,11 @@ if 1:
 		'srandom',
 		'strerror_r',
 		'timegm',
-		'writev',
 	])
+	autoconf.haveFunc('preadv', 'sys/uio.h')
+	autoconf.haveFunc('preadv2', 'sys/uio.h')
+	autoconf.haveFunc('pwritev', 'sys/uio.h')
+	autoconf.haveFunc('writev', 'sys/uio.h')
 	autoconf.haveFunc('getentropy', 'sys/random.h')
 	autoconf.haveFunc('getrandom', 'linux/random.h')
 	if re.compile("sunos|solaris").search(env['PLATFORM']):

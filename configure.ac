@@ -1481,7 +1481,7 @@ AC_CHECK_HEADERS([sys/event.h],      [AC_CHECK_FUNCS([kqueue])])
 AC_CHECK_HEADERS([sys/mman.h],       [AC_CHECK_FUNCS([mmap])])
 AC_CHECK_HEADERS([sys/random.h],     [AC_CHECK_FUNCS([getentropy])])
 AC_CHECK_HEADERS([sys/resource.h],   [AC_CHECK_FUNCS([getrlimit])])
-AC_CHECK_HEADERS([sys/uio.h],        [AC_CHECK_FUNCS([preadv pwritev writev])])
+AC_CHECK_HEADERS([sys/uio.h],        [AC_CHECK_FUNCS([preadv preadv2 pwritev writev])])
 if test "$ac_cv_func_poll" = no; then
   AC_CHECK_HEADERS([sys/select.h])
   AC_CHECK_FUNCS([select])

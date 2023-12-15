@@ -170,7 +170,7 @@ static chunk_file_view * chunk_file_view_failed (chunk_file_view *cfv) {
 ssize_t
 chunk_file_pread (int fd, void *buf, size_t count, off_t offset)
 {
-    /*(expects open file for FILE_CHUNK)*/
+    /*(expects open file for non-empty FILE_CHUNK)*/
   #ifndef HAVE_PREAD
     /*(On systems without pread() or equivalent, lseek() is repeated if this
      * func is called in a loop, but this func is generally used on small files,
@@ -189,6 +189,46 @@ chunk_file_pread (int fd, void *buf, size_t count, off_t offset)
       #endif
     } while (-1 == rd && errno == EINTR);
     return rd;
+}
+
+#ifdef HAVE_PREADV2
+#if defined(HAVE_SYS_UIO_H)
+# include <sys/uio.h>
+#endif
+#endif
+
+ssize_t
+chunk_file_pread_chunk (chunk *c, void *buf, size_t count)
+{
+    /*(expects open file for non-empty FILE_CHUNK)*/
+  #if 0 /*(handled by callers)*/
+    const off_t len = c->file.length - c->offset;
+    if (len < (off_t)count) count = (size_t)len;
+  #endif
+  #ifdef HAVE_PREADV2
+    struct iovec iov[1] = { { buf, count } };
+    const int flags = !c->file.busy ? RWF_NOWAIT : 0;
+    c->file.busy = 0;
+    ssize_t rd = preadv2(c->file.fd, iov, 1, c->offset, flags);
+    if (__builtin_expect( (rd > 0), 1)) {
+        return rd;
+    }
+    if (__builtin_expect( (rd < 0), 1)) {
+        /* EINTR should be rare since sigaction SA_RESTART is set with SIGCHLD
+         * and other signals are expected to be rare.  For convenience, treat
+         * EINTR as if EAGAIN was received so that every caller does not need
+         * to check EINTR. (sigaction() expected to be present with preadv2())
+         * Callers should check c->file.busy before propagating error. */
+        int errnum = errno;
+        c->file.busy = (errnum == EAGAIN || errnum == EINTR);
+        return rd;
+    }
+    /* Linux 5.9 and Linux 5.10 have a bug where preadv2() with the
+     * RWF_NOWAIT flag may return 0 even when not at end of file.
+     * (Unfortunately, Linux 5.10 is a long-term-support (LTS) release) */
+  #endif
+
+    return chunk_file_pread(c->file.fd, buf, count, c->offset);
 }
 
 static void chunk_reset_file_chunk(chunk *c) {

@@ -184,6 +184,7 @@
 #cmakedefine  HAVE_PORT_CREATE
 #cmakedefine  HAVE_PREAD
 #cmakedefine  HAVE_PREADV
+#cmakedefine  HAVE_PREADV2
 #cmakedefine  HAVE_PWRITE
 #cmakedefine  HAVE_PWRITEV
 #cmakedefine  HAVE_SELECT

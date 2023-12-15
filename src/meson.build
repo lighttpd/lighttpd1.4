@@ -142,6 +142,7 @@ functions = {
   'posix_spawn_file_actions_addfchdir_np': 'spawn.h',
   'pread': 'unistd.h',
   'preadv': 'sys/uio.h',
+  'preadv2': 'sys/uio.h',
   'pwrite': 'unistd.h',
   'pwritev': 'sys/uio.h',
   'sendfile64': 'sys/sendfile.h',

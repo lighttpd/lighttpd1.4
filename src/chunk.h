@@ -56,6 +56,9 @@ typedef struct chunkqueue {
 
 ssize_t chunk_file_pread (int fd, void *buf, size_t count, off_t offset);
 
+/* attempts non-blocking preadv2 RWF_NOWAIT on Linux, else chunk_file_pread() */
+ssize_t chunk_file_pread_chunk (chunk *c, void *buf, size_t count);
+
 __attribute_returns_nonnull__
 buffer * chunk_buffer_acquire(void);
 
