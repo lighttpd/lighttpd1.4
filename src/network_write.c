@@ -174,9 +174,12 @@ static int network_write_file_chunk_no_mmap(const int fd, chunkqueue * const cq,
 
     if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
 
-    toSend = chunk_file_pread(c->file.fd, buf, toSend, c->offset);
+    toSend = chunk_file_pread_chunk(c, buf, toSend);
     if (toSend <= 0) {
-        log_perror(errh, __FILE__, __LINE__, "read");/* err or unexpected EOF */
+        if (c->file.busy)
+            return -3; /* read I/O would block or signal interrupt; yield */
+        /* -1 error; 0 EOF (unexpected) */
+        log_perror(errh, __FILE__, __LINE__, "read(\"%s\")", c->mem->ptr);
         return -1;
     }
 
