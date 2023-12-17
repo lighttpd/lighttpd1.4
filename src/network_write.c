@@ -81,6 +81,12 @@
 #ifdef ENABLE_MMAP
 # define NETWORK_WRITE_USE_MMAP
 #endif
+# ifdef HAVE_PREADV2
+#  if defined(HAVE_SYS_UIO_H)
+#   include <sys/uio.h>
+#  endif
+#  undef NETWORK_WRITE_USE_MMAP
+# endif
 #endif
 
 
@@ -584,7 +590,7 @@ const char * network_write_show_handlers(void) {
       "\t- writev\n"
      #endif
       "\t+ write\n"
-     #ifdef NETWORK_WRITE_USE_MMAP
+     #if defined(NETWORK_WRITE_USE_MMAP) || defined(HAVE_PREADV2)
       "\t+ mmap support\n"
      #else
       "\t- mmap support\n"
