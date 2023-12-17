@@ -78,9 +78,7 @@
 #endif
 
 #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
-#ifdef ENABLE_MMAP
 # define NETWORK_WRITE_USE_MMAP
-#endif
 # ifdef HAVE_PREADV2
 #  if defined(HAVE_SYS_UIO_H)
 #   include <sys/uio.h>

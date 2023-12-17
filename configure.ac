@@ -1524,7 +1524,7 @@ AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for Large File System support])
 AC_ARG_ENABLE([lfs],
   [AS_HELP_STRING([--enable-lfs],
-    [Turn on Large File System (default)]
+    [Large File System support (enabled; option ignored)]
   )],
   [
     case "${enableval}" in
@@ -1612,28 +1612,23 @@ if test "$ipv6" = true; then
   fi
 fi
 
-# disable mmap by default
 # lighttpd may always use mmap with files it owns (created tmp files)
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([use mmap if available])
 AC_ARG_ENABLE([mmap],
   [AS_HELP_STRING([--enable-mmap],
-    [use mmap if available]
+    [use mmap if available (enabled; option ignored)]
   )],
   [
     case "${enableval}" in
     yes) mmap=true ;;
-    no) mmap=false ;;
+    no) mmap=true ;;
     *) AC_MSG_ERROR([bad value ${enableval} for --enable-mmap]) ;;
     esac
   ],
-  [mmap=false]
+  [mmap=true]
 )
 AC_MSG_RESULT([$mmap])
-
-if test "$mmap" = true; then
-  AC_DEFINE([ENABLE_MMAP], [1], [Use mmap if available])
-fi
 
 
 AC_MSG_NOTICE([----------------------------------------])
