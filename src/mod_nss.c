@@ -2223,11 +2223,21 @@ connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t ma
           : (uint32_t)max_bytes;
         int wr;
 
-        if (0 != chunkqueue_peek_data(cq, &data, &data_len, errh)) return -1;
+        if (0 != chunkqueue_peek_data(cq, &data, &data_len, errh, 1)) return -1;
         if (__builtin_expect( (0 == data_len), 0)) {
-            chunkqueue_remove_finished_chunks(cq);
-            continue;
+            if (!cq->first->file.busy)
+                chunkqueue_remove_finished_chunks(cq);
+            break; /* try again later */
         }
+
+        /* yield if read less than requested
+         * (if starting cqlen was less than requested read amount, then
+         *  chunkqueue should be empty now, so no need to calculate that)
+         * max_bytes will end up negative at bottom of block and loop exit */
+        if (data_len < ( LOCAL_SEND_BUFSIZE < max_bytes
+                       ? LOCAL_SEND_BUFSIZE
+                       : (uint32_t)max_bytes))
+            max_bytes = 0; /* try again later; trigger loop exit on next iter */
 
         /*(if partial write occurred, expect that subsequent writes will have
          * at least that much data available from chunkqueue_peek_data(), which

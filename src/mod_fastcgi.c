@@ -321,7 +321,7 @@ static int fastcgi_get_packet(handler_ctx *hctx, fastcgi_response_packet *packet
 	}
 	char *ptr = (char *)&header;
 	uint32_t rd = sizeof(FCGI_Header);
-	if (chunkqueue_peek_data(hctx->rb, &ptr, &rd, hctx->r->conf.errh) < 0)
+	if (chunkqueue_peek_data(hctx->rb,&ptr,&rd,hctx->r->conf.errh,0) < 0)
 		return -1;
 	if (rd != sizeof(FCGI_Header))
 		return -1;

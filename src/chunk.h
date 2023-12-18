@@ -165,7 +165,7 @@ void chunkqueue_small_resp_optim (chunkqueue * restrict cq);
 ssize_t chunkqueue_write_chunk (int fd, chunkqueue * restrict cq, log_error_st * restrict errh);
 ssize_t chunkqueue_write_chunk_to_pipe (int fd, chunkqueue * restrict cq, log_error_st * restrict errh);
 
-int chunkqueue_peek_data (chunkqueue *cq, char **data, uint32_t *dlen, log_error_st * restrict errh);
+int chunkqueue_peek_data (chunkqueue *cq, char **data, uint32_t *dlen, log_error_st * restrict errh, int nowait);
 int chunkqueue_read_data (chunkqueue *cq, char *data, uint32_t dlen, log_error_st * restrict errh);
 
 chunk * chunkqueue_read_squash (chunkqueue * restrict cq, log_error_st * restrict errh);

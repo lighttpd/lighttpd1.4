@@ -3865,7 +3865,7 @@ webdav_parse_chunkqueue (request_st * const r,
             else {
                 char *data = buf;
                 uint32_t dlen = sizeof(buf);
-                if (0 == chunkqueue_peek_data(cq, &data, &dlen, r->conf.errh)) {
+                if (0 == chunkqueue_peek_data(cq,&data,&dlen,r->conf.errh,0)) {
                     xmlstr = data;
                     weHave = dlen;
                 }

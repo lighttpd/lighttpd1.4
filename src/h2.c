@@ -2941,13 +2941,20 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
              *  than reference counting file chunks split and duplicated by
              *  chunkqueue_steal() into 16k chunks, and alternating with 8k
              *  chunk buffers containing 9 byte HTTP/2 header frame) */
-            const uint32_t len = dlen < fsize ? dlen : fsize-9;
+            uint32_t len = dlen < fsize ? dlen : fsize-9;
             uint32_t blen = len;
             buffer * const b =         /*(sizeof(dataframe)-3 == 9)*/
               chunkqueue_append_buffer_open_sz(con->write_queue, 9+len);
             char *data = b->ptr+9;     /*(note: not including +1 to _open_sz)*/
-            if (0 == chunkqueue_peek_data(cq, &data, &blen, r->conf.errh)
-                && blen == len) {
+
+            if (0 == chunkqueue_peek_data(cq, &data, &len, r->conf.errh, 1)) {
+                if (__builtin_expect( (0 == len), 0)) {
+                    if (!cq->first->file.busy)
+                        chunkqueue_remove_finished_chunks(cq);
+                    /*(remove empty last chunk)*/
+                    chunkqueue_remove_empty_chunks(con->write_queue);
+                    break; /* yield bandwidth for other ready streams */
+                }
                 dlen -= len;
                 sent += len;
                 dataframe.c[3] = (len >> 16) & 0xFF; /*(+3 to skip align pad)*/
@@ -2959,11 +2966,13 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
                 buffer_commit(b, 9+len);
                 chunkqueue_append_buffer_commit(con->write_queue);
                 chunkqueue_mark_written(cq, len);
+                if (blen != len)
+                    break; /* yield bandwidth for other ready streams */
                 continue;
             }
 
             /*(else remove empty last chunk and fall through to below)*/
-            chunkqueue_remove_empty_chunks(cq);
+            chunkqueue_remove_empty_chunks(con->write_queue);
         }
 
         const uint32_t len = dlen < fsize ? dlen : fsize;
@@ -3446,12 +3455,12 @@ h2_process_streams (connection * const con,
                     uint32_t dlen = (r->x.h2.prio & 1) ? 32768-18 : 8192;
                     if (dlen > (uint32_t)max_bytes) dlen = (uint32_t)max_bytes;
                     dlen = h2_send_cqdata(r, con, &r->write_queue, dlen);
-                    if (dlen) { /*(do not resched (spin) if swin empty window)*/
-                        max_bytes -= (off_t)dlen;
-                        if (!chunkqueue_is_empty(&r->write_queue)) {
+                    max_bytes -= (off_t)dlen;
+                    if (!chunkqueue_is_empty(&r->write_queue)) {
+                        /*(do not resched (spin) if swin empty window)*/
+                        if (dlen || r->write_queue.first->file.busy)
                             resched |= 1;
-                            continue;
-                        }
+                        continue;
                     }
                 }
                 if (!chunkqueue_is_empty(&r->write_queue)

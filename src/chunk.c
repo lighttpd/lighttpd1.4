@@ -1450,9 +1450,10 @@ chunkqueue_write_chunk_file_intermed (const int fd, chunk * const restrict c, lo
     char buf[16384];
     char *data = buf;
     const off_t len = c->file.length - c->offset;
+    /*if (0 == len) return 0;*//*(sanity check)*//*chunkqueue_write_chunk_file*/
     uint32_t dlen = len < (off_t)sizeof(buf) ? (uint32_t)len : sizeof(buf);
     chunkqueue cq = {c,c,0,0,0,0}; /*(fake cq for chunkqueue_peek_data())*/
-    if (0 != chunkqueue_peek_data(&cq, &data, &dlen, errh) && 0 == dlen)
+    if (0 != chunkqueue_peek_data(&cq, &data, &dlen, errh, 0) && 0 == dlen)
         return -1;
     return chunkqueue_write_data(fd, data, dlen);
 }
@@ -1618,22 +1619,22 @@ chunk_setjmp_memcpy_cb (void *dst, const void *src, off_t len)
 int
 chunkqueue_peek_data (chunkqueue * const cq,
                       char ** const data, uint32_t * const dlen,
-                      log_error_st * const errh)
+                      log_error_st * const errh, int nowait)
 {
     char * const data_in = *data;
     const uint32_t data_insz = *dlen;
     *dlen = 0;
 
     for (chunk *c = cq->first; c; ) {
-        uint32_t space = data_insz - *dlen;
+        const uint32_t space = data_insz - *dlen;
         switch (c->type) {
           case MEM_CHUNK:
             {
                 uint32_t have = buffer_clen(c->mem) - (uint32_t)c->offset;
-                if (have > space)
-                    have = space;
                 if (__builtin_expect( (0 == have), 0))
                     break;
+                if (have > space)
+                    have = space;
                 if (*dlen)
                     memcpy(data_in + *dlen, c->mem->ptr + c->offset, have);
                 else
@@ -1645,10 +1646,10 @@ chunkqueue_peek_data (chunkqueue * const cq,
           case FILE_CHUNK:
             if (c->file.fd >= 0 || 0 == chunk_open_file_chunk(c, errh)) {
                 off_t len = c->file.length - c->offset;
-                if (len > (off_t)space)
-                    len = (off_t)space;
                 if (__builtin_expect( (0 == len), 0))
                     break;
+                if (len > (off_t)space)
+                    len = (off_t)space;
 
             #if 0 /* XXX: might improve performance on some system workloads */
               #ifdef HAVE_MMAP
@@ -1689,17 +1690,24 @@ chunkqueue_peek_data (chunkqueue * const cq,
               #endif
             #endif
 
-                ssize_t rd = chunk_file_pread(c->file.fd, data_in+*dlen,
-                                              (size_t)len, c->offset);
-                if (rd <= 0) { /* -1 error; 0 EOF (unexpected) */
+                c->file.busy |= !nowait; /* trigger blocking read next try */
+                ssize_t rd =
+                  chunk_file_pread_chunk(c, data_in+*dlen, (size_t)len);
+                if (__builtin_expect( (rd <= 0), 0)) {
+                    if (nowait && c->file.busy) /* yield */
+                        return 0; /* read I/O would block or signal interrupt */
+                    /* -1 error; 0 EOF (unexpected) */
                     log_perror(errh, __FILE__, __LINE__, "read(\"%s\")",
                                c->mem->ptr);
                     return -1;
                 }
 
                 *dlen += (uint32_t)rd;
+                if (nowait && rd != len)
+                    return 0;
                 break;
             }
+            c->file.busy = 0;
             return -1;
 
           default:
@@ -1730,7 +1738,7 @@ chunkqueue_read_data (chunkqueue * const cq,
 {
     char *ptr = data;
     uint32_t len = dlen;
-    if (chunkqueue_peek_data(cq, &ptr, &len, errh) < 0 || len != dlen)
+    if (chunkqueue_peek_data(cq, &ptr, &len, errh, 0) < 0 || len != dlen)
         return -1;
     if (data != ptr) memcpy(data, ptr, len);
     chunkqueue_mark_written(cq, len);
@@ -1753,7 +1761,7 @@ chunkqueue_read_squash (chunkqueue * const restrict cq, log_error_st * const res
     chunk * const c = chunk_acquire((uint32_t)cqlen+1);
     char *data = c->mem->ptr;
     uint32_t dlen = (uint32_t)cqlen;
-    int rc = chunkqueue_peek_data(cq, &data, &dlen, errh);
+    int rc = chunkqueue_peek_data(cq, &data, &dlen, errh, 0);
     if (rc < 0) {
         chunk_release(c);
         return NULL;

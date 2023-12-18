@@ -793,7 +793,7 @@ ajp13_recv_parse_loop (request_st * const r, handler_ctx * const hctx)
             break; /* incomplete packet header + min response payload */
         char *ptr = (char *)&header;
         uint32_t pklen = 5;
-        if (chunkqueue_peek_data(hctx->rb, &ptr, &pklen, errh) < 0)
+        if (chunkqueue_peek_data(hctx->rb, &ptr, &pklen, errh, 0) < 0)
             break;
         if (pklen != 5)
             break;
@@ -878,7 +878,7 @@ ajp13_recv_parse_loop (request_st * const r, handler_ctx * const hctx)
             else if (hctx->send_content_body) {
                 ptr = (char *)&header;
                 pklen = 7;
-                if (chunkqueue_peek_data(hctx->rb, &ptr, &pklen, errh) < 0)
+                if (chunkqueue_peek_data(hctx->rb, &ptr, &pklen, errh, 0) < 0)
                     return HANDLER_GO_ON;
                 if (pklen != 7)
                     return HANDLER_GO_ON;
@@ -910,7 +910,7 @@ ajp13_recv_parse_loop (request_st * const r, handler_ctx * const hctx)
                         /*assert(3 == plen);*/
             ptr = (char *)&header;
             pklen = 7;
-            if (chunkqueue_peek_data(hctx->rb, &ptr, &pklen, errh) < 0)
+            if (chunkqueue_peek_data(hctx->rb, &ptr, &pklen, errh, 0) < 0)
                 return HANDLER_GO_ON;
             if (pklen != 7)
                 return HANDLER_GO_ON;
@@ -921,7 +921,7 @@ ajp13_recv_parse_loop (request_st * const r, handler_ctx * const hctx)
           #if 0
             ptr = (char *)&header;
             pklen = 6;
-            if (chunkqueue_peek_data(hctx->rb, &ptr, &pklen, errh) < 0)
+            if (chunkqueue_peek_data(hctx->rb, &ptr, &pklen, errh, 0) < 0)
                 return HANDLER_GO_ON;
             if (pklen != 6)
                 return HANDLER_GO_ON;
