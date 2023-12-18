@@ -36,6 +36,7 @@ typedef struct chunk {
 		int    fd;
 		uint8_t is_temp; /* file is temporary and will be deleted if on cleanup */
 		uint8_t busy;    /* file chunk not in page cache; reading might block */
+		uint8_t flagmask;/* (internal; used with preadv2() RWF_NOWAIT) */
 	  #if defined(HAVE_MMAP) || defined(_WIN32) /*(see local sys-mmap.h)*/
 		chunk_file_view *view;
 	  #endif

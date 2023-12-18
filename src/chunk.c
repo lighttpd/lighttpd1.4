@@ -117,6 +117,7 @@ static chunk *chunk_init(void) {
 	c->file.length = 0;
 	c->file.is_temp = 0;
 	c->file.busy = 0;
+	c->file.flagmask = 0;
 	c->file.view = NULL;
       #endif
 	c->file.fd = -1;
@@ -195,6 +196,33 @@ chunk_file_pread (int fd, void *buf, size_t count, off_t offset)
 #if defined(HAVE_SYS_UIO_H)
 # include <sys/uio.h>
 #endif
+static ssize_t
+chunk_file_preadv2_flags (chunk *c)
+{
+    if (0 == c->file.flagmask) {
+        /* Initialize mask.  About to make syscall to preadv2(), so a
+         * few extra instructions to avoid failing syscall is worthwhile */
+        c->file.flagmask = RWF_NOWAIT;
+
+        /* Do not attempt preadv2() RWF_NOWAIT on temporary files;
+         * strong possibility to be on tmpfs or, if not, likely that tmpfile
+         * will still be in page cache when read after being written */
+        const char * const fn = c->mem->ptr; /* check "/tmp/" or "/dev/shm/" */
+        if (buffer_clen(c->mem) > 5 && fn[4] == '/'
+            && (   (fn[1] == 't' && fn[2] == 'm' && fn[3] == 'p')
+                || (fn[1] == 'd' && fn[2] == 'e' && fn[3] == 'v')))
+            c->file.flagmask = ~RWF_NOWAIT;
+      #if 0
+        /* already set in chunkqueue_get_append_newtempfile()
+         * c->file.is_temp generally should not be set elsewhere
+         * (mod_deflate sets is_temp when writing to cache file)
+         * (mod_webdav sets is_temp when writing file for PUT) */
+        if (c->file.is_temp)
+            c->file.flagmask = ~RWF_NOWAIT;
+      #endif
+    }
+    return (RWF_NOWAIT & c->file.flagmask);
+}
 #endif
 
 ssize_t
@@ -207,7 +235,7 @@ chunk_file_pread_chunk (chunk *c, void *buf, size_t count)
   #endif
   #ifdef HAVE_PREADV2
     struct iovec iov[1] = { { buf, count } };
-    const int flags = !c->file.busy ? RWF_NOWAIT : 0;
+    const int flags = !c->file.busy ? chunk_file_preadv2_flags(c) : 0;
     c->file.busy = 0;
     ssize_t rd = preadv2(c->file.fd, iov, 1, c->offset, flags);
     if (__builtin_expect( (rd > 0), 1)) {
@@ -220,6 +248,10 @@ chunk_file_pread_chunk (chunk *c, void *buf, size_t count)
          * to check EINTR. (sigaction() expected to be present with preadv2())
          * Callers should check c->file.busy before propagating error. */
         int errnum = errno;
+        if (errnum == EOPNOTSUPP) {  /* WTH?  tmpfs not supported ?!?! */
+            c->file.flagmask = ~RWF_NOWAIT;
+            return chunk_file_pread_chunk(c, buf, count);/*(tail recurse once)*/
+        }
         c->file.busy = (errnum == EAGAIN || errnum == EINTR);
         return rd;
     }
@@ -258,6 +290,7 @@ static void chunk_reset_file_chunk(chunk *c) {
 	c->file.fd = -1;
 	c->file.length = 0;
 	c->file.busy = 0;
+	c->file.flagmask = 0;
 	c->type = MEM_CHUNK;
 }
 
@@ -817,6 +850,11 @@ static chunk *chunkqueue_get_append_newtempfile(chunkqueue * const restrict cq, 
     const array * const restrict tempdirs = chunkqueue_default_tempdirs;
     buffer * const restrict template = c->mem;
     c->file.is_temp = 1;
+  #ifdef HAVE_PREADV2
+    /* strong possibility to be on tmpfs or, if not, likely that tmpfile
+     * will still be in page cache when read after being written */
+    c->file.flagmask = ~RWF_NOWAIT;
+  #endif
 
     if (tempdirs && tempdirs->used) {
         /* we have several tempdirs, only if all of them fail we jump out */
