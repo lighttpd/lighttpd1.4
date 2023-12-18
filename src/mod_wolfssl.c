@@ -2708,6 +2708,70 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
 }
 
 
+__attribute_cold__
+static int
+mod_wolfssl_write_err (SSL * const ssl, int wr, connection * const con,
+                       log_error_st * const errh)
+{
+    int ssl_r;
+    unsigned long err;
+
+    switch ((ssl_r = SSL_get_error(ssl, wr))) {
+      case SSL_ERROR_WANT_READ:
+        con->is_readable = -1;
+        return 0; /* try again later */
+      case SSL_ERROR_WANT_WRITE:
+        con->is_writable = -1;
+        return 0; /* try again later */
+      case SSL_ERROR_SYSCALL:
+        /* perhaps we have error waiting in our error-queue */
+        if (0 != (err = ERR_get_error())) {
+            do {
+                log_error(errh, __FILE__, __LINE__,
+                  "SSL: %d %d %s",ssl_r,wr,ERR_error_string(err,NULL));
+            } while((err = ERR_get_error()));
+        }
+        else if (wr == -1) {
+            /* no, but we have errno */
+            switch(errno) {
+              case EAGAIN:
+              case EINTR:
+             #if defined(__FreeBSD__) && defined(SF_NODISKIO)
+              case EBUSY:
+             #endif
+                return 0; /* try again later */
+              case EPIPE:
+              case ECONNRESET:
+                return -2;
+              default:
+                log_perror(errh, __FILE__, __LINE__,
+                  "SSL: %d %d", ssl_r, wr);
+                break;
+            }
+        }
+        else {
+            /* neither error-queue nor errno ? */
+            log_perror(errh, __FILE__, __LINE__,
+              "SSL (error): %d %d", ssl_r, wr);
+        }
+        break;
+
+      case SSL_ERROR_ZERO_RETURN:
+        /* clean shutdown on the remote side */
+        if (wr == 0) return -2;
+
+        __attribute_fallthrough__
+      default:
+        while((err = ERR_get_error()))
+            log_error(errh, __FILE__, __LINE__,
+              "SSL: %d %d %s", ssl_r, wr, ERR_error_string(err, NULL));
+        break;
+    }
+
+    return -1;
+}
+
+
     /* local_send_buffer is a static buffer of size (LOCAL_SEND_BUFSIZE)
      *
      * it has to stay at the same location all the time to satisfy the needs
@@ -2769,57 +2833,8 @@ connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t ma
             return -1;
         }
 
-        if (wr <= 0) {
-            int ssl_r;
-            unsigned long err;
-
-            switch ((ssl_r = SSL_get_error(ssl, wr))) {
-            case SSL_ERROR_WANT_READ:
-                con->is_readable = -1;
-                return 0; /* try again later */
-            case SSL_ERROR_WANT_WRITE:
-                con->is_writable = -1;
-                return 0; /* try again later */
-            case SSL_ERROR_SYSCALL:
-                /* perhaps we have error waiting in our error-queue */
-                if (0 != (err = ERR_get_error())) {
-                    do {
-                        log_error(errh, __FILE__, __LINE__,
-                          "SSL: %d %d %s",ssl_r,wr,ERR_error_string(err,NULL));
-                    } while((err = ERR_get_error()));
-                } else if (wr == -1) {
-                    /* no, but we have errno */
-                    switch(errno) {
-                    case EPIPE:
-                    case ECONNRESET:
-                        return -2;
-                    default:
-                        log_perror(errh, __FILE__, __LINE__,
-                          "SSL: %d %d", ssl_r, wr);
-                        break;
-                    }
-                } else {
-                    /* neither error-queue nor errno ? */
-                    log_perror(errh, __FILE__, __LINE__,
-                      "SSL (error): %d %d", ssl_r, wr);
-                }
-                break;
-
-            case SSL_ERROR_ZERO_RETURN:
-                /* clean shutdown on the remote side */
-
-                if (wr == 0) return -2;
-
-                __attribute_fallthrough__
-            default:
-                while((err = ERR_get_error())) {
-                    log_error(errh, __FILE__, __LINE__,
-                      "SSL: %d %d %s", ssl_r, wr, ERR_error_string(err, NULL));
-                }
-                break;
-            }
-            return -1;
-        }
+        if (wr <= 0)
+            return mod_wolfssl_write_err(ssl, wr, con, errh);
 
         chunkqueue_mark_written(cq, wr);
         max_bytes -= wr;
