@@ -1557,7 +1557,7 @@ if test "$ac_cv_func_sendfile" = yes; then
         #include <sys/socket.h>
         #include <sys/uio.h>
         int main(void) {
-          int o = 0;
+          off_t o = 0;
           if (-1 == sendfile(-1, 0, &o, 0) && errno == ENOSYS) return -1;
           return 0;
         }
