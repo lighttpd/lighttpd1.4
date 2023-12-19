@@ -34,6 +34,7 @@ SOFTWARE.
 #endif
 
 #include <assert.h>
+#include <ctype.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1693,6 +1694,12 @@ lshpack_dec_decode (struct lshpack_dec *dec,
 
         indexed_type = LSHPACK_NO_INDEX;
     }
+
+    if (index == LSHPACK_HDR_UNKNOWN && s == src_end)
+    {
+        return LSHPACK_ERR_BAD_DATA;
+    }
+    
     if (index != LSHPACK_HDR_UNKNOWN && index <= LSHPACK_HDR_WWW_AUTHENTICATE)
     {
         output->hpack_index = index;
@@ -1786,6 +1793,11 @@ lshpack_dec_decode (struct lshpack_dec *dec,
         }
         if (len > UINT16_MAX)
             return LSHPACK_ERR_TOO_LARGE;
+        while(len > 0 && isspace(*(name + len - 1)))
+            --len;
+        if (len == 0)
+            return LSHPACK_ERR_BAD_DATA;
+
 #if LSHPACK_DEC_CALC_HASH
         output->flags |= LSXPACK_NAME_HASH;
         output->name_hash = XXH32(name, (size_t) len, LSHPACK_XXH_SEED);

@@ -243,6 +243,13 @@ lshpack_dec_set_max_capacity (struct lshpack_dec *, unsigned);
 #define STAILQ_FOREACH          SIMPLEQ_FOREACH
 #endif
 
+#ifndef STAILQ_FOREACH
+#define STAILQ_FOREACH(var, head, field)                                \
+        for((var) = STAILQ_FIRST((head));                               \
+           (var);                                                       \
+           (var) = STAILQ_NEXT((var), field))
+#endif
+
 struct lshpack_enc_table_entry;
 
 STAILQ_HEAD(lshpack_enc_head, lshpack_enc_table_entry);
