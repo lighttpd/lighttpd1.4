@@ -231,7 +231,7 @@ lshpack_dec_set_max_capacity (struct lshpack_dec *, unsigned);
 
 /* OpenBSD and older MacOSX might not define STAILQ,
  * but ls-hpack usage could use SIMPLEQ as alternative */
-#ifndef STAILQ_FOREACH
+#if defined(SIMPLEQ_FOREACH) && !defined(STAILQ_FOREACH)
 #define STAILQ_HEAD             SIMPLEQ_HEAD
 #define STAILQ_ENTRY            SIMPLEQ_ENTRY
 #define STAILQ_INIT             SIMPLEQ_INIT
@@ -243,7 +243,7 @@ lshpack_dec_set_max_capacity (struct lshpack_dec *, unsigned);
 #define STAILQ_FOREACH          SIMPLEQ_FOREACH
 #endif
 
-#ifndef STAILQ_FOREACH
+#if defined(STAILQ_FIRST) && defined(STAILQ_NEXT) && !defined(STAILQ_FOREACH)
 #define STAILQ_FOREACH(var, head, field)                                \
         for((var) = STAILQ_FIRST((head));                               \
            (var);                                                       \
