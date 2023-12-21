@@ -157,7 +157,6 @@ int chunkqueue_steal_with_tempfiles(chunkqueue * restrict dest, chunkqueue * res
 void chunkqueue_append_cq_range (chunkqueue *dst, const chunkqueue *src, off_t offset, off_t len);
 
 int chunk_open_file_chunk(chunk * restrict c, log_error_st * restrict errh);
-int chunkqueue_open_file_chunk(chunkqueue * restrict cq, log_error_st * restrict errh);
 
 void chunkqueue_compact_mem_offset(chunkqueue *cq);
 void chunkqueue_compact_mem(chunkqueue *cq, size_t clen);

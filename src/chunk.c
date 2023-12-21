@@ -1463,10 +1463,6 @@ int chunk_open_file_chunk(chunk * const restrict c, log_error_st * const restric
 	return 0;
 }
 
-int chunkqueue_open_file_chunk(chunkqueue * const restrict cq, log_error_st * const restrict errh) {
-    return chunk_open_file_chunk(cq->first, errh);
-}
-
 
 static ssize_t
 chunkqueue_write_data (const int fd, const void *buf, size_t len)
