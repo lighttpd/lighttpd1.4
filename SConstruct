@@ -413,7 +413,9 @@ if 1:
 		'explicit_bzero',
 		'explicit_memset',
 		'fork',
+		'getentropy',
 		'getloadavg',
+		'getrandom',
 		'getrlimit',
 		'getuid',
 		'gmtime_r',
@@ -437,7 +439,10 @@ if 1:
 		'posix_spawn_file_actions_addclosefrom_np',
 		'posix_spawn_file_actions_addfchdir_np',
 		'pread',
+		'preadv',
+		'preadv2',
 		'pwrite',
+		'pwritev',
 		'select',
 		'sendfile',
 		'sendfile64',
@@ -447,13 +452,8 @@ if 1:
 		'srandom',
 		'strerror_r',
 		'timegm',
+		'writev',
 	])
-	autoconf.haveFunc('preadv', 'sys/uio.h')
-	autoconf.haveFunc('preadv2', 'sys/uio.h')
-	autoconf.haveFunc('pwritev', 'sys/uio.h')
-	autoconf.haveFunc('writev', 'sys/uio.h')
-	autoconf.haveFunc('getentropy', 'sys/random.h')
-	autoconf.haveFunc('getrandom', 'linux/random.h')
 	if re.compile("sunos|solaris").search(env['PLATFORM']):
 		autoconf.haveCHeaders([
 			'port.h',
@@ -461,9 +461,9 @@ if 1:
 			'sys/devpoll.h',
 			'sys/filio.h',
 		])
-		autoconf.haveFunc('port_create', 'port.h')
+		autoconf.haveFunc('port_create')
 		autoconf.haveFunc('sendfilev')
-		autoconf.haveFunc('setpflags', 'priv.h')
+		autoconf.haveFunc('setpflags')
 
 	autoconf.haveTypes(Split('pid_t size_t off_t'))
 
