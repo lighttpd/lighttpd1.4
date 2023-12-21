@@ -1436,7 +1436,7 @@ void chunkqueue_compact_mem(chunkqueue *cq, size_t clen) {
      * no data added/removed from chunkqueue; consolidated only */
 }
 
-static int chunk_open_file_chunk(chunk * const restrict c, log_error_st * const restrict errh) {
+int chunk_open_file_chunk(chunk * const restrict c, log_error_st * const restrict errh) {
 	if (-1 == c->file.fd) {
 		/* (permit symlinks; should already have been checked.  However, TOC-TOU remains) */
 		if (-1 == (c->file.fd = fdevent_open_cloexec(c->mem->ptr, 1, O_RDONLY, 0))) {
