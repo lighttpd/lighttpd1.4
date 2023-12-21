@@ -829,8 +829,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		chunk * const c = cq->first;
 		if (c && c == cq->last && c->type == FILE_CHUNK && c->file.is_temp) {
 			/* request body in single tempfile if not streaming req body */
-			if (-1 == c->file.fd
-			    && 0 != chunkqueue_open_file_chunk(cq, r->conf.errh))
+			if (-1 == c->file.fd && 0 != chunk_open_file_chunk(c, r->conf.errh))
 				return cgi_create_err(r, cgi_fds, NULL);
 		  #ifdef __COVERITY__
 			force_assert(-1 != c->file.fd);

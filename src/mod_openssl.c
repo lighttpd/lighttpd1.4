@@ -3281,7 +3281,7 @@ connection_write_cq_ssl_ktls (connection * const con, chunkqueue * const cq, off
         off_t len = c->file.length - c->offset;
         if (len > max_bytes) len = max_bytes;
         if (0 == len) break; /*(FILE_CHUNK or max_bytes should not be 0)*/
-        if (-1 == c->file.fd && 0 != chunkqueue_open_file_chunk(cq, hctx->errh))
+        if (-1 == c->file.fd && 0 != chunk_open_file_chunk(c, hctx->errh))
             return -1;
 
       #if defined(__FreeBSD__) && defined(SF_NODISKIO)

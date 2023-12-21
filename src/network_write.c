@@ -176,7 +176,7 @@ static int network_write_file_chunk_no_mmap(const int fd, chunkqueue * const cq,
     if (toSend <= 0) return network_remove_finished_chunks(cq, toSend);
     if (toSend > (off_t)sizeof(buf)) toSend = (off_t)sizeof(buf);
 
-    if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
+    if (c->file.fd < 0 && 0 != chunk_open_file_chunk(c, errh)) return -1;
 
     toSend = chunk_file_pread_chunk(c, buf, toSend);
     if (toSend <= 0) {
@@ -328,7 +328,7 @@ static int network_write_file_chunk_sendfile(const int fd, chunkqueue * const cq
     if (toSend > *p_max_bytes) toSend = *p_max_bytes;
     if (toSend <= 0) return network_remove_finished_chunks(cq, toSend);
 
-    if (c->file.fd < 0 && 0 != chunkqueue_open_file_chunk(cq, errh)) return -1;
+    if (c->file.fd < 0 && 0 != chunk_open_file_chunk(c, errh)) return -1;
 
     /* Darwin, FreeBSD, and Solaris variants support iovecs and could
      * be optimized to send more than just file in single syscall */
