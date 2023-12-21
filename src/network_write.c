@@ -441,8 +441,8 @@ static int network_write_file_chunk_sendfile(const int fd, chunkqueue * const cq
 
     /* Solaris sendfilev() */
     /* (This could theoretically be extended to handle multiple FILE_CHUNKs,
-     *  but that is not expected in typical usage, except maybe with mod_ssi,
-     *  and p_max_bytes with be quickly exhausted for all but tiny files) */
+     *  but that is not expected in typical usage, except mod_ssi and Range,
+     *  and p_max_bytes will be quickly exhausted for all but tiny files) */
     int i = 0;
     sendfilevec_t fvec[MAX_CHUNKS*2+1];
     for (; i < hdr_cnt; ++i) {
