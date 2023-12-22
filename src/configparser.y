@@ -3,7 +3,9 @@
 %name configparser
 
 %include {
+#ifndef NDEBUG
 #define NDEBUG
+#endif
 #include "first.h"
 #include "base.h"
 #include "configfile.h"
