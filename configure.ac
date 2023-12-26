@@ -764,7 +764,7 @@ if test "x$use_mbedtls" = "xyes"; then
          AC_DEFINE(HAVE_LIBMBEDTLS, [1], [Have libmbedtls library])
          AC_DEFINE(HAVE_LIBMBEDX509, [1], [Have libmbedx509 library])
          AC_DEFINE(HAVE_LIBMBEDCRYPTO, [1], [Have libmbedcrypto library]) ],
-        [],[-lmbedcrypto "$DL_LIB"])
+        [],[-lmbedx509 -lmbedcrypto "$DL_LIB"])
       ],[],[-lmbedcrypto "$DL_LIB"])
     ],[],[])
   LIBS="$OLDLIBS"
