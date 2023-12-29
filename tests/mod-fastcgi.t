@@ -117,7 +117,7 @@ EOF
 	ok($tf->handle_http($t) == 0, 'FastCGI - Auth');
 
 	$t->{REQUEST}  = ( <<EOF
-GET /expire/access.txt?auth-ok HTTP/1.0
+GET /subdir/any.txt?auth-ok HTTP/1.0
 Host: auth.example.org
 EOF
  );

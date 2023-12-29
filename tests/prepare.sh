@@ -17,9 +17,8 @@ tmpdir="${top_builddir}/tests/tmp/lighttpd"
 # create test-framework
 rm -rf "${tmpdir}"
 mkdir -p "${tmpdir}/servers/www.example.org/pages/"           \
-         "${tmpdir}/servers/www.example.org/pages/dummydir/"  \
          "${tmpdir}/servers/www.example.org/pages/~test ä_/"  \
-         "${tmpdir}/servers/www.example.org/pages/expire/"    \
+         "${tmpdir}/servers/www.example.org/pages/subdir/"    \
          "${tmpdir}/servers/123.example.org/pages/"           \
          "${tmpdir}/servers/a.example.org/pages/a/"           \
          "${tmpdir}/servers/b.example.org/pages/b/"           \
@@ -49,8 +48,9 @@ touch "${tmpdir}/servers/www.example.org/pages/image.jpg" \
       "${tmpdir}/servers/www.example.org/pages/Foo.txt" \
       "${tmpdir}/servers/www.example.org/pages/a" \
       "${tmpdir}/servers/www.example.org/pages/index.html~" \
-      "${tmpdir}/servers/www.example.org/pages/expire/access.txt" \
-      "${tmpdir}/servers/www.example.org/pages/expire/modification.txt"
+      "${tmpdir}/servers/www.example.org/pages/subdir/any.txt" \
+      "${tmpdir}/servers/www.example.org/pages/subdir/access.txt" \
+      "${tmpdir}/servers/www.example.org/pages/subdir/modification.txt"
 echo "12345" > "${tmpdir}/servers/123.example.org/pages/12345.txt"
 echo "12345" > "${tmpdir}/servers/123.example.org/pages/12345.html"
 echo "12345" > "${tmpdir}/servers/123.example.org/pages/dummyfile.bla"

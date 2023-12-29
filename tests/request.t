@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 161;
+use Test::More tests => 164;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -604,17 +604,17 @@ ok($tf->handle_http($t) == 0, 'Content-Length for text/plain');
 ## Low-Level Response-Header Parsing - Location
 
 $t->{REQUEST}  = ( <<EOF
-GET /dummydir HTTP/1.0
+GET /subdir HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => '/dummydir/' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => '/subdir/' } ];
 ok($tf->handle_http($t) == 0, 'internal redirect in directory');
 
 $t->{REQUEST}  = ( <<EOF
-GET /dummydir?foo HTTP/1.0
+GET /subdir?foo HTTP/1.0
 EOF
  );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => '/dummydir/?foo' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 301, 'Location' => '/subdir/?foo' } ];
 ok($tf->handle_http($t) == 0, 'internal redirect in directory + querystring');
 
 $t->{REQUEST}  = ( <<EOF
@@ -977,7 +977,7 @@ sub init_testbed {
     unless (-l $l) {
         return 0 unless symlink($f,$l);
     };
-    $f = "$docroot/expire";
+    $f = "$docroot/subdir";
     $l = "$docroot/symlinked";
     $rc = undef;
     unless (-l $l) {
@@ -1019,7 +1019,7 @@ EOF
 
 # symlinked dir in path
 	$t->{REQUEST} = ( <<EOF
-GET /symlinked/access.txt HTTP/1.0
+GET /symlinked/any.txt HTTP/1.0
 Host: symlink.example.org
 EOF
  );
@@ -1056,7 +1056,7 @@ EOF
 
 # symlinked dir in path
 	$t->{REQUEST} = ( <<EOF
-GET /symlinked/access.txt HTTP/1.0
+GET /symlinked/any.txt HTTP/1.0
 Host: nosymlink.example.org
 EOF
  );
@@ -1476,6 +1476,33 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Encoding' => 'gzip', 'Content-Type' => "text/plain" } ];
 ok($tf->handle_http($t) == 0, 'bzip2 requested but disabled');
+
+
+## mod_expire
+
+$t->{REQUEST} = ( <<EOF
+GET /subdir/access.txt HTTP/1.0
+Host: www.example.org
+EOF
+ );
+$t->{RESPONSE}  = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Expires' => '' } ];
+ok($tf->handle_http($t) == 0, 'expires HTTP/1.0');
+
+$t->{REQUEST} = ( <<EOF
+GET /subdir/access.txt HTTP/1.1
+Host: www.example.org
+EOF
+ );
+$t->{RESPONSE}  = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, '+Cache-Control' => '' } ];
+ok($tf->handle_http($t) == 0, 'cache-control HTTP/1.1 by access time');
+
+$t->{REQUEST} = ( <<EOF
+GET /subdir/modification.txt HTTP/1.1
+Host: www.example.org
+EOF
+ );
+$t->{RESPONSE}  = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, '+Cache-Control' => '' } ];
+ok($tf->handle_http($t) == 0, 'cache-control HTTP/1.1 by modification time');
 
 
 ## mod_extforward
