@@ -995,6 +995,7 @@ add_executable(test_mod
 	t/test_mod_access.c
 	t/test_mod_alias.c
 	t/test_mod_evhost.c
+	t/test_mod_expire.c
 	t/test_mod_indexfile.c
 	t/test_mod_simple_vhost.c
 	t/test_mod_ssi.c
