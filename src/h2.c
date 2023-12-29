@@ -3459,7 +3459,7 @@ h2_process_streams (connection * const con,
                     if (!chunkqueue_is_empty(&r->write_queue)) {
                         /*(do not resched (spin) if swin empty window)*/
                         if (dlen || r->write_queue.first->file.busy)
-                            resched |= 1;
+                            resched |= r->write_queue.first->file.busy ? 4 : 1;
                         continue;
                     }
                 }
@@ -3543,10 +3543,12 @@ h2_process_streams (connection * const con,
     if (h2r->state == CON_STATE_WRITE) {
         /* (resched & 1) more data is available to write, if still able to write
          * (resched & 2) resched to read deferred frames from con->read_queue
+         * (resched & 4) at least one request is waiting for disk I/O
          * (resched & 0x100) (intermediate flag handled above) */
         /*(con->is_writable set to 0 if !chunkqueue_is_empty(con->write_queue)
          * after trying to write in connection_handle_write() above)*/
-        if (((resched & 1) && con->is_writable>0 && !con->traffic_limit_reached)
+        if (((resched & (1|4))
+             && con->is_writable > 0 && !con->traffic_limit_reached)
             || (resched & 2))
             joblist_append(con);
 
