@@ -40,105 +40,60 @@ FREE_FUNC(mod_expire_free) {
     free(p->toffsets);
 }
 
-static time_t mod_expire_get_offset(log_error_st *errh, const buffer *expire, time_t *offset) {
-	char *ts;
-	time_t type;
-	time_t retts = 0;
+__attribute_noinline__
+static time_t mod_expire_get_offset (const char *ts, time_t *mod) {
+    /* (access|now|modification) [plus] {<num> <unit>}*
+     * e.g. 'access 3 months' */
 
-	/*
-	 * parse
-	 *
-	 * '(access|now|modification) [plus] {<num> <type>}*'
-	 *
-	 * e.g. 'access 1 years'
-	 */
+    *mod = 0;
+    if (0 == strncmp(ts, "access ", 7))
+        ts   += 7;
+    else if (0 == strncmp(ts, "now ", 4))
+        ts   += 4;
+    else if ((*mod = (0 == strncmp(ts, "modification ", 13))))
+        ts   += 13;
+    else
+        return (*mod = -1);
 
-	if (buffer_is_blank(expire)) {
-		log_error(errh, __FILE__, __LINE__, "mod_expire empty string");
-		return -1;
-	}
+    if (0 == strncmp(ts, "plus ", 5))
+        ts   += 5; /* skip optional plus */
 
-	ts = expire->ptr;
+    static const struct expire_units {
+      const char *str;
+      uint32_t len;
+      int32_t mult;
+    } expire_units[] = { /*(list longest match first)*/
+      { "year",   sizeof("year")-1,   60 * 60 * 24 * 365 }
+     ,{ "month",  sizeof("month")-1,  60 * 60 * 24 * 30 }
+     ,{ "week",   sizeof("week")-1,   60 * 60 * 24 * 7 }
+     ,{ "day",    sizeof("day")-1,    60 * 60 * 24 }
+     ,{ "hour",   sizeof("hour")-1,   60 * 60 }
+     ,{ "minute", sizeof("minute")-1, 60 }
+     ,{ "min",    sizeof("min")-1,    60 }
+     ,{ "second", sizeof("second")-1, 1 }
+     ,{ "sec",    sizeof("sec")-1,    1 }
+     ,{ NULL,     0,                  0 }
+    };
 
-	if (0 == strncmp(ts, "access ", 7)) {
-		type  = 0;
-		ts   += 7;
-	} else if (0 == strncmp(ts, "now ", 4)) {
-		type  = 0;
-		ts   += 4;
-	} else if (0 == strncmp(ts, "modification ", 13)) {
-		type  = 1;
-		ts   += 13;
-	} else {
-		/* invalid type-prefix */
-		log_error(errh, __FILE__, __LINE__, "invalid <base>: %s", ts);
-		return -1;
-	}
-
-	if (0 == strncmp(ts, "plus ", 5)) {
-		/* skip the optional plus */
-		ts   += 5;
-	}
-
-	/* the rest is just <number> (years|months|weeks|days|hours|minutes|seconds) */
-	do {
-		char *space, *err;
-		int num;
-
-		if (NULL == (space = strchr(ts, ' '))) {
-			log_error(errh, __FILE__, __LINE__,
-			  "missing space after <num>: %s", ts);
-			return -1;
-		}
-
-		num = strtol(ts, &err, 10);
-		if (*err != ' ') {
-			log_error(errh, __FILE__, __LINE__,
-			  "missing <type> after <num>: %s", ts);
-			return -1;
-		}
-
-		ts = space + 1;
-
-		if (NULL == (space = strchr(ts, ' ')))
-			space = expire->ptr + buffer_clen(expire);
-
-		{
-			int slen;
-			/* */
-
-			slen = space - ts;
-			if (ts[slen-1] == 's') --slen; /* strip plural */
-
-			if (slen == 4 && 0 == strncmp(ts, "year", slen))
-				num *= 60 * 60 * 24 * 30 * 12;
-			else if (slen == 5 && 0 == strncmp(ts, "month", slen))
-				num *= 60 * 60 * 24 * 30;
-			else if (slen == 4 && 0 == strncmp(ts, "week", slen))
-				num *= 60 * 60 * 24 * 7;
-			else if (slen == 3 && 0 == strncmp(ts, "day", slen))
-				num *= 60 * 60 * 24;
-			else if (slen == 4 && 0 == strncmp(ts, "hour", slen))
-				num *= 60 * 60;
-			else if (slen == 6 && 0 == strncmp(ts, "minute", slen))
-				num *= 60;
-			else if (slen == 6 && 0 == strncmp(ts, "second", slen))
-				num *= 1;
-			else {
-				log_error(errh, __FILE__, __LINE__, "unknown type: %s", ts);
-				return -1;
-			}
-
-			retts += num;
-
-			if (*space == '\0') break;
-			ts = space + 1;
-		}
-	} while (*ts);
-
-	*offset = retts;
-
-	return type;
+    /* <num> (years|months|weeks|days|hours|minutes|seconds) */
+    time_t offset = 0;
+    do {
+        /*(note: not checking num validity; missing num treated as 0)*/
+        /*(note: not enforcing space between nums and units)*/
+        char *err;
+        long num = strtol(ts, &err, 10);
+        ts = err;
+        while (*ts == ' ') ++ts;
+        const struct expire_units *units = expire_units;
+        while (units->str && 0 != strncmp(ts, units->str, units->len)) ++units;
+        if (units->str == NULL)
+            return (*mod = -1);
+        offset += num * units->mult;
+        ts += units->len;
+        if (*ts == 's') ++ts; /* strip plural */
+        while (*ts == ' ') ++ts;
+    } while (*ts);
+    return offset;
 }
 
 static void mod_expire_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -232,10 +187,10 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
                 time_t *toff = p->toffsets + p->tused;
                 for (uint32_t k = 0; k < a->used; ++k, toff+=2, p->tused+=2) {
                     buffer *v = &((data_string *)a->data[k])->value;
-                    *toff = mod_expire_get_offset(srv->errh, v, toff+1);
+                    toff[1] = mod_expire_get_offset(v->ptr, &toff[0]);
                     if (-1 == *toff) {
                         log_error(srv->errh, __FILE__, __LINE__,
-                          "parsing %s failed: %s", cpk[cpv->k_id].k, v->ptr);
+                          "invalid %s = \"%s\"", cpk[cpv->k_id].k, v->ptr);
                         return HANDLER_ERROR;
                     }
                     /* overwrite v->used with offset int p->toffsets
