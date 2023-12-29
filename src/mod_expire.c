@@ -233,10 +233,9 @@ mod_expire_set_header (request_st * const r, const time_t * const off)
         /* can't set modification-based expire if mtime is not available */
         if (NULL == st) return HANDLER_GO_ON;
         expires += TIME64_CAST(st->st_mtime);
+        /* expires should be at least cur_ts */
+        if (expires < cur_ts) expires = cur_ts;
     }
-
-    /* expires should be at least cur_ts */
-    if (expires < cur_ts) expires = cur_ts;
 
     /* HTTP/1.1 dictates that Cache-Control overrides Expires if both present.
      * Therefore, send only Cache-Control to HTTP/1.1 requests.  This means
