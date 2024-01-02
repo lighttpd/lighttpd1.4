@@ -941,7 +941,7 @@ int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *err
              || buffer_eq_slen(stat_cache_string, CONST_STR_LEN("none")))
         sc.stat_cache_engine = STAT_CACHE_ENGINE_NONE;
     else {
-        log_error(errh, __FILE__, __LINE__,
+        static const char fmt[] =
           "server.stat-cache-engine can be one of \"disable\", \"simple\","
 #ifdef HAVE_SYS_INOTIFY_H
           " \"inotify\","
@@ -951,7 +951,8 @@ int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *err
 #ifdef HAVE_FAM_H
           " \"fam\","
 #endif
-          " but not: %s", stat_cache_string->ptr);
+          " but not: %s";
+        log_error(errh, __FILE__, __LINE__, fmt, stat_cache_string->ptr);
         return -1;
     }
     return 0;
