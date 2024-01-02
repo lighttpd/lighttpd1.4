@@ -261,7 +261,7 @@ log_buffer_prepare (const log_error_st * const errh,
 
 __attribute_nonnull__()
 static void
-log_error_write (const log_error_st * const errh, buffer * const restrict b)
+log_error_write (const log_error_st * const errh, buffer * const restrict b, const int pri)
 {
     if (errh->mode != FDLOG_SYSLOG) { /* FDLOG_FD FDLOG_FILE FDLOG_PIPE */
         buffer_append_char(b, '\n');
@@ -269,7 +269,12 @@ log_error_write (const log_error_st * const errh, buffer * const restrict b)
     }
     else {
       #ifdef HAVE_SYSLOG_H
-        syslog(LOG_ERR, "%s", b->ptr);
+       #ifndef LOG_PRI
+       #define LOG_PRI(x) (x & 3)
+       #endif
+        syslog(LOG_PRI(pri), "%s", b->ptr);
+      #else
+        UNUSED(pri);
       #endif
     }
 }
@@ -309,11 +314,11 @@ log_error_append_strerror (buffer * const b, const int errnum)
 
 __attribute_format__((__printf__, 4, 0))
 static void
-log_error_va_list_impl (const log_error_st *errh,
-                        const char * const restrict filename,
-                        const unsigned int line,
-                        const char * const restrict fmt, va_list ap,
-                        const int perr)
+log_va_list (const log_error_st *errh,
+             const char * const restrict filename,
+             const unsigned int line,
+             const char * const restrict fmt, va_list ap,
+             const int pri)
 {
     const int errnum = errno;
 
@@ -323,7 +328,7 @@ log_error_va_list_impl (const log_error_st *errh,
 
     log_buffer_vsprintf(b, fmt, ap);
   #ifdef _WIN32
-    switch (perr) {
+    switch (pri >> 8) {
       case 0: default: break;
       case 1: log_error_append_winerror(b, GetLastError());
               if (errnum) log_error_append_strerror(b, errnum);
@@ -332,15 +337,20 @@ log_error_va_list_impl (const log_error_st *errh,
               break;
     }
   #else
-    if (perr)
+    if (pri >> 8)
         log_error_append_strerror(b, errnum);
   #endif
 
-    log_error_write(errh, b);
+    log_error_write(errh, b, pri);
 
     buffer_clear(b);
     errno = errnum;
 }
+
+
+#ifndef LOG_ERR
+#define LOG_ERR 3
+#endif
 
 
 void
@@ -350,7 +360,7 @@ log_error(log_error_st * const errh,
 {
     va_list ap;
     va_start(ap, fmt);
-    log_error_va_list_impl(errh, filename, line, fmt, ap, 0);
+    log_va_list(errh, filename, line, fmt, ap, ((0 << 8) | LOG_ERR));
     va_end(ap);
 }
 
@@ -362,7 +372,7 @@ log_perror (log_error_st * const errh,
 {
     va_list ap;
     va_start(ap, fmt);
-    log_error_va_list_impl(errh, filename, line, fmt, ap, 1);
+    log_va_list(errh, filename, line, fmt, ap, ((1 << 8) | LOG_ERR));
     va_end(ap);
 }
 
@@ -375,7 +385,7 @@ log_serror (log_error_st * const errh,
 {
     va_list ap;
     va_start(ap, fmt);
-    log_error_va_list_impl(errh, filename, line, fmt, ap, 2);
+    log_va_list(errh, filename, line, fmt, ap, ((2 << 8) | LOG_ERR));
     va_end(ap);
 }
 #endif
@@ -413,7 +423,7 @@ log_error_multiline (log_error_st *errh,
         if (n && current_line[n-1] == '\r') --n; /*(skip "\r\n")*/
         buffer_truncate(b, prefix_len);
         log_buffer_append_encoded(b, current_line, n);
-        log_error_write(errh, b);
+        log_error_write(errh, b, LOG_ERR);
     }
 
     buffer_clear(b);
