@@ -351,6 +351,21 @@ log_va_list (const log_error_st *errh,
 #ifndef LOG_ERR
 #define LOG_ERR 3
 #endif
+#ifndef LOG_DEBUG
+#define LOG_DEBUG 7
+#endif
+
+
+void
+log_debug(log_error_st * const errh,
+          const char * const filename, const unsigned int line,
+          const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    log_va_list(errh, filename, line, fmt, ap, ((0 << 8) | LOG_DEBUG));
+    va_end(ap);
+}
 
 
 void
@@ -392,12 +407,26 @@ log_serror (log_error_st * const errh,
 
 
 void
-log_error_multiline (log_error_st *errh,
-                     const char * const restrict filename,
-                     const unsigned int line,
-                     const char * const restrict multiline,
-                     const size_t len,
-                     const char * const restrict fmt, ...)
+log_pri (log_error_st * const errh,
+         const char * const filename, const unsigned int line,
+         const int pri, const char *fmt, ...)
+{
+    /*(same as log_error() with extra 'pri' param for syslog())*/
+    va_list ap;
+    va_start(ap, fmt);           /*((0 << 8) | pri)*/
+    log_va_list(errh, filename, line, fmt, ap, pri);
+    va_end(ap);
+}
+
+
+void
+log_pri_multiline (log_error_st *errh,
+                   const char * const restrict filename,
+                   const unsigned int line,
+                   const int pri,
+                   const char * const restrict multiline,
+                   const size_t len,
+                   const char * const restrict fmt, ...)
 {
     if (0 == len) return;
 
@@ -423,7 +452,7 @@ log_error_multiline (log_error_st *errh,
         if (n && current_line[n-1] == '\r') --n; /*(skip "\r\n")*/
         buffer_truncate(b, prefix_len);
         log_buffer_append_encoded(b, current_line, n);
-        log_error_write(errh, b, LOG_ERR);
+        log_error_write(errh, b, pri);
     }
 
     buffer_clear(b);
