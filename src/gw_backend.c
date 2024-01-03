@@ -1422,7 +1422,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                         else if (buffer_eq_slen(b, CONST_STR_LEN("authorizer")))
                             host_mode = GW_AUTHORIZER;
                         else
-                            log_error(srv->errh, __FILE__, __LINE__,
+                            log_warn(srv->errh, __FILE__, __LINE__,
                               "WARNING: unknown gw mode: %s "
                               "(ignored, mode set to responder)", b->ptr);
                     }

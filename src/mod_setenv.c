@@ -110,10 +110,10 @@ static void mod_setenv_prep_ext (const array * const ac) {
          * invalid in HTTP/2 and in updated HTTP/1.1 specs)*/
         s = ds->value.ptr;
         if (NULL != strchr(s, '\r') || NULL != strchr(s, '\n')) {
-            log_error(NULL, __FILE__, __LINE__,
+            log_warn(NULL, __FILE__, __LINE__,
                "WARNING: setenv.*-header contains CR and/or NL (invalid): "
                "%s: %s", ds->key.ptr, s);
-            log_error(NULL, __FILE__, __LINE__,
+            log_warn(NULL, __FILE__, __LINE__,
               "Use mod_magnet for finer control of request, response headers.");
         }
     }

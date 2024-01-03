@@ -2227,7 +2227,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             s->ssl_ctx, network_ssl_servername_callback);
         wolfSSL_CTX_set_servername_arg(s->ssl_ctx, srv);
        #else
-        log_error(srv->errh, __FILE__, __LINE__,
+        log_warn(srv->errh, __FILE__, __LINE__,
           "SSL: WARNING: SNI callbacks *crippled* in wolfSSL library build");
         UNUSED(network_ssl_servername_callback);
        #endif

@@ -408,7 +408,7 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 
 	host = host_token->ptr;
 	if ((use_ipv6 && (*host == '\0' || *host == ':')) || (host[0] == '[' && host[1] == ']')) {
-		log_error(srv->errh, __FILE__, __LINE__,
+		log_warn(srv->errh, __FILE__, __LINE__,
 		  "warning: please use server.use-ipv6 only for hostnames, "
 		  "not without server.bind / empty address; your config will "
 		  "break if the kernel default for IPV6_V6ONLY changes");
@@ -432,7 +432,7 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 		if (s->set_v6only) {
 			set_v6only = 1;
 		} else {
-			log_error(srv->errh, __FILE__, __LINE__,
+			log_warn(srv->errh, __FILE__, __LINE__,
 			  "warning: server.set-v6only will be removed soon, "
 			  "update your config to have different sockets for ipv4 and ipv6");
 		}

@@ -276,7 +276,7 @@ static void config_warn_openssl_module (server *srv) {
 			if (0 == strncmp(du->key.ptr, "ssl.", sizeof("ssl.")-1)) {
 				/* mod_openssl should be loaded after mod_extforward */
 				array_insert_value(srv->srvconf.modules, CONST_STR_LEN("mod_openssl"));
-				log_error(srv->errh, __FILE__, __LINE__,
+				log_warn(srv->errh, __FILE__, __LINE__,
 				  "Warning: please add \"mod_openssl\" to server.modules list "
 				  "in lighttpd.conf.  A future release of lighttpd 1.4.x "
 				  "*will not* automatically load mod_openssl and lighttpd "
@@ -384,7 +384,7 @@ static void config_warn_authn_module (server *srv, const char *module, uint32_t 
     buffer_copy_string_len(tb, CONST_STR_LEN("mod_authn_"));
     buffer_append_string_len(tb, module, len);
     array_insert_value(srv->srvconf.modules, BUF_PTR_LEN(tb));
-    log_error(srv->errh, __FILE__, __LINE__,
+    log_warn(srv->errh, __FILE__, __LINE__,
       "Warning: please add \"mod_authn_%s\" to server.modules list "
       "in lighttpd.conf.  A future release of lighttpd 1.4.x will "
       "not automatically load mod_authn_%s and lighttpd will fail "
@@ -428,7 +428,7 @@ static void config_compat_module_load (server *srv) {
                 if (!contains_mod_auth) {
                     contains_mod_auth = 1;
                     if (dyn_name)
-                        log_error(srv->errh, __FILE__, __LINE__,
+                        log_warn(srv->errh, __FILE__, __LINE__,
                           "Warning: mod_auth should be listed in server.modules"
                           " before dynamic backends such as %s", dyn_name);
                 }
@@ -464,7 +464,7 @@ static void config_compat_module_load (server *srv) {
             if (NULL == dyn_name)
                 dyn_name = m->ptr;
             if (!append_mod_staticfile)
-                log_error(srv->errh, __FILE__, __LINE__,
+                log_warn(srv->errh, __FILE__, __LINE__,
                   "Warning: %s should be listed in server.modules"
                   " before mod_staticfile", m->ptr);
         }
@@ -1255,7 +1255,7 @@ static int config_insert(server *srv) {
                #ifndef HAVE_LSTAT
                #ifndef _WIN32
                 if (0 == cpv->v.u)
-                    log_error(srv->errh, __FILE__, __LINE__,
+                    log_warn(srv->errh, __FILE__, __LINE__,
                       "Your system lacks lstat(). "
                       "We can not differentiate symlinks from files. "
                       "Please remove server.follow-symlink from your config.");
@@ -1398,7 +1398,7 @@ int config_finalize(server *srv, const buffer *default_server_tag) {
 
             if (!array_get_element_klen(srv->srvconf.config_touched,
                                         BUF_PTR_LEN(k)))
-                log_error(srv->errh, __FILE__, __LINE__,
+                log_warn(srv->errh, __FILE__, __LINE__,
                   "WARNING: unknown config-key: %s (ignored)", k->ptr);
         }
     }
@@ -1784,7 +1784,7 @@ static void config_log_error_open_syslog(server *srv, log_error_st *errh, const 
             }
         }
         if (-1 == facility) {
-            log_error(srv->errh, __FILE__, __LINE__,
+            log_warn(srv->errh, __FILE__, __LINE__,
               "unrecognized server.syslog-facility: \"%s\"; "
               "defaulting to \"daemon\" facility",
               syslog_facility->ptr);
