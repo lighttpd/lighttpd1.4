@@ -574,12 +574,12 @@ static int mod_extforward_set_addr(request_st * const r, plugin_data *p, const c
 	}
   #if 0 /*(not expected)*/
 	else if (r->conf.log_request_handling)
-		log_error(r->conf.errh, __FILE__, __LINE__,
+		log_debug(r->conf.errh, __FILE__, __LINE__,
 		  "-- mod_extforward_uri_handler already patched this connection, resetting state");
   #endif
 
 	if (r->conf.log_request_handling)
-		log_error(r->conf.errh, __FILE__, __LINE__, "using address: %s", addr);
+		log_debug(r->conf.errh, __FILE__, __LINE__, "using address: %s", addr);
 
   #if 0 /*(no longer necessary since not overwriting con->dst_addr_buf)*/
 	/* save old address */
@@ -1106,7 +1106,7 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	}
 	else {
 		if (r->conf.log_request_handling) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "no forward header found or "
 			  "remote address %s is NOT a trusted proxy, skipping",
 			  r->con->dst_addr_buf.ptr);
@@ -1182,7 +1182,7 @@ CONNECTION_FUNC(mod_extforward_handle_con_accept)
     }
     else {
         if (r->conf.log_request_handling) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
+            log_debug(r->conf.errh, __FILE__, __LINE__,
               "remote address %s is NOT a trusted proxy, skipping",
               con->dst_addr_buf.ptr);
         }

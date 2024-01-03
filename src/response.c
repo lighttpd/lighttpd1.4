@@ -112,12 +112,12 @@ http_response_physical_path_error (request_st * const r, const int code, const c
     if ((code == 404 && r->conf.log_file_not_found)
         || r->conf.log_request_handling) {
         if (NULL == msg)
-            log_perror(r->conf.errh, __FILE__, __LINE__, "-- ");
+            log_pdebug(r->conf.errh, __FILE__, __LINE__, "-- ");
         else
-            log_error(r->conf.errh, __FILE__, __LINE__, "%s", msg);
-        log_error(r->conf.errh, __FILE__, __LINE__,
+            log_debug(r->conf.errh, __FILE__, __LINE__, "%s", msg);
+        log_debug(r->conf.errh, __FILE__, __LINE__,
           "Path         : %s", r->physical.path.ptr);
-        log_error(r->conf.errh, __FILE__, __LINE__,
+        log_debug(r->conf.errh, __FILE__, __LINE__,
           "URI          : %s", r->uri.path.ptr);
     }
     return HANDLER_FINISHED;
@@ -292,17 +292,17 @@ http_response_prepare (request_st * const r)
 		#endif
 
 		if (r->conf.log_request_handling) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "-- parsed Request-URI");
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "Request-URI     : %s", r->target.ptr);
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "URI-scheme      : %s", r->uri.scheme.ptr);
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "URI-authority   : %s", r->uri.authority.ptr);
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "URI-path (clean): %s", r->uri.path.ptr);
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "URI-query       : %.*s",
 			  BUFFER_INTLEN_PTR(&r->uri.query));
 		}
@@ -381,15 +381,15 @@ http_response_prepare (request_st * const r)
 			if (HANDLER_GO_ON != rc) return rc;
 
 			if (r->conf.log_request_handling) {
-				log_error(r->conf.errh, __FILE__, __LINE__,
+				log_debug(r->conf.errh, __FILE__, __LINE__,
 				  "-- logical -> physical");
-				log_error(r->conf.errh, __FILE__, __LINE__,
+				log_debug(r->conf.errh, __FILE__, __LINE__,
 				  "Doc-Root     : %s", r->physical.doc_root.ptr);
-				log_error(r->conf.errh, __FILE__, __LINE__,
+				log_debug(r->conf.errh, __FILE__, __LINE__,
 				  "Basedir      : %s", r->physical.basedir.ptr);
-				log_error(r->conf.errh, __FILE__, __LINE__,
+				log_debug(r->conf.errh, __FILE__, __LINE__,
 				  "Rel-Path     : %s", r->physical.rel_path.ptr);
-				log_error(r->conf.errh, __FILE__, __LINE__,
+				log_debug(r->conf.errh, __FILE__, __LINE__,
 				  "Path         : %s", r->physical.path.ptr);
 			}
 	}
@@ -401,13 +401,13 @@ http_response_prepare (request_st * const r)
 		if (HANDLER_GO_ON != rc) return rc;
 
 		if (r->conf.log_request_handling) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "-- handling subrequest");
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "Path         : %s", r->physical.path.ptr);
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "URI          : %s", r->uri.path.ptr);
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "Pathinfo     : %.*s",
 			  BUFFER_INTLEN_PTR(&r->pathinfo));
 		}

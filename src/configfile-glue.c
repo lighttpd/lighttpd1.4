@@ -388,7 +388,7 @@ static void config_cond_result_trace(request_st * const r, const data_config * c
       case COND_RESULT_TRUE:  msg = "true"; break;
       default:                msg = "invalid cond_result_t"; break;
     }
-    log_error(r->conf.errh, __FILE__, __LINE__, "%d (%s) result: %s (cond: %s)",
+    log_debug(r->conf.errh, __FILE__, __LINE__, "%d (%s) result: %s (cond: %s)",
               dc->context_ndx, &"uncached"[cached ? 2 : 0], msg, dc->key.ptr);
 }
 
@@ -422,7 +422,7 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		 * if the parent is not decided yet or false, we can't be true either 
 		 */
 		if (debug_cond) {
-			log_error(r->conf.errh, __FILE__, __LINE__, "go parent %s", dc->parent->key.ptr);
+			log_debug(r->conf.errh, __FILE__, __LINE__, "go parent %s", dc->parent->key.ptr);
 		}
 
 		switch (config_check_cond_cached(r, dc->parent, debug_cond)) {
@@ -445,7 +445,7 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 		 * was evaluated as "false" (not unset/skipped/true)
 		 */
 		if (debug_cond) {
-			log_error(r->conf.errh, __FILE__, __LINE__, "go prev %s", dc->prev->key.ptr);
+			log_debug(r->conf.errh, __FILE__, __LINE__, "go prev %s", dc->prev->key.ptr);
 		}
 
 		/* make sure prev is checked first */
@@ -465,7 +465,7 @@ static cond_result_t config_check_cond_nocache(request_st * const r, const data_
 
 	if (!(r->conditional_is_valid & (1 << dc->comp))) {
 		if (debug_cond) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "%d %s not available yet", dc->comp, dc->key.ptr);
 		}
 
@@ -531,7 +531,7 @@ static cond_result_t config_check_cond_nocache_eval(request_st * const r, const 
 		l = (buffer *)&empty_string;
 
 	if (debug_cond)
-		log_error(r->conf.errh, __FILE__, __LINE__,
+		log_debug(r->conf.errh, __FILE__, __LINE__,
 			"%s compare to %s", dc->comp_key, l->ptr);
 
 	int match;
@@ -600,7 +600,7 @@ static cond_result_t config_check_cond_calc(request_st * const r, const int cont
     const data_config * const dc = config_reference.data[context_ndx];
     const int debug_cond = r->conf.log_condition_handling;
     if (debug_cond) {
-        log_error(r->conf.errh, __FILE__, __LINE__,
+        log_debug(r->conf.errh, __FILE__, __LINE__,
                   "=== start of condition block ===");
     }
     return config_check_cond_nocache_calc(r, dc, debug_cond, cache);

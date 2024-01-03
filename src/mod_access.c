@@ -81,11 +81,11 @@ __attribute_cold__
 static handler_t mod_access_reject (request_st * const r, plugin_data * const p) {
     if (r->conf.log_request_handling) {
         if (p->conf.access_allow && p->conf.access_allow->used)
-            log_error(r->conf.errh, __FILE__, __LINE__,
+            log_debug(r->conf.errh, __FILE__, __LINE__,
               "url denied as failed to match any from access_allow %s",
               r->uri.path.ptr);
         else
-            log_error(r->conf.errh, __FILE__, __LINE__,
+            log_debug(r->conf.errh, __FILE__, __LINE__,
               "url denied as we match access_deny %s",
               r->uri.path.ptr);
     }

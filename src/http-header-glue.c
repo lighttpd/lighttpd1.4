@@ -403,7 +403,7 @@ void http_response_send_file (request_st * const r, const buffer * const path, s
 		if (sce->fd < 0 && __builtin_expect( (0 != sce->st.st_size), 0)) {
 			r->http_status = (errno == ENOENT) ? 404 : 403;
 			if (r->conf.log_request_handling) {
-				log_perror(r->conf.errh, __FILE__, __LINE__,
+				log_pdebug(r->conf.errh, __FILE__, __LINE__,
 				  "file open failed: %s", path->ptr);
 			}
 			return;
@@ -414,9 +414,9 @@ void http_response_send_file (request_st * const r, const buffer * const path, s
 	    && 0 != stat_cache_path_contains_symlink(path, r->conf.errh)) {
 		r->http_status = 403;
 		if (r->conf.log_request_handling) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "-- access denied due symlink restriction");
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "Path         : %s", path->ptr);
 		}
 		return;
@@ -426,7 +426,7 @@ void http_response_send_file (request_st * const r, const buffer * const path, s
 	if (__builtin_expect( (!S_ISREG(sce->st.st_mode)), 0)) {
 		r->http_status = 403;
 		if (r->conf.log_file_not_found) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
+			log_debug(r->conf.errh, __FILE__, __LINE__,
 			  "not a regular file: %s -> %s",
 			  r->uri.path.ptr, path->ptr);
 		}

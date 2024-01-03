@@ -1569,7 +1569,7 @@ h2_parse_headers_frame (struct lshpack_dec * const restrict decoder, const unsig
             hpctx.id = lshpack_idx_http_header[lsx.hpack_index];
 
             if (hpctx.log_request_header)
-                log_error(r->conf.errh, __FILE__, __LINE__,
+                log_debug(r->conf.errh, __FILE__, __LINE__,
                   "fd:%d id:%u rqst: %.*s: %.*s", r->con->fd, r->x.h2.id,
                   (int)hpctx.klen, hpctx.k, (int)hpctx.vlen, hpctx.v);
 
@@ -2331,7 +2331,7 @@ __attribute_noinline__
 static void
 h2_log_response_header_lsx(request_st * const r, const lsxpack_header_t * const lsx)
 {
-    log_error(r->conf.errh, __FILE__, __LINE__,
+    log_debug(r->conf.errh, __FILE__, __LINE__,
       "fd:%d id:%u resp: %.*s: %.*s", r->con->fd, r->x.h2.id,
       (int)lsx->name_len, lsx->buf + lsx->name_offset,
       (int)lsx->val_len,  lsx->buf + lsx->val_offset);
@@ -2342,7 +2342,7 @@ __attribute_cold__
 static void
 h2_log_response_header(request_st * const r, const int len, const char * const hdr)
 {
-    log_error(r->conf.errh, __FILE__, __LINE__,
+    log_debug(r->conf.errh, __FILE__, __LINE__,
       "fd:%d id:%u resp: %.*s", r->con->fd, r->x.h2.id, len, hdr);
 }
 
@@ -3589,7 +3589,7 @@ h2_check_timeout (connection * const con, const unix_time64_t cur_ts)
                     if (cur_ts - con->read_idle_ts > rr->conf.max_read_idle) {
                         /* time - out */
                         if (rr->conf.log_timeouts) {
-                            log_error(rr->conf.errh, __FILE__, __LINE__,
+                            log_debug(rr->conf.errh, __FILE__, __LINE__,
                               "request aborted - read timeout: %d", con->fd);
                         }
                         connection_set_state_error(r, CON_STATE_ERROR);
@@ -3607,7 +3607,7 @@ h2_check_timeout (connection * const con, const unix_time64_t cur_ts)
                         /*(see comment further down about max_write_idle)*/
                         /* time - out */
                         if (r->conf.log_timeouts) {
-                            log_error(r->conf.errh, __FILE__, __LINE__,
+                            log_debug(r->conf.errh, __FILE__, __LINE__,
                               "NOTE: a request from %s for %.*s timed out "
                               "after writing %lld bytes. We waited %d seconds. "
                               "If this is a problem, increase "
@@ -3627,7 +3627,7 @@ h2_check_timeout (connection * const con, const unix_time64_t cur_ts)
             if (cur_ts - con->read_idle_ts > con->keep_alive_idle) {
                 /* time - out */
                 if (r->conf.log_timeouts) {
-                    log_error(r->conf.errh, __FILE__, __LINE__,
+                    log_debug(r->conf.errh, __FILE__, __LINE__,
                               "connection closed - keep-alive timeout: %d",
                               con->fd);
                 }

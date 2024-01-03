@@ -148,9 +148,9 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
     if (NULL == p->conf.indexfiles) return HANDLER_GO_ON;
 
     if (r->conf.log_request_handling) {
-        log_error(r->conf.errh, __FILE__, __LINE__,
+        log_debug(r->conf.errh, __FILE__, __LINE__,
           "-- handling the request as Indexfile");
-        log_error(r->conf.errh, __FILE__, __LINE__,
+        log_debug(r->conf.errh, __FILE__, __LINE__,
           "URI          : %s", r->uri.path.ptr);
     }
 

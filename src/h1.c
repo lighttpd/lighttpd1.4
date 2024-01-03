@@ -878,7 +878,7 @@ h1_check_timeout (connection * const con, const unix_time64_t cur_ts)
           : (int)r->conf.max_read_idle;
         if (cur_ts - con->read_idle_ts > idle_timeout) {
             if (r->conf.log_timeouts)
-                log_error(r->conf.errh, __FILE__, __LINE__,
+                log_debug(r->conf.errh, __FILE__, __LINE__,
                   "connection closed - %s timeout: %d",
                   keep_alive ? "keep-alive" : "read", con->fd);
             request_set_state_error(r, CON_STATE_ERROR);
@@ -911,7 +911,7 @@ h1_check_timeout (connection * const con, const unix_time64_t cur_ts)
         if (cur_ts - con->write_request_ts > r->conf.max_write_idle) {
             /* time - out */
             if (r->conf.log_timeouts) {
-                log_error(r->conf.errh, __FILE__, __LINE__,
+                log_debug(r->conf.errh, __FILE__, __LINE__,
                   "NOTE: a request from %s for %.*s timed out after writing "
                   "%lld bytes. We waited %d seconds. If this is a problem, "
                   "increase server.max-write-idle",

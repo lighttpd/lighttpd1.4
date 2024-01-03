@@ -1476,9 +1476,9 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	if (!p->conf.dir_listing) return HANDLER_GO_ON;
 
 	if (r->conf.log_request_handling) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
+		log_debug(r->conf.errh, __FILE__, __LINE__,
 		  "-- handling the request as Dir-Listing");
-		log_error(r->conf.errh, __FILE__, __LINE__,
+		log_debug(r->conf.errh, __FILE__, __LINE__,
 		  "URI          : %s", r->uri.path.ptr);
 	}
 

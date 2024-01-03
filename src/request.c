@@ -314,7 +314,7 @@ __attribute_cold__
 __attribute_noinline__
 static int http_request_header_line_invalid(request_st * const restrict r, const int status, const char * const restrict msg) {
     if (r->conf.log_request_header_on_error) {
-        if (msg) log_error(r->conf.errh, __FILE__, __LINE__, "%s", msg);
+        if (msg) log_debug(r->conf.errh, __FILE__, __LINE__, "%s", msg);
     }
     return status;
 }
@@ -324,10 +324,10 @@ __attribute_noinline__
 static int http_request_header_char_invalid(request_st * const restrict r, const char ch, const char * const restrict msg) {
     if (r->conf.log_request_header_on_error) {
         if ((unsigned char)ch > 32 && ch != 127) {
-            log_error(r->conf.errh, __FILE__, __LINE__, "%s ('%c')", msg, ch);
+            log_debug(r->conf.errh, __FILE__, __LINE__, "%s ('%c')", msg, ch);
         }
         else {
-            log_error(r->conf.errh, __FILE__, __LINE__, "%s (0x%x)", msg, ch);
+            log_debug(r->conf.errh, __FILE__, __LINE__, "%s (0x%x)", msg, ch);
         }
     }
     return 400;
@@ -1381,7 +1381,7 @@ http_request_headers_process_h2 (request_st * const restrict r, const int scheme
     /* limited; headers not collected into a single buf for HTTP/2 */
     if (__builtin_expect( (0 != r->http_status), 0)) {
         if (r->conf.log_request_header_on_error) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
+            log_debug(r->conf.errh, __FILE__, __LINE__,
               "request-header:\n:authority: %s\n:method: %s\n:path: %s",
               r->http_host ? r->http_host->ptr : "",
               http_method_buf(r->http_method)->ptr,
