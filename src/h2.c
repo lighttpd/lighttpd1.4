@@ -3588,7 +3588,7 @@ h2_check_timeout (connection * const con, const unix_time64_t cur_ts)
                      * (future: might keep separate timestamp per-request) */
                     if (cur_ts - con->read_idle_ts > rr->conf.max_read_idle) {
                         /* time - out */
-                        if (rr->conf.log_request_handling) {
+                        if (rr->conf.log_timeouts) {
                             log_error(rr->conf.errh, __FILE__, __LINE__,
                               "request aborted - read timeout: %d", con->fd);
                         }
@@ -3626,7 +3626,7 @@ h2_check_timeout (connection * const con, const unix_time64_t cur_ts)
         else {
             if (cur_ts - con->read_idle_ts > con->keep_alive_idle) {
                 /* time - out */
-                if (r->conf.log_request_handling) {
+                if (r->conf.log_timeouts) {
                     log_error(r->conf.errh, __FILE__, __LINE__,
                               "connection closed - keep-alive timeout: %d",
                               con->fd);

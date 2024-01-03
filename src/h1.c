@@ -877,7 +877,7 @@ h1_check_timeout (connection * const con, const unix_time64_t cur_ts)
           ? con->keep_alive_idle
           : (int)r->conf.max_read_idle;
         if (cur_ts - con->read_idle_ts > idle_timeout) {
-            if (r->conf.log_request_handling)
+            if (r->conf.log_timeouts)
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "connection closed - %s timeout: %d",
                   keep_alive ? "keep-alive" : "read", con->fd);
