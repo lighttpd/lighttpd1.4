@@ -169,6 +169,7 @@ static void test_mod_expire_set_header_check(void) {
     assert(light_btst(r.resp_htags, HTTP_HEADER_CACHE_CONTROL));
 
     http_response_reset(&r);
+    array_free_data(&r.resp_headers);
 }
 
 void test_mod_expire (void);
