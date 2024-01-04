@@ -313,6 +313,7 @@ connection_write_chunkqueue (connection * const con, chunkqueue * const restrict
 }
 
 
+__attribute_noinline__
 static int connection_handle_write(request_st * const r, connection * const con) {
 	/*assert(!chunkqueue_is_empty(cq));*//* checked by callers */
 
@@ -321,10 +322,7 @@ static int connection_handle_write(request_st * const r, connection * const con)
 	switch (rc) {
 	case 0:
 		break;
-	case -1: /* error on our side */
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "connection closed: write failed on fd %d", con->fd);
-		__attribute_fallthrough__
+	case -1: /* local error */
 	case -2: /* remote close */
 		connection_set_state_error(r, CON_STATE_ERROR);
 		return CON_STATE_ERROR;
