@@ -12,6 +12,7 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -44,7 +45,7 @@ extern int access(const char *path, int mode);
 #endif
 
 /* #define PRIVATE static */
-#define PRIVATE
+#define PRIVATE static
 
 #ifdef TEST
 #define MAXRHS 5       /* Set low to exercise exception code */
@@ -436,7 +437,6 @@ struct lemon {
 };
 
 #define MemoryCheck(X) if((X)==0){ \
-  extern void memory_error(void); \
   memory_error(); \
 }
 
@@ -544,6 +544,7 @@ static struct action *Action_sort(
   return ap;
 }
 
+PRIVATE
 void Action_add(
   struct action **app,
   enum e_action type,
@@ -618,6 +619,7 @@ struct acttab {
 #define acttab_yylookahead(X,N)  ((X)->aAction[N].lookahead)
 
 /* Free all memory associated with the given acttab */
+PRIVATE
 void acttab_free(acttab *p){
   free( p->aAction );
   free( p->aLookahead );
@@ -625,6 +627,7 @@ void acttab_free(acttab *p){
 }
 
 /* Allocate a new acttab structure */
+PRIVATE
 acttab *acttab_alloc(int nsymbol, int nterminal){
   acttab *p = (acttab *) calloc( 1, sizeof(*p) );
   if( p==0 ){
@@ -642,6 +645,7 @@ acttab *acttab_alloc(int nsymbol, int nterminal){
 ** This routine is called once for each lookahead for a particular
 ** state.
 */
+PRIVATE
 void acttab_action(acttab *p, int lookahead, int action){
   if( p->nLookahead>=p->nLookaheadAlloc ){
     p->nLookaheadAlloc += 25;
@@ -683,6 +687,7 @@ void acttab_action(acttab *p, int lookahead, int action){
 ** a smaller table.  For non-terminal symbols, which are never syntax errors,
 ** makeItSafe can be false.
 */
+PRIVATE
 int acttab_insert(acttab *p, int makeItSafe){
   int i, j, k, n, end;
   assert( p->nLookahead>0 );
@@ -792,6 +797,7 @@ int acttab_insert(acttab *p, int makeItSafe){
 ** Return the size of the action table without the trailing syntax error
 ** entries.
 */
+PRIVATE
 int acttab_action_size(acttab *p){
   int n = p->nAction;
   while( n>0 && p->aAction[n-1].lookahead<0 ){ n--; }
@@ -1011,6 +1017,7 @@ PRIVATE struct state *getstate(struct lemon *lemp)
 /*
 ** Return true if two symbols are the same.
 */
+PRIVATE
 int same_symbol(struct symbol *a, struct symbol *b)
 {
   int i;
@@ -2008,7 +2015,7 @@ static int handleflags(int i, FILE *err)
   }else if( op[j].type==OPT_FLAG ){
     *((int*)op[j].arg) = v;
   }else if( op[j].type==OPT_FFLAG ){
-    ((void(*)(int))op[j].fn)(v);
+    ((void(*)(int))(uintptr_t)op[j].fn)(v);
   }else if( op[j].type==OPT_FSTR ){
     op[j].fn(&g_argv[i][2]);
   }else{
@@ -2092,13 +2099,13 @@ static int handleswitch(int i, FILE *err)
         *(double*)(op[j].arg) = dv;
         break;
       case OPT_FDBL:
-        ((void(*)(double))op[j].fn)(dv);
+        ((void(*)(double))(uintptr_t)op[j].fn)(dv);
         break;
       case OPT_INT:
         *(int*)(op[j].arg) = lv;
         break;
       case OPT_FINT:
-        ((void(*)(int))op[j].fn)((int)lv);
+        ((void(*)(int))(uintptr_t)op[j].fn)((int)lv);
         break;
       case OPT_STR:
         *(char**)(op[j].arg) = sv;
@@ -3248,6 +3255,7 @@ PRIVATE FILE *file_open(
 
 /* Print the text of a rule
 */
+PRIVATE
 void rule_print(FILE *out, struct rule *rp){
   int i, j;
   fprintf(out, "%s",rp->lhs->name);
@@ -3304,6 +3312,7 @@ void Reprint(struct lemon *lemp)
 
 /* Print a single rule.
 */
+PRIVATE
 void RulePrint(FILE *fp, struct rule *rp, int iCursor){
   struct symbol *sp;
   int i, j;
@@ -3325,6 +3334,7 @@ void RulePrint(FILE *fp, struct rule *rp, int iCursor){
 
 /* Print the rule for a configuration.
 */
+PRIVATE
 void ConfigPrint(FILE *fp, struct config *cfp){
   RulePrint(fp, cfp->rp, cfp->dot);
 }
@@ -3368,6 +3378,7 @@ char *tag;
 /* Print an action to the given file descriptor.  Return FALSE if
 ** nothing was actually printed.
 */
+PRIVATE
 int PrintAction(
   struct action *ap,          /* The action to print */
   FILE *fp,                   /* Print the action here */
@@ -3743,6 +3754,7 @@ PRIVATE void tplt_print(FILE *out, struct lemon *lemp, char *str, int *lineno)
 ** The following routine emits code for the destructor for the
 ** symbol sp
 */
+PRIVATE
 void emit_destructor_code(
   FILE *out,
   struct symbol *sp,
@@ -3789,6 +3801,7 @@ void emit_destructor_code(
 /*
 ** Return TRUE (non-zero) if the given symbol has a destructor.
 */
+PRIVATE
 int has_destructor(struct symbol *sp, struct lemon *lemp)
 {
   int ret;
@@ -4106,6 +4119,7 @@ PRIVATE void emit_code(
 ** union, also set the ".dtnum" field of every terminal and nonterminal
 ** symbol.
 */
+PRIVATE
 void print_stack_union(
   FILE *out,                  /* The output stream */
   struct lemon *lemp,         /* The main info structure for this parser */
