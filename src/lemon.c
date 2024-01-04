@@ -6,8 +6,13 @@
 **
 ** The author of this program disclaims copyright.
 */
+#ifdef _MSC_VER
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -40,7 +45,7 @@ extern int access(const char *path, int mode);
 #endif
 
 /* #define PRIVATE static */
-#define PRIVATE
+#define PRIVATE static
 
 #ifdef TEST
 #define MAXRHS 5       /* Set low to exercise exception code */
@@ -48,7 +53,7 @@ extern int access(const char *path, int mode);
 #define MAXRHS 1000
 #endif
 
-extern void memory_error();
+extern void memory_error(void);
 static int showPrecedenceConflict = 0;
 static char *msort(char*,char**,int(*)(const char*,const char*));
 
@@ -88,7 +93,9 @@ static MemChunk *memChunkList = 0;
 */
 static void *lemon_malloc(size_t nByte){
   MemChunk *p;
-  if( nByte<0 ) return 0;
+  if( (ssize_t)nByte<0
+       || (ssize_t)(nByte+sizeof(MemChunk)) < (ssize_t)sizeof(MemChunk) )
+    return 0;
   p = malloc( nByte + sizeof(MemChunk) );
   if( p==0 ){
     fprintf(stderr, "Out of memory.  Failed to allocate %lld bytes.\n",
@@ -274,6 +281,7 @@ struct s_options {
   enum option_type type;
   const char *label;
   char *arg;
+  void(*fn)(char *);
   const char *message;
 };
 int    OptInit(char**,struct s_options*,FILE*);
@@ -510,7 +518,6 @@ struct lemon {
 };
 
 #define MemoryCheck(X) if((X)==0){ \
-  extern void memory_error(); \
   memory_error(); \
 }
 
@@ -618,6 +625,7 @@ static struct action *Action_sort(
   return ap;
 }
 
+PRIVATE
 void Action_add(
   struct action **app,
   enum e_action type,
@@ -692,6 +700,7 @@ struct acttab {
 #define acttab_yylookahead(X,N)  ((X)->aAction[N].lookahead)
 
 /* Free all memory associated with the given acttab */
+PRIVATE
 void acttab_free(acttab *p){
   lemon_free( p->aAction );
   lemon_free( p->aLookahead );
@@ -699,6 +708,7 @@ void acttab_free(acttab *p){
 }
 
 /* Allocate a new acttab structure */
+PRIVATE
 acttab *acttab_alloc(int nsymbol, int nterminal){
   acttab *p = (acttab *) lemon_calloc( 1, sizeof(*p) );
   if( p==0 ){
@@ -716,6 +726,7 @@ acttab *acttab_alloc(int nsymbol, int nterminal){
 ** This routine is called once for each lookahead for a particular
 ** state.
 */
+PRIVATE
 void acttab_action(acttab *p, int lookahead, int action){
   if( p->nLookahead>=p->nLookaheadAlloc ){
     p->nLookaheadAlloc += 25;
@@ -757,6 +768,7 @@ void acttab_action(acttab *p, int lookahead, int action){
 ** a smaller table.  For non-terminal symbols, which are never syntax errors,
 ** makeItSafe can be false.
 */
+PRIVATE
 int acttab_insert(acttab *p, int makeItSafe){
   int i, j, k, n, end;
   assert( p->nLookahead>0 );
@@ -866,6 +878,7 @@ int acttab_insert(acttab *p, int makeItSafe){
 ** Return the size of the action table without the trailing syntax error
 ** entries.
 */
+PRIVATE
 int acttab_action_size(acttab *p){
   int n = p->nAction;
   while( n>0 && p->aAction[n-1].lookahead<0 ){ n--; }
@@ -1085,6 +1098,7 @@ PRIVATE struct state *getstate(struct lemon *lemp)
 /*
 ** Return true if two symbols are the same.
 */
+PRIVATE
 int same_symbol(struct symbol *a, struct symbol *b)
 {
   int i;
@@ -1751,30 +1765,30 @@ int main(int argc, char **argv){
   static int printPP = 0;
   
   static struct s_options options[] = {
-    {OPT_FLAG, "b", (char*)&basisflag, "Print only the basis in report."},
-    {OPT_FLAG, "c", (char*)&compress, "Don't compress the action table."},
-    {OPT_FSTR, "d", (char*)&handle_d_option, "Output directory.  Default '.'"},
-    {OPT_FSTR, "D", (char*)handle_D_option, "Define an %ifdef macro."},
-    {OPT_FLAG, "E", (char*)&printPP, "Print input file after preprocessing."},
-    {OPT_FSTR, "f", 0, "Ignored.  (Placeholder for -f compiler options.)"},
-    {OPT_FLAG, "g", (char*)&rpflag, "Print grammar without actions."},
-    {OPT_FSTR, "I", 0, "Ignored.  (Placeholder for '-I' compiler options.)"},
-    {OPT_FLAG, "m", (char*)&mhflag, "Output a makeheaders compatible file."},
-    {OPT_FLAG, "l", (char*)&nolinenosflag, "Do not print #line statements."},
-    {OPT_FSTR, "O", 0, "Ignored.  (Placeholder for '-O' compiler options.)"},
-    {OPT_FLAG, "p", (char*)&showPrecedenceConflict,
+    {OPT_FLAG, "b", (char*)&basisflag, 0, "Print only the basis in report."},
+    {OPT_FLAG, "c", (char*)&compress, 0, "Don't compress the action table."},
+    {OPT_FSTR, "d", 0, handle_d_option, "Output directory.  Default '.'"},
+    {OPT_FSTR, "D", 0, handle_D_option, "Define an %ifdef macro."},
+    {OPT_FLAG, "E", (char*)&printPP, 0, "Print input file after preprocessing."},
+    {OPT_FSTR, "f", 0, 0, "Ignored.  (Placeholder for -f compiler options.)"},
+    {OPT_FLAG, "g", (char*)&rpflag, 0, "Print grammar without actions."},
+    {OPT_FSTR, "I", 0, 0, "Ignored.  (Placeholder for '-I' compiler options.)"},
+    {OPT_FLAG, "m", (char*)&mhflag, 0, "Output a makeheaders compatible file."},
+    {OPT_FLAG, "l", (char*)&nolinenosflag, 0, "Do not print #line statements."},
+    {OPT_FSTR, "O", 0, 0, "Ignored.  (Placeholder for '-O' compiler options.)"},
+    {OPT_FLAG, "p", (char*)&showPrecedenceConflict, 0,
                     "Show conflicts resolved by precedence rules"},
-    {OPT_FLAG, "q", (char*)&quiet, "(Quiet) Don't print the report file."},
-    {OPT_FLAG, "r", (char*)&noResort, "Do not sort or renumber states"},
-    {OPT_FLAG, "s", (char*)&statistics,
+    {OPT_FLAG, "q", (char*)&quiet, 0, "(Quiet) Don't print the report file."},
+    {OPT_FLAG, "r", (char*)&noResort, 0, "Do not sort or renumber states"},
+    {OPT_FLAG, "s", (char*)&statistics, 0,
                                    "Print parser stats to standard output."},
-    {OPT_FLAG, "S", (char*)&sqlFlag,
+    {OPT_FLAG, "S", (char*)&sqlFlag, 0,
                     "Generate the *.sql file describing the parser tables."},
-    {OPT_FLAG, "x", (char*)&version, "Print the version number."},
-    {OPT_FSTR, "T", (char*)handle_T_option, "Specify a template file."},
-    {OPT_FSTR, "U", (char*)handle_U_option, "Undefine a macro."},
-    {OPT_FSTR, "W", 0, "Ignored.  (Placeholder for '-W' compiler options.)"},
-    {OPT_FLAG,0,0,0}
+    {OPT_FLAG, "x", (char*)&version, 0, "Print the version number."},
+    {OPT_FSTR, "T", 0, handle_T_option, "Specify a template file."},
+    {OPT_FSTR, "U", 0, handle_U_option, "Undefine a macro."},
+    {OPT_FSTR, "W", 0, 0, "Ignored.  (Placeholder for '-W' compiler options.)"},
+    {OPT_FLAG,0,0,0,0}
   };
   int i;
   int exitcode;
@@ -2106,14 +2120,14 @@ static int handleflags(int i, FILE *err)
       errline(i,1,err);
     }
     errcnt++;
-  }else if( op[j].arg==0 ){
+  }else if( op[j].arg==0 && op[j].fn==0 ){
     /* Ignore this option */
   }else if( op[j].type==OPT_FLAG ){
     *((int*)op[j].arg) = v;
   }else if( op[j].type==OPT_FFLAG ){
-    (*(void(*)(int))(op[j].arg))(v);
+    ((void(*)(int))(uintptr_t)op[j].fn)(v);
   }else if( op[j].type==OPT_FSTR ){
-    (*(void(*)(char *))(op[j].arg))(&g_argv[i][2]);
+    op[j].fn(&g_argv[i][2]);
   }else{
     if( err ){
       fprintf(err,"%smissing argument on switch.\n",emsg);
@@ -2195,19 +2209,19 @@ static int handleswitch(int i, FILE *err)
         *(double*)(op[j].arg) = dv;
         break;
       case OPT_FDBL:
-        (*(void(*)(double))(op[j].arg))(dv);
+        ((void(*)(double))(uintptr_t)op[j].fn)(dv);
         break;
       case OPT_INT:
         *(int*)(op[j].arg) = lv;
         break;
       case OPT_FINT:
-        (*(void(*)(int))(op[j].arg))((int)lv);
+        ((void(*)(int))(uintptr_t)op[j].fn)((int)lv);
         break;
       case OPT_STR:
         *(char**)(op[j].arg) = sv;
         break;
       case OPT_FSTR:
-        (*(void(*)(char *))(op[j].arg))(sv);
+        op[j].fn(sv);
         break;
     }
   }
@@ -3358,6 +3372,7 @@ PRIVATE FILE *file_open(
 
 /* Print the text of a rule
 */
+PRIVATE
 void rule_print(FILE *out, struct rule *rp){
   int i, j;
   fprintf(out, "%s",rp->lhs->name);
@@ -3414,6 +3429,7 @@ void Reprint(struct lemon *lemp)
 
 /* Print a single rule.
 */
+PRIVATE
 void RulePrint(FILE *fp, struct rule *rp, int iCursor){
   struct symbol *sp;
   int i, j;
@@ -3435,6 +3451,7 @@ void RulePrint(FILE *fp, struct rule *rp, int iCursor){
 
 /* Print the rule for a configuration.
 */
+PRIVATE
 void ConfigPrint(FILE *fp, struct config *cfp){
   RulePrint(fp, cfp->rp, cfp->dot);
 }
@@ -3478,6 +3495,7 @@ char *tag;
 /* Print an action to the given file descriptor.  Return FALSE if
 ** nothing was actually printed.
 */
+PRIVATE
 int PrintAction(
   struct action *ap,          /* The action to print */
   FILE *fp,                   /* Print the action here */
@@ -3854,6 +3872,7 @@ PRIVATE void tplt_print(FILE *out, struct lemon *lemp, char *str, int *lineno)
 ** The following routine emits code for the destructor for the
 ** symbol sp
 */
+PRIVATE
 void emit_destructor_code(
   FILE *out,
   struct symbol *sp,
@@ -3900,6 +3919,7 @@ void emit_destructor_code(
 /*
 ** Return TRUE (non-zero) if the given symbol has a destructor.
 */
+PRIVATE
 int has_destructor(struct symbol *sp, struct lemon *lemp)
 {
   int ret;
@@ -4217,6 +4237,7 @@ PRIVATE void emit_code(
 ** union, also set the ".dtnum" field of every terminal and nonterminal
 ** symbol.
 */
+PRIVATE
 void print_stack_union(
   FILE *out,                  /* The output stream */
   struct lemon *lemp,         /* The main info structure for this parser */
@@ -5740,7 +5761,7 @@ struct symbol *Symbol_Nth(int n)
 }
 
 /* Return the size of the array */
-int Symbol_count()
+int Symbol_count(void)
 {
   return x2a ? x2a->count : 0;
 }
@@ -5748,7 +5769,7 @@ int Symbol_count()
 /* Return an array of pointers to all data in the table.
 ** The array is obtained from malloc.  Return NULL if memory allocation
 ** problems, or if the array is empty. */
-struct symbol **Symbol_arrayof()
+struct symbol **Symbol_arrayof(void)
 {
   struct symbol **array;
   int i,arrSize;
@@ -5799,7 +5820,7 @@ PRIVATE unsigned statehash(struct config *a)
 }
 
 /* Allocate a new state structure */
-struct state *State_new()
+struct state *State_new(void)
 {
   struct state *newstate;
   newstate = (struct state *)lemon_calloc(1, sizeof(struct state) );
