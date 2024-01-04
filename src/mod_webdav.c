@@ -2263,7 +2263,6 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
 
   #ifdef __linux__ /* Linux 2.6.33+ sendfile() supports file-to-file copy */
   #if defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILE \
-   && (!defined _LARGEFILE_SOURCE || defined HAVE_SENDFILE64) \
    && defined(__linux__) && !defined HAVE_SENDFILE_BROKEN
     off_t offset = 0;
    #if defined(_LP64) || defined(__LP64__) || defined(_WIN64)
@@ -2303,7 +2302,6 @@ webdav_fcopyfile_sz (int ifd, int ofd, off_t isz)
        && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1050) \
    || defined(HAVE_ELFTC_COPYFILE) /* __FreeBSD__ */ \
    || (defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILE \
-       && (!defined _LARGEFILE_SOURCE || defined HAVE_SENDFILE64) \
        && defined(__linux__) && !defined HAVE_SENDFILE_BROKEN)
     /*(file may have been truncated during prior copy acceleration attempt)*/
     if (0 == rd)

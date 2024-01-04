@@ -10,7 +10,7 @@ find_package(PkgConfig)
 
 include(LighttpdMacros)
 
-add_definitions(-D_TIME_BITS=64 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_LARGE_FILES -D_DEFAULT_SOURCE)
+add_definitions(-D_TIME_BITS=64 -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES -D_DEFAULT_SOURCE)
 
 # default to ON
 set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Default value for ``POSITION_INDEPENDENT_CODE`` of targets.")
@@ -229,12 +229,6 @@ check_include_files(sys/filio.h HAVE_SYS_FILIO_H)
 check_function_exists(port_create HAVE_PORT_CREATE)
 check_function_exists(sendfilev HAVE_SENDFILEV)
 check_function_exists(setpflags HAVE_SETPFLAGS)
-endif()
-
-if(LINUX)
-set(CMAKE_REQUIRED_DEFINITIONS "-D_LARGEFILE64_SOURCE")
-check_symbol_exists(sendfile64 "sys/sendfile.h" HAVE_SENDFILE64)
-set(CMAKE_REQUIRED_DEFINITIONS)
 endif()
 
 check_type_size(long SIZEOF_LONG)

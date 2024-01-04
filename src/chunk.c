@@ -1494,7 +1494,6 @@ chunkqueue_write_chunk_file_intermed (const int fd, chunk * const restrict c, lo
 
 
 #if defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILE \
- && (!defined _LARGEFILE_SOURCE || defined HAVE_SENDFILE64) \
  && defined(__linux__) && !defined HAVE_SENDFILE_BROKEN
 #include <sys/sendfile.h>
 #include <stdint.h>
@@ -1512,7 +1511,6 @@ chunkqueue_write_chunk_file (const int fd, chunk * const restrict c, log_error_s
     if (0 == len) return 0; /*(sanity check)*/
 
   #if defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILE \
-   && (!defined _LARGEFILE_SOURCE || defined HAVE_SENDFILE64) \
    && defined(__linux__) && !defined HAVE_SENDFILE_BROKEN
     /* Linux kernel >= 2.6.33 supports sendfile() between most fd types */
     off_t offset = c->offset;

@@ -16,7 +16,6 @@
 
 /* on linux 2.4.x you get either sendfile or LFS */
 #if defined HAVE_SYS_SENDFILE_H && defined HAVE_SENDFILE \
- && (!defined _LARGEFILE_SOURCE || defined HAVE_SENDFILE64) \
  && defined(__linux__) && !defined HAVE_SENDFILE_BROKEN
 # ifdef NETWORK_WRITE_USE_SENDFILE
 #  error "can't have more than one sendfile implementation"

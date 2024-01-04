@@ -190,7 +190,6 @@
 #cmakedefine  HAVE_SELECT
 #cmakedefine  HAVE_SENDFILE
 #cmakedefine  HAVE_SEND_FILE
-#cmakedefine  HAVE_SENDFILE64
 #cmakedefine  HAVE_SENDFILEV
 #cmakedefine  HAVE_SETPFLAGS
 #cmakedefine  HAVE_SIGACTION
