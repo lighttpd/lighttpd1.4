@@ -865,34 +865,7 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
             ndx = 0;
     }
     else {
-     /*const char *balancing = "";*/
      switch(balance) {
-      case GW_BALANCE_HASH:
-       { /* hash balancing */
-        const uint32_t base_hash =
-          gw_hash(BUF_PTR_LEN(&r->uri.authority),
-                  gw_hash(BUF_PTR_LEN(&r->uri.path), DJBHASH_INIT));
-        uint32_t last_max = UINT32_MAX;
-        for (int k = 0; k < ext_used; ++k) {
-            const gw_host * const host = extension->hosts[k];
-            if (0 == host->active_procs) continue;
-            const uint32_t cur_max = base_hash ^ host->gw_hash;
-          #if 0
-            if (debug) {
-                log_error(r->conf.errh, __FILE__, __LINE__,
-                  "proxy - election: %s %s %s %u", r->uri.path.ptr,
-                  host->host ? host->host->ptr : "",
-                  r->uri.authority.ptr, cur_max);
-            }
-          #endif
-            if (last_max < cur_max || last_max == UINT32_MAX) {
-                last_max = cur_max;
-                ndx = k;
-            }
-        }
-        /*balancing = "hash";*/
-        break;
-       }
       case GW_BALANCE_LEAST_CONNECTION:
        { /* fair balancing */
         for (int k = 0, max_usage = INT_MAX; k < ext_used; ++k) {
@@ -903,7 +876,6 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
                 ndx = k;
             }
         }
-        /*balancing = "least connection";*/
         break;
        }
       case GW_BALANCE_RR:
@@ -932,45 +904,30 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
 
         /* Save new index for next round */
         extension->last_used_ndx = ndx;
-
-        /*balancing = "round-robin";*/
         break;
        }
+      case GW_BALANCE_HASH:
       case GW_BALANCE_STICKY:
-       { /* source sticky balancing */
-        const buffer * const dst_addr_buf = r->dst_addr_buf;
-        const uint32_t base_hash =
-          gw_hash(BUF_PTR_LEN(dst_addr_buf), DJBHASH_INIT);
-        uint32_t last_max = UINT32_MAX;
+       { /* hash balancing or source sticky balancing */
+        const uint32_t base_hash = (balance == GW_BALANCE_HASH)
+          ? gw_hash(BUF_PTR_LEN(&r->uri.authority),
+                    gw_hash(BUF_PTR_LEN(&r->uri.path), DJBHASH_INIT))
+          : gw_hash(BUF_PTR_LEN(r->dst_addr_buf), DJBHASH_INIT);
+        uint32_t last_max = 0;
         for (int k = 0; k < ext_used; ++k) {
             const gw_host * const host = extension->hosts[k];
             if (0 == host->active_procs) continue;
-            const uint32_t cur_max = base_hash ^ host->gw_hash ^ host->port;
-          #if 0
-            if (debug) {
-                log_error(r->conf.errh, __FILE__, __LINE__,
-                  "proxy - election: %s %s %hu %u", dst_addr_buf->ptr,
-                  host->host ? host->host->ptr : "",
-                  host->port, cur_max);
-            }
-          #endif
-            if (last_max < cur_max || last_max == UINT32_MAX) {
+            const uint32_t cur_max = base_hash ^ host->gw_hash;
+            if (last_max <= cur_max) {
                 last_max = cur_max;
                 ndx = k;
             }
         }
-        /*balancing = "sticky";*/
         break;
        }
       default:
         break;
      }
-     #if 0
-     if (debug) {
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "gw - balancing: %s, hosts: %d", balancing, ext_used);
-     }
-     #endif
     }
 
     if (__builtin_expect( (-1 != ndx), 1)) {
@@ -1783,7 +1740,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
             }
 
             const buffer * const h = host->host ? host->host : host->unixsocket;
-            host->gw_hash = gw_hash(BUF_PTR_LEN(h), DJBHASH_INIT);
+            host->gw_hash = gw_hash(BUF_PTR_LEN(h), DJBHASH_INIT) ^ host->port;
 
             /* s->exts is list of exts -> hosts
              * s->exts now used as combined list
