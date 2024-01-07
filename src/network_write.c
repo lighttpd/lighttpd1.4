@@ -351,7 +351,7 @@ static int network_write_file_chunk_sendfile(const int fd, chunkqueue * const cq
             return network_remove_finished_chunks(cq, clen);
     }
 
-    if (!c || FILE_CHUNK != c->type) {
+    if (!c || FILE_CHUNK != c->type || (flen = c->file.length-c->offset) <= 0) {
         if (0 == hdr_cnt)
             return network_remove_finished_chunks(cq, 0);
         ssize_t wr = writev(fd, headers, hdr_cnt);
@@ -359,9 +359,6 @@ static int network_write_file_chunk_sendfile(const int fd, chunkqueue * const cq
     }
 
     /* if (c && FILE_CHUNK == c->type) */
-    flen = c->file.length - c->offset;
-    if (flen <= 0)
-        return network_remove_finished_chunks(cq, flen);
     if (flen > *p_max_bytes - nbytes) flen = *p_max_bytes - nbytes;
     nbytes += flen;
    #if !defined(NETWORK_WRITE_USE_DARWIN_SENDFILE)
