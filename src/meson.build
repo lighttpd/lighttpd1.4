@@ -72,12 +72,12 @@ foreach h : headers
 endforeach
 
 # will be needed for auth
+libcrypt = []
 if conf_data.get('HAVE_CRYPT_H')
 	# check if we need libcrypt for crypt_r / crypt
 
 	# crypt_r in default libs?
 	if compiler.has_function('crypt_r', args: defs, prefix: '#include <crypt.h>')
-		libcrypt = []
 		conf_data.set('HAVE_CRYPT_R', 1)
 	# crypt_r in -lcrypt ?
 	elif compiler.has_function('crypt_r', args: defs + ['-lcrypt'], prefix: '#include <crypt.h>')
@@ -85,7 +85,6 @@ if conf_data.get('HAVE_CRYPT_H')
 		conf_data.set('HAVE_CRYPT_R', 1)
 	# crypt in default libs?
 	elif compiler.has_function('crypt', args: defs, prefix: '#include <crypt.h>')
-		libcrypt = []
 		conf_data.set('HAVE_CRYPT', 1)
 	# crypt in -lcrypt ?
 	elif compiler.has_function('crypt', args: defs + ['-lcrypt'], prefix: '#include <crypt.h>')
@@ -95,7 +94,6 @@ if conf_data.get('HAVE_CRYPT_H')
 elif conf_data.get('HAVE_UNISTD_H')
 	# crypt in default libs?
 	if compiler.has_function('crypt', args: defs, prefix: '#include <unistd.h>')
-		libcrypt = []
 		conf_data.set('HAVE_CRYPT', 1)
 	# crypt in -lcrypt ?
 	elif compiler.has_function('crypt', args: defs + ['-lcrypt'], prefix: '#include <unistd.h>')
@@ -179,12 +177,12 @@ conf_data.set('SIZEOF_OFF_T', compiler.sizeof('off_t', args: defs))
 conf_data.set('HAVE_CLOCK_GETTIME', compiler.has_function('clock_gettime', args: defs, prefix: '#include <time.h>'))
 clock_lib = []
 if not conf_data.get('HAVE_CLOCK_GETTIME')
-  rt = compiler.find_library('rt')
+  rt = compiler.find_library('rt', required: false)
   conf_data.set('HAVE_CLOCK_GETTIME', compiler.has_function('clock_gettime', args: defs, dependencies: rt, prefix: '#include <time.h>'))
   if conf_data.get('HAVE_CLOCK_GETTIME')
     clock_lib = rt
   else
-    threads = dependency('threads')
+    threads = dependency('threads', required: false)
     conf_data.set('HAVE_CLOCK_GETTIME', compiler.has_function('clock_gettime', args: defs, dependencies: threads, prefix: '#include <time.h>'))
     if conf_data.get('HAVE_CLOCK_GETTIME')
       clock_lib = threads
@@ -878,6 +876,11 @@ if libsasl.found()
 	]
 endif
 
+plugin_suffix = []
+if (host_machine.system() == 'darwin')
+	plugin_suffix = 'so'  # use "so" instead of "dylib"
+endif
+
 foreach mod: modules
 	mod_name = mod.get(0)
 	mod_sources = mod.get(1)
@@ -886,6 +889,7 @@ foreach mod: modules
 		sources: mod_sources,
 		dependencies: [ common_flags, mod_deps ],
 		name_prefix: '',
+		name_suffix: plugin_suffix,
 		install: true,
 		install_dir: moduledir,
 	)
