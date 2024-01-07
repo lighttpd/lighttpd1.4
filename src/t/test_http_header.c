@@ -100,7 +100,7 @@ static void test_http_header_tables (void) {
         if (http_headers[u].vlen == 0) break;
         int8_t x = http_headers_off[http_headers[u].vlen];
         assert((unsigned int)x <= u);
-        assert(http_headers[x].vlen == http_headers[u].vlen);
+        assert(http_headers[(uint8_t)x].vlen == http_headers[u].vlen);
     }
 }
 
