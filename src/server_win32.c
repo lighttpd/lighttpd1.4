@@ -166,7 +166,11 @@ static UINT lighttpd_ServiceDelete (void)
 
 static void signal_handler (int sig);
 
-static void lighttpd_ServiceCtrlHandler (DWORD dwCtrl)
+static void
+#if !defined(_WIN64)
+__stdcall
+#endif
+lighttpd_ServiceCtrlHandler (DWORD dwCtrl)
 {
     switch (dwCtrl) {
       case SERVICE_CONTROL_PARAMCHANGE:
@@ -235,7 +239,11 @@ static char ** svc_main_argv;
 
 __attribute_cold__
 __attribute_noinline__
-static void lighttpd_ServiceMain (DWORD dwNumServicesArgs, LPSTR *lpServiceArgVectors)
+static void
+#if !defined(_WIN64)
+__stdcall
+#endif
+lighttpd_ServiceMain (DWORD dwNumServicesArgs, LPSTR *lpServiceArgVectors)
 {
     /* service thread; not main(); params are not program startup argc, argv */
     hStatus = RegisterServiceCtrlHandlerA("lighttpd",
