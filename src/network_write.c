@@ -449,7 +449,7 @@ static int network_write_file_chunk_sendfile(const int fd, chunkqueue * const cq
     }
     fvec[i].sfv_fd = c->file.fd;
     fvec[i].sfv_flag = 0;
-    fvec[i].sfv_off = offset;
+    fvec[i].sfv_off = c->offset;
     fvec[i].sfv_len = (size_t)flen;
     ++i;
     for (int j = 0; j < trl_cnt; ++i, ++j) {
