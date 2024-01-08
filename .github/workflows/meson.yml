@@ -1,0 +1,133 @@
+name: On PRs - meson
+
+on: [push, pull_request]
+
+concurrency:
+  group: ${{github.workflow}}-${{github.head_ref}}
+  cancel-in-progress: true
+
+jobs:
+
+  Ubuntu-gcc:
+    runs-on: ubuntu-latest
+    name: Linux-GCC${{matrix.cxx}}-deps=${{matrix.deps}}
+    strategy:
+      matrix:
+        cxx: ['11']
+        deps: ['enabled', 'disabled']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: |
+          sudo apt install -y g++-${{matrix.cxx}}
+          python3 -m pip install meson ninja
+      - name: Compile and Test
+        env:
+          CXX: g++-${{matrix.cxx}}
+        run: |
+          meson setup "${{github.workspace}}/build" -Dauto_features=${{matrix.deps}} -Dwarning_level=3
+          meson compile -C "${{github.workspace}}/build" --verbose
+          meson test -C "${{github.workspace}}/build" --verbose
+
+  Ubuntu-clang:
+    runs-on: ubuntu-latest
+    name: Linux-Clang${{matrix.cxx}}-deps=${{matrix.deps}}
+    strategy:
+      matrix:
+        cxx: ['14']
+        deps: ['enabled', 'disabled']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: |
+          sudo apt install -y clang-${{matrix.cxx}} libc++abi-${{matrix.cxx}}-dev libc++-${{matrix.cxx}}-dev lld-${{matrix.cxx}}
+          python3 -m pip install meson ninja
+      - name: Compile and Test
+        env:
+          CXX: clang++-${{matrix.cxx}}
+          CXXFLAGS: -stdlib=libc++
+          CXX_LD: lld-${{matrix.cxx}}
+        run: |
+          meson setup "${{github.workspace}}/build" -Dauto_features=${{matrix.deps}} -Dwarning_level=3
+          meson compile -C "${{github.workspace}}/build" --verbose
+          meson test -C "${{github.workspace}}/build" --verbose
+
+  MacOS:
+    runs-on: macos-latest
+    name: macOS-deps=${{matrix.deps}}
+    strategy:
+      matrix:
+        deps: ['enabled', 'disabled']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: |
+          brew install perl
+          python3 -m pip install meson ninja
+      - name: Compile and Test
+        run: |
+          meson setup "${{github.workspace}}/build" -Dauto_features=${{matrix.deps}} -Dwarning_level=3
+          meson compile -C "${{github.workspace}}/build" --verbose
+          meson test -C "${{github.workspace}}/build" --verbose
+
+  DragonflyBSD:
+    runs-on: ubuntu-latest
+    name: DragonflyBSD
+    steps:
+      - uses: actions/checkout@v4
+      - name: DragonflyBSD
+        uses: vmactions/dragonflybsd-vm@v1
+        with:
+          prepare: |
+            pkg install -y ninja meson pkgconf pcre2 perl5
+          run: |
+            meson setup "${{github.workspace}}/build" -Dwarning_level=3
+            meson compile -C "${{github.workspace}}/build" --verbose
+            meson test -C "${{github.workspace}}/build" --verbose
+
+  FreeBSD:
+    runs-on: ubuntu-latest
+    name: FreeBSD
+    steps:
+      - uses: actions/checkout@v4
+      - name: FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          prepare: |
+            pkg install -y ninja meson pkgconf pcre2 perl5
+          run: |
+            meson setup "${{github.workspace}}/build" -Dwarning_level=3
+            meson compile -C "${{github.workspace}}/build" --verbose
+            meson test -C "${{github.workspace}}/build" --verbose
+
+  NetBSD:
+    runs-on: ubuntu-latest
+    name: NetBSD
+    steps:
+      - uses: actions/checkout@v4
+      - name: NetBSD
+        uses: vmactions/openbsd-vm@v1
+        with:
+          prepare: |
+            pkg_add ninja meson pkgconf pcre2 perl5
+          run: |
+            meson setup "${{github.workspace}}/build" -Dwarning_level=3
+            meson compile -C "${{github.workspace}}/build" --verbose
+            # TODO: figure out why tests/lighttpd.conf not found; works for FreeBSD and DragonFly
+            #meson test -C "${{github.workspace}}/build" --verbose
+
+  OpenBSD:
+    runs-on: ubuntu-latest
+    name: OpenBSD
+    steps:
+      - uses: actions/checkout@v4
+      - name: OpenBSD
+        uses: vmactions/openbsd-vm@v1
+        with:
+          prepare: |
+            pkg_add ninja meson pkgconf pcre2 perl5
+          run: |
+            meson setup "${{github.workspace}}/build" -Dwarning_level=3
+            meson compile -C "${{github.workspace}}/build" --verbose
+            # TODO: figure out why tests/lighttpd.conf not found; works for FreeBSD and DragonFly
+            #meson test -C "${{github.workspace}}/build" --verbose
