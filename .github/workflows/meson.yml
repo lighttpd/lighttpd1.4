@@ -141,3 +141,35 @@ jobs:
           cmake --build build --config Release
           # run src/t/test_*; cmake config skips Perl tests/* on native Windows
           ctest -V --test-dir build --build-config Release
+
+  Windows-MSYS2:
+    runs-on: windows-latest
+    name: Windows-MSYS2-${{matrix.platform}}
+    strategy:
+      matrix:
+        platform: ['mingw32', 'mingw64', 'ucrt64', 'clang32', 'clang64']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{matrix.platform}}
+          install: >-
+            dos2unix
+          pacboy: >-
+            cc:p
+            cmake:p
+            pcre2:p
+            pkgconf:p
+      - name: Compile and Test
+        shell: msys2 {0}
+        run: |
+          # TODO: figure out why linking modules fails due to missing
+          # liblighttpd.dll.a (should be import lib created from lighttpd.exe)
+          # Build static lighttpd.exe with only core modules to avoid link error
+          touch "${{github.workspace}}/src/plugin-static.h"
+          cmake -G "Ninja" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
+          cmake --build build --config Release
+          # Run the compiled unit tests src/t/test_*;
+          # (Skip the Perl test framework in tests/*)
+          # TODO: might install more packages into container to run more tests
+          ctest -V --test-dir build --build-config Release --no-tests=error -R '^test_'
