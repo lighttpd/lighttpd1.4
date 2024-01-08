@@ -272,6 +272,10 @@ set(CMAKE_REQUIRED_LIBRARIES "ws2_32")
 endif()
 check_function_exists(inet_aton HAVE_INET_ATON)
 check_function_exists(inet_pton HAVE_INET_PTON)
+if(WIN32)
+set(HAVE_IPV6 1)
+set(HAVE_INET_PTON 1)
+else()
 check_c_source_compiles("
 	#include <sys/types.h>
 	#include <sys/socket.h>
@@ -281,8 +285,6 @@ check_c_source_compiles("
 		struct sockaddr_in6 s; struct in6_addr t=in6addr_any; int i=AF_INET6; s; t.s6_addr[0] = 0;
 		return 0;
 	}" HAVE_IPV6)
-if(WIN32)
-set(HAVE_IPV6 1)
 endif()
 if(CMAKE_SYSTEM_NAME MATCHES "SunOS")
 set(CMAKE_REQUIRED_LIBRARIES)
