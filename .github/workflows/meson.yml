@@ -8,12 +8,8 @@ concurrency:
 
 jobs:
 
-  Ubuntu-gcc:
+  Linux-GCC:
     runs-on: ubuntu-latest
-    name: Linux-GCC-deps=${{matrix.deps}}
-    strategy:
-      matrix:
-        deps: ['enabled', 'disabled']
     steps:
       - uses: actions/checkout@v4
       - uses: egor-tensin/setup-gcc@v1
@@ -24,16 +20,12 @@ jobs:
           python3 -m pip install meson ninja
       - name: Compile and Test
         run: |
-          meson setup "${{github.workspace}}/build" -Dauto_features=${{matrix.deps}} -Dwarning_level=3
+          meson setup "${{github.workspace}}/build" -Dwarning_level=3
           meson compile -C "${{github.workspace}}/build" --verbose
           meson test -C "${{github.workspace}}/build" --verbose
 
-  Ubuntu-clang:
+  Linux-Clang:
     runs-on: ubuntu-latest
-    name: Linux-Clang-deps=${{matrix.deps}}
-    strategy:
-      matrix:
-        deps: ['enabled', 'disabled']
     steps:
       - uses: actions/checkout@v4
       - uses: egor-tensin/setup-clang@v1
@@ -44,16 +36,12 @@ jobs:
           python3 -m pip install meson ninja
       - name: Compile and Test
         run: |
-          meson setup "${{github.workspace}}/build" -Dauto_features=${{matrix.deps}} -Dwarning_level=3
+          meson setup "${{github.workspace}}/build" -Dwarning_level=3
           meson compile -C "${{github.workspace}}/build" --verbose
           meson test -C "${{github.workspace}}/build" --verbose
 
   MacOS:
     runs-on: macos-latest
-    name: macOS-deps=${{matrix.deps}}
-    strategy:
-      matrix:
-        deps: ['enabled', 'disabled']
     steps:
       - uses: actions/checkout@v4
       - name: Install packages
@@ -62,17 +50,15 @@ jobs:
           python3 -m pip install meson ninja
       - name: Compile and Test
         run: |
-          meson setup "${{github.workspace}}/build" -Dauto_features=${{matrix.deps}} -Dwarning_level=3
+          meson setup "${{github.workspace}}/build" -Dwarning_level=3
           meson compile -C "${{github.workspace}}/build" --verbose
           meson test -C "${{github.workspace}}/build" --verbose
 
   DragonflyBSD:
     runs-on: ubuntu-latest
-    name: DragonflyBSD
     steps:
       - uses: actions/checkout@v4
-      - name: DragonflyBSD
-        uses: vmactions/dragonflybsd-vm@v1
+      - uses: vmactions/dragonflybsd-vm@v1
         with:
           prepare: |
             pkg install -y ninja meson pkgconf pcre2 perl5
@@ -83,11 +69,9 @@ jobs:
 
   FreeBSD:
     runs-on: ubuntu-latest
-    name: FreeBSD
     steps:
       - uses: actions/checkout@v4
-      - name: FreeBSD
-        uses: vmactions/freebsd-vm@v1
+      - uses: vmactions/freebsd-vm@v1
         with:
           prepare: |
             pkg install -y ninja meson pkgconf pcre2 perl5
@@ -98,11 +82,9 @@ jobs:
 
   NetBSD:
     runs-on: ubuntu-latest
-    name: NetBSD
     steps:
       - uses: actions/checkout@v4
-      - name: NetBSD
-        uses: vmactions/openbsd-vm@v1
+      - uses: vmactions/openbsd-vm@v1
         with:
           prepare: |
             pkg_add ninja meson pkgconf pcre2 perl5
@@ -114,11 +96,9 @@ jobs:
 
   OpenBSD:
     runs-on: ubuntu-latest
-    name: OpenBSD
     steps:
       - uses: actions/checkout@v4
-      - name: OpenBSD
-        uses: vmactions/openbsd-vm@v1
+      - uses: vmactions/openbsd-vm@v1
         with:
           prepare: |
             pkg_add ninja meson pkgconf pcre2 perl5
