@@ -13,6 +13,9 @@ if(SOCKLIBS)
   target_link_libraries(scgi-responder ${SOCKLIBS})
 endif()
 
+# tests/* do not run under native Windows; not written for Windows paths
+if(NOT WIN32)
+
 set(T_FILES
 	prepare.sh
 	request.t
@@ -28,3 +31,5 @@ foreach(it ${T_FILES})
 		"${lighttpd_BINARY_DIR}"
 		"${lighttpd_SOURCE_DIR}/tests/${it}")
 endforeach()
+
+endif() # (NOT WIN32)
