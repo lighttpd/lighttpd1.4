@@ -18,6 +18,7 @@
 
 #include <windows.h>
 #include <direct.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <stringapiset.h>
 

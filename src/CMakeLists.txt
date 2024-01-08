@@ -915,7 +915,11 @@ set(L_INSTALL_TARGETS)
 
 add_executable(lighttpd-angel lighttpd-angel.c)
 set(L_INSTALL_TARGETS ${L_INSTALL_TARGETS} lighttpd-angel)
+if(WIN32)
+add_target_properties(lighttpd-angel COMPILE_FLAGS "-DSBIN_DIR=\\\"${CMAKE_INSTALL_FULL_SBINDIR}\\\"")
+else()
 add_target_properties(lighttpd-angel COMPILE_FLAGS "-DSBIN_DIR=\\\\\"${CMAKE_INSTALL_FULL_SBINDIR}\\\\\"")
+endif()
 
 set(SERVER_SRC
 	server.c

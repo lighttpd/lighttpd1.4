@@ -331,6 +331,7 @@ int fdevent_fcntl_set_nb_cloexec_sock (int fd)
 
 #include <windows.h>
 #include <signal.h>     /* sig_atomic_t SIGKILL */
+#include <errno.h>
 
 #ifndef SIGKILL
 #define SIGKILL 9
