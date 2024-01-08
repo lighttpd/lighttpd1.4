@@ -20,6 +20,7 @@
 #endif
 
 #if defined(__sun)
+#undef _XOPEN_SOURCE /* WTH, Solaris ?!? */
 #define __EXTENSIONS__
 #endif
 
