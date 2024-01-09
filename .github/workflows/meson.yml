@@ -105,3 +105,19 @@ jobs:
             meson setup "${{github.workspace}}/build" -Dwarning_level=3
             meson compile -C "${{github.workspace}}/build" --verbose
             meson test -C "${{github.workspace}}/build" --verbose
+
+  Windows-VisualStudio:
+    runs-on: windows-latest
+    name: Windows-VisualStudio-${{matrix.platform}}
+    strategy:
+      matrix:
+        platform: ['x64', 'win32']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Compile and Test
+        run: |
+          cmake -G "Visual Studio 17 2022" -A "${{matrix.platform}}" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DWITH_PCRE2=OFF -DWITH_PCRE=OFF -DWITH_ZLIB=OFF
+          cmake --build build --config Release
+          # run src/t/test_*; cmake config skips Perl tests/* on native Windows
+          ctest -V --test-dir build --build-config Release
