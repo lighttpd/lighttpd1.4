@@ -1,4 +1,4 @@
-name: On PRs - meson
+name: On PRs
 
 on: [push, pull_request]
 
@@ -8,7 +8,7 @@ concurrency:
 
 jobs:
 
-  Linux-GCC:
+  Linux-gcc:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
           meson compile -C "${{github.workspace}}/build" --verbose
           meson test -C "${{github.workspace}}/build" --verbose
 
-  Linux-Clang:
+  Linux-clang:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +40,7 @@ jobs:
           meson compile -C "${{github.workspace}}/build" --verbose
           meson test -C "${{github.workspace}}/build" --verbose
 
-  MacOS:
+  macOS:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,15 +84,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: vmactions/openbsd-vm@v1
+      - uses: vmactions/netbsd-vm@v1
         with:
           prepare: |
-            pkg_add ninja meson pkgconf pcre2 perl5
+            pkg_add cmake pkgconf pcre2 perl
           run: |
-            meson setup "${{github.workspace}}/build" -Dwarning_level=3
-            meson compile -C "${{github.workspace}}/build" --verbose
-            # TODO: figure out why tests/lighttpd.conf not found; works for FreeBSD and DragonFly
-            #meson test -C "${{github.workspace}}/build" --verbose
+            cmake -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release
+            cmake --build build --config Release
+            ctest -V --test-dir build --build-config Release
 
   OpenBSD:
     runs-on: ubuntu-latest
@@ -105,5 +104,4 @@ jobs:
           run: |
             meson setup "${{github.workspace}}/build" -Dwarning_level=3
             meson compile -C "${{github.workspace}}/build" --verbose
-            # TODO: figure out why tests/lighttpd.conf not found; works for FreeBSD and DragonFly
-            #meson test -C "${{github.workspace}}/build" --verbose
+            meson test -C "${{github.workspace}}/build" --verbose
