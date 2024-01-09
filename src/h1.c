@@ -245,7 +245,7 @@ h1_send_headers (request_st * const r)
     r->resp_header_len = buffer_clen(b);
 
     if (r->conf.log_response_header)
-        log_error_multiline(r->conf.errh, __FILE__, __LINE__,
+        log_debug_multiline(r->conf.errh, __FILE__, __LINE__,
                             BUF_PTR_LEN(b), "fd:%d resp: ", r->con->fd);
 
     chunkqueue_prepend_buffer_commit(cq);
@@ -494,7 +494,7 @@ h1_recv_headers (request_st * const r, connection * const con)
 
     r->rqst_header_len = header_len;
     if (r->conf.log_request_header)
-        log_error_multiline(r->conf.errh, __FILE__, __LINE__,
+        log_debug_multiline(r->conf.errh, __FILE__, __LINE__,
                             hdrs, header_len, "fd:%d rqst: ", con->fd);
     http_request_headers_process(r, hdrs, hoff, con->proto_default_port);
     chunkqueue_mark_written(cq, r->rqst_header_len);
