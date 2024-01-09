@@ -106,6 +106,26 @@ jobs:
             meson compile -C "${{github.workspace}}/build" --verbose
             meson test -C "${{github.workspace}}/build" --verbose
 
+#  # Solaris VM test is really slow compared to other VMs tests
+#  # (retrieving and installing packages is really slow)
+#  Solaris:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: vmactions/solaris-vm@v1
+#        with:
+#          prepare: |
+#            pkgutil -y -i cmake gcc5core gmake pkgconfig pcre2 perl
+#          run: |
+#            # TODO: configure matrix with Sun Studio compiler
+#            # TODO: figure out why pcre2 is installed but not found
+#            cmake -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DWITH_PCRE2=OFF -DWITH_PCRE=OFF
+#            cmake --build build --config Release
+#            # TODO: figure out why t/* tests are built but not found (not run)
+#            # TODO: figure out tests/* are not found (not run)
+#            # ctest --no-tests=error is also failing to fail/cause CI to fail
+#            ctest -V --test-dir build --build-config Release --no-tests=error
+
   Windows-VisualStudio:
     runs-on: windows-latest
     name: Windows-VisualStudio-${{matrix.platform}}
