@@ -37,7 +37,7 @@ cp "${srcdir}/docroot/"*.html \
 # (tests will fail to run from an alternate build root on platforms
 #  on which cp -n is not supported, such as NetBSD and OpenBSD)
 # (does not detect if srcdir or top_builddir are inconsistent with trailing '/')
-[[ "${srcdir}" = "." ]] || [[ "${srcdir}" = "${top_builddir}/tests" ]] || \
+[ "${srcdir}" = "." ] || [ "${srcdir}" = "${top_builddir}/tests" ] || \
 cp    "${srcdir}/"*.conf \
       "${srcdir}/lighttpd.user" \
       "${srcdir}/lighttpd.htpasswd" \
