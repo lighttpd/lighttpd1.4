@@ -96,6 +96,22 @@ jobs:
             meson compile -C "${{github.workspace}}/build" --verbose
             meson test -C "${{github.workspace}}/build" --verbose
 
+  NetBSD:
+    runs-on: ubuntu-latest
+    name: NetBSD
+    steps:
+      - uses: actions/checkout@v4
+      - name: NetBSD
+        uses: vmactions/openbsd-vm@v1
+        with:
+          prepare: |
+            pkg_add ninja meson pkgconf pcre2 perl5
+          run: |
+            meson setup "${{github.workspace}}/build" -Dwarning_level=3
+            meson compile -C "${{github.workspace}}/build" --verbose
+            # TODO: figure out why tests/lighttpd.conf not found; works for FreeBSD and DragonFly
+            #meson test -C "${{github.workspace}}/build" --verbose
+
   OpenBSD:
     runs-on: ubuntu-latest
     name: OpenBSD
