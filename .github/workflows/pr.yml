@@ -74,11 +74,20 @@ jobs:
       - uses: vmactions/freebsd-vm@v1
         with:
           prepare: |
-            pkg install -y ninja meson pkgconf pcre2 perl5
+            pkg install -y autoconf automake autotools libtool m4 pkgconf \
+              ninja meson cmake scons-py39 pcre2 perl5 \
+              gnutls libressl mbedtls nettle nss wolfssl \
+              cyrus-sasl krb5 libdbi openldap26-client \
+              mariadb1011-client postgresql16-client \
+              brotli libdeflate zstd \
+              libmaxminddb libunwind lua51 lua54 \
+              e2fsprogs-libuuid libxml2 sqlite3
           run: |
-            meson setup "${{github.workspace}}/build" -Dwarning_level=3
-            meson compile -C "${{github.workspace}}/build" --verbose
-            meson test -C "${{github.workspace}}/build" --verbose
+            set -e
+            cd "${{github.workspace}}" && scripts/ci-build.sh meson
+            cd "${{github.workspace}}" && scripts/ci-build.sh cmake
+            cd "${{github.workspace}}" && scripts/ci-build.sh scons
+            cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
 
   NetBSD:
     runs-on: ubuntu-latest

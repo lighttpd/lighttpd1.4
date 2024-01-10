@@ -10,6 +10,11 @@ compiler="${3:-gcc}"    # might want to overwrite a compiler
 # - create "cov-int" directory for upload (gets `tar`d)
 # - access coverity binaries with export PATH="${COVERITY_PATH}"
 
+if [ "$(uname -s)" = "FreeBSD" ]; then
+    export CPPFLAGS=-I/usr/local/include
+    export LDFLAGS=-L/usr/local/lib
+fi
+
 case "${build}" in
 "autobuild"|"coverity")
 	mkdir -p m4
@@ -31,7 +36,7 @@ case "${build}" in
 		--with-webdav-props --with-webdav-locks
 	case "${build}" in
 	"autobuild")
-		make -j 2
+		make -j 4
 		make check
 		;;
 	"coverity")
@@ -76,7 +81,7 @@ case "${build}" in
 		-DWITH_WEBDAV_LOCKS=ON \
 		-DWITH_WEBDAV_PROPS=ON \
 		..
-	make -j 2
+	make -j 4 VERBOSE=1
 	ctest -V
 	;;
 "meson")
@@ -108,8 +113,8 @@ case "${build}" in
 	  -Dwith_zstd=enabled \
 	  build
 	cd build
-	meson compile
-	meson test
+	meson compile --verbose
+	meson test --verbose
 	;;
 "scons")
 	case "${label}" in
@@ -119,9 +124,8 @@ case "${build}" in
 		export LIBS="-ldl"
 		;;
 	esac
-	# scons -j 2 with_pcre2=yes with_zlib=yes with_brotli=yes with_openssl=yes -k check_fullstatic
-	# scons -j 2 with_pcre2=yes with_zlib=yes with_brotli=yes with_openssl=yes -k check_static check_dynamic
-	scons -j 2 with_pcre2=yes with_zlib=yes with_brotli=yes with_openssl=yes -k check_fullstatic check_static check_dynamic
+	scons -j 4 with_pcre2=yes with_zlib=yes with_openssl=yes with_brotli=yes -k check_static check_dynamic
+	scons -j 4 with_pcre2=yes with_zlib=yes with_openssl=yes -k check_fullstatic
 	;;
 *)
 	echo >&2 "Unknown build system: ${build}"
