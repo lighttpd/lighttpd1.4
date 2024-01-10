@@ -139,8 +139,10 @@ jobs:
         run: |
           cmake -G "Visual Studio 17 2022" -A "${{matrix.platform}}" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DWITH_PCRE2=OFF -DWITH_PCRE=OFF -DWITH_ZLIB=OFF
           cmake --build build --config Release
-          # run src/t/test_*; cmake config skips Perl tests/* on native Windows
-          ctest -V --test-dir build --build-config Release
+          # run the compiled unit tests src/t/test_*;
+          # (skip the Perl test framework in tests/*)
+          # (note: tests/CMakeLists.txt also skips Perl tests/* on native WIN32)
+          ctest -V --test-dir build --build-config Release --no-tests=error -R '^test_'
 
   Windows-MSYS2:
     runs-on: windows-latest
@@ -153,8 +155,7 @@ jobs:
       - uses: msys2/setup-msys2@v2
         with:
           msystem: ${{matrix.platform}}
-          install: >-
-            dos2unix
+          update: true
           pacboy: >-
             cc:p
             cmake:p
@@ -165,11 +166,28 @@ jobs:
         run: |
           # TODO: figure out why linking modules fails due to missing
           # liblighttpd.dll.a (should be import lib created from lighttpd.exe)
-          # Build static lighttpd.exe with only core modules to avoid link error
+          # Build static lighttpd.exe with (at least) modules used by tests.
+          # List plugins used by tests/*.conf server.modules = (...)
           touch "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_access)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_accesslog)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_auth)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_authn_file)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_cgi)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_deflate)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_expire)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_extforward)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_fastcgi)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_proxy)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_redirect)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_scgi)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_setenv)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_simple_vhost)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_staticfile)" >> "${{github.workspace}}/src/plugin-static.h"
+          #echo "PLUGIN_INIT(mod_status)" >> "${{github.workspace}}/src/plugin-static.h"
           cmake -G "Ninja" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
           cmake --build build --config Release
-          # Run the compiled unit tests src/t/test_*;
-          # (Skip the Perl test framework in tests/*)
-          # TODO: might install more packages into container to run more tests
+          # run the compiled unit tests src/t/test_*;
+          # (skip the Perl test framework in tests/*)
+          # (note: tests/CMakeLists.txt also skips Perl tests/* on native WIN32)
           ctest -V --test-dir build --build-config Release --no-tests=error -R '^test_'
