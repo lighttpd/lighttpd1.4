@@ -9,7 +9,15 @@
 #include <string.h>
 #include <stdlib.h>
 
+#ifdef __has_include
+#if __has_include(<dbi/dbi.h>)
 #include <dbi/dbi.h>
+#else
+#include <dbi.h>
+#endif
+#else
+#include <dbi/dbi.h>
+#endif
 
 #include "mod_vhostdb_api.h"
 #include "base.h"
