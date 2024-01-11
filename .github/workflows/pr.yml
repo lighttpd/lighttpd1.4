@@ -20,6 +20,7 @@ jobs:
           python3 -m pip install meson ninja
       - name: Compile and Test
         run: |
+          set -e
           meson setup "${{github.workspace}}/build" -Dwarning_level=3
           meson compile -C "${{github.workspace}}/build" --verbose
           meson test -C "${{github.workspace}}/build" --verbose
@@ -36,6 +37,7 @@ jobs:
           python3 -m pip install meson ninja
       - name: Compile and Test
         run: |
+          set -e
           meson setup "${{github.workspace}}/build" -Dwarning_level=3
           meson compile -C "${{github.workspace}}/build" --verbose
           meson test -C "${{github.workspace}}/build" --verbose
@@ -50,6 +52,7 @@ jobs:
           python3 -m pip install meson ninja
       - name: Compile and Test
         run: |
+          set -e
           meson setup "${{github.workspace}}/build" -Dwarning_level=3
           meson compile -C "${{github.workspace}}/build" --verbose
           meson test -C "${{github.workspace}}/build" --verbose
@@ -98,6 +101,7 @@ jobs:
           prepare: |
             pkg_add cmake pkgconf pcre2 perl
           run: |
+            set -e
             cmake -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release
             cmake --build build --config Release
             ctest -V --test-dir build --build-config Release
@@ -111,6 +115,7 @@ jobs:
           prepare: |
             pkg_add ninja meson pkgconf pcre2 perl5
           run: |
+            set -e
             meson setup "${{github.workspace}}/build" -Dwarning_level=3
             meson compile -C "${{github.workspace}}/build" --verbose
             meson test -C "${{github.workspace}}/build" --verbose
@@ -126,6 +131,7 @@ jobs:
 #          prepare: |
 #            pkgutil -y -i cmake gcc5core gmake pkgconfig pcre2 perl
 #          run: |
+#            set -e
 #            # TODO: configure matrix with Sun Studio compiler
 #            # TODO: figure out why pcre2 is installed but not found
 #            cmake -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DWITH_PCRE2=OFF -DWITH_PCRE=OFF
@@ -173,6 +179,7 @@ jobs:
       - name: Compile and Test
         shell: msys2 {0}
         run: |
+          set -e
           # TODO: figure out why linking modules fails due to missing
           # liblighttpd.dll.a (should be import lib created from lighttpd.exe)
           # Build static lighttpd.exe with (at least) modules used by tests.
