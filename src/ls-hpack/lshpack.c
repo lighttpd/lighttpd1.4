@@ -38,8 +38,10 @@ SOFTWARE.
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#if 0
 #ifndef _WIN32 /*(<sys/queue.h> included in "lshpack.h" immediately below)*/
 #include <sys/queue.h>
+#endif
 #endif
 
 #include "lshpack.h"
