@@ -8,7 +8,7 @@ concurrency:
 
 jobs:
 
-  Linux-gcc:
+  Linux-ubuntu-gcc:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +25,7 @@ jobs:
           meson compile -C "${{github.workspace}}/build" --verbose
           meson test -C "${{github.workspace}}/build" --verbose
 
-  Linux-clang:
+  Linux-ubuntu-clang:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -129,12 +129,11 @@ jobs:
 #      - uses: vmactions/solaris-vm@v1
 #        with:
 #          prepare: |
-#            pkgutil -y -i cmake gcc5core gmake pkgconfig pcre2 perl
+#            pkgutil -y -i cmake gcc5core gmake pkgconfig perl libpcre2_dev
 #          run: |
 #            set -e
 #            # TODO: configure matrix with Sun Studio compiler
-#            # TODO: figure out why pcre2 is installed but not found
-#            cmake -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DWITH_PCRE2=OFF -DWITH_PCRE=OFF
+#            cmake -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release
 #            cmake --build build --config Release
 #            # TODO: figure out why t/* tests are built but not found (not run)
 #            # TODO: figure out tests/* are not found (not run)
@@ -164,7 +163,8 @@ jobs:
     name: Windows-MSYS2-${{matrix.platform}}
     strategy:
       matrix:
-        platform: ['mingw32', 'mingw64', 'ucrt64', 'clang32', 'clang64']
+        platform: ['mingw64', 'ucrt64', 'clang64']
+        #platform: ['mingw32', 'mingw64', 'ucrt64', 'clang32', 'clang64']
     steps:
       - uses: actions/checkout@v4
       - uses: msys2/setup-msys2@v2
@@ -207,3 +207,56 @@ jobs:
           # (skip the Perl test framework in tests/*)
           # (note: tests/CMakeLists.txt also skips Perl tests/* on native WIN32)
           ctest -V --test-dir build --build-config Release --no-tests=error -R '^test_'
+
+  Linux-alpine-x86_64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jirutka/setup-alpine@v1
+        with:
+          branch: latest-stable
+          arch: x86_64
+          packages: >
+            build-base cmake meson ninja pkgconf perl scons
+            autoconf automake libtool m4
+            gnutls-dev mbedtls-dev openssl-dev nettle-dev nss-dev wolfssl-dev
+            pcre2-dev brotli-dev libdeflate-dev zlib-dev zstd-dev
+            cyrus-sasl-dev krb5-dev libdbi-dev linux-pam-dev openldap-dev
+            mariadb-connector-c-dev postgresql16-dev
+            libmaxminddb-dev libunwind-dev lua5.1-dev lua5.4-dev
+            libxml2-dev ossp-uuid-dev sqlite-dev
+            zlib-static openssl-libs-static
+      - name: Compile and Test
+        run: |
+          set -e
+          # Alpine Linux wolfssl package built w/o features required by lighttpd
+          export NO_WOLFSSL=1
+          cd "${{github.workspace}}" && scripts/ci-build.sh meson
+          cd "${{github.workspace}}" && scripts/ci-build.sh cmake
+          cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
+          cd "${{github.workspace}}" && scripts/ci-build.sh scons
+          #('scons check_fullstatic' needs zlib-static openssl-libs-static)
+        shell: alpine.sh {0}
+
+  Linux-alpine:
+    runs-on: ubuntu-latest
+    name: Linux-alpine-${{matrix.platform}}
+    strategy:
+      matrix:
+        platform: ['x86','armhf','armv7','aarch64','ppc64le','riscv64']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jirutka/setup-alpine@v1
+        with:
+          # riscv64 currently requires 'edge'
+          branch: edge
+          arch: ${{matrix.platform}}
+          packages: >
+            build-base meson ninja perl pkgconf pcre2-dev zlib-dev
+      - name: Compile and Test
+        run: |
+          set -e
+          meson setup "${{github.workspace}}/build" -Dwarning_level=3
+          meson compile -C "${{github.workspace}}/build" --verbose
+          meson test -C "${{github.workspace}}/build" --verbose
+        shell: alpine.sh {0}
