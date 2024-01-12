@@ -10,6 +10,12 @@ compiler="${3:-gcc}"    # might want to overwrite a compiler
 # - create "cov-int" directory for upload (gets `tar`d)
 # - access coverity binaries with export PATH="${COVERITY_PATH}"
 
+# enable --with-wolfssl by default, but allow it to be disabled,
+# e.g. on Alpine Linux where wolfssl package is not built including
+# features required by lighttpd (--with-opensslextra --enable-lighty)
+${WITH_WOLFSSL:=true}
+[ -n "$NO_WOLFSSL" ] && unset WITH_WOLFSSL
+
 if [ "$(uname -s)" = "FreeBSD" ]; then
     export CPPFLAGS=-I/usr/local/include
     export LDFLAGS=-L/usr/local/lib
@@ -32,7 +38,7 @@ case "${build}" in
 		--with-mbedtls \
 		--with-nss \
 		--with-openssl \
-		--with-wolfssl \
+		${WITH_WOLFSSL:+--with-wolfssl} \
 		--with-webdav-props --with-webdav-locks
 	case "${build}" in
 	"autobuild")
@@ -77,7 +83,7 @@ case "${build}" in
 		-DWITH_NETTLE=ON \
 		-DWITH_NSS=ON \
 		-DWITH_OPENSSL=ON \
-		-DWITH_WOLFSSL=ON \
+		${WITH_WOLFSSL:+-DWITH_WOLFSSL=ON} \
 		-DWITH_WEBDAV_LOCKS=ON \
 		-DWITH_WEBDAV_PROPS=ON \
 		..
@@ -108,7 +114,7 @@ case "${build}" in
 	  -Dwith_sasl=enabled \
 	  -Dwith_webdav_locks=enabled \
 	  -Dwith_webdav_props=enabled \
-	  -Dwith_wolfssl=true \
+	  ${WITH_WOLFSSL:+-Dwith_wolfssl=true} \
 	  -Dwith_zlib=enabled \
 	  -Dwith_zstd=enabled \
 	  build
