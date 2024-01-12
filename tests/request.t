@@ -1392,6 +1392,10 @@ ok($tf->handle_http($t) == 0, 'broken header via perl cgi');
 
 ## mod_deflate
 
+SKIP: {
+    my $has_zlib = $tf->has_feature("zlib support");
+    skip "skipping tests requiring zlib", 9 unless $has_zlib;
+
 $t->{REQUEST}  = ( <<EOF
 GET /index.html HTTP/1.0
 Host: deflate.example.org
@@ -1476,6 +1480,8 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, '+Vary' => '', 'Content-Encoding' => 'gzip', 'Content-Type' => "text/plain" } ];
 ok($tf->handle_http($t) == 0, 'bzip2 requested but disabled');
+
+}
 
 
 ## mod_expire
