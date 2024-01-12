@@ -9,6 +9,7 @@ fi
 if test "x${top_builddir}" = "x"; then
 	top_builddir=..
 fi
+top_builddir=${top_builddir%/tests/..}
 
 echo "Testing in build directory: '${top_builddir}' and cwd: '$(pwd)'"
 

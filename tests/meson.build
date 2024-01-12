@@ -26,7 +26,7 @@ if target_machine.system() != 'windows'
 
 env = environment()
 env.set('srcdir', meson.current_source_dir())
-env.set('top_builddir', meson.build_root())
+env.set('top_builddir', meson.current_build_dir() + '/..')
 
 tests = [
 	'request.t',
