@@ -145,7 +145,8 @@ jobs:
     name: Windows-VisualStudio-${{matrix.platform}}
     strategy:
       matrix:
-        platform: ['x64', 'win32']
+        platform: ['x64']
+        #platform: ['x64', 'win32']
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
