@@ -330,7 +330,9 @@ sub handle_http {
 			print $remote "\012";
 		}
 	}
-	if ($^O ne "openbsd" && $^O ne "dragonfly" && !$self->{"win32native"}) {
+	if ($^O ne "openbsd" && $^O ne "dragonfly"
+	    && $Config{"archname"} !~ /^s390x-/
+	    && !$self->{"win32native"}) {
 		# (avoid on OS where TCP half-close may be reported as POLLHUP)
 		shutdown($remote, 1); # I've stopped writing data
 	}
