@@ -132,10 +132,17 @@ typedef long long off_t;
 #include <sys/types.h>
 #include <stddef.h>
 
+#if __GNUC__ && (__clang__ || __GNUC__ >= 5) && !defined(__COVERITY__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcpp"
+#endif
 #ifdef __has_include
 #if __has_include(<sys/cdefs.h>)
 #include <sys/cdefs.h>
 #endif
+#endif
+#if __GNUC__ && (__clang__ || __GNUC__ >= 5) && !defined(__COVERITY__)
+#pragma GCC diagnostic pop
 #endif
 
 #ifndef __BEGIN_DECLS
