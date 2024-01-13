@@ -10,37 +10,59 @@ jobs:
 
   Linux-ubuntu-gcc:
     runs-on: ubuntu-latest
+    name: Linux-ubuntu-${{matrix.platform}}-gcc
+    strategy:
+      matrix:
+        platform: ['x64', 'x86']
     steps:
       - uses: actions/checkout@v4
       - uses: egor-tensin/setup-gcc@v1
-        with:
-          version: '13'
       - name: Install packages
         run: |
-          python3 -m pip install meson ninja
+          sudo apt-get install cmake meson ninja-build pkg-config perl scons \
+            autoconf automake autotools-dev libtool m4 \
+            nettle-dev gnutls-dev \
+            libmbedtls-dev libnss3-dev libssl-dev libwolfssl-dev \
+            libpcre2-dev libbrotli-dev libdeflate-dev zlib1g-dev libzstd-dev \
+            libsasl2-dev libkrb5-dev libdbi-dev libpam-dev libldap-dev \
+            libmariadb-dev libpq-dev \
+            libmaxminddb-dev libunwind-dev liblua5.1-0-dev liblua5.4-dev \
+            libxml2-dev uuid-dev libsqlite3-dev
       - name: Compile and Test
         run: |
           set -e
-          meson setup "${{github.workspace}}/build" -Dwarning_level=3
-          meson compile -C "${{github.workspace}}/build" --verbose
-          meson test -C "${{github.workspace}}/build" --verbose
+          cd "${{github.workspace}}" && scripts/ci-build.sh meson
+          cd "${{github.workspace}}" && scripts/ci-build.sh cmake
+          cd "${{github.workspace}}" && scripts/ci-build.sh scons
+          cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
 
   Linux-ubuntu-clang:
     runs-on: ubuntu-latest
+    name: Linux-ubuntu-${{matrix.platform}}-clang
+    strategy:
+      matrix:
+        platform: ['x64', 'x86']
     steps:
       - uses: actions/checkout@v4
       - uses: egor-tensin/setup-clang@v1
-        with:
-          version: '17'
       - name: Install packages
         run: |
-          python3 -m pip install meson ninja
+          sudo apt-get install cmake meson ninja-build pkg-config perl scons \
+            autoconf automake autotools-dev libtool m4 \
+            nettle-dev gnutls-dev \
+            libmbedtls-dev libnss3-dev libssl-dev libwolfssl-dev \
+            libpcre2-dev libbrotli-dev libdeflate-dev zlib1g-dev libzstd-dev \
+            libsasl2-dev libkrb5-dev libdbi-dev libpam-dev libldap-dev \
+            libmariadb-dev libpq-dev \
+            libmaxminddb-dev libunwind-dev liblua5.1-0-dev liblua5.4-dev \
+            libxml2-dev uuid-dev libsqlite3-dev
       - name: Compile and Test
         run: |
           set -e
-          meson setup "${{github.workspace}}/build" -Dwarning_level=3
-          meson compile -C "${{github.workspace}}/build" --verbose
-          meson test -C "${{github.workspace}}/build" --verbose
+          cd "${{github.workspace}}" && scripts/ci-build.sh meson
+          cd "${{github.workspace}}" && scripts/ci-build.sh cmake
+          cd "${{github.workspace}}" && scripts/ci-build.sh scons
+          cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
 
   macOS:
     runs-on: macos-latest
