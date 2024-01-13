@@ -33,6 +33,7 @@ jobs:
           set -e
           cd "${{github.workspace}}" && scripts/ci-build.sh meson
           cd "${{github.workspace}}" && scripts/ci-build.sh cmake
+          cd "${{github.workspace}}" && scripts/ci-build.sh cmake-asan
           cd "${{github.workspace}}" && scripts/ci-build.sh scons
           cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
 
