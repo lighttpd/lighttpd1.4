@@ -16,6 +16,21 @@ compiler="${3:-gcc}"    # might want to overwrite a compiler
 ${WITH_WOLFSSL:=true}
 [ -n "$NO_WOLFSSL" ] && unset WITH_WOLFSSL
 
+${WITH_KRB5:=true}
+[ -n "$NO_KRB5" ] && unset WITH_KRB5
+
+${WITH_PAM:=true}
+[ -n "$NO_PAM" ] && unset WITH_PAM
+
+${WITH_PGSQL:=true}
+[ -n "$NO_PGSQL" ] && unset WITH_PGSQL
+
+${WITH_SASL:=true}
+[ -n "$NO_SASL" ] && unset WITH_SASL
+
+${WITH_UNWIND:=true}
+[ -n "$NO_UNWIND" ] && unset WITH_UNWIND
+
 if [ "$(uname -s)" = "FreeBSD" ]; then
     export CPPFLAGS=-I/usr/local/include
     export LDFLAGS=-L/usr/local/lib
@@ -27,11 +42,13 @@ case "${build}" in
 	autoreconf --force --install
 	./configure -C \
 		--with-pic --enable-extra-warnings \
-		--with-dbi --with-mysql --with-pgsql \
+		--with-dbi --with-mysql ${WITH_PGSQL:+--with-pgsql} \
 		--with-ldap --with-pcre2 \
 		--with-zlib --with-zstd --with-brotli --with-libdeflate \
-		--with-lua --with-libunwind \
-		--with-krb5 --with-pam --with-sasl \
+		--with-lua ${WITH_UNWIND:+--with-libunwind} \
+		${WITH_KRB5:+--with-krb5} \
+		${WITH_PAM:+--with-pam} \
+		${WITH_SASL:+--with-sasl} \
 		--with-maxminddb \
 		--with-nettle \
 		--with-gnutls \
@@ -69,15 +86,15 @@ case "${build}" in
 		-DWITH_BROTLI=ON \
 		-DWITH_LIBDEFLATE=ON \
 		-DWITH_LDAP=ON \
-		-DWITH_LIBUNWIND=ON \
+		${WITH_UNWIND:+-DWITH_LIBUNWIND=ON} \
 		-DWITH_LUA=ON \
 		-DWITH_MAXMINDDB=ON \
 		-DWITH_DBI=ON \
 		-DWITH_MYSQL=ON \
-		-DWITH_PGSQL=ON \
-		-DWITH_KRB5=ON \
-		-DWITH_PAM=ON \
-		-DWITH_SASL=ON \
+		${WITH_PGSQL:+-DWITH_PGSQL=ON} \
+		${WITH_KRB5:+-DWITH_KRB5=ON} \
+		${WITH_PAM:+-DWITH_PAM=ON} \
+		${WITH_SASL:+-DWITH_SASL=ON} \
 		-DWITH_GNUTLS=ON \
 		-DWITH_MBEDTLS=ON \
 		-DWITH_NETTLE=ON \
@@ -97,10 +114,10 @@ case "${build}" in
 	  -Dwith_brotli=enabled \
 	  -Dwith_dbi=enabled \
 	  -Dwith_gnutls=true \
-	  -Dwith_krb5=enabled \
+	  ${WITH_KRB5:+-Dwith_krb5=enabled} \
 	  -Dwith_ldap=enabled \
 	  -Dwith_libdeflate=enabled \
-	  -Dwith_libunwind=enabled \
+	  ${WITH_UNWIND:+-Dwith_libunwind=enabled} \
 	  -Dwith_lua=true \
 	  -Dwith_maxminddb=enabled \
 	  -Dwith_mbedtls=true \
@@ -108,10 +125,10 @@ case "${build}" in
 	  -Dwith_nettle=true \
 	  -Dwith_nss=true \
 	  -Dwith_openssl=true \
-	  -Dwith_pam=enabled \
+	  ${WITH_PAM:+-Dwith_pam=enabled} \
 	  -Dwith_pcre2=true \
-	  -Dwith_pgsql=enabled \
-	  -Dwith_sasl=enabled \
+	  ${WITH_PGSQL:+-Dwith_pgsql=enabled} \
+	  ${WITH_SASL:+-Dwith_sasl=enabled} \
 	  -Dwith_webdav_locks=enabled \
 	  -Dwith_webdav_props=enabled \
 	  ${WITH_WOLFSSL:+-Dwith_wolfssl=true} \
