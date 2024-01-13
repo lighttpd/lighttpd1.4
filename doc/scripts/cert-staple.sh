@@ -24,8 +24,11 @@ errexit() {
 }
 
 # short-circuit if Next Update is > $next_delta in the future
+# and the stapling file is newer than the certificate and the chain
 next_ts=$(readlink "$OCSP_DER" 2>/dev/null)
-if [ -n "$next_ts" ]; then
+if [ -n "$next_ts" ] && \
+   [ "$OCSP_DER" -nt "$CERT_PEM" ] && \
+   [ "$OCSP_DER" -nt "$CHAIN_PEM" ]; then
     next_ts="${next_ts##*.}"
     ts=$(date +%s)
     ts=$(( $ts + $next_delta ))
