@@ -280,6 +280,7 @@ jobs:
             libxml2-dev ossp-uuid-dev sqlite-dev
             zlib-static openssl-libs-static
       - name: Compile and Test
+        shell: alpine.sh {0}
         run: |
           set -e
           # Alpine Linux wolfssl package built w/o features required by lighttpd
@@ -289,12 +290,14 @@ jobs:
           cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
           cd "${{github.workspace}}" && scripts/ci-build.sh scons
           #('scons check_fullstatic' needs zlib-static openssl-libs-static)
-        shell: alpine.sh {0}
 
   Linux-alpine:
     runs-on: ubuntu-latest
     name: Linux-alpine-${{matrix.platform}}
+    # abort if x86 fails (x86_64 or x86 are fastest "native" builds)
+    continue-on-error: ${{ matrix.platform != 'x86' }}
     strategy:
+      fail-fast: true
       matrix:
         platform: ['x86','armhf','armv7','aarch64','ppc64le','riscv64','s390x']
     steps:
@@ -307,9 +310,9 @@ jobs:
           packages: >
             build-base meson ninja perl pkgconf pcre2-dev zlib-dev
       - name: Compile and Test
+        shell: alpine.sh {0}
         run: |
           set -e
           meson setup "${{github.workspace}}/build" -Dwarning_level=3
           meson compile -C "${{github.workspace}}/build" --verbose
           meson test -C "${{github.workspace}}/build" --verbose
-        shell: alpine.sh {0}
