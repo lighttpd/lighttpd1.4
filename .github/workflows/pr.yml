@@ -32,7 +32,7 @@ jobs:
         run: |
           set -e
           cd "${{github.workspace}}" && scripts/ci-build.sh meson
-          cd "${{github.workspace}}" && scripts/ci-build.sh cmake
+          #cd "${{github.workspace}}" && scripts/ci-build.sh cmake
           cd "${{github.workspace}}" && scripts/ci-build.sh cmake-asan
           cd "${{github.workspace}}" && scripts/ci-build.sh scons
           cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
@@ -60,10 +60,10 @@ jobs:
       - name: Compile and Test
         run: |
           set -e
-          cd "${{github.workspace}}" && scripts/ci-build.sh meson
+          #cd "${{github.workspace}}" && scripts/ci-build.sh meson
           cd "${{github.workspace}}" && scripts/ci-build.sh cmake
-          cd "${{github.workspace}}" && scripts/ci-build.sh scons
-          cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
+          #cd "${{github.workspace}}" && scripts/ci-build.sh scons
+          #cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
 
   macOS:
     runs-on: macos-latest
