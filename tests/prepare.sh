@@ -42,7 +42,6 @@ cp "${srcdir}/docroot/"*.html \
 cp    "${srcdir}/"*.conf \
       "${srcdir}/lighttpd.user" \
       "${srcdir}/lighttpd.htpasswd" \
-      "${srcdir}/var-include-sub.conf" \
       "${top_builddir}/tests/"
 
 # create some content
