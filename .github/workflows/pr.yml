@@ -273,12 +273,19 @@ jobs:
 
   Linux-alpine-x86_64:
     runs-on: ubuntu-latest
+    name: Linux-alpine-${{matrix.platform}}
+    # abort if x86_64 fails (x86_64 or x86 are fastest "native" builds)
+    continue-on-error: ${{ matrix.platform != 'x86_64' }}
+    strategy:
+      fail-fast: true
+      matrix:
+        platform: ['x86_64']
     steps:
       - uses: actions/checkout@v4
       - uses: jirutka/setup-alpine@v1
         with:
           branch: latest-stable
-          arch: x86_64
+          arch: ${{matrix.platform}}
           packages: >
             build-base cmake meson ninja pkgconf perl scons
             autoconf automake libtool m4
@@ -294,12 +301,12 @@ jobs:
         run: |
           set -e
           # Alpine Linux wolfssl package built w/o features required by lighttpd
+          #('scons check_fullstatic' needs zlib-static openssl-libs-static)
           export NO_WOLFSSL=1
           cd "${{github.workspace}}" && scripts/ci-build.sh meson
           cd "${{github.workspace}}" && scripts/ci-build.sh cmake
-          cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
           cd "${{github.workspace}}" && scripts/ci-build.sh scons
-          #('scons check_fullstatic' needs zlib-static openssl-libs-static)
+          cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
 
   Linux-alpine:
     runs-on: ubuntu-latest
