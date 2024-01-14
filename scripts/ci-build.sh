@@ -36,6 +36,12 @@ if [ "$(uname -s)" = "FreeBSD" ]; then
     export LDFLAGS=-L/usr/local/lib
 fi
 
+if [ "$(uname -s)" = "NetBSD" ]; then
+    export CPPFLAGS=-I/usr/pkg/include
+    export LDFLAGS=-L/usr/pkg/lib
+    export LD_LIBRARY_PATH=/usr/pkg/lib
+fi
+
 case "${build}" in
 "autobuild"|"coverity")
 	mkdir -p m4
