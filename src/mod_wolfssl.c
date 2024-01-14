@@ -3538,12 +3538,14 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
                     break;
                   case 13:
                     if (buffer_eq_icase_ssn(v, "SessionTicket", 13)) {
+                      #ifdef HAVE_SESSION_TICKET
                         if (flag)
                             SSL_CTX_clear_options(s->ssl_ctx,
                                                   SSL_OP_NO_TICKET);
                         else
                             SSL_CTX_set_options(s->ssl_ctx,
                                                 SSL_OP_NO_TICKET);
+                      #endif
                         continue;
                     }
                     break;
