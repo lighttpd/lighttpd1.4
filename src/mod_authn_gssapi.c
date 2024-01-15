@@ -370,7 +370,9 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
                                    BUF_PTR_LEN(require->realm));
     /*#define GSS_C_NT_USER_NAME gss_nt_user_name*/
     /*#define GSS_C_NT_HOSTBASED_SERVICE gss_nt_service_name*/
+    #ifndef GSS_KRB5_NT_PRINCIPAL_NAME
     #define GSS_KRB5_NT_PRINCIPAL_NAME gss_nt_krb5_name
+    #endif
 
     token_s.value = sprinc->ptr;
     token_s.length = buffer_clen(sprinc);
