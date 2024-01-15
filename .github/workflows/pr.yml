@@ -97,8 +97,10 @@ jobs:
       - uses: vmactions/dragonflybsd-vm@v1
         with:
           prepare: |
-            pkg install -y ninja meson pkgconf pcre2 perl5
+            pkg install -y bash ninja meson pkgconf pcre2 perl5
+            chsh -s /usr/local/bin/bash
           run: |
+            set -e
             meson setup "${{github.workspace}}/build" -Dwarning_level=3
             meson compile -C "${{github.workspace}}/build" --verbose
             meson test -C "${{github.workspace}}/build" --verbose
