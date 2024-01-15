@@ -31,15 +31,23 @@ ${WITH_SASL:=true}
 ${WITH_UNWIND:=true}
 [ -n "$NO_UNWIND" ] && unset WITH_UNWIND
 
-if [ "$(uname -s)" = "FreeBSD" ]; then
+sysname="$(uname -s)"
+
+if [ "$sysname" = "FreeBSD" ]; then
     export CPPFLAGS=-I/usr/local/include
     export LDFLAGS=-L/usr/local/lib
 fi
 
-if [ "$(uname -s)" = "NetBSD" ]; then
+if [ "$sysname" = "NetBSD" ]; then
     export CPPFLAGS=-I/usr/pkg/include
     export LDFLAGS=-L/usr/pkg/lib
     export LD_LIBRARY_PATH=/usr/pkg/lib
+fi
+
+if [ "$sysname" = "OpenBSD" ]; then
+    export CPPFLAGS=-I/usr/local/include
+    export LDFLAGS=-L/usr/local/lib
+    export PKG_CONFIG_LIBDIR=/usr/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/heimdal/lib/pkgconfig
 fi
 
 case "${build}" in
