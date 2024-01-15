@@ -139,7 +139,7 @@ jobs:
               brotli libdeflate zlib zstd \
               libmaxminddb libunwind lua51 lua54 \
               libuuid libxml2 sqlite3
-          # autoconf automake gmake libtool m4 py311-scons
+          # autoconf automake gmake libtool m4 meson py311-scons
           run: |
             set -e
             export NO_UNWIND=1
@@ -152,12 +152,18 @@ jobs:
       - uses: vmactions/openbsd-vm@v1
         with:
           prepare: |
-            pkg_add ninja meson pkgconf pcre2 perl5
+            pkg_add ninja meson pkgconf pcre2 \
+              gnutls mbedtls libnettle nss \
+              cyrus-sasl-- heimdal-libs libdbi openldap-client-- \
+              mariadb-client postgresql-client \
+              brotli libdeflate zstd \
+              libmaxminddb lua--%5.1 lua--%5.4 \
+              e2fsprogs ossp-uuid libxml sqlite3
+          # autoconf automake cmake gmake libtool m4 scons
           run: |
             set -e
-            meson setup "${{github.workspace}}/build" -Dwarning_level=3
-            meson compile -C "${{github.workspace}}/build" --verbose
-            meson test -C "${{github.workspace}}/build" --verbose
+            export NO_PAM=1 NO_UNWIND=1 NO_WOLFSSL=1
+            cd "${{github.workspace}}" && scripts/ci-build.sh meson
 
 #  # Solaris VM test is really slow compared to other VMs tests
 #  # (retrieving and installing packages is really slow)
