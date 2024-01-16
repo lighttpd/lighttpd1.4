@@ -243,47 +243,29 @@ jobs:
         platform: ['mingw64', 'ucrt64', 'clang64']
         #platform: ['mingw32', 'mingw64', 'ucrt64', 'clang32', 'clang64']
     steps:
+      - run: git config --global core.autocrlf input
       - uses: actions/checkout@v4
       - uses: msys2/setup-msys2@v2
         with:
           msystem: ${{matrix.platform}}
           update: true
+          install: m4
           pacboy: >-
             cc:p
-            cmake:p
+            autotools:p
+            libtool:p
+            make:p
             pcre2:p
             pkgconf:p
       - name: Compile and Test
         shell: msys2 {0}
         run: |
           set -e
-          # TODO: figure out why linking modules fails due to missing
-          # liblighttpd.dll.a (should be import lib created from lighttpd.exe)
-          # Build static lighttpd.exe with (at least) modules used by tests.
-          # List plugins used by tests/*.conf server.modules = (...)
-          touch "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_access)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_accesslog)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_auth)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_authn_file)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_cgi)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_deflate)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_expire)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_extforward)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_fastcgi)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_proxy)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_redirect)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_scgi)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_setenv)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_simple_vhost)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_staticfile)" >> "${{github.workspace}}/src/plugin-static.h"
-          #echo "PLUGIN_INIT(mod_status)" >> "${{github.workspace}}/src/plugin-static.h"
-          cmake -G "Ninja" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
-          cmake --build build --config Release
-          # run the compiled unit tests src/t/test_*;
-          # (skip the Perl test framework in tests/*)
-          # (note: tests/CMakeLists.txt also skips Perl tests/* on native WIN32)
-          ctest -V --test-dir build --build-config Release --no-tests=error -R '^test_'
+          cd "${{github.workspace}}"
+          ./autogen.sh
+          ./configure
+          make -j 4
+          make -j 4 check VERBOSE=1
 
   Linux-alpine-x86_64:
     runs-on: ubuntu-latest
