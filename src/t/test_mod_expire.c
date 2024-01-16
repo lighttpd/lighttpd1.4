@@ -2,9 +2,6 @@
 
 #undef NDEBUG
 #include <assert.h>
-// GPS
-//#include <stdlib.h>
-//#include <stdio.h>
 
 #include "mod_expire.c"
 
