@@ -39,6 +39,9 @@ if ($ENV{"QUERY_STRING"} eq "xsendfile") {
     #  encode everything that is not alphanumeric, '.' '_', '-', '/')
     require Cwd;
     my $path = $prefix . Cwd::getcwd() . "/index.txt";
+    # (alternative: run cygpath command, if available, on cygwin or msys2)
+    $path = substr($path, length($prefix)+2)
+      if ($^O eq "msys" && uc($ENV{MSYSTEM} || "") ne "MSYS");
     $path =~ s#([^\w./-])#"%".unpack("H2",$1)#eg;
 
     print "Status: 200\r\n";

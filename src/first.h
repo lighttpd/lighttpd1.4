@@ -69,7 +69,9 @@
 #define _POSIX
 #define __USE_MINGW_ALARM 1
 /* https://sourceforge.net/p/mingw-w64/wiki2/gnu%20printf/ */
+#ifndef __USE_MINGW_ANSI_STDIO
 #define __USE_MINGW_ANSI_STDIO 1
+#endif
 /*#include <stdio.h>*/
 #ifndef __clang__
 #ifndef __MINGW_PRINTF_FORMAT

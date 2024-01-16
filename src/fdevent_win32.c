@@ -555,6 +555,7 @@ pid_t fdevent_createprocess (char *argv[], char *envp[], intptr_t fdin, intptr_t
     char *dirp = NULL;
     if (0 == strcmp(argv[0],"/bin/sh") && argv[1] && 0 == strcmp(argv[1],"-c")){
         /* future: consider checking for SHELL variable in environment */
+        /* future: getenv("COMSPEC") and use, if available, for cmd.exe */
       #if 1
         *(const char **)&argv[0] = "C:\\Windows\\System32\\cmd.exe";
         *(const char **)&argv[1] = "/c";
@@ -567,12 +568,26 @@ pid_t fdevent_createprocess (char *argv[], char *envp[], intptr_t fdin, intptr_t
         /* dfd == -2 for argv[0], dfd == -3 indicates argv[1] */
         const char *arg = (-3 == dfd) ? argv[1] : argv[0];
         if (arg && (arg[0] == '\\' || arg[0] == '/' || arg[1] == ':')) {
+            /* dirname must be a Windows path, not a cygwin or msys2 path.
+             * Attempt to remove the leading cygwin or msys2 driver signifier.
+             * Note: not handling /proc and does not work across volumes.
+             * future: getenv("CYGVOL") and do case-insensitive prefix match */
             /* step over "/cygdrive/c/..." (or other drive letter) -> "/..."
              * (note: below code assumes script is on current volume)
              * (to honor volume, could copy volume and replace '/' with ':') */
             if (0 == memcmp(arg, "/cygdrive/", 10)
                 && arg[10] != '\0' && arg[11] == '/')
                 arg += 11;
+            else if (arg[0] == '/' && arg[1] != '\0' && arg[2] == '/'
+                     && getenv("MSYSTEM")) { /* MSYS2 */
+                /* not perfect, but catches CYGVOL prepended in mod_cgi.c
+                 * and omitted in gw_backend.c as long as path from gw_backend.c
+                 * does not happen to start w/ same single letter folder name */
+                const char *cygvol = getenv("CYGVOL");
+                len = cygvol ? strlen(cygvol) : 0;
+                if (len && 0 == _strnicmp(arg, cygvol, len))
+                    arg += len;
+            }
 
             char *sl = strrchr(arg, '/');
             char *bs = strrchr(arg, '\\');

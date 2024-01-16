@@ -1233,7 +1233,7 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'perl via cgi');
 
-if ($^O ne "cygwin") {
+if ($^O ne "cygwin" && $^O ne "msys") {
     $t->{REQUEST}  = ( <<EOF
 GET /cgi.pl%20%20%20 HTTP/1.0
 EOF

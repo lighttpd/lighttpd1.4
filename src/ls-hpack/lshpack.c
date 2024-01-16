@@ -23,6 +23,7 @@ SOFTWARE.
 */
 
 /*(lighttpd customization)*/
+#include "first.h"
 #ifndef XXH_HEADER_NAME
 #define XXH_HEADER_NAME "algo_xxhash.h"
 #endif

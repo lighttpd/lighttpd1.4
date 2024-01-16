@@ -2294,6 +2294,18 @@ static int main_init_once (void) {
   #endif
     tzset();
 
+  #ifdef __MINGW32__
+    /* MSYS2 translates SHELL path even if MSYS_NO_PATHCONV=1
+     * lighttpd uses "/bin/sh" for consistency and substitutes "cmd.exe" later
+     * (__MINGW32__ is also set when mingw cross-compiler used under Cygwin) */
+    if (getenv("MSYSTEM")) { /* MSYS2 */
+        const char *shell = getenv("SHELL");
+        size_t len = shell ? strlen(shell) : 0;
+        if (len >= 11 && 0 == strcmp(shell+len-11, "\\bin\\sh.exe"))
+            setenv("SHELL", "/bin/sh", 1);
+    }
+  #endif
+
     return 1;
 }
 

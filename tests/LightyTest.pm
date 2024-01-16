@@ -49,6 +49,13 @@ sub new {
 	#   ($^O eq "MSWin32") is untested; not supported
 	$self->{"win32native"} = $^O eq "cygwin"
 	                      && 0 != system("ldd '$$self{LIGHTTPD_PATH}' | grep -q cygwin");
+	if ($^O eq "msys" && 0 != system("ldd '$$self{LIGHTTPD_PATH}' | grep -q msys-")) {
+		$self->{"win32native"} = 1;
+		# Note: msys2 mingw cross compile/link hangs if MSYS_NO_PATHCONV is set,
+		#       so scope setting MSYS_NO_PATHCONV here for running tests
+		$ENV{MSYS_NO_PATHCONV} = 1;
+		#$ENV{MSYS2_ARG_CONV_EXCL} = "*";
+	}
 
 	my ($name, $aliases, $addrtype, $net) = gethostbyaddr(inet_aton("127.0.0.1"), AF_INET);
 
@@ -112,11 +119,13 @@ sub stop_proc {
 				chomp($winpid);
 				close($WH);
 			}
+			my $msys = ($^O eq "msys");
+			my $taskkill = $msys ? "/c/Windows/System32/taskkill.exe" : "/cygdrive/c/windows/system32/taskkill.exe";
 			if ($winpid) {
-				system('/cygdrive/c/windows/system32/taskkill.exe', '/F', '/T', '/PID', $winpid);
+				system($taskkill, '/F', '/T', '/PID', $winpid);
 			}
 			else {
-				system('/cygdrive/c/windows/system32/taskkill.exe', '/F', '/T', '/IM', 'lighttpd.exe');
+				system($taskkill, '/F', '/T', '/IM', 'lighttpd.exe');
 			}
 		}
 		else {
@@ -213,10 +222,11 @@ sub start_proc {
 			$conf               = cygpath_alm($conf);
 			$modules_path       = cygpath_alm($modules_path);
 
+			my $msys = ($^O eq "msys");
 			$ENV{CYGROOT}       = cygpath_alm("/", 1);
 			$ENV{CYGVOL}        = $ENV{CYGROOT} =~ m%^([a-z]):%i
-			                      ? "/cygdrive/$1"
-			                      : "/cygdrive/c";
+			                      ? $msys ? "/$1" : "/cygdrive/$1"
+			                      : $msys ? "/c"  : "/cygdrive/c";
 
 			# On platforms where systemd socket activation is not supported
 			# or inconvenient for testing (i.e. cygwin <-> native Windows exe),
