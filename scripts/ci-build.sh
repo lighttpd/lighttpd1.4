@@ -25,6 +25,9 @@ ${WITH_GNUTLS:=true}
 ${WITH_KRB5:=true}
 [ -n "$NO_KRB5" ] && unset WITH_KRB5
 
+${WITH_MYSQL:=true}
+[ -n "$NO_MYSQL" ] && unset WITH_MYSQL
+
 ${WITH_PAM:=true}
 [ -n "$NO_PAM" ] && unset WITH_PAM
 
@@ -66,7 +69,7 @@ case "${build}" in
 	./configure -C \
 		--with-pic --enable-extra-warnings \
 		${WITH_DBI:+--with-dbi} \
-		--with-mysql \
+		${WITH_MYSQL:+--with-mysql} \
 		${WITH_PGSQL:+--with-pgsql} \
 		--with-ldap --with-pcre2 \
 		--with-zlib --with-zstd --with-brotli --with-libdeflate \
@@ -117,7 +120,7 @@ case "${build}" in
 		-DWITH_LUA=ON \
 		-DWITH_MAXMINDDB=ON \
 		${WITH_DBI:+-DWITH_DBI=ON} \
-		-DWITH_MYSQL=ON \
+		${WITH_MYSQL:+-DWITH_MYSQL=ON} \
 		${WITH_PGSQL:+-DWITH_PGSQL=ON} \
 		${WITH_KRB5:+-DWITH_KRB5=ON} \
 		${WITH_PAM:+-DWITH_PAM=ON} \
@@ -148,7 +151,7 @@ case "${build}" in
 	  -Dwith_lua=true \
 	  -Dwith_maxminddb=enabled \
 	  -Dwith_mbedtls=true \
-	  -Dwith_mysql=enabled \
+	  ${WITH_MYSQL:+-Dwith_mysql=enabled} \
 	  -Dwith_nettle=true \
 	  -Dwith_nss=true \
 	  -Dwith_openssl=true \
