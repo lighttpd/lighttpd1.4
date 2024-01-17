@@ -16,6 +16,9 @@ compiler="${3:-gcc}"    # might want to overwrite a compiler
 ${WITH_WOLFSSL:=true}
 [ -n "$NO_WOLFSSL" ] && unset WITH_WOLFSSL
 
+${WITH_DBI:=true}
+[ -n "$NO_DBI" ] && unset WITH_DBI
+
 ${WITH_KRB5:=true}
 [ -n "$NO_KRB5" ] && unset WITH_KRB5
 
@@ -56,10 +59,13 @@ case "${build}" in
 	autoreconf --force --install
 	./configure -C \
 		--with-pic --enable-extra-warnings \
-		--with-dbi --with-mysql ${WITH_PGSQL:+--with-pgsql} \
+		${WITH_DBI:+--with-dbi} \
+		--with-mysql \
+		${WITH_PGSQL:+--with-pgsql} \
 		--with-ldap --with-pcre2 \
 		--with-zlib --with-zstd --with-brotli --with-libdeflate \
-		--with-lua ${WITH_UNWIND:+--with-libunwind} \
+		--with-lua \
+		${WITH_UNWIND:+--with-libunwind} \
 		${WITH_KRB5:+--with-krb5} \
 		${WITH_PAM:+--with-pam} \
 		${WITH_SASL:+--with-sasl} \
@@ -103,7 +109,7 @@ case "${build}" in
 		${WITH_UNWIND:+-DWITH_LIBUNWIND=ON} \
 		-DWITH_LUA=ON \
 		-DWITH_MAXMINDDB=ON \
-		-DWITH_DBI=ON \
+		${WITH_DBI:+-DWITH_DBI=ON} \
 		-DWITH_MYSQL=ON \
 		${WITH_PGSQL:+-DWITH_PGSQL=ON} \
 		${WITH_KRB5:+-DWITH_KRB5=ON} \
@@ -126,7 +132,7 @@ case "${build}" in
 	meson configure --buildtype debugoptimized \
 	  -Dbuild_extra_warnings=true \
 	  -Dwith_brotli=enabled \
-	  -Dwith_dbi=enabled \
+	  ${WITH_DBI:+-Dwith_dbi=enabled} \
 	  -Dwith_gnutls=true \
 	  ${WITH_KRB5:+-Dwith_krb5=enabled} \
 	  -Dwith_ldap=enabled \
