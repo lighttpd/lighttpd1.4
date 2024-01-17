@@ -249,23 +249,25 @@ jobs:
         with:
           msystem: ${{matrix.platform}}
           update: true
-          install: m4
+          install: git m4 libuuid-devel
           pacboy: >-
-            cc:p
-            autotools:p
-            libtool:p
-            make:p
-            pcre2:p
-            pkgconf:p
+            cc:p autotools:p libtool:p make:p pcre2:p pkgconf:p
+            nettle:p gnutls:p mbedtls:p nss:p openssl:p
+            brotli:p libdeflate:p zlib:p zstd:p
+            cyrus-sasl:p openldap:p
+            libmariadbclient:p postgresql:p
+            libmaxminddb:p libunwind:p lua51:p lua:p luajit:p
+            libxml2:p sqlite3:p
+          # heimdal-devel: available only on platform: msys (?)
+          # libuuid-devel: available only on platform: msys (?) static lib.a
       - name: Compile and Test
         shell: msys2 {0}
         run: |
           set -e
-          cd "${{github.workspace}}"
-          ./autogen.sh
-          ./configure
-          make -j 4
-          make -j 4 check VERBOSE=1
+          # NO_GNUTLS=1 gnutls/socket.h can not find <sys/socket.h>
+          # NO_MYSQL=1 build not finding mysql_config
+          export NO_DBI=1 NO_GNUTLS=1 NO_KRB5=1 NO_MYSQL=1 NO_PAM=1 NO_UNWIND=1 NO_UUID=1 NO_WOLFSSL=1
+          cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
 
   Linux-alpine-x86_64:
     runs-on: ubuntu-latest
