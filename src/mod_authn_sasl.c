@@ -17,7 +17,9 @@
  * - database query is synchronous and blocks waiting for response
  */
 
+#ifndef _WIN32
 #include <sys/utsname.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 
@@ -118,6 +120,7 @@ static plugin_config * mod_authn_sasl_parse_opts(server *srv, const array * cons
       array_get_element_klen(opts, CONST_STR_LEN("fqdn"));
     if (NULL != ds) fqdn = ds->value.ptr;
     if (NULL == fqdn) {
+      #ifndef _WIN32
         static struct utsname uts;
         if (uts.nodename[0] == '\0') {
             if (0 != uname(&uts)) {
@@ -126,6 +129,14 @@ static plugin_config * mod_authn_sasl_parse_opts(server *srv, const array * cons
             }
         }
         fqdn = uts.nodename;
+      #else
+        fqdn = getenv("HOSTNAME");
+        if (NULL == fdqn) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "auth.backend.sasl.opts missing fqdn");
+            return NULL;
+        }
+      #endif
     }
 
     ds = (const data_string *)
