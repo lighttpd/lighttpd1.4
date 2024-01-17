@@ -131,7 +131,7 @@ static plugin_config * mod_authn_sasl_parse_opts(server *srv, const array * cons
         fqdn = uts.nodename;
       #else
         fqdn = getenv("HOSTNAME");
-        if (NULL == fdqn) {
+        if (NULL == fqdn) {
             log_error(srv->errh, __FILE__, __LINE__,
               "auth.backend.sasl.opts missing fqdn");
             return NULL;
