@@ -19,6 +19,9 @@ ${WITH_WOLFSSL:=true}
 ${WITH_DBI:=true}
 [ -n "$NO_DBI" ] && unset WITH_DBI
 
+${WITH_GNUTLS:=true}
+[ -n "$NO_GNUTLS" ] && unset WITH_GNUTLS
+
 ${WITH_KRB5:=true}
 [ -n "$NO_KRB5" ] && unset WITH_KRB5
 
@@ -74,7 +77,7 @@ case "${build}" in
 		${WITH_SASL:+--with-sasl} \
 		--with-maxminddb \
 		--with-nettle \
-		--with-gnutls \
+		${WITH_GNUTLS:+--with-gnutls} \
 		--with-mbedtls \
 		--with-nss \
 		--with-openssl \
@@ -119,7 +122,7 @@ case "${build}" in
 		${WITH_KRB5:+-DWITH_KRB5=ON} \
 		${WITH_PAM:+-DWITH_PAM=ON} \
 		${WITH_SASL:+-DWITH_SASL=ON} \
-		-DWITH_GNUTLS=ON \
+		${WITH_GNUTLS:+-DWITH_GNUTLS=ON} \
 		-DWITH_MBEDTLS=ON \
 		-DWITH_NETTLE=ON \
 		-DWITH_NSS=ON \
@@ -137,7 +140,7 @@ case "${build}" in
 	  -Dbuild_extra_warnings=true \
 	  -Dwith_brotli=enabled \
 	  ${WITH_DBI:+-Dwith_dbi=enabled} \
-	  -Dwith_gnutls=true \
+	  ${WITH_GNUTLS:+-Dwith_gnutls=true} \
 	  ${WITH_KRB5:+-Dwith_krb5=enabled} \
 	  -Dwith_ldap=enabled \
 	  -Dwith_libdeflate=enabled \
