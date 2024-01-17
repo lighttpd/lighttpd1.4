@@ -25,6 +25,9 @@
 #ifndef PROT_READ
 #define PROT_READ PAGE_READONLY
 #endif
+#ifndef PROT_WRITE
+#define PROT_WRITE PAGE_READWRITE
+#endif
 
 #define HAVE_MMAP 1
 
@@ -65,6 +68,7 @@ mmap (void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 # define MAP_SHARED 0
 # define MAP_PRIVATE 0
 # define PROT_READ 0
+# define PROT_WRITE 0
 
 # define mmap(a, b, c, d, e, f) (-1)
 # define munmap(a, b) (-1)
