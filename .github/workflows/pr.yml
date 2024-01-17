@@ -207,6 +207,14 @@ jobs:
             libmariadb-devel libpq-devel
             libmaxminddb-devel libunwind-devel lua-devel lua5.1-devel
             libxml2-devel libuuid-devel libsqlite3-devel
+      - name: Update
+        shell: powershell
+        run: |
+          # (https://github.com/cygwin/cygwin-install-action/blob/master/action.yml)
+          Invoke-WebRequest https://cygwin.com/setup-x86_64.exe -OutFile C:\setup.exe
+          # because setup is a Windows GUI app, make it part of a pipeline to make
+          # PowerShell wait for it to exit
+          & C:\setup.exe -qgnO -t | Out-Default
       - name: Compile and Test
         #shell: C:\cygwin\bin\bash.exe --noprofile --norc -o igncr -eo pipefail '{0}'
         shell: C:\cygwin\bin\bash.exe --login -o igncr -eo pipefail '{0}'
