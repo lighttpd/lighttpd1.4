@@ -34,6 +34,9 @@ ${WITH_SASL:=true}
 ${WITH_UNWIND:=true}
 [ -n "$NO_UNWIND" ] && unset WITH_UNWIND
 
+${WITH_UUID:=true}
+[ -n "$NO_UUID" ] && unset WITH_UUID
+
 sysname="$(uname -s)"
 
 if [ "$sysname" = "FreeBSD" ]; then
@@ -76,7 +79,8 @@ case "${build}" in
 		--with-nss \
 		--with-openssl \
 		${WITH_WOLFSSL:+--with-wolfssl} \
-		--with-webdav-props --with-webdav-locks
+		${WITH_UUID:+--with-webdav-locks} \
+		--with-webdav-props
 	case "${build}" in
 	"autobuild")
 		make -j 4
@@ -121,7 +125,7 @@ case "${build}" in
 		-DWITH_NSS=ON \
 		-DWITH_OPENSSL=ON \
 		${WITH_WOLFSSL:+-DWITH_WOLFSSL=ON} \
-		-DWITH_WEBDAV_LOCKS=ON \
+		${WITH_UUID:+-DWITH_WEBDAV_LOCKS=ON} \
 		-DWITH_WEBDAV_PROPS=ON \
 		..
 	make -j 4 VERBOSE=1
@@ -149,7 +153,7 @@ case "${build}" in
 	  -Dwith_pcre2=true \
 	  ${WITH_PGSQL:+-Dwith_pgsql=enabled} \
 	  ${WITH_SASL:+-Dwith_sasl=enabled} \
-	  -Dwith_webdav_locks=enabled \
+	  ${WITH_UUID:+-Dwith_webdav_locks=enabled} \
 	  -Dwith_webdav_props=enabled \
 	  ${WITH_WOLFSSL:+-Dwith_wolfssl=true} \
 	  -Dwith_zlib=enabled \
