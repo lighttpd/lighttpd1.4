@@ -240,6 +240,7 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Compile and Test
         run: |
+          $ErrorActionPreference = 'Stop'
           cmake -G "Visual Studio 17 2022" -A "${{matrix.platform}}" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DWITH_PCRE2=OFF -DWITH_PCRE=OFF -DWITH_ZLIB=OFF
           cmake --build build --config Release
           # run the compiled unit tests src/t/test_*;
