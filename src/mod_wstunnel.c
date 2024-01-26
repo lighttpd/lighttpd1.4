@@ -87,6 +87,7 @@
 #include "array.h"
 #include "buffer.h"
 #include "chunk.h"
+#include "fdevent.h"
 #include "http_header.h"
 #include "log.h"
 
@@ -347,10 +348,22 @@ static handler_t wstunnel_create_env(gw_handler_ctx *gwhctx) {
     handler_ctx *hctx = (handler_ctx *)gwhctx;
     request_st * const r = hctx->gw.r;
     handler_t rc;
-    if (0 == r->reqbody_length || r->http_version > HTTP_VERSION_1_1) {
-        http_response_upgrade_read_body_unknown(r);
-        chunkqueue_append_chunkqueue(&r->reqbody_queue, &r->read_queue);
+    if (0 != r->reqbody_length && r->http_version == HTTP_VERSION_1_1) {
+        /* Defer reading websocket protocol from HTTP/1.1 client until
+         * request body has been received, and then discarded.
+         * mod_wstunnel_check_extension() requires GET method for HTTP/1.1
+         * so (r->conf.http_parseopts & HTTP_PARSEOPT_METHOD_GET_BODY) if
+         * r->reqbody_length, which is not the default config */
+        if (r->state == CON_STATE_READ_POST) {
+            r->conf.stream_request_body &=
+              ~(FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN);
+            rc = r->con->reqbody_read(r);
+            if (rc != HANDLER_GO_ON) return rc;
+        }
+        chunkqueue_mark_written(&r->reqbody_queue, r->reqbody_length);
     }
+    http_response_upgrade_read_body_unknown(r);
+    chunkqueue_append_chunkqueue(&r->reqbody_queue, &r->read_queue);
     rc = mod_wstunnel_handshake_create_response(hctx);
     if (rc != HANDLER_GO_ON) return rc;
 
