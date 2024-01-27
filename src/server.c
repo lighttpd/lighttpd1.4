@@ -1251,7 +1251,7 @@ __attribute_noinline__
 static void server_sockets_enable (server *srv) {
     server_sockets_set_event(srv, FDEVENT_IN);
     srv->sockets_disabled = 0;
-    log_error(srv->errh, __FILE__, __LINE__, "[note] sockets enabled again");
+    log_notice(srv->errh, __FILE__, __LINE__, "[note] sockets enabled again");
 }
 
 __attribute_cold__
@@ -1259,7 +1259,7 @@ __attribute_noinline__
 static void server_sockets_disable (server *srv) {
     server_sockets_set_event(srv, 0);
     srv->sockets_disabled = 1;
-    log_error(srv->errh, __FILE__, __LINE__,
+    log_notice(srv->errh, __FILE__, __LINE__,
       (0 == srv->lim_conns)
         ? "[note] sockets disabled, connection limit reached"
         : "[note] sockets disabled, out-of-fds");
