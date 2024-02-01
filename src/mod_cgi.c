@@ -9,6 +9,7 @@
 #include "http_cgi.h"
 #include "http_chunk.h"
 #include "http_header.h"
+#include "gw_backend.h" /* gw_upgrade_policy() */
 
 #include "plugin.h"
 
@@ -1053,19 +1054,10 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	if (!S_ISREG(st->st_mode)) return HANDLER_GO_ON;
 	if (p->conf.execute_x_only == 1 && (st->st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) return HANDLER_GO_ON;
 
-	if (__builtin_expect( (r->h2_connect_ext != 0), 0)) {
-		if (!p->conf.upgrade) {
-			r->http_status = 405; /* Method Not Allowed */
-			return HANDLER_FINISHED;
-		}
-	}
-	else if (!light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE))
-		p->conf.upgrade = 0;
-	else if (!p->conf.upgrade || r->http_version != HTTP_VERSION_1_1) {
-		p->conf.upgrade = 0;
-		http_header_request_unset(r, HTTP_HEADER_UPGRADE,
-		                          CONST_STR_LEN("Upgrade"));
-	}
+	p->conf.upgrade = (unsigned short)
+	  gw_upgrade_policy(r, 0, (int)p->conf.upgrade);
+	if (0 != r->http_status)
+		return HANDLER_FINISHED;
 
 	if (r->reqbody_length
 	    && p->tempfile_accum

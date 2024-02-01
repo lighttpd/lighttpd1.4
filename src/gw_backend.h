@@ -370,4 +370,6 @@ handler_t gw_handle_waitpid_cb(server *srv, void *p_d, pid_t pid, int status);
 
 void gw_set_transparent(gw_handler_ctx *hctx);
 
+int gw_upgrade_policy (request_st *r, int auth_mode, int upgrade);
+
 #endif

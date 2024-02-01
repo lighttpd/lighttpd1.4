@@ -2518,6 +2518,27 @@ static handler_t gw_process_fdevent(gw_handler_ctx * const hctx, request_st * co
     return HANDLER_GO_ON;
 }
 
+int gw_upgrade_policy (request_st * const r, const int auth_mode, int upgrade)
+{
+    if (__builtin_expect( (r->h2_connect_ext != 0), 0)) {
+        if (!upgrade && !auth_mode)
+            r->http_status = 405; /* Method Not Allowed */
+    }
+    else if (!light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE))
+        upgrade = 0;
+    else if (!upgrade || r->http_version != HTTP_VERSION_1_1
+             || (0 != r->reqbody_length
+                 && !config_feature_bool(r->con->srv,
+                                         "gw.upgrade-with-request-body", 0))) {
+        upgrade = 0;
+        if (!auth_mode)
+            http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+                                      CONST_STR_LEN("Upgrade"));
+    }
+
+    return upgrade;
+}
+
 static handler_t gw_response_headers_upgrade(request_st * const r, struct http_response_opts_t *opts) {
     /* response headers just completed */
     UNUSED(r);
@@ -2707,20 +2728,10 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
     /*(combine host upgrade setting with that of mod_proxy, mod_wstunnel)*/
     p->conf.upgrade |= host->upgrade;
 
-    if (__builtin_expect( (r->h2_connect_ext != 0), 0)) {
-        if (!p->conf.upgrade && gw_mode != GW_AUTHORIZER) {
-            r->http_status = 405; /* Method Not Allowed */
-            return HANDLER_FINISHED;
-        }
-    }
-    else if (!light_btst(r->rqst_htags, HTTP_HEADER_UPGRADE))
-        p->conf.upgrade = 0;
-    else if (!p->conf.upgrade || r->http_version != HTTP_VERSION_1_1) {
-        p->conf.upgrade = 0;
-        if (gw_mode != GW_AUTHORIZER)
-            http_header_request_unset(r, HTTP_HEADER_UPGRADE,
-                                      CONST_STR_LEN("Upgrade"));
-    }
+    p->conf.upgrade =
+      gw_upgrade_policy(r,(gw_mode == GW_AUTHORIZER),p->conf.upgrade);
+    if (0 != r->http_status)
+        return HANDLER_FINISHED;
 
     if (!hctx) hctx = handler_ctx_init(hctx_sz);
 
