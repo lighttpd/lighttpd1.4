@@ -946,19 +946,19 @@ static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const
 }
 
 static int recv_ietf_00(handler_ctx *hctx) {
+    buffer_string_prepare_copy(hctx->gw.r->tmp_buf, 65535);
     request_st * const r = hctx->gw.r;
     chunkqueue *cq = &r->reqbody_queue;
     buffer *payload = hctx->frame.payload;
     char *mem;
     DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%llx",
                     r->con->fd, (long long)chunkqueue_length(cq));
-    for (chunk *c = cq->first; c; c = c->next) {
-        char *frame = c->mem->ptr+c->offset;
-        /*(chunk_remaining_length() on MEM_CHUNK)*/
-        size_t flen = (size_t)(buffer_clen(c->mem) - c->offset);
-        /*(FILE_CHUNK not handled, but might need to add support)*/
-        force_assert(c->type == MEM_CHUNK);
-        for (size_t i = 0; i < flen; ) {
+    while (!chunkqueue_is_empty(cq)) {
+        char *frame = r->tmp_buf->ptr;
+        uint32_t flen = buffer_string_space(r->tmp_buf);
+        if (0 != chunkqueue_peek_data(cq, &frame, &flen, r->conf.errh, 0))
+            return -1;
+        for (uint32_t i = 0; i < flen; ) {
             switch (hctx->frame.state) {
             case MOD_WEBSOCKET_FRAME_STATE_INIT:
                 hctx->frame.ctl.siz = 0;
@@ -978,7 +978,7 @@ static int recv_ietf_00(handler_ctx *hctx) {
             case MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD:
                 mem = (char *)memchr(frame+i, 0xff, flen - i);
                 if (mem == NULL) {
-                    DEBUG_LOG_DEBUG("got continuous payload, size=%zx", flen-i);
+                    DEBUG_LOG_DEBUG("got continuous payload, size=%x", flen-i);
                     hctx->frame.ctl.siz += flen - i;
                     if (hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX) {
                         DEBUG_LOG_WARN("frame size has been exceeded: %x",
@@ -1036,10 +1036,8 @@ static int recv_ietf_00(handler_ctx *hctx) {
                 return -1;
             }
         }
+        chunkqueue_mark_written(cq, flen);
     }
-    /* XXX: should add ability to handle and preserve partial frames above */
-    /*(not chunkqueue_reset(); do not reset cq->bytes_in, cq->bytes_out)*/
-    chunkqueue_mark_written(cq, chunkqueue_length(cq));
     return 0;
 }
 
@@ -1134,18 +1132,18 @@ static void unmask_payload(handler_ctx *hctx) {
 }
 
 static int recv_rfc_6455(handler_ctx *hctx) {
+    buffer_string_prepare_copy(hctx->gw.r->tmp_buf, 65535);
     request_st * const r = hctx->gw.r;
     chunkqueue *cq = &r->reqbody_queue;
     buffer *payload = hctx->frame.payload;
     DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%llx",
                     r->con->fd, (long long)chunkqueue_length(cq));
-    for (chunk *c = cq->first; c; c = c->next) {
-        char *frame = c->mem->ptr+c->offset;
-        /*(chunk_remaining_length() on MEM_CHUNK)*/
-        size_t flen = (size_t)(buffer_clen(c->mem) - c->offset);
-        /*(FILE_CHUNK not handled, but might need to add support)*/
-        force_assert(c->type == MEM_CHUNK);
-        for (size_t i = 0; i < flen; ) {
+    while (!chunkqueue_is_empty(cq)) {
+        char *frame = r->tmp_buf->ptr;
+        uint32_t flen = buffer_string_space(r->tmp_buf);
+        if (0 != chunkqueue_peek_data(cq, &frame, &flen, r->conf.errh, 0))
+            return -1;
+        for (uint32_t i = 0; i < flen; ) {
             switch (hctx->frame.state) {
             case MOD_WEBSOCKET_FRAME_STATE_INIT:
                 switch (frame[i] & 0x0f) {
@@ -1263,11 +1261,11 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                     i += (size_t)(hctx->frame.ctl.siz & SIZE_MAX);
                     hctx->frame.ctl.siz = 0;
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_INIT;
-                    DEBUG_LOG_DEBUG("rest of frame size=%zx", flen - i);
+                    DEBUG_LOG_DEBUG("rest of frame size=%x", flen - i);
                 /* SIZE_MAX < hctx->frame.ctl.siz */
                 }
                 else {
-                    DEBUG_LOG_DEBUG("read payload, size=%zx", flen - i);
+                    DEBUG_LOG_DEBUG("read payload, size=%x", flen - i);
                     buffer_append_string_len(payload, frame+i, flen - i);
                     hctx->frame.ctl.siz -= flen - i;
                     i += flen - i;
@@ -1306,10 +1304,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 return -1;
             }
         }
+        chunkqueue_mark_written(cq, flen);
     }
-    /* XXX: should add ability to handle and preserve partial frames above */
-    /*(not chunkqueue_reset(); do not reset cq->bytes_in, cq->bytes_out)*/
-    chunkqueue_mark_written(cq, chunkqueue_length(cq));
     return 0;
 }
 
