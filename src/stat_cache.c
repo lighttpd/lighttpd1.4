@@ -1110,7 +1110,7 @@ void stat_cache_update_entry(const char *name, uint32_t len,
                              const struct stat *st, const buffer *etagb)
 {
     if (sc.stat_cache_engine == STAT_CACHE_ENGINE_NONE) return;
-    force_assert(0 != len);
+    if (__builtin_expect( (0 == len), 0)) return; /*(should not happen)*/
     if (name[len-1] == '/') { if (0 == --len) len = 1; }
     splay_tree **sptree = &sc.files;
     stat_cache_entry *sce =
@@ -1144,7 +1144,7 @@ void stat_cache_update_entry(const char *name, uint32_t len,
 void stat_cache_delete_entry(const char *name, uint32_t len)
 {
     if (sc.stat_cache_engine == STAT_CACHE_ENGINE_NONE) return;
-    force_assert(0 != len);
+    if (__builtin_expect( (0 == len), 0)) return; /*(should not happen)*/
     if (name[len-1] == '/') { if (0 == --len) len = 1; }
     splay_tree **sptree = &sc.files;
     stat_cache_entry *sce = stat_cache_sptree_find(sptree, name, len);
@@ -1241,7 +1241,7 @@ static void stat_cache_delete_tree(const char *name, uint32_t len)
 
 void stat_cache_delete_dir(const char *name, uint32_t len)
 {
-    force_assert(0 != len);
+    if (__builtin_expect( (0 == len), 0)) return; /*(should not happen)*/
     if (name[len-1] == '/') { if (0 == --len) len = 1; }
     stat_cache_delete_tree(name, len);
   #ifdef HAVE_FAM_H
@@ -1333,7 +1333,7 @@ stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
      * (but use full path given with stat(), even with trailing '/') */
     uint32_t len = buffer_clen(name);
     int final_slash = 0;
-    force_assert(0 != len);
+    if (__builtin_expect( (0 == len), 0)) return NULL; /*(should not happen)*/
     if (name->ptr[len-1] == '/') { final_slash = 1; if (0 == --len) len = 1; }
     /* Note: paths are expected to be normalized before calling stat_cache,
      * e.g. without repeated '/' */
@@ -1419,9 +1419,9 @@ int stat_cache_path_contains_symlink(const buffer *name, log_error_st *errh) {
     /* we assume "/" can not be symlink,
      * so skip the symlink stuff if path is "/" */
     size_t len = buffer_clen(name);
-    force_assert(0 != len);
-    force_assert(name->ptr[0] == '/');
-    if (1 == len) return 0;
+    if (__builtin_expect( (0 == len), 0)) return -1; /*(should not happen)*/
+    if (__builtin_expect( (name->ptr[0] != '/'), 0)) return -1;
+    if (__builtin_expect( (1 == len), 0)) return 0;
    #ifndef PATH_MAX
    #define PATH_MAX 4096
    #endif
