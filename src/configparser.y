@@ -63,8 +63,9 @@ static void configparser_push(config_t *ctx, data_config *dc, int isnew) {
 
 static data_config *configparser_pop(config_t *ctx) {
   data_config *old = ctx->current;
-  force_assert(ctx->configs_stack.used);
-  ctx->current = ctx->configs_stack.data[--ctx->configs_stack.used];
+  ctx->current = ctx->configs_stack.used > 0
+               ? ctx->configs_stack.data[--ctx->configs_stack.used]
+               : NULL;
   force_assert(old && ctx->current);
   return old;
 }
@@ -73,15 +74,7 @@ static data_config *configparser_pop(config_t *ctx) {
 static data_unset *configparser_get_variable(config_t *ctx, const buffer *key) {
   const data_unset *du;
   data_config *dc;
-
-#if 0
-  fprintf(stderr, "get var %s\n", key->ptr);
-#endif
   for (dc = ctx->current; dc; dc = dc->parent) {
-#if 0
-    fprintf(stderr, "get var on block: %s\n", dc->key.ptr);
-    array_print(dc->value, 0);
-#endif
     if (NULL != (du = array_get_element_klen(dc->value, BUF_PTR_LEN(key)))) {
       data_unset *du_copy = du->fn->copy(du);
       buffer_clear(&du_copy->key);
@@ -153,7 +146,7 @@ static data_unset *configparser_merge_data(data_unset *op1, const data_unset *op
       break;
     }
     default:
-      force_assert(0);
+      ck_assert_failed(__FILE__, __LINE__, "unexpected enum value");
       break;
   }
   return op1;
@@ -255,8 +248,7 @@ configparser_parse_condition(config_t * const ctx, const buffer * const obj_tag,
     case CONFIG_COND_PREFIX:  op = "=^"; break;
     case CONFIG_COND_SUFFIX:  op = "=$"; break;
     default:
-      force_assert(0);
-      return; /* unreachable */
+      ck_assert_failed(__FILE__, __LINE__, "unexpected enum value");
     }
 
     const uint32_t comp_offset = buffer_clen(&ctx->current->key)+3;
@@ -630,7 +622,6 @@ eols ::= .
 globalstart ::= GLOBAL. {
   data_config *dc;
   dc = configparser_get_data_config(ctx->srv->config_context, CONST_STR_LEN("global"));
-  force_assert(dc);
   configparser_push(ctx, dc, 0);
 }
 
@@ -670,15 +661,17 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
     }
   }
   if (ctx->ok) {
-    size_t pos;
     data_config *dc;
     dc = (data_config *)array_extract_element_klen(ctx->all_configs, BUF_PTR_LEN(&C->key));
-    force_assert(C == dc);
+    if (C != dc) ctx->ok = 0; /*(should not happen)*/
+  }
+  if (ctx->ok) {
     buffer_copy_buffer(&C->key, &B->key);
     C->comp_key = C->key.ptr + (B->comp_key - B->key.ptr);
     C->comp = B->comp;
     /*buffer_copy_buffer(&C->string, &B->string);*/
     /* -2 for "==" and minus 3 for spaces and quotes around string (in key) */
+    size_t pos;
     pos = buffer_clen(&C->key) - buffer_clen(&B->string) - 5;
     switch(B->cond) {
     case CONFIG_COND_NE:
@@ -706,9 +699,10 @@ condlines(A) ::= condlines(B) eols ELSE cond_else(C). {
       /*buffer_copy_string_len(C->op, CONST_STR_LEN("!$"));*/
       break;
     default: /* should not happen; CONFIG_COND_ELSE checked further above */
-      force_assert(0);
+      ck_assert_failed(__FILE__, __LINE__, "unexpected enum value");
     }
 
+    data_config *dc;
     if (NULL == (dc = configparser_get_data_config(ctx->all_configs, BUF_PTR_LEN(&C->key)))) {
       /* re-insert into ctx->all_configs with new C->key */
       array_insert_unique(ctx->all_configs, (data_unset *)C);
