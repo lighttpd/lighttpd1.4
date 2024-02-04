@@ -37,7 +37,8 @@ struct fdnode_st {
 #define FDEVENT_ERR    0x0008
 #define FDEVENT_HUP    0x0010
 #define FDEVENT_NVAL   0x0020
-#if defined(__sun) && defined(__SVR4) /* Solaris */
+#if (defined(__sun) && defined(__SVR4)) /* Solaris */ \
+ || defined(__FreeBSD__)
 #define FDEVENT_RDHUP  0x4000
 #else
 #define FDEVENT_RDHUP  0x2000

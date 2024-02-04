@@ -118,4 +118,11 @@ void ck_assert_failed(const char *filename, unsigned int line, const char *msg);
 __END_DECLS
 
 
+#include <assert.h>     /* C11 static_assert() and _Static_assert() */
+#ifndef static_assert
+#define static_assert(x,str) ck_assert(x)
+#endif
+#define ck_static_assert(x) static_assert((x),#x)
+
+
 #endif
