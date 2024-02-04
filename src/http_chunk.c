@@ -228,7 +228,6 @@ int http_chunk_append_buffer(request_st * const r, buffer * const mem) {
 __attribute_noinline__
 int http_chunk_append_mem(request_st * const r, const char * const mem, const size_t len) {
     if (0 == len) return 0;
-    force_assert(NULL != mem);
 
     chunkqueue * const cq = &r->write_queue;
 
