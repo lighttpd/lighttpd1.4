@@ -885,6 +885,19 @@ static chunk *chunkqueue_get_append_newtempfile(chunkqueue * const restrict cq, 
     return NULL;
 }
 
+__attribute_cold__
+static int chunkqueue_close_tempchunk (chunk * const restrict c, log_error_st * const restrict errh) {
+    force_assert(0 == c->file.refchg); /*(else should not happen)*/
+    int rc = close(c->file.fd);
+    c->file.fd = -1;
+    if (0 != rc) {
+        log_perror(errh, __FILE__, __LINE__,
+          "close() temp-file %s failed", c->mem->ptr);
+        return 0;
+    }
+    return 1;
+}
+
 static chunk *chunkqueue_get_append_tempfile(chunkqueue * const restrict cq, log_error_st * const restrict errh) {
     /*
      * if the last chunk is
@@ -904,14 +917,8 @@ static chunk *chunkqueue_get_append_tempfile(chunkqueue * const restrict cq, log
             return c; /* ok, take the last chunk for our job */
 
         /* the chunk is too large now, close it */
-        force_assert(0 == c->file.refchg); /*(else should not happen)*/
-        int rc = close(c->file.fd);
-        c->file.fd = -1;
-        if (0 != rc) {
-            log_perror(errh, __FILE__, __LINE__,
-              "close() temp-file %s failed", c->mem->ptr);
+        if (!chunkqueue_close_tempchunk(c, errh))
             return NULL;
-        }
     }
     return chunkqueue_get_append_newtempfile(cq, errh);
 }
@@ -933,14 +940,8 @@ static int chunkqueue_append_tempfile_err(chunkqueue * const cq, log_error_st * 
         chunkqueue_remove_empty_chunks(cq);
     }
     else {/*(close tempfile; avoid later attempts to append)*/
-        force_assert(0 == c->file.refchg); /*(else should not happen)*/
-        int rc = close(c->file.fd);
-        c->file.fd = -1;
-        if (0 != rc) {
-            log_perror(errh, __FILE__, __LINE__,
-              "close() temp-file %s failed", c->mem->ptr);
+        if (!chunkqueue_close_tempchunk(c, errh))
             retry = 0;
-        }
     }
     return retry;
 }
