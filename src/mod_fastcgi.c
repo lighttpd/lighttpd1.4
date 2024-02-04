@@ -140,23 +140,17 @@ static int fcgi_env_add(void *venv, const char *key, size_t key_len, const char 
 
 	if (!key || (!val && val_len)) return -1;
 
-	/**
-	 * field length can be 31bit max
-	 *
-	 * HINT: this can't happen as FCGI_MAX_LENGTH is only 16bit
-	 */
-	force_assert(key_len < 0x7fffffffu);
-	force_assert(val_len < 0x7fffffffu);
-
 	if (key_len > 127) {
+		if (key_len > 0x7fffffffu) return -1; /*(should not happen)*/
 		len_enc[0] = ((key_len >> 24) & 0xff) | 0x80;
 		len_enc[1] =  (key_len >> 16) & 0xff;
 		len_enc[2] =  (key_len >>  8) & 0xff;
-		len_enc_len += 3;
+		len_enc_len = 3;
 	}
 	len_enc[len_enc_len++] = key_len & 0xff;
 
 	if (val_len > 127) {
+		if (val_len > 0x7fffffffu) return -1; /*(should not happen)*/
 		len_enc[len_enc_len++] = ((val_len >> 24) & 0xff) | 0x80;
 		len_enc[len_enc_len++] = (val_len >> 16) & 0xff;
 		len_enc[len_enc_len++] = (val_len >> 8) & 0xff;
