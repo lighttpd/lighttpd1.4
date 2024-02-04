@@ -649,11 +649,9 @@ int sock_addr_from_str_numeric(sock_addr * const restrict saddr, const char * co
     } else switch (addrlist->ai_family) {
     case AF_INET:
         memcpy(&saddr->ipv4, addrlist->ai_addr, sizeof(saddr->ipv4));
-        force_assert(AF_INET == saddr->plain.sa_family);
         break;
     case AF_INET6:
         memcpy(&saddr->ipv6, addrlist->ai_addr, sizeof(saddr->ipv6));
-        force_assert(AF_INET6 == saddr->plain.sa_family);
         break;
     default:
         log_error(errh, __FILE__, __LINE__,
