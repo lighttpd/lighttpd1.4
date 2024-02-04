@@ -47,25 +47,32 @@ static int * gw_status_get_counter(gw_host *host, gw_proc *proc, const char *tag
     /*(At the cost of some memory, could prepare strings for host and for proc
      * so that here we would copy ready made string for proc (or if NULL,
      * for host), and then append tag to produce key)*/
+    /*("gw.backend." 11, host->id <=128, proc->id <=10+1, static tag <=11)*/
     char label[288];
     size_t llen = sizeof("gw.backend.")-1, len;
     memcpy(label, "gw.backend.", llen);
 
     len = buffer_clen(host->id);
     if (len) {
+      #ifdef __COVERITY__
         force_assert(len < sizeof(label) - llen);
+      #endif
         memcpy(label+llen, host->id->ptr, len);
         llen += len;
     }
 
     if (proc) {
+      #ifdef __COVERITY__
         force_assert(llen < sizeof(label) - (LI_ITOSTRING_LENGTH + 1));
+      #endif
         label[llen++] = '.';
         len = li_utostrn(label+llen, LI_ITOSTRING_LENGTH, proc->id);
         llen += len;
     }
 
+  #ifdef __COVERITY__
     force_assert(tlen < sizeof(label) - llen);
+  #endif
     memcpy(label+llen, tag, tlen);
     llen += tlen;
     label[llen] = '\0';
@@ -1353,7 +1360,8 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
             data_array * const da_host = (data_array *)da_ext->value.data[n];
 
             if (da_host->type != TYPE_ARRAY
-                || !array_is_kvany(&da_host->value)){
+                || !array_is_kvany(&da_host->value)
+                || buffer_clen(&da_host->key) > 128) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected value for gw.server near [%s](string); "
                   "expected ( \"ext\" => "
