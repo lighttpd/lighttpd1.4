@@ -72,6 +72,7 @@ __attribute_hot__
 void array_reset_data_strings(array *a);
 
 __attribute_cold__
+__attribute_nonnull__()
 void array_insert_unique(array *a, data_unset *entry);
 
 __attribute_cold__
@@ -124,6 +125,7 @@ static inline void array_set_key_value(array * const a, const char * const k, co
 }
 
 __attribute_cold__
+__attribute_nonnull__()
 void array_replace(array *a, data_unset *entry);
 
 __attribute_pure__

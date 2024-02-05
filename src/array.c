@@ -424,9 +424,8 @@ void array_insert_value(array * const a, const char * const v, const uint32_t vl
 
 /* if entry already exists return pointer to existing entry, otherwise insert entry and return NULL */
 __attribute_cold__
+__attribute_nonnull__()
 static data_unset **array_find_or_insert(array * const a, data_unset * const entry) {
-    force_assert(NULL != entry);
-
     /* push value onto end of array if there is no key */
     if (buffer_is_unset(&entry->key)) {
         array_insert_data_at_pos(a, entry, a->used);
@@ -443,20 +442,20 @@ static data_unset **array_find_or_insert(array * const a, data_unset * const ent
 
 /* replace or insert data (free existing entry) */
 void array_replace(array * const a, data_unset * const entry) {
-    if (NULL == array_find_or_insert(a, entry)) return;
+    data_unset ** const oldp = array_find_or_insert(a, entry);
+    if (NULL == oldp) return;
 
-    /* find the entry (array_find_or_insert() returned non-NULL) */
-    const int32_t ipos = array_get_index(a, BUF_PTR_LEN(&entry->key));
-    force_assert(ipos >= 0);
-    data_unset *old = a->sorted[ipos];
+    data_unset * const old = *oldp;
+    *oldp = entry;
+
+    for (uint32_t i = 0; i < a->used; ++i) {
+        if (a->data[i] == old) {
+            a->data[i] = entry;
+            break;
+        }
+    }
+
     force_assert(old != entry);
-    a->sorted[ipos] = entry;
-
-    uint32_t i = 0;
-    while (i < a->used && a->data[i] != old) ++i;
-    force_assert(i != a->used);
-    a->data[i] = entry;
-
     old->fn->free(old);
 }
 
