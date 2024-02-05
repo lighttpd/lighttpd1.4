@@ -912,8 +912,8 @@ mod_auth_digest_mutate (http_auth_info_t * const ai, const http_auth_digest_para
   #endif
     size_t n;
     struct const_iovec iov[11];
-    char a1[MD_DIGEST_LENGTH_MAX*2+8]; /*(+1 for li_tohex(); +8 for align)*/
-    char a2[MD_DIGEST_LENGTH_MAX*2+8]; /*(+1 for li_tohex(); +8 for align)*/
+    char a1[MD_DIGEST_LENGTH_MAX*2];
+    char a2[MD_DIGEST_LENGTH_MAX*2];
 
     li_tohex(a1, sizeof(a1), (const char *)ai->digest, ai->dlen);
 
@@ -1047,7 +1047,7 @@ mod_auth_append_nonce (buffer *b, unix_time64_t cur_ts, const struct http_auth_r
         n = HTTP_AUTH_DIGEST_MD5_BINLEN;
         break;
     }
-    li_tohex(buffer_extend(b, n*2), n*2+1, (const char *)h, n);
+    li_tohex(buffer_extend(b, n*2), n*2, (const char *)h, n);
 }
 
 

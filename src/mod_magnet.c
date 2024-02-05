@@ -830,7 +830,7 @@ static int magnet_md_once(lua_State *L) {
     }
 
     if (dlen) {
-        char dighex[MD_DIGEST_LENGTH_MAX*2+1];
+        char dighex[MD_DIGEST_LENGTH_MAX*2];
         li_tohex_uc(dighex, sizeof(dighex), (char *)digest, dlen);
         lua_pushlstring(L, dighex, dlen*2);
     }
@@ -893,7 +893,7 @@ static int magnet_hmac_once(lua_State *L) {
     }
 
     if (rc) {
-        char dighex[MD_DIGEST_LENGTH_MAX*2+1];
+        char dighex[MD_DIGEST_LENGTH_MAX*2];
         li_tohex_uc(dighex, sizeof(dighex), (char *)digest, dlen);
         lua_pushlstring(L, dighex, dlen*2);
     }

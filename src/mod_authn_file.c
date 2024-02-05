@@ -656,6 +656,7 @@ static int mod_authn_file_crypt_cmp(const buffer * const password, const char * 
                     char ntlmhex[MD4_DIGEST_LENGTH*2+1];
                     MD4_once((unsigned char *)ntlmhash, sample, pwlen);
                     li_tohex(ntlmhex,sizeof(ntlmhex),ntlmhash,sizeof(ntlmhash));
+                    ntlmhex[MD4_DIGEST_LENGTH*2] = '\0';
 
                     /*(reuse sample buffer for salt  (FYI: expect slen == 8))*/
                     memcpy(sample, "$1$", sizeof("$1$")-1);

@@ -135,7 +135,7 @@ size_t li_itostrn(char *buf, size_t buf_len, intmax_t val);
 __attribute_nonnull__()
 size_t li_utostrn(char *buf, size_t buf_len, uintmax_t val);
 
-/* buf must be (at least) 2*s_len + 1 big. uses lower-case hex letters. */
+/* buf must be (at least) 2*s_len big. uses lower-case hex letters. */
 #define li_tohex(buf,buf_len,s,s_len) li_tohex_lc((buf),(buf_len),(s),(s_len))
 __attribute_nonnull__()
 void li_tohex_lc(char * restrict buf, size_t buf_len, const char * restrict s, size_t s_len);

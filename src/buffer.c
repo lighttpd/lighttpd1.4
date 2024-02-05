@@ -447,23 +447,21 @@ int buffer_is_equal(const buffer *a, const buffer *b) {
 
 
 void li_tohex_lc(char * const restrict buf, size_t buf_len, const char * const restrict s, size_t s_len) {
-	force_assert(2 * s_len > s_len && 2 * s_len < buf_len);
+	force_assert(s_len <= (buf_len >> 1));
 
 	for (size_t i = 0; i < s_len; ++i) {
 		buf[2*i]   = hex_chars_lc[(s[i] >> 4) & 0x0F];
 		buf[2*i+1] = hex_chars_lc[s[i] & 0x0F];
 	}
-	buf[2*s_len] = '\0';
 }
 
 void li_tohex_uc(char * const restrict buf, size_t buf_len, const char * const restrict s, size_t s_len) {
-	force_assert(2 * s_len > s_len && 2 * s_len < buf_len);
+	force_assert(s_len <= (buf_len >> 1));
 
 	for (size_t i = 0; i < s_len; ++i) {
 		buf[2*i]   = hex_chars_uc[(s[i] >> 4) & 0x0F];
 		buf[2*i+1] = hex_chars_uc[s[i] & 0x0F];
 	}
-	buf[2*s_len] = '\0';
 }
 
 

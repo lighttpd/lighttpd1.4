@@ -351,7 +351,7 @@ geoip2_env_set (request_st * const r, array * const env,
     /* GeoIP2 database interfaces return pointers directly into database,
      * and these are valid until the database is closed.
      * However, note that the strings *are not* '\0'-terminated */
-    char buf[35];
+    char buf[34];
     if (!data->has_data || 0 == data->offset) return;
     const char *v = buf;
     size_t vlen;
