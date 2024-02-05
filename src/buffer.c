@@ -148,11 +148,16 @@ void buffer_commit(buffer *b, size_t size)
 	size_t sz = b->used;
 	if (0 == sz) sz = 1;
 
+  #if __has_builtin(__builtin_add_overflow)
+	if (__builtin_add_overflow(size, sz, &sz))
+		ck_assert_failed(__FILE__, __LINE__, "add overflow");
+  #else
 	if (size > 0) {
 		/* check for overflow: unsigned overflow is defined to wrap around */
 		sz += size;
 		force_assert(sz > size);
 	}
+  #endif
 
 	b->used = sz;
 	b->ptr[sz - 1] = '\0';
@@ -442,8 +447,7 @@ int buffer_is_equal(const buffer *a, const buffer *b) {
 
 
 void li_tohex_lc(char * const restrict buf, size_t buf_len, const char * const restrict s, size_t s_len) {
-	force_assert(2 * s_len > s_len);
-	force_assert(2 * s_len < buf_len);
+	force_assert(2 * s_len > s_len && 2 * s_len < buf_len);
 
 	for (size_t i = 0; i < s_len; ++i) {
 		buf[2*i]   = hex_chars_lc[(s[i] >> 4) & 0x0F];
@@ -453,8 +457,7 @@ void li_tohex_lc(char * const restrict buf, size_t buf_len, const char * const r
 }
 
 void li_tohex_uc(char * const restrict buf, size_t buf_len, const char * const restrict s, size_t s_len) {
-	force_assert(2 * s_len > s_len);
-	force_assert(2 * s_len < buf_len);
+	force_assert(2 * s_len > s_len && 2 * s_len < buf_len);
 
 	for (size_t i = 0; i < s_len; ++i) {
 		buf[2*i]   = hex_chars_uc[(s[i] >> 4) & 0x0F];
