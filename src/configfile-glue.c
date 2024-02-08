@@ -208,7 +208,8 @@ int config_plugin_values_init_block(server * const srv, const array * const ca, 
                 if (v && *v) {
                     char *e;
                     long l = strtol(v, &e, 10);
-                    if (e != v && !*e && l >= 0 && l <= 65535) {
+                    if (e != v && !*e && l >= 0 && l <= 65536) {
+                        if (l == 65536) l = 65535;
                         cpv->v.shrt = (unsigned short)l;
                         break;
                     }
@@ -222,8 +223,11 @@ int config_plugin_values_init_block(server * const srv, const array * const ca, 
                 cpv->v.shrt =
                   (unsigned short)((const data_integer *)du)->value;
                 if (((const data_integer *)du)->value >= 0
-                    && ((const data_integer *)du)->value <= 65535)
+                    && ((const data_integer *)du)->value <= 65536) {
+                    if (((const data_integer *)du)->value == 65536)
+                        cpv->v.shrt = 65535;
                     break;
+                }
                 __attribute_fallthrough__
               default:
                 log_error(srv->errh, __FILE__, __LINE__,
