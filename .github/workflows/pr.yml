@@ -211,6 +211,7 @@ jobs:
             libmariadb-devel libpq-devel
             libmaxminddb-devel libunwind-devel lua-devel lua5.1-devel
             libxml2-devel libuuid-devel libsqlite3-devel
+            libintl-devel
       - name: Update
         shell: powershell
         run: |
