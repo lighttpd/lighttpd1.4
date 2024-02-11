@@ -2100,7 +2100,7 @@ static int config_tokenizer(tokenizer_t *t, buffer *token) {
             for (i = 1; s[i] && s[i] != '"'; ++i) {
                 if (s[i] == '\\' && s[i+1] == '"') {
                     buffer_append_string_len(token, start, s + i - start);
-                    start = s + ++i; /* step over '"' */
+                    start = s + ++i; /* step over '\\'; include literal '"' */
                 }
             }
 
