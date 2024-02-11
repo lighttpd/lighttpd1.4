@@ -198,7 +198,7 @@ static void pcre_keyvalue_buffer_append_match(buffer *b, const pcre_keyvalue_ctx
 static void pcre_keyvalue_buffer_append_ctxmatch(buffer *b, const pcre_keyvalue_ctx *ctx, unsigned int num, int flags) {
     const struct cond_match_t * const cache = ctx->cache;
     if (!cache) return; /* no enclosing match context */
-    if (num < (unsigned int)cache->captures) {
+    if ((int)num < cache->captures) {/* ->captures might be -1 if no captures */
       #ifdef HAVE_PCRE2_H
         const PCRE2_SIZE *ovec = (PCRE2_SIZE *)cache->matches;
       #elif defined(HAVE_PCRE_H)
