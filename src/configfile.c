@@ -1949,18 +1949,20 @@ void config_log_error_close(server *srv) {
 
 
 typedef struct {
-	const char *source;
-	const char *input;
 	int offset;
 	int size;
+	const char *input;
+	buffer *token;
 
+	char in_key;
+	char parens;
+	char in_cond;
+	char simulate_eol;
+
+	int tid;
 	int line_pos;
 	int line;
-
-	int in_key;
-	int parens;
-	int in_cond;
-	int simulate_eol;
+	const char *source;
 	log_error_st *errh;
 } tokenizer_t;
 
@@ -1971,7 +1973,6 @@ static int config_skip_newline(const tokenizer_t * const t) {
     return 1 + (s[0] == '\r' && s[1] == '\n');
 }
 
-__attribute_noinline__
 __attribute_pure__
 static int config_skip_comment(const tokenizer_t * const t) {
     /*assert(t->input[t->offset] == '#');*/
@@ -1987,7 +1988,9 @@ static int config_tokenizer_err(tokenizer_t *t, const char *file, unsigned int l
     return -1;
 }
 
-static int config_tokenizer(tokenizer_t *t, buffer *token) {
+__attribute_noinline__
+static int config_tokenizer(tokenizer_t *t) {
+    buffer * const token = t->token;
     if (t->simulate_eol) {
         t->simulate_eol = 0;
         t->in_key = 1;
@@ -2092,6 +2095,12 @@ static int config_tokenizer(tokenizer_t *t, buffer *token) {
             break;
           case '"':
            {
+            /* sanity check that previous token was not also TK_STRING */
+            if (t->tid == TK_STRING)
+                return config_tokenizer_err(t, __FILE__, __LINE__,
+                         "strings may be combined with '+' "
+                         "or separated with ',' or '=>' in lists");
+
             /* search for the terminating " */
             const char *start = s + 1;   /*buffer_blank(token);*/
             buffer_copy_string_len(token, CONST_STR_LEN(""));
@@ -2121,7 +2130,7 @@ static int config_tokenizer(tokenizer_t *t, buffer *token) {
           case ')':
             if (!t->parens)
                 return config_tokenizer_err(t, __FILE__, __LINE__,
-                         "close-parens seen open-parens");
+                         "close-parens without open-parens");
             t->offset++;
             t->parens--;
             buffer_copy_string_len(token, s, 1); /* ")" */
@@ -2259,9 +2268,6 @@ static int config_tokenizer(tokenizer_t *t, buffer *token) {
 
 static int config_parse(server *srv, config_t *context, const char *source, const char *input, int isize) {
 	tokenizer_t t;
-	buffer * const lasttoken = buffer_init();
-	int ret;
-
 	t.source = source;
 	t.input = input;
 	t.size = isize;
@@ -2273,21 +2279,20 @@ static int config_parse(server *srv, config_t *context, const char *source, cons
 	t.parens = 0;
 	t.in_cond = 0;
 	t.simulate_eol = 0;
+	t.tid = -1;
 	t.errh = srv->errh;
 
+	t.token = buffer_init();
 	void * const pParser = configparserAlloc( malloc );
 	force_assert(pParser);
-	do {
-		ret = config_tokenizer(&t, lasttoken);
-		if (__builtin_expect( (ret <= 0), 0))
-			break;
+	while (context->ok && (t.tid = config_tokenizer(&t)) > 0) {
 		buffer * const token = buffer_init();
-		buffer_copy_buffer(token, lasttoken);
-		configparser(pParser, ret, token, context);
+		buffer_copy_buffer(token, t.token);
+		configparser(pParser, t.tid, token, context);
 		/*token = NULL;*/
-	} while (context->ok);
+	}
 
-	if (ret != -1 && context->ok) {
+	if (t.tid != -1 && context->ok) {
 		/* add an EOL at EOF, better than say sorry */
 		buffer * const token = buffer_init();
 		buffer_copy_string(token, "(EOL)");
@@ -2299,18 +2304,18 @@ static int config_parse(server *srv, config_t *context, const char *source, cons
 	}
 	configparserFree(pParser, free);
 
-	if (ret == -1) {
+	if (t.tid == -1) {
 		log_error(t.errh, __FILE__, __LINE__,
-		          "configfile parser failed at: %s", lasttoken->ptr);
+		          "configfile parser failed at: %s", t.token->ptr);
 	} else if (context->ok == 0) {
 		log_error(t.errh, __FILE__, __LINE__, "source: %s line: %d pos: %d "
 		          "parser failed somehow near here: %s",
-		          t.source, t.line, t.offset - t.line_pos, lasttoken->ptr);
-		ret = -1;
+		          t.source, t.line, t.offset - t.line_pos, t.token->ptr);
+		t.tid = -1;
 	}
-	buffer_free(lasttoken);
+	buffer_free(t.token);
 
-	return ret == -1 ? -1 : 0;
+	return t.tid == -1 ? -1 : 0;
 }
 
 __attribute_cold__
