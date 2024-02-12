@@ -2499,6 +2499,26 @@ static int magnet_reqbody(lua_State *L) {
             return 1;
         }
         break;
+      case 'u': /* unspecified_len; r.req_body.unspecified_len */
+        if (klen == 15 && 0 == memcmp(k, "unspecified_len", 15)) {
+            /* HTTP/1.0 with unknown request body len might omit Content-Length.
+             * If Connection: keep-alive is not provided (so Connection: close),
+             * then allow reading until EOF if this method is called, instead of
+             * treating request as if Content-Length: 0 was sent (the default).
+             * (Implemented by streaming; not performing request offload.) */
+            if (HTTP_VERSION_1_0 == r->http_version
+                && 0 == r->reqbody_length
+                   /*(r->reqbody == -1 if HTTP/1.1 Transfer-Encoding: chunked)*/
+                && !r->keep_alive
+                && !light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_LENGTH)) {
+                http_response_upgrade_read_body_unknown(r);
+                lua_pushboolean(L, 1);
+            }
+            else
+                lua_pushboolean(L, 0);
+            return 1;
+        }
+        break;
       default:
         break;
     }
