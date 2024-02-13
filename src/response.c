@@ -237,6 +237,8 @@ static handler_t http_response_config (request_st * const r) {
         r->http_version = HTTP_VERSION_1_0;
         /*(when forcing HTTP/1.0, ignore (unlikely) Connection: keep-alive)*/
         r->keep_alive = 0;
+        http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+                                  CONST_STR_LEN("upgrade"));
     }
 
     if (__builtin_expect( (r->reqbody_length > 0), 0)
