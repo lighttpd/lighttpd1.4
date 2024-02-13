@@ -894,13 +894,17 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	}
 	else if (r->h2_connect_ext) {
 	}
-	else if (-1 == r->reqbody_length
+	else if (r->reqbody_length < 0
 	         && (r->conf.stream_request_body
 	             & (FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN))) {
-		if (__builtin_expect( (hctx->conf.header.force_http10), 0))
-			return http_response_reqbody_read_error(r, 411);
-		hctx->gw.stdin_append = proxy_stdin_append; /* stream chunked body */
-		buffer_append_string_len(b, CONST_STR_LEN("\r\nTransfer-Encoding: chunked"));
+		if (__builtin_expect( (hctx->conf.header.force_http10), 0)) {
+			if (-1 == r->reqbody_length)
+				return http_response_reqbody_read_error(r, 411);
+		}
+		else {
+			hctx->gw.stdin_append = proxy_stdin_append; /* stream chunked body */
+			buffer_append_string_len(b, CONST_STR_LEN("\r\nTransfer-Encoding: chunked"));
+		}
 	}
 
 	/* "Forwarded" and legacy X- headers */
