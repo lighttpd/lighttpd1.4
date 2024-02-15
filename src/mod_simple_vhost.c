@@ -155,7 +155,7 @@ static int build_doc_root(request_st * const r, plugin_data *p, buffer *out, con
 
 	if (!stat_cache_path_isdir(out)) {
 		if (p->conf.debug) {
-			log_perror(r->conf.errh, __FILE__, __LINE__, "%s", out->ptr);
+			log_pdebug(r->conf.errh, __FILE__, __LINE__, "%s", out->ptr);
 		}
 		return 0;
 	}

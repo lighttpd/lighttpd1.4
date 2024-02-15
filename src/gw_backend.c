@@ -269,7 +269,7 @@ static void gw_proc_connect_success(gw_host *host, gw_proc *proc, int debug, req
     proc->last_used = log_monotonic_secs;
 
     if (debug) {
-        log_error(r->conf.errh, __FILE__, __LINE__,
+        log_debug(r->conf.errh, __FILE__, __LINE__,
           "got proc: pid: %d socket: %s load: %d",
           proc->pid, proc->connection_name->ptr, proc->load);
     }
@@ -313,7 +313,7 @@ static void gw_proc_connect_error(request_st * const r, gw_host *host, gw_proc *
               "Check the manual, section Performance how to handle this.");
           #endif
             if (debug) {
-                log_error(errh, __FILE__, __LINE__,
+                log_debug(errh, __FILE__, __LINE__,
                   "This means that you have more incoming requests than your "
                   "FastCGI backend can handle in parallel.  It might help to "
                   "spawn more FastCGI backends or PHP children; if not, "
@@ -349,7 +349,7 @@ static void gw_proc_release(gw_host *host, gw_proc *proc, int debug, log_error_s
     gw_proc_load_dec(host, proc);
 
     if (debug) {
-        log_error(errh, __FILE__, __LINE__,
+        log_debug(errh, __FILE__, __LINE__,
           "released proc: pid: %d socket: %s load: %u",
           proc->pid, proc->connection_name->ptr, proc->load);
     }
@@ -506,7 +506,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
     int status;
 
     if (debug) {
-        log_error(errh, __FILE__, __LINE__,
+        log_debug(errh, __FILE__, __LINE__,
           "new proc, socket: %hu %s",
           proc->port, proc->unixsocket ? proc->unixsocket->ptr : "");
     }
@@ -687,7 +687,7 @@ static int gw_spawn_connection(gw_host * const host, gw_proc * const proc, log_e
         proc->pid = 0;
 
         if (debug) {
-            log_error(errh, __FILE__, __LINE__,
+            log_debug(errh, __FILE__, __LINE__,
               "(debug) socket is already used; won't spawn: %s",
               proc->connection_name->ptr);
         }
@@ -942,7 +942,7 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
 
         if (debug) {
             gw_host * const host = extension->hosts[ndx];
-            log_error(r->conf.errh, __FILE__, __LINE__,
+            log_debug(r->conf.errh, __FILE__, __LINE__,
               "gw - found a host %s %hu",
               host->host ? host->host->ptr : "", host->port);
             return host;
@@ -992,7 +992,7 @@ static int gw_establish_connection(request_st * const r, gw_host *host, gw_proc 
       #endif
         {
             if (debug > 2) {
-                log_error(r->conf.errh, __FILE__, __LINE__,
+                log_debug(r->conf.errh, __FILE__, __LINE__,
                   "connect delayed; will continue later: %s",
                   proc->connection_name->ptr);
             }
@@ -1005,7 +1005,7 @@ static int gw_establish_connection(request_st * const r, gw_host *host, gw_proc 
     }
 
     if (debug > 1) {
-        log_error(r->conf.errh, __FILE__, __LINE__,
+        log_debug(r->conf.errh, __FILE__, __LINE__,
           "connect succeeded: %d", gw_fd);
     }
 
@@ -1057,7 +1057,7 @@ static void gw_restart_dead_proc(gw_host * const host, log_error_st * const errh
                 /* restart the child */
 
                 if (debug) {
-                    log_error(errh, __FILE__, __LINE__,
+                    log_debug(errh, __FILE__, __LINE__,
                       "--- gw spawning"
                       "\n\tsocket %s"
                       "\n\tcurrent: 1 / %u",
@@ -1078,7 +1078,7 @@ static void gw_restart_dead_proc(gw_host * const host, log_error_st * const errh
 static void gw_restart_dead_procs(gw_host * const host, log_error_st * const errh, const int debug, const int trigger) {
     for (gw_proc *proc = host->first; proc; proc = proc->next) {
         if (debug > 2) {
-            log_error(errh, __FILE__, __LINE__,
+            log_debug(errh, __FILE__, __LINE__,
               "proc: %s %d %d %d %d", proc->connection_name->ptr,
               proc->state, proc->is_local, proc->load, proc->pid);
         }
@@ -1674,7 +1674,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     host->max_load_per_proc = 0;
 
                 if (s->debug) {
-                    log_error(srv->errh, __FILE__, __LINE__,
+                    log_debug(srv->errh, __FILE__, __LINE__,
                       "--- gw spawning local"
                       "\n\tproc: %s"
                       "\n\tport: %hu"
@@ -1692,7 +1692,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
                     gw_proc * const proc = gw_proc_init(host);
 
                     if (s->debug) {
-                        log_error(srv->errh, __FILE__, __LINE__,
+                        log_debug(srv->errh, __FILE__, __LINE__,
                           "--- gw spawning"
                           "\n\tport: %hu"
                           "\n\tsocket %s"
@@ -2062,7 +2062,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
             log_error_st * const errh = r->conf.errh;
           #if 0
             if (hctx->conf.debug > 1) {
-                log_error(errh, __FILE__, __LINE__, "sdsx",
+                log_debug(errh, __FILE__, __LINE__, "sdsx",
                   "send data to backend (fd=%d), size=%zu",
                   hctx->fd, chunkqueue_length(&hctx->wb));
             }
@@ -2427,7 +2427,7 @@ static handler_t gw_recv_response_error(gw_handler_ctx * const hctx, request_st 
             if (proc->disabled_until < log_monotonic_secs
                 && 0 != gw_proc_waitpid(host, proc, errh)) {
                 if (hctx->conf.debug) {
-                    log_error(errh, __FILE__, __LINE__,
+                    log_debug(errh, __FILE__, __LINE__,
                       "--- gw spawning\n\tsocket %s\n\tcurrent: 1/%d",
                       proc->connection_name->ptr, host->num_procs);
                 }
@@ -2908,7 +2908,7 @@ static void gw_handle_trigger_host(gw_host * const host, log_error_st * const er
     if (overload && host->num_procs && host->num_procs < host->max_procs) {
         /* overload, spawn new child */
         if (debug) {
-            log_error(errh, __FILE__, __LINE__,
+            log_debug(errh, __FILE__, __LINE__,
               "overload detected, spawning a new child");
         }
 
@@ -2924,7 +2924,7 @@ static void gw_handle_trigger_host(gw_host * const host, log_error_st * const er
 
         /* terminate proc that has been idling for a long time */
         if (debug) {
-            log_error(errh, __FILE__, __LINE__,
+            log_debug(errh, __FILE__, __LINE__,
               "idle-timeout reached, terminating child: socket: %s pid %d",
               proc->unixsocket ? proc->unixsocket->ptr : "", proc->pid);
         }

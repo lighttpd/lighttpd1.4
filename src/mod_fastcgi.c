@@ -307,7 +307,7 @@ static int fastcgi_get_packet(handler_ctx *hctx, fastcgi_response_packet *packet
 	if (rblen < (off_t)sizeof(FCGI_Header)) {
 		/* no header */
 		if (hctx->conf.debug && 0 != rblen) {
-			log_error(hctx->r->conf.errh, __FILE__, __LINE__,
+			log_debug(hctx->r->conf.errh, __FILE__, __LINE__,
 			  "FastCGI: header too small: %lld bytes < %zu bytes, "
 			  "waiting for more data", (long long)rblen, sizeof(FCGI_Header));
 		}
