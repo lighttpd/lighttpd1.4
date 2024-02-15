@@ -2510,6 +2510,7 @@ static int magnet_reqbody(lua_State *L) {
             else {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "unable to collect request body (handler already set); "
+                  "(prefer to collect in magnet.attract-raw-url-to config) "
                   "(perhaps load mod_magnet earlier in server.modules, "
                   "before mod_%s; or require r.req_env['REMOTE_USER'] before "
                   "attempting r.req_body.collect?)", r->handler_module->name);
