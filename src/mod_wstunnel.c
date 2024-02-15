@@ -101,13 +101,13 @@
   if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_ERR) { log_error(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
 
 #define DEBUG_LOG_WARN(format, ...) \
-  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_WARN) { log_error(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
+  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_WARN) { log_warn(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
 
 #define DEBUG_LOG_INFO(format, ...) \
-  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_INFO) { log_error(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
+  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_INFO) { log_info(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
 
 #define DEBUG_LOG_DEBUG(format, ...) \
-  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_DEBUG) { log_error(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
+  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_DEBUG) { log_debug(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
 
 typedef struct {
     gw_plugin_config gw; /* start must match layout of gw_plugin_config */
