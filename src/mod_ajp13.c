@@ -772,11 +772,9 @@ ajp13_recv_0(const request_st * const r, const handler_ctx * const hctx)
             && !(r->conf.stream_response_body
                  & FDEVENT_STREAM_RESPONSE_POLLRDHUP))
             return HANDLER_GO_ON;
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "unexpected end-of-file (perhaps the ajp13 process died):"
-          "pid: %d socket: %s",
-          hctx->proc->pid, hctx->proc->connection_name->ptr);
 
+        gw_backend_error_trace(hctx, r,
+          "unexpected end-of-file (perhaps the ajp13 process died)");
         return HANDLER_ERROR;
 }
 

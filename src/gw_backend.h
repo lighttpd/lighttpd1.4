@@ -362,6 +362,9 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
 __attribute_cold__
 int gw_get_defaults_balance(server *srv, const buffer *b);
 
+__attribute_cold__
+void gw_backend_error_trace(const gw_handler_ctx * hctx, const request_st *r, const char *msg);
+
 handler_t gw_check_extension(request_st *r, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
 handler_t gw_handle_request_reset(request_st *r, void *p_d);
 handler_t gw_handle_subrequest(request_st *r, void *p_d);

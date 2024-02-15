@@ -2150,6 +2150,18 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
 
 __attribute_cold__
 __attribute_noinline__
+void gw_backend_error_trace(const gw_handler_ctx * const hctx, const request_st * const r, const char * const msg)
+{
+    log_error(r->conf.errh, __FILE__, __LINE__,
+      "%s on socket: %s (pid:%d) for %s %s?%.*s",
+      msg, hctx->proc->connection_name->ptr, hctx->proc->pid,
+      r->http_host ? r->http_host->ptr : "",
+      r->uri.path.ptr, BUFFER_INTLEN_PTR(&r->uri.query));
+}
+
+
+__attribute_cold__
+__attribute_noinline__
 static handler_t gw_backend_error(gw_handler_ctx * const hctx, request_st * const r)
 {
     if (hctx->backend_error) hctx->backend_error(hctx);
@@ -2439,34 +2451,24 @@ static handler_t gw_recv_response_error(gw_handler_ctx * const hctx, request_st 
             }
         }
 
-        if (r->resp_body_started == 0) {
-            /* nothing has been sent out yet, try to use another child */
+        int reconnect = 0;
+        const char * const msg = (r->resp_body_started == 0)
+          ? hctx->wb.bytes_out == 0
+              /* if nothing has been sent out yet, try to use another child */
+              ? (reconnect = hctx->reconnects++ < 5)
+                  ? "reconnecting; response not received, request not sent"
+                  : "closing connection; response not received, but too many retries"
+              : "closing connection; response not received, but request sent"
+          : !light_btst(r->resp_htags,HTTP_HEADER_UPGRADE) && !r->h2_connect_ext
+              ? "terminating connection; response already sent out, "
+                "but backend returned error"
+              : NULL;
 
-            if (hctx->wb.bytes_out == 0 && hctx->reconnects++ < 5) {
-                log_error(r->conf.errh, __FILE__, __LINE__,
-                  "response not received, request not sent on "
-                  "socket: %s for %s?%.*s, reconnecting",
-                  proc->connection_name->ptr,
-                  r->uri.path.ptr, BUFFER_INTLEN_PTR(&r->uri.query));
+        if (msg) gw_backend_error_trace(hctx, r, msg);
 
-                return gw_reconnect(hctx, r);
-            }
-
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "response not received, request sent: %lld on "
-              "socket: %s for %s?%.*s, closing connection",
-              (long long)hctx->wb.bytes_out, proc->connection_name->ptr,
-              r->uri.path.ptr, BUFFER_INTLEN_PTR(&r->uri.query));
-        } else if (!light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)
-                   && !r->h2_connect_ext) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "response already sent out, but backend returned error on "
-              "socket: %s for %s?%.*s, terminating connection",
-              proc->connection_name->ptr,
-              r->uri.path.ptr, BUFFER_INTLEN_PTR(&r->uri.query));
-        }
-
-        return gw_backend_error(hctx, r); /* HANDLER_FINISHED */
+        return reconnect
+          ? gw_reconnect(hctx, r)
+          : gw_backend_error(hctx, r); /* HANDLER_FINISHED */
 }
 
 
