@@ -241,16 +241,12 @@ typedef off_t loff_t;
 #ifndef MOD_WEBDAV_BUILD_MINIMAL
 #if defined(HAVE_LIBXML_H) && defined(HAVE_SQLITE3_H)
 
+#define USE_LOCKS
 #define USE_PROPPATCH
 /* minor: libxml2 includes stdlib.h in headers, too */
 #include <libxml/tree.h>
 #include <libxml/parser.h>
 #include <sqlite3.h>
-
-#if defined(HAVE_LIBUUID) && defined(HAVE_UUID_UUID_H)
-#define USE_LOCKS
-#include <uuid/uuid.h>
-#endif
 
 #endif /* defined(HAVE_LIBXML_H) && defined(HAVE_SQLITE3_H) */
 #endif /* MOD_WEBDAV_BUILD_MINIMAL */
@@ -5607,6 +5603,54 @@ webdav_conflicting_lock_cb (void * const vdata,
 }
 
 
+#include "rand.h"       /* li_rand_pseudo_bytes() */
+
+static void
+webdav_uuid_v4 (char * const s) /* s receives 36 chars of output */
+{
+    /* generate UUID version 4: random number based */
+    char uuid[16];
+    /*(could have written into s+20 instead of uuid[] of stack
+     * except that would violate 'restrict' keyword on li_tohex_lc() args)*/
+    /*(li_rand_pseudo_bytes() aims to produce high-quality pseudorandom bytes)*/
+    /*(If using li_rand_bytes() instead, then check return value)*/
+    li_rand_pseudo_bytes((unsigned char *)uuid, sizeof(uuid));
+
+    /* set version 4 */
+    uuid[6] &= 0x0f;
+    uuid[6] |= 0x40;
+
+    /* set variant (always DCE 1.1 only) */
+    uuid[8] &= 0x3f;
+    uuid[8] |= 0x80;
+
+    /* stringify UUID */
+  #if 0 /* write string into hex[] and then memcpy() into s */
+    char hex[32];
+    li_tohex_lc(hex, sizeof(hex), uuid, sizeof(uuid));
+    memcpy(s,    hex,  8);
+    s[8]  = '-';
+    memcpy(s+9,  hex,  4);
+    s[13] = '-';
+    memcpy(s+14, hex,  4);
+    s[18] = '-';
+    memcpy(s+19, hex,  4);
+    s[23] = '-';
+    memcpy(s+24, hex, 12);
+  #else /* write string into s and then memmove() in-place */
+    li_tohex_lc(s+4, 36-4, uuid, sizeof(uuid));
+    memmove(s,    s+4,       8);
+    s[8]  = '-';
+    memmove(s+9,  s+4+8,     4);
+    s[13] = '-';
+    memmove(s+14, s+4+8+4,   4);
+    s[18] = '-';
+    memmove(s+19, s+4+8+4+4, 4);
+    s[23] = '-';
+  #endif
+}
+
+
 static handler_t
 mod_webdav_lock (request_st * const r, const plugin_config * const pconf)
 {
@@ -5861,13 +5905,12 @@ mod_webdav_lock (request_st * const r, const plugin_config * const pconf)
             lockdata.depth = 0; /* force Depth: 0 on non-collections */
 
         /* create locktoken
-         * (uuid_unparse() output is 36 chars + '\0') */
-        uuid_t id;
+         * (uuid v4 string is 36 chars) */
         char lockstr[sizeof("<urn:uuid:>") + 36] = "<urn:uuid:";
         lockdata.locktoken.ptr = lockstr+1;         /*(without surrounding <>)*/
         lockdata.locktoken.used = sizeof(lockstr)-2;/*(without surrounding <>)*/
-        uuid_generate(id);
-        uuid_unparse(id, lockstr+sizeof("<urn:uuid:")-1);
+        lockstr[sizeof(lockstr)-2] = '\0';
+        webdav_uuid_v4(lockstr+sizeof("<urn:uuid:")-1);
 
         /* XXX: consider fix TOC-TOU race condition by starting transaction
          * and re-running webdav_lock_activelocks() check before running
