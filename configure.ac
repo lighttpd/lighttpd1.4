@@ -120,7 +120,6 @@ AC_CHECK_HEADERS([\
   sys/uio.h \
   sys/un.h \
   syslog.h \
-  uuid/uuid.h \
 ])
 
 dnl Checks for typedefs, structures, and compiler characteristics.
@@ -1219,7 +1218,7 @@ if test "$WITH_WEBDAV_PROPS" != no; then
 fi
 
 
-dnl webdav locks (uuid)
+dnl webdav locks (uuid) (obsolete flag; ignored in build)
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for locks in mod_webdav])
 AC_ARG_WITH([webdav-locks],
@@ -1231,39 +1230,12 @@ AC_ARG_WITH([webdav-locks],
 )
 AC_MSG_RESULT([$WITH_WEBDAV_LOCKS])
 
-if test "$WITH_WEBDAV_LOCKS" != no; then
-  if test "$WITH_WEBDAV_PROPS" = no; then
+if test "$WITH_WEBDAV_PROPS" = no; then
+  if test "$WITH_WEBDAV_LOCKS" != no; then
     AC_MSG_ERROR([--with-webdav-locks requires --with-webdav-props])
   fi
-
-  AC_MSG_CHECKING([for libuuid])
-  AC_ARG_WITH([uuid],
-    [AS_HELP_STRING([--with-uuid], [uuid for locks in mod_webdav])],
-    [WITH_UUID=$withval],
-    [WITH_UUID=yes]
-  )
-  AC_MSG_RESULT([$WITH_UUID])
-
-  if test "$WITH_UUID" = no; then
-    AC_MSG_ERROR([--with-webdav-locks requires uuid])
-  fi
-
-  if test "$WITH_UUID" != yes; then
-    UUID_LIBS="-L$WITH_UUID -luuid"
-    CPPFLAGS="$CPPFLAGS -I$WITH_UUID"
-  else
-    AC_CHECK_LIB([uuid], [uuid_unparse],
-      [UUID_LIBS=-luuid],
-      [AC_MSG_ERROR([uuid lib not found, install it or build without --with-webdav-locks])]
-    )
-    AC_CHECK_HEADERS([uuid/uuid.h], [],
-      [AC_MSG_ERROR([uuid headers not found, install them or build without --with-webdav-locks])]
-    )
-  fi
-
-  AC_DEFINE([HAVE_LIBUUID], [1], [libuuid])
-  AC_DEFINE([HAVE_UUID_UUID_H], [1], [uuid/uuid.h is available])
-  AC_SUBST([UUID_LIBS])
+else
+  WITH_WEBDAV_LOCKS="yes"
 fi
 
 dnl xxhash

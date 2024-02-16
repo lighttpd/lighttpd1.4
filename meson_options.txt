@@ -117,7 +117,7 @@ option('with_sasl',
 option('with_webdav_locks',
 	type: 'feature',
 	value: 'disabled',
-	description: 'locks in webdav [default: off]',
+	description: 'locks in webdav (obsolete flag; ignored) [default: off]',
 )
 option('with_webdav_props',
 	type: 'feature',

@@ -125,7 +125,7 @@ modules = {
 	'mod_status' : { 'src' : [ 'mod_status.c' ] },
 	'mod_userdir' : { 'src' : [ 'mod_userdir.c' ] },
 	'mod_vhostdb' : { 'src' : [ 'mod_vhostdb.c', 'mod_vhostdb_api.c' ] },
-	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'], env['LIBUUID'] ] },
+	'mod_webdav' : { 'src' : [ 'mod_webdav.c' ], 'lib' : [ env['LIBXML2'], env['LIBSQLITE3'] ] },
 	'mod_wstunnel' : { 'src' : [ 'mod_wstunnel.c' ], 'lib' : [ env['LIBCRYPTO'] ] },
 }
 

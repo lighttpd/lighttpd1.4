@@ -29,7 +29,7 @@ jobs:
             libsasl2-dev libkrb5-dev libdbi-dev libpam-dev libldap-dev \
             libmariadb-dev libpq-dev \
             libmaxminddb-dev libunwind-dev liblua5.1-0-dev liblua5.4-dev \
-            libxml2-dev uuid-dev libsqlite3-dev
+            libxml2-dev libsqlite3-dev
       - name: Compile and Test
         run: |
           set -e
@@ -60,7 +60,7 @@ jobs:
             libsasl2-dev libkrb5-dev libdbi-dev libpam-dev libldap-dev \
             libmariadb-dev libpq-dev \
             libmaxminddb-dev libunwind-dev liblua5.1-0-dev liblua5.4-dev \
-            libxml2-dev uuid-dev libsqlite3-dev
+            libxml2-dev libsqlite3-dev
       - name: Compile and Test
         run: |
           set -e
@@ -81,7 +81,7 @@ jobs:
             mariadb-connector-c libpq \
             brotli libdeflate zlib zstd \
             libmaxminddb lua \
-            libxml2 ossp-uuid sqlite
+            libxml2 sqlite
           # autoconf automake libtool m4 cmake scons
       - name: Compile and Test
         run: |
@@ -120,7 +120,7 @@ jobs:
               mariadb1011-client postgresql16-client \
               brotli libdeflate zstd \
               libmaxminddb libunwind lua51 lua54 \
-              e2fsprogs-libuuid libxml2 sqlite3
+              libxml2 sqlite3
           run: |
             set -e
             cd "${{github.workspace}}" && scripts/ci-build.sh meson
@@ -142,7 +142,7 @@ jobs:
               mariadb-client postgresql16-client \
               brotli libdeflate zlib zstd \
               libmaxminddb libunwind lua51 lua54 \
-              libuuid libxml2 sqlite3
+              libxml2 sqlite3
           # autoconf automake gmake libtool m4 meson py311-scons
           run: |
             set -e
@@ -163,7 +163,7 @@ jobs:
               mariadb-client postgresql-client \
               brotli libdeflate zstd \
               libmaxminddb lua--%5.1 lua--%5.4 \
-              e2fsprogs ossp-uuid libxml sqlite3
+              libxml sqlite3
           # autoconf automake cmake gmake libtool m4 scons
           run: |
             set -e
@@ -210,7 +210,7 @@ jobs:
             libsasl2-devel libkrb5-devel libdbi-devel openldap-devel
             libmariadb-devel libpq-devel
             libmaxminddb-devel libunwind-devel lua-devel lua5.1-devel
-            libxml2-devel libuuid-devel libsqlite3-devel
+            libxml2-devel libsqlite3-devel
             libintl-devel
       - name: Update
         shell: powershell
@@ -263,7 +263,7 @@ jobs:
         with:
           msystem: ${{matrix.platform}}
           update: true
-          install: git m4 libuuid-devel
+          install: git m4
           pacboy: >-
             cc:p autotools:p libtool:p make:p pcre2:p pkgconf:p
             nettle:p gnutls:p mbedtls:p nss:p openssl:p
@@ -273,14 +273,13 @@ jobs:
             libmaxminddb:p libunwind:p lua51:p lua:p luajit:p
             libxml2:p sqlite3:p
           # heimdal-devel: available only on platform: msys (?)
-          # libuuid-devel: available only on platform: msys (?) static lib.a
       - name: Compile and Test
         shell: msys2 {0}
         run: |
           set -e
           # NO_GNUTLS=1 gnutls/socket.h can not find <sys/socket.h>
           # NO_MYSQL=1 build not finding mysql_config
-          export NO_DBI=1 NO_GNUTLS=1 NO_KRB5=1 NO_MYSQL=1 NO_PAM=1 NO_UNWIND=1 NO_UUID=1 NO_WOLFSSL=1
+          export NO_DBI=1 NO_GNUTLS=1 NO_KRB5=1 NO_MYSQL=1 NO_PAM=1 NO_UNWIND=1 NO_WOLFSSL=1
           cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
 
   Linux-alpine-x86_64:
@@ -306,7 +305,7 @@ jobs:
             cyrus-sasl-dev krb5-dev libdbi-dev linux-pam-dev openldap-dev
             mariadb-connector-c-dev postgresql16-dev
             libmaxminddb-dev libunwind-dev lua5.1-dev lua5.4-dev
-            libxml2-dev ossp-uuid-dev sqlite-dev
+            libxml2-dev sqlite-dev
             zlib-static openssl-libs-static
       - name: Compile and Test
         shell: alpine.sh {0}

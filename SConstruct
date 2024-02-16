@@ -264,7 +264,7 @@ vars.AddVariables(
 	PackageVariable('with_pgsql', 'enable pgsql support', 'no'),
 	PackageVariable('with_sasl', 'enable SASL support', 'no'),
 	BoolVariable('with_sqlite3', 'enable sqlite3 support (required for webdav props)', 'no'),
-	BoolVariable('with_uuid', 'enable uuid support (required for webdav locks)', 'no'),
+	BoolVariable('with_uuid', 'enable uuid support (obsolete flag; ignored)', 'no'),
 	# with_valgrind not supported
 	# with_xattr not supported
 	PackageVariable('with_xml', 'enable xml support (required for webdav props)', 'no'),
@@ -355,7 +355,6 @@ if 1:
 		LIBSQLITE3 = '',
 		LIBSSL = '',
 		LIBSSLCRYPTO = '',
-		LIBUUID = '',
 		LIBWOLFSSL = '',
 		LIBX509 = '',
 		LIBXML2 = '',
@@ -696,14 +695,6 @@ if 1:
 		autoconf.env.Append(
 			CPPFLAGS = [ '-DHAVE_SQLITE3_H', '-DHAVE_LIBSQLITE3' ],
 			LIBSQLITE3 = 'sqlite3',
-		)
-
-	if env['with_uuid']:
-		if not autoconf.CheckLibWithHeader('uuid', 'uuid/uuid.h', 'C'):
-			fail("Couldn't find uuid")
-		autoconf.env.Append(
-			CPPFLAGS = [ '-DHAVE_UUID_UUID_H', '-DHAVE_LIBUUID' ],
-			LIBUUID = 'uuid',
 		)
 
 	if env['with_xml']:

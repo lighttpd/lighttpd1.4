@@ -23,12 +23,10 @@ FreeBSD dependencies:
   pkg install lua51  (or lua52 or lua53 or lua54)
 - LDAP (mod_auth feature)
   pkg install openldap-client
-- SQLite3 (required for most mod_webdav features)
+- SQLite3 (mod_webdav WebDAV properties and locking)
   pkg install sqlite3
-- XML (mod_webdav properties and locking)
+- XML (mod_webdav WebDAV properties and locking)
   pkg install libxml2
-- UUID library (mod_webdav locking)
-  pkg install e2fsprogs-libuuid
 
 Configure:
 

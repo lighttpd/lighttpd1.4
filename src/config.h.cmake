@@ -131,10 +131,6 @@
 /* sqlite3 */
 #cmakedefine  HAVE_SQLITE3_H
 
-/* UUID */
-#cmakedefine  HAVE_UUID_UUID_H
-#cmakedefine  HAVE_LIBUUID
-
 /* ZLIB */
 #cmakedefine  HAVE_ZLIB_H
 #cmakedefine  HAVE_LIBZ

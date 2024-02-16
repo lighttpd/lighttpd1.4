@@ -443,16 +443,6 @@ conf_data.set('HAVE_SASL', libsasl.found())
 #if get_option('with_valgrind')
 #endif
 
-uuid = compiler.has_function('uuid_generate', args: defs, prefix: '#include <uuid/uuid.h>')
-if uuid
-  libuuid = dependency('', required: false)
-else
-  libuuid = dependency('uuid', required: get_option('with_webdav_locks'))
-endif
-
-conf_data.set('HAVE_LIBUUID', uuid)
-conf_data.set('HAVE_UUID_UUID_H', uuid)
-
 libxml2 = dependency('libxml-2.0', required: get_option('with_webdav_props'))
 libsqlite3 = dependency('sqlite3', required: get_option('with_webdav_props'))
 conf_data.set('HAVE_LIBXML2', libxml2.found())
@@ -785,7 +775,7 @@ modules = [
 	[ 'mod_status', [ 'mod_status.c' ] ],
 	[ 'mod_userdir', [ 'mod_userdir.c' ] ],
 	[ 'mod_vhostdb', [ 'mod_vhostdb.c', 'mod_vhostdb_api.c' ] ],
-	[ 'mod_webdav', [ 'mod_webdav.c' ], [ libsqlite3, libuuid, libxml2, libelftc ] ],
+	[ 'mod_webdav', [ 'mod_webdav.c' ], [ libsqlite3, libxml2, libelftc ] ],
 	[ 'mod_wstunnel', [ 'mod_wstunnel.c' ], libcrypto ],
 ]
 endif

@@ -78,8 +78,6 @@ optional packages for optional features ::
   libpq               # Postgresql ./configure --with-pgsql
   libpq-devel
   libunwind-devel     # libunwind  ./configure --with-libunwind
-  libuuid             # libuuid    ./configure --with-webdav-locks
-  libuuid-devel
   libxml2             # libxml2    ./configure --with-webdav-props
   libxml2-devel
   libxml2-static
@@ -188,7 +186,7 @@ build using CMake and Xcode on Mac OS X with MacPorts
   $ xcodebuild --license
   $ xcode-select --install
   $ sudo port selfupdate
-  $ sudo port install autoconf automake cmake libtool m4 pcre2 pkgconfig zlib zstd brotli openssl libxml sqlite3 openldap libunwind libunwind-headers mysql57 openldap ossp-uuid
+  $ sudo port install autoconf automake cmake libtool m4 pcre2 pkgconfig zlib zstd brotli openssl libxml sqlite3 openldap libunwind libunwind-headers mysql57 openldap
   # Note: some of the above require more fiddling to configure with CMake...
 
   # cmake and build
