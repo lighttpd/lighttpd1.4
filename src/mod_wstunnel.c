@@ -1117,6 +1117,9 @@ static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, cons
     }
     request_st * const r = hctx->gw.r;
     http_chunk_append_mem(r, mem, len);
+  #ifdef __COVERITY__
+    if (payload == NULL) ck_assert(0 == siz);
+  #endif
     if (siz) http_chunk_append_mem(r, payload, siz);
     DEBUG_LOG_DEBUG("send data to client (fd=%d), frame size=%zx",
                     r->con->fd, len+siz);
