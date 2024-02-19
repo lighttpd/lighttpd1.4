@@ -3,6 +3,177 @@
 NEWS
 ====
 
+- 1.4.74 - 2024-02-19
+  * [mod_h2] send 500 if backend oversized resp hdrs
+  * [mod_h2] h2_send_1xx() lowercase field names (fixes #3233)
+  * [mod_dirlisting] smaller funcs to generate listing
+  * [mod_dirlisting] dir-listing.sort option (#3235)
+  * [mod_dirlisting] check for response stream bufmin
+  * [core] skip SIGUSR1 after clock jump if chroot'ed
+  * [mod_deflate] move bzip2 to end of priority list
+  * [mod_deflate] deflate.allowed-encodings default
+  * [core] cfg "if","elif","elsif","elseif","else if"
+  * [lemon] refresh LEMON parser to SQLite maint ver
+  * [core] add newlines to config parsing error trace
+  * [ls-hpack] sys/queue.h portability
+  * [scons] remove -std=gnu99 to use modern defaults
+  * [multiple] share code for upgrade: websocket
+  * [core] check for SOCK_CLOEXEC earlier in startup
+  * [autotools] report if ipv6 support disabled (fixes #3237)
+  * [core] simpler error page header
+  * [mod_status] simpler status page header
+  * [h2] quicker server graceful shutdown of idle h2
+  * [mod_openssl] kTLS: check for kernel tls offload
+  * [mod_gnutls] kTLS: check for kernel tls offload
+  * [core] quicker server graceful shutdown of websockets
+  * [build] -D_LARGEFILE64_SOURCE for musl sendfile64()
+  * [mod_setenv] code consistency
+  * [mod_expire] resp tag check
+  * [mod_expire] comment
+  * [core] use SF_NODISKIO with sendfile() on FreeBSD
+  * [core] chunk_file_pread_chunk()
+  * [mod_deflate] prefer reusable buffer to read file
+  * [core] reduce blocking I/O sending files to net
+  * [core] reduce network send file fallback path
+  * [core] try mmap() if not using sendfile()
+  * [mod_wolfssl] mod_wolfssl_write_err()
+  * [multiple] extend chunkqueue_peek_data() w/ nowait
+  * [core] preadv2 RWF_NOWAIT EOPNOTSUPP on tmpfs (?!)
+  * [build] type error in configure.ac sendfile probe (fixes #3238)
+  * [core] update ls-hpack
+  * [ls-hpack] sys/queue.h STAILQ_FOREACH portability
+  * [core] chunk_open_file_chunk() in chunk.h
+  * [multiple] use chunk_open_file_chunk()
+  * [core] remove chunkqueue_open_file_chunk()
+  * [core] use sendfile() with iovecs where available
+  * [scons] remove CheckFunc() incorrect header usage
+  * [core] spelling in comment in network_write.c
+  * [cmake] check for sendfile64 only on Linux
+  * [core] quiet compiler warning for NDEBUG redefined
+  * [autoconf] config test for mbedtls needs mbedx509
+  * [mod_h2] add con to job queue when wr alloc used
+  * [mod_h2] use different flag for disk I/O busy
+  * [crypto] use evp api for truncated sha-2 with libressl
+  * [mod_expire] smaller options parse func
+  * [mod_expire] check modification time to cur time
+  * [tests] t/test_mod_expire.c
+  * [tests] add mod_expire tests to tests/request.t
+  * [core] log trace with priority for syslog() (#3239)
+  * [core] avoid preprocessor use inside macros
+  * [core] log_pri() and log_pri_multiline() (#3239)
+  * [build] remove checks for sendfile64
+  * [tests] clean up memleak on test exit
+  * [build] quiet compiler warnings in LEMON parser
+  * [core] simplify connection_handle_write() err case
+  * [core] gw_host_get shared code
+  * [doc] update doc/config/conf.d/mime.conf
+  * [core] combine *BSD cond handling 0-len FILE_CHUNK
+  * [meson] portability improvements
+  * [core] DragonflyBSD portability
+  * [tests] quiet compiler warning
+  * [ci] enable github CI
+  * [ci] adjust .github/workflows/meson.yml
+  * [ci] quiet msys-clang32 stdcall compiler warning
+  * [ci] #undef _XOPEN_SOURCE on Solaris
+  * [core] fix recent solaris typo; compile failure
+  * [ci] _WIN32 portability
+  * [cmake,meson] skip tests/* under native Windows
+  * [tests] support platforms without cp -n
+  * [ci] cmake did not detect inet_pton on x86 _WIN32
+  * [ci] use latest GCC and clang
+  * [ci] adjust .github/workflows/meson.yml
+  * [ci] further simplify
+  * [ci] adjust NetBSD,OpenBSD tests .github/workflows
+  * [ci] add Windows-VisualStudio to .github/workflows
+  * [ci] add Solaris (disabled) to .github/workflows
+  * [ci] add Windows-MSYS2 to .github/workflows
+  * [ci] rename .github/workflows/meson.yml to pr.yml
+  * [tests] adjust shell syntax in tests/prepare.sh
+  * [tests] test_mod stub funcs for static builds
+  * [ci] adjust Windows tests in .github/workflows
+  * [mod_authn_dbi,mod_vhostdb_dbi] check for <dbi.h>
+  * [ci] tailor scripts/ci-build.sh for FreeBSD
+  * [ci] use set -e in .github/workflows run commands
+  * [debug] debug.log-timeouts for all timeout logging
+  * [debug] use log_debug_multiline() (#3239)
+  * [debug] use log_debug() instead of log_error() (#3239)
+  * [multiple] use log_warn() for config warnings (#3239)
+  * [core] use log_warn(),log_notice(),log_info() (fixes #3239)
+  * [ls-hpack] compat include of <sys/queue.h>
+  * [tests] skip deflate tests if zlib not available
+  * [core] ignore cc -Wcpp warning for <sys/cdefs.h>
+  * [ci] mechanism to disable wolfssl in ci-build.sh
+  * [ci] use Alpine Linux VMs to test additional arch
+  * [ci] skip 32-bit builds on Windows; save resources
+  * [tests] skip shutdown(SHUT_WR) in tests on s390x
+  * [ci] add s390x arch
+  * [meson] replace deprecated meson.build_root() use
+  * [ci] x86_64 and x86 featureful builds on ubuntu
+  * [ci] add x86_64 cmake ASAN build on ubuntu
+  * [ci] ci-build.sh add some NO_* options
+  * [ci] add Windows-Cygwin build
+  * [ci] fail fast if x86 build fails on alpine
+  * [ci] reduce some builds while maintaining coverage
+  * [ci] remove config not actually running x86 ubuntu
+  * [ci] more featureful build on macOS
+  * [doc] cert-staple.sh check staple newer than cert
+  * [ci] pr.yml format consistency
+  * [tests] remove repeated file in prepare.sh cp
+  * [wolfssl] renamed SSL_OP_NO_TICKET
+  * [ci] more featureful build on NetBSD
+  * [mod_authn_gssapi] ifndef GSS_KRB5_NT_PRINCIPAL_NAME
+  * [build] check 'lua54' before other lua variants
+  * [ci] OpenBSD CFLAGS LDFLAGS PKG_CONFIG_LIBDIR
+  * [ci] more featureful build on OpenBSD
+  * [ci] use bash on DragonflyBSD instead of csh
+  * [ci] special-cases for running tests under MSYS2
+  * [ci] basic build and run tests under MSYS2
+  * [tests] remove stray comment from test_mod_expire
+  * [ci] ci-build.sh NO_DBI option
+  * [ci] ci-build.sh NO_UUID option
+  * [ci] ci-build.sh NO_GNUTLS option
+  * [ci] ci-build.sh NO_MYSQL option
+  * [core] _WIN32 define PROT_WRITE to PAGE_READWRITE
+  * [mod_authn_sasl] use HOSTNAME for fqdn on _WIN32
+  * [ci] more featureful build on MSYS2
+  * [mod_authn_sasl] fix typo
+  * [ci] use cygwin test repos for latest packages
+  * [ci] vmactions usesh: true
+  * [ci] fix cmake generator path for MSVC
+  * [mod_wstunnel] read and discard HTTP/1.1 req body
+  * [core] use log_notice() for conn limit notice (#3239)
+  * [core] gw_upgrade_policy() shared code
+  * [mod_wstunnel] handle large kernel socket recv buf
+  * [core] stat_cache.c replace assert w/ error codes
+  * [core] remove dev assert in http_chunk_append_mem
+  * [core] ck_static_assert()
+  * [core] remove asserts from gw_status_get_counter()
+  * [core] configparser.y combine assert, remove debug
+  * [core] remove assert from sock_addr.c
+  * [mod_fastcgi] check env w/ cond instead of assert
+  * [core] shared code chunkqueue_close_tempchunk()
+  * [core] buffer.c combine asserts
+  * [core] array require nonnull for insert,replace
+  * [core] li_tohex*() no longer adds '\0'
+  * [core] accept 65536 in config for ushort values
+  * [ci] add missing intermediate dep for Cygwin
+  * [core] clarify configfile parse comment
+  * [core] fix crash with invalid lighttpd.conf syntax
+  * [core] lighttpd.conf detect,err if consecutive str
+  * [mod_magnet] lighty.r.req_body.unspecified_len
+  * [mod_proxy] handle HTTP/1.0 unspecified req len
+  * [core] unset Upgrade if downgrade HTTP/1.1 to 1.0
+  * [mod_magnet] interface to downgrade HTTP/1.1 to 1.0
+  * [mod_magnet] expand guidance in error message (#3240)
+  * [debug] use log_debug() instead of log_error() (#3239)
+  * [mod_wstunnel] use log_warn(),log_notice(),log_info() (#3239)
+  * [multiple] gw_backend_error_trace() (fixes #1406)
+  * [mod_webdav] webdav_uuid_v4() to supplant libuuid (#1056)
+  * [build] remove libuuid dependency (fixes #1056)
+  * [mod_wstunnel] quiet coverity warning
+  * [doc] fix typos in doc/config/lighttpd.conf
+  * [mod_h2] send 502 if backend oversized resp hdrs
+
 - 1.4.73 - 2023-10-30
   * [core] add .mkv to mimetype.assign builtin defaults
   * [core] warn if out-of-range value for config short
