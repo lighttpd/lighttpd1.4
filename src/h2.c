@@ -2584,13 +2584,13 @@ h2_send_headers_block (request_st * const r, connection * const con, const char 
         log_error(r->conf.errh, __FILE__, __LINE__,
                   "oversized response-header");
       #if 0 /*(recursive call might add additional 16k stack use)*/
-        h2_send_headers_block(r, con, CONST_STR_LEN(":status: 500\r\n\r\n"), flags);
+        h2_send_headers_block(r, con, CONST_STR_LEN(":status: 502\r\n\r\n"), flags);
         return;
       #else
         hoff[0] = 1;
         hoff[1] = 0;
-        hdrs = ":status: 500\r\n\r\n";
-        if (http_header_parse_hoff(CONST_STR_LEN(":status: 500\r\n\r\n"),hoff)){
+        hdrs = ":status: 502\r\n\r\n";
+        if (http_header_parse_hoff(CONST_STR_LEN(":status: 502\r\n\r\n"),hoff)){
             /*(ignore for coverity; static string is successfully parsed)*/
         }
       #endif
