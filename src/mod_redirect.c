@@ -6,6 +6,7 @@
 #include "buffer.h"
 #include "burl.h"
 #include "http_header.h"
+#include "http_kv.h"    /* http_method_get_or_head() */
 
 #include "plugin.h"
 
@@ -138,15 +139,13 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
                 cpv->vtype = T_CONFIG_LOCAL;
                 break;
               case 1: /* url.redirect-code */
-		if (cpv->v.shrt < 100 || cpv->v.shrt >= 1000) cpv->v.shrt = 301;
+		if (cpv->v.shrt < 100 || cpv->v.shrt >= 1000) cpv->v.shrt = 0;
                 break;
               default:/* should not happen */
                 break;
             }
         }
     }
-
-    p->defaults.redirect_code = 301;
 
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
@@ -190,7 +189,10 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
         http_header_response_set(r, HTTP_HEADER_LOCATION,
                                  CONST_STR_LEN("Location"),
                                  BUF_PTR_LEN(tb));
-        r->http_status = p->conf.redirect_code;
+        r->http_status = p->conf.redirect_code
+                       ? p->conf.redirect_code
+                       : http_method_get_or_head(r->http_method)
+                         || r->http_version == HTTP_VERSION_1_0 ? 301 : 308;
         r->handler_module = NULL;
         r->resp_body_finished = 1;
     }
