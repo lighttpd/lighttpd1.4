@@ -225,6 +225,8 @@ lshpack_dec_set_max_capacity (struct lshpack_dec *, unsigned);
 #endif
 #endif
 
+#ifndef STAILQ_FOREACH
+
 #ifndef SIMPLEQ_FOREACH
 #include "../compat/sys/queue.h"
 #endif
@@ -241,6 +243,8 @@ lshpack_dec_set_max_capacity (struct lshpack_dec *, unsigned);
 #define STAILQ_NEXT             SIMPLEQ_NEXT
 #define STAILQ_REMOVE_HEAD      SIMPLEQ_REMOVE_HEAD
 #define STAILQ_FOREACH          SIMPLEQ_FOREACH
+#endif
+
 #endif
 
 #if defined(STAILQ_FIRST) && defined(STAILQ_NEXT) && !defined(STAILQ_FOREACH)
