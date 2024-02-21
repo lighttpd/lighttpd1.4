@@ -1594,9 +1594,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 
 
 #define LIGHTTPD_DEFAULT_CIPHER_LIST \
-"EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384"
+"EECDH+AESGCM:CHACHA20:!PSK:!DHE"
 
-/*"TLS1-3-AES-256-GCM-SHA384:TLS1-3-CHACHA20-POLY1305-SHA256:TLS1-3-AES-128-GCM-SHA256:TLS1-3-AES-128-CCM-SHA256:TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-ECDSA-WITH-CHACHA20-POLY1305-SHA256:TLS-ECDHE-RSA-WITH-CHACHA20-POLY1305-SHA256:TLS-ECDHE-ECDSA-WITH-AES-128-GCM-SHA256:TLS-ECDHE-RSA-WITH-AES-128-GCM-SHA256:TLS-ECDHE-ECDSA-WITH-AES-256-CCM:TLS-ECDHE-ECDSA-WITH-AES-256-CCM-8:TLS-DHE-RSA-WITH-CHACHA20-POLY1305-SHA256"*/
+/*"TLS1-3-AES-256-GCM-SHA384:TLS1-3-CHACHA20-POLY1305-SHA256:TLS1-3-AES-128-GCM-SHA256:TLS1-3-AES-128-CCM-SHA256:TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-ECDSA-WITH-CHACHA20-POLY1305-SHA256:TLS-ECDHE-RSA-WITH-CHACHA20-POLY1305-SHA256:TLS-ECDHE-ECDSA-WITH-AES-128-GCM-SHA256:TLS-ECDHE-RSA-WITH-AES-128-GCM-SHA256"*/
 
 
 static int
@@ -3621,6 +3621,33 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
                 log_error(srv->errh, __FILE__, __LINE__,
                   "MTLS: ignoring cipher string after SUITEB: %s", e);
             return 1;
+        }
+        else if (0 == strncmp_const(e,
+                  "EECDH+AESGCM:CHACHA20:!PSK:!DHE")) {
+            e += sizeof(
+                  "EECDH+AESGCM:CHACHA20:!PSK:!DHE")-1;
+          #if defined(MBEDTLS_SSL_PROTO_TLS1_3)
+            if (nids + 10 >= idsz)
+          #else
+            if (nids + 6 >= idsz)
+          #endif
+            {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "MTLS: error: too many ciphersuites during list expand");
+                return 0;
+            }
+          #if defined(MBEDTLS_SSL_PROTO_TLS1_3)
+            ids[++nids] = MBEDTLS_TLS1_3_AES_256_GCM_SHA384;
+            ids[++nids] = MBEDTLS_TLS1_3_CHACHA20_POLY1305_SHA256;
+            ids[++nids] = MBEDTLS_TLS1_3_AES_128_GCM_SHA256;
+            ids[++nids] = MBEDTLS_TLS1_3_AES_128_CCM_SHA256;
+          #endif
+            ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256;
+            ids[++nids] = MBEDTLS_TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256;
         }
         else if (0 == strncmp_const(e,
                   "ECDHE+AESGCM:ECDHE+AES256:CHACHA20:!SHA1:!SHA256:!SHA384")

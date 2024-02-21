@@ -1920,13 +1920,13 @@ static int
 network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 {
     int rc;
-    UNUSED(p);
 
     /* construct GnuTLS "priority" string
      *
      * default: NORMAL (since GnuTLS 3.3.0, could also use NULL for defaults)
      * SUITEB128 and SUITEB192 are stricter than NORMAL
      * (and are attempted to be supported in mod_gnutls_ssl_conf_ciphersuites())
+     * SECURE is slightly stricter than NORMAL
      */
 
   #if GNUTLS_VERSION_NUMBER < 0x030600
@@ -1974,7 +1974,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
      * GnuTLS by concatenating into a single priority string */
 
     buffer *b = srv->tmp_buf;
-    if (NULL == s->priority_base) s->priority_base = "NORMAL";
+    if (NULL == s->priority_base) s->priority_base = "SECURE";
     buffer_copy_string_len(b, s->priority_base, strlen(s->priority_base));
     if (!buffer_is_blank(&s->priority_str)) {
         buffer_append_char(b, ':');
@@ -1990,7 +1990,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     }
 
     if (p->defaults.ssl_log_noise)
-        log_error(srv->errh, __FILE__, __LINE__,
+        log_debug(srv->errh, __FILE__, __LINE__,
                   "debug: GnuTLS priority string: %s", b->ptr);
 
     const char *err_pos;
@@ -2006,7 +2006,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 
 
 #define LIGHTTPD_DEFAULT_CIPHER_LIST \
-"EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384"
+"EECDH+AESGCM:CHACHA20:!PSK:!DHE"
 
 
 static int
@@ -3337,13 +3337,20 @@ mod_gnutls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *
             return 1;
         }
         else if (0 == strncmp_const(e,
+                  "EECDH+AESGCM:CHACHA20:!PSK:!DHE")) {
+            e += sizeof(
+                  "EECDH+AESGCM:CHACHA20:!PSK:!DHE")-1;
+            buffer_append_string_len(plist,
+              CONST_STR_LEN("+AES-256-GCM:+AES-128-GCM:+CHACHA20-POLY1305:-RSA:-PSK:-DHE-RSA:-AES-256-CCM:-AES-128-CCM:-AES-256-CBC:-AES-128-CBC:"));
+        }
+        else if (0 == strncmp_const(e,
                   "ECDHE+AESGCM:ECDHE+AES256:CHACHA20:!SHA1:!SHA256:!SHA384")
               || 0 == strncmp_const(e,
                   "EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384")) {
             e += sizeof(
                   "EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384")-1;
             buffer_append_string_len(plist,
-              CONST_STR_LEN("+AES-256-GCM:+AES-128-GCM:+AES-256-CCM:+AES-256-CCM-8:+CHACHA20-POLY1305:"));
+              CONST_STR_LEN("+AES-256-GCM:+AES-128-GCM:+CHACHA20-POLY1305:+AES-256-CCM:+AES-256-CCM-8:-RSA:-PSK:-DHE-RSA:-AES-256-CBC:-AES-128-CBC:"));
         }
 
         if (e != b->ptr && *e != ':' && *e != '\0') {

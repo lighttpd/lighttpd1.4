@@ -1740,7 +1740,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 
 
 #define LIGHTTPD_DEFAULT_CIPHER_LIST \
-"EECDH+AESGCM:AES256+EECDH:CHACHA20:!SHA1:!SHA256:!SHA384"
+"EECDH+AESGCM:CHACHA20:!DH"
 
 
 static int
