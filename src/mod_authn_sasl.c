@@ -258,8 +258,9 @@ static int mod_authn_sasl_cb_log(void *vreq, int level, const char *message) {
       case SASL_LOG_ERR:
       case SASL_LOG_FAIL:
       case SASL_LOG_WARN: /* (might omit SASL_LOG_WARN if too noisy in logs) */
-        log_error(((request_st *)vreq)->conf.errh, __FILE__, __LINE__,
-                  "%s", message);
+        level = (level == SASL_LOG_WARN) ? 4 : 3; /* LOG_WARNING 4, LOG_ERR 3 */
+        log_pri(((request_st *)vreq)->conf.errh, __FILE__, __LINE__, level,
+                "%s", message);
         break;
     }
     return SASL_OK;
