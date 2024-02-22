@@ -21,7 +21,8 @@ jobs:
           platform: ${{matrix.platform}}
       - name: Install packages
         run: |
-          sudo apt-get install cmake meson ninja-build pkg-config perl scons \
+          sudo apt-get install build-essential \
+            cmake meson ninja-build pkg-config scons \
             autoconf automake autotools-dev libtool m4 \
             nettle-dev gnutls-dev \
             libmbedtls-dev libnss3-dev libssl-dev libwolfssl-dev \
@@ -52,7 +53,8 @@ jobs:
           platform: ${{matrix.platform}}
       - name: Install packages
         run: |
-          sudo apt-get install cmake meson ninja-build pkg-config perl scons \
+          sudo apt-get install build-essential \
+            cmake meson ninja-build pkg-config scons \
             autoconf automake autotools-dev libtool m4 \
             nettle-dev gnutls-dev \
             libmbedtls-dev libnss3-dev libssl-dev libwolfssl-dev \
