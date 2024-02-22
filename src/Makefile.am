@@ -371,7 +371,8 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	ls-hpack/lshpack.h \
 	ls-hpack/lsxpack_header.h \
 	ls-hpack/huff-tables.h \
-	compat/fastcgi.h
+	compat/fastcgi.h \
+	compat/sys/queue.h
 
 
 DEFS= @DEFS@ -DHAVE_VERSIONSTAMP_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
