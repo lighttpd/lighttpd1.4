@@ -42,6 +42,12 @@ ${WITH_UNWIND:=true}
 
 sysname="$(uname -s)"
 
+if [ "$sysname" = "Darwin" ]; then
+    # keg-only package installs not linked into /usr/local
+    #   brew install cyrus-sasl krb5 libpq
+    export PKG_CONFIG_PATH="/usr/local/opt/cyrus-sasl/lib/pkgconfig:/usr/local/opt/krb5/lib/pkgconfig:/usr/local/opt/libpq/lib/pkgconfig"
+fi
+
 if [ "$sysname" = "FreeBSD" ]; then
     export CPPFLAGS=-I/usr/local/include
     export LDFLAGS=-L/usr/local/lib
