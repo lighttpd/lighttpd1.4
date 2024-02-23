@@ -1727,70 +1727,7 @@ static void config_log_error_open_syslog(server *srv, log_error_st *errh, const 
     /*assert(errh->fd == STDERR_FILENO);*/
     errh->mode = FDLOG_SYSLOG;
     errh->fd = -1;
-    /* perhaps someone wants to use syslog() */
-    int facility = -1;
-    if (syslog_facility) {
-        static const struct facility_name_st {
-          const char *name;
-          int val;
-        } facility_names[] = {
-            { "auth",     LOG_AUTH }
-          #ifdef LOG_AUTHPRIV
-           ,{ "authpriv", LOG_AUTHPRIV }
-          #endif
-          #ifdef LOG_CRON
-           ,{ "cron",     LOG_CRON }
-          #endif
-           ,{ "daemon",   LOG_DAEMON }
-          #ifdef LOG_FTP
-           ,{ "ftp",      LOG_FTP }
-          #endif
-          #ifdef LOG_KERN
-           ,{ "kern",     LOG_KERN }
-          #endif
-          #ifdef LOG_LPR
-           ,{ "lpr",      LOG_LPR }
-          #endif
-          #ifdef LOG_MAIL
-           ,{ "mail",     LOG_MAIL }
-          #endif
-          #ifdef LOG_NEWS
-           ,{ "news",     LOG_NEWS }
-          #endif
-           ,{ "security", LOG_AUTH }           /* DEPRECATED */
-          #ifdef LOG_SYSLOG
-           ,{ "syslog",   LOG_SYSLOG }
-          #endif
-          #ifdef LOG_USER
-           ,{ "user",     LOG_USER }
-          #endif
-          #ifdef LOG_UUCP
-           ,{ "uucp",     LOG_UUCP }
-          #endif
-           ,{ "local0",   LOG_LOCAL0 }
-           ,{ "local1",   LOG_LOCAL1 }
-           ,{ "local2",   LOG_LOCAL2 }
-           ,{ "local3",   LOG_LOCAL3 }
-           ,{ "local4",   LOG_LOCAL4 }
-           ,{ "local5",   LOG_LOCAL5 }
-           ,{ "local6",   LOG_LOCAL6 }
-           ,{ "local7",   LOG_LOCAL7 }
-        };
-        for (unsigned int i = 0; i < sizeof(facility_names)/sizeof(facility_names[0]); ++i) {
-            const struct facility_name_st *f = facility_names+i;
-            if (0 == strcmp(syslog_facility->ptr, f->name)) {
-                facility = f->val;
-                break;
-            }
-        }
-        if (-1 == facility) {
-            log_warn(srv->errh, __FILE__, __LINE__,
-              "unrecognized server.syslog-facility: \"%s\"; "
-              "defaulting to \"daemon\" facility",
-              syslog_facility->ptr);
-        }
-    }
-    openlog("lighttpd", LOG_CONS|LOG_PID, -1==facility ? LOG_DAEMON : facility);
+    fdlog_openlog(srv->errh, syslog_facility);
   #else
     UNUSED(srv);
     UNUSED(errh);
@@ -1940,10 +1877,10 @@ void config_log_error_close(server *srv) {
     if (srv->errh->mode == FDLOG_SYSLOG) {
         srv->errh->mode = FDLOG_FD;
         srv->errh->fd = STDERR_FILENO;
-      #ifdef HAVE_SYSLOG_H
-        closelog();
-      #endif
     }
+  #ifdef HAVE_SYSLOG_H
+    fdlog_closelog();
+  #endif
 }
 
 

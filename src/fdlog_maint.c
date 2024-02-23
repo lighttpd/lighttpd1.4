@@ -327,3 +327,93 @@ fdlog_flushall (fdlog_st * const errh)
     }
     if (errh->b.ptr) buffer_free_ptr(&errh->b);
 }
+
+
+#ifdef HAVE_SYSLOG_H
+
+#include <syslog.h>
+
+static int fdlog_syslogging;
+
+void
+fdlog_closelog (void)
+{
+    if (fdlog_syslogging) {
+        fdlog_syslogging = 0;
+        closelog();
+    }
+}
+
+
+void
+fdlog_openlog (fdlog_st * const errh, const buffer * const syslog_facility)
+{
+    if (fdlog_syslogging)
+        return;
+    fdlog_syslogging = 1;
+    int facility = -1;
+    if (syslog_facility) {
+        static const struct facility_name_st {
+          const char *name;
+          int val;
+        } facility_names[] = {
+            { "auth",     LOG_AUTH }
+          #ifdef LOG_AUTHPRIV
+           ,{ "authpriv", LOG_AUTHPRIV }
+          #endif
+          #ifdef LOG_CRON
+           ,{ "cron",     LOG_CRON }
+          #endif
+           ,{ "daemon",   LOG_DAEMON }
+          #ifdef LOG_FTP
+           ,{ "ftp",      LOG_FTP }
+          #endif
+          #ifdef LOG_KERN
+           ,{ "kern",     LOG_KERN }
+          #endif
+          #ifdef LOG_LPR
+           ,{ "lpr",      LOG_LPR }
+          #endif
+          #ifdef LOG_MAIL
+           ,{ "mail",     LOG_MAIL }
+          #endif
+          #ifdef LOG_NEWS
+           ,{ "news",     LOG_NEWS }
+          #endif
+           ,{ "security", LOG_AUTH }           /* DEPRECATED */
+          #ifdef LOG_SYSLOG
+           ,{ "syslog",   LOG_SYSLOG }
+          #endif
+          #ifdef LOG_USER
+           ,{ "user",     LOG_USER }
+          #endif
+          #ifdef LOG_UUCP
+           ,{ "uucp",     LOG_UUCP }
+          #endif
+           ,{ "local0",   LOG_LOCAL0 }
+           ,{ "local1",   LOG_LOCAL1 }
+           ,{ "local2",   LOG_LOCAL2 }
+           ,{ "local3",   LOG_LOCAL3 }
+           ,{ "local4",   LOG_LOCAL4 }
+           ,{ "local5",   LOG_LOCAL5 }
+           ,{ "local6",   LOG_LOCAL6 }
+           ,{ "local7",   LOG_LOCAL7 }
+        };
+        for (unsigned int i = 0; i < sizeof(facility_names)/sizeof(facility_names[0]); ++i) {
+            const struct facility_name_st *f = facility_names+i;
+            if (0 == strcmp(syslog_facility->ptr, f->name)) {
+                facility = f->val;
+                break;
+            }
+        }
+        if (-1 == facility) {
+            log_warn(errh, __FILE__, __LINE__,
+              "unrecognized syslog facility: \"%s\"; "
+              "defaulting to \"daemon\" facility",
+              syslog_facility->ptr);
+        }
+    }
+    openlog("lighttpd", LOG_CONS|LOG_PID, -1==facility ? LOG_DAEMON : facility);
+}
+
+#endif

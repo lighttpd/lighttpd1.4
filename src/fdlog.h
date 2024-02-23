@@ -48,4 +48,12 @@ void fdlog_pipes_abandon_pids (void);
 __attribute_cold__
 void fdlog_pipe_serrh (int fd);
 
+#ifdef HAVE_SYSLOG_H
+__attribute_cold__
+void fdlog_closelog (void);
+
+__attribute_cold__
+void fdlog_openlog (fdlog_st *errh, const buffer *syslog_facility);
+#endif
+
 #endif
