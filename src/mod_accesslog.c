@@ -378,6 +378,7 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
 
     /* process and validate config directives
      * (init i to 0 if global context; to 1 to skip empty global context) */
+    int uses_syslog = 0;
     for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
         config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
         int use_syslog = 0;
@@ -440,6 +441,7 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
 
         if (srv->srvconf.preflight_check) continue;
 
+        uses_syslog |= use_syslog;
         if (use_syslog) continue; /* ignore the next checks */
         cpv = cpvfile; /* accesslog.filename handled after preflight_check */
         if (NULL == cpv) continue;
@@ -455,6 +457,8 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
 
   #ifdef HAVE_SYSLOG_H
     p->defaults.syslog_level = LOG_INFO;
+    if (uses_syslog)
+        fdlog_openlog(srv->errh, srv->srvconf.syslog_facility);
   #endif
 
     /* initialize p->defaults from global config context */
