@@ -1,6 +1,14 @@
-name: On PRs
+name: CI
 
-on: [push, pull_request]
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - ci
+    tags:
+      - lighttpd-*
 
 concurrency:
   group: ${{github.workflow}}-${{github.head_ref}}
