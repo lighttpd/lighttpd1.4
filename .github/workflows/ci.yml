@@ -235,7 +235,8 @@ jobs:
           set -e
           export PATH=/usr/bin:$(cygpath ${SYSTEMROOT})/system32
           export NO_PAM=1 NO_UNWIND=1 NO_WOLFSSL=1
-          cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
+          export SHELL=/bin/dash
+          cd "${{github.workspace}}" && /bin/dash scripts/ci-build.sh autobuild
 
   Windows-VisualStudio:
     runs-on: windows-latest
@@ -288,7 +289,8 @@ jobs:
           # NO_GNUTLS=1 gnutls/socket.h can not find <sys/socket.h>
           # NO_MYSQL=1 build not finding mysql_config
           export NO_DBI=1 NO_GNUTLS=1 NO_KRB5=1 NO_MYSQL=1 NO_PAM=1 NO_UNWIND=1 NO_WOLFSSL=1
-          cd "${{github.workspace}}" && scripts/ci-build.sh autobuild
+          export SHELL=/bin/dash
+          cd "${{github.workspace}}" && /bin/dash scripts/ci-build.sh autobuild
 
   Linux-alpine-x86_64:
     runs-on: ubuntu-latest
