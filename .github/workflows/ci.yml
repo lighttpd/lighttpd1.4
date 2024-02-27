@@ -230,8 +230,7 @@ jobs:
           # PowerShell wait for it to exit
           & C:\setup.exe -qgnO -t | Out-Default
       - name: Compile and Test
-        #shell: C:\cygwin\bin\bash.exe --noprofile --norc -o igncr -eo pipefail '{0}'
-        shell: C:\cygwin\bin\bash.exe --login -o igncr -eo pipefail '{0}'
+        shell: C:\cygwin\bin\bash.exe --noprofile --norc -o igncr -eo pipefail '{0}'
         run: |
           set -e
           export PATH=/usr/bin:$(cygpath ${SYSTEMROOT})/system32
