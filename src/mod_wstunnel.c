@@ -610,38 +610,44 @@ static handler_t mod_wstunnel_check_extension(request_st * const r, void *p_d) {
 }
 
 TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
-    const plugin_data * const p = p_d;
-    const unix_time64_t cur_ts = log_monotonic_secs + 1;
-
     gw_handle_trigger(srv, p_d);
 
+    const plugin_data * const p = p_d;
+    const unix_time64_t cur_ts = log_monotonic_secs + 1;
+    struct hxcon h1c;
+    h1c.rused = 1;
+
     for (connection *con = srv->conns; con; con = con->next) {
-        request_st * const r = &con->request;
-        handler_ctx *hctx = r->plugin_ctx[p->id];
-        if (NULL == hctx || r->handler_module != p->self)
-            continue;
+        hxcon * const hx = con->hx ? con->hx : (h1c.r[0] = &con->request, &h1c);
+        for (uint32_t i = 0, rused = hx->rused; i < rused; ++i) {
+            request_st * const r = hx->r[i];
+            handler_ctx * const hctx = r->plugin_ctx[p->id];
+            if (NULL == hctx || r->handler_module != p->self)
+                continue;
 
-        if (hctx->gw.state != GW_STATE_WRITE && hctx->gw.state != GW_STATE_READ)
-            continue;
+            if (hctx->gw.state != GW_STATE_WRITE && hctx->gw.state != GW_STATE_READ)
+                continue;
 
-        if (cur_ts - con->read_idle_ts > r->conf.max_read_idle) {
-            DEBUG_LOG_INFO("timeout client (fd=%d)", con->fd);
-            mod_wstunnel_frame_send(hctx,MOD_WEBSOCKET_FRAME_TYPE_CLOSE,NULL,0);
-            gw_handle_request_reset(r, p_d);
-            joblist_append(con);
-            /* avoid server.c closing connection with error due to max_read_idle
-             * (might instead run joblist after plugins_call_handle_trigger())*/
-            con->read_idle_ts = cur_ts;
-            continue;
-        }
+            /* attempt to cleanly close websocket if connection idle timeout
+             * (occurs 1 sec sooner than r->conf.max_read_idle due to +1 above)
+             * (note: >= HTTP/2 affected only if entire connection is idle) */
+            if (__builtin_expect(
+                  (cur_ts - con->read_idle_ts > r->conf.max_read_idle), 0)) {
+                DEBUG_LOG_INFO("timeout client (fd=%d)", con->fd);
+                mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, NULL, 0);
+                gw_handle_request_reset(r, p_d);
+                joblist_append(con);
+                continue;
+            }
 
-        if (0 != hctx->hybivers
-            && hctx->conf.ping_interval > 0
-            && (int32_t)hctx->conf.ping_interval + hctx->ping_ts < cur_ts) {
-            hctx->ping_ts = cur_ts;
-            mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_PING, CONST_STR_LEN("ping"));
-            joblist_append(con);
-            continue;
+            if (0 != hctx->hybivers
+                && hctx->conf.ping_interval > 0
+                && (int32_t)hctx->conf.ping_interval + hctx->ping_ts < cur_ts) {
+                hctx->ping_ts = cur_ts;
+                mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_PING, CONST_STR_LEN("ping"));
+                joblist_append(con);
+                continue;
+            }
         }
     }
 
