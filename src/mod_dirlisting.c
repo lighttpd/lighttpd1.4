@@ -1022,10 +1022,19 @@ static void http_list_directory_dirname(buffer * const out, const dirls_entry_t 
 	buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n"));
 }
 
+static void http_list_file_ent(buffer * const out, const dirls_entry_t * const ent, const char * const name) {
+	buffer_append_string_encoded(out, name, ent->namelen, ENCODING_REL_URI_PART);
+	buffer_append_string_len(out, CONST_STR_LEN("\">"));
+	buffer_append_string_encoded(out, name, ent->namelen, ENCODING_MINIMAL_XML);
+	buffer_append_string_len(out, CONST_STR_LEN("</a></td><td class=\"m\">"));
+
+	http_list_directory_mtime(out, ent);
+}
+
 static void http_list_directory_filename(buffer * const out, const dirls_entry_t * const ent, const char * const name, handler_ctx * const hctx) {
 	buffer_append_string_len(out, CONST_STR_LEN("<tr><td class=\"n\"><a href=\""));
 
-	http_list_directory_ent(out, ent, name);
+	http_list_file_ent(out, ent, name);
 
 	const buffer *content_type;
   #if defined(HAVE_XATTR) || defined(HAVE_EXTATTR) /*(pass full path)*/
