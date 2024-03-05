@@ -1383,6 +1383,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
 
 
 #if OPENSSL_VERSION_NUMBER < 0x10101000L \
+ || !(defined(_LP64) || defined(__LP64__) || defined(_WIN64)) \
  || defined(BORINGSSL_API_VERSION) \
  ||(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3060000fL)
 static unix_time64_t
@@ -1402,6 +1403,7 @@ mod_openssl_cert_is_active (const X509 *crt)
     const ASN1_TIME *notBefore = X509_get0_notBefore(crt);
     const ASN1_TIME *notAfter  = X509_get0_notAfter(crt);
   #if OPENSSL_VERSION_NUMBER < 0x10101000L \
+   || !(defined(_LP64) || defined(__LP64__) || defined(_WIN64)) \
    || defined(BORINGSSL_API_VERSION) \
    ||(defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3060000fL)
     const unix_time64_t before = mod_openssl_asn1_time_to_posix(notBefore);
