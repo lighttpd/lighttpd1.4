@@ -1430,11 +1430,12 @@ mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
   #if LIBWOLFSSL_VERSION_HEX >= 0x05000000 /*(stub func filled in v5.0.0)*/
     /* Note: up to at least wolfSSL 4.5.0 (current version as this is written)
      * wolfSSL_ASN1_TIME_diff() is a stub function which always returns 0 */
-    /* Note: this does not check for integer overflow of time_t! */
-    int day, sec;
-    return wolfSSL_ASN1_TIME_diff(&day, &sec, NULL, asn1time)
-      ? log_epoch_secs + day*86400 + sec
-      : -1;
+    /* prefer wolfSSL_ASN1_TIME_to_tm() instead of wolfSSL_ASN1_TIME_diff() */
+    struct tm x;
+    if (!wolfSSL_ASN1_TIME_to_tm(asn1time, &x))
+        return -1;
+    time_t t = timegm(&x);
+    return (t != -1) ? TIME64_CAST(t) : t;
   #else
     UNUSED(asn1time);
     return -1;
