@@ -3,6 +3,28 @@
 NEWS
 ====
 
+- 1.4.75 - 2024-03-13
+  * [mod_redirect] url.redirect-code = 308 new default
+  * [ls-hpack] more portability fixes for sys/queue.h
+  * [ls-hpack] update version to 2.3.3
+  * [TLS] default to stronger ciphers w/ PFS and AEAD
+  * [ci] apt-get install build-essential on Ubuntu
+  * [ci] /usr/local/opt keg-only pkgs on Darwin(macOS)
+  * [mod_authn_sasl] translate SASL_LOG_* to syslog
+  * [build] include src/compat/sys/queue.h in tarball
+  * [core] fdlog_openlog(), fdlog_closelog()
+  * [mod_accesslog] fdlog_openlog() if using syslog
+  * [cmake] fix LEMON_PATH with empty CMAKE_BUILD_TYPE
+  * [ci] limit github ci to specific branches
+  * [ci] prefer non-login shell for Cygwin CI build
+  * [ci] prefer dash for Cygwin and MSYS2 builds
+  * [mod_wstunnel] fix server.ping-interval w/ HTTP/2
+  * [mod_dirlisting] fix suffix display of '/' on file (fixes #3242)
+  * [mod_openssl] use internal asn1_time fn on 32-bit (fixes #3244)
+  * [mod_openssl] faster ASN1_TIME parse
+  * [mod_wolfssl] faster ASN1_TIME parse
+  * [doc] update TLS comment in sample lighttpd.conf
+
 - 1.4.74 - 2024-02-19
   * [mod_h2] send 500 if backend oversized resp hdrs
   * [mod_h2] h2_send_1xx() lowercase field names (fixes #3233)
