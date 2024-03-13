@@ -6,6 +6,7 @@
 #include "log.h"
 #include "connections.h"
 #include "plugin.h"
+#include "plugin_config.h"
 #include "sock_addr.h"
 
 #include "network_write.h"
@@ -539,6 +540,17 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 	} else
 #endif
 	{
+	  #ifdef __linux__
+		if (config_feature_bool(srv, "server.network-mptcp", 1)) {
+			/* manually define mptcp protocol number in case the compiler is using an older version of libc */
+			#ifndef IPPROTO_MPTCP
+			#define IPPROTO_MPTCP 262
+			#endif
+			if (-1 == (srv_socket->fd = fdevent_socket_nb_cloexec(family, SOCK_STREAM, IPPROTO_MPTCP)))
+				log_pdebug(srv->errh, __FILE__, __LINE__, "socket() IPPROTO_MPTCP");
+		}
+		if (-1 != srv_socket->fd) { } else /*fallback to tcp*/
+	  #endif
 		if (-1 == (srv_socket->fd = fdevent_socket_nb_cloexec(family, SOCK_STREAM, IPPROTO_TCP))) {
 		  #ifndef _WIN32
 			/* some configs might always include IPv6 addresses,
