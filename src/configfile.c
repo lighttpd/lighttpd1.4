@@ -1030,7 +1030,7 @@ static void config_mimetypes_default(array * const a) {
         /* "application/octet-stream" okay to trigger download for archives,
          * but providing type (even if explicit "application/octet-stream")
          * allows http_response_send_file() to send ETag and Last-Modified.
-         * (implicit "application/octet-stream" skips sending caching headers
+         * (implicit "application/octet-stream" would omit caching headers
          *  when type is not found in mimetype.assign (or xattr, if enabled)) */
 
        ,".7z",    "application/x-7z-compressed"
@@ -1062,11 +1062,7 @@ static void config_mimetypes_default(array * const a) {
 
        ,"README", "text/plain;charset=utf-8"
 
-      #if 0
-        /* intentionally omit catch-all to signal elsewhere internally
-         * to omit sending caching headers such as ETag, Last-Modified */
        ,"",       "application/octet-stream"
-      #endif
     };
 
     uint32_t i = 0;
