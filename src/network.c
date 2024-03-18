@@ -30,6 +30,8 @@
 #define unsetenv(name)                _putenv_s((name), "")
 #endif
 
+static int network_mptcp = 0;
+
 void
 network_accept_tcp_nagle_disable (const int fd)
 {
@@ -541,13 +543,15 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 #endif
 	{
 	  #ifdef __linux__
-		if (config_feature_bool(srv, "server.network-mptcp", 1)) {
+		if (network_mptcp) {
 			/* manually define mptcp protocol number in case the compiler is using an older version of libc */
 			#ifndef IPPROTO_MPTCP
 			#define IPPROTO_MPTCP 262
 			#endif
-			if (-1 == (srv_socket->fd = fdevent_socket_nb_cloexec(family, SOCK_STREAM, IPPROTO_MPTCP)))
+			if (-1 == (srv_socket->fd = fdevent_socket_nb_cloexec(family, SOCK_STREAM, IPPROTO_MPTCP))) {
 				log_pdebug(srv->errh, __FILE__, __LINE__, "socket() IPPROTO_MPTCP");
+				network_mptcp = 0;
+			}
 		}
 		if (-1 != srv_socket->fd) { } else /*fallback to tcp*/
 	  #endif
@@ -830,6 +834,8 @@ int network_init(server *srv, int stdin_fd) {
         if (-1 != cpv->k_id)
             network_merge_config(&p->defaults, cpv);
     }
+
+    network_mptcp = config_feature_bool(srv, "server.network-mptcp", 0);
 
     if (config_feature_bool(srv, "server.graceful-restart-bg", 0))
         srv->srvconf.systemd_socket_activation = 1;
