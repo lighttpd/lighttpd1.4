@@ -268,9 +268,8 @@ REQUEST_FUNC(mod_expire_handler) {
 	buffer *vb;
 	const data_string *ds;
 
-	/* Add caching headers only to http_status
-	 * 200 OK or 204 No Content or 206 Partial Content */
-	if (r->http_status != 200 && r->http_status != 204 && r->http_status != 206)
+	/* Add caching headers only to http_status 200 OK or 206 Partial Content */
+	if (r->http_status != 200 && r->http_status != 206)
 		return HANDLER_GO_ON;
 	/* Add caching headers only to GET, HEAD, QUERY requests */
 	if (!http_method_get_head_query(r->http_method)) return HANDLER_GO_ON;
