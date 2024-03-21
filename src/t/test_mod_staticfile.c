@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "mod_staticfile.c"
 #include "fdlog.h"

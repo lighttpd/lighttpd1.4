@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "log.h"
+#include "array.h"
 #include "buffer.h"
 
 #include "plugin.h"
@@ -8,15 +9,6 @@
 #include "request.h"
 #include "response.h"
 #include "stat_cache.h"
-
-#include <stdlib.h>
-#include <string.h>
-
-/**
- * this is a staticfile for a lighttpd plugin
- *
- */
-
 
 typedef struct {
 	const array *exclude_ext;
@@ -98,6 +90,7 @@ SETDEFAULTS_FUNC(mod_staticfile_set_defaults) {
 }
 
 __attribute_cold__
+__attribute_noinline__
 static handler_t
 mod_staticfile_not_handled(request_st * const r, const char * const msg)
 {
