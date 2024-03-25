@@ -40,6 +40,8 @@ struct fdnode_st {
 #if (defined(__sun) && defined(__SVR4)) /* Solaris */ \
  || defined(__FreeBSD__)
 #define FDEVENT_RDHUP  0x4000
+#elif (defined(__linux__) && (defined(__sparc__) || defined(__sparc)))
+#define FDEVENT_RDHUP  0x0800
 #else
 #define FDEVENT_RDHUP  0x2000
 #endif
