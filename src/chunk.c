@@ -220,6 +220,9 @@ chunk_file_preadv2_flags (chunk *c)
         if (c->file.is_temp)
             c->file.flagmask = ~RWF_NOWAIT;
       #endif
+      #ifdef __gnu_hurd__ /*RWF_NOWAIT not currently(?) supported on GNU/Hurd*/
+        c->file.flagmask = ~RWF_NOWAIT;
+      #endif
     }
     return (RWF_NOWAIT & c->file.flagmask);
 }
@@ -248,6 +251,12 @@ chunk_file_pread_chunk (chunk *c, void *buf, size_t count)
          * to check EINTR. (sigaction() expected to be present with preadv2())
          * Callers should check c->file.busy before propagating error. */
         int errnum = errno;
+      #ifdef __gnu_hurd__ /*RWF_NOWAIT not currently(?) supported on GNU/Hurd*/
+      #if defined(ENOTSUP) && ENOTSUP != EOPNOTSUPP
+        if (errnum == ENOTSUP)
+            errnum = EOPNOTSUPP;
+      #endif
+      #endif
         if (errnum == EOPNOTSUPP) {  /* WTH?  tmpfs not supported ?!?! */
             c->file.flagmask = ~RWF_NOWAIT;
             return chunk_file_pread_chunk(c, buf, count);/*(tail recurse once)*/
