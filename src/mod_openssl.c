@@ -1561,6 +1561,8 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
   #endif
 }
 
+#endif /* OPENSSL_NO_OCSP */
+
 
 static unix_time64_t
 mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
@@ -1677,6 +1679,8 @@ mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
   #endif
 }
 
+
+#ifndef OPENSSL_NO_OCSP
 
 static unix_time64_t
 mod_openssl_ocsp_next_update (plugin_cert *pc)
