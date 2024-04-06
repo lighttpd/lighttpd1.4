@@ -1,6 +1,5 @@
 #!/bin/bash
 
-SRCTEST=src/server.c
 PACKAGE=lighttpd
 BASEDOWNLOADURL="https://download.lighttpd.net/lighttpd/releases-1.4.x"
 SNAPSHOTURL="https://download.lighttpd.net/lighttpd/snapshots-1.4.x"
@@ -13,25 +12,15 @@ fi
 AUTHOR="${AUTHOR:-stbuehler}"
 
 # may take one argument for prereleases like
-# ./packdist.sh [--nopack] rc1-r10
+# ./packdist.sh rc1-r10
 
 syntax() {
-	echo "./packdist.sh [--nopack] [--help] [~rc1]" >&2
+	echo "./packdist.sh [--help] [~rc1]" >&2
 	exit 2
 }
 
-if [ ! -f ${SRCTEST} ]; then
-	echo "Current directory is not the source directory"
-	exit 1
-fi
-
-dopack=1
-
 while [ $# -gt 0 ]; do
 	case "$1" in
-	"--nopack")
-		dopack=0
-		;;
 	"--help")
 		syntax
 		;;
@@ -62,8 +51,8 @@ force() {
 # summarize all changes since last release
 genchanges() {
 	(
-		cat ../NEWS | sed "/^- ${version}/,/^-/p;d" | sed "/^- /d;/^$/d" | sed -e 's/^  \*/\*/'
-	) > CHANGES
+		sed "/^- ${version}/,/^-/p;d" | sed "/^- /d;/^$/d" | sed -e 's/^  \*/\*/'
+	) < ${self}/NEWS > CHANGES
 	return 0
 }
 
@@ -168,41 +157,32 @@ EOF
 	fi
 }
 
-if [ ${dopack} = "1" ]; then
-	force ./autogen.sh
+self=$(dirname "$(readlink -f "$0")")
+force cd "${self}"
 
-	if [ -d distbuild ]; then
-		# make distcheck may leave readonly files
-		chmod u+w -R distbuild
-		rm -rf distbuild
-	fi
+if [ -d distbuild ]; then
+	# make distcheck may leave readonly files
+	chmod u+w -R distbuild
+	rm -rf distbuild
+fi
+force mkdir distbuild
 
-	force mkdir distbuild
-	force cd distbuild
-
-	force ../configure --prefix=/usr
-
-	# force make
-	# force make check
-
-	force make -j 4 distcheck
-	force fakeroot make dist
+version=$(grep "version: '1\\.4\\." ${self}/meson.build | cut -d"'" -f2)
+name="${PACKAGE}-${version}${append}"
+force git remote update
+if [ -z "${KEYID}" ]; then
+    force git tag -s -m "${name}" "${name}"
 else
-	force cd distbuild
+    force git tag -u "${KEYID}" -m "${name}" "${name}"
 fi
-
-version=`./config.status -V | head -n 1 | cut -d' ' -f3`
-name="${PACKAGE}-${version}"
-if [ -n "${append}" ]; then
-	cp "${name}.tar.gz" "${name}${append}.tar.gz"
-	cp "${name}.tar.xz" "${name}${append}.tar.xz"
-	name="${name}${append}"
-fi
+force git archive --format tar -o "distbuild/${name}.tar" --prefix "${name}/" "${name}"
+force cd distbuild
+force gzip -n --keep "${name}.tar"
+force xz --keep "${name}.tar"
+force rm "${name}.tar"
 
 force sha256sum "${name}.tar."{gz,xz} > "${name}.sha256sum"
 force sha512sum "${name}.tar."{gz,xz} > "${name}.sha512sum"
-
-rm -f "${name}".tar.*.asc
 
 force gpg ${KEYID:+-u "${KEYID}"} -a --output "${name}.tar.gz.asc" --detach-sig "${name}.tar.gz"
 force gpg ${KEYID:+-u "${KEYID}"} -a --output "${name}.tar.xz.asc" --detach-sig "${name}.tar.xz"
@@ -284,6 +264,23 @@ echo
 echo -------
 echo
 
+escprevversion=$(printf "%s" "${prevversion}" | sed 's/\./[.]/g')
+escversion=$(printf "%s" "${version}" | sed 's/\./[.]/g')
+nextversion="${version%.*}.$((${version##*.} + 1))"
+echo cd distbuild
+echo scp "${name}.{tar*,sha256sum}" lighttpd.net:
+echo ssh lighttpd.net -c \""cp ${name}.{tar*,sha256sum} download/lighttpd/releases-1.4.x/"\"
+echo ssh lighttpd.net -c \""mv ${name}.{tar*,sha256sum} archive/"\"
+echo ssh lighttpd.net -c \""sed -i -e 's/${escprevversion}/${version}/g' download/lighttpd/README.txt"\"
+echo ssh lighttpd.net -c \""echo lighttpd-${version} > download/lighttpd/releases-1.4.x/latest.txt"\"
+echo
+echo mkdir dl
+echo cd dl
 echo wget "${BASEDOWNLOADURL}/${name}".'{tar.gz,tar.xz,sha256sum,sha512sum}'
 echo sha256sum -c "${name}".sha256sum
 echo sha512sum -c "${name}".sha512sum
+echo
+echo cd "${self}"
+echo sed -i -e "'s/${escversion}/${nextversion}/g'" CMakeLists.txt SConstruct configure.ac meson.build
+echo git commit -m "'- next is ${nextversion}'" CMakeLists.txt SConstruct configure.ac meson.build
+echo git push origin "${name}" master
