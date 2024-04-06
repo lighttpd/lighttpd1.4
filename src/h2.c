@@ -1333,6 +1333,7 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
     h2con * const h2c = (h2con *)con->hx;
     const uint32_t fsize = h2c->s_max_frame_size;
     const uint32_t id = h2_u31(s+5);
+    int nloops = 0;
     do {
         if (cqlen < n+9) return n+9; /* incomplete frame; go on */
         if (clen < n+9) {
@@ -1365,6 +1366,40 @@ h2_recv_continuation (uint32_t n, uint32_t clen, const off_t cqlen, chunkqueue *
             c = cq->first; /*(reload after h2_frame_cq_compact())*/
             s = (uint8_t *)(c->mem->ptr + c->offset);
         }
+
+        /* Detect VU#421644 (even though lighttpd already imposes limits)
+         * HTTP/2 CONTINUATION frames can be utilized for DoS attacks
+         *
+         * MAX_READ_LIMIT is currently 256k (from kernel socket buffers)
+         * and much larger than 64k limit which lighttpd imposes on raw request
+         * HEADERS + CONTINUATION(s) above, and much larger than 64k upper limit
+         * which lighttpd imposes on HPACK-decoded request headers.  Since
+         * kernel socket buffers are generally not less than 32k, expect to
+         * complete reading CONTINUATION(s) in 3 recv()s or less if DoS attacker
+         * is quickly sending CONTINUATION frames.  Instead of keeping a count
+         * of small CONTINUATION frames, simply set a limit on the max number of
+         * CONTINUATION frames to process consecutively in this batch.
+         *
+         * Warn once if >= 32 CONTINUATION frames processed in this batch. */
+        if (++nloops == 32) {
+            log_error(NULL, __FILE__, __LINE__,
+              "h2: %s quickly sent excessive number of CONTINUATION frames",
+              con->request.dst_addr_buf->ptr);
+            h2_send_goaway_e(con, H2_E_NO_ERROR);
+        }
+      #if 0
+        if (nloops > 32) {
+            h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
+            return 0;
+        }
+      #endif
+      #if 0 /*(too specific;excessive empty frames handled in above heuristic)*/
+        /* possible CONTINUATION attack if 0 frame length and not END_HEADERS */
+        if (__builtin_expect( (0==flen), 0) && !(flags & H2_FLAG_END_HEADERS)) {
+            h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
+            return 0;
+        }
+      #endif
     } while (!(flags & H2_FLAG_END_HEADERS));
 
     /* If some CONTINUATION frames were concatenated to earlier frames while
