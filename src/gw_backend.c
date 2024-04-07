@@ -1957,6 +1957,33 @@ static handler_t gw_write_refill_wb(gw_handler_ctx * const hctx, request_st * co
     return HANDLER_GO_ON;
 }
 
+__attribute_cold__
+static handler_t gw_network_backend_write_error(gw_handler_ctx * const hctx, request_st * const r) {
+  #ifdef _WIN32
+    switch(WSAGetLastError())
+  #else
+    switch(errno)
+  #endif
+    {
+     #ifdef _WIN32
+      case WSAENOTCONN:
+      case WSAECONNRESET:
+     #else
+      case EPIPE:
+      case ENOTCONN:
+      case ECONNRESET:
+     #endif
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "connection was dropped after accept() "
+          "(perhaps the gw process died), write-offset: %lld socket: %s",
+          (long long)hctx->wb.bytes_out, hctx->proc->connection_name->ptr);
+        return HANDLER_ERROR;
+      default:
+        log_perror(r->conf.errh, __FILE__, __LINE__, "write failed");
+        return HANDLER_ERROR;
+    }
+}
+
 static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * const r) {
     switch(hctx->state) {
     case GW_STATE_INIT:
@@ -2059,46 +2086,18 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
         __attribute_fallthrough__
     case GW_STATE_WRITE:
         if (!chunkqueue_is_empty(&hctx->wb)) {
-            log_error_st * const errh = r->conf.errh;
           #if 0
             if (hctx->conf.debug > 1) {
-                log_debug(errh, __FILE__, __LINE__, "sdsx",
+                log_debug(r->conf.errh, __FILE__, __LINE__,
                   "send data to backend (fd=%d), size=%zu",
                   hctx->fd, chunkqueue_length(&hctx->wb));
             }
           #endif
             off_t bytes_out = hctx->wb.bytes_out;
             if (r->con->srv->network_backend_write(hctx->fd, &hctx->wb,
-                                                   MAX_WRITE_LIMIT, errh) < 0) {
-              #ifdef _WIN32
-                switch(WSAGetLastError())
-              #else
-                switch(errno)
-              #endif
-                {
-                #ifdef _WIN32
-                case WSAENOTCONN:
-                case WSAECONNRESET:
-                #else
-                case EPIPE:
-                case ENOTCONN:
-                case ECONNRESET:
-                #endif
-                    /* the connection got dropped after accept()
-                     * we don't care about that --
-                     * if you accept() it, you have to handle it.
-                     */
-                    log_error(errh, __FILE__, __LINE__,
-                      "connection was dropped after accept() "
-                      "(perhaps the gw process died), "
-                      "write-offset: %lld socket: %s",
-                      (long long)hctx->wb.bytes_out,
-                      hctx->proc->connection_name->ptr);
-                    return HANDLER_ERROR;
-                default:
-                    log_perror(errh, __FILE__, __LINE__, "write failed");
-                    return HANDLER_ERROR;
-                }
+                                                   MAX_WRITE_LIMIT,
+                                                   r->conf.errh) < 0) {
+                return gw_network_backend_write_error(hctx, r);
             }
             else if (hctx->wb.bytes_out > bytes_out) {
                 hctx->write_ts = hctx->proc->last_used = log_monotonic_secs;
