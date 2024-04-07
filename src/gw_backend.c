@@ -2074,14 +2074,24 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
         /*(disable Nagle algorithm if streaming and content-length unknown)*/
         if (AF_UNIX != hctx->host->family) {
             if (r->reqbody_length < 0) {
-                if (-1 == fdevent_set_tcp_nodelay(hctx->fd, 1)) {
-                    /*(error, but not critical)*/
+                /*(skip if hctx->create_env() already called
+                 * gw_set_transparent() to fdevent_set_tcp_nodelay() */
+                if (hctx->state != GW_STATE_WRITE) {
+                    if (-1 == fdevent_set_tcp_nodelay(hctx->fd, 1)) {
+                        /*(error, but not critical)*/
+                    }
                 }
             }
         }
 
         hctx->read_ts = log_monotonic_secs;
-        fdevent_fdnode_event_add(hctx->ev, hctx->fdn, FDEVENT_IN|FDEVENT_RDHUP);
+        {
+            int events = fdevent_fdnode_interest(hctx->fdn)
+                       | FDEVENT_IN|FDEVENT_RDHUP;
+            if (chunkqueue_is_empty(&hctx->wb))
+                events &= ~FDEVENT_OUT; /*(no data ready; avoid extra syscall)*/
+            fdevent_fdnode_event_set(hctx->ev, hctx->fdn, events);
+        }
         gw_set_state(hctx, GW_STATE_WRITE);
         __attribute_fallthrough__
     case GW_STATE_WRITE:
