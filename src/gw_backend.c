@@ -1915,6 +1915,8 @@ static void gw_conditional_tcp_fin(gw_handler_ctx * const hctx, request_st * con
     if (!chunkqueue_is_empty(&hctx->wb))return;
     if (!hctx->host->tcp_fin_propagate) return;
     if (hctx->gw_mode == GW_AUTHORIZER) return;
+    if (hctx->state == GW_STATE_CONNECT_DELAYED)
+        return;
     if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BACKEND_SHUT_WR)
         return;
 
