@@ -152,6 +152,11 @@ jobs:
               brotli libdeflate zlib zstd \
               libmaxminddb libunwind lua51 lua54 \
               libxml2 sqlite3
+            pkg_add dash
+          # note: repeat 'pkg_add dash' to exit 0
+          #   since NetBSD 10.0 has some issues with the packaging of the listed
+          #   packages above and exits non-zero due to various packaging issues,
+          #   but the result is still sufficient for lighttpd CI build tests.
           # autoconf automake gmake libtool m4 meson py311-scons
           run: |
             set -e
