@@ -3,6 +3,22 @@
 NEWS
 ====
 
+- 1.4.76 - 2024-04-12
+  * [core] add default to builtin mimetype.assign
+  * [core] add MPTCP support
+  * [core] disable MPTCP support by default
+  * [mod_expire] omit caching hdrs for 204 No Content
+  * [mod_staticfile] noinline cold func
+  * [core] GNU/Hurd preadv2() RWF_NOWAIT ENOTSUP
+  * [core] special value for Linux POLLRDHUP on SPARC
+  * [mod_openssl] define asn1 time w/ OPENSSL_NO_OCSP
+  * [h2] VU#421644 HTTP/2 CONTINUATION Flood
+  * [build] packdist.sh git archive; replace make dist
+  * [core] gw_network_backend_write_error() cold func
+  * [core] reduce syscalls in some backend connect
+  * [core] defer TCP_FIN propagate if connect()ing (fixes #3249)
+  * [ci] workaround some packaging issues in NetBSD 10
+
 - 1.4.75 - 2024-03-13
   * [mod_redirect] url.redirect-code = 308 new default
   * [ls-hpack] more portability fixes for sys/queue.h
