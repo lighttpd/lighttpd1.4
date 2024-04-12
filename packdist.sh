@@ -268,11 +268,12 @@ escprevversion=$(printf "%s" "${prevversion}" | sed 's/\./[.]/g')
 escversion=$(printf "%s" "${version}" | sed 's/\./[.]/g')
 nextversion="${version%.*}.$((${version##*.} + 1))"
 echo cd distbuild
-echo scp "${name}.{tar*,sha256sum}" lighttpd.net:
-echo ssh lighttpd.net -c \""cp ${name}.{tar*,sha256sum} download/lighttpd/releases-1.4.x/"\"
-echo ssh lighttpd.net -c \""mv ${name}.{tar*,sha256sum} archive/"\"
-echo ssh lighttpd.net -c \""sed -i -e 's/${escprevversion}/${version}/g' download/lighttpd/README.txt"\"
-echo ssh lighttpd.net -c \""echo lighttpd-${version} > download/lighttpd/releases-1.4.x/latest.txt"\"
+echo scp "${name}.{tar*,sha*sum}" lighttpd.net:
+echo ssh lighttpd.net \""cp ${name}.{tar*,sha*sum} download/lighttpd/releases-1.4.x/"\"
+echo ssh lighttpd.net \""mv ${name}.{tar*,sha*sum} archive/"\"
+# (not using 'sed -i' due to dir permissions)
+echo ssh lighttpd.net \""sed -e 's/${escprevversion}/${version}/g' download/lighttpd/README.txt > README.txt.\\\$\\\$ && cat README.txt.\\\$\\\$ > download/lighttpd/README.txt && rm README.txt.\\\$\\\$"\"
+echo ssh lighttpd.net \""echo lighttpd-${version} > download/lighttpd/releases-1.4.x/latest.txt"\"
 echo
 echo mkdir dl
 echo cd dl
@@ -283,4 +284,5 @@ echo
 echo cd "${self}"
 echo sed -i -e "'s/${escversion}/${nextversion}/g'" CMakeLists.txt SConstruct configure.ac meson.build
 echo git commit -m "'- next is ${nextversion}'" CMakeLists.txt SConstruct configure.ac meson.build
-echo git push origin "${name}" master
+echo git push origin master
+echo git push origin "${name}"
