@@ -31,7 +31,6 @@ configparser.c
 configparser.h
 configure
 depcomp
-distribute.sh
 fcgi-responder
 install-sh
 lemon

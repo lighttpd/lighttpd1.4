@@ -1644,7 +1644,6 @@ LIGHTTPD_VERSION_ID=m4_format([0x%x%02x%02x], m4_unquote(m4_split(AC_PACKAGE_VER
 AC_DEFINE_UNQUOTED([LIGHTTPD_VERSION_ID], [$LIGHTTPD_VERSION_ID], [lighttpd-version-id])
 
 AC_CONFIG_FILES([\
-  distribute.sh \
   doc/config/conf.d/Makefile \
   doc/config/Makefile \
   doc/config/vhosts.d/Makefile \
