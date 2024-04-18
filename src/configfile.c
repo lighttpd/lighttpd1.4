@@ -1054,6 +1054,7 @@ static void config_mimetypes_default(array * const a) {
        ,".lha",   "application/x-lha"
        ,".lhz",   "application/x-lzh"
        ,".so",    "application/octet-stream"
+       ,".torrent","application/x-bittorrent"
 
        ,".deb",   "application/vnd.debian.binary-package"
        ,".dmg",   "application/x-apple-diskimage"
