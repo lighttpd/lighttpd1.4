@@ -338,6 +338,11 @@ fdevent_linux_sysepoll_event_set (fdevents *ev, fdnode *fdn, int events)
     struct epoll_event ep;
   #ifndef EPOLLRDHUP
     events &= ~FDEVENT_RDHUP;
+  #elif (defined(__linux__) && (defined(__sparc__) || defined(__sparc)))
+    if (events & FDEVENT_RDHUP) {
+        events &= ~FDEVENT_RDHUP;
+        events |= EPOLLRDHUP;
+    }
   #endif
     ep.events = events | EPOLLERR | EPOLLHUP;
     ep.data.ptr = fdn;
@@ -376,7 +381,11 @@ fdevent_linux_sysepoll_init (fdevents *ev)
     ck_static_assert(EPOLLERR   == FDEVENT_ERR);
     ck_static_assert(EPOLLHUP   == FDEVENT_HUP);
   #ifdef EPOLLRDHUP
+   #if (defined(__linux__) && (defined(__sparc__) || defined(__sparc)))
+    ck_static_assert(EPOLLRDHUP  & FDEVENT_RDHUP);
+   #else
     ck_static_assert(EPOLLRDHUP == FDEVENT_RDHUP);
+   #endif
   #endif
 
     ev->type      = FDEVENT_HANDLER_LINUX_SYSEPOLL;
@@ -770,6 +779,11 @@ fdevent_poll_event_set (fdevents *ev, fdnode *fdn, int events)
 
   #ifndef POLLRDHUP
     events &= ~FDEVENT_RDHUP;
+  #elif (defined(__linux__) && (defined(__sparc__) || defined(__sparc)))
+    if (events & FDEVENT_RDHUP) {
+        events &= ~FDEVENT_RDHUP;
+        events |= POLLRDHUP;
+    }
   #endif
 
     if (k >= 0) {
@@ -854,7 +868,11 @@ fdevent_poll_init (fdevents *ev)
     ck_static_assert(POLLHUP   == FDEVENT_HUP);
     ck_static_assert(POLLNVAL  == FDEVENT_NVAL);
   #ifdef POLLRDHUP
+   #if (defined(__linux__) && (defined(__sparc__) || defined(__sparc)))
+    ck_static_assert(POLLRDHUP  & FDEVENT_RDHUP);
+   #else
     ck_static_assert(POLLRDHUP == FDEVENT_RDHUP);
+   #endif
   #endif
 
     ev->type      = FDEVENT_HANDLER_POLL;
