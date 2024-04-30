@@ -1,0 +1,79 @@
+#!/bin/bash
+
+. ${TOOL_DIR}/functions
+
+function brief()
+{
+    echo "--test-lighttpd=[no|<path>]"
+}
+
+function help()
+{
+    brief
+    cat <<EOF
+    If this option is given with a <path> to the compiled lighttpd tests tree, the full tree will be imported
+    on the target under /data/lighttpd from which you can execute the lighttpd test suite using:
+
+    cd /data/lighttpd
+    ./base_testsuite.sh
+
+    NOTE: You must compile the lighttpd source tree of the desired target before building
+    the vm image.
+
+    The default is no.
+EOF
+}
+
+function validate() {
+
+	if [ ${OPT_TEST_LIGHTTPD} != "no" ]; then
+		if [ ! -d "${OPT_TEST_LIGHTTPD}" ]; then
+			echo "Invalid lighttpd source tree '${OPT_TEST_LIGHTTPD}'"
+			exit 1;
+		fi
+	else
+		exit 0;
+	fi
+}
+
+function configure()
+{
+	rm -f output/option_files/*.opt_test_lighttpd
+	if [ "$OPT_TEST_LIGHTTPD" != no ]; then
+		if [ "${OPT_VERBOSE}" == "yes" ]; then
+			echo "Building lighttpd file list from ${OPT_TEST_LIGHTTPD}"
+		fi
+
+		for f in $(find ${OPT_TEST_LIGHTTPD} -type f); do
+			echo "[perms=0755] lighttpd/${f#${OPT_TEST_LIGHTTPD}/}=${f}" >> output/option_files/data_files.opt_test_lighttpd
+		done;
+
+		case ${OPT_ARCH} in
+		x86*)
+			LIGHTTPD_TEST_PREFIX="nto-${OPT_ARCH}-o";
+			;;
+		*aarch64*)
+			LIGHTTPD_TEST_PREFIX="nto-aarch64-le";
+			;;
+		esac
+
+		# export lighttpd options"
+		echo "LIGHTTPD_TEST_PREFIX=${LIGHTTPD_TEST_PREFIX}" >> output/option_files/ifs_env.opt_test_lighttpd
+
+	fi
+
+	exit 0
+}
+
+case "$1" in
+	brief)
+		brief;;
+	help)
+		help;;
+	validate)
+		validate;;
+	configure)
+		configure;;
+	default)
+		echo no;;
+esac

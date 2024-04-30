@@ -1,0 +1,310 @@
+#!/bin/sh
+
+#
+#    Color definition of terminal outputs
+#
+red="\033[0;31m"
+grn="\033[0;32m"
+yel="\033[1;33m"
+blu="\033[1;34m"
+cls="\033[0m"
+
+#
+#    Default basic prefix is /usr/local
+#
+BASIC_PREFIX="/usr/local"
+
+#
+#    QNX specific build configuration nested level
+#
+NESTED_LEVEL="../../.."
+
+#
+#    A prefix path to use on the target.
+#
+PREFIX="${INSTALL_ROOT_nto}/${BASIC_PREFIX}"
+
+#
+#    A prefix path to binary on the target.
+#    bindir	${EXEC_PREFIX}/bin
+#    libdir	${EXEC_PREFIX}/lib
+#
+EXEC_PREFIX="${INSTALL_ROOT_nto}/${cpudir}/${BASIC_PREFIX}"
+
+#    Setup of essential configuration parameters
+#
+function hook_preconfigure {
+#
+#    Add needed libraries
+#
+    if [ ${__NTO_VERSION} -ge 800 ]; then
+        echo "QNX version ${__NTO_VERSION} detected."
+        LDFLAGS="$LDFLAGS -lfsnotify"
+    fi
+
+#
+#    Distributive directory
+#
+    DIST_BASE="${PWD}/${NESTED_LEVEL}"
+
+#
+#    Setup correct pathes for install and build make commands
+#
+    configure_opts="--srcdir=${DIST_BASE}"
+    configure_opts="${configure_opts} --prefix=${PREFIX}"
+    configure_opts="${configure_opts} --exec-prefix=${EXEC_PREFIX}"
+
+
+    #deactivate support of pcre2
+    configure_opts="${configure_opts} --with-pcre2=no"
+}
+
+#
+#    Adjust relative path to ./configure tool
+#
+function hook_configure {
+    ${NESTED_LEVEL}/configure \
+        ${ac_host:+"--host=${ac_host}"} \
+        ${ac_build:+"--build=${ac_build}"} \
+        ${configure_opts} \
+        ${ac_params:+${CC:+"CC=${CC}"}} \
+        ${ac_params:+${CFLAGS:+"CFLAGS=-O2 ${CFLAGS}"}} \
+        ${ac_params:+${CPPFLAGS:+"CPPFLAGS=${CPPFLAGS}"}} \
+        ${ac_params:+${LDFLAGS:+"LDFLAGS=${LDFLAGS}"}} \
+        ${ac_params:+${CXX:+"CXX=${CXX}"}} \
+        ${ac_params:+${CXXFLAGS:+"CXXFLAGS=-O2 ${CXXFLAGS}"}} \
+        ${ac_params:+${ac_autotools:+${ac_autotools}}} \
+        || Error "configure failed";
+}
+
+function hook_premake {
+    if [ "${make_cmds}" == "check" ] && [ "${TARGET_SYSNAME}" == "nto" ]; then
+        echo "${blu}For target nto suppress tests execution.${cls}"
+        echo "${blu}All tests have to be run on target system.${cls}"
+        make_opts="${make_opts} TESTS="
+    fi
+}
+
+
+function cp_by_sed {
+    for v in ${2}; do
+        _source=${v}
+        _dest=$(echo ${_source} | sed "${1}")
+        _dest_folder="${3}/$(dirname ${_dest})"
+        [ -d "${_dest_folder}" ] || (set -x; mkdir -p ${_dest_folder})
+        (set -x; cp -f ${_source} ${_dest_folder})
+    done
+}
+
+function test_script_gen {
+    script_name=$1
+    script_log=$2
+    unittests_path=$3
+    perltests_path=$4
+    tools_path=$5
+    version=$6
+    perl_path_2_bin="/usr/bin/perl"
+    perl_path_2_lib="/usr/lib/perl5"
+    echo "Creating testsuites script..."
+    echo "#!/bin/sh"                                                        > $script_name || Error "Unexpected error during $script_name initialization";
+    echo "base=\$PWD"                                                      >> $script_name
+
+    echo "echo \"Setup temp directory\""                                   >> $script_name
+    echo "if [ -d \"/tmp\" ]; then"                                        >> $script_name
+    echo "   [ -d \"/var/tmp\" ] || (set -x; ln -sP /tmp /var/tmp)"        >> $script_name
+    echo "else"                                                            >> $script_name
+    echo "   echo \"${red}Error - /tmp directory was not found!${cls}\""   >> $script_name
+    echo "   exit 1"                                                       >> $script_name
+    echo "fi"                                                              >> $script_name
+
+    echo "echo \"Setup perl env\""                                           >> $script_name
+    echo "LOCALPERL=\"no\""                                                  >> $script_name
+    echo "if [ -e \"${perl_path_2_lib}\" ]; then"                            >> $script_name
+    echo "   PERLPATH=\$(which perl)"                                        >> $script_name
+    echo "   [ -e \"${perl_path_2_bin}\" ] || (set -x; ln -sP \$PERLPATH ${perl_path_2_bin})" >> $script_name
+    echo "else"                                                              >> $script_name
+    echo "   LOCALPERL=\"yes\""                                              >> $script_name
+    echo "   (set -x; ln -Ps \$base/${tools_path}/perl  ${perl_path_2_bin})" >> $script_name
+    echo "   (set -x; ln -Ps \$base/${tools_path}/perl5 ${perl_path_2_lib})" >> $script_name
+    echo "fi"                                                                >> $script_name
+
+    echo "echo \"Setup tests env\""                                    >> $script_name
+    echo "export PATH=\$base/${tools_path}:\$PATH"                     >> $script_name
+    echo "export srcdir=\$base/${perltests_path}"                      >> $script_name
+    echo "export top_builddir=\$base"                                  >> $script_name
+    echo "export VERBOSE=1"                                            >> $script_name
+
+    echo "echo \"Setup correct system time\""                          >> $script_name
+    echo "gen_date=$(date +'%s')"                                      >> $script_name
+    echo "gen_date_frm=$(date +'%m%d%H%M%C%y.%S')"                     >> $script_name
+    echo "sys_date=\$(date +'%s')"                                     >> $script_name
+    echo "if (( \$gen_date > \$sys_date )); then"                      >> $script_name
+    echo "   date \$gen_date_frm"                                      >> $script_name
+    echo "   echo \"System time changed to:\$gen_date_frm\""           >> $script_name
+    echo "fi"                                                          >> $script_name
+
+    # Add creation of script log
+    echo "echo \"### Testsuites log file ###\" > $script_log"          >> $script_name
+
+    # Add unit tests
+    echo "Adding unittests to the script:'$script_name'..."
+    number=0
+    unittests_list=$(find ${unittests_path} -type f -executable)
+    echo "### Run all unittests ###"                                   >> $script_name
+    echo "ut_pass=0"                                                   >> $script_name
+    echo "ut_fail=0"                                                   >> $script_name
+    for v in ${unittests_list}; do
+        number=$((number+1));
+        echo "### Suite number: $number"                               >> $script_name
+        echo "result=\$($v 2>&1)"                                      >> $script_name
+        echo "if [ 0 -eq \$? ]; then"                                  >> $script_name
+        echo "   ut_pass=\$((ut_pass+1))"                              >> $script_name
+        echo "   echo \"${grn}PASS${cls}:$v\""                         >> $script_name
+        echo "else"                                                    >> $script_name
+        echo "   ut_fail=\$((ut_fail+1))"                              >> $script_name
+        echo "   echo \"${red}FAIL${cls}:$v\""                         >> $script_name
+        echo "fi"                                                      >> $script_name
+        echo "echo \"### Testsuite:$v ###\" >> $script_log"            >> $script_name
+        echo "echo \"\${result}\" >> $script_log"                      >> $script_name
+        echo "${blu}ADDED${cls}:$v";
+    done
+    echo "echo \"${grn}==========================================${cls}\"" >> $script_name
+    echo "echo \"${grn}Unit tests summary for lighttpd ${version}${cls}\"" >> $script_name
+    echo "echo \"${grn}==========================================${cls}\"" >> $script_name
+    echo "echo \"# TOTAL: ${number}\""                                     >> $script_name
+    echo "echo \"# ${grn}PASS${cls}: \${ut_pass}\""                        >> $script_name
+    echo "echo \"# ${red}FAIL${cls}: \${ut_fail}\""                        >> $script_name
+    echo "echo \"${grn}==========================================${cls}\"" >> $script_name
+    # Add perl tests
+    echo "Adding perltests to the script:'$script_name'..."
+    number=0
+    echo "### Run all perltests ###"                                   >> $script_name
+    echo "pt_pass=0"                                                   >> $script_name
+    echo "pt_fail=0"                                                   >> $script_name
+    for v in "${perltests_path}/prepare.sh" "perl ${perltests_path}/run-tests.pl" "${perltests_path}/cleanup.sh"; do
+        number=$((number+1));
+        echo "### Suite number: $number"                               >> $script_name
+        echo "result=\$($v 2>&1)"                                      >> $script_name
+        echo "if [ 0 -eq \$? ]; then"                                  >> $script_name
+        echo "   pt_pass=\$((pt_pass+1))"                              >> $script_name
+        echo "   echo \"${grn}PASS${cls}:$v\""                         >> $script_name
+        echo "else"                                                    >> $script_name
+        echo "   pt_fail=\$((pt_fail+1))"                              >> $script_name
+        echo "   echo \"${red}FAIL${cls}:$v\""                         >> $script_name
+        echo "fi"                                                      >> $script_name
+        echo "echo \"### Testsuite:$v ###\" >> $script_log"            >> $script_name
+        echo "echo \"\${result}\""                                     >> $script_name
+        echo "echo \"\${result}\" >> $script_log"                      >> $script_name
+        echo "${blu}ADDED${cls}:$v";
+    done
+    echo "echo \"${grn}==========================================${cls}\"" >> $script_name
+    echo "echo \"${grn}Perl tests summary for lighttpd ${version}${cls}\"" >> $script_name
+    echo "echo \"${grn}==========================================${cls}\"" >> $script_name
+    echo "echo \"# TOTAL: ${number}\""                                     >> $script_name
+    echo "echo \"# ${grn}PASS${cls}: \${pt_pass}\""                        >> $script_name
+    echo "echo \"# ${red}FAIL${cls}: \${pt_fail}\""                        >> $script_name
+    echo "if [ 0 -eq \${ut_fail} ] && [ 0 -eq \${pt_fail} ]; then"         >> $script_name
+    echo "echo \"${grn}==========================================${cls}\"" >> $script_name
+    echo "else"                                                            >> $script_name
+    echo "   echo \"${red}\${ut_fail} unittests fails${cls}\""             >> $script_name
+    echo "   echo \"${red}\${pt_fail} perltests fails${cls}\""             >> $script_name
+    echo "   echo \"${red}See test log:$script_log ${cls}\""               >> $script_name
+    echo "fi"                                                              >> $script_name
+
+    # Remove testsuite perl settings
+    echo "if [ \$LOCALPERL == \"yes\" ]; then"                             >> $script_name
+    echo "   echo \"Remove symbols link to local perl\""                   >> $script_name
+    echo "   (set -x; rm ${perl_path_2_bin})"                              >> $script_name
+    echo "   (set -x; rm ${perl_path_2_lib})"                              >> $script_name
+    echo "fi"                                                              >> $script_name
+
+    # Restore correct system time
+    echo "if (( \$gen_date > \$sys_date )); then"                          >> $script_name
+    echo "   echo \"Restore correct system time\""                         >> $script_name
+    echo "   cur_date=\$(date +'%s')"                                      >> $script_name
+    echo "   shift=\$((cur_date - gen_date))"                              >> $script_name
+    echo "   sys_date=\$((sys_date + shift))"                              >> $script_name
+    echo "   sys_date_frm=\$(date -s \$sys_date +'%m%d%H%M%C%y.%S')"       >> $script_name
+    echo "   date \$sys_date_frm"                                          >> $script_name
+    echo "   echo \"Test duration: \$shift\""                              >> $script_name
+    echo "   echo \"System time restored to:\$sys_date_frm\""              >> $script_name
+    echo "fi"                                                              >> $script_name
+
+    chmod +x $script_name
+}
+
+
+function hook_postmake {
+    base_build=$PWD
+    base_build_src="${base_build}/src"
+    base_build_tests="${base_build}/tests"
+
+    base_src="${base_build}/${NESTED_LEVEL}/src"
+    base_tests="${base_build}/${NESTED_LEVEL}/tests"
+    base_testsuite_script="base_testsuite.sh"
+
+    testsuite_sdp_bin=${EXEC_PREFIX}/bin/lighttpd_tests
+    tools_bin=tools
+
+    pkg_ver=$(grep -P '^.*version\s+=' ${NESTED_LEVEL}/SConstruct | grep -oP '\d+\.\d+\.\d+') || "UNKNOWN"
+
+    #
+    # uninstall all lighttpd test from SDP
+    #
+    if [ "${make_cmds}" == "uninstall" ] && [ -d ${testsuite_sdp_bin} ]; then
+        echo "we have to uninstall all lighttpd tests"
+        (set -x; rm -rf ${testsuite_sdp_bin})
+    fi
+
+    #
+    # install all lighttpd tests
+    #
+    if [ "${make_cmds}" == "check" ] && [ "${TARGET_SYSNAME}" == "nto" ] && [ "${SYSNAME}" == "linux" ]; then
+        if [ -d ${base_build_src} ] && [ -d ${base_build_tests} ]; then
+
+            echo "${blu}=========================================================================${cls}"
+            echo "${blu}Generate script to run testsuites for the ${cpu}${cls}"
+            echo "${blu}=========================================================================${cls}"
+
+            echo "Copy testsuite artifacts ..."
+            [ -d "${testsuite_sdp_bin}" ] || (set -x; mkdir -p ${testsuite_sdp_bin})
+
+            src_bin_list=$(find ${base_build_src} -type f -executable )
+            cp_by_sed "s/^.*\/\(src\/.*\)$/\1/"   "${src_bin_list[@]}"   ${testsuite_sdp_bin}
+
+            src_cfg_list=$(find ${base_src} -type f | grep -v -i -P "meson|cmake|makefile|.*\.(h|c)$")
+            cp_by_sed "s/^.*\/\(src\/.*\)$/\1/"   "${src_cfg_list[@]}"   ${testsuite_sdp_bin}
+
+            tests_bin_list=$(find ${base_build_tests} -type f -executable)
+            cp_by_sed "s/^.*\/\(tests\/.*\)$/\1/" "${tests_bin_list[@]}" ${testsuite_sdp_bin}
+
+            tests_cfg_list=$(find ${base_tests} -type f | grep -v -i -P "meson|cmake|makefile|.*\.(h|c)$")
+            cp_by_sed "s/^.*\/\(tests\/.*\)$/\1/" "${tests_cfg_list[@]}" ${testsuite_sdp_bin}
+
+            echo "Copy testsuite tools ..."
+            full_path_tools_bin="${testsuite_sdp_bin}/${tools_bin}"
+            [ -d ${full_path_tools_bin} ] || (set -x; mkdir -p ${full_path_tools_bin} )
+
+            perl_bin=${QNX_TARGET}/${cpudir}/usr/bin/perl
+            (set -x; cp  -f ${perl_bin} ${full_path_tools_bin}) || Error "perl was not found.";
+
+            perl_lib=${QNX_TARGET}/${cpudir}/usr/lib/perl5
+            (set -x; cp -rf ${perl_lib} ${full_path_tools_bin}) || Error "perl libs were not found.";
+
+            expr_bin=${QNX_TARGET}/${cpudir}/usr/bin/expr
+            (set -x; cp  -f ${expr_bin} ${full_path_tools_bin}) || Error "expr tool was not found.";
+
+            echo "Setup build script ..."
+            test_script_gen ${base_testsuite_script} "test-suite.log" "src/t" "tests" ${tools_bin} ${pkg_ver}
+            (set -x; cp  -f ${base_testsuite_script} ${testsuite_sdp_bin})
+
+            echo "${grn}=========================================================================${cls}"
+            echo "${grn}Testsuite summary for lighttpd ${pkg_ver}${cls}"
+            echo "${grn}=========================================================================${cls}"
+
+        else
+            echo "${red}Error - base testsuite for lighttpd ${pkg_ver} was not found!${cls}";
+            exit 1;
+        fi
+    fi
+}

@@ -1,0 +1,7 @@
+# QNX Build Files
+build/nto-aarch64-le/*
+build/nto-x86_64-o/*
+!build/Makefile
+!build/build-hooks
+!build/nto-aarch64-le/GNUmakefile
+!build/nto-x86_64-o/GNUmakefile

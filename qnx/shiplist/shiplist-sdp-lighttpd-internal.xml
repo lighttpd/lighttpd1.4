@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<shiplist>
+	<id>com.qnx.${baselineId}.osr.lighttpd.internal</id>
+	<name>Lighttpd 1.4 web server</name>
+	<description>Lighttpd is a secure, fast, compliant, and very flexible web server</description>
+	<property key="f.support" value="Custom"/>
+	<property key="f.swtype" value="III"/>
+	<property key="f.engage" value="B"/>
+	<category>OSR</category>
+
+	<property key="com.qnx.internal" value="true"/>
+	<!-- don't generate provides/requires tags for internal packages-->
+	<requires value="suppress-library: autogen"/>
+	<provides value="suppress-library: autogen"/>
+
+	<!-- install dynamic libraries -->
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_accesslog.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_ajp13.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_authn_file.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_auth.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_cgi.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_deflate.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_dirlisting.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_extforward.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_h2.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_proxy.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_rrdtool.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_sockproxy.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_ssi.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_status.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_userdir.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_vhostdb.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_webdav.so" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/lib/mod_wstunnel.so" runtime="false" />
+
+	<!-- install binaries -->
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/sbin/lighttpd" runtime="false" />
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/sbin/lighttpd-angel" runtime="false" />
+</shiplist>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<shiplist>
+	<id>com.qnx.${baselineId}.osr.lighttpd_tests.internal</id>
+	<name>Lighttpd 1.4 web server Tests</name>
+	<description>Lighttpd web server Tests - (perl scripts and unittests)</description>
+	<property key="f.support" value="Custom"/>
+	<property key="f.swtype" value="III"/>
+	<property key="f.engage" value="B"/>
+	<property key="useInfo" value="false"/>
+	<category>OSR</category>
+
+	<property key="com.qnx.internal" value="true"/>
+	<!-- don't generate provides/requires tags for internal packages-->
+	<requires value="suppress-library: autogen"/>
+	<provides value="suppress-library: autogen"/>
+
+	<asset dest="${targetfolder}/[ARCH:aarch64le,x86_64]/usr/local/bin/lighttpd_tests/" runtime="false"/>
+</shiplist>
