@@ -80,6 +80,7 @@ EOF
 
 SKIP: {
 	skip "no crypt-des under openbsd or MS Visual Studio", 2 if $^O eq 'openbsd' || $tf->{'win32native'};
+	skip "no crypt-des under qnx", 2 if $^O eq 'nto';
 
 	$t->{REQUEST}  = ( <<EOF
 GET /get-server-env.php?env=REMOTE_USER HTTP/1.0

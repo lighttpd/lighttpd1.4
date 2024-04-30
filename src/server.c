@@ -361,6 +361,15 @@ static void server_main_setup_signals (void) {
     sigaction(SIGALRM, &act, NULL);
     sigaction(SIGUSR1, &act, NULL);
 
+   #ifdef __QNX__
+      /*
+       * In QNX SDP 7.1 SA_RESTART is not supported
+       */
+      #ifndef SA_RESTART
+         #define SA_RESTART 0
+      #endif
+   #endif /* __QNX__ */
+
     /* it should be safe to restart syscalls after SIGCHLD */
     act.sa_flags |= SA_RESTART | SA_NOCLDSTOP;
     sigaction(SIGCHLD, &act, NULL);
