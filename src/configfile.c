@@ -330,7 +330,7 @@ static int config_has_opt_enabled (const server * const srv, const char * const 
         if (NULL == du) continue;
         if (du->type == TYPE_ARRAY
             ? ((data_array *)du)->value.used != 0
-            : config_plugin_value_tobool(du, 0))
+            : config_plugin_value_to_bool(du, 0))
             return 1;
     }
     return 0;
@@ -561,7 +561,7 @@ static int config_http_parseopts (server *srv, const array *a) {
         const data_string * const ds = (const data_string *)a->data[i];
         const buffer *k = &ds->key;
         unsigned short int opt;
-        int val = config_plugin_value_tobool((data_unset *)ds, 2);
+        int val = config_plugin_value_to_bool((data_unset *)ds, 2);
         if (2 == val) {
             log_error(srv->errh, __FILE__, __LINE__,
               "unrecognized value for server.http-parseopts: "
@@ -903,16 +903,16 @@ static int config_insert_srvconf(server *srv) {
               case 32:/* server.feature-flags */
                 srv->srvconf.feature_flags = cpv->v.a;
                 srv->srvconf.h2proto =
-                  config_plugin_value_tobool(
+                  config_plugin_value_to_bool(
                     array_get_element_klen(cpv->v.a,
                                            CONST_STR_LEN("server.h2proto")), 1);
                 if (srv->srvconf.h2proto)
                     srv->srvconf.h2proto +=
-                      config_plugin_value_tobool(
+                      config_plugin_value_to_bool(
                         array_get_element_klen(cpv->v.a,
                                                CONST_STR_LEN("server.h2c")), 1);
                 srv->srvconf.absolute_dir_redirect =
-                  config_plugin_value_tobool(
+                  config_plugin_value_to_bool(
                     array_get_element_klen(cpv->v.a,
                       CONST_STR_LEN("server.absolute-dir-redirect")), 0);
                 break;

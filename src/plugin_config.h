@@ -133,7 +133,9 @@ typedef struct {
 
 __attribute_cold__
 __attribute_pure__
-int config_plugin_value_tobool(const data_unset *du, int default_value);
+int config_plugin_value_to_bool(const data_unset *du, int default_value);
+#define config_plugin_value_tobool(du, default_value) \
+        config_plugin_value_to_bool((du),(default_value))
 
 __attribute_cold__
 __attribute_pure__

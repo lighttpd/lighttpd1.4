@@ -54,7 +54,7 @@ int config_capture(server *srv, int idx) {
 
 int config_feature_bool (const server *srv, const char *feature, int default_value) {
     return srv->srvconf.feature_flags
-      ? config_plugin_value_tobool(
+      ? config_plugin_value_to_bool(
           array_get_element_klen(srv->srvconf.feature_flags,
                                  feature, strlen(feature)), default_value)
       : default_value;
@@ -68,7 +68,7 @@ int32_t config_feature_int (const server *srv, const char *feature, int32_t defa
       : default_value;
 }
 
-int config_plugin_value_tobool (const data_unset *du, int default_value)
+int config_plugin_value_to_bool (const data_unset *du, int default_value)
 {
     if (NULL == du) return default_value;
     if (du->type == TYPE_STRING) {
@@ -267,7 +267,7 @@ int config_plugin_values_init_block(server * const srv, const array * const ca, 
             break;
           case T_CONFIG_BOOL:
             {
-                int v = config_plugin_value_tobool(du, -1);
+                int v = config_plugin_value_to_bool(du, -1);
                 if (-1 == v) {
                     log_error(srv->errh, __FILE__, __LINE__,
                       "ERROR: unexpected type for key: %s (string) "

@@ -14,7 +14,7 @@
 #include "stat_cache.h"
 #include "plugin.h"
 #include "plugins.h"
-#include "plugin_config.h"  /* config_plugin_value_tobool() */
+#include "plugin_config.h"
 #include "network_write.h"  /* network_write_show_handlers() */
 #include "reqpool.h"        /* request_pool_init() request_pool_free() */
 #include "response.h"       /* http_dispatch[] strftime_cache_reset() */

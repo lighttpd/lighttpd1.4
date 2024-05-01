@@ -176,7 +176,7 @@ static unsigned int mod_proxy_parse_forwarded(server *srv, const array *a)
               "by, for, host, proto, remote_user, but not: %s", du->key.ptr);
             return UINT_MAX;
         }
-        int val = config_plugin_value_tobool(du, 2);
+        int val = config_plugin_value_to_bool(du, 2);
         if (2 == val) {
             log_error(srv->errh, __FILE__, __LINE__,
               "proxy.forwarded values must be one of: "
@@ -197,7 +197,7 @@ static http_header_remap_opts * mod_proxy_parse_header_opts(server *srv, const a
     for (uint32_t j = 0, used = a->used; j < used; ++j) {
         data_array *da = (data_array *)a->data[j];
         if (buffer_eq_slen(&da->key, CONST_STR_LEN("https-remap"))) {
-            int val = config_plugin_value_tobool((data_unset *)da, 2);
+            int val = config_plugin_value_to_bool((data_unset *)da, 2);
             if (2 == val) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected value for proxy.header; "
@@ -208,7 +208,7 @@ static http_header_remap_opts * mod_proxy_parse_header_opts(server *srv, const a
             continue;
         }
         else if (buffer_eq_slen(&da->key, CONST_STR_LEN("force-http10"))) {
-            int val = config_plugin_value_tobool((data_unset *)da, 2);
+            int val = config_plugin_value_to_bool((data_unset *)da, 2);
             if (2 == val) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected value for proxy.header; "
@@ -219,7 +219,7 @@ static http_header_remap_opts * mod_proxy_parse_header_opts(server *srv, const a
             continue;
         }
         else if (buffer_eq_slen(&da->key, CONST_STR_LEN("upgrade"))) {
-            int val = config_plugin_value_tobool((data_unset *)da, 2);
+            int val = config_plugin_value_to_bool((data_unset *)da, 2);
             if (2 == val) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected value for proxy.header; "
@@ -230,7 +230,7 @@ static http_header_remap_opts * mod_proxy_parse_header_opts(server *srv, const a
             continue;
         }
         else if (buffer_eq_slen(&da->key, CONST_STR_LEN("connect"))) {
-            int val = config_plugin_value_tobool((data_unset *)da, 2);
+            int val = config_plugin_value_to_bool((data_unset *)da, 2);
             if (2 == val) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected value for proxy.header; "

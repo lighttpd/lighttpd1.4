@@ -549,7 +549,7 @@ static handler_t mod_auth_require_parse_array(const array *value, array * const 
 				dauth->require->algorithm = algorithm;
 				dauth->require->realm = realm;
 				dauth->require->nonce_secret = nonce_secret; /*(NULL is ok)*/
-				dauth->require->userhash = config_plugin_value_tobool(userhash, 0);
+				dauth->require->userhash = config_plugin_value_to_bool(userhash, 0);
 				if (!mod_auth_require_parse(dauth->require, require, errh)) {
 					dauth->fn->free((data_unset *)dauth);
 					return HANDLER_ERROR;

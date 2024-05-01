@@ -313,7 +313,7 @@ static unsigned int mod_extforward_parse_opts(server *srv, const array *opts_par
             return UINT_MAX;
         }
 
-        int val = config_plugin_value_tobool(du, 2);
+        int val = config_plugin_value_to_bool(du, 2);
         if (2 == val) {
             log_error(srv->errh, __FILE__, __LINE__,
               "extforward.params values must be one of: "
