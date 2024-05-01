@@ -232,7 +232,7 @@ typedef struct {
 } ssi_val_t;
 
 __attribute_pure__
-static int ssi_val_tobool(const ssi_val_t *B) {
+static int ssi_val_to_bool(const ssi_val_t *B) {
     return B->type == SSI_TYPE_BOOL ? B->bo : !buffer_is_blank(&B->str);
 }
 
@@ -241,7 +241,7 @@ static int ssi_eval_expr_cmp(const ssi_val_t * const v1, const ssi_val_t * const
     int cmp = (v1->type != SSI_TYPE_BOOL && v2->type != SSI_TYPE_BOOL)
       ? strcmp(v1->str.ptr ? v1->str.ptr : "",
                v2->str.ptr ? v2->str.ptr : "")
-      : ssi_val_tobool(v1) - ssi_val_tobool(v2);
+      : ssi_val_to_bool(v1) - ssi_val_to_bool(v2);
     switch (cond) {
       case TK_EQ: return (cmp == 0);
       case TK_NE: return (cmp != 0);
@@ -256,8 +256,8 @@ static int ssi_eval_expr_cmp(const ssi_val_t * const v1, const ssi_val_t * const
 __attribute_pure__
 static int ssi_eval_expr_cmp_bool(const ssi_val_t * const v1, const ssi_val_t * const v2, const int cond) {
     return (cond == TK_OR)
-      ? ssi_val_tobool(v1) || ssi_val_tobool(v2)  /* TK_OR */
-      : ssi_val_tobool(v1) && ssi_val_tobool(v2); /* TK_AND */
+      ? ssi_val_to_bool(v1) || ssi_val_to_bool(v2)  /* TK_OR */
+      : ssi_val_to_bool(v1) && ssi_val_to_bool(v2); /* TK_AND */
 }
 
 static void ssi_eval_expr_append_val(buffer * const b, const char *s, const size_t slen) {
@@ -434,7 +434,7 @@ static int ssi_eval_expr_step(ssi_tokenizer_t * const t, ssi_val_t * const v) {
         if (t->in_brace > 16) return -1; /*(arbitrary limit)*/
         next = ssi_eval_expr_loop(t, v);
         if (next == TK_RPARAN && level == t->in_brace) {
-            int result = ssi_val_tobool(v);
+            int result = ssi_val_to_bool(v);
             next = ssi_eval_expr_step(t, v); /*(resets v)*/
             v->bo = result;
             v->type = SSI_TYPE_BOOL;
@@ -451,7 +451,7 @@ static int ssi_eval_expr_step(ssi_tokenizer_t * const t, ssi_val_t * const v) {
         next = ssi_eval_expr_step(t, v);
         --t->depth;
         if (-1 == next) return next;
-        v->bo = !ssi_val_tobool(v);
+        v->bo = !ssi_val_to_bool(v);
         v->type = SSI_TYPE_BOOL;
         return next;
       default:
@@ -528,7 +528,7 @@ static int ssi_eval_expr(handler_ctx *p, const char *expr) {
     ssi_val_t v = { { NULL, 0, 0 }, SSI_TYPE_UNSET, 0 };
     int rc = ssi_eval_expr_loop(&t, &v);
     rc = (0 == rc && 0 == t.in_brace && 0 == t.depth)
-      ? ssi_val_tobool(&v)
+      ? ssi_val_to_bool(&v)
       : -1;
     buffer_free_ptr(&v.str);
 
