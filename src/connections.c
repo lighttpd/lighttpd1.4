@@ -884,6 +884,7 @@ connection_graceful_shutdown_maint (server * const srv)
              * (from zero) *up to* one more second, but no more */
             if (HTTP_LINGER_TIMEOUT > 1)
                 con->close_timeout_ts -= (HTTP_LINGER_TIMEOUT - 1);
+            con->close_timeout_ts -= (graceful_expire << 1); /*(-2 if expired)*/
             if (log_monotonic_secs - con->close_timeout_ts > HTTP_LINGER_TIMEOUT)
                 changed = 1;
         }
@@ -907,7 +908,7 @@ connection_graceful_shutdown_maint (server * const srv)
             changed = 1;
         }
 
-        if (graceful_expire) {
+        if (graceful_expire && r->state != CON_STATE_CLOSE) {
             connection_set_state_error(r, CON_STATE_ERROR);
             changed = 1;
         }
