@@ -368,7 +368,7 @@ if get_option('with_nettle')
 	# manual search:
 	# header: nettle/nettle-types.h
 	# function: nettle_md5_init (-lnettle)
-	if compiler.get_define('FORCE_WOLFSSL_CRYPTO') == '' and compiler.get_define('FORCE_MBEDTLS_CRYPTO') == ''
+	if compiler.get_define('FORCE_GNUTLS_CRYPTO') == '' and compiler.get_define('FORCE_MBEDTLS_CRYPTO') == '' and compiler.get_define('FORCE_OPENSSL_CRYPTO') == '' and compiler.get_define('FORCE_WOLFSSL_CRYPTO') == ''
 	  libcrypto = [ dependency('nettle') ]
 	  conf_data.set('HAVE_NETTLE_NETTLE_TYPES_H', true)
 	endif
