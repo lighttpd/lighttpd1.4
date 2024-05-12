@@ -1208,7 +1208,7 @@ Authorization: Digest username="jan", realm="download archiv",
 	algorithm="md5", response="049b000fb00ab51dddea6f093a96aa2e"
 EOF
   );
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401, 'WWW-Authenticate' => '/, stale=true$/' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401, 'WWW-Authenticate' => qr/, stale=true$/ } ];
 ok($tf->handle_http($t) == 0, 'Digest-Auth: stale nonce');
 
 $t->{REQUEST}  = ( <<EOF
@@ -1220,7 +1220,7 @@ Authorization: Digest username = "jan", realm = "download archiv",
 	algorithm = "md5", response = "049b000fb00ab51dddea6f093a96aa2e"     
 EOF
  ); # note: trailing whitespace at end of request line above is intentional
-$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401, 'WWW-Authenticate' => '/, stale=true$/' } ];
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401, 'WWW-Authenticate' => qr/, stale=true$/ } ];
 ok($tf->handle_http($t) == 0, 'Digest-Auth: BWS, trailing WS, stale nonce');
 
 

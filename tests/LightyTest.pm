@@ -485,8 +485,8 @@ sub handle_http {
 			}
 
 			if ($verify_value) {
-				if ($href->{$_} =~ /^\/(.+)\/$/) {
-					if ($resp_hdr{$k} !~ /$1/) {
+				if (ref($href->{$_}) eq "Regexp") {
+					if ($resp_hdr{$k} !~ $href->{$_}) {
 						diag(sprintf(
 							"\nresponse-header failed: expected '%s', got '%s', regex: %s",
 							$href->{$_}, $resp_hdr{$k}, $1));
