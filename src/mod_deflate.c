@@ -543,8 +543,12 @@ static encparms * mod_deflate_parse_params(const array * const a, log_error_st *
             #define ZSTD_WINDOWLOG_MAX \
              (sizeof(size_t)==4 ? ZSTD_WINDOWLOG_MAX_32 : ZSTD_WINDOWLOG_MAX_64)
             #endif
-            if (ZSTD_WINDOWLOG_MIN <= v && v <= ZSTD_WINDOWLOG_MAX)
+            if (ZSTD_WINDOWLOG_MIN <= v && v <= ZSTD_WINDOWLOG_MAX) {
                 params->zstd.windowLog = v;/* 10 .. 31 *//*(30 max for 32-bit)*/
+                /* RFC8878 recommends 8 MB max window size for HTTP encoders
+                 * and a future RFC will require 8 MB zstd window size limit */
+                if (v > 23) params->zstd.windowLog = 23; /*(8 MB limit)*/
+            }
             else
                 log_error(errh, __FILE__, __LINE__,
                           "invalid value for ZSTD_c_windowLog");
