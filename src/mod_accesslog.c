@@ -575,7 +575,8 @@ static format_fields * mod_accesslog_process_format(const char * const format, c
 					}
 				} else if (FORMAT_HEADER == f->field
 				           || FORMAT_RESPONSE_HEADER == f->field) {
-					f->opt = http_header_hkey_get(BUF_PTR_LEN(fstr));
+					if (buffer_is_blank(fstr)) f->field = FORMAT_LITERAL; /*(blank)*/
+					else f->opt = http_header_hkey_get(BUF_PTR_LEN(fstr));
 				} else if (FORMAT_REMOTE_HOST == f->field
 				           || FORMAT_REMOTE_ADDR == f->field) {
 					f->field = FORMAT_REMOTE_ADDR;
@@ -593,8 +594,10 @@ static format_fields * mod_accesslog_process_format(const char * const format, c
 				} else if (FORMAT_REMOTE_USER == f->field) {
 					f->field = FORMAT_ENV;
 					buffer_copy_string_len(fstr, CONST_STR_LEN("REMOTE_USER"));
-				} else if (FORMAT_NOTE == f->field) {
-					f->field = FORMAT_ENV;
+				} else if (FORMAT_ENV == f->field
+				           || FORMAT_NOTE == f->field) {
+					if (buffer_is_blank(fstr)) f->field = FORMAT_LITERAL; /*(blank)*/
+					else f->field = FORMAT_ENV;
 				}
 			}
 
