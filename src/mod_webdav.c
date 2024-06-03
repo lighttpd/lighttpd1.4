@@ -445,6 +445,9 @@ FREE_FUNC(mod_webdav_free) {
             }
         }
     }
+
+    /*(potentially disruptive if other modules also use sqlite)*/
+    /*sqlite3_shutdown();*/
 }
 
 
@@ -1307,6 +1310,13 @@ mod_webdav_sqlite3_init (const char * const restrict dbname,
 
   #else /* USE_PROPPATCH */
 
+    int sqlrc = sqlite3_initialize();
+    if (sqlrc != SQLITE_OK) {
+        log_error(errh, __FILE__, __LINE__, "sqlite3_initialize(): %s",
+                  sqlite3_errstr(sqlrc));
+        return 0;
+    }
+
   /*(expects (plugin_config *s) (log_error_st *errh) (char *err))*/
   #define MOD_WEBDAV_SQLITE_CREATE_TABLE(query, label)                   \
     if (sqlite3_exec(sqlh, query, NULL, NULL, &err) != SQLITE_OK) {      \
@@ -1321,8 +1331,8 @@ mod_webdav_sqlite3_init (const char * const restrict dbname,
     }
 
     sqlite3 *sqlh;
-    int sqlrc = sqlite3_open_v2(dbname, &sqlh,
-                                SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE, NULL);
+    sqlrc = sqlite3_open_v2(dbname, &sqlh,
+                            SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE, NULL);
     if (sqlrc != SQLITE_OK) {
         log_error(errh, __FILE__, __LINE__, "sqlite3_open() '%s': %s",
                   dbname, sqlh ? sqlite3_errmsg(sqlh) : sqlite3_errstr(sqlrc));
