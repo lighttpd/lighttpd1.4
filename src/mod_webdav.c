@@ -1349,9 +1349,9 @@ mod_webdav_sqlite3_init (const char * const restrict dbname,
     /* add ownerinfo column to locks table (update older mod_webdav sqlite db)
      * (could check if 'PRAGMA user_version;' is 0, add column, and increment)*/
   #define MOD_WEBDAV_SQLITE_SELECT_LOCKS_OWNERINFO_TEST \
-    "SELECT COUNT(*) FROM locks WHERE ownerinfo = \"\""
+    "SELECT COUNT(*) FROM locks WHERE ownerinfo = ''"
   #define MOD_WEBDAV_SQLITE_ALTER_TABLE_LOCKS \
-    "ALTER TABLE locks ADD COLUMN ownerinfo TEXT NOT NULL DEFAULT \"\""
+    "ALTER TABLE locks ADD COLUMN ownerinfo TEXT NOT NULL DEFAULT ''"
     if (sqlite3_exec(sqlh, MOD_WEBDAV_SQLITE_SELECT_LOCKS_OWNERINFO_TEST,
                      NULL, NULL, &err) != SQLITE_OK) {
         sqlite3_free(err); /* "no such column: ownerinfo" */
@@ -1417,6 +1417,12 @@ mod_webdav_sqlite3_prep (sql_config * const restrict sql,
                     : sqlite3_errstr(sqlrc));
         return 0;
     }
+  #ifdef SQLITE_DBCONFIG_DQS_DDL
+    sqlite3_db_config(sql->sqlh, SQLITE_DBCONFIG_DQS_DDL, 0, NULL);
+  #endif
+  #ifdef SQLITE_DBCONFIG_DQS_DML
+    sqlite3_db_config(sql->sqlh, SQLITE_DBCONFIG_DQS_DML, 0, NULL);
+  #endif
 
     /* future: perhaps not all statements should be prepared;
      * infrequently executed statements could be run with sqlite3_exec(),
