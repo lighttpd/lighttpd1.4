@@ -1362,20 +1362,40 @@ mod_webdav_sqlite3_init (const char * const restrict dbname,
 
 
 #ifdef USE_PROPPATCH
+__attribute_noinline__
+static int
+mod_webdav_sqlite3_prepare (sql_config * const restrict sql,
+                            const char *query,
+                            size_t qsz,
+                            sqlite3_stmt **stmt,
+                            log_error_st * const errh)
+{
+  #ifdef SQLITE_PREPARE_PERSISTENT
+    if (sqlite3_prepare_v3(sql->sqlh, query, qsz, SQLITE_PREPARE_PERSISTENT,
+                           stmt, NULL) != SQLITE_OK)
+  #else
+    if (sqlite3_prepare_v2(sql->sqlh, query, qsz,
+                           stmt, NULL) != SQLITE_OK)
+  #endif
+    {
+        log_error(errh, __FILE__, __LINE__, "sqlite3_prepare(): %s",
+                  sqlite3_errmsg(sql->sqlh));
+        return 0;
+    }
+    return 1;
+}
+
 __attribute_cold__
 static int
 mod_webdav_sqlite3_prep (sql_config * const restrict sql,
                          const char * const sqlite_db_name,
                          log_error_st * const errh)
 {
-  /*(expects (plugin_config *s) (log_error_st *errh))*/
-  #define MOD_WEBDAV_SQLITE_PREPARE_STMT(query, stmt)                      \
-    if (sqlite3_prepare_v2(sql->sqlh, query, sizeof(query)-1, &stmt, NULL) \
-        != SQLITE_OK) {                                                    \
-        log_error(errh, __FILE__, __LINE__, "sqlite3_prepare_v2(): %s",    \
-                  sqlite3_errmsg(sql->sqlh));                              \
-        return 0;                                                          \
-    }
+  /*(expects (sql_config *sql) (log_error_st *errh))*/
+  /*(note: include nul byte in sizeof(query) passed to sqlite3_prepare*())*/
+  #define MOD_WEBDAV_SQLITE_PREPARE_STMT(query, stmt)                        \
+    if (!mod_webdav_sqlite3_prepare(sql, query, sizeof(query), &stmt, errh)) \
+        return 0;
 
     int sqlrc = sqlite3_open_v2(sqlite_db_name, &sql->sqlh,
                                 SQLITE_OPEN_READWRITE, NULL);
