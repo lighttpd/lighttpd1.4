@@ -458,74 +458,8 @@ environment and set the user-id, group-id and change to
 another root-directory (chroot).
 
 For convenience a wrapper script should be used which takes
-care of all the necessary option. Such a script in included
-in the lighttpd distribution and is call spawn-php.sh.
-
-The script has a set of config variables you should take
-a look at: ::
-
-  ## ABSOLUTE path to the spawn-fcgi binary
-  SPAWNFCGI="/usr/local/sbin/spawn-fcgi"
-
-  ## ABSOLUTE path to the PHP binary
-  FCGIPROGRAM="/usr/local/bin/php"
-
-  ## bind to tcp-port on localhost
-  FCGIPORT="1026"
-
-  ## bind to unix domain socket
-  # FCGISOCKET="/tmp/php.sock"
-
-  ## number of PHP children to spawn
-  PHP_FCGI_CHILDREN=10
-
-  ## number of request server by a single php-process until
-  ## is will be restarted
-  PHP_FCGI_MAX_REQUESTS=1000
-
-  ## IP addresses where PHP should access server connections
-  ## from
-  FCGI_WEB_SERVER_ADDRS="127.0.0.1,192.168.0.1"
-
-  # allowed environment variables sperated by spaces
-  ALLOWED_ENV="ORACLE_HOME PATH USER"
-
-  ## if this script is run as root switch to the following user
-  USERID=wwwrun
-  GROUPID=wwwrun
-
-If you have set the variables to values that fit to your
-setup you can start it by calling: ::
-
-  $ spawn-php.sh
-  spawn-fcgi.c.136: child spawned successfully: PID: 6925
-
-If you get "child spawned successfully: PID:" the php
-processes could be started successfully. You should see them
-in your processlist: ::
-
-  $ ps ax | grep php
-  6925 ?        S      0:00 /usr/local/bin/php
-  6928 ?        S      0:00 /usr/local/bin/php
-  ...
-
-The number of processes should be PHP_FCGI_CHILDREN + 1.
-Here the process 6925 is the master of the slaves which
-handle the work in parallel. Number of parallel workers can
-be set by PHP_FCGI_CHILDREN. A worker dies automatically of
-handling PHP_FCGI_MAX_REQUESTS requests as PHP might have
-memory leaks.
-
-If you start the script as user root php processes will be
-running as the user USERID and group GROUPID to drop the
-root permissions. Otherwise the php processes will run as
-the user you started script as.
-
-As the script might be started from a unknown stage or even
-directly from the command-line it cleans the environment
-before starting the processes. ALLOWED_ENV contains all
-the external environment variables that should be available
-to the php-process.
+care of all the necessary option.  See examples at
+https://git.lighttpd.net/lighttpd/spawn-fcgi/src/branch/master/doc
 
 
 Perl
