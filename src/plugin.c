@@ -457,7 +457,7 @@ handler_t plugins_call_init(server *srv) {
 		if (p->init) {
 			if (NULL == (p->data = p->init())) {
 				log_error(srv->errh, __FILE__, __LINE__,
-				  "plugin-init failed for module %s", p->name);
+				  "plugin-init failed for mod_%s", p->name);
 				return HANDLER_ERROR;
 			}
 
@@ -466,7 +466,7 @@ handler_t plugins_call_init(server *srv) {
 
 			if (p->version != LIGHTTPD_VERSION_ID) {
 				log_error(srv->errh, __FILE__, __LINE__,
-				  "plugin-version doesn't match lighttpd-version for %s", p->name);
+				  "plugin-version doesn't match lighttpd-version for mod_%s", p->name);
 				return HANDLER_ERROR;
 			}
 		}
