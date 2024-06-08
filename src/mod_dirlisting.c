@@ -953,7 +953,14 @@ static void http_list_directory_header(request_st * const r, const handler_ctx *
 				" color: #787878;"
 				" padding-top: 4px;"
 				"}\n"
+				"@media (prefers-color-scheme: dark) {\n"
+				" a, a:active {color: #9E9EFF;}\n"
+				" a:visited {color: #D0ADF0;}\n"
+				" body, div.list {background-color: transparent;}\n"
+				" div.foot {color: #878787;}\n"
+				"}\n"
 				"</style>\n"
+				"<meta name=\"color-scheme\" content=\"light dark\">\n"
 			));
 		}
 
