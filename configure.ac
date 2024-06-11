@@ -932,11 +932,16 @@ if test "$WITH_PCRE" != no; then
     PCRE_LIB="-L$WITH_PCRE/lib -lpcre"
     CPPFLAGS="$CPPFLAGS -I$WITH_PCRE/include"
   else
-    AC_PATH_PROG([PCRECONFIG], [pcre-config])
-    if test -n "$PCRECONFIG"; then
-      PCRE_LIB=`"$PCRECONFIG" --libs`
-      CPPFLAGS="$CPPFLAGS `"$PCRECONFIG" --cflags`"
-    fi
+    PKG_CHECK_MODULES([PCRE], [libpcre], [
+      PCRE_LIB="$PCRE_LIBS"
+      CPPFLAGS="$CPPFLAGS $PCRE_CFLAGS"
+    ], [
+      AC_PATH_PROG([PCRECONFIG], [pcre-config])
+      if test -n "$PCRECONFIG"; then
+        PCRE_LIB=`"$PCRECONFIG" --libs`
+        CPPFLAGS="$CPPFLAGS `"$PCRECONFIG" --cflags`"
+      fi
+    ])
   fi
 
   if test -z "$PCRE_LIB"; then
