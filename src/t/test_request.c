@@ -143,7 +143,7 @@ static void test_request_http_request_parse(request_st * const r)
                     "Host: www.example.org\r\n"
                     "\r\n"));
 
-    run_http_request_parse(r, __LINE__, 501,
+    run_http_request_parse(r, __LINE__, 400,
       "invalid request-line: method slash space space proto",
       CONST_STR_LEN("GET/  HTTP/1.0\r\n"
                     "Host: www.example.org\r\n"

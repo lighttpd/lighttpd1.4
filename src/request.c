@@ -914,6 +914,8 @@ static int http_request_parse_reqline(request_st * const restrict r, const char 
         /*(space char must exist if http_request_parse_proto_loose() succeeds)*/
         for (p = ptr + len - 9; p[-1] != ' '; --p) ;
     }
+    if (p[-2] == ' ')
+        return http_request_header_line_invalid(r, 400, "invalid request line (separators) -> 400");
 
     /* method is expected to be a short string in the general case */
     size_t i = 0;
