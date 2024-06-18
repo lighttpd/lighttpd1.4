@@ -1636,6 +1636,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
         return NULL;
     }
 
+#if !defined(HAVE_PQC)
     buffer *ssl_pemfile_pkey =
       mod_wolfssl_evp_pkey_load_pem_file(privkey->ptr, srv->errh);
     if (NULL == ssl_pemfile_pkey) {
@@ -1646,9 +1647,12 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
 
     /* wolfSSL_X509_check_private_key() is a stub func (not implemented) in
      * WolfSSL prior to v4.6.0, and still no-op #ifdef NO_CHECK_PRIVATE_KEY */
+#endif
 
     plugin_cert *pc = ck_malloc(sizeof(plugin_cert));
+#if !defined(HAVE_PQC)
     pc->ssl_pemfile_pkey = ssl_pemfile_pkey;
+#endif
     pc->ssl_pemfile_x509 = ssl_pemfile_x509;
     pc->ssl_pemfile_chain= ssl_pemfile_chain;
     pc->ssl_pemfile = pemfile;
@@ -2173,6 +2177,16 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                    s->ssl_ctx, s->pc->ssl_pemfile->ptr, srv->errh))
             return -1;
 
+#ifdef HAVE_PQC
+        if (1 != SSL_CTX_use_PrivateKey_file(s->ssl_ctx,
+                                             s->pc->ssl_pemfile->ptr,
+                                             SSL_FILETYPE_PEM)) {
+            log_error(srv->errh, __FILE__, __LINE__,
+                      "SSL: %s %s", ERR_error_string(ERR_get_error(), NULL),
+                            s->pc->ssl_pemfile->ptr);
+            return -1;
+        }
+#else
         buffer *k = s->pc->ssl_pemfile_pkey;
         if (1 != wolfSSL_CTX_use_PrivateKey_buffer(s->ssl_ctx,
                                                    (unsigned char *)k->ptr,
@@ -2183,6 +2197,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
               s->pc->ssl_pemfile->ptr, s->pc->ssl_privkey->ptr);
             return -1;
         }
+#endif
 
         if (SSL_CTX_check_private_key(s->ssl_ctx) != 1) {
             log_error(srv->errh, __FILE__, __LINE__,
