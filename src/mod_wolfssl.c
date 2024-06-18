@@ -2178,9 +2178,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             return -1;
 
 #ifdef HAVE_PQC
-        if (1 != SSL_CTX_use_PrivateKey_file(s->ssl_ctx,
-                                             s->pc->ssl_pemfile->ptr,
-                                             SSL_FILETYPE_PEM)) {
+        if (1 != wolfSSL_CTX_use_PrivateKey_file(s->ssl_ctx,
+                                                 s->pc->ssl_pemfile->ptr,
+                                                 SSL_FILETYPE_PEM)) {
             log_error(srv->errh, __FILE__, __LINE__,
                       "SSL: %s %s", ERR_error_string(ERR_get_error(), NULL),
                             s->pc->ssl_pemfile->ptr);
