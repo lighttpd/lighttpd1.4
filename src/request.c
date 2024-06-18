@@ -511,37 +511,6 @@ static int http_request_parse_single_header(request_st * const restrict r, const
 
 __attribute_cold__
 __attribute_noinline__
-static int http_request_parse_proto_loose(request_st * const restrict r, const char * const restrict ptr, const size_t len, const unsigned int http_parseopts) {
-    const char * proto = memchr(ptr, ' ', len);
-    if (NULL == proto)
-        return http_request_header_line_invalid(r, 400, "incomplete request line -> 400");
-    proto = memchr(proto+1, ' ', len - (proto+1 - ptr));
-    if (NULL == proto)
-        return http_request_header_line_invalid(r, 400, "incomplete request line -> 400");
-    ++proto;
-
-    if (proto[0]=='H' && proto[1]=='T' && proto[2]=='T' && proto[3]=='P' && proto[4] == '/') {
-        if (proto[5] == '1' && proto[6] == '.' && (proto[7] == '1' || proto[7] == '0')) {
-            /* length already checked before calling this routine */
-            /* (len != (size_t)(proto - ptr + 8)) */
-            if (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT) /*(http_header_strict)*/
-                return http_request_header_line_invalid(r, 400, "incomplete request line -> 400");
-            r->http_version = (proto[7] == '1') ? HTTP_VERSION_1_1 : HTTP_VERSION_1_0;
-        }
-        else
-            return http_request_header_line_invalid(r, 505, "unknown HTTP version -> 505");
-    }
-    else
-        return http_request_header_line_invalid(r, 400, "unknown protocol -> 400");
-
-    /* keep-alive default: HTTP/1.1 -> true; HTTP/1.0 -> false */
-    r->keep_alive = (HTTP_VERSION_1_0 != r->http_version);
-
-    return 0;
-}
-
-__attribute_cold__
-__attribute_noinline__
 static const char * http_request_parse_reqline_uri(request_st * const restrict r, const char * const restrict uri, const size_t len, const unsigned int http_parseopts) {
     const char *nuri;
     if ((len > 7 && buffer_eq_icase_ssn(uri, "http://", 7)
@@ -908,23 +877,19 @@ static int http_request_parse_reqline(request_st * const restrict r, const char 
         r->http_version = HTTP_VERSION_1_0;
         r->keep_alive = 0; /* keep-alive default: HTTP/1.0 -> false */
     }
-    else {
-        int status = http_request_parse_proto_loose(r,ptr,len,http_parseopts);
-        if (0 != status) return status;
-        /*(space char must exist if http_request_parse_proto_loose() succeeds)*/
-        for (p = ptr + len - 9; p[-1] != ' '; --p) ;
-    }
+  #if 0 /*(pedantic: "HTTP/???")*/
+    else if (p[-1] == ' ' && (http_1_0.u >> 24) == (proto8.u >> 24))
+        return http_request_header_line_invalid(r, 505, "unknown HTTP version -> 505");
+  #endif
+    else
+        return http_request_header_line_invalid(r, 400, "unknown protocol -> 400");
     if (p[-2] == ' ')
         return http_request_header_line_invalid(r, 400, "invalid request line (separators) -> 400");
 
     /* method is expected to be a short string in the general case */
     size_t i = 0;
     while (ptr[i] != ' ') ++i;
-  #if 0 /*(space must exist if protocol was parsed successfully)*/
-    while (i < len && ptr[i] != ' ') ++i;
-    if (ptr[i] != ' ')
-        return http_request_header_line_invalid(r, 400, "incomplete request line -> 400");
-  #endif
+    /*(space must exist if protocol was parsed successfully)*/
 
     r->http_method = http_method_key_get(ptr, i);
     if (HTTP_METHOD_UNSET >= r->http_method)

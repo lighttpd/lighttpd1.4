@@ -362,23 +362,23 @@ static void test_request_http_request_parse(request_st * const r)
       CONST_STR_LEN("GET /\r\n"
                     "\r\n"));
 
-    run_http_request_parse(r, __LINE__, 505,
+    run_http_request_parse(r, __LINE__, 400 /*505*/,
       "zeros in protocol version",
       CONST_STR_LEN("GET / HTTP/01.01\r\n"
                     "Host: foo\r\n"
                     "\r\n"));
 
-    run_http_request_parse(r, __LINE__, 505,
+    run_http_request_parse(r, __LINE__, 400 /*505*/,
       "missing major version",
       CONST_STR_LEN("GET / HTTP/.01\r\n"
                     "\r\n"));
 
-    run_http_request_parse(r, __LINE__, 505,
+    run_http_request_parse(r, __LINE__, 400 /*505*/,
       "missing minor version",
       CONST_STR_LEN("GET / HTTP/01.\r\n"
                     "\r\n"));
 
-    run_http_request_parse(r, __LINE__, 505,
+    run_http_request_parse(r, __LINE__, 400 /*505*/,
       "strings as version",
       CONST_STR_LEN("GET / HTTP/a.b\r\n"
                     "\r\n"));
@@ -398,7 +398,7 @@ static void test_request_http_request_parse(request_st * const r)
       CONST_STR_LEN("ABC / HTTP/1.0\r\n"
                     "\r\n"));
 
-    run_http_request_parse(r, __LINE__, 505,
+    run_http_request_parse(r, __LINE__, 400 /*505*/,
       "unknown protocol",
       CONST_STR_LEN("GET / HTTP/1.3\r\n"
                     "\r\n"));
