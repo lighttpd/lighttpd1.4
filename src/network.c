@@ -414,7 +414,7 @@ static int network_server_init(server *srv, const network_socket_config *s, buff
 	}
 
 	host = host_token->ptr;
-	if ((use_ipv6 && (*host == '\0' || *host == ':')) || (host[0] == '[' && host[1] == ']')) {
+	if ((use_ipv6 && (*host == '\0' || (host[0] == ':' && host[1] != ':'))) || (host[0] == '[' && host[1] == ']')) {
 		log_warn(srv->errh, __FILE__, __LINE__,
 		  "warning: please use server.use-ipv6 only for hostnames, "
 		  "not without server.bind / empty address; your config will "
