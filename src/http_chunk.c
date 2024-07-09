@@ -290,8 +290,11 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
             if (buffer_is_blank(h)) {
                 /*(short-circuit common case: complete chunked header line)*/
                 p = memchr(mem, '\n', (size_t)len);
-                if (p)
+                if (p) {
                     hsz = (off_t)(++p - mem);
+                    if (p-1 == mem || p[-2] != '\r')
+                        p = NULL; /* flag missing '\r'; p checked again below */
+                }
                 else {
                     if (len >= 1024) {
                         log_error(r->conf.errh, __FILE__, __LINE__,
@@ -322,6 +325,9 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                     hsz = 0;
                 }
                 s = (unsigned char *)h->ptr;/*(note: read h->ptr after append)*/
+                /*(non-blank h contains at least one non-'\n' char, plus '\n')*/
+                if (s[buffer_clen(h)-2] != '\r')
+                    p = NULL; /* flag missing '\r'; p checked again below */
             }
 
             for (unsigned char u; (u=(unsigned char)hex2int(*s))!=0xFF; ++s) {
@@ -333,9 +339,14 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 te_chunked <<= 4;
                 te_chunked |= u;
             }
-            if ((char *)s == mem || (char *)s == h->ptr) return -1; /*(no hex)*/
-            while (*s == ' ' || *s == '\t') ++s;
-            if (*s != '\r' && *s != ';') { /*(not strictly checking \r\n)*/
+            if ((char *)s == mem || (char *)s == h->ptr) /*(no hex)*/
+                p = NULL;
+            else if (*s != '\r') {
+                while (*s == ' ' || *s == '\t') ++s;
+                if (*s != '\r' && *s != ';')
+                    p = NULL;
+            }
+            if (p == NULL) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "chunked header invalid chars");
                 return -1;
