@@ -625,7 +625,7 @@ h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_
                     return http_response_reqbody_read_error(r, 400);
                 }
                 while (*s == ' ' || *s == '\t') ++s;
-                if (*s != '\r' && *s != ';') {
+                if (p[-1] != '\r' || (p-1 != (char *)s && *s != ';')) {
                     log_error(r->conf.errh, __FILE__, __LINE__,
                       "chunked header invalid chars -> 400");
                     /* 400 Bad Request */
