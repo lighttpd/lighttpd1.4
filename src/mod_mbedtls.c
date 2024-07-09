@@ -2622,6 +2622,9 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 
     /* mbedtls_x509_serial_gets() (inefficiently) formats to hex separated by
      * colons, but would differ from behavior of other lighttpd TLS modules */
+  #ifdef __COVERITY__
+    ck_assert(crt->serial.len); /*(otherwise, invalid crt returned above)*/
+  #endif
     size_t i = 0; /* skip leading 0's per Distinguished Encoding Rules (DER) */
     while (i < crt->serial.len && crt->serial.p[i] == 0) ++i;
     if (i == crt->serial.len) --i;

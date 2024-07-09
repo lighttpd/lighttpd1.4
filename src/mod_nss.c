@@ -2598,6 +2598,9 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 
     https_add_ssl_client_subject(r, &crt->subject);
 
+  #ifdef __COVERITY__
+    ck_assert(crt->serialNumber.len);/*(otherwise, invalid crt returned above)*/
+  #endif
     s = (char *)crt->serialNumber.data;
     size_t i = 0; /* skip leading 0's per Distinguished Encoding Rules (DER) */
     while (i < crt->serialNumber.len && s[i] == 0) ++i;

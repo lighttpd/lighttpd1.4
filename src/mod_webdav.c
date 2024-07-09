@@ -2446,7 +2446,9 @@ webdav_parent_modified (const buffer *path)
 {
     uint32_t dirlen = buffer_clen(path);
     const char *fn = path->ptr;
-    /*force_assert(0 != dirlen);*/
+  #ifdef __COVERITY__
+    force_assert(0 != dirlen);
+  #endif
     /*force_assert(fn[0] == '/');*/
     if (fn[dirlen-1] == '/') --dirlen;
     if (0 != dirlen) while (fn[--dirlen] != '/') ;
