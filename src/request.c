@@ -62,9 +62,10 @@ __attribute_nonnull__()
 __attribute_pure__
 static const char * http_request_check_uri_strict (const uint8_t * const restrict s, const uint_fast32_t len) {
     for (uint_fast32_t i = 0; i < len; ++i) {
-        if (__builtin_expect( (s[i] <= 32),  0)) return (const char *)s+i;
-        if (__builtin_expect( (s[i] == 127), 0)) return (const char *)s+i;
-        if (__builtin_expect( (s[i] == 255), 0)) return (const char *)s+i;
+        if (__builtin_expect( (s[i] <= 32),  0))
+            return (const char *)s+i;
+        if (__builtin_expect( ((s[i] & 0x7f) == 0x7f), 0)) /* 127 or 255 */
+            return (const char *)s+i;
     }
     return NULL;
 }
