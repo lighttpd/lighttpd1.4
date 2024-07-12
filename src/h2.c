@@ -2227,7 +2227,8 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con)
     h2c->s_initial_window_size   = 65536; /* SETTINGS_INITIAL_WINDOW_SIZE    */
     h2c->s_max_frame_size        = 16384; /* SETTINGS_MAX_FRAME_SIZE         */
     h2c->s_max_header_list_size  = ~0u;   /* SETTINGS_MAX_HEADER_LIST_SIZE   */
-    h2c->sent_settings           = log_monotonic_secs;/*(send SETTINGS below)*/
+    /* used both as boolean and timestamp, avoid incorrect protocol handling when monotonic clock starts at zero */
+    h2c->sent_settings           = log_monotonic_secs ? log_monotonic_secs : 1;/*(send SETTINGS below)*/
 
     lshpack_dec_init(&h2c->decoder);
     lshpack_enc_init(&h2c->encoder);
