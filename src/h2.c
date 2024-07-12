@@ -2228,6 +2228,8 @@ h2_init_con (request_st * const restrict h2r, connection * const restrict con)
     h2c->s_max_frame_size        = 16384; /* SETTINGS_MAX_FRAME_SIZE         */
     h2c->s_max_header_list_size  = ~0u;   /* SETTINGS_MAX_HEADER_LIST_SIZE   */
     h2c->sent_settings           = log_monotonic_secs;/*(send SETTINGS below)*/
+    /* avoid incorrect protocol handling when monotonic clock starts at zero */
+    if (!h2c->sent_settings) h2c->sent_settings = 1;/*(boolean and timestamp)*/
 
     lshpack_dec_init(&h2c->decoder);
     lshpack_enc_init(&h2c->encoder);
