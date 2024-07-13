@@ -1581,7 +1581,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 
 	if (p->conf.json) {
 		hctx->jb = chunk_buffer_acquire();
-		buffer_append_string_len(hctx->jb, CONST_STR_LEN("{["));
+		buffer_append_string_len(hctx->jb, CONST_STR_LEN("["));
 		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
 		                         CONST_STR_LEN("Content-Type"),
 		                         CONST_STR_LEN("application/json"));
@@ -1645,7 +1645,7 @@ SUBREQUEST_FUNC(mod_dirlisting_subrequest) {
       case HANDLER_FINISHED:
         if (hctx->jb || hctx->hb) { /* (hctx->conf.json || !hctx->conf.sort) */
             if (hctx->jb)
-                buffer_append_string_len(hctx->jb, CONST_STR_LEN("]}"));
+                buffer_append_string_len(hctx->jb, CONST_STR_LEN("]"));
             mod_dirlisting_stream_append(r, hctx, 1);
             if (hctx->hb)
                 mod_dirlisting_cache_stream_add_footer(r, hctx);
