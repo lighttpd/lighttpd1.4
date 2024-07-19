@@ -993,7 +993,7 @@ mod_auth_append_nonce (buffer *b, unix_time64_t cur_ts, const struct http_auth_r
     buffer_append_uint_hex(b, (uintmax_t)cur_ts);
     buffer_append_char(b, ':');
     const buffer * const nonce_secret = require->nonce_secret;
-    int rnd;
+    unsigned int rnd;
     if (NULL == nonce_secret)
         rnd = rndptr ? *rndptr : li_rand_pseudo();
     else { /*(do not directly expose random number generator single value)*/
@@ -1476,6 +1476,7 @@ mod_auth_digest_validate_nonce (request_st * const r, const struct http_auth_req
 
     if (require->nonce_secret) {
         unsigned int rnd = 0;
+        i++;
         for (int j = i+8; i < j && light_isxdigit(nonce[i]); ++i) {
             rnd = (rnd << 4) + hex2int(nonce[i]);
         }
@@ -1488,7 +1489,7 @@ mod_auth_digest_validate_nonce (request_st * const r, const struct http_auth_req
         }
         buffer * const tb = r->tmp_buf;
         buffer_clear(tb);
-        mod_auth_append_nonce(tb, cur_ts, require, ai->dalgo, (int *)&rnd);
+        mod_auth_append_nonce(tb, ts, require, ai->dalgo, (int *)&rnd);
         if (!buffer_eq_slen(tb, dp->ptr[e_nonce], dp->len[e_nonce])) {
             /* nonce not generated using current require->nonce_secret */
             log_error(r->conf.errh, __FILE__, __LINE__,
