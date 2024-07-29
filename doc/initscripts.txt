@@ -46,4 +46,4 @@ https://build.opensuse.org/package/show/server:http/lighttpd
 sample systemd unit script: doc/systemd/lighttpd.service
 
 Additional, updated information may be found at
-https://redmine.lighttpd.net/projects/lighttpd/wiki/InstallFromSource
+https://wiki.lighttpd.net/InstallFromSource

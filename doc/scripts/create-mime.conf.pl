@@ -202,7 +202,7 @@ print <<EOF;
 ##  MimeType handling
 ## -------------------
 ##
-## https://redmine.lighttpd.net/projects/lighttpd/wiki/Mimetype_assignDetails
+## https://wiki.lighttpd.net/mimetype_assignDetails
 
 ##
 ## mimetype.xattr-name

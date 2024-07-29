@@ -23,7 +23,7 @@ Description
 
 
 NOTE: latest documentation can be found at:
-https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_ModAuth
+https://wiki.lighttpd.net/mod_auth
 
 
 Supported Methods

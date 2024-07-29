@@ -24,7 +24,7 @@ Description
 lighttpd supports TLS with mod_openssl.
 
 The latest lighttpd SSL/TLS doc can be found at:
-https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL
+https://wiki.lighttpd.net/Docs_SSL
 
 Configuration
 -------------

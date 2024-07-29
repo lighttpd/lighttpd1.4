@@ -8,7 +8,7 @@ Description=lighttpd socket
 # Enable listening on http port
 ListenStream=80
 # To enable listening on https port, lighttpd config needs SSL setup
-# https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_SSL
+# https://wiki.lighttpd.net/Docs_SSL
 #ListenStream=443
 Service=lighttpd.service
 
