@@ -2,12 +2,13 @@
 ##
 ## For more examples check:
 ##
-## https://redmine.lighttpd.net/projects/lighttpd/wiki/Docs_Configuration
+## https://wiki.lighttpd.net/Docs_ConfigurationOptions
 ##
-$HTTP["host"] == "download.example.com" {
-  var.server_name = "download.example.com"
-  server.name = server_name
-  server.document-root = vhosts_dir + "/web/" + server_name + "/htdocs"
+
+#$HTTP["host"] == "download.example.com" {
+  #var.server_name = "download.example.com"
+  #server.name = server_name
+  #server.document-root = vhosts_dir + "/web/" + server_name + "/htdocs"
 
   ## TLS certificate per vhost
   ##
@@ -20,7 +21,7 @@ $HTTP["host"] == "download.example.com" {
   ##
   #accesslog.filename          = log_root + "/" + server_name + "/access.log"
   #server.errorlog             = log_root + "/" + server_name + "/error.log"
-}
+#}
 
 ##
 #######################################################################
