@@ -123,7 +123,7 @@ jobs:
           usesh: true
           prepare: |
             pkg install -y autoconf automake autotools libtool m4 pkgconf \
-              ninja meson cmake scons-py39 pcre2 perl5 \
+              ninja meson cmake scons-py311 pcre2 perl5 \
               gnutls libressl mbedtls nettle nss wolfssl \
               cyrus-sasl krb5 libdbi openldap26-client \
               mariadb1011-client postgresql16-client \
@@ -250,12 +250,18 @@ jobs:
       matrix:
         platform: ['x64']
         #platform: ['x64', 'win32']
+    #error: The GHA binary source requires the ACTIONS_RUNTIME_TOKEN and ACTIONS_CACHE_URL environment variables to be set. See https://learn.microsoft.com/vcpkg/users/binarycaching?WT.mc_id=vcpkg_inproduct_cli#gha for details.
+    #env:
+    #  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
+      #- name: Install dependencies
+      #  run: vcpkg install --triplet ${{matrix.platform}}-windows openssl pcre2 zlib
       - name: Compile and Test
         run: |
           $ErrorActionPreference = 'Stop'
+          #cmake -G "Visual Studio 17 2022" -A "${{matrix.platform}}" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DWITH_OPENSSL=ON -DWITH_PCRE2=OFF -DWITH_PCRE=OFF -DWITH_ZLIB=OFF
           cmake -G "Visual Studio 17 2022" -A "${{matrix.platform}}" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DWITH_PCRE2=OFF -DWITH_PCRE=OFF -DWITH_ZLIB=OFF
           cmake --build build --config Release
           # run the compiled unit tests src/t/test_*;
