@@ -356,11 +356,23 @@ if get_option('with_mbedtls')
 	# function: mbedtls_ssl_init (-lmbedtls)
 	# function: mbedtls_x509_get_name (-lmbedx509)
 	# function: mbedtls_base64_encode (-lmbedcrypto)
-	libmbedtls = [ compiler.find_library('mbedtls') ]
-	libmbedx509 = [ compiler.find_library('mbedx509') ]
-	libmbedcrypto = [ compiler.find_library('mbedcrypto') ]
+	libmbedtls = dependency('mbedtls', required: false)
+	if not(libmbedtls.found())
+	  libmbedtls = [ compiler.find_library('mbedtls') ]
+	endif
+	libmbedx509 = dependency('mbedx509', required: false)
+	if not(libmbedx509.found())
+	  libmbedx509 = [ compiler.find_library('mbedx509') ]
+	endif
+	libmbedcrypto = dependency('mbedcrypto', required: false)
+	if not(libmbedcrypto.found())
+	  libmbedcrypto = [ compiler.find_library('mbedcrypto') ]
+	endif
 	if compiler.get_define('FORCE_WOLFSSL_CRYPTO') == ''
-	  libcrypto = [ compiler.find_library('mbedcrypto') ]
+	  libcrypto = dependency('mbedcrypto', required: false)
+	  if not(libcrypto.found())
+	    libcrypto = [ compiler.find_library('mbedcrypto') ]
+	  endif
 	endif
 	conf_data.set('HAVE_LIBMBEDCRYPTO', true)
 endif
@@ -838,7 +850,7 @@ endif
 
 if get_option('with_mbedtls')
 	modules += [
-		[ 'mod_mbedtls', [ 'mod_mbedtls.c' ], libmbedtls + libmbedx509 + libmbedcrypto ],
+		[ 'mod_mbedtls', [ 'mod_mbedtls.c' ], [ libmbedtls, libmbedx509, libmbedcrypto ] ],
 	]
 endif
 
