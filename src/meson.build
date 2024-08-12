@@ -331,6 +331,16 @@ libmbedtls = []
 libmbedcrypto = []
 libmbedx509 = []
 libwolfssl = []
+if get_option('with_gnutls')
+	# manual search:
+	# header: gnutls/gnutls.h
+	# function: gnutls_check_version (-lgnutls)
+	libgnutls = [ dependency('gnutls') ]
+	conf_data.set('HAVE_GNUTLS_CRYPTO_H', true)
+	if compiler.get_define('FORCE_MBEDTLS_CRYPTO') == '' and compiler.get_define('FORCE_OPENSSL_CRYPTO') == '' and compiler.get_define('FORCE_WOLFSSL_CRYPTO') == ''
+	  libcrypto = [ dependency('gnutls') ]
+	endif
+endif
 if get_option('with_openssl')
 	# manual search:
 	# header: openssl/ssl.h
@@ -338,7 +348,9 @@ if get_option('with_openssl')
 	# function: RAND_bytes (-lcrypto)
 	libssl = [ dependency('libssl') ]
 	libsslcrypto = [ dependency('libcrypto') ]
-	libcrypto = [ dependency('libcrypto') ]
+	if compiler.get_define('FORCE_GNUTLS_CRYPTO') == '' and compiler.get_define('FORCE_MBEDTLS_CRYPTO') == '' and compiler.get_define('FORCE_WOLFSSL_CRYPTO') == ''
+	  libcrypto = [ dependency('libcrypto') ]
+	endif
 	conf_data.set('HAVE_OPENSSL_SSL_H', true)
 	conf_data.set('HAVE_LIBSSL', true)
 endif
@@ -347,7 +359,9 @@ if get_option('with_wolfssl')
 	# header: wolfssl/ssl.h
 	# function: wolfSSL_Init (-lwolfssl)
 	libwolfssl = [ dependency('wolfssl') ]
-	libcrypto = [ dependency('wolfssl') ]
+	if compiler.get_define('FORCE_GNUTLS_CRYPTO') == '' and compiler.get_define('FORCE_MBEDTLS_CRYPTO') == '' and compiler.get_define('FORCE_OPENSSL_CRYPTO') == ''
+	  libcrypto = [ dependency('wolfssl') ]
+	endif
 	conf_data.set('HAVE_WOLFSSL_SSL_H', true)
 endif
 if get_option('with_mbedtls')
@@ -368,7 +382,7 @@ if get_option('with_mbedtls')
 	if not(libmbedcrypto.found())
 	  libmbedcrypto = [ compiler.find_library('mbedcrypto') ]
 	endif
-	if compiler.get_define('FORCE_WOLFSSL_CRYPTO') == ''
+	if compiler.get_define('FORCE_GNUTLS_CRYPTO') == '' and compiler.get_define('FORCE_OPENSSL_CRYPTO') == '' and compiler.get_define('FORCE_WOLFSSL_CRYPTO') == ''
 	  libcrypto = dependency('mbedcrypto', required: false)
 	  if not(libcrypto.found())
 	    libcrypto = [ compiler.find_library('mbedcrypto') ]
@@ -383,16 +397,6 @@ if get_option('with_nettle')
 	if compiler.get_define('FORCE_GNUTLS_CRYPTO') == '' and compiler.get_define('FORCE_MBEDTLS_CRYPTO') == '' and compiler.get_define('FORCE_OPENSSL_CRYPTO') == '' and compiler.get_define('FORCE_WOLFSSL_CRYPTO') == ''
 	  libcrypto = [ dependency('nettle') ]
 	  conf_data.set('HAVE_NETTLE_NETTLE_TYPES_H', true)
-	endif
-endif
-if get_option('with_gnutls')
-	# manual search:
-	# header: gnutls/gnutls.h
-	# function: gnutls_check_version (-lgnutls)
-	libgnutls = [ dependency('gnutls') ]
-	conf_data.set('HAVE_GNUTLS_CRYPTO_H', true)
-	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(get_option('with_nettle'))
-	  libcrypto = [ dependency('gnutls') ]
 	endif
 endif
 libssl3 = []
