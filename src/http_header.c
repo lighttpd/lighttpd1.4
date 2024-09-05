@@ -100,8 +100,9 @@ enum http_header_e http_header_hkey_get(const char * const s, const size_t slen)
         const int i = http_headers_off[slen];
         /*(lowercase first char as all recognized headers start w/ alpha char)*/
         const int c = s[0] | 0x20;
-        const struct keyvlenvalue * restrict kv = http_headers + i;
+        const struct keyvlenvalue * restrict kv = http_headers;
         if (__builtin_expect( (i != -1), 1)) {
+            kv += i;
             do {
                 if (__builtin_expect( (c != kv->value[0]), 1))
                     continue;
@@ -120,8 +121,9 @@ enum http_header_e http_header_hkey_get_lc(const char * const s, const size_t sl
     if (__builtin_expect( (slen < sizeof(http_headers_off)), 1)) {
         const int i = http_headers_off[slen];
         const int c = s[0];
-        const struct keyvlenvalue * restrict kv = http_headers + i;
+        const struct keyvlenvalue * restrict kv = http_headers;
         if (__builtin_expect( (i != -1), 1)) {
+            kv += i;
             do {
                 if (__builtin_expect( (c != kv->value[0]), 1))
                     continue;
