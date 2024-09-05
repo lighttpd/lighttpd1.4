@@ -164,11 +164,6 @@ static size_t malloc_top_pad;
 #define TEXT_SSL
 #endif
 
-#ifndef __sgi
-/* IRIX doesn't like the alarm based time() optimization */
-/* #define USE_ALARM */
-#endif
-
 #ifdef _WIN32
 /* (Note: assume overwrite == 1 in this setenv() replacement) */
 /*#define setenv(name,value,overwrite)  SetEnvironmentVariable((name),(value))*/
@@ -2032,21 +2027,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		return -1;
 	}
 
-#ifdef USE_ALARM
-	{
-		/* setup periodic timer (1 second) */
-		struct itimerval interval;
-		interval.it_interval.tv_sec = 1;
-		interval.it_interval.tv_usec = 0;
-		interval.it_value.tv_sec = 1;
-		interval.it_value.tv_usec = 0;
-		if (setitimer(ITIMER_REAL, &interval, NULL)) {
-			log_perror(srv->errh, __FILE__, __LINE__, "setitimer()");
-			return -1;
-		}
-	}
-#endif
-
 	/* get the current number of FDs */
   #ifdef _WIN32
 	srv->cur_fds = 3; /*(estimate on _WIN32)*/
@@ -2201,8 +2181,8 @@ static void server_main_loop (server * const srv) {
 			server_handle_sighup(srv);
 		}
 
-		/*(USE_ALARM not used; fdevent_poll() is effective periodic timer)*/
-	      #ifdef USE_ALARM
+		/*(SIGALRM not used here; fdevent_poll() is effective periodic timer)*/
+	      #if 0
 		if (handle_sig_alarm) {
 			handle_sig_alarm = 0;
 	      #endif
@@ -2210,7 +2190,7 @@ static void server_main_loop (server * const srv) {
 			if (mono_ts != log_monotonic_secs) {
 				server_handle_sigalrm(srv, mono_ts, last_active_ts);
 			}
-	      #ifdef USE_ALARM
+	      #if 0
 		}
 	      #endif
 
