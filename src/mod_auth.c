@@ -1538,9 +1538,24 @@ mod_auth_check_digest (request_st * const r, void *p_d, const struct http_auth_r
     if (__builtin_expect( (HANDLER_GO_ON != rc), 0))
         return rc;
 
+    int eq;
+    unsigned char digcpy[sizeof(ai.digest)];
+    if (r->h2_connect_ext)
+        memcpy(digcpy, ai.digest, ai.dlen);
+
     mod_auth_digest_mutate(&ai, &dp, http_method_buf(r->http_method));
 
-    if (!ck_memeq_const_time_fixed_len(dp.rdigest, ai.digest, ai.dlen)) {
+    eq = ck_memeq_const_time_fixed_len(dp.rdigest, ai.digest, ai.dlen);
+    if (r->h2_connect_ext) {
+        if (!eq) {
+            memcpy(ai.digest, digcpy, ai.dlen);
+            mod_auth_digest_mutate(&ai, &dp, http_method_buf(HTTP_METHOD_GET));
+            eq = ck_memeq_const_time_fixed_len(dp.rdigest, ai.digest, ai.dlen);
+        }
+        ck_memzero(digcpy, ai.dlen);
+    }
+
+    if (!eq) {
         /*ck_memzero(ai.digest, ai.dlen);*//*skip clear since mutated*/
         /* digest not ok */
         log_error(r->conf.errh, __FILE__, __LINE__,
