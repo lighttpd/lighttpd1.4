@@ -719,6 +719,8 @@ static const char js_simple_table_resort[] = \
 "function get_inner_text(el) {\n" \
 " if((typeof el == 'string')||(typeof el == 'undefined'))\n" \
 "  return el;\n" \
+" if(el.dataset && typeof el.dataset.value === \"string\")\n" \
+"  return el.dataset.value;\n" \
 " if(el.innerText)\n" \
 "  return el.innerText;\n" \
 " else {\n" \
@@ -735,15 +737,6 @@ static const char js_simple_table_resort[] = \
 "\n" \
 "function isdigit(c) {\n" \
 " return (c >= '0' && c <= '9');\n" \
-"}\n" \
-"\n" \
-"function unit_multiplier(unit) {\n" \
-" return (unit=='K') ? 1000\n" \
-"      : (unit=='M') ? 1000000\n" \
-"      : (unit=='G') ? 1000000000\n" \
-"      : (unit=='T') ? 1000000000000\n" \
-"      : (unit=='P') ? 1000000000000000\n" \
-"      : (unit=='E') ? 1000000000000000000 : 1;\n" \
 "}\n" \
 "\n" \
 "var li_date_regex=/(\\d{4})-(\\w{3})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})/;\n" \
@@ -776,24 +769,18 @@ static const char js_simple_table_resort[] = \
 " var at = get_inner_text(a.cells[sort_column]);\n" \
 " var bt = get_inner_text(b.cells[sort_column]);\n" \
 " var cmp;\n" \
-" if (sort_column == name_column) {\n" \
-"  if (at == '../') return -1;\n" \
-"  if (bt == '../') return  1;\n" \
-" }\n" \
-" if (a.cells[sort_column].className == 'int') {\n" \
+" if (sort_column == size_column) {\n" \
 "  cmp = parseInt(at)-parseInt(bt);\n" \
 " } else if (sort_column == date_column) {\n" \
 "  var ad = isdigit(at.substr(0,1));\n" \
 "  var bd = isdigit(bt.substr(0,1));\n" \
 "  if (ad != bd) return (!ad ? -1 : 1);\n" \
 "  cmp = li_date_cmp(at,bt);\n" \
-" } else if (sort_column == size_column) {\n" \
-"  var ai = parseInt(at, 10) * unit_multiplier(at.substr(-1,1));\n" \
-"  var bi = parseInt(bt, 10) * unit_multiplier(bt.substr(-1,1));\n" \
-"  if (at.substr(0,1) == '-') ai = -1;\n" \
-"  if (bt.substr(0,1) == '-') bi = -1;\n" \
-"  cmp = ai - bi;\n" \
 " } else {\n" \
+"  if (sort_column == name_column) {\n" \
+"   if (at == '../') return -1;\n" \
+"   if (bt == '../') return  1;\n" \
+"  }\n" \
 "  cmp = at.toLocaleUpperCase().localeCompare(bt.toLocaleUpperCase());\n" \
 "  if (0 != cmp) return cmp;\n" \
 "  cmp = at.localeCompare(bt);\n" \
@@ -994,7 +981,7 @@ static void http_list_directory_header(request_st * const r, const handler_ctx *
 		"<tr class=\"d\">"
 			"<td class=\"n\"><a href=\"../\">..</a>/</td>"
 			"<td class=\"m\">&nbsp;</td>"
-			"<td class=\"s\">- &nbsp;</td>"
+			"<td class=\"s\" data-value=\"-1\">- &nbsp;</td>"
 			"<td class=\"t\">Directory</td>"
 		"</tr>\n"
 		));
@@ -1026,7 +1013,7 @@ static void http_list_directory_dirname(buffer * const out, const dirls_entry_t 
 
 	http_list_directory_ent(out, ent, name);
 
-	buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n"));
+	buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\" data-value=\"-1\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n"));
 }
 
 static void http_list_file_ent(buffer * const out, const dirls_entry_t * const ent, const char * const name) {
@@ -1061,10 +1048,13 @@ static void http_list_directory_filename(buffer * const out, const dirls_entry_t
 	}
 
 	char sizebuf[sizeof("999.9K")];
+	char dvbuf[LI_ITOSTRING_LENGTH];
 	size_t buflen =
 	  http_list_directory_sizefmt(sizebuf, sizeof(sizebuf), ent->size);
 	struct const_iovec iov[] = {
-	  { CONST_STR_LEN("</td><td class=\"s\">") }
+	  { CONST_STR_LEN("</td><td class=\"s\" data-value=\"") }
+	 ,{ dvbuf, li_itostrn(dvbuf, sizeof(dvbuf), ent->size) }
+	 ,{ CONST_STR_LEN("\">") }
 	 ,{ sizebuf, buflen }
 	 ,{ CONST_STR_LEN("</td><td class=\"t\">") }
 	 ,{ BUF_PTR_LEN(content_type) }
