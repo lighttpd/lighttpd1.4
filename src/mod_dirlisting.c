@@ -719,7 +719,9 @@ static const char js_simple_table_resort[] = \
 "function get_inner_text(el) {\n" \
 " if((typeof el == 'string')||(typeof el == 'undefined'))\n" \
 "  return el;\n" \
-" if(el.dataset && typeof el.dataset.value === \"string\")\n" \
+" if(el.dataset\n" \
+"    && (typeof el.dataset.value === 'string'\n" \
+"        || typeof el.dataset.value === 'number'))\n" \
 "  return el.dataset.value;\n" \
 " if(el.innerText)\n" \
 "  return el.innerText;\n" \
@@ -735,10 +737,6 @@ static const char js_simple_table_resort[] = \
 " return str;\n" \
 "}\n" \
 "\n" \
-"function isdigit(c) {\n" \
-" return (c >= '0' && c <= '9');\n" \
-"}\n" \
-"\n" \
 "var li_date_regex=/(\\d{4})-(\\w{3})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})/;\n" \
 "\n" \
 "var li_mon = ['Jan','Feb','Mar','Apr','May','Jun',\n" \
@@ -748,16 +746,24 @@ static const char js_simple_table_resort[] = \
 " var i; for (i = 0; i < 12 && mon != li_mon[i]; ++i); return i;\n" \
 "}\n" \
 "\n" \
-"function li_date_cmp(s1, s2) {\n" \
-" var dp1 = li_date_regex.exec(s1)\n" \
-" var dp2 = li_date_regex.exec(s2)\n" \
-" for (var i = 1; i < 7; ++i) {\n" \
-"  var cmp = (2 != i)\n" \
-"   ? parseInt(dp1[i]) - parseInt(dp2[i])\n" \
-"   : li_mon_num(dp1[2]) - li_mon_num(dp2[2]);\n" \
-"  if (0 != cmp) return cmp;\n" \
+"function li_dates_to_dv(table) {\n" \
+" for (var j=1;j<table.rows.length;j++) {\n" \
+"  var el = table.rows[j].cells[date_column];\n" \
+"  if(el.dataset && typeof el.dataset.value != 'undefined') {\n" \
+"   if (typeof el.dataset.value == 'number')\n" \
+"    break;\n" \
+"   if (el.dataset.value === \"-1\")\n" \
+"    el.dataset.value = -1;\n" \
+"  } else {\n" \
+"   var d = li_date_regex.exec(get_inner_text(el));\n" \
+"   el.dataset.value = (parseInt(d[0])*(1<<25))\n" \
+"     + ( (li_mon_num(d[1])<<22)\n" \
+"        |(parseInt(d[2])  <<17)\n" \
+"        |(parseInt(d[3])  <<12)\n" \
+"        |(parseInt(d[4])  << 6)\n" \
+"        |(parseInt(d[5])) );\n" \
+"  }\n" \
 " }\n" \
-" return 0;\n" \
 "}\n" \
 "\n" \
 "function sortfn_then_by_name(a,b,sort_column) {\n" \
@@ -772,10 +778,7 @@ static const char js_simple_table_resort[] = \
 " if (sort_column == size_column) {\n" \
 "  cmp = parseInt(at)-parseInt(bt);\n" \
 " } else if (sort_column == date_column) {\n" \
-"  var ad = isdigit(at.substr(0,1));\n" \
-"  var bd = isdigit(bt.substr(0,1));\n" \
-"  if (ad != bd) return (!ad ? -1 : 1);\n" \
-"  cmp = li_date_cmp(at,bt);\n" \
+"  cmp = at-bt;\n" \
 " } else {\n" \
 "  if (sort_column == name_column) {\n" \
 "   if (at == '../') return -1;\n" \
@@ -796,10 +799,11 @@ static const char js_simple_table_resort[] = \
 "function resort(lnk) {\n" \
 " var span = lnk.childNodes[1];\n" \
 " var table = lnk.parentNode.parentNode.parentNode.parentNode;\n" \
+" click_column = lnk.parentNode.cellIndex;\n" \
+" if (click_column == date_column) li_dates_to_dv(table);\n" \
 " var rows = new Array();\n" \
 " for (var j=1;j<table.rows.length;j++)\n" \
 "  rows[j-1] = table.rows[j];\n" \
-" click_column = lnk.parentNode.cellIndex;\n" \
 " rows.sort(sortfn);\n" \
 "\n" \
 " if (prev_span != null) prev_span.innerHTML = '';\n" \
@@ -980,7 +984,7 @@ static void http_list_directory_header(request_st * const r, const handler_ctx *
 		buffer_append_string_len(out, CONST_STR_LEN(
 		"<tr class=\"d\">"
 			"<td class=\"n\"><a href=\"../\">..</a>/</td>"
-			"<td class=\"m\">&nbsp;</td>"
+			"<td class=\"m\" data-value=\"-1\">&nbsp;</td>"
 			"<td class=\"s\" data-value=\"-1\">- &nbsp;</td>"
 			"<td class=\"t\">Directory</td>"
 		"</tr>\n"
