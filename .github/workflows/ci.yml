@@ -184,26 +184,55 @@ jobs:
             export NO_PAM=1 NO_UNWIND=1 NO_WOLFSSL=1
             cd "${{github.workspace}}" && scripts/ci-build.sh meson
 
-#  # Solaris VM test is really slow compared to other VMs tests
-#  # (retrieving and installing packages is really slow)
-#  Solaris:
-#    runs-on: ubuntu-latest
-#    steps:
-#      - uses: actions/checkout@v4
-#      - uses: vmactions/solaris-vm@v1
-#        with:
-#          usesh: true
-#          prepare: |
-#            pkgutil -y -i cmake gcc5core gmake pkgconfig perl libpcre2_dev
-#          run: |
-#            set -e
-#            # TODO: configure matrix with Sun Studio compiler
-#            cmake -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release
-#            cmake --build build --config Release
-#            # TODO: figure out why t/* tests are built but not found (not run)
-#            # TODO: figure out tests/* are not found (not run)
-#            # ctest --no-tests=error is also failing to fail/cause CI to fail
-#            ctest -V --test-dir build --build-config Release --no-tests=error
+  # Solaris VM test is slow compared to other VMs tests
+  # (retrieving and installing packages may be slow)
+  Solaris:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/solaris-vm@v1
+        with:
+          release: "11.4-gcc"
+          usesh: true
+          copyback: false
+          prepare: |
+            pkgutil -y -i cmake gmake pkgconfig perl \
+              libpcre2_dev \
+              libnettle_dev libgnutls_dev libnss_dev libssl_dev \
+              libbrotli_dev libz_dev libzstd_dev \
+              libkrb5_dev libdbi_dev openldap_dev sasl_dev \
+              mysql56_dev postgresql_dev \
+              lua_dev \
+              libxml2_dev libsqlite3_dev
+          run: |
+            set -e
+            cmake -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_EXTRA_WARNINGS=ON \
+              -DWITH_PCRE2=ON \
+              -DWITH_ZLIB=ON \
+              -DWITH_ZSTD=ON \
+              -DWITH_BROTLI=ON \
+              -DWITH_LDAP=ON \
+              -DWITH_LUA=ON \
+              -DWITH_DBI=ON \
+              -DWITH_PGSQL=ON \
+              -DWITH_SASL=ON \
+              -DWITH_GNUTLS=ON \
+              -DWITH_NETTLE=ON \
+              -DWITH_NSS=ON \
+              -DWITH_OPENSSL=ON \
+              -DWITH_WEBDAV_PROPS=ON
+            cmake --build build --config Release
+            ctest -V --test-dir build --build-config Release --no-tests=error
+            # no packages for libdeflate, maxminddb, mbedtls
+            #   (modifications needed for scripts/ci-build.sh)
+            # additional work needed for build config to find lua, brotli, zstd
+            # additional work needed for build to find 64-bit mysql libs
+            # additional work needed for build to find krb5.h
+            #set -e
+            #export NO_PAM=1 NO_UNWIND=1 NO_WOLFSSL=1
+            #export NO_LIBDEFLATE=1 NO_MAXMINDDB=1 NO_MBEDTLS=1
+            #cd "${{github.workspace}}" && scripts/ci-build.sh cmake
 
   Windows-Cygwin:
     runs-on: windows-latest
