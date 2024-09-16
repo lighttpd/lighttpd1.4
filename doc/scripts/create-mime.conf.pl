@@ -177,10 +177,11 @@ add(".mjs", "text/javascript");
 
 # other useful mappings
 my %useful = (
+	".tgz"     => "application/x-gtar-compressed",
 	".tar.gz"  => "application/x-gtar-compressed",
 	".gz"      => "application/gzip",
-	".tbz"     => "application/x-gtar-compressed",
-	".tar.bz2" => "application/x-gtar-compressed",
+	".tbz"     => "application/x-bzip-compressed-tar",
+	".tar.bz2" => "application/x-bzip-compressed-tar",
 	".bz2"     => "application/x-bzip2",
 	".log"     => "text/plain",
 	".conf"    => "text/plain",
