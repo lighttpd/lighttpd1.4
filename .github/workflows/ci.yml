@@ -196,6 +196,7 @@ jobs:
           usesh: true
           copyback: false
           prepare: |
+            pkgutil -U
             pkgutil -y -i cmake gmake pkgconfig perl \
               libpcre2_dev \
               libnettle_dev libgnutls_dev libnss_dev libssl_dev \
