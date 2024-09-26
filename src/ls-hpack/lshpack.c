@@ -33,6 +33,9 @@ SOFTWARE.
 #ifndef NDEBUG
 #define NDEBUG
 #endif
+#ifndef FALL_THROUGH
+#define FALL_THROUGH __attribute_fallthrough__
+#endif
 
 #include <assert.h>
 #include <ctype.h>
@@ -50,6 +53,20 @@ SOFTWARE.
 #include "lshpack-test.h"
 #endif
 #include XXH_HEADER_NAME
+
+#ifdef _MSC_VER
+#  ifndef FALL_THROUGH
+#  define FALL_THROUGH
+#  endif
+#endif
+
+#ifndef FALL_THROUGH
+#  if defined __has_attribute && __has_attribute (fallthrough)
+#    define FALL_THROUGH __attribute__ ((fallthrough))
+#  else
+#    define FALL_THROUGH
+#  endif
+#endif
 
 #ifndef LS_HPACK_USE_LARGE_TABLES
 #define LS_HPACK_USE_LARGE_TABLES 1
@@ -692,7 +709,6 @@ lshpack_enc_enc_int (unsigned char *dst, unsigned char *const end,
  */
 #if __GNUC__
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
-#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
 #if __clang__
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #endif
@@ -803,20 +819,20 @@ lshpack_enc_huff_encode (const unsigned char *src,
         {                               /* Write out */
 #if UINTPTR_MAX == 18446744073709551615ull
         case 8: *p_dst++ = bits >> 56;
-        /* fall through */
+        FALL_THROUGH;
         case 7: *p_dst++ = bits >> 48;
-        /* fall through */
+        FALL_THROUGH;
         case 6: *p_dst++ = bits >> 40;
-        /* fall through */
+        FALL_THROUGH;
         case 5: *p_dst++ = bits >> 32;
 #endif
-        /* fall through */
+        FALL_THROUGH;
         case 4: *p_dst++ = bits >> 24;
-        /* fall through */
+        FALL_THROUGH;
         case 3: *p_dst++ = bits >> 16;
-        /* fall through */
+        FALL_THROUGH;
         case 2: *p_dst++ = bits >> 8;
-        /* fall through */
+        FALL_THROUGH;
         default: *p_dst++ = bits;
         }
         return p_dst - dst;
@@ -1913,11 +1929,11 @@ lshpack_dec_huff_decode (const unsigned char *src, int src_len,
             case 8:
                 buf <<= 8;
                 buf |= (uintptr_t) *src++;
-                /* fall through */
+                FALL_THROUGH;
             case 7:
                 buf <<= 8;
                 buf |= (uintptr_t) *src++;
-                /* fall through */
+                FALL_THROUGH;
             default:
                 buf <<= 48;
                 buf |= (uintptr_t) *src++ << 40;
@@ -1925,15 +1941,15 @@ lshpack_dec_huff_decode (const unsigned char *src, int src_len,
                 buf |= (uintptr_t) *src++ << 24;
                 buf |= (uintptr_t) *src++ << 16;
 #else
-                /* fall through */
+                FALL_THROUGH;
             case 4:
                 buf <<= 8;
                 buf |= (uintptr_t) *src++;
-                /* fall through */
+                FALL_THROUGH;
             case 3:
                 buf <<= 8;
                 buf |= (uintptr_t) *src++;
-                /* fall through */
+                FALL_THROUGH;
             default:
                 buf <<= 16;
 #endif

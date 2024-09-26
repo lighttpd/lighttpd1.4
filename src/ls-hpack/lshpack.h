@@ -35,7 +35,7 @@ extern "C" {
 
 #define LSHPACK_MAJOR_VERSION 2
 #define LSHPACK_MINOR_VERSION 3
-#define LSHPACK_PATCH_VERSION 3
+#define LSHPACK_PATCH_VERSION 4
 
 #define lshpack_strlen_t lsxpack_strlen_t
 #define LSHPACK_MAX_STRLEN LSXPACK_MAX_STRLEN
