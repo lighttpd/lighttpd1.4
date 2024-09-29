@@ -179,6 +179,26 @@ static void test_buffer_append_bs_escaped(void) {
     buffer_free(b);
 }
 
+static void test_light_isprint(void) {
+    for (int8_t i = 0; i < ' '; ++i)
+        assert(!light_isprint(i));
+    for (int8_t i = ' '; i <= '~'; ++i)
+        assert(light_isprint(i));
+    for (uint16_t i = '~'+1; i <= 255; ++i)
+        assert(!light_isprint(i));
+}
+
+static void test_light_iscntrl(void) {
+    for (int i = 0; i <= 0x1F; ++i)
+        assert(light_iscntrl(i));
+    for (int i = 0x20; i <= 0x7E; ++i)
+        assert(!light_iscntrl(i));
+    for (int i = 0x7F; i <= 0x9F; ++i)
+        assert(light_iscntrl(i));
+    for (int i = 0xA0; i <= 0xFF; ++i)
+        assert(!light_iscntrl(i));
+}
+
 void test_buffer (void);
 void test_buffer (void)
 {
@@ -187,4 +207,6 @@ void test_buffer (void)
 	test_buffer_string_space();
 	test_buffer_append_path_len();
 	test_buffer_append_bs_escaped();
+	test_light_isprint();
+	test_light_iscntrl();
 }

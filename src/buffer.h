@@ -233,6 +233,23 @@ static inline int light_isalnum(int c) {
 	return light_isdigit(c) || light_isalpha(c);
 }
 
+__attribute_pure__
+static inline int light_isprint(int c);
+static inline int light_isprint(int c) {
+	return (uint32_t)(c - ' ') <= '~' - ' ';/*(ASCII isprint() ' ' .. '~')*/
+}
+
+/* https://en.wikipedia.org/wiki/Unicode_control_characters */
+/* https://en.wikipedia.org/wiki/C0_and_C1_control_codes */
+__attribute_pure__
+static inline int light_iscntrl(int c);
+static inline int light_iscntrl(int c) {
+	return (c & 0x7F) < 0x20 || c == 0x7F; /*(optimized to branchless)*/
+	/*(optimized for ASCII printable chars to return 0 more quickly)*/
+	/*return __builtin_expect( (!light_isprint(c)), 0)
+	 *  && __builtin_expect( ((unsigned int)c < 0xA0), 0);*/
+}
+
 #define light_isupper(c) ((uint32_t)(c)-'A' <= 'Z'-'A')
 #define light_islower(c) ((uint32_t)(c)-'a' <= 'z'-'a')
 

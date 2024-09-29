@@ -186,12 +186,21 @@ log_buffer_prefix (buffer * const restrict b,
 }
 
 
+__attribute_pure__
+static size_t
+log_buffer_isprint_len (const char * const s, const size_t n)
+{
+    size_t i;
+    for (i = 0; i < n && light_isprint(s[i]); ++i) ;
+    return i;
+}
+
+
 static void
 log_buffer_append_encoded (buffer * const b,
                            const char * const s, const size_t n)
 {
-    size_t i;
-    for (i = 0; i < n && ' ' <= s[i] && s[i] <= '~'; ++i) ;/*(ASCII isprint())*/
+    size_t i = log_buffer_isprint_len(s, n);
     if (i == n)
         buffer_append_string_len(b, s, n);  /* common case; nothing to encode */
     else
@@ -227,8 +236,7 @@ log_buffer_vsprintf (buffer * const restrict b,
         vsnprintf(s, n+1, fmt, ap);
     }
 
-    unsigned int i;
-    for (i = 0; i < n && ' ' <= s[i] && s[i] <= '~'; ++i) ;/*(ASCII isprint())*/
+    unsigned int i = (unsigned int)log_buffer_isprint_len(s, n);
     if (i == n) return; /* common case; nothing to encode */
 
     /* need to encode log line

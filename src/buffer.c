@@ -670,7 +670,7 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 
 	/* count to-be-encoded-characters */
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
-		if (__builtin_expect( (*ds >= ' ' && *ds <= '~'), 1))
+		if (__builtin_expect( (light_isprint(*ds)), 1))
 			d_len++;
 		else { /* CTLs or non-ASCII characters */
 			switch (*ds) {
@@ -694,7 +694,7 @@ void buffer_append_string_c_escaped(buffer * const restrict b, const char * cons
 	}
 
 	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
-		if (__builtin_expect( (*ds >= ' ' && *ds <= '~'), 1))
+		if (__builtin_expect( (light_isprint(*ds)), 1))
 			d[d_len++] = *ds;
 		else { /* CTLs or non-ASCII characters */
 			d[d_len++] = '\\';
@@ -733,11 +733,8 @@ buffer_append_bs_escaped (buffer * const restrict b,
      * second to do the escaping. (This non-ASCII optim is not done here) */
     buffer_string_prepare_append(b, len);
     for (const char * const end = s+len; s < end; ++s) {
-        unsigned int c;
         const char * const ptr = s;
-        do {
-            c = *(const unsigned char *)s;
-        } while (c >= ' ' && c <= '~' && c != '"' && c != '\\' && ++s < end);
+        while (light_isprint(*s) && *s != '"' && *s != '\\' && ++s < end) ;
         if (s - ptr) buffer_append_string_len(b, ptr, s - ptr);
 
         if (s == end)
@@ -748,6 +745,7 @@ buffer_append_bs_escaped (buffer * const restrict b,
          *  the receiver supports decoding octal escapes (\000) and the escaped
          *  string contains \0 followed by two digits not part of escaping)*/
 
+        unsigned int c = *(const unsigned char *)s;
         char *d;
         switch (c) {
           case '\a':case '\b':case '\t':case '\n':case '\v':case '\f':case '\r':
@@ -781,11 +779,8 @@ buffer_append_bs_escaped_json (buffer * const restrict b,
     /* Intended for use escaping string to be surrounded by double-quotes */
     buffer_string_prepare_append(b, len);
     for (const char * const end = s+len; s < end; ++s) {
-        unsigned int c;
         const char * const ptr = s;
-        do {
-            c = *(const unsigned char *)s;
-        } while (c >= ' ' && c != '"' && c != '\\' && ++s < end);
+        while (!light_iscntrl(*s) && *s != '"' && *s != '\\' && ++s < end) ;
         if (s - ptr) buffer_append_string_len(b, ptr, s - ptr);
 
         if (s == end)
@@ -796,6 +791,7 @@ buffer_append_bs_escaped_json (buffer * const restrict b,
          *  the receiver supports decoding octal escapes (\000) and the escaped
          *  string contains \0 followed by two digits not part of escaping)*/
 
+        unsigned int c = *(const unsigned char *)s;
         char *d;
         switch (c) {
           case '\a':case '\b':case '\t':case '\n':case '\v':case '\f':case '\r':
