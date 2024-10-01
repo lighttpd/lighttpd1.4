@@ -171,17 +171,17 @@ __attribute_nonnull__()
 void buffer_append_string_encoded_hex_uc(buffer * restrict b, const char * restrict s, size_t len);
 
 typedef enum {
-	ENCODING_REL_URI, /* for coding a rel-uri (/with space/and%percent) nicely as part of a href */
-	ENCODING_REL_URI_PART, /* same as ENC_REL_URL plus coding / too as %2F */
+	ENCODING_REL_URI = 0,  /* coding href rel-uri (/with space/and%percent) */
+	ENCODING_REL_URI_PART, /* same as ENCODING_REL_URL plus coding / as %2F */
 	ENCODING_HTML,         /* & becomes &amp; and so on */
 	ENCODING_MINIMAL_XML   /* minimal encoding for xml */
 } buffer_encoding_t;
 
-void buffer_append_string_encoded(buffer * restrict b, const char * restrict s, size_t s_len, buffer_encoding_t encoding);
+void buffer_append_string_encoded(buffer * restrict b, const char * restrict s, size_t len, buffer_encoding_t encoding);
 
 /* escape non-printable characters; simple escapes for \t, \r, \n; fallback to \xCC */
 __attribute_nonnull__()
-void buffer_append_string_c_escaped(buffer * restrict b, const char * restrict s, size_t s_len);
+void buffer_append_string_c_escaped(buffer * restrict b, const char * restrict s, size_t len);
 
 /* escape non-printable chars, '"', '\\', and chars which high bit set */
 void buffer_append_bs_escaped (buffer * restrict b, const char * restrict s, size_t len);

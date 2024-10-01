@@ -192,7 +192,7 @@ void buffer_append_string(buffer * restrict b, const char * restrict s) {
  *
  * @param b a buffer
  * @param s the string
- * @param s_len size of the string (without the terminating \0)
+ * @param len size of the string (without the terminating \0)
  */
 
 void buffer_append_string_len(buffer * const restrict b, const char * const restrict s, const size_t len) {
@@ -592,130 +592,97 @@ static const char encoded_chars_minimal_xml[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /*  F0 -  FF */
 };
 
+static const char * const encoded_chars_maps[] = {
+    encoded_chars_rel_uri,       /* .[ENCODING_REL_URI] */
+    encoded_chars_rel_uri_part,  /* .[ENCODING_REL_URI_PART] */
+    encoded_chars_html,          /* .[ENCODING_HTML] */
+    encoded_chars_minimal_xml    /* .[ENCODING_MINIMAL_XML] */
+};
 
 
-void buffer_append_string_encoded(buffer * const restrict b, const char * const restrict s, size_t s_len, buffer_encoding_t encoding) {
-	unsigned char *ds, *d;
-	size_t d_len, ndx;
-	const char *map = NULL;
+void buffer_append_string_encoded(buffer * const restrict b, const char * const restrict s, size_t len, buffer_encoding_t encoding) {
+    if (__builtin_expect( (0 == len), 0)) return;
 
-	switch(encoding) {
-	case ENCODING_REL_URI:
-		map = encoded_chars_rel_uri;
-		break;
-	case ENCODING_REL_URI_PART:
-		map = encoded_chars_rel_uri_part;
-		break;
-	case ENCODING_HTML:
-		map = encoded_chars_html;
-		break;
-	case ENCODING_MINIMAL_XML:
-		map = encoded_chars_minimal_xml;
-		break;
-	}
+    const unsigned char *ds;
+    const unsigned char * const end = (const unsigned char *)s + len;
+    size_t dlen = 0;
+    const char * const map = encoded_chars_maps[encoding];
 
-	/* count to-be-encoded-characters */
-	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
-		if (map[*ds & 0xFF]) {
-			switch(encoding) {
-			case ENCODING_REL_URI:
-			case ENCODING_REL_URI_PART:
-				d_len += 3;
-				break;
-			case ENCODING_HTML:
-			case ENCODING_MINIMAL_XML:
-				d_len += 6;
-				break;
-			}
-		} else {
-			d_len++;
-		}
-	}
+    /* count to-be-encoded-characters: +3 for REL_URI*; +6 for HTML/XML */
+    ds = (const unsigned char *)s;
+    do {
+        dlen += !map[*ds] ? 1 : (encoding <= ENCODING_REL_URI_PART) ? 3 : 6;
+    } while (++ds < end);
 
-	d = (unsigned char*) buffer_extend(b, d_len);
+    if (dlen == len) { /*(short-circuit; nothing to encode)*/
+        buffer_append_string_len(b, s, len);
+        return;
+    }
 
-	if (d_len == s_len) { /*(short-circuit; nothing to encoded)*/
-		memcpy(d, s, s_len);
-		return;
-	}
-
-	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
-		if (map[*ds & 0xFF]) {
-			switch(encoding) {
-			case ENCODING_REL_URI:
-			case ENCODING_REL_URI_PART:
-				d[d_len++] = '%';
-				d[d_len++] = hex_chars_uc[((*ds) >> 4) & 0x0F];
-				d[d_len++] = hex_chars_uc[(*ds) & 0x0F];
-				break;
-			case ENCODING_HTML:
-			case ENCODING_MINIMAL_XML:
-				d[d_len++] = '&';
-				d[d_len++] = '#';
-				d[d_len++] = 'x';
-				d[d_len++] = hex_chars_uc[((*ds) >> 4) & 0x0F];
-				d[d_len++] = hex_chars_uc[(*ds) & 0x0F];
-				d[d_len++] = ';';
-				break;
-			}
-		} else {
-			d[d_len++] = *ds;
-		}
-	}
+    unsigned char * restrict d = (unsigned char *)buffer_extend(b, dlen);
+    ds = (const unsigned char *)s;
+    do {
+        if (!map[*ds])
+            *d++ = *ds;
+        else if (encoding <= ENCODING_REL_URI_PART) {
+            d[0] = '%';
+            d[1] = hex_chars_uc[*ds >> 4];
+            d[2] = hex_chars_uc[*ds & 0x0F];
+            d += 3;
+        }
+        else {
+            d[0] = '&';
+            d[1] = '#';
+            d[2] = 'x';
+            d[3] = hex_chars_uc[*ds >> 4];
+            d[4] = hex_chars_uc[*ds & 0x0F];
+            d[5] = ';';
+            d += 6;
+        }
+    } while (++ds < end);
 }
 
-void buffer_append_string_c_escaped(buffer * const restrict b, const char * const restrict s, size_t s_len) {
-	unsigned char *ds, *d;
-	size_t d_len, ndx;
+void buffer_append_string_c_escaped(buffer * const restrict b, const char * const restrict s, size_t len) {
+    if (__builtin_expect( (0 == len), 0)) return;
 
-	/* count to-be-encoded-characters */
-	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
-		if (__builtin_expect( (light_isprint(*ds)), 1))
-			d_len++;
-		else { /* CTLs or non-ASCII characters */
-			switch (*ds) {
-			case '\t':
-			case '\r':
-			case '\n':
-				d_len += 2;
-				break;
-			default:
-				d_len += 4; /* \xCC */
-				break;
-			}
-		}
-	}
+    const unsigned char *ds;
+    const unsigned char * const end = (const unsigned char *)s + len;
+    size_t dlen = 0;
 
-	d = (unsigned char*) buffer_extend(b, d_len);
+    /* count to-be-encoded-characters: +2 for \t \n \r; +4 for other encs */
+    ds = (const unsigned char *)s;
+    do {
+        dlen += light_isprint(*ds)
+          ? 1
+          : (*ds == '\t' || *ds == '\n' || *ds == '\r') ? 2 : 4;
+    } while (++ds < end);
 
-	if (d_len == s_len) { /*(short-circuit; nothing to encoded)*/
-		memcpy(d, s, s_len);
-		return;
-	}
+    if (dlen == len) { /*(short-circuit; nothing to encode)*/
+        buffer_append_string_len(b, s, len);
+        return;
+    }
 
-	for (ds = (unsigned char *)s, d_len = 0, ndx = 0; ndx < s_len; ds++, ndx++) {
-		if (__builtin_expect( (light_isprint(*ds)), 1))
-			d[d_len++] = *ds;
-		else { /* CTLs or non-ASCII characters */
-			d[d_len++] = '\\';
-			switch (*ds) {
-			case '\t':
-				d[d_len++] = 't';
-				break;
-			case '\r':
-				d[d_len++] = 'r';
-				break;
-			case '\n':
-				d[d_len++] = 'n';
-				break;
-			default:
-				d[d_len++] = 'x';
-				d[d_len++] = hex_chars_lc[(*ds) >> 4];
-				d[d_len++] = hex_chars_lc[(*ds) & 0x0F];
-				break;
-			}
-		}
-	}
+    unsigned char * restrict d = (unsigned char *)buffer_extend(b, dlen);
+    ds = (const unsigned char *)s;
+    do {
+        if (light_isprint(*ds))
+            *d++ = *ds;
+        else { /* CTLs or non-ASCII characters */
+            d[0] = '\\';
+            switch (*ds) {
+              case '\t': case '\n': case '\r':
+                d[1] = "0000000abtnvfr"[*ds];
+                d += 2;
+                break;
+              default:
+                d[1] = 'x';
+                d[2] = hex_chars_lc[*ds >> 4];
+                d[3] = hex_chars_lc[*ds & 0x0F];
+                d += 4;
+                break;
+            }
+        }
+    } while (++ds < end);
 }
 
 
