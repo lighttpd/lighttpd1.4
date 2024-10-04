@@ -523,7 +523,7 @@ static handler_t wstunnel_handler_setup (request_st * const r, plugin_data * con
     hctx->frame.payload       = chunk_buffer_acquire();
 
     unsigned int binary = hctx->conf.frame_type; /*(0 = "text"; 1 = "binary")*/
-    if (!binary) {
+    {
         const buffer *vb =
           http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Protocol"));
         if (NULL != vb) {
@@ -537,6 +537,9 @@ static handler_t wstunnel_handler_setup (request_st * const r, plugin_data * con
                         binary = 1;
                         break;
                     }
+                }
+                else if (binary) {
+                    /* ignore other subprotos if already configured "binary" */
                 }
                 else if (buffer_eq_icase_ssn(s, CONST_STR_LEN("base64"))) {
                     s += sizeof("base64")-1;
