@@ -46,7 +46,7 @@ static const char encoded_chars_http_uri_reqd[] = {
  * https://en.wikipedia.org/wiki/UTF-8
  * detect invalid UTF-8 byte and byte in overlong encoding of 7-bit ASCII
  * (but does not detect other invalid/overlong multibyte encoding sequences) */
-#define li_utf8_invalid_byte(b) ((b) >= 0xF5 || ((b)|0x1) == 0xC1)
+#define li_utf8_invalid_byte(b) light_utf8_invalid_byte(b)
 
 
 static int burl_is_unreserved (const int c)

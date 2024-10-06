@@ -250,6 +250,29 @@ static inline int light_iscntrl(int c) {
 	 *  && __builtin_expect( ((unsigned int)c < 0xA0), 0);*/
 }
 
+/* c (char byte) MUST be non-negative integer
+ * (must mask off high bits after signed integer promotion)
+ * https://en.wikipedia.org/wiki/UTF-8
+ * detect invalid UTF-8 byte and byte in overlong encoding of 7-bit ASCII
+ * (but does not detect other invalid/overlong multibyte encoding sequences) */
+//#define light_utf8_invalid_byte(c) ((c) >= 0xF5 || ((c)|0x1) == 0xC1)
+#define light_utf8_invalid_byte(c) \
+  (   __builtin_expect( ((c) >= 0xF5),       0) \
+   || __builtin_expect( (((c)|0x1) == 0xC1), 0) )
+
+/* https://en.wikipedia.org/wiki/Unicode_control_characters */
+/* https://en.wikipedia.org/wiki/C0_and_C1_control_codes */
+__attribute_const__
+static inline int light_iscntrl_or_utf8_invalid_byte(int c);
+static inline int light_iscntrl_or_utf8_invalid_byte(int c) {
+	/* return light_iscntrl(c) || light_utf8_invalid_byte(c); */
+	/*(optimized for ASCII printable chars to return 0 more quickly)*/
+	c &= 0xFF;
+	return __builtin_expect( (!light_isprint(c)), 0)
+	  && (__builtin_expect( ((unsigned int)(c-0xA0) >= 0xF5-0xA0), 0)
+	      || __builtin_expect( (((c)|0x1) == 0xC1), 0));
+}
+
 #define light_isupper(c) ((uint32_t)(c)-'A' <= 'Z'-'A')
 #define light_islower(c) ((uint32_t)(c)-'a' <= 'z'-'a')
 

@@ -199,6 +199,23 @@ static void test_light_iscntrl(void) {
         assert(!light_iscntrl(i));
 }
 
+static void test_light_iscntrl_or_utf8_invalid_byte(void) {
+    for (int i = 0; i <= 0x1F; ++i)
+        assert(light_iscntrl_or_utf8_invalid_byte(i));
+    for (int i = 0x20; i <= 0x7E; ++i)
+        assert(!light_iscntrl_or_utf8_invalid_byte(i));
+    for (int i = 0x7F; i <= 0x9F; ++i)
+        assert(light_iscntrl_or_utf8_invalid_byte(i));
+    for (int i = 0xA0; i <= 0xBF; ++i)
+        assert(!light_iscntrl_or_utf8_invalid_byte(i));
+    for (int i = 0xC0; i <= 0xC1; ++i)
+        assert(light_iscntrl_or_utf8_invalid_byte(i));
+    for (int i = 0xC2; i <= 0xF4; ++i)
+        assert(!light_iscntrl_or_utf8_invalid_byte(i));
+    for (int i = 0xF5; i <= 0xFF; ++i)
+        assert(light_iscntrl_or_utf8_invalid_byte(i));
+}
+
 void test_buffer (void);
 void test_buffer (void)
 {
@@ -209,4 +226,5 @@ void test_buffer (void)
 	test_buffer_append_bs_escaped();
 	test_light_isprint();
 	test_light_iscntrl();
+	test_light_iscntrl_or_utf8_invalid_byte();
 }
