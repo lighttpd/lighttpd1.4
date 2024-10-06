@@ -925,6 +925,8 @@ static int config_insert_srvconf(server *srv) {
     if (0 == srv->srvconf.port)
         srv->srvconf.port = ssl_enabled ? 443 : 80;
 
+    log_buffer_isprint_init(config_feature_bool(srv,"server.errorlog-utf8",0));
+
     if (config_feature_bool(srv, "server.h2proto", 1))
         array_insert_value(srv->srvconf.modules, CONST_STR_LEN("mod_h2"));
 

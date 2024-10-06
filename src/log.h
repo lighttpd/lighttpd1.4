@@ -97,4 +97,7 @@ __attribute_cold__
 __attribute_returns_nonnull__
 log_error_st * log_set_global_errh (log_error_st *errh, int ts_high_precision);
 
+__attribute_cold__
+void log_buffer_isprint_init (int utf8);
+
 #endif
