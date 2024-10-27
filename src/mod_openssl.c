@@ -664,16 +664,18 @@ static void ech_status_trace(request_st *r, SSL *ssl)
 {
     char *sni_ech = NULL;
     char *sni_clr = NULL;
-    int status = SSL_ech_get_status(ssl, &sni_ech, &sni_clr);
+    int status = SSL_ech_get1_status(ssl, &sni_ech, &sni_clr);
     const char *str = ech_status_str(status);
-    if (sni_ech == NULL) sni_ech = "";
-    if (sni_clr == NULL) sni_clr = "";
+    const char *ech = sni_ech ? sni_ech : "";
+    const char *clr = sni_clr ? sni_clr : "";
     if (str)
         log_error(r->conf.errh, __FILE__, __LINE__,
-                  "ech_status: %s sni_clr: %s sni_ech: %s",str,sni_clr,sni_ech);
+                  "ech_status: %s sni_clr: %s sni_ech: %s", str, clr, ech);
     else
         log_error(r->conf.errh, __FILE__, __LINE__,
-                  "ech_status: %d sni_clr: %s sni_ech: %s",rc,sni_clr,sni_ech);
+                  "ech_status: %d sni_clr: %s sni_ech: %s", status, clr, ech);
+    OPENSSL_free(sni_ech);
+    OPENSSL_free(sni_clr);
 }
 
 static unsigned int
@@ -762,7 +764,8 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
 
     char *sni_ech = NULL;
     char *sni_clr = NULL;
-    switch (SSL_ech_get_status(hctx->ssl, &sni_ech, &sni_clr)) {
+    handler_t rc = HANDLER_GO_ON;
+    switch (SSL_ech_get1_status(hctx->ssl, &sni_ech, &sni_clr)) {
       case SSL_ECH_STATUS_SUCCESS:
         /* require that request :authority (Host) match SNI in ECH to avoid one
          * ECH-provided host testing for existence of another ECH-only host.
@@ -770,7 +773,7 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
         if (!mod_openssl_ech_only_host_match(CONST_BUF_LEN(r->http_host),
                                              sni_ech, strlen(sni_ech))) {
             r->http_status = 400;
-            return HANDLER_FINISHED;
+            rc = HANDLER_FINISHED;
         }
         break;
       /*case SSL_ECH_STATUS_NOT_TRIED:*/
@@ -786,17 +789,18 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
             const buffer *redo_host =
               mod_openssl_ech_only(hctx, CONST_BUF_LEN(&r->uri.authority));
             buffer * const http_host = r->http_host;
-            if (NULL == sni_clr)
-                *(const char **)&sni_clr =
-                  SSL_get_servername(hctx->ssl, TLSEXT_NAMETYPE_host_name);
-            if (NULL != sni_clr) {
+            const char *clr = sni_clr
+              ? sni_clr
+              : SSL_get_servername(hctx->ssl, TLSEXT_NAMETYPE_host_name);
+            if (NULL != clr) {
                 buffer * const tb = r->tmp_buf;
-                buffer_copy_string_len(tb, sni_clr, strlen(sni_clr));
+                buffer_copy_string_len(tb, clr, strlen(clr));
                 buffer_to_lower(tb); /*(normalized in policy checks)*/
                 if (0 != http_request_host_policy(tb,
                                                   r->conf.http_parseopts, 443)){
                     r->http_status = 400;
-                    return HANDLER_FINISHED;
+                    rc = HANDLER_FINISHED;
+                    break;
                 }
                 const buffer * const redo_host_sni =
                   mod_openssl_ech_only(hctx, CONST_BUF_LEN(tb));
@@ -820,11 +824,13 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
                 buffer_append_string_len(http_host, srv_token->ptr+o, n);
             }
             ++r->loops_per_request;
-            return HANDLER_COMEBACK;
+            rc = HANDLER_COMEBACK;
         }
         break;
     }
-    return HANDLER_GO_ON;
+    OPENSSL_free(sni_ech);
+    OPENSSL_free(sni_clr);
+    return rc;
 }
 
 #endif /* !OPENSSL_NO_ECH */
@@ -1652,7 +1658,10 @@ mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
          * there is a need for such complex behavior on different ports.) */
         char *sni_ech = NULL;
         char *sni_clr = NULL;
-        switch (SSL_ech_get_status(hctx->ssl, &sni_ech, &sni_clr)) {
+        int rc = SSL_ech_get1_status(hctx->ssl, &sni_ech, &sni_clr);
+        OPENSSL_free(sni_ech);
+        OPENSSL_free(sni_clr);
+        switch (rc) {
           case SSL_ECH_STATUS_SUCCESS:
             break;
           /*case SSL_ECH_STATUS_NOT_TRIED:*/
@@ -4351,17 +4360,16 @@ http_cgi_ssl_ech(request_st * const r, SSL * const ssl)
     /* add to environment ECH status, inner SNI, and outer SNI */
     char *sni_ech = NULL;
     char *sni_clr = NULL;
-    int status = SSL_ech_get_status(ssl, &sni_ech, &sni_clr);
+    int status = SSL_ech_get1_status(ssl, &sni_ech, &sni_clr);
     const char *str = ech_status_str(status);
     if (str == NULL) str = "ECH status unknown"; /*(alt: format status to str)*/
-    if (NULL == sni_clr) *(const char **)&sni_clr = "NONE";
-    if (NULL == sni_ech) *(const char **)&sni_ech = "NONE";
-    http_header_env_set(r, CONST_STR_LEN("SSL_ECH_STATUS"),
-                        str, strlen(str));
-    http_header_env_set(r, CONST_STR_LEN("SSL_ECH_COVER"),
-                        sni_clr, strlen(sni_clr));
-    http_header_env_set(r, CONST_STR_LEN("SSL_ECH_HIDDEN"),
-                        sni_ech, strlen(sni_ech));
+    http_header_env_set(r, CONST_STR_LEN("SSL_ECH_STATUS"), str, strlen(str));
+    const char *clr = sni_clr ? sni_clr : "NONE";
+    http_header_env_set(r, CONST_STR_LEN("SSL_ECH_COVER"),  clr, strlen(clr));
+    const char *ech = sni_ech ? sni_ech : "NONE";
+    http_header_env_set(r, CONST_STR_LEN("SSL_ECH_HIDDEN"), ech, strlen(ech));
+    OPENSSL_free(sni_ech);
+    OPENSSL_free(sni_clr);
 }
 #endif
 
