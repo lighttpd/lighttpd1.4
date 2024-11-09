@@ -2036,6 +2036,9 @@ static int config_tokenizer(tokenizer_t *t) {
                 return config_tokenizer_err(t, __FILE__, __LINE__,
                          "strings may be combined with '+' "
                          "or separated with ',' or '=>' in lists");
+            if (t->tid == TK_LKEY)
+                return config_tokenizer_err(t, __FILE__, __LINE__,
+                         "missing assignment operator ('=') ?");
 
             /* search for the terminating " */
             const char *start = s + 1;   /*buffer_blank(token);*/
@@ -2182,8 +2185,14 @@ static int config_tokenizer(tokenizer_t *t) {
                         return TK_ELSE;
                     else if (0 == strcmp(token->ptr, "else"))
                         return TK_ELSE;
-                    else
+                    else {
+                        /* sanity check that previous token was not also TK_LKEY */
+                        if (t->tid == TK_LKEY)
+                            return config_tokenizer_err(t, __FILE__, __LINE__,
+                                     "missing assignment operator ('=') or "
+                                     "missing string concat operator ('+') ?");
                         return TK_LKEY;
+                    }
                 }
                 else if (0 == i
                          && ((uint8_t *)s)[0] == 0xc2
