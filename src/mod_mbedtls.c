@@ -4226,6 +4226,8 @@ mod_mbedtls_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const bu
 static void
 mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *b, int max)
 {
+    /* note: mbedtls does not support TLSv1.3 well on the server-side
+     * until well into the mbedtls 3.x branch: e.g. mbedtls 3.6.1 */
     int v = MBEDTLS_SSL_MINOR_VERSION_3; /* default: TLS v1.2 */
     if (NULL == b) /* default: min TLSv1.2, max TLSv1.3 */
       #ifdef MBEDTLS_SSL_MINOR_VERSION_4
@@ -4298,9 +4300,20 @@ mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *
 static void
 mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *b, int max)
 {
+  #ifndef MBEDTLS_SSL_PROTO_TLS1_3 /* use TLSv1.2 if TLSv1.3 not avail */
+  #define MBEDTLS_SSL_VERSION_TLS1_3 MBEDTLS_SSL_VERSION_TLS1_2
+  #endif
+  #if MBEDTLS_VERSION_NUMBER >= 0x03060100 /* mbedtls 3.6.1 */
+    /* note: mbedtls does not support TLSv1.3 well on the server-side
+     * until well into the mbedtls 3.x branch: e.g. mbedtls 3.6.1 */
+    int v = MBEDTLS_SSL_VERSION_TLS1_3; /* default: TLS v1.3 */
+    if (NULL == b) /* default: min TLSv1.3, max TLSv1.3 */
+        v = MBEDTLS_SSL_VERSION_TLS1_3;
+  #else
     int v = MBEDTLS_SSL_VERSION_TLS1_2; /* default: TLS v1.2 */
     if (NULL == b) /* default: min TLSv1.2, max TLSv1.3 */
         v = max ? MBEDTLS_SSL_VERSION_TLS1_3 : MBEDTLS_SSL_VERSION_TLS1_2;
+  #endif
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("None"))) /*"disable" limit*/
         v = max ? MBEDTLS_SSL_VERSION_TLS1_3 : MBEDTLS_SSL_VERSION_TLS1_2;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.2")))
@@ -4322,6 +4335,9 @@ mod_mbedtls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *
             return;
         }
     }
+  #ifndef MBEDTLS_SSL_PROTO_TLS1_3
+  #undef MBEDTLS_SSL_VERSION_TLS1_3
+  #endif
 
     max
       ? mbedtls_ssl_conf_max_tls_version(s->ssl_ctx, v)

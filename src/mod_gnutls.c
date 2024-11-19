@@ -1977,7 +1977,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
      * GnuTLS by concatenating into a single priority string */
 
     buffer *b = srv->tmp_buf;
-    if (NULL == s->priority_base) s->priority_base = "SECURE";
+    if (NULL == s->priority_base) s->priority_base = "SECURE:%PROFILE_MEDIUM";
     buffer_copy_string_len(b, s->priority_base, strlen(s->priority_base));
     if (!buffer_is_blank(&s->priority_str)) {
         buffer_append_char(b, ':');
@@ -3619,8 +3619,13 @@ mod_gnutls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *c
 static int
 mod_gnutls_ssl_conf_proto_val (server *srv, const buffer *b, int max)
 {
-    if (NULL == b) /* default: min TLSv1.2, max TLSv1.3 */
-        return max ? GNUTLS_TLS1_3 : GNUTLS_TLS1_2;
+    /* gnutls 3.6.3 (July 2018) added enum to define GNUTLS_TLS1_3 */
+    #if GNUTLS_VERSION_NUMBER < 0x030603
+    #define GNUTLS_TLS1_3 GNUTLS_TLS1_2
+    #endif
+
+    if (NULL == b) /* default: min TLSv1.3, max TLSv1.3 */
+        return GNUTLS_TLS1_3;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("None"))) /*"disable" limit*/
         return max ? GNUTLS_TLS1_3 : GNUTLS_TLS1_0;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.0")))
@@ -3642,7 +3647,11 @@ mod_gnutls_ssl_conf_proto_val (server *srv, const buffer *b, int max)
                       "GnuTLS: ssl.openssl.ssl-conf-cmd %s %s invalid; ignored",
                       max ? "MaxProtocol" : "MinProtocol", b->ptr);
     }
-    return max ? GNUTLS_TLS1_3 : GNUTLS_TLS1_2;
+    return GNUTLS_TLS1_3;
+
+    #if GNUTLS_VERSION_NUMBER < 0x030603
+    #undef GNUTLS_TLS1_3
+    #endif
 }
 
 
@@ -3672,9 +3681,11 @@ mod_gnutls_ssl_conf_proto (server *srv, plugin_config_socket *s, const buffer *m
         if (x < GNUTLS_TLS1_2) break;
         buffer_append_string_len(b, CONST_STR_LEN("+VERS-TLS1.2:"));
         __attribute_fallthrough__
+     #if GNUTLS_VERSION_NUMBER >= 0x030603
       case GNUTLS_TLS1_3:
         if (x < GNUTLS_TLS1_3) break;
         buffer_append_string_len(b, CONST_STR_LEN("+VERS-TLS1.3:"));
         break;
+     #endif
     }
 }

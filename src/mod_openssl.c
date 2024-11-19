@@ -3311,7 +3311,11 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       #if OPENSSL_VERSION_NUMBER >= 0x10100000L \
        || defined(BORINGSSL_API_VERSION) \
        || defined(LIBRESSL_VERSION_NUMBER)
+       #ifdef TLS1_3_VERSION
+        if (!SSL_CTX_set_min_proto_version(s->ssl_ctx, TLS1_3_VERSION))
+       #else
         if (!SSL_CTX_set_min_proto_version(s->ssl_ctx, TLS1_2_VERSION))
+       #endif
             return -1;
       #endif
 
@@ -4777,9 +4781,9 @@ int mod_openssl_plugin_init (plugin *p)
 static int
 mod_openssl_ssl_conf_proto_val (server *srv, const buffer *b, int max)
 {
-    if (NULL == b) /* default: min TLSv1.2, max TLSv1.3 */
+    if (NULL == b) /* default: min TLSv1.3 (if supported), max TLSv1.3 */
       #ifdef TLS1_3_VERSION
-        return max ? TLS1_3_VERSION : TLS1_2_VERSION;
+        return TLS1_3_VERSION;
       #else
         return TLS1_2_VERSION;
       #endif
@@ -4814,7 +4818,7 @@ mod_openssl_ssl_conf_proto_val (server *srv, const buffer *b, int max)
                       max ? "MaxProtocol" : "MinProtocol", b->ptr);
     }
   #ifdef TLS1_3_VERSION
-    return max ? TLS1_3_VERSION : TLS1_2_VERSION;
+    return TLS1_3_VERSION;
   #else
     return TLS1_2_VERSION;
   #endif

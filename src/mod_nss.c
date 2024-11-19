@@ -2651,7 +2651,9 @@ http_cgi_ssl_env (request_st * const r, handler_ctx * const hctx)
     size_t n;
     const char *s = NULL;
     switch (inf.protocolVersion) {
+     #ifdef SSL_LIBRARY_VERSION_TLS_1_3
       case SSL_LIBRARY_VERSION_TLS_1_3: s="TLSv1.3";n=sizeof("TLSv1.3")-1;break;
+     #endif
       case SSL_LIBRARY_VERSION_TLS_1_2: s="TLSv1.2";n=sizeof("TLSv1.2")-1;break;
       case SSL_LIBRARY_VERSION_TLS_1_1: s="TLSv1.1";n=sizeof("TLSv1.1")-1;break;
       case SSL_LIBRARY_VERSION_TLS_1_0: s="TLSv1.0";n=sizeof("TLSv1.0")-1;break;
@@ -2866,9 +2868,13 @@ mod_nss_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *curv
 static PRUint16
 mod_nss_ssl_conf_proto_val (server *srv, const buffer *b, int max)
 {
+    #ifndef SSL_LIBRARY_VERSION_TLS_1_3 /* use TLSv1.2 if TLSv1.3 not avail */
+    #define SSL_LIBRARY_VERSION_TLS_1_3 SSL_LIBRARY_VERSION_TLS_1_2
+    #endif
+
     /* use of SSL v3 should be avoided, and SSL v2 is not supported here */
-    if (NULL == b) /* default: min TLSv1.2, max TLSv1.3 */
-        return max ? SSL_LIBRARY_VERSION_TLS_1_3 : SSL_LIBRARY_VERSION_TLS_1_2;
+    if (NULL == b) /* default: min TLSv1.3, max TLSv1.3 */
+        return SSL_LIBRARY_VERSION_TLS_1_3;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("None"))) /*"disable" limit*/
         return max ? SSL_LIBRARY_VERSION_TLS_1_3 : SSL_LIBRARY_VERSION_TLS_1_0;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.0")))
@@ -2890,7 +2896,11 @@ mod_nss_ssl_conf_proto_val (server *srv, const buffer *b, int max)
                       "NSS: ssl.openssl.ssl-conf-cmd %s %s invalid; ignored",
                       max ? "MaxProtocol" : "MinProtocol", b->ptr);
     }
-    return max ? SSL_LIBRARY_VERSION_TLS_1_3 : SSL_LIBRARY_VERSION_TLS_1_2;
+    return SSL_LIBRARY_VERSION_TLS_1_3;
+
+    #if SSL_LIBRARY_VERSION_TLS_1_3 == SSL_LIBRARY_VERSION_TLS_1_2
+    #undef SSL_LIBRARY_VERSION_TLS_1_3
+    #endif
 }
 
 

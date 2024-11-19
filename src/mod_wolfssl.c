@@ -1140,12 +1140,14 @@ ssl_info_callback (const SSL *ssl, int where, int ret)
         /* SSL_version() is valid after initial handshake completed */
         SSL *ssl_nonconst;
         *(const SSL **)&ssl_nonconst = ssl;
+      #ifdef WOLFSSL_TLS13
         if (wolfSSL_GetVersion(ssl_nonconst) >= WOLFSSL_TLSV1_3) {
             /* https://wiki.openssl.org/index.php/TLS1.3
              * "Renegotiation is not possible in a TLSv1.3 connection" */
             handler_ctx *hctx = (handler_ctx *) SSL_get_app_data(ssl);
             hctx->renegotiations = -1;
         }
+      #endif
     }
 }
 
@@ -2265,9 +2267,15 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
        #endif
       #endif
 
+      #ifdef WOLFSSL_TLS13
+        if (wolfSSL_CTX_SetMinVersion(s->ssl_ctx, WOLFSSL_TLSV1_3)
+               != WOLFSSL_SUCCESS)
+            return -1;
+      #else
         if (wolfSSL_CTX_SetMinVersion(s->ssl_ctx, WOLFSSL_TLSV1_2)
                != WOLFSSL_SUCCESS)
             return -1;
+      #endif
 
         if (s->ssl_conf_cmd && s->ssl_conf_cmd->used) {
             if (0 != mod_openssl_ssl_conf_cmd(srv, s)) return -1;
@@ -3470,8 +3478,12 @@ int mod_wolfssl_plugin_init (plugin *p)
 static int
 mod_openssl_ssl_conf_proto_val (server *srv, const buffer *b, int max)
 {
-    if (NULL == b) /* default: min TLSv1.2, max TLSv1.3 */
-        return max ? WOLFSSL_TLSV1_3 : WOLFSSL_TLSV1_2;
+    #ifndef WOLFSSL_TLS13 /* use TLSv1.2 if TLSv1.3 not avail */
+    #define WOLFSSL_TLSV1_3 WOLFSSL_TLSV1_2
+    #endif
+
+    if (NULL == b) /* default: min TLSv1.3, max TLSv1.3 */
+        return WOLFSSL_TLSV1_3;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("None"))) /*"disable" limit*/
         return max ? WOLFSSL_TLSV1_3 : WOLFSSL_TLSV1;
     else if (buffer_eq_icase_slen(b, CONST_STR_LEN("TLSv1.0")))
@@ -3493,7 +3505,11 @@ mod_openssl_ssl_conf_proto_val (server *srv, const buffer *b, int max)
                       "SSL: ssl.openssl.ssl-conf-cmd %s %s invalid; ignored",
                       max ? "MaxProtocol" : "MinProtocol", b->ptr);
     }
-    return max ? WOLFSSL_TLSV1_3 : WOLFSSL_TLSV1_2;
+    return WOLFSSL_TLSV1_3;
+
+    #ifndef WOLFSSL_TLS13
+    #undef WOLFSSL_TLSV1_3
+    #endif
 }
 
 
@@ -3636,7 +3652,9 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
           case WOLFSSL_TLSV1_2:
             wolfSSL_CTX_set_options(s->ssl_ctx, WOLFSSL_OP_NO_TLSv1_3);
             __attribute_fallthrough__
+         #ifdef WOLFSSL_TLS13
           case WOLFSSL_TLSV1_3:
+         #endif
           default:
             break;
         }
