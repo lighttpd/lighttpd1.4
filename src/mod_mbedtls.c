@@ -4103,7 +4103,7 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
 
     const char *groups = curvelist && !buffer_is_blank(curvelist)
       ? curvelist->ptr
-      : NULL;
+      : "x25519:secp256r1:secp384r1:x448";
     for (const char *e; groups; groups = e ? e+1 : NULL) {
         const char * const n = groups;
         e = strchr(n, ':');
@@ -4163,7 +4163,7 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
 
     const char *groups = curvelist && !buffer_is_blank(curvelist)
       ? curvelist->ptr
-      : NULL;
+      : "x25519:secp256r1:secp384r1:x448";
     for (const char *e; groups; groups = e ? e+1 : NULL) {
         const char * const n = groups;
         e = strchr(n, ':');

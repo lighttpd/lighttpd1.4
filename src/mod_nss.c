@@ -2810,8 +2810,7 @@ mod_nss_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *curv
     unsigned int num_grps = 0;
     const char *groups = curvelist && !buffer_is_blank(curvelist)
       ? curvelist->ptr
-      : NULL;
-    if (NULL == groups) return 1;
+      : "X25519:P-256:P-384";
     for (const char *e; groups; groups = e ? e+1 : NULL) {
         e = strchr(groups, ':');
         size_t len = e ? (size_t)(e - groups) : strlen(groups);

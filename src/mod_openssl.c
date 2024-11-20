@@ -2992,10 +2992,20 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
    || (defined(LIBRESSL_VERSION_NUMBER) \
        && LIBRESSL_VERSION_NUMBER >= 0x2050100fL) \
    || OPENSSL_VERSION_NUMBER >= 0x10100000L
-   #if defined(BORINGSSL_API_VERSION) || defined(LIBRESSL_VERSION_NUMBER)
     const char *groups = ssl_ec_curve && !buffer_is_blank(ssl_ec_curve)
       ? ssl_ec_curve->ptr
-      : "prime256v1";
+      :
+       #if defined(BORINGSSL_API_VERSION) || defined(LIBRESSL_VERSION_NUMBER)
+        /* libressl recognizes X448, but does not appear to implement X448 */
+        /* boringssl include/openssl/evp.h contains comment:
+         * > EVP_PKEY_X448 is defined for OpenSSL compatibility, but we do not
+         * > support X448 and attempts to create keys will fail.
+         */
+        "X25519:P-256:P-384";
+       #else
+        /* openssl recognizes and implements X448 */
+        "X25519:P-256:P-384:X448";
+       #endif
 
    #if (defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 19) \
     || (defined(LIBRESSL_VERSION_NUMBER) \
@@ -3011,7 +3021,6 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
           "SSL: Unable to config groups %s", groups);
         return 0;
     }
-   #endif
   #else
     /* Support for Elliptic-Curve Diffie-Hellman key exchange */
     /* OpenSSL only supports the "named curves" from RFC 4492, section 5.1.1. */

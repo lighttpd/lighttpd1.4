@@ -1948,6 +1948,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     }
   #endif
 
+    buffer_append_string_len(&s->priority_str,
+                             CONST_STR_LEN("-CURVE-ALL:"));
     if (!mod_gnutls_ssl_conf_curves(srv, s, NULL))
         return -1;
 
@@ -3591,7 +3593,7 @@ mod_gnutls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *c
     buffer * const plist = &s->priority_str;
     const char *groups = curvelist && !buffer_is_blank(curvelist)
       ? curvelist->ptr
-      : NULL;
+      : "X25519:P-256:P-384:X448";
     for (const char *e; groups; groups = e ? e+1 : NULL) {
         const char * const n = groups;
         e = strchr(n, ':');
