@@ -2322,14 +2322,51 @@ mod_openssl_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const bu
 }
 
 
-#if defined(BORINGSSL_API_VERSION) \
- || defined(LIBRESSL_VERSION_NUMBER) \
- || OPENSSL_VERSION_NUMBER < 0x10100000L
 static int
 mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *ssl_ec_curve)
 {
   #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
   #ifndef OPENSSL_NO_ECDH
+  #if defined(BORINGSSL_API_VERSION) \
+   || (defined(LIBRESSL_VERSION_NUMBER) \
+       && LIBRESSL_VERSION_NUMBER >= 0x2050100fL)
+    /* boringssl eccurves_default[] (now kDefaultGroups[])
+     * has been the equivalent of "X25519:secp256r1:secp384r1" since 2016
+     * (previously with secp521r1 appended for Android)
+     * (and before that the equivalent of "secp256r1:secp384r1:secp521r1"
+     *  since mid 2014) */
+    /* libressl eccurves_default[] (now ecgroups_server_default[])
+     * has been the equivalent of "X25519:secp256r1:secp384r1"
+     * since libressl v2.5.1 (Feb 2017) which added SSL_CTX_set1_groups_list()*/
+    if (NULL == ssl_ec_curve || buffer_is_blank(ssl_ec_curve))
+        return 1;
+  #endif
+
+  #if (defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3) \
+   || (defined(LIBRESSL_VERSION_NUMBER) \
+       && LIBRESSL_VERSION_NUMBER >= 0x2050100fL) \
+   || OPENSSL_VERSION_NUMBER >= 0x10100000L
+   #if defined(BORINGSSL_API_VERSION) || defined(LIBRESSL_VERSION_NUMBER)
+    const char *groups = ssl_ec_curve && !buffer_is_blank(ssl_ec_curve)
+      ? ssl_ec_curve->ptr
+      : "prime256v1";
+
+   #if (defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 19) \
+    || (defined(LIBRESSL_VERSION_NUMBER) \
+        && LIBRESSL_VERSION_NUMBER >= 0x2050100fL) \
+    || OPENSSL_VERSION_NUMBER >= 0x10101000L
+    int rc = SSL_CTX_set1_groups_list(s->ssl_ctx, groups);
+   #elif (defined(BORINGSSL_API_VERSION && BORINGSSL_API_VERSION >= 3) \
+      || OPENSSL_VERSION_NUMBER >= 0x10100000L
+    int rc = SSL_CTX_set1_curves_list(s->ssl_ctx, groups);
+   #endif
+    if (1 != rc) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: Unable to config groups %s", groups);
+        return 0;
+    }
+   #endif
+  #else
     /* Support for Elliptic-Curve Diffie-Hellman key exchange */
     /* OpenSSL only supports the "named curves" from RFC 4492, section 5.1.1. */
     const char *curve = ssl_ec_curve ? ssl_ec_curve->ptr : "prime256v1";
@@ -2380,14 +2417,13 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     }
   #endif
   #endif
+  #endif
     UNUSED(srv);
     UNUSED(s);
     UNUSED(ssl_ec_curve);
 
     return 1;
 }
-#endif /* BORINGSSL_API_VERSION || LIBRESSL_VERSION_NUMBER */
-       /* || OPENSSL_VERSION_NUMBER < 0x10100000L */
 
 
 static int
@@ -2499,10 +2535,8 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         if (!mod_openssl_ssl_conf_dhparameters(srv, s, NULL))
             return -1;
 
-      #if OPENSSL_VERSION_NUMBER < 0x10100000L
         if (!mod_openssl_ssl_conf_curves(srv, s, NULL))
             return -1;
-      #endif
 
       #ifdef TLSEXT_TYPE_session_ticket
        #if OPENSSL_VERSION_NUMBER < 0x30000000L

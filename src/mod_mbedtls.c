@@ -1546,6 +1546,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 
     mod_mbedtls_ssl_conf_proto(srv, s, NULL, 0); /* min */
 
+    if (!mod_mbedtls_ssl_conf_curves(srv, s, NULL))
+        return -1;
+
     if (s->ssl_conf_cmd && s->ssl_conf_cmd->used) {
         if (0 != mod_mbedtls_ssl_conf_cmd(srv, s)) return -1;
     }
@@ -3489,8 +3492,7 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
     if (ciphersuites) {
         buffer *b = ciphersuites;
         buffer_to_upper(b); /*(ciphersuites are all uppercase (currently))*/
-        for (const char *e = b->ptr-1; e; ) {
-            const char * const p = e+1;
+        for (const char *e, *p = b->ptr; p; p = e ? e+1 : NULL) {
             e = strchr(p, ':');
             size_t len = e ? (size_t)(e - p) : strlen(p);
             if (len >= sizeof(n)) {
@@ -4072,9 +4074,11 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     const int idsz = (int)(sizeof(ids)/sizeof(*ids)-1);
     const mbedtls_ecp_curve_info * const curve_info = mbedtls_ecp_curve_list();
 
-    const buffer * const b = curvelist;
-    for (const char *e = b->ptr-1; e; ) {
-        const char * const n = e+1;
+    const char *groups = curvelist && !buffer_is_blank(curvelist)
+      ? curvelist->ptr
+      : NULL;
+    for (const char *e; groups; groups = e ? e+1 : NULL) {
+        const char * const n = groups;
         e = strchr(n, ':');
         size_t len = e ? (size_t)(e - n) : strlen(n);
         /* similar to mbedtls_ecp_curve_info_from_name() */
@@ -4101,6 +4105,7 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     ++nids;
 
     /* curves list must be persistent for lifetime of mbedtls_ssl_config */
+    if (s->curves) free(s->curves);
     s->curves = ck_malloc(nids * sizeof(mbedtls_ecp_group_id));
     memcpy(s->curves, ids, nids * sizeof(mbedtls_ecp_group_id));
 
@@ -4129,9 +4134,11 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     const int idsz = (int)(sizeof(ids)/sizeof(*ids)-1);
     const mbedtls_ecp_curve_info * const curve_info = mbedtls_ecp_curve_list();
 
-    const buffer * const b = curvelist;
-    for (const char *e = b->ptr-1; e; ) {
-        const char * const n = e+1;
+    const char *groups = curvelist && !buffer_is_blank(curvelist)
+      ? curvelist->ptr
+      : NULL;
+    for (const char *e; groups; groups = e ? e+1 : NULL) {
+        const char * const n = groups;
         e = strchr(n, ':');
         size_t len = e ? (size_t)(e - n) : strlen(n);
         /* similar to mbedtls_ecp_curve_info_from_name() */
@@ -4158,6 +4165,7 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     ++nids;
 
     /* curves list must be persistent for lifetime of mbedtls_ssl_config */
+    if (s->curves) free(s->curves);
     s->curves = ck_malloc(nids * sizeof(uint16_t));
     memcpy(s->curves, ids, nids * sizeof(uint16_t));
 

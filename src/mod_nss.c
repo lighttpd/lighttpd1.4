@@ -1679,6 +1679,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             return -1;
     }
 
+    if (!mod_nss_ssl_conf_curves(srv, s, NULL))
+        return -1;
+
     mod_nss_ssl_conf_proto(srv, s, NULL, NULL); /* set default range */
 
     if (s->ssl_conf_cmd && s->ssl_conf_cmd->used) {
@@ -2764,15 +2767,95 @@ int mod_nss_plugin_init (plugin *p)
 static int
 mod_nss_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *curvelist)
 {
+  #if NSS_VMAJOR > 3 || (NSS_VMAJOR == 3 && NSS_VMINOR >= 27)
+
+    struct {
+      const char *name;
+      uint32_t len;
+      SSLNamedGroup id;
+    } const group_map[] = { /*(not an exhaustive list)*/
+      { CONST_STR_LEN("P256"), ssl_grp_ec_secp256r1 }
+     ,{ CONST_STR_LEN("P384"), ssl_grp_ec_secp384r1 }
+     ,{ CONST_STR_LEN("P521"), ssl_grp_ec_secp521r1 }
+     ,{ CONST_STR_LEN("P-256"), ssl_grp_ec_secp256r1 }
+     ,{ CONST_STR_LEN("P-384"), ssl_grp_ec_secp384r1 }
+     ,{ CONST_STR_LEN("P-521"), ssl_grp_ec_secp521r1 }
+     ,{ CONST_STR_LEN("X25519"), ssl_grp_ec_curve25519 }
+     ,{ CONST_STR_LEN("ff2048"), ssl_grp_ffdhe_2048 }
+     ,{ CONST_STR_LEN("ff3072"), ssl_grp_ffdhe_3072 }
+     ,{ CONST_STR_LEN("ff4096"), ssl_grp_ffdhe_4096 }
+     ,{ CONST_STR_LEN("ff6144"), ssl_grp_ffdhe_6144 }
+     ,{ CONST_STR_LEN("ff8192"), ssl_grp_ffdhe_8192 }
+     ,{ CONST_STR_LEN("ffdhe2048"), ssl_grp_ffdhe_2048 }
+     ,{ CONST_STR_LEN("ffdhe3072"), ssl_grp_ffdhe_3072 }
+     ,{ CONST_STR_LEN("ffdhe4096"), ssl_grp_ffdhe_4096 }
+     ,{ CONST_STR_LEN("ffdhe6144"), ssl_grp_ffdhe_6144 }
+     ,{ CONST_STR_LEN("ffdhe8192"), ssl_grp_ffdhe_8192 }
+     ,{ CONST_STR_LEN("secp224r1"), ssl_grp_ec_secp224r1 }
+     ,{ CONST_STR_LEN("secp256k1"), ssl_grp_ec_secp256k1 }
+     ,{ CONST_STR_LEN("secp384r1"), ssl_grp_ec_secp384r1 }
+     ,{ CONST_STR_LEN("secp521r1"), ssl_grp_ec_secp521r1 }
+     ,{ CONST_STR_LEN("prime256v1"), ssl_grp_ec_secp256r1 }
+     ,{ CONST_STR_LEN("xyber768d00"), ssl_grp_kem_xyber768d00 }
+     ,{ CONST_STR_LEN("mlkem768x25519"), ssl_grp_kem_mlkem768x25519 }
+    };
+
+    SSLNamedGroup grps[33]; /* sslimpl.h:#define SSL_NAMED_GROUP_COUNT 33 */
+    unsigned int num_grps = 0;
+    const char *groups = curvelist && !buffer_is_blank(curvelist)
+      ? curvelist->ptr
+      : NULL;
+    if (NULL == groups) return 1;
+    for (const char *e; groups; groups = e ? e+1 : NULL) {
+        e = strchr(groups, ':');
+        size_t len = e ? (size_t)(e - groups) : strlen(groups);
+        SSLNamedGroup grp = ssl_grp_none;
+        int q = 0;
+        if (*groups == '?') {
+            ++groups;
+            --len;
+            q = 1;
+        }
+        for (uint32_t i = 0; i < sizeof(group_map)/sizeof(*group_map); ++i) {
+            if (group_map[i].len == len
+                && buffer_eq_icase_ssn(group_map[i].name, groups, len)) {
+                grp = group_map[i].id;
+                break;
+            }
+        }
+        if (grp == ssl_grp_none) {
+            if (!q)
+                log_error(srv->errh, __FILE__, __LINE__,
+                          "NSS: ignoring unrecognized Curves/Groups (%.*s)",
+                          (int)len, groups);
+        }
+        else if (num_grps < sizeof(grps)/sizeof(*grps))
+            grps[num_grps++] = grp;
+        else {
+            log_error(srv->errh, __FILE__, __LINE__,
+                      "NSS: too many Curves/Groups; ignoring excess (%s)",
+                      groups);
+            break;
+        }
+    }
+
+    return num_grps
+      ? SECSuccess == SSL_NamedGroupConfig(s->model, grps, num_grps)
+      : 0;
+
+  #else
+
+    if (NULL == curvelist || buffer_is_blank(curvelist))
+        return 1;
+
     log_error(srv->errh, __FILE__, __LINE__,
               "NSS: ignoring Curves/Groups; not implemented (%s)",
               curvelist->ptr);
     UNUSED(s);
-    UNUSED(curvelist);
-
-    /* XXX: TODO: see ssl/sslt.h enum SSLNamedGroup */
 
     return 1;
+
+  #endif
 }
 
 

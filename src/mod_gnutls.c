@@ -1948,6 +1948,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     }
   #endif
 
+    if (!mod_gnutls_ssl_conf_curves(srv, s, NULL))
+        return -1;
+
     if (s->ssl_conf_cmd && s->ssl_conf_cmd->used) {
         if (0 != mod_gnutls_ssl_conf_cmd(srv, s)) return -1;
     }
@@ -3248,8 +3251,7 @@ mod_gnutls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *
     if (ciphersuites) {
         buffer *b = ciphersuites;
         buffer_to_upper(b); /*(ciphersuites are all uppercase (currently))*/
-        for (const char *e = b->ptr-1; e; ) {
-            const char * const p = e+1;
+        for (const char *e, *p = b->ptr; p; p = e ? e+1 : NULL) {
             e = strchr(p, ':');
             size_t len = e ? (size_t)(e - p) : strlen(p);
 
@@ -3513,6 +3515,7 @@ mod_gnutls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *
 static int
 mod_gnutls_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const buffer *dhparameters)
 {
+    int rc;
     if (dhparameters) {
         /* "Prior to GnuTLS 3.6.0 for the ephemeral or anonymous Diffie-Hellman
          * (DH) TLS ciphersuites the application was required to generate or
@@ -3585,9 +3588,11 @@ mod_gnutls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *c
     };
 
     buffer * const plist = &s->priority_str;
-    const buffer * const b = curvelist;
-    for (const char *e = b->ptr-1; e; ) {
-        const char * const n = e+1;
+    const char *groups = curvelist && !buffer_is_blank(curvelist)
+      ? curvelist->ptr
+      : NULL;
+    for (const char *e; groups; groups = e ? e+1 : NULL) {
+        const char * const n = groups;
         e = strchr(n, ':');
         size_t len = e ? (size_t)(e - n) : strlen(n);
         uint32_t i;

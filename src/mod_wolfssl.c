@@ -2009,6 +2009,26 @@ mod_openssl_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const bu
 static int
 mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *ssl_ec_curve)
 {
+  #if LIBWOLFSSL_VERSION_HEX >= 0x03012000 \
+   && (defined(OPENSSL_EXTRA) || defined(HAVE_CURL)) \
+   && (defined(HAVE_ECC) || defined(HAVE_CURVE25519) || defined(HAVE_CURVE448))
+    /* typical wolfssl sloppy code: wolfSSL_CTX_set1_groups_list() is v4.4.0 is
+     * almost identical in behavior to wolfSSL_CTX_set1_curves_list(), but much
+     * more limited by additional preprocessor directives
+     *   defined(OPENSSL_EXTRA) && defined(HAVE_ECC) &&
+     *   defined(WOLFSSL_TLS13) && defined(HAVE_SUPPORTED_CURVES)
+     */
+    const char *groups = ssl_ec_curve && !buffer_is_blank(ssl_ec_curve)
+      ? ssl_ec_curve->ptr
+      : NULL;
+    if (NULL == groups) return 1; /*(prior code not called w/ NULL list)*/
+    if (WOLFSSL_SUCCESS != wolfSSL_CTX_set1_curves(s->ssl_ctx, groups)) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: Unknown to set groups %s", groups);
+        return 0;
+    }
+  #else /* (prior code here is preserved for fallback cases) */
+    if (NULL == ssl_ec_curve) return 1; /*(prior code not called w/ NULL list)*/
     /* Support for Elliptic-Curve Diffie-Hellman key exchange */
     /* OpenSSL only supports the "named curves" from RFC 4492, section 5.1.1. */
     const char *curve = ssl_ec_curve ? ssl_ec_curve->ptr : "prime256v1";
@@ -2030,6 +2050,7 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
           "SSL: Unknown curve name %s", curve);
         return 0;
     }
+  #endif
 }
 
 
@@ -2116,6 +2137,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       #endif
 
         if (!mod_openssl_ssl_conf_dhparameters(srv, s, NULL))
+            return -1;
+
+        if (!mod_openssl_ssl_conf_curves(srv, s, NULL))
             return -1;
 
       #ifdef HAVE_SESSION_TICKET
