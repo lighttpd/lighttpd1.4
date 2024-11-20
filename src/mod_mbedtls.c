@@ -3579,6 +3579,8 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
         else if (0 == strncmp_const(e, "SUITEB128")
               || 0 == strncmp_const(e, "SUITEB128ONLY")
               || 0 == strncmp_const(e, "SUITEB192")) {
+            default_suite = 0;
+            crt_profile_default = -1;
             mbedtls_ssl_conf_cert_profile(s->ssl_ctx,
                                           &mbedtls_x509_crt_profile_suiteb);
             /* re-initialize mbedtls_ssl_config defaults */
@@ -4038,9 +4040,13 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
     ids[++nids] = 0; /* terminate list */
     ++nids;
 
-    if (!crt_profile_default)
+    if (0 == crt_profile_default)
         mbedtls_ssl_conf_cert_profile(s->ssl_ctx,
                                       &mbedtls_x509_crt_profile_next);
+    else if (1 == crt_profile_default)
+        mbedtls_ssl_conf_cert_profile(s->ssl_ctx,
+                                      &mbedtls_x509_crt_profile_default);
+    /* else if (-1 == crt_profile_default) *//*(cert_profile set further up)*/
 
     /* ciphersuites list must be persistent for lifetime of mbedtls_ssl_config*/
     free(s->ciphersuites);
