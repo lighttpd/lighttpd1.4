@@ -43,7 +43,6 @@
  * - session ticket rotation (see comments above)
  * - OCSP Must Staple detection
  * - ssl.verifyclient.depth
- * - ssl.openssl.ssl-conf-cmd Ciphersuite
  *
  * future:
  * - consider SSL_AlertReceivedCallback() to set SSLAlertCallback
@@ -3642,14 +3641,44 @@ static int parse_nss_ciphers(server_rec *s, char *ciphers, PRBool cipher_list[ci
 static int
 mod_nss_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *ciphersuites, const buffer *cipherstring)
 {
-    if (ciphersuites)
-        /* XXX: not implemented;
-         *      could manually add support for short list of TLSv1.3 suites */
-        log_error(srv->errh, __FILE__, __LINE__,
-                  "Ciphersuite support not implemented for %s",
-                  ciphersuites->ptr);
+    buffer * const tb = srv->tmp_buf;
+    buffer_clear(tb);
+    if (ciphersuites) {
+        /*(adapted from mod_gnutls.c:mod_gnutls_ssl_conf_ciphersuites())*/
+        buffer *b = ciphersuites;
+        buffer_to_upper(b); /*(ciphersuites are all uppercase (currently))*/
+        for (const char *e, *p = b->ptr; p; p = e ? e+1 : NULL) {
+            e = strchr(p, ':');
+            size_t len = e ? (size_t)(e - p) : strlen(p);
 
-    if (!cipherstring || buffer_is_blank(cipherstring))
+            if (buffer_eq_icase_ss(p, len,
+                  CONST_STR_LEN("TLS_CHACHA20_POLY1305_SHA256")))
+                buffer_append_string_len(tb,
+                  CONST_STR_LEN("+chacha20_poly1305_sha_256:"));
+            else if (buffer_eq_icase_ss(p, len,
+                  CONST_STR_LEN("TLS_AES_256_GCM_SHA384")))
+                buffer_append_string_len(tb,
+                  CONST_STR_LEN("+aes_256_gcm_sha_384:"));
+            else if (buffer_eq_icase_ss(p, len,
+                  CONST_STR_LEN("TLS_AES_128_GCM_SHA256")))
+                buffer_append_string_len(tb,
+                  CONST_STR_LEN("+aes_128_gcm_sha_256:"));
+            else if (buffer_eq_icase_ss(p, len,
+                  CONST_STR_LEN("TLS_AES_128_CCM_SHA256"))
+                  || buffer_eq_icase_ss(p, len,
+                  CONST_STR_LEN("TLS_AES_128_CCM_8_SHA256")))
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "NSS: skipped ciphersuite; not supported: %.*s",
+                  (int)len, p);
+            else
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "NSS: skipped ciphersuite; not recognized: %.*s",
+                  (int)len, p);
+        }
+    }
+
+    if ((!cipherstring || buffer_is_blank(cipherstring))
+        && buffer_is_blank(tb))
         return 1; /* nothing to do */
 
     /*
@@ -3674,12 +3703,20 @@ mod_nss_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer *cip
     for (int i = 0; i < ciphernum; ++i)
         cipher_state[i] = PR_FALSE;
 
+    if (!buffer_is_blank(tb)) {
+        buffer_truncate(tb, buffer_clen(tb)-1); /*(remove trailing ':')*/
+        int rc = nss_parse_ciphers(srv->errh, tb->ptr, cipher_state);
+        if (-1 == rc) return 0;
+    }
+
+  if (cipherstring && !buffer_is_blank(cipherstring)) {
     char *ciphers = strdup(cipherstring->ptr);/*(string modified during parse)*/
     if (NULL == ciphers) return 0;
 
     int rc = nss_parse_ciphers(srv->errh, ciphers, cipher_state);
     free(ciphers);
     if (-1 == rc) return 0;
+  }
 
     if (s->protos.min && s->protos.min <= SSL_LIBRARY_VERSION_3_0
         && countciphers(cipher_state, SSLV3) == 0) {
