@@ -2795,8 +2795,12 @@ mod_nss_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *curv
      ,{ CONST_STR_LEN("secp384r1"), ssl_grp_ec_secp384r1 }
      ,{ CONST_STR_LEN("secp521r1"), ssl_grp_ec_secp521r1 }
      ,{ CONST_STR_LEN("prime256v1"), ssl_grp_ec_secp256r1 }
+    #if NSS_VMAJOR > 3 || (NSS_VMAJOR == 3 && NSS_VMINOR >= 98)
      ,{ CONST_STR_LEN("xyber768d00"), ssl_grp_kem_xyber768d00 }
+    #endif
+    #if NSS_VMAJOR > 3 || (NSS_VMAJOR == 3 && NSS_VMINOR >= 106)
      ,{ CONST_STR_LEN("mlkem768x25519"), ssl_grp_kem_mlkem768x25519 }
+    #endif
     };
 
     SSLNamedGroup grps[33]; /* sslimpl.h:#define SSL_NAMED_GROUP_COUNT 33 */
