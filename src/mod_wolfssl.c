@@ -2027,6 +2027,7 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
           "SSL: Unknown to set groups %s", groups);
         return 0;
     }
+    return 1;
   #else /* (prior code here is preserved for fallback cases) */
     if (NULL == ssl_ec_curve) return 1; /*(prior code not called w/ NULL list)*/
     /* Support for Elliptic-Curve Diffie-Hellman key exchange */
