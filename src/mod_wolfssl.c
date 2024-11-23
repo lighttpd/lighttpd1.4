@@ -2022,7 +2022,7 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
       ? ssl_ec_curve->ptr
       : NULL;
     if (NULL == groups) return 1; /*(prior code not called w/ NULL list)*/
-    if (WOLFSSL_SUCCESS != wolfSSL_CTX_set1_curves(s->ssl_ctx, groups)) {
+    if (WOLFSSL_SUCCESS != wolfSSL_CTX_set1_curves_list(s->ssl_ctx, groups)) {
         log_error(srv->errh, __FILE__, __LINE__,
           "SSL: Unknown to set groups %s", groups);
         return 0;
