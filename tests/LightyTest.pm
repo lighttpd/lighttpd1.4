@@ -460,6 +460,7 @@ sub handle_http {
 			(my $k = $_) =~ tr/[A-Z]/[a-z]/;
 
 			my $verify_value = 1;
+			my $verify_less_than = 0;
 			my $key_inverted = 0;
 
 			if (substr($k, 0, 1) eq '+') {
@@ -470,6 +471,10 @@ sub handle_http {
 				$k = substr($k, 1);
 				$key_inverted = 1;
 				$verify_value = 0; ## skip the value check
+			} elsif (substr($k, 0, 1) eq '<') {
+				## the value must be less than
+				$k = substr($k, 1);
+				$verify_less_than = 1;
 			}
 
 			if ($key_inverted) {
@@ -490,6 +495,13 @@ sub handle_http {
 						diag(sprintf(
 							"\nresponse-header failed: expected '%s', got '%s', regex: %s",
 							$href->{$_}, $resp_hdr{$k}, $1));
+						return -1;
+					}
+				} elsif ($verify_less_than) {
+					if ($resp_hdr{$k} >= $href->{$_}) {
+						diag(sprintf(
+							"\nresponse-header failed: expected '%s' > '%s'",
+							$href->{$_}, $resp_hdr{$k}));
 						return -1;
 					}
 				} elsif ($href->{$_} ne $resp_hdr{$k}) {
