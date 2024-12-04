@@ -459,37 +459,17 @@ sub handle_http {
 
 			(my $k = $_) =~ tr/[A-Z]/[a-z]/;
 
-			my $verify_value = 1;
-			my $verify_less_than = 0;
-			my $key_inverted = 0;
+			# prefix '+' or '-' to require presence (or not) of header
+			# prefix '<' to require response value < expected value
+			# no prefix to require response value match expected value
+			my $tag = $k =~ s/^([<+-])// ? $1 : '';
 
-			if (substr($k, 0, 1) eq '+') {
-				$k = substr($k, 1);
-				$verify_value = 0;
-			} elsif (substr($k, 0, 1) eq '-') {
-				## the key should NOT exist
-				$k = substr($k, 1);
-				$key_inverted = 1;
-				$verify_value = 0; ## skip the value check
-			} elsif (substr($k, 0, 1) eq '<') {
-				## the value must be less than
-				$k = substr($k, 1);
-				$verify_less_than = 1;
+			if (defined($resp_hdr{$k}) ^ !!($tag ne '-')) {
+				diag(sprintf("\nheader '%s' %s", $k, ($tag ne '-' ? "is missing" : "MUST NOT be set")));
+				return -1;
 			}
 
-			if ($key_inverted) {
-				if (defined $resp_hdr{$k}) {
-					diag(sprintf("\nheader '%s' MUST not be set", $k));
-					return -1;
-				}
-			} else {
-				if (not defined $resp_hdr{$k}) {
-					diag(sprintf("\nrequired header '%s' is missing", $k));
-					return -1;
-				}
-			}
-
-			if ($verify_value) {
+			if ($tag ne '+' && $tag ne '-') {
 				if (ref($href->{$_}) eq "Regexp") {
 					if ($resp_hdr{$k} !~ $href->{$_}) {
 						diag(sprintf(
@@ -497,8 +477,8 @@ sub handle_http {
 							$href->{$_}, $resp_hdr{$k}, $1));
 						return -1;
 					}
-				} elsif ($verify_less_than) {
-					if ($resp_hdr{$k} >= $href->{$_}) {
+				} elsif ($tag eq '<') {
+					if (!($resp_hdr{$k} < $href->{$_})) {
 						diag(sprintf(
 							"\nresponse-header failed: expected '%s' > '%s'",
 							$href->{$_}, $resp_hdr{$k}));
