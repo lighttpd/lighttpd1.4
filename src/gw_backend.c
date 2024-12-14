@@ -1932,6 +1932,8 @@ static void gw_conditional_tcp_fin(gw_handler_ctx * const hctx, request_st * con
 static handler_t gw_write_refill_wb(gw_handler_ctx * const hctx, request_st * const r) {
     if (chunkqueue_is_empty(&r->reqbody_queue))
         return HANDLER_GO_ON;
+    if (hctx->gw_mode == GW_AUTHORIZER)
+        return HANDLER_GO_ON;
     if (hctx->stdin_append) {
         if (chunkqueue_length(&hctx->wb) < 65536 - 16384)
             return hctx->stdin_append(hctx);

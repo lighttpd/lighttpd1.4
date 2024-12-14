@@ -266,7 +266,8 @@ ajp13_stdin_append_n (handler_ctx * const hctx, const uint32_t n)
     else /* unexpected; misbehaving backend sent MANY Get Body Chunk requests */
         hctx->request_id = INT_MAX; /*(limitation of overloaded struct member)*/
 
-    ajp13_stdin_append(hctx);
+    if (hctx->gw_mode != GW_AUTHORIZER)
+        ajp13_stdin_append(hctx);
 }
 
 
@@ -629,7 +630,7 @@ ajp13_create_env (handler_ctx * const hctx)
         chunkqueue_prepend_buffer_commit(&hctx->wb);
         hctx->wb_reqlen = (off_t)n;
 
-        if (r->reqbody_length) {
+        if (r->reqbody_length && hctx->gw_mode != GW_AUTHORIZER) {
             /*chunkqueue_append_chunkqueue(&hctx->wb, &r->reqbody_queue);*/
             if (r->reqbody_length > 0)
                 hctx->wb_reqlen += r->reqbody_length;

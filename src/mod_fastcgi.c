@@ -187,6 +187,7 @@ static handler_t fcgi_stdin_append(handler_ctx *hctx) {
 	off_t req_cqlen = chunkqueue_length(req_cq);
 	int request_id = hctx->request_id;
 	if (req_cqlen > MAX_WRITE_LIMIT) req_cqlen = MAX_WRITE_LIMIT;
+	if (hctx->gw_mode == GW_AUTHORIZER) req_cqlen = 0;
 
 	/* something to send ? */
 	for (offset = 0; offset != req_cqlen; offset += weWant) {
@@ -232,7 +233,7 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 	request_st * const r = hctx->r;
 
 	http_cgi_opts opts = {
-	  (hctx->gw_mode == FCGI_AUTHORIZER),
+	  (hctx->gw_mode == GW_AUTHORIZER),
 	  host->break_scriptfilename_for_php,
 	  host->docroot,
 	  host->strip_request_uri
@@ -281,7 +282,7 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 		chunkqueue_prepend_buffer_commit(&hctx->wb);
 	}
 
-	if (r->reqbody_length) {
+	if (r->reqbody_length && hctx->gw_mode != GW_AUTHORIZER) {
 		/*chunkqueue_append_chunkqueue(&hctx->wb, &r->reqbody_queue);*/
 		if (r->reqbody_length > 0)
 			hctx->wb_reqlen += r->reqbody_length;/* (eventual) (minimal) total request size, not necessarily including all fcgi_headers around content length yet */

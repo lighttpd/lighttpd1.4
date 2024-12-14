@@ -879,9 +879,12 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 		b->ptr[b->used-2] = '0'; /*(overwrite end of request line)*/
 	}
 
-	if (r->reqbody_length > 0
-	    || (0 == r->reqbody_length
-		&& !http_method_get_or_head(r->http_method))) {
+	if (hctx->gw.gw_mode == GW_AUTHORIZER) {
+		buffer_append_string_len(b, CONST_STR_LEN("\r\nContent-Length: 0"));
+	}
+	else if (r->reqbody_length > 0
+	         || (0 == r->reqbody_length
+		     && !http_method_get_or_head(r->http_method))) {
 		/* set Content-Length if client sent Transfer-Encoding: chunked
 		 * and not streaming to backend (request body has been fully received) */
 		const buffer *vb = http_header_request_get(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
@@ -921,6 +924,10 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 			break;
 		case HTTP_HEADER_HOST:
 			continue; /*(handled further above)*/
+		case HTTP_HEADER_CONTENT_LENGTH:
+			if (hctx->gw.gw_mode == GW_AUTHORIZER)
+				continue; /*(handled further above)*/
+			break;
 		case HTTP_HEADER_OTHER:
 			if (__builtin_expect( ('p' == (ds->key.ptr[0] | 0x20)), 0)) {
 				if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy-Connection"))) continue;
@@ -1025,7 +1032,7 @@ static handler_t proxy_create_env(gw_handler_ctx *gwhctx) {
 	hctx->gw.wb_reqlen = buffer_clen(b);
 	chunkqueue_prepend_buffer_commit(&hctx->gw.wb);
 
-	if (r->reqbody_length) {
+	if (r->reqbody_length && hctx->gw.gw_mode != GW_AUTHORIZER) {
 		if (r->reqbody_length > 0)
 			hctx->gw.wb_reqlen += r->reqbody_length; /* total req size */
 		else /* as-yet-unknown total request size (Transfer-Encoding: chunked)*/
