@@ -1,3 +1,10 @@
+/*
+ * mod_magnet - Lua support for lighttpd
+ *
+ * Largely rewritten from original
+ * Copyright(c) 2021 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * License: BSD 3-clause (same as lighttpd)
+ */
 #include "first.h"
 
 #include "sys-crypto-md.h"
