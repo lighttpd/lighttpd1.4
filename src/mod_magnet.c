@@ -1,6 +1,7 @@
 #include "first.h"
 
 #include "sys-crypto-md.h"
+#include "sys-dirent.h"
 #include "algo_hmac.h"
 #include "base.h"
 #include "base64.h"
@@ -28,7 +29,6 @@
 #include "sys-unistd.h" /* readlink() */
 #endif
 
-#include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
 /*#include <setjmp.h>*//*(not currently used)*/
@@ -285,14 +285,6 @@ static int magnet_pairs(lua_State *L) {
 
 
 /* XXX: mystery why dir walk (readdir) is not already part of lua io liolib.c */
-
-#ifndef _D_EXACT_NAMLEN
-#ifdef _DIRENT_HAVE_D_NAMLEN
-#define _D_EXACT_NAMLEN(d) ((d)->d_namlen)
-#else
-#define _D_EXACT_NAMLEN(d) (strlen ((d)->d_name))
-#endif
-#endif
 
 static int magnet_readdir_iter(lua_State *L) {
     DIR ** const d = (DIR **)lua_touserdata(L, lua_upvalueindex(1));
