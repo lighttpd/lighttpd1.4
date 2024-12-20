@@ -111,6 +111,23 @@
 #include "plugin.h"
 #include "sock_addr.h"
 
+/* (kludge compatibility with unstable, unreleased OpenSSL ECH API) */
+#if !defined(OPENSSL_NO_ECH) && !defined(BORINGSSL_API_VERSION)
+#ifdef SSL_ECH_USE_FOR_RETRY
+#define OSSL_ECHSTORE SSL_CTX
+#define OSSL_ECHSTORE_num_keys SSL_CTX_ech_server_get_key_status
+#define OSSL_ECHSTORE_flush_keys SSL_CTX_ech_server_flush_keys
+#define OSSL_ECHSTORE_new(a,b) s->ssl_ctx
+#define OSSL_ECHSTORE_free(a) do { } while (0)
+#define SSL_CTX_set1_echstore(a,b) 1
+#define OSSL_ECH_FOR_RETRY SSL_ECH_USE_FOR_RETRY
+#define OSSL_ECHSTORE_read_pem(es,in,is_retry_config) \
+        SSL_CTX_ech_server_enable_file(es, b->ptr, is_retry_config)
+#define SSL_ech_get1_status SSL_ech_get_status
+#define echstore ssl_ctx
+#endif
+#endif
+
 typedef struct {
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
     EVP_PKEY *ssl_pemfile_pkey;
@@ -691,8 +708,10 @@ static void ech_status_trace(request_st *r, SSL *ssl)
     else
         log_error(r->conf.errh, __FILE__, __LINE__,
                   "ech_status: %d sni_clr: %s sni_ech: %s", status, clr, ech);
+  #ifndef SSL_ECH_USE_FOR_RETRY
     OPENSSL_free(sni_ech);
     OPENSSL_free(sni_clr);
+  #endif
 }
 
 static unsigned int
@@ -845,8 +864,10 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
         }
         break;
     }
+  #ifndef SSL_ECH_USE_FOR_RETRY
     OPENSSL_free(sni_ech);
     OPENSSL_free(sni_clr);
+  #endif
     return rc;
 }
 
@@ -1676,8 +1697,10 @@ mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
         char *sni_ech = NULL;
         char *sni_clr = NULL;
         int rc = SSL_ech_get1_status(hctx->ssl, &sni_ech, &sni_clr);
+       #ifndef SSL_ECH_USE_FOR_RETRY
         OPENSSL_free(sni_ech);
         OPENSSL_free(sni_clr);
+       #endif
         switch (rc) {
           case SSL_ECH_STATUS_SUCCESS:
             break;
@@ -4385,8 +4408,10 @@ http_cgi_ssl_ech(request_st * const r, SSL * const ssl)
     http_header_env_set(r, CONST_STR_LEN("SSL_ECH_COVER"),  clr, strlen(clr));
     const char *ech = sni_ech ? sni_ech : "NONE";
     http_header_env_set(r, CONST_STR_LEN("SSL_ECH_HIDDEN"), ech, strlen(ech));
+  #ifndef SSL_ECH_USE_FOR_RETRY
     OPENSSL_free(sni_ech);
     OPENSSL_free(sni_clr);
+  #endif
 }
 #endif
 
