@@ -559,6 +559,27 @@ static void ech_key_status_trace (server * const srv, OSSL_ECHSTORE * const es)
 }
 #endif
 
+__attribute_pure__
+static const buffer *
+mod_openssl_refresh_ech_key_is_ech_only(plugin_ssl_ctx * const s, const char * const h, size_t hlen)
+{
+    /* (similar to mod_openssl_ech_only(), but without hctx) */
+    const array * const ech_only_hosts = plugin_data_singleton->ech_only_hosts;
+    if (ech_only_hosts) {
+        const data_unset *du = array_get_element_klen(ech_only_hosts, h, hlen);
+        if (du) return &((const data_string *)du)->value;
+    }
+
+    const array * const ech_public_hosts = s->ech_public_hosts;
+    if (ech_public_hosts
+        && NULL == array_get_element_klen(ech_public_hosts, h, hlen)) {
+        /*(return first host in ech_public_hosts list as non-ech-host)*/
+        return &ech_public_hosts->data[0]->key;
+    }
+
+    return NULL;
+}
+
 #include "sys-dirent.h"
 static int
 mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, const unix_time64_t cur_ts)
@@ -617,9 +638,17 @@ mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, 
             continue;
         }
 
+        uint32_t hlen = nlen > 8 && 0 == memcmp(ep->d_name+nlen-8, ".pem", 4)
+          ? nlen-8
+          : nlen-4;
+        int is_retry_config =
+          mod_openssl_refresh_ech_key_is_ech_only(s, ep->d_name, hlen)
+            ? 0
+            : OSSL_ECH_FOR_RETRY;
+
         BIO *in = BIO_new_file(b->ptr, "r");
         if (in != NULL
-            && 1 == OSSL_ECHSTORE_read_pem(es, in, OSSL_ECH_FOR_RETRY)) {
+            && 1 == OSSL_ECHSTORE_read_pem(es, in, is_retry_config)) {
           #ifdef LIGHTTPD_OPENSSL_ECH_DEBUG
             log_error(srv->errh, __FILE__, __LINE__,
               "SSL: OSSL_ECHSTORE_read_pem() worked for %s", b->ptr);
