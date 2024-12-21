@@ -87,13 +87,26 @@
 #endif
 
 /* check defines from <openssl/ssl.h> for experimental ECH support */
-#if !defined(SSL_OP_ECH_GREASE)
+#if !defined(SSL_OP_ECH_GREASE) && !defined(SSL_R_ECH_REJECTED)
 #define OPENSSL_NO_ECH
 #endif
 
 #ifndef OPENSSL_NO_ECH
 /*#define LIGHTTPD_OPENSSL_ECH_DEBUG*/ /*(ECH developer debug trace)*/
+#if defined(BORINGSSL_API_VERSION)
+#include <openssl/hpke.h>
+#ifndef TLSEXT_TYPE_ech
+#define TLSEXT_TYPE_ech TLSEXT_TYPE_encrypted_client_hello
+#endif
+#ifndef OSSL_ECH_FOR_RETRY
+#define OSSL_ECH_FOR_RETRY 1
+#endif
+#ifndef SSL_ECH_STATUS_SUCCESS
+#define SSL_ECH_STATUS_SUCCESS 1
+#endif
+#else
 #include <openssl/ech.h>
+#endif
 #endif
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
@@ -110,6 +123,10 @@
 #include "log.h"
 #include "plugin.h"
 #include "sock_addr.h"
+
+#ifdef BORINGSSL_API_VERSION
+#include "base64.h"
+#endif
 
 /* (kludge compatibility with unstable, unreleased OpenSSL ECH API) */
 #if !defined(OPENSSL_NO_ECH) && !defined(BORINGSSL_API_VERSION)
@@ -545,6 +562,7 @@ ssl_tlsext_status_cb(SSL *ssl, void *arg)
 #ifndef OPENSSL_NO_ECH
 
 #ifdef LIGHTTPD_OPENSSL_ECH_DEBUG
+#if !defined(BORINGSSL_API_VERSION)
 static void ech_key_status_trace (server * const srv, OSSL_ECHSTORE * const es)
 {
     int numkeys = 0;
@@ -557,6 +575,7 @@ static void ech_key_status_trace (server * const srv, OSSL_ECHSTORE * const es)
           "SSL: OSSL_ECHSTORE_num_keys number of keys loaded %d",
           numkeys);
 }
+#endif
 #endif
 
 __attribute_pure__
@@ -579,6 +598,11 @@ mod_openssl_refresh_ech_key_is_ech_only(plugin_ssl_ctx * const s, const char * c
 
     return NULL;
 }
+
+#define PEM_BEGIN_PKEY      "-----BEGIN PRIVATE KEY-----"
+#define PEM_END_PKEY        "-----END PRIVATE KEY-----"
+#define PEM_BEGIN_ECHCONFIG "-----BEGIN ECHCONFIG-----"
+#define PEM_END_ECHCONFIG   "-----END ECHCONFIG-----"
 
 #include "sys-dirent.h"
 static int
@@ -659,6 +683,124 @@ mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, 
         *v = fallback ? 0 : OSSL_ECH_FOR_RETRY;
     }
 
+  #if defined(BORINGSSL_API_VERSION)
+
+    SSL_ECH_KEYS *keys = SSL_ECH_KEYS_new();
+    if (keys == NULL) {
+        array_free_data(&a);
+        return 0;
+    }
+
+    int rc = 1;
+    for (uint32_t i = 0; i < a.used; ++i) {
+        buffer * const n = &a.sorted[i]->key;
+        buffer_append_path_len(kp, BUF_PTR_LEN(n)); /* *.ech */
+
+        int rv = 0;
+        off_t dlen = 64*1024;/*(arbitrary limit: 64 KB file; expect < 1 KB)*/
+        char *data = fdevent_load_file(kp->ptr, &dlen, srv->errh, malloc, free);
+        EVP_HPKE_KEY key;
+        EVP_HPKE_KEY_zero(&key);
+        buffer * const tb = srv->tmp_buf;
+        buffer_clear(tb);
+        do {
+            if (NULL == data) break;
+
+            char *b, *e;
+            uint32_t len;
+            b = strstr(data, PEM_BEGIN_PKEY);
+            if (NULL == b) break;
+            b += sizeof(PEM_BEGIN_PKEY)-1;
+            if (*b == '\r') ++b;
+            if (*b == '\n') ++b;
+            e = strstr(b, PEM_END_PKEY);
+            if (NULL == e) break;
+            len = (uint32_t)(e - b);
+
+            buffer_clear(tb);
+            if (NULL == buffer_append_base64_decode(tb,b,len,BASE64_STANDARD))
+                break;
+
+            const uint8_t *x = (uint8_t *)tb->ptr;
+            EVP_PKEY *pkey = d2i_AutoPrivateKey(NULL,&x,(long)buffer_clen(tb));
+            /*(BoringSSL tools/bssl outputs raw pkey;
+             * handle if that output is subsequently base64-encoded raw pkey)*/
+            /*if (NULL == pkey) break;*/
+
+            const EVP_HPKE_KEM * const kem = (pkey == NULL)
+              ? EVP_hpke_x25519_hkdf_sha256()
+              : EVP_PKEY_id(pkey) == EVP_PKEY_X25519 /* NID_X25519 */
+              ? EVP_hpke_x25519_hkdf_sha256()
+              : EVP_PKEY_id(pkey) == EVP_PKEY_EC /* NID_X9_62_id_ecPublicKey */
+              ? EVP_hpke_p256_hkdf_sha256()
+              : NULL;
+            if (NULL == kem) {
+                EVP_PKEY_free(pkey);
+                break;
+            }
+
+            size_t out_len = buffer_clen(tb); /*(large enough)*/
+            rv = (pkey)
+              ? EVP_PKEY_get_raw_private_key(pkey, (uint8_t *)tb->ptr, &out_len)
+              : 1;
+            EVP_PKEY_free(pkey);
+            if (0 == rv)
+                break;
+            rv = 0;
+
+            EVP_HPKE_KEY_zero(&key);
+            if (!EVP_HPKE_KEY_init(&key, kem, (uint8_t *)tb->ptr, out_len))
+                break;
+
+            ck_memzero(tb->ptr, buffer_clen(tb));
+
+            b = strstr(data, PEM_BEGIN_ECHCONFIG);
+            if (NULL == b) break;
+            b += sizeof(PEM_BEGIN_ECHCONFIG)-1;
+            if (*b == '\r') ++b;
+            if (*b == '\n') ++b;
+            e = strstr(b, PEM_END_ECHCONFIG);
+            if (NULL == e) break;
+            len = (uint32_t)(e - b);
+
+            buffer_clear(tb);
+            if (NULL == buffer_append_base64_decode(tb,b,len,BASE64_STANDARD))
+                break;
+
+            /* OpenSSL tool 'openssl ech' ECHConfig begins with 2-byte len;
+             * BoringSSL 'tool/bssl generate-ech' ECHConfig does not */
+            if (buffer_clen(tb) > 2
+                && (uint32_t)((tb->ptr[0]<<4)|tb->ptr[1]) == buffer_clen(tb)-2){
+                memmove(tb->ptr, tb->ptr+2, buffer_clen(tb)-2);
+                buffer_truncate(tb, buffer_clen(tb)-2);
+            }
+
+            const int is_retry_config = ((data_integer *)a.sorted[i])->value;
+            rv = SSL_ECH_KEYS_add(keys, is_retry_config,
+                                  (uint8_t *)BUF_PTR_LEN(tb), &key);
+        } while (0);
+        ck_memzero(tb->ptr, buffer_clen(tb));
+        EVP_HPKE_KEY_cleanup(&key);
+        if (dlen) ck_memzero(data, dlen);
+        free(data);
+
+        if (0 == rv) {
+            char buf[128];
+            ERR_error_string_n(ERR_get_error(), buf, sizeof(buf));
+            log_error(srv->errh, __FILE__, __LINE__,
+                      "SSL: %s: %s", kp->ptr, buf);
+            rc = 0;
+        }
+
+        buffer_truncate(kp, dirlen);
+    }
+
+    if (1 != SSL_CTX_set1_ech_keys(s->ssl_ctx, keys))
+        rc = 0;
+    SSL_ECH_KEYS_free(keys);
+
+  #else  /* !BORINGSSL_API_VERSION */
+
     OSSL_ECHSTORE * const es = OSSL_ECHSTORE_new(NULL, NULL);
     if (es == NULL) {
         array_free_data(&a);
@@ -698,6 +840,8 @@ mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, 
    #endif
     OSSL_ECHSTORE_free(es);
 
+  #endif /* !BORINGSSL_API_VERSION */
+
     array_free_data(&a);
 
     if (1 == rc) s->ech_keydir_refresh_ts = cur_ts;
@@ -724,6 +868,7 @@ mod_openssl_refresh_ech_keys (server * const srv, const plugin_data *p, const un
 
 
 #ifdef LIGHTTPD_OPENSSL_ECH_DEBUG
+#if !defined(BORINGSSL_API_VERSION)
 
 __attribute_const__
 static const char * ech_status_str (int status)
@@ -782,6 +927,7 @@ mod_openssl_ech_cb (SSL * const ssl, const char * const str)
     return 1;
 }
 
+#endif /* !BORING_API_VERSION */
 #endif /* LIGHTTPD_OPENSSL_ECH_DEBUG */
 
 
@@ -856,16 +1002,29 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
     char *sni_ech = NULL;
     char *sni_clr = NULL;
     handler_t rc = HANDLER_GO_ON;
-    switch (SSL_ech_get1_status(hctx->ssl, &sni_ech, &sni_clr)) {
+  #if defined(BORINGSSL_API_VERSION)
+    switch (SSL_ech_accepted(hctx->ssl))
+  #else
+    switch (SSL_ech_get1_status(hctx->ssl, &sni_ech, &sni_clr))
+  #endif
+    {
       case SSL_ECH_STATUS_SUCCESS:
         /* require that request :authority (Host) match SNI in ECH to avoid one
          * ECH-provided host testing for existence of another ECH-only host.
          * 'sni_ech' is assumed normalized since ECH decryption succeeded. */
+       {
+      #if defined(BORINGSSL_API_VERSION)
+        const char *ech =
+          SSL_get_servername(hctx->ssl, TLSEXT_NAMETYPE_host_name);
+      #else
+        const char *ech = sni_ech;
+      #endif
         if (!mod_openssl_ech_only_host_match(CONST_BUF_LEN(r->http_host),
-                                             sni_ech, strlen(sni_ech))) {
+                                             ech, strlen(ech))) {
             r->http_status = 400;
             rc = HANDLER_FINISHED;
         }
+       }
         break;
       /*case SSL_ECH_STATUS_NOT_TRIED:*/
       default:
@@ -1749,6 +1908,9 @@ mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
          * to help admins avoid mistakes where ech-only host might be accessed
          * on a different port.  Admin can use separate lighttpd instances if
          * there is a need for such complex behavior on different ports.) */
+      #if defined(BORINGSSL_API_VERSION)
+        int rc = SSL_ech_accepted(hctx->ssl);
+      #else
         char *sni_ech = NULL;
         char *sni_clr = NULL;
         int rc = SSL_ech_get1_status(hctx->ssl, &sni_ech, &sni_clr);
@@ -1756,6 +1918,7 @@ mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
         OPENSSL_free(sni_ech);
         OPENSSL_free(sni_clr);
        #endif
+      #endif
         switch (rc) {
           case SSL_ECH_STATUS_SUCCESS:
             break;
@@ -3155,8 +3318,11 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
       #ifndef OPENSSL_NO_ECH
         if (s->ech_opts) {
           #if defined(LIGHTTPD_OPENSSL_ECH_DEBUG)
+          #if !defined(BORINGSSL_API_VERSION)
             SSL_CTX_ech_set_callback(s->ssl_ctx, mod_openssl_ech_cb);
           #endif
+          #endif
+          #if defined(SSL_OP_ECH_TRIALDECRYPT)
             /* enable SSL_OP_ECH_TRIALDECRYPT by default unless disabled;
              * prefer "Options" => "ECHTrialDecrypt"
              * in lighttpd ssl.openssl.ssl-conf-cmd */
@@ -3165,6 +3331,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                                          CONST_STR_LEN("trial-decrypt")), 1)) {
                 SSL_CTX_set_options(s->ssl_ctx, SSL_OP_ECH_TRIALDECRYPT);
             }
+          #endif
         }
       #endif
 
@@ -4449,6 +4616,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 
 
 #ifdef LIGHTTPD_OPENSSL_ECH_DEBUG
+#if !defined(BORINGSSL_API_VERSION)
 static void
 http_cgi_ssl_ech(request_st * const r, SSL * const ssl)
 {
@@ -4468,6 +4636,7 @@ http_cgi_ssl_ech(request_st * const r, SSL * const ssl)
     OPENSSL_free(sni_clr);
   #endif
 }
+#endif
 #endif
 
 
@@ -4494,7 +4663,9 @@ http_cgi_ssl_env (request_st * const r, handler_ctx * const hctx)
     }
 
   #ifdef LIGHTTPD_OPENSSL_ECH_DEBUG
+  #if !defined(BORINGSSL_API_VERSION)
     http_cgi_ssl_ech(r, hctx->ssl);
+  #endif
   #endif
 }
 
