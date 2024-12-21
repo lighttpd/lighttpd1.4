@@ -1704,6 +1704,7 @@ mod_mbedtls_set_defaults_sockets(server *srv, plugin_data *p)
         if (0 == i) memcpy(&defaults, &conf, sizeof(conf));
 
         if (0 != i && !conf.ssl_enabled) continue;
+        if (0 != i && !is_socket_scope) continue;
 
         /* fill plugin_config_socket with global context then $SERVER["socket"]
          * only for directives directly in current $SERVER["socket"] condition*/
