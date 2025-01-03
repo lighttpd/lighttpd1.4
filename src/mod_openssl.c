@@ -122,7 +122,7 @@
 #define SSL_CTX_set1_echstore(a,b) 1
 #define OSSL_ECH_FOR_RETRY SSL_ECH_USE_FOR_RETRY
 #define OSSL_ECHSTORE_read_pem(es,in,is_retry_config) \
-        SSL_CTX_ech_server_enable_file(es, b->ptr, is_retry_config)
+        SSL_CTX_ech_server_enable_file(es, kp->ptr, is_retry_config)
 #define SSL_ech_get1_status SSL_ech_get_status
 #define echstore ssl_ctx
 #endif
@@ -588,83 +588,107 @@ mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, 
         || s->ech_keydir_refresh_ts + s->ech_keydir_refresh_interval > cur_ts)
         return 1;
 
-    OSSL_ECHSTORE * const es_cur = SSL_CTX_get1_echstore(s->ssl_ctx);
+    /* collect *.ech from s->ech_keydir
+     * order matters, so load into array for predictable ordering
+     * and allow admin to name files with prefixes for desired order
+     * (note: array uses case-insensitive sort) */
 
-    int nkeys = 0;
-  if (es_cur != NULL)
-    if (1 != OSSL_ECHSTORE_num_keys(es_cur, &nkeys)) nkeys = 0;
+    array a = { NULL, NULL, 0, 0 };
 
-    int rc = 1;
-  if (es_cur != NULL)
-    if (nkeys > 0) {
-        time_t refresh_interval = (time_t)(int32_t)s->ech_keydir_refresh_interval;
-        if (refresh_interval <= 0)
-            /* keys loaded and refresh time is disabled (zero or negative) */
-            return 1;
-
-        rc = OSSL_ECHSTORE_flush_keys(es_cur, refresh_interval+5);
-        if (1 != rc)
-            log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: OSSL_ECHSTORE_flush_keys failed (%d)", rc);
+    buffer * const kp = s->ech_keydir;
+    const uint32_t dirlen = buffer_clen(kp);
+    DIR * const dp = opendir(kp->ptr);
+    if (NULL == dp) {
+        log_perror(srv->errh,__FILE__,__LINE__,"%s dir:%s",__func__,kp->ptr);
+        return 0;
     }
 
-    OSSL_ECHSTORE_free(es_cur);
+    struct stat st;
+    for (struct dirent *ep; (ep = readdir(dp)); ) {
+        uint32_t nlen = (uint32_t)_D_EXACT_NAMLEN(ep);
+        if (nlen > 4 && 0 == memcmp(ep->d_name+nlen-4, ".ech", 4)
+            && 0 == stat(kp->ptr, &st))
+            *(array_get_int_ptr(&a, ep->d_name, nlen)) =
+              TIME64_CAST(st.st_mtime) > 1 ? (int)st.st_mtime : 0;
+            /*(disable OSSL_ECH_FOR_RETRY if mtime is 0 or 1 (from 1970))*/
+    }
 
-    buffer * const b = s->ech_keydir;
-    const uint32_t dirlen = buffer_clen(b);
-    DIR * const dp = opendir(b->ptr);
-    if (NULL == dp) {
-        log_perror(srv->errh,__FILE__,__LINE__,"%s dir:%s",__func__,b->ptr);
-        return 0;
+    closedir(dp);
+
+    /* walk sorted list, change array values from mtime to retry config flag */
+    for (uint32_t i = 0; i < a.used; ++i) {
+        buffer * const n = &a.sorted[i]->key;
+        int *v = &((data_integer *)a.sorted[i])->value;
+
+        /* (arbitrary convention: allow tag prefix followed by '@' for sort) */
+        const char *h = strchr(n->ptr, '@');
+        uint32_t hlen = buffer_clen(n);
+        if (h)
+            hlen -= (uint32_t)(++h - n->ptr);
+        else
+            h = n->ptr;
+        hlen -= (hlen > 8 && 0 == memcmp(h+hlen-8, ".pem", 4)) ? 8 : 4;
+        for (uint32_t j = i+1; j < a.used; ++j) {
+            /* detect if value already converted to retry config flag */
+            int * const nv = &((data_integer *)a.sorted[j])->value;
+            if (*nv == 0 || *nv == OSSL_ECH_FOR_RETRY)
+                continue; /*(false positive if mtime is 0 or 1 (from 1970))*/
+
+            const buffer * const next = &a.sorted[j]->key;
+            const char *nh = strchr(next->ptr, '@');
+            uint32_t nhlen = buffer_clen(next);
+            if (nh)
+                nhlen -= (uint32_t)(++nh - next->ptr);
+            else
+                nh = next->ptr;
+            nhlen -= (nhlen > 8 && 0 == memcmp(nh+nhlen-8, ".pem", 4)) ? 8 : 4;
+            if (nhlen != hlen || 0 != memcmp(nh, h, hlen))
+                continue;
+            if (*(unsigned int *)v < *(unsigned int *)nv) {
+                *v = 0;
+                v = nv;
+            }
+            else {
+                ((data_integer *)a.sorted[j])->value = 0;
+            }
+        }
+        /* set retry config flag if newest entry for host and no alternate
+         * fallback host; do not set retry config for older keys */
+        const buffer * const fallback =
+          mod_openssl_refresh_ech_key_is_ech_only(s, h, hlen);
+        *v = fallback ? 0 : OSSL_ECH_FOR_RETRY;
     }
 
     OSSL_ECHSTORE * const es = OSSL_ECHSTORE_new(NULL, NULL);
     if (es == NULL) {
+        array_free_data(&a);
         return 0;
     }
 
-    /* load any echconfig files matching <name>.ech */
-    struct stat st;
-    for (struct dirent *ep; (ep = readdir(dp)); ) {
-        size_t nlen = _D_EXACT_NAMLEN(ep);
-        if (nlen <= 4) continue;
-        if (0 != memcmp(ep->d_name+nlen-4, ".ech", 4)) continue;
+    /* load all echconfig files matching *.ech */
+    int rc = 1;
+    for (uint32_t i = 0; i < a.used; ++i) {
+        buffer * const n = &a.sorted[i]->key;
+        buffer_append_path_len(kp, BUF_PTR_LEN(n)); /* *.ech */
 
-        buffer_append_path_len(b, ep->d_name, nlen);    /* *.ech */
-
-        if (0 == stat(b->ptr, &st)
-            && TIME64_CAST(st.st_mtime) < s->ech_keydir_refresh_ts) {
-            buffer_truncate(b, dirlen);
-            continue;
-        }
-
-        uint32_t hlen = nlen > 8 && 0 == memcmp(ep->d_name+nlen-8, ".pem", 4)
-          ? nlen-8
-          : nlen-4;
-        int is_retry_config =
-          mod_openssl_refresh_ech_key_is_ech_only(s, ep->d_name, hlen)
-            ? 0
-            : OSSL_ECH_FOR_RETRY;
-
-        BIO *in = BIO_new_file(b->ptr, "r");
+        BIO *in = BIO_new_file(kp->ptr, "r");
+        const int is_retry_config = ((data_integer *)a.sorted[i])->value;
         if (in != NULL
             && 1 == OSSL_ECHSTORE_read_pem(es, in, is_retry_config)) {
           #ifdef LIGHTTPD_OPENSSL_ECH_DEBUG
             log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: OSSL_ECHSTORE_read_pem() worked for %s", b->ptr);
+              "SSL: OSSL_ECHSTORE_read_pem() worked for %s", kp->ptr);
           #endif
         }
         else {
             log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: OSSL_ECHSTORE_read_pem() failed for %s", b->ptr);
+              "SSL: OSSL_ECHSTORE_read_pem() failed for %s", kp->ptr);
             rc = 0;
         }
         BIO_free_all(in);
 
-        buffer_truncate(b, dirlen);
+        buffer_truncate(kp, dirlen);
     }
-
-    closedir(dp);
 
     if (1 != SSL_CTX_set1_echstore(s->ssl_ctx, es))
         rc = 0;
@@ -673,6 +697,8 @@ mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, 
         ech_key_status_trace(srv, es);
    #endif
     OSSL_ECHSTORE_free(es);
+
+    array_free_data(&a);
 
     if (1 == rc) s->ech_keydir_refresh_ts = cur_ts;
     return rc;
