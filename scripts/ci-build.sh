@@ -44,8 +44,8 @@ sysname="$(uname -s)"
 
 if [ "$sysname" = "Darwin" ]; then
     # keg-only package installs not linked into /opt/homebrew
-    #   brew install cyrus-sasl krb5 libressl libpq libxml2 openldap zlib
-    export PKG_CONFIG_PATH="/opt/homebrew/opt/cyrus-sasl/lib/pkgconfig:/opt/homebrew/opt/krb5/lib/pkgconfig:/opt/homebrew/opt/libressl/lib/pkgconfig:/opt/homebrew/opt/libpq/lib/pkgconfig:/opt/homebrew/opt/libxml2/lib/pkgconfig:/opt/homebrew/opt/openldap/lib/pkgconfig:/opt/homebrew/opt/zlib/lib/pkgconfig"
+    #   brew install cyrus-sasl krb5 libressl libpq libxml2 mariadb-connector-c openldap zlib
+    export PKG_CONFIG_PATH="/opt/homebrew/opt/cyrus-sasl/lib/pkgconfig:/opt/homebrew/opt/krb5/lib/pkgconfig:/opt/homebrew/opt/libressl/lib/pkgconfig:/opt/homebrew/opt/libpq/lib/pkgconfig:/opt/homebrew/opt/libxml2/lib/pkgconfig:/opt/homebrew/opt/mariadb-connector-c/lib/pkgconfig:/opt/homebrew/opt/openldap/lib/pkgconfig:/opt/homebrew/opt/zlib/lib/pkgconfig"
 fi
 
 if [ "$sysname" = "FreeBSD" ]; then
