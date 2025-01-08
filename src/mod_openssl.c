@@ -631,6 +631,7 @@ mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, 
     for (struct dirent *ep; (ep = readdir(dp)); ) {
         uint32_t nlen = (uint32_t)_D_EXACT_NAMLEN(ep);
         if (nlen > 4 && 0 == memcmp(ep->d_name+nlen-4, ".ech", 4)
+            && ep->d_name[0] != '.'
             && 0 == stat(kp->ptr, &st))
             *(array_get_int_ptr(&a, ep->d_name, nlen)) =
               TIME64_CAST(st.st_mtime) > 1 ? (int)st.st_mtime : 0;
