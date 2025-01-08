@@ -592,7 +592,7 @@ mod_openssl_refresh_ech_key_is_ech_only(plugin_ssl_ctx * const s, const char * c
     const array * const ech_public_hosts = s->ech_public_hosts;
     if (ech_public_hosts
         && NULL == array_get_element_klen(ech_public_hosts, h, hlen)) {
-        /*(return first host in ech_public_hosts list as non-ech-host)*/
+        /*(return first host in ech_public_hosts list as public-name)*/
         return &ech_public_hosts->data[0]->key;
     }
 
@@ -952,7 +952,7 @@ mod_openssl_ech_only (const handler_ctx * const hctx, const char * const h, size
     }
     if (ech_public_hosts
         && NULL == array_get_element_klen(ech_public_hosts, h, hlen)) {
-        /*(return first host in ech_public_hosts list as non-ech-host)*/
+        /*(return first host in ech_public_hosts list as public-name)*/
         return &ech_public_hosts->data[0]->key;
     }
     return NULL;
@@ -1592,7 +1592,8 @@ mod_openssl_merge_config_cpv (plugin_config * const pconf, const config_plugin_v
       case 17:/* ssl.verifyclient.ca-crl-file */
         break;
      #endif
-      case 18:/* ssl.non-ech-host */
+      case 18:/* ssl.ech-public-name */
+      case 19:/* ssl.non-ech-host */
         break;
       default:/* should not happen */
         return;
@@ -1905,7 +1906,7 @@ mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
          * avoid timing differences (which might reveal existence of specific
          * ech-only host due to having to reset, re-patch if host is ech-only).
          * This is possible with the global list of ech_only_hosts configured
-         * by ssl.non-ech-host.  We have chosen to unconditionally strip port
+         * w/ ssl.ech-public-name.  We have chosen to unconditionally strip port
          * to help admins avoid mistakes where ech-only host might be accessed
          * on a different port.  Admin can use separate lighttpd instances if
          * there is a need for such complex behavior on different ports.) */
@@ -3574,20 +3575,20 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                 s->ech_keydir_refresh_interval =
                   (uint32_t)config_plugin_value_to_int32(du, 900);
                 du = array_get_element_klen(ech_opts,
-                                            CONST_STR_LEN("public-hosts"));
+                                            CONST_STR_LEN("public-names"));
                 if (du && du->type == TYPE_ARRAY) {
                     s->ech_public_hosts = &((data_array *)du)->value;
                     if (s->ech_public_hosts->used == 0)
                         s->ech_public_hosts = NULL;
                     else {
-                        /*(error out if "public-hosts" has ports appended)
+                        /*(error out if "public-names" has ports appended)
                          *(could instead re-create/re-index array, but naw)*/
                         const array * const a = s->ech_public_hosts;
                         for (uint32_t j = 0; j < a->used; ++j) {
                             const buffer * h = &a->data[j]->key;
                             if (NULL != strchr(h->ptr, ':')) {
                                 log_error(srv->errh, __FILE__, __LINE__,
-                                  "ssl.ech-opts \"public-hosts\" must be listed"
+                                  "ssl.ech-opts \"public-names\" must be listed"
                                   "without port: %s", h->ptr);
                                 rc = HANDLER_ERROR;
                             }
@@ -3696,6 +3697,9 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.verifyclient.ca-crl-file"),
+        T_CONFIG_STRING,
+        T_CONFIG_SCOPE_CONNECTION }
+     ,{ CONST_STR_LEN("ssl.ech-public-name"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.non-ech-host"),
@@ -3813,7 +3817,8 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
               case 17:/* ssl.verifyclient.ca-crl-file */
              #endif
                 break;
-              case 18:/* ssl.non-ech-host */
+              case 18:/* ssl.ech-public-name */
+              case 19:/* ssl.non-ech-host */
                 if (0 != i) {
                     config_cond_info cfginfo;
                     config_get_config_cond_info(&cfginfo,
