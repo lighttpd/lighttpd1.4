@@ -608,8 +608,10 @@ mod_openssl_refresh_ech_key_is_ech_only(plugin_ssl_ctx * const s, const char * c
 static int
 mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, const unix_time64_t cur_ts)
 {
-    if (NULL == s->ech_keydir
-        || s->ech_keydir_refresh_ts + s->ech_keydir_refresh_interval > cur_ts)
+    if (NULL == s->ech_keydir)
+        return 1;
+    if (0 != s->ech_keydir_refresh_ts
+        && s->ech_keydir_refresh_ts + s->ech_keydir_refresh_interval > cur_ts)
         return 1;
 
     /* collect *.ech from s->ech_keydir
@@ -627,18 +629,27 @@ mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, 
         return 0;
     }
 
+    unix_time64_t lmod = 0;
     struct stat st;
     for (struct dirent *ep; (ep = readdir(dp)); ) {
         uint32_t nlen = (uint32_t)_D_EXACT_NAMLEN(ep);
         if (nlen > 4 && 0 == memcmp(ep->d_name+nlen-4, ".ech", 4)
             && ep->d_name[0] != '.'
-            && 0 == stat(kp->ptr, &st))
+            && 0 == stat(kp->ptr, &st)) {
             *(array_get_int_ptr(&a, ep->d_name, nlen)) =
-              TIME64_CAST(st.st_mtime) > 1 ? (int)st.st_mtime : 0;
-            /*(disable OSSL_ECH_FOR_RETRY if mtime is 0 or 1 (from 1970))*/
+              TIME64_CAST(st.st_mtime) > 1 ? (int)st.st_mtime : 2;
+            if (lmod < TIME64_CAST(st.st_mtime))
+                lmod = TIME64_CAST(st.st_mtime);
+        }
     }
 
     closedir(dp);
+
+    if (s->ech_keydir_refresh_ts > lmod) {
+        s->ech_keydir_refresh_ts = cur_ts;
+        array_free_data(&a);
+        return 1; /* no changes since last refresh */
+    }
 
     /* walk sorted list, change array values from mtime to retry config flag */
     for (uint32_t i = 0; i < a.used; ++i) {
@@ -657,7 +668,7 @@ mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, 
             /* detect if value already converted to retry config flag */
             int * const nv = &((data_integer *)a.sorted[j])->value;
             if (*nv == 0 || *nv == OSSL_ECH_FOR_RETRY)
-                continue; /*(false positive if mtime is 0 or 1 (from 1970))*/
+                continue;
 
             const buffer * const next = &a.sorted[j]->key;
             const char *nh = strchr(next->ptr, '@');
@@ -3573,7 +3584,7 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
                     s->ech_keydir = NULL;
                 du = array_get_element_klen(ech_opts, CONST_STR_LEN("refresh"));
                 s->ech_keydir_refresh_interval =
-                  (uint32_t)config_plugin_value_to_int32(du, 900);
+                  (uint32_t)config_plugin_value_to_int32(du, 300);
                 du = array_get_element_klen(ech_opts,
                                             CONST_STR_LEN("public-names"));
                 if (du && du->type == TYPE_ARRAY) {
