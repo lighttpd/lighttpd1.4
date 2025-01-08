@@ -99,6 +99,7 @@ http_response_physical_pathinfo (request_st * const r)
     buffer_truncate(&r->uri.path, buffer_clen(&r->uri.path) - len);
     buffer_truncate(&r->physical.path,
                     (uint32_t)(pathinfo - r->physical.path.ptr));
+    config_cond_cache_reset_item(r, COMP_HTTP_URL);
 
     return sce;
 }
