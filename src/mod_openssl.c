@@ -128,23 +128,6 @@
 #include "base64.h"
 #endif
 
-/* (kludge compatibility with unstable, unreleased OpenSSL ECH API) */
-#if !defined(OPENSSL_NO_ECH) && !defined(BORINGSSL_API_VERSION)
-#ifdef SSL_ECH_USE_FOR_RETRY
-#define OSSL_ECHSTORE SSL_CTX
-#define OSSL_ECHSTORE_num_keys SSL_CTX_ech_server_get_key_status
-#define OSSL_ECHSTORE_flush_keys SSL_CTX_ech_server_flush_keys
-#define OSSL_ECHSTORE_new(a,b) s->ssl_ctx
-#define OSSL_ECHSTORE_free(a) do { } while (0)
-#define SSL_CTX_set1_echstore(a,b) 1
-#define OSSL_ECH_FOR_RETRY SSL_ECH_USE_FOR_RETRY
-#define OSSL_ECHSTORE_read_pem(es,in,is_retry_config) \
-        SSL_CTX_ech_server_enable_file(es, kp->ptr, is_retry_config)
-#define SSL_ech_get1_status SSL_ech_get_status
-#define echstore ssl_ctx
-#endif
-#endif
-
 typedef struct {
     /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
     EVP_PKEY *ssl_pemfile_pkey;
@@ -920,10 +903,8 @@ static void ech_status_trace(request_st *r, SSL *ssl)
     else
         log_error(r->conf.errh, __FILE__, __LINE__,
                   "ech_status: %d sni_clr: %s sni_ech: %s", status, clr, ech);
-  #ifndef SSL_ECH_USE_FOR_RETRY
     OPENSSL_free(sni_ech);
     OPENSSL_free(sni_clr);
-  #endif
 }
 
 static unsigned int
@@ -1090,10 +1071,8 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
         }
         break;
     }
-  #ifndef SSL_ECH_USE_FOR_RETRY
     OPENSSL_free(sni_ech);
     OPENSSL_free(sni_clr);
-  #endif
     return rc;
 }
 
@@ -1604,7 +1583,6 @@ mod_openssl_merge_config_cpv (plugin_config * const pconf, const config_plugin_v
         break;
      #endif
       case 18:/* ssl.ech-public-name */
-      case 19:/* ssl.non-ech-host */
         break;
       default:/* should not happen */
         return;
@@ -1927,10 +1905,8 @@ mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
         char *sni_ech = NULL;
         char *sni_clr = NULL;
         int rc = SSL_ech_get1_status(hctx->ssl, &sni_ech, &sni_clr);
-       #ifndef SSL_ECH_USE_FOR_RETRY
         OPENSSL_free(sni_ech);
         OPENSSL_free(sni_clr);
-       #endif
       #endif
         switch (rc) {
           case SSL_ECH_STATUS_SUCCESS:
@@ -3713,9 +3689,6 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
      ,{ CONST_STR_LEN("ssl.ech-public-name"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
-     ,{ CONST_STR_LEN("ssl.non-ech-host"),
-        T_CONFIG_STRING,
-        T_CONFIG_SCOPE_CONNECTION }
      ,{ NULL, 0,
         T_CONFIG_UNSET,
         T_CONFIG_SCOPE_UNSET }
@@ -3829,7 +3802,6 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
              #endif
                 break;
               case 18:/* ssl.ech-public-name */
-              case 19:/* ssl.non-ech-host */
                 if (0 != i) {
                     config_cond_info cfginfo;
                     config_get_config_cond_info(&cfginfo,
@@ -4661,10 +4633,8 @@ http_cgi_ssl_ech(request_st * const r, SSL * const ssl)
     http_header_env_set(r, CONST_STR_LEN("SSL_ECH_OUTER_SNI"),clr,strlen(clr));
     const char *ech = sni_ech ? sni_ech : "NONE";
     http_header_env_set(r, CONST_STR_LEN("SSL_ECH_INNER_SNI"),ech,strlen(ech));
-  #ifndef SSL_ECH_USE_FOR_RETRY
     OPENSSL_free(sni_ech);
     OPENSSL_free(sni_clr);
-  #endif
 }
 #endif
 #endif
