@@ -810,7 +810,7 @@ http_response_has_error_handler (request_st * const r)
             const int subreq_status = r->http_status;
             if (r->error_handler_saved_status > 0)
                 r->http_status = r->error_handler_saved_status;
-            else if (r->http_status == 404 || r->http_status == 403)
+            else if (r->http_status == 404)
                 /* error-handler-404 is a 404 */
                 r->http_status = -r->error_handler_saved_status;
             else {
@@ -827,8 +827,7 @@ http_response_has_error_handler (request_st * const r)
             const buffer *error_handler = NULL;
             if (r->conf.error_handler)
                 error_handler = r->conf.error_handler;
-            else if ((r->http_status == 404 || r->http_status == 403)
-                   && r->conf.error_handler_404)
+            else if (r->http_status == 404 && r->conf.error_handler_404)
                 error_handler = r->conf.error_handler_404;
 
             if (error_handler)
