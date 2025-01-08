@@ -1001,6 +1001,9 @@ static int magnet_hexdec(lua_State *L) {
     if (0 == rc)
         lua_pushlstring(L, BUF_PTR_LEN(b));
     magnet_tmpbuf_release(b);
+  #ifdef __COVERITY__ /* shut up coverity; li_hex2bin() returns 0 or -1 */
+    force_assert(rc <= 0);
+  #endif
     return rc+1; /* 1 on success (pushed string); 0 on failure (no value) */
 }
 
