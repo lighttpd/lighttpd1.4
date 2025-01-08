@@ -4647,9 +4647,9 @@ http_cgi_ssl_ech(request_st * const r, SSL * const ssl)
     if (str == NULL) str = "ECH status unknown"; /*(alt: format status to str)*/
     http_header_env_set(r, CONST_STR_LEN("SSL_ECH_STATUS"), str, strlen(str));
     const char *clr = sni_clr ? sni_clr : "NONE";
-    http_header_env_set(r, CONST_STR_LEN("SSL_ECH_COVER"),  clr, strlen(clr));
+    http_header_env_set(r, CONST_STR_LEN("SSL_ECH_OUTER_SNI"),clr,strlen(clr));
     const char *ech = sni_ech ? sni_ech : "NONE";
-    http_header_env_set(r, CONST_STR_LEN("SSL_ECH_HIDDEN"), ech, strlen(ech));
+    http_header_env_set(r, CONST_STR_LEN("SSL_ECH_INNER_SNI"),ech,strlen(ech));
   #ifndef SSL_ECH_USE_FOR_RETRY
     OPENSSL_free(sni_ech);
     OPENSSL_free(sni_clr);
