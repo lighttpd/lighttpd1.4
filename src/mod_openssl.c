@@ -1016,10 +1016,32 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
                                             ech, strlen(ech)))
             break;
        }
-        {
-            r->http_status = 400;
-            rc = HANDLER_FINISHED;
+        /* allow r->http_host to not match ECH SNI only if
+         * r->http_host is in explicit list of public names (if defined)
+         * (avoid leaking r->http_host is ECH-only;
+         *  do not use mod_openssl_ech_only() here) */
+        if (hctx->ech_public_hosts) {
+            /* (XXX: not done: adjust length to omit :port from r->http_host)*/
+            if (NULL != array_get_element_klen(hctx->ech_public_hosts,
+                                               BUF_PTR_LEN(r->http_host)))
+                break;
         }
+        /* XXX: 421 here exposes that some ECH-only vhosts exist on this server,
+         * though not which virtual hosts.  Alternative: fall through to the
+         * default case below?  Doing so from here would cause the code below
+         * to use the inner SNI for BoringSSL, and the outer SNI for OpenSSL.
+         * What are we trying to protect?  If protecting the contents, then
+         * mod_auth or other authorization mechanisms should be preferred over
+         * hidden ECH-host.  If protecting SNI, then that was already done in
+         * the initial ECH, even though to a different vhost.  If there is a
+         * super-secret ECH key and ECHConfig for an ECH-only host and that
+         * ECHConfig is not public, but was distributed out-of-band, then we
+         * would not want to expose its existence to a connection which did not
+         * use ECH, or which did use ECH but with ECHConfig from a different
+         * anonymity set instead of the super-secret ECHConfig.
+         * Should we add config option to disable this 421 policy response? */
+        r->http_status = 421; /* Misdirected Request */
+        rc = HANDLER_FINISHED;
         break;
       /*case SSL_ECH_STATUS_NOT_TRIED:*/
       default:
