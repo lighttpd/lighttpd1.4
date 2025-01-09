@@ -1012,16 +1012,18 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
       #else
         const char *ech = sni_ech;
       #endif
-        if (!mod_openssl_ech_only_host_match(CONST_BUF_LEN(r->http_host),
-                                             ech, strlen(ech))) {
+        if (mod_openssl_ech_only_host_match(BUF_PTR_LEN(r->http_host),
+                                            ech, strlen(ech)))
+            break;
+       }
+        {
             r->http_status = 400;
             rc = HANDLER_FINISHED;
         }
-       }
         break;
       /*case SSL_ECH_STATUS_NOT_TRIED:*/
       default:
-        if (0 == r->loops_per_request && r->http_host) {
+        if (0 == r->loops_per_request) {
             /* avoid acknowledging existence of ECH-only host in request
              * if connection not ECH and some hosts configured ECH-only */
             /* always restart request once to minimize timing differences */
@@ -1030,7 +1032,7 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
              * request whether or not it matches cleartext SNI */
             /* (r->uri.authority is ECH-only if redo_host *is not* NULL) */
             const buffer *redo_host =
-              mod_openssl_ech_only(hctx, CONST_BUF_LEN(&r->uri.authority));
+              mod_openssl_ech_only(hctx, BUF_PTR_LEN(&r->uri.authority));
             buffer * const http_host = r->http_host;
             const char *clr = sni_clr
               ? sni_clr
@@ -1045,7 +1047,7 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
                     break;
                 }
                 const buffer * const redo_host_sni =
-                  mod_openssl_ech_only(hctx, CONST_BUF_LEN(tb));
+                  mod_openssl_ech_only(hctx, BUF_PTR_LEN(tb));
                 redo_host = (NULL != redo_host)
                   ? (NULL == redo_host_sni) ? tb : redo_host_sni
                   : http_host;
@@ -1917,7 +1919,7 @@ mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
              * avoid acknowledging existence of host sent in cleartext SNI */
             /* alternative: apply config for mod_openssl_ech_only() fallback */
             if (NULL != mod_openssl_ech_only(hctx,
-                                             CONST_BUF_LEN(&r->uri.authority))){
+                                             BUF_PTR_LEN(&r->uri.authority))) {
                 buffer_clear(&r->uri.authority);
                 return SSL_TLSEXT_ERR_OK;
             }
@@ -3812,8 +3814,8 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                             p->ech_only_hosts = array_init(4);
                       #if 0
                         array_set_key_value(p->ech_only_hosts,
-                                            CONST_BUF_LEN(cfginfo.string),
-                                            CONST_BUF_LEN(cpv->v.b));
+                                            BUF_PTR_LEN(cfginfo.string),
+                                            BUF_PTR_LEN(cpv->v.b));
                       #else
                         /*(not expecting IPv6-literal as ECH-only)*/
                         const char *kcolon = strchr(cfginfo.string->ptr, ':');
@@ -3822,7 +3824,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                           : buffer_string_length(cfginfo.string);
                         array_set_key_value(p->ech_only_hosts,
                                             cfginfo.string->ptr, klen,
-                                            CONST_BUF_LEN(cpv->v.b));
+                                            BUF_PTR_LEN(cpv->v.b));
                       #endif
                     }
                     else {
