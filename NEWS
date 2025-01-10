@@ -3,6 +3,111 @@
 NEWS
 ====
 
+- 1.4.77 - 2025-01-10
+  * [build] packdist.sh tweaks of convenience commands
+  * [build] remove ancient distribute.sh.in script
+  * [core] add .torrent to mimetype.assign builtin defaults
+  * Revert "[core] special value for Linux POLLRDHUP on SPARC" (fixes #3251)
+  * [core] special value for Linux POLLRDHUP on SPARC (fixes #3251)
+  * [mod_ssi] rename ssi_val_tobool to ssi_val_to_bool
+  * [multiple] rename config_plugin_value_tobool
+  * [core] fix graceful shutdown timeout handling
+  * [core] preprocessor option to force crypto lib
+  * [cmake] fix some typos in pcre2 detection
+  * [tests] disambiguate regex test value from string
+  * [tests] fix deflate tests w/ Fedora zlib-ng-compat
+  * [core] port for QNX7.1/8.0
+  * [doc] remove ancient doc/scripts/spawn-php.sh
+  * [mod_deflate] limit zstd max window size to 8 MB
+  * [mod_accesslog] ignore format specifier w/o label
+  * [autotools] add pkgconf test for libdbi
+  * [mod_webdav] use SQLITE_PREPARE_PERSISTENT
+  * [mod_webdav] call sqlite3_initialize() at init
+  * [mod_webdav] disable double-quoted string literal
+  * [doc] remove ancient doc/scripts/spawn-php.sh
+  * [core] clarify error msg for plugin ver mismatch
+  * [mod_dirlisting] Add dark mode support
+  * [autotools] Prefer libpcre.pc to pcre-config
+  * [core] server.ip-transparent option on listen sock
+  * [core] reject HTTP/1.x request-line URI trail sp
+  * [core] remove http_request_parse_proto_loose()
+  * [core] strictly require CRLF on chunked header
+  * [core] strictly require CRLF on all chunked header
+  * [multiple] quiet coverity false positives
+  * [core] http_request_check_uri_strict optimization
+  * [h2] fix spurious connection resets with zero log_monotonic_secs
+  * [mod_dirlisting] fix ?json output; emit JSON list (fixes #3256)
+  * [mod_dirlisting] minor optimization for ?json
+  * [mod_auth] fix Digest nonce validation w/ nonce_secret
+  * [core] omit pcre2 JIT error trace if JIT not avail
+  * [doc] rename sample config lighttpd.annotated.conf
+  * [doc] simplify doc/config/lighttpd.conf entry
+  * [doc] use shorter https://wiki.lighttpd.net/ url
+  * [ci] ci dependency maintenance
+  * [meson] use pkg-config to find mbedtls 3.6
+  * [meson] update FORCE_* vars to select crypto lib
+  * [core] remove long-unused #ifdef USE_ALARM
+  * [core] avoid pedantic compiler warning (fixes #3262)
+  * [mod_auth] HTTP Digest and HTTP/2 extended CONNECT
+  * [mod_dirlisting] sort by exact value of size (fixes #3264)
+  * [mod_dirlisting] sort mtime using data-value (#3264)
+  * [ci] enable Solaris build (now less slow)
+  * [core] remove mimetype.assign from tests/lighttpd.conf
+  * [ci] adjust Solaris CI build
+  * [doc] update create-mime.conf.pl compression types
+  * [doc] update doc/config/conf.d/mime.conf
+  * [ci] adjust Solaris CI build
+  * [core] remove cast from ioctl() RNDGETENTCNT
+  * [core] update ls-hpack
+  * [core] light_isprint(), light_iscntrl()
+  * [core] perf: tighter loops for str encode,escape
+  * [mod_wstunnel] Sec-WebSocket-Protocol: binary
+  * [core] light_iscntrl_or_utf8_invalid_byte()
+  * [core] option: allow unescaped UTF-8 in errorlog (fixes #3268)
+  * [systemd] test config in ExecReload before signal
+  * [core] config parsing: detect invalid keys
+  * [TLS] allow list of Groups/Curves
+  * [mbedtls] reset crt_profile when reconfigured
+  * [mod_mbedtls] guard mbedtls use of RSA_PSK
+  * [mod_nss] add ssl.openssl.ssl-conf-cmd Ciphersuite
+  * [mod_wolfssl] typo
+  * [mod_nss] ver check for experimental groups/curves
+  * [mod_wolfssl] missing return
+  * [tests] do not test for exact compress zlib size
+  * [tests] consolidate test value comparison logic
+  * .github/workflows/dependabot.yml "github-actions"
+  * [ci] dependabot.yml name
+  * [ci] ci.yml pull_request types
+  * [ci] move file to .github/dependabot.yml
+  * [multiple] avoid sending body to GW_AUTHORIZER (fixes #3272)
+  * [mod_magnet] use local sys-dirent.h (portability)
+  * [mod_magnet] add code header to mod_magnet.c
+  * [TLS] skip SSL_CTX init if not in SOCKET condition
+  * [mod_openssl] ssl.ech-opts, load ECH keys
+  * [mod_openssl] ssl.non-ech-host opt to require ECH
+  * [mod_openssl] free mem from SSL_ech_get1_status()
+  * [mod_openssl] ECH: use new OSSL_ECHSTORE APIs
+  * [mod_openssl] ECH: refresh 4 year old patches
+  * [mod_openssl] ECH: kludge compat w/ OpenSSL ECH API
+  * [mod_openssl] omit OSSL_ECH_FOR_RETRY for ECH-only
+  * [mod_openssl] ECH: OSSL_ECH_FOR_RETRY for cur key
+  * [mod_openssl] ECH: boringssl support
+  * [TLS] modify TLS defaults to MinProtocol TLSv1.3
+  * [TLS] use TLSv1.3 groups X25519:P-256:P-384:X448
+  * [ci] macos: mariadb-connector-c is keg-only
+  * [mod_openssl] skip *.ech files beginning with '.'
+  * [mod_openssl] ECH: rename directives to ECH terms
+  * [core] server.error-handler-404 handles only 404
+  * [mod_magnet] quiet coverity false positive
+  * [mod_openssl] ECH: use same (debug) CGI var names
+  * [mod_openssl] ECH: reload keys only if modified
+  * [mod_openssl] ECH: remove kludge compat w/ OpenSSL ECH API
+  * [core] reset cond cache item URL if pathinfo
+  * [mod_openssl] use BUF_PTR_LEN when buffer not NULL
+  * [mod_openssl] ECH: code comments for ECH-only host
+  * [core] import xxHash v0.8.3
+  * [autoconf] update ax_prog_cc_for_build.m4
+
 - 1.4.76 - 2024-04-12
   * [core] add default to builtin mimetype.assign
   * [core] add MPTCP support
