@@ -544,6 +544,9 @@ pid_t fdevent_createprocess (char *argv[], char *envp[], intptr_t fdin, intptr_t
      * Forcing argument strings to be concatenated into a single string
      * only to be re-parsed by Windows can lead to security issues.
      *
+     * Above comment from 2021 was true then as now in 2025
+     * https://blog.orange.tw/posts/2025-01-worstfit-unveiling-hidden-transformers-in-windows-ansi/
+     *
      * NB: callers of fdevent_createprocess() must properly escape and quote
      *     arguments appropriately for target program (argv[0]) so that target
      *     program can safely parse command line after calling GetCommandLine()
