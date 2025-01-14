@@ -1222,9 +1222,10 @@ http_request_parse (request_st * const restrict r, const int scheme_port)
     }
 
     if (0 == r->reqbody_length) {
-        /* POST requires Content-Length (or Transfer-Encoding)
+        /* POST generally expects Content-Length (or Transfer-Encoding)
          * (-1 == r->reqbody_length when Transfer-Encoding: chunked)*/
         if (HTTP_METHOD_POST == r->http_method
+            && r->http_version <= HTTP_VERSION_1_1
             && !light_btst(r->rqst_htags, HTTP_HEADER_CONTENT_LENGTH)) {
             return http_request_header_line_invalid(r, 411, "POST-request, but content-length missing -> 411");
         }
