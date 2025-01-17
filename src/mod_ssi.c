@@ -1160,6 +1160,9 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 		/* send cmd output to a temporary file */
 		if (0 != chunkqueue_append_mem_to_tempfile(cq, "", 0, errh)) break;
 		c = cq->last;
+		off_t flen = c->file.length;
+		if (flen && flen != lseek(c->file.fd, flen, SEEK_SET))
+			log_perror(errh, __FILE__, __LINE__, "lseek failed");
 
 		int status = 0;
 		struct stat stb;
@@ -1184,7 +1187,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 			if (0 == fstat(c->file.fd, &stb)) {
 			}
 		}
-		chunkqueue_update_file(cq, c, stb.st_size);
+		chunkqueue_update_file(cq, c, stb.st_size - flen);
 		break;
 	}
 	case SSI_IF: {

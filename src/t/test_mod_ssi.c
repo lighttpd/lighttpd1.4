@@ -87,20 +87,22 @@ test_mod_ssi_read_fd (request_st * const r, handler_ctx * const hctx)
     assert(NULL == cq->first);
 
   #ifndef _WIN32 /* TODO: command for cmd.exe */
+    const char ssi_exec2[] =
+       "result: <!--#exec cmd=\"expr 1 + 1\"-->";
     hctx->conf.ssi_exec = 1;
-    test_mod_ssi_write_testfile(fd, ssi_exec, sizeof(ssi_exec)-1);
+    test_mod_ssi_write_testfile(fd, ssi_exec2, sizeof(ssi_exec2)-1);
     test_mod_ssi_reset(r, hctx);
     mod_ssi_read_fd(r, hctx, &st, fd);
     assert(cq->first);
     assert(cq->first->type == FILE_CHUNK);
-    assert(2 == chunkqueue_length(cq));
+    assert(10 == chunkqueue_length(cq));
     char buf[80];
     if (0 != lseek(cq->first->file.fd, 0, SEEK_SET)
-        || 2 != read(cq->first->file.fd, buf, sizeof(buf))) {
+        || 10 != read(cq->first->file.fd, buf, sizeof(buf))) {
         perror("lseek(),read()");
         exit(1);
     }
-    assert(0 == memcmp(buf, "2\n", 2));
+    assert(0 == memcmp(buf, "result: 2\n", 10));
     hctx->conf.ssi_exec = 0;
   #endif
 
