@@ -825,8 +825,8 @@ lshpack_enc_huff_encode (const unsigned char *src,
         case 6: *p_dst++ = bits >> 40;
         FALL_THROUGH;
         case 5: *p_dst++ = bits >> 32;
-#endif
         FALL_THROUGH;
+#endif
         case 4: *p_dst++ = bits >> 24;
         FALL_THROUGH;
         case 3: *p_dst++ = bits >> 16;
