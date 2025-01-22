@@ -1604,8 +1604,8 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 		http_etag_create(r->tmp_buf, &st, r->conf.etag_flags);
 		http_header_response_set(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"), BUF_PTR_LEN(r->tmp_buf));
 
-		const buffer * const mtime = http_response_set_last_modified(r, st.st_mtime);
-		http_response_handle_cachable(r, mtime, st.st_mtime);
+		const buffer * const mtime = http_response_set_last_modified(r, TIME64_CAST(st.st_mtime));
+		http_response_handle_cachable(r, mtime, TIME64_CAST(st.st_mtime));
 	}
 
 	/* Reset the modified time of included files */

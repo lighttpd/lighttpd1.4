@@ -2242,7 +2242,7 @@ mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
         return -1;
    #endif
     time_t t = timegm(&x);
-    return (t != -1) ? TIME64_CAST(t) : t;
+    return (t != (time_t)-1) ? TIME64_CAST(t) : t;
 
   #elif defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER <0x3050000fL
     /* LibreSSL was forked from OpenSSL 1.0.1; does not have ASN1_TIME_diff */
@@ -2313,7 +2313,7 @@ mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
     x.tm_year-= 1900;
     x.tm_mon -= 1;
     time_t t = timegm(&x);
-    return (t != -1) ? TIME64_CAST(t) + offset : t;
+    return (t != (time_t)-1) ? TIME64_CAST(t) + offset : t;
 
   #else
 
@@ -2323,7 +2323,7 @@ mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
     if (!ASN1_TIME_to_tm(asn1time, &x))
         return -1;
     time_t t = timegm(&x);
-    return (t != -1) ? TIME64_CAST(t) : t;
+    return (t != (time_t)-1) ? TIME64_CAST(t) : t;
 
    #else
 
@@ -2361,7 +2361,9 @@ mod_openssl_ocsp_next_update (plugin_cert *pc)
     /* XXX: should save and evaluate cert status returned by these calls */
     ASN1_TIME *nextupd = NULL;
     OCSP_single_get0_status(OCSP_resp_get0(bs, 0), NULL, NULL, NULL, &nextupd);
-    unix_time64_t t = nextupd ? mod_openssl_asn1_time_to_posix(nextupd) : -1;
+    unix_time64_t t = nextupd
+      ? mod_openssl_asn1_time_to_posix(nextupd)
+      : (time_t)-1;
 
     /* Note: trust external process which creates ssl.stapling-file to verify
      *       (as well as to validate certificate status)
@@ -2403,7 +2405,7 @@ mod_openssl_reload_stapling_file (server *srv, plugin_cert *pc, const unix_time6
     pc->ssl_stapling = b; /*(unchanged unless orig was NULL)*/
     pc->ssl_stapling_loadts = cur_ts;
     pc->ssl_stapling_nextts = mod_openssl_ocsp_next_update(pc);
-    if (pc->ssl_stapling_nextts == -1) {
+    if (pc->ssl_stapling_nextts == (time_t)-1) {
         /* "Next Update" might not be provided by OCSP responder
          * Use 3600 sec (1 hour) in that case. */
         /* retry in 1 hour if unable to determine Next Update */

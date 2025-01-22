@@ -188,7 +188,7 @@ SETDEFAULTS_FUNC(mod_expire_set_defaults) {
                 for (uint32_t k = 0; k < a->used; ++k, toff+=2, p->tused+=2) {
                     buffer *v = &((data_string *)a->data[k])->value;
                     toff[1] = mod_expire_get_offset(v->ptr, &toff[0]);
-                    if (-1 == *toff) {
+                    if ((time_t)-1 == *toff) {
                         log_error(srv->errh, __FILE__, __LINE__,
                           "invalid %s = \"%s\"", cpk[cpv->k_id].k, v->ptr);
                         return HANDLER_ERROR;

@@ -10,11 +10,11 @@ static void test_mod_expire_get_offset_check(void) {
     time_t mod;
 
     str = "";
-    assert(-1 == mod_expire_get_offset(str, &mod));
+    assert((time_t)-1 == mod_expire_get_offset(str, &mod));
     str = "foo plus 0";
-    assert(-1 == mod_expire_get_offset(str, &mod));
+    assert((time_t)-1 == mod_expire_get_offset(str, &mod));
     str = "access plus 0";
-    assert(-1 == mod_expire_get_offset(str, &mod));
+    assert((time_t)-1 == mod_expire_get_offset(str, &mod));
 
     str = "access 0 sec";
     assert(0 == mod_expire_get_offset(str, &mod));

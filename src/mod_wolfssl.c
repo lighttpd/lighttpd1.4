@@ -1437,7 +1437,7 @@ mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
     if (!wolfSSL_ASN1_TIME_to_tm(asn1time, &x))
         return -1;
     time_t t = timegm(&x);
-    return (t != -1) ? TIME64_CAST(t) : t;
+    return (t != (time_t)-1) ? TIME64_CAST(t) : t;
   #else
     UNUSED(asn1time);
     return -1;
@@ -1490,7 +1490,9 @@ mod_openssl_ocsp_next_update (plugin_cert *pc)
    #else
     OCSP_single_get0_status(OCSP_resp_get0(bs, 0), NULL, NULL, NULL, &nextupd);
    #endif
-    unix_time64_t t = nextupd ? mod_openssl_asn1_time_to_posix(nextupd) : -1;
+    unix_time64_t t = nextupd
+      ? mod_openssl_asn1_time_to_posix(nextupd)
+      : (time_t)-1;
 
     /* Note: trust external process which creates ssl.stapling-file to verify
      *       (as well as to validate certificate status)
@@ -1532,7 +1534,7 @@ mod_openssl_reload_stapling_file (server *srv, plugin_cert *pc, const unix_time6
     pc->ssl_stapling = b; /*(unchanged unless orig was NULL)*/
     pc->ssl_stapling_loadts = cur_ts;
     pc->ssl_stapling_nextts = mod_openssl_ocsp_next_update(pc);
-    if (pc->ssl_stapling_nextts == -1) {
+    if (pc->ssl_stapling_nextts == (time_t)-1) {
         /* "Next Update" might not be provided by OCSP responder
          * Use 3600 sec (1 hour) in that case. */
         /* retry in 1 hour if unable to determine Next Update */

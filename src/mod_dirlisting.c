@@ -1714,10 +1714,10 @@ static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data *
     stat_cache_entry * const sce = stat_cache_get_entry_open(tb, 1);
     if (NULL == sce || sce->fd == -1)
         return HANDLER_GO_ON;
+    if (TIME64_CAST(sce->st.st_mtime) + p->conf.cache->max_age < log_epoch_secs)
+        return HANDLER_GO_ON;
     const unix_time64_t max_age =
       TIME64_CAST(sce->st.st_mtime) + p->conf.cache->max_age - log_epoch_secs;
-    if (max_age < 0)
-        return HANDLER_GO_ON;
 
     !p->conf.json
       ? mod_dirlisting_content_type(r, p->conf.encoding)

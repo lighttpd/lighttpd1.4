@@ -2420,7 +2420,7 @@ webdav_if_match_or_unmodified_since (request_st * const r, struct stat *st)
     if (NULL != ius) {
         if (NULL == st)
             return 412; /* Precondition Failed */
-        if (http_date_if_modified_since(BUF_PTR_LEN(ius), st->st_mtime))
+        if (http_date_if_modified_since(BUF_PTR_LEN(ius), TIME64_CAST(st->st_mtime)))
             return 412; /* Precondition Failed */
     }
 

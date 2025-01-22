@@ -3661,7 +3661,8 @@ h2_check_timeout (connection * const con, const unix_time64_t cur_ts)
             }
         }
         else {
-            if (cur_ts - con->read_idle_ts > con->keep_alive_idle) {
+            if (cur_ts - con->read_idle_ts
+                 > (unix_time64_t)con->keep_alive_idle) {
                 /* time - out */
                 if (r->conf.log_timeouts) {
                     log_debug(r->conf.errh, __FILE__, __LINE__,

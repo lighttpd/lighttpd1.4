@@ -478,7 +478,7 @@ server_epoch_secs (server * const srv, unix_time64_t mono_ts_delta)
           config_feature_int(srv, "server.clock-jump-restart", 1800);
         if (delta && (new_ts_adj > cur_ts
                       ? new_ts_adj-cur_ts
-                      : cur_ts-new_ts_adj) > delta) {
+                      : cur_ts-new_ts_adj) > (unix_time64_t)delta) {
             log_error(srv->errh, __FILE__, __LINE__,
               "clock jumped; "
               "attempting graceful restart in < ~5 seconds, else hard restart");
@@ -2092,7 +2092,7 @@ static void server_handle_sigalrm (server * const srv, unix_time64_t mono_ts, un
 				log_epoch_secs = server_epoch_secs(srv, 0);
 
 				/* check idle time limit, if enabled */
-				if (idle_limit && idle_limit < mono_ts - last_active_ts && !graceful_shutdown) {
+				if (idle_limit && (unix_time64_t)idle_limit < mono_ts - last_active_ts && !graceful_shutdown) {
 					log_notice(srv->errh, __FILE__, __LINE__,
 					  "[note] idle timeout %ds exceeded, "
 					  "initiating graceful shutdown", (int)idle_limit);

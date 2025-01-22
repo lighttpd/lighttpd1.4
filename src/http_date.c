@@ -288,11 +288,7 @@ http_date_if_modified_since (const char * const ifmod, const uint32_t ifmodlen,
     if (NULL == http_date_str_to_tm(ifmod, ifmodlen, &ifmodtm))
         return 1; /* date parse error */
     const time_t ifmtime = timegm(&ifmodtm);
-  #if HAS_TIME_BITS64
-    return (lmtime > ifmtime);
-  #else
-    return (TIME64_CAST(lmtime) > TIME64_CAST(ifmtime) || ifmtime==(time_t)-1);
-  #endif
+    return (lmtime > TIME64_CAST(ifmtime) || ifmtime == (time_t)-1);
     /* returns 0 if not modified since,
      * returns 1 if modified since or date parse error */
 }

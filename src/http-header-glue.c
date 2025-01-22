@@ -466,11 +466,11 @@ void http_response_send_file (request_st * const r, const buffer * const path, s
 
 		const buffer * const lmod =
 		  __builtin_expect( (!light_btst(r->resp_htags, HTTP_HEADER_LAST_MODIFIED)), 1)
-		  ? http_response_set_last_modified(r, sce->st.st_mtime)
+		  ? http_response_set_last_modified(r, TIME64_CAST(sce->st.st_mtime))
 		  : NULL;
 
 		if (http_response_maybe_cachable(r)
-		    && HANDLER_FINISHED == http_response_handle_cachable(r, lmod, sce->st.st_mtime))
+		    && HANDLER_FINISHED == http_response_handle_cachable(r, lmod, TIME64_CAST(sce->st.st_mtime)))
 			return;
 	}
 
