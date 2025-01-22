@@ -29,6 +29,12 @@
 #include "sys-socket.h"
 #include "sys-unistd.h" /* <unistd.h> */
 
+#ifndef _WIN32
+#include <arpa/inet.h>  /* htonl() */
+#else
+#include <winsock2.h>   /* htonl() */
+#endif
+
 /**
  * max size of the HTTP response header from backends
  * (differs from server.max-request-field-size for max request field size)

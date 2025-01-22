@@ -16,6 +16,12 @@
 
 #include "sys-socket.h"
 
+#ifndef _WIN32
+#include <arpa/inet.h>  /* ntohs() */
+#else
+#include <winsock2.h>   /* ntohs() */
+#endif
+
 /**
  * mod_extforward.c for lighttpd, by comman.kang <at> gmail <dot> com
  *                  extended, modified by Lionel Elie Mamane (LEM), lionel <at> mamane <dot> lu
