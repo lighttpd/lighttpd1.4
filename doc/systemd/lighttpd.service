@@ -1,6 +1,7 @@
 [Unit]
 Description=Lighttpd Daemon
 After=network-online.target
+Documentation=man:lighttpd https://wiki.lighttpd.net
 
 [Service]
 Type=simple

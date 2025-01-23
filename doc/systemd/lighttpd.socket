@@ -3,6 +3,7 @@
 
 [Unit]
 Description=lighttpd socket
+Documentation=man:lighttpd https://wiki.lighttpd.net
 
 [Socket]
 # Enable listening on http port
