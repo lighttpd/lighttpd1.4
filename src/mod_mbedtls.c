@@ -557,7 +557,7 @@ mod_mbedtls_merge_config_cpv (plugin_config * const pconf, const config_plugin_v
         break;
       case 4: /* ssl.ca-crl-file */
         if (cpv->vtype == T_CONFIG_LOCAL)
-            pconf->ssl_ca_dn_file = cpv->v.v;
+            pconf->ssl_ca_crl_file = cpv->v.v;
         break;
       case 5: /* ssl.read-ahead */
         pconf->ssl_read_ahead = (0 != cpv->v.u);
