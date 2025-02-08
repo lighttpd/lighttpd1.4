@@ -72,7 +72,10 @@ my %manual_conflicts_resolve = (
 	},
 );
 
-open MIMETYPES, "/etc/mime.types" or die "Can't open /etc/mime.types: $!";
+# lighttpd 1.4.71 and later provide a default mimetype.assign with common web
+# media types, so only warn if create-mime.conf.pl fails to open /etc/mime.types
+open MIMETYPES, '<', "/etc/mime.types"
+  or (warn("open /etc/mime.types: $!\n"), exit(0));
 
 my %extensions;
 my %lcext;
