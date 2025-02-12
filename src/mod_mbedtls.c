@@ -4103,7 +4103,32 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
 
     const char *groups = curvelist && !buffer_is_blank(curvelist)
       ? curvelist->ptr
-      : "x25519:secp256r1:secp384r1:x448";
+      :
+       #if defined(MBEDTLS_ECP_DP_CURVE25519_ENABLED)
+        "x25519"
+       #endif
+       #if defined(MBEDTLS_ECP_DP_SECP256R1_ENABLED)
+        #if defined(MBEDTLS_ECP_DP_CURVE25519_ENABLED)
+        ":"
+        #endif
+        "secp256r1"
+       #endif
+       #if defined(MBEDTLS_ECP_DP_SECP384R1_ENABLED)
+        #if defined(MBEDTLS_ECP_DP_CURVE25519_ENABLED) \
+         || defined(MBEDTLS_ECP_DP_SECP256R1_ENABLED)
+        ":"
+        #endif
+        "secp384r1"
+       #endif
+       #if defined(MBEDTLS_ECP_DP_CURVE448_ENABLED)
+        #if defined(MBEDTLS_ECP_DP_CURVE25519_ENABLED) \
+         || defined(MBEDTLS_ECP_DP_SECP256R1_ENABLED)  \
+         || defined(MBEDTLS_ECP_DP_SECP384R1_ENABLED)
+        ":"
+        #endif
+        "x448"
+       #endif
+        ;
     for (const char *e; groups; groups = e ? e+1 : NULL) {
         const char * const n = groups;
         e = strchr(n, ':');
@@ -4163,7 +4188,32 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
 
     const char *groups = curvelist && !buffer_is_blank(curvelist)
       ? curvelist->ptr
-      : "x25519:secp256r1:secp384r1:x448";
+      :
+       #if defined(MBEDTLS_ECP_DP_CURVE25519_ENABLED)
+        "x25519"
+       #endif
+       #if defined(MBEDTLS_ECP_DP_SECP256R1_ENABLED)
+        #if defined(MBEDTLS_ECP_DP_CURVE25519_ENABLED)
+        ":"
+        #endif
+        "secp256r1"
+       #endif
+       #if defined(MBEDTLS_ECP_DP_SECP384R1_ENABLED)
+        #if defined(MBEDTLS_ECP_DP_CURVE25519_ENABLED) \
+         || defined(MBEDTLS_ECP_DP_SECP256R1_ENABLED)
+        ":"
+        #endif
+        "secp384r1"
+       #endif
+       #if defined(MBEDTLS_ECP_DP_CURVE448_ENABLED)
+        #if defined(MBEDTLS_ECP_DP_CURVE25519_ENABLED) \
+         || defined(MBEDTLS_ECP_DP_SECP256R1_ENABLED)  \
+         || defined(MBEDTLS_ECP_DP_SECP384R1_ENABLED)
+        ":"
+        #endif
+        "x448"
+       #endif
+        ;
     for (const char *e; groups; groups = e ? e+1 : NULL) {
         const char * const n = groups;
         e = strchr(n, ':');
