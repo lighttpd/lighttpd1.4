@@ -3027,7 +3027,7 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
         && LIBRESSL_VERSION_NUMBER >= 0x2050100fL) \
     || OPENSSL_VERSION_NUMBER >= 0x10101000L
     int rc = SSL_CTX_set1_groups_list(s->ssl_ctx, groups);
-   #elif (defined(BORINGSSL_API_VERSION && BORINGSSL_API_VERSION >= 3) \
+   #elif (defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3) \
       || OPENSSL_VERSION_NUMBER >= 0x10100000L
     int rc = SSL_CTX_set1_curves_list(s->ssl_ctx, groups);
    #endif
