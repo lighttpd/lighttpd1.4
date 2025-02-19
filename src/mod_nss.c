@@ -144,25 +144,42 @@
 #include "log.h"
 #include "plugin.h"
 
-typedef struct {
-    /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
-    char must_staple;
+typedef struct mod_nss_kp {
     CERTCertificate *ssl_pemfile_x509;
     SECKEYPrivateKey *ssl_pemfile_pkey;
     SSLExtraServerCertData ssl_credex;
-    const buffer *ssl_stapling_file;
     unix_time64_t ssl_stapling_loadts;
     unix_time64_t ssl_stapling_nextts;
     SECItemArray OCSPResponses;
     SECItem OCSPResponse;
+    int refcnt;
+    int8_t must_staple;
+    struct mod_nss_kp *next;
+} mod_nss_kp;
+
+typedef struct {
+    /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
+    mod_nss_kp *kp; /* parsed public/private key structures */
+    const buffer *ssl_pemfile;
+    const buffer *ssl_privkey;
+    const buffer *ssl_stapling_file;
+    unix_time64_t pkey_ts;
 } plugin_cert;
 
 typedef struct {
     PRFileDesc *model;
+    plugin_cert *pc;
+    mod_nss_kp *kp;
     SSLVersionRange protos;
     PRBool ssl_compression;
     int8_t ssl_session_ticket;
 } plugin_ssl_ctx;
+
+typedef struct {
+    CERTCertificateList *crl_list;
+    const char *crl_file;
+    unix_time64_t crl_loadts;
+} plugin_crl;
 
 typedef struct {
     plugin_cert *pc;
@@ -202,7 +219,7 @@ typedef struct {
 
 typedef struct {
     PLUGIN_DATA;
-    plugin_ssl_ctx *ssl_ctxs;
+    plugin_ssl_ctx **ssl_ctxs;
     plugin_config defaults;
     server *srv;
 } plugin_data;
@@ -213,6 +230,8 @@ static int ssl_is_init;
 static plugin_data *plugin_data_singleton;
 #define LOCAL_SEND_BUFSIZE 16384 /* DEFAULT_MAX_RECORD_SIZE */
 static char *local_send_buffer;
+static int feature_refresh_certs;
+static int feature_refresh_crls;
 
 typedef struct {
     PRFileDesc *ssl;
@@ -227,7 +246,53 @@ typedef struct {
     int verify_status;
     buffer *tmp_buf;
     log_error_st *errh;
+    mod_nss_kp *kp;
+    plugin_cert *ssl_ctx_pc;
 } handler_ctx;
+
+
+__attribute_cold__
+static mod_nss_kp *
+mod_nss_kp_init (void)
+{
+    mod_nss_kp * const kp = ck_calloc(1, sizeof(*kp));
+    kp->refcnt = 1;
+    return kp;
+}
+
+
+__attribute_cold__
+static void
+mod_nss_kp_free (mod_nss_kp *kp)
+{
+    CERT_DestroyCertificate(kp->ssl_pemfile_x509);
+    SECKEY_DestroyPrivateKey(kp->ssl_pemfile_pkey);
+    CERTCertificateList *certChain;
+    *(const CERTCertificateList **)&certChain =
+      kp->ssl_credex.certChain;
+    CERT_DestroyCertificateList(certChain);
+    PORT_Free(kp->OCSPResponse.data);
+    //CERT_Destroy...(kp->ssl_credex.signedCertTimestamps);
+    //CERT_Destroy...(kp->ssl_credex.delegCred);
+    //CERT_Destroy...(kp->ssl_credex.delegCredPrivKey);
+    free(kp);
+}
+
+
+static mod_nss_kp *
+mod_nss_kp_acq (plugin_cert *pc)
+{
+    mod_nss_kp *kp = pc->kp;
+    ++kp->refcnt;
+    return kp;
+}
+
+
+static void
+mod_nss_kp_rel (mod_nss_kp *kp)
+{
+    --kp->refcnt;
+}
 
 
 static handler_ctx *
@@ -243,6 +308,8 @@ static void
 handler_ctx_free (handler_ctx *hctx)
 {
     mod_nss_io_dtor(hctx->ssl);
+    if (hctx->kp)
+        mod_nss_kp_rel(hctx->kp);
     free(hctx);
 }
 
@@ -663,9 +730,12 @@ mod_nss_load_config_dncrts (const char *fn, log_error_st *errh)
 
 
 static void
-mod_nss_free_config_crls (CERTCertificateList *crls)
+mod_nss_free_config_crls (plugin_crl *ssl_ca_crl)
 {
+    CERTCertificateList *crls = ssl_ca_crl->crl_list;
     if (NULL == crls) return;
+    ssl_ca_crl->crl_list = NULL;
+    ssl_ca_crl->crl_loadts = (unix_time64_t)-1;
     CERTCertDBHandle * const dbhandle = CERT_GetDefaultCertDB();
     for (int i = 0; i < crls->len; ++i)
         CERT_UncacheCRL(dbhandle, crls->certs+i);
@@ -748,6 +818,56 @@ mod_nss_load_config_crls (const char *fn, log_error_st *errh)
     }
 
     return chain;
+}
+
+
+__attribute_noinline__
+static int
+mod_nss_reload_crl_file (server *srv, plugin_crl *ssl_ca_crl, const unix_time64_t cur_ts)
+{
+    /* CRLs can be updated at any time, though expected on/before Next Update */
+
+    if (ssl_ca_crl->crl_list)
+        mod_nss_free_config_crls(ssl_ca_crl);
+
+    CERTCertificateList *d =
+      mod_nss_load_config_crls(ssl_ca_crl->crl_file, srv->errh);
+    if (NULL == d)
+        return 0;
+
+    ssl_ca_crl->crl_list = d;
+    ssl_ca_crl->crl_loadts = cur_ts;
+    return 1;
+}
+
+
+static int
+mod_nss_refresh_crl_file (server *srv, plugin_crl *ssl_ca_crl, const unix_time64_t cur_ts)
+{
+    struct stat st;
+    if (0 != stat(ssl_ca_crl->crl_file, &st)
+        || (TIME64_CAST(st.st_mtime) <= ssl_ca_crl->crl_loadts
+            && ssl_ca_crl->crl_loadts != (unix_time64_t)-1))
+        return 1;
+    return mod_nss_reload_crl_file(srv, ssl_ca_crl, cur_ts);
+}
+
+
+static void
+mod_nss_refresh_crl_files (server *srv, const plugin_data *p, const unix_time64_t cur_ts)
+{
+    /* future: might construct array of (plugin_crl *) at startup
+     *         to avoid the need to search for them here */
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    if (NULL == p->cvlist) return;
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; cpv->k_id != -1; ++cpv) {
+            if (cpv->k_id != 4) continue; /* k_id == 4 for ssl.ca-crl-file */
+            if (cpv->vtype != T_CONFIG_LOCAL) continue;
+            mod_nss_refresh_crl_file(srv, cpv->v.v, cur_ts);
+        }
+    }
 }
 
 
@@ -857,19 +977,28 @@ mod_nss_load_config_pkey (const char *fn, CERTCertificate *cert, log_error_st *e
 
 
 static void
+mod_nss_free_plugin_ssl_ctx (plugin_ssl_ctx * const s)
+{
+    PR_Close(s->model);
+    if (s->kp)
+        mod_nss_kp_rel(s->kp);
+    free(s);
+}
+
+
+static void
 mod_nss_free_config (server *srv, plugin_data * const p)
 {
     if (NULL != p->ssl_ctxs) {
-        PRFileDesc *global_model = p->ssl_ctxs->model;
         /* free from $SERVER["socket"] (if not copy of global scope) */
         for (uint32_t i = 1; i < srv->config_context->used; ++i) {
-            plugin_ssl_ctx * const s = p->ssl_ctxs + i;
-            if (s->model && s->model != global_model)
-                PR_Close(s->model);
+            plugin_ssl_ctx * const s = p->ssl_ctxs[i];
+            if (s && s != p->ssl_ctxs[0])
+                mod_nss_free_plugin_ssl_ctx(s);
         }
         /* free from global scope */
-        if (global_model)
-            PR_Close(global_model);
+        if (p->ssl_ctxs[0])
+            mod_nss_free_plugin_ssl_ctx(p->ssl_ctxs[0]);
         free(p->ssl_ctxs);
     }
 
@@ -882,16 +1011,12 @@ mod_nss_free_config (server *srv, plugin_data * const p)
               case 0: /* ssl.pemfile */
                 if (cpv->vtype == T_CONFIG_LOCAL) {
                     plugin_cert *pc = cpv->v.v;
-                    CERT_DestroyCertificate(pc->ssl_pemfile_x509);
-                    SECKEY_DestroyPrivateKey(pc->ssl_pemfile_pkey);
-                    CERTCertificateList *certChain;
-                    *(const CERTCertificateList **)&certChain =
-                      pc->ssl_credex.certChain;
-                    CERT_DestroyCertificateList(certChain);
-                    PORT_Free(pc->OCSPResponse.data);
-                    //CERT_Destroy...(pc->ssl_credex.signedCertTimestamps);
-                    //CERT_Destroy...(pc->ssl_credex.delegCred);
-                    //CERT_Destroy...(pc->ssl_credex.delegCredPrivKey);
+                    mod_nss_kp *kp = pc->kp;
+                    while (kp) {
+                        mod_nss_kp *o = kp;
+                        kp = kp->next;
+                        mod_nss_kp_free(o);
+                    }
                     free(pc);
                 }
                 break;
@@ -901,8 +1026,10 @@ mod_nss_free_config (server *srv, plugin_data * const p)
                     CERT_DestroyCertList(cpv->v.v);
                 break;
               case 4: /* ssl.ca-crl-file */
-                if (cpv->vtype == T_CONFIG_LOCAL)
+                if (cpv->vtype == T_CONFIG_LOCAL) {
                     mod_nss_free_config_crls(cpv->v.v);
+                    free(cpv->v.v);
+                }
                 break;
               default:
                 break;
@@ -1076,8 +1203,9 @@ static void
 mod_nss_expire_stapling_file (server *srv, plugin_cert *pc)
 {
     /* discard expired OCSP stapling response */
-    pc->ssl_credex.stapledOCSPResponses = NULL;
-    if (pc->must_staple)
+    mod_nss_kp * const kp = pc->kp;
+    kp->ssl_credex.stapledOCSPResponses = NULL;
+    if (kp->must_staple)
         log_error(srv->errh, __FILE__, __LINE__,
                   "certificate marked OCSP Must-Staple, "
                   "but OCSP response expired from ssl.stapling-file %s",
@@ -1105,12 +1233,13 @@ mod_nss_reload_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t 
      * XXX: lighttpd is not threaded, so this is probably not an issue (?)
      */
 
-    PORT_Free(pc->OCSPResponse.data);
-    pc->OCSPResponse.data   = f.data;
-    pc->OCSPResponse.len    = f.len;
-    pc->OCSPResponses.items = &pc->OCSPResponse;
-    pc->OCSPResponses.len   = 1;
-    pc->ssl_credex.stapledOCSPResponses = &pc->OCSPResponses;
+    mod_nss_kp * const kp = pc->kp;
+    PORT_Free(kp->OCSPResponse.data);
+    kp->OCSPResponse.data   = f.data;
+    kp->OCSPResponse.len    = f.len;
+    kp->OCSPResponses.items = &kp->OCSPResponse;
+    kp->OCSPResponses.len   = 1;
+    kp->ssl_credex.stapledOCSPResponses = &kp->OCSPResponses;
 
     /* NSS does not expose CERTOCSPSingleResponse member nextUpdate
      * to allow getting (PRTime) of nextUpdate from the OCSP response.
@@ -1121,16 +1250,16 @@ mod_nss_reload_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t 
      */
     unix_time64_t nextupd = -1;
 
-    pc->ssl_stapling_loadts = cur_ts;
-    pc->ssl_stapling_nextts = nextupd;
-    if (pc->ssl_stapling_nextts == -1) {
+    kp->ssl_stapling_loadts = cur_ts;
+    kp->ssl_stapling_nextts = nextupd;
+    if (kp->ssl_stapling_nextts == -1) {
         /* "Next Update" might not be provided by OCSP responder
          * Use 3600 sec (1 hour) in that case. */
         /* retry in 1 hour if unable to determine Next Update */
-        pc->ssl_stapling_nextts = cur_ts + 3600;
-        pc->ssl_stapling_loadts = 0;
+        kp->ssl_stapling_nextts = cur_ts + 3600;
+        kp->ssl_stapling_loadts = 0;
     }
-    else if (pc->ssl_stapling_nextts < cur_ts)
+    else if (kp->ssl_stapling_nextts < cur_ts)
         mod_nss_expire_stapling_file(srv, pc);
 
     return 0;
@@ -1140,12 +1269,13 @@ mod_nss_reload_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t 
 static int
 mod_nss_refresh_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t cur_ts)
 {
-    if (pc->ssl_stapling_nextts > cur_ts + 256)
+    mod_nss_kp * const kp = pc->kp;
+    if (kp->ssl_stapling_nextts > cur_ts + 256)
         return 0; /* skip check for refresh unless close to expire */
     struct stat st;
     if (0 != stat(pc->ssl_stapling_file->ptr, &st)
-        || TIME64_CAST(st.st_mtime) <= pc->ssl_stapling_loadts) {
-        if (pc->ssl_stapling_nextts < cur_ts)
+        || TIME64_CAST(st.st_mtime) <= kp->ssl_stapling_loadts) {
+        if (kp->ssl_stapling_nextts < cur_ts)
             mod_nss_expire_stapling_file(srv, pc);
         return 0;
     }
@@ -1194,6 +1324,7 @@ mod_nss_crt_must_staple (CERTCertificate *crt)
 }
 
 
+__attribute_noinline__
 static void *
 network_nss_load_pemfile (server *srv, const buffer *pemfile, const buffer *privkey, const buffer *ssl_stapling_file)
 {
@@ -1217,25 +1348,22 @@ network_nss_load_pemfile (server *srv, const buffer *pemfile, const buffer *priv
                                                    PR_FALSE);
 
     plugin_cert *pc = ck_calloc(1, sizeof(plugin_cert));
-    pc->ssl_pemfile_pkey = pkey;
-    pc->ssl_pemfile_x509 = ssl_pemfile_x509;
-    pc->ssl_credex.certChain = ssl_pemfile_chain;
+    mod_nss_kp * const kp = pc->kp = mod_nss_kp_init();
+    kp->ssl_pemfile_pkey = pkey;
+    kp->ssl_pemfile_x509 = ssl_pemfile_x509;
+    kp->ssl_credex.certChain = ssl_pemfile_chain;
+    pc->ssl_pemfile = pemfile;
+    pc->ssl_privkey = privkey;
     pc->ssl_stapling_file= ssl_stapling_file;
-    pc->ssl_stapling_loadts = 0;
-    pc->ssl_stapling_nextts = 0;
-    pc->OCSPResponse.type   = 0;
-    pc->OCSPResponse.data   = NULL;
-    pc->OCSPResponse.len    = 0;
-    pc->OCSPResponses.items = NULL;
-    pc->OCSPResponses.len   = 0;
-    pc->must_staple = mod_nss_crt_must_staple(ssl_pemfile_x509);
+    pc->pkey_ts = log_epoch_secs;
+    kp->must_staple = mod_nss_crt_must_staple(ssl_pemfile_x509);
 
     if (pc->ssl_stapling_file) {
         if (mod_nss_reload_stapling_file(srv, pc, log_epoch_secs) < 0) {
             /* continue without OCSP response if there is an error */
         }
     }
-    else if (pc->must_staple) {
+    else if (kp->must_staple) {
         log_error(srv->errh, __FILE__, __LINE__,
                   "certificate %s marked OCSP Must-Staple, "
                   "but ssl.stapling-file not provided", pemfile->ptr);
@@ -1300,9 +1428,8 @@ mod_nss_acme_tls_1 (handler_ctx *hctx)
     /* use NSS deprecated functions to unconfigure an already-configured cert.
      * This is because SSL_ConfigServerCert() will replace an existing cert
      * of the same type, but not if an existing cert is of a different type */
-    if (hctx->conf.pc) {
-        SSLKEAType certType =
-          NSS_FindCertKEAType(hctx->conf.pc->ssl_pemfile_x509);
+    if (hctx->kp) {
+        SSLKEAType certType = NSS_FindCertKEAType(hctx->kp->ssl_pemfile_x509);
         SSL_ConfigSecureServerWithCertChain(hctx->ssl,NULL,NULL,NULL,certType);
     }
 
@@ -1462,8 +1589,6 @@ mod_nss_SNI (PRFileDesc *ssl, const SECItem *srvNameArr, PRUint32 srvNameArrSize
     r->conditional_is_valid |= (1 << COMP_HTTP_SCHEME)
                             |  (1 << COMP_HTTP_HOST);
 
-    plugin_cert *pc = hctx->conf.pc;
-
     mod_nss_patch_config(r, &hctx->conf);
     /* reset COMP_HTTP_HOST so that conditions re-run after request hdrs read */
     /*(done in configfile-glue.c:config_cond_cache_reset() after request hdrs read)*/
@@ -1483,20 +1608,20 @@ mod_nss_SNI (PRFileDesc *ssl, const SECItem *srvNameArr, PRUint32 srvNameArrSize
         }
     }
 
-    if (pc == hctx->conf.pc)
+    if (hctx->ssl_ctx_pc == hctx->conf.pc)
         return SSL_SNI_CURRENT_CONFIG_IS_USED;
 
     /* use NSS deprecated functions to unconfigure an already-configured cert.
      * This is because SSL_ConfigServerCert() will replace an existing cert
      * of the same type, but not if an existing cert is of a different type */
-    SSLKEAType certType =
-      NSS_FindCertKEAType(hctx->conf.pc->ssl_pemfile_x509);
+    SSLKEAType certType = NSS_FindCertKEAType(hctx->kp->ssl_pemfile_x509);
     SSL_ConfigSecureServerWithCertChain(ssl, NULL, NULL, NULL, certType);
+
+    mod_nss_kp_rel(hctx->kp);
+    mod_nss_kp * const kp = hctx->kp = mod_nss_kp_acq(hctx->conf.pc);
     SECStatus rc =
-      SSL_ConfigServerCert(ssl, hctx->conf.pc->ssl_pemfile_x509,
-                           hctx->conf.pc->ssl_pemfile_pkey,
-                           &hctx->conf.pc->ssl_credex,
-                           sizeof(hctx->conf.pc->ssl_credex));
+      SSL_ConfigServerCert(ssl, kp->ssl_pemfile_x509, kp->ssl_pemfile_pkey,
+                           &kp->ssl_credex, sizeof(kp->ssl_credex));
     if (rc < 0) {
         elogf(r->conf.errh, __FILE__, __LINE__,
               "failed to set SNI certificate for TLS server name %s",
@@ -1726,11 +1851,10 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     SSL_OptionSet(model, SSL_REQUEST_CERTIFICATE, PR_FALSE);
     SSL_OptionSet(model, SSL_REQUIRE_CERTIFICATE, SSL_REQUIRE_NEVER);
 
+    mod_nss_kp * const kp = s->pc->kp;
     SECStatus rc =
-      SSL_ConfigServerCert(model, s->pc->ssl_pemfile_x509,
-                           s->pc->ssl_pemfile_pkey,
-                           &s->pc->ssl_credex,
-                           sizeof(s->pc->ssl_credex));
+      SSL_ConfigServerCert(model, kp->ssl_pemfile_x509, kp->ssl_pemfile_pkey,
+                           &kp->ssl_credex, sizeof(kp->ssl_credex));
     if (rc < 0) {
         elogf(srv->errh, __FILE__, __LINE__,
               "failed to set default certificate for socket");
@@ -1771,7 +1895,7 @@ mod_nss_set_defaults_sockets(server *srv, plugin_data *p)
     static const buffer default_ssl_cipher_list =
       { CONST_STR_LEN(LIGHTTPD_DEFAULT_CIPHER_LIST), 0 };
 
-    p->ssl_ctxs = ck_calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
+    p->ssl_ctxs = ck_calloc(srv->config_context->used,sizeof(plugin_ssl_ctx *));
 
     int rc = HANDLER_GO_ON;
     plugin_data_base srvplug;
@@ -1889,7 +2013,7 @@ mod_nss_set_defaults_sockets(server *srv, plugin_data *p)
                  *  and desiring to inherit the ssl config from global context
                  *  without having to duplicate the directives)*/
                 if (count_not_engine
-                    || (conf.ssl_enabled && NULL == p->ssl_ctxs[0].model)) {
+                    || (conf.ssl_enabled && NULL == p->ssl_ctxs[0])) {
                     log_error(srv->errh, __FILE__, __LINE__,
                       "NSS: ssl.pemfile has to be set in same "
                       "$SERVER[\"socket\"] scope as other ssl.* directives, "
@@ -1898,8 +2022,7 @@ mod_nss_set_defaults_sockets(server *srv, plugin_data *p)
                     rc = HANDLER_ERROR;
                     continue;
                 }
-                plugin_ssl_ctx * const s = p->ssl_ctxs + sidx;
-                *s = *p->ssl_ctxs;/*(copy struct of ssl_ctx from global scope)*/
+                p->ssl_ctxs[sidx] = p->ssl_ctxs[0]; /*(copy global scope)*/
                 continue;
             }
             /* PEM file is required */
@@ -1919,8 +2042,11 @@ mod_nss_set_defaults_sockets(server *srv, plugin_data *p)
 
         /*conf.ssl_ctx = NULL;*//*(filled by network_init_ssl() even on error)*/
         if (0 == network_init_ssl(srv, &conf, p)) {
-            plugin_ssl_ctx * const s = p->ssl_ctxs + sidx;
+            plugin_ssl_ctx * const s = p->ssl_ctxs[sidx] =
+              ck_malloc(sizeof(plugin_ssl_ctx));
             s->model              = conf.model;
+            s->pc                 = conf.pc;
+            s->kp                 = mod_nss_kp_acq(s->pc);
             s->protos             = conf.protos;
             s->ssl_compression    = conf.ssl_compression;
             s->ssl_session_ticket = conf.ssl_session_ticket;
@@ -1932,6 +2058,11 @@ mod_nss_set_defaults_sockets(server *srv, plugin_data *p)
     }
 
     free(srvplug.cvlist);
+
+    if (rc == HANDLER_GO_ON && ssl_is_init) {
+        mod_nss_refresh_crl_files(srv, p, log_epoch_secs);
+    }
+
     return rc;
 }
 
@@ -1939,7 +2070,7 @@ mod_nss_set_defaults_sockets(server *srv, plugin_data *p)
 SETDEFAULTS_FUNC(mod_nss_set_defaults)
 {
     static const config_plugin_keys_t cpk[] = {
-      { CONST_STR_LEN("ssl.pemfile"),
+      { CONST_STR_LEN("ssl.pemfile"), /* expect pos 0 for refresh certs,staple*/
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.privkey"),
@@ -1951,7 +2082,7 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
      ,{ CONST_STR_LEN("ssl.ca-dn-file"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
-     ,{ CONST_STR_LEN("ssl.ca-crl-file"),
+     ,{ CONST_STR_LEN("ssl.ca-crl-file"), /* expect pos 4 for refresh crl */
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.read-ahead"),
@@ -2059,17 +2190,12 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
                 __attribute_fallthrough__
               case 4: /* ssl.ca-crl-file */
                 if (!buffer_is_blank(cpv->v.b)) {
-                    CERTCertificateList *d =
-                      mod_nss_load_config_crls(cpv->v.b->ptr, srv->errh);
-                    if (d != NULL) {
-                        cpv->vtype = T_CONFIG_LOCAL;
-                        cpv->v.v = d;
-                    }
-                    else {
-                        log_error(srv->errh, __FILE__, __LINE__,
-                                  "%s = %s", cpk[cpv->k_id].k, cpv->v.b->ptr);
-                        return HANDLER_ERROR;
-                    }
+                    plugin_crl *ssl_ca_crl = ck_malloc(sizeof(*ssl_ca_crl));
+                    ssl_ca_crl->crl_list = NULL;
+                    ssl_ca_crl->crl_file = cpv->v.b->ptr;
+                    ssl_ca_crl->crl_loadts = (unix_time64_t)-1;
+                    cpv->vtype = T_CONFIG_LOCAL;
+                    cpv->v.v = ssl_ca_crl;
                 }
                 break;
               case 5: /* ssl.read-ahead */
@@ -2136,6 +2262,9 @@ SETDEFAULTS_FUNC(mod_nss_set_defaults)
         if (-1 != cpv->k_id)
             mod_nss_merge_config(&p->defaults, cpv);
     }
+
+    feature_refresh_certs = config_feature_bool(srv, "ssl.refresh-certs", 0);
+    feature_refresh_crls  = config_feature_bool(srv, "ssl.refresh-crls",  0);
 
     return mod_nss_set_defaults_sockets(srv, p);
 }
@@ -2352,18 +2481,22 @@ CONNECTION_FUNC(mod_nss_handle_con_accept)
     con->plugin_ctx[p->id] = hctx;
     buffer_blank(&r->uri.authority);
 
-    plugin_ssl_ctx *s = p->ssl_ctxs + srv_sock->sidx;
-    if (NULL == s->model) s = p->ssl_ctxs; /*(inherit from global scope)*/
-    hctx->ssl_session_ticket = s->ssl_session_ticket;
-
     con->network_read = connection_read_cq_ssl;
     con->network_write = connection_write_cq_ssl;
     con->proto_default_port = 443; /* "https" */
-    mod_nss_patch_config(r, &hctx->conf);
-
-    hctx->ssl = mod_nss_io_ctor(con->fd, s->model, r->conf.errh);
+    plugin_ssl_ctx *s = p->ssl_ctxs[srv_sock->sidx]
+                      ? p->ssl_ctxs[srv_sock->sidx]
+                      : p->ssl_ctxs[0];
+    if (s) {
+        hctx->ssl_session_ticket = s->ssl_session_ticket;
+        hctx->ssl_ctx_pc = s->pc;
+        hctx->kp = mod_nss_kp_acq(s->pc);
+        hctx->ssl = mod_nss_io_ctor(con->fd, s->model, r->conf.errh);
+    }
     if (NULL == hctx->ssl)
         return HANDLER_ERROR;
+
+    mod_nss_patch_config(r, &hctx->conf);
 
     /* future: move more config from here to config model in network_init_ssl().
      * Callbacks need to be set here to be able to set callback arg to hctx */
@@ -2732,12 +2865,117 @@ REQUEST_FUNC(mod_nss_handle_request_reset)
 }
 
 
+static void
+mod_nss_refresh_plugin_ssl_ctx (server * const srv, plugin_ssl_ctx * const s)
+{
+    if (NULL == s->kp || NULL == s->pc || s->kp == s->pc->kp) return;
+    mod_nss_kp_rel(s->kp);
+    mod_nss_kp * const kp = s->kp = mod_nss_kp_acq(s->pc);
+
+    SECStatus rc =
+      SSL_ConfigServerCert(s->model, kp->ssl_pemfile_x509, kp->ssl_pemfile_pkey,
+                           &kp->ssl_credex, sizeof(kp->ssl_credex));
+    if (rc < 0) {
+        elogf(srv->errh, __FILE__, __LINE__,
+              "failed to set default certificate for socket: %s %s",
+              s->pc->ssl_pemfile->ptr, s->pc->ssl_privkey->ptr);
+        /* no recovery until admin fixes input files */
+    }
+}
+
+
+static int
+mod_nss_refresh_plugin_cert (server * const srv, plugin_cert * const pc)
+{
+    /* Check for and free updated items from prior refresh iteration and which
+     * now have refcnt 0.  Waiting for next iteration is a not-quite thread-safe
+     * but lock-free way to have extremely low probability that another thread
+     * might have a reference but was suspended between storing pointer and
+     * updating refcnt (kp_acq), and still suspended full refresh period later;
+     * highly unlikely unless thread is stopped in a debugger.  There should be
+     * single maint thread, other threads read only pc->kp head, and pc->kp head
+     * should always have refcnt >= 1, except possibly during process shutdown*/
+    /*(lighttpd is currently single-threaded)*/
+    for (mod_nss_kp **kpp = &pc->kp->next; *kpp; ) {
+        mod_nss_kp *kp = *kpp;
+        if (kp->refcnt)
+            kpp = &kp->next;
+        else {
+            *kpp = kp->next;
+            mod_nss_kp_free(kp);
+        }
+    }
+
+    /* Note: check last modification timestamp only on privkey file, so when
+     * 'mv' updated files into place from generation location, script should
+     * update privkey last, after pem file (and OCSP stapling file) */
+    struct stat st;
+    if (0 != stat(pc->ssl_privkey->ptr, &st))
+        return 0; /* ignore if stat() error; keep using existing crt/pk */
+    if (TIME64_CAST(st.st_mtime) <= pc->pkey_ts)
+        return 0; /* mtime match; no change */
+
+    plugin_cert *npc =
+      network_nss_load_pemfile(srv, pc->ssl_pemfile, pc->ssl_privkey,
+                               pc->ssl_stapling_file);
+    if (NULL == npc)
+        return 0; /* ignore if crt/pk error; keep using existing crt/pk */
+
+    /*(future: if threaded, only one thread should update pcs)*/
+
+    mod_nss_kp * const kp = pc->kp;
+    mod_nss_kp * const nkp = npc->kp;
+    nkp->next = kp;
+    pc->pkey_ts = npc->pkey_ts;
+    pc->kp = nkp;
+    mod_nss_kp_rel(kp);
+
+    free(npc);
+    return 1;
+}
+
+
+static void
+mod_nss_refresh_certs (server *srv, const plugin_data * const p)
+{
+    if (NULL == p->cvlist) return;
+    int newpcs = 0;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            if (cpv->k_id != 0) continue; /* k_id == 0 for ssl.pemfile */
+            if (cpv->vtype != T_CONFIG_LOCAL) continue;
+            newpcs |= mod_nss_refresh_plugin_cert(srv, cpv->v.v);
+        }
+    }
+
+    if (newpcs && NULL != p->ssl_ctxs) {
+        if (p->ssl_ctxs[0])
+            mod_nss_refresh_plugin_ssl_ctx(srv, p->ssl_ctxs[0]);
+        /* refresh $SERVER["socket"] (if not copy of global scope) */
+        for (uint32_t i = 1; i < srv->config_context->used; ++i) {
+            plugin_ssl_ctx * const s = p->ssl_ctxs[i];
+            if (s && s != p->ssl_ctxs[0])
+                mod_nss_refresh_plugin_ssl_ctx(srv, s);
+        }
+    }
+}
+
+
 TRIGGER_FUNC(mod_nss_handle_trigger) {
     const plugin_data * const p = p_d;
     const unix_time64_t cur_ts = log_epoch_secs;
     if (cur_ts & 0x3f) return HANDLER_GO_ON; /*(continue once each 64 sec)*/
 
+    /*if (!(cur_ts & 0x3ff))*/ /*(once each 1024 sec (~17 min))*/
+        if (feature_refresh_certs)
+            mod_nss_refresh_certs(srv, p);
+
     mod_nss_refresh_stapling_files(srv, p, cur_ts);
+
+    if (feature_refresh_crls)
+        mod_nss_refresh_crl_files(srv, p, cur_ts);
 
     return HANDLER_GO_ON;
 }
