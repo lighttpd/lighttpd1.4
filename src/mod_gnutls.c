@@ -61,20 +61,44 @@ GNUTLS_SKIP_GLOBAL_INIT
 #include "log.h"
 #include "plugin.h"
 
+typedef struct mod_gnutls_x509_crl {
+    gnutls_datum_t d; /* .data is (gnutls_x509_crl_t) */
+    int refcnt;
+    struct mod_gnutls_x509_crl *next;
+} mod_gnutls_x509_crl;
+
 typedef struct {
-    /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
+    mod_gnutls_x509_crl *ca_crl;
+    const char *crl_file;
+    unix_time64_t crl_loadts;
+} plugin_crl;
+
+typedef struct mod_gnutls_kp {
     gnutls_certificate_credentials_t ssl_cred;
-    char trust_inited;
-    char must_staple;
+    int refcnt;
+    int8_t trust_verify;
+    int8_t must_staple;
+    mod_gnutls_x509_crl *ca_crl;
     gnutls_datum_t *ssl_pemfile_x509;
     gnutls_privkey_t ssl_pemfile_pkey;
-    const buffer *ssl_stapling_file;
     unix_time64_t ssl_stapling_loadts;
     unix_time64_t ssl_stapling_nextts;
+    struct mod_gnutls_kp *next;
+} mod_gnutls_kp;
+
+typedef struct {
+    /* SNI per host: with COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
+    mod_gnutls_kp *kp; /* parsed public/private key structures */
+    const buffer *ssl_pemfile;
+    const buffer *ssl_privkey;
+    const buffer *ssl_stapling_file;
+    unix_time64_t pkey_ts;
 } plugin_cert;
 
 typedef struct {
     int8_t ssl_session_ticket;
+    plugin_cert *pc;
+    mod_gnutls_kp *kp;
     /*(preserved here for deinit at server shutdown)*/
     gnutls_priority_t priority_cache;
   #if GNUTLS_VERSION_NUMBER < 0x030600
@@ -111,7 +135,7 @@ typedef struct {
     plugin_cert *pc;
     gnutls_datum_t *ssl_ca_file;    /* .data is (gnutls_x509_crt_t) */
     gnutls_datum_t *ssl_ca_dn_file; /* .data is (gnutls_x509_crt_t) */
-    gnutls_datum_t *ssl_ca_crl_file;/* .data is (gnutls_x509_crl_t) */
+    plugin_crl *ssl_ca_crl_file;
 
     unsigned char ssl_verifyclient;
     unsigned char ssl_verifyclient_enforce;
@@ -128,7 +152,7 @@ typedef struct {
 
 typedef struct {
     PLUGIN_DATA;
-    plugin_ssl_ctx *ssl_ctxs;
+    plugin_ssl_ctx **ssl_ctxs;
     plugin_config defaults;
     server *srv;
     const char *ssl_stek_file;
@@ -140,6 +164,8 @@ static int ssl_is_init;
 static plugin_data *plugin_data_singleton;
 #define LOCAL_SEND_BUFSIZE 16384 /* DEFAULT_MAX_RECORD_SIZE */
 static char *local_send_buffer;
+static int feature_refresh_certs;
+static int feature_refresh_crls;
 
 typedef struct {
     gnutls_session_t ssl;      /* gnutls request/connection context */
@@ -154,8 +180,68 @@ typedef struct {
     unsigned int verify_status;
     buffer *tmp_buf;
     log_error_st *errh;
-    gnutls_certificate_credentials_t acme_tls_1_cred;
+    mod_gnutls_kp *kp;
 } handler_ctx;
+
+
+static mod_gnutls_x509_crl *
+mod_gnutls_x509_crl_acq (plugin_crl *ssl_ca_crl)
+{
+    mod_gnutls_x509_crl *ca_crl = ssl_ca_crl->ca_crl;
+    if (ca_crl)
+        ++ca_crl->refcnt;
+    return ca_crl;
+}
+
+
+static void
+mod_gnutls_x509_crl_rel (mod_gnutls_x509_crl *ca_crl)
+{
+    --ca_crl->refcnt;
+}
+
+
+__attribute_cold__
+static mod_gnutls_kp *
+mod_gnutls_kp_init (void)
+{
+    mod_gnutls_kp * const kp = ck_calloc(1, sizeof(*kp));
+    kp->refcnt = 1;
+    return kp;
+}
+
+
+static void
+mod_gnutls_free_config_crts (gnutls_datum_t *d);
+
+__attribute_cold__
+static void
+mod_gnutls_kp_free (mod_gnutls_kp *kp)
+{
+    gnutls_certificate_free_credentials(kp->ssl_cred);
+    mod_gnutls_free_config_crts(kp->ssl_pemfile_x509);
+    gnutls_privkey_deinit(kp->ssl_pemfile_pkey);
+    if (kp->ca_crl)
+        mod_gnutls_x509_crl_rel(kp->ca_crl);
+    free(kp);
+}
+
+
+static mod_gnutls_kp *
+mod_gnutls_kp_acq (plugin_cert *pc)
+{
+    mod_gnutls_kp *kp = pc->kp;
+    ++kp->refcnt;
+    return kp;
+}
+
+
+static void
+mod_gnutls_kp_rel (mod_gnutls_kp *kp)
+{
+    if (--kp->refcnt < 0)
+        mod_gnutls_kp_free(kp); /* immed free for acme-tls/1 */
+}
 
 
 static handler_ctx *
@@ -169,8 +255,8 @@ static void
 handler_ctx_free (handler_ctx *hctx)
 {
     gnutls_deinit(hctx->ssl);
-    if (hctx->acme_tls_1_cred)
-        gnutls_certificate_free_credentials(hctx->acme_tls_1_cred);
+    if (hctx->kp)
+        mod_gnutls_kp_rel(hctx->kp);
     free(hctx);
 }
 
@@ -455,6 +541,7 @@ static void mod_gnutls_free_gnutls (void)
 }
 
 
+__attribute_cold__
 __attribute_noinline__
 static void
 mod_gnutls_free_config_crts_data (gnutls_datum_t *d)
@@ -468,6 +555,7 @@ mod_gnutls_free_config_crts_data (gnutls_datum_t *d)
 }
 
 
+__attribute_cold__
 static void
 mod_gnutls_free_config_crts (gnutls_datum_t *d)
 {
@@ -476,16 +564,20 @@ mod_gnutls_free_config_crts (gnutls_datum_t *d)
 }
 
 
+__attribute_cold__
 static void
-mod_gnutls_free_config_crls (gnutls_datum_t *d)
+mod_gnutls_free_config_crls (mod_gnutls_x509_crl *ca_crl)
 {
-    if (NULL == d) return;
-    gnutls_x509_crl_t *crls = (gnutls_x509_crl_t *)(void *)d->data;
-    unsigned int u = d->size;
-    for (unsigned int i = 0; i < u; ++i)
-        gnutls_x509_crl_deinit(crls[i]);
-    gnutls_free(crls);
-    gnutls_free(d);
+    while (ca_crl) {
+        mod_gnutls_x509_crl *o = ca_crl;
+        ca_crl = ca_crl->next;
+        gnutls_x509_crl_t *crls = (gnutls_x509_crl_t *)(void *)o->d.data;
+        unsigned int u = o->d.size;
+        free(o);
+        for (unsigned int i = 0; i < u; ++i)
+            gnutls_x509_crl_deinit(crls[i]);
+        gnutls_free(crls);
+    }
 }
 
 
@@ -544,7 +636,7 @@ mod_gnutls_load_config_crts (const char *fn, log_error_st *errh)
 }
 
 
-static gnutls_datum_t *
+static mod_gnutls_x509_crl *
 mod_gnutls_load_config_crls (const char *fn, log_error_st *errh)
 {
     /*(very similar to other mod_gnutls_load_config_*())*/
@@ -553,24 +645,20 @@ mod_gnutls_load_config_crls (const char *fn, log_error_st *errh)
     gnutls_datum_t f = { NULL, 0 };
     int rc = mod_gnutls_load_file(fn, &f, errh);
     if (rc < 0) return NULL;
-    gnutls_datum_t *d = gnutls_malloc(sizeof(gnutls_datum_t));
-    if (d == NULL) {
-        mod_gnutls_datum_wipe(&f);
-        return NULL;
-    }
-    d->data = NULL;
-    d->size = 0;
+    mod_gnutls_x509_crl *ca_crl = ck_calloc(1, sizeof(mod_gnutls_x509_crl));
+    ca_crl->refcnt = 1;
+    gnutls_datum_t *d = &ca_crl->d;
     rc = gnutls_x509_crl_list_import2((gnutls_x509_crl_t **)&d->data, &d->size,
                                       &f, GNUTLS_X509_FMT_PEM, 0);
     mod_gnutls_datum_wipe(&f);
     if (rc < 0) {
         elogf(errh, __FILE__, __LINE__, rc,
               "gnutls_x509_crl_list_import2() %s", fn);
-        mod_gnutls_free_config_crls(d);
+        mod_gnutls_free_config_crls(ca_crl);
         return NULL;
     }
 
-    return d;
+    return ca_crl;
 }
 
 
@@ -610,31 +698,33 @@ mod_gnutls_load_config_pkey (const char *fn, log_error_st *errh)
 
 
 static void
+mod_gnutls_free_plugin_ssl_ctx (plugin_ssl_ctx * const s)
+{
+    if (s->priority_cache)
+        gnutls_priority_deinit(s->priority_cache);
+  #if GNUTLS_VERSION_NUMBER < 0x030600
+    if (s->dh_params)
+        gnutls_dh_params_deinit(s->dh_params);
+  #endif
+    if (s->kp)
+        mod_gnutls_kp_rel(s->kp);
+    free(s);
+}
+
+
+static void
 mod_gnutls_free_config (server *srv, plugin_data * const p)
 {
     if (NULL != p->ssl_ctxs) {
-        gnutls_priority_t pcache_global_scope = p->ssl_ctxs->priority_cache;
         /* free from $SERVER["socket"] (if not copy of global scope) */
         for (uint32_t i = 1; i < srv->config_context->used; ++i) {
-            plugin_ssl_ctx * const s = p->ssl_ctxs + i;
-            if (s->priority_cache && s->priority_cache != pcache_global_scope) {
-                if (s->priority_cache)
-                    gnutls_priority_deinit(s->priority_cache);
-              #if GNUTLS_VERSION_NUMBER < 0x030600
-                if (s->dh_params)
-                    gnutls_dh_params_deinit(s->dh_params);
-              #endif
-            }
+            plugin_ssl_ctx * const s = p->ssl_ctxs[i];
+            if (s && s != p->ssl_ctxs[0])
+                mod_gnutls_free_plugin_ssl_ctx(s);
         }
         /* free from global scope */
-        if (pcache_global_scope) {
-            if (p->ssl_ctxs[0].priority_cache)
-                gnutls_priority_deinit(p->ssl_ctxs[0].priority_cache);
-          #if GNUTLS_VERSION_NUMBER < 0x030600
-            if (p->ssl_ctxs[0].dh_params)
-                gnutls_dh_params_deinit(p->ssl_ctxs[0].dh_params);
-          #endif
-        }
+        if (p->ssl_ctxs[0])
+            mod_gnutls_free_plugin_ssl_ctx(p->ssl_ctxs[0]);
         free(p->ssl_ctxs);
     }
 
@@ -647,9 +737,12 @@ mod_gnutls_free_config (server *srv, plugin_data * const p)
               case 0: /* ssl.pemfile */
                 if (cpv->vtype == T_CONFIG_LOCAL) {
                     plugin_cert *pc = cpv->v.v;
-                    gnutls_certificate_free_credentials(pc->ssl_cred);
-                    mod_gnutls_free_config_crts(pc->ssl_pemfile_x509);
-                    gnutls_privkey_deinit(pc->ssl_pemfile_pkey);
+                    mod_gnutls_kp *kp = pc->kp;
+                    while (kp) {
+                        mod_gnutls_kp *o = kp;
+                        kp = kp->next;
+                        mod_gnutls_kp_free(o);
+                    }
                     free(pc);
                 }
                 break;
@@ -659,8 +752,11 @@ mod_gnutls_free_config (server *srv, plugin_data * const p)
                     mod_gnutls_free_config_crts(cpv->v.v);
                 break;
               case 4: /* ssl.ca-crl-file */
-                if (cpv->vtype == T_CONFIG_LOCAL)
-                    mod_gnutls_free_config_crls(cpv->v.v);
+                if (cpv->vtype == T_CONFIG_LOCAL) {
+                    plugin_crl *ssl_ca_crl = cpv->v.v;
+                    mod_gnutls_free_config_crls(ssl_ca_crl->ca_crl);
+                    free(ssl_ca_crl);
+                }
                 break;
               default:
                 break;
@@ -904,6 +1000,85 @@ mod_gnutls_patch_config (request_st * const r, plugin_config * const pconf)
 }
 
 
+__attribute_noinline__
+static int
+mod_gnutls_reload_crl_file (server *srv, const plugin_data *p, const unix_time64_t cur_ts, plugin_crl *ssl_ca_crl)
+{
+    /* CRLs can be updated at any time, though expected on/before Next Update */
+    mod_gnutls_x509_crl *ca_crl =
+      mod_gnutls_load_config_crls(ssl_ca_crl->crl_file, srv->errh);
+    if (NULL == ca_crl)
+        return 0;
+    mod_gnutls_x509_crl *ca_crl_prior = ca_crl->next = ssl_ca_crl->ca_crl;
+    ssl_ca_crl->ca_crl = ca_crl;
+    ssl_ca_crl->crl_loadts = cur_ts;
+    if (ca_crl_prior) {
+        /* (could skip this scan if ca_crl_prior->refcnt == 1) */
+        /* future: might construct array of (plugin_cert *) at startup
+         *         to avoid the need to search for them here */
+        /* (init i to 0 if global context; to 1 to skip empty global context) */
+        for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+            const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+            for (; cpv->k_id != -1; ++cpv) {
+                if (cpv->k_id != 0) continue; /* k_id == 0 for ssl.pemfile */
+                if (cpv->vtype != T_CONFIG_LOCAL) continue;
+                mod_gnutls_kp *kp = ((plugin_cert *)cpv->v.v)->kp;
+                if (kp->ca_crl == ca_crl_prior) {
+                    kp->trust_verify = 0;
+                    kp->ca_crl = NULL;
+                    gnutls_certificate_set_trust_list(kp->ssl_cred, NULL, 0);
+                    mod_gnutls_x509_crl_rel(ca_crl_prior);
+                }
+            }
+        }
+        mod_gnutls_x509_crl_rel(ca_crl_prior);
+    }
+    return 1;
+}
+
+
+static int
+mod_gnutls_refresh_crl_file (server *srv, const plugin_data *p, const unix_time64_t cur_ts, plugin_crl *ssl_ca_crl)
+{
+    if (ssl_ca_crl->ca_crl) {
+        for (mod_gnutls_x509_crl **crlp = &ssl_ca_crl->ca_crl->next; *crlp; ) {
+            mod_gnutls_x509_crl *ca_crl = *crlp;
+            if (ca_crl->refcnt)
+                crlp = &ca_crl->next;
+            else {
+                *crlp = ca_crl->next;
+                mod_gnutls_free_config_crls(ca_crl);
+            }
+        }
+    }
+
+    struct stat st;
+    if (0 != stat(ssl_ca_crl->crl_file, &st)
+        || (TIME64_CAST(st.st_mtime) <= ssl_ca_crl->crl_loadts
+            && ssl_ca_crl->crl_loadts != (unix_time64_t)-1))
+        return 1;
+    return mod_gnutls_reload_crl_file(srv, p, cur_ts, ssl_ca_crl);
+}
+
+
+static void
+mod_gnutls_refresh_crl_files (server *srv, const plugin_data *p, const unix_time64_t cur_ts)
+{
+    /* future: might construct array of (plugin_crl *) at startup
+     *         to avoid the need to search for them here */
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    if (NULL == p->cvlist) return;
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        const config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; cpv->k_id != -1; ++cpv) {
+            if (cpv->k_id != 4) continue; /* k_id == 4 for ssl.ca-crl-file */
+            if (cpv->vtype != T_CONFIG_LOCAL) continue;
+            mod_gnutls_refresh_crl_file(srv, p, cur_ts, cpv->v.v);
+        }
+    }
+}
+
+
 static int
 mod_gnutls_verify_set_tlist (handler_ctx *hctx, int req)
 {
@@ -914,12 +1089,15 @@ mod_gnutls_verify_set_tlist (handler_ctx *hctx, int req)
      * connections when ssl.ca-dn-file and ssl.ca-file are both set.  If both
      * are set, current code attempts to set ssl.ca-dn-file right before sending
      * client cert request, and sets ssl.ca-file right before client cert verify
+     * (*not reentrant and not thread-safe*)
      *
      * Architecture would be cleaner if the trust list for verifying client cert
      * (gnutls_x509_trust_list_t) were available to attach to a gnutls_session_t
      * instead of attaching to a gnutls_certificate_credentials_t.
      */
-    if (hctx->conf.pc->trust_inited) return GNUTLS_E_SUCCESS;
+    const int dn_hint = (req && hctx->conf.ssl_ca_dn_file);
+    if (!dn_hint && hctx->kp->trust_verify)
+        return GNUTLS_E_SUCCESS;
 
     gnutls_datum_t *d;
     int rc;
@@ -927,7 +1105,7 @@ mod_gnutls_verify_set_tlist (handler_ctx *hctx, int req)
     /* set trust list using ssl_ca_dn_file, if set, for client cert request
      * (when req is true) (for CAs sent by server to client in cert request)
      * (trust is later replaced by ssl_ca_file for client cert verification) */
-    d = req && hctx->conf.ssl_ca_dn_file
+    d = dn_hint
       ? hctx->conf.ssl_ca_dn_file
       : hctx->conf.ssl_ca_file;
     if (NULL == d) {
@@ -955,28 +1133,43 @@ mod_gnutls_verify_set_tlist (handler_ctx *hctx, int req)
         return rc;
     }
 
-    d = hctx->conf.ssl_ca_crl_file;
-    if (NULL != d && req && hctx->conf.ssl_ca_dn_file) {
+    if (!dn_hint && hctx->conf.ssl_ca_crl_file) {
         /*(check req and ssl_ca_dn_file to see if tlist will be replaced later,
          * and, if so, defer setting crls until later)*/
-        gnutls_x509_crl_t *crl_list = (gnutls_x509_crl_t *)(void *)d->data;
-        rc = gnutls_x509_trust_list_add_crls(tlist, crl_list, d->size, 0, 0);
-        if (rc < 0) {
-            elog(hctx->r->conf.errh, __FILE__, __LINE__, rc,
-                 "gnutls_x509_trust_list_add_crls()");
-            gnutls_x509_trust_list_deinit(tlist, 0);
-            return rc;
+        mod_gnutls_x509_crl **ca_crl = &hctx->kp->ca_crl;
+        *ca_crl = mod_gnutls_x509_crl_acq(hctx->conf.ssl_ca_crl_file);
+        if (*ca_crl) {
+            d = &(*ca_crl)->d;
+            gnutls_x509_crl_t *crl_list = (gnutls_x509_crl_t *)(void *)d->data;
+            rc = gnutls_x509_trust_list_add_crls(tlist,crl_list,d->size,0,0);
+            if (rc < 0) {
+                elog(hctx->r->conf.errh, __FILE__, __LINE__, rc,
+                     "gnutls_x509_trust_list_add_crls()");
+                gnutls_x509_trust_list_deinit(tlist, 0);
+                mod_gnutls_x509_crl_rel(*ca_crl);
+                *ca_crl = NULL;
+                return rc;
+            }
         }
     }
 
     /* gnutls limitation; wasteful to have to copy into each cred */
     /* (would be better to share list with session, instead of with cred) */
-    gnutls_certificate_credentials_t ssl_cred = hctx->conf.pc->ssl_cred;
+    gnutls_certificate_credentials_t ssl_cred = hctx->kp->ssl_cred;
     gnutls_certificate_set_trust_list(ssl_cred, tlist, 0); /* transfer tlist */
 
     /* (must flip trust lists back and forth b/w DN names and verify CAs) */
-    if (NULL == hctx->conf.ssl_ca_dn_file)
-        hctx->conf.pc->trust_inited = 1;
+    hctx->kp->trust_verify = !dn_hint;
+
+    if (dn_hint) {
+        /* gnutls_certificate_set_trust_list() replaced previous tlist,
+         * so decrement refcnt on ca_crl if it was part of prior tlist */
+        mod_gnutls_x509_crl **ca_crl = &hctx->kp->ca_crl;
+        if (*ca_crl) {
+            mod_gnutls_x509_crl_rel(*ca_crl);
+            *ca_crl = NULL;
+        }
+    }
 
     return GNUTLS_E_SUCCESS;
 }
@@ -1086,7 +1279,7 @@ mod_gnutls_expire_stapling_file (server *srv, plugin_cert *pc)
     /* Does GnuTLS detect expired OCSP response? */
     /* or must we rebuild gnutls_certificate_credentials_t ? */
   #endif
-    if (pc->must_staple)
+    if (pc->kp->must_staple)
         log_error(srv->errh, __FILE__, __LINE__,
                   "certificate marked OCSP Must-Staple, "
                   "but OCSP response expired from ssl.stapling-file %s",
@@ -1124,32 +1317,34 @@ mod_gnutls_reload_stapling_file (server *srv, plugin_cert *pc, const unix_time64
      * XXX: lighttpd is not threaded, so this is probably not an issue (?)
      */
 
+    mod_gnutls_kp * const kp = pc->kp;
+
   #if 0
-    gnutls_certificate_set_flags(pc->ssl_cred,
+    gnutls_certificate_set_flags(kp->ssl_cred,
                                  GNUTLS_CERTIFICATE_SKIP_OCSP_RESPONSE_CHECK);
   #endif
 
     const char *fn = pc->ssl_stapling_file->ptr;
-    int rc = gnutls_certificate_set_ocsp_status_request_file(pc->ssl_cred,fn,0);
+    int rc = gnutls_certificate_set_ocsp_status_request_file(kp->ssl_cred,fn,0);
     if (rc < 0)
         return rc;
 
   #if GNUTLS_VERSION_NUMBER >= 0x030603
     time_t nextupd =
-      gnutls_certificate_get_ocsp_expiration(pc->ssl_cred, 0, 0, 0);
+      gnutls_certificate_get_ocsp_expiration(kp->ssl_cred, 0, 0, 0);
     if (nextupd == (time_t)-2) nextupd = (time_t)-1;
   #endif
 
-    pc->ssl_stapling_loadts = cur_ts;
-    pc->ssl_stapling_nextts = nextupd;
-    if (pc->ssl_stapling_nextts == -1) {
+    kp->ssl_stapling_loadts = cur_ts;
+    kp->ssl_stapling_nextts = nextupd;
+    if (kp->ssl_stapling_nextts == -1) {
         /* "Next Update" might not be provided by OCSP responder
          * Use 3600 sec (1 hour) in that case. */
         /* retry in 1 hour if unable to determine Next Update */
-        pc->ssl_stapling_nextts = cur_ts + 3600;
-        pc->ssl_stapling_loadts = 0;
+        kp->ssl_stapling_nextts = cur_ts + 3600;
+        kp->ssl_stapling_loadts = 0;
     }
-    else if (pc->ssl_stapling_nextts < cur_ts)
+    else if (kp->ssl_stapling_nextts < cur_ts)
         mod_gnutls_expire_stapling_file(srv, pc);
 
     return 0;
@@ -1159,12 +1354,13 @@ mod_gnutls_reload_stapling_file (server *srv, plugin_cert *pc, const unix_time64
 static int
 mod_gnutls_refresh_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t cur_ts)
 {
-    if (pc->ssl_stapling_nextts > cur_ts + 256)
+    mod_gnutls_kp * const kp = pc->kp;
+    if (kp->ssl_stapling_nextts > cur_ts + 256)
         return 0; /* skip check for refresh unless close to expire */
     struct stat st;
     if (0 != stat(pc->ssl_stapling_file->ptr, &st)
-        || TIME64_CAST(st.st_mtime) <= pc->ssl_stapling_loadts) {
-        if (pc->ssl_stapling_nextts < cur_ts)
+        || TIME64_CAST(st.st_mtime) <= kp->ssl_stapling_loadts) {
+        if (kp->ssl_stapling_nextts < cur_ts)
             mod_gnutls_expire_stapling_file(srv, pc);
         return 0;
     }
@@ -1247,7 +1443,7 @@ mod_gnutls_crt_must_staple (gnutls_x509_crt_t crt)
 
 
 static int
-mod_gnutls_construct_crt_chain (plugin_cert *pc, gnutls_datum_t *d, log_error_st *errh)
+mod_gnutls_construct_crt_chain (mod_gnutls_kp *kp, gnutls_datum_t *d, log_error_st *errh)
 {
     /* Historically, openssl will use the cert chain in (SSL_CTX *) if a cert
      * does not have a chain configured in (SSL *).  Attempt to provide
@@ -1260,7 +1456,7 @@ mod_gnutls_construct_crt_chain (plugin_cert *pc, gnutls_datum_t *d, log_error_st
     int rc = gnutls_certificate_allocate_credentials(&ssl_cred);
     if (rc < 0) return rc;
     unsigned int ncrt = (d ? d->size : 0);
-    unsigned int off = (d == pc->ssl_pemfile_x509) ? 0 : 1;
+    unsigned int off = (d == kp->ssl_pemfile_x509) ? 0 : 1;
     gnutls_pcert_st * const pcert_list =
       gnutls_malloc(sizeof(gnutls_pcert_st) * (off+ncrt));
     if (NULL == pcert_list) {
@@ -1271,9 +1467,9 @@ mod_gnutls_construct_crt_chain (plugin_cert *pc, gnutls_datum_t *d, log_error_st
     rc = 0;
 
     if (off) { /*(add crt to chain if different from d)*/
-        /*assert(pc->ssl_pemfile_x509->size == 1)*/
+        /*assert(kp->ssl_pemfile_x509->size == 1)*/
         gnutls_x509_crt_t *crts =
-          (gnutls_x509_crt_t *)(void *)pc->ssl_pemfile_x509->data;
+          (gnutls_x509_crt_t *)(void *)kp->ssl_pemfile_x509->data;
         rc = gnutls_pcert_import_x509(pcert_list, crts[0], 0);
     }
 
@@ -1293,7 +1489,7 @@ mod_gnutls_construct_crt_chain (plugin_cert *pc, gnutls_datum_t *d, log_error_st
     ncrt += off;
     if (0 == rc)
         rc = gnutls_certificate_set_key(ssl_cred, NULL, 0, pcert_list, ncrt,
-                                        pc->ssl_pemfile_pkey);
+                                        kp->ssl_pemfile_pkey);
     if (rc < 0) {
         for (unsigned int i = 0; i < ncrt; ++i)
             gnutls_pcert_deinit(pcert_list+i);
@@ -1308,17 +1504,18 @@ mod_gnutls_construct_crt_chain (plugin_cert *pc, gnutls_datum_t *d, log_error_st
      * not be run on gnutls_pcert_st in list, though top-level list storage
      * should be freed.  On failure, ownership is not transferred for either. */
     gnutls_free(pcert_list);
-    pc->ssl_pemfile_pkey = NULL;
-    pc->ssl_cred = ssl_cred;
+    kp->ssl_pemfile_pkey = NULL;
+    kp->ssl_cred = ssl_cred;
 
-    /* release lists used to configure pc->ssl_cred */
-    mod_gnutls_free_config_crts(pc->ssl_pemfile_x509);
-    pc->ssl_pemfile_x509 = NULL;
+    /* release lists used to configure kp->ssl_cred */
+    mod_gnutls_free_config_crts(kp->ssl_pemfile_x509);
+    kp->ssl_pemfile_x509 = NULL;
 
     return 0;
 }
 
 
+__attribute_noinline__
 static void *
 network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *privkey, const buffer *ssl_stapling_file)
 {
@@ -1342,8 +1539,9 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
     }
 
     plugin_cert *pc = ck_malloc(sizeof(plugin_cert));
-    pc->ssl_cred = ssl_cred;
-    pc->trust_inited = 0;
+    mod_gnutls_kp * const kp = pc->kp = mod_gnutls_kp_init();
+    kp->ssl_cred = ssl_cred;
+    /*(incomplete)*/
 
     return pc;
 
@@ -1363,18 +1561,18 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
     }
 
     plugin_cert *pc = ck_malloc(sizeof(plugin_cert));
-    pc->ssl_cred = NULL;
-    pc->trust_inited = 0;
-    pc->ssl_pemfile_x509 = d;
-    pc->ssl_pemfile_pkey = pkey;
+    mod_gnutls_kp * const kp = pc->kp = mod_gnutls_kp_init();
+    kp->ssl_pemfile_x509 = d;
+    kp->ssl_pemfile_pkey = pkey;
+    pc->ssl_pemfile = pemfile;
+    pc->ssl_privkey = privkey;
     pc->ssl_stapling_file= ssl_stapling_file;
-    pc->ssl_stapling_loadts = 0;
-    pc->ssl_stapling_nextts = 0;
-    pc->must_staple =
+    pc->pkey_ts = log_epoch_secs;
+    kp->must_staple =
       mod_gnutls_crt_must_staple(((gnutls_x509_crt_t *)(void *)d->data)[0]);
 
     if (d->size > 1) { /*(certificate chain provided)*/
-        int rc = mod_gnutls_construct_crt_chain(pc, d, srv->errh);
+        int rc = mod_gnutls_construct_crt_chain(kp, d, srv->errh);
         if (rc < 0) {
             mod_gnutls_free_config_crts(d);
             gnutls_privkey_deinit(pkey);
@@ -1388,7 +1586,7 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
             /* continue without OCSP response if there is an error */
         }
     }
-    else if (pc->must_staple) {
+    else if (kp->must_staple) {
         log_error(srv->errh, __FILE__, __LINE__,
                   "certificate %s marked OCSP Must-Staple, "
                   "but ssl.stapling-file not provided", pemfile->ptr);
@@ -1481,24 +1679,23 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
         return GNUTLS_E_FILE_ERROR;
     }
 
-    plugin_cert pc;
-    pc.ssl_cred = NULL;
-    pc.trust_inited = 0;
-    pc.ssl_pemfile_x509 = d;
-    pc.ssl_pemfile_pkey = pkey;
+    mod_gnutls_kp * const kp = mod_gnutls_kp_init();
+    kp->refcnt = 0; /*(special-case for single-use and immed free in kp_free)*/
+    kp->ssl_pemfile_x509 = d;
+    kp->ssl_pemfile_pkey = pkey;
 
-    rc = mod_gnutls_construct_crt_chain(&pc, d, errh);
+    rc = mod_gnutls_construct_crt_chain(kp, d, errh);
     if (rc < 0) {
         mod_gnutls_free_config_crts(d);
         gnutls_privkey_deinit(pkey);
         return rc;
     }
 
-    gnutls_certificate_credentials_t ssl_cred = pc.ssl_cred;
+    gnutls_certificate_credentials_t ssl_cred = kp->ssl_cred;
 
   #endif
 
-    hctx->acme_tls_1_cred = ssl_cred; /*(save ptr and free later)*/
+    hctx->kp = kp;
 
     gnutls_credentials_clear(hctx->ssl);
     rc = gnutls_credentials_set(hctx->ssl, GNUTLS_CRD_CERTIFICATE, ssl_cred);
@@ -1736,14 +1933,16 @@ mod_gnutls_client_hello_hook(gnutls_session_t ssl, unsigned int htype,
     }
   #endif
 
-    if (NULL == hctx->conf.pc->ssl_cred) {
-        rc = mod_gnutls_construct_crt_chain(hctx->conf.pc,
+    hctx->kp = mod_gnutls_kp_acq(hctx->conf.pc);
+
+    if (NULL == hctx->kp->ssl_cred) {
+        rc = mod_gnutls_construct_crt_chain(hctx->kp,
                                             hctx->conf.ssl_ca_file,
                                             hctx->r->conf.errh);
         if (rc < 0) return rc;
     }
 
-    gnutls_certificate_credentials_t ssl_cred = hctx->conf.pc->ssl_cred;
+    gnutls_certificate_credentials_t ssl_cred = hctx->kp->ssl_cred;
 
     hctx->verify_status = ~0u;
     gnutls_certificate_request_t req = GNUTLS_CERT_IGNORE;
@@ -2040,7 +2239,7 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
     static const buffer default_ssl_cipher_list =
       { CONST_STR_LEN(LIGHTTPD_DEFAULT_CIPHER_LIST), 0 };
 
-    p->ssl_ctxs = ck_calloc(srv->config_context->used, sizeof(plugin_ssl_ctx));
+    p->ssl_ctxs = ck_calloc(srv->config_context->used,sizeof(plugin_ssl_ctx *));
 
     int rc = HANDLER_GO_ON;
     plugin_data_base srvplug;
@@ -2157,8 +2356,7 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
                  *  and desiring to inherit the ssl config from global context
                  *  without having to duplicate the directives)*/
                 if (count_not_engine
-                    || (conf.ssl_enabled
-                        && NULL == p->ssl_ctxs[0].priority_cache)) {
+                    || (conf.ssl_enabled && NULL == p->ssl_ctxs[0])) {
                     log_error(srv->errh, __FILE__, __LINE__,
                       "GnuTLS: ssl.pemfile has to be set in same "
                       "$SERVER[\"socket\"] scope as other ssl.* directives, "
@@ -2167,8 +2365,7 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
                     rc = HANDLER_ERROR;
                     continue;
                 }
-                plugin_ssl_ctx * const s = p->ssl_ctxs + sidx;
-                *s = *p->ssl_ctxs;/*(copy struct of ssl_ctx from global scope)*/
+                p->ssl_ctxs[sidx] = p->ssl_ctxs[0]; /*(copy from global scope)*/
                 continue;
             }
             /* PEM file is required */
@@ -2188,7 +2385,8 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
 
         /*conf.ssl_ctx = NULL;*//*(filled by network_init_ssl() even on error)*/
         if (0 == network_init_ssl(srv, &conf, p)) {
-            plugin_ssl_ctx * const s = p->ssl_ctxs + sidx;
+            plugin_ssl_ctx * const s = p->ssl_ctxs[sidx] =
+              ck_malloc(sizeof(plugin_ssl_ctx));
             s->ssl_session_ticket = conf.ssl_session_ticket;
             s->priority_cache     = conf.priority_cache;
           #if GNUTLS_VERSION_NUMBER < 0x030600
@@ -2205,10 +2403,13 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
         free(conf.priority_str.ptr);
     }
 
-    if (rc == HANDLER_GO_ON && ssl_is_init)
-        mod_gnutls_session_ticket_key_check(srv, p, log_epoch_secs);
-
     free(srvplug.cvlist);
+
+    if (rc == HANDLER_GO_ON && ssl_is_init) {
+        mod_gnutls_session_ticket_key_check(srv, p, log_epoch_secs);
+        mod_gnutls_refresh_crl_files(srv, p, log_epoch_secs);
+    }
+
     return rc;
 }
 
@@ -2216,7 +2417,7 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
 SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
 {
     static const config_plugin_keys_t cpk[] = {
-      { CONST_STR_LEN("ssl.pemfile"),
+      { CONST_STR_LEN("ssl.pemfile"), /* expect pos 0 for refresh certs,staple*/
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.privkey"),
@@ -2228,7 +2429,7 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
      ,{ CONST_STR_LEN("ssl.ca-dn-file"),
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
-     ,{ CONST_STR_LEN("ssl.ca-crl-file"),
+     ,{ CONST_STR_LEN("ssl.ca-crl-file"), /* expect pos 4 for refresh crl */
         T_CONFIG_STRING,
         T_CONFIG_SCOPE_CONNECTION }
      ,{ CONST_STR_LEN("ssl.read-ahead"),
@@ -2322,17 +2523,12 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
                 __attribute_fallthrough__
               case 4: /* ssl.ca-crl-file */
                 if (!buffer_is_blank(cpv->v.b)) {
-                    gnutls_datum_t *d =
-                      mod_gnutls_load_config_crls(cpv->v.b->ptr, srv->errh);
-                    if (d != NULL) {
-                        cpv->vtype = T_CONFIG_LOCAL;
-                        cpv->v.v = d;
-                    }
-                    else {
-                        log_error(srv->errh, __FILE__, __LINE__,
-                                  "%s = %s", cpk[cpv->k_id].k, cpv->v.b->ptr);
-                        return HANDLER_ERROR;
-                    }
+                    plugin_crl *ssl_ca_crl = ck_malloc(sizeof(*ssl_ca_crl));
+                    ssl_ca_crl->ca_crl = NULL;
+                    ssl_ca_crl->crl_file = cpv->v.b->ptr;
+                    ssl_ca_crl->crl_loadts = (unix_time64_t)-1;
+                    cpv->vtype = T_CONFIG_LOCAL;
+                    cpv->v.v = ssl_ca_crl;
                 }
                 break;
               case 5: /* ssl.read-ahead */
@@ -2403,6 +2599,9 @@ SETDEFAULTS_FUNC(mod_gnutls_set_defaults)
   #if GNUTLS_VERSION_NUMBER >= 0x030704
     mod_gnutls_check_ktls();
   #endif
+
+    feature_refresh_certs = config_feature_bool(srv, "ssl.refresh-certs", 0);
+    feature_refresh_crls  = config_feature_bool(srv, "ssl.refresh-crls",  0);
 
     return mod_gnutls_set_defaults_sockets(srv, p);
 }
@@ -2766,8 +2965,14 @@ CONNECTION_FUNC(mod_gnutls_handle_con_accept)
     con->plugin_ctx[p->id] = hctx;
     buffer_blank(&r->uri.authority);
 
-    plugin_ssl_ctx *s = p->ssl_ctxs + srv_sock->sidx;
-    if (NULL == s->priority_cache) s = p->ssl_ctxs; /*(inherit from global)*/
+    plugin_ssl_ctx *s = p->ssl_ctxs[srv_sock->sidx]
+                      ? p->ssl_ctxs[srv_sock->sidx]
+                      : p->ssl_ctxs[0];
+    if (NULL == s) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "SSL: not configured for socket");
+        return HANDLER_ERROR;
+    }
     hctx->ssl_session_ticket = s->ssl_session_ticket;
     int flags = GNUTLS_SERVER | GNUTLS_NO_SIGNAL | GNUTLS_NONBLOCK;
              /* ??? add feature: GNUTLS_ENABLE_EARLY_START ??? */
@@ -3145,13 +3350,106 @@ REQUEST_FUNC(mod_gnutls_handle_request_reset)
 }
 
 
+static void
+mod_gnutls_refresh_plugin_ssl_ctx (plugin_ssl_ctx * const s)
+{
+    if (NULL == s->kp || NULL == s->pc || s->kp == s->pc->kp) return;
+    mod_gnutls_kp_rel(s->kp);
+    s->kp = mod_gnutls_kp_acq(s->pc);
+}
+
+
+static int
+mod_gnutls_refresh_plugin_cert (server * const srv, plugin_cert * const pc)
+{
+    /* Check for and free updated items from prior refresh iteration and which
+     * now have refcnt 0.  Waiting for next iteration is a not-quite thread-safe
+     * but lock-free way to have extremely low probability that another thread
+     * might have a reference but was suspended between storing pointer and
+     * updating refcnt (kp_acq), and still suspended full refresh period later;
+     * highly unlikely unless thread is stopped in a debugger.  There should be
+     * single maint thread, other threads read only pc->kp head, and pc->kp head
+     * should always have refcnt >= 1, except possibly during process shutdown*/
+    /*(lighttpd is currently single-threaded)*/
+    for (mod_gnutls_kp **kpp = &pc->kp->next; *kpp; ) {
+        mod_gnutls_kp *kp = *kpp;
+        if (kp->refcnt)
+            kpp = &kp->next;
+        else {
+            *kpp = kp->next;
+            mod_gnutls_kp_free(kp);
+        }
+    }
+
+    /* Note: check last modification timestamp only on privkey file, so when
+     * 'mv' updated files into place from generation location, script should
+     * update privkey last, after pem file (and OCSP stapling file) */
+    struct stat st;
+    if (0 != stat(pc->ssl_privkey->ptr, &st))
+        return 0; /* ignore if stat() error; keep using existing crt/pk */
+    if (TIME64_CAST(st.st_mtime) <= pc->pkey_ts)
+        return 0; /* mtime match; no change */
+
+    plugin_cert *npc =
+      network_gnutls_load_pemfile(srv, pc->ssl_pemfile, pc->ssl_privkey,
+                                  pc->ssl_stapling_file);
+    if (NULL == npc)
+        return 0; /* ignore if crt/pk error; keep using existing crt/pk */
+
+    /*(future: if threaded, only one thread should update pcs)*/
+
+    mod_gnutls_kp * const kp = pc->kp;
+    mod_gnutls_kp * const nkp = npc->kp;
+    nkp->next = kp;
+    pc->pkey_ts = npc->pkey_ts;
+    pc->kp = nkp;
+    mod_gnutls_kp_rel(kp);
+
+    free(npc);
+    return 1;
+}
+
+
+static void
+mod_gnutls_refresh_certs (server *srv, const plugin_data * const p)
+{
+    if (NULL == p->cvlist) return;
+    int newpcs = 0;
+    /* (init i to 0 if global context; to 1 to skip empty global context) */
+    for (int i = !p->cvlist[0].v.u2[1], used = p->nconfig; i < used; ++i) {
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            if (cpv->k_id != 0) continue; /* k_id == 0 for ssl.pemfile */
+            if (cpv->vtype != T_CONFIG_LOCAL) continue;
+            newpcs |= mod_gnutls_refresh_plugin_cert(srv, cpv->v.v);
+        }
+    }
+
+    if (newpcs && NULL != p->ssl_ctxs) {
+        if (p->ssl_ctxs[0])
+            mod_gnutls_refresh_plugin_ssl_ctx(p->ssl_ctxs[0]);
+        /* refresh $SERVER["socket"] (if not copy of global scope) */
+        for (uint32_t i = 1; i < srv->config_context->used; ++i) {
+            plugin_ssl_ctx * const s = p->ssl_ctxs[i];
+            if (s && s != p->ssl_ctxs[0])
+                mod_gnutls_refresh_plugin_ssl_ctx(s);
+        }
+    }
+}
+
+
 TRIGGER_FUNC(mod_gnutls_handle_trigger) {
     const plugin_data * const p = p_d;
     const unix_time64_t cur_ts = log_epoch_secs;
     if (cur_ts & 0x3f) return HANDLER_GO_ON; /*(continue once each 64 sec)*/
 
     mod_gnutls_session_ticket_key_check(srv, p, cur_ts);
+    /*if (!(cur_ts & 0x3ff))*/ /*(once each 1024 sec (~17 min))*/
+        if (feature_refresh_certs)
+            mod_gnutls_refresh_certs(srv, p);
     mod_gnutls_refresh_stapling_files(srv, p, cur_ts);
+    if (feature_refresh_crls)
+        mod_gnutls_refresh_crl_files(srv, p, cur_ts);
 
     return HANDLER_GO_ON;
 }
