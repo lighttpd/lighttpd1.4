@@ -221,7 +221,6 @@ typedef struct {
     int handshake_done;
     size_t pending_write;
     plugin_config conf;
-    buffer *tmp_buf;
     log_error_st *errh;
     mbedtls_ssl_config *ssl_ctx;
     /*plugin_cert *pc;*/
@@ -1294,7 +1293,6 @@ network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *
 static int
 mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
 {
-    buffer * const b = hctx->tmp_buf;
     const buffer * const name = &hctx->r->uri.authority;
     log_error_st * const errh = hctx->r->conf.errh;
     size_t len;
@@ -1314,6 +1312,7 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
     if (0 != http_request_host_policy(name,hctx->r->conf.http_parseopts,443))
         return rc;
   #endif
+    buffer * const b = buffer_init();
     buffer_copy_path_len2(b, BUF_PTR_LEN(hctx->conf.ssl_acme_tls_1),
                              BUF_PTR_LEN(name));
     len = buffer_clen(b);
@@ -1352,11 +1351,12 @@ mod_mbedtls_acme_tls_1 (handler_ctx *hctx)
 
         /*hctx->pc = NULL;*/
         hctx->kp = kp;
-        return 0;
 
     } while (0);
 
-    mod_mbedtls_kp_free(kp);
+    if (0 != rc)
+        mod_mbedtls_kp_free(kp);
+    buffer_free(b);
     return rc;
 }
 #endif
@@ -2569,7 +2569,6 @@ CONNECTION_FUNC(mod_mbedtls_handle_con_accept)
     request_st * const r = &con->request;
     hctx->r = r;
     hctx->con = con;
-    hctx->tmp_buf = con->srv->tmp_buf;
     hctx->errh = r->conf.errh;
     con->plugin_ctx[p->id] = hctx;
     buffer_blank(&r->uri.authority);

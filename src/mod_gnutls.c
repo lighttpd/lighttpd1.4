@@ -178,7 +178,6 @@ typedef struct {
     size_t pending_write;
     plugin_config conf;
     unsigned int verify_status;
-    buffer *tmp_buf;
     log_error_st *errh;
     mod_gnutls_kp *kp;
 } handler_ctx;
@@ -1608,7 +1607,6 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
 static int
 mod_gnutls_acme_tls_1 (handler_ctx *hctx)
 {
-    buffer * const b = hctx->tmp_buf;
     const buffer * const name = &hctx->r->uri.authority;
     log_error_st * const errh = hctx->r->conf.errh;
     int rc = GNUTLS_E_INVALID_REQUEST;
@@ -1627,6 +1625,7 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
     if (0 != http_request_host_policy(name, hctx->r->conf.http_parseopts, 443))
         return rc;
   #endif
+    buffer * const b = buffer_init();
     buffer_copy_path_len2(b, BUF_PTR_LEN(hctx->conf.ssl_acme_tls_1),
                              BUF_PTR_LEN(name));
 
@@ -1639,7 +1638,7 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
     /*(similar to network_gnutls_load_pemfile() but propagates rc)*/
     gnutls_certificate_credentials_t ssl_cred = NULL;
     rc = gnutls_certificate_allocate_credentials(&ssl_cred);
-    if (rc < 0) { buffer_free(privkey); return rc; }
+    if (rc < 0) { buffer_free(b); buffer_free(privkey); return rc; }
     rc = gnutls_certificate_set_x509_key_file2(ssl_cred,
                                                b->ptr, privkey->ptr,
                                                GNUTLS_X509_FMT_PEM, NULL, 0);
@@ -1647,6 +1646,7 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
         elogf(errh, __FILE__, __LINE__, rc,
               "failed to load acme-tls/1 cert (%s, %s)",
               b->ptr, privkey->ptr);
+        buffer_free(b);
         buffer_free(privkey);
         gnutls_certificate_free_credentials(ssl_cred);
         return rc;
@@ -1664,9 +1664,9 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
     buffer_append_string_len(b, CONST_STR_LEN(".crt.pem"));
 
     gnutls_datum_t *d = mod_gnutls_load_config_crts(b->ptr, errh);
-    if (NULL == d) return GNUTLS_E_FILE_ERROR;
-    if (0 == d->size) {
+    if (NULL == d || 0 == d->size) {
         mod_gnutls_free_config_crts(d);
+        buffer_free(b);
         return GNUTLS_E_FILE_ERROR;
     }
 
@@ -1674,6 +1674,7 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
     buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
 
     gnutls_privkey_t pkey = mod_gnutls_load_config_pkey(b->ptr, errh);
+    buffer_free(b);
     if (NULL == pkey) {
         mod_gnutls_free_config_crts(d);
         return GNUTLS_E_FILE_ERROR;
@@ -2960,7 +2961,6 @@ CONNECTION_FUNC(mod_gnutls_handle_con_accept)
     request_st * const r = &con->request;
     hctx->r = r;
     hctx->con = con;
-    hctx->tmp_buf = con->srv->tmp_buf;
     hctx->errh = r->conf.errh;
     con->plugin_ctx[p->id] = hctx;
     buffer_blank(&r->uri.authority);

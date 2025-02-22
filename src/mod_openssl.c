@@ -238,7 +238,6 @@ typedef struct {
     uint8_t alpn;
     uint8_t ech_only_policy;
     plugin_config conf;
-    buffer *tmp_buf;
     log_error_st *errh;
     mod_openssl_kp *kp;
     plugin_cert *ssl_ctx_pc;
@@ -1127,6 +1126,7 @@ mod_openssl_ech_only_host_match (const char *a, size_t alen, const char *b, size
 
 
 __attribute_cold__
+__attribute_noinline__
 static handler_t
 mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hctx)
 {
@@ -2824,7 +2824,6 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
 static int
 mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
 {
-    buffer * const b = hctx->tmp_buf;
     const buffer * const name = &hctx->r->uri.authority;
     log_error_st * const errh = hctx->r->conf.errh;
     X509 *ssl_pemfile_x509 = NULL;
@@ -2847,6 +2846,7 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     if (0 != http_request_host_policy(name,hctx->r->conf.http_parseopts,443))
         return rc;
   #endif
+    buffer * const b = buffer_init();
     buffer_copy_path_len2(b, BUF_PTR_LEN(hctx->conf.ssl_acme_tls_1),
                              BUF_PTR_LEN(name));
     len = buffer_clen(b);
@@ -2911,6 +2911,7 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     if (ssl_pemfile_chain)
         sk_X509_pop_free(ssl_pemfile_chain, X509_free);
 
+    buffer_free(b);
     return rc;
 }
 
@@ -4586,7 +4587,6 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
     request_st * const r = &con->request;
     hctx->r = r;
     hctx->con = con;
-    hctx->tmp_buf = con->srv->tmp_buf;
     hctx->errh = r->conf.errh;
     con->plugin_ctx[p->id] = hctx;
     buffer_blank(&r->uri.authority);

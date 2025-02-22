@@ -244,7 +244,6 @@ typedef struct {
     size_t pending_write;
     plugin_config conf;
     int verify_status;
-    buffer *tmp_buf;
     log_error_st *errh;
     mod_nss_kp *kp;
     plugin_cert *ssl_ctx_pc;
@@ -1382,7 +1381,6 @@ network_nss_load_pemfile (server *srv, const buffer *pemfile, const buffer *priv
 static int
 mod_nss_acme_tls_1 (handler_ctx *hctx)
 {
-    buffer * const b = hctx->tmp_buf;
     const buffer * const name = &hctx->r->uri.authority;
     log_error_st * const errh = hctx->r->conf.errh;
 
@@ -1400,6 +1398,7 @@ mod_nss_acme_tls_1 (handler_ctx *hctx)
     if (0 != http_request_host_policy(name, hctx->r->conf.http_parseopts, 443))
         return SECFailure;
   #endif
+    buffer * const b = buffer_init();
     buffer_copy_path_len2(b, BUF_PTR_LEN(hctx->conf.ssl_acme_tls_1),
                              BUF_PTR_LEN(name));
 
@@ -1411,14 +1410,17 @@ mod_nss_acme_tls_1 (handler_ctx *hctx)
     CERTCertificateList *ssl_pemfile_chain;
     CERTCertificate *ssl_pemfile_x509 =
       mod_nss_load_pem_crts(b->ptr, errh, &ssl_pemfile_chain);
-    if (NULL == ssl_pemfile_x509)
+    if (NULL == ssl_pemfile_x509) {
+        buffer_free(b);
         return SECFailure;
+    }
 
     buffer_truncate(b, len);
     buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
 
     SECKEYPrivateKey *pkey =
       mod_nss_load_config_pkey(b->ptr, ssl_pemfile_x509, errh);
+    buffer_free(b);
     if (NULL == pkey) {
         CERT_DestroyCertificate(ssl_pemfile_x509);
         if (ssl_pemfile_chain) CERT_DestroyCertificateList(ssl_pemfile_chain);
@@ -2476,7 +2478,6 @@ CONNECTION_FUNC(mod_nss_handle_con_accept)
     request_st * const r = &con->request;
     hctx->r = r;
     hctx->con = con;
-    hctx->tmp_buf = con->srv->tmp_buf;
     hctx->errh = r->conf.errh;
     con->plugin_ctx[p->id] = hctx;
     buffer_blank(&r->uri.authority);
