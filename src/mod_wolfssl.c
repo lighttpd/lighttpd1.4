@@ -2594,7 +2594,7 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
     plugin_data_base srvplug;
     memset(&srvplug, 0, sizeof(srvplug));
     plugin_data_base * const ps = &srvplug;
-    if (!config_plugin_values_init(srv, ps, cpk, "mod_openssl"))
+    if (!config_plugin_values_init(srv, ps, cpk, "mod_wolfssl"))
         return HANDLER_ERROR;
 
     plugin_config_socket defaults;
@@ -2849,7 +2849,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
   #if LIBWOLFSSL_VERSION_HEX < 0x05000000 || !defined(OPENSSL_EXTRA)
     p->cafiles = array_init(0);
   #endif
-    if (!config_plugin_values_init(srv, p, cpk, "mod_openssl"))
+    if (!config_plugin_values_init(srv, p, cpk, "mod_wolfssl"))
         return HANDLER_ERROR;
 
     const buffer *default_ssl_ca_crl_file = NULL;
