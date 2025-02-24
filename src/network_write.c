@@ -291,7 +291,7 @@ static int network_writev_mem_chunks(const int fd, chunkqueue * const cq, off_t 
 
   #ifdef _WIN32
     DWORD dw;
-    ssize_t wr = WSASend(fd, chunks, num_chunks, &dw, 0, NULL, NULL);
+    ssize_t wr = WSASend(fd, chunks, (DWORD)num_chunks, &dw, 0, NULL, NULL);
     if (0 == wr) wr = (ssize_t)dw;
   #else
     ssize_t wr = writev(fd, chunks, num_chunks);
