@@ -691,11 +691,11 @@ AC_ARG_WITH([wolfssl],
 AC_MSG_RESULT([$WITH_WOLFSSL])
 AM_CONDITIONAL([BUILD_WITH_WOLFSSL], test ! "$WITH_WOLFSSL" = no)
 
-if test "$WITH_WOLFSSL" != no; then
-  CPPFLAGS_SAVE="${CPPFLAGS}"
-  LDFLAGS_SAVE="${LDFLAGS}"
-  if test "$WITH_WOLFSSL" != yes; then
-    WOLFSSL_CFLAGS="-I$WITH_WOLFSSL/include -I$WITH_WOLFSSL/include/wolfssl"
+if test "$WITH_WOLFSSL" != "no"; then
+  if test "$WITH_WOLFSSL" != "yes"; then
+    CPPFLAGS="$CPPFLAGS -I$WITH_WOLFSSL/include"
+    LDFLAGS="$LDFLAGS -L$WITH_WOLFSSL/lib"
+    WOLFSSL_CFLAGS="-I$WITH_WOLFSSL/include"
     WOLFSSL_LIBS="-L$WITH_WOLFSSL/lib -lwolfssl"
     LDFLAGS="${LDFLAGS} -L$WITH_WOLFSSL/lib"
   else
@@ -724,13 +724,8 @@ if test "$WITH_WOLFSSL" != no; then
 
   AC_SUBST([WOLFSSL_CFLAGS])
   AC_SUBST([WOLFSSL_LIBS])
-  if test "$WITH_OPENSSL" = no; then
-    CRYPTO_LIB="$WOLFSSL_CRYPTO_LIB"
-    AC_SUBST([CRYPTO_LIB])
-  else
-    CPPFLAGS="${CPPFLAGS_SAVE}"
-    LDFLAGS="${LDFLAGS_SAVE}"
-  fi
+  CRYPTO_LIB="$WOLFSSL_CRYPTO_LIB"
+  AC_SUBST([CRYPTO_LIB])
 fi
 
 dnl Check for mbedTLS
