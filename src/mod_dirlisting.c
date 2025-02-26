@@ -756,12 +756,12 @@ static const char js_simple_table_resort[] = \
 "    el.dataset.value = -1;\n" \
 "  } else {\n" \
 "   var d = li_date_regex.exec(get_inner_text(el));\n" \
-"   el.dataset.value = (parseInt(d[0])*(1<<25))\n" \
-"     + ( (li_mon_num(d[1])<<22)\n" \
-"        |(parseInt(d[2])  <<17)\n" \
-"        |(parseInt(d[3])  <<12)\n" \
-"        |(parseInt(d[4])  << 6)\n" \
-"        |(parseInt(d[5])) );\n" \
+"   el.dataset.value = (parseInt(d[1])*(1<<25))\n" \
+"     + ( (li_mon_num(d[2])<<22)\n" \
+"        |(parseInt(d[3])  <<17)\n" \
+"        |(parseInt(d[4])  <<12)\n" \
+"        |(parseInt(d[5])  << 6)\n" \
+"        |(parseInt(d[6])) );\n" \
 "  }\n" \
 " }\n" \
 "}\n" \
@@ -823,7 +823,7 @@ static const char js_simple_table_resort[] = \
 /* portions copied from mod_dirlist (lighttpd2) */
 static const char js_simple_table_init_sort[] = \
 "\n" \
-"function init_sort(init_sort_column, ascending) {\n" \
+"function init_sort(init_sort_column, descending) {\n" \
 " var tables = document.getElementsByTagName(\"table\");\n" \
 " for (var i = 0; i < tables.length; i++) {\n" \
 "  var table = tables[i];\n" \
@@ -847,7 +847,7 @@ static const char js_simple_table_init_sort[] = \
 "    }\n" \
 "   }\n" \
 "   var lnk = row[init_sort_column].firstChild;\n" \
-"   if (ascending) {\n" \
+"   if (descending) {\n" \
 "    var span = lnk.childNodes[1];\n" \
 "    span.setAttribute('sortdir','down');\n" \
 "   }\n" \
@@ -868,8 +868,8 @@ static const char js_simple_table_init_sort[] = \
 "    case \"D\": c=3; break;\n" \
 "  }\n" \
 "  switch (urlParams.get('O')) {\n" \
-"    case \"A\": o=1; break;\n" \
-"    case \"D\": o=0; break;\n" \
+"    case \"A\": o=0; break;\n" \
+"    case \"D\": o=1; break;\n" \
 "  }\n" \
 "  init_sort(c,o);\n" \
 "}\n" \
