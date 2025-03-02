@@ -1573,6 +1573,7 @@ network_gnutls_load_pemfile (server *srv, const buffer *pemfile, const buffer *p
     if (d->size > 1) { /*(certificate chain provided)*/
         int rc = mod_gnutls_construct_crt_chain(kp, d, srv->errh);
         if (rc < 0) {
+            mod_gnutls_kp_free(kp);
             mod_gnutls_free_config_crts(d);
             gnutls_privkey_deinit(pkey);
             free(pc);
@@ -1687,6 +1688,7 @@ mod_gnutls_acme_tls_1 (handler_ctx *hctx)
 
     rc = mod_gnutls_construct_crt_chain(kp, d, errh);
     if (rc < 0) {
+        mod_gnutls_kp_free(kp);
         mod_gnutls_free_config_crts(d);
         gnutls_privkey_deinit(pkey);
         return rc;
