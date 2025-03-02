@@ -906,7 +906,11 @@ fdevent_select_reset (fdevents *ev)
 static int
 fdevent_select_event_del (fdevents *ev, fdnode *fdn)
 {
+  #ifdef _WIN32
+    SOCKET fd = (SOCKET)fdn->fd;
+  #else
     int fd = fdn->fd;
+  #endif
     FD_CLR(fd, &(ev->select_set_read));
     FD_CLR(fd, &(ev->select_set_write));
     FD_CLR(fd, &(ev->select_set_error));
@@ -916,7 +920,11 @@ fdevent_select_event_del (fdevents *ev, fdnode *fdn)
 static int
 fdevent_select_event_set (fdevents *ev, fdnode *fdn, int events)
 {
+  #ifdef _WIN32
+    SOCKET fd = (SOCKET)(fdn->fde_ndx = fdn->fd);
+  #else
     int fd = fdn->fde_ndx = fdn->fd;
+  #endif
 
     /* we should be protected by max-fds, but you never know */
   #ifdef _WIN32
