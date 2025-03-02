@@ -2327,6 +2327,13 @@ __attribute_noinline__
 static int
 mod_openssl_reload_crl_file (server *srv, plugin_cacerts *cacerts, const unix_time64_t cur_ts)
 {
+  #if OPENSSL_VERSION_NUMBER < 0x10100000
+    /* fall through to perform initial load, but skip reload for 1.0.2 */
+    /*(X509_STORE_get0_objects(), X509_OBJECT_get0_X509() available in 1.1.0)*/
+    if (cacerts->store)
+        return 1;
+  #endif
+
     /* CRLs can be updated at any time, though expected on/before Next Update */
     /* For BoringSSL, SSL_CTX_set_cert_store() is called in network_init_ssl()
      * to support auto-chaining.  Since only CRLs are updated here, there are
@@ -2338,6 +2345,7 @@ mod_openssl_reload_crl_file (server *srv, plugin_cacerts *cacerts, const unix_ti
         return 0;
     X509_STORE * const store = cacerts->store;
     int rc = 1;
+  #if OPENSSL_VERSION_NUMBER >= 0x10100000
     /* duplicate X509_STORE with X509 objects and skip CRLs */
     /* (modelled off X509_STORE_get1_all_certs()) */
     /*X509_STORE_lock(store);*/
@@ -2348,6 +2356,7 @@ mod_openssl_reload_crl_file (server *srv, plugin_cacerts *cacerts, const unix_ti
             rc = X509_STORE_add_cert(new_store, cert);
     }
     /*X509_STORE_unlock(store);*/
+  #endif
 
     if (rc) {
         rc = mod_openssl_load_cacrls(new_store, cacerts->crl_file, srv);
