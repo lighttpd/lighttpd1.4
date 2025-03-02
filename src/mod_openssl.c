@@ -3521,7 +3521,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             SSL_CTX_set_verify_depth(s->ssl_ctx, s->ssl_verifyclient_depth + 1);
             if (s->ssl_ca_crl_file && !buffer_is_blank(s->ssl_ca_crl_file)) {
                 X509_STORE *store = SSL_CTX_get_cert_store(s->ssl_ctx);
-                if (!mod_openssl_load_cacrls(store, s->ssl_ca_crl_file, srv))
+                if (!mod_openssl_load_cacrls(store,s->ssl_ca_crl_file->ptr,srv))
                     return -1;
             }
         }
