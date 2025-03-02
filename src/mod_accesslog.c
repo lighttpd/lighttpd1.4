@@ -459,6 +459,8 @@ SETDEFAULTS_FUNC(mod_accesslog_set_defaults) {
     p->defaults.syslog_level = LOG_INFO;
     if (uses_syslog)
         fdlog_openlog(srv->errh, srv->srvconf.syslog_facility);
+  #else
+    UNUSED(uses_syslog);
   #endif
 
     /* initialize p->defaults from global config context */
