@@ -1756,7 +1756,13 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         rc = mbedtls_ssl_ticket_setup(&p->ticket_ctx,
                                       mbedtls_psa_get_random,
                                       MBEDTLS_PSA_RANDOM_STATE,
+          #if MBEDTLS_VERSION_NUMBER < 0x04000000 /* mbedtls 4.0.0 */
                                       MBEDTLS_CIPHER_AES_256_GCM,
+          #else
+                                      PSA_ALG_CATEGORY_AEAD,
+                                      PSA_KEY_TYPE_AES,
+                                      256,
+          #endif
                                       43200); /* ticket timeout: 12 hours */
       #else
         rc = mbedtls_ssl_ticket_setup(&p->ticket_ctx, mbedtls_ctr_drbg_random,
