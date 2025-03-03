@@ -114,8 +114,10 @@ static handler_t network_server_handle_fdevent(void *context, int revents) {
       #else
         switch (errno) {
           case EAGAIN:
+         #ifdef EWOULDBLOCK
          #if EWOULDBLOCK != EAGAIN
           case EWOULDBLOCK:
+         #endif
          #endif
           case EINTR:
           case ECONNABORTED:

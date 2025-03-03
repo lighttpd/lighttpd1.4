@@ -3077,6 +3077,11 @@ mod_wolfssl_write_err (SSL * const ssl, int wr, connection * const con,
             /* no, but we have errno */
             switch(errno) {
               case EAGAIN:
+             #ifdef EWOULDBLOCK
+             #if EWOULDBLOCK != EAGAIN
+              case EWOULDBLOCK:
+             #endif
+             #endif
               case EINTR:
              #if defined(__FreeBSD__) && defined(SF_NODISKIO)
               case EBUSY:

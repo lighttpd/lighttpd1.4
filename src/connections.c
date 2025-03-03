@@ -516,6 +516,11 @@ static int connection_read_cq_err(connection *con) {
   #else
     switch (errno) {
     case EAGAIN:
+   #ifdef EWOULDBLOCK
+   #if EWOULDBLOCK != EAGAIN
+    case EWOULDBLOCK:
+   #endif
+   #endif
         return 0;
     case EINTR:
         /* we have been interrupted before we could read */

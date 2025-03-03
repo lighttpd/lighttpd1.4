@@ -105,6 +105,11 @@ static int network_write_error(int fd, log_error_st *errh) {
   #else
     switch (errno) {
       case EAGAIN:
+     #ifdef EWOULDBLOCK
+     #if EWOULDBLOCK != EAGAIN
+      case EWOULDBLOCK:
+     #endif
+     #endif
       case EINTR:
         return -3;
       case EPIPE:
@@ -476,6 +481,11 @@ static int network_write_file_chunk_sendfile(const int fd, chunkqueue * const cq
             break; /* try again later */
          #endif
           case EAGAIN:
+         #ifdef EWOULDBLOCK
+         #if EWOULDBLOCK != EAGAIN
+          case EWOULDBLOCK:
+         #endif
+         #endif
           case EINTR:
             break; /* try again later */
           case EPIPE:
