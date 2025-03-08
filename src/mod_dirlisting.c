@@ -756,7 +756,7 @@ static const char js_simple_table_resort[] = \
 "    el.dataset.value = -1;\n" \
 "  } else {\n" \
 "   var d = li_date_regex.exec(get_inner_text(el));\n" \
-"   el.dataset.value = (parseInt(d[1])*(1<<25))\n" \
+"   el.dataset.value = (parseInt(d[1])*(1<<26))\n" \
 "     + ( (li_mon_num(d[2])<<22)\n" \
 "        |(parseInt(d[3])  <<17)\n" \
 "        |(parseInt(d[4])  <<12)\n" \
