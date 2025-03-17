@@ -684,6 +684,10 @@ connection_state_machine_loop (request_st * const r, connection * const con)
 		case CON_STATE_RESPONSE_END: /* transient */
 		case CON_STATE_ERROR:        /* transient */
 			connection_handle_response_end_state(r, con);
+			if (r->state == CON_STATE_REQUEST_START) {
+				joblist_append(con);
+				return;
+			}
 			/*(make sure ostate will not match r->state)*/
 			ostate = CON_STATE_RESPONSE_END;/* != r->state */
 			break;
