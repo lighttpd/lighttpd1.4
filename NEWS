@@ -3,6 +3,47 @@
 NEWS
 ====
 
+- 1.4.78 - 2025-03-22
+  * [core] comment about _WIN32 security dangers
+  * [core] allow POST w/o Content-Length for HTTP/2 (#3273)
+  * [mod_ssi] fix #exec (fixes #3275)
+  * [multiple] address warnings for *unsigned* time_t
+  * [multiple] add missing includes
+  * [ls-hpack] adjust misplaced macro
+  * [doc] add Documentation key to lighttpd.service
+  * [mod_mbedtls] fix ssl.verifyclient.ca-crl-file
+  * [doc] create-mime.conf.pl warn missing mime.types
+  * [mod_wolfssl] limit default curves to avail curves
+  * [mod_mbedtls] limit default curves to avail curves
+  * [mod_openssl] fix preproc syntax error (fixes #3277)
+  * [autotools] adjust build with wolfssl crypto
+  * [mod_mbedtls] check/reload crt,pkey,crl each 64sec
+  * [mod_wolfssl] use wolfSSL_CTX_set_cert_cb()
+  * [mod_wolfssl] check/reload crt,pkey,crl each 64sec
+  * [mod_openssl] check/reload crt,pkey,crl each 64sec
+  * [mod_nss] check/reload crt,pkey,crl each 64sec
+  * [mod_gnutls] check/reload crt,pkey,crl each 64sec
+  * [TLS] remove hctx->tmp_buf use from acme-tls/1
+  * [mod_wolfssl] adjust module spelling in config err
+  * [core] _WIN32 cast size_t to DWORD for WSASend()
+  * [mod_mbedtls] mbedtls 4.x mbedtls_ssl_ticket_setup
+  * [mod_mbedtls] mbedtls 4.x removes DHE-RSA key exch
+  * [mod_accesslog] quiet unused var on Windows warning
+  * [ci] FreeBSD package mbedtls3
+  * [mod_openssl] fix type mismatch fn run w/ libressl
+  * [ci] macOS quiet brew install if pkg already inst
+  * [mod_gnutls] free kp if cert chain invalid
+  * [cmake] use execute_process()
+  * [core] _WIN32: cast fd to SOCKET for FD_SET,FD_CLR
+  * [mod_openssl] reload CRLs for openssl >= 1.1.0
+  * [multiple] check EAGAIN and EWOULDBLOCK, if diff
+  * [mod_dirlisting] Fix off-by-one error in date conversion for sorting on mtime
+  * [mod_dirlisting] Swap A(scending) and D(escending) values (A=0, D=1)
+  * [mod_dirlisting] fix JS date sorting (fixes #3279)
+  * [core] yield after HTTP/1.x response end
+  * [meson] set default buildtype=debugoptimized
+  * [ci] use meson build with cov-build for coverity
+
 - 1.4.77 - 2025-01-10
   * [build] packdist.sh tweaks of convenience commands
   * [build] remove ancient distribute.sh.in script
