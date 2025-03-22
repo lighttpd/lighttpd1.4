@@ -66,7 +66,7 @@ if [ "$sysname" = "OpenBSD" ]; then
 fi
 
 case "${build}" in
-"autobuild"|"coverity")
+"autobuild")
 	mkdir -p m4
 	autoreconf --force --install
 	./configure -C \
@@ -89,16 +89,8 @@ case "${build}" in
 		--with-openssl \
 		${WITH_WOLFSSL:+--with-wolfssl} \
 		--with-webdav-props
-	case "${build}" in
-	"autobuild")
-		make -j 4
-		make check
-		;;
-	"coverity")
-		[ -z "${COVERITY_PATH}" ] || export PATH="${COVERITY_PATH}"
-		cov-build --dir "cov-int" make
-		;;
-	esac
+	make -j 4
+	make check
 	;;
 "cmake"|"cmake-asan")
 	mkdir -p cmakebuild
@@ -138,7 +130,7 @@ case "${build}" in
 	make -j 4 VERBOSE=1
 	ctest -V
 	;;
-"meson")
+"meson"|"coverity")
 	[ -d build ] || meson setup build
 	meson configure --buildtype debugoptimized \
 	  -Dbuild_extra_warnings=true \
@@ -166,8 +158,16 @@ case "${build}" in
 	  -Dwith_zstd=enabled \
 	  build
 	cd build
-	meson compile --verbose
-	meson test --verbose
+	case "${build}" in
+	"autobuild")
+		meson compile --verbose
+		meson test --verbose
+		;;
+	"coverity")
+		[ -z "${COVERITY_PATH}" ] || export PATH="${COVERITY_PATH}"
+		cov-build --dir "cov-int" -- meson compile --verbose
+		;;
+	esac
 	;;
 "scons")
 	case "${label}" in
