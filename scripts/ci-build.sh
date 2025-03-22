@@ -165,7 +165,7 @@ case "${build}" in
 		;;
 	"coverity")
 		[ -z "${COVERITY_PATH}" ] || export PATH="${COVERITY_PATH}"
-		cov-build --dir "cov-int" -- meson compile --verbose
+		cov-build --dir "../cov-int" -- meson compile --verbose
 		;;
 	esac
 	;;
