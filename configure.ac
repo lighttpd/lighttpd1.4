@@ -1323,7 +1323,7 @@ if test "$WITH_LUA" != no; then
     fi
     PKG_CHECK_MODULES([LUA], [$WITH_LUA >= $lua_min_ver],
       [found_lua=1],
-      [AC_MSG_NOTICE([Couldn\'t find requested lua pkg-config module $WITH_LUA])]
+      [AC_MSG_NOTICE([Could not find requested lua pkg-config module $WITH_LUA])]
     )
     if test "$found_lua" = "0"; then
       LUA_LIBS="-L$WITH_LUA -llua"
@@ -1334,12 +1334,12 @@ if test "$WITH_LUA" != no; then
       if test "$found_lua" = "0"; then
         PKG_CHECK_MODULES([LUA], [$luaname >= 5.1],
           [found_lua=1],
-          [AC_MSG_NOTICE([Couldn\'t find $luaname])]
+          [AC_MSG_NOTICE([Could not find $luaname])]
         )
       fi
     done
     if test "$found_lua" = "0"; then
-      AC_MSG_ERROR([Couldn\'t find any lua pkg-config module])
+      AC_MSG_ERROR([Could not find any lua pkg-config module])
     fi
   fi
 
