@@ -246,7 +246,8 @@ jobs:
             cmake meson ninja scons
             gcc-g++ git pkgconf perl
             libpcre2-devel
-            libnettle-devel gnutls-devel mbedtls-devel libnss-devel libssl-devel
+            libnettle-devel
+            libgnutls-devel mbedtls-devel libnss-devel libssl-devel
             libbrotli-devel libdeflate-devel zlib-devel libzstd-devel
             libsasl2-devel libkrb5-devel libdbi-devel openldap-devel
             libmariadb-devel libpq-devel
