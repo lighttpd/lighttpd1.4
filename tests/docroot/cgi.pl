@@ -41,7 +41,8 @@ if ($ENV{"QUERY_STRING"} eq "xsendfile") {
     my $path = $prefix . Cwd::getcwd() . "/index.txt";
     # (alternative: run cygpath command, if available, on cygwin or msys2)
     $path = substr($path, length($prefix)+2)
-      if ($^O eq "msys" && uc($ENV{MSYSTEM} || "") ne "MSYS");
+      if (($^O eq "msys" && uc($ENV{MSYSTEM} || "") ne "MSYS")
+          || ($^O eq "cygwin" && exists $ENV{MSYSTEM}));
     $path =~ s#([^\w./-])#"%".unpack("H2",$1)#eg;
 
     print "Status: 200\r\n";

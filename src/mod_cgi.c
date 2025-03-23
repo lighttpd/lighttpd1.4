@@ -46,6 +46,7 @@ typedef struct {
       #endif
       #if defined(_WIN32)
 	buffer *cygvol;
+	buffer *msystem;
       #endif
 } env_accum;
 
@@ -136,6 +137,8 @@ INIT_FUNC(mod_cgi_init) {
 	if (s) buffer_copy_string((p->env.systemroot = buffer_init()), s);
       #endif
       #if defined(_WIN32)
+	s = getenv("MSYSTEM");
+	if (s) buffer_copy_string((p->env.msystem = buffer_init()), s);
 	s = getenv("CYGVOL");
 	if (s) buffer_copy_string((p->env.cygvol = buffer_init()), s);
       #endif
@@ -153,6 +156,7 @@ FREE_FUNC(mod_cgi_free) {
       #endif
       #if defined(_WIN32)
 	buffer_free(p->env.cygvol);
+	buffer_free(p->env.msystem);
       #endif
 
     for (cgi_pid_t *cgi_pid = p->cgi_pid, *next; cgi_pid; cgi_pid = next) {
@@ -909,6 +913,11 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		/* CYGWIN and _WIN32 need SYSTEMROOT */
 		if (p->env.systemroot) {
 			cgi_env_add(env, CONST_STR_LEN("SYSTEMROOT"), BUF_PTR_LEN(p->env.systemroot));
+		}
+	      #endif
+	      #if defined(_WIN32)
+		if (p->env.msystem) {
+			cgi_env_add(env, CONST_STR_LEN("MSYSTEM"), BUF_PTR_LEN(p->env.msystem));
 		}
 	      #endif
 

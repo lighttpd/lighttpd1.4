@@ -49,7 +49,8 @@ sub new {
 	#   ($^O eq "MSWin32") is untested; not supported
 	$self->{"win32native"} = $^O eq "cygwin"
 	                      && 0 != system("ldd '$$self{LIGHTTPD_PATH}' | grep -q cygwin");
-	if ($^O eq "msys" && 0 != system("ldd '$$self{LIGHTTPD_PATH}' | grep -q msys-")) {
+	if (($^O eq "msys" || ($^O eq "cygwin" && exists $ENV{MSYSTEM}))
+            && 0 != system("ldd '$$self{LIGHTTPD_PATH}' | grep -q msys-")) {
 		$self->{"win32native"} = 1;
 		# Note: msys2 mingw cross compile/link hangs if MSYS_NO_PATHCONV is set,
 		#       so scope setting MSYS_NO_PATHCONV here for running tests
@@ -119,7 +120,7 @@ sub stop_proc {
 				chomp($winpid);
 				close($WH);
 			}
-			my $msys = ($^O eq "msys");
+			my $msys = ($^O eq "msys" || ($^O eq "cygwin" && exists $ENV{MSYSTEM}));
 			my $taskkill = $msys ? "/c/Windows/System32/taskkill.exe" : "/cygdrive/c/windows/system32/taskkill.exe";
 			if ($winpid) {
 				system($taskkill, '/F', '/T', '/PID', $winpid);
@@ -222,7 +223,7 @@ sub start_proc {
 			$conf               = cygpath_alm($conf);
 			$modules_path       = cygpath_alm($modules_path);
 
-			my $msys = ($^O eq "msys");
+			my $msys = ($^O eq "msys" || ($^O eq "cygwin" && exists $ENV{MSYSTEM}));
 			$ENV{CYGROOT}       = cygpath_alm("/", 1);
 			$ENV{CYGVOL}        = $ENV{CYGROOT} =~ m%^([a-z]):%i
 			                      ? $msys ? "/$1" : "/cygdrive/$1"
