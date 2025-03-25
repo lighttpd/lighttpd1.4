@@ -1949,7 +1949,7 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
         return 0;
     }
 
- #if 0 /* disabled due to openssl quicks selecting incorrect certificate */
+ #if 0 /* disabled due to openssl quirks selecting incorrect certificate */
     /* reuse cert chain/privkey assigned to ssl_ctx where cert matches */
   if (hctx->ssl_ctx_pc
       && buffer_is_equal(hctx->ssl_ctx_pc->ssl_pemfile, pc->ssl_pemfile)) {
@@ -5028,7 +5028,7 @@ mod_openssl_refresh_plugin_ssl_ctx (server * const srv, plugin_ssl_ctx * const s
     mod_openssl_kp_rel(s->kp);
     s->kp = mod_openssl_kp_acq(s->pc);
 
-  #if 0 /* disabled due to openssl quicks selecting incorrect certificate */
+  #if 0 /* disabled due to openssl quirks selecting incorrect certificate */
     if (1 != mod_openssl_SSL_CTX_use_cert_and_key(s->ssl_ctx, s->pc, s->kp)) {
         log_error(srv->errh, __FILE__, __LINE__,
           "SSL: %s %s %s", ERR_error_string(ERR_get_error(), NULL),
