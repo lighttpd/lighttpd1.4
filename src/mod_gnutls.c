@@ -3361,6 +3361,18 @@ mod_gnutls_refresh_plugin_ssl_ctx (plugin_ssl_ctx * const s)
 }
 
 
+__attribute_cold__
+static int
+mod_gnutls_refresh_plugin_cert_fail (server * const srv, plugin_cert * const pc)
+{
+    log_perror(srv->errh, __FILE__, __LINE__,
+               "GnuTLS: unable to check/refresh cert key; "
+               "continuing to use already-loaded %s",
+               pc->ssl_privkey->ptr);
+    return 0;
+}
+
+
 static int
 mod_gnutls_refresh_plugin_cert (server * const srv, plugin_cert * const pc)
 {
@@ -3388,7 +3400,8 @@ mod_gnutls_refresh_plugin_cert (server * const srv, plugin_cert * const pc)
      * update privkey last, after pem file (and OCSP stapling file) */
     struct stat st;
     if (0 != stat(pc->ssl_privkey->ptr, &st))
-        return 0; /* ignore if stat() error; keep using existing crt/pk */
+        return mod_gnutls_refresh_plugin_cert_fail(srv, pc);
+        /* ignore if stat() error; keep using existing crt/pk */
     if (TIME64_CAST(st.st_mtime) <= pc->pkey_ts)
         return 0; /* mtime match; no change */
 
@@ -3396,7 +3409,8 @@ mod_gnutls_refresh_plugin_cert (server * const srv, plugin_cert * const pc)
       network_gnutls_load_pemfile(srv, pc->ssl_pemfile, pc->ssl_privkey,
                                   pc->ssl_stapling_file);
     if (NULL == npc)
-        return 0; /* ignore if crt/pk error; keep using existing crt/pk */
+        return mod_gnutls_refresh_plugin_cert_fail(srv, pc);
+        /* ignore if crt/pk error; keep using existing crt/pk */
 
     /*(future: if threaded, only one thread should update pcs)*/
 
