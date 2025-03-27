@@ -256,14 +256,6 @@ jobs:
             libmaxminddb-devel libunwind-devel lua-devel lua5.1-devel
             libxml2-devel libsqlite3-devel
             libintl-devel
-      - name: Update
-        shell: pwsh
-        run: |
-          # (https://github.com/cygwin/cygwin-install-action/blob/master/action.yml)
-          Invoke-WebRequest https://cygwin.com/setup-x86_64.exe -OutFile D:\setup.exe -MaximumRetryCount 3
-          # because setup is a Windows GUI app, make it part of a pipeline to
-          # make PowerShell wait for it to exit
-          & D:\setup.exe -qgnO -t | Out-Default
       - name: Compile and Test
         shell: D:\cygwin\bin\bash.exe --noprofile --norc -o igncr -eo pipefail '{0}'
         run: |
