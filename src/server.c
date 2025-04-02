@@ -1733,17 +1733,22 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 			log_perror(srv->errh, __FILE__, __LINE__, "getrlimit()");
 			use_rlimit = 0;
 		}
+		else if (0 == srv->srvconf.max_fds) {
+			/*(default upper limit of 4k if server.max-fds not specified)*/
+			/*(and if existing rlim_max >= 4096, whether or not root)*/
+			if (rlim.rlim_cur < 4096 && rlim.rlim_max >= 4096)
+				srv->srvconf.max_fds = 4096;
+		}
+		else if (i_am_root)
+				rlim.rlim_max = srv->srvconf.max_fds;
 
-		/**
-		 * if we are not root can can't increase the fd-limit above rlim_max, but we can reduce it
-		 */
 		if (use_rlimit && srv->srvconf.max_fds
 		    && (i_am_root || srv->srvconf.max_fds <= rlim.rlim_max)) {
 			/* set rlimits */
+			/* root can increase fd-limit above rlim_max, others can only reduce it */
 
 			rlim_t rlim_cur = rlim.rlim_cur;
 			rlim.rlim_cur = srv->srvconf.max_fds;
-			if (i_am_root) rlim.rlim_max = srv->srvconf.max_fds;
 
 			if (0 != setrlimit(RLIMIT_NOFILE, &rlim)) {
 				log_perror(srv->errh, __FILE__, __LINE__, "setrlimit()");
