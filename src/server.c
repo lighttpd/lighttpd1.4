@@ -604,6 +604,43 @@ static void server_pid_file_remove(server *srv) {
 	}
 }
 
+__attribute_cold__
+static int server_pid_file_open(server * const srv, int i_am_root) {
+    if (NULL == srv->srvconf.pid_file)
+        return 0;
+    const char * const pidfile = srv->srvconf.pid_file->ptr;
+
+    pid_fd = fdevent_open_cloexec(pidfile, 0, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC,
+                                  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (-1 != pid_fd)
+        return 0;
+
+  #ifdef __linux__
+    if (errno == EACCES
+        && i_am_root && srv->srvconf.username && !srv->srvconf.changeroot)
+        /* root without CAP_DAC_OVERRIDE capability
+         * and pidfile owned by target user */
+        return 0;
+  #else
+    UNUSED(i_am_root);
+  #endif
+
+    struct stat st;
+    if (errno != EEXIST
+        || 0 != stat(pidfile, &st)
+        || !S_ISREG(st.st_mode)
+        || (pid_fd =
+              fdevent_open_cloexec(pidfile, 0,
+                                   O_WRONLY | O_CREAT | O_TRUNC,
+                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))==-1){
+        log_perror(srv->errh, __FILE__, __LINE__,
+          "opening pid-file failed: %s", pidfile);
+        return -1;
+    }
+
+    return 0;
+}
+
 
 __attribute_cold__
 static server_socket * server_oneshot_getsock(server *srv, sock_addr *cnt_addr) {
@@ -1692,34 +1729,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 
 	/* open pid file BEFORE chroot */
 	if (-2 == pid_fd) pid_fd = -1; /*(initial startup state)*/
-	if (-1 == pid_fd && srv->srvconf.pid_file) {
-		const char *pidfile = srv->srvconf.pid_file->ptr;
-		if (-1 == (pid_fd = fdevent_open_cloexec(pidfile, 0, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
-			struct stat st;
-			if (errno != EEXIST) {
-				log_perror(srv->errh, __FILE__, __LINE__,
-				  "opening pid-file failed: %s", pidfile);
-				return -1;
-			}
-
-			if (0 != stat(pidfile, &st)) {
-				log_perror(srv->errh, __FILE__, __LINE__,
-				  "stating existing pid-file failed: %s", pidfile);
-			}
-
-			if (!S_ISREG(st.st_mode)) {
-				log_error(srv->errh, __FILE__, __LINE__,
-				  "pid-file exists and isn't regular file: %s", pidfile);
-				return -1;
-			}
-
-			if (-1 == (pid_fd = fdevent_open_cloexec(pidfile, 0, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))) {
-				log_perror(srv->errh, __FILE__, __LINE__,
-				  "opening pid-file failed: %s", pidfile);
-				return -1;
-			}
-		}
-	}
+	if (-1 == pid_fd && 0 != server_pid_file_open(srv, i_am_root))
+		return -1;
 
 	{
 #ifdef HAVE_GETRLIMIT
@@ -1900,6 +1911,11 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		  "prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL)");
 		return -1;
 	}
+#endif
+
+#ifdef __linux__ /*(might occur w/ root on Linux and w/ limited Capabilities)*/
+	if (-1 == pid_fd && 0 != server_pid_file_open(srv, 0))
+		return -1;
 #endif
 
 #ifdef HAVE_FORK
