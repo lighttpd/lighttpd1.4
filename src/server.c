@@ -582,7 +582,7 @@ static void server_free(server *srv) {
 
 __attribute_cold__
 __attribute_noinline__
-static void remove_pid_file(server *srv) {
+static void server_pid_file_remove(server *srv) {
 	if (pid_fd <= -2) return;
 	if (srv->srvconf.pid_file && 0 <= pid_fd) {
 		if (0 != ftruncate(pid_fd, 0)) {
@@ -1244,7 +1244,7 @@ static void server_graceful_state (server *srv) {
     }
     else {
         server_sockets_close(srv);
-        remove_pid_file(srv);
+        server_pid_file_remove(srv);
         /*(prevent more removal attempts)*/
         srv->srvconf.pid_file = NULL;
     }
@@ -2364,7 +2364,7 @@ int server_main (int argc, char ** argv) {
 
         /* clean-up */
         chunkqueue_internal_pipes(0);
-        remove_pid_file(srv);
+        server_pid_file_remove(srv);
         config_log_error_close(srv);
       #ifdef _WIN32
         fdevent_win32_cleanup();
