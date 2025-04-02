@@ -1892,6 +1892,16 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 #endif
 	}
 
+#if defined(HAVE_SYS_PRCTL_H) && defined(PR_CAP_AMBIENT)
+	/* clear Linux ambient capabilities, if any had been granted
+	 * (avoid leaking privileges to CGI or other subprocesses) */
+	if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0L, 0L, 0L) < 0) {
+		log_perror(srv->errh, __FILE__, __LINE__,
+		  "prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL)");
+		return -1;
+	}
+#endif
+
 #ifdef HAVE_FORK
 	/* network is up, let's daemonize ourself */
 	if (0 == srv->srvconf.dont_daemonize && 0 == graceful_restart) {
