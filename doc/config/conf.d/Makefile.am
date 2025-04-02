@@ -16,5 +16,6 @@ EXTRA_DIST=access_log.conf \
 	simple_vhost.conf \
 	ssi.conf \
 	status.conf \
+	tls.conf \
 	userdir.conf \
 	webdav.conf
