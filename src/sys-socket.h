@@ -40,6 +40,9 @@ typedef unsigned short sa_family_t;
 #ifndef UNIX_PATH_MAX
 #define UNIX_PATH_MAX    108
 #endif
+#ifndef SOMAXCONN
+#define SOMAXCONN       1024
+#endif
 
 /* for solaris 2.5 and NetBSD 1.3.x */
 #ifndef HAVE_SOCKLEN_T

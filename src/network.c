@@ -861,7 +861,7 @@ int network_init(server *srv, int stdin_fd) {
     if (!config_plugin_values_init(srv, p, cpk, "network"))
         return HANDLER_ERROR;
 
-    p->defaults.listen_backlog = 1024;
+    p->defaults.listen_backlog = SOMAXCONN > 1024 ? SOMAXCONN : 1024;
     p->defaults.defer_accept = 0;
     p->defaults.use_ipv6 = 0;
     p->defaults.set_v6only = 1;

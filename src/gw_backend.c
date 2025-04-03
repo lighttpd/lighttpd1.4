@@ -1391,7 +1391,7 @@ int gw_set_defaults_backend(server *srv, gw_plugin_data *p, const array *a, gw_p
             host->break_scriptfilename_for_php = 0;
             host->kill_signal = SIGTERM;
             host->fix_root_path_name = 0;
-            host->listen_backlog = 1024;
+            host->listen_backlog = SOMAXCONN > 1024 ? SOMAXCONN : 1024;
             host->xsendfile_allow = 0;
             host->refcount = 0;
 
