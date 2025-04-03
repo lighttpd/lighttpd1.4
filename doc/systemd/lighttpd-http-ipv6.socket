@@ -1,0 +1,19 @@
+# please note: lighttpd.conf must contain directive:
+#   server.systemd-socket-activation = "enable"
+
+[Unit]
+Description=lighttpd http IPv6 socket
+Documentation=man:lighttpd https://wiki.lighttpd.net
+
+[Socket]
+Service=lighttpd.service
+
+# http IPv6
+ListenStream=[::]:80
+
+NoDelay=true
+BindIPv6Only=ipv6-only
+#FreeBind=true
+
+[Install]
+WantedBy=sockets.target

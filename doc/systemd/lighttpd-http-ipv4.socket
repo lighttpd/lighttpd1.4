@@ -2,16 +2,18 @@
 #   server.systemd-socket-activation = "enable"
 
 [Unit]
-Description=lighttpd socket
+Description=lighttpd http IPv4 socket
 Documentation=man:lighttpd https://wiki.lighttpd.net
 
 [Socket]
-# Enable listening on http port
-ListenStream=80
-# To enable listening on https port, lighttpd config needs SSL setup
-# https://wiki.lighttpd.net/Docs_SSL
-#ListenStream=443
 Service=lighttpd.service
+
+# http IPv4
+ListenStream=0.0.0.0:80
+
+NoDelay=true
+BindIPv6Only=ipv6-only
+#FreeBind=true
 
 [Install]
 WantedBy=sockets.target
