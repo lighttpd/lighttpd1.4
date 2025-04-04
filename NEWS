@@ -3,6 +3,27 @@
 NEWS
 ====
 
+- 1.4.79 - 2025-04-04
+  * [ci] update deps pkg names for lighttpd on Cygwin
+  * [ci] MSYS detection kludge in tests/LightyTest.pm
+  * [autotools] spelling Couldn't => Could not
+  * [mod_openssl] revert SSL_CTX default cert assign
+  * [mod_openssl] spelling in comment
+  * [TLS] issue trace if unable to check/refresh cert
+  * [ci] Cygwin Invoke-WebRequest -MaximumRetryCount 3
+  * [ci] Cygwin prefer D:\ drive
+  * [ci] Cygwin remove redundant call to setup.exe
+  * [core] set server.max-fds = 4096 if not specified
+  * [core] clear Linux ambient capabilities, if any
+  * [core] rename remove_pid_file() -> server_pid_file_remove()
+  * [core] retry pidfile open on Linux
+  * [doc] systemd lighttpd.service hardening
+  * [doc] move TLS config to separate file tls.conf
+  * [doc] systemd lighttpd.service hardening addition
+  * [doc] systemd lighttpd*.socket activation examples
+  * [core] default listen() backlog to SOMAXCONN
+  * [ci] fix meson build execution selection
+
 - 1.4.78 - 2025-03-22
   * [core] comment about _WIN32 security dangers
   * [core] allow POST w/o Content-Length for HTTP/2 (#3273)
