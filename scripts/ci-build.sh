@@ -159,13 +159,13 @@ case "${build}" in
 	  build
 	cd build
 	case "${build}" in
-	"autobuild")
-		meson compile --verbose
+	"meson")
+		meson compile -j 4 --verbose
 		meson test --verbose
 		;;
 	"coverity")
 		[ -z "${COVERITY_PATH}" ] || export PATH="${COVERITY_PATH}"
-		cov-build --dir "../cov-int" -- meson compile --verbose
+		cov-build --dir "../cov-int" -- meson compile -j 4 --verbose
 		;;
 	esac
 	;;
