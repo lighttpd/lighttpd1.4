@@ -7,31 +7,29 @@ Installation
 Quick Installation
 ------------------
 
-Get lighttpd source from
+Obtain lighttpd source from https://download.lighttpd.net/lighttpd/
 
-https://www.lighttpd.net/download/
+  $ release=$(curl -s https://download.lighttpd.net/lighttpd/releases-1.4.x/latest.txt)
+  $ curl -s -o $release.tar.xz https://download.lighttpd.net/lighttpd/releases-1.4.x/$release.tar.xz
+  $ tar xvJf $release.tar.xz
 
-unpack it by ::
+compile and install:
 
-  $ tar xvJf lighttpd-1.4.xx.tar.xz
-
-compile and install it with ::
-
-  $ cd lighttpd-1.4.xx
+  $ cd $release
   $ ./autogen.sh
   $ ./configure -C
   $ make check
   $ /usr/bin/sudo make install
 
-take look at the configfile in ./doc/lighttpd.conf,
-make your own copy of that file and modify it for your needs.
+Take a look at the sample config files in ./doc/config/*.conf,
+make your own copy of the samples, and modify for your needs.
 
 
 Online documentation
 --------------------
-https://redmine.lighttpd.net/projects/lighttpd/wiki/Devel
-https://redmine.lighttpd.net/projects/lighttpd/wiki/DevelSubversion
-https://redmine.lighttpd.net/projects/lighttpd/wiki/InstallFromSource
+
+https://wiki.lighttpd.net/Devel
+https://wiki.lighttpd.net/InstallFromSource
 
 
 Custom Installation
@@ -118,7 +116,7 @@ re-run ./configure after installing packages
 
 compile and install it with ::
 
-  $ cd lighttpd-1.4.xx
+  $ cd $release
   $ ./autogen.sh        # detect/use newer versions of autotools (if present)
   $ ./configure -C      # add --with-xxxxx custom flags
   $ make
