@@ -1563,11 +1563,6 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		return 0;
 	}
 
-  #if defined(HAVE_MALLOC_TRIM)
-	if (srv->srvconf.max_conns <= 16 && malloc_top_pad == 524288)
-		malloc_top_pad = 131072; /*(reduce memory use on small systems)*/
-  #endif
-
 	if (oneshot_fd) {
 		if (oneshot_fd <= STDERR_FILENO) {
 			log_error(srv->errh, __FILE__, __LINE__,
@@ -2039,6 +2034,11 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		/* or use the default: we really don't want to hit max-fds */
 		srv->lim_conns = srv->srvconf.max_conns = srv->max_fds/3;
 	}
+
+  #if defined(HAVE_MALLOC_TRIM)
+	if (srv->srvconf.max_conns <= 16 && malloc_top_pad == 524288)
+		malloc_top_pad = 131072; /*(reduce memory use on small systems)*/
+  #endif
 
 	/*
 	 * kqueue() is called here, select resets its internals,
