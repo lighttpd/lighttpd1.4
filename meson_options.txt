@@ -38,11 +38,6 @@ option('with_ldap',
 	value: 'disabled',
 	description: 'with LDAP-support for mod_auth mod_vhostdb_ldap [default: off]',
 )
-option('with_libev',
-	type: 'feature',
-	value: 'disabled',
-	description: 'libev support for fdevent handlers [default: off]',
-)
 option('with_libunwind',
 	type: 'feature',
 	value: 'disabled',

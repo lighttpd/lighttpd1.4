@@ -1,5 +1,3 @@
-AM_CFLAGS = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
-
 noinst_PROGRAMS=\
 	t/test_common \
 	t/test_configfile \
@@ -106,9 +104,9 @@ if NO_RDYNAMIC
 common_ldflags = -avoid-version -no-undefined
 lib_LTLIBRARIES += liblightcomp.la
 liblightcomp_la_SOURCES=$(common_src)
-liblightcomp_la_CFLAGS=$(AM_CFLAGS) $(LIBEV_CFLAGS)
+liblightcomp_la_CFLAGS= $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 liblightcomp_la_LDFLAGS = $(common_ldflags) --export-all-symbols
-liblightcomp_la_LIBADD = $(PCRE_LIB) $(CRYPTO_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(ATTR_LIB) $(WS2_32_LIB)
+liblightcomp_la_LIBADD = $(PCRE_LIB) $(CRYPTO_LIB) $(FAM_LIBS) $(LIBUNWIND_LIBS) $(ATTR_LIB) $(WS2_32_LIB)
 common_libadd = liblightcomp.la
 if !LIGHTTPD_STATIC
 common_src += mod_auth_api.c mod_vhostdb_api.c
@@ -136,14 +134,14 @@ endif
 
 lib_LTLIBRARIES += mod_webdav.la
 mod_webdav_la_SOURCES = mod_webdav.c
-mod_webdav_la_CFLAGS = $(AM_CFLAGS) $(XML_CFLAGS) $(SQLITE_CFLAGS) 
+mod_webdav_la_CFLAGS =  $(XML_CFLAGS) $(SQLITE_CFLAGS)
 mod_webdav_la_LDFLAGS = $(common_module_ldflags)
 mod_webdav_la_LIBADD = $(common_libadd) $(XML_LIBS) $(SQLITE_LIBS) $(ELFTC_LIB)
 
 if BUILD_WITH_LUA
 lib_LTLIBRARIES += mod_magnet.la
 mod_magnet_la_SOURCES = mod_magnet.c mod_magnet_cache.c algo_hmac.c
-mod_magnet_la_CFLAGS = $(AM_CFLAGS) $(LUA_CFLAGS)
+mod_magnet_la_CFLAGS = $(LUA_CFLAGS)
 mod_magnet_la_LDFLAGS = $(common_module_ldflags)
 mod_magnet_la_LIBADD = $(common_libadd) $(LUA_LIBS) $(CRYPTO_LIB) -lm
 endif
@@ -417,14 +415,14 @@ lighttpd_SOURCES = \
 lighttpd_CPPFLAGS = \
   -DLIGHTTPD_STATIC \
   $(XML_CFLAGS) $(SQLITE_CFLAGS) \
-  $(FAM_CFLAGS) $(LIBEV_CFLAGS) $(LIBUNWIND_CFLAGS)
+  $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 lighttpd_LDADD = \
   $(common_libadd) \
   $(CRYPT_LIB) $(CRYPTO_LIB) $(XXHASH_LIBS) \
   $(XML_LIBS) $(SQLITE_LIBS) $(ELFTC_LIB) \
   $(PCRE_LIB) $(Z_LIB) $(ZSTD_LIB) $(BZ_LIB) $(BROTLI_LIBS) $(DEFLATE_LIBS) \
   $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) \
-  $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS)
+  $(FAM_LIBS) $(LIBUNWIND_LIBS)
 lighttpd_LDFLAGS = -export-dynamic
 
 lighttpd_SOURCES += h2.c ls-hpack/lshpack.c algo_xxhash.c
@@ -494,8 +492,8 @@ else
 
 ## default lighttpd server
 lighttpd_SOURCES = $(src)
-lighttpd_CPPFLAGS = $(FAM_CFLAGS) $(LIBEV_CFLAGS)
-lighttpd_LDADD = $(common_libadd) $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(CRYPTO_LIB) $(XXHASH_LIBS) $(FAM_LIBS) $(LIBEV_LIBS) $(LIBUNWIND_LIBS) $(WS2_32_LIB)
+lighttpd_CPPFLAGS = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
+lighttpd_LDADD = $(common_libadd) $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(CRYPTO_LIB) $(XXHASH_LIBS) $(FAM_LIBS) $(LIBUNWIND_LIBS) $(WS2_32_LIB)
 lighttpd_LDFLAGS = -export-dynamic
 
 endif
@@ -529,8 +527,8 @@ t_test_mod_SOURCES = $(common_src) t/test_mod.c \
                      t/test_mod_ssi.c \
                      t/test_mod_staticfile.c \
                      t/test_mod_userdir.c
-t_test_mod_CFLAGS  = $(AM_CFLAGS) $(LIBEV_CFLAGS)
-t_test_mod_LDADD   = $(LIBUNWIND_LIBS) $(PCRE_LIB) $(CRYPTO_LIB) $(DL_LIB) $(FAM_LIBS) $(LIBEV_LIBS) $(ATTR_LIB) $(WS2_32_LIB)
+t_test_mod_CFLAGS  = $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
+t_test_mod_LDADD   = $(PCRE_LIB) $(CRYPTO_LIB) $(DL_LIB) $(FAM_LIBS) $(LIBUNWIND_LIBS) $(ATTR_LIB) $(WS2_32_LIB)
 
 noinst_HEADERS   = $(hdr)
 EXTRA_DIST = \

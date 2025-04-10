@@ -185,19 +185,6 @@ AC_SUBST([DL_LIB])
 dnl prepare pkg-config usage below
 PKG_PROG_PKG_CONFIG
 
-dnl checking for libev
-AC_MSG_NOTICE([----------------------------------------])
-AC_MSG_CHECKING([for libev support])
-AC_ARG_WITH([libev],
-  [AS_HELP_STRING([--with-libev@<:@=PATH@:>@],
-    [Include libev support for fdevent handlers in PATH/include and PATH/lib]
-  )],
-  [WITH_LIBEV=$withval],
-  [WITH_LIBEV=no]
-)
-AC_MSG_RESULT([$WITH_LIBEV])
-dnl ignore WITH_LIBEV
-
 dnl Checks for mysql
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for MySQL support])
