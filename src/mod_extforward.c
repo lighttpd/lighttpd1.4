@@ -1331,8 +1331,10 @@ indicating which element is present :
 /* returns 0 if needs to poll, <0 upon error or >0 is protocol vers (success) */
 static int hap_PROXY_recv (const int fd, union hap_PROXY_hdr * const hdr, const int family, const int so_type)
 {
+    /*static const char v2sig[] =
+        "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A";*/
     static const char v2sig[12] =
-        "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A";
+        {0x0D,0x0A,0x0D,0x0A,0x00,0x0D,0x0A,0x51,0x55,0x49,0x54,0x0A};
 
     ssize_t ret;
     size_t sz;

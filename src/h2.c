@@ -2412,7 +2412,8 @@ h2_send_headers (request_st * const r, connection * const con)
     const int log_response_header = r->conf.log_response_header;
     const int resp_header_repeated = r->resp_header_repeated;
 
-    char status[12] = ":status: 200";
+    /*char status[] = ":status: 200";*/
+    char status[12] = {':','s','t','a','t','u','s',':',' ','2','0','0'};
 
     memset(&lsx, 0, sizeof(lsxpack_header_t));
     lsx.buf = status;
