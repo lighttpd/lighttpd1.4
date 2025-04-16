@@ -1901,7 +1901,9 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 #if defined(HAVE_SYS_PRCTL_H) && defined(PR_CAP_AMBIENT)
 	/* clear Linux ambient capabilities, if any had been granted
 	 * (avoid leaking privileges to CGI or other subprocesses) */
-	if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0L, 0L, 0L) < 0) {
+	if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0L, 0L, 0L) < 0
+           /* not supported before linux 4.3 / on some emulators (e.g. Cloud Run 1st gen) */
+           && errno != EINVAL) {
 		log_perror(srv->errh, __FILE__, __LINE__,
 		  "prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL)");
 		return -1;
