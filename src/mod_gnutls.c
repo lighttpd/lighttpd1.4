@@ -2389,7 +2389,7 @@ mod_gnutls_set_defaults_sockets(server *srv, plugin_data *p)
         /*conf.ssl_ctx = NULL;*//*(filled by network_init_ssl() even on error)*/
         if (0 == network_init_ssl(srv, &conf, p)) {
             plugin_ssl_ctx * const s = p->ssl_ctxs[sidx] =
-              ck_malloc(sizeof(plugin_ssl_ctx));
+              ck_calloc(1, sizeof(plugin_ssl_ctx));
             s->ssl_session_ticket = conf.ssl_session_ticket;
             s->priority_cache     = conf.priority_cache;
           #if GNUTLS_VERSION_NUMBER < 0x030600
