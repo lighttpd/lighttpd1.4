@@ -81,6 +81,9 @@ esac
 AM_CONDITIONAL([NO_RDYNAMIC], [test "$NO_RDYNAMIC" = yes])
 
 AM_CONDITIONAL([LIGHTTPD_STATIC], [test "$LIGHTTPD_STATIC" = yes])
+if test "$LIGHTTPD_STATIC" = yes; then
+  AC_DEFINE([LIGHTTPD_STATIC], [1], [lighttpd static build])
+fi
 
 AC_EXEEXT
 

@@ -413,7 +413,6 @@ lighttpd_SOURCES = \
   mod_vhostdb_api.c \
   mod_webdav.c
 lighttpd_CPPFLAGS = \
-  -DLIGHTTPD_STATIC \
   $(XML_CFLAGS) $(SQLITE_CFLAGS) \
   $(FAM_CFLAGS) $(LIBUNWIND_CFLAGS)
 lighttpd_LDADD = \
