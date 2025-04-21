@@ -82,3 +82,17 @@ RestrictNamespaces=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
 SystemCallArchitectures=native
+
+#SystemCallFilter=@known
+#SystemCallFilter=@system-service
+#SystemCallFilter=~@privileged
+#SystemCallFilter=@setuid
+#SystemCallFilter=~@mount
+#SystemCallFilter=chroot
+#SystemCallFilter=~@resources
+#SystemCallFilter=setrlimit
+#SystemCallFilter=~@cpu-emulation
+#SystemCallFilter=~@debug
+#SystemCallFilter=~@keyring
+#SystemCallFilter=~@obsolete
+#SystemCallFilter=~@pkey
