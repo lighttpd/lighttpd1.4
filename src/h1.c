@@ -600,8 +600,8 @@ h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_
         off_t len = chunkqueue_length(cq);
 
         while (0 == te_chunked) {
-            char *p;
-            chunk *c = cq->first;
+            const char *p;
+            const chunk *c = cq->first;
             if (NULL == c) break;
             force_assert(c->type == MEM_CHUNK);
             p = strchr(c->mem->ptr+c->offset, '\n');
@@ -618,13 +618,14 @@ h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_
                     te_chunked <<= 4;
                     te_chunked |= u;
                 }
-                if (__builtin_expect( (p == (char *)s + hsz), 0) /*(no hex)*/
+                if (__builtin_expect( ((char *)s == c->mem->ptr+c->offset), 0)
                     || __builtin_expect( (p[-2] != '\r'), 0)) {  /*(no '\r')*/
-                    p = NULL;
+                    p = NULL; /*(no hex or not '\r')*/
                 }
                 else if (__builtin_expect( (p-2 != (char *)s), 0)) {
                     while (*s == ' ' || *s == '\t') ++s;
-                    if (*s != '\r' && *s != ';')
+                    if (p-2 != (char *)s
+                        && (*s != ';' || p-2 != strchr((char *)s+1, '\r')))
                         p = NULL;
                 }
                 if (NULL == p) {

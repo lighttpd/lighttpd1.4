@@ -292,8 +292,8 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 p = memchr(mem, '\n', (size_t)len);
                 if (p) {
                     hsz = (off_t)(++p - mem);
-                    if (p-1 == mem || p[-2] != '\r')
-                        p = NULL; /* flag missing '\r'; p checked again below */
+                    if (p-1 == mem)
+                        p = NULL; /* p checked again below */
                 }
                 else {
                     if (len >= 1024) {
@@ -323,11 +323,10 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                     mem += hsz;
                     len -= hsz;
                     hsz = 0;
+                    p = h->ptr + buffer_clen(h);
                 }
                 s = (unsigned char *)h->ptr;/*(note: read h->ptr after append)*/
                 /*(non-blank h contains at least one non-'\n' char, plus '\n')*/
-                if (s[buffer_clen(h)-2] != '\r')
-                    p = NULL; /* flag missing '\r'; p checked again below */
             }
 
             for (unsigned char u; (u=(unsigned char)hex2int(*s))!=0xFF; ++s) {
@@ -339,12 +338,19 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 te_chunked <<= 4;
                 te_chunked |= u;
             }
-            if ((char *)s == mem || (char *)s == h->ptr) /*(no hex)*/
-                p = NULL;
-            else if (*s != '\r') {
-                while (*s == ' ' || *s == '\t') ++s;
-                if (*s != '\r' && *s != ';')
+            if (p != NULL) {
+                if ((char *)s == mem || (char *)s == h->ptr      /*(no hex)*/
+                    || __builtin_expect( (p[-2] != '\r'), 0)) {  /*(no '\r')*/
                     p = NULL;
+                }
+                else if (__builtin_expect( (p-2 != (char *)s), 0)) {
+                    while (*s == ' ' || *s == '\t') ++s;
+                    if (p-2 != (char *)s
+                        && (*s != ';'
+                            || p-2 != memchr((char *)s+1, '\r',
+                                             (size_t)(p - (char *)s - 2))))
+                        p = NULL;
+                }
             }
             if (p == NULL) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
