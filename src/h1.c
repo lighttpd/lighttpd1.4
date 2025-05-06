@@ -590,7 +590,16 @@ h1_chunked_crlf (chunkqueue * const cq)
 }
 
 
-static handler_t
+__attribute_cold__
+__attribute_noinline__
+static int
+h1_chunked_400_bad_request (request_st * const r, const char *errstr)
+{
+    log_error(r->conf.errh, __FILE__, __LINE__, "%s", errstr);
+    return 400; /* Bad Request */
+}
+
+static int
 h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_cq)
 {
     /* r->conf.max_request_size is in kBytes */
@@ -610,10 +619,8 @@ h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_
                 unsigned char *s = (unsigned char *)c->mem->ptr+c->offset;
                 for (unsigned char u;(u=(unsigned char)hex2int(*s))!=0xFF;++s) {
                     if (te_chunked > (off_t)(1uLL<<(8*sizeof(off_t)-5))-1-2) {
-                        log_error(r->conf.errh, __FILE__, __LINE__,
+                        return h1_chunked_400_bad_request(r,
                           "chunked data size too large -> 400");
-                        /* 400 Bad Request */
-                        return http_response_reqbody_read_error(r, 400);
                     }
                     te_chunked <<= 4;
                     te_chunked |= u;
@@ -629,19 +636,15 @@ h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_
                         p = NULL;
                 }
                 if (NULL == p) {
-                    log_error(r->conf.errh, __FILE__, __LINE__,
+                    return h1_chunked_400_bad_request(r,
                       "chunked header invalid chars -> 400");
-                    /* 400 Bad Request */
-                    return http_response_reqbody_read_error(r, 400);
                 }
 
                 if (hsz >= 1024) {
                     /* prevent theoretical integer overflow
                      * casting to (size_t) and adding 2 (for "\r\n") */
-                    log_error(r->conf.errh, __FILE__, __LINE__,
+                    return h1_chunked_400_bad_request(r,
                       "chunked header line too long -> 400");
-                    /* 400 Bad Request */
-                    return http_response_reqbody_read_error(r, 400);
                 }
 
                 if (0 == te_chunked) {
@@ -698,8 +701,7 @@ h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_
                     log_error(r->conf.errh, __FILE__, __LINE__,
                       "request-size too long: %lld -> 413",
                       (long long)(dst_cq->bytes_in + te_chunked));
-                    /* 413 Payload Too Large */
-                    return http_response_reqbody_read_error(r, 413);
+                    return 413; /* 413 Payload Too Large */
                 }
 
                 te_chunked += 2; /*(for trailing "\r\n" after chunked data)*/
@@ -710,10 +712,8 @@ h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_
             /*(likely better ways to handle chunked header crossing chunkqueue
              * chunks, but this situation is not expected to occur frequently)*/
             if ((off_t)buffer_clen(c->mem) - c->offset >= 1024) {
-                log_error(r->conf.errh, __FILE__, __LINE__,
+                return h1_chunked_400_bad_request(r,
                   "chunked header line too long -> 400");
-                /* 400 Bad Request */
-                return http_response_reqbody_read_error(r, 400);
             }
             else if (!h1_cq_compact(cq)) {
                 break;
@@ -729,8 +729,7 @@ h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_
             }
             else if (0 != chunkqueue_steal_with_tempfiles(dst_cq, cq, len,
                                                           r->conf.errh)) {
-                /* 500 Internal Server Error */
-                return http_response_reqbody_read_error(r, 500);
+                return 500; /* 500 Internal Server Error */
             }
             te_chunked -= len;
             len = chunkqueue_length(cq);
@@ -740,10 +739,8 @@ h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_
 
         if (2 == te_chunked) {
             if (-1 == h1_chunked_crlf(cq)) {
-                log_error(r->conf.errh, __FILE__, __LINE__,
+                return h1_chunked_400_bad_request(r,
                   "chunked data missing end CRLF -> 400");
-                /* 400 Bad Request */
-                return http_response_reqbody_read_error(r, 400);
             }
             chunkqueue_mark_written(cq, 2);/*consume \r\n at end of chunk data*/
             te_chunked -= 2;
@@ -752,11 +749,11 @@ h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_
     } while (!chunkqueue_is_empty(cq));
 
     r->x.h1.te_chunked = te_chunked;
-    return HANDLER_GO_ON;
+    return 0;
 }
 
 
-static handler_t
+static int
 h1_read_body_unknown (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_cq)
 {
     /* r->conf.max_request_size is in kBytes */
@@ -765,10 +762,9 @@ h1_read_body_unknown (request_st * const r, chunkqueue * const cq, chunkqueue * 
     if (0 != max_request_size && dst_cq->bytes_in > max_request_size) {
         log_error(r->conf.errh, __FILE__, __LINE__,
           "request-size too long: %lld -> 413", (long long)dst_cq->bytes_in);
-        /* 413 Payload Too Large */
-        return http_response_reqbody_read_error(r, 413);
+        return 413; /* 413 Payload Too Large */
     }
-    return HANDLER_GO_ON;
+    return 0;
 }
 
 
@@ -811,10 +807,11 @@ h1_reqbody_read (request_st * const r)
 
     if (r->reqbody_length < 0) {
         /*(-1: Transfer-Encoding: chunked, -2: unspecified length)*/
-        handler_t rc = (-1 == r->reqbody_length)
+        int status = (-1 == r->reqbody_length)
                      ? h1_chunked(r, cq, dst_cq)
                      : h1_read_body_unknown(r, cq, dst_cq);
-        if (HANDLER_GO_ON != rc) return rc;
+        if (status)
+            return http_response_reqbody_read_error(r, status);
         chunkqueue_remove_finished_chunks(cq);
     }
     else {
