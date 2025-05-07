@@ -4627,6 +4627,16 @@ mod_webdav_put_0 (request_st * const r, const plugin_config * const pconf)
         return HANDLER_FINISHED;
     }
 
+    /*if (errno == EACCES || errno == EPERM || errno == EROFS)*/
+    {
+        log_perror(r->conf.errh, __FILE__, __LINE__,
+          "open(%s, O_WRONLY|...)", r->physical.path.ptr);
+      #ifdef __linux__
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "check systemd lighttpd.service; e.g. ProtectHome=yes");
+      #endif
+    }
+
     http_status_set_error(r, 500); /* Internal Server Error */
     return HANDLER_FINISHED;
 }
@@ -4688,7 +4698,14 @@ mod_webdav_put_prep (request_st * const r, const plugin_config * const pconf)
           case ENOTDIR:
             http_status_set_error(r, 409); /* Conflict */
             break;
+          /*case EACCES: case EPERM: case EROFS:*/
           default:
+            log_perror(r->conf.errh, __FILE__, __LINE__,
+              "open() tmpfile for %s", r->physical.path.ptr);
+           #ifdef __linux__
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "check systemd lighttpd.service; e.g. ProtectHome=yes");
+           #endif
             http_status_set_error(r, 500); /* Internal Server Error */
             break;
         }
