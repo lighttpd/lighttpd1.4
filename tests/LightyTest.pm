@@ -325,9 +325,9 @@ sub handle_http {
 	diag("\nsending request header to ".$host.":".$self->{PORT}) if $is_debug;
 	foreach(@request) {
 		# pipeline requests
+		s/\r(?=\n)//gs;
 		chomp;
-		s/\r//g;
-		s/\n/$EOL/g;
+		s/\n/$EOL/gs;
 
 		diag("<< ".$_."\n") if $is_debug;
 		if (!$slow) {

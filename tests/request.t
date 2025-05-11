@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 164;
+use Test::More tests => 166;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -294,6 +294,38 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400 } ];
 ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked; chunked header too long');
+
+$t->{REQUEST}  = ( <<EOF
+POST /cgi.pl?post-len HTTP/1.1
+Host: www.example.org
+Connection: close
+Content-Type: application/x-www-form-urlencoded
+Transfer-Encoding: chunked
+
+a;\rx
+0123456789
+0
+
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, stray \r');
+
+$t->{REQUEST}  = ( <<EOF
+POST /cgi.pl?post-len HTTP/1.1
+Host: www.example.org
+Connection: close
+Content-Type: application/x-www-form-urlencoded
+Transfer-Encoding: chunked
+
+a;\nx
+0123456789
+0
+
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, stray \n');
 
 ## ranges
 
