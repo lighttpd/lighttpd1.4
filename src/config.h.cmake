@@ -200,6 +200,7 @@
 #cmakedefine  HAVE_MEMSET_S
 #cmakedefine  HAVE_EXPLICIT_BZERO
 #cmakedefine  HAVE_EXPLICIT_MEMSET
+#cmakedefine  HAVE_MEMSET_EXPLICIT
 #cmakedefine  HAVE_COPY_FILE_RANGE
 
 /* libcrypt */

@@ -427,6 +427,7 @@ if 1:
 		'malloc_trim',
 		'mallopt',
 		'mempcpy',
+		'memset_explicit',
 		'memset_s',
 		'mkostemp',
 		'mmap',

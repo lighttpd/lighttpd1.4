@@ -129,6 +129,7 @@ functions = {
   'malloc_trim': 'malloc.h',
   'mallopt': 'malloc.h',
   'mempcpy': 'string.h',
+  'memset_explicit': 'string.h',
   'memset_s': 'string.h',
   'mkostemp': 'stdlib.h',
   'mmap': 'sys/mman.h',

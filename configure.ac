@@ -1421,6 +1421,7 @@ AC_CHECK_FUNCS([\
   lstat \
   madvise \
   mempcpy \
+  memset_explicit \
   memset_s \
   mkostemp \
   pipe2 \

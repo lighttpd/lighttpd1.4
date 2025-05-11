@@ -42,12 +42,6 @@
 
 #ifndef HAVE_MEMSET_S
 
-#if defined(__STDC_VERSION__) && __STDC_VERSION__-0 >= 202311L /* C23 */
-#ifndef HAVE_MEMSET_EXPLICIT
-#define HAVE_MEMSET_EXPLICIT 1
-#endif
-#endif
-
 #ifdef _WIN32
 #define VC_EXTRALEAN
 #define WIN32_LEAN_AND_MEAN
@@ -149,7 +143,7 @@ ck_memclear_s (void * const s, const rsize_t smax, rsize_t n)
 
    #if defined(HAVE_EXPLICIT_BZERO)
     explicit_bzero(s, n);
-   #elif defined(HAVE_MEMSET_EXPLICIT)
+   #elif defined(HAVE_MEMSET_EXPLICIT) /* C23: __STDC_VERSION__-0 >= 202311L */
     memset_explicit(s, 0, n);
    #elif defined(HAVE_EXPLICIT_MEMSET)
     explicit_memset(s, 0, n);
