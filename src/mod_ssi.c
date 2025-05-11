@@ -1166,7 +1166,7 @@ static int process_ssi_stmt(request_st * const r, handler_ctx * const p, const c
 
 		int status = 0;
 		struct stat stb;
-		stb.st_size = 0;
+		stb.st_size = flen;
 		/*(expects STDIN_FILENO open to /dev/null)*/
 		int serrh_fd = r->conf.serrh ? r->conf.serrh->fd : -1;
 		pid = fdevent_sh_exec(cmd, NULL, -1, c->file.fd, serrh_fd);
@@ -1514,7 +1514,7 @@ static void mod_ssi_read_fd(request_st * const r, handler_ctx * const p, struct 
 				if (prelen - pretag && !p->if_is_false) {
 					chunkqueue_append_mem(cq, buf+pretag, prelen-pretag);
 				}
-				memcpy(buf, buf+prelen, (offset -= prelen));
+				memmove(buf, buf+prelen, (offset -= prelen));
 				pretag = 0;
 				break;
 			}
