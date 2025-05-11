@@ -354,6 +354,7 @@ jobs:
         shell: alpine.sh {0}
         run: |
           set -e
+          export SHELL=/bin/sh
           # Alpine Linux wolfssl package built w/o features required by lighttpd
           #('scons check_fullstatic' needs zlib-static openssl-libs-static)
           export NO_WOLFSSL=1
@@ -384,6 +385,7 @@ jobs:
         shell: alpine.sh {0}
         run: |
           set -e
+          export SHELL=/bin/sh
           meson setup "${{github.workspace}}/build" -Dwarning_level=3
           meson compile -C "${{github.workspace}}/build" --verbose
           meson test -C "${{github.workspace}}/build" --verbose
