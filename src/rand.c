@@ -336,7 +336,9 @@ static void li_rand_init (void)
         ck_bt_abort(__FILE__,__LINE__,"wolfCrypt_Init or wc_InitRng() failed");
   #endif
   #ifdef USE_OPENSSL_CRYPTO
+  #if !defined(BORINGSSL_API_VERSION) && !defined(AWSLC_API_VERSION)
     RAND_poll();
+  #endif
     RAND_seed(xsubi, (int)sizeof(xsubi));
   #endif
   #ifdef USE_MBEDTLS_CRYPTO

@@ -50,10 +50,6 @@
 #endif
 #endif
 
-#ifdef BORINGSSL_API_VERSION
-#undef OPENSSL_NO_STDIO /* for X509_STORE_load_locations() */
-#endif
-
 #ifdef _WIN32
 #include <winsock2.h>
 #include <Windows.h>
@@ -2353,7 +2349,7 @@ mod_openssl_reload_crl_file (server *srv, plugin_cacerts *cacerts, const unix_ti
     /* (modelled off X509_STORE_get1_all_certs()) */
     /*X509_STORE_lock(store);*/
     STACK_OF(X509_OBJECT) *objs = X509_STORE_get0_objects(store);
-    for (int i = 0; i < sk_X509_OBJECT_num(objs) && rc; ++i) {
+    for (int i = 0, num = sk_X509_OBJECT_num(objs); i < num && rc; ++i) {
         X509 *cert = X509_OBJECT_get0_X509(sk_X509_OBJECT_value(objs, i));
         if (cert != NULL)
             rc = X509_STORE_add_cert(new_store, cert);
@@ -3103,6 +3099,7 @@ network_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
 
 #if OPENSSL_VERSION_NUMBER < 0x30000000L
 #ifndef OPENSSL_NO_DH
+#if !defined(BORINGSSL_API_VERSION) && !defined(AWSLC_API_VERSION)
 #if OPENSSL_VERSION_NUMBER < 0x10100000L \
  || (defined(LIBRESSL_VERSION_NUMBER) \
      && LIBRESSL_VERSION_NUMBER < 0x2070000fL)
@@ -3163,6 +3160,7 @@ static DH *get_dh2048(void)
     }
     return dh;
 }
+#endif /* !BORINGSSL_API_VERSION && !AWSLC_API_VERSION */
 #endif /* !OPENSSL_NO_DH */
 #endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
 
@@ -3170,7 +3168,21 @@ static DH *get_dh2048(void)
 static int
 mod_openssl_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const buffer *dhparameters)
 {
-  #ifndef OPENSSL_NO_DH
+  #ifdef OPENSSL_NO_DH
+    if (dhparameters) {
+        UNUSED(s);
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: openssl compiled without DH support, "
+          "can't load parameters from %s", dhparameters->ptr);
+    }
+  #elif defined(BORINGSSL_API_VERSION) || defined(AWSLC_API_VERSION)
+    if (dhparameters) {
+        UNUSED(s);
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: BoringSSL/AWS-LC does not support FFDH cipher suites; "
+          "skipping loading parameters from %s", dhparameters->ptr);
+    }
+  #else
    #if OPENSSL_VERSION_NUMBER < 0x30000000L
     DH *dh;
     /* Support for Diffie-Hellman key exchange */
@@ -3235,12 +3247,6 @@ mod_openssl_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const bu
         SSL_CTX_set_dh_auto(s->ssl_ctx, 1);
    #endif
     SSL_CTX_set_options(s->ssl_ctx, SSL_OP_SINGLE_DH_USE);
-  #else
-    if (dhparameters) {
-        log_error(srv->errh, __FILE__, __LINE__,
-          "SSL: openssl compiled without DH support, "
-          "can't load parameters from %s", dhparameters->ptr);
-    }
   #endif
 
     return 1;

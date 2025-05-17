@@ -591,7 +591,7 @@ SHA512_Update(SHA512_CTX *ctx, const void *data, size_t length)
 #endif
 
 #include <openssl/opensslv.h>
-#ifdef BORINGSSL_API_VERSION
+#if defined(BORINGSSL_API_VERSION) || defined(AWSLC_API_VERSION)
 typedef SHA512_CTX SHA512_256_CTX;
 #endif
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L \
