@@ -70,6 +70,13 @@
 #ifndef OPENSSL_NO_OCSP
 #include <openssl/ocsp.h>
 #endif
+#ifdef AWSLC_API_VERSION /* alt: OPENSSL_IS_AWSLC */
+/* AWS-LC derived from BoringSSL, but AWSLC_API_VERSION has different meaning.
+ * Reuse BORINGSSL_API_VERSION for (presently) small num of API version checks*/
+#ifndef BORINGSSL_API_VERSION
+#define BORINGSSL_API_VERSION 19
+#endif
+#endif
 #ifdef BORINGSSL_API_VERSION
 #include <openssl/hmac.h>
 /* BoringSSL purports to have some OCSP support */
@@ -863,8 +870,10 @@ mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, 
               ? EVP_hpke_x25519_hkdf_sha256()
               : EVP_PKEY_id(pkey) == EVP_PKEY_X25519 /* NID_X25519 */
               ? EVP_hpke_x25519_hkdf_sha256()
+             #ifndef AWSLC_API_VERSION
               : EVP_PKEY_id(pkey) == EVP_PKEY_EC /* NID_X9_62_id_ecPublicKey */
               ? EVP_hpke_p256_hkdf_sha256()
+             #endif
               : NULL;
             if (NULL == kem) {
                 EVP_PKEY_free(pkey);
