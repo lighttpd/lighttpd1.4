@@ -164,6 +164,9 @@ if env['with_sasl']:
 if env['with_openssl']:
 	modules['mod_openssl'] = { 'src' : [ 'mod_openssl.c' ], 'lib' : [ env['LIBSSL'], env['LIBSSLCRYPTO'] ] }
 
+if env['with_boringssl']:
+	modules['mod_boringssl'] = { 'src' : [ 'mod_boringssl.c' ], 'lib' : [ env['LIBSSL'], env['LIBSSLCRYPTO'], 'stdc++' ] }
+
 if env['with_wolfssl']:
 	modules['mod_wolfssl'] = { 'src' : [ 'mod_wolfssl.c' ], 'lib' : [ env['LIBWOLFSSL'], 'm' ] }
 

@@ -81,7 +81,7 @@
 #cmakedefine  HAVE_NSS_NSS_H
 #cmakedefine  HAVE_NSS3_NSS_H
 
-/* OpenSSL */
+/* OpenSSL or BoringSSL or AWS-LC */
 #cmakedefine  HAVE_OPENSSL_SSL_H
 #cmakedefine  HAVE_LIBSSL
 

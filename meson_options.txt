@@ -1,3 +1,8 @@
+option('with_boringssl',
+	type: 'boolean',
+	value: false,
+	description: 'with boringssl-support [default: off]',
+)
 option('with_brotli',
 	type: 'feature',
 	value: 'disabled',

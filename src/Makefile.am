@@ -293,6 +293,14 @@ mod_openssl_la_LIBADD = $(OPENSSL_LIBS) $(common_libadd)
 mod_openssl_la_CPPFLAGS = $(OPENSSL_CFLAGS)
 endif
 
+if BUILD_WITH_BORINGSSL
+lib_LTLIBRARIES += mod_boringssl.la
+mod_boringssl_la_SOURCES = mod_boringssl.c
+mod_boringssl_la_LDFLAGS = $(common_module_ldflags)
+mod_boringssl_la_LIBADD = $(BORINGSSL_LIBS) $(common_libadd)
+mod_boringssl_la_CPPFLAGS = $(BORINGSSL_CFLAGS)
+endif
+
 if BUILD_WITH_MBEDTLS
 lib_LTLIBRARIES += mod_mbedtls.la
 mod_mbedtls_la_SOURCES = mod_mbedtls.c
@@ -466,6 +474,11 @@ if BUILD_WITH_OPENSSL
 lighttpd_SOURCES += mod_openssl.c
 lighttpd_CPPFLAGS += $(OPENSSL_CFLAGS)
 lighttpd_LDADD += $(OPENSSL_LIBS)
+endif
+if BUILD_WITH_BORINGSSL
+lighttpd_SOURCES += mod_boringssl.c
+lighttpd_CPPFLAGS += $(BORINGSSL_CFLAGS)
+lighttpd_LDADD += $(BORINGSSL_LIBS)
 endif
 if BUILD_WITH_MBEDTLS
 lighttpd_SOURCES += mod_mbedtls.c

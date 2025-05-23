@@ -824,6 +824,84 @@ if test "x$use_gnutls" = "xyes"; then
   fi
 fi
 
+dnl Check for boringssl
+AC_MSG_NOTICE([----------------------------------------])
+AC_MSG_CHECKING([for BoringSSL])
+AC_ARG_WITH([boringssl],
+  [AS_HELP_STRING([--with-boringssl@<:@=DIR@:>@],
+    [Include boringssl support (default no)]
+  )],
+  [WITH_BORINGSSL=$withval],
+  [WITH_BORINGSSL=no]
+)
+AC_MSG_RESULT([$WITH_BORINGSSL])
+AM_CONDITIONAL([BUILD_WITH_BORINGSSL], test ! "$WITH_BORINGSSL" = no)
+
+if test "$WITH_BORINGSSL" != no; then
+  if test "$WITH_BORINGSSL" != yes; then
+    boringssl_append_CPPFLAGS=" -I$WITH_BORINGSSL/include"
+    boringssl_append_LDFLAGS=" -L$WITH_BORINGSSL/lib"
+  fi
+fi
+
+AC_MSG_CHECKING([custom include directory for boringssl])
+AC_ARG_WITH([boringssl-includes],
+  [AS_HELP_STRING([--with-boringssl-includes=DIR], [OpenSSL includes])],
+  [
+    if test "$WITH_BORINGSSL" = no; then
+      AC_MSG_ERROR([build --with-boringssl to use --with-boringssl-includes])
+    fi
+    boringssl_append_CPPFLAGS=" -I$withval"
+    AC_MSG_RESULT([$withval])
+  ],
+  [AC_MSG_RESULT([no])]
+)
+
+AC_MSG_CHECKING([custom lib directory for boringssl])
+AC_ARG_WITH([boringssl-libs],
+  [AS_HELP_STRING([--with-boringssl-libs=DIR], [OpenSSL libraries])],
+  [
+    if test "$WITH_BORINGSSL" = no; then
+      AC_MSG_ERROR([build --with-boringssl to use --with-boringssl-libs])
+    fi
+    boringssl_append_LDFLAGS=" -L$withval"
+    AC_MSG_RESULT([$withval])
+  ],
+  [AC_MSG_RESULT([no])]
+)
+
+if test "$WITH_BORINGSSL" != no; then
+  CPPFLAGS_SAVE="${CPPFLAGS}"
+  LDFLAGS_SAVE="${LDFLAGS}"
+  CPPFLAGS="${CPPFLAGS}${boringssl_append_CPPFLAGS}"
+  LDFLAGS="${LDFLAGS}${boringssl_append_LDFLAGS}"
+
+  AC_CHECK_HEADERS([openssl/ssl.h], [], [
+    AC_MSG_ERROR([boringssl headers not found. install them or build without --with-boringssl])
+  ])
+  AC_CHECK_LIB([crypto], [RAND_bytes],
+    [BORINGSSL_CRYPTO_LIB="-lcrypto"],
+    [AC_MSG_ERROR([boringssl crypto library not found. install it or build without --with-boringssl])]
+  )
+  AC_CHECK_LIB([ssl], [SSL_CREDENTIAL_new_x509],
+    [BORINGSSL_LIBS="${boringssl_append_LDFLAGS} -lssl -lcrypto -lstdc++"],
+    [AC_MSG_ERROR([boringssl ssl library not found. install it or build without --with-boringssl])],
+    [ -lssl -lcrypto -lstdc++ "$DL_LIB" ]
+  )
+
+  AC_DEFINE([HAVE_LIBSSL], [1], [Have libssl])
+  BORINGSSL_CFLAGS="${boringssl_append_CPPFLAGS}"
+  AC_SUBST([BORINGSSL_CFLAGS])
+  AC_SUBST([BORINGSSL_LIBS])
+  if test "x$CRYPTO_LIB" = "x"; then
+    CRYPTO_LIB="$BORINGSSL_CRYPTO_LIB"
+    AC_SUBST([CRYPTO_LIB])
+  else
+    CPPFLAGS="${CPPFLAGS_SAVE}"
+    LDFLAGS="${LDFLAGS_SAVE}"
+  fi
+fi
+
 dnl Check for NSS
 AC_MSG_NOTICE([----------------------------------------])
 AC_MSG_CHECKING([for NSS])
@@ -1734,6 +1812,9 @@ lighty_track_feature "pam" "mod_authn_pam" \
 
 lighty_track_feature "network-openssl" "mod_openssl" \
   'test "$WITH_OPENSSL" != no'
+
+lighty_track_feature "network-boringssl" "mod_boringssl" \
+  'test "$WITH_BORINGSSL" != no'
 
 lighty_track_feature "network-mbedtls" "mod_mbedtls" \
   'test "$WITH_MBEDTLS" != no'

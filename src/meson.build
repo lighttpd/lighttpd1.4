@@ -345,7 +345,7 @@ endif
 if get_option('with_openssl')
 	# manual search:
 	# header: openssl/ssl.h
-	# function: SSL_new (-lssl)
+	# function: SSL_CREDENTIAL_new_x509 (-lssl)
 	# function: RAND_bytes (-lcrypto)
 	libssl = [ dependency('libssl') ]
 	libsslcrypto = [ dependency('libcrypto') ]
@@ -400,6 +400,20 @@ if get_option('with_nettle')
 	  conf_data.set('HAVE_NETTLE_NETTLE_TYPES_H', true)
 	endif
 endif
+if get_option('with_boringssl')
+	# manual search:
+	# header: openssl/ssl.h
+	# function: SSL_new (-lssl)
+	# function: RAND_bytes (-lcrypto)
+	libssl = [ dependency('libssl') ]
+	libsslcrypto = [ dependency('libcrypto') ]
+	libstdcplusplus = [ dependency('libstdc++') ]
+	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(get_option('with_nettle')) and not(get_option('with_gnutls'))
+	  libcrypto = [ dependency('libcrypto') ]
+	endif
+	conf_data.set('HAVE_OPENSSL_SSL_H', true)
+	conf_data.set('HAVE_LIBSSL', true)
+endif
 libssl3 = []
 libsmime3 = []
 libnss3 = []
@@ -417,7 +431,7 @@ if get_option('with_nss')
 	#libnss3 = [ compiler.find_library('nss3') ]
 	#libnssutil3 = [ compiler.find_library('nssutil3') ]
 	conf_data.set('HAVE_NSS3_NSS_H', true)
-	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(get_option('with_nettle')) and not(get_option('with_gnutls'))
+	if not(get_option('with_openssl')) and not(get_option('with_wolfssl')) and not(get_option('with_mbedtls')) and not(get_option('with_nettle')) and not(get_option('with_gnutls')) and not(get_option('with_boringssl'))
 	  libcrypto = [ dependency('nss') ]
 	endif
 endif
@@ -838,6 +852,12 @@ if libldap.found() and liblber.found()
 	modules += [
 		[ 'mod_authn_ldap', [ 'mod_authn_ldap.c' ], [ libldap, liblber ] ],
 		[ 'mod_vhostdb_ldap', [ 'mod_vhostdb_ldap.c' ], [ libldap, liblber ] ],
+	]
+endif
+
+if get_option('with_boringssl')
+	modules += [
+		[ 'mod_boringssl', [ 'mod_boringssl.c' ], libssl + libsslcrypto + libstdcplusplus ],
 	]
 endif
 
