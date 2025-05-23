@@ -1,8 +1,8 @@
 /*
- * mod_openssl - openssl support for lighttpd
+ * mod_boringssl - boringssl support for lighttpd
  *
  * Fully-rewritten from original
- * Copyright(c) 2016 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
+ * Copyright(c) 2016,2025 Glenn Strauss gstrauss()gluelogic.com  All rights reserved
  * License: BSD 3-clause (same as lighttpd)
  */
 /*
@@ -48,9 +48,9 @@
  *   cmake -GNinja -B build -DCMAKE_BUILD_TYPE=MinSizeRel -DCMAKE_POSITION_INDEPENDENT_CODE=ON
  *   ninja -C build
  * Configure lighttpd build
- *   --with-openssl
- *   --with-openssl-includes=/path/to/boringssl/include
- *   --with-openssl-libs=/path/to/boringssl/build
+ *   --with-boringssl
+ *   --with-boringssl-includes=/path/to/boringssl/include
+ *   --with-boringssl-libs=/path/to/boringssl/build
  * If linking lighttpd against dynamic BoringSSL libs, run lighttpd with
  *   LD_LIBRARY_PATH=/path/to/boringssl/build
  * If linking lighttpd mod_openssl.so against static BoringSSL libs,
@@ -5620,11 +5620,11 @@ TRIGGER_FUNC(mod_openssl_handle_trigger) {
 
 __attribute_cold__
 __declspec_dllexport__
-int mod_openssl_plugin_init (plugin *p);
-int mod_openssl_plugin_init (plugin *p)
+int mod_boringssl_plugin_init (plugin *p);
+int mod_boringssl_plugin_init (plugin *p)
 {
     p->version      = LIGHTTPD_VERSION_ID;
-    p->name         = "openssl";
+    p->name         = "boringssl";
     p->init         = mod_openssl_init;
     p->cleanup      = mod_openssl_free;
     p->priv_defaults= mod_openssl_set_defaults;
