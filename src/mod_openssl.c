@@ -26,6 +26,53 @@
  *   if multiple lighttpd workers are configured, ssl.stek-file should be
  *   defined and the file maintained externally.
  */
+/*
+ * BoringSSL and AWS-LC (fork of BoringSSL) have OpenSSL an compatibility layer
+ * and may be used instead of openssl, though functionality should be carefully
+ * tested to ensure all the features of TLS required for *your* environment work
+ * as expected.  BoringSSL and AWS-LC do not fully reimplement all of OpenSSL,
+ * and behavior may differ from OpenSSL behavior.
+ *
+ * AWS-LC disables the auto-chaining feature by default, though if interested in
+ * performance, you should not be relying on auto-chaining and should be
+ * providing certificate chains including intermediates, e.g. fullchain.pem.
+ * BoringSSL disables the auto-chaining feature when SSL_CREDENTIAL is used,
+ * which is now how this module configures certificate selected for connection.
+ *
+ * See BUILDING.md in BoringSSL source tree for BoringSSL build instructions.
+ * Choose CMAKE_BUILD_TYPE (e.g. Release, MinSizeRel, RelWithDebInfo, etc.)
+ * If choosing to build BoringSSL as shared library:
+ *   cmake -GNinja -B build -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_SHARED_LIBS=1
+ *   ninja -C build
+ * If choosing to build BoringSSL as static library to link with mod_openssl.so:
+ *   cmake -GNinja -B build -DCMAKE_BUILD_TYPE=MinSizeRel -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+ *   ninja -C build
+ * Configure lighttpd build
+ *   --with-openssl
+ *   --with-openssl-includes=/path/to/boringssl/include
+ *   --with-openssl-libs=/path/to/boringssl/build
+ * If linking lighttpd against dynamic BoringSSL libs, run lighttpd with
+ *   LD_LIBRARY_PATH=/path/to/boringssl/build
+ * If linking lighttpd mod_openssl.so against static BoringSSL libs,
+ * - static BoringSSL build needs: cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+ * - mod_openssl.so link must be modified to include: -lssl -lcrypto -lstdc++
+ *   (not the default -lssl -lcrypto)
+ *
+ * Note: BoringSSL can be built single-threaded to reduce locking overhead.
+ * Since lighttpd is not currently threaded, then if lighttpd is built against
+ * static libraries for BoringSSL, BoringSSL could be built with
+ *   -DOPENSSL_NO_THREADS_CORRUPT_MEMORY_AND_LEAK_SECRETS_IF_THREADED
+ * as long as those static libs were linked only into single-threaded programs.
+ * Note: AWS-LC sets this define for certain specific embedded targets in the
+ * AWS-LC source code include/openssl/target.h
+ *
+ * lighttpd providing OCSP stapled responses is supported with BoringSSL,
+ * though there are some limitations: the OCSP staple is not parsed for
+ * nextUpdate, so the ssl.stapling-file is reloaded hourly.  Also, the
+ * certificate is not parsed for the OCSP Must-Staple flag.  If not using
+ * OCSP stapling, lighttpd mod_openssl.c can be told to omit the code here
+ * by *commenting out* #undef OPENSSL_NO_OCSP below.
+ */
 #include "first.h"
 
 #include <sys/types.h>
@@ -79,7 +126,9 @@
 #endif
 #ifdef BORINGSSL_API_VERSION
 #include <openssl/hmac.h>
-/* BoringSSL purports to have some OCSP support */
+/* BoringSSL purports to have some OCSP support in C++ pki/ocsp.h
+ * but does not provide <openssl/ocsp.h> and sets OPENSSL_NO_OCSP
+ * in <openssl/opensslconf.h>, included by <openssl/base.h> */
 #undef OPENSSL_NO_OCSP
 #endif
 
@@ -132,10 +181,18 @@
 #endif
 
 typedef struct mod_openssl_kp {
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    SSL_CREDENTIAL *cred;
+    EVP_PKEY *ssl_pemfile_pkey;
+    CRYPTO_BUFFER **ssl_pemfile_x509;
+    size_t ssl_pemfile_chain;
+    CRYPTO_BUFFER *ssl_stapling_der;
+  #else
     EVP_PKEY *ssl_pemfile_pkey;
     X509 *ssl_pemfile_x509;
     STACK_OF(X509) *ssl_pemfile_chain;
     buffer *ssl_stapling_der;
+  #endif
     int refcnt;
     int8_t must_staple;
     int8_t self_issued;
@@ -218,6 +275,9 @@ typedef struct {
   #endif
     array *ech_only_hosts;
     const char *ssl_stek_file;
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    CRYPTO_BUFFER_POOL *cbpool;
+  #endif
 } plugin_data;
 
 static int ssl_is_init;
@@ -255,6 +315,10 @@ mod_openssl_kp_init (void)
 {
     mod_openssl_kp * const kp = ck_calloc(1, sizeof(*kp));
     kp->refcnt = 1;
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    kp->cred = SSL_CREDENTIAL_new_x509();
+    ck_assert(kp->cred);
+  #endif
     return kp;
 }
 
@@ -263,10 +327,19 @@ __attribute_cold__
 static void
 mod_openssl_kp_free (mod_openssl_kp *kp)
 {
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    SSL_CREDENTIAL_free(kp->cred);
+    EVP_PKEY_free(kp->ssl_pemfile_pkey);
+    for (size_t i = 0; i < kp->ssl_pemfile_chain; ++i)
+        CRYPTO_BUFFER_free(kp->ssl_pemfile_x509[i]);
+    free(kp->ssl_pemfile_x509);
+    CRYPTO_BUFFER_free(kp->ssl_stapling_der);
+  #else
     EVP_PKEY_free(kp->ssl_pemfile_pkey);
     X509_free(kp->ssl_pemfile_x509);
     sk_X509_pop_free(kp->ssl_pemfile_chain, X509_free);
     buffer_free(kp->ssl_stapling_der);
+  #endif
     free(kp);
 }
 
@@ -321,6 +394,19 @@ mod_openssl_SSL_CTX_use_cert_and_key (SSL_CTX *ssl_ctx, plugin_cert *pc, mod_ope
                                     kp->ssl_pemfile_chain,
                                     1);
 
+  #elif defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+
+   #if 1
+    return SSL_CTX_add1_credential(ssl_ctx, kp->cred);
+   #else
+    return SSL_CTX_set_chain_and_key(ssl_ctx,
+                                     kp->ssl_pemfile_x509,
+                                     kp->ssl_pemfile_chain, /* num_certs */
+                                     kp->ssl_pemfile_pkey,
+                                     NULL);
+
+   #endif
+
   #else
 
    #if OPENSSL_VERSION_NUMBER >= 0x10002000 \
@@ -361,6 +447,27 @@ mod_openssl_SSL_use_cert_and_key (SSL *ssl, plugin_cert *pc, mod_openssl_kp *kp)
                                 kp->ssl_pemfile_pkey,
                                 kp->ssl_pemfile_chain,
                                 1);
+
+  #elif defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+
+    /* Always assign SSL_CREDENTIAL in cert callback and skip SSL_certs_clear()
+     * when assigning SNI, since OpenSSL and BoringSSL do not check if
+     * configured certs (i.e. from SSL_CTX) match the SNI.  (Default certs are
+     * currently not assigned to SSL_CTX, so SSL_certs_clear() can be skipped.)
+     * While assigning default cert to SSL_CTX might be more efficient in
+     * configs using a single cert, there is copy and refcnt overhead for
+     * every (SSL *) created. */
+    /*SSL_certs_clear(ssl);*/
+
+   #if 1
+    return SSL_add1_credential(ssl, kp->cred);
+   #else
+    return SSL_set_chain_and_key(ssl,
+                                 kp->ssl_pemfile_x509,
+                                 kp->ssl_pemfile_chain, /* num_certs */
+                                 kp->ssl_pemfile_pkey,
+                                 NULL);
+   #endif
 
   #else
 
@@ -1381,6 +1488,11 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
             }
         }
     }
+
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    /*(doc states: CRYPTO_BUFFER_POOL_free frees |pool|, which must be empty.)*/
+    CRYPTO_BUFFER_POOL_free(p->cbpool);
+  #endif
 }
 
 
@@ -1486,6 +1598,8 @@ mod_openssl_check_ktls (void)
 #endif /* SSL_OP_ENABLE_KTLS */
 
 
+#if !defined(BORINGSSL_API_VERSION) || BORINGSSL_API_VERSION < 3
+
 /* use memory from openssl secure heap for temporary buffers, returned storage
  * (pemfile might contain a private key in addition to certificate chain)
  * Interfaces similar to those constructed in include/openssl/pem.h for
@@ -1581,6 +1695,8 @@ mod_openssl_load_X509_sk (const char *file, log_error_st *errh, STACK_OF(X509) *
     *chain = chain_sk;
     return 1;
 }
+
+#endif /* !BORINGSSL_API_VERSION || BORINGSSL_API_VERSION < 3 */
 
 
 static int
@@ -2017,8 +2133,9 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
   }
 
   #ifndef OPENSSL_NO_OCSP
-  #ifdef BORINGSSL_API_VERSION
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION < 3
     /* BoringSSL suggests API different than SSL_CTX_set_tlsext_status_cb() */
+    /* BoringSSL >= 3 provides additional option using SSL_CREDENTIAL */
     buffer *ocsp_resp = hctx->kp->ssl_stapling_der;
     if (NULL != ocsp_resp
         && !SSL_set_ocsp_response(ssl, (uint8_t *)BUF_PTR_LEN(ocsp_resp))) {
@@ -2258,6 +2375,157 @@ mod_openssl_cert_is_active (const X509 *crt)
 }
 
 
+#if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+
+static int
+mod_boringssl_cert_is_active (CRYPTO_BUFFER *cert)
+{
+    X509 *x509 = X509_parse_from_buffer(cert);
+    int rc = 0;
+    if (x509) {
+        rc = mod_openssl_cert_is_active(x509);
+        X509_free(x509);
+    }
+    return rc;
+}
+
+
+/* BoringSSL OpenSSL compat API does not wipe temp mem used; write our own */
+/* (pemfile might contain private key)*/
+/* code here is based on similar code in mod_nss and mod_wolfssl */
+#include "base64.h"
+
+#define PEM_BEGIN          "-----BEGIN "
+#define PEM_END            "-----END "
+#define PEM_BEGIN_CERT     "-----BEGIN CERTIFICATE-----"
+#define PEM_END_CERT       "-----END CERTIFICATE-----"
+#define PEM_BEGIN_TRUSTED_CERT "-----BEGIN TRUSTED CERTIFICATE-----"
+#define PEM_END_TRUSTED_CERT   "-----END TRUSTED CERTIFICATE-----"
+#ifndef PEM_BEGIN_PKEY
+#define PEM_BEGIN_PKEY     "-----BEGIN PRIVATE KEY-----"
+#endif
+#ifndef PEM_END_PKEY
+#define PEM_END_PKEY       "-----END PRIVATE KEY-----"
+#endif
+#define PEM_BEGIN_EC_PKEY  "-----BEGIN EC PRIVATE KEY-----"
+#define PEM_END_EC_PKEY    "-----END EC PRIVATE KEY-----"
+#define PEM_BEGIN_RSA_PKEY "-----BEGIN RSA PRIVATE KEY-----"
+#define PEM_END_RSA_PKEY   "-----END RSA PRIVATE KEY-----"
+#define PEM_BEGIN_DSA_PKEY "-----BEGIN DSA PRIVATE KEY-----"
+#define PEM_END_DSA_PKEY   "-----END DSA PRIVATE KEY-----"
+#define PEM_BEGIN_ANY_PKEY "-----BEGIN ANY PRIVATE KEY-----"
+#define PEM_END_ANY_PKEY   "-----END ANY PRIVATE KEY-----"
+/* (not implemented: support to get password from user for encrypted key) */
+#define PEM_BEGIN_ENCRYPTED_PKEY "-----BEGIN ENCRYPTED PRIVATE KEY-----"
+#define PEM_END_ENCRYPTED_PKEY   "-----END ENCRYPTED PRIVATE KEY-----"
+
+#define PEM_BEGIN_X509_CRL "-----BEGIN X509 CRL-----"
+#define PEM_END_X509_CRL   "-----END X509 CRL-----"
+
+
+static CRYPTO_BUFFER **
+mod_boringssl_load_pem_file (const char *fn, log_error_st *errh, size_t *num_certs, int use_pool)
+{
+    /* copied/modified from mod_wolfssl.c:mod_wolfssl_load_pem_file()
+     * to store DER list in (CRYPTO_BUFFER **) rather than (buffer *) */
+    /* A more generic func might be written using BoringSSL PEM_read_bio() */
+    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(fn, &dlen, errh, malloc, free);
+    if (NULL == data) return NULL;
+
+    CRYPTO_BUFFER_POOL * const cbpool =
+      use_pool ? plugin_data_singleton->cbpool : NULL;
+    CRYPTO_BUFFER **certs = NULL;
+    buffer *tb = NULL;
+    int rc = -1;
+    do {
+        int count = 0;
+        char *b = data;
+        for (; (b = strstr(b, PEM_BEGIN_CERT)); b += sizeof(PEM_BEGIN_CERT)-1)
+            ++count;
+        b = data;
+        for (; (b = strstr(b, PEM_BEGIN_TRUSTED_CERT));
+                b += sizeof(PEM_BEGIN_TRUSTED_CERT)-1)
+            ++count;
+        if (0 == count) {
+            rc = 0;
+            if (NULL == strstr(data, "-----")) {
+                /* does not look like PEM, treat as DER format */
+                *num_certs = 1;
+                certs = ck_malloc(sizeof(CRYPTO_BUFFER *));
+                certs[0] =
+                  CRYPTO_BUFFER_new((uint8_t *)data, (size_t)dlen, cbpool);
+            }
+            break;
+        }
+
+        tb = buffer_init();
+        certs = ck_calloc(count, sizeof(CRYPTO_BUFFER *));
+
+        int i = 0;
+        for (char *e = data; (b = strstr(e, PEM_BEGIN_CERT)); ++i) {
+            b += sizeof(PEM_BEGIN_CERT)-1;
+            if (*b == '\r') ++b;
+            if (*b == '\n') ++b;
+            e = strstr(b, PEM_END_CERT);
+            if (NULL == e) break;
+            uint32_t len = (uint32_t)(e - b);
+            e += sizeof(PEM_END_CERT)-1;
+            if (i >= count) break; /*(should not happen)*/
+            buffer_clear(tb);
+            if (NULL == buffer_append_base64_decode(tb,b,len,BASE64_STANDARD))
+                break;
+            certs[i] = CRYPTO_BUFFER_new((uint8_t *)BUF_PTR_LEN(tb), cbpool);
+            if (NULL == certs[i])
+                break;
+        }
+        for (char *e = data; (b = strstr(e, PEM_BEGIN_TRUSTED_CERT)); ++i) {
+            b += sizeof(PEM_BEGIN_TRUSTED_CERT)-1;
+            if (*b == '\r') ++b;
+            if (*b == '\n') ++b;
+            e = strstr(b, PEM_END_TRUSTED_CERT);
+            if (NULL == e) break;
+            uint32_t len = (uint32_t)(e - b);
+            e += sizeof(PEM_END_TRUSTED_CERT)-1;
+            if (i >= count) break; /*(should not happen)*/
+            buffer_clear(tb);
+            if (NULL == buffer_append_base64_decode(tb,b,len,BASE64_STANDARD))
+                break;
+            certs[i] = CRYPTO_BUFFER_new((uint8_t *)BUF_PTR_LEN(tb), cbpool);
+            if (NULL == certs[i])
+                break;
+        }
+        if (i == count) {
+            rc = 0;
+            *num_certs = (size_t)count;
+        }
+        else
+            errno = EIO;
+    } while (0);
+
+    buffer_free(tb);
+    if (dlen) ck_memzero(data, dlen);
+    free(data);
+
+    if (rc < 0) {
+        log_perror(errh, __FILE__, __LINE__, "error loading %s", fn);
+        if (certs) {
+            for (int i = 0; NULL != certs[i]; ++i)
+                CRYPTO_BUFFER_free(certs[i]);
+            free(certs);
+            certs = NULL;
+        }
+    }
+
+    if (certs && !mod_boringssl_cert_is_active(certs[0]))
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: inactive/expired X509 certificate '%s'", fn);
+
+    return certs;
+}
+
+#else /* !BORINGSSL_API_VERSION || BORINGSSL_API_VERSION < 3 */
+
 static X509 *
 mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) **chain)
 {
@@ -2299,10 +2567,18 @@ mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) 
     return x;
 }
 
+#endif /* !BORINGSSL_API_VERSION || BORINGSSL_API_VERSION < 3 */
+
 
 static EVP_PKEY *
 mod_openssl_evp_pkey_load_pem_file (const char *file, log_error_st *errh)
 {
+    /* Note: BoringSSL has OpenSSL interface PEM_read_bio_PrivateKey(),
+     * used here, to parse private key from PEM files.  Another option, which
+     * would avoid the BIO interface, would be to parse numerous private key
+     * types out of the PEM ourself, and then call d2i_AutoPrivateKey() as is
+     * done in mod_openssl_refresh_ech_keys_ctx() */
+
     off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
     char *data = fdevent_load_file(file, &dlen, errh, malloc, free);
     if (NULL == data) return NULL;
@@ -2416,6 +2692,24 @@ mod_openssl_refresh_crl_files (server *srv, const plugin_data *p, const unix_tim
 
 #ifndef OPENSSL_NO_OCSP
 
+#if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+
+static CRYPTO_BUFFER *
+mod_boringssl_load_stapling_file (const char *file, log_error_st *errh)
+{
+    /* load raw .der file */
+    off_t dlen = 1*1024*1024;/*(arbitrary limit: 1 MB file; expect < 1 KB)*/
+    char *data = fdevent_load_file(file, &dlen, errh, malloc, free);
+    if (NULL == data) return NULL;
+
+    CRYPTO_BUFFER *ocsp_staple =
+      CRYPTO_BUFFER_new((uint8_t *)data, (size_t)dlen, NULL);
+    free(data);
+    return ocsp_staple;
+}
+
+#else /* !BORINGSSL_API_VERSION || BORINGSSL_API_VERSION < 3 */
+
 static buffer *
 mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
 {
@@ -2423,7 +2717,7 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
      *
      * Note: for some TLS libs, the OCSP stapling response is not copied when
      * assigned to a session (and is reasonable since not changed frequently)
-     * - BoringSSL SSL_set_ocsp_response()
+     * - BoringSSL SSL_set_ocsp_response() (note: replaced using SSL_CREDENTIAL)
      * - WolfSSL SSL_set_tlsext_status_ocsp_resp() (differs from OpenSSL API)
      * Therefore, there is a potential race condition if the OCSP response is
      * assigned to the session during the handshake and the Server Hello is
@@ -2433,7 +2727,8 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
      * AND the buffer is resized, this would be a problem.  Resizing the buffer
      * is unlikely since updated OSCP response for same certificate are
      * typically the same size with the signature and dates refreshed.
-     */
+     * The above applies to OpenSSL.  Call free() on b->ptr below for older
+     * BoringSSL is no longer race since SSL_CREDENTIAL is used above instead */
 
     /* load raw .der file */
     off_t dlen = 1*1024*1024;/*(arbitrary limit: 1 MB file; expect < 1 KB)*/
@@ -2485,6 +2780,8 @@ mod_openssl_load_stapling_file (const char *file, log_error_st *errh, buffer *b)
 
   #endif
 }
+
+#endif /* !BORINGSSL_API_VERSION || BORINGSSL_API_VERSION < 3 */
 
 #endif /* OPENSSL_NO_OCSP */
 
@@ -2607,6 +2904,7 @@ mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
 
 #ifndef OPENSSL_NO_OCSP
 
+#if !defined(BORINGSSL_API_VERSION) || BORINGSSL_API_VERSION < 3
 static unix_time64_t
 mod_openssl_ocsp_next_update (buffer *der)
 {
@@ -2640,6 +2938,7 @@ mod_openssl_ocsp_next_update (buffer *der)
     return t;
   #endif
 }
+#endif
 
 
 __attribute_cold__
@@ -2651,7 +2950,13 @@ mod_openssl_expire_stapling_file (server *srv, plugin_cert *pc)
         return;
 
     /* discard expired OCSP stapling response */
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    /* note: BoringSSL still sends expired OCSP staple in SSL_CREDENTIAL
+     * (unless we create new kp with new SSL_CREDENTIAL w/o OCSP staple) */
+    CRYPTO_BUFFER_free(kp->ssl_stapling_der);
+  #else
     buffer_free(kp->ssl_stapling_der);
+  #endif
     kp->ssl_stapling_der = NULL;
     if (kp->must_staple)
         log_error(srv->errh, __FILE__, __LINE__,
@@ -2664,18 +2969,68 @@ mod_openssl_expire_stapling_file (server *srv, plugin_cert *pc)
 static int
 mod_openssl_reload_stapling_file (server *srv, plugin_cert *pc, const unix_time64_t cur_ts)
 {
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    CRYPTO_BUFFER *b =
+      mod_boringssl_load_stapling_file(pc->ssl_stapling_file->ptr, srv->errh);
+    if (!b) return 0;
+
+    mod_openssl_kp *kp = pc->kp;
+    if (kp->ssl_stapling_nextts != (time_t)-1) {
+        /* SSL_CREDENTIAL should be treated as immutable once assigned to a
+         * connection, so create new ref-counted kp with new SSL_CREDENTIAL
+         * to update OCSP staple */
+        kp = mod_openssl_kp_init();
+        if (!SSL_CREDENTIAL_set1_cert_chain(kp->cred, pc->kp->ssl_pemfile_x509,
+                                            (size_t)pc->kp->ssl_pemfile_chain)
+            || !SSL_CREDENTIAL_set1_private_key(kp->cred,
+                                                pc->kp->ssl_pemfile_pkey)) {
+            /*(unexpected; already validated in pc->kp->cred)*/
+            mod_openssl_kp_free(kp);
+            CRYPTO_BUFFER_free(b);
+            return 0;
+        }
+    }
+    if (!SSL_CREDENTIAL_set1_ocsp_response(kp->cred, b)) {
+        /* continue without OCSP response if there is an error */
+        /* future: check and warn if kp->must_staple is set */
+        if (kp != pc->kp)
+            mod_openssl_kp_free(kp);
+        CRYPTO_BUFFER_free(b);
+        return 0;
+    }
+    if (kp != pc->kp) {
+        /* move (steal) privkey and chain from old kp */
+        mod_openssl_kp * const okp = pc->kp;
+        kp->ssl_pemfile_pkey = okp->ssl_pemfile_pkey;
+        okp->ssl_pemfile_pkey = NULL;
+        kp->ssl_pemfile_x509 = okp->ssl_pemfile_x509;
+        okp->ssl_pemfile_x509 = NULL;
+        kp->ssl_pemfile_chain = okp->ssl_pemfile_chain;
+        okp->ssl_pemfile_chain = 0;
+        kp->must_staple = okp->must_staple;
+        kp->self_issued = okp->self_issued;
+        kp->next = okp;
+        pc->kp = kp;
+        mod_openssl_kp_rel(okp);
+    }
+  #else
     mod_openssl_kp * const kp = pc->kp;
     buffer *b = mod_openssl_load_stapling_file(pc->ssl_stapling_file->ptr,
                                                srv->errh, kp->ssl_stapling_der);
     if (!b) return 0;
+  #endif
 
     kp->ssl_stapling_der = b; /*(unchanged unless orig was NULL)*/
     kp->ssl_stapling_loadts = cur_ts;
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    kp->ssl_stapling_nextts = (time_t)-1;
+  #else
     kp->ssl_stapling_nextts = mod_openssl_ocsp_next_update(b);
+  #endif
     if (kp->ssl_stapling_nextts == (time_t)-1) {
         /* "Next Update" might not be provided by OCSP responder
          * Use 3600 sec (1 hour) in that case. */
-        /* retry in 1 hour if unable to determine Next Update */
+        /* Trigger reload in 1 hour if unable to determine Next Update */
         kp->ssl_stapling_nextts = cur_ts + 3600;
         kp->ssl_stapling_loadts = 0;
     }
@@ -2725,6 +3080,7 @@ mod_openssl_refresh_stapling_files (server *srv, const plugin_data *p, const uni
 }
 
 
+#if !defined(BORINGSSL_API_VERSION) || BORINGSSL_API_VERSION < 3
 static int
 mod_openssl_crt_must_staple (const X509 *crt)
 {
@@ -2755,6 +3111,7 @@ mod_openssl_crt_must_staple (const X509 *crt)
     return rc; /* 1 if OCSP Must-Staple found; 0 if not */
   #endif
 }
+#endif
 
 #endif /* OPENSSL_NO_OCSP */
 
@@ -2765,17 +3122,25 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
 {
     if (!mod_openssl_init_once_openssl(srv)) return NULL;
 
+    EVP_PKEY *ssl_pemfile_pkey =
+      mod_openssl_evp_pkey_load_pem_file(privkey->ptr, srv->errh);
+    if (NULL == ssl_pemfile_pkey)
+        return NULL;
+
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    size_t ssl_pemfile_chain = 0;
+    CRYPTO_BUFFER **ssl_pemfile_x509 =
+      mod_boringssl_load_pem_file(pemfile->ptr, srv->errh, &ssl_pemfile_chain, 1);
+    if (NULL == ssl_pemfile_x509) {
+        EVP_PKEY_free(ssl_pemfile_pkey);
+        return NULL;
+    }
+  #else
     STACK_OF(X509) *ssl_pemfile_chain = NULL;
     X509 *ssl_pemfile_x509 =
       mod_openssl_load_pem_file(pemfile->ptr, srv->errh, &ssl_pemfile_chain);
-    if (NULL == ssl_pemfile_x509)
-        return NULL;
-
-    EVP_PKEY *ssl_pemfile_pkey =
-      mod_openssl_evp_pkey_load_pem_file(privkey->ptr, srv->errh);
-    if (NULL == ssl_pemfile_pkey) {
-        X509_free(ssl_pemfile_x509);
-        sk_X509_pop_free(ssl_pemfile_chain, X509_free);
+    if (NULL == ssl_pemfile_x509) {
+        EVP_PKEY_free(ssl_pemfile_pkey);
         return NULL;
     }
 
@@ -2789,6 +3154,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
         sk_X509_pop_free(ssl_pemfile_chain, X509_free);
         return NULL;
     }
+  #endif
 
     plugin_cert *pc = ck_malloc(sizeof(plugin_cert));
     mod_openssl_kp * const kp = pc->kp = mod_openssl_kp_init();
@@ -2799,6 +3165,23 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     pc->ssl_privkey = privkey;
     pc->ssl_stapling_file= ssl_stapling_file;
     pc->pkey_ts = log_epoch_secs;
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    /*kp->must_staple = 0;*//* not implemented: obtain value from parsing cert*/
+    /*kp->self_issued = 0;*//* not implemented: obtain value from parsing cert*/
+    /* kp->self_issued used to avoid config for self-signed cert
+     * if auto-chaining is enabled; not done for BoringSSL */
+    if (!SSL_CREDENTIAL_set1_cert_chain(kp->cred, ssl_pemfile_x509,
+                                        ssl_pemfile_chain)
+        || !SSL_CREDENTIAL_set1_private_key(kp->cred, ssl_pemfile_pkey)) {
+        log_error(srv->errh, __FILE__, __LINE__, "SSL:"
+          "SSL_CREDENTIAL init failed; reason: %s %s %s",
+          ERR_error_string(ERR_get_error(), NULL),
+          pemfile->ptr, privkey->ptr);
+        mod_openssl_kp_free(kp);
+        free(pc);
+        return NULL;
+    }
+  #else
   #ifndef OPENSSL_NO_OCSP
     kp->must_staple = mod_openssl_crt_must_staple(ssl_pemfile_x509);
   #else
@@ -2807,10 +3190,13 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     kp->self_issued =
       (0 == X509_NAME_cmp(X509_get_subject_name(ssl_pemfile_x509),
                           X509_get_issuer_name(ssl_pemfile_x509)));
+  #endif
 
     if (pc->ssl_stapling_file) {
       #ifndef OPENSSL_NO_OCSP
+        kp->ssl_stapling_nextts = (time_t)-1; /*flag for BoringSSL to reuse kp*/
         if (!mod_openssl_reload_stapling_file(srv, pc, log_epoch_secs)) {
+            kp->ssl_stapling_nextts = 0;
             /* continue without OCSP response if there is an error */
         }
       #else
@@ -2843,8 +3229,13 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
 {
     const buffer * const name = &hctx->r->uri.authority;
     log_error_st * const errh = hctx->r->conf.errh;
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    size_t ssl_pemfile_chain = 0;
+    CRYPTO_BUFFER **ssl_pemfile_x509 = NULL;
+  #else
     X509 *ssl_pemfile_x509 = NULL;
     STACK_OF(X509) *ssl_pemfile_chain = NULL;
+  #endif
     EVP_PKEY *ssl_pemfile_pkey = NULL;
     size_t len;
     int rc = SSL_TLSEXT_ERR_ALERT_FATAL;
@@ -2869,19 +3260,39 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     len = buffer_clen(b);
 
     do {
+        buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
+        ssl_pemfile_pkey = mod_openssl_evp_pkey_load_pem_file(b->ptr, errh);
+        if (NULL == ssl_pemfile_pkey) {
+            log_error(errh, __FILE__, __LINE__,
+              "SSL: Failed to load acme-tls/1 pemfile: %s", b->ptr);
+            break;
+        }
+
+        buffer_truncate(b, len); /*(remove ".key.pem")*/
         buffer_append_string_len(b, CONST_STR_LEN(".crt.pem"));
+      #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
         ssl_pemfile_x509 =
-          mod_openssl_load_pem_file(b->ptr, errh, &ssl_pemfile_chain);
+          mod_boringssl_load_pem_file(b->ptr, errh, &ssl_pemfile_chain, 0);
         if (NULL == ssl_pemfile_x509) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: Failed to load acme-tls/1 pemfile: %s", b->ptr);
             break;
         }
 
-        buffer_truncate(b, len); /*(remove ".crt.pem")*/
-        buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
-        ssl_pemfile_pkey = mod_openssl_evp_pkey_load_pem_file(b->ptr, errh);
-        if (NULL == ssl_pemfile_pkey) {
+        if (1 != SSL_set_chain_and_key(ssl,
+                                       ssl_pemfile_x509,
+                                       ssl_pemfile_chain, /* num_certs */
+                                       ssl_pemfile_pkey,
+                                       NULL)) {
+            log_error(errh, __FILE__, __LINE__,
+              "SSL: failed to set acme-tls/1 certificate for TLS server "
+              "name %s: %s", name->ptr, ERR_error_string(ERR_get_error(),NULL));
+            break;
+        }
+      #else /* !BORINGSSL_API_VERSION || BORINGSSL_API_VERSION < 3 */
+        ssl_pemfile_x509 =
+          mod_openssl_load_pem_file(b->ptr, errh, &ssl_pemfile_chain);
+        if (NULL == ssl_pemfile_x509) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: Failed to load acme-tls/1 pemfile: %s", b->ptr);
             break;
@@ -2917,6 +3328,7 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
               "name %s: %s", name->ptr, ERR_error_string(ERR_get_error(),NULL));
             break;
         }
+      #endif /* !BORINGSSL_API_VERSION || BORINGSSL_API_VERSION < 3 */
 
         hctx->conf.ssl_verifyclient_enforce = 0;
         SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
@@ -2924,9 +3336,17 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
     } while (0);
 
     if (ssl_pemfile_pkey) EVP_PKEY_free(ssl_pemfile_pkey);
+  #if defined(BORINGSSL_API_VERSION) && BORINGSSL_API_VERSION >= 3
+    if (ssl_pemfile_x509) {
+        for (size_t i = 0; i < ssl_pemfile_chain; ++i)
+            CRYPTO_BUFFER_free(ssl_pemfile_x509[i]);
+        free(ssl_pemfile_x509);
+    }
+  #else
     if (ssl_pemfile_x509) X509_free(ssl_pemfile_x509);
     if (ssl_pemfile_chain)
         sk_X509_pop_free(ssl_pemfile_chain, X509_free);
+  #endif
 
     buffer_free(b);
     return rc;
@@ -3508,6 +3928,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         SSL_CTX_set_cert_cb(s->ssl_ctx, mod_openssl_cert_cb, NULL);
         UNUSED(p);
 
+       #ifndef AWSLC_API_VERSION
+        /* auto-chaining disabled by default in AWS-LC;
+         * lighttpd does not provide config tunable to enable auto-chaining */
        #if defined(BORINGSSL_API_VERSION) /* BoringSSL limitation */
         /* set cert store for auto-chaining
          * BoringSSL does not support SSL_set1_chain_cert_store() in cert_cb */
@@ -3516,6 +3939,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                 return -1;
             SSL_CTX_set_cert_store(s->ssl_ctx, s->ssl_ca_file->store);
         }
+       #endif
        #endif
 
       #else /* OPENSSL_VERSION_NUMBER < 0x10002000 */
@@ -5044,6 +5468,7 @@ mod_openssl_refresh_plugin_ssl_ctx (server * const srv, plugin_ssl_ctx * const s
     s->kp = mod_openssl_kp_acq(s->pc);
 
   #if 0 /* disabled due to openssl quirks selecting incorrect certificate */
+    /* BoringSSL certificate selection also does not currently check SNI */
     if (1 != mod_openssl_SSL_CTX_use_cert_and_key(s->ssl_ctx, s->pc, s->kp)) {
         log_error(srv->errh, __FILE__, __LINE__,
           "SSL: %s %s %s", ERR_error_string(ERR_get_error(), NULL),
