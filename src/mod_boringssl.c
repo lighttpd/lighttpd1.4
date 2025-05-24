@@ -1551,12 +1551,7 @@ network_ssl_servername_callback (SSL *ssl, int *al, void *srv)
     const char *servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
     if (NULL == servername)
         return SSL_TLSEXT_ERR_NOACK; /* client did not provide SNI */
-    size_t len = strlen(servername);
-    int read_ahead = hctx->conf.ssl_read_ahead;
-    int rc = mod_openssl_SNI(hctx, servername, len);
-    if (!read_ahead && hctx->conf.ssl_read_ahead)
-        SSL_set_read_ahead(ssl, hctx->conf.ssl_read_ahead);
-    return rc;
+    return mod_openssl_SNI(hctx, servername, strlen(servername));
 }
 #endif
 
@@ -2382,7 +2377,6 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         }
        #endif
 
-        SSL_CTX_set_read_ahead(s->ssl_ctx, s->ssl_read_ahead);
         SSL_CTX_set_mode(s->ssl_ctx, SSL_CTX_get_mode(s->ssl_ctx)
                                    | SSL_MODE_ENABLE_PARTIAL_WRITE
                                    | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER
@@ -3147,9 +3141,9 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
         return mod_openssl_close_notify(hctx);
 
     ERR_clear_error();
+    int pend = SSL_pending(hctx->ssl);
     do {
-        len = SSL_pending(hctx->ssl);
-        mem_len = len < 2048 ? 2048 : (size_t)len;
+        mem_len = pend < 2048 ? 2048 : (size_t)pend;
         chunk * const ckpt = cq->last;
         mem = chunkqueue_get_memory(cq, &mem_len);
 
@@ -3181,8 +3175,7 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
             hctx->alpn = 0;
         }
       #endif
-    } while (len > 0
-             && (hctx->conf.ssl_read_ahead || SSL_pending(hctx->ssl) > 0));
+    } while (len > 0 && (pend = SSL_pending(hctx->ssl)) > 0);
 
     if (len < 0) {
         int oerrno = errno;
@@ -3385,7 +3378,6 @@ mod_openssl_close_notify(handler_ctx *hctx)
             /* Drain SSL read buffers in case pending records need processing.
              * Limit to reading next record to avoid denial of service when CPU
              * processing TLS is slower than arrival speed of TLS data packets.
-             * (unless hctx->conf.ssl_read_ahead is set)
              *
              * references:
              *
@@ -3408,7 +3400,7 @@ mod_openssl_close_notify(handler_ctx *hctx)
                 do {
                     char buf[4096];
                     ret = SSL_read(hctx->ssl, buf, (int)sizeof(buf));
-                } while (ret > 0 && (hctx->conf.ssl_read_ahead||(ssl_r-=ret)));
+                } while (ret > 0 && (ssl_r -= ret));
             }
 
             ERR_clear_error();
