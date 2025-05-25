@@ -38,6 +38,8 @@
  * providing certificate chains including intermediates, e.g. fullchain.pem.
  * BoringSSL disables the auto-chaining feature when SSL_CREDENTIAL is used,
  * which is now how this module configures certificate selected for connection.
+ * BoringSSL disables auto-chaining when using TLS_with_buffers_method()
+ * optimization, but SSL_CREDENTIAL use already made auto-chaining unavailable.
  *
  * See BUILDING.md in BoringSSL source tree for BoringSSL build instructions.
  * Choose CMAKE_BUILD_TYPE (e.g. Release, MinSizeRel, RelWithDebInfo, etc.)
@@ -1467,9 +1469,6 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
         SSL_set_verify(ssl, mode, verify_callback);
         SSL_set_verify_depth(ssl, hctx->conf.ssl_verifyclient_depth + 1);
     }
-    else {
-        SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
-    }
 
     return 1;
 }
@@ -1763,11 +1762,6 @@ static int
 mod_openssl_reload_crl_file (server *srv, plugin_cacerts *cacerts, const unix_time64_t cur_ts)
 {
     /* CRLs can be updated at any time, though expected on/before Next Update */
-    /* For BoringSSL, SSL_CTX_set_cert_store() is called in network_init_ssl()
-     * to support auto-chaining.  Since only CRLs are updated here, there are
-     * no modifications needed there; the SSL_CTX will keep reference to
-     * original ref-counted X509_STORE for cert auto-chaining.  (Or, we could
-     * add code to resolve all certificate chains at startup.) */
     X509_STORE * const new_store = X509_STORE_new();
     if (NULL == new_store)
         return 0;
@@ -2003,8 +1997,8 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     pc->pkey_ts = log_epoch_secs;
     /*kp->must_staple = 0;*//* not implemented: obtain value from parsing cert*/
     /*kp->self_issued = 0;*//* not implemented: obtain value from parsing cert*/
-    /* kp->self_issued used to avoid config for self-signed cert
-     * if auto-chaining is enabled; not done for BoringSSL */
+    /* kp->self_issued was used to avoid config for self-signed cert
+     * if auto-chaining was enabled; not done for BoringSSL */
     if (!SSL_CREDENTIAL_set1_cert_chain(kp->cred, ssl_pemfile_x509,
                                         ssl_pemfile_chain)
         || !SSL_CREDENTIAL_set1_private_key(kp->cred, ssl_pemfile_pkey)) {
@@ -2109,8 +2103,7 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
             break;
         }
 
-        hctx->conf.ssl_verifyclient_enforce = 0;
-        SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
+        hctx->conf.ssl_verifyclient = 0;
         rc = SSL_TLSEXT_ERR_OK;
     } while (0);
 
@@ -2263,6 +2256,8 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
 }
 
 
+static int mod_boringssl_verifyclient_selective;
+
 static int
 network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
 {
@@ -2279,7 +2274,12 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                         | SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION
                         | SSL_OP_NO_COMPRESSION;
 
-        s->ssl_ctx = SSL_CTX_new(TLS_server_method());
+        /* prefer more efficient BoringSSL API TLS_with_buffers_method()
+         * when client certificate verification not configured */
+        s->ssl_ctx = SSL_CTX_new(!s->ssl_verifyclient
+                                   && !mod_boringssl_verifyclient_selective
+                                 ? TLS_with_buffers_method()
+                                 : TLS_server_method());
         if (NULL == s->ssl_ctx) {
             log_error(srv->errh, __FILE__, __LINE__,
               "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
@@ -2365,18 +2365,6 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         SSL_CTX_set_cert_cb(s->ssl_ctx, mod_openssl_cert_cb, NULL);
         UNUSED(p);
 
-       #ifndef AWSLC_API_VERSION
-        /* auto-chaining disabled by default in AWS-LC;
-         * lighttpd does not provide config tunable to enable auto-chaining */
-        /* set cert store for auto-chaining
-         * BoringSSL does not support SSL_set1_chain_cert_store() in cert_cb */
-        if (s->ssl_ca_file && s->ssl_ca_file->store) {
-            if (!X509_STORE_up_ref(s->ssl_ca_file->store))
-                return -1;
-            SSL_CTX_set_cert_store(s->ssl_ctx, s->ssl_ca_file->store);
-        }
-       #endif
-
         SSL_CTX_set_mode(s->ssl_ctx, SSL_CTX_get_mode(s->ssl_ctx)
                                    | SSL_MODE_ENABLE_PARTIAL_WRITE
                                    | SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER
@@ -2456,6 +2444,27 @@ mod_openssl_set_defaults_sockets(server *srv, plugin_data *p)
     plugin_config_socket defaults;
     memset(&defaults, 0, sizeof(defaults));
     defaults.ssl_cipher_list = &default_ssl_cipher_list;
+
+    /* flag if ssl.verifyclient.activate is enabled in any conditions
+     * which are not global and not $SERVER["socket"], as this prevents
+     * use of TLS_with_buffers_method() optimization vs TLS_server_method()
+     * in network_init_ssl() */
+    for (int i = !p->cvlist[0].v.u2[1]; i < p->nconfig; ++i) {
+        config_cond_info cfginfo;
+        config_get_config_cond_info(&cfginfo, (uint32_t)p->cvlist[i].k_id);
+        if (0 == i || cfginfo.comp == COMP_SERVER_SOCKET) continue;
+        config_plugin_value_t *cpv = p->cvlist + p->cvlist[i].v.u2[0];
+        for (; -1 != cpv->k_id; ++cpv) {
+            switch (cpv->k_id) {
+              case 7: /* ssl.verifyclient.activate */
+                if (0 != cpv->v.u)
+                    mod_boringssl_verifyclient_selective = 1;
+                break;
+              default:
+                break;
+            }
+        }
+    }
 
     /* process and validate config directives for global and $SERVER["socket"]
      * (init i to 0 if global context; to 1 to skip empty global context) */
