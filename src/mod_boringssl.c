@@ -3527,8 +3527,6 @@ __attribute_noinline__
 static void
 https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 {
-    X509 *xs;
-    X509_NAME *xn;
     buffer *vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_VERIFY"));
 
     long vr = SSL_get_verify_result(hctx->ssl);
@@ -3537,15 +3535,26 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
         https_add_ssl_client_verify_err(vb, vr);
         return;
     }
-    else if (!(xs = SSL_get_peer_certificate(hctx->ssl)))
-    {
+
+    const STACK_OF(CRYPTO_BUFFER) * const peer_certs =
+      SSL_get0_peer_certificates(hctx->ssl);
+    if (!peer_certs) {
         buffer_copy_string_len(vb, CONST_STR_LEN("NONE"));
         return;
-    } else {
-        buffer_copy_string_len(vb, CONST_STR_LEN("SUCCESS"));
     }
 
-    xn = X509_get_subject_name(xs);
+    buffer_copy_string_len(vb, CONST_STR_LEN("SUCCESS"));
+
+    CRYPTO_BUFFER * const cert = sk_CRYPTO_BUFFER_value(peer_certs, 0);
+    if (!cert) return;
+  #if 0
+    X509 * const xs = X509_parse_from_buffer(cert);
+  #else /*(avoid extra work above since still using TLS_server_method())*/
+    X509 * const xs = SSL_get_peer_certificate(hctx->ssl);
+  #endif
+    if (!xs) return;
+
+    X509_NAME * const xn = X509_get_subject_name(xs);
     {
         char buf[256];
         int len = safer_X509_NAME_oneline(xn, buf, sizeof(buf));
@@ -3589,16 +3598,43 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
     }
 
     if (hctx->conf.ssl_verifyclient_export_cert) {
-        BIO *bio;
-        if (NULL != (bio = BIO_new(BIO_s_mem()))) {
-            PEM_write_bio_X509(bio, xs);
-            const int n = BIO_pending(bio);
-
-            vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_CERT"));
-            buffer_extend(vb, (uint32_t)n);
-            BIO_read(bio, vb->ptr, n);
-            BIO_free(bio);
+        buffer * const tb = r->tmp_buf;
+        buffer_clear(tb);
+        buffer_append_base64_encode(tb, CRYPTO_BUFFER_data(cert),
+                                    CRYPTO_BUFFER_len(cert), BASE64_STANDARD);
+        vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_CERT"));
+      #if 0 /*(slightly more efficient, but more code)*/
+        char *p = buffer_extend(vb, sizeof(PEM_BEGIN_CERT"\n")
+                                   +buffer_clen(tb)
+                                   +(buffer_clen(tb) >> 6)
+                                   +((buffer_clen(tb) & 0x3F) != 0)
+                                   +sizeof(PEM_END_CERT"\n"));
+        memcpy(p, CONST_STR_LEN(PEM_BEGIN_CERT"\n"));
+        p += sizeof(PEM_BEGIN_CERT"\n")-1;
+        for (uint32_t off = 0, len = buffer_clen(tb); len; ) {
+            const uint32_t n = len > 64 ? 64 : len;
+            memcpy(p, tb->ptr+off, n);
+            p[n] = '\n';
+            p += n + 1;
+            off += n;
+            len -= n;
         }
+        memcpy(p, CONST_STR_LEN(PEM_END_CERT"\n"));
+        /*p += sizeof(PEM_END_CERT"\n")-1;*/
+      #else
+        buffer_string_prepare_append(vb, sizeof(PEM_BEGIN_CERT"\n")
+                                        +buffer_clen(tb)
+                                        +(buffer_clen(tb) >> 6) + 1
+                                        +sizeof(PEM_END_CERT"\n"));
+        buffer_append_string_len(vb, CONST_STR_LEN(PEM_BEGIN_CERT"\n"));
+        for (uint32_t off = 0, len = buffer_clen(tb); len; ) {
+            uint32_t n = len > 64 ? 64 : len;
+            buffer_append_str2(vb, tb->ptr+off, n, CONST_STR_LEN("\n"));
+            off += n;
+            len -= n;
+        }
+        buffer_append_string_len(vb, CONST_STR_LEN(PEM_END_CERT"\n"));
+      #endif
     }
     X509_free(xs);
 }
