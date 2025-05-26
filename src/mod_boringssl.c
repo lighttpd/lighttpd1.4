@@ -106,6 +106,7 @@
 #include <openssl/err.h>
 #include <openssl/objects.h>
 #include <openssl/pem.h>
+#include <openssl/pool.h>
 #include <openssl/rand.h>
 #include <openssl/tls1.h>
 #ifndef OPENSSL_NO_DH
@@ -2285,6 +2286,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
               "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
             return -1;
         }
+        SSL_CTX_set0_buffer_pool(s->ssl_ctx, p->cbpool);
 
       #ifdef SSL_OP_NO_RENEGOTIATION /* openssl 1.1.0 */
         ssloptions |= SSL_OP_NO_RENEGOTIATION;
@@ -2772,6 +2774,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
 
     plugin_data * const p = p_d;
     p->srv = srv;
+    p->cbpool = CRYPTO_BUFFER_POOL_new();
     if (!config_plugin_values_init(srv, p, cpk, "mod_openssl"))
         return HANDLER_ERROR;
 
