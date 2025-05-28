@@ -1720,10 +1720,6 @@ mod_boringssl_load_pem_file (const char *fn, log_error_st *errh, size_t *num_cer
         }
     }
 
-    if (certs && !mod_boringssl_cert_is_active(certs[0]))
-        log_error(errh, __FILE__, __LINE__,
-          "SSL: inactive/expired X509 certificate '%s'", fn);
-
     return certs;
 }
 
@@ -1990,6 +1986,9 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
         EVP_PKEY_free(ssl_pemfile_pkey);
         return NULL;
     }
+    if (!mod_boringssl_cert_is_active(ssl_pemfile_x509[0]))
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: inactive/expired X509 certificate '%s'",ssl_stapling_file->ptr);
 
     plugin_cert *pc = ck_malloc(sizeof(plugin_cert));
     mod_openssl_kp * const kp = pc->kp = mod_openssl_kp_init();
