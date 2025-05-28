@@ -76,12 +76,13 @@
  * by *commenting out* #undef OPENSSL_NO_OCSP below.
  *
  * To allow for removal of older code paths, this module requires at least
- *   BORINGSSL_API_VERSION >= 3 for SSL_CREDENTIAL APIs, TLS_server_method()
+ *   BORINGSSL_API_VERSION >= 3 for TLS_with_buffers_method()
  *   BORINGSSL_API_VERSION >= 5 for BoringSSL impl of various OpenSSL 1.1.0 APIs
  *   BORINGSSL_API_VERSION >= 17 for ECH APIs
  *   BORINGSSL_API_VERSION >= 19 for ASN1_TIME_to_posix()
  *   BORINGSSL_API_VERSION >= 19 for SSL_CTX_set1_groups_list()
- *   BORINGSSL_API_VERSION >= 19 (~Jan 2023; you should use newer)
+ *   BORINGSSL_API_VERSION >= 32 for SSL_CREDENTIAL APIs (unsupported in AWS-LC)
+ *   BORINGSSL_API_VERSION >= 32 (~Mar 2024; you should use newer)
  */
 #include "first.h"
 
@@ -115,6 +116,9 @@
 #ifdef AWSLC_API_VERSION /* alt: OPENSSL_IS_AWSLC */
 /* AWS-LC derived from BoringSSL, but AWSLC_API_VERSION has different meaning.
  * Reuse BORINGSSL_API_VERSION for (presently) small num of API version checks*/
+/* XXX: AWS-LC does not currently support BoringSSL SSL_CREDENTIAL
+ * The last commit which was able to build mod_openssl.c (not mod_boringssl.c)
+ * against AWS-LC was commit 5ac7eecb */
 #ifndef BORINGSSL_API_VERSION
 #define BORINGSSL_API_VERSION 19
 #endif
@@ -122,7 +126,7 @@
 #ifndef BORINGSSL_API_VERSION
 #error "mod_boringssl.c build detected non-BoringSSL headers"
 #endif
-#if BORINGSSL_API_VERSION < 19
+#if BORINGSSL_API_VERSION < 32
 #error "mod_boringssl.c build detected old BoringSSL headers"
 #endif
 #include <openssl/hmac.h>
