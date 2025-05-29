@@ -197,7 +197,7 @@ typedef struct {
 } plugin_ssl_ctx;
 
 typedef struct {
-    STACK_OF(X509_NAME) *names;
+    STACK_OF(CRYPTO_BUFFER) *names;
     X509_STORE *store;
     const char *crl_file;
     unix_time64_t crl_loadts;
@@ -216,7 +216,7 @@ typedef struct {
     /*(copied from plugin_data for socket ssl_ctx config)*/
     plugin_cert *pc;
     const plugin_cacerts *ssl_ca_file;
-    STACK_OF(X509_NAME) *ssl_ca_dn_file;
+    STACK_OF(CRYPTO_BUFFER) *ssl_ca_dn_file;
     const buffer *ssl_ca_crl_file;
     unsigned char ssl_verifyclient;
     unsigned char ssl_verifyclient_enforce;
@@ -228,7 +228,7 @@ typedef struct {
     /* SNI per host: w/ COMP_SERVER_SOCKET, COMP_HTTP_SCHEME, COMP_HTTP_HOST */
     plugin_cert *pc;
     const plugin_cacerts *ssl_ca_file;
-    STACK_OF(X509_NAME) *ssl_ca_dn_file;
+    STACK_OF(CRYPTO_BUFFER) *ssl_ca_dn_file;
     const buffer *ssl_ca_crl_file;
 
     unsigned char ssl_verifyclient;
@@ -1079,14 +1079,14 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
               case 2: /* ssl.ca-file */
                 if (cpv->vtype == T_CONFIG_LOCAL) {
                     plugin_cacerts *cacerts = cpv->v.v;
-                    sk_X509_NAME_pop_free(cacerts->names, X509_NAME_free);
+                    sk_CRYPTO_BUFFER_pop_free(cacerts->names, CRYPTO_BUFFER_free);
                     X509_STORE_free(cacerts->store);
                     free(cacerts);
                 }
                 break;
               case 3: /* ssl.ca-dn-file */
                 if (cpv->vtype == T_CONFIG_LOCAL)
-                    sk_X509_NAME_pop_free(cpv->v.v, X509_NAME_free);
+                    sk_CRYPTO_BUFFER_pop_free(cpv->v.v, CRYPTO_BUFFER_free);
                 break;
               default:
                 break;
@@ -1099,72 +1099,95 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
 }
 
 
-static int
-mod_openssl_load_X509_STORE (const char *file, log_error_st *errh, X509_STORE **chain, BIO *in)
-{
-    X509_STORE *chain_store = NULL;
-    for (X509 *ca; (ca = PEM_read_bio_X509(in,NULL,NULL,NULL)); X509_free(ca)) {
-        if (NULL == chain_store) /*(allocate only if it will not be empty)*/
-            chain_store = X509_STORE_new();
-        if (!chain_store || !X509_STORE_add_cert(chain_store, ca)) {
-            log_error(errh, __FILE__, __LINE__,
-              "SSL: couldn't read X509 certificates from '%s'", file);
-            if (chain_store) X509_STORE_free(chain_store);
-            X509_free(ca);
-            return 0;
-        }
-    }
-    *chain = chain_store;
-    return 1;
-}
-
-
 static plugin_cacerts *
-mod_openssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
+mod_boringssl_load_cacerts_x509 (CRYPTO_BUFFER * const * const certs, size_t num_certs)
 {
-    const char *file = ssl_ca_file->ptr;
-    BIO *in = BIO_new(BIO_s_file());
-    if (NULL == in) {
-        log_error(errh, __FILE__, __LINE__,
-          "SSL: BIO_new(BIO_s_file()) failed");
-        return NULL;
-    }
+    STACK_OF(CRYPTO_BUFFER) *names = sk_CRYPTO_BUFFER_new_null();
+    array *dedupa = array_init((uint32_t)num_certs);
+    X509_STORE * const chain_store = X509_STORE_new();
+    int rc = 0;
+    do {
+        if (NULL == names || NULL == chain_store) break;
 
-    if (BIO_read_filename(in, file) <= 0) {
-        log_error(errh, __FILE__, __LINE__,
-          "SSL: BIO_read_filename('%s') failed", file);
-        BIO_free(in);
-        return NULL;
-    }
+        size_t i;
+        for (i = 0; i < num_certs; ++i) {
+            X509 *x509 = X509_parse_from_buffer(certs[i]);
+            if (NULL == x509 || !X509_STORE_add_cert(chain_store, x509)) {
+                X509_free(x509);
+                break;
+            }
 
-    X509_STORE *chain_store = NULL;
-    if (!mod_openssl_load_X509_STORE(file, errh, &chain_store, in)) {
-        BIO_free(in);
-        return NULL;
-    }
+            uint8_t *subj = NULL;
+            int len = i2d_X509_NAME(X509_get_subject_name(x509), &subj);
+            if (len < 0)
+                break;
+            /* skip duplicates (using a temporary array and binary search)
+             * (expecting short list of certificates and without duplicates) */
+            int *n = array_get_int_ptr(dedupa, (char *)subj, (uint32_t)len);
+            if (*n) {
+                OPENSSL_free(subj);
+                continue;
+            }
+            *n = 1;
+            /* insert into sk, preserving order from (CRYPTO_BUFFER *)certs
+             * (admin might have preferred CA order for client cert selection)*/
+            CRYPTO_BUFFER *subject =
+              CRYPTO_BUFFER_new(subj, len, plugin_data_singleton->cbpool);
+            OPENSSL_free(subj);
+            if (!subject || !sk_CRYPTO_BUFFER_push(names, subject)) {
+                CRYPTO_BUFFER_free(subject);
+                break;
+            }
+        }
+        if (i != num_certs)
+            break;
 
-    BIO_free(in);
+        rc = 1;
+    } while (0);
 
-    if (NULL == chain_store) {
-        log_error(errh, __FILE__, __LINE__,
-          "SSL: ssl.verifyclient.ca-file is empty %s", file);
+    array_free(dedupa);
+
+    if (!rc) {
+        sk_CRYPTO_BUFFER_pop_free(names, CRYPTO_BUFFER_free);
+        X509_STORE_free(chain_store);
         return NULL;
     }
 
     plugin_cacerts *cacerts = ck_malloc(sizeof(plugin_cacerts));
-
-    /* (would be more efficient to walk the X509_STORE and build the list,
-     *  but this works for now and matches how ssl.ca-dn-file is handled) */
-    cacerts->names = SSL_load_client_CA_file(file);
-    if (NULL == cacerts->names) {
-        X509_STORE_free(chain_store);
-        free(cacerts);
-        return NULL;
-    }
-
+    cacerts->names = names;
     cacerts->store = chain_store;
     cacerts->crl_file = NULL;
     cacerts->crl_loadts = 0;
+    return cacerts;
+}
+
+
+static CRYPTO_BUFFER **
+mod_boringssl_load_pem_file (const char *fn, log_error_st *errh, size_t *num_certs, int use_pool);
+
+static plugin_cacerts *
+mod_openssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
+{
+    size_t num_certs = 0;
+    CRYPTO_BUFFER **certs = /* future: use pool (final arg) */
+      mod_boringssl_load_pem_file(ssl_ca_file->ptr, errh, &num_certs, 0);
+    if (NULL == certs) {
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: valid cert(s) not found in ssl.verifyclient.ca-(dn-)file %s",
+          ssl_ca_file->ptr);
+        return NULL;
+    }
+
+    plugin_cacerts *cacerts = mod_boringssl_load_cacerts_x509(certs, num_certs);
+    if (NULL == cacerts)
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: error parsing ssl.verifyclient.ca-(dn-)file %s",
+          ssl_ca_file->ptr);
+
+    for (size_t i = 0; i < num_certs; ++i)
+        CRYPTO_BUFFER_free(certs[i]);
+    free(certs);
+
     return cacerts;
 }
 
@@ -1356,21 +1379,35 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     }
 
     if (preverify_ok && 0 == depth && NULL != hctx->conf.ssl_ca_dn_file) {
-        /* verify that client cert is issued by CA in ssl.ca-dn-file
-         * if both ssl.ca-dn-file and ssl.ca-file were configured */
-        STACK_OF(X509_NAME) * const cert_names = hctx->conf.ssl_ca_dn_file;
-        X509_NAME *issuer;
+        /* verify that client cert is issued by CA in ssl.ca-dn-file, if set */
         err_cert = X509_STORE_CTX_get_current_cert(ctx);
         if (NULL == err_cert) return !hctx->conf.ssl_verifyclient_enforce;
-        issuer = X509_get_issuer_name(err_cert);
-      #if 0 /*(?desirable/undesirable to have cert_names sorted?)*/
-        if (-1 != sk_X509_NAME_find(cert_names, issuer))
+
+        uint8_t *issuer = NULL;
+        int issuer_len = i2d_X509_NAME(X509_get_issuer_name(err_cert), &issuer);
+        if (issuer_len < 0) /*(unexpected)*/
+            issuer_len = 0; /*(cause no match and cert rejection below)*/
+        STACK_OF(CRYPTO_BUFFER) * const ca_dn_names = hctx->conf.ssl_ca_dn_file;
+      #if 0
+          /* copying into CRYPTO_BUFFER and setting stack cmp_func
+           * just to use sk_CRYPTO_BUFFER_find() is excessive
+           * and less efficient than straightforward comparison
+           * (Also, ca_dn_names would need to be sorted at init time,
+           *  and a separate stack kept for ca_dn list sent to client
+           *  in the order given by admin input file (not sorted)) */
+        if (sk_CRYPTO_BUFFER_find(ca_dn_names, NULL, cb_issuer))
             return preverify_ok; /* match */
       #else
-        for (int i = 0, len = sk_X509_NAME_num(cert_names); i < len; ++i) {
-            if (0 == X509_NAME_cmp(sk_X509_NAME_value(cert_names, i), issuer))
+        const size_t ilen = (size_t)issuer_len;
+        for (int i = 0, len = sk_CRYPTO_BUFFER_num(ca_dn_names); i < len; ++i) {
+            const CRYPTO_BUFFER *name = sk_CRYPTO_BUFFER_value(ca_dn_names, i);
+            if (ilen == CRYPTO_BUFFER_len(name)
+                && 0 == memcmp(CRYPTO_BUFFER_data(name), issuer, ilen)) {
+                free(issuer);
                 return preverify_ok; /* match */
+            }
         }
+        free(issuer);
       #endif
 
         preverify_ok = 0;
@@ -1461,13 +1498,10 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
             return 0;
         }
         SSL_set1_verify_cert_store(ssl, hctx->conf.ssl_ca_file->store);
-        /* WTH openssl?  SSL_set_client_CA_list() calls set0_CA_list(),
-         * but there is no set1_CA_list() to simply up the reference count
-         * (without needing to duplicate the list) */
-        STACK_OF(X509_NAME) * const cert_names = hctx->conf.ssl_ca_dn_file
+        STACK_OF(CRYPTO_BUFFER) * const ca_dn_names = hctx->conf.ssl_ca_dn_file
           ? hctx->conf.ssl_ca_dn_file
           : hctx->conf.ssl_ca_file->names;
-        SSL_set_client_CA_list(ssl, SSL_dup_CA_list(cert_names));
+        SSL_set0_client_CAs(ssl, ca_dn_names);
         int mode = SSL_VERIFY_PEER;
         if (hctx->conf.ssl_verifyclient_enforce)
             mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
@@ -2790,8 +2824,6 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
         config_plugin_value_t *pemfile = NULL;
         config_plugin_value_t *privkey = NULL;
         const buffer *ssl_stapling_file = NULL;
-        const buffer *ssl_ca_file = NULL;
-        const buffer *ssl_ca_dn_file = NULL;
         const buffer *ssl_ca_crl_file = NULL;
         plugin_cacerts *cacerts = NULL;
         for (; -1 != cpv->k_id; ++cpv) {
@@ -2808,18 +2840,13 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
               case 2: /* ssl.ca-file */
                 if (buffer_is_blank(cpv->v.b)) break;
                 if (!mod_openssl_init_once_openssl(srv)) return HANDLER_ERROR;
-                ssl_ca_file = cpv->v.b;
-                cpv->v.v = mod_openssl_load_cacerts(ssl_ca_file, srv->errh);
+                cpv->v.v = mod_openssl_load_cacerts(cpv->v.b, srv->errh);
                 if (NULL != cpv->v.v) {
                     cpv->vtype = T_CONFIG_LOCAL;
                     cacerts = (plugin_cacerts *)cpv->v.v;
                 }
-                else {
-                    log_error(srv->errh, __FILE__, __LINE__, "SSL: %s %s",
-                      ERR_error_string(ERR_get_error(), NULL),
-                      ssl_ca_file->ptr);
+                else
                     return HANDLER_ERROR;
-                }
                 break;
               case 16:/* ssl.verifyclient.ca-dn-file */
                 cpv->k_id = 3;
@@ -2827,17 +2854,16 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
               case 3: /* ssl.ca-dn-file */
                 if (buffer_is_blank(cpv->v.b)) break;
                 if (!mod_openssl_init_once_openssl(srv)) return HANDLER_ERROR;
-                ssl_ca_dn_file = cpv->v.b;
-                cpv->v.v = SSL_load_client_CA_file(ssl_ca_dn_file->ptr);
+                cpv->v.v = mod_openssl_load_cacerts(cpv->v.b, srv->errh);
                 if (NULL != cpv->v.v) {
                     cpv->vtype = T_CONFIG_LOCAL;
+                    plugin_cacerts *ca_dn_certs = cpv->v.v;
+                    cpv->v.v = ca_dn_certs->names;
+                    X509_STORE_free(ca_dn_certs->store);
+                    free(ca_dn_certs);
                 }
-                else {
-                    log_error(srv->errh, __FILE__, __LINE__, "SSL: %s %s",
-                      ERR_error_string(ERR_get_error(), NULL),
-                      ssl_ca_dn_file->ptr);
+                else
                     return HANDLER_ERROR;
-                }
                 break;
               case 17:/* ssl.verifyclient.ca-crl-file */
                 cpv->k_id = 4;
