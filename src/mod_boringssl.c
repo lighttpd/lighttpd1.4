@@ -2294,6 +2294,17 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
 }
 
 
+static void
+li_get_current_time (const SSL *ssl, struct timeval *out_clock)
+{
+    /* use cached time in sec since already available; elide excess time() calls
+     * (note: *inappropriate* for DTLS, which uses higher precision timers)
+     * (this lighttpd module does not currently support DTLS) */
+    UNUSED(ssl);
+    out_clock->tv_sec = log_epoch_secs;
+    out_clock->tv_usec = 0;
+}
+
 static int mod_boringssl_verifyclient_selective;
 
 static int
@@ -2324,6 +2335,12 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             return -1;
         }
         SSL_CTX_set0_buffer_pool(s->ssl_ctx, p->cbpool);
+        /* use cached time since already available; elide excess time() calls
+         * (note: *inappropriate* for DTLS, which uses higher precision timers)
+         * (this lighttpd module does not currently support DTLS) */
+        /* (while intended for testing, prototype is public in openssl/ssl.h) */
+        SSL_CTX_set_current_time_cb(s->ssl_ctx, li_get_current_time);
+        SSL_CTX_set_cert_verify_callback(s->ssl_ctx, app_verify_callback, NULL);
 
       #ifdef SSL_OP_NO_RENEGOTIATION /* openssl 1.1.0 */
         ssloptions |= SSL_OP_NO_RENEGOTIATION;
