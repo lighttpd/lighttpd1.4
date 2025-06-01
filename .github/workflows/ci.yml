@@ -367,14 +367,14 @@ jobs:
             mariadb-connector-c-dev postgresql16-dev
             libmaxminddb-dev libunwind-dev lua5.1-dev lua5.4-dev
             libxml2-dev sqlite-dev
-            zlib-static openssl-libs-static
+            zlib-static openssl-libs-static pcre2-static
       - name: Compile and Test
         shell: alpine.sh {0}
         run: |
           set -e
           export SHELL=/bin/sh
           # Alpine Linux wolfssl package built w/o features required by lighttpd
-          #('scons check_fullstatic' needs zlib-static openssl-libs-static)
+          #('scons check_fullstatic' needs *-static packages in list above)
           export NO_WOLFSSL=1
           cd "${{github.workspace}}" && scripts/ci-build.sh meson
           cd "${{github.workspace}}" && scripts/ci-build.sh cmake
