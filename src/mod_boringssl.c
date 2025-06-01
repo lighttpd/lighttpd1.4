@@ -199,6 +199,7 @@ typedef struct {
 typedef struct {
     STACK_OF(CRYPTO_BUFFER) *names;
     X509_STORE *store;
+    STACK_OF(X509_CRL) *sk_crls;
     const char *crl_file;
     unix_time64_t crl_loadts;
 } plugin_cacerts;
@@ -1081,6 +1082,7 @@ mod_openssl_free_config (server *srv, plugin_data * const p)
                     plugin_cacerts *cacerts = cpv->v.v;
                     sk_CRYPTO_BUFFER_pop_free(cacerts->names, CRYPTO_BUFFER_free);
                     X509_STORE_free(cacerts->store);
+                    sk_X509_CRL_pop_free(cacerts->sk_crls, X509_CRL_free);
                     free(cacerts);
                 }
                 break;
@@ -1189,21 +1191,6 @@ mod_openssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
     free(certs);
 
     return cacerts;
-}
-
-
-static int
-mod_openssl_load_cacrls (X509_STORE *store, const char *ssl_ca_crl_file, server *srv)
-{
-    if (1 != X509_STORE_load_locations(store, ssl_ca_crl_file, NULL))
-    {
-        log_error(srv->errh, __FILE__, __LINE__,
-          "SSL: %s %s", ERR_error_string(ERR_get_error(), NULL),
-          ssl_ca_crl_file);
-        return 0;
-    }
-    X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK | X509_V_FLAG_CRL_CHECK_ALL);
-    return 1;
 }
 
 
@@ -1485,14 +1472,11 @@ mod_boringssl_custom_verify_callback (SSL * const ssl, handler_ctx * const hctx)
          *  in SSL_set_verify() with own verify_callback() might be excessive)*/
         X509_VERIFY_PARAM_set_depth(param, hctx->conf.ssl_verifyclient_depth);
 
-      #if 0 /*(inherited from already configured X509_STORE)*/
-        X509_VERIFY_PARAM_set_flags(param, X509_V_FLAG_CRL_CHECK
-                                         | X509_V_FLAG_CRL_CHECK_ALL);
-        /* XXX: if STACK_OF(X509_CRL) built at init, it could be set here
-         *      and avoid the excess locking to copy out of the X509_STORE
-         *      STACK_OF(X509_OBJECT) during verification */
-        /*X509_STORE_CTX_set0_crls(store_ctx, STACK_OF__X509_CRL);*/
-      #endif
+        if (hctx->conf.ssl_ca_file->sk_crls) {
+            X509_STORE_CTX_set0_crls(store_ctx,hctx->conf.ssl_ca_file->sk_crls);
+            X509_VERIFY_PARAM_set_flags(param, X509_V_FLAG_CRL_CHECK
+                                             | X509_V_FLAG_CRL_CHECK_ALL);
+        }
 
       #ifndef OPENSSL_NO_ECH
         /* ClientHelloOuter connections use a different name */
@@ -1544,16 +1528,19 @@ app_verify_callback (X509_STORE_CTX *store_ctx, void *arg)
         return 1; /* feign success */
 
     int rc = mod_boringssl_custom_verify_callback(ssl, hctx);
-    if (rc != X509_V_OK)
+    if (rc != X509_V_OK) {
         X509_STORE_CTX_set_error(store_ctx, rc);
+        return !hctx->conf.ssl_verifyclient_enforce;
+    }
 
-    X509_STORE_CTX_set_depth(store_ctx, hctx->conf.ssl_verifyclient_depth);
-    X509_STORE_CTX_set_time_posix(store_ctx, 0, (int64_t)log_epoch_secs);
-
-    /* XXX: if STACK_OF(X509_CRL) built at init, it could be set here
-     *      and avoid the excess locking to copy out of the X509_STORE
-     *      STACK_OF(X509_OBJECT) during verification */
-    /*X509_STORE_CTX_set0_crls(ctx, STACK_OF__X509_CRL);*/
+    X509_VERIFY_PARAM * const param = X509_STORE_CTX_get0_param(store_ctx);
+    X509_VERIFY_PARAM_set_time_posix(param, (int64_t)log_epoch_secs);
+    X509_VERIFY_PARAM_set_depth(param, hctx->conf.ssl_verifyclient_depth);
+    if (hctx->conf.ssl_ca_file->sk_crls) {
+        X509_STORE_CTX_set0_crls(store_ctx, hctx->conf.ssl_ca_file->sk_crls);
+        X509_VERIFY_PARAM_set_flags(param, X509_V_FLAG_CRL_CHECK
+                                         | X509_V_FLAG_CRL_CHECK_ALL);
+    }
 
     rc = X509_verify_cert(store_ctx);
     if (rc <= 0) {
@@ -1870,7 +1857,7 @@ mod_boringssl_load_pem_file (const char *fn, log_error_st *errh, size_t *num_cer
     free(data);
 
     if (rc < 0) {
-        log_perror(errh, __FILE__, __LINE__, "error loading %s", fn);
+        log_perror(errh, __FILE__, __LINE__, "SSL: error loading %s", fn);
         if (certs) {
             for (int i = 0; NULL != certs[i]; ++i)
                 CRYPTO_BUFFER_free(certs[i]);
@@ -1917,38 +1904,94 @@ mod_openssl_evp_pkey_load_pem_file (const char *file, log_error_st *errh)
 }
 
 
+static STACK_OF(X509_CRL) *
+mod_boringssl_load_crl_file (const char *fn, log_error_st *errh)
+{
+    /* copied/modified from mod_wolfssl.c:mod_wolfssl_load_pem_file()
+     * to store X509_CRLs in STACK_OF(X509_CRL) rather than (buffer *) */
+    /* A more generic func might be written using BoringSSL PEM_read_bio() */
+    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(fn, &dlen, errh, malloc, free);
+    if (NULL == data) return NULL;
+
+    STACK_OF(X509_CRL) *sk_crls = sk_X509_CRL_new_null();
+    buffer *tb = NULL;
+    int rc = -1;
+    do {
+        int count = 0;
+        char *b = data;
+        for (; (b = strstr(b, PEM_BEGIN_X509_CRL)); b += sizeof(PEM_BEGIN_X509_CRL)-1)
+            ++count;
+        if (0 == count) {
+            rc = 0;
+            if (NULL == strstr(data, "-----")) {
+                /* does not look like PEM, treat as DER format */
+                const uint8_t *dp = (uint8_t *)data;
+                X509_CRL *crl = d2i_X509_CRL(NULL, &dp, (long)dlen);
+                if (!crl || !sk_X509_CRL_push(sk_crls, crl)) {
+                    X509_CRL_free(crl);
+                    rc = -1;
+                }
+            }
+            break;
+        }
+
+        tb = buffer_init();
+
+        int i = 0;
+        for (char *e = data; (b = strstr(e, PEM_BEGIN_X509_CRL)); ++i) {
+            b += sizeof(PEM_BEGIN_X509_CRL)-1;
+            if (*b == '\r') ++b;
+            if (*b == '\n') ++b;
+            e = strstr(b, PEM_END_X509_CRL);
+            if (NULL == e) break;
+            uint32_t len = (uint32_t)(e - b);
+            e += sizeof(PEM_END_X509_CRL)-1;
+            if (i >= count) break; /*(should not happen)*/
+            buffer_clear(tb);
+            if (NULL == buffer_append_base64_decode(tb,b,len,BASE64_STANDARD))
+                break;
+            const uint8_t *dp = (uint8_t *)data;
+            X509_CRL *crl = d2i_X509_CRL(NULL, &dp, (long)dlen);
+            if (!crl || !sk_X509_CRL_push(sk_crls, crl)) {
+                X509_CRL_free(crl);
+                break;
+            }
+        }
+        if (i == count)
+            rc = 0;
+    } while (0);
+
+    buffer_free(tb);
+    if (dlen) ck_memzero(data, dlen);
+    free(data);
+
+    if (rc < 0) {
+        errno = EIO;
+        log_perror(errh, __FILE__, __LINE__, "SSL: error loading %s", fn);
+        sk_X509_CRL_pop_free(sk_crls, X509_CRL_free);
+        sk_crls = NULL;
+    }
+
+    return sk_crls;
+}
+
+
 __attribute_noinline__
 static int
 mod_openssl_reload_crl_file (server *srv, plugin_cacerts *cacerts, const unix_time64_t cur_ts)
 {
     /* CRLs can be updated at any time, though expected on/before Next Update */
-    X509_STORE * const new_store = X509_STORE_new();
-    if (NULL == new_store)
-        return 0;
-    X509_STORE * const store = cacerts->store;
-    int rc = 1;
-    /* duplicate X509_STORE with X509 objects and skip CRLs */
-    /* (modelled off X509_STORE_get1_all_certs()) */
-    /*X509_STORE_lock(store);*/
-    STACK_OF(X509_OBJECT) *objs = X509_STORE_get0_objects(store);
-    for (int i = 0, num = sk_X509_OBJECT_num(objs); i < num && rc; ++i) {
-        X509 *cert = X509_OBJECT_get0_X509(sk_X509_OBJECT_value(objs, i));
-        if (cert != NULL)
-            rc = X509_STORE_add_cert(new_store, cert);
+    STACK_OF(X509_CRL) *sk_crls =
+      mod_boringssl_load_crl_file(cacerts->crl_file, srv->errh);
+    /* XXX: not thread-safe if another thread has pointer to sk_crls
+     * and is about to perform client certificate verification */
+    if (sk_crls) {
+        sk_X509_CRL_pop_free(cacerts->sk_crls, X509_CRL_free);
+        cacerts->sk_crls = sk_crls;
+        cacerts->crl_loadts = cur_ts;
     }
-    /*X509_STORE_unlock(store);*/
-
-    if (rc) {
-        rc = mod_openssl_load_cacrls(new_store, cacerts->crl_file, srv);
-        if (rc) {
-            cacerts->crl_loadts = cur_ts;
-            cacerts->store = new_store;
-        }
-    }
-    /* XXX: not thread-safe if another thread has pointer to store and is about
-     * to perform client certificate verification */
-    X509_STORE_free(rc ? store : new_store);
-    return rc;
+    return (sk_crls != NULL);
 }
 
 
