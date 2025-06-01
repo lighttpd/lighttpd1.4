@@ -1343,6 +1343,184 @@ ssl_info_callback (const SSL *ssl, int where, int ret)
   #endif
 }
 
+
+__attribute_cold__
+__attribute_noinline__
+static int
+verify_error_trace (handler_ctx *hctx, X509 *x509, int depth, int err)
+{
+    char buf[256];
+    buf[0] = '\0';
+    if (!x509) {
+        /* SSL_get_peer_certificate() would require X509_free() before return */
+        SSL_SESSION *session = SSL_get0_session(hctx->ssl);
+        x509 = session ? SSL_SESSION_get0_peer(session) : NULL;
+    }
+    if (x509)
+        safer_X509_NAME_oneline(X509_get_subject_name(x509), buf, sizeof(buf));
+    if (err == X509_V_OK)
+        err = X509_V_ERR_UNSPECIFIED;
+    log_error(hctx->errh, __FILE__, __LINE__,
+      "SSL: verify error:num=%d:%s:depth=%d:subject=%s",
+      err, X509_verify_cert_error_string(err), depth, buf);
+    if (   err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
+        || err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT) {
+        safer_X509_NAME_oneline(X509_get_issuer_name(x509), buf, sizeof(buf));
+        log_error(hctx->errh, __FILE__, __LINE__, "SSL: issuer=%s", buf);
+    }
+    return err;
+}
+
+
+/*static enum ssl_verify_result_t*/
+/*custom_verify_callback (SSL *ssl, uint8_t *out_alert)*/
+static int
+mod_boringssl_custom_verify_callback (SSL * const ssl, handler_ctx * const hctx)
+{
+    /*handler_ctx * const hctx = (handler_ctx *) SSL_get_app_data(ssl);*/
+
+    const STACK_OF(CRYPTO_BUFFER) * const peer_certs =
+      SSL_get0_peer_certificates(ssl);
+    if (!peer_certs) { /*(should not happen if custom_verify_callback called)*/
+        /**out_alert = SSL_AD_INTERNAL_ERROR;*/
+        /*return ssl_verify_invalid;*/
+        return verify_error_trace(hctx, NULL, 0, X509_V_ERR_UNSPECIFIED);
+    }
+
+    if (sk_CRYPTO_BUFFER_num(peer_certs) > hctx->conf.ssl_verifyclient_depth) {
+        /* For a server with a well-defined set of trusted CAs, testing length
+         * of chain provided by client is sufficient, rather than the convoluted
+         * steps in the example provided at the bottom of
+         *   https://docs.openssl.org/master/man3/SSL_CTX_set_verify/
+         * which may be better for a client testing the certificate chain
+         * against a large list of public internet CAs */
+        /**out_alert = SSL_AD_UNKNOWN_CA;*/
+        /*return ssl_verify_invalid;*/
+        return
+          verify_error_trace(hctx, NULL, 0, X509_V_ERR_CERT_CHAIN_TOO_LONG);
+    }
+
+    /* (SSL_get_peer_certificate() would require X509_free() before return)*/
+    SSL_SESSION *session = SSL_get0_session(ssl);
+    X509 * const peer_x509 = session ? SSL_SESSION_get0_peer(session) : NULL;
+    /*if (!peer_x509) return ssl_verify_invalid;*/ /*(should not happen here)*/
+    if (!peer_x509)
+        return verify_error_trace(hctx, NULL, 0, X509_V_ERR_UNSPECIFIED);
+
+    if (hctx->conf.ssl_ca_dn_file) {
+        uint8_t *issuer = NULL;
+        /* future: parse issuer from sk_CRYPTO_BUFFER_value(peer_certs, 0) */
+        /* get issuer of peer cert and re-encode name to DER format */
+        int issuer_len = i2d_X509_NAME(X509_get_issuer_name(peer_x509),&issuer);
+
+      #if 0
+        /* copying into CRYPTO_BUFFER and setting stack cmp_func
+         * just to use sk_CRYPTO_BUFFER_find() is excessive
+         * and less efficient than straightforward comparison
+         * (Also, ca_dn_names would need to be sorted at init time,
+         *  and a separate stack kept for ca_dn list sent to client
+         *  in the order given by admin input file (not sorted)) */
+        STACK_OF(CRYPTO_BUFFER) * const ca_dn_names = hctx->conf.ssl_ca_dn_file;
+        if (sk_CRYPTO_BUFFER_find(ca_dn_names, NULL, issuer)) {
+            free(issuer);
+            issuer = NULL;
+        }
+      #else
+        if (issuer_len < 0) /*(unexpected)*/
+            issuer_len = 0; /*(cause no match and cert rejection below)*/
+        const size_t ilen = (size_t)issuer_len;
+        STACK_OF(CRYPTO_BUFFER) * const ca_dn_names = hctx->conf.ssl_ca_dn_file;
+        for (int i = 0, len = sk_CRYPTO_BUFFER_num(ca_dn_names); i < len; ++i) {
+            const CRYPTO_BUFFER *name = sk_CRYPTO_BUFFER_value(ca_dn_names, i);
+            if (ilen == CRYPTO_BUFFER_len(name)
+                && 0 == memcmp(CRYPTO_BUFFER_data(name), issuer, ilen)) {
+                free(issuer);
+                issuer = NULL;
+                break; /* match */
+            }
+        }
+      #endif
+        if (issuer != NULL) {
+            free(issuer);
+            /**out_alert = SSL_AD_BAD_CERTIFICATE;*/
+            /*return ssl_verify_invalid;*/
+            return                               /*?X509_V_ERR_CERT_UNTRUSTED?*/
+              verify_error_trace(hctx, peer_x509, 0, X509_V_ERR_CERT_REJECTED);
+        }
+    }
+
+    return X509_V_OK;
+
+  #if 0 /* handled via app_verify_callback() call to X509_verify_cert() */
+    /* verify client certificate */
+    /* reference: ssl/ssl_x509.cc:ssl_crypto_x509_session_verify_cert_chain() */
+    /* (this block originally coded to be part of custom_verify_callback()) */
+    int rc = -1;
+    X509_STORE_CTX * const store_ctx = X509_STORE_CTX_new();
+    do {
+        if (!store_ctx)
+            break;
+        if (!X509_STORE_CTX_init(store_ctx, hctx->conf.ssl_ca_file->store,
+                                 peer_x509, SSL_get_peer_cert_chain(ssl)))
+            break;
+
+        X509_VERIFY_PARAM * const param = X509_STORE_CTX_get0_param(store_ctx);
+
+      #if 0
+        if (!X509_STORE_CTX_set_default(store_ctx, "ssl_client"))/*client cert*/
+            break;
+      #else
+        X509_VERIFY_PARAM_set_purpose(param, X509_PURPOSE_SSL_CLIENT);
+        X509_VERIFY_PARAM_set_trust(param, X509_TRUST_SSL_CLIENT);
+      #endif
+
+        /* elide extra calls to get time() to check cert and CRL times */
+        X509_VERIFY_PARAM_set_time_posix(param, (int64_t)log_epoch_secs);
+
+        /* could set X509_STORE_set_depth() and inherit from X509_STORE
+         * if lighttpd.conf added requirement that ssl.verifyclient.depth
+         * be configured in same context as CA certs and CRLs.
+         * (https://docs.openssl.org/master/man3/SSL_CTX_set_verify/ example
+         *  setting ssl_verifyclient_depth + 1 and checking depth manually
+         *  in SSL_set_verify() with own verify_callback() might be excessive)*/
+        X509_VERIFY_PARAM_set_depth(param, hctx->conf.ssl_verifyclient_depth);
+
+      #if 0 /*(inherited from already configured X509_STORE)*/
+        X509_VERIFY_PARAM_set_flags(param, X509_V_FLAG_CRL_CHECK
+                                         | X509_V_FLAG_CRL_CHECK_ALL);
+        /* XXX: if STACK_OF(X509_CRL) built at init, it could be set here
+         *      and avoid the excess locking to copy out of the X509_STORE
+         *      STACK_OF(X509_OBJECT) during verification */
+        /*X509_STORE_CTX_set0_crls(store_ctx, STACK_OF__X509_CRL);*/
+      #endif
+
+      #ifndef OPENSSL_NO_ECH
+        /* ClientHelloOuter connections use a different name */
+        const char *name;
+        size_t name_len = 0;
+        SSL_get0_ech_name_override(ssl, &name, &name_len);
+        if (name_len && !X509_VERIFY_PARAM_set1_host(param, name, name_len)))
+            break;
+      #endif
+
+        rc = X509_verify_cert(store_ctx);
+        if (1 != rc) {
+            rc = 0;
+            verify_error_trace(hctx, X509_STORE_CTX_get_current_cert(store_ctx),
+                                     X509_STORE_CTX_get_error_depth(store_ctx),
+                                     X509_STORE_CTX_get_error(store_ctx));
+        }
+    } while (0);
+    if (-1 == rc)
+        verify_error_trace(hctx, peer_x509, 0, X509_V_ERR_UNSPECIFIED);
+
+    X509_STORE_CTX_free(store_ctx);
+    return (1 == rc) ? ssl_verify_ok : ssl_verify_invalid;
+  #endif
+}
+
+
+#if 0
 /* https://wiki.openssl.org/index.php/Manual:SSL_CTX_set_verify(3)#EXAMPLES */
 static int
 verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
@@ -1439,6 +1617,54 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
 
     return !hctx->conf.ssl_verifyclient_enforce;
 }
+#endif
+
+
+static int
+app_verify_callback (X509_STORE_CTX *store_ctx, void *arg)
+{
+    /* Using SSL_CTX_set_cert_verify_callback() to set app_verify_callback
+     * leverages ssl/ssl_x509.cc:ssl_crypto_x509_session_verify_cert_chain()
+     * to set up X509_STORE_CTX.  app_verify_callback() replaces the call
+     * from ssl/ssl_x509.cc:ssl_crypto_x509_session_verify_cert_chain() to
+     * X509_verify_cert(), but this intercepts and then turn around and call
+     * X509_verify_cert().  This is an alternative to custom_verify_callback
+     * which repaces ssl/ssl_x509.cc:ssl_crypto_x509_session_verify_cert_chain()
+     * and results in custom_verify_callback having to replicate X509_STORE_CTX,
+     * which is very complicated. */
+    UNUSED(arg);
+    SSL * const ssl =
+      X509_STORE_CTX_get_ex_data(store_ctx,
+                                 SSL_get_ex_data_X509_STORE_CTX_idx());
+
+    /* SSL_CTX_set_cert_verify_callback() sets callback on SSL_CTX
+     * Skip verification if client certificate verification is not enabled */
+    handler_ctx * const hctx = (handler_ctx *) SSL_get_app_data(ssl);
+    if (!hctx->conf.ssl_verifyclient) /*(certificates were not requested)*/
+        return 1; /* feign success */
+
+    int rc = mod_boringssl_custom_verify_callback(ssl, hctx);
+    if (rc != X509_V_OK)
+        X509_STORE_CTX_set_error(store_ctx, rc);
+
+    X509_STORE_CTX_set_depth(store_ctx, hctx->conf.ssl_verifyclient_depth);
+    X509_STORE_CTX_set_time_posix(store_ctx, 0, (int64_t)log_epoch_secs);
+
+    /* XXX: if STACK_OF(X509_CRL) built at init, it could be set here
+     *      and avoid the excess locking to copy out of the X509_STORE
+     *      STACK_OF(X509_OBJECT) during verification */
+    /*X509_STORE_CTX_set0_crls(ctx, STACK_OF__X509_CRL);*/
+
+    rc = X509_verify_cert(store_ctx);
+    if (rc <= 0) {
+        verify_error_trace(hctx, X509_STORE_CTX_get_current_cert(store_ctx),
+                                 X509_STORE_CTX_get_error_depth(store_ctx),
+                                 X509_STORE_CTX_get_error(store_ctx));
+        rc = !hctx->conf.ssl_verifyclient_enforce;
+    }
+    return rc;
+}
+
 
 enum {
   MOD_OPENSSL_ALPN_HTTP11      = 1
@@ -1505,8 +1731,7 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
         int mode = SSL_VERIFY_PEER;
         if (hctx->conf.ssl_verifyclient_enforce)
             mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
-        SSL_set_verify(ssl, mode, verify_callback);
-        SSL_set_verify_depth(ssl, hctx->conf.ssl_verifyclient_depth + 1);
+        SSL_set_verify(ssl, mode, NULL);
     }
 
     return 1;
