@@ -1882,21 +1882,27 @@ mod_openssl_evp_pkey_load_pem_file (const char *file, log_error_st *errh)
     off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
     char *data = fdevent_load_file(file, &dlen, errh, malloc, free);
     if (NULL == data) return NULL;
+
     EVP_PKEY *x = NULL;
-    BIO *in = BIO_new_mem_buf(data, (int)dlen);
-    if (NULL != in) {
-        x = (NULL != strstr(data, "-----"))
-          ? PEM_read_bio_PrivateKey(in, NULL, NULL, NULL)
-          : d2i_PrivateKey_bio(in, NULL);
-        BIO_free(in);
+    if (NULL != strstr(data, "-----")) {
+        BIO *in = BIO_new_mem_buf(data, (int)dlen);
+        if (NULL != in) {
+            x = PEM_read_bio_PrivateKey(in, NULL, NULL, NULL);
+            BIO_free(in);
+        }
+        else
+            log_error(errh, __FILE__, __LINE__,
+              "SSL: BIO_new/BIO_read_filename('%s') failed", file);
     }
+    else {
+        const uint8_t *d = (uint8_t *)data;
+        x = d2i_AutoPrivateKey(NULL, &d, dlen);
+    }
+
     if (dlen) ck_memzero(data, dlen);
     free(data);
 
-    if (NULL == in)
-        log_error(errh, __FILE__, __LINE__,
-          "SSL: BIO_new/BIO_read_filename('%s') failed", file);
-    else if (NULL == x)
+    if (NULL == x)
         log_error(errh, __FILE__, __LINE__,
           "SSL: couldn't read private key from '%s'", file);
 
