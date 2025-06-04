@@ -365,12 +365,31 @@ __attribute_pure__
 static int
 asn1_pem_begins (const struct iovec *iov, const char *label, size_t llen)
 {
+    /*(presumes input string already matched PEM_BEGIN)*/
+    /*assert(llen > (sizeof(PEM_BEGIN)-1) + 4);*/
     size_t len = iov->iov_len - 1;                   /* remove '\n' */
     len -= (((char *)iov->iov_base)[len-1] == '\r'); /* remove '\r' */
     return len == llen /*(compare middle of string until first trailing '-')*/
         && 0 == memcmp((char *)iov->iov_base + (sizeof(PEM_BEGIN)-1),
                                        label + (sizeof(PEM_BEGIN)-1),
                                        llen  - (sizeof(PEM_BEGIN)-1) - 4);
+}
+
+
+__attribute_pure__
+static int
+asn1_pem_begins_pkey (const struct iovec *iov)
+{
+    /*(presumes input string already matched PEM_BEGIN)*/
+    size_t len = iov->iov_len - 1;                   /* remove '\n' */
+    len -= (((char *)iov->iov_base)[len-1] == '\r'); /* remove '\r' */
+    /*(compare middle of string until first trailing '-')*/
+    return len >= (sizeof(PEM_BEGIN)-1) + (sizeof("PRIVATE KEY-")-1) + 4
+        && 0 == memcmp((char *)iov->iov_base
+                         + iov->iov_len
+                         - (iov->iov_len - len)
+                         - (sizeof("PRIVATE KEY-")-1) - 4,
+                       "PRIVATE KEY-", (sizeof("PRIVATE KEY-")-1));
 }
 
 
@@ -526,10 +545,7 @@ mod_boringssl_pem_parse_evp_pkey_cb (void *cb_arg, struct iovec *vec, size_t nve
     }
 
     for (size_t i = 0; i < nvec; i += 3) {
-        if (   asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_PKEY))
-            || asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_EC_PKEY))
-            || asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_RSA_PKEY))
-            || asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_DSA_PKEY))) {
+        if (asn1_pem_begins_pkey(vec+i)) {
             EVP_PKEY *x = NULL;
             buffer * const tb = buffer_init();
             const uint8_t *d = (uint8_t *)
