@@ -884,21 +884,11 @@ mod_wolfssl_evp_pkey_load_pem_file (const char *fn, log_error_st *errh)
     do {
         /*(expecting single private key in file, so first match)*/
         char *b, *e;
-        if ((b = strstr(data, PEM_BEGIN_PKEY))
-            && (e = strstr(b, PEM_END_PKEY)))
-            b += sizeof(PEM_BEGIN_PKEY)-1;
-        else if ((b = strstr(data, PEM_BEGIN_EC_PKEY))
-                 && (e = strstr(b, PEM_END_EC_PKEY)))
-            b += sizeof(PEM_BEGIN_EC_PKEY)-1;
-        else if ((b = strstr(data, PEM_BEGIN_RSA_PKEY))
-                 && (e = strstr(b, PEM_END_RSA_PKEY)))
-            b += sizeof(PEM_BEGIN_RSA_PKEY)-1;
-        else if ((b = strstr(data, PEM_BEGIN_DSA_PKEY))
-                 && (e = strstr(b, PEM_END_DSA_PKEY)))
-            b += sizeof(PEM_BEGIN_DSA_PKEY)-1;
-        else if ((b = strstr(data, PEM_BEGIN_ANY_PKEY))
-                 && (e = strstr(b, PEM_END_ANY_PKEY)))
-            b += sizeof(PEM_BEGIN_ANY_PKEY)-1;
+        if ((e = strstr(data, PEM_BEGIN))
+                 && (b = strstr(e, "PRIVATE KEY-----"))
+                 && NULL == memchr(e, '\n', (size_t)(b - e))
+                 && (e = strstr(b, PEM_END)))
+            b += sizeof("PRIVATE KEY-----")-1;
         else if (NULL == strstr(data, "-----")) {
             /* does not look like PEM, treat as DER format */
             pkey = buffer_init();
@@ -926,8 +916,8 @@ mod_wolfssl_evp_pkey_load_pem_file (const char *fn, log_error_st *errh)
         if (pkey) {
             wolfSSL_OPENSSL_cleanse(pkey->ptr, pkey->size);
             buffer_free(pkey);
+            pkey = NULL;
         }
-        return NULL;
     }
 
     return pkey;
