@@ -337,6 +337,266 @@ handler_ctx_free (handler_ctx *hctx)
 }
 
 
+#define PEM_BEGIN          "-----BEGIN "
+#define PEM_END            "-----END "
+#define PEM_BEGIN_CERT     "-----BEGIN CERTIFICATE-----"
+#define PEM_END_CERT       "-----END CERTIFICATE-----"
+#define PEM_BEGIN_TRUSTED_CERT "-----BEGIN TRUSTED CERTIFICATE-----"
+#define PEM_END_TRUSTED_CERT   "-----END TRUSTED CERTIFICATE-----"
+#define PEM_BEGIN_PKEY     "-----BEGIN PRIVATE KEY-----"
+#define PEM_END_PKEY       "-----END PRIVATE KEY-----"
+#define PEM_BEGIN_EC_PKEY  "-----BEGIN EC PRIVATE KEY-----"
+#define PEM_END_EC_PKEY    "-----END EC PRIVATE KEY-----"
+#define PEM_BEGIN_RSA_PKEY "-----BEGIN RSA PRIVATE KEY-----"
+#define PEM_END_RSA_PKEY   "-----END RSA PRIVATE KEY-----"
+#define PEM_BEGIN_DSA_PKEY "-----BEGIN DSA PRIVATE KEY-----"
+#define PEM_END_DSA_PKEY   "-----END DSA PRIVATE KEY-----"
+#define PEM_BEGIN_ANY_PKEY "-----BEGIN ANY PRIVATE KEY-----"
+#define PEM_END_ANY_PKEY   "-----END ANY PRIVATE KEY-----"
+/* (not implemented: support to get password from user for encrypted key) */
+#define PEM_BEGIN_ENCRYPTED_PKEY "-----BEGIN ENCRYPTED PRIVATE KEY-----"
+#define PEM_END_ENCRYPTED_PKEY   "-----END ENCRYPTED PRIVATE KEY-----"
+
+#define PEM_BEGIN_X509_CRL "-----BEGIN X509 CRL-----"
+#define PEM_END_X509_CRL   "-----END X509 CRL-----"
+
+
+__attribute_pure__
+static int
+asn1_pem_begins (const struct iovec *iov, const char *label, size_t llen)
+{
+    size_t len = iov->iov_len - 1;                   /* remove '\n' */
+    len -= (((char *)iov->iov_base)[len-1] == '\r'); /* remove '\r' */
+    return len == llen /*(compare middle of string until first trailing '-')*/
+        && 0 == memcmp((char *)iov->iov_base + (sizeof(PEM_BEGIN)-1),
+                                       label + (sizeof(PEM_BEGIN)-1),
+                                       llen  - (sizeof(PEM_BEGIN)-1) - 4);
+}
+
+
+static struct iovec *
+asn1_pem_parse_mem (char *data, size_t dlen, size_t *nvec)
+{
+    /* intended for use on small files which are infrequently read;
+     *   not optimized for highest performance */
+    /* (note: using strstr() and strchr() requires that data[dlen] == '\0') */
+    /* (could be written to use memmem(), but not quite as portable) */
+    /* (could be written to walk data once and resize vec as needed) */
+    size_t count = 0;
+    for (char *b = data; (b = strstr(b, PEM_BEGIN)); b += sizeof(PEM_BEGIN)-1)
+        ++count;
+    if (0 == count) {
+        if (NULL == strstr(data, "-----")) {
+            /* does not look like PEM, treat as DER format */
+            *nvec = 1;
+            struct iovec * const iov = ck_malloc(sizeof(struct iovec));
+            iov[0].iov_base = data;
+            iov[0].iov_len  = dlen;
+            return iov;
+        }
+        return NULL;
+    }
+
+    *nvec = count * 3;
+    struct iovec * const vec = ck_calloc(*nvec, sizeof(struct iovec));
+    struct iovec * iov = vec;
+    for (char *b, *e = data; (b = strstr(e, PEM_BEGIN)); iov += 3) {
+        e = strchr(b + sizeof(PEM_BEGIN)-1, '\n');
+        if (NULL == e) break;
+        iov[0].iov_base = b;
+        iov[0].iov_len  = (size_t)(++e - b);
+        iov[1].iov_base = b = e;
+        e = strstr(b, PEM_END);
+        if (NULL == e) break;
+        iov[1].iov_len  = (size_t)(e - b);
+        iov[2].iov_base = b = e;
+        e = strchr(b + sizeof(PEM_END)-1, '\n');
+        if (NULL == e) break;
+        iov[2].iov_len  = (size_t)(++e - b);
+    }
+    if (iov != (vec + *nvec)) {
+        free(vec);
+        return NULL;
+    }
+
+    return vec;
+}
+
+
+/*
+ * Note: nvec == 1 suggests vec[0].iov_base is DER format
+ *       nvec being multiple of 3 is PEM format, 3 iovecs per PEM item
+ *         -----BEGIN ... -----
+ *         <base64-encoded data>
+ *         -----END ... -----
+ *       (If passing each PEM item to a subsequent func for PEM-decoding,
+ *        the PEM item is vec[i].iov_base with length
+ *        (vec[i].iov_len + vec[i+1].iov_len + vec[i+2].iov_len))
+ *
+ * Callback should copy data of interest and should wipe buffers
+ * of sensitive copies (e.g. after base64-decoding PEM -> DER).
+ */
+typedef void *(*asn1_pem_parse_cb)(void *cb_arg, struct iovec *vec, size_t nvec);
+
+
+static void *
+asn1_pem_parse_file (const char *fn, log_error_st *errh, asn1_pem_parse_cb cb, void *cb_arg)
+{
+    /* (note: dlen must be < 4 GB if 64-bit off_t and 32-bit size_t) */
+    off_t dlen = 16*1024*1024;/*(arbitrary limit: 16 MB file; expect < 1 MB)*/
+    char *data = fdevent_load_file(fn, &dlen, errh, malloc, free);
+    if (NULL == data) return NULL;
+
+    size_t nvec;
+    struct iovec *vec = asn1_pem_parse_mem(data, (size_t)dlen, &nvec);
+    void *rv = (NULL != vec) ? cb(cb_arg, vec, nvec) : NULL;
+
+    if (dlen) ck_memzero(data, dlen);
+    free(data);
+
+    return rv;
+}
+
+
+__attribute_cold__
+static void *
+mod_boringssl_pem_parse_certs_cb (void *cb_arg, struct iovec *vec, size_t nvec)
+{
+    CRYPTO_BUFFER **certs;
+    CRYPTO_BUFFER_POOL * const cbpool =
+      *(size_t *)cb_arg ? plugin_data_singleton->cbpool : NULL;
+    /*(cb_arg overloaded as input flag for 'use_pool' or not)*/
+
+    if (1 == nvec) { /* treat data as single DER */
+        certs = ck_malloc(sizeof(CRYPTO_BUFFER *));
+        certs[0] = CRYPTO_BUFFER_new(vec[0].iov_base, vec[0].iov_len, cbpool);
+        if (certs[0] == NULL) {
+            free(certs);
+            return NULL;
+        }
+        *(size_t *)cb_arg = 1; /* ncerts */
+        return certs;
+    }
+
+    size_t ncerts = 0, i;
+    for (i = 0; i < nvec; i += 3) {
+        if (asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_CERT))
+            || asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_TRUSTED_CERT)))
+            vec[ncerts++] = vec[i+1];
+    }
+    if (0 == ncerts)
+        return NULL;
+
+    certs = ck_calloc(ncerts, sizeof(CRYPTO_BUFFER *));
+    buffer * const tb = buffer_init();
+    for (i = 0; i < ncerts; ++i) {
+        buffer_clear(tb);
+        if (NULL == buffer_append_base64_decode(tb, vec[i].iov_base,
+                                                    vec[i].iov_len,
+                                                BASE64_STANDARD))
+            break;
+        certs[i] = CRYPTO_BUFFER_new((uint8_t *)BUF_PTR_LEN(tb), cbpool);
+        if (NULL == certs[i])
+            break;
+    }
+    buffer_free(tb);
+
+    if (i == ncerts) {
+        *(size_t *)cb_arg = ncerts;
+    }
+    else if (certs) {
+        while (i) CRYPTO_BUFFER_free(certs[--i]);
+        free(certs);
+        certs = NULL;
+    }
+
+    return certs;
+}
+
+
+__attribute_cold__
+static void *
+mod_boringssl_pem_parse_evp_pkey_cb (void *cb_arg, struct iovec *vec, size_t nvec)
+{
+    UNUSED(cb_arg);
+
+    if (1 == nvec) { /* treat data as single DER */
+        const uint8_t *d = (uint8_t *)vec[0].iov_base;
+        return d2i_AutoPrivateKey(NULL, &d, vec[0].iov_len);
+    }
+
+    for (size_t i = 0; i < nvec; i += 3) {
+        if (   asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_PKEY))
+            || asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_EC_PKEY))
+            || asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_RSA_PKEY))
+            || asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_DSA_PKEY))) {
+            buffer * const tb = buffer_init();
+            if (NULL == buffer_append_base64_decode(tb, vec[i+1].iov_base,
+                                                        vec[i+1].iov_len,
+                                                    BASE64_STANDARD))
+                break;
+            const uint8_t *d = (uint8_t *)tb->ptr;
+            EVP_PKEY *x = d2i_AutoPrivateKey(NULL, &d, buffer_clen(tb));
+            ck_memzero(tb->ptr, buffer_clen(tb));
+            return x;
+        }
+    }
+
+    return NULL;
+}
+
+
+__attribute_cold__
+static void *
+mod_boringssl_pem_parse_crls_cb (void *cb_arg, struct iovec *vec, size_t nvec)
+{
+    UNUSED(cb_arg);
+    STACK_OF(X509_CRL) *sk_crls = sk_X509_CRL_new_null();
+
+    if (1 == nvec) { /* treat data as single DER */
+        const uint8_t *dp = (uint8_t *)vec[0].iov_base;
+        X509_CRL *crl = d2i_X509_CRL(NULL, &dp, (long)vec[0].iov_len);
+        if (!crl || !sk_X509_CRL_push(sk_crls, crl)) {
+            X509_CRL_free(crl);
+            sk_X509_CRL_free(sk_crls);
+            return NULL;
+        }
+        return sk_crls;
+    }
+
+    size_t ncrls = 0, i;
+    for (i = 0; i < nvec; i += 3) {
+        if (asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_X509_CRL)))
+            vec[ncrls++] = vec[i+1];
+    }
+    if (0 == ncrls)
+        return NULL;
+
+    buffer * const tb = buffer_init();
+    for (i = 0; i < ncrls; ++i) {
+        buffer_clear(tb);
+        if (NULL == buffer_append_base64_decode(tb, vec[i].iov_base,
+                                                    vec[i].iov_len,
+                                                BASE64_STANDARD))
+            break;
+        const uint8_t *dp = (uint8_t *)tb->ptr;
+        X509_CRL *crl = d2i_X509_CRL(NULL, &dp, (long)buffer_clen(tb));
+        if (!crl || !sk_X509_CRL_push(sk_crls, crl)) {
+            X509_CRL_free(crl);
+            break;
+        }
+    }
+    buffer_free(tb);
+
+    if (i != ncrls) {
+        sk_X509_CRL_pop_free(sk_crls, X509_CRL_free);
+        sk_crls = NULL;
+    }
+
+    return sk_crls;
+}
+
+
 #ifdef TLSEXT_TYPE_session_ticket
 /* ssl/ssl_local.h */
 #define TLSEXT_KEYNAME_LENGTH  16
@@ -583,10 +843,104 @@ mod_openssl_refresh_ech_key_is_ech_only(plugin_ssl_ctx * const s, const char * c
     return NULL;
 }
 
-#define PEM_BEGIN_PKEY      "-----BEGIN PRIVATE KEY-----"
-#define PEM_END_PKEY        "-----END PRIVATE KEY-----"
 #define PEM_BEGIN_ECHCONFIG "-----BEGIN ECHCONFIG-----"
 #define PEM_END_ECHCONFIG   "-----END ECHCONFIG-----"
+
+struct ech_keys_cb_param {
+  SSL_ECH_KEYS *keys;
+  int is_retry_config;
+  buffer *tmp_buf;
+};
+
+__attribute_cold__
+static void *
+mod_boringssl_pem_parse_ech_keys_cb (void *cb_arg, struct iovec *vec, size_t nvec)
+{
+    struct iovec *vec_pkey = NULL;
+    struct iovec *vec_echconfig = NULL;
+    for (size_t i = 0; i < nvec; i += 3) {
+        if (asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_PKEY))) {
+            if (!vec_pkey) /*(expecting only one; take first one)*/
+                vec_pkey = vec+i+1;
+        }
+        else if (asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_ECHCONFIG))) {
+            if (!vec_echconfig) /*(expecting only one; take first one)*/
+                vec_echconfig = vec+i+1;
+        }
+    }
+    if (!vec_pkey || !vec_echconfig)
+        return NULL;
+
+    int rv = 0;
+    EVP_HPKE_KEY key;
+    EVP_HPKE_KEY_zero(&key);
+    const struct ech_keys_cb_param * const params = cb_arg;
+    buffer * const tb = params->tmp_buf;
+    do {
+        buffer_clear(tb);
+        if (NULL == buffer_append_base64_decode(tb, vec_pkey->iov_base,
+                                                    vec_pkey->iov_len,
+                                                BASE64_STANDARD))
+            break;
+
+        const uint8_t *x = (uint8_t *)tb->ptr;
+        EVP_PKEY *pkey = d2i_AutoPrivateKey(NULL, &x, (long)buffer_clen(tb));
+        /*(BoringSSL tools/bssl outputs raw pkey;
+         * handle if that output is subsequently base64-encoded raw pkey)*/
+        /*if (NULL == pkey) break;*/
+
+        const EVP_HPKE_KEM * const kem = (pkey == NULL)
+          ? EVP_hpke_x25519_hkdf_sha256()
+          : EVP_PKEY_id(pkey) == EVP_PKEY_X25519 /* NID_X25519 */
+          ? EVP_hpke_x25519_hkdf_sha256()
+         #ifndef AWSLC_API_VERSION
+          : EVP_PKEY_id(pkey) == EVP_PKEY_EC /* NID_X9_62_id_ecPublicKey */
+          ? EVP_hpke_p256_hkdf_sha256()
+         #endif
+          : NULL;
+        if (NULL == kem) {
+            EVP_PKEY_free(pkey);
+            break;
+        }
+
+        size_t out_len = buffer_clen(tb); /*should be large enough tmp_buf*/
+        rv = (pkey)
+          ? EVP_PKEY_get_raw_private_key(pkey, (uint8_t *)tb->ptr, &out_len)
+          : 1;
+        EVP_PKEY_free(pkey);
+        if (0 == rv)
+            break;
+        rv = 0;
+
+        EVP_HPKE_KEY_zero(&key);
+        if (!EVP_HPKE_KEY_init(&key, kem, (uint8_t *)tb->ptr, out_len))
+            break;
+
+        ck_memzero(tb->ptr, buffer_clen(tb));
+
+        buffer_clear(tb);
+        if (NULL == buffer_append_base64_decode(tb, vec_echconfig->iov_base,
+                                                    vec_echconfig->iov_len,
+                                                BASE64_STANDARD))
+            break;
+
+        /* OpenSSL tool 'openssl ech' ECHConfig begins with 2-byte len;
+         * BoringSSL 'tool/bssl generate-ech' ECHConfig does not */
+        if (buffer_clen(tb) > 2
+            && (uint32_t)((tb->ptr[0]<<4)|tb->ptr[1]) == buffer_clen(tb)-2){
+            memmove(tb->ptr, tb->ptr+2, buffer_clen(tb)-2);
+            buffer_truncate(tb, buffer_clen(tb)-2);
+        }
+
+        rv = SSL_ECH_KEYS_add(params->keys, params->is_retry_config,
+                              (uint8_t *)BUF_PTR_LEN(tb), &key);
+    } while (0);
+    ck_memzero(tb->ptr, buffer_clen(tb));
+    EVP_HPKE_KEY_cleanup(&key);
+
+    return rv ? params->keys : NULL; /*((void *) 'flag' for success or fail)*/
+}
+
 
 #include "sys-dirent.h"
 static int
@@ -685,102 +1039,15 @@ mod_openssl_refresh_ech_keys_ctx (server * const srv, plugin_ssl_ctx * const s, 
         return 0;
     }
 
+    struct ech_keys_cb_param cb_arg = { keys, 0, srv->tmp_buf };
     int rc = 1;
     for (uint32_t i = 0; i < a.used; ++i) {
         buffer * const n = &a.sorted[i]->key;
+        cb_arg.is_retry_config = ((data_integer *)a.sorted[i])->value;
         buffer_append_path_len(kp, BUF_PTR_LEN(n)); /* *.ech */
 
-        int rv = 0;
-        off_t dlen = 64*1024;/*(arbitrary limit: 64 KB file; expect < 1 KB)*/
-        char *data = fdevent_load_file(kp->ptr, &dlen, srv->errh, malloc, free);
-        EVP_HPKE_KEY key;
-        EVP_HPKE_KEY_zero(&key);
-        buffer * const tb = srv->tmp_buf;
-        buffer_clear(tb);
-        do {
-            if (NULL == data) break;
-
-            char *b, *e;
-            uint32_t len;
-            b = strstr(data, PEM_BEGIN_PKEY);
-            if (NULL == b) break;
-            b += sizeof(PEM_BEGIN_PKEY)-1;
-            if (*b == '\r') ++b;
-            if (*b == '\n') ++b;
-            e = strstr(b, PEM_END_PKEY);
-            if (NULL == e) break;
-            len = (uint32_t)(e - b);
-
-            buffer_clear(tb);
-            if (NULL == buffer_append_base64_decode(tb,b,len,BASE64_STANDARD))
-                break;
-
-            const uint8_t *x = (uint8_t *)tb->ptr;
-            EVP_PKEY *pkey = d2i_AutoPrivateKey(NULL,&x,(long)buffer_clen(tb));
-            /*(BoringSSL tools/bssl outputs raw pkey;
-             * handle if that output is subsequently base64-encoded raw pkey)*/
-            /*if (NULL == pkey) break;*/
-
-            const EVP_HPKE_KEM * const kem = (pkey == NULL)
-              ? EVP_hpke_x25519_hkdf_sha256()
-              : EVP_PKEY_id(pkey) == EVP_PKEY_X25519 /* NID_X25519 */
-              ? EVP_hpke_x25519_hkdf_sha256()
-             #ifndef AWSLC_API_VERSION
-              : EVP_PKEY_id(pkey) == EVP_PKEY_EC /* NID_X9_62_id_ecPublicKey */
-              ? EVP_hpke_p256_hkdf_sha256()
-             #endif
-              : NULL;
-            if (NULL == kem) {
-                EVP_PKEY_free(pkey);
-                break;
-            }
-
-            size_t out_len = buffer_clen(tb); /*(large enough)*/
-            rv = (pkey)
-              ? EVP_PKEY_get_raw_private_key(pkey, (uint8_t *)tb->ptr, &out_len)
-              : 1;
-            EVP_PKEY_free(pkey);
-            if (0 == rv)
-                break;
-            rv = 0;
-
-            EVP_HPKE_KEY_zero(&key);
-            if (!EVP_HPKE_KEY_init(&key, kem, (uint8_t *)tb->ptr, out_len))
-                break;
-
-            ck_memzero(tb->ptr, buffer_clen(tb));
-
-            b = strstr(data, PEM_BEGIN_ECHCONFIG);
-            if (NULL == b) break;
-            b += sizeof(PEM_BEGIN_ECHCONFIG)-1;
-            if (*b == '\r') ++b;
-            if (*b == '\n') ++b;
-            e = strstr(b, PEM_END_ECHCONFIG);
-            if (NULL == e) break;
-            len = (uint32_t)(e - b);
-
-            buffer_clear(tb);
-            if (NULL == buffer_append_base64_decode(tb,b,len,BASE64_STANDARD))
-                break;
-
-            /* OpenSSL tool 'openssl ech' ECHConfig begins with 2-byte len;
-             * BoringSSL 'tool/bssl generate-ech' ECHConfig does not */
-            if (buffer_clen(tb) > 2
-                && (uint32_t)((tb->ptr[0]<<4)|tb->ptr[1]) == buffer_clen(tb)-2){
-                memmove(tb->ptr, tb->ptr+2, buffer_clen(tb)-2);
-                buffer_truncate(tb, buffer_clen(tb)-2);
-            }
-
-            const int is_retry_config = ((data_integer *)a.sorted[i])->value;
-            rv = SSL_ECH_KEYS_add(keys, is_retry_config,
-                                  (uint8_t *)BUF_PTR_LEN(tb), &key);
-        } while (0);
-        ck_memzero(tb->ptr, buffer_clen(tb));
-        EVP_HPKE_KEY_cleanup(&key);
-        if (dlen) ck_memzero(data, dlen);
-        free(data);
-
-        if (0 == rv) {
+        if (!asn1_pem_parse_file(kp->ptr, srv->errh,
+                                 mod_boringssl_pem_parse_ech_keys_cb, &cb_arg)){
             char buf[128];
             ERR_error_string_n(ERR_get_error(), buf, sizeof(buf));
             log_error(srv->errh, __FILE__, __LINE__,
@@ -1164,15 +1431,13 @@ mod_boringssl_load_cacerts_x509 (CRYPTO_BUFFER * const * const certs, size_t num
 }
 
 
-static CRYPTO_BUFFER **
-mod_boringssl_load_pem_file (const char *fn, log_error_st *errh, size_t *num_certs, int use_pool);
-
 static plugin_cacerts *
 mod_openssl_load_cacerts (const buffer *ssl_ca_file, log_error_st *errh)
 {
-    size_t num_certs = 0;
-    CRYPTO_BUFFER **certs = /* future: use pool (final arg) */
-      mod_boringssl_load_pem_file(ssl_ca_file->ptr, errh, &num_certs, 0);
+    size_t num_certs = 0; /* overloaded as input param use_pool=0 */
+    CRYPTO_BUFFER **certs =
+      asn1_pem_parse_file(ssl_ca_file->ptr, errh,
+                          mod_boringssl_pem_parse_certs_cb, &num_certs);
     if (NULL == certs) {
         log_error(errh, __FILE__, __LINE__,
           "SSL: valid cert(s) not found in ssl.verifyclient.ca-(dn-)file %s",
@@ -1739,257 +2004,14 @@ mod_boringssl_cert_is_active (CRYPTO_BUFFER *cert)
 }
 
 
-/* BoringSSL OpenSSL compat API does not wipe temp mem used; write our own */
-/* (pemfile might contain private key)*/
-/* code here is based on similar code in mod_nss and mod_wolfssl */
-#include "base64.h"
-
-#define PEM_BEGIN          "-----BEGIN "
-#define PEM_END            "-----END "
-#define PEM_BEGIN_CERT     "-----BEGIN CERTIFICATE-----"
-#define PEM_END_CERT       "-----END CERTIFICATE-----"
-#define PEM_BEGIN_TRUSTED_CERT "-----BEGIN TRUSTED CERTIFICATE-----"
-#define PEM_END_TRUSTED_CERT   "-----END TRUSTED CERTIFICATE-----"
-#ifndef PEM_BEGIN_PKEY
-#define PEM_BEGIN_PKEY     "-----BEGIN PRIVATE KEY-----"
-#endif
-#ifndef PEM_END_PKEY
-#define PEM_END_PKEY       "-----END PRIVATE KEY-----"
-#endif
-#define PEM_BEGIN_EC_PKEY  "-----BEGIN EC PRIVATE KEY-----"
-#define PEM_END_EC_PKEY    "-----END EC PRIVATE KEY-----"
-#define PEM_BEGIN_RSA_PKEY "-----BEGIN RSA PRIVATE KEY-----"
-#define PEM_END_RSA_PKEY   "-----END RSA PRIVATE KEY-----"
-#define PEM_BEGIN_DSA_PKEY "-----BEGIN DSA PRIVATE KEY-----"
-#define PEM_END_DSA_PKEY   "-----END DSA PRIVATE KEY-----"
-#define PEM_BEGIN_ANY_PKEY "-----BEGIN ANY PRIVATE KEY-----"
-#define PEM_END_ANY_PKEY   "-----END ANY PRIVATE KEY-----"
-/* (not implemented: support to get password from user for encrypted key) */
-#define PEM_BEGIN_ENCRYPTED_PKEY "-----BEGIN ENCRYPTED PRIVATE KEY-----"
-#define PEM_END_ENCRYPTED_PKEY   "-----END ENCRYPTED PRIVATE KEY-----"
-
-#define PEM_BEGIN_X509_CRL "-----BEGIN X509 CRL-----"
-#define PEM_END_X509_CRL   "-----END X509 CRL-----"
-
-
-static CRYPTO_BUFFER **
-mod_boringssl_load_pem_file (const char *fn, log_error_st *errh, size_t *num_certs, int use_pool)
-{
-    /* copied/modified from mod_wolfssl.c:mod_wolfssl_load_pem_file()
-     * to store DER list in (CRYPTO_BUFFER **) rather than (buffer *) */
-    /* A more generic func might be written using BoringSSL PEM_read_bio() */
-    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
-    char *data = fdevent_load_file(fn, &dlen, errh, malloc, free);
-    if (NULL == data) return NULL;
-
-    CRYPTO_BUFFER_POOL * const cbpool =
-      use_pool ? plugin_data_singleton->cbpool : NULL;
-    CRYPTO_BUFFER **certs = NULL;
-    buffer *tb = NULL;
-    int rc = -1;
-    do {
-        int count = 0;
-        char *b = data;
-        for (; (b = strstr(b, PEM_BEGIN_CERT)); b += sizeof(PEM_BEGIN_CERT)-1)
-            ++count;
-        b = data;
-        for (; (b = strstr(b, PEM_BEGIN_TRUSTED_CERT));
-                b += sizeof(PEM_BEGIN_TRUSTED_CERT)-1)
-            ++count;
-        if (0 == count) {
-            rc = 0;
-            if (NULL == strstr(data, "-----")) {
-                /* does not look like PEM, treat as DER format */
-                *num_certs = 1;
-                certs = ck_malloc(sizeof(CRYPTO_BUFFER *));
-                certs[0] =
-                  CRYPTO_BUFFER_new((uint8_t *)data, (size_t)dlen, cbpool);
-            }
-            break;
-        }
-
-        tb = buffer_init();
-        certs = ck_calloc(count, sizeof(CRYPTO_BUFFER *));
-
-        int i = 0;
-        for (char *e = data; (b = strstr(e, PEM_BEGIN_CERT)); ++i) {
-            b += sizeof(PEM_BEGIN_CERT)-1;
-            if (*b == '\r') ++b;
-            if (*b == '\n') ++b;
-            e = strstr(b, PEM_END_CERT);
-            if (NULL == e) break;
-            uint32_t len = (uint32_t)(e - b);
-            e += sizeof(PEM_END_CERT)-1;
-            if (i >= count) break; /*(should not happen)*/
-            buffer_clear(tb);
-            if (NULL == buffer_append_base64_decode(tb,b,len,BASE64_STANDARD))
-                break;
-            certs[i] = CRYPTO_BUFFER_new((uint8_t *)BUF_PTR_LEN(tb), cbpool);
-            if (NULL == certs[i])
-                break;
-        }
-        for (char *e = data; (b = strstr(e, PEM_BEGIN_TRUSTED_CERT)); ++i) {
-            b += sizeof(PEM_BEGIN_TRUSTED_CERT)-1;
-            if (*b == '\r') ++b;
-            if (*b == '\n') ++b;
-            e = strstr(b, PEM_END_TRUSTED_CERT);
-            if (NULL == e) break;
-            uint32_t len = (uint32_t)(e - b);
-            e += sizeof(PEM_END_TRUSTED_CERT)-1;
-            if (i >= count) break; /*(should not happen)*/
-            buffer_clear(tb);
-            if (NULL == buffer_append_base64_decode(tb,b,len,BASE64_STANDARD))
-                break;
-            certs[i] = CRYPTO_BUFFER_new((uint8_t *)BUF_PTR_LEN(tb), cbpool);
-            if (NULL == certs[i])
-                break;
-        }
-        if (i == count) {
-            rc = 0;
-            *num_certs = (size_t)count;
-        }
-        else
-            errno = EIO;
-    } while (0);
-
-    buffer_free(tb);
-    if (dlen) ck_memzero(data, dlen);
-    free(data);
-
-    if (rc < 0) {
-        log_perror(errh, __FILE__, __LINE__, "SSL: error loading %s", fn);
-        if (certs) {
-            for (int i = 0; NULL != certs[i]; ++i)
-                CRYPTO_BUFFER_free(certs[i]);
-            free(certs);
-            certs = NULL;
-        }
-    }
-
-    return certs;
-}
-
-
-static EVP_PKEY *
-mod_openssl_evp_pkey_load_pem_file (const char *file, log_error_st *errh)
-{
-    /* Note: BoringSSL has OpenSSL interface PEM_read_bio_PrivateKey(),
-     * used here, to parse private key from PEM files.  Another option, which
-     * would avoid the BIO interface, would be to parse numerous private key
-     * types out of the PEM ourself, and then call d2i_AutoPrivateKey() as is
-     * done in mod_openssl_refresh_ech_keys_ctx() */
-
-    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
-    char *data = fdevent_load_file(file, &dlen, errh, malloc, free);
-    if (NULL == data) return NULL;
-
-    EVP_PKEY *x = NULL;
-    if (NULL != strstr(data, "-----")) {
-        BIO *in = BIO_new_mem_buf(data, (int)dlen);
-        if (NULL != in) {
-            x = PEM_read_bio_PrivateKey(in, NULL, NULL, NULL);
-            BIO_free(in);
-        }
-        else
-            log_error(errh, __FILE__, __LINE__,
-              "SSL: BIO_new/BIO_read_filename('%s') failed", file);
-    }
-    else {
-        const uint8_t *d = (uint8_t *)data;
-        x = d2i_AutoPrivateKey(NULL, &d, dlen);
-    }
-
-    if (dlen) ck_memzero(data, dlen);
-    free(data);
-
-    if (NULL == x)
-        log_error(errh, __FILE__, __LINE__,
-          "SSL: couldn't read private key from '%s'", file);
-
-    return x;
-}
-
-
-static STACK_OF(X509_CRL) *
-mod_boringssl_load_crl_file (const char *fn, log_error_st *errh)
-{
-    /* copied/modified from mod_wolfssl.c:mod_wolfssl_load_pem_file()
-     * to store X509_CRLs in STACK_OF(X509_CRL) rather than (buffer *) */
-    /* A more generic func might be written using BoringSSL PEM_read_bio() */
-    off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
-    char *data = fdevent_load_file(fn, &dlen, errh, malloc, free);
-    if (NULL == data) return NULL;
-
-    STACK_OF(X509_CRL) *sk_crls = sk_X509_CRL_new_null();
-    buffer *tb = NULL;
-    int rc = -1;
-    do {
-        int count = 0;
-        char *b = data;
-        for (; (b = strstr(b, PEM_BEGIN_X509_CRL)); b += sizeof(PEM_BEGIN_X509_CRL)-1)
-            ++count;
-        if (0 == count) {
-            rc = 0;
-            if (NULL == strstr(data, "-----")) {
-                /* does not look like PEM, treat as DER format */
-                const uint8_t *dp = (uint8_t *)data;
-                X509_CRL *crl = d2i_X509_CRL(NULL, &dp, (long)dlen);
-                if (!crl || !sk_X509_CRL_push(sk_crls, crl)) {
-                    X509_CRL_free(crl);
-                    rc = -1;
-                }
-            }
-            break;
-        }
-
-        tb = buffer_init();
-
-        int i = 0;
-        for (char *e = data; (b = strstr(e, PEM_BEGIN_X509_CRL)); ++i) {
-            b += sizeof(PEM_BEGIN_X509_CRL)-1;
-            if (*b == '\r') ++b;
-            if (*b == '\n') ++b;
-            e = strstr(b, PEM_END_X509_CRL);
-            if (NULL == e) break;
-            uint32_t len = (uint32_t)(e - b);
-            e += sizeof(PEM_END_X509_CRL)-1;
-            if (i >= count) break; /*(should not happen)*/
-            buffer_clear(tb);
-            if (NULL == buffer_append_base64_decode(tb,b,len,BASE64_STANDARD))
-                break;
-            const uint8_t *dp = (uint8_t *)data;
-            X509_CRL *crl = d2i_X509_CRL(NULL, &dp, (long)dlen);
-            if (!crl || !sk_X509_CRL_push(sk_crls, crl)) {
-                X509_CRL_free(crl);
-                break;
-            }
-        }
-        if (i == count)
-            rc = 0;
-    } while (0);
-
-    buffer_free(tb);
-    if (dlen) ck_memzero(data, dlen);
-    free(data);
-
-    if (rc < 0) {
-        errno = EIO;
-        log_perror(errh, __FILE__, __LINE__, "SSL: error loading %s", fn);
-        sk_X509_CRL_pop_free(sk_crls, X509_CRL_free);
-        sk_crls = NULL;
-    }
-
-    return sk_crls;
-}
-
-
 __attribute_noinline__
 static int
 mod_openssl_reload_crl_file (server *srv, plugin_cacerts *cacerts, const unix_time64_t cur_ts)
 {
     /* CRLs can be updated at any time, though expected on/before Next Update */
     STACK_OF(X509_CRL) *sk_crls =
-      mod_boringssl_load_crl_file(cacerts->crl_file, srv->errh);
+      asn1_pem_parse_file(cacerts->crl_file, srv->errh,
+                          mod_boringssl_pem_parse_crls_cb, NULL);
     /* XXX: not thread-safe if another thread has pointer to sk_crls
      * and is about to perform client certificate verification */
     if (sk_crls) {
@@ -1997,6 +2019,10 @@ mod_openssl_reload_crl_file (server *srv, plugin_cacerts *cacerts, const unix_ti
         cacerts->sk_crls = sk_crls;
         cacerts->crl_loadts = cur_ts;
     }
+    else
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: error parsing %s", cacerts->crl_file);
+
     return (sk_crls != NULL);
 }
 
@@ -2183,14 +2209,21 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     if (!mod_openssl_init_once_openssl(srv)) return NULL;
 
     EVP_PKEY *ssl_pemfile_pkey =
-      mod_openssl_evp_pkey_load_pem_file(privkey->ptr, srv->errh);
-    if (NULL == ssl_pemfile_pkey)
+      asn1_pem_parse_file(privkey->ptr, srv->errh,
+                          mod_boringssl_pem_parse_evp_pkey_cb, NULL);
+    if (NULL == ssl_pemfile_pkey) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: couldn't read private key from '%s'", privkey->ptr);
         return NULL;
+    }
 
-    size_t ssl_pemfile_chain = 0;
+    size_t ssl_pemfile_chain = 1; /* overloaded as input param use_pool=1 */
     CRYPTO_BUFFER **ssl_pemfile_x509 =
-      mod_boringssl_load_pem_file(pemfile->ptr, srv->errh, &ssl_pemfile_chain, 1);
+      asn1_pem_parse_file(pemfile->ptr, srv->errh,
+                          mod_boringssl_pem_parse_certs_cb, &ssl_pemfile_chain);
     if (NULL == ssl_pemfile_x509) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "SSL: error parsing %s", pemfile->ptr);
         EVP_PKEY_free(ssl_pemfile_pkey);
         return NULL;
     }
@@ -2287,7 +2320,9 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
 
     do {
         buffer_append_string_len(b, CONST_STR_LEN(".key.pem"));
-        ssl_pemfile_pkey = mod_openssl_evp_pkey_load_pem_file(b->ptr, errh);
+        ssl_pemfile_pkey =
+          asn1_pem_parse_file(b->ptr, errh,
+                              mod_boringssl_pem_parse_evp_pkey_cb, NULL);
         if (NULL == ssl_pemfile_pkey) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: Failed to load acme-tls/1 pemfile: %s", b->ptr);
@@ -2297,7 +2332,8 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
         buffer_truncate(b, len); /*(remove ".key.pem")*/
         buffer_append_string_len(b, CONST_STR_LEN(".crt.pem"));
         ssl_pemfile_x509 =
-          mod_boringssl_load_pem_file(b->ptr, errh, &ssl_pemfile_chain, 0);
+          asn1_pem_parse_file(b->ptr, errh, mod_boringssl_pem_parse_certs_cb,
+                              &ssl_pemfile_chain);/* overloaded as use_pool=0 */
         if (NULL == ssl_pemfile_x509) {
             log_error(errh, __FILE__, __LINE__,
               "SSL: Failed to load acme-tls/1 pemfile: %s", b->ptr);
