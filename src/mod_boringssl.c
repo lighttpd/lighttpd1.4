@@ -530,14 +530,16 @@ mod_boringssl_pem_parse_evp_pkey_cb (void *cb_arg, struct iovec *vec, size_t nve
             || asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_EC_PKEY))
             || asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_RSA_PKEY))
             || asn1_pem_begins(vec+i, CONST_STR_LEN(PEM_BEGIN_DSA_PKEY))) {
+            EVP_PKEY *x = NULL;
             buffer * const tb = buffer_init();
-            if (NULL == buffer_append_base64_decode(tb, vec[i+1].iov_base,
-                                                        vec[i+1].iov_len,
-                                                    BASE64_STANDARD))
-                break;
-            const uint8_t *d = (uint8_t *)tb->ptr;
-            EVP_PKEY *x = d2i_AutoPrivateKey(NULL, &d, buffer_clen(tb));
+            const uint8_t *d = (uint8_t *)
+              buffer_append_base64_decode(tb, vec[i+1].iov_base,
+                                              vec[i+1].iov_len,
+                                          BASE64_STANDARD);
+            if (d)
+                x = d2i_AutoPrivateKey(NULL, &d, buffer_clen(tb));
             ck_memzero(tb->ptr, buffer_clen(tb));
+            buffer_free(tb);
             return x;
         }
     }
