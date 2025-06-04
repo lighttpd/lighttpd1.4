@@ -2229,7 +2229,7 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     }
     if (!mod_boringssl_cert_is_active(ssl_pemfile_x509[0]))
         log_error(srv->errh, __FILE__, __LINE__,
-          "SSL: inactive/expired X509 certificate '%s'",ssl_stapling_file->ptr);
+          "SSL: inactive/expired X509 certificate '%s'", pemfile->ptr);
 
     plugin_cert *pc = ck_malloc(sizeof(plugin_cert));
     mod_openssl_kp * const kp = pc->kp = mod_openssl_kp_init();
