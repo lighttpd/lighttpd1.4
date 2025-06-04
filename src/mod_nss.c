@@ -907,21 +907,11 @@ mod_nss_load_config_pkey (const char *fn, CERTCertificate *cert, log_error_st *e
     do {
         /*(expecting single private key in file, so first match)*/
         char *b, *e;
-        if ((b = strstr((char *)f.data, PEM_BEGIN_PKEY))
-            && (e = strstr(b, PEM_END_PKEY)))
-            b += sizeof(PEM_BEGIN_PKEY)-1;
-        else if ((b = strstr((char *)f.data, PEM_BEGIN_EC_PKEY))
-                 && (e = strstr(b, PEM_END_EC_PKEY)))
-            b += sizeof(PEM_BEGIN_EC_PKEY)-1;
-        else if ((b = strstr((char *)f.data, PEM_BEGIN_RSA_PKEY))
-                 && (e = strstr(b, PEM_END_RSA_PKEY)))
-            b += sizeof(PEM_BEGIN_RSA_PKEY)-1;
-        else if ((b = strstr((char *)f.data, PEM_BEGIN_DSA_PKEY))
-                 && (e = strstr(b, PEM_END_DSA_PKEY)))
-            b += sizeof(PEM_BEGIN_DSA_PKEY)-1;
-        else if ((b = strstr((char *)f.data, PEM_BEGIN_ANY_PKEY))
-                 && (e = strstr(b, PEM_END_ANY_PKEY)))
-            b += sizeof(PEM_BEGIN_ANY_PKEY)-1;
+        if ((e = strstr((char *)f.data, PEM_BEGIN))
+                 && (b = strstr(e, "PRIVATE KEY-----"))
+                 && NULL == memchr(e, '\n', (size_t)(b - e))
+                 && (e = strstr(b, PEM_END)))
+            b += sizeof("PRIVATE KEY-----")-1;
         else if (NULL == strstr((char *)f.data, "-----")) {
             der = f; /*(copy struct)*/
             f.type = 0;
