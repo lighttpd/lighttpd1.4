@@ -864,7 +864,7 @@ static int http_response_append_splice(request_st * const r, http_response_opts 
 #endif
 
 
-static int http_response_append_mem(request_st * const r, const char * const mem, size_t len) {
+static int http_response_append_mem(request_st * const r, const char * const mem, uint32_t len) {
     if (r->resp_decode_chunked)
         return http_chunk_decode_append_mem(r, mem, len);
 

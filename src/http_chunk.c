@@ -285,22 +285,24 @@ http_chunk_decode_append_error (request_st * const r, const char *errstr)
 }
 
 static int
-http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
+http_chunk_decode_append_data (request_st * const r, buffer * const mb)
 {
     if (r->gw_dechunk->done) return -1; /*(excess data)*/
 
     buffer * const h = &r->gw_dechunk->b;
     off_t te_chunked = r->gw_dechunk->gw_chunked;
+    const char *mem = mb->ptr;
+    uint32_t len = buffer_clen(mb);
     while (len) {
         if (0 == te_chunked) {
             const char *p;
             unsigned char *s = (unsigned char *)mem;
-            off_t hsz;
+            uint32_t hsz;
             if (buffer_is_blank(h)) {
                 /*(short-circuit common case: complete chunked header line)*/
-                p = memchr(mem, '\n', (size_t)len);
+                p = memchr(mem, '\n', len);
                 if (p) {
-                    hsz = (off_t)(++p - mem);
+                    hsz = (uint32_t)(++p - mem);
                     if (p-1 == mem)
                         p = NULL; /* p checked again below */
                 }
@@ -309,7 +311,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                         return http_chunk_decode_append_error(r,
                           "chunked header line too long");
                     }
-                    buffer_append_string_len(h, mem, (uint32_t)len);
+                    buffer_append_string_len(h, mem, len);
                     break; /* incomplete HTTP chunked header line */
                 }
             }
@@ -317,11 +319,11 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 uint32_t hlen = buffer_clen(h);
                 p = strchr(h->ptr, '\n');
                 if (p)
-                    hsz = (off_t)(++p - h->ptr);
+                    hsz = (uint32_t)(++p - h->ptr);
                 else {
-                    p = memchr(mem, '\n', (size_t)len);
-                    hsz = (p ? (off_t)(++p - mem) : len);
-                    if ((off_t)(1024 - hlen) < hsz) {
+                    p = memchr(mem, '\n', len);
+                    hsz = (p ? (uint32_t)(++p - mem) : len);
+                    if (1024 - hlen < hsz) {
                         return http_chunk_decode_append_error(r,
                           "chunked header line too long");
                     }
@@ -387,7 +389,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                 mlen = (r->conf.max_request_field_size > mlen)
                      ?  r->conf.max_request_field_size - mlen
                      :  0;
-                if ((off_t)mlen < len) {
+                if (mlen < len) {
                     /* truncate excessively long trailers */
                     /* (not truncated; passed as-is if r->resp_send_chunked) */
                     if (r->resp_send_chunked) r->keep_alive = 0;
@@ -406,7 +408,7 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
                     buffer_append_string_len(h, CONST_STR_LEN("\r\n"));
                     break;
                 }
-                buffer_append_string_len(h, mem, (uint32_t)len);
+                buffer_append_string_len(h, mem, len);
                 if ((p = strstr(h->ptr, "\r\n\r\n"))) {
                     r->gw_dechunk->done = r->http_status;
                     if (p[4] != '\0') return -1; /*(excess data)*/
@@ -424,14 +426,15 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
         }
 
         if (te_chunked >= 2) {
-            off_t clen = te_chunked - 2;
-            if (clen > len) clen = len;
+            uint32_t clen = te_chunked - 2 <= (off_t)len
+              ? (uint32_t)(te_chunked - 2)
+              : len;
             if (!r->resp_send_chunked
                 && 0 != http_chunk_append_mem(r, mem, clen))
                 return -1;
             mem += clen;
             len -= clen;
-            te_chunked -= clen;
+            te_chunked -= (off_t)clen;
             if (te_chunked == 2) {
                 if (len >= 2) {
                     if (mem[0] != '\r' || mem[1] != '\n') return -1;
@@ -459,6 +462,25 @@ http_chunk_decode_append_data (request_st * const r, const char *mem, off_t len)
     if (r->gw_dechunk->done)
         r->resp_body_finished = 1;
     r->gw_dechunk->gw_chunked = te_chunked;
+
+    /* no need to decode chunked to immediately re-encode chunked;
+     * pass through chunked encoding as provided by backend,
+     * though it is still parsed (above) to maintain state.
+     * XXX: consider having callers use chunk buffers for hctx->b
+     *      for more efficient data copy avoidance and buffer reuse
+     * note: r->resp_send_chunked = 0 until response headers sent,
+     * which is when Transfer-Encoding: chunked might be chosen */
+    if (r->resp_send_chunked) {
+        r->resp_send_chunked = 0;
+        int rc = mb->size  /* might append to tmpfile; check rc */
+          ? http_chunk_append_buffer(r, mb)
+          : http_chunk_append_mem(r, BUF_PTR_LEN(mb));
+        r->resp_send_chunked = 1;
+        return rc;
+    }
+    else if (mb->size)
+        buffer_clear(mb);
+
     return 0;
 }
 
@@ -470,50 +492,14 @@ int http_chunk_decode_append_buffer(request_st * const r, buffer * const mem)
 
     /*(called by funcs receiving chunked data from backends)*/
     /*(separate from http_chunk_append_buffer() called by numerous others)*/
-
-    /* might avoid copy by transferring buffer if buffer is all data that is
-     * part of large chunked block, but choosing to *not* expand that out here*/
-    if (0 != http_chunk_decode_append_data(r, BUF_PTR_LEN(mem)))
-        return -1;
-
-    /* no need to decode chunked to immediately re-encode chunked;
-     * pass through chunked encoding as provided by backend,
-     * though it is still parsed (above) to maintain state.
-     * XXX: consider having callers use chunk buffers for hctx->b
-     *      for more efficient data copy avoidance and buffer reuse
-     * note: r->resp_send_chunked = 0 until response headers sent,
-     * which is when Transfer-Encoding: chunked might be chosen */
-    if (r->resp_send_chunked) {
-        r->resp_send_chunked = 0;
-        int rc = http_chunk_append_buffer(r, mem); /* might append to tmpfile */
-        r->resp_send_chunked = 1;
-        return rc;
-    }
-    else
-        buffer_clear(mem);
-
-    return 0;
+    return http_chunk_decode_append_data(r, mem);
 }
 
-int http_chunk_decode_append_mem(request_st * const r, const char * const mem, size_t len)
+int http_chunk_decode_append_mem(request_st * const r, const char * const mem, const uint32_t len)
 {
     /*(called by funcs receiving chunked data from backends)*/
     /*(separate from http_chunk_append_mem() called by numerous others)*/
-
-    if (0 != http_chunk_decode_append_data(r, mem, (off_t)len))
-        return -1;
-
-    /* no need to decode chunked to immediately re-encode chunked;
-     * pass through chunked encoding as provided by backend,
-     * though it is still parsed (above) to maintain state.
-     * note: r->resp_send_chunked = 0 until response headers sent,
-     * which is when Transfer-Encoding: chunked might be chosen */
-    if (r->resp_send_chunked) {
-        r->resp_send_chunked = 0;
-        int rc = http_chunk_append_mem(r, mem, len); /*might append to tmpfile*/
-        r->resp_send_chunked = 1;
-        return rc;
-    }
-
-    return 0;
+    buffer mb = { NULL, len+1, 0 };
+    *(const char **)&mb.ptr = mem;
+    return http_chunk_decode_append_data(r, &mb);
 }
