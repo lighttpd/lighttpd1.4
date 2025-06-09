@@ -8,6 +8,7 @@
 #include "buffer.h"
 #include "array.h"
 #include "chunk.h"
+#include "http_header.h"
 #include "http_kv.h"
 
 struct chunkqueue;      /* declaration */
@@ -258,6 +259,19 @@ typedef struct http_header_parse_ctx {
 } http_header_parse_ctx;
 
 
+typedef struct http_trailer_parse_ctx {
+    const char *k;
+    const char *v;
+    uint32_t klen;
+    uint32_t vlen;
+    uint32_t max_request_field_size;
+    uint32_t hlen;
+    unsigned int http_header_strict;
+    enum http_header_e id;
+    const buffer *trailer;
+} http_trailer_parse_ctx;
+
+
 int http_request_validate_pseudohdrs (request_st * restrict r, int scheme, unsigned int http_parseopts);
 int http_request_parse_header (request_st * restrict r, http_header_parse_ctx * restrict hpctx);
 void http_request_headers_process_h2 (request_st * restrict r, int scheme_port);
@@ -265,6 +279,17 @@ void http_request_headers_process (request_st * restrict r, char * restrict hdrs
 int http_request_parse_target(request_st *r, int scheme_port);
 int http_request_host_normalize(buffer *b, int scheme_port);
 int http_request_host_policy(buffer *b, unsigned int http_parseopts, int scheme_port);
+
+__attribute_nonnull__()
+__attribute_pure__
+const char * http_request_field_check_name (const char * restrict k, int klen, unsigned int http_header_strict);
+
+__attribute_nonnull__()
+__attribute_pure__
+const char * http_request_field_check_value (const char * restrict v, uint32_t vlen, unsigned int http_header_strict);
+
+int http_request_trailer_check (request_st * restrict r, http_trailer_parse_ctx * restrict htctx);
+int http_request_trailers_check (request_st * restrict r, char *t, uint32_t tlen, const buffer *trailer);
 
 int64_t li_restricted_strtoint64 (const char *v, const uint32_t vlen, const char ** const err);
 

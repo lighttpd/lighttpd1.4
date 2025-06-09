@@ -2599,7 +2599,12 @@ h2_send_headers (request_st * const r, connection * const con)
 
     const uint32_t dlen = (uint32_t)((char *)dst - tb->ptr);
     const uint32_t flags =
+     #if 1
       (r->resp_body_finished && chunkqueue_is_empty(&r->write_queue))
+     #else /*(see src/response.c:http_response_merge_trailers())*/
+      (r->resp_body_finished && chunkqueue_is_empty(&r->write_queue)
+       && (!r->gw_dechunk || buffer_is_unset(&r->gw_dechunk->b)))
+     #endif
         ? H2_FLAG_END_STREAM
         : 0;
     h2_send_hpack(r, con, tb->ptr, dlen, flags);
@@ -2801,7 +2806,7 @@ h2_send_end_stream_data (request_st * const r, connection * const con);
 __attribute_cold__
 __attribute_noinline__
 static void
-h2_send_end_stream_trailers (request_st * const r, connection * const con, const buffer * const trailers)
+h2_send_end_stream_trailers (request_st * const r, connection * const con, char * const trailers, const uint32_t tlen)
 {
     /*(trailers are merged into response headers if trailers are received before
      * sending response headers to client.  However, if streaming response, then
@@ -2812,7 +2817,7 @@ h2_send_end_stream_trailers (request_st * const r, connection * const con, const
     hoff[0] = 1;                         /* number of lines */
     hoff[1] = 0;                         /* base offset for all lines */
     /*hoff[2] = ...;*/                   /* offset from base for 2nd line */
-    uint32_t rc = http_header_parse_hoff(BUF_PTR_LEN(trailers), hoff);
+    uint32_t rc = http_header_parse_hoff(trailers, tlen, hoff);
     if (0 == rc || rc > USHRT_MAX || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1
         || 1 == hoff[0]) { /*(initial blank line)*/
         /* skip trailers if incomplete, too many fields, or too long (> 64k-1)*/
@@ -2820,22 +2825,25 @@ h2_send_end_stream_trailers (request_st * const r, connection * const con, const
         return;
     }
 
-    char * const ptr = trailers->ptr;
     for (int i = 1; i < hoff[0]; ++i) {
-        char *k = ptr + ((i > 1) ? hoff[i] : 0);
+        char *k = trailers + ((i > 1) ? hoff[i] : 0);
+      #if 0
+        /*(checked in http_request_trailers_check())*/
         if (*k == ':') {
             /*(pseudo-header should not appear in trailers)*/
             h2_send_end_stream_data(r, con);
             return;
         }
-        const char * const colon = memchr(k, ':', ptr+hoff[i+1]-k);
-        if (NULL == colon) continue;
+      #endif
+        const char * const colon = memchr(k, ':', trailers+hoff[i+1]-k);
+        /*(checked in http_request_trailers_check())*/
+        /*if (NULL == colon) continue;*/
         do {
             if (light_isupper(*k)) *k |= 0x20;
         } while (++k != colon);
     }
 
-    h2_send_headers_hoff(r, con, ptr, hoff, H2_FLAG_END_STREAM);
+    h2_send_headers_hoff(r, con, trailers, hoff, H2_FLAG_END_STREAM);
 }
 
 
@@ -2955,6 +2963,7 @@ h2_send_cqdata (request_st * const r, connection * const con, chunkqueue * const
 
     /* XXX: does not provide an optimization to send final set of data with
      *      END_STREAM flag; see h2_send_end_stream_data() to end stream */
+    /*      (and would also have to add check for trailers before END_STREAM) */
 
     /* adjust stream and connection windows */
     /*assert(dlen <= INT32_MAX);*//* dlen should be <= MAX_WRITE_LIMIT */
@@ -3085,9 +3094,17 @@ h2_send_end_stream (request_st * const r, connection * const con)
     if (r->x.h2.state == H2_STATE_CLOSED) return;
     if (r->state != CON_STATE_ERROR && r->resp_body_finished) {
         /* CON_STATE_RESPONSE_END */
-        if (r->gw_dechunk && r->gw_dechunk->done
-            && !buffer_is_unset(&r->gw_dechunk->b))
-            h2_send_end_stream_trailers(r, con, &r->gw_dechunk->b);
+        buffer *b;
+        char *t;
+        if (r->http_status != 204 && r->http_status != 304
+            && r->gw_dechunk && r->gw_dechunk->done
+            && !buffer_is_unset(&r->gw_dechunk->b)
+               /* step over initial "0\r\n" */
+            && (t = strchr((b = &r->gw_dechunk->b)->ptr, '\n'))) {
+            ++t;
+            h2_send_end_stream_trailers(r, con, t, buffer_clen(b)
+                                                   - (uint32_t)(t - b->ptr));
+        }
         else
             h2_send_end_stream_data(r, con);
     }

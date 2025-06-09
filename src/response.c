@@ -565,10 +565,19 @@ __attribute_cold__
 static void
 http_response_merge_trailers (request_st * const r)
 {
+  #if 0
+    /* HTTP/2 protocol has framing support for trailers, but many client
+     * implementations (including popular browsers) lack generic support,
+     * so comment this out to prefer to merge trailers into headers when
+     * not streaming response.  If this is enabled, also modify the end of
+     * src/h2.c:h2_send_headers() to handle trailers with empty response body */
+    if (r->http_version >= HTTP_VERSION_2) return; /*see h2_send_end_stream()*/
+  #endif
+
     /* attempt to merge trailers into headers; header not yet sent by caller */
     if (buffer_is_blank(&r->gw_dechunk->b)) return;
     const int done = r->gw_dechunk->done;
-    if (!done) return; /* XXX: !done; could scan for '\n' and send only those */
+    if (!done) return;
 
     /* do not include trailers if success status (when response was read from
      * backend) subsequently changed to error status.  http_chunk could add the
@@ -576,24 +585,33 @@ http_response_merge_trailers (request_st * const r)
      * http_chunk.c */
     if (done < 400 && r->http_status >= 400) return;
 
-    /* XXX: trailers passed through; no sanity check currently done
-     * https://tools.ietf.org/html/rfc7230#section-4.1.2
-     *
-     * Not checking for disallowed fields
-     * Not handling (deprecated) line wrapping
-     * Not strictly checking fields
-     */
     const char *k = strchr(r->gw_dechunk->b.ptr, '\n'); /*(skip final chunk)*/
     if (NULL == k) return; /*(should not happen)*/
     ++k;
     for (const char *v, *e; (e = strchr(k, '\n')); k = e+1) {
         v = memchr(k, ':', (size_t)(e - k));
-        if (NULL == v || v == k || *k == ' ' || *k == '\t') continue;
+        /*(checked in http_request_trailers_check())*/
+        /*if (NULL == v || v == k || *k == ' ' || *k == '\t') continue;*/
+        if (NULL == v) break; /*(final blank line; v already validated)*/
         uint32_t klen = (uint32_t)(v - k);
         do { ++v; } while (*v == ' ' || *v == '\t');
-        if (*v == '\r' || *v == '\n') continue;
+        /*(checked in http_request_trailers_check())*/
+        /*if (*v == '\r' || *v == '\n') continue;*/
         enum http_header_e id = http_header_hkey_get(k, klen);
-        http_header_response_insert(r, id, k, klen, v, (size_t)(e - v));
+        uint32_t vlen = (uint32_t)(e - v);
+        if (e[-1] == '\r') --vlen;
+        /* RFC9110 https://www.rfc-editor.org/rfc/rfc9110.html
+         * Section B.2. "Changes from RFC 7230" encourages implementations
+         * to avoid merging trailers into headers if the implementation
+         * does not have full knowledge of each field permitting merge and
+         * defining how to merge.  ... In other words, merging to headers is
+         * discouraged.  This code might move in that direction in the future,
+         * though de-chunking (and either merging or dropping trailers) is
+         * simpler for naive HTTP/1.x clients to handle properly.
+         * RFC9110 mentions only a few fields explicitly allowed in trailers:
+         * ETag, Authentication-Info, Proxy-Authentication-Info, Accept-Ranges
+         * (Additionally, browser clients tend to recognize Server-Timing) */
+        http_header_response_insert(r, id, k, klen, v, vlen);
     }
     http_header_response_unset(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Trailer"));
     buffer_clear(&r->gw_dechunk->b);
