@@ -45,7 +45,6 @@ static void test_http_header_tables (void) {
           case HTTP_HEADER_DNT:
           case HTTP_HEADER_ETAG:
           case HTTP_HEADER_EXPECT:
-          case HTTP_HEADER_EXPECT_CT:
           case HTTP_HEADER_EXPIRES:
           case HTTP_HEADER_FORWARDED:
           case HTTP_HEADER_HOST:
