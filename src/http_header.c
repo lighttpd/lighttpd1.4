@@ -155,7 +155,14 @@ int http_header_str_contains_token (const char * const s, const uint32_t slen, c
         if (slen - i < mlen) return 0;
         if (buffer_eq_icase_ssn(s+i, m, mlen)) {
             i += mlen;
+          #if 0
+            /* XXX: could do even stricter parse to validate optional ";q=x.x"
+             * and parse to next ',' or end of string; not done here */
+            while (i<slen &&(s[i]==' ' || s[i]=='\t')) ++i;
+            if (i == slen || s[i]==',' || s[i]==';')
+          #else
             if (i == slen || s[i]==' ' || s[i]=='\t' || s[i]==',' || s[i]==';')
+          #endif
                 return 1;
         }
         while (i < slen &&   s[i]!=',') ++i;
