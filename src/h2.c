@@ -2609,6 +2609,11 @@ h2_send_headers (request_st * const r, connection * const con)
 __attribute_cold__
 __attribute_noinline__
 static void
+h2_send_headers_hoff (request_st * const r, connection * const con, const char *hdrs, const unsigned short hoff[8192], uint32_t flags);
+
+__attribute_cold__
+__attribute_noinline__
+static void
 h2_send_headers_block (request_st * const r, connection * const con, const char *hdrs, const uint32_t hlen, uint32_t flags)
 {
     unsigned short hoff[8192]; /* max num header lines + 3; 16k on stack */
@@ -2633,7 +2638,14 @@ h2_send_headers_block (request_st * const r, connection * const con, const char 
         }
       #endif
     }
+    h2_send_headers_hoff(r, con, hdrs, hoff, flags);
+}
 
+__attribute_cold__
+__attribute_noinline__
+static void
+h2_send_headers_hoff (request_st * const r, connection * const con, const char *hdrs, const unsigned short hoff[8192], uint32_t flags)
+{
     /*(h2_init_con() resized h2r->tmp_buf to 64k; shared with r->tmp_buf)*/
     buffer * const tb = r->tmp_buf;
     force_assert(tb->size >= 65536);/*(sanity check; remove in future)*/
@@ -2823,7 +2835,7 @@ h2_send_end_stream_trailers (request_st * const r, connection * const con, const
         } while (++k != colon);
     }
 
-    h2_send_headers_block(r, con, BUF_PTR_LEN(trailers), H2_FLAG_END_STREAM);
+    h2_send_headers_hoff(r, con, ptr, hoff, H2_FLAG_END_STREAM);
 }
 
 
