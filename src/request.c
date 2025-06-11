@@ -93,6 +93,14 @@ static const char * http_request_check_line_minimal (const char * const restrict
     return NULL;
 }
 
+__attribute_nonnull__()
+__attribute_pure__
+const char * http_request_field_check_value (const char * const restrict v, const uint32_t vlen, const unsigned int http_header_strict) {
+    return (http_header_strict)
+      ? http_request_check_line_strict(v, vlen)
+      : http_request_check_line_minimal(v, vlen);
+}
+
 static int request_check_hostname(buffer * const host) {
     /*
      *       hostport      = host [ ":" port ]
@@ -758,9 +766,8 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
             const unsigned int http_header_strict =
               (hpctx->http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
-            const char * const x = (http_header_strict)
-              ? http_request_check_line_strict(v, vlen)
-              : http_request_check_line_minimal(v, vlen);
+            const char * const x =
+              http_request_field_check_value(v, vlen, http_header_strict);
             if (x)
                 return http_request_header_char_invalid(r, *x,
                   "invalid character in header -> 400");
@@ -1455,9 +1462,9 @@ http_request_trailer_check (request_st * const restrict r, http_trailer_parse_ct
               "forbidden trailer");
     }
 
-    const char * const x = (tpctx->http_header_strict)
-      ? http_request_check_line_strict(tpctx->v, tpctx->vlen)
-      : http_request_check_line_minimal(tpctx->v, tpctx->vlen);
+    const char * const x =
+      http_request_field_check_value(tpctx->v, tpctx->vlen,
+                                     tpctx->http_header_strict);
     if (x)
         return http_request_header_char_invalid(r, *x,
           "invalid character in trailer");
@@ -1522,9 +1529,9 @@ http_request_trailers_check (request_st * const restrict r, char *t, uint32_t tl
                   "missing CR before LF in trailer");
             /*(enforce strict policy for trailers)*/
             const int http_header_strict = 1;
-            const char * const x = (http_header_strict)
-              ? http_request_check_line_strict(k, (uint32_t)(end - k - 2))
-              : http_request_check_line_minimal(k, (uint32_t)(end - k - 2));
+            const char * const x =
+              http_request_field_check_value(k, (uint32_t)(end - k - 2),
+                                             http_header_strict);
             if (x)
                 return http_request_header_char_invalid(r, *x,
                   "invalid character in trailer");

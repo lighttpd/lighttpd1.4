@@ -282,10 +282,6 @@ int http_request_host_policy(buffer *b, unsigned int http_parseopts, int scheme_
 
 __attribute_nonnull__()
 __attribute_pure__
-const char * http_request_field_check_name (const char * restrict k, int klen, unsigned int http_header_strict);
-
-__attribute_nonnull__()
-__attribute_pure__
 const char * http_request_field_check_value (const char * restrict v, uint32_t vlen, unsigned int http_header_strict);
 
 int http_request_trailer_check (request_st * restrict r, http_trailer_parse_ctx * restrict htctx);
