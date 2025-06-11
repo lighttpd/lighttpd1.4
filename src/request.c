@@ -549,8 +549,9 @@ static const char * http_request_parse_reqline_uri(request_st * const restrict r
 
 
 __attribute_cold__
-__attribute_noinline__
-static int http_request_parse_header_other(request_st * const restrict r, const char * const restrict k, const int klen, const unsigned int http_header_strict);
+__attribute_nonnull__()
+__attribute_pure__
+static const char * http_request_field_check_name_h2(const char * const restrict k, const int_fast32_t klen, const unsigned int http_header_strict);
 
 
 int
@@ -783,18 +784,16 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
             }
 
             if (__builtin_expect( (hpctx->id == HTTP_HEADER_H2_UNKNOWN), 0)) {
-                uint32_t j = 0;
-                while ((light_islower(k[j]) || k[j] == '-') && ++j < klen) ;
-                if (__builtin_expect( (j != klen), 0)) {
-                    if (0 != http_request_parse_header_other(r, k+j, klen-j,
-                                                            http_header_strict))
-                        return 400;
-                    do {
-                        if (light_isupper(k[j])) return 400;
-                    } while (++j < klen);
-                }
-
                 hpctx->id = http_header_hkey_get_lc(k, klen);
+            }
+
+            if (hpctx->id == HTTP_HEADER_OTHER) {
+                const char * const xx =
+                  http_request_field_check_name_h2(k, (int)klen,
+                                                   http_header_strict);
+                if (xx)
+                    return http_request_header_char_invalid(r, *xx,
+                      "invalid character in header key -> 400");
             }
 
             const enum http_header_e id = (enum http_header_e)hpctx->id;
@@ -1043,8 +1042,8 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
 }
 
 __attribute_cold__
-__attribute_noinline__
-static int http_request_parse_header_other(request_st * const restrict r, const char * const restrict k, const int klen, const unsigned int http_header_strict) {
+__attribute_pure__
+static const char * http_request_parse_header_other(const char * const restrict k, const int klen, const unsigned int http_header_strict) {
     for (int i = 0; i < klen; ++i) {
         if (light_isalpha(k[i]) || k[i] == '-') continue; /*(common cases)*/
         /**
@@ -1055,7 +1054,6 @@ static int http_request_parse_header_other(request_st * const restrict r, const 
         switch(k[i]) {
         case ' ':
         case '\t':
-            return http_request_header_line_invalid(r, 400, "WS character in key -> 400");
         case '\r':
         case '\n':
         case '(':
@@ -1075,14 +1073,42 @@ static int http_request_parse_header_other(request_st * const restrict r, const 
         case '=':
         case '{':
         case '}':
-            return http_request_header_char_invalid(r, k[i], "invalid character in header key -> 400");
+            return k+i;
         default:
             if (http_header_strict ? (k[i] < 32 || ((unsigned char *)k)[i] >= 127) : k[i] == '\0')
-                return http_request_header_char_invalid(r, k[i], "invalid character in header key -> 400");
+                return k+i;
             break; /* ok */
         }
     }
-    return 0;
+    return NULL;
+}
+
+__attribute_nonnull__()
+__attribute_pure__
+const char * http_request_field_check_name(const char * const restrict k, const int klen, const unsigned int http_header_strict) {
+    for (int i = 0; i < klen; ++i) {
+        if (light_isalpha(k[i]) || k[i] == '-') continue; /*(common cases)*/
+        return http_request_parse_header_other(k+i, klen-i, http_header_strict);
+    }
+    return NULL;
+}
+
+__attribute_cold__
+__attribute_nonnull__()
+__attribute_pure__
+static const char * http_request_field_check_name_h2(const char * const restrict k, const int_fast32_t klen, const unsigned int http_header_strict) {
+    int_fast32_t i = 0;
+    while ((light_islower(k[i]) || k[i] == '-') && ++i < klen) ;/*common cases*/
+    if (__builtin_expect( (i != klen), 0)) {
+        const char * const x =
+          http_request_parse_header_other(k+i, klen-i, http_header_strict);
+        if (x)
+            return x;
+        do {
+            if (light_isupper(k[i])) return k+i;
+        } while (++i < klen);
+    }
+    return NULL;
 }
 
 static int http_request_parse_headers(request_st * const restrict r, char * const restrict ptr, const unsigned short * const restrict hoff, const unsigned int http_parseopts) {
@@ -1137,12 +1163,11 @@ static int http_request_parse_headers(request_st * const restrict r, char * cons
         const enum http_header_e id = http_header_hkey_get(k, klen);
 
         if (id == HTTP_HEADER_OTHER) {
-            for (int j = 0; j < klen; ++j) {
-                if (light_isalpha(k[j]) || k[j] == '-') continue; /*(common cases)*/
-                if (0 != http_request_parse_header_other(r, k+j, klen-j, http_header_strict))
-                    return 400;
-                break;
-            }
+            const char * const x =
+              http_request_field_check_name(k, klen, http_header_strict);
+            if (x)
+                return http_request_header_char_invalid(r, *x,
+                  "invalid character in header key -> 400");
         }
 
         /* remove leading whitespace from value */
@@ -1437,14 +1462,12 @@ http_request_trailer_check (request_st * const restrict r, http_trailer_parse_ct
               "forbidden trailer");
     }
     else { /* (id == HTTP_HEADER_OTHER) */
-        for (uint32_t j = 0; j < tpctx->klen; ++j) {
-            if (light_isalpha(k[j]) || tpctx->k[j] == '-') /*(common cases)*/
-                continue;
-            if (0 != http_request_parse_header_other(r,tpctx->k+j,tpctx->klen-j,
-                                                     tpctx->http_header_strict))
-                return 400;
-            break;
-        }
+        const char * const x =
+          http_request_field_check_name(tpctx->k, (int)tpctx->klen,
+                                        tpctx->http_header_strict);
+        if (x)
+            return http_request_header_char_invalid(r, *x,
+              "invalid character in header key -> 400");
         /* explicitly reject certain field names disallows in trailers
          * (XXX: list can be expanded further)
          * (If list gets too long, consider whitelisting common trailers,
