@@ -5,6 +5,7 @@
 #include "base.h"
 #include "array.h"
 #include "buffer.h"
+#include "burl.h"       /* HTTP_PARSEOPT_HEADER_STRICT */
 #include "chunk.h"
 #include "fdevent.h"
 #include "log.h"
@@ -964,6 +965,9 @@ static int http_response_process_headers(request_st * const restrict r, http_res
         return 0;
     }
 
+    const unsigned int http_header_strict =
+      (r->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+
     for (; i < hoff[0]; ++i) {
         const char *k = s+hoff[i], *value;
         char *end = s+hoff[i+1]-1; /*('\n')*/
@@ -1001,10 +1005,15 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             }
             else if (id == HTTP_HEADER_OTHER && klen > 9 && (k[0] & 0xdf) == 'V'
                      && buffer_eq_icase_ssn(k, CONST_STR_LEN("Variable-"))) {
+                /* trust response from configured authorizer; skip validating */
                 http_header_env_append(r, k + 9, klen - 9, value, end - value);
             }
             continue;
         }
+
+        if (NULL != http_request_field_check_value(value, end - value,
+                                                   http_header_strict))
+            continue; /* invalid char in field value; skip */
 
         switch (id) {
           case HTTP_HEADER_STATUS:
@@ -1101,11 +1110,9 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             /* (not bothering to remove HTTP2-Settings from Connection) */
             continue;
           case HTTP_HEADER_OTHER:
-            /* ignore invalid headers with whitespace between label and ':'
-             * (if less strict behavior is desired, check and correct above
-             *  this switch() statement, but not for BACKEND_PROXY) */
-            if (k[klen-1] == ' ' || k[klen-1] == '\t')
-                continue;
+            if (NULL != http_request_field_check_name(k, klen,
+                                                      http_header_strict))
+                continue; /* invalid char in field name; skip */
             break;
           default:
             break;
