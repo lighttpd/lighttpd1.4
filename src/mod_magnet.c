@@ -1600,6 +1600,36 @@ static int magnet_readlink(lua_State *L) {
     return 1;
 }
 
+__attribute_noinline__
+__attribute_nonnull__()
+__attribute_pure__
+static int magnet_extended_field_check_value (const const_buffer * const k, const const_buffer * const v, const unsigned int http_header_strict) {
+    uint32_t len = v->len;
+    if (0 == len) return 1;
+    const char *b = v->ptr;
+    for (const char *e; (e = memchr(b, '\n', len)); b = e) {
+        /* check blank line (could terminate fields)
+         * check for '\r' in "\r\n"
+         * check that next line repeats same field name k followed by ':' */
+        uint32_t n = (uint32_t)(++e - b);
+        len -= n;
+        if (n < 3 || e[-2] != '\r' || 0 == len)
+            return 0;
+        if (NULL != http_request_field_check_value(b, n-2, http_header_strict))
+            return 0;
+        if (*e == ' ' || *e == '\t') /* line folding; deprecated in HTTP */
+            continue;   /*(should not be used; might not be handled elsewhere) */
+        if (len < k->len + 1)
+            return 0;
+        if (e[k->len] != ':' || !buffer_eq_icase_ssn(e, k->ptr, k->len))
+            return 0;
+        e += k->len + 1;
+        len -= k->len + 1;
+    }
+    return (NULL == http_request_field_check_value(b, len, http_header_strict));
+    /* 1:success; 0:fail */
+}
+
 static int magnet_reqhdr_get(lua_State *L) {
     size_t klen;
     const char * const k = luaL_checklstring(L, 2, &klen);
@@ -1615,9 +1645,10 @@ static int magnet_reqhdr_set(lua_State *L) {
 
     request_st * const r = **(request_st ***)lua_touserdata(L, 1);
     enum http_header_e id = http_header_hkey_get(k.ptr, (uint32_t)k.len);
+    const unsigned int http_header_strict =
+      (r->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
     switch (id) {
-      /*case HTTP_HEADER_OTHER:*/
       default:
         break;
 
@@ -1626,11 +1657,20 @@ static int magnet_reqhdr_set(lua_State *L) {
          * (change Host to something else, if you must */
         if (0 == v.len) return 0;
 
+        buffer_copy_string_len_lc(r->tmp_buf, v.ptr, v.len);
+        if (0 != http_request_host_policy(r->tmp_buf, r->conf.http_parseopts,
+                                          r->con->proto_default_port)) {
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "invalid char attempting to set request header Host: (%.*s)",
+              (int)v.len, v.ptr);
+            return 0;
+        }
+
         /*(must set r->http_host if r->http_host was not previously set)*/
         /* copied from request.c:http_request_header_set_Host() */
         r->http_host = http_header_request_set_ptr(r, HTTP_HEADER_HOST,
                                                    CONST_STR_LEN("Host"));
-        buffer_copy_string_len_lc(r->http_host, v.ptr, v.len);
+        buffer_copy_buffer(r->http_host, r->tmp_buf);
         return 0;
 
       case HTTP_HEADER_CONTENT_LENGTH:
@@ -1665,11 +1705,57 @@ static int magnet_reqhdr_set(lua_State *L) {
         if (0 != v.len) return 0; /* do not allow TE other than to unset */
         break;
      #endif
+
+        /* other */
+
+      case HTTP_HEADER_OTHER:
+        if (NULL != http_request_field_check_name(k.ptr, k.len,
+                                                  http_header_strict)) {
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "invalid char in request header field name: (%.*s)",
+              (int)k.len, k.ptr);
+            return 0;
+        }
+        break;
     }
 
-    v.len
-      ? http_header_request_set(r, id, k.ptr, k.len, v.ptr, v.len)
-      : http_header_request_unset(r, id, k.ptr, k.len);
+    if (0 == v.len) {
+        http_header_request_unset(r, id, k.ptr, k.len);
+        return 0;
+    }
+
+    /* check read-only string before overwriting existing response value */
+    if (!magnet_extended_field_check_value(&k, &v, http_header_strict)) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "invalid char in request header field value for %.*s",
+          (int)k.len, k.ptr);
+        return 0;
+    }
+
+    buffer * const vb = http_header_request_set_ptr(r, id, k.ptr, k.len);
+    buffer_copy_string_len(vb, v.ptr, v.len);
+
+    for (char *n = vb->ptr; (n = strchr(n, '\n')); ++n) {
+        /* unfold line folding; deprecated in HTTP */
+        if (n[1] == ' ' || n[1] == '\t') {
+            n[-1] = n[0] = ' ';
+            continue;
+        }
+      #if 0
+        /* handle multi-line request headers with HTTP/2
+         * (lowercase header name and mark r->rqst_header_repeated)
+         * (similar to http_header.c:http_header_response_insert_addtl()) */
+        if (r->http_version >= HTTP_VERSION_2) {
+            /*r->rqst_header_repeated = 1;*//*(not implemented)*/
+            do {
+                ++n;
+                if (light_isupper(*n)) *n |= 0x20;
+            } while (*n != ':' && *n != '\n' && *n != '\0');
+            /*(checked in magnet_extended_field_check_value(), so not '\0')*/
+        }
+      #endif
+    }
+
     return 0;
 }
 
@@ -1693,9 +1779,10 @@ static int magnet_resphdr_set_kv(lua_State *L, request_st * const r) {
     const const_buffer k = magnet_checkconstbuffer(L, -2);
     const const_buffer v = magnet_checkconstbuffer(L, -1);
     const enum http_header_e id = http_header_hkey_get(k.ptr, (uint32_t)k.len);
+    const unsigned int http_header_strict =
+      (r->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
     switch (id) {
-      /*case HTTP_HEADER_OTHER:*/
       default:
         break;
 
@@ -1712,6 +1799,18 @@ static int magnet_resphdr_set_kv(lua_State *L, request_st * const r) {
          *         and also handle in context if HTTP/2 */
       case HTTP_HEADER_TRANSFER_ENCODING:
         return 0; /* silently ignore; do not allow modification */
+
+        /* other */
+
+      case HTTP_HEADER_OTHER:
+        if (NULL != http_request_field_check_name(k.ptr, k.len,
+                                                  http_header_strict)) {
+            log_error(r->conf.errh, __FILE__, __LINE__,
+              "invalid char in response header field name: (%.*s)",
+              (int)k.len, k.ptr);
+            return 0;
+        }
+        break;
     }
 
     if (0 == v.len) {
@@ -1719,19 +1818,33 @@ static int magnet_resphdr_set_kv(lua_State *L, request_st * const r) {
         return 0;
     }
 
+    /* check read-only string before overwriting existing response value */
+    if (!magnet_extended_field_check_value(&k, &v, http_header_strict)) {
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "invalid char in response header field value for %.*s",
+          (int)k.len, k.ptr);
+        return 0;
+    }
+
     buffer * const vb = http_header_response_set_ptr(r, id, k.ptr, k.len);
     buffer_copy_string_len(vb, v.ptr, v.len);
 
-    if (r->http_version >= HTTP_VERSION_2) {
+    for (char *n = vb->ptr; (n = strchr(n, '\n')); ++n) {
+        /* unfold line folding; deprecated in HTTP */
+        if (n[1] == ' ' || n[1] == '\t') {
+            n[-1] = n[0] = ' ';
+            continue;
+        }
         /* handle multi-line response headers with HTTP/2
          * (lowercase header name and mark r->resp_header_repeated)
          * (similar to http_header.c:http_header_response_insert_addtl()) */
-        for (char *n = vb->ptr; (n = strchr(n, '\n')); ) {
+        if (r->http_version >= HTTP_VERSION_2) {
             r->resp_header_repeated = 1;
             do {
                 ++n;
                 if (light_isupper(*n)) *n |= 0x20;
             } while (*n != ':' && *n != '\n' && *n != '\0');
+            /*(checked in magnet_extended_field_check_value(), so not '\0')*/
         }
     }
 
