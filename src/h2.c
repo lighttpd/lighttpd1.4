@@ -2624,7 +2624,7 @@ h2_send_headers_block (request_st * const r, connection * const con, const char 
     hoff[1] = 0;                         /* base offset for all lines */
     /*hoff[2] = ...;*/                   /* offset from base for 2nd line */
     uint32_t rc = http_header_parse_hoff(hdrs, hlen, hoff);
-    if (0 == rc || rc > USHRT_MAX || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1
+    if (rc != hlen || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1
         || 1 == hoff[0]) { /*(initial blank line (should not happen))*/
         /* error if headers incomplete or too many header fields */
         log_error(r->conf.errh, __FILE__, __LINE__,
@@ -2827,7 +2827,7 @@ h2_send_end_stream_trailers (request_st * const r, connection * const con, char 
     hoff[1] = 0;                         /* base offset for all lines */
     /*hoff[2] = ...;*/                   /* offset from base for 2nd line */
     uint32_t rc = http_header_parse_hoff(trailers, tlen, hoff);
-    if (0 == rc || rc > USHRT_MAX || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1
+    if (rc != tlen || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1
         || 1 == hoff[0]) { /*(initial blank line)*/
         /* skip trailers if incomplete, too many fields, or too long (> 64k-1)*/
         h2_send_end_stream_data(r, con);

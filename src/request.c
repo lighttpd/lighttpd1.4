@@ -1512,7 +1512,7 @@ http_request_trailers_check (request_st * const restrict r, char *t, uint32_t tl
     hoff[1] = 0;                         /* base offset for all lines */
     /*hoff[2] = ...;*/                   /* offset from base for 2nd line */
     uint32_t rc = http_header_parse_hoff(t, tlen, hoff);
-    if (0 == rc || rc > USHRT_MAX || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1)
+    if (rc != tlen || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1)
         return http_request_header_line_invalid(r, 400,
           "invalid trailers; incomplete or too many fields -> 400");
     if (1 == hoff[0]) /*(initial blank line (no trailers))*/
