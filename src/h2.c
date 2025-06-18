@@ -2636,9 +2636,14 @@ h2_send_headers_block (request_st * const r, connection * const con, const char 
         hoff[0] = 1;
         hoff[1] = 0;
         hdrs = ":status: 502\r\n\r\n";
+       #if 0
         if (http_header_parse_hoff(CONST_STR_LEN(":status: 502\r\n\r\n"),hoff)){
             /*(ignore for coverity; static string is successfully parsed)*/
         }
+       #else
+        hoff[2] = 14;
+        hoff[3] = 16;
+       #endif
       #endif
     }
     h2_send_headers_hoff(r, con, hdrs, hoff, flags);
@@ -2773,7 +2778,13 @@ h2_send_100_continue (request_st * const r, connection * const con)
     /* short header block, so reuse shared code used for trailers
      * rather than adding something specific for ls-hpack here */
 
+  #if 0
     h2_send_1xx_block(r, con, CONST_STR_LEN(":status: 100\r\n\r\n"));
+  #else
+    const unsigned short hoff[8192] = { 1, 0, 14, 16 };
+    const char * const hdrs = ":status: 100\r\n\r\n";
+    h2_send_headers_hoff(r, con, hdrs, hoff, 0);
+  #endif
 }
 
 
