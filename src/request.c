@@ -1527,7 +1527,7 @@ http_request_trailers_check (request_st * const restrict r, char *t, uint32_t tl
     tpctx.max_request_field_size = r->conf.max_request_field_size;
 
     for (int i = 1; i < hoff[0]; ++i) {
-        const char *k = t + ((i > 1) ? hoff[i] : 0);
+        const char *k = t + hoff[i]; /*t + ((i > 1) ? hoff[i] : 0);*/
         const char *end = t + hoff[i+1];
       #if 0 /* (let validation fail below on leading WS line folding) */
         if (   __builtin_expect( (*k == ' '),  0)

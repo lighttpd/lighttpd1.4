@@ -2688,7 +2688,7 @@ h2_send_headers_hoff (request_st * const r, connection * const con, const char *
     /* note: expects field-names are lowercased (http_response_write_header())*/
 
     for (; i < hoff[0]; ++i) {
-        const char *k = hdrs + ((i > 1) ? hoff[i] : 0);
+        const char *k = hdrs + hoff[i]; /*hdrs + ((i > 1) ? hoff[i] : 0);*/
         const char *end = hdrs + hoff[i+1];
         const char *v = memchr(k, ':', end-k);
         /* XXX: DOES NOT handle line wrapping (which is deprecated by RFCs)
@@ -2835,7 +2835,7 @@ h2_send_end_stream_trailers (request_st * const r, connection * const con, char 
     }
 
     for (int i = 1; i < hoff[0]; ++i) {
-        char *k = trailers + ((i > 1) ? hoff[i] : 0);
+        char *k = trailers + hoff[i]; /*trailers + ((i > 1) ? hoff[i] : 0);*/
       #if 0
         /*(checked in http_request_trailers_check())*/
         if (*k == ':') {
