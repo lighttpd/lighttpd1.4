@@ -1202,6 +1202,10 @@ static int http_request_parse_headers(request_st * const restrict r, char * cons
         if (0 != status) return status;
     }
 
+    /* check that headers end with CRLF blank line ("\r\n" is 2 chars) */
+    if (http_header_strict && hoff[hoff[0]+1] - hoff[hoff[0]] != 2)
+        return http_request_header_line_invalid(r, 400, "missing CR before LF to end header block -> 400");
+
     return 0;
 }
 
