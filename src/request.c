@@ -1114,14 +1114,6 @@ static const char * http_request_field_check_name_h2(const char * const restrict
 static int http_request_parse_headers(request_st * const restrict r, char * const restrict ptr, const unsigned short * const restrict hoff, const unsigned int http_parseopts) {
     const unsigned int http_header_strict = (http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
 
-  #if 0 /*(not checked here; will later result in invalid label for HTTP header)*/
-    int i = hoff[2];
-
-    if (ptr[i] == ' ' || ptr[i] == '\t') {
-        return http_request_header_line_invalid(r, 400, "WS at the start of first line -> 400");
-    }
-  #endif
-
     for (int i = 2; i < hoff[0]; ++i) {
         const char *k = ptr + hoff[i];
         /* one past last line hoff[hoff[0]] is to final "\r\n" */
@@ -1173,20 +1165,6 @@ static int http_request_parse_headers(request_st * const restrict r, char * cons
         /* remove leading whitespace from value */
         while (*v == ' ' || *v == '\t') ++v;
 
-        for (; i+1 <= hoff[0]; ++i) {
-            end = ptr + hoff[i+1];
-            if (end[0] != ' ' && end[0] != '\t') break;
-
-            /* line folding */
-          #ifdef __COVERITY__
-            force_assert(end - k >= 2);
-          #endif
-            if (end[-2] == '\r')
-                end[-2] = ' ';
-            else if (http_header_strict)
-                return http_request_header_line_invalid(r, 400, "missing CR before LF in header -> 400");
-            end[-1] = ' ';
-        }
       #ifdef __COVERITY__
         /*(buf holding k has non-zero request-line, so end[-2] valid)*/
         force_assert(end >= k + 2);
@@ -1529,41 +1507,6 @@ http_request_trailers_check (request_st * const restrict r, char *t, uint32_t tl
     for (int i = 1; i < hoff[0]; ++i) {
         const char *k = t + hoff[i]; /*t + ((i > 1) ? hoff[i] : 0);*/
         const char *end = t + hoff[i+1];
-      #if 0 /* (let validation fail below on leading WS line folding) */
-        if (   __builtin_expect( (*k == ' '),  0)
-            || __builtin_expect( (*k == '\t'), 0)) {
-          #if 0
-            /* XXX: ??? strict policy option: always reject ???
-             *   ? always reject line folding in trailers? */
-            return http_request_header_line_invalid(r, 400,
-              "invalid header line folding in trailers");
-          #else
-            if (i == 1)
-                return http_request_header_line_invalid(r, 400,
-                  "invalid header line folding in trailers");
-            /* skip over line wrapping/folding (deprecated)
-             * but value is still validated strictly */
-          #ifdef __COVERITY__
-            /*(k has at least " \n" by now, so end[-2] valid)*/
-            force_assert(end >= k + 2);
-          #endif
-            if (end[-2] != '\r') /*(header line must end "\r\n")*/
-                return http_request_header_line_invalid(r, 400,
-                  "missing CR before LF in trailer");
-            /*(enforce strict policy for trailers)*/
-            const int http_header_strict = 1;
-            const char * const x =
-              http_request_field_check_value(k, (uint32_t)(end - k - 2),
-                                             http_header_strict);
-            if (x)
-                return http_request_header_char_invalid(r, *x,
-                  "invalid character in trailer");
-            /* (if input were writable, could overwrite prior line ending "\r\n"
-             *  with spaces to remove the line folding) */
-            continue;
-          #endif
-        }
-      #endif
         const char *v = memchr(k, ':', end-k);
         if (NULL == v)
             return http_request_header_line_invalid(r, 400,

@@ -367,18 +367,54 @@ void http_header_env_append(request_st * const r, const char *k, uint32_t klen, 
 }
 
 
-uint32_t
-http_header_parse_hoff (const char *n, const uint32_t clen, unsigned short hoff[8192])
+/*(independent func to further isolate cold path)*/
+__attribute_cold__
+static void
+http_header_parse_unfold_impl (char * const restrict b)
 {
+    if (b[-2] == '\r') b[-2] = ' ';
+    b[-1] = ' ';
+}
+
+
+uint32_t
+http_header_parse_hoff (char *n, const uint32_t clen, unsigned short hoff[8192])
+{
+    /* note: callers must check for field block ending line "\r\n" if required
+     * or else a smuggled "\n" might prematurely truncate the field block */
+
+    /* note: removal of line folding occurs for any line (after first line)
+     * which begins ' ' or '\t', including for lines ending "\n" (rather than
+     * "\r\n"); in prior code, lines ending "\n" would be rejected if policy
+     * http_header_strict was in effect. */
+
+    /* note: in the code below, HTTP/1.x reqline followed by first line starting
+     * ' ' or '\t' will be folded into reqline, resulting in at least two spaces
+     * consecutively, which http_request_parse_reqline() will reject due to
+     * multiple spaces between URI and protocol, or URI starting with space. */
+
     uint32_t hlen = 0;
-    for (const char *b; (n = memchr((b = n),'\n',clen-hlen)); ++n) {
+    for (char *b; (n = memchr((b = n),'\n',clen-hlen)); ++n) {
         uint32_t x = (uint32_t)(n - b + 1);
         hlen += x;
-        if (x <= 2 && (x == 1 || n[-1] == '\r')) {
+        if (__builtin_expect( (x <= 2), 0) && (x == 1 || n[-1] == '\r')) {
+            /* "\r\n" (or "\n") ends headers (expect false except last line) */
             hoff[hoff[0]+1] = hlen;
             return hlen;
         }
-        if (++hoff[0] >= /*sizeof(hoff)/sizeof(hoff[0])-1*/ 8192-1) break;
+        else if ((   __builtin_expect( (b[0] == ' '), 0)
+                  || __builtin_expect( (b[0] == '\t'), 0))
+                 && hlen != x) { /*(true except first line)*/
+            /* line folding; unfold (cold code path) */
+            http_header_parse_unfold_impl(b);
+            /* update hoff[] offset for current line (further below) */
+        }
+        else {
+            ++hoff[0];
+            /* update hoff[] offset for next line (further below) */
+            if (__builtin_expect( (hoff[0] >= 8192-1), 0))
+                break;                        /*sizeof(hoff)/sizeof(hoff[0])-1*/
+        }
         hoff[hoff[0]] = hlen;
     }
     return 0;

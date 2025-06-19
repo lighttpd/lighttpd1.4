@@ -23,7 +23,7 @@ static void test_request_reset(request_st * const r)
 
 static void run_http_request_parse(request_st * const r, int line, int status, const char *desc, const char *req, size_t reqlen)
 {
-    unsigned short hloffsets[32];
+    unsigned short hloffsets[8192];
     char hdrs[1024];
     test_request_reset(r);
     assert(reqlen < sizeof(hdrs));
@@ -31,11 +31,17 @@ static void run_http_request_parse(request_st * const r, int line, int status, c
     hloffsets[0] = 1;
     hloffsets[1] = 0;
     hloffsets[2] = 0;
-    for (const char *n=req, *end=req+reqlen; (n=memchr(n,'\n',end-n)); ++n) {
-        if (++hloffsets[0] >= sizeof(hloffsets)/sizeof(*hloffsets)) break;
-        hloffsets[hloffsets[0]] = n - req + 1;
+
+    /* line folding is handled transparently in http_header_parse_hoff() */
+    uint32_t hlen = http_header_parse_hoff(hdrs, reqlen, hloffsets);
+    if (!hlen) {
+        fprintf(stderr,
+                "%s.%d: %s() failed for test %s\n",
+                __FILE__, line, "http_header_parse_hoff", desc);
+        fflush(stderr);
+        abort();
     }
-    --hloffsets[0]; /*(ignore final blank line "\r\n" ending headers)*/
+
     const int proto_default_port = 80;
     int http_status =
       http_request_parse_hoff(r, hdrs, hloffsets, proto_default_port);

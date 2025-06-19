@@ -1272,6 +1272,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
 
 
 __attribute_cold__
+__attribute_noinline__
 static void h2_recv_expect_100 (request_st * const r);
 
 static handler_t
@@ -2617,7 +2618,7 @@ h2_send_headers_hoff (request_st * const r, connection * const con, const char *
 __attribute_cold__
 __attribute_noinline__
 static void
-h2_send_headers_block (request_st * const r, connection * const con, const char *hdrs, const uint32_t hlen, uint32_t flags)
+h2_send_headers_block (request_st * const r, connection * const con, char *hdrs, const uint32_t hlen, uint32_t flags)
 {
     unsigned short hoff[8192]; /* max num header lines + 3; 16k on stack */
     hoff[0] = 1;                         /* number of lines */
@@ -2726,7 +2727,7 @@ h2_send_headers_hoff (request_st * const r, connection * const con, const char *
 
 
 static void
-h2_send_1xx_block (request_st * const r, connection * const con, const char * const hdrs, const uint32_t hlen)
+h2_send_1xx_block (request_st * const r, connection * const con, char * const hdrs, const uint32_t hlen)
 {
     h2_send_headers_block(r, con, hdrs, hlen, 0);
 }
@@ -2754,10 +2755,16 @@ h2_send_1xx (request_st * const r, connection * const con)
         }
         buffer_append_str2(b, CONST_STR_LEN("\r\n"), k, klen);
         buffer_append_str2(b, CONST_STR_LEN(": "), ds->value.ptr, vlen);
+        /*(line folding should have been unfolded
+         * before being adding to r->resp_headers)*/
     }
     buffer_append_string_len(b, CONST_STR_LEN("\r\n\r\n"));
 
-    h2_send_1xx_block(r, con, BUF_PTR_LEN(b));
+    if (buffer_clen(b) <= UINT16_MAX)
+        h2_send_1xx_block(r, con, BUF_PTR_LEN(b));
+    else
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "intermediate response headers too large for %s", r->uri.path.ptr);
 
     chunk_buffer_release(b);
     return 1; /* for http_response_send_1xx */
@@ -2789,6 +2796,7 @@ h2_send_100_continue (request_st * const r, connection * const con)
 
 
 __attribute_cold__
+__attribute_noinline__
 static void
 h2_recv_expect_100 (request_st * const r)
 {
@@ -2826,6 +2834,8 @@ h2_send_end_stream_trailers (request_st * const r, connection * const con, char 
     hoff[0] = 1;                         /* number of lines */
     hoff[1] = 0;                         /* base offset for all lines */
     /*hoff[2] = ...;*/                   /* offset from base for 2nd line */
+    /*(unfolding occurs in http_request_trailers_check()
+     * called from http_chunk_decode_append_trailers())*/
     uint32_t rc = http_header_parse_hoff(trailers, tlen, hoff);
     if (rc != tlen || hoff[0] >= sizeof(hoff)/sizeof(hoff[0])-1
         || 1 == hoff[0]) { /*(initial blank line)*/
@@ -2869,6 +2879,7 @@ h2_send_cqheaders (request_st * const r, connection * const con)
     uint32_t flags = (r->resp_body_finished && NULL == c->next)
       ? H2_FLAG_END_STREAM
       : 0;
+    /* XXX: add field validation if this code is ever enabled */
     h2_send_headers_block(r, con, c->mem->ptr + c->offset, len, flags);
     chunkqueue_mark_written(&r->write_queue, len);
 }
