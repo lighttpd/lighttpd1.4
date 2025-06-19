@@ -1569,7 +1569,7 @@ h2_parse_headers_frame (struct lshpack_dec * const restrict decoder, const unsig
 {
     http_header_parse_ctx hpctx;
     hpctx.hlen     = 0;
-    hpctx.pseudo   = 1; /*(XXX: should be !trailers if handling trailers)*/
+    hpctx.pseudo   = !trailers;
     hpctx.scheme   = 0;
     hpctx.trailers = trailers;
     hpctx.log_request_header = r->conf.log_request_header;

@@ -650,7 +650,7 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
       #endif
     }
 
-    if (!hpctx->trailers) {
+    {
         if (*k == ':') {
             /* HTTP/2 request pseudo-header fields */
             if (!hpctx->pseudo) /*(pseudo header after non-pseudo header)*/
@@ -803,9 +803,13 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
                 return http_request_header_line_invalid(r, 400,
                   "invalid TE header value with HTTP/2 -> 400");
 
-            return http_request_parse_single_header(r, id, k, klen, v, vlen);
+            return !hpctx->trailers
+              ? http_request_parse_single_header(r, id, k, klen, v, vlen)
+              : 0; /*(trailers validated but then discarded (for now))*/
         }
     }
+
+  #if 0 /* (old comments from when this block handled 'if (hpctx->trailers)') */
     else { /*(trailers)*/
         if (*k == ':')
             return http_request_header_line_invalid(r, 400,
@@ -841,6 +845,7 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
 
         return 0;
     }
+  #endif
 }
 
 
