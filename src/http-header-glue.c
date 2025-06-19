@@ -959,7 +959,7 @@ static int http_response_process_headers(request_st * const restrict r, http_res
         }
     }
     else if (__builtin_expect( (opts->backend == BACKEND_PROXY), 0)) {
-        /* invalid response Status-Line from HTTP proxy */
+        /* invalid response Status-Line from HTTP backend */
         r->http_status = 502; /* Bad Gateway */
         r->handler_module = NULL;
         return 0;
@@ -967,6 +967,20 @@ static int http_response_process_headers(request_st * const restrict r, http_res
 
     const unsigned int http_header_strict =
       (r->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+
+    /* strictly validate all lines end "\r\n" for BACKEND_PROXY */
+    if (opts->backend == BACKEND_PROXY && http_header_strict) {
+        for (int j = 1; j <= hoff[0]; ++j) {
+            /*(nph check above ensures at least 2 chars on first line)*/
+            if (s[hoff[i+1]-2] != '\r') {
+                log_error(r->conf.errh, __FILE__, __LINE__,
+                  "HTTP backend response missing CR before LF");
+                r->http_status = 502; /* Bad Gateway */
+                r->handler_module = NULL;
+                return 0;
+            }
+        }
+    }
 
     for (; i < hoff[0]; ++i) {
         const char *k = s+hoff[i], *value;
