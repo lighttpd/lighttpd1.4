@@ -674,7 +674,7 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
      * e.g. without repeated '/' */
     if (!fn_is_dir) {
         while (fn[--dirlen] != '/') ;
-        if (0 == dirlen) dirlen = 1; /*(should not happen for file)*/
+        if (0 == dirlen) dirlen = 1; /*(file in root dir)*/
     }
     int dir_ndx;
     fam_dir_entry *fam_dir =
@@ -694,6 +694,7 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
     int ck_dir = fn_is_dir;
     if (!fn_is_dir && (NULL==fam_dir || cur_ts - fam_dir->stat_ts >= 16)) {
         ck_dir = 1;
+      if (dirlen > 1) {
         /*(temporarily modify fn)*/
         fn[dirlen] = '\0';
         if (0 != lstat(fn, &lst)) {
@@ -708,6 +709,9 @@ static fam_dir_entry * fam_dir_monitor(stat_cache_fam *scf, char *fn, uint32_t d
             return NULL;
         }
         fn[dirlen] = '/';
+      }
+      else if (0 != stat("/", (st = &lst))) /*assume "/" is dir, not symlink*/
+        return NULL;
     }
 
     int ck_lnk = (NULL == fam_dir);
