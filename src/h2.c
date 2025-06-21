@@ -1664,6 +1664,10 @@ h2_parse_headers_frame (struct lshpack_dec * const restrict decoder, const unsig
     }
 
     hpctx.hlen += 2;
+    /* note: trailer field length is added here, too, and should be if merging
+     * trailers into request headers.  If not, might increase buffer size optim
+     * for preparing env for backends (though probably merging if not sent yet).
+     * Also affects mod_magnet accessor lighty.r.req_item["req_header_len"] */
     r->rqst_header_len += hpctx.hlen;
     /*(accounting for mod_accesslog and mod_rrdtool)*/
     chunkqueue * const rq = &r->read_queue;

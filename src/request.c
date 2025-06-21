@@ -9,6 +9,7 @@
 
 #include "request.h"
 #include "burl.h"
+#include "fdevent.h"  /* FDEVENT_STREAM_REQUEST FDEVENT_STREAM_REQUEST_BUFMIN */
 #include "http_header.h"
 #include "http_kv.h"
 #include "log.h"
@@ -518,6 +519,57 @@ static int http_request_parse_single_header(request_st * const restrict r, const
     return 0;
 }
 
+
+__attribute_cold__
+__attribute_noinline__
+static int http_request_parse_single_trailer(request_st * const restrict r, const enum http_header_e id, const char * const restrict k, const size_t klen, const char * const restrict v, const size_t vlen) {
+    /* (for HTTP/2) */
+
+    if (0 == (r->conf.stream_request_body
+              & (FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN))) {
+        /* (HTTP/2 version of src/h1.c:h1_chunked_trailers()) */
+        /* RFC9110 https://www.rfc-editor.org/rfc/rfc9110.html
+         * Section B.2. "Changes from RFC 7230" encourages implementations
+         * to avoid merging trailers into headers if the implementation
+         * does not have full knowledge of each field permitting merge and
+         * defining how to merge.  ... In other words, merging to headers is
+         * discouraged.  This code might move in that direction in the future,
+         * though de-chunking (and either merging or dropping trailers) is
+         * necessary for non-HTTP backends (e.g. FastCGI, SCGI, AJP13, etc which
+         * do not support trailers in their protocols).
+         * RFC9110 mentions only a few fields explicitly allowed in trailers:
+         * ETag, Authentication-Info, Proxy-Authentication-Info, Accept-Ranges
+         */
+        http_trailer_parse_ctx tpctx;
+        tpctx.k    = k;
+        tpctx.v    = v;
+        tpctx.klen = klen;
+        tpctx.vlen = vlen;
+        tpctx.max_request_field_size = r->conf.max_request_field_size;
+        tpctx.hlen = 0;
+        tpctx.http_header_strict =
+          (r->conf.http_parseopts & HTTP_PARSEOPT_HEADER_STRICT);
+        tpctx.id = id;
+        tpctx.trailer = http_header_request_get(r, HTTP_HEADER_OTHER,
+                                                CONST_STR_LEN("Trailer"));
+        int rc = http_request_trailer_check(r, &tpctx);
+        if (0 != rc)
+            return rc;
+        /* note: Trailer header (if set) is left set as info for backends.
+         * To remove Trailer, would have to check for trailer merging into
+         * headers after all trailers processed */
+        http_header_request_append(r, id, k, klen, v, vlen);
+    }
+    else {
+        /* trailers currently ignored if streaming request,
+         * but (future) could be set aside here if handler is mod_proxy
+         * and mod_proxy is sending chunked request to backend */
+    }
+
+    return 0;
+}
+
+
 __attribute_cold__
 __attribute_noinline__
 static const char * http_request_parse_reqline_uri(request_st * const restrict r, const char * const restrict uri, const size_t len, const unsigned int http_parseopts) {
@@ -805,7 +857,7 @@ http_request_parse_header (request_st * const restrict r, http_header_parse_ctx 
 
             return !hpctx->trailers
               ? http_request_parse_single_header(r, id, k, klen, v, vlen)
-              : 0; /*(trailers validated but then discarded (for now))*/
+              : http_request_parse_single_trailer(r, id, k, klen, v, vlen);
         }
     }
 

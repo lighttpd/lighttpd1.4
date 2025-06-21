@@ -824,6 +824,7 @@ static handler_t proxy_stdin_append(gw_handler_ctx *hctx) {
 
     if (hctx->wb.bytes_in == hctx->wb_reqlen) {/*hctx->r->reqbody_length >= 0*/
         /* terminate STDIN */
+        /* future: if request trailers were to have been set aside, add here */
         chunkqueue_append_mem(&hctx->wb, CONST_STR_LEN("0\r\n\r\n"));
         hctx->wb_reqlen += (int)sizeof("0\r\n\r\n");
     }

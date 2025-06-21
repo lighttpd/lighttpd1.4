@@ -599,6 +599,68 @@ h1_chunked_400_bad_request (request_st * const r, const char *errstr)
     return 400; /* Bad Request */
 }
 
+
+__attribute_cold__
+__attribute_noinline__
+static int
+h1_chunked_trailers (request_st * const restrict r, char * restrict t, uint32_t tlen)
+{
+    buffer * const trailer = http_header_request_get(r, HTTP_HEADER_OTHER,
+                                                     CONST_STR_LEN("Trailer"));
+    /*(skip final chunk "0\r\n")*/
+    ++t;
+    while (*++t != '\n') --tlen;
+    ++t;
+    tlen -= 3;
+    int rc = http_request_trailers_check(r, t, tlen, trailer);
+    if (0 != rc)
+        return rc;
+
+    if (0 == (r->conf.stream_request_body
+              & (FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN))) {
+        /* similarities to src/response.c:http_response_merge_trailers() */
+        /* RFC9110 https://www.rfc-editor.org/rfc/rfc9110.html
+         * Section B.2. "Changes from RFC 7230" encourages implementations
+         * to avoid merging trailers into headers if the implementation
+         * does not have full knowledge of each field permitting merge and
+         * defining how to merge.  ... In other words, merging to headers is
+         * discouraged.  This code might move in that direction in the future,
+         * though de-chunking (and either merging or dropping trailers) is
+         * necessary for non-HTTP backends (e.g. FastCGI, SCGI, AJP13, etc which
+         * do not support trailers in their protocols).
+         * RFC9110 mentions only a few fields explicitly allowed in trailers:
+         * ETag, Authentication-Info, Proxy-Authentication-Info, Accept-Ranges
+         */
+      #if 0 /* should we leave Trailer for backends to find merged headers? */
+        if (trailer)
+            http_header_request_unset(r, HTTP_HEADER_OTHER,
+                                      CONST_STR_LEN("Trailer"));
+      #endif
+        for (const char *k = t, *v, *e; (e = strchr(k, '\n')); k = e+1) {
+            v = memchr(k, ':', (size_t)(e - k));
+            /*(checked in http_request_trailers_check())*/
+            /*if (NULL == v || v == k || *k == ' ' || *k == '\t') continue;*/
+            if (NULL == v) break; /*(final blank line; v already validated)*/
+            uint32_t klen = (uint32_t)(v - k);
+            do { ++v; } while (*v == ' ' || *v == '\t');
+            /*(checked in http_request_trailers_check())*/
+            /*if (*v == '\r' || *v == '\n') continue;*/
+            enum http_header_e id = http_header_hkey_get(k, klen);
+            uint32_t vlen = (uint32_t)(e - v);
+            if (e[-1] == '\r') --vlen;
+            http_header_request_append(r, id, k, klen, v, vlen);
+        }
+    }
+    else {
+        /* trailers currently ignored if streaming request,
+         * but (future) could be set aside here if handler is mod_proxy
+         * and mod_proxy is sending chunked request to backend */
+    }
+
+    return 0;
+}
+
+
 static int
 h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_cq)
 {
@@ -679,12 +741,10 @@ h1_chunked (request_st * const r, chunkqueue * const cq, chunkqueue * const dst_
                             }
                         }
                         hsz = p + 4 - (c->mem->ptr+c->offset);
-                        /* trailers currently ignored, but could be processed
-                         * here if 0 == (r->conf.stream_request_body &
-                         *               & (FDEVENT_STREAM_REQUEST
-                         *                 |FDEVENT_STREAM_REQUEST_BUFMIN))
-                         * taking care to reject fields forbidden in trailers,
-                         * making trailers available to CGI and other backends*/
+                        int rc = h1_chunked_trailers(r, c->mem->ptr+c->offset,
+                                                     (uint32_t)hsz);
+                        if (0 != rc)
+                            return rc;
                     }
                     chunkqueue_mark_written(cq, (size_t)hsz);
                     r->reqbody_length = dst_cq->bytes_in;
