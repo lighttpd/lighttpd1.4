@@ -89,30 +89,28 @@ static void mod_setenv_prep_ext (const array * const ac) {
     for (uint32_t i = 0; i < a->used; ++i) {
         data_string * const ds = (data_string *)a->data[i];
         ds->ext = http_header_hkey_get(BUF_PTR_LEN(&ds->key));
-        /*(convenience: assume list, remove line ends, if line ends after ',')*/
-        for (char *s = ds->value.ptr; (s = strchr(s, ',')); ++s) {
-            if (s[1] == '\r') *++s = ' ';
-            if (s[1] == '\n') *++s = ' ';
+        /*(convenience: change all \t \r \n to space)*/
+        for (char *s = ds->value.ptr; *s; ++s) {
+            if (*s == '\t' || *s == '\r' || *s == '\n') *s = ' ';
         }
         /*(strip trailing and leading whitespace)*/
         const char *s = ds->value.ptr;
         uint32_t n = buffer_clen(&ds->value);
-        while (n-- && (s[n]==' ' || s[n]=='\t' || s[n]=='\r' || s[n]=='\n')) ;
+        while (n-- && s[n] == ' ') ;
         buffer_truncate(&ds->value, ++n);
         s = ds->value.ptr;
-        while (*s==' ' || *s=='\t' || *s=='\r' || *s=='\n') ++s;
-        if (s != ds->value.ptr) {
+        if (*s == ' ') {
+            while (*++s == ' ') ;
             n -= (uint32_t)(s - ds->value.ptr);
             memmove(ds->value.ptr, s, n);
             buffer_truncate(&ds->value, n);
         }
-        /*(warning if value contains '\r' or '\n';
-         * invalid in HTTP/2 and in updated HTTP/1.1 specs)*/
-        s = ds->value.ptr;
-        if (NULL != strchr(s, '\r') || NULL != strchr(s, '\n')) {
+        if ((ds->ext == HTTP_HEADER_OTHER
+             && http_request_field_check_name(BUF_PTR_LEN(&ds->key), 1))
+            || http_request_field_check_value(BUF_PTR_LEN(&ds->value), 1)) {
             log_warn(NULL, __FILE__, __LINE__,
-               "WARNING: setenv.*-header contains CR and/or NL (invalid): "
-               "%s: %s", ds->key.ptr, s);
+               "WARNING: setenv.*-header contains invalid char: "
+               "%s: %s", ds->key.ptr, ds->value.ptr);
             log_warn(NULL, __FILE__, __LINE__,
               "Use mod_magnet for finer control of request, response headers.");
         }
