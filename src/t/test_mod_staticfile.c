@@ -337,12 +337,12 @@ test_mod_staticfile_process (request_st * const r, plugin_config * const pconf)
 {
     test_mod_staticfile_reset(r);
 
-    pconf->disable_pathinfo = 0;
+    pconf->pathinfo = 1;
     buffer_copy_string_len(&r->pathinfo, CONST_STR_LEN("/pathinfo"));
     run_mod_staticfile_process(r, pconf, __LINE__, 200,
       "pathinfo allowed and present");
     test_mod_staticfile_reset(r);
-    pconf->disable_pathinfo = 1;
+    pconf->pathinfo = 0;
     run_mod_staticfile_process(r, pconf, __LINE__, 0,
       "pathinfo denied and present");
     test_mod_staticfile_reset(r);
@@ -350,7 +350,7 @@ test_mod_staticfile_process (request_st * const r, plugin_config * const pconf)
     run_mod_staticfile_process(r, pconf, __LINE__, 200,
       "pathinfo denied and not present");
     test_mod_staticfile_reset(r);
-    pconf->disable_pathinfo = 0;
+    pconf->pathinfo = 1;
 
     array * const a = array_init(1);
     array_insert_value(a, CONST_STR_LEN(".exe"));

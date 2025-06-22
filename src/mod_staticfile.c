@@ -13,7 +13,7 @@
 typedef struct {
 	const array *exclude_ext;
 	unsigned short etags_used;
-	unsigned short disable_pathinfo;
+	unsigned short pathinfo;
 } plugin_config;
 
 typedef struct {
@@ -35,7 +35,7 @@ static void mod_staticfile_merge_config_cpv(plugin_config * const pconf, const c
         pconf->etags_used = cpv->v.u;
         break;
       case 2: /* static-file.disable-pathinfo */
-        pconf->disable_pathinfo = cpv->v.u;
+        pconf->pathinfo = (0 == cpv->v.u); /*(invert)*/
         break;
       default:/* should not happen */
         return;
@@ -103,7 +103,7 @@ mod_staticfile_not_handled(request_st * const r, const char * const msg)
 static handler_t
 mod_staticfile_process (request_st * const r, plugin_config * const pconf)
 {
-    if (pconf->disable_pathinfo && !buffer_is_blank(&r->pathinfo)) {
+    if (!pconf->pathinfo && !buffer_is_blank(&r->pathinfo)) {
         return mod_staticfile_not_handled(r, "pathinfo");
     }
 
