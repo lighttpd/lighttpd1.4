@@ -96,6 +96,12 @@ static void mod_setenv_prep_ext (const array * const ac) {
         /*(strip trailing and leading whitespace)*/
         const char *s = ds->value.ptr;
         uint32_t n = buffer_clen(&ds->value);
+      #ifdef __COVERITY__
+        /* coverity narrow-mindedly warns about integer underflow,
+         * which is well-defined in C for uint32_t, and even if
+         * n == 0 and underflows, is corrected on next line w/ ++n */
+        if (0 == n) continue; /*(actually doing this would skip checks; don't)*/
+      #endif
         while (n-- && s[n] == ' ') ;
         buffer_truncate(&ds->value, ++n);
         s = ds->value.ptr;
