@@ -655,6 +655,10 @@ h1_chunked_trailers (request_st * const restrict r, char * restrict t, uint32_t 
         /* trailers currently ignored if streaming request,
          * but (future) could be set aside here if handler is mod_proxy
          * and mod_proxy is sending chunked request to backend */
+      #if 0
+        /* omit final "\r\n" for simplicity for HTTP/2 trailer accumulation */
+        http_header_env_set(r, CONST_STR_LEN("_L_TRAILERS"), t, tlen-2);
+      #endif
     }
 
     return 0;

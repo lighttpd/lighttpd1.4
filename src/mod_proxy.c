@@ -824,8 +824,29 @@ static handler_t proxy_stdin_append(gw_handler_ctx *hctx) {
 
     if (hctx->wb.bytes_in == hctx->wb_reqlen) {/*hctx->r->reqbody_length >= 0*/
         /* terminate STDIN */
+      #if 0
         /* future: if request trailers were to have been set aside, add here */
-        chunkqueue_append_mem(&hctx->wb, CONST_STR_LEN("0\r\n\r\n"));
+        /* Note: there could be Content-Length with HTTP/2, but subsequent
+         * trailers would not be sent to HTTP/1.1 backend since lighttpd would
+         * send Content-Length instead of chunked encoding.  While lighttpd
+         * could check for Trailer header and HTTP/2 in proxy_create_env(), and
+         * could choose to unset Content-Length, this is not currently done.
+         * An HTTP/2 client sending trailers could avoid setting Content-Length.
+         * (There is no Content-Length with HTTP/1.1 Transfer-Encoding: chunked
+         *  and subsequent trailers.) */
+        if (array_get_element_klen(&r->env, CONST_STR_LEN("_L_TRAILERS"))) {
+            /*(look up twice if exists, but (potentially) avoid copying buffer,
+             * and free underlying value ptr sooner)*/
+            buffer * const vb =
+              array_get_buf_ptr(&r->env, CONST_STR_LEN("_L_TRAILERS"));
+            hctx->wb_reqlen += buffer_clen(vb); /*(before buffer move)*/
+            chunkqueue_append_mem(&hctx->wb, CONST_STR_LEN("0\r\n"));
+            chunkqueue_append_buffer(&hctx->wb, CONST_BUF_LEN(vb));
+            chunkqueue_append_mem(&hctx->wb, CONST_STR_LEN("\r\n"));
+        }
+        else
+      #endif
+            chunkqueue_append_mem(&hctx->wb, CONST_STR_LEN("0\r\n\r\n"));
         hctx->wb_reqlen += (int)sizeof("0\r\n\r\n");
     }
 

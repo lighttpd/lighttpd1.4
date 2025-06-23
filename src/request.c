@@ -564,6 +564,12 @@ static int http_request_parse_single_trailer(request_st * const restrict r, cons
         /* trailers currently ignored if streaming request,
          * but (future) could be set aside here if handler is mod_proxy
          * and mod_proxy is sending chunked request to backend */
+      #if 0 /*(similar to http_header_env_append() but adds lines, not tokens)*/
+        buffer * const vb =
+          array_get_buf_ptr(&r->env, CONST_STR_LEN("_L_TRAILERS"));
+        buffer_append_str2(vb, k, klen, CONST_STR_LEN(": "));
+        buffer_append_str2(vb, v, vlen, CONST_STR_LEN("\r\n"));
+      #endif
     }
 
     return 0;
