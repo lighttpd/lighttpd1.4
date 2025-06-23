@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 166;
+use Test::More tests => 171;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -164,8 +164,19 @@ EOF
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'Continue, Expect');
 
+$t->{REQUEST}  = ( <<EOF
+GET /cgi.pl?trailer HTTP/1.1
+Host: www.example.org
+Connection: close
+
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, 'Test-Trailer' => 'testing' } ];
+ok($tf->handle_http($t) == 0, 'GET response Transfer-Encoding: chunked, with trailer');
+
 # note Transfer-Encoding: chunked tests will fail with 411 Length Required if
 #   server.stream-request-body != 0 in lighttpd.conf
+#   Also, trailers might not be merged into headers before exec of CGI.
 $t->{REQUEST}  = ( <<EOF
 POST /cgi.pl?post-len HTTP/1.1
 Host: www.example.org
@@ -237,6 +248,60 @@ Host: www.example.org
 Connection: close
 Content-Type: application/x-www-form-urlencoded
 Transfer-Encoding: chunked
+Trailer: test-trailer
+
+a
+0123456789
+0
+Test-Trailer: testing
+
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, with trailer matching Trailer');
+
+$t->{REQUEST}  = ( <<EOF
+POST /cgi.pl?post-len HTTP/1.1
+Host: www.example.org
+Connection: close
+Content-Type: application/x-www-form-urlencoded
+Transfer-Encoding: chunked
+Trailer: not-matching
+
+a
+0123456789
+0
+Test-Trailer: testing
+
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, with trailer not matching Trailer');
+
+$t->{REQUEST}  = ( <<EOF
+POST /cgi.pl?env=HTTP_TEST_TRAILER HTTP/1.1
+Host: www.example.org
+Connection: close
+Content-Type: application/x-www-form-urlencoded
+Transfer-Encoding: chunked
+Trailer: test-trailer
+
+a
+0123456789
+0
+Test-Trailer: testing
+
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, 'HTTP-Content' => 'testing' } ];
+ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, echo trailer');
+
+$t->{REQUEST}  = ( <<EOF
+POST /cgi.pl?post-len HTTP/1.1
+Host: www.example.org
+Connection: close
+Content-Type: application/x-www-form-urlencoded
+Transfer-Encoding: chunked
 
 a; comment
 0123456789
@@ -246,6 +311,22 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
 ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, chunked header comment');
+
+$t->{REQUEST}  = ( <<EOF
+POST /cgi.pl?post-len HTTP/1.1
+Host: www.example.org
+Connection: close
+Content-Type: application/x-www-form-urlencoded
+Transfer-Encoding: chunked
+
+a
+0123456789
+0; comment
+
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200 } ];
+ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, chunked header comment on final chunk');
 
 $t->{REQUEST}  = ( <<EOF
 POST /cgi.pl?post-len HTTP/1.1

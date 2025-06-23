@@ -76,6 +76,21 @@ if ($ENV{"QUERY_STRING"} eq "post-len") {
     exit 0;
 }
 
+# trailer
+# note: gets merged into headers unless lighttpd configured to stream response
+# note: client browsers (e.g. Firefox) might support only Server-Timing
+#       (which Firefox Inspector displays in response Timings, not Headers)
+#   https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Trailer
+#   https://caniuse.com/?search=trailer
+if ($ENV{"QUERY_STRING"} eq "trailer") {
+    $|=1;
+    print "Status: 200\r\nTransfer-Encoding: chunked\r\n\r\n";
+    # (chose not to add 'sleep' here)
+    print "0\r\nTest-Trailer: testing\r\n\r\n";
+    #print "0\r\nServer-Timing: metric;desc=\"test-trailer\";dur=9.87\r\n\r\n";
+    exit 0;
+}
+
 # default
 print "Content-Type: text/plain\r\n\r\n";
 print $ENV{"QUERY_STRING"};
