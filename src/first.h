@@ -24,6 +24,12 @@
 #define __EXTENSIONS__
 #endif
 
+#if defined(__QNX__)
+#if __QNX__ < 800 /* < QNX 8.0.0 */
+#undef HAVE_MMAP
+#endif
+#endif
+
 #ifndef __STDC_WANT_LIB_EXT1__
 #define __STDC_WANT_LIB_EXT1__ 1
 #endif
