@@ -6,6 +6,7 @@
 
 struct server_socket;   /* declaration */
 
+__attribute_cold__
 void connections_pool_clear(server *srv);
 
 __attribute_cold__
