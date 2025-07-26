@@ -29,6 +29,7 @@ jobs:
           platform: ${{matrix.platform}}
       - name: Install packages
         run: |
+          sudo apt-get update
           sudo apt-get install build-essential \
             cmake meson ninja-build pkg-config scons \
             autoconf automake autotools-dev libtool m4 \
@@ -61,6 +62,7 @@ jobs:
           platform: ${{matrix.platform}}
       - name: Install packages
         run: |
+          sudo apt-get update
           sudo apt-get install build-essential \
             cmake meson ninja-build pkg-config scons \
             autoconf automake autotools-dev libtool m4 \
