@@ -364,16 +364,13 @@ mod_openssl_SSL_use_cert_and_key (SSL *ssl, plugin_cert *pc, mod_openssl_kp *kp)
 
   #else
 
+    if (1 != SSL_use_certificate(ssl, kp->ssl_pemfile_x509))
+        return 0;
    #if OPENSSL_VERSION_NUMBER >= 0x10002000 \
     && (!defined(LIBRESSL_VERSION_NUMBER) \
         || LIBRESSL_VERSION_NUMBER >= 0x3000000fL)
-    if (1 != SSL_use_certificate(ssl, kp->ssl_pemfile_x509))
-        return 0;
     if (kp->ssl_pemfile_chain)
         SSL_set1_chain(ssl, kp->ssl_pemfile_chain);
-   #else
-    if (1 != SSL_use_certificate_chain_file(ssl, pc->ssl_pemfile->ptr))
-        return 0;
    #endif
 
     if (1 != SSL_use_PrivateKey(ssl, kp->ssl_pemfile_pkey))
@@ -2510,7 +2507,10 @@ mod_openssl_asn1_time_to_posix (const ASN1_TIME *asn1time)
     time_t t = timegm(&x);
     return (t != (time_t)-1) ? TIME64_CAST(t) : t;
 
-  #elif defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER <0x3050000fL
+  #elif (defined(LIBRESSL_VERSION_NUMBER) \
+         && LIBRESSL_VERSION_NUMBER < 0x3050000fL) \
+     || (!defined(LIBRESSL_VERSION_NUMBER) \
+         && OPENSSL_VERSION_NUMBER < 0x10002000L)
     /* LibreSSL was forked from OpenSSL 1.0.1; does not have ASN1_TIME_diff */
 
     /*(Note: all certificate times are expected to use UTC)*/
