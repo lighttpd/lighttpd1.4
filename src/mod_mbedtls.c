@@ -791,7 +791,8 @@ mod_mbedtls_verify_cb (void *arg, mbedtls_x509_crt *crt, int depth, uint32_t *fl
 
     if (depth > hctx->conf.ssl_verifyclient_depth) {
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-                  "MTLS: client cert chain too long");
+                  "MTLS: addr:%s client cert chain too long",
+                  hctx->con->dst_addr_buf.ptr);
         *flags |= MBEDTLS_X509_BADCERT_OTHER; /* cert chain too long */
     }
     else if (0 == depth && NULL != hctx->conf.ssl_ca_dn_file) {
@@ -816,7 +817,8 @@ mod_mbedtls_verify_cb (void *arg, mbedtls_x509_crt *crt, int depth, uint32_t *fl
     }
     if (*flags & MBEDTLS_X509_BADCERT_NOT_TRUSTED) {
         log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-                  "MTLS: client cert not trusted");
+                  "MTLS: addr:%s client cert not trusted",
+                  hctx->con->dst_addr_buf.ptr);
     }
 
     return 0;
@@ -856,7 +858,8 @@ mod_mbedtls_SNI (void *arg, mbedtls_ssl_context *ssl, const unsigned char *serve
 
     if (len >= 1024) { /*(expecting < 256; TLSEXT_MAXLEN_host_name is 255)*/
         log_error(r->conf.errh, __FILE__, __LINE__,
-                  "MTLS: SNI name too long %.*s", (int)len, servername);
+          "MTLS: addr:%s SNI name too long (%zu) %.*s...",
+          hctx->con->dst_addr_buf.ptr, len, 1024, servername);
         return MBEDTLS_ERR_SSL_ILLEGAL_PARAMETER;
     }
 
@@ -1369,7 +1372,8 @@ mod_mbedtls_alpn_h2_policy (handler_ctx * const hctx)
   #if 0 /* SNI omitted by client when connecting to IP instead of to name */
     if (buffer_is_blank(&hctx->r->uri.authority)) {
         log_error(hctx->errh, __FILE__, __LINE__,
-          "SSL: error ALPN h2 without SNI");
+          "MTLS: addr:%s error ALPN h2 without SNI",
+          hctx->con->dst_addr_buf.ptr);
         return -1;
     }
   #endif
@@ -1377,7 +1381,8 @@ mod_mbedtls_alpn_h2_policy (handler_ctx * const hctx)
     if (hctx->ssl.major_ver == MBEDTLS_SSL_MAJOR_VERSION_3
         && hctx->ssl.minor_ver < MBEDTLS_SSL_MINOR_VERSION_3) {
         log_error(hctx->errh, __FILE__, __LINE__,
-          "SSL: error ALPN h2 requires TLSv1.2 or later");
+          "MTLS: addr:%s error ALPN h2 requires TLSv1.2 or later",
+          hctx->con->dst_addr_buf.ptr);
         return -1;
     }
   #else /*(mbedTLS 3.0.0 dropped support for TLSv1.1 and earlier)*/
@@ -2235,11 +2240,12 @@ mod_mbedtls_ssl_write_err(connection *con, handler_ctx *hctx, int wr, size_t wr_
         break; /* try again later */
       case MBEDTLS_ERR_NET_CONN_RESET:
         if (hctx->conf.ssl_log_noise)
-            elog(hctx->r->conf.errh, __FILE__, __LINE__, wr,
-                 "peer closed connection");
+            elogf(hctx->r->conf.errh, __FILE__, __LINE__, wr,
+              "addr:%s peer closed connection", con->dst_addr_buf.ptr);
         return -1;
       default:
-        elog(hctx->r->conf.errh, __FILE__, __LINE__, wr, __func__);
+        elogf(hctx->r->conf.errh, __FILE__, __LINE__, wr,
+          "addr:%s %s()", con->dst_addr_buf.ptr, __func__);
         return -1;
     }
 
@@ -2481,7 +2487,8 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
         if (!hctx->conf.ssl_log_noise) return -1;
         __attribute_fallthrough__
       default:
-        elog(hctx->r->conf.errh, __FILE__, __LINE__, rc, __func__);
+        elogf(hctx->r->conf.errh, __FILE__, __LINE__, rc,
+          "addr:%s %s()", hctx->con->dst_addr_buf.ptr, __func__);
         return -1;
     }
 }
@@ -2541,7 +2548,8 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
             if (!hctx->conf.ssl_log_noise) return -1;
             __attribute_fallthrough__
           default:
-            elog(hctx->errh, __FILE__, __LINE__, rc, "Reading mbedtls");
+            elogf(hctx->r->conf.errh, __FILE__, __LINE__, rc,
+              "addr:%s mod_mbedtls_ssl_read_err()",hctx->con->dst_addr_buf.ptr);
             return -1;
         }
     } else if (len == 0) {
@@ -2666,8 +2674,9 @@ mod_mbedtls_close_notify (handler_ctx *hctx)
       case MBEDTLS_ERR_SSL_WANT_WRITE:
         return 0;
       default:
-        elog(hctx->r->conf.errh, __FILE__, __LINE__, rc,
-             "mbedtls_ssl_close_notify()");
+        elogf(hctx->r->conf.errh, __FILE__, __LINE__, rc,
+          "addr:%s mbedtls_ssl_close_notify()",
+          hctx->con->dst_addr_buf.ptr);
         __attribute_fallthrough__
       case MBEDTLS_ERR_NET_CONN_RESET:
         mbedtls_ssl_session_reset(&hctx->ssl);

@@ -59,12 +59,6 @@
 #include <wolfssl/ocsp.h>
 #endif
 
-static char global_err_buf[WOLFSSL_MAX_ERROR_SZ];
-#undef ERR_error_string
-#define ERR_error_string(e,b) \
-        (wolfSSL_ERR_error_string_n((e),global_err_buf,WOLFSSL_MAX_ERROR_SZ), \
-         global_err_buf)
-
 #if 0 /* symbols and definitions requires WolfSSL built with -DOPENSSL_EXTRA */
 #define SSL_TLSEXT_ERR_OK               0
 #define SSL_TLSEXT_ERR_ALERT_FATAL      alert_fatal
@@ -281,6 +275,70 @@ handler_ctx_free (handler_ctx *hctx)
     if (hctx->kp)
         mod_wolfssl_kp_rel(hctx->kp);
     free(hctx);
+}
+
+
+__attribute_cold__
+__attribute_noinline__
+static void
+elog (log_error_st * const errh, const char * const file, const int line,
+      const char * const msg)
+{
+    /* error logging convenience function which decodes err codes */
+    char buf[WOLFSSL_MAX_ERROR_SZ];
+    wolfSSL_ERR_error_string_n(ERR_get_error(),buf,sizeof(buf));/*thread-safe*/
+    log_error(errh, file, line, "SSL: %s %s", msg, buf);
+}
+
+
+__attribute_cold__
+__attribute_format__((__printf__, 4, 5))
+__attribute_noinline__
+static void
+elogf (log_error_st * const errh, const char * const file, const int line,
+       const char * const fmt, ...)
+{
+    char msg[1024];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, ap);
+    va_end(ap);
+    elog(errh, file, line, msg);
+}
+
+
+__attribute_cold__
+__attribute_noinline__
+static void
+elogc (handler_ctx * const hctx,
+       const char * const file, const int line, const int ssl_err)
+{
+    char buf[WOLFSSL_MAX_ERROR_SZ];
+    uint32_t err;
+    while ((err = ERR_get_error())) {
+        switch (ERR_GET_REASON(err)) {
+          case SSL_R_SSL_HANDSHAKE_FAILURE:
+        #ifdef SSL_R_UNEXPECTED_EOF_WHILE_READING
+          case SSL_R_UNEXPECTED_EOF_WHILE_READING:
+        #endif
+        #ifdef SSL_R_TLSV1_ALERT_UNKNOWN_CA
+          case SSL_R_TLSV1_ALERT_UNKNOWN_CA:
+        #endif
+        #ifdef SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN
+          case SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN:
+        #endif
+        #ifdef SSL_R_SSLV3_ALERT_BAD_CERTIFICATE
+          case SSL_R_SSLV3_ALERT_BAD_CERTIFICATE:
+        #endif
+            if (!hctx->conf.ssl_log_noise) continue;
+            break;
+          default:
+            break;
+        }
+        wolfSSL_ERR_error_string_n(err, buf, sizeof(buf)); /*(thread-safe)*/
+        log_error(hctx->r->conf.errh, file, line, "SSL: addr:%s ssl_err:%d %s",
+                  hctx->con->dst_addr_buf.ptr, ssl_err, buf);
+    }
 }
 
 
@@ -535,9 +593,9 @@ ssl_tlsext_status_cb(SSL *ssl, void *arg)
     memcpy(ocsp_resp, ssl_stapling->ptr, (uint32_t)len);
 
     if (!SSL_set_tlsext_status_ocsp_resp(ssl, ocsp_resp, len)) {
-        log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-          "SSL: failed to set OCSP response for TLS server name %s: %s",
-          hctx->r->uri.authority.ptr, ERR_error_string(ERR_get_error(), NULL));
+        elogf(hctx->r->conf.errh, __FILE__, __LINE__,
+          "failed to set OCSP response for TLS server name %s",
+          hctx->r->uri.authority.ptr);
         return SSL_TLSEXT_ERR_NOACK; /* ignore OCSP request if error occurs */
         /*return SSL_TLSEXT_ERR_ALERT_FATAL;*/
     }
@@ -1058,8 +1116,7 @@ mod_wolfssl_load_cacrls (WOLFSSL_CTX *ssl_ctx, const buffer *ssl_ca_crl_file, se
     if (rc == WOLFSSL_SUCCESS)
         return 1;
 
-    log_error(srv->errh, __FILE__, __LINE__,
-      "SSL: %s %s", ERR_error_string(rc, NULL), fn);
+    elog(srv->errh, __FILE__, __LINE__, fn);
     return 0;
   #else
     UNUSED(ssl_ctx);
@@ -1090,8 +1147,7 @@ mod_wolfssl_load_verify_locn (SSL_CTX *ssl_ctx, const buffer *b, server *srv)
     if (rc == WOLFSSL_SUCCESS)
         return 1;
 
-    log_error(srv->errh, __FILE__, __LINE__,
-      "SSL: %s %s", ERR_error_string(rc, NULL), fn);
+    elog(srv->errh, __FILE__, __LINE__, fn);
     return 0;
 }
 
@@ -1316,7 +1372,8 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     safer_X509_NAME_oneline(X509_get_subject_name(err_cert),buf,sizeof(buf));
     log_error_st *errh = hctx->r->conf.errh;
     log_error(errh, __FILE__, __LINE__,
-      "SSL: verify error:num=%d:%s:depth=%d:subject=%s",
+      "SSL: addr:%s verify error:num=%d:%s:depth=%d:subject=%s",
+      hctx->con->dst_addr_buf.ptr,
       err, X509_verify_cert_error_string(err), depth, buf);
 
     /*
@@ -1326,7 +1383,8 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     if (!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY ||
                           err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
         safer_X509_NAME_oneline(X509_get_issuer_name(err_cert),buf,sizeof(buf));
-        log_error(errh, __FILE__, __LINE__, "SSL: issuer=%s", buf);
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: addr:%s issuer=%s", hctx->con->dst_addr_buf.ptr, buf);
     }
 
     return !hctx->conf.ssl_verifyclient_enforce;
@@ -1365,10 +1423,9 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
             if (!wolfSSL_use_certificate_chain_buffer(ssl,
                                                       (unsigned char *)c->ptr,
                                                       (long)buffer_clen(c))) {
-                log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-                  "SSL: failed to set cert chain for TLS server name %s: %s",
-                  hctx->r->uri.authority.ptr,
-                  ERR_error_string(ERR_get_error(), NULL));
+                elogf(hctx->r->conf.errh, __FILE__, __LINE__,
+                  "failed to set cert chain for TLS server name %s",
+                  hctx->r->uri.authority.ptr);
                 return 0;
             }
         }
@@ -1380,10 +1437,9 @@ mod_openssl_cert_cb (SSL *ssl, void *arg)
         if (1 != wolfSSL_use_PrivateKey_buffer(ssl, (unsigned char *)pkey->ptr,
                                                (int)buffer_clen(pkey),
                                                WOLFSSL_FILETYPE_ASN1)) {
-            log_error(hctx->r->conf.errh, __FILE__, __LINE__,
-              "SSL: failed to set private key for TLS server name %s: %s",
-              hctx->r->uri.authority.ptr,
-              ERR_error_string(ERR_get_error(), NULL));
+            elogf(hctx->r->conf.errh, __FILE__, __LINE__,
+              "failed to set private key for TLS server name %s",
+              hctx->r->uri.authority.ptr);
             return 0;
         }
     }
@@ -1434,7 +1490,8 @@ mod_openssl_SNI (handler_ctx *hctx, const char *servername, size_t len)
     request_st * const r = hctx->r;
     if (len >= 1024) { /*(expecting < 256; TLSEXT_MAXLEN_host_name is 255)*/
         log_error(r->conf.errh, __FILE__, __LINE__,
-                  "SSL: SNI name too long %.*s", (int)len, servername);
+          "SSL: addr:%s SNI name too long (%zu) %.*s...",
+          hctx->con->dst_addr_buf.ptr, len, 1024, servername);
         return SSL_TLSEXT_ERR_ALERT_FATAL;
     }
 
@@ -1526,9 +1583,7 @@ mod_wolfssl_reload_crl_file (server *srv, plugin_cacerts *cacerts, const unix_ti
         cacerts->crl_loadts = cur_ts;
     }
     else {
-        log_error(srv->errh, __FILE__, __LINE__, "SSL: %s %s",
-          ERR_error_string(ERR_get_error(), NULL),
-          cacerts->crl_file);
+        elog(srv->errh, __FILE__, __LINE__, cacerts->crl_file);
     }
     return rc;
   #else
@@ -1560,9 +1615,7 @@ mod_wolfssl_reload_crl_file (server *srv, plugin_cacerts *cacerts, const unix_ti
             cacerts->store = new_store;
         }
         else {
-            log_error(srv->errh, __FILE__, __LINE__, "SSL: %s %s",
-              ERR_error_string(ERR_get_error(), NULL),
-              cacerts->crl_file);
+            elog(srv->errh, __FILE__, __LINE__, cacerts->crl_file);
         }
     }
     /* XXX: not thread-safe if another thread has pointer to store and is about
@@ -1965,10 +2018,9 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
 
       #if 0 /* redundant with below? */
         if (!X509_check_private_key(ssl_pemfile_x509, ssl_pemfile_pkey)) {
-            log_error(errh, __FILE__, __LINE__,
-               "SSL: Private key does not match acme-tls/1 "
-               "certificate public key, reason: %s %s"
-               ERR_error_string(ERR_get_error(), NULL), b->ptr);
+            elogf(errh, __FILE__, __LINE__,
+               "Private key does not match acme-tls/1 "
+               "certificate public key %s", b->ptr);
             break;
         }
       #endif
@@ -1979,18 +2031,18 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
       #if 1
         if (!wolfSSL_use_certificate_chain_buffer(ssl, (unsigned char *)c->ptr,
                                                   (long)buffer_clen(c))) {
-            log_error(errh, __FILE__, __LINE__,
-              "SSL: failed to set acme-tls/1 certificate for TLS server "
-              "name %s: %s", name->ptr, ERR_error_string(ERR_get_error(),NULL));
+            elogf(errh, __FILE__, __LINE__,
+              "failed to set acme-tls/1 certificate for TLS server name %s",
+              name->ptr);
             break;
         }
       #else
         if (1 != wolfSSL_use_certificate_buffer(ssl, (unsigned char *)c->ptr,
                                                 (int)buffer_clen(c),
                                                 WOLFSSL_FILETYPE_PEM)) {
-            log_error(errh, __FILE__, __LINE__,
-              "SSL: failed to set acme-tls/1 certificate for TLS server "
-              "name %s: %s", name->ptr, ERR_error_string(ERR_get_error(),NULL));
+            elogf(errh, __FILE__, __LINE__,
+              "failed to set acme-tls/1 certificate for TLS server name %s",
+              name->ptr);
             break;
         }
 
@@ -2006,9 +2058,9 @@ mod_openssl_acme_tls_1 (SSL *ssl, handler_ctx *hctx)
         if (1 != wolfSSL_use_PrivateKey_buffer(ssl, (unsigned char *)pkey->ptr,
                                                (int)buffer_clen(pkey),
                                                WOLFSSL_FILETYPE_ASN1)) {
-            log_error(errh, __FILE__, __LINE__,
-              "SSL: failed to set acme-tls/1 private key for TLS server "
-              "name %s: %s", name->ptr, ERR_error_string(ERR_get_error(),NULL));
+            elogf(errh, __FILE__, __LINE__,
+              "failed to set acme-tls/1 private key for TLS server name %s",
+              name->ptr);
             break;
         }
 
@@ -2035,13 +2087,15 @@ mod_openssl_alpn_h2_policy (handler_ctx * const hctx)
   #if 0 /* SNI omitted by client when connecting to IP instead of to name */
     if (buffer_is_blank(&hctx->r->uri.authority)) {
         log_error(hctx->errh, __FILE__, __LINE__,
-          "SSL: error ALPN h2 without SNI");
+          "SSL: addr:%s error ALPN h2 without SNI",
+          hctx->con->dst_addr_buf.ptr);
         return -1;
     }
   #endif
     if (wolfSSL_version(hctx->ssl) < TLS1_2_VERSION) {
         log_error(hctx->errh, __FILE__, __LINE__,
-          "SSL: error ALPN h2 requires TLSv1.2 or later");
+          "SSL: addr:%s error ALPN h2 requires TLSv1.2 or later",
+          hctx->con->dst_addr_buf.ptr);
         return -1;
     }
 
@@ -2312,8 +2366,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         s->ssl_ctx = SSL_CTX_new(SSLv23_server_method());
       #endif
         if (NULL == s->ssl_ctx) {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
+            elog(srv->errh, __FILE__, __LINE__, "SSL_CTX_new");
             return -1;
         }
 
@@ -2325,9 +2378,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
          * required for client cert verification to work with sessions */
         if (0 == SSL_CTX_set_session_id_context(
                    s->ssl_ctx,(const unsigned char*)CONST_STR_LEN("lighttpd"))){
-            log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: failed to set session context: %s",
-              ERR_error_string(ERR_get_error(), NULL));
+            elog(srv->errh,__FILE__,__LINE__,"SSL_CTX_set_session_id_context");
             return -1;
         }
 
@@ -2352,8 +2403,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
             if ((SSL_OP_NO_SSLv3
                  & SSL_CTX_set_options(s->ssl_ctx, SSL_OP_NO_SSLv3))
                 != SSL_OP_NO_SSLv3) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
+                elog(srv->errh, __FILE__, __LINE__, "SSL_CTX_set_options");
                 return -1;
             }
         }
@@ -2361,8 +2411,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         if (s->ssl_cipher_list) {
             /* Disable support for low encryption ciphers */
             if (SSL_CTX_set_cipher_list(s->ssl_ctx,s->ssl_cipher_list->ptr)!=1){
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
+                elog(srv->errh, __FILE__, __LINE__, "SSL_CTX_set_cipher_list");
                 return -1;
             }
 
@@ -2452,9 +2501,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                                                    (unsigned char *)c->ptr,
                                                    (long)buffer_clen(c));
         if (rc != WOLFSSL_SUCCESS) {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: %s %s", ERR_error_string(rc, NULL),
-              s->pc->ssl_pemfile->ptr);
+            elog(srv->errh, __FILE__, __LINE__, s->pc->ssl_pemfile->ptr);
             return -1;
         }
 
@@ -2463,17 +2510,15 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                                                    (unsigned char *)k->ptr,
                                                    (int)buffer_clen(k),
                                                    WOLFSSL_FILETYPE_ASN1)) {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: %s %s %s", ERR_error_string(ERR_get_error(), NULL),
+            elogf(srv->errh, __FILE__, __LINE__, "%s %s",
               s->pc->ssl_pemfile->ptr, s->pc->ssl_privkey->ptr);
             return -1;
         }
 
       #ifndef NO_CHECK_PRIVATE_KEY
         if (1 != wolfSSL_CTX_check_private_key(s->ssl_ctx)) {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: Private key does not match the certificate public key, "
-              "reason: %s %s %s", ERR_error_string(ERR_get_error(), NULL),
+            elogf(srv->errh, __FILE__, __LINE__,
+              "Private key does not match the certificate public key %s %s",
               s->pc->ssl_pemfile->ptr, s->pc->ssl_privkey->ptr);
             return -1;
         }
@@ -2876,9 +2921,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                     cacerts = cpv->v.v;
                 }
                 else {
-                    log_error(srv->errh, __FILE__, __LINE__, "SSL: %s %s",
-                      ERR_error_string(ERR_get_error(), NULL),
-                      ssl_ca_file->ptr);
+                    elog(srv->errh, __FILE__, __LINE__, ssl_ca_file->ptr);
                     return HANDLER_ERROR;
                 }
                 break;
@@ -2903,9 +2946,7 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
                     cpv->vtype = T_CONFIG_LOCAL;
                 }
                 else {
-                    log_error(srv->errh, __FILE__, __LINE__, "SSL: %s %s",
-                      ERR_error_string(ERR_get_error(), NULL),
-                      ssl_ca_dn_file->ptr);
+                    elog(srv->errh, __FILE__, __LINE__, ssl_ca_dn_file->ptr);
                     return HANDLER_ERROR;
                 }
                 break;
@@ -3042,30 +3083,25 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
 
 __attribute_cold__
 static int
-mod_wolfssl_write_err (SSL * const ssl, int wr, connection * const con,
-                       log_error_st * const errh)
+mod_wolfssl_write_err (handler_ctx * const restrict hctx, int wr)
 {
-    int ssl_r;
-    unsigned long err;
-
-    switch ((ssl_r = SSL_get_error(ssl, wr))) {
+    /* Note: caller calls ERR_clear_error() before SSL_write() */
+    const int ssl_err = SSL_get_error(hctx->ssl, wr);
+    switch (ssl_err) {
       case SSL_ERROR_WANT_READ:
-        con->is_readable = -1;
+        hctx->con->is_readable = -1;
         return 0; /* try again later */
       case SSL_ERROR_WANT_WRITE:
-        con->is_writable = -1;
+        hctx->con->is_writable = -1;
         return 0; /* try again later */
+      case SSL_ERROR_ZERO_RETURN:
+        /* clean shutdown on the remote side */
+        if (wr == 0) return -2;
+        __attribute_fallthrough__
       case SSL_ERROR_SYSCALL:
-        /* perhaps we have error waiting in our error-queue */
-        if (0 != (err = ERR_get_error())) {
-            do {
-                log_error(errh, __FILE__, __LINE__,
-                  "SSL: %d %d %s",ssl_r,wr,ERR_error_string(err,NULL));
-            } while((err = ERR_get_error()));
-        }
-        else if (wr == -1) {
-            /* no, but we have errno */
-            switch(errno) {
+        {
+            int errnum = errno;
+            switch(errnum) {
               case EAGAIN:
              #ifdef EWOULDBLOCK
              #if EWOULDBLOCK != EAGAIN
@@ -3079,32 +3115,27 @@ mod_wolfssl_write_err (SSL * const ssl, int wr, connection * const con,
                 return 0; /* try again later */
               case EPIPE:
               case ECONNRESET:
+               #if 0
+                if (hctx->conf.ssl_log_noise)
+                    log_perror(hctx->errh, __FILE__, __LINE__,
+                      "SSL: addr:%s ssl_err:%d errno:%d",
+                      hctx->con->dst_addr_buf.ptr, ssl_err, errnum);
+               #endif
                 return -2;
               default:
-                log_perror(errh, __FILE__, __LINE__,
-                  "SSL: %d %d", ssl_r, wr);
+                if (0 == ERR_peek_error())
+                    log_perror(hctx->errh, __FILE__, __LINE__,
+                      "SSL: addr:%s ssl_err:%d wr:%d errno:%d",
+                      hctx->con->dst_addr_buf.ptr, ssl_err, wr, errnum);
                 break;
             }
         }
-        else {
-            /* neither error-queue nor errno ? */
-            log_perror(errh, __FILE__, __LINE__,
-              "SSL (error): %d %d", ssl_r, wr);
-        }
         break;
-
-      case SSL_ERROR_ZERO_RETURN:
-        /* clean shutdown on the remote side */
-        if (wr == 0) return -2;
-
-        __attribute_fallthrough__
       default:
-        while((err = ERR_get_error()))
-            log_error(errh, __FILE__, __LINE__,
-              "SSL: %d %d %s", ssl_r, wr, ERR_error_string(err, NULL));
         break;
     }
 
+    elogc(hctx, __FILE__, __LINE__, ssl_err);
     return -1;
 }
 
@@ -3133,8 +3164,6 @@ static int
 connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
     handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
-    SSL * const ssl = hctx->ssl;
-    log_error_st * const errh = hctx->errh;
 
     if (__builtin_expect( (0 != hctx->close_notify), 0))
         return mod_openssl_close_notify(hctx);
@@ -3146,7 +3175,8 @@ connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t ma
           : (uint32_t)max_bytes;
         int wr;
 
-        if (0 != chunkqueue_peek_data(cq, &data, &data_len, errh, 1)) return -1;
+        if (0 != chunkqueue_peek_data(cq, &data, &data_len, hctx->errh, 1))
+            return -1;
         if (__builtin_expect( (0 == data_len), 0)) {
             if (!cq->first->file.busy)
                 chunkqueue_remove_finished_chunks(cq);
@@ -3163,16 +3193,17 @@ connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t ma
          */
 
         ERR_clear_error();
-        wr = SSL_write(ssl, data, data_len);
+        wr = SSL_write(hctx->ssl, data, data_len);
 
         if (__builtin_expect( (hctx->renegotiations > 1), 0)) {
-            log_error(errh, __FILE__, __LINE__,
-              "SSL: renegotiation initiated by client, killing connection");
+            log_error(hctx->errh, __FILE__, __LINE__,
+              "SSL: addr:%s renegotiation initiated by client, "
+              "killing connection", con->dst_addr_buf.ptr);
             return -1;
         }
 
         if (wr <= 0)
-            return mod_wolfssl_write_err(ssl, wr, con, errh);
+            return mod_wolfssl_write_err(hctx, wr);
 
         chunkqueue_mark_written(cq, wr);
 
@@ -3216,7 +3247,8 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
 
         if (hctx->renegotiations > 1) {
             log_error(hctx->errh, __FILE__, __LINE__,
-              "SSL: renegotiation initiated by client, killing connection");
+              "SSL: addr:%s renegotiation initiated by client, "
+              "killing connection", con->dst_addr_buf.ptr);
             return -1;
         }
 
@@ -3244,9 +3276,8 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
              && (hctx->conf.ssl_read_ahead || SSL_pending(hctx->ssl) > 0));
 
     if (len < 0) {
-        int oerrno = errno;
-        int rc, ssl_err;
-        switch ((rc = SSL_get_error(hctx->ssl, len))) {
+        const int ssl_err = SSL_get_error(hctx->ssl, len);
+        switch (ssl_err) {
         case SSL_ERROR_WANT_WRITE:
             con->is_writable = -1;
             __attribute_fallthrough__
@@ -3273,32 +3304,32 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
              *   errno for details).
              *
              */
-            while((ssl_err = ERR_get_error())) {
-                /* get all errors from the error-queue */
-                log_error(hctx->errh, __FILE__, __LINE__,
-                  "SSL: %d %s", rc, ERR_error_string(ssl_err, NULL));
-            }
-
-            switch(oerrno) {
+           {
+            const int errnum = errno;
+            switch(errnum) {
+            case EPIPE:
             case ECONNRESET:
                 if (!hctx->conf.ssl_log_noise) break;
                 __attribute_fallthrough__
             default:
-                /* (oerrno should be something like ECONNABORTED not 0
+                /* (errnum should be something like ECONNABORTED not 0
                  *  if client disconnected before anything was sent
                  *  (e.g. TCP connection probe), but it does not appear
                  *  that openssl provides such notification, not even
                  *  something like SSL_R_SSL_HANDSHAKE_FAILURE) */
-                if (0==oerrno && 0==cq->bytes_in && !hctx->conf.ssl_log_noise)
+                if (0==errnum && 0==cq->bytes_in && !hctx->conf.ssl_log_noise)
                     break;
 
-                errno = oerrno; /*(for log_perror())*/
-                log_perror(hctx->errh, __FILE__, __LINE__,
-                  "SSL: %d %d %d", len, rc, oerrno);
+                if (0 == ERR_peek_error())
+                    log_perror(hctx->errh, __FILE__, __LINE__,
+                      "SSL: addr:%s ssl_err:%d rd:%d errno:%d",
+                      con->dst_addr_buf.ptr, ssl_err, len, errnum);
+                else
+                    elogc(hctx, __FILE__, __LINE__, ssl_err);
                 break;
             }
-
             break;
+           }
         case SSL_ERROR_ZERO_RETURN:
             /* clean shutdown on the remote side */
 
@@ -3312,30 +3343,8 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
 
             /*__attribute_fallthrough__*/
         default:
-            while((ssl_err = ERR_get_error())) {
-                switch (ERR_GET_REASON(ssl_err)) {
-                case SSL_R_SSL_HANDSHAKE_FAILURE:
-              #ifdef SSL_R_UNEXPECTED_EOF_WHILE_READING
-                case SSL_R_UNEXPECTED_EOF_WHILE_READING:
-              #endif
-              #ifdef SSL_R_TLSV1_ALERT_UNKNOWN_CA
-                case SSL_R_TLSV1_ALERT_UNKNOWN_CA:
-              #endif
-              #ifdef SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN
-                case SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN:
-              #endif
-              #ifdef SSL_R_SSLV3_ALERT_BAD_CERTIFICATE
-                case SSL_R_SSLV3_ALERT_BAD_CERTIFICATE:
-              #endif
-                    if (!hctx->conf.ssl_log_noise) continue;
-                    break;
-                default:
-                    break;
-                }
-                /* get all errors from the error-queue */
-                log_error(hctx->errh, __FILE__, __LINE__,
-                  "SSL: %d %s", rc, ERR_error_string(ssl_err, NULL));
-            }
+            /* get all errors from the error-queue */
+            elogc(hctx, __FILE__, __LINE__, ssl_err);
             break;
         }
         return -1;
@@ -3382,8 +3391,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_accept)
         return HANDLER_GO_ON;
     }
     else {
-        log_error(r->conf.errh, __FILE__, __LINE__,
-          "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
+        elog(hctx->r->conf.errh, __FILE__, __LINE__, "accept");
         return HANDLER_ERROR;
     }
 }
@@ -3424,16 +3432,13 @@ static int
 mod_openssl_close_notify(handler_ctx *hctx)
 {
         int ret, ssl_r;
-        unsigned long err;
-        log_error_st *errh;
 
         if (1 == hctx->close_notify) return -2;
 
         ERR_clear_error();
         switch ((ret = SSL_shutdown(hctx->ssl))) {
         case 1:
-            mod_openssl_detach(hctx);
-            return -2;
+            break;
         case 0:
             /* Drain SSL read buffers in case pending records need processing.
              * Limit to reading next record to avoid denial of service when CPU
@@ -3465,60 +3470,54 @@ mod_openssl_close_notify(handler_ctx *hctx)
             }
 
             ERR_clear_error();
-            switch ((ret = SSL_shutdown(hctx->ssl))) {
-            case 1:
-                mod_openssl_detach(hctx);
-                return -2;
-            case 0:
-                hctx->close_notify = -1;
-                return 0;
-            default:
+            ret = SSL_shutdown(hctx->ssl);
+            if (1 == ret)
                 break;
+            else if (0 == ret) {
+                hctx->close_notify = -1;
+                return 0; /* try again later */
             }
 
             __attribute_fallthrough__
         default:
 
-            if (!SSL_is_init_finished(hctx->ssl)) {
-                mod_openssl_detach(hctx);
-                return -2;
-            }
+            if (!SSL_is_init_finished(hctx->ssl))
+                break;
 
             switch ((ssl_r = SSL_get_error(hctx->ssl, ret))) {
             case SSL_ERROR_WANT_WRITE:
             case SSL_ERROR_WANT_READ:
-            case SSL_ERROR_ZERO_RETURN: /*(unexpected here)*/
                 hctx->close_notify = -1;
                 return 0; /* try again later */
             case SSL_ERROR_SYSCALL:
-                if (0 == ERR_peek_error()) {
-                    switch(errno) {
+                {
+                    const int errnum = errno;
+                    switch (errnum) {
                     case 0: /*ssl bug (see lighttpd ticket #2213)*/
                     case EPIPE:
                     case ECONNRESET:
-                        mod_openssl_detach(hctx);
-                        return -2;
+                        break;
                     default:
-                        log_perror(hctx->r->conf.errh, __FILE__, __LINE__,
-                          "SSL (error): %d %d", ssl_r, ret);
+                        if (0 == ERR_peek_error())
+                            log_perror(hctx->r->conf.errh, __FILE__, __LINE__,
+                              "SSL: addr:%s ssl_err:%d ret:%d errno:%d",
+                              hctx->con->dst_addr_buf.ptr, ssl_r, ret, errnum);
+                        else
+                            elogc(hctx, __FILE__, __LINE__, ssl_r);
                         break;
                     }
-                    break;
                 }
-                __attribute_fallthrough__
+                break;
             default:
-                errh = hctx->r->conf.errh;
-                while((err = ERR_get_error())) {
-                    log_error(errh, __FILE__, __LINE__,
-                      "SSL: %d %d %s", ssl_r, ret, ERR_error_string(err, NULL));
-                }
-
+                elogc(hctx, __FILE__, __LINE__, ssl_r);
                 break;
             }
+
+            break;
         }
-        ERR_clear_error();
-        hctx->close_notify = -1;
-        return ret;
+
+        mod_openssl_detach(hctx);
+        return -2;
 }
 
 
@@ -3576,7 +3575,7 @@ static void
 https_add_ssl_client_verify_err (buffer * const b, long status)
 {
     char errstr[256];
-    ERR_error_string_n(status, errstr, sizeof(errstr));
+    wolfSSL_ERR_error_string_n(status, errstr, sizeof(errstr));
     buffer_append_string(b, errstr);
 }
 
@@ -3753,9 +3752,7 @@ mod_wolfssl_refresh_plugin_ssl_ctx (server * const srv, plugin_ssl_ctx * const s
                                                (unsigned char *)c->ptr,
                                                (long)buffer_clen(c));
     if (rc != WOLFSSL_SUCCESS) {
-        log_error(srv->errh, __FILE__, __LINE__,
-          "SSL: %s %s", ERR_error_string(rc, NULL),
-          s->pc->ssl_pemfile->ptr);
+        elog(srv->errh, __FILE__, __LINE__, s->pc->ssl_pemfile->ptr);
         return; /* no recovery until admin fixes input files */
     }
 
@@ -3764,8 +3761,7 @@ mod_wolfssl_refresh_plugin_ssl_ctx (server * const srv, plugin_ssl_ctx * const s
                                                (unsigned char *)k->ptr,
                                                (int)buffer_clen(k),
                                                WOLFSSL_FILETYPE_ASN1)) {
-        log_error(srv->errh, __FILE__, __LINE__,
-          "SSL: %s %s %s", ERR_error_string(ERR_get_error(), NULL),
+        elogf(srv->errh, __FILE__, __LINE__, "%s %s",
           s->pc->ssl_pemfile->ptr, s->pc->ssl_privkey->ptr);
         return; /* no recovery until admin fixes input files */
     }
@@ -3774,9 +3770,8 @@ mod_wolfssl_refresh_plugin_ssl_ctx (server * const srv, plugin_ssl_ctx * const s
   #if 0
   #ifndef NO_CHECK_PRIVATE_KEY
     if (1 != wolfSSL_CTX_check_private_key(s->ssl_ctx)) {
-        log_error(srv->errh, __FILE__, __LINE__,
-          "SSL: Private key does not match the certificate public key, "
-          "reason: %s %s %s", ERR_error_string(ERR_get_error(), NULL),
+        elogf(srv->errh, __FILE__, __LINE__,
+          "Private key does not match the certificate public key %s %s"
           s->pc->ssl_pemfile->ptr, s->pc->ssl_privkey->ptr);
         return; /* no recovery until admin fixes input files */
     }
@@ -4131,8 +4126,7 @@ mod_openssl_ssl_conf_cmd (server *srv, plugin_config_socket *s)
         buffer_append_string_len(cipherstring,
                                  CONST_STR_LEN(":!aNULL:!eNULL:!EXP"));
         if (SSL_CTX_set_cipher_list(s->ssl_ctx, cipherstring->ptr) != 1) {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "SSL: %s", ERR_error_string(ERR_get_error(), NULL));
+            elog(srv->errh, __FILE__, __LINE__, "SSL_CTX_set_cipher_list");
             rc = -1;
         }
 

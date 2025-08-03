@@ -1723,14 +1723,16 @@ mod_gnutls_alpn_h2_policy (handler_ctx * const hctx)
   #if 0 /* SNI omitted by client when connecting to IP instead of to name */
     if (buffer_is_blank(&hctx->r->uri.authority)) {
         log_error(hctx->errh, __FILE__, __LINE__,
-          "SSL: error ALPN h2 without SNI");
+          "GnuTLS: addr:%s error ALPN h2 without SNI",
+          hctx->con->dst_addr_buf.ptr);
         return -1;
     }
   #endif
     if (gnutls_protocol_get_version(hctx->ssl) < GNUTLS_TLS1_2) {
         /*(future: if DTLS supported by lighttpd, add DTLS condition)*/
         log_error(hctx->errh, __FILE__, __LINE__,
-          "SSL: error ALPN h2 requires TLSv1.2 or later");
+          "GnuTLS: addr:%s error ALPN h2 requires TLSv1.2 or later",
+          hctx->con->dst_addr_buf.ptr);
         return -1;
     }
 
@@ -1814,7 +1816,8 @@ mod_gnutls_SNI(handler_ctx * const hctx,
 
     if (len >= 1024) { /*(expecting < 256; TLSEXT_MAXLEN_host_name is 255)*/
         log_error(r->conf.errh, __FILE__, __LINE__,
-                  "GnuTLS: SNI name too long %.*s", (int)len, servername);
+          "GnuTLS: addr:%s SNI name too long (%u) %.*s...",
+          hctx->con->dst_addr_buf.ptr, len, 1024, servername);
         return GNUTLS_E_INVALID_REQUEST;
     }
 
@@ -2641,7 +2644,9 @@ mod_gnutls_write_err(connection *con, handler_ctx *hctx, int wr, size_t wr_len)
         if (hctx->conf.ssl_log_noise)
             elog(hctx->r->conf.errh, __FILE__, __LINE__, wr, __func__);
        #endif
-        elog(hctx->r->conf.errh, __FILE__, __LINE__, wr, __func__);
+        elogf(hctx->r->conf.errh, __FILE__, __LINE__, wr,
+          "addr:%s %s()",
+          con->dst_addr_buf.ptr, __func__);
         return -1;
     }
 
@@ -2698,7 +2703,8 @@ mod_gnutls_read_err(connection *con, handler_ctx *hctx, int rc)
               default:
                 str = gnutls_alert_get_name(alert);
                 elogf(hctx->r->conf.errh, __FILE__, __LINE__, rc,
-                      "%s(): alert %s", __func__, str ? str : "(unknown)");
+                  "addr:%s %s(): alert %s",
+                  con->dst_addr_buf.ptr, __func__, str ? str : "(unknown)");
                 return -1;
             }
         }
@@ -2710,7 +2716,9 @@ mod_gnutls_read_err(connection *con, handler_ctx *hctx, int rc)
       case GNUTLS_E_GOT_APPLICATION_DATA: /*(not expected with current use)*/
         /*if (hctx->handshake) return -1;*//*(accept only during handshake)*/
       default:
-        elog(hctx->r->conf.errh, __FILE__, __LINE__, rc, __func__);
+        elogf(hctx->r->conf.errh, __FILE__, __LINE__, rc,
+          "addr:%s %s()",
+          con->dst_addr_buf.ptr, __func__);
         return -1;
     }
 }
@@ -2972,7 +2980,7 @@ CONNECTION_FUNC(mod_gnutls_handle_con_accept)
                       : p->ssl_ctxs[0];
     if (NULL == s) {
         log_error(r->conf.errh, __FILE__, __LINE__,
-          "SSL: not configured for socket");
+          "GnuTLS: not configured for socket");
         return HANDLER_ERROR;
     }
     hctx->ssl_session_ticket = s->ssl_session_ticket;
@@ -3076,8 +3084,8 @@ mod_gnutls_close_notify (handler_ctx *hctx)
       case GNUTLS_E_INTERRUPTED:
         return 0;
       default:
-        elog(hctx->r->conf.errh, __FILE__, __LINE__, rc,
-             "mod_gnutls_close_notify()");
+        elogf(hctx->r->conf.errh, __FILE__, __LINE__, rc,
+              "addr:%s mod_gnutls_close_notify()", hctx->con->dst_addr_buf.ptr);
         __attribute_fallthrough__
       case GNUTLS_E_PUSH_ERROR: /*(noisy; probably connection reset)*/
         mod_gnutls_detach(hctx);
