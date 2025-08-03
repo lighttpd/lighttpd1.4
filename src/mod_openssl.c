@@ -4263,9 +4263,15 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
   #if OPENSSL_VERSION_NUMBER < 0x30000000L \
    && !defined(BORINGSSL_API_VERSION) \
    && !defined(LIBRESSL_VERSION_NUMBER)
+  if (log_epoch_secs >= 1792728000) /* 23 Oct 2026 */
     log_error(srv->errh, __FILE__, __LINE__, "SSL:"
       "openssl library version is outdated and has reached end-of-life.  "
-      "As of 11 Sep 2023, only openssl 3.0.0 and later continue to receive "
+      "As of 22 Oct 2026, only openssl 3.5 and later continue to receive "
+      "security patches from openssl.org");
+  else
+    log_error(srv->errh, __FILE__, __LINE__, "SSL:"
+      "openssl library version is outdated and has reached end-of-life.  "
+      "As of 11 Sep 2023, only openssl 3.0 and later continue to receive "
       "security patches from openssl.org");
   #endif
 
