@@ -3439,6 +3439,9 @@ mod_openssl_close_notify(handler_ctx *hctx)
         switch ((ret = SSL_shutdown(hctx->ssl))) {
         case 1:
             break;
+        #if defined(WOLFSSL_SHUTDOWN_NOT_DONE) && WOLFSSL_SHUTDOWN_NOT_DONE != 0
+        case WOLFSSL_SHUTDOWN_NOT_DONE:
+        #endif
         case 0:
             /* Drain SSL read buffers in case pending records need processing.
              * Limit to reading next record to avoid denial of service when CPU
@@ -3473,7 +3476,12 @@ mod_openssl_close_notify(handler_ctx *hctx)
             ret = SSL_shutdown(hctx->ssl);
             if (1 == ret)
                 break;
-            else if (0 == ret) {
+            else if (0 == ret
+                    #if defined(WOLFSSL_SHUTDOWN_NOT_DONE) \
+                     && WOLFSSL_SHUTDOWN_NOT_DONE != 0
+                     || WOLFSSL_SHUTDOWN_NOT_DONE == ret
+                    #endif
+                    ) {
                 hctx->close_notify = -1;
                 return 0; /* try again later */
             }
