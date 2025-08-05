@@ -4459,6 +4459,17 @@ connection_write_cq_ssl_ktls (connection * const con, chunkqueue * const cq, off
           SSL_sendfile(hctx->ssl, c->file.fd, c->offset, (size_t)len, flags);
         if (wr < 0) {
             c->file.busy = (errno == EBUSY);
+          #if OPENSSL_VERSION_NUMBER < 0x30400000L /* && >= 0x30000000L */
+            unsigned long err = ERR_peek_error();
+            if (err && ERR_GET_LIB(err) != ERR_LIB_SYS
+                && ERR_GET_REASON(err) == SSL_R_UNINITIALIZED) {
+                int errnum = errno;
+                if (errnum) {
+                    err = ERR_get_error(); /* pop (invalid) error from queue */
+                    ERR_raise_data(ERR_LIB_SYS,errnum,"ktls_sendfile failure");
+                }
+            }
+          #endif
             return mod_openssl_write_err(hctx, (int)wr);
         }
         c->file.busy = 0;
@@ -4467,8 +4478,20 @@ connection_write_cq_ssl_ktls (connection * const con, chunkqueue * const cq, off
 
         ossl_ssize_t wr =
           SSL_sendfile(hctx->ssl, c->file.fd, c->offset, (size_t)len, 0);
-        if (wr < 0)
+        if (wr < 0) {
+          #if OPENSSL_VERSION_NUMBER < 0x30400000L /* && >= 0x30000000L */
+            unsigned long err = ERR_peek_error();
+            if (err && ERR_GET_LIB(err) != ERR_LIB_SYS
+                && ERR_GET_REASON(err) == SSL_R_UNINITIALIZED) {
+                int errnum = errno;
+                if (errnum) {
+                    err = ERR_get_error(); /* pop (invalid) error from queue */
+                    ERR_raise_data(ERR_LIB_SYS,errnum,"ktls_sendfile failure");
+                }
+            }
+          #endif
             return mod_openssl_write_err(hctx, (int)wr);
+        }
 
       #endif
 
