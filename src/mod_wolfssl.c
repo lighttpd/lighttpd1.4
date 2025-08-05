@@ -3081,6 +3081,10 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
 }
 
 
+static void
+mod_openssl_detach(handler_ctx *hctx);
+
+
 __attribute_cold__
 static int
 mod_wolfssl_write_err (handler_ctx * const restrict hctx, int wr)
@@ -3121,6 +3125,7 @@ mod_wolfssl_write_err (handler_ctx * const restrict hctx, int wr)
                       "SSL: addr:%s ssl_err:%d errno:%d",
                       hctx->con->dst_addr_buf.ptr, ssl_err, errnum);
                #endif
+                mod_openssl_detach(hctx); /*non-recoverable; skip CLOSE_NOTIFY*/
                 return -2;
               default:
                 if (0 == ERR_peek_error())
@@ -3136,6 +3141,7 @@ mod_wolfssl_write_err (handler_ctx * const restrict hctx, int wr)
     }
 
     elogc(hctx, __FILE__, __LINE__, ssl_err);
+    mod_openssl_detach(hctx); /* non-recoverable; skip CLOSE_NOTIFY */
     return -1;
 }
 
@@ -3347,6 +3353,7 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
             elogc(hctx, __FILE__, __LINE__, ssl_err);
             break;
         }
+        mod_openssl_detach(hctx); /* non-recoverable; skip CLOSE_NOTIFY */
         return -1;
     } else if (len == 0) {
         con->is_readable = 0;
@@ -3414,7 +3421,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_shut_wr)
 {
     plugin_data *p = p_d;
     handler_ctx *hctx = con->plugin_ctx[p->id];
-    if (NULL == hctx) return HANDLER_GO_ON;
+    if (NULL == hctx || 1 == hctx->close_notify) return HANDLER_GO_ON;
 
     hctx->close_notify = -2;
     if (SSL_is_init_finished(hctx->ssl)) {
