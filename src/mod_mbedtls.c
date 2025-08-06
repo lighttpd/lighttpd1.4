@@ -56,6 +56,12 @@
 #include <string.h>
 
 #include <mbedtls/version.h>
+/*(compatibility while waiting for future mbedtls 4.x interfaces)*/
+#if MBEDTLS_VERSION_NUMBER >= 0x04000000 /* mbedtls 4.0.0 */
+#define MBEDTLS_DECLARE_PRIVATE_IDENTIFIERS
+#include <mbedtls/ecp.h> /* mbedtls_ecp_curve_info mbedtls_ecp_curve_list() */
+#undef MBEDTLS_DECLARE_PRIVATE_IDENTIFIERS
+#endif
 /*(compatibility while waiting for future mbedtls 3.x interfaces)*/
 #if MBEDTLS_VERSION_NUMBER < 0x03020000 /* mbedtls 3.02.0 */
 #ifndef MBEDTLS_ALLOW_PRIVATE_ACCESS
