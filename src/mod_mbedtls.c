@@ -1192,7 +1192,8 @@ mod_mbedtls_pk_parse_keyfile (mbedtls_pk_context *ctx, const char *fn, const cha
     char *data = fdevent_load_file(fn, &dlen, NULL, malloc, free);
     if (NULL == data) return rc;
 
-  #if MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.00.0 */
+  #if MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.0.0 */ \
+   && MBEDTLS_VERSION_NUMBER <  0x04000000 /* mbedtls 4.0.0 */
    #if defined(MBEDTLS_USE_PSA_CRYPTO)
     rc = mbedtls_pk_parse_key(ctx, (unsigned char *)data, (size_t)dlen+1,
                               (const unsigned char *)pwd,
@@ -1248,7 +1249,8 @@ network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *
         return NULL;
     }
 
-  #if MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.00.0 */
+  #if MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.0.0 */ \
+   && MBEDTLS_VERSION_NUMBER <  0x04000000 /* mbedtls 4.0.0 */
    #if defined(MBEDTLS_USE_PSA_CRYPTO)
     rc = mbedtls_pk_check_pair(&kp->crt.pk, &kp->pk,
                                mbedtls_psa_get_random,MBEDTLS_PSA_RANDOM_STATE);
@@ -1659,6 +1661,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
     s->ssl_ctx = ck_malloc(sizeof(mbedtls_ssl_config));
     mbedtls_ssl_config_init(s->ssl_ctx);
 
+ #if MBEDTLS_VERSION_NUMBER < 0x04000000 /* mbedtls 4.0.0 */
     /* set the RNG in the ssl config context, using the default random func */
   #if defined(MBEDTLS_USE_PSA_CRYPTO)
     mbedtls_ssl_conf_rng(s->ssl_ctx,
@@ -1666,6 +1669,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
   #else
     mbedtls_ssl_conf_rng(s->ssl_ctx, mbedtls_ctr_drbg_random, &p->ctr_drbg);
   #endif
+ #endif
 
     /* mbedtls defaults to disable client renegotiation
      * mbedtls defaults to no record compression unless mbedtls is built
@@ -1761,9 +1765,9 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
         && !*(unsigned char *)&p->ticket_ctx) { /*init once*/
       #if defined(MBEDTLS_USE_PSA_CRYPTO)
         rc = mbedtls_ssl_ticket_setup(&p->ticket_ctx,
+          #if MBEDTLS_VERSION_NUMBER < 0x04000000 /* mbedtls 4.0.0 */
                                       mbedtls_psa_get_random,
                                       MBEDTLS_PSA_RANDOM_STATE,
-          #if MBEDTLS_VERSION_NUMBER < 0x04000000 /* mbedtls 4.0.0 */
                                       MBEDTLS_CIPHER_AES_256_GCM,
           #else
                                       PSA_ALG_CATEGORY_AEAD,
