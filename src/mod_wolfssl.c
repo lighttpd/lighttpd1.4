@@ -3136,6 +3136,12 @@ mod_wolfssl_write_err (handler_ctx * const restrict hctx, int wr)
             }
         }
         break;
+      #if LIBWOLFSSL_VERSION_HEX >= 0x03007001
+      case SOCKET_PEER_CLOSED_E:
+      case SOCKET_ERROR_E:
+        mod_openssl_detach(hctx); /*non-recoverable; skip CLOSE_NOTIFY*/
+        return -2;
+      #endif
       default:
         break;
     }
@@ -3336,6 +3342,12 @@ connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max
             }
             break;
            }
+        #if LIBWOLFSSL_VERSION_HEX >= 0x03007001
+        case SOCKET_PEER_CLOSED_E:
+        case SOCKET_ERROR_E:
+            if (!hctx->conf.ssl_log_noise) break;
+            __attribute_fallthrough__
+        #endif
         case SSL_ERROR_ZERO_RETURN:
             /* clean shutdown on the remote side */
 
@@ -3523,6 +3535,11 @@ mod_openssl_close_notify(handler_ctx *hctx)
                     }
                 }
                 break;
+            #if LIBWOLFSSL_VERSION_HEX >= 0x03007001
+            case SOCKET_PEER_CLOSED_E:
+            case SOCKET_ERROR_E:
+                break;
+            #endif
             default:
                 elogc(hctx, __FILE__, __LINE__, ssl_r);
                 break;
