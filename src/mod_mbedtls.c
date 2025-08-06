@@ -2735,6 +2735,8 @@ https_add_ssl_client_cert (request_st * const r, const mbedtls_x509_crt * const 
 static void
 https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *name)
 {
+  #if MBEDTLS_VERSION_NUMBER < 0x04000000 /* mbedtls 4.0.0 */
+
     /* add components of client Subject DN */
     /* code block is similar to mbedtls_x509_dn_gets() */
     /* code block specialized for creating env vars of Subject DN components
@@ -2748,8 +2750,15 @@ https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *nam
         if (!name->oid.p)
             continue;
         const char *short_name = NULL;
+      #if MBEDTLS_VERSION_NUMBER >= 0x04000000 /* mbedtls 4.0.0 */
+       #if 0 /* OID interfaces in library/x509_oid.h are not public */
+        if (0 != mbedtls_x509_oid_get_attr_short_name(&name->oid, &short_name))
+       #endif
+            continue;
+      #else
         if (0 != mbedtls_oid_get_attr_short_name(&name->oid, &short_name))
             continue;
+      #endif
         const size_t len = strlen(short_name);
         if (prelen+len >= sizeof(key)) continue;
         memcpy(key+prelen, short_name, len); /*(not '\0'-terminated)*/
@@ -2781,6 +2790,45 @@ https_add_ssl_client_subject (request_st * const r, const mbedtls_x509_name *nam
      */
     if (n > 2)
         http_header_env_set(r, CONST_STR_LEN("SSL_CLIENT_S_DN"), buf+2, n-2);
+
+  #else  /* MBEDTLS_VERSION_NUMBER >= 0x04000000 *//* mbedtls 4.0.0 */
+
+    const size_t prelen = sizeof("SSL_CLIENT_S_DN_")-1;
+    char key[64] = "SSL_CLIENT_S_DN_";
+    char buf[512]; /* MBEDTLS_X509_MAX_DN_NAME_SIZE is (256) */
+
+    int tot = mbedtls_x509_dn_gets(buf, sizeof(buf), name);
+    if (tot <= 0)
+        return;
+
+    for (char *v, *sep, *p = buf; (v = strchr(p, '=')); p = sep+2) {
+        sep = strstr(p, ", ");
+        if (sep == NULL)
+            sep = buf+tot;
+
+        const uint32_t len = (uint32_t)(v - p);
+        if (prelen+len >= sizeof(key)) continue;
+        memcpy(key+prelen, p, len); /*(not '\0'-terminated)*/
+
+        /* XXX: different from code for mbedtls < 4.x above
+         * - non-ASCII UTF-8 is escaped in resulting string
+         * - multi-valued RDNs (separated by '+') are not parsed out below */
+        const uint32_t n = (uint32_t)(sep - ++v);
+        for (uint32_t i = 0; i < n; ++i) {
+            unsigned char c = ((unsigned char *)v)[i];
+            if (c < 32 || c == 127) v[i] = '?';
+        }
+
+        http_header_env_set(r, key, prelen+len, v, n);
+
+        if (sep == buf+tot)
+            break;
+    }
+
+    http_header_env_set(r, CONST_STR_LEN("SSL_CLIENT_S_DN"),
+                        buf, (uint32_t)tot);
+
+  #endif /* MBEDTLS_VERSION_NUMBER >= 0x04000000 *//* mbedtls 4.0.0 */
 }
 
 
