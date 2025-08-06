@@ -69,7 +69,9 @@
 #include <mbedtls/entropy.h>
 #endif
 #include <mbedtls/debug.h>
+#if defined(MBEDTLS_DHM_C)
 #include <mbedtls/dhm.h>
+#endif
 #include <mbedtls/error.h>
 #include <mbedtls/oid.h>
 #include <mbedtls/pem.h>
@@ -4102,7 +4104,9 @@ mod_mbedtls_ssl_conf_ciphersuites (server *srv, plugin_config_socket *s, buffer 
                 mbedtls_ssl_conf_ciphersuites(s->ssl_ctx, ssl_preset_suiteb192);
                 mbedtls_ssl_conf_cert_profile(s->ssl_ctx,
                                               &crt_profile_suiteb192);
+              #if defined(MBEDTLS_DHM_C)
                 mbedtls_ssl_conf_dhm_min_bitlen(s->ssl_ctx, 3072);
+              #endif
             }
             e += (0 == strncmp_const(e, "SUITEB128ONLY"))
                  ? sizeof("SUITEB128ONLY")-1
@@ -4725,6 +4729,7 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
 static int
 mod_mbedtls_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const buffer *dhparameters)
 {
+  #if defined(MBEDTLS_DHM_C)
     mbedtls_dhm_context dhm;
     mbedtls_dhm_init(&dhm);
     int rc = mbedtls_dhm_parse_dhmfile(&dhm, dhparameters->ptr);
@@ -4739,6 +4744,12 @@ mod_mbedtls_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const bu
     }
     mbedtls_dhm_free(&dhm);
     return (0 == rc);
+  #else
+    UNUSED(srv);
+    UNUSED(s);
+    UNUSED(dhparameters);
+    return 1;
+  #endif
 }
 
 
