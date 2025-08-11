@@ -1007,7 +1007,7 @@ static void show_help (void) {
 #endif
 " - a light and fast webserver\n" \
 "usage:\n" \
-" -f <name>  filename of the config-file\n" \
+" -f <name>  filename of the config-file ('-' for stdin)\n" \
 " -m <name>  module directory (default: "LIBRARY_DIR")\n" \
 " -i <secs>  graceful shutdown after <secs> of inactivity\n" \
 " -1         process single (one) request on stdin socket, then exit\n" \
