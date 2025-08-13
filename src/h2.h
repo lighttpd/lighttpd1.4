@@ -91,6 +91,7 @@ struct h2con {
     uint8_t n_refused_stream;
     uint8_t n_discarded_headers;
     uint8_t n_recv_rst_stream;
+    uint8_t n_send_rst_stream_err;
 };
 typedef struct h2con h2con;
 

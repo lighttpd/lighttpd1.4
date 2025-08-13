@@ -351,11 +351,107 @@ h2_send_rst_stream_state (request_st * const r, h2con * const h2c)
 
 __attribute_cold__
 static void
+h2_send_goaway_e (connection * const con, const request_h2error_t e);
+
+
+__attribute_cold__
+static void
 h2_send_rst_stream (request_st * const r, connection * const con, const request_h2error_t e)
 {
     /*(set r->x.h2.state=H2_STATE_CLOSED)*/
     h2_send_rst_stream_state(r, (h2con *)con->hx);
     h2_send_rst_stream_id(r->x.h2.id, con, e);
+
+    /* attempt to detect HTTP/2 MadeYouReset DoS attack VU#767506 CVE-2025-8671
+     * heuristic to detect excessive err sent by client to cause reset by server
+     * Ignore H2_E_NO_ERROR and H2_E_INTERNAL_ERROR.
+     *   Were H2_E_INTERNAL_ERROR to be included, there might be false positives
+     *   (not attacks) in the count.  Ignoring H2_E_INTERNAL_ERROR here does not
+     *   count *response* headers too long, but that is not a client error.
+     * Ignore H2_E_REFUSED_STREAM, which is counted separately, elsewhere,
+     *   but not listed in conditional below since H2_E_REFUSED_STREAM is sent
+     *   directly via h2_send_rst_stream_id(), not h2_send_rst_stream()
+     * Include all other errors, though some are more prevalent than others:
+     *   H2_E_PROTOCOL_ERROR, H2_E_FLOW_CONTROL_ERROR, H2_E_STREAM_CLOSED,
+     *   H2_E_FRAME_SIZE_ERROR, H2_E_COMPRESSION_ERROR, ...
+     * Many such errors are sent with GOAWAY, so not as relevant to count here.
+     * If r->x.h2.state is not H2_STATE_CLOSED, include H2_E_STREAM_CLOSED here.
+     *
+     * Errors for unrecognized (not currently active) stream id are not counted
+     * here, but also do not affect potentially in-progress streams which are
+     * consuming resources in lighttpd and/or backends, e.g. if request headers
+     * are not yet complete, a backend to handle request has not been started.
+     *
+     * Similar to h2_recv_rst_stream() for HTTP/2 Rapid Reset attack,
+     * send GOAWAY with H2_E_NO_ERROR if count exceeds the policy limit since if
+     * peer is triggering server to send RST_STREAM, the peer is misbehaving,
+     * whether or not it is multiplexing requests from different clients, but a
+     * naive peer multiplexing requests from different clients could result in
+     * more reset (failed) streams of valid streams if one client could trigger
+     * too many resets sent by server on a single multiplexed connection, and
+     * server resets all streams and sends GOAWAY w/ error (not H2_E_NO_ERROR).
+     * log watchers such as fail2ban could watch for error log trace indicating
+     * detection of this attack, and could respond accordingly, across multiple
+     * servers.  In lighttpd, a client could trigger server-sent reset stream w/
+     * e.g. mismatch between received data and Content-Length, when provided.
+     */
+    if (e != H2_E_NO_ERROR && e != H2_E_INTERNAL_ERROR) {
+        /* simulate receiving TCP FIN from client to trigger imminent shutdown()
+         * on socket connection to backend, indicating request terminated.
+         * Note: mod_cgi must be configured for this to have any effect,
+         *   e.g. cgi.limits += ("tcp-fin-propagate" => "SIGTERM")
+         * Regardless of whether or not this optimization is performed,
+         * lighttpd will schedule close() on backend socket (or CGI pipe)
+         * and will close() backend socket (or kill CGI) upon next poll cycle */
+        /*r->conf.stream_request_body |= FDEVENT_STREAM_REQUEST_TCP_FIN;*/
+        if (r->handler_module)
+            joblist_append(con);  /*(cause short poll for next poll cycle)*/
+
+        /* increment h2c->n_send_rst_stream_err and check for policy violation
+         *
+         * time step interval currently 2 secs: (log_monotonic_secs >> 1)
+         * store time bits in upper nibble of h2c->n_send_rst_stream_err
+         *   (32-second time slice: ((log_monotonic_secs >> 1) & 0xF))
+         * time_bits are only 4 bits, so repeated time_bits could cause false
+         *   positive and not decay the counter, but well-behaved peers should
+         *   not trigger *any* RST_STREAM, so tripping the policy sooner is ok.
+         *   (rather than potentially missing policy violation (false negative))
+         * decay counter (divide by 2 (>> 1)) when time step interval changes
+         *   (any time interval change; not shifting by (cur_bits - time_bits))
+         * counter is 4 bits, so max is 15 (0xF) unless bit masks are adjusted
+         *
+         * XXX: server triggered to send RST_STREAM w/ error is unexpected
+         *      A stricter implementation might send GOAWAY H2_E_NO_ERROR
+         *      upon first occurrence.
+         */
+        h2con * const h2c = (h2con *)con->hx;
+        uint8_t cur_bits = (log_monotonic_secs >> 1) & 0xF;
+        uint8_t time_bits = h2c->n_send_rst_stream_err >> 4;
+        if (cur_bits != time_bits)
+            h2c->n_send_rst_stream_err =
+              (cur_bits << 4) | ((h2c->n_send_rst_stream_err & 0xF) >> 1);
+        if (!h2c->sent_goaway && (++h2c->n_send_rst_stream_err & 0xF) > 4) {
+            log_error(NULL, __FILE__, __LINE__,
+              "h2: %s triggered too many RST_STREAM too quickly (xaddr:%s)",
+              con->request.dst_addr_buf->ptr, r->dst_addr_buf->ptr);
+            h2_send_goaway_e(con, H2_E_NO_ERROR);
+            /* h2_send_goaway_e w/ H2_E_PROTOCOL_ERROR or H2_E_ENHANCE_YOUR_CALM
+             * would cause other request streams to be reset (and would have to
+             * check h2c->send_goaway <= 0 above instead of !h2c->sent_goaway)*/
+        }
+    }
+}
+
+
+__attribute_cold__
+__attribute_noinline__
+static void
+h2_send_rst_stream_closed (request_st * const r, connection * const con)
+{
+    if (r->x.h2.state == H2_STATE_CLOSED) /*already closed; rst_stream_id only*/
+        h2_send_rst_stream_id(r->x.h2.id, con, H2_E_STREAM_CLOSED);
+    else /*(r->x.h2.state == H2_STATE_HALF_CLOSED_REMOTE)*/
+        h2_send_rst_stream(r, con, H2_E_STREAM_CLOSED);
 }
 
 
@@ -593,6 +689,8 @@ h2_recv_rst_stream (connection * const con, const uint8_t * const s, const uint3
         /* XXX: ? add debug trace including error code from RST_STREAM ? */
         r->state = CON_STATE_ERROR;
         r->x.h2.state = H2_STATE_CLOSED;
+        if (r->handler_module)
+            joblist_append(con);  /*(cause short poll for next poll cycle)*/
 
         /* attempt to detect HTTP/2 rapid reset attack (CVE-2023-44487)
          * Send GOAWAY if 17 or more requests in recent batch of up to 32
@@ -608,8 +706,8 @@ h2_recv_rst_stream (connection * const con, const uint8_t * const s, const uint3
               (h2c->n_recv_rst_stream >> 4) + (h2c->n_recv_rst_stream & 0xf);
             if (n_recv_rst_stream > 16) {
                 log_error(NULL, __FILE__, __LINE__,
-                  "h2: %s sent too many RST_STREAM too quickly",
-                  con->request.dst_addr_buf->ptr);
+                  "h2: %s sent too many RST_STREAM too quickly (xaddr:%s)",
+                  con->request.dst_addr_buf->ptr, r->dst_addr_buf->ptr);
                 h2_send_goaway_e(con, H2_E_NO_ERROR);
             }
         }
@@ -1137,7 +1235,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
 
     if (r->x.h2.state == H2_STATE_CLOSED
         || r->x.h2.state == H2_STATE_HALF_CLOSED_REMOTE) {
-        h2_send_rst_stream_id(id, con, H2_E_STREAM_CLOSED);
+        h2_send_rst_stream_closed(r, con); /* H2_E_STREAM_CLOSED */
         chunkqueue_mark_written(cq, 9+len);
         h2_send_window_update_unit(con, h2r, len); /*(h2r->x.h2.rwin)*/
         return 1;
@@ -1515,7 +1613,7 @@ h2_recv_trailers_r (connection * const con, h2con * const h2c, const uint32_t id
     }
     if (r->x.h2.state != H2_STATE_OPEN
         && r->x.h2.state != H2_STATE_HALF_CLOSED_LOCAL) {
-        h2_send_rst_stream(r, con, H2_E_STREAM_CLOSED);
+        h2_send_rst_stream_closed(r, con); /* H2_E_STREAM_CLOSED */
         return NULL;
     }
     /* RFC 7540 is not explicit in restricting HEADERS (trailers) following
