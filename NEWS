@@ -3,6 +3,97 @@
 NEWS
 ====
 
+- 1.4.80 - 2025-08-13
+  * [doc] move comments in systemd lighttpd.service
+  * [doc] refresh INSTALL
+  * [core] adjust malloc_top_pad after srv->srvconf.max_conns
+  * [build] remove references to libev; no longer used
+  * [multiple] stricter string init without trail '\0'
+  * workaround unsupported PR_CAP_AMBIENT_CLEAR_ALL on Cloud Run
+  * [TLS] 0-init plugin_ssl_ctx (fixes #3281)
+  * [autotools] LIGHTTPD_STATIC in config.h if static build
+  * [doc] systemd lighttpd.service SystemCallFilter
+  * [core] reject stray \r in chunked headers
+  * [tests] reject stray \r or \n in chunked headers
+  * [core] http_chunk_decode_append_error()
+  * [core] h1_chunked_400_bad_request()
+  * [mod_webdav] log trace for EACCES on PUT
+  * [build] check for C23 memset_explicit()
+  * [mod_ssi] set tmp file length if ssi exec fails
+  * [ci] set SHELL=/bin/sh for builds on alpine
+  * [mod_openssl] avoid BoringSSL/AWS-LC compiler warn
+  * [mod_openssl] AWS-LC limitations/compatibility (#3282)
+  * [ci] use actions/cache@v3 to cache Cygwin install
+  * [mod_openssl] use BoringSSL APIs w/ SSL_CREDENTIAL
+  * [mod_boringssl] cp mod_openssl.c mod_boringssl.c
+  * [build] build support for mod_boringssl
+  * [mod_boringssl] rename plugin init func
+  * [mod_boringssl] remove openssl/libressl code
+  * [mod_openssl] remove code specific to boringssl
+  * [mod_boringssl] ignore ssl.read-ahead
+  * [mod_boringssl] TLS_with_buffers_method() optim
+  * [mod_boringssl] init/enable CRYPTO_BUFFER_POOL
+  * [mod_boringssl] use SSL_get0_peer_certificates()
+  * [mod_boringssl] using AWS-LC does not build
+  * [mod_boringssl] code reuse
+  * [mod_boringssl] more CRYPTO_BUFFER code, less X509
+  * [mod_boringssl] elide excess time() calls
+  * [mod_boringssl] alt callbacks for client cert vfy
+  * [mod_boringssl] remove verify_callback (replaced)
+  * [ci] bump actions/cache from 3 to 4
+  * [ci] add package for SCONS "fullstatic" build
+  * [mod_boringssl] load CRLs into STACK_OF(X509_CRL)
+  * [mod_openssl] revert commits; re-support AWS-LC
+  * [mod_boringssl] skip BIO copy if pkey already DER
+  * [mod_boringssl] shared code for parsing PEM files
+  * [mod_boringssl] typo
+  * [mod_boringssl] wipe tmp_buf used to decode pkey
+  * [mod_boringssl] more generic pkey read from PEM
+  * [mod_wolfssl] more generic pkey read from PEM
+  * [mod_nss] more generic pkey read from PEM
+  * [core] http_chunk_decode_append_* code reuse
+  * [h2] h2_send_headers_hoff() to reduce stack use
+  * [core] stricter validate of trailers from backends
+  * [core] check Transfer-Encoding: chunked from backends
+  * [core] remove deprecated Expect-CT from enum
+  * [core] http_header_str_contains_token() comment
+  * [core] http_request_field_check_value() code reuse
+  * [core] http_request_field_check_name() code reuse
+  * [core] stricter validation of backend response
+  * [mod_magnet] stricter validation of request/response
+  * [h2] fill in hoff[] for ":status: XXX\r\n\r\n"
+  * [core] simplify hoff[] access when hoff[1] == 0
+  * [core] check HTTP/1.x field block fully consumed
+  * [core] unfold fields in http_header_parse_hoff()
+  * [h2] stricter validation of HTTP/2 trailers
+  * [core] validate BACKEND_PROXY headers end w/ CRLF
+  * [core] strict validate request headers end w/ CRLF
+  * [core] fix stat_cache inotify for files in rootdir
+  * [core] merge request trailers into request headers
+  * [mod_staticfile] reject pathinfo on static files
+  * [mod_setenv] warn if setenv.* incl invalid chars
+  * [tests] trailers
+  * [mod_proxy] sketch out streaming and trailers
+  * [mod_setenv] quiet coverity noise
+  * [core] disable mmap for < QNX 8.0.0
+  * [core] connections_pool_clear() unless in jobqueue
+  * [ci] run apt-get update on github ubuntu workflows
+  * [ci] explicit compiler install on github ubuntu workflows
+  * [mod_openssl] build against ancient openssl libs
+  * [TLS] SSL error handling improvements
+  * [mod_openssl] update lib version EOL warning
+  * [mod_openssl] workaround OpenSSL 3 SSL_sendfile bug
+  * [mod_wolfssl] check for WOLFSSL_SHUTDOWN_NOT_DONE
+  * [TLS] skip SSL_shutdown after non-recoverable error
+  * [mod_wolfssl] handle additional wolfssl socket err
+  * [mod_mbedtls] mbedtls 4.x removes MBEDTLS_DHM_C
+  * [mod_mbedtls] mbedtls 4.x PSA crypto handles RNG
+  * [mod_mbedtls] mbedtls 4.x removes RSA key exch
+  * [mod_mbedtls] mbedtls 4.x curve_info,list private
+  * [mod_mbedtls] mbedtls 4.x makes oid private
+  * [doc] command line -f - to read config from stdin (fixes #3286)
+  * [h2] attempt to detect HTTP/2 MadeYouReset DoS
+
 - 1.4.79 - 2025-04-04
   * [ci] update deps pkg names for lighttpd on Cygwin
   * [ci] MSYS detection kludge in tests/LightyTest.pm
