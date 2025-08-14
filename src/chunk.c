@@ -352,7 +352,7 @@ __attribute_returns_nonnull__
 static buffer * chunk_buffer_acquire_sz(const size_t sz) {
     chunk *c;
     buffer *b;
-    if (sz <= (chunk_buf_sz|1)) {
+    if (sz <= chunk_buf_sz) {
         if (chunks) {
             c = chunks;
             chunks = c->next;
@@ -368,7 +368,7 @@ static buffer * chunk_buffer_acquire_sz(const size_t sz) {
              * (sz & ~1uL) relies on buffer_realloc() adding +1 *and* on callers
              * of this func never passing power-2 + 1 sz unless direct caller
              * adds +1 for '\0', as is done in chunk_buffer_prepare_append() */
-            c = chunk_init_sz(((sz&~1uL)+(chunk_buf_sz-1)) & ~(chunk_buf_sz-1));
+            c = chunk_init_sz((sz + (chunk_buf_sz-1)) & ~(chunk_buf_sz-1));
         }
     }
     c->next = chunk_buffers;
@@ -432,7 +432,7 @@ size_t chunk_buffer_prepare_append(buffer * const b, size_t sz) {
 __attribute_noinline__
 __attribute_returns_nonnull__
 static chunk * chunk_acquire(size_t sz) {
-    if (sz <= (chunk_buf_sz|1)) {
+    if (sz <= chunk_buf_sz) {
         if (chunks) {
             chunk *c = chunks;
             chunks = c->next;
