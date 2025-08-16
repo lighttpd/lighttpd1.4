@@ -1475,7 +1475,7 @@ http_request_trailer_check (request_st * const restrict r, http_trailer_parse_ct
          *   Choosing to reject Connection,Proxy-Connection in trailers.
          * Choosing to reject Forwarded,Upgrade,WWW-Authenticate in trailers
          */
-        if (id
+        if (light_bshift(id)
             & (light_bshift(HTTP_HEADER_AUTHORIZATION)
               |light_bshift(HTTP_HEADER_AGE)
               |light_bshift(HTTP_HEADER_CACHE_CONTROL)

@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 171;
+use Test::More tests => 172;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -295,6 +295,24 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 200, 'HTTP-Content' => 'testing' } ];
 ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, echo trailer');
+
+$t->{REQUEST}  = ( <<EOF
+POST /cgi.pl?env=HTTP_TEST_TRAILER HTTP/1.1
+Host: www.example.org
+Connection: close
+Content-Type: application/x-www-form-urlencoded
+Transfer-Encoding: chunked
+Trailer: Content-Length
+
+a
+0123456789
+0
+Content-Length: 0
+
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.1', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'POST via Transfer-Encoding: chunked, disallowed trailer');
 
 $t->{REQUEST}  = ( <<EOF
 POST /cgi.pl?post-len HTTP/1.1
