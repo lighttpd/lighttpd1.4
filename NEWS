@@ -3,6 +3,9 @@
 NEWS
 ====
 
+- 1.4.81 - 2025-08-17
+  * [core] security: fix to reject disallowed trailers
+
 - 1.4.80 - 2025-08-13
   * [doc] move comments in systemd lighttpd.service
   * [doc] refresh INSTALL
