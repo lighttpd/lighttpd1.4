@@ -643,6 +643,8 @@ h1_chunked_trailers (request_st * const restrict r, char * restrict t, uint32_t 
             if (NULL == v) break; /*(final blank line; v already validated)*/
             uint32_t klen = (uint32_t)(v - k);
             do { ++v; } while (*v == ' ' || *v == '\t');
+            if (!http_request_trailer_check_whitelist(k, klen))
+                continue;
             /*(checked in http_request_trailers_check())*/
             /*if (*v == '\r' || *v == '\n') continue;*/
             enum http_header_e id = http_header_hkey_get(k, klen);

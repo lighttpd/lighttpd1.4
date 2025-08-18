@@ -558,7 +558,8 @@ static int http_request_parse_single_trailer(request_st * const restrict r, cons
         /* note: Trailer header (if set) is left set as info for backends.
          * To remove Trailer, would have to check for trailer merging into
          * headers after all trailers processed */
-        http_header_request_append(r, id, k, klen, v, vlen);
+        if (http_request_trailer_check_whitelist(k, klen))
+            http_header_request_append(r, id, k, klen, v, vlen);
     }
     else {
         /* trailers currently ignored if streaming request,
@@ -1445,6 +1446,37 @@ http_request_headers_process_h2 (request_st * const restrict r, const int scheme
 }
 
 
+static buffer *trailer_whitelist;
+
+
+__attribute_cold__
+void
+http_request_trailer_set_whitelist (buffer *b)
+{
+    if (buffer_string_is_empty(b))
+        b = NULL;
+    else if (b->ptr[buffer_clen(b)-1] != ',')
+        buffer_append_char(b, ','); /*see http_request_trailer_check_whitelist*/
+    trailer_whitelist = b;
+}
+
+
+__attribute_cold__
+__attribute_pure__
+int
+http_request_trailer_check_whitelist (const char *k, const uint32_t klen)
+{
+    if (!trailer_whitelist) return 0;
+    const char *s = trailer_whitelist->ptr;
+    for (const char *comma; (comma = strchr(s, ',')); s = comma+1) {
+        uint32_t n = (uint32_t)(comma - s);
+        if (n == klen && buffer_eq_icase_ssn(k, s, n))
+            return 1;
+    }
+    return 0;
+}
+
+
 __attribute_cold__
 int
 http_request_trailer_check (request_st * const restrict r, http_trailer_parse_ctx * const restrict tpctx)
@@ -1467,7 +1499,7 @@ http_request_trailer_check (request_st * const restrict r, http_trailer_parse_ct
     if (__builtin_expect( (id != HTTP_HEADER_OTHER), 1)) {
         /*(recognizing label name establishes label name
          * does not contain bad whitespace or CTL chars)*/
-        /* explicitly reject certain field names disallows in trailers
+        /* explicitly reject certain field names disallowed in trailers
          * (XXX: list can be expanded further)
          * https://datatracker.ietf.org/doc/html/rfc7230#section-4.1.2
          * https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Trailer
@@ -1501,6 +1533,7 @@ http_request_trailer_check (request_st * const restrict r, http_trailer_parse_ct
               |light_bshift(HTTP_HEADER_TE)
               |light_bshift(HTTP_HEADER_TRANSFER_ENCODING)
               |light_bshift(HTTP_HEADER_UPGRADE)
+              |light_bshift(HTTP_HEADER_USER_AGENT)
               |light_bshift(HTTP_HEADER_VARY)
               |light_bshift(HTTP_HEADER_WWW_AUTHENTICATE)))
             return http_request_header_line_invalid(r, 400,

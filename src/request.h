@@ -288,6 +288,12 @@ __attribute_nonnull__()
 __attribute_pure__
 const char * http_request_field_check_value (const char * restrict v, uint32_t vlen, unsigned int http_header_strict);
 
+__attribute_cold__
+void http_request_trailer_set_whitelist (buffer *b);
+
+__attribute_pure__
+int http_request_trailer_check_whitelist (const char *k, uint32_t klen);
+
 int http_request_trailer_check (request_st * restrict r, http_trailer_parse_ctx * restrict htctx);
 int http_request_trailers_check (request_st * restrict r, char *t, uint32_t tlen, const buffer *trailer);
 
