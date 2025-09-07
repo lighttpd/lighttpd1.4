@@ -270,7 +270,7 @@ static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const 
                 p+=6;
             }
             else if (0 == strncmp((const char *)p, "upper:", 6)) {
-                flags |= BURL_TOLOWER;
+                flags |= BURL_TOUPPER;
                 p+=6;
             }
             else { /* skip unrecognized to... */
