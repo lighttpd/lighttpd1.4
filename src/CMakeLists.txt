@@ -1213,7 +1213,7 @@ endif()
 
 if(HAVE_LIBMBEDTLS AND HAVE_LIBMEDCRYPTO AND HAVE_LIBMEDX509)
 	add_and_install_library(mod_mbedtls "mod_mbedtls.c")
-	set(L_MOD_MBEDTLS ${L_MOD_MBEDTLS} mbedtls mbedcrypto mbedx509)
+	set(L_MOD_MBEDTLS ${L_MOD_MBEDTLS} mbedtls mbedx509 mbedcrypto)
 	target_link_libraries(mod_mbedtls ${L_MOD_MBEDTLS})
 endif()
 
