@@ -309,6 +309,19 @@ static int pcre_keyvalue_buffer_subst_ext(buffer *b, const char *pattern, const 
                     burl_append(b, BUF_PTR_LEN(burl->query), flags);
                 p+=5;
             }
+            else if (0 == strncmp((const char *)p, "authority.noport}", 17)) {
+                /*(note: specific to authority;
+                 * not implemented as "noport:" BURL_* token)*/
+                if (burl->authority) {
+                    const char * const colon = strrchr(burl->authority->ptr, ':');
+                    uint32_t len = buffer_clen(burl->authority);
+                    const char * const ptr = burl->authority->ptr;
+                    if (colon && ptr[len-1] != ']')
+                        len = (uint32_t)(colon - ptr);
+                    burl_append(b, ptr, len, flags);
+                }
+                p+=16;
+            }
             else { /* skip unrecognized url.* */
                 p = (const unsigned char *)strchr((const char *)p, '}');
                 if (NULL == p) return -1;
