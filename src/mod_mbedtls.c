@@ -1229,6 +1229,11 @@ __attribute_noinline__
 static void *
 network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *privkey)
 {
+  #if defined(MBEDTLS_USE_PSA_CRYPTO)
+    if (!mod_mbedtls_init_once_mbedtls(srv))
+        return NULL;
+  #endif
+
     mod_mbedtls_kp * const kp = mod_mbedtls_kp_init();
     int rc;
 
@@ -2115,9 +2120,9 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
                 __attribute_fallthrough__
               case 2: /* ssl.ca-file */
               case 3: /* ssl.ca-dn-file */
-               #if 0 /* defer; not necessary for pemfile parsing */
+               #if defined(MBEDTLS_USE_PSA_CRYPTO)
                 if (!mod_mbedtls_init_once_mbedtls(srv)) return HANDLER_ERROR;
-               #endif
+               #endif /* else defer; not necessary for pemfile parsing */
                 if (!buffer_is_blank(cpv->v.b)) {
                     mbedtls_x509_crt *cacert = ck_calloc(1, sizeof(*cacert));
                     mbedtls_x509_crt_init(cacert);
