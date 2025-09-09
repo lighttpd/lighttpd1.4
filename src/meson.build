@@ -379,12 +379,30 @@ if get_option('with_mbedtls')
 	if not(libmbedx509.found())
 	  libmbedx509 = [ compiler.find_library('mbedx509') ]
 	endif
-	libmbedcrypto = dependency('mbedcrypto', required: false)
+	libmbedcrypto = dependency('tfpsacrypto', required: false)
+	if not(libmbedcrypto.found())
+	  libmbedcrypto = compiler.find_library('tfpsacrypto', required: false, disabler: true)
+	  if (libmbedcrypto.found())
+	    libmbedcrypto = [ libmbedcrypto ]
+	  endif
+	endif
+	if not(libmbedcrypto.found())
+	  libmbedcrypto = dependency('mbedcrypto', required: false)
+	endif
 	if not(libmbedcrypto.found())
 	  libmbedcrypto = [ compiler.find_library('mbedcrypto') ]
 	endif
 	if compiler.get_define('FORCE_GNUTLS_CRYPTO') == '' and compiler.get_define('FORCE_OPENSSL_CRYPTO') == '' and compiler.get_define('FORCE_WOLFSSL_CRYPTO') == ''
-	  libcrypto = dependency('mbedcrypto', required: false)
+	  libcrypto = dependency('tfpsacrypto', required: false)
+	  if not(libcrypto.found())
+	    libcrypto = compiler.find_library('tfpsacrypto', required: false, disabler: true)
+	    if (libcrypto.found())
+	      libcrypto = [ libcrypto ]
+	    endif
+	  endif
+	  if not(libcrypto.found())
+	    libcrypto = dependency('mbedcrypto', required: false)
+	  endif
 	  if not(libcrypto.found())
 	    libcrypto = [ compiler.find_library('mbedcrypto') ]
 	  endif

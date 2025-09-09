@@ -742,17 +742,29 @@ AM_CONDITIONAL(BUILD_WITH_MBEDTLS, test ! $WITH_MBEDTLS = no)
 if test "x$use_mbedtls" = "xyes"; then
   AC_CHECK_HEADERS([mbedtls/ssl.h])
   OLDLIBS="$LIBS"
-  AC_CHECK_LIB(mbedcrypto, mbedtls_base64_encode,
+  AC_CHECK_LIB(tfpsacrypto, mbedtls_base64_encode,
     [AC_CHECK_LIB(mbedx509, mbedtls_x509_get_name,
       [AC_CHECK_LIB(mbedtls, mbedtls_ssl_init,
-        [MTLS_LIBS="-lmbedtls -lmbedx509 -lmbedcrypto"
-         CRYPTO_LIB="-lmbedcrypto"
+        [MTLS_LIBS="-lmbedtls -lmbedx509 -ltfpsacrypto"
+         CRYPTO_LIB="-ltfpsacrypto"
          AC_DEFINE(HAVE_LIBMBEDTLS, [1], [Have libmbedtls library])
          AC_DEFINE(HAVE_LIBMBEDX509, [1], [Have libmbedx509 library])
          AC_DEFINE(HAVE_LIBMBEDCRYPTO, [1], [Have libmbedcrypto library]) ],
-        [],[-lmbedx509 -lmbedcrypto "$DL_LIB"])
-      ],[],[-lmbedcrypto "$DL_LIB"])
-    ],[],[])
+        [],[-lmbedx509 -ltfpsacrypto "$DL_LIB"])
+      ],[],[-ltfpsacrypto "$DL_LIB"])
+    ],
+    [AC_CHECK_LIB(mbedcrypto, mbedtls_base64_encode,
+      [AC_CHECK_LIB(mbedx509, mbedtls_x509_get_name,
+        [AC_CHECK_LIB(mbedtls, mbedtls_ssl_init,
+          [MTLS_LIBS="-lmbedtls -lmbedx509 -lmbedcrypto"
+           CRYPTO_LIB="-lmbedcrypto"
+           AC_DEFINE(HAVE_LIBMBEDTLS, [1], [Have libmbedtls library])
+           AC_DEFINE(HAVE_LIBMBEDX509, [1], [Have libmbedx509 library])
+           AC_DEFINE(HAVE_LIBMBEDCRYPTO, [1], [Have libmbedcrypto library]) ],
+          [],[-lmbedx509 -lmbedcrypto "$DL_LIB"])
+        ],[],[-lmbedcrypto "$DL_LIB"])
+      ],[],[])
+    ],[])
   LIBS="$OLDLIBS"
   AC_SUBST(MTLS_LIBS)
   AC_SUBST(CRYPTO_LIB)
