@@ -714,7 +714,7 @@ char * chunkqueue_get_memory(chunkqueue * const restrict cq, size_t * const rest
 	}
 
 	/* allocate new chunk */
-	b = chunkqueue_append_buffer_open_sz(cq, sz);
+	b = chunkqueue_append_buffer_open_sz(cq, sz+1);
 	*len = buffer_string_space(b);
 	return b->ptr;
 }
