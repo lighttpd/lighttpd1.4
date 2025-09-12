@@ -3,6 +3,16 @@
 NEWS
 ====
 
+- 1.4.82 - 2025-09-12
+  * [core] restrict request trailers to configured list
+  * [core] fix logic inversion in "toupper:" modifier
+  * [mod_redirect,mod_rewrite] ${url.authority.noport} token
+  * [cmake,mod_mbedtls] mbedx509 mbedcrypto order
+  * [mod_mbedtls] psa_crypto_init() for MBEDTLS_USE_PSA_CRYPTO (fixes #3288)
+  * [build] mod_mbedtls: use tfpsacrypto if found
+  * [ci] Bump actions/checkout from 4 to 5
+  * [core] avoid chunk mem reallocation on read/recv
+
 - 1.4.81 - 2025-08-17
   * [core] security: fix to reject disallowed trailers
 
