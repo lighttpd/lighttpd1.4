@@ -1244,7 +1244,7 @@ network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *
         mod_mbedtls_kp_free(kp);
         return NULL;
     }
-    else if (!mod_mbedtls_cert_is_active(&kp->crt)) {
+    else if (!mod_mbedtls_cert_is_active(&kp->crt) && log_epoch_secs > 300) {
         log_error(srv->errh, __FILE__, __LINE__,
           "MTLS: inactive/expired X509 certificate '%s'", pemfile->ptr);
     }

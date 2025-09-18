@@ -2309,7 +2309,8 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
         EVP_PKEY_free(ssl_pemfile_pkey);
         return NULL;
     }
-    if (!mod_boringssl_cert_is_active(ssl_pemfile_x509[0]))
+    if (!mod_boringssl_cert_is_active(ssl_pemfile_x509[0])
+        && log_epoch_secs > 300)
         log_error(srv->errh, __FILE__, __LINE__,
           "SSL: inactive/expired X509 certificate '%s'", pemfile->ptr);
 

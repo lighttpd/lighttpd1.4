@@ -2346,7 +2346,7 @@ mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) 
         X509_free(x);
         x = NULL;
     }
-    else if (!mod_openssl_cert_is_active(x)) {
+    else if (!mod_openssl_cert_is_active(x) && log_epoch_secs > 300) {
         log_error(errh, __FILE__, __LINE__,
           "SSL: inactive/expired X509 certificate '%s'", file);
     }

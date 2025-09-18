@@ -626,7 +626,8 @@ mod_gnutls_load_config_crts (const char *fn, log_error_st *errh)
         return NULL;
     }
     else if (
-      !mod_gnutls_cert_is_active(((gnutls_x509_crt_t *)(void *)d->data)[0])) {
+      !mod_gnutls_cert_is_active(((gnutls_x509_crt_t *)(void *)d->data)[0])
+      && log_epoch_secs > 300) {
         log_error(errh, __FILE__, __LINE__,
           "GnuTLS: inactive/expired X509 certificate '%s'", fn);
     }

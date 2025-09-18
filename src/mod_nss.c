@@ -658,7 +658,7 @@ mod_nss_load_pem_crts (const char *fn, log_error_st *errh, CERTCertificateList *
         CERT_DestroyCertificateList(*pchain);
         *pchain = NULL;
     }
-    else if (!mod_nss_cert_is_active(cert)) {
+    else if (!mod_nss_cert_is_active(cert) && log_epoch_secs > 300) {
         log_error(errh, __FILE__, __LINE__,
           "NSS: inactive/expired X509 certificate '%s'", fn);
     }

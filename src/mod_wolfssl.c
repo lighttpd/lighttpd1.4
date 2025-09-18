@@ -865,7 +865,7 @@ mod_wolfssl_load_pem_file (const char *fn, log_error_st *errh, buffer ***chain)
     }
 
   #if LIBWOLFSSL_VERSION_HEX >= 0x04002000
-    if (certs && !mod_wolfssl_cert_is_active(certs[0]))
+    if (certs && !mod_wolfssl_cert_is_active(certs[0]) && log_epoch_secs > 300)
         log_error(errh, __FILE__, __LINE__,
           "SSL: inactive/expired X509 certificate '%s'", fn);
   #endif
@@ -919,7 +919,7 @@ mod_wolfssl_load_raw_file (const char *fn, log_error_st *errh, buffer ***chain)
         e += sizeof(PEM_END_CERT)-1;
         if (NULL == buffer_append_base64_decode(der,b,len,BASE64_STANDARD))
             break;
-        if (!mod_wolfssl_cert_is_active(der))
+        if (!mod_wolfssl_cert_is_active(der) && log_epoch_secs > 300)
             log_error(errh, __FILE__, __LINE__,
               "SSL: inactive/expired X509 certificate '%s'", fn);
     } while (0);
