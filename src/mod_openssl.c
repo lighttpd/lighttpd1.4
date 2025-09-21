@@ -225,8 +225,8 @@ static int ssl_is_init;
 static int ktls_enable;
 #endif
 /* need assigned p->id for deep access of module handler_ctx for connection
- *   i.e. handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id]; */
-static plugin_data *plugin_data_singleton;
+ *   i.e. handler_ctx *hctx = con->plugin_ctx[mod_openssl_plugin_data->id]; */
+static plugin_data *mod_openssl_plugin_data;
 #define LOCAL_SEND_BUFSIZE (16 * 1024)
 static char *local_send_buffer;
 static int feature_refresh_certs;
@@ -773,7 +773,8 @@ static const buffer *
 mod_openssl_refresh_ech_key_is_ech_only(plugin_ssl_ctx * const s, const char * const h, size_t hlen)
 {
     /* (similar to mod_openssl_ech_only(), but without hctx) */
-    const array * const ech_only_hosts = plugin_data_singleton->ech_only_hosts;
+    const array * const ech_only_hosts =
+      mod_openssl_plugin_data->ech_only_hosts;
     if (ech_only_hosts) {
         const data_unset *du = array_get_element_klen(ech_only_hosts, h, hlen);
         if (du) return &((const data_string *)du)->value;
@@ -1311,8 +1312,7 @@ mod_openssl_ech_only_policy_check (request_st * const r, handler_ctx * const hct
 
 INIT_FUNC(mod_openssl_init)
 {
-    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
-    return plugin_data_singleton;
+    return (mod_openssl_plugin_data = ck_calloc(1, sizeof(plugin_data)));
 }
 
 
@@ -1844,7 +1844,7 @@ mod_openssl_merge_config(plugin_config * const pconf, const config_plugin_value_
 static void
 mod_openssl_patch_config (request_st * const r, plugin_config * const pconf)
 {
-    plugin_data * const p = plugin_data_singleton;
+    plugin_data * const p = mod_openssl_plugin_data;
     memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
@@ -4374,7 +4374,7 @@ mod_openssl_close_notify(handler_ctx *hctx);
 static int
 connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_openssl_plugin_data->id];
 
     if (__builtin_expect( (0 != hctx->close_notify), 0))
         return mod_openssl_close_notify(hctx);
@@ -4437,7 +4437,7 @@ connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t ma
 static int
 connection_write_cq_ssl_ktls (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_openssl_plugin_data->id];
 
     if (__builtin_expect( (0 != hctx->close_notify), 0))
         return mod_openssl_close_notify(hctx);
@@ -4515,7 +4515,7 @@ connection_write_cq_ssl_ktls (connection * const con, chunkqueue * const cq, off
 static int
 connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_openssl_plugin_data->id];
     int len;
     char *mem = NULL;
     size_t mem_len = 0;

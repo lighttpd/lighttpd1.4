@@ -64,11 +64,10 @@ typedef struct {
     script_cache cache;
 } plugin_data;
 
-static plugin_data *plugin_data_singleton;
+static plugin_data *mod_magnet_plugin_data;
 
 INIT_FUNC(mod_magnet_init) {
-    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
-    return plugin_data_singleton;
+    return (mod_magnet_plugin_data = ck_calloc(1, sizeof(plugin_data)));
 }
 
 FREE_FUNC(mod_magnet_free) {
@@ -2615,7 +2614,7 @@ static int magnet_reqbody(lua_State *L) {
             else if (NULL == r->handler_module) {
                 r->conf.stream_request_body &=
                   ~(FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN);
-                r->handler_module = plugin_data_singleton->self;
+                r->handler_module = mod_magnet_plugin_data->self;
                 lua_pushboolean(L, 0);
             }
             else if (0 == strcmp(r->handler_module->name, "security3")) {

@@ -103,7 +103,7 @@ typedef struct {
     array tokens;
 } plugin_data;
 
-static plugin_data *mod_extforward_plugin_data_singleton;
+static plugin_data *mod_extforward_plugin_data;
 static int extforward_check_proxy;
 
 
@@ -151,7 +151,7 @@ static void handler_ctx_free(handler_ctx *hctx) {
 }
 
 INIT_FUNC(mod_extforward_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    return (mod_extforward_plugin_data = ck_calloc(1, sizeof(plugin_data)));
 }
 
 FREE_FUNC(mod_extforward_free) {
@@ -403,7 +403,6 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
         }
     }
 
-    mod_extforward_plugin_data_singleton = p;
     p->defaults.opts = PROXY_FORWARDED_NONE;
 
     /* initialize p->defaults from global config context */
@@ -1601,8 +1600,7 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
 
     if (3 + len > sz) return 0;
 
-    handler_ctx * const hctx =
-      con->plugin_ctx[mod_extforward_plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_extforward_plugin_data->id];
     tlv = (struct pp2_tlv *)((char *)hdr + 16);
     for (sz -= len, len -= 3; sz >= 3; sz -= 3 + len) {
         tlv = (struct pp2_tlv *)((char *)tlv + 3 + len);
@@ -1710,8 +1708,7 @@ static int mod_extforward_network_read (connection *con,
       default: rc = -1; break;
     }
 
-    handler_ctx *hctx =
-      con->plugin_ctx[mod_extforward_plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_extforward_plugin_data->id];
     con->network_read = hctx->saved_network_read;
     hctx->saved_network_read = NULL;
     return (0 == rc) ? con->network_read(con, cq, max_bytes) : rc;

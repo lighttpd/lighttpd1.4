@@ -226,8 +226,8 @@ typedef struct {
 
 static int ssl_is_init;
 /* need assigned p->id for deep access of module handler_ctx for connection
- *   i.e. handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id]; */
-static plugin_data *plugin_data_singleton;
+ *   i.e. handler_ctx *hctx = con->plugin_ctx[mod_nss_plugin_data->id]; */
+static plugin_data *mod_nss_plugin_data;
 #define LOCAL_SEND_BUFSIZE 16384 /* DEFAULT_MAX_RECORD_SIZE */
 static char *local_send_buffer;
 static int feature_refresh_certs;
@@ -454,8 +454,7 @@ mod_nss_secitem_wipe (SECItem * const d)
 
 INIT_FUNC(mod_nss_init)
 {
-    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
-    return plugin_data_singleton;
+    return (mod_nss_plugin_data = ck_calloc(1, sizeof(plugin_data)));
 }
 
 
@@ -1110,7 +1109,7 @@ mod_nss_merge_config(plugin_config * const pconf, const config_plugin_value_t *c
 static void
 mod_nss_patch_config (request_st * const r, plugin_config * const pconf)
 {
-    plugin_data * const p = plugin_data_singleton;
+    plugin_data * const p = mod_nss_plugin_data;
     memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
@@ -2336,7 +2335,7 @@ mod_nss_close_notify(handler_ctx *hctx);
 static int
 connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_nss_plugin_data->id];
     PRFileDesc * const ssl = hctx->ssl;
     log_error_st * const errh = hctx->errh;
 
@@ -2412,7 +2411,7 @@ mod_nss_SSLHandshakeCallback (PRFileDesc *fd, void *arg)
 static int
 connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_nss_plugin_data->id];
 
     UNUSED(max_bytes);
 

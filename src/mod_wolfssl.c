@@ -193,8 +193,8 @@ typedef struct {
 
 static int ssl_is_init;
 /* need assigned p->id for deep access of module handler_ctx for connection
- *   i.e. handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id]; */
-static plugin_data *plugin_data_singleton;
+ *   i.e. handler_ctx *hctx = con->plugin_ctx[mod_wolfssl_plugin_data->id]; */
+static plugin_data *mod_wolfssl_plugin_data;
 #define LOCAL_SEND_BUFSIZE (16 * 1024)
 static char *local_send_buffer;
 static int feature_refresh_certs;
@@ -606,11 +606,10 @@ ssl_tlsext_status_cb(SSL *ssl, void *arg)
 
 INIT_FUNC(mod_openssl_init)
 {
-    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
   #ifdef DEBUG_WOLFSSL
     wolfSSL_Debugging_ON();
   #endif
-    return plugin_data_singleton;
+    return (mod_wolfssl_plugin_data = ck_calloc(1, sizeof(plugin_data)));
 }
 
 
@@ -645,10 +644,8 @@ static void mod_openssl_free_openssl (void)
     stek_rotate_ts = 0;
   #endif
 
-    if (wolfSSL_Cleanup() != WOLFSSL_SUCCESS) {
-        log_error(plugin_data_singleton->srv->errh, __FILE__, __LINE__,
-          "SSL: wolfSSL_Cleanup() failed");
-    }
+    if (wolfSSL_Cleanup() != WOLFSSL_SUCCESS)
+        log_error(NULL, __FILE__, __LINE__, "SSL: wolfSSL_Cleanup() failed");
 
     free(local_send_buffer);
     ssl_is_init = 0;
@@ -1251,7 +1248,7 @@ mod_openssl_merge_config(plugin_config * const pconf, const config_plugin_value_
 static void
 mod_openssl_patch_config (request_st * const r, plugin_config * const pconf)
 {
-    plugin_data * const p = plugin_data_singleton;
+    plugin_data * const p = mod_wolfssl_plugin_data;
     memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
@@ -3175,7 +3172,7 @@ mod_openssl_close_notify(handler_ctx *hctx);
 static int
 connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_wolfssl_plugin_data->id];
 
     if (__builtin_expect( (0 != hctx->close_notify), 0))
         return mod_openssl_close_notify(hctx);
@@ -3237,7 +3234,7 @@ connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t ma
 static int
 connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_wolfssl_plugin_data->id];
     int len;
     char *mem = NULL;
     size_t mem_len = 0;

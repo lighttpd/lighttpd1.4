@@ -160,8 +160,8 @@ typedef struct {
 
 static int ssl_is_init;
 /* need assigned p->id for deep access of module handler_ctx for connection
- *   i.e. handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id]; */
-static plugin_data *plugin_data_singleton;
+ *   i.e. handler_ctx *hctx = con->plugin_ctx[mod_gnutls_plugin_data->id]; */
+static plugin_data *mod_gnutls_plugin_data;
 #define LOCAL_SEND_BUFSIZE 16384 /* DEFAULT_MAX_RECORD_SIZE */
 static char *local_send_buffer;
 static int feature_refresh_certs;
@@ -501,8 +501,7 @@ mod_gnutls_session_ticket_key_check (server *srv, const plugin_data *p, const un
 
 INIT_FUNC(mod_gnutls_init)
 {
-    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
-    return plugin_data_singleton;
+    return (mod_gnutls_plugin_data = ck_calloc(1, sizeof(plugin_data)));
 }
 
 
@@ -991,7 +990,7 @@ mod_gnutls_merge_config(plugin_config * const pconf, const config_plugin_value_t
 static void
 mod_gnutls_patch_config (request_st * const r, plugin_config * const pconf)
 {
-    plugin_data * const p = plugin_data_singleton;
+    plugin_data * const p = mod_gnutls_plugin_data;
     memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
@@ -2732,7 +2731,7 @@ mod_gnutls_close_notify(handler_ctx *hctx);
 static int
 connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_gnutls_plugin_data->id];
     gnutls_session_t const ssl = hctx->ssl;
     if (!hctx->handshake) return 0;
 
@@ -2828,7 +2827,7 @@ connection_write_cq_ssl_ktls (connection * const con, chunkqueue * const cq, off
      * Therefore, callers should ensure GNUTLS_KTLS_SEND is enabled before
      * configuring: con->network_write = connection_write_cq_ssl_ktls */
 
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_gnutls_plugin_data->id];
     if (!hctx->handshake) return 0;
 
     if (hctx->pending_write) {
@@ -2914,7 +2913,7 @@ mod_gnutls_ssl_handshake (handler_ctx *hctx)
 static int
 connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_gnutls_plugin_data->id];
 
     UNUSED(max_bytes);
 
@@ -2957,8 +2956,7 @@ static void
 mod_gnutls_debug_cb(int level, const char *str)
 {
     UNUSED(level);
-    log_error_st *errh = plugin_data_singleton->srv->errh;
-    log_error(errh, __FILE__, __LINE__, "GnuTLS: %s", str);
+    log_error(NULL, __FILE__, __LINE__, "GnuTLS: %s", str);
 }
 
 

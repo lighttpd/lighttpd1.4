@@ -209,8 +209,8 @@ typedef struct {
 
 static int ssl_is_init;
 /* need assigned p->id for deep access of module handler_ctx for connection
- *   i.e. handler_ctx *hctx = con->plugin_ctx[plugin_data_singleton->id]; */
-static plugin_data *plugin_data_singleton;
+ *   i.e. handler_ctx *hctx = con->plugin_ctx[mod_mbedtls_plugin_data->id]; */
+static plugin_data *mod_mbedtls_plugin_data;
 #ifdef MBEDTLS_SSL_OUT_CONTENT_LEN
 #define LOCAL_SEND_BUFSIZE MBEDTLS_SSL_OUT_CONTENT_LEN
 #else
@@ -500,11 +500,7 @@ mod_mbedtls_session_ticket_key_check (plugin_data *p, const unix_time64_t cur_ts
 
 INIT_FUNC(mod_mbedtls_init)
 {
-    plugin_data_singleton = (plugin_data *)ck_calloc(1, sizeof(plugin_data));
-  #if defined(MBEDTLS_SSL_SESSION_TICKETS)
-    mbedtls_ssl_ticket_init(&plugin_data_singleton->ticket_ctx);
-  #endif
-    return plugin_data_singleton;
+    return (mod_mbedtls_plugin_data = ck_calloc(1, sizeof(plugin_data)));
 }
 
 
@@ -513,6 +509,9 @@ static int mod_mbedtls_init_once_mbedtls (server *srv)
     if (ssl_is_init) return 1;
     ssl_is_init = 1;
 
+  #if !defined(MBEDTLS_USE_PSA_CRYPTO) || defined(MBEDTLS_SSL_SESSION_TICKETS)
+    plugin_data * const p = mod_mbedtls_plugin_data;
+  #endif
   #if defined(MBEDTLS_USE_PSA_CRYPTO)
     psa_status_t ps = psa_crypto_init();
     if (ps != PSA_SUCCESS) {
@@ -521,7 +520,6 @@ static int mod_mbedtls_init_once_mbedtls (server *srv)
         return 0;
     }
   #else
-    plugin_data * const p = plugin_data_singleton;
     mbedtls_ctr_drbg_init(&p->ctr_drbg); /* init empty NSIT random num gen */
     mbedtls_entropy_init(&p->entropy);   /* init empty entropy collection struct
                                                .. could add sources here too */
@@ -536,6 +534,9 @@ static int mod_mbedtls_init_once_mbedtls (server *srv)
              "Init of random number generator failed");
         return 0;
     }
+  #endif
+  #if defined(MBEDTLS_SSL_SESSION_TICKETS)
+    mbedtls_ssl_ticket_init(&p->ticket_ctx);
   #endif
 
     local_send_buffer = ck_malloc(LOCAL_SEND_BUFSIZE);
@@ -552,7 +553,9 @@ static void mod_mbedtls_free_mbedtls (void)
     stek_rotate_ts = 0;
   #endif
 
-    plugin_data * const p = plugin_data_singleton;
+  #if !defined(MBEDTLS_USE_PSA_CRYPTO) || defined(MBEDTLS_SSL_SESSION_TICKETS)
+    plugin_data * const p = mod_mbedtls_plugin_data;
+  #endif
   #if defined(MBEDTLS_USE_PSA_CRYPTO)
     mbedtls_psa_crypto_free();
   #else
@@ -725,7 +728,7 @@ mod_mbedtls_merge_config(plugin_config * const pconf, const config_plugin_value_
 static void
 mod_mbedtls_patch_config (request_st * const r, plugin_config * const pconf)
 {
-    plugin_data * const p = plugin_data_singleton;
+    plugin_data * const p = mod_mbedtls_plugin_data;
     memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
@@ -1206,7 +1209,7 @@ mod_mbedtls_pk_parse_keyfile (mbedtls_pk_context *ctx, const char *fn, const cha
                               pwd ? strlen(pwd) : 0,
                               mbedtls_psa_get_random, MBEDTLS_PSA_RANDOM_STATE);
    #else
-    plugin_data * const p = plugin_data_singleton;
+    plugin_data * const p = mod_mbedtls_plugin_data;
     rc = mbedtls_pk_parse_key(ctx, (unsigned char *)data, (size_t)dlen+1,
                               (const unsigned char *)pwd,
                               pwd ? strlen(pwd) : 0,
@@ -1266,7 +1269,7 @@ network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     rc = mbedtls_pk_check_pair(&kp->crt.pk, &kp->pk,
                                mbedtls_psa_get_random,MBEDTLS_PSA_RANDOM_STATE);
    #else
-    plugin_data * const p = plugin_data_singleton;
+    plugin_data * const p = mod_mbedtls_plugin_data;
     rc = mbedtls_pk_check_pair(&kp->crt.pk, &kp->pk,
                                mbedtls_ctr_drbg_random, &p->ctr_drbg);
    #endif
@@ -2282,7 +2285,7 @@ mod_mbedtls_close_notify(handler_ctx *hctx);
 static int
 connection_write_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_mbedtls_plugin_data->id];
     mbedtls_ssl_context * const ssl = &hctx->ssl;
 
     if (hctx->pending_write) {
@@ -2514,7 +2517,7 @@ mod_mbedtls_ssl_handshake (handler_ctx *hctx)
 static int
 connection_read_cq_ssl (connection * const con, chunkqueue * const cq, off_t max_bytes)
 {
-    handler_ctx * const hctx = con->plugin_ctx[plugin_data_singleton->id];
+    handler_ctx * const hctx = con->plugin_ctx[mod_mbedtls_plugin_data->id];
     int len;
     char *mem = NULL;
     size_t mem_len = 0;
@@ -2586,7 +2589,7 @@ mod_mbedtls_debug_cb(void *ctx, int level,
                      const char *str)
 {
     if (level < (intptr_t)ctx) /* level */
-        log_error(plugin_data_singleton->srv->errh,file,line,"MTLS: %s",str);
+        log_error(NULL, file, line, "MTLS: %s", str);
 }
 
 
