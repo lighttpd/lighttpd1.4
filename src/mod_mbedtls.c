@@ -56,12 +56,6 @@
 #include <string.h>
 
 #include <mbedtls/version.h>
-/*(compatibility while waiting for future mbedtls 4.x interfaces)*/
-#if MBEDTLS_VERSION_NUMBER >= 0x04000000 /* mbedtls 4.0.0 */
-#define MBEDTLS_DECLARE_PRIVATE_IDENTIFIERS
-#include <mbedtls/ecp.h> /* mbedtls_ecp_curve_info mbedtls_ecp_curve_list() */
-#undef MBEDTLS_DECLARE_PRIVATE_IDENTIFIERS
-#endif
 /*(compatibility while waiting for future mbedtls 3.x interfaces)*/
 #if MBEDTLS_VERSION_NUMBER < 0x03020000 /* mbedtls 3.02.0 */
 #ifndef MBEDTLS_ALLOW_PRIVATE_ACCESS
@@ -70,6 +64,27 @@
 #endif
 #if defined(MBEDTLS_USE_PSA_CRYPTO)
 #include <mbedtls/psa_util.h>
+/*(compatibility while waiting for future mbedtls 4.x interfaces)*/
+#if MBEDTLS_VERSION_NUMBER >= 0x04000000 /* mbedtls 4.0.0 */
+/* mbedtls_ecp_curve_info mbedtls_ecp_curve_list() */
+typedef struct mbedtls_ecp_curve_info {
+    mbedtls_ecp_group_id grp_id;    /*!< An internal identifier. */
+    uint16_t tls_id;                /*!< The TLS NamedCurve identifier. */
+    uint16_t bit_size;              /*!< The curve size in bits. */
+    const char *name;               /*!< A human-friendly name. */
+} mbedtls_ecp_curve_info;
+const mbedtls_ecp_curve_info *mbedtls_ecp_curve_list(void);
+#include <mbedtls/pk.h>
+typedef enum {
+    MBEDTLS_PK_NONE = MBEDTLS_PK_SIGALG_NONE,
+    MBEDTLS_PK_RSA = MBEDTLS_PK_SIGALG_RSA_PKCS1V15,
+    MBEDTLS_PK_RSASSA_PSS = MBEDTLS_PK_SIGALG_RSA_PSS,
+    MBEDTLS_PK_ECDSA = MBEDTLS_PK_SIGALG_ECDSA,
+    MBEDTLS_PK_ECKEY,
+    MBEDTLS_PK_ECKEY_DH,
+    MBEDTLS_PK_OPAQUE,
+} mbedtls_pk_type_t;
+#endif
 #else
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
