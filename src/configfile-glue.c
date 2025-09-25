@@ -337,8 +337,8 @@ int config_plugin_values_init(server * const srv, void *p_d, const config_plugin
             if (cpk[i].scope == T_CONFIG_SCOPE_SERVER)
                 /* server scope options should be set only in server scope */
                 log_warn(srv->errh, __FILE__, __LINE__,
-                  "DEPRECATED: do not set server options in conditionals, "
-                  "variable: %s", cpk[i].k);
+                  "DEPRECATED: do not set global server options within "
+                  "conditions: %s", cpk[i].k);
             if (cpk[i].scope == T_CONFIG_SCOPE_SOCKET
                 && (dc->comp!=COMP_SERVER_SOCKET || dc->cond!=CONFIG_COND_EQ))
                 /* socket options should be set in socket or global scope */
