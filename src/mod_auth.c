@@ -16,6 +16,7 @@
 #include "base.h"
 #include "ck.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "log.h"
 #include "algo_splaytree.h"
 #include "plugin.h"
@@ -732,14 +733,11 @@ int mod_auth_plugin_init(plugin *p) {
 #include "http_header.h"
 
 __attribute_cold__
-__attribute_noinline__
 static handler_t
 mod_auth_send_400_bad_request (request_st * const r)
 {
     /* a field was missing or invalid */
-    r->http_status = 400; /* Bad Request */
-    r->handler_module = NULL;
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 400); /* Bad Request */
 }
 
 
@@ -748,15 +746,13 @@ __attribute_noinline__
 static handler_t
 mod_auth_send_401_unauthorized_basic (request_st * const r, const buffer * const realm)
 {
-    r->http_status = 401;
-    r->handler_module = NULL;
     buffer_append_str3(
       http_header_response_set_ptr(r, HTTP_HEADER_WWW_AUTHENTICATE,
                                    CONST_STR_LEN("WWW-Authenticate")),
       CONST_STR_LEN("Basic realm=\""),
       BUF_PTR_LEN(realm),
       CONST_STR_LEN("\", charset=\"UTF-8\""));
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 401); /* Unauthorized */
 }
 
 
@@ -772,9 +768,7 @@ mod_auth_basic_misconfigured (request_st * const r, const struct http_auth_backe
           "auth.require \"method\" => \"basic\" invalid "
           "(try \"digest\"?) for %s", r->uri.path.ptr);
 
-    r->http_status = 500;
-    r->handler_module = NULL;
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 500); /* Internal Server Error */
 }
 
 
@@ -1109,13 +1103,11 @@ __attribute_noinline__
 static handler_t
 mod_auth_send_401_unauthorized_digest(request_st * const r, const struct http_auth_require_t * const require, int nonce_stale)
 {
-    r->http_status = 401;
-    r->handler_module = NULL;
     mod_auth_digest_www_authenticate(
       http_header_response_set_ptr(r, HTTP_HEADER_WWW_AUTHENTICATE,
                                    CONST_STR_LEN("WWW-Authenticate")),
       log_epoch_secs, require, nonce_stale);
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 401); /* Unauthorized */
 }
 
 
@@ -1215,9 +1207,7 @@ mod_auth_digest_misconfigured (request_st * const r, const struct http_auth_back
           "auth.require \"method\" => \"digest\" invalid "
           "(try \"basic\"?) for %s", r->uri.path.ptr);
 
-    r->http_status = 500;
-    r->handler_module = NULL;
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 500); /* Internal Server Error */
 }
 
 
@@ -1591,11 +1581,7 @@ static handler_t mod_auth_check_extern(request_st * const r, void *p_d, const st
     const buffer *vb = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
     UNUSED(p_d);
     UNUSED(backend);
-    if (NULL != vb && http_auth_match_rules(require, vb->ptr, NULL, NULL)) {
-        return HANDLER_GO_ON;
-    } else {
-        r->http_status = 401;
-        r->handler_module = NULL;
-        return HANDLER_FINISHED;
-    }
+    return (NULL != vb && http_auth_match_rules(require, vb->ptr, NULL, NULL))
+      ? HANDLER_GO_ON
+      : http_status_set_err(r, 401); /* Unauthorized */
 }

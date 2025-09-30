@@ -4,9 +4,9 @@
 #include "log.h"
 #include "buffer.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "request.h"
 #include "sock_addr.h"
-
 #include "plugin.h"
 
 #include <limits.h>
@@ -706,10 +706,8 @@ static int buffer_backslash_unescape (buffer * const b) {
 __attribute_cold__
 static handler_t mod_extforward_bad_request (request_st * const r, const unsigned int line, const char * const msg)
 {
-    r->http_status = 400; /* Bad Request */
-    r->handler_module = NULL;
     log_error(r->conf.errh, __FILE__, line, "%s", msg);
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 400); /* Bad Request */
 }
 
 static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * const p, const buffer * const forwarded) {

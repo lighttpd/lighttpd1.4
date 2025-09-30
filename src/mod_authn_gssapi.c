@@ -33,6 +33,7 @@
 #include "base64.h"
 #include "fdevent.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "log.h"
 #include "plugin.h"
 
@@ -153,9 +154,7 @@ SETDEFAULTS_FUNC(mod_authn_gssapi_set_defaults) {
 __attribute_cold__
 static handler_t mod_authn_gssapi_send_400_bad_request (request_st * const r)
 {
-    r->http_status = 400;
-    r->handler_module = NULL;
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 400); /* Bad Request */
 }
 
 __attribute_cold__
@@ -256,19 +255,16 @@ static int mod_authn_gssapi_create_krb5_ccache(request_st * const r, plugin_data
 __attribute_cold__
 static handler_t mod_authn_gssapi_send_500_server_error (request_st * const r)
 {
-    r->http_status = 500;
-    r->handler_module = NULL;
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 500); /* Internal Server Error */
 }
 
+__attribute_noinline__
 static handler_t mod_authn_gssapi_send_401_unauthorized_negotiate (request_st * const r)
 {
-    r->http_status = 401;
-    r->handler_module = NULL;
     http_header_response_set(r, HTTP_HEADER_WWW_AUTHENTICATE,
                              CONST_STR_LEN("WWW-Authenticate"),
                              CONST_STR_LEN("Negotiate"));
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 401); /* Unauthorized */
 }
 
 static int mod_authn_gssapi_store_gss_creds(request_st * const r, plugin_data * const p, char * const princ_name, gss_cred_id_t delegated_cred)
@@ -613,14 +609,13 @@ static int mod_authn_gssapi_store_krb5_creds(request_st * const r, plugin_data *
         return -1;
 }
 
+__attribute_noinline__
 static handler_t mod_authn_gssapi_send_401_unauthorized_basic (request_st * const r)
 {
-    r->http_status = 401;
-    r->handler_module = NULL;
     http_header_response_set(r, HTTP_HEADER_WWW_AUTHENTICATE,
                              CONST_STR_LEN("WWW-Authenticate"),
                              CONST_STR_LEN("Basic realm=\"Kerberos\""));
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 401); /* Unauthorized */
 }
 
 static handler_t mod_authn_gssapi_basic(request_st * const r, void *p_d, const http_auth_require_t * const require, const buffer * const username, const char * const pw)

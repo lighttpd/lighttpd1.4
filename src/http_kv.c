@@ -72,74 +72,6 @@ static const buffer http_methods[] = {
 	{ "", 0, 0 }
 };
 
-/* https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml */
-static const keyvalue http_status[] = {
-	{ 100, CONST_LEN_STR("100 Continue") },
-	{ 101, CONST_LEN_STR("101 Switching Protocols") },
-	{ 102, CONST_LEN_STR("102 Processing") }, /* WebDAV */
-	{ 103, CONST_LEN_STR("103 Early Hints") },
-	{ 200, CONST_LEN_STR("200 OK") },
-	{ 201, CONST_LEN_STR("201 Created") },
-	{ 202, CONST_LEN_STR("202 Accepted") },
-	{ 203, CONST_LEN_STR("203 Non-Authoritative Information") },
-	{ 204, CONST_LEN_STR("204 No Content") },
-	{ 205, CONST_LEN_STR("205 Reset Content") },
-	{ 206, CONST_LEN_STR("206 Partial Content") },
-	{ 207, CONST_LEN_STR("207 Multi-status") }, /* WebDAV */
-	{ 208, CONST_LEN_STR("208 Already Reported") },
-	{ 226, CONST_LEN_STR("226 IM Used") },
-	{ 300, CONST_LEN_STR("300 Multiple Choices") },
-	{ 301, CONST_LEN_STR("301 Moved Permanently") },
-	{ 302, CONST_LEN_STR("302 Found") },
-	{ 303, CONST_LEN_STR("303 See Other") },
-	{ 304, CONST_LEN_STR("304 Not Modified") },
-	{ 305, CONST_LEN_STR("305 Use Proxy") },
-	{ 306, CONST_LEN_STR("306 (Unused)") },
-	{ 307, CONST_LEN_STR("307 Temporary Redirect") },
-	{ 308, CONST_LEN_STR("308 Permanent Redirect") },
-	{ 400, CONST_LEN_STR("400 Bad Request") },
-	{ 401, CONST_LEN_STR("401 Unauthorized") },
-	{ 402, CONST_LEN_STR("402 Payment Required") },
-	{ 403, CONST_LEN_STR("403 Forbidden") },
-	{ 404, CONST_LEN_STR("404 Not Found") },
-	{ 405, CONST_LEN_STR("405 Method Not Allowed") },
-	{ 406, CONST_LEN_STR("406 Not Acceptable") },
-	{ 407, CONST_LEN_STR("407 Proxy Authentication Required") },
-	{ 408, CONST_LEN_STR("408 Request Timeout") },
-	{ 409, CONST_LEN_STR("409 Conflict") },
-	{ 410, CONST_LEN_STR("410 Gone") },
-	{ 411, CONST_LEN_STR("411 Length Required") },
-	{ 412, CONST_LEN_STR("412 Precondition Failed") },
-	{ 413, CONST_LEN_STR("413 Payload Too Large") },
-	{ 414, CONST_LEN_STR("414 URI Too Long") },
-	{ 415, CONST_LEN_STR("415 Unsupported Media Type") },
-	{ 416, CONST_LEN_STR("416 Range Not Satisfiable") },
-	{ 417, CONST_LEN_STR("417 Expectation Failed") },
-	{ 421, CONST_LEN_STR("421 Misdirected Request") }, /* RFC 7540 */
-	{ 422, CONST_LEN_STR("422 Unprocessable Entity") }, /* WebDAV */
-	{ 423, CONST_LEN_STR("423 Locked") }, /* WebDAV */
-	{ 424, CONST_LEN_STR("424 Failed Dependency") }, /* WebDAV */
-	{ 425, CONST_LEN_STR("425 Too Early") },
-	{ 426, CONST_LEN_STR("426 Upgrade Required") }, /* TLS */
-	{ 428, CONST_LEN_STR("428 Precondition Required") },
-	{ 429, CONST_LEN_STR("429 Too Many Requests") },
-	{ 431, CONST_LEN_STR("431 Request Header Fields Too Large") },
-	{ 451, CONST_LEN_STR("451 Unavailable For Legal Reasons") },
-	{ 500, CONST_LEN_STR("500 Internal Server Error") },
-	{ 501, CONST_LEN_STR("501 Not Implemented") },
-	{ 502, CONST_LEN_STR("502 Bad Gateway") },
-	{ 503, CONST_LEN_STR("503 Service Unavailable") },
-	{ 504, CONST_LEN_STR("504 Gateway Timeout") },
-	{ 505, CONST_LEN_STR("505 HTTP Version Not Supported") },
-	{ 506, CONST_LEN_STR("506 Variant Also Negotiates") },
-	{ 507, CONST_LEN_STR("507 Insufficient Storage") }, /* WebDAV */
-	{ 508, CONST_LEN_STR("508 Loop Detected") },
-	{ 510, CONST_LEN_STR("510 Not Extended") },
-	{ 511, CONST_LEN_STR("511 Network Authentication Required") },
-
-	{ -1, 0, NULL }
-};
-
 
 const buffer *
 http_version_buf (http_version_t i)
@@ -160,16 +92,6 @@ http_method_buf (http_method_t i)
 }
 
 
-__attribute_pure__
-static const keyvalue *
-keyvalue_from_key (const keyvalue *kv, const int k)
-{
-    /*(expects sentinel to have key == -1 and value == NULL)*/
-    while (kv->key != k && kv->key != -1) ++kv;
-    return kv;
-}
-
-
 http_method_t
 http_method_key_get (const char *s, const size_t slen)
 {
@@ -185,22 +107,4 @@ http_method_key_get (const char *s, const size_t slen)
       : i == sizeof(http_methods)/sizeof(*http_methods)-2
         ? HTTP_METHOD_PRI
         : HTTP_METHOD_UNSET;
-}
-
-
-void
-http_status_append (buffer * const b, const int status)
-{
-    if (200 == status) { /*(short-circuit common case)*/
-        buffer_append_string_len(b, CONST_STR_LEN("200 OK"));
-        return;
-    }
-
-    const keyvalue * const kv = keyvalue_from_key(http_status, status);
-    if (__builtin_expect( (0 != kv->vlen), 1))
-        buffer_append_string_len(b, kv->value, kv->vlen);
-    else {
-        buffer_append_int(b, status);
-        buffer_append_char(b, ' ');
-    }
 }

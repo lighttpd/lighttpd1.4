@@ -36,6 +36,7 @@
 #include "chunk.h"
 #include "fdevent.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "log.h"
 #include "sock_addr.h"
 
@@ -962,8 +963,7 @@ static gw_host * gw_host_get(request_st * const r, gw_extension *extension, int 
 
     /* all hosts are down */
     /* sorry, we don't have a server alive for this ext */
-    r->http_status = 503; /* Service Unavailable */
-    r->handler_module = NULL;
+    http_status_set_err(r, 503); /* Service Unavailable */
 
     /* only send the 'no handler' once */
     if (!extension->note_is_sent) {
@@ -2374,9 +2374,7 @@ static handler_t gw_authorizer_ok(gw_handler_ctx * const hctx, request_st * cons
         log_error(r->conf.errh, __FILE__, __LINE__,
           "too many loops while processing request: %s",
           r->target_orig.ptr);
-        r->http_status = 500; /* Internal Server Error */
-        r->handler_module = NULL;
-        return HANDLER_FINISHED;
+        return http_status_set_err(r, 500); /* Internal Server Error */
     }
 
     /* restart the request so other handlers can process it */

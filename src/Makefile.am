@@ -48,7 +48,7 @@ MAINTAINERCLEANFILES = configparser.c configparser.h
 CLEANFILES = versionstamp.h versionstamp.h.tmp lemon$(BUILD_EXEEXT)
 
 common_src=base64.c buffer.c burl.c log.c \
-	http_header.c http_kv.c keyvalue.c chunk.c  \
+	http_header.c http_kv.c http_status.c keyvalue.c chunk.c \
 	http_chunk.c fdevent.c fdevent_fdnode.c gw_backend.c \
 	stat_cache.c http_etag.c array.c \
 	algo_md5.c algo_sha1.c algo_splaytree.c \
@@ -361,7 +361,7 @@ hdr = base64.h buffer.h burl.h network.h log.h http_kv.h keyvalue.h \
 	http_header.h http_range.h \
 	fdevent.h gw_backend.h connections.h base.h base_decls.h stat_cache.h \
 	plugin.h plugins.h plugin_config.h \
-	http_etag.h array.h \
+	http_etag.h http_status.h array.h \
 	fdevent_impl.h network_write.h configfile.h \
 	sock_addr_cache.h \
 	configparser.h \

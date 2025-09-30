@@ -21,6 +21,7 @@
 #include "http_chunk.h"
 #include "http_etag.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "rand.h"
 #include "response.h"   /* http_response_send_1xx() */
 
@@ -3406,10 +3407,8 @@ magnet_script_setup (request_st * const r, plugin_data * const p, script * const
 			  "loading script %s failed", sc->name.ptr);
 		lua_settop(L, 0);
 
-		if (p->conf.stage >= 0) { /*(before response_start)*/
-			r->http_status = 500;
-			r->handler_module = NULL;
-		}
+		if (p->conf.stage >= 0) /*(before response_start)*/
+			http_status_set_err(r, 500); /* Internal Server Error */
 
 		return 0;
 	}
@@ -3453,11 +3452,8 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 			log_error_multiline(r->conf.errh, __FILE__, __LINE__,
 			                    err, errlen, "lua: ");
 			/*lua_pop(L, 1);*/ /* pop error msg */ /* defer to later */
-			if (p->conf.stage >= 0) { /*(before response_start)*/
-				r->http_status = 500;
-				r->handler_module = NULL;
-				result = HANDLER_FINISHED;
-			}
+			if (p->conf.stage >= 0) /*(before response_start)*/
+				result = http_status_set_err(r, 500); /* HANDLER_FINISHED */
 	}
 	else do {
 		/*(luaL_optinteger might raise error, which we want to avoid)*/
@@ -3481,7 +3477,6 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 		/*lua_pop(L, 1);*//* defer to later */
 
 		if (lua_return_value >= 200) {
-			r->http_status = lua_return_value;
 			/*(note: body may already have been set via lighty.r.resp_body.*)*/
 			if (lua_getfield_and_type(L, result_ndx, "content") == LUA_TTABLE) {
 				magnet_attach_content(L, r); /* deprecated legacy API */
@@ -3490,13 +3485,13 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 			if (!chunkqueue_is_empty(&r->write_queue)) {
 				r->handler_module = p->self;
 			}
-			r->resp_body_finished = 1;
+			http_status_set_fin(r, lua_return_value);
 			result = HANDLER_FINISHED;
 		} else if (lua_return_value >= 100) {
 			/*(skip for response-start; send response as-is w/ added headers)*/
 			if (p->conf.stage < 0) break;
 			/*(custom lua code should not return 101 Switching Protocols)*/
-			r->http_status = lua_return_value;
+			http_status_set(r, lua_return_value);
 			result = http_response_send_1xx(r)
 			  ? HANDLER_GO_ON
 			  : HANDLER_ERROR;

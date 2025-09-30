@@ -10,6 +10,7 @@
 #include "http_chunk.h"
 #include "http_etag.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "request.h"
 #include "stat_cache.h"
 
@@ -1585,7 +1586,6 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 
 	if (mod_ssi_process_file(r, p, &st)) return -1;
 
-	r->resp_body_started  = 1;
 	r->resp_body_finished = 1;
 
 	if (!p->conf.content_type) {
@@ -1642,15 +1642,9 @@ SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
 	 * and hctx->ssi_cgi_env should be allocated and cleaned up per request.
 	 */
 
-			/* handle ssi-request */
-
-			if (mod_ssi_handle_request(r, hctx)) {
-				/* on error */
-				r->http_status = 500;
-				r->handler_module = NULL;
-			}
-
-			return HANDLER_FINISHED;
+	return 0 == mod_ssi_handle_request(r, hctx)
+	  ? HANDLER_FINISHED
+	  : http_status_set_err(r, 500); /* Internal Server Error */
 }
 
 static handler_t mod_ssi_handle_request_reset(request_st * const r, void *p_d) {

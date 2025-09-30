@@ -9,6 +9,7 @@
 #include "http_cgi.h"
 #include "http_chunk.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "gw_backend.h" /* gw_upgrade_policy() */
 
 #include "plugin.h"
@@ -1189,12 +1190,8 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 				  ? http_response_reqbody_read_error(r, 411)
 				  : HANDLER_WAIT_FOR_EVENT;
 			}
-		if (cgi_create_env(r, p, hctx, hctx->cgi_handler)) {
-			r->http_status = 500;
-			r->handler_module = NULL;
-
-			return HANDLER_FINISHED;
-		}
+		if (cgi_create_env(r, p, hctx, hctx->cgi_handler))
+			return http_status_set_err(r, 500); /* HANDLER_FINISHED */
 	} else if (!chunkqueue_is_empty(cq)) {
 		if (fdevent_fdnode_interest(hctx->fdntocgi) & FDEVENT_OUT)
 			return HANDLER_WAIT_FOR_EVENT;

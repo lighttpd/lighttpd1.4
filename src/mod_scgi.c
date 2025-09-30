@@ -13,6 +13,7 @@ typedef gw_handler_ctx   handler_ctx;
 #include "base.h"
 #include "buffer.h"
 #include "http_cgi.h"
+#include "http_status.h"
 #include "log.h"
 
 enum { LI_PROTOCOL_SCGI, LI_PROTOCOL_UWSGI };
@@ -194,11 +195,9 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 	buffer_copy_string_len(b, CONST_STR_LEN("          "));
 
 	if (0 != http_cgi_headers(r, &opts, scgi_env_add, b)) {
-		r->http_status = 400;
-		r->handler_module = NULL;
 		buffer_clear(b);
 		chunkqueue_remove_finished_chunks(&hctx->wb);
-		return HANDLER_FINISHED;
+		return http_status_set_err(r, 400); /* Bad Request */
 	}
 
 	if (hctx->conf.proto == LI_PROTOCOL_SCGI) {
@@ -216,11 +215,9 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 		/* http://uwsgi-docs.readthedocs.io/en/latest/Protocol.html */
 		size_t len = buffer_clen(b)-10;
 		if (len > USHRT_MAX) {
-			r->http_status = 431; /* Request Header Fields Too Large */
-			r->handler_module = NULL;
 			buffer_clear(b);
 			chunkqueue_remove_finished_chunks(&hctx->wb);
-			return HANDLER_FINISHED;
+			return http_status_set_err(r, 431); /* Request Header Fields Too Large */
 		}
 		offset = 10 - 4;
 		b->ptr[offset]   = 0;

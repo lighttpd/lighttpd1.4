@@ -12,6 +12,7 @@
 #include "chunk.h"
 #include "http_chunk.h"
 #include "http_range.h"
+#include "http_status.h"
 
 #include "plugin.h"
 #include "plugins.h"
@@ -196,20 +197,10 @@ static handler_t http_response_physical_path_check(request_st * const r) {
 	return HANDLER_GO_ON;
 }
 
-__attribute_cold__
-__attribute_noinline__
-static handler_t http_status_set_error_close (request_st * const r, int status) {
-    r->keep_alive = 0;
-    r->resp_body_finished = 1;
-    r->handler_module = NULL;
-    r->http_status = status;
-    return HANDLER_FINISHED;
-}
 
 __attribute_cold__
 static handler_t http_response_prepare_options_star (request_st * const r) {
-    r->http_status = 200;
-    r->resp_body_finished = 1;
+    http_status_set_fin(r, 200);
     http_header_response_append(r, HTTP_HEADER_ALLOW, CONST_STR_LEN("Allow"),
                                 CONST_STR_LEN("OPTIONS, GET, HEAD, POST"));
     return HANDLER_FINISHED;
@@ -220,7 +211,7 @@ __attribute_cold__
 static handler_t http_response_prepare_connect (request_st * const r) {
     return (r->handler_module)
       ? HANDLER_GO_ON
-      : http_status_set_error_close(r, 405);/* 405 Method Not Allowed */
+      : http_status_set_err_close(r, 405); /* 405 Method Not Allowed */
 }
 
 
@@ -247,8 +238,7 @@ static handler_t http_response_config (request_st * const r) {
         && (off_t)r->reqbody_length > ((off_t)r->conf.max_request_size << 10)) {
         log_error(r->conf.errh, __FILE__, __LINE__,
           "request-size too long: %lld -> 413", (long long) r->reqbody_length);
-        return /* 413 Payload Too Large */
-          http_status_set_error_close(r, 413);
+        return http_status_set_err_close(r, 413); /* 413 Payload Too Large */
     }
 
     return HANDLER_GO_ON;
@@ -429,7 +419,7 @@ http_response_prepare (request_st * const r)
 				}
 				else if (r->http_method == HTTP_METHOD_CONNECT)
 					/* 405 Method Not Allowed */
-					return http_status_set_error_close(r, 405);
+					return http_status_set_err_close(r, 405);
 					/*return http_response_prepare_connect(r);*/
 				else if (!http_method_get_head_query_post(r->http_method))
 					r->http_status = 501;
@@ -470,7 +460,7 @@ static handler_t http_response_comeback (request_st * const r)
         r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
                                 | (1 << COMP_HTTP_REMOTE_IP);
         config_cond_cache_reset(r);
-        return http_status_set_error_close(r, status);
+        return http_status_set_err_close(r, status);
     }
 }
 

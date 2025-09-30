@@ -843,7 +843,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 
 set(COMMON_SRC
 	base64.c buffer.c burl.c log.c
-	http_header.c http_kv.c keyvalue.c chunk.c
+	http_header.c http_kv.c http_status.c keyvalue.c chunk.c
 	http_chunk.c fdevent.c fdevent_fdnode.c gw_backend.c
 	stat_cache.c http_etag.c array.c
 	algo_md5.c algo_sha1.c algo_splaytree.c

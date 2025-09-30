@@ -22,6 +22,7 @@
 #include "fdevent.h"    /* FDEVENT_STREAM_REQUEST_BUFMIN */
 #include "http_date.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "log.h"
 #include "request.h"
 #include "response.h"   /* http_dispatch[] http_response_omit_header() */
@@ -1303,12 +1304,11 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
         if (__builtin_expect( (n >= 0), 1)) /*(force wupd below w/ +16384)*/
             wupd=n>=rwin ? (n-=rwin)>(int32_t)len ? len : (uint32_t)n+16384 : 0;
         else if (-n > 65536 || 0 == r->http_status) {
-            if (0 == r->http_status) {
-                r->http_status = 413; /* Payload Too Large */
-                r->handler_module = NULL;
+            if (!http_status_is_set(r)) {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "request-size too long: %lld -> 413",
                   (long long) (dst->bytes_in + (off_t)alen));
+                http_status_set_err(r, 413); /* Payload Too Large */
             }
             else { /* if (-n > 65536) */
                 /* tolerate up to 64k additional data before resetting stream

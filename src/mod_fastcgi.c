@@ -13,6 +13,7 @@ typedef gw_handler_ctx   handler_ctx;
 #include "fdevent.h"
 #include "http_cgi.h"
 #include "http_chunk.h"
+#include "http_status.h"
 #include "log.h"
 #include "request.h"
 
@@ -265,11 +266,9 @@ static handler_t fcgi_create_env(handler_ctx *hctx) {
 	/* send FCGI_PARAMS */
 
 	if (0 != http_cgi_headers(r, &opts, fcgi_env_add, b)) {
-		r->http_status = 400;
-		r->handler_module = NULL;
 		buffer_clear(b);
 		chunkqueue_remove_finished_chunks(&hctx->wb);
-		return HANDLER_FINISHED;
+		return http_status_set_err(r, 400); /* Bad Request */
 	} else {
 		fcgi_header(&(header), FCGI_PARAMS, request_id,
 			    buffer_clen(b) - sizeof(FCGI_BeginRequestRecord) - sizeof(FCGI_Header), 0);

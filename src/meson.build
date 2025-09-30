@@ -572,6 +572,7 @@ common_src = files(
 	'http_date.c',
 	'http_header.c',
 	'http_kv.c',
+	'http_status.c',
 	'http-header-glue.c',
 	'keyvalue.c',
 	'log.c',

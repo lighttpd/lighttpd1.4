@@ -17,6 +17,7 @@
 #include "chunk.h"
 #include "log.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "sock_addr.h"
 
 handler_t
@@ -58,10 +59,8 @@ http_cgi_local_redir (request_st * const r)
             log_error(r->conf.errh, __FILE__, __LINE__,
               "too many internal loops while processing request: %s",
               r->target_orig.ptr);
-            r->http_status = 500; /* Internal Server Error */
             r->resp_body_started = 0;
-            r->handler_module = NULL;
-            return HANDLER_FINISHED;
+            return http_status_set_err(r, 500);
         }
 
         buffer_copy_buffer(&r->target, vb);

@@ -27,6 +27,7 @@ typedef gw_handler_ctx   handler_ctx;
 #include "fdevent.h"
 #include "http_chunk.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "http_kv.h"
 #include "log.h"
 
@@ -651,11 +652,9 @@ ajp13_create_env (handler_ctx * const hctx)
     array_free(cgienv);
   #endif
 
-    r->http_status = 400;
-    r->handler_module = NULL;
     buffer_clear(b);
     chunkqueue_remove_finished_chunks(&hctx->wb);
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 400); /* Bad Request */
 }
 
 

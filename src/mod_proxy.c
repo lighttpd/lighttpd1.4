@@ -10,6 +10,7 @@
 #include "fdevent.h"
 #include "http_kv.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "log.h"
 #include "sock_addr.h"
 
@@ -1161,9 +1162,7 @@ static handler_t mod_proxy_check_extension(request_st * const r, void *p_d) {
 				hctx->gw.create_env = proxy_create_env_connect;
 			}
 			else {
-				r->http_status = 405; /* Method Not Allowed */
-				r->handler_module = NULL;
-				return HANDLER_FINISHED;
+				return http_status_set_err(r, 405); /* Method Not Allowed */
 			}
 		}
 	}

@@ -78,9 +78,6 @@ __attribute_nonnull__()
 __attribute_pure__
 http_method_t http_method_key_get (const char *s, size_t slen);
 
-__attribute_nonnull__()
-void http_status_append (buffer *b, int status);
-
 #define http_method_get_or_head(method)         ((method) <= HTTP_METHOD_HEAD)
 #define http_method_get_head_query(method)      ((method) <= HTTP_METHOD_QUERY)
 #define http_method_get_head_query_post(method) ((method) <= HTTP_METHOD_POST)

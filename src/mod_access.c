@@ -3,6 +3,7 @@
 #include "request.h"
 #include "array.h"
 #include "buffer.h"
+#include "http_status.h"
 #include "log.h"
 
 #include "plugin.h"
@@ -90,9 +91,7 @@ static handler_t mod_access_reject (request_st * const r, plugin_data * const p)
               r->uri.path.ptr);
     }
 
-    r->http_status = 403;
-    r->handler_module = NULL;
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 403); /* Forbidden */
 }
 
 __attribute_pure__

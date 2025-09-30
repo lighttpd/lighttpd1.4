@@ -16,6 +16,7 @@
 #include "fdevent.h"    /* FDEVENT_STREAM_REQUEST_BUFMIN */
 #include "http_date.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "log.h"
 #include "reqpool.h"    /* request_reset_ex() */
 #include "request.h"

@@ -14,6 +14,7 @@
 #include "http_date.h"
 #include "http_etag.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "plugin_config.h" /* config_feature_bool */
 #include "sock_addr.h"
 #include "stat_cache.h"
@@ -128,8 +129,7 @@ int http_response_redirect_to_directory(request_st * const r, int status) {
 	}
 	buffer *vb;
 	if (status >= 300) {
-		r->http_status = status;
-		r->resp_body_finished = 1;
+		http_status_set_fin(r, status);
 		vb = http_header_response_set_ptr(r, HTTP_HEADER_LOCATION,
 		                                  CONST_STR_LEN("Location"));
 	}
@@ -269,9 +269,7 @@ __attribute_cold__
 static handler_t http_response_412 (request_st * const r) {
     /* http_response_reqbody_read_error() without setting r->keep_alive = 0 */
     http_response_body_clear(r, 0);
-    r->handler_module = NULL;
-    r->http_status = 412;
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 412);
 }
 
 
@@ -391,9 +389,7 @@ handler_t http_response_reqbody_read_error (request_st * const r, int http_statu
     if (0 != r->resp_header_len) return HANDLER_ERROR;
 
     http_response_body_clear(r, 0);
-    r->http_status = http_status;
-    r->handler_module = NULL;
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, http_status);
 }
 
 
@@ -519,10 +515,8 @@ static void http_response_xsendfile (request_st * const r, buffer * const path, 
 	if (!buffer_is_valid_UTF8(path)) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "X-Sendfile invalid UTF-8 after url-decode: %s", path->ptr);
-		if (r->http_status < 400) {
-			r->http_status = 502;
-			r->handler_module = NULL;
-		}
+		if (r->http_status < 400)
+			http_status_set_err(r, 502); /* Bad Gateway */
 		return;
 	}
 	buffer_path_simplify(path);
@@ -953,15 +947,13 @@ static int http_response_process_headers(request_st * const restrict r, http_res
         if (0 == r->http_status) {
             log_error(r->conf.errh, __FILE__, __LINE__,
               "invalid HTTP status line: %s", s);
-            r->http_status = 502; /* Bad Gateway */
-            r->handler_module = NULL;
+            http_status_set_err(r, 502); /* Bad Gateway */
             return 0;
         }
     }
     else if (__builtin_expect( (opts->backend == BACKEND_PROXY), 0)) {
         /* invalid response Status-Line from HTTP backend */
-        r->http_status = 502; /* Bad Gateway */
-        r->handler_module = NULL;
+        http_status_set_err(r, 502); /* Bad Gateway */
         return 0;
     }
 
@@ -975,8 +967,7 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             if (s[hoff[i+1]-2] != '\r') {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "HTTP backend response missing CR before LF");
-                r->http_status = 502; /* Bad Gateway */
-                r->handler_module = NULL;
+                http_status_set_err(r, 502); /* Bad Gateway */
                 return 0;
             }
         }
@@ -1042,10 +1033,8 @@ static int http_response_process_headers(request_st * const restrict r, http_res
                         r->http_status = status;
                     opts->local_redir = 0; /*(disable; status was set)*/
                 }
-                else {
-                    r->http_status = 502;
-                    r->handler_module = NULL;
-                }
+                else
+                    http_status_set_err(r, 502); /* Bad Gateway */
                 continue; /* do not send Status to client */
             } /*(else pass w/o parse for BACKEND_PROXY)*/
             break;
@@ -1104,8 +1093,7 @@ static int http_response_process_headers(request_st * const restrict r, http_res
              * Technically, could allow "identity, chunked" and related,
              * but still should reject unrecognized encodings */
             if (!buffer_eq_icase_ss(value,end-value,CONST_STR_LEN("chunked"))) {
-                r->http_status = 502; /* Bad Gateway */
-                r->handler_module = NULL;
+                http_status_set_err(r, 502); /* Bad Gateway */
                 continue;
             }
             if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
@@ -1217,9 +1205,7 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
         if ((header_len ? header_len : blen) > MAX_HTTP_RESPONSE_FIELD_SIZE) {
             log_error(r->conf.errh, __FILE__, __LINE__,
               "response headers too large for %s", r->uri.path.ptr);
-            r->http_status = 502; /* Bad Gateway */
-            r->handler_module = NULL;
-            return HANDLER_FINISHED;
+            return http_status_set_err(r, 502); /* Bad Gateway */
         }
         if (hoff[2]) { /*(at least one newline found if offset is non-zero)*/
             /*("HTTP/1.1 200 " is at least 13 chars + \r\n; 12 w/o final ' ')*/
@@ -1242,9 +1228,7 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
                     }
                     else {
                         /* invalid response headers */
-                        r->http_status = 502; /* Bad Gateway */
-                        r->handler_module = NULL;
-                        return HANDLER_FINISHED;
+                        return http_status_set_err(r, 502);
                     }
                 }
             }
@@ -1293,9 +1277,7 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
              && r->http_status < 300) {
         /*(not handling other 1xx intermediate responses here; not expected)*/
         http_response_body_clear(r, 0);
-        r->handler_module = NULL;
-        r->http_status = 405; /* Method Not Allowed */
-        return HANDLER_FINISHED;
+        return http_status_set_err(r, 405); /* Method Not Allowed */
     }
 
     if (opts->local_redir && r->http_status >= 300 && r->http_status < 400

@@ -89,6 +89,7 @@
 #include "chunk.h"
 #include "fdevent.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "log.h"
 
 #define MOD_WEBSOCKET_LOG_NONE  0
@@ -421,7 +422,7 @@ static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const 
 
     if (NULL == allowed_origins || 0 == allowed_origins->used) {
         DEBUG_LOG_INFO("%s", "allowed origins not specified");
-        return 1;
+        return 0;
     }
 
     /* "Origin" header is preferred
@@ -434,8 +435,7 @@ static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const 
     olen = origin ? buffer_clen(origin) : 0;
     if (0 == olen) {
         DEBUG_LOG_ERR("%s", "Origin header is invalid");
-        r->http_status = 400; /* Bad Request */
-        return 0;
+        return 400; /* Bad Request */
     }
 
     for (size_t i = 0; i < allowed_origins->used; ++i) {
@@ -444,38 +444,21 @@ static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const 
         if ((olen > blen ? origin->ptr[olen-blen-1] == '.' : olen == blen)
             && 0 == memcmp(origin->ptr+olen-blen, b->ptr, blen)) {
             DEBUG_LOG_INFO("%s matches allowed origin: %s",origin->ptr,b->ptr);
-            return 1;
+            return 0;
         }
     }
     DEBUG_LOG_INFO("%s does not match any allowed origins", origin->ptr);
-    r->http_status = 403; /* Forbidden */
-    return 0;
+    return 403; /* Forbidden */
 }
 
 static int wstunnel_check_request(request_st * const r, handler_ctx * const hctx) {
-    const buffer * const vers =
-      http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Version"));
-    const long hybivers = (NULL != vers)
-      ? light_isdigit(*vers->ptr) ? strtol(vers->ptr, NULL, 10) : -1
-      : 0;
-    if (hybivers < 0 || hybivers > INT_MAX) {
-        DEBUG_LOG_ERR("%s", "invalid Sec-WebSocket-Version");
-        r->http_status = 400; /* Bad Request */
-        return -1;
-    }
-
     /*(redundant since HTTP/1.1 required in mod_wstunnel_check_extension())*/
     if (!r->http_host || buffer_is_blank(r->http_host)) {
         DEBUG_LOG_ERR("%s", "Host header does not exist");
-        r->http_status = 400; /* Bad Request */
-        return -1;
+        return 400; /* Bad Request */
     }
 
-    if (!wstunnel_is_allowed_origin(r, hctx)) {
-        return -1;
-    }
-
-    return (int)hybivers;
+    return wstunnel_is_allowed_origin(r, hctx);
 }
 
 static void wstunnel_backend_error(gw_handler_ctx *gwhctx) {
@@ -492,15 +475,24 @@ static void wstunnel_handler_ctx_free(void *gwhctx) {
 
 static handler_t wstunnel_handler_setup (request_st * const r, plugin_data * const p) {
     handler_ctx *hctx = r->plugin_ctx[p->id];
-    int hybivers;
     hctx->errh = r->conf.errh;/*(for mod_wstunnel-specific DEBUG_* macros)*/
     hctx->conf = p->conf; /*(copies struct)*/
-    hybivers = wstunnel_check_request(r, hctx);
-    if (hybivers < 0) {
-        r->handler_module = NULL;
-        return HANDLER_FINISHED;
+
+    int status = wstunnel_check_request(r, hctx);
+    if (status)
+        return http_status_set_err(r, status);
+
+    const buffer * const vers =
+      http_header_request_get(r, HTTP_HEADER_OTHER,
+                                 CONST_STR_LEN("Sec-WebSocket-Version"));
+    const long hybivers = (NULL != vers)
+      ? light_isdigit(*vers->ptr) ? strtol(vers->ptr, NULL, 10) : -1
+      : 0;
+    if (hybivers < 0 || hybivers > INT_MAX) {
+        DEBUG_LOG_ERR("%s", "invalid Sec-WebSocket-Version");
+        return http_status_set_err(r, 400); /* Bad Request */
     }
-    hctx->hybivers = hybivers;
+    hctx->hybivers = (int)hybivers;
     if (0 == hybivers) {
         DEBUG_LOG_INFO("WebSocket Version = %s", "hybi-00");
     }

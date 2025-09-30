@@ -11,6 +11,7 @@
 
 #include "mod_vhostdb_api.h"
 #include "base.h"
+#include "http_status.h"
 #include "plugin.h"
 #include "plugin_config.h"
 #include "log.h"
@@ -250,9 +251,7 @@ REQUEST_FUNC(mod_vhostdb_handle_request_reset) {
 __attribute_cold__
 static handler_t mod_vhostdb_error_500 (request_st * const r)
 {
-    r->http_status = 500; /* Internal Server Error */
-    r->handler_module = NULL;
-    return HANDLER_FINISHED;
+    return http_status_set_err(r, 500); /* Internal Server Error */
 }
 
 static handler_t mod_vhostdb_found (request_st * const r, vhostdb_cache_entry * const ve)

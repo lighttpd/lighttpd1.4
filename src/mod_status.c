@@ -4,6 +4,7 @@
 #include "fdevent.h"
 #include "http_chunk.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "log.h"
 
 #include "plugin.h"
@@ -660,8 +661,7 @@ static handler_t mod_status_handle_server_statistics(request_st * const r) {
 	const array * const st = &plugin_stats;
 	if (0 == st->used) {
 		/* we have nothing to send */
-		r->http_status = 204;
-		r->resp_body_finished = 1;
+		http_status_set_fin(r, 204);
 		return HANDLER_FINISHED;
 	}
 
@@ -674,9 +674,7 @@ static handler_t mod_status_handle_server_statistics(request_st * const r) {
 	}
 	chunkqueue_append_buffer_commit(&r->write_queue);
 
-	r->http_status = 200;
-	r->resp_body_finished = 1;
-
+	http_status_set_fin(r, 200);
 	return HANDLER_FINISHED;
 }
 
@@ -692,9 +690,7 @@ static handler_t mod_status_handle_server_status(request_st * const r, plugin_da
 		mod_status_handle_server_status_html(srv, r, p);
 	}
 
-	r->http_status = 200;
-	r->resp_body_finished = 1;
-
+	http_status_set_fin(r, 200);
 	return HANDLER_FINISHED;
 }
 
@@ -786,9 +782,7 @@ static handler_t mod_status_handle_server_config(request_st * const r) {
 
 	http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"), CONST_STR_LEN("text/html"));
 
-	r->http_status = 200;
-	r->resp_body_finished = 1;
-
+	http_status_set_fin(r, 200);
 	return HANDLER_FINISHED;
 }
 

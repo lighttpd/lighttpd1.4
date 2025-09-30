@@ -259,6 +259,7 @@ typedef off_t loff_t;
 #include "http_date.h"
 #include "http_etag.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "log.h"
 #include "request.h"
 #include "response.h"   /* http_response_redirect_to_directory() */
@@ -270,18 +271,7 @@ typedef off_t loff_t;
 static int has_proc_self_fd;
 #endif
 
-#define http_status_get(r)           ((r)->http_status)
-#define http_status_set_fin(r, code) ((r)->resp_body_finished = 1,\
-                                      (r)->handler_module = NULL, \
-                                      (r)->http_status = (code))
-#define http_status_set(r, code)     ((r)->http_status = (code))
-#define http_status_unset(r)         ((r)->http_status = 0)
-#define http_status_is_set(r)        (0 != (r)->http_status)
-__attribute_cold__
-__attribute_noinline__
-static int http_status_set_error (request_st * const r, int status) {
-    return http_status_set_fin(r, status);
-}
+#define http_status_set_error(r,status) http_status_set_err_fin((r),(status))
 
 typedef physical physical_st;
 
@@ -1110,8 +1100,7 @@ __attribute_cold__
 static void
 webdav_xml_doc_error_propfind_finite_depth (request_st * const r)
 {
-    http_status_set(r, 403); /* Forbidden */
-    r->resp_body_finished = 1;
+    http_status_set_fin(r, 403); /* Forbidden */
 
     buffer * const b =
       chunkqueue_append_buffer_open_sz(&r->write_queue, 256);
@@ -1127,8 +1116,7 @@ __attribute_cold__
 static void
 webdav_xml_doc_error_lock_token_matches_request_uri (request_st * const r)
 {
-    http_status_set(r, 409); /* Conflict */
-    r->resp_body_finished = 1;
+    http_status_set_fin(r, 409); /* Conflict */
 
     buffer * const b =
       chunkqueue_append_buffer_open_sz(&r->write_queue, 256);
@@ -1146,8 +1134,7 @@ static void
 webdav_xml_doc_423_locked (request_st * const r, buffer * const hrefs,
                            const char * const errtag, const uint32_t errtaglen)
 {
-    http_status_set(r, 423); /* Locked */
-    r->resp_body_finished = 1;
+    http_status_set_fin(r, 423); /* Locked */
 
     chunkqueue * const cq = &r->write_queue;
     buffer * const b = chunkqueue_prepend_buffer_open(cq);
