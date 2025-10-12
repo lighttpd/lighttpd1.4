@@ -34,9 +34,7 @@
 enum {
   STAT_CACHE_ENGINE_SIMPLE  = 0  /*(default)*/
  ,STAT_CACHE_ENGINE_NONE    = 1
- ,STAT_CACHE_ENGINE_FAM     = 2  /* same as STAT_CACHE_ENGINE_INOTIFY */
- ,STAT_CACHE_ENGINE_INOTIFY = 2  /* same as STAT_CACHE_ENGINE_FAM */
- ,STAT_CACHE_ENGINE_KQUEUE  = 2  /* same as STAT_CACHE_ENGINE_FAM */
+ ,STAT_CACHE_ENGINE_FSMON   = 2  /* file system monitor (inotify,kqueue,FAM) */
 };
 
 struct stat_cache_fam;  /* declaration */
@@ -71,13 +69,12 @@ static void * stat_cache_sptree_find(splay_tree ** const sptree,
 
 
 #if defined(HAVE_SYS_INOTIFY_H) \
+ || defined(HAVE_FAM_H) \
  || (defined(HAVE_SYS_EVENT_H) && defined(HAVE_KQUEUE))
-#ifndef HAVE_FAM_H
-#define HAVE_FAM_H
-#endif
+#define STAT_CACHE_FSMON
 #endif
 
-#ifdef HAVE_FAM_H
+#ifdef STAT_CACHE_FSMON
 
 /* monitor changes in directories using FAM
  *
@@ -817,7 +814,7 @@ static void stat_cache_entry_free(void *data) {
 
     if (--sce->refcnt) return;
 
-  #ifdef HAVE_FAM_H
+  #ifdef STAT_CACHE_FSMON
     /*(decrement refcnt only;
      * defer cancelling FAM monitor on dir even if refcnt reaches zero)*/
     if (sce->fam_dir) --((fam_dir_entry *)sce->fam_dir)->refcnt;
@@ -883,8 +880,8 @@ static int stat_cache_attr_get(const char *name) {
 #endif
 
 int stat_cache_init(fdevents *ev, log_error_st *errh) {
-  #ifdef HAVE_FAM_H
-    if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
+  #ifdef STAT_CACHE_FSMON
+    if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FSMON) {
         sc.scf = stat_cache_init_fam(ev, errh);
         if (NULL == sc.scf) return 0;
     }
@@ -903,7 +900,7 @@ void stat_cache_free(void) {
     }
     sc.files = NULL;
 
-  #ifdef HAVE_FAM_H
+  #ifdef STAT_CACHE_FSMON
     stat_cache_free_fam(sc.scf);
     sc.scf = NULL;
   #endif
@@ -930,16 +927,14 @@ int stat_cache_choose_engine (const buffer *stat_cache_string, log_error_st *err
         sc.stat_cache_engine = STAT_CACHE_ENGINE_SIMPLE;
 #ifdef HAVE_SYS_INOTIFY_H
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("inotify")))
-        sc.stat_cache_engine = STAT_CACHE_ENGINE_INOTIFY;
-        /*(STAT_CACHE_ENGINE_FAM == STAT_CACHE_ENGINE_INOTIFY)*/
+        sc.stat_cache_engine = STAT_CACHE_ENGINE_FSMON;
 #elif defined HAVE_SYS_EVENT_H && defined HAVE_KQUEUE
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("kqueue")))
-        sc.stat_cache_engine = STAT_CACHE_ENGINE_KQUEUE;
-        /*(STAT_CACHE_ENGINE_FAM == STAT_CACHE_ENGINE_KQUEUE)*/
+        sc.stat_cache_engine = STAT_CACHE_ENGINE_FSMON;
 #endif
 #ifdef HAVE_FAM_H
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("fam")))
-        sc.stat_cache_engine = STAT_CACHE_ENGINE_FAM;
+        sc.stat_cache_engine = STAT_CACHE_ENGINE_FSMON;
 #endif
     else if (buffer_eq_slen(stat_cache_string, CONST_STR_LEN("disable"))
              || buffer_eq_slen(stat_cache_string, CONST_STR_LEN("none")))
@@ -1163,7 +1158,7 @@ void stat_cache_invalidate_entry(const char *name, uint32_t len)
     stat_cache_entry *sce = stat_cache_sptree_find(sptree, name, len);
     if (sce && buffer_is_equal_string(&sce->name, name, len)) {
         sce->stat_ts = 0;
-      #ifdef HAVE_FAM_H
+      #ifdef STAT_CACHE_FSMON
         if (sce->fam_dir != NULL) {
             --((fam_dir_entry *)sce->fam_dir)->refcnt;
             sce->fam_dir = NULL;
@@ -1172,7 +1167,7 @@ void stat_cache_invalidate_entry(const char *name, uint32_t len)
     }
 }
 
-#ifdef HAVE_FAM_H
+#ifdef STAT_CACHE_FSMON
 
 static void stat_cache_invalidate_dir_tree_walk(splay_tree *t,
                                                 const char *name, size_t len)
@@ -1248,8 +1243,8 @@ void stat_cache_delete_dir(const char *name, uint32_t len)
     if (__builtin_expect( (0 == len), 0)) return; /*(should not happen)*/
     if (name[len-1] == '/') { if (0 == --len) len = 1; }
     stat_cache_delete_tree(name, len);
-  #ifdef HAVE_FAM_H
-    if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
+  #ifdef STAT_CACHE_FSMON
+    if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FSMON) {
         splay_tree **sptree = &sc.scf->dirs;
         fam_dir_entry *fam_dir = stat_cache_sptree_find(sptree, name, len);
         if (fam_dir && buffer_eq_slen(&fam_dir->name, name, len))
@@ -1314,8 +1309,8 @@ static stat_cache_entry * stat_cache_refresh_entry(const buffer * const name, ui
 
         sce->st = st; /*(copy prior to calling fam_dir_monitor())*/
 
-      #ifdef HAVE_FAM_H
-        if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FAM) {
+      #ifdef STAT_CACHE_FSMON
+        if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FSMON) {
             if (sce->fam_dir) --((fam_dir_entry *)sce->fam_dir)->refcnt;
             sce->fam_dir = fam_dir_monitor(sc.scf, name->ptr, len, &st);
           #if 0 /*(performed below)*/
@@ -1354,8 +1349,8 @@ stat_cache_entry * stat_cache_get_entry(const buffer * const name) {
             refresh = 1; /* 1 stat cache entry exists, but might need refresh */
             if (sc.stat_cache_engine == STAT_CACHE_ENGINE_SIMPLE)
                 refresh = (sce->stat_ts != cur_ts);      /* 0 if fresh */
-          #ifdef HAVE_FAM_H
-            else if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FAM
+          #ifdef STAT_CACHE_FSMON
+            else if (sc.stat_cache_engine == STAT_CACHE_ENGINE_FSMON
                      && sce->fam_dir) /* entry is in monitored dir */
                 /* re-stat() periodically, even if monitoring for changes
                  * (due to limitations in stat_cache.c use of FAM)
@@ -1510,8 +1505,8 @@ static void stat_cache_periodic_cleanup(const time_t max_age, const unix_time64_
 void stat_cache_trigger_cleanup(void) {
 	time_t max_age = 2;
 
-      #ifdef HAVE_FAM_H
-	if (STAT_CACHE_ENGINE_FAM == sc.stat_cache_engine) {
+      #ifdef STAT_CACHE_FSMON
+	if (STAT_CACHE_ENGINE_FSMON == sc.stat_cache_engine) {
 		if (log_monotonic_secs & 0x1F) return;
 		/* once every 32 seconds (0x1F == 31) */
 		max_age = 32;
