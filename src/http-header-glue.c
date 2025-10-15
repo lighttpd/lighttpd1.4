@@ -498,190 +498,186 @@ void http_response_send_file (request_st * const r, const buffer * const path, s
 }
 
 
-static void http_response_xsendfile (request_st * const r, buffer * const path, const array * const xdocroot) {
-	const int status = r->http_status;
-	int valid = 1;
+static int http_response_xsendfile_path_check (const request_st * const r, buffer * const path, const array * const xdocroot) {
+    /* note: path buffer is modified in place */
 
-	/* reset Content-Length, if set by backend
-	 * Content-Length might later be set to size of X-Sendfile static file,
-	 * determined by open(), fstat() to reduces race conditions if the file
-	 * is modified between stat() (stat_cache_get_entry()) and open(). */
-	if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
-		http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
-		                           CONST_STR_LEN("Content-Length"));
-	}
+    buffer_urldecode_path(path);
 
-	buffer_urldecode_path(path);
-	if (!buffer_is_valid_UTF8(path)) {
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "X-Sendfile invalid UTF-8 after url-decode: %s", path->ptr);
-		if (r->http_status < 400)
-			http_status_set_err(r, 502); /* Bad Gateway */
-		return;
-	}
-	buffer_path_simplify(path);
-	if (r->conf.force_lowercase_filenames) {
-		buffer_to_lower(path);
-	}
-	if (buffer_is_blank(path)) {
-		r->http_status = 502;
-		valid = 0;
-	}
+    if (!buffer_is_valid_UTF8(path)) {
+        log_error(r->conf.errh, __FILE__, __LINE__, "X-Sendfile: "
+          "invalid UTF-8 after url-decode: %s", path->ptr);
+        return 502; /* Bad Gateway */
+    }
 
-	/* check that path is under xdocroot(s)
-	 * - xdocroot should have trailing slash appended at config time
-	 * - r->conf.force_lowercase_filenames is not a server-wide setting,
-	 *   and so can not be definitively applied to xdocroot at config time*/
-	if (xdocroot && xdocroot->used) {
-		const buffer * const xval = !r->conf.force_lowercase_filenames
-		  ? array_match_value_prefix(xdocroot, path)
-		  : array_match_value_prefix_nc(xdocroot, path);
-		if (NULL == xval) {
-			log_error(r->conf.errh, __FILE__, __LINE__,
-			  "X-Sendfile (%s) not under configured x-sendfile-docroot(s)", path->ptr);
-			r->http_status = 403;
-			valid = 0;
-		}
-	}
+    buffer_path_simplify(path);
+    if (r->conf.force_lowercase_filenames)
+        buffer_to_lower(path);
 
-	if (valid) http_response_send_file(r, path, NULL);
+    if (buffer_is_blank(path))
+        return 502; /* Bad Gateway */
 
-	if (r->http_status >= 400 && status < 300) {
-		r->handler_module = NULL;
-	} else if (0 != status && 200 != status) {
-		r->http_status = status;
-	}
+    /* check that path is under xdocroot(s)
+     * - xdocroot should have trailing slash appended at config time
+     * - r->conf.force_lowercase_filenames is not a server-wide setting,
+     *   and so can not be definitively applied to xdocroot at config time*/
+    if (xdocroot && xdocroot->used) {
+        const buffer * const xval = !r->conf.force_lowercase_filenames
+          ? array_match_value_prefix(xdocroot, path)
+          : array_match_value_prefix_nc(xdocroot, path);
+        if (NULL == xval) {
+            log_error(r->conf.errh, __FILE__, __LINE__, "X-Sendfile: "
+              "file not under configured x-sendfile-docroot(s): %s",
+              path->ptr);
+            return 403; /* Forbidden */
+        }
+    }
+
+    return 0;
 }
 
 
-static void http_response_xsendfile2(request_st * const r, const buffer * const value, const array * const xdocroot) {
-    const char *pos = value->ptr;
-    buffer * const b = r->tmp_buf;
-    const int status = r->http_status;
+static void http_response_xsendfile (request_st * const r, buffer * const path, const array * const xdocroot) {
+    /* reset Content-Length, if set by backend
+     * Content-Length might later be set to size of X-Sendfile static file,
+     * determined by open(), fstat() to reduces race conditions if the file
+     * is modified between stat() (stat_cache_get_entry()) and open(). */
+    http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
+                               CONST_STR_LEN("Content-Length"));
 
-    /* reset Content-Length, if set by backend */
-    if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
-        http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
-                                   CONST_STR_LEN("Content-Length"));
+    int status = http_response_xsendfile_path_check(r, path, xdocroot);
+    if (status) {
+        if (r->http_status < 300)
+            http_status_set_err(r, status);
+        return;
     }
 
+    status = r->http_status;
+
+    http_response_send_file(r, path, NULL);
+
+    if (r->http_status >= 400 && status < 300)
+        http_status_set_err(r, r->http_status);
+    else if (0 != status && 200 != status)
+        r->http_status = status;
+}
+
+
+__attribute_cold__
+static void http_response_xsendfile2(request_st * const r, const buffer * const value, const array * const xdocroot) {
+    /* reset Content-Length, if set by backend */
+    http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH,
+                               CONST_STR_LEN("Content-Length"));
+
+    char *pos = value->ptr;
+    int status = 0;
+
     while (*pos) {
-        const char *filename, *range;
-        stat_cache_entry *sce;
-        off_t begin_range, end_range, range_len;
-
-        while (' ' == *pos) pos++;
-        if (!*pos) break;
-
-        filename = pos;
-        if (NULL == (range = strchr(pos, ' '))) {
+        const char * const filename = pos;
+        if (NULL == (pos = strchr(pos, ' '))) {
             /* missing range */
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "Couldn't find range after filename: %s", filename);
-            r->http_status = 502;
+            log_error(r->conf.errh, __FILE__, __LINE__, "X-Sendfile2: "
+              "could not find range after filename: %s", filename);
+            status = 502;
             break;
         }
-        buffer_copy_string_len(b, filename, range - filename);
+        buffer * const tb = r->tmp_buf;
+        buffer_copy_string_len(tb, filename, pos++ - filename);
+        status = http_response_xsendfile_path_check(r, tb, xdocroot);
+        if (status) break;
 
-        /* find end of range */
-        for (pos = ++range; *pos && *pos != ' ' && *pos != ','; pos++) ;
+        /* parse range */
+        errno = 0;
+        char *range = pos;
+        off_t begin_range = strtoll(pos, &range, 10);
+        off_t end_range = -1;
+        if (errno || pos == range || '-' != *range++)
+            begin_range = -1;
+        else if (*range != '\0' && *range != ' ' && *range != ',') {
+            end_range = strtoll(pos, &range, 10);
+            if (errno || end_range < 0 || pos == range
+                || (*range != '\0' && *range != ' ' && *range != ','))
+                begin_range = -1;
+        }
+        pos = range;
+        if (begin_range < 0) {
+            log_error(r->conf.errh, __FILE__, __LINE__, "X-Sendfile2: "
+              "could not decode range after filename: %s", filename);
+            status = 502;
+            break;
+        }
 
-        buffer_urldecode_path(b);
-        if (!buffer_is_valid_UTF8(b)) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "X-Sendfile2 invalid UTF-8 after url-decode: %s", b->ptr);
-            r->http_status = 502;
-            break;
-        }
-        buffer_path_simplify(b);
-        if (r->conf.force_lowercase_filenames) {
-            buffer_to_lower(b);
-        }
-        if (buffer_is_blank(b)) {
-            r->http_status = 502;
-            break;
-        }
-        if (xdocroot && xdocroot->used) {
-            const buffer * const xval = !r->conf.force_lowercase_filenames
-              ? array_match_value_prefix(xdocroot, b)
-              : array_match_value_prefix_nc(xdocroot, b);
-            if (NULL == xval) {
-                log_error(r->conf.errh, __FILE__, __LINE__,
-                  "X-Sendfile2 (%s) not under configured x-sendfile-docroot(s)",
-                  b->ptr);
-                r->http_status = 403;
+        /* no parameters accepted */
+        while (*pos == ' ') ++pos;
+        if (*pos != '\0') {
+            if (*pos == ',')
+                do { ++pos; } while (*pos == ' ');
+            else {
+                status = 502;
                 break;
             }
         }
 
-        sce = stat_cache_get_entry_open(b, r->conf.follow_symlink);
-        if (NULL == sce) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "send-file error: couldn't get stat_cache entry for "
-              "X-Sendfile2: %s", b->ptr);
-            r->http_status = 404;
+        stat_cache_entry * const sce =
+          stat_cache_get_entry_open(tb, r->conf.follow_symlink);
+        if (NULL == sce || (sce->fd < 0 && 0 != sce->st.st_size)) {
+            log_error(r->conf.errh, __FILE__, __LINE__, "X-Sendfile2: "
+              "could not open/fstat: %s", tb->ptr);
+            status = sce ? 403 : 404;
             break;
-        } else if (!S_ISREG(sce->st.st_mode)) {
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "send-file error: wrong filetype for X-Sendfile2: %s", b->ptr);
-            r->http_status = 502;
+        }
+        else if (!S_ISREG(sce->st.st_mode)) {
+            log_error(r->conf.errh, __FILE__, __LINE__, "X-Sendfile2: "
+              "not regular file: %s", tb->ptr);
+            status = 502;
             break;
         }
         /* found the file */
 
-        /* parse range */
-        end_range = sce->st.st_size - 1;
-        {
-            char *rpos = NULL;
-            errno = 0;
-            begin_range = strtoll(range, &rpos, 10);
-            if (errno != 0 || begin_range < 0 || rpos == range)
-                goto range_failed;
-            if ('-' != *rpos++) goto range_failed;
-            if (rpos != pos) {
-                range = rpos;
-                end_range = strtoll(range, &rpos, 10);
-                if (errno != 0 || end_range < 0 || rpos == range)
-                    goto range_failed;
-            }
-            if (rpos != pos) goto range_failed;
-
-            goto range_success;
-
-range_failed:
-            log_error(r->conf.errh, __FILE__, __LINE__,
-              "Couldn't decode range after filename: %s", filename);
-            r->http_status = 502;
-            break;
-
-range_success: ;
-        }
-
-        /* no parameters accepted */
-
-        while (*pos == ' ') pos++;
-        if (*pos != '\0' && *pos != ',') {
-            r->http_status = 502;
-            break;
-        }
-
-        range_len = end_range - begin_range + 1;
+        if (end_range < 0) end_range = sce->st.st_size - 1;
+        const off_t range_len = end_range - begin_range + 1;
         if (range_len < 0) {
-            r->http_status = 502;
+            status = 502;
             break;
         }
         if (range_len != 0) {
             http_chunk_append_file_ref_range(r, sce, begin_range, range_len);
         }
-
-        if (*pos == ',') pos++;
     }
 
-    if (r->http_status >= 400 && status < 300) {
-	r->handler_module = NULL;
-    } else if (0 != status && 200 != status) {
-        r->http_status = status;
+    if (0 == status)
+        r->resp_body_finished = 1;
+    else if (status >= 400 && r->http_status < 300) {
+        http_response_body_clear(r, 0);
+        http_status_set_err(r, status);
     }
+}
+
+
+static int http_response_xsendfilex(request_st * const r, http_response_opts * const opts) {
+    buffer *vb;
+
+    /* X-Sendfile2 is deprecated; historical for fastcgi */
+    if (opts->backend == BACKEND_FASTCGI
+        && (vb = http_header_response_get(r, HTTP_HEADER_OTHER,
+                                          CONST_STR_LEN("X-Sendfile2")))) {
+        http_response_xsendfile2(r, vb, opts->xsendfile_docroot);
+        /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
+        buffer_clear(vb); /*(do not send to client)*/
+        return 1;
+    }
+    else if ((vb = http_header_response_get(r, HTTP_HEADER_OTHER,
+                                            CONST_STR_LEN("X-Sendfile")))
+             /* X-LIGHTTPD-send-file is deprecated; historical for fastcgi */
+             || (opts->backend == BACKEND_FASTCGI
+                 && (vb = http_header_response_get(r, HTTP_HEADER_OTHER,
+                            CONST_STR_LEN("X-LIGHTTPD-send-file"))))) {
+        http_response_xsendfile(r, vb, opts->xsendfile_docroot);
+        /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
+        buffer_clear(vb); /*(do not send to client)*/
+        return 1;
+    }
+
+    return 0;
 }
 
 
@@ -1290,27 +1286,8 @@ handler_t http_response_parse_headers(request_st * const r, http_response_opts *
     }
 
     if (opts->xsendfile_allow) {
-        buffer *vb;
-        /* X-Sendfile2 is deprecated; historical for fastcgi */
-        if (opts->backend == BACKEND_FASTCGI
-            && NULL != (vb = http_header_response_get(r, HTTP_HEADER_OTHER,
-                                                      CONST_STR_LEN("X-Sendfile2")))) {
-            http_response_xsendfile2(r, vb, opts->xsendfile_docroot);
-            /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
-            buffer_clear(vb); /*(do not send to client)*/
-            if (NULL == r->handler_module)
-                r->resp_body_started = 0;
-            return HANDLER_FINISHED;
-        } else if (NULL != (vb = http_header_response_get(r, HTTP_HEADER_OTHER,
-                                                          CONST_STR_LEN("X-Sendfile")))
-                   || (opts->backend == BACKEND_FASTCGI /* X-LIGHTTPD-send-file is deprecated; historical for fastcgi */
-                       && NULL != (vb = http_header_response_get(r, HTTP_HEADER_OTHER,
-                                                                 CONST_STR_LEN("X-LIGHTTPD-send-file"))))) {
-            http_response_xsendfile(r, vb, opts->xsendfile_docroot);
-            /* http_header_response_unset() shortcut for HTTP_HEADER_OTHER */
-            buffer_clear(vb); /*(do not send to client)*/
-            if (NULL == r->handler_module)
-                r->resp_body_started = 0;
+        if (http_response_xsendfilex(r, opts)) {
+            if (opts->headers) opts->headers(r, opts);
             return HANDLER_FINISHED;
         }
     }
