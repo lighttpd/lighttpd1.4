@@ -1017,6 +1017,11 @@ static int http_response_process_headers(request_st * const restrict r, http_res
             continue; /* invalid char in field value; skip */
 
         switch (id) {
+          case HTTP_HEADER_OTHER:
+            if (NULL != http_request_field_check_name(k, klen,
+                                                      http_header_strict))
+                continue; /* invalid char in field name; skip */
+            break;
           case HTTP_HEADER_STATUS:
             if (opts->backend != BACKEND_PROXY) {
                 end[0] = '\0';
@@ -1107,11 +1112,6 @@ static int http_response_process_headers(request_st * const restrict r, http_res
              *   A server MUST NOT send this header field. */
             /* (not bothering to remove HTTP2-Settings from Connection) */
             continue;
-          case HTTP_HEADER_OTHER:
-            if (NULL != http_request_field_check_name(k, klen,
-                                                      http_header_strict))
-                continue; /* invalid char in field name; skip */
-            break;
           default:
             break;
         }
