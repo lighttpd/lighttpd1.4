@@ -2560,6 +2560,47 @@ int gw_upgrade_policy (request_st * const r, const int auth_mode, int upgrade)
     return upgrade;
 }
 
+int gw_incremental_policy (request_st * const r, int upgrade)
+{
+    /*(not checking auth_mode so this is run twice for authorizer,
+     * but Incremental header is checked before auth attempt)*/
+  #if 0
+    /* skip checks if in auth_mode since no request body sent to authorizer */
+    if (auth_mode)
+        return 1;
+  #endif
+
+    if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST)
+        return 1; /* already configured to stream request body */
+
+    const buffer *vb = http_header_request_get(r, HTTP_HEADER_INCREMENTAL,
+                                               CONST_STR_LEN("Incremental"));
+    if (NULL == vb || buffer_clen(vb) < 2 || 0 != memcmp(vb->ptr, "?1", 2))
+        return 1; /* not found, invalid structured-field boolean, or not true */
+
+    if ((r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_CONFIGURED)
+         && !upgrade) {
+        /* if not already configured to stream request body, but configured,
+         * then policy is to fully buffer and must reject request w/ 501,
+         * though make an exception if Upgrade policy is allowed */
+      #if 0
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "Incremental request header conflicts "
+          "with server request buffering policy");
+      #endif
+        /* (use "gateway" as our proxy service name) */
+        http_header_request_append(r, HTTP_HEADER_OTHER,
+          CONST_STR_LEN("Proxy-Status"),
+          CONST_STR_LEN("gateway;error=incremental_refused"));
+        http_status_set_err(r, 501); /* Not Implemented */
+        return 0;
+    }
+    r->conf.stream_request_body |=
+      (FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN);
+
+    return 1;
+}
+
 static handler_t gw_response_headers_upgrade(request_st * const r, struct http_response_opts_t *opts) {
     /* response headers just completed */
     UNUSED(r);
@@ -2752,6 +2793,8 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
     p->conf.upgrade =
       gw_upgrade_policy(r,(gw_mode == GW_AUTHORIZER),p->conf.upgrade);
     if (0 != r->http_status)
+        return HANDLER_FINISHED;
+    if (!gw_incremental_policy(r, p->conf.upgrade))
         return HANDLER_FINISHED;
 
     if (!hctx) hctx = handler_ctx_init(hctx_sz);

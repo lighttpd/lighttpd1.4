@@ -1112,6 +1112,30 @@ static int http_response_process_headers(request_st * const restrict r, http_res
              *   A server MUST NOT send this header field. */
             /* (not bothering to remove HTTP2-Settings from Connection) */
             continue;
+          case HTTP_HEADER_INCREMENTAL:
+            if (r->conf.stream_response_body & FDEVENT_STREAM_RESPONSE)
+                break;
+            /*(pass Incremental if Upgrade, since server already streams)*/
+            /*(expect to see Upgrade before Incremental; not special-casing)*/
+            if (light_btst(r->resp_htags, HTTP_HEADER_UPGRADE)) /* 101 */
+                break;
+            if (end - value < 2 || 0 != memcmp(value, "?1", 2))
+                break;
+            if (r->conf.stream_response_body
+                 & FDEVENT_STREAM_RESPONSE_CONFIGURED) {
+                log_error(r->conf.errh, __FILE__, __LINE__,
+                  "backend Incremental response header conflicts "
+                  "with server response buffering policy");
+                /* (use "gateway" as our proxy name) */
+                http_header_response_append(r, HTTP_HEADER_OTHER,
+                  CONST_STR_LEN("Proxy-Status"),
+                  CONST_STR_LEN("gateway;error=incremental_refused"));
+                http_status_set_err(r, 501); /* Not Implemented */
+                continue;
+            }
+            r->conf.stream_response_body |=
+              (FDEVENT_STREAM_RESPONSE|FDEVENT_STREAM_RESPONSE_BUFMIN);
+            break;
           default:
             break;
         }

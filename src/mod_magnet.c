@@ -2615,6 +2615,8 @@ static int magnet_reqbody(lua_State *L) {
             else if (NULL == r->handler_module) {
                 r->conf.stream_request_body &=
                   ~(FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN);
+                r->conf.stream_request_body |=
+                  FDEVENT_STREAM_REQUEST_CONFIGURED;
                 r->handler_module = mod_magnet_plugin_data->self;
                 lua_pushboolean(L, 0);
             }

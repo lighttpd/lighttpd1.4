@@ -140,10 +140,12 @@ static void config_merge_config_cpv(request_config * const pconf, const config_p
         pconf->range_requests = (0 != cpv->v.u);
         break;
       case 16:/* server.stream-request-body */
-        pconf->stream_request_body = cpv->v.shrt;
+        pconf->stream_request_body = cpv->v.shrt
+                                   | FDEVENT_STREAM_REQUEST_CONFIGURED;
         break;
       case 17:/* server.stream-response-body */
-        pconf->stream_response_body = cpv->v.shrt;
+        pconf->stream_response_body = cpv->v.shrt
+                                    | FDEVENT_STREAM_RESPONSE_CONFIGURED;
         break;
       case 18:/* server.kbytes-per-second */
         pconf->global_bytes_per_second = (unsigned int)((off_t *)cpv->v.v)[1];

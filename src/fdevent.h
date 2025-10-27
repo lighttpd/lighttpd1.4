@@ -59,14 +59,16 @@ struct fdnode_st {
 
 #define FDEVENT_STREAM_REQUEST                  BV(0)
 #define FDEVENT_STREAM_REQUEST_BUFMIN           BV(1)
+#define FDEVENT_STREAM_REQUEST_CONFIGURED       BV(2)
 #define FDEVENT_STREAM_REQUEST_POLLRDHUP        BV(12)
 #define FDEVENT_STREAM_REQUEST_TCP_FIN          BV(13)
 #define FDEVENT_STREAM_REQUEST_BACKEND_SHUT_WR  BV(14)
 #define FDEVENT_STREAM_REQUEST_POLLIN           BV(15)
 
-#define FDEVENT_STREAM_RESPONSE           BV(0)
-#define FDEVENT_STREAM_RESPONSE_BUFMIN    BV(1)
-#define FDEVENT_STREAM_RESPONSE_POLLRDHUP BV(15)
+#define FDEVENT_STREAM_RESPONSE                 BV(0)
+#define FDEVENT_STREAM_RESPONSE_BUFMIN          BV(1)
+#define FDEVENT_STREAM_RESPONSE_CONFIGURED      BV(2)
+#define FDEVENT_STREAM_RESPONSE_POLLRDHUP       BV(15)
 
 __attribute_cold__
 int fdevent_config(const char **event_handler_name, log_error_st *errh);

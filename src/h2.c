@@ -64,6 +64,7 @@ static const char http_header_lc[][32] = {
  ,[HTTP_HEADER_IF_NONE_MATCH]             = "if-none-match"
  ,[HTTP_HEADER_IF_RANGE]                  = "if-range"
  ,[HTTP_HEADER_IF_UNMODIFIED_SINCE]       = "if-unmodified-since"
+ ,[HTTP_HEADER_INCREMENTAL]               = "incremental"
  ,[HTTP_HEADER_LAST_MODIFIED]             = "last-modified"
  ,[HTTP_HEADER_LINK]                      = "link"
  ,[HTTP_HEADER_LOCATION]                  = "location"
@@ -162,6 +163,7 @@ static const uint8_t http_header_lshpack_idx[] = {
  ,[HTTP_HEADER_X_CONTENT_TYPE_OPTIONS]    = LSHPACK_HDR_UNKNOWN
  ,[HTTP_HEADER_X_FRAME_OPTIONS]           = LSHPACK_HDR_UNKNOWN
  ,[HTTP_HEADER_X_XSS_PROTECTION]          = LSHPACK_HDR_UNKNOWN
+ ,[HTTP_HEADER_INCREMENTAL]               = LSHPACK_HDR_UNKNOWN
 };
 
 

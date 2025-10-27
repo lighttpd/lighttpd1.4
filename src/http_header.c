@@ -29,8 +29,8 @@ typedef struct keyvlenvalue {
 /* Note: must be kept in sync h2.c:lshpack_idx_http_header[] */
 /* http_headers_off lists first offset at which string of specific len occur */
 static const int8_t http_headers_off[] = {
-  -1, -1,  0,  1,  4,  9, 11, 17, 21, 26, 27, -1, 30, 31,
-  37, 40, 45, 49, -1, 52, -1, -1, 53, 54, -1, 55, -1, 57
+  -1, -1,  0,  1,  4,  9, 11, 17, 21, 26, 27, 30, 31, 32,
+  38, 41, 46, 50, -1, 53, -1, -1, 54, 55, -1, 56, -1, 58
 };
 static const keyvlenvalue http_headers[] = {
   { HTTP_HEADER_TE,                          CONST_LEN_STR("te") }
@@ -63,6 +63,7 @@ static const keyvlenvalue http_headers[] = {
  ,{ HTTP_HEADER_CONNECTION,                  CONST_LEN_STR("connection") }
  ,{ HTTP_HEADER_SET_COOKIE,                  CONST_LEN_STR("set-cookie") }
  ,{ HTTP_HEADER_USER_AGENT,                  CONST_LEN_STR("user-agent") }
+ ,{ HTTP_HEADER_INCREMENTAL,                 CONST_LEN_STR("incremental") }
  ,{ HTTP_HEADER_CONTENT_TYPE,                CONST_LEN_STR("content-type") }
  ,{ HTTP_HEADER_LAST_MODIFIED,               CONST_LEN_STR("last-modified") }
  ,{ HTTP_HEADER_AUTHORIZATION,               CONST_LEN_STR("authorization") }

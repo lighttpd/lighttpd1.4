@@ -54,6 +54,7 @@ static void test_http_header_tables (void) {
           case HTTP_HEADER_IF_NONE_MATCH:
           case HTTP_HEADER_IF_RANGE:
           case HTTP_HEADER_IF_UNMODIFIED_SINCE:
+          case HTTP_HEADER_INCREMENTAL:
           case HTTP_HEADER_LAST_MODIFIED:
           case HTTP_HEADER_LINK:
           case HTTP_HEADER_LOCATION:

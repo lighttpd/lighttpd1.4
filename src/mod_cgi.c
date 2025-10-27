@@ -1069,6 +1069,9 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	if (0 != r->http_status)
 		return HANDLER_FINISHED;
 
+	if (!gw_incremental_policy(r, (int)p->conf.upgrade))
+		return HANDLER_FINISHED;
+
 	if (r->reqbody_length
 	    && p->tempfile_accum
 	    && !(r->conf.stream_request_body /*(if not streaming request body)*/
