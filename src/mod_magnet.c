@@ -2521,6 +2521,7 @@ static int magnet_respbody(lua_State *L) {
       case 's': /* set; r.resp_body.set */
         if (k[1] == 'e' && k[2] == 't' && k[3] == '\0') {
             http_response_body_clear(r, 0); /* clear respbody, then add */
+            r->resp_body_finished = 1;
             lua_pushlightuserdata(L, r);
             lua_pushcclosure(L, magnet_respbody_add, 1);
             return 1;
