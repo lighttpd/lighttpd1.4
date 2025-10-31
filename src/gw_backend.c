@@ -2625,14 +2625,12 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
     if (NULL == p->conf.exts) return HANDLER_GO_ON;
   #endif
 
-    buffer *fn = uri_path_handler ? &r->uri.path : &r->physical.path;
-    const size_t s_len = buffer_clen(fn);
+    const buffer *fn = uri_path_handler ? &r->uri.path : &r->physical.path;
+    if (buffer_is_blank(fn)) return HANDLER_GO_ON; /*(not expected)*/
     gw_extension *extension = NULL;
     gw_host *host = NULL;
     gw_handler_ctx *hctx;
     unsigned short gw_mode;
-
-    if (0 == s_len) return HANDLER_GO_ON; /*(not expected)*/
 
     /* check p->conf.exts_auth list and then p->conf.ext_resp list
      * (skip p->conf.exts_auth if array is empty
@@ -2668,27 +2666,21 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
         if (p->conf.ext_mapping) {
             data_string *ds =
               (data_string *)array_match_key_suffix(p->conf.ext_mapping, fn);
-            if (NULL != ds) {
-                /* found a mapping */
-                    /* check if we know the extension */
-                    uint32_t k;
-                    for (k = 0; k < exts->used; ++k) {
-                        extension = exts->exts+k;
-
-                        if (buffer_is_equal(&ds->value, &extension->key)) {
-                            break;
-                        }
+            if (NULL != ds) { /* found a mapping */
+                /* check if we know the extension */
+                for (uint32_t k = 0; k < exts->used; ++k) {
+                    gw_extension *ext = exts->exts+k;
+                    if (buffer_is_equal(&ds->value, &ext->key)) {
+                        extension = ext;
+                        break;
                     }
-
-                    if (k == exts->used) {
-                        /* found nothing */
-                        extension = NULL;
-                    }
+                }
             }
         }
 
         if (extension == NULL) {
-            size_t uri_path_len = buffer_clen(&r->uri.path);
+            const uint32_t uri_path_len = buffer_clen(&r->uri.path);
+            const uint32_t s_len = buffer_clen(fn);
 
             /* check if extension matches */
             for (uint32_t k = 0; k < exts->used; ++k) {
@@ -2696,7 +2688,7 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
               #ifdef __clang_analyzer__
                 force_assert(ext); /*(unnecessary; quiet clang analyzer)*/
               #endif
-                size_t ct_len = buffer_clen(&ext->key);
+                uint32_t ct_len = buffer_clen(&ext->key);
 
                 /* check _url_ in the form "/gw_pattern" */
                 if (ext->key.ptr[0] == '/') {
@@ -2770,8 +2762,8 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
                 * PATH_INFO   = /bar
                 *
                 */
-            /* (s_len is buffer_clen(&r->uri.path) if (uri_path_handler) */
             uint32_t elen = buffer_clen(&extension->key);
+            uint32_t s_len = buffer_clen(&r->uri.path);
             const char *pathinfo;
             if (1 == elen && host->fix_root_path_name) {
                 buffer_copy_buffer(&r->pathinfo, &r->uri.path);
