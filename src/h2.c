@@ -1188,7 +1188,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     uint32_t alen = len; /* actual data len, minus padding */
     uint32_t pad = 0;
     if (s[4] & H2_FLAG_PADDED) {
-        pad = s[9];
+        pad = s[9]; /*(reads '\0' after string if 0 == len)*/
         if (pad >= len) {
             h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
             return 0;
@@ -1868,7 +1868,7 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
     uint32_t alen = flen;
     if (s[4] & H2_FLAG_PADDED) {
         ++psrc;
-        const uint32_t pad = s[9];
+        const uint32_t pad = s[9]; /*(reads '\0' after string if 0 == alen)*/
         if (alen < 1 + pad) {
             /* Padding that exceeds the size remaining for the header block
              * fragment MUST be treated as a PROTOCOL_ERROR. */
