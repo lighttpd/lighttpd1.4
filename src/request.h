@@ -192,8 +192,7 @@ struct request_st {
     char resp_header_repeated;
 
     char loops_per_request;  /* catch endless loops in a single request */
-    int8_t keep_alive; /* only request.c can enable it, all other just disable */
-    char async_callback;
+    int8_t keep_alive; /* only request.c can enable it, others may disable */
 
     buffer *tmp_buf;                    /* shared; same as srv->tmp_buf */
     response_dechunk *gw_dechunk;

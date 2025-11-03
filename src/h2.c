@@ -3474,7 +3474,6 @@ h2_con_upgrade_h2c (request_st * const h2r, connection * const con)
   #endif
   #if 0
     r->loops_per_request = h2r->loops_per_request;
-    r->async_callback = h2r->async_callback;
   #endif
     r->keep_alive = h2r->keep_alive;
     r->tmp_buf = h2r->tmp_buf;                /* shared; same as srv->tmp_buf */

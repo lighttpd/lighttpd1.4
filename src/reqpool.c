@@ -126,7 +126,6 @@ request_reset (request_st * const r)
     r->resp_body_scratchpad = -1;
     r->rqst_htags = 0;
 
-    r->async_callback = 0;
     r->error_handler_saved_status = 0;
     /*r->error_handler_saved_method = HTTP_METHOD_UNSET;*/
     /*(error_handler_saved_method value is not valid

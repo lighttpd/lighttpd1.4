@@ -273,16 +273,8 @@ http_response_prepare (request_st * const r)
 	 *  gw_authorizer_ok() before calling http_response_reset()) */
 	if (__builtin_expect( (buffer_is_unset(&r->physical.path)), 1)) {
 
-		#if 0 /*(r->async_callback currently unused)*/
-		if (__builtin_expect( (!r->async_callback), 1)) {
-		#endif
 			rc = http_response_config(r);
 			if (HANDLER_GO_ON != rc) return rc;
-		#if 0 /*(r->async_callback currently unused)*/
-		}
-		else
-			r->async_callback = 0; /* reset */
-		#endif
 
 		if (r->conf.log_request_handling) {
 			log_debug(r->conf.errh, __FILE__, __LINE__,
