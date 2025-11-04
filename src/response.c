@@ -468,38 +468,56 @@ http_response_prepare_fin (request_st * const r, void *unused)
 }
 
 
+/* specialized from src/plugin.c */
+typedef struct {
+  handler_t(*fn)(request_st *, void *);
+  void *data; /* plugin_data_base *data; */
+} plugin_fn_req_data;
+
+
+__attribute_hot__
 static handler_t
 http_response_prepare (request_st * const r)
 {
+    /* specialized from src/plugin.c:plugins_call_fn_req_data() */
+    /*(PLUGIN_FUNC_HANDLE_URI_CLEAN == 0 for plugin_slots[0])*/
+    const void * const plugin_slots = r->con->plugin_slots;
+    const uint32_t offset = ((const uint16_t *)plugin_slots)[0]+r->resp_fn_step;
+    const plugin_fn_req_data *plfd = (const plugin_fn_req_data *)
+      (((uintptr_t)plugin_slots) + offset);
+    /* http_response_prepare_fin() never returns HANDLER_GO_ON
+     * and will always end the for() loop, if reached in fn ptrs */
     handler_t rc;
+    for (; (rc = plfd->fn(r, plfd->data)) == HANDLER_GO_ON; ++plfd)
+        ++r->resp_fn_step;
+    return rc;
+}
 
-    if (__builtin_expect( (buffer_is_unset(&r->physical.path)), 1)) {
-        rc = http_response_config(r, NULL);
-        if (HANDLER_GO_ON != rc) return rc;
 
-        rc = plugins_call_handle_uri_clean(r);
-        if (HANDLER_GO_ON != rc) return rc;
-
-        rc = http_response_prepare_docroot(r, NULL);
-        if (HANDLER_GO_ON != rc) return rc;
-
-        rc = plugins_call_handle_docroot(r);
-        if (HANDLER_GO_ON != rc) return rc;
-
-        rc = http_response_prepare_physical(r, NULL);
-        if (HANDLER_GO_ON != rc) return rc;
-
-        rc = plugins_call_handle_physical(r);
-        if (HANDLER_GO_ON != rc) return rc;
-    }
-
-    rc = http_response_prepare_subrequest_start(r, NULL);
-    if (HANDLER_GO_ON != rc) return rc;
-
-    rc = plugins_call_handle_subrequest_start(r);
-    if (HANDLER_GO_ON != rc) return rc;
-
-    return http_response_prepare_fin(r, NULL);
+__attribute_cold__
+void
+http_response_fn_init (server * const srv)
+{
+    /* overwrite NULL fn ptrs which were used to end hook lists
+     * (stored in linear array) so that these hooks run consecutively,
+     * along with fn ptrs inserted here.  See src/plugin.c:plugins_call_init()*/
+    /* (alternative implementation to better preserve encapsulation would be to
+     *  create an init func in response.c which passed 5 fn ptrs to an init func
+     *  in plugin.c) */
+    /*(PLUGIN_FUNC_HANDLE_URI_CLEAN == 0 for plugin_slots[0])*/
+    const void * const plugin_slots = srv->plugin_slots;
+    uint32_t offset = ((const uint16_t *)plugin_slots)[0];
+    plugin_fn_req_data *plfd = (plugin_fn_req_data *)
+      (((uintptr_t)plugin_slots) + offset);
+    plfd->fn = http_response_config;
+    do { ++plfd; } while (plfd->fn);
+    plfd->fn = http_response_prepare_docroot;
+    do { ++plfd; } while (plfd->fn);
+    plfd->fn = http_response_prepare_physical;
+    do { ++plfd; } while (plfd->fn);
+    plfd->fn = http_response_prepare_subrequest_start;
+    do { ++plfd; } while (plfd->fn);
+    plfd->fn = http_response_prepare_fin;
 }
 
 
@@ -526,6 +544,7 @@ static handler_t http_response_comeback (request_st * const r)
 
     int status = http_request_parse_target(r, r->con->proto_default_port);
     if (0 == status) {
+        r->resp_fn_step = 0;
         r->conditional_is_valid = (1 << COMP_SERVER_SOCKET)
                                 | (1 << COMP_HTTP_SCHEME)
                                 | (1 << COMP_HTTP_HOST)

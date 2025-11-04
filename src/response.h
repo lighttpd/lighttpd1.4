@@ -83,4 +83,7 @@ handler_t http_response_handler(request_st *r);
 __attribute_cold__
 void strftime_cache_reset(void);
 
+__attribute_cold__
+void http_response_fn_init (server *srv);
+
 #endif

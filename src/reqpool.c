@@ -59,8 +59,11 @@ request_init_data (request_st * const r, connection * const con, server * const 
 
     r->http_method = HTTP_METHOD_UNSET;
     r->http_version = HTTP_VERSION_UNSET;
+  #if 0 /*(already zeroed by calloc())*/
+    r->resp_fn_step = 0;
     r->resp_header_len = 0;
     r->loops_per_request = 0;
+  #endif
     r->tmp_buf = srv->tmp_buf;
     r->resp_body_scratchpad = -1;
     r->server_name = &r->uri.authority;
@@ -105,6 +108,7 @@ request_reset (request_st * const r)
 
     http_response_reset(r);
 
+    r->resp_fn_step = 0;
     r->loops_per_request = 0;
     r->keep_alive = 0;
 

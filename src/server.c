@@ -18,6 +18,7 @@
 #include "network_write.h"  /* network_write_show_handlers() */
 #include "reqpool.h"        /* request_pool_init() request_pool_free() */
 #include "response.h"       /* http_dispatch[] strftime_cache_reset() */
+                            /* http_response_fn_init() */
 
 #ifdef HAVE_VERSIONSTAMP_H
 # include "versionstamp.h"
@@ -1692,6 +1693,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		  "Initialization of plugins failed. Going down.");
 		return -1;
 	}
+	http_response_fn_init(srv);
 
 	http_dispatch[HTTP_VERSION_1_1] = h1_1_dispatch_table; /* copy struct */
 

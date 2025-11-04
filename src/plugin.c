@@ -511,10 +511,20 @@ handler_t plugins_call_init(server *srv) {
 			++offsets[PLUGIN_FUNC_WORKER_INIT];
 	}
 
+	/* allocate first space for response.c:http_response_config() */
+	++offsets[PLUGIN_FUNC_HANDLE_URI_CLEAN];
+
 	uint32_t nslots =
 	  (sizeof(offsets)+sizeof(plugin_fn_data)-1) / sizeof(plugin_fn_data);
 	for (uint32_t i = 0; i < PLUGIN_FUNC_SIZEOF; ++i) {
-		if (offsets[i]) {
+		/* note: allocate at least one slot for
+		 *   PLUGIN_FUNC_HANDLE_URI_CLEAN
+		 *   PLUGIN_FUNC_HANDLE_DOCROOT
+		 *   PLUGIN_FUNC_HANDLE_PHYSICAL
+		 *   PLUGIN_FUNC_HANDLE_SUBREQUEST_START
+		 * in order to be able to overwrite NULL w/ fn ptr in response.c
+		 */
+		if (offsets[i] || i <= PLUGIN_FUNC_HANDLE_SUBREQUEST_START) {
 			uint32_t offset = nslots;
 			nslots += offsets[i]+1; /* +1 to mark end of each list */
 			force_assert(offset * sizeof(plugin_fn_data) <= USHRT_MAX);
@@ -525,6 +535,10 @@ handler_t plugins_call_init(server *srv) {
 	/* allocate and fill slots of two dimensional array */
 	srv->plugin_slots = ck_calloc(nslots, sizeof(plugin_fn_data));
 	memcpy(srv->plugin_slots, offsets, sizeof(offsets));
+
+	/* allocate first space for response.c:http_response_config() */
+	plugins_call_init_slot(srv, (pl_cb_t)(uintptr_t)1, NULL,
+				offsets[PLUGIN_FUNC_HANDLE_URI_CLEAN]);
 
 	/* add handle_uri_raw before handle_uri_clean, but in same slot */
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {

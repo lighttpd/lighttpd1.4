@@ -182,6 +182,7 @@ struct request_st {
     buffer *dst_addr_buf;
 
     /* response */
+    uint32_t resp_fn_step;
     uint32_t resp_header_len;
     uint64_t resp_htags; /*bitfield of flagged headers present in response*/
     array resp_headers;
