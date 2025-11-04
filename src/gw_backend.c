@@ -2387,7 +2387,7 @@ static handler_t gw_authorizer_ok(gw_handler_ctx * const hctx, request_st * cons
     /*(FYI: if multiple FastCGI authorizers were to be supported,
      * next one could be started here instead of restarting request)*/
 
-    r->handler_module = NULL;
+    /*r->handler_module = NULL;*//* performed by http_response_reset() */
     return HANDLER_COMEBACK;
 }
 

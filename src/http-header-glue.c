@@ -368,7 +368,7 @@ static void http_response_header_clear (request_st * const r) {
 void http_response_reset (request_st * const r) {
     r->http_status = 0;
     r->handler_module = NULL;
-    if (r->physical.path.ptr) { /*(skip for mod_fastcgi authorizer)*/
+    if (r->physical.path.ptr) { /*(skip for gw_backend authorizer)*/
         buffer_clear(&r->physical.doc_root);
         buffer_clear(&r->physical.basedir);
         buffer_reset(&r->physical.path);
@@ -684,7 +684,7 @@ static int http_response_xsendfilex(request_st * const r, http_response_opts * c
 void http_response_backend_error (request_st * const r) {
 	if (r->resp_body_started) {
 		/*(response might have been already started, kill the connection)*/
-		/*(mode == DIRECT to avoid later call to http_response_backend_done())*/
+		/*(unset handler to avoid later call to http_response_backend_done())*/
 		r->handler_module = NULL;  /*(avoid sending final chunked block)*/
 		r->keep_alive = 0;
 		r->resp_body_finished = 1;

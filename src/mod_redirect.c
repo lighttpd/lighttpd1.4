@@ -6,6 +6,7 @@
 #include "buffer.h"
 #include "burl.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "http_kv.h"    /* http_method_get_or_head() */
 
 #include "plugin.h"
@@ -189,12 +190,11 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
         http_header_response_set(r, HTTP_HEADER_LOCATION,
                                  CONST_STR_LEN("Location"),
                                  BUF_PTR_LEN(tb));
-        r->http_status = p->conf.redirect_code
+        int status = p->conf.redirect_code
                        ? p->conf.redirect_code
                        : http_method_get_or_head(r->http_method)
                          || r->http_version == HTTP_VERSION_1_0 ? 301 : 308;
-        r->handler_module = NULL;
-        r->resp_body_finished = 1;
+        http_status_set_fin(r, status);
     }
     else if (HANDLER_ERROR == rc) {
         log_error(r->conf.errh, __FILE__, __LINE__,

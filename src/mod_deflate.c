@@ -120,6 +120,7 @@
 #include "http_chunk.h"
 #include "http_etag.h"
 #include "http_header.h"
+#include "http_status.h"
 #include "response.h"
 #include "stat_cache.h"
 
@@ -2003,17 +2004,15 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 			} else {
 				r->http_status = 412;
 			}
+			http_status_set_fin(r, r->http_status);
 
 			/* response_start hook occurs after error docs have been handled.
 			 * For now, send back empty response body.
 			 * In the future, might extract the error doc code so that it
 			 * might be run again if response_start hooks return with
-			 * changed http_status and r->handler_module = NULL */
+			 * changed http_status and r->handler_module NULL */
 			/* clear content length even if 304 since compressed length unknown */
 			http_response_body_clear(r, 0);
-
-			r->resp_body_finished = 1;
-			r->handler_module = NULL;
 			return HANDLER_GO_ON;
 		}
 	}

@@ -9,6 +9,7 @@ __attribute_nonnull__()
 void http_status_append (buffer *b, int http_status);
 
 #define http_status_set_fin(r, code) ((r)->resp_body_finished = 1, \
+                                      (r)->handler_module = NULL, \
                                       (r)->http_status = (code))
 #define http_status_set(r, code)     ((r)->http_status = (code))
 #define http_status_is_set(r)        ((r)->http_status != 0)
