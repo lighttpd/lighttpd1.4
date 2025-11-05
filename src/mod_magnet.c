@@ -3511,7 +3511,8 @@ magnet_attract (request_st * const r, plugin_data * const p, script * const sc)
 				  http_header_env_set_ptr(r,CONST_STR_LEN("_L_MAGNET_RESTART"));
 				buffer_append_char(vb, '0');
 			}
-			http_response_reset(r);
+			buffer_reset(&r->physical.path);
+			r->handler_module = NULL;
 			result = HANDLER_COMEBACK;
 			if (++*vb->ptr-'0' >= 10) {
 				log_error(r->conf.errh, __FILE__, __LINE__,
@@ -3593,7 +3594,8 @@ SUBREQUEST_FUNC(mod_magnet_handle_subrequest) {
             return HANDLER_WAIT_FOR_EVENT;
     }
 
-    http_response_reset(r);
+    buffer_reset(&r->physical.path);
+    r->handler_module = NULL;
     return HANDLER_COMEBACK;
 }
 
