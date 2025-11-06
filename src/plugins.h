@@ -10,13 +10,15 @@ int plugins_load(server *srv);
 __attribute_cold__
 void plugins_free(server *srv);
 
+#if 0 /*(handled differently in http_response_prepare())*/
 handler_t plugins_call_handle_uri_clean(request_st *r);
+handler_t plugins_call_handle_docroot(request_st *r);
+handler_t plugins_call_handle_physical(request_st *r);
 handler_t plugins_call_handle_subrequest_start(request_st *r);
+#endif
 handler_t plugins_call_handle_response_start(request_st *r);
 handler_t plugins_call_handle_request_env(request_st *r);
 handler_t plugins_call_handle_request_done(request_st *r);
-handler_t plugins_call_handle_docroot(request_st *r);
-handler_t plugins_call_handle_physical(request_st *r);
 handler_t plugins_call_handle_request_reset(request_st *r);
 
 handler_t plugins_call_handle_connection_accept(connection *con);
