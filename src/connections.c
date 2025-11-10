@@ -839,10 +839,9 @@ connection_state_machine (connection * const con)
 {
     int rc = !con->fn || con->fn->process_streams(con, http_response_handler,
                                                        connection_handle_write);
-    request_st * const r = &con->request;
     if (rc)
-        connection_state_machine_loop(r, con);
-    connection_set_fdevent_interest(r, con);
+        connection_state_machine_loop(&con->request, con);
+    connection_set_fdevent_interest(&con->request, con);
 }
 
 
