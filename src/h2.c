@@ -3419,7 +3419,7 @@ h2_con_upgrade_h2c (request_st * const h2r, connection * const con)
     request_st * const r = h2_init_stream(h2r, con);
     /*(undo double-count; already incremented in CON_STATE_REQUEST_START)*/
     --con->request_count;
-    r->state = CON_STATE_WRITE; /* require 0 == r->reqbody_length */
+    r->state = CON_STATE_HANDLE_REQUEST; /* require 0 == r->reqbody_length */
     r->http_status = 0;
     r->http_method = h2r->http_method;
     r->x.h2.state = H2_STATE_HALF_CLOSED_REMOTE;
