@@ -770,6 +770,7 @@ static int config_insert_srvconf(server *srv) {
         T_CONFIG_SCOPE_UNSET }
     };
 
+    http_request_trailer_set_whitelist(NULL); /*(reset after config reload)*/
     srv->srvconf.h2proto = 1; /* enable HTTP/2 by default */
 
     int rc = 0;
