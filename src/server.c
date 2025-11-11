@@ -2330,6 +2330,8 @@ static int main_init_once (void) {
     }
   #endif
 
+    ck_static_assert(sizeof(off_t) == 8); /* sanity check: 64-bit off_t */
+
     return 1;
 }
 
