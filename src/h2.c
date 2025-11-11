@@ -3384,9 +3384,31 @@ h2_retire_con (request_st * const h2r, connection * const con)
 }
 
 
+__attribute_cold__
+__attribute_nonnull__()
 static void
-h2_con_upgrade_h2c (request_st * const h2r, connection * const con)
+h2_upgrade_h2c (request_st * const h2r, connection * const con)
 {
+    /* Upgrade: h2c
+     * RFC7540 3.2 Starting HTTP/2 for "http" URIs */
+
+    buffer * const http2_settings =
+      http_header_request_get(h2r, HTTP_HEADER_HTTP2_SETTINGS,
+                              CONST_STR_LEN("HTTP2-Settings"));
+
+    /* ignore Upgrade: h2c if request body present since we do not
+     * (currently) handle request body before transition to h2c */
+    /* RFC7540 3.2 Requests that contain a payload body MUST be sent
+     * in their entirety before the client can send HTTP/2 frames. */
+
+    if (NULL != http2_settings
+        && 0 == h2r->reqbody_length
+        && h2r->conf.h2proto > 1 /*(must be enabled with server.h2c feature)*/
+        && !con->is_ssl_sock)    /*(disallow h2c over TLS socket)*/
+        h2r->http_version = HTTP_VERSION_2;
+    else
+        return;
+
     /* HTTP/1.1 101 Switching Protocols
      * Connection: Upgrade
      * Upgrade: h2c
@@ -3411,6 +3433,15 @@ h2_con_upgrade_h2c (request_st * const h2r, connection * const con)
     if (((h2con *)con->hx)->sent_goaway) return;
 
     ((h2con *)con->hx)->h2_cid = 1; /* stream id 1 is assigned to h2c upgrade */
+
+    buffer * const tb = h2r->tmp_buf;
+    buffer_clear(tb);
+    if (buffer_append_base64_decode(tb,BUF_PTR_LEN(http2_settings),BASE64_URL))
+        h2_parse_frame_settings(con, (uint8_t *)BUF_PTR_LEN(tb));
+    else {
+        h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
+        return;
+    }
 
     /* copy request state from &con->request to subrequest r
      * XXX: would be nice if there were a cleaner way to do this
@@ -3479,46 +3510,20 @@ h2_con_upgrade_h2c (request_st * const h2r, connection * const con)
     r->tmp_buf = h2r->tmp_buf;                /* shared; same as srv->tmp_buf */
     r->start_hp = h2r->start_hp;                /* copy struct */
 
+    http_header_request_unset(r, HTTP_HEADER_HTTP2_SETTINGS,
+                              CONST_STR_LEN("HTTP2-Settings"));
+    http_header_request_unset(r, HTTP_HEADER_UPGRADE,
+                              CONST_STR_LEN("Upgrade"));
+    buffer * const http_connection =
+      http_header_request_get(r, HTTP_HEADER_CONNECTION,
+                              CONST_STR_LEN("Connection"));
+    http_header_remove_token(http_connection, CONST_STR_LEN("HTTP2-Settings"));
+    http_header_remove_token(http_connection, CONST_STR_LEN("Upgrade"));
+
     /* Note: HTTP/1.1 101 Switching Protocols is not immediately written to
      * the network here.  As this is called from cleartext Upgrade: h2c,
      * we choose to delay sending the status until the beginning of the response
      * to the HTTP/1.1 request which included Upgrade: h2c */
-}
-
-
-__attribute_cold__
-__attribute_nonnull__()
-static void
-h2_upgrade_h2c (request_st * const r, connection * const con)
-{
-    /* Upgrade: h2c
-     * RFC7540 3.2 Starting HTTP/2 for "http" URIs */
-
-    buffer * const http2_settings =
-      http_header_request_get(r, HTTP_HEADER_HTTP2_SETTINGS,
-                              CONST_STR_LEN("HTTP2-Settings"));
-
-    /* ignore Upgrade: h2c if request body present since we do not
-     * (currently) handle request body before transition to h2c */
-    /* RFC7540 3.2 Requests that contain a payload body MUST be sent
-     * in their entirety before the client can send HTTP/2 frames. */
-
-    if (NULL != http2_settings
-        && 0 == r->reqbody_length
-        && r->conf.h2proto > 1/*(must be enabled with server.h2c feature)*/
-        && !con->is_ssl_sock) { /*(disallow h2c over TLS socket)*/
-
-        r->http_version = HTTP_VERSION_2;
-        h2_con_upgrade_h2c(r, con);
-
-        buffer * const b = r->tmp_buf;
-        buffer_clear(b);
-        if (buffer_append_base64_decode(b, BUF_PTR_LEN(http2_settings),
-                                        BASE64_URL))
-            h2_parse_frame_settings(con, (uint8_t *)BUF_PTR_LEN(b));
-        else
-            h2_send_goaway_e(con, H2_E_PROTOCOL_ERROR);
-    }
 }
 
 
