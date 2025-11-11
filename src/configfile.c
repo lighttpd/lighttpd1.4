@@ -770,7 +770,7 @@ static int config_insert_srvconf(server *srv) {
         T_CONFIG_SCOPE_UNSET }
     };
 
-    srv->srvconf.h2proto = 2; /* enable HTTP/2 and h2c by default */
+    srv->srvconf.h2proto = 1; /* enable HTTP/2 by default */
 
     int rc = 0;
     plugin_data_base srvplug;
@@ -915,7 +915,7 @@ static int config_insert_srvconf(server *srv) {
                     srv->srvconf.h2proto +=
                       config_plugin_value_to_bool(
                         array_get_element_klen(cpv->v.a,
-                                               CONST_STR_LEN("server.h2c")), 1);
+                                               CONST_STR_LEN("server.h2c")), 0);
                 srv->srvconf.absolute_dir_redirect =
                   config_plugin_value_to_bool(
                     array_get_element_klen(cpv->v.a,
