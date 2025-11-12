@@ -4920,12 +4920,16 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
     {
         ASN1_INTEGER *xsn = X509_get_serialNumber(xs);
         BIGNUM *serialBN = ASN1_INTEGER_to_BN(xsn, NULL);
-        char *serialHex = BN_bn2hex(serialBN);
-        http_header_env_set(r,
-                            CONST_STR_LEN("SSL_CLIENT_M_SERIAL"),
-                            serialHex, strlen(serialHex));
-        OPENSSL_free(serialHex);
-        BN_free(serialBN);
+        if (serialBN) {
+            char *serialHex = BN_bn2hex(serialBN);
+            if (serialHex) {
+                http_header_env_set(r,
+                                    CONST_STR_LEN("SSL_CLIENT_M_SERIAL"),
+                                    serialHex, strlen(serialHex));
+                OPENSSL_free(serialHex);
+            }
+            BN_free(serialBN);
+        }
     }
 
     if (hctx->conf.ssl_verifyclient_username) {
