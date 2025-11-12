@@ -988,7 +988,7 @@ static int http_request_parse_reqline(request_st * const restrict r, const char 
           : http_request_check_uri_strict((const uint8_t *)uri, len)
       : memchr(ptr, '\0', hoff[hoff[0]]);/* check entire headers set for '\0' */
     if (x)
-        http_request_header_char_invalid(r, *x, "invalid character in URI -> 400");
+        return http_request_header_char_invalid(r, *x, "invalid character in URI -> 400");
 
     buffer_copy_string_len(&r->target, uri, len);
     buffer_copy_string_len(&r->target_orig, uri, len);
