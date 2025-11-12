@@ -198,7 +198,7 @@ mod_authn_dbi_dbconf_setup (server *srv, const array *opts, void **vdata)
 
         /* connect to database */
         mod_authn_dbi_error_callback(dbconn, dbconf);
-        if (dbconf->reconnect_count >= 3) {
+        if (dbconf->reconnect_count > 3) {
             mod_authn_dbi_dbconf_free(dbconf);
             return -1;
         }

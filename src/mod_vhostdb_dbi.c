@@ -163,7 +163,7 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
 
         /* connect to database */
         mod_vhostdb_dbi_error_callback(dbconn, dbconf);
-        if (dbconf->reconnect_count >= 3) {
+        if (dbconf->reconnect_count > 3) {
             mod_vhostdb_dbconf_free(dbconf);
             return -1;
         }
