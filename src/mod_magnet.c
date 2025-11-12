@@ -2542,12 +2542,12 @@ static int magnet_reqbody_add(lua_State *L) {
     const int tempfile = (cq->last && cq->last->file.is_temp);
     if (lua_isstring(L, -1)) {
         const_buffer data = magnet_checkconstbuffer(L, -1);
-        r->reqbody_length += data.len;
         if (r->reqbody_length <= 65536 && !tempfile)
             chunkqueue_append_mem(cq, data.ptr, data.len);
         else if (chunkqueue_append_mem_to_tempfile(cq, data.ptr, data.len,
                                                    r->conf.errh))
             return 0; /* boolean false */
+        r->reqbody_length += data.len;
         return 1; /* boolean true */
     }
     else if (!lua_istable(L, -1))
@@ -2558,12 +2558,12 @@ static int magnet_reqbody_add(lua_State *L) {
 
         if (lua_isstring(L, -1)) {
             const_buffer data = magnet_checkconstbuffer(L, -1);
-            r->reqbody_length += data.len;
             if (r->reqbody_length <= 65536 && !tempfile)
                 chunkqueue_append_mem(cq, data.ptr, data.len);
             else if (chunkqueue_append_mem_to_tempfile(cq, data.ptr, data.len,
                                                        r->conf.errh))
                 return 0; /* boolean false */
+            r->reqbody_length += data.len;
         }
         else if (lua_isnil(L, -1)) { /* end of list */
             end = 1;
