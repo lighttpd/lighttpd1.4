@@ -690,11 +690,13 @@ ajp13_expand_headers (buffer * const b, handler_ctx * const hctx, uint32_t plen)
         plen -= 2;
         len = ajp13_dec_uint16(ptr);
         ptr += 2;
-        if (plen < len+1) break;
-        plen -= len+1; /* include -1 for ending '\0' */
         buffer_append_char(b, ' ');
-        if (len) buffer_append_string_len(b, (char *)ptr, len);
-        ptr += len+1;
+        if (len != 65535) { /*(len == 65535 for empty string)*/
+            if (plen < len+1) break;
+            plen -= len+1; /* include -1 for ending '\0' */
+            if (len) buffer_append_string_len(b, (char *)ptr, len);
+            ptr += len+1;
+        }
 
         if (plen < 2) break;
         plen -= 2;
@@ -703,6 +705,7 @@ ajp13_expand_headers (buffer * const b, handler_ctx * const hctx, uint32_t plen)
             if (plen < 2) break;
             plen -= 2;
             len = ajp13_dec_uint16(ptr);
+            /*(len == 65535 should not happen for field name; error out below)*/
             ptr += 2;
             if (len >= 0xA000) {
                 if (len == 0xA000 || len > 0xA00B) break;
@@ -738,6 +741,7 @@ ajp13_expand_headers (buffer * const b, handler_ctx * const hctx, uint32_t plen)
             plen -= 2;
             len = ajp13_dec_uint16(ptr);
             ptr += 2;
+            if (len == 65535) continue; /*(empty string)*/
             if (plen < len+1) break;
             plen -= len+1;
             buffer_append_string_len(b, (char *)ptr, len);
