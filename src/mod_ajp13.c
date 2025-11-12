@@ -658,7 +658,7 @@ ajp13_create_env (handler_ctx * const hctx)
 }
 
 
-static void
+static int
 ajp13_expand_headers (buffer * const b, handler_ctx * const hctx, uint32_t plen)
 {
     /* hctx->rb must contain at least plen content
@@ -694,6 +694,7 @@ ajp13_expand_headers (buffer * const b, handler_ctx * const hctx, uint32_t plen)
         if (len != 65535) { /*(len == 65535 for empty string)*/
             if (plen < len+1) break;
             plen -= len+1; /* include -1 for ending '\0' */
+            if (NULL != memchr(ptr, '\n', len)) return 0;
             if (len) buffer_append_string_len(b, (char *)ptr, len);
             ptr += len+1;
         }
@@ -731,6 +732,7 @@ ajp13_expand_headers (buffer * const b, handler_ctx * const hctx, uint32_t plen)
             else {
                 if (plen < len+1) break;
                 plen -= len+1;
+                if (NULL != memchr(ptr, '\n', len)) return 0;
                 buffer_append_str3(b, CONST_STR_LEN("\n"),
                                    (char *)ptr, len,
                                    CONST_STR_LEN(": "));
@@ -744,12 +746,14 @@ ajp13_expand_headers (buffer * const b, handler_ctx * const hctx, uint32_t plen)
             if (len == 65535) continue; /*(empty string)*/
             if (plen < len+1) break;
             plen -= len+1;
+            if (NULL != memchr(ptr, '\n', len)) return 0;
             buffer_append_string_len(b, (char *)ptr, len);
             ptr += len+1;
         }
     } while (0);
 
     buffer_append_string_len(b, CONST_STR_LEN("\n\n"));
+    return 1;
 }
 
 
@@ -825,7 +829,11 @@ ajp13_recv_parse_loop (request_st * const r, handler_ctx * const hctx)
                     buffer_clear(hdrs);
                 }
 
-                ajp13_expand_headers(hdrs, hctx, 4 + plen);
+                if (!ajp13_expand_headers(hdrs, hctx, 4 + plen)) {
+                    log_error(errh, __FILE__, __LINE__,
+                      "AJP13: headers packet received with embedded newlines");
+                    return http_status_set_err(r, 502); /* Bad Gateway */
+                }
 
                 if (HANDLER_GO_ON !=
                     http_response_parse_headers(r, &hctx->opts, hdrs)) {
