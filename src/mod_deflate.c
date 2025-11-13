@@ -1445,18 +1445,23 @@ static int mod_deflate_stream_end(handler_ctx *hctx) {
 	}
 }
 
-static int deflate_compress_cleanup(request_st * const r, handler_ctx * const hctx) {
-	int rc = mod_deflate_stream_end(hctx);
+static handler_t mod_deflate_finished(request_st * const r, handler_ctx * const hctx, const buffer * const tb) {
+  #ifdef __COVERITY__
+    /* coverity misses if hctx->cache_fd is not -1, then tb is not NULL */
+    force_assert(-1 == hctx->cache_fd || NULL != tb);
+  #endif
+    if (-1 != hctx->cache_fd && 0 != mod_deflate_cache_file_finish(r, hctx, tb))
+        return HANDLER_ERROR;
 
-      #if 1 /* unnecessary if deflate.min-compress-size is set to a reasonable value */
-	if (0 == rc && hctx->bytes_in < hctx->bytes_out)
-		log_error(r->conf.errh, __FILE__, __LINE__,
-		  "uri %s in=%lld smaller than out=%lld", r->target.ptr,
-		  (long long)hctx->bytes_in, (long long)hctx->bytes_out);
-      #endif
+  #if 1 /* unnecessary if deflate.min-compress-size is set to a reasonable value */
+    if (hctx->bytes_in < hctx->bytes_out)
+        log_error(r->conf.errh, __FILE__, __LINE__,
+          "uri %s in=%lld smaller than out=%lld", r->target.ptr,
+          (long long)hctx->bytes_in, (long long)hctx->bytes_out);
+  #endif
 
-	handler_ctx_free(hctx);
-	return rc;
+    mod_deflate_note_ratio(r, hctx->bytes_out, hctx->bytes_in);
+    return HANDLER_GO_ON;
 }
 
 
@@ -2136,13 +2141,9 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	    && c->type == FILE_CHUNK
 	    && chunkqueue_chunk_file_view(c, len, r->conf.errh)
 	    && chunk_file_view_dlen(c->file.view, c->offset) >= len) { /*(cfv)*/
-		rc = HANDLER_GO_ON;
 		hctx->bytes_in = len;
 		if (mod_deflate_using_libdeflate(hctx, p)) {
-			if (NULL == tb || 0 == mod_deflate_cache_file_finish(r, hctx, tb))
-				mod_deflate_note_ratio(r, hctx->bytes_out, hctx->bytes_in);
-			else
-				rc = HANDLER_ERROR;
+			rc = mod_deflate_finished(r, hctx, tb);
 			handler_ctx_free(hctx);
 			return rc;
 		}
@@ -2157,13 +2158,9 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	    && c == r->write_queue.last
 	    && c->type == MEM_CHUNK) {
 		/*(skip if FILE_CHUNK; not worth mmap/munmap overhead on small file)*/
-		rc = HANDLER_GO_ON;
 		hctx->bytes_in = len;
 		if (mod_deflate_using_libdeflate_sm(hctx, p)) {
-			if (NULL == tb || 0 == mod_deflate_cache_file_finish(r, hctx, tb))
-				mod_deflate_note_ratio(r, hctx->bytes_out, hctx->bytes_in);
-			else
-				rc = HANDLER_ERROR;
+			rc = mod_deflate_finished(r, hctx, tb);
 			handler_ctx_free(hctx);
 			return rc;
 		}
@@ -2195,25 +2192,17 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	if (light_btst(r->resp_htags, HTTP_HEADER_CONTENT_LENGTH)) {
 		http_header_response_unset(r, HTTP_HEADER_CONTENT_LENGTH, CONST_STR_LEN("Content-Length"));
 	}
-	r->plugin_ctx[p->id] = hctx;
 
 	rc = deflate_compress_response(r, hctx);
-	if (HANDLER_GO_ON == rc) return HANDLER_GO_ON;
-	if (HANDLER_FINISHED == rc) {
-	  #ifdef __COVERITY__
-		/* coverity misses if hctx->cache_fd is not -1, then tb is not NULL */
-		force_assert(-1 == hctx->cache_fd || NULL != tb);
-	  #endif
-		if (-1 == hctx->cache_fd
-		    || 0 == mod_deflate_cache_file_finish(r, hctx, tb)) {
-			mod_deflate_note_ratio(r, hctx->bytes_out, hctx->bytes_in);
-			rc = HANDLER_GO_ON;
-		}
-		else
+	if (HANDLER_GO_ON == rc)
+		r->plugin_ctx[p->id] = hctx;
+	else {
+		if (mod_deflate_stream_end(hctx) < 0)
 			rc = HANDLER_ERROR;
+		else if (HANDLER_FINISHED == rc)
+			rc = mod_deflate_finished(r, hctx, tb);
+		handler_ctx_free(hctx);
 	}
-	r->plugin_ctx[p->id] = NULL;
-	if (deflate_compress_cleanup(r, hctx) < 0) return HANDLER_ERROR;
 	return rc;
 }
 
@@ -2223,7 +2212,8 @@ static handler_t mod_deflate_cleanup(request_st * const r, void *p_d) {
 
 	if (NULL != hctx) {
 		r->plugin_ctx[p->id] = NULL;
-		deflate_compress_cleanup(r, hctx);
+		mod_deflate_stream_end(hctx);
+		handler_ctx_free(hctx);
 	}
 
 	return HANDLER_GO_ON;
