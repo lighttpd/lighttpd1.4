@@ -328,6 +328,15 @@ static buffer * mod_deflate_cache_file_name(request_st * const r, const buffer *
                               BUF_PTR_LEN(&r->physical.path));
     buffer_append_str2(tb, CONST_STR_LEN("-"), /*(strip surrounding '"')*/
                            etag->ptr+1, buffer_clen(etag)-2);
+    /* translate any '/' (and backslash on Windows) in appended etag to '~' */
+    char *ptr = tb->ptr + buffer_clen(tb) - (buffer_clen(etag)-2) - 1;
+    while (*++ptr) {
+      #if defined(_WIN32) || defined(__CYGWIN__)
+        if (*ptr == '/' || *ptr == '\\') *ptr = '~';
+      #else
+        if (*ptr == '/') *ptr = '~';
+      #endif
+    }
     return tb;
 }
 
