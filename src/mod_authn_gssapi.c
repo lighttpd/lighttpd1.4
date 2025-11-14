@@ -335,6 +335,11 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
 
     mod_authn_gssapi_patch_config(r, p);
 
+    if (!p->conf.auth_gssapi_principal) {
+        log_error(r->conf.errh, __FILE__, __LINE__, "auth.backend.gssapi.principal not configured");
+        return http_status_set_err(r, 500); /* Internal Server Error */
+    }
+
     if (p->conf.auth_gssapi_keytab) {
         /* ??? Should code = krb5_kt_resolve(kcontext, p->conf.auth_gssapi_keytab->ptr, &keytab);
          *     be used, instead of putenv() of KRB5_KTNAME=...?  See mod_authn_gssapi_basic() */
@@ -639,6 +644,11 @@ static handler_t mod_authn_gssapi_basic(request_st * const r, void *p_d, const h
     }
 
     mod_authn_gssapi_patch_config(r, p);
+
+    if (!p->conf.auth_gssapi_principal) {
+        log_error(r->conf.errh, __FILE__, __LINE__, "auth.backend.gssapi.principal not configured");
+        return http_status_set_err(r, 500); /* Internal Server Error */
+    }
 
     code = krb5_init_context(&kcontext);
     if (code) {
