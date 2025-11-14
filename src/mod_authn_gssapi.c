@@ -248,6 +248,33 @@ static int mod_authn_gssapi_create_krb5_ccache(request_st * const r, plugin_data
     return -1;
 }
 
+__attribute_nonnull__()
+static buffer * mod_authn_gssapi_construct_sprinc (request_st * const r, const buffer * const principal)
+{
+    buffer * const sprinc = buffer_init();
+    buffer_copy_buffer(sprinc, principal);
+    if (strchr(sprinc->ptr, '/') == NULL) {
+        /*(copy HTTP Host, omitting port if port is present)*/
+        const buffer * const http_host = r->http_host
+                                       ? r->http_host
+                                       : r->server_name;
+        if (http_host && !buffer_is_blank(http_host)) {
+            size_t len;
+            if (*http_host->ptr == '[') {
+                const char * const bracket = strchr(http_host->ptr+1, ']');
+                len = bracket
+                    ? bracket - http_host->ptr + 1
+                    : buffer_clen(http_host);
+            }
+            else
+                len = strcspn(http_host->ptr, ":");
+            buffer_append_str2(sprinc, CONST_STR_LEN("/"),
+                                       http_host->ptr, (uint32_t)len);
+        }
+    }
+    return sprinc;
+}
+
 /*
  * HTTP auth Negotiate
  */
@@ -353,19 +380,7 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
         /* ktname.ptr becomes part of the environment, do not free */
     }
 
-    sprinc = buffer_init();
-    if (p->conf.auth_gssapi_principal)
-        buffer_copy_buffer(sprinc, p->conf.auth_gssapi_principal);
-    if (strchr(sprinc->ptr, '/') == NULL) {
-        /*(copy HTTP Host, omitting port if port is present)*/
-        /* ??? Should r->server_name be used if http_host not present?
-         * ??? What if r->server_name is not set?
-         * ??? Will this work below if IPv6 provided in Host?  probably not */
-        if (r->http_host && !buffer_is_blank(r->http_host))
-            buffer_append_str2(sprinc, CONST_STR_LEN("/"),
-                                       r->http_host->ptr,
-                                       strcspn(r->http_host->ptr, ":"));
-    }
+    sprinc = mod_authn_gssapi_construct_sprinc(r,p->conf.auth_gssapi_principal);
     if (strchr(sprinc->ptr, '@') == NULL)
         buffer_append_str2(sprinc, CONST_STR_LEN("@"),
                                    BUF_PTR_LEN(require->realm));
@@ -667,19 +682,7 @@ static handler_t mod_authn_gssapi_basic(request_st * const r, void *p_d, const h
         return mod_authn_gssapi_send_401_unauthorized_basic(r); /*(well, should be 500)*/
     }
 
-    sprinc = buffer_init();
-    if (p->conf.auth_gssapi_principal)
-        buffer_copy_buffer(sprinc, p->conf.auth_gssapi_principal);
-    if (strchr(sprinc->ptr, '/') == NULL) {
-        /*(copy HTTP Host, omitting port if port is present)*/
-        /* ??? Should r->server_name be used if http_host not present?
-         * ??? What if r->server_name is not set?
-         * ??? Will this work below if IPv6 provided in Host?  probably not */
-        if (r->http_host && !buffer_is_blank(r->http_host))
-            buffer_append_str2(sprinc, CONST_STR_LEN("/"),
-                                       r->http_host->ptr,
-                                       strcspn(r->http_host->ptr, ":"));
-    }
+    sprinc = mod_authn_gssapi_construct_sprinc(r,p->conf.auth_gssapi_principal);
 
     /*(init c_creds before anything which might krb5_free_cred_contents())*/
     memset(&c_creds, 0, sizeof(c_creds));
