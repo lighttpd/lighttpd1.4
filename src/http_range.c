@@ -379,7 +379,7 @@ http_range_rfc7233 (request_st * const r)
      *   A server MUST ignore a Range header field received with a request
      *   method other than GET.
      */
-    if (!http_method_get_or_head(r->http_method))
+    if (!http_method_get_head_query(r->http_method))
         return http_status;
     /* no "Range" in HTTP/1.0 */
     if (r->http_version < HTTP_VERSION_1_1)
@@ -439,8 +439,9 @@ http_range_rfc7233 (request_st * const r)
      * [RFC7233] 3.1 Range
      *   A server MUST ignore a Range header field received with a request
      *   method other than GET.
+     * (extended to QUERY here, after limited to GET HEAD QUERY further above)
      */
-    if (r->http_method != HTTP_METHOD_GET)
+    if (r->http_method == HTTP_METHOD_HEAD)
         return http_status;
 
     /* check for Range request */
