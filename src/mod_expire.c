@@ -26,7 +26,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
     time_t *toffsets;
     uint32_t tused;
 } plugin_data;
@@ -115,12 +114,12 @@ static void mod_expire_merge_config(plugin_config * const pconf, const config_pl
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_expire_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_expire_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_expire_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_expire_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -264,7 +263,6 @@ mod_expire_set_header (request_st * const r, const time_t * const off)
 }
 
 REQUEST_FUNC(mod_expire_handler) {
-	plugin_data *p = p_d;
 	buffer *vb;
 	const data_string *ds;
 
@@ -277,27 +275,29 @@ REQUEST_FUNC(mod_expire_handler) {
 	if (light_btst(r->resp_htags, HTTP_HEADER_CACHE_CONTROL))
 		return HANDLER_GO_ON;
 
-	mod_expire_patch_config(r, p);
+	plugin_config pconf;
+	mod_expire_patch_config(r, p_d, &pconf);
 
 	/* check expire.url */
-	ds = p->conf.expire_url
-	  ? (const data_string *)array_match_key_prefix(p->conf.expire_url, &r->uri.path)
+	ds = pconf.expire_url
+	  ? (const data_string *)array_match_key_prefix(pconf.expire_url, &r->uri.path)
 	  : NULL;
 	/* check expire.mimetypes (if no match with expire.url) */
 	if (NULL == ds) {
-		if (NULL == p->conf.expire_mimetypes) return HANDLER_GO_ON;
+		if (NULL == pconf.expire_mimetypes) return HANDLER_GO_ON;
 		vb = http_header_response_get(r, HTTP_HEADER_CONTENT_TYPE, CONST_STR_LEN("Content-Type"));
 		if (NULL != vb)
 			ds = (const data_string *)
-			     array_match_key_prefix(p->conf.expire_mimetypes, vb);
+			     array_match_key_prefix(pconf.expire_mimetypes, vb);
 		if (NULL == ds) {
 			ds = (const data_string *)
-			     array_get_element_klen(p->conf.expire_mimetypes,
+			     array_get_element_klen(pconf.expire_mimetypes,
 			                            CONST_STR_LEN(""));
 			if (NULL == ds) return HANDLER_GO_ON;
 		}
 	}
 
+	const plugin_data * const p = p_d;
 	return mod_expire_set_header(r, p->toffsets + ds->value.used);
 }
 

@@ -48,7 +48,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 } plugin_data;
 
 static handler_t mod_authn_file_htdigest_digest(request_st *r, void *p_d, http_auth_info_t *ai);
@@ -106,12 +105,12 @@ static void mod_authn_file_merge_config(plugin_config * const pconf, const confi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_authn_file_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_authn_file_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_authn_file_merge_config(&p->conf,
+            mod_authn_file_merge_config(pconf,
                                         p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -282,9 +281,9 @@ static int mod_authn_file_htdigest_get_loop(const char *data, const buffer *auth
 }
 
 static int mod_authn_file_htdigest_get(request_st * const r, void *p_d, http_auth_info_t * const ai) {
-    plugin_data *p = (plugin_data *)p_d;
-    mod_authn_file_patch_config(r, p);
-    const buffer * const auth_fn = p->conf.auth_htdigest_userfile;
+    plugin_config pconf;
+    mod_authn_file_patch_config(r, p_d, &pconf);
+    const buffer * const auth_fn = pconf.auth_htdigest_userfile;
     if (!auth_fn) return -1;
 
     off_t dlen = 64*1024*1024;/*(arbitrary limit: 64 MB file; expect < 1 MB)*/
@@ -397,10 +396,10 @@ static int mod_authn_file_htpasswd_get(const buffer *auth_fn, const char *userna
 }
 
 static handler_t mod_authn_file_plain_digest(request_st * const r, void *p_d, http_auth_info_t * const ai) {
-    plugin_data *p = (plugin_data *)p_d;
-    mod_authn_file_patch_config(r, p);
+    plugin_config pconf;
+    mod_authn_file_patch_config(r, p_d, &pconf);
     buffer * const tb = r->tmp_buf; /* password-string from auth-backend */
-    int rc = mod_authn_file_htpasswd_get(p->conf.auth_plain_userfile,
+    int rc = mod_authn_file_htpasswd_get(pconf.auth_plain_userfile,
                                          ai->username, ai->ulen, tb,
                                          r->conf.errh);
     if (0 != rc) return HANDLER_ERROR;
@@ -414,10 +413,10 @@ static handler_t mod_authn_file_plain_digest(request_st * const r, void *p_d, ht
 }
 
 static handler_t mod_authn_file_plain_basic(request_st * const r, void *p_d, const http_auth_require_t * const require, const buffer * const username, const char * const pw) {
-    plugin_data *p = (plugin_data *)p_d;
-    mod_authn_file_patch_config(r, p);
+    plugin_config pconf;
+    mod_authn_file_patch_config(r, p_d, &pconf);
     buffer * const tb = r->tmp_buf; /* password-string from auth-backend */
-    int rc = mod_authn_file_htpasswd_get(p->conf.auth_plain_userfile,
+    int rc = mod_authn_file_htpasswd_get(pconf.auth_plain_userfile,
                                          BUF_PTR_LEN(username), tb,
                                          r->conf.errh);
     if (0 == rc) {
@@ -695,10 +694,10 @@ static int mod_authn_file_crypt_cmp(const buffer * const password, const char * 
 #endif
 
 static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, const http_auth_require_t * const require, const buffer * const username, const char * const pw) {
-    plugin_data *p = (plugin_data *)p_d;
-    mod_authn_file_patch_config(r, p);
+    plugin_config pconf;
+    mod_authn_file_patch_config(r, p_d, &pconf);
     buffer * const tb = r->tmp_buf; /* password-string from auth-backend */
-    int rc = mod_authn_file_htpasswd_get(p->conf.auth_htpasswd_userfile,
+    int rc = mod_authn_file_htpasswd_get(pconf.auth_htpasswd_userfile,
                                          BUF_PTR_LEN(username), tb,
                                          r->conf.errh);
     if (0 != rc) return HANDLER_ERROR;

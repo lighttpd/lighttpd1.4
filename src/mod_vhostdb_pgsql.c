@@ -32,7 +32,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 } plugin_data;
 
 static void mod_vhostdb_dbconf_free (void *vdata)
@@ -105,11 +104,10 @@ static int mod_vhostdb_dbconf_setup (server *srv, const array *opts, void **vdat
     return 0;
 }
 
-static void mod_vhostdb_patch_config(request_st * const r, plugin_data * const p);
+static void mod_vhostdb_patch_config(request_st * const r, const plugin_data * const p, plugin_config * const pconf);
 
 static int mod_vhostdb_pgsql_query(request_st * const r, void *p_d, buffer *docroot)
 {
-    plugin_data *p = (plugin_data *)p_d;
     vhostdb_config *dbconf;
     PGresult *res;
     int cols, rows;
@@ -118,9 +116,10 @@ static int mod_vhostdb_pgsql_query(request_st * const r, void *p_d, buffer *docr
     buffer *sqlquery = docroot;
     buffer_clear(sqlquery); /*(also resets docroot (alias))*/
 
-    mod_vhostdb_patch_config(r, p);
-    if (NULL == p->conf.vdata) return 0; /*(after resetting docroot)*/
-    dbconf = (vhostdb_config *)p->conf.vdata;
+    plugin_config pconf;
+    mod_vhostdb_patch_config(r, p_d, &pconf);
+    if (NULL == pconf.vdata) return 0; /*(after resetting docroot)*/
+    dbconf = (vhostdb_config *)pconf.vdata;
 
     for (char *b = dbconf->sqlquery->ptr, *d; *b; b = d+1) {
         if (NULL != (d = strchr(b, '?'))) {
@@ -214,12 +213,12 @@ static void mod_vhostdb_merge_config(plugin_config * const pconf, const config_p
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_vhostdb_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_vhostdb_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_vhostdb_merge_config(&p->conf,p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_vhostdb_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 

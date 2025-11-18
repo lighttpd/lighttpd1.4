@@ -30,7 +30,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
     unix_time64_t cache_ts[2];
     buffer cache_user[2];
     buffer cache_path[2];
@@ -79,11 +78,11 @@ static void mod_userdir_merge_config(plugin_config * const pconf, const config_p
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_userdir_patch_config(request_st * const r, plugin_data * const p) {
-    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+static void mod_userdir_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_userdir_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_userdir_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -171,7 +170,7 @@ static int mod_userdir_in_vlist(const array * const a, const char * const k, con
 }
 
 __attribute_noinline__
-static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data * const p, const char * const uptr, const size_t ulen) {
+static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data * const p, const plugin_config * const pconf, const char * const uptr, const size_t ulen) {
     char u[256];
     if (ulen >= sizeof(u)) return HANDLER_GO_ON;
 
@@ -181,9 +180,13 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
     /* we build the physical path */
     buffer * const b = r->tmp_buf;
 
-    if (!p->conf.basepath) {
+    if (!pconf->basepath) {
+      #ifndef HAVE_PWD_H
+        UNUSED(p);
+      #endif
       #ifdef HAVE_PWD_H
         /* getpwnam() lookup is expensive; first check 2-element cache */
+        /* thread-safety todo: p->cache(s) */
         const unix_time64_t cur_ts = log_monotonic_secs;
         int cached = -1;
         const int cache_sz =(int)(sizeof(p->cache_user)/sizeof(*p->cache_user));
@@ -197,12 +200,12 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
         struct passwd *pwd;
         if (cached >= 0) {
             buffer_copy_path_len2(b, BUF_PTR_LEN(&p->cache_path[cached]),
-                                     BUF_PTR_LEN(p->conf.path));
+                                     BUF_PTR_LEN(pconf->path));
         }
         else if ((pwd = getpwnam(u))) {
             const size_t plen = strlen(pwd->pw_dir);
             buffer_copy_path_len2(b, pwd->pw_dir, plen,
-                                     BUF_PTR_LEN(p->conf.path));
+                                     BUF_PTR_LEN(pconf->path));
             if (!stat_cache_path_isdir(b)) {
                 return HANDLER_GO_ON;
             }
@@ -243,13 +246,13 @@ static handler_t mod_userdir_docroot_construct(request_st * const r, plugin_data
             }
         }
 
-        buffer_copy_buffer(b, p->conf.basepath);
-        if (p->conf.letterhomes) {
+        buffer_copy_buffer(b, pconf->basepath);
+        if (pconf->letterhomes) {
             if (u[0] == '.') return HANDLER_GO_ON;
             buffer_append_path_len(b, u, 1);
         }
         buffer_append_path_len(b, u, ulen);
-        buffer_append_path_len(b, BUF_PTR_LEN(p->conf.path));
+        buffer_append_path_len(b, BUF_PTR_LEN(pconf->path));
     }
 
     buffer_copy_buffer(&r->physical.basedir, b);
@@ -287,13 +290,13 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
     if (r->uri.path.ptr[0] != '/' ||
         r->uri.path.ptr[1] != '~') return HANDLER_GO_ON;
 
-    plugin_data * const p = p_d;
-    mod_userdir_patch_config(r, p);
+    plugin_config pconf;
+    mod_userdir_patch_config(r, p_d, &pconf);
 
     /* enforce the userdir.path to be set in the config, ugly fix for #1587;
      * should be replaced with a clean .enabled option in 1.5
      */
-    if (!p->conf.active || !p->conf.path) return HANDLER_GO_ON;
+    if (!pconf.active || !pconf.path) return HANDLER_GO_ON;
 
     const char * const uptr = r->uri.path.ptr + 2;
     const char * const rel_url = strchr(uptr, '/');
@@ -312,21 +315,21 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
      * but these lists are expected to be relatively short in most cases
      * so there is not a huge benefit to doing so in the common case */
 
-    if (p->conf.exclude_user) {
+    if (pconf.exclude_user) {
         /* use case-insensitive comparison for exclude list
          * if r->conf.force_lowercase_filenames */
         if (!r->conf.force_lowercase_filenames
-            ? mod_userdir_in_vlist(p->conf.exclude_user, uptr, ulen)
-            : mod_userdir_in_vlist_nc(p->conf.exclude_user, uptr, ulen))
+            ? mod_userdir_in_vlist(pconf.exclude_user, uptr, ulen)
+            : mod_userdir_in_vlist_nc(pconf.exclude_user, uptr, ulen))
             return HANDLER_GO_ON; /* user in exclude list */
     }
 
-    if (p->conf.include_user) {
-        if (!mod_userdir_in_vlist(p->conf.include_user, uptr, ulen))
+    if (pconf.include_user) {
+        if (!mod_userdir_in_vlist(pconf.include_user, uptr, ulen))
             return HANDLER_GO_ON; /* user not in include list */
     }
 
-    return mod_userdir_docroot_construct(r, p, uptr, ulen);
+    return mod_userdir_docroot_construct(r, p_d, &pconf, uptr, ulen);
 }
 
 

@@ -31,7 +31,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 } plugin_data;
 
 
@@ -76,12 +75,12 @@ static void mod_skeleton_merge_config(plugin_config * const pconf, const config_
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_skeleton_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_skeleton_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_skeleton_merge_config(&p->conf, p->cvlist+p->cvlist[i].v.u2[0]);
+            mod_skeleton_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -110,18 +109,17 @@ SETDEFAULTS_FUNC(mod_skeleton_set_defaults) {
 }
 
 URIHANDLER_FUNC(mod_skeleton_uri_handler) {
-    plugin_data * const p = p_d;
-
     /* determine whether or not module participates in request */
 
     if (NULL != r->handler_module) return HANDLER_GO_ON;
     if (buffer_is_blank(&r->uri.path)) return HANDLER_GO_ON;
 
     /* get module config for request */
-    mod_skeleton_patch_config(r, p);
+    plugin_config pconf;
+    mod_skeleton_patch_config(r, p_d, &pconf);
 
-    if (NULL == p->conf.match
-        || NULL == array_match_value_suffix(p->conf.match, &r->uri.path)) {
+    if (NULL == pconf.match
+        || NULL == array_match_value_suffix(pconf.match, &r->uri.path)) {
         return HANDLER_GO_ON;
     }
 

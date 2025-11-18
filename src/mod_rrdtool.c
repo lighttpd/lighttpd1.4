@@ -30,7 +30,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 
     int read_fd;
     int write_fd;
@@ -149,12 +148,12 @@ static void mod_rrd_merge_config(plugin_config * const pconf, const config_plugi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_rrd_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_rrd_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_rrd_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_rrd_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -416,13 +415,15 @@ static handler_t mod_rrd_waitpid_cb(server *srv, void *p_d, pid_t pid, int statu
 }
 
 REQUESTDONE_FUNC(mod_rrd_account) {
-    plugin_data *p = p_d;
+    const plugin_data * const p = p_d;
     /*(0 == p->rrdtool_pid if never activated; not used)*/
     if (0 == p->rrdtool_pid) return HANDLER_GO_ON;
 
-    mod_rrd_patch_config(r, p);
-    rrd_config * const rrd = p->conf.rrd;
+    plugin_config pconf;
+    mod_rrd_patch_config(r, p, &pconf);
+    rrd_config * const rrd = pconf.rrd;
     if (NULL != rrd) {
+        /* thread-safety todo: atomics, or lock around modification */
         ++rrd->requests;
         rrd->bytes_written += http_request_stats_bytes_out(r);
         rrd->bytes_read    += http_request_stats_bytes_in(r);

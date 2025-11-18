@@ -16,7 +16,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 } plugin_data;
 
 INIT_FUNC(mod_access_init) {
@@ -42,12 +41,12 @@ static void mod_access_merge_config(plugin_config * const pconf, const config_pl
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_access_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_access_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_access_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_access_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -79,9 +78,9 @@ SETDEFAULTS_FUNC(mod_access_set_defaults) {
 }
 
 __attribute_cold__
-static handler_t mod_access_reject (request_st * const r, plugin_data * const p) {
+static handler_t mod_access_reject (request_st * const r, const plugin_config * const pconf) {
     if (r->conf.log_request_handling) {
-        if (p->conf.access_allow && p->conf.access_allow->used)
+        if (pconf->access_allow && pconf->access_allow->used)
             log_debug(r->conf.errh, __FILE__, __LINE__,
               "url denied as failed to match any from access_allow %s",
               r->uri.path.ptr);
@@ -122,15 +121,15 @@ static int mod_access_check (const array * const allow, const array * const deny
  * this handles the issue of trailing slashes
  */
 URIHANDLER_FUNC(mod_access_uri_handler) {
-    plugin_data *p = p_d;
-    mod_access_patch_config(r, p);
-    if (NULL == p->conf.access_allow && NULL == p->conf.access_deny)
+    plugin_config pconf;
+    mod_access_patch_config(r, p_d, &pconf);
+    if (NULL == pconf.access_allow && NULL == pconf.access_deny)
         return HANDLER_GO_ON; /* access allowed; nothing to match */
 
-    return mod_access_check(p->conf.access_allow, p->conf.access_deny,
+    return mod_access_check(pconf.access_allow, pconf.access_deny,
                             &r->uri.path, r->conf.force_lowercase_filenames)
-      ? HANDLER_GO_ON              /* access allowed */
-      : mod_access_reject(r, p);   /* access denied */
+      ? HANDLER_GO_ON                   /* access allowed */
+      : mod_access_reject(r, &pconf);   /* access denied */
 }
 
 

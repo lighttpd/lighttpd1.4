@@ -53,11 +53,11 @@ static void mod_sockproxy_merge_config(plugin_config * const pconf, const config
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_sockproxy_patch_config(request_st * const r, plugin_data * const p) {
-    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+static void mod_sockproxy_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_sockproxy_merge_config(&p->conf,p->cvlist+p->cvlist[i].v.u2[0]);
+            mod_sockproxy_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -141,20 +141,21 @@ static handler_t sockproxy_create_env_connect(handler_ctx *hctx) {
 
 static handler_t mod_sockproxy_connection_accept(connection *con, void *p_d) {
 	request_st * const r = &con->request;
-	plugin_data *p = p_d;
 	handler_t rc;
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-	mod_sockproxy_patch_config(r, p);
-	if (NULL == p->conf.exts) return HANDLER_GO_ON;
+	plugin_config pconf;
+	mod_sockproxy_patch_config(r, p_d, &pconf);
+	if (NULL == pconf.exts) return HANDLER_GO_ON;
 
 	/*(fake r->uri.path for matching purposes in gw_check_extension())*/
 	buffer_copy_string_len(&r->uri.path, CONST_STR_LEN("/"));
 
-	rc = gw_check_extension(r, p, 1, 0);
+	rc = gw_check_extension(r, &pconf, p_d, 1, 0);
 	if (HANDLER_GO_ON != rc) return rc;
 
+	const plugin_data * const p = p_d;
 	if (r->handler_module == p->self) {
 		handler_ctx *hctx = r->plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_PROXY;

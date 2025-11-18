@@ -22,7 +22,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 } plugin_data;
 
 typedef struct {
@@ -75,7 +74,7 @@ static void mod_setenv_merge_config(plugin_config * const pconf, const config_pl
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_setenv_patch_config(request_st * const r, plugin_data * const p, plugin_config * const pconf) {
+static void mod_setenv_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
     memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))

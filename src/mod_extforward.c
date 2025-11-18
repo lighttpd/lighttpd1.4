@@ -93,12 +93,12 @@ typedef struct {
     unsigned int opts;
     char hap_PROXY;
     char hap_PROXY_ssl_client_verify;
+    int plid;
 } plugin_config;
 
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
     array *default_headers;
     array tokens;
 } plugin_data;
@@ -209,11 +209,11 @@ static void mod_extforward_merge_config(plugin_config * const pconf, const confi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_extforward_patch_config(request_st * const r, plugin_data * const p) {
-    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+static void mod_extforward_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_extforward_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_extforward_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -404,6 +404,7 @@ SETDEFAULTS_FUNC(mod_extforward_set_defaults) {
     }
 
     p->defaults.opts = PROXY_FORWARDED_NONE;
+    p->defaults.plid = p->id; /*(not a config option; for convenient access)*/
 
     /* initialize p->defaults from global config context */
     if (p->nconfig > 0 && p->cvlist->v.u2[1]) {
@@ -502,15 +503,15 @@ static void extract_forward_array(array * const result, const buffer *pbuffer)
 /*
  * check whether ip is trusted, return 1 for trusted , 0 for untrusted
  */
-static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
+static int is_proxy_trusted(const plugin_config *pconf, const char * const ip, size_t iplen)
 {
     const data_string *ds =
-      (const data_string *)array_get_element_klen(p->conf.forwarder, ip, iplen);
+      (const data_string *)array_get_element_klen(pconf->forwarder, ip, iplen);
     if (NULL != ds) return !buffer_is_blank(&ds->value);
 
-    if (p->conf.forward_masks_used) {
-        const struct sock_addr_mask * const addrs = p->conf.forward_masks;
-        const uint32_t aused = p->conf.forward_masks_used;
+    if (pconf->forward_masks_used) {
+        const struct sock_addr_mask * const addrs = pconf->forward_masks;
+        const uint32_t aused = pconf->forward_masks_used;
         sock_addr addr;
         /* C funcs inet_aton(), inet_pton() require '\0'-terminated IP str */
         char addrstr[64]; /*(larger than INET_ADDRSTRLEN and INET6_ADDRSTRLEN)*/
@@ -530,50 +531,51 @@ static int is_proxy_trusted(plugin_data *p, const char * const ip, size_t iplen)
     return 0;
 }
 
-static int is_connection_trusted(connection * const con, plugin_data *p)
+static int is_connection_trusted(connection * const con, const plugin_config *pconf)
 {
-    if (p->conf.forward_all) return (1 == p->conf.forward_all);
-    return is_proxy_trusted(p, BUF_PTR_LEN(&con->dst_addr_buf));
+    if (pconf->forward_all) return (1 == pconf->forward_all);
+    return is_proxy_trusted(pconf, BUF_PTR_LEN(&con->dst_addr_buf));
 }
 
-static int is_connection_trusted_cached(connection * const con, plugin_data *p)
+static int is_connection_trusted_cached(connection * const con, const plugin_config * const pconf)
 {
-    if (p->conf.forward_all) return (1 == p->conf.forward_all);
+    if (pconf->forward_all) return (1 == pconf->forward_all);
 
-    handler_ctx ** const hctx = (handler_ctx **)&con->plugin_ctx[p->id];
+    handler_ctx ** const hctx = (handler_ctx **)&con->plugin_ctx[pconf->plid];
     if (!*hctx)
         *hctx = handler_ctx_init();
     else if ((*hctx)->con_is_trusted != -1)
         return (*hctx)->con_is_trusted;
     return ((*hctx)->con_is_trusted =
-      is_proxy_trusted(p, BUF_PTR_LEN(&con->dst_addr_buf)));
+      is_proxy_trusted(pconf, BUF_PTR_LEN(&con->dst_addr_buf)));
 }
 
 /*
  * Return last address of proxy that is not trusted.
  * Do not accept "all" keyword here.
  */
-static const buffer *last_not_in_array(array *a, plugin_data *p)
+static const buffer *last_not_in_array(array *a, plugin_config *pconf)
 {
 	int i;
 
 	for (i = a->used - 1; i >= 0; i--) {
 		data_string *ds = (data_string *)a->data[i];
-		if (!is_proxy_trusted(p, BUF_PTR_LEN(&ds->value))) {
+		if (!is_proxy_trusted(pconf, BUF_PTR_LEN(&ds->value))) {
 			return &ds->value;
 		}
 	}
 	return NULL;
 }
 
-static int mod_extforward_set_addr(request_st * const r, plugin_data *p, const char *addr, size_t addrlen) {
+static int mod_extforward_set_addr(request_st * const r, const plugin_config * const pconf, const char *addr, size_t addrlen) {
 	sock_addr sock;
 	sock.plain.sa_family = AF_UNSPEC;
 	if (1 != sock_addr_from_str_numeric(&sock, addr, r->conf.errh)) return 0;
 	if (sock.plain.sa_family == AF_UNSPEC) return 0;
 
-	if (!r->plugin_ctx[p->id]) {
-		handler_rctx * const rctx = r->plugin_ctx[p->id] = handler_rctx_init();
+	const int plid = pconf->plid;
+	if (!r->plugin_ctx[plid]) {
+		handler_rctx * const rctx = r->plugin_ctx[plid] = handler_rctx_init();
 		r->dst_addr = &rctx->dst_addr;
 		r->dst_addr_buf = &rctx->dst_addr_buf;
 	}
@@ -631,11 +633,13 @@ static void mod_extforward_set_proto(request_st * const r, const char * const pr
 	}
 }
 
-static handler_t mod_extforward_X_Forwarded_For(request_st * const r, plugin_data * const p, const buffer * const x_forwarded_for) {
+static handler_t mod_extforward_X_Forwarded_For(request_st * const r, plugin_config * const pconf, const buffer * const x_forwarded_for) {
 	/* build forward_array from forwarded data_string */
+	/* thread-safety todo: allocate/free (array *) locally, or per-thread */
+	plugin_data * const p = mod_extforward_plugin_data;
 	array * const forward_array = &p->tokens;
 	extract_forward_array(forward_array, x_forwarded_for);
-	const buffer *real_remote_addr = last_not_in_array(forward_array, p);
+	const buffer *real_remote_addr = last_not_in_array(forward_array, pconf);
 	if (real_remote_addr != NULL) { /* parsed */
 		/* get scheme if X-Forwarded-Proto is set
 		 * Limitations:
@@ -646,7 +650,7 @@ static handler_t mod_extforward_X_Forwarded_For(request_st * const r, plugin_dat
 		 *    as in X-Forwarded-For to find proto set by last trusted proxy)
 		 */
 		const buffer *x_forwarded_proto = http_header_request_get(r, HTTP_HEADER_X_FORWARDED_PROTO, CONST_STR_LEN("X-Forwarded-Proto"));
-		if (mod_extforward_set_addr(r, p, BUF_PTR_LEN(real_remote_addr)) && NULL != x_forwarded_proto) {
+		if (mod_extforward_set_addr(r, pconf, BUF_PTR_LEN(real_remote_addr)) && NULL != x_forwarded_proto) {
 			mod_extforward_set_proto(r, BUF_PTR_LEN(x_forwarded_proto));
 		}
 	}
@@ -710,7 +714,7 @@ static handler_t mod_extforward_bad_request (request_st * const r, const unsigne
     return http_status_set_err(r, 400); /* Bad Request */
 }
 
-static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * const p, const buffer * const forwarded) {
+static handler_t mod_extforward_Forwarded (request_st * const r, plugin_config * const pconf, const buffer * const forwarded) {
     /* HTTP list need not consist of param=value tokens,
      * but this routine expect such for HTTP Forwarded header
      * Since info in each set of params is only used if from
@@ -827,7 +831,7 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
          * attempted by this module. */
 
         if (v != vlen) {
-            int trusted = is_proxy_trusted(p, s+v, vlen-v);
+            int trusted = is_proxy_trusted(pconf, s+v, vlen-v);
 
             if (s[v] != '_' && s[v] != '/'
                 && (7 != (vlen - v) || 0 != memcmp(s+v, "unknown", 7))) {
@@ -848,7 +852,8 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
         char c = *ipend;
         int rc;
         *ipend = '\0';
-        rc = mod_extforward_set_addr(r, p, s+offsets[ofor+2], offsets[ofor+3]);
+        rc = mod_extforward_set_addr(r, pconf,
+                                     s+offsets[ofor+2], offsets[ofor+3]);
         *ipend = c;
         if (!rc) return HANDLER_GO_ON; /* invalid addr; make no changes */
     }
@@ -906,7 +911,7 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
         mod_extforward_set_proto(r, s+v, vlen-v);
     }
 
-    if (p->conf.opts & PROXY_FORWARDED_HOST) {
+    if (pconf->opts & PROXY_FORWARDED_HOST) {
         /* Limitations:
          * - r->http_host is not reset in mod_extforward_restore()
          *   but is currently not an issues since r->http_host will be
@@ -971,7 +976,7 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
         }
     }
 
-    if (p->conf.opts & PROXY_FORWARDED_REMOTE_USER) {
+    if (pconf->opts & PROXY_FORWARDED_REMOTE_USER) {
         /* find remote_user param set by closest proxy
          * (auth may have been handled by any trusted proxy in proxy chain) */
         for (j = i; j < used; ) {
@@ -1007,7 +1012,7 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
     }
 
   #if 0
-    if ((p->conf.opts & PROXY_FORWARDED_CREATE_XFF)
+    if ((pconf->opts & PROXY_FORWARDED_CREATE_XFF)
         && !light_btst(r->rqst_htags, HTTP_HEADER_X_FORWARDED_FOR)) {
         /* create X-Forwarded-For if not present
          * (and at least original connecting IP is a trusted proxy) */
@@ -1051,13 +1056,13 @@ static handler_t mod_extforward_Forwarded (request_st * const r, plugin_data * c
 }
 
 URIHANDLER_FUNC(mod_extforward_uri_handler) {
-	plugin_data *p = p_d;
-	mod_extforward_patch_config(r, p);
-	if (NULL == p->conf.forwarder) return HANDLER_GO_ON;
+	plugin_config pconf;
+	mod_extforward_patch_config(r, p_d, &pconf);
+	if (NULL == pconf.forwarder) return HANDLER_GO_ON;
 
-	if (p->conf.hap_PROXY_ssl_client_verify) {
+	if (pconf.hap_PROXY_ssl_client_verify) {
 		const data_string *ds;
-		handler_ctx *hctx = r->con->plugin_ctx[p->id];
+		handler_ctx *hctx = r->con->plugin_ctx[pconf.plid];
 		if (NULL != hctx && hctx->ssl_client_verify && NULL != hctx->env
 		    && NULL != (ds = (const data_string *)array_get_element_klen(hctx->env, CONST_STR_LEN("SSL_CLIENT_S_DN_CN")))) {
 			http_header_env_set(r,
@@ -1079,21 +1084,21 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 	/* Note: headers are parsed per-request even when using HAProxy PROXY
 	 * protocol since Forwarded header might provide additional info and
 	 * internal _L_ vars might be set for later use by mod_proxy or others*/
-	/*if (p->conf.hap_PROXY) return HANDLER_GO_ON;*/
+	/*if (pconf.hap_PROXY) return HANDLER_GO_ON;*/
 
-	if (NULL == p->conf.headers) return HANDLER_GO_ON;
+	if (NULL == pconf.headers) return HANDLER_GO_ON;
 
 	/* Do not reparse headers for same request, e.g. after HANDLER_COMEBACK
 	 * from mod_rewrite, mod_magnet MAGNET_RESTART_REQUEST, mod_cgi
 	 * cgi.local-redir, or gw_backend reconnect.  This has the implication
 	 * that mod_magnet and mod_cgi with local-redir should not modify
 	 * Forwarded or related headers and expect effects here */
-	if (r->plugin_ctx[p->id]) return HANDLER_GO_ON;
+	if (r->plugin_ctx[pconf.plid]) return HANDLER_GO_ON;
 
 	const buffer *forwarded = NULL;
 	int is_forwarded_header = 0;
-	for (uint32_t k = 0; k < p->conf.headers->used; ++k) {
-		const data_string * const ds = (data_string *)p->conf.headers->data[k];
+	for (uint32_t k = 0; k < pconf.headers->used; ++k) {
+		const data_string * const ds = (data_string *)pconf.headers->data[k];
 		const buffer * const hdr = &ds->value;
 		forwarded = http_header_request_get(r, ds->ext, BUF_PTR_LEN(hdr));
 		if (forwarded) {
@@ -1102,10 +1107,10 @@ URIHANDLER_FUNC(mod_extforward_uri_handler) {
 		}
 	}
 
-	if (forwarded && is_connection_trusted_cached(r->con, p)) {
+	if (forwarded && is_connection_trusted_cached(r->con, &pconf)) {
 		return (is_forwarded_header)
-		  ? mod_extforward_Forwarded(r, p, forwarded)
-		  : mod_extforward_X_Forwarded_For(r, p, forwarded);
+		  ? mod_extforward_Forwarded(r, &pconf, forwarded)
+		  : mod_extforward_X_Forwarded_For(r, &pconf, forwarded);
 	}
 	else {
 		if (r->conf.log_request_handling) {
@@ -1172,13 +1177,13 @@ static int mod_extforward_network_read (connection *con, chunkqueue *cq, off_t m
 CONNECTION_FUNC(mod_extforward_handle_con_accept)
 {
     request_st * const r = &con->request;
-    plugin_data *p = p_d;
-    mod_extforward_patch_config(r, p);
-    if (!p->conf.hap_PROXY) return HANDLER_GO_ON;
-    if (NULL == p->conf.forwarder) return HANDLER_GO_ON;
-    if (is_connection_trusted(con, p)) {
+    plugin_config pconf;
+    mod_extforward_patch_config(r, p_d, &pconf);
+    if (!pconf.hap_PROXY) return HANDLER_GO_ON;
+    if (NULL == pconf.forwarder) return HANDLER_GO_ON;
+    if (is_connection_trusted(con, &pconf)) {
         handler_ctx *hctx = handler_ctx_init();
-        con->plugin_ctx[p->id] = hctx;
+        con->plugin_ctx[pconf.plid] = hctx;
         hctx->con_is_trusted = -1; /*(masquerade IP not yet known/checked)*/
         hctx->saved_network_read = con->network_read;
         con->network_read = mod_extforward_network_read;

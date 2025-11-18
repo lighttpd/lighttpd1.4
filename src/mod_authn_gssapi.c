@@ -46,7 +46,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 } plugin_data;
 
 static handler_t mod_authn_gssapi_check(request_st *r, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
@@ -90,13 +89,13 @@ static void mod_authn_gssapi_merge_config(plugin_config * const pconf, const con
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_authn_gssapi_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_authn_gssapi_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_authn_gssapi_merge_config(&p->conf,
-                                        p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_authn_gssapi_merge_config(pconf,
+                                          p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -360,27 +359,28 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
         return mod_authn_gssapi_send_400_bad_request(r);
     }
 
-    mod_authn_gssapi_patch_config(r, p);
+    plugin_config pconf;
+    mod_authn_gssapi_patch_config(r, p, &pconf);
 
-    if (!p->conf.auth_gssapi_principal) {
+    if (!pconf.auth_gssapi_principal) {
         log_error(r->conf.errh, __FILE__, __LINE__, "auth.backend.gssapi.principal not configured");
         return http_status_set_err(r, 500); /* Internal Server Error */
     }
 
-    if (p->conf.auth_gssapi_keytab) {
-        /* ??? Should code = krb5_kt_resolve(kcontext, p->conf.auth_gssapi_keytab->ptr, &keytab);
+    if (pconf.auth_gssapi_keytab) {
+        /* ??? Should code = krb5_kt_resolve(kcontext, pconf.auth_gssapi_keytab->ptr, &keytab);
          *     be used, instead of putenv() of KRB5_KTNAME=...?  See mod_authn_gssapi_basic() */
         /* ??? Should KRB5_KTNAME go into r->env instead ??? */
         /* ??? Should KRB5_KTNAME be added to mod_authn_gssapi_basic(), too? */
         buffer ktname;
         memset(&ktname, 0, sizeof(ktname));
         buffer_copy_string_len(&ktname, CONST_STR_LEN("KRB5_KTNAME="));
-        buffer_append_string_buffer(&ktname, p->conf.auth_gssapi_keytab);
+        buffer_append_string_buffer(&ktname, pconf.auth_gssapi_keytab);
         putenv(ktname.ptr);
         /* ktname.ptr becomes part of the environment, do not free */
     }
 
-    sprinc = mod_authn_gssapi_construct_sprinc(r,p->conf.auth_gssapi_principal);
+    sprinc = mod_authn_gssapi_construct_sprinc(r, pconf.auth_gssapi_principal);
     if (strchr(sprinc->ptr, '@') == NULL)
         buffer_append_str2(sprinc, CONST_STR_LEN("@"),
                                    BUF_PTR_LEN(require->realm));
@@ -434,7 +434,7 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
         goto end;
     }
 
-    if (p->conf.auth_gssapi_store_creds) {
+    if (pconf.auth_gssapi_store_creds) {
         if (!(acc_flags & GSS_C_CONF_FLAG))
             log_error(r->conf.errh, __FILE__, __LINE__, "No confidentiality for user: %s", (char *)token_out.value);
         if (!(acc_flags & GSS_C_DELEG_FLAG)) {
@@ -658,9 +658,10 @@ static handler_t mod_authn_gssapi_basic(request_st * const r, void *p_d, const h
         return mod_authn_gssapi_send_401_unauthorized_basic(r);
     }
 
-    mod_authn_gssapi_patch_config(r, p);
+    plugin_config pconf;
+    mod_authn_gssapi_patch_config(r, p, &pconf);
 
-    if (!p->conf.auth_gssapi_principal) {
+    if (!pconf.auth_gssapi_principal) {
         log_error(r->conf.errh, __FILE__, __LINE__, "auth.backend.gssapi.principal not configured");
         return http_status_set_err(r, 500); /* Internal Server Error */
     }
@@ -671,18 +672,18 @@ static handler_t mod_authn_gssapi_basic(request_st * const r, void *p_d, const h
         return mod_authn_gssapi_send_401_unauthorized_basic(r); /*(well, should be 500)*/
     }
 
-    if (!p->conf.auth_gssapi_keytab) {
+    if (!pconf.auth_gssapi_keytab) {
         log_error(r->conf.errh, __FILE__, __LINE__, "auth.backend.gssapi.keytab not configured");
         return mod_authn_gssapi_send_401_unauthorized_basic(r); /*(well, should be 500)*/
     }
 
-    code = krb5_kt_resolve(kcontext, p->conf.auth_gssapi_keytab->ptr, &keytab);
+    code = krb5_kt_resolve(kcontext, pconf.auth_gssapi_keytab->ptr, &keytab);
     if (code) {
-        log_error(r->conf.errh, __FILE__, __LINE__, "krb5_kt_resolve(): %d %s", code, p->conf.auth_gssapi_keytab->ptr);
+        log_error(r->conf.errh, __FILE__, __LINE__, "krb5_kt_resolve(): %d %s", code, pconf.auth_gssapi_keytab->ptr);
         return mod_authn_gssapi_send_401_unauthorized_basic(r); /*(well, should be 500)*/
     }
 
-    sprinc = mod_authn_gssapi_construct_sprinc(r,p->conf.auth_gssapi_principal);
+    sprinc = mod_authn_gssapi_construct_sprinc(r, pconf.auth_gssapi_principal);
 
     /*(init c_creds before anything which might krb5_free_cred_contents())*/
     memset(&c_creds, 0, sizeof(c_creds));
@@ -735,7 +736,7 @@ static handler_t mod_authn_gssapi_basic(request_st * const r, void *p_d, const h
         goto end;
     }
 
-    if (!p->conf.auth_gssapi_store_creds) goto end;
+    if (!pconf.auth_gssapi_store_creds) goto end;
 
     ret = krb5_cc_resolve(kcontext, "MEMORY:", &ret_ccache);
     if (ret) {

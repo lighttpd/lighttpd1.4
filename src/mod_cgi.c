@@ -40,15 +40,6 @@ typedef struct {
 	size_t oused;
 	buffer *b;
 	buffer *boffsets;
-	buffer *ld_preload;
-	buffer *ld_library_path;
-      #if defined(__CYGWIN__) || defined(_WIN32)
-	buffer *systemroot;
-      #endif
-      #if defined(_WIN32)
-	buffer *cygvol;
-	buffer *msystem;
-      #endif
 } env_accum;
 
 typedef struct {
@@ -72,11 +63,21 @@ struct cgi_pid_t;
 typedef struct {
 	PLUGIN_DATA;
 	plugin_config defaults;
-	plugin_config conf;
 	int tempfile_accum;
-	struct cgi_pid_t *cgi_pid;
-	env_accum env;
+	struct {
+		buffer *ld_preload;
+		buffer *ld_library_path;
+	  #if defined(__CYGWIN__) || defined(_WIN32)
+		buffer *systemroot;
+	  #endif
+	  #if defined(_WIN32)
+		buffer *cygvol;
+		buffer *msystem;
+	  #endif
+	} env;
 } plugin_data;
+
+static struct cgi_pid_t *cgi_pids; /* thread-safety todo: lock around modify */
 
 typedef struct {
 	struct cgi_pid_t *cgi_pid;
@@ -160,10 +161,11 @@ FREE_FUNC(mod_cgi_free) {
 	buffer_free(p->env.msystem);
       #endif
 
-    for (cgi_pid_t *cgi_pid = p->cgi_pid, *next; cgi_pid; cgi_pid = next) {
+    for (cgi_pid_t *cgi_pid = cgi_pids, *next; cgi_pid; cgi_pid = next) {
         next = cgi_pid->next;
         free(cgi_pid);
     }
+    cgi_pids = NULL;
 
     if (NULL == p->cvlist) return;
     /* (init i to 0 if global context; to 1 to skip empty global context) */
@@ -217,12 +219,11 @@ static void mod_cgi_merge_config(plugin_config * const pconf, const config_plugi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_cgi_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_cgi_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_cgi_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_cgi_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -418,16 +419,19 @@ SETDEFAULTS_FUNC(mod_cgi_set_defaults) {
 }
 
 
-static cgi_pid_t * cgi_pid_add(plugin_data *p, pid_t pid, handler_ctx *hctx) {
+static cgi_pid_t * cgi_pid_add(pid_t pid, handler_ctx *hctx) {
     cgi_pid_t *cgi_pid = ck_malloc(sizeof(cgi_pid_t));
     cgi_pid->pid = pid;
     cgi_pid->signal_sent = 0;
     cgi_pid->hctx = hctx;
     cgi_pid->prev = NULL;
-    cgi_pid->next = p->cgi_pid;
+
+    /* thread-safety todo: lock around modifications */
+    cgi_pid->next = cgi_pids;
     if (cgi_pid->next)
         cgi_pid->next->prev = cgi_pid;
-    p->cgi_pid = cgi_pid;
+    cgi_pids = cgi_pid;
+
     return cgi_pid;
 }
 
@@ -436,11 +440,12 @@ static void cgi_pid_kill(cgi_pid_t *cgi_pid, int sig) {
     fdevent_kill(cgi_pid->pid, sig);
 }
 
-static void cgi_pid_del(plugin_data *p, cgi_pid_t *cgi_pid) {
+static void cgi_pid_del(cgi_pid_t *cgi_pid) {
+    /* thread-safety todo: lock around modifications */
     if (cgi_pid->prev)
         cgi_pid->prev->next = cgi_pid->next;
     else
-        p->cgi_pid = cgi_pid->next;
+        cgi_pids = cgi_pid->next;
 
     if (cgi_pid->next)
         cgi_pid->next->prev = cgi_pid->prev;
@@ -479,7 +484,7 @@ static void cgi_connection_close(handler_ctx *hctx) {
 		cgi_connection_close_fdtocgi(hctx); /*(closes only hctx->fdtocgi)*/
 	}
 
-	plugin_data * const p = hctx->plugin_data;
+	const plugin_data * const p = hctx->plugin_data;
 	request_st * const r = hctx->r;
 	r->plugin_ctx[p->id] = NULL;
 
@@ -806,7 +811,7 @@ static int cgi_create_err (request_st * const r, int cgi_fds[4], const char *msg
     return -1;
 }
 
-static int cgi_create_env(request_st * const r, plugin_data * const p, handler_ctx * const hctx, buffer * const cgi_handler) {
+static int cgi_create_env(request_st * const r, handler_ctx * const hctx, buffer * const cgi_handler) {
 	int cgi_fds[4] = { -1, -1, -1, -1 };
 	int * const to_cgi_fds = cgi_fds;
 	int * const from_cgi_fds = to_cgi_fds+2;
@@ -877,7 +882,8 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 	if (-1 == fdevent_fcntl_set_nb(from_cgi_fds[0]))
 		return cgi_create_err(r, cgi_fds, "fcntl()");
 
-	env_accum * const env = &p->env;
+	env_accum envacc;
+	env_accum * const env = &envacc;
 	env->b = chunk_buffer_acquire();
 	env->boffsets = chunk_buffer_acquire();
 	buffer_truncate(env->b, 0);
@@ -903,6 +909,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 		if (hctx->conf.upgrade)
 			r->reqbody_length = -1;
 
+		const plugin_data * const p = hctx->plugin_data;;
 		/* for valgrind */
 		if (p->env.ld_preload) {
 			cgi_env_add(env, CONST_STR_LEN("LD_PRELOAD"), BUF_PTR_LEN(p->env.ld_preload));
@@ -1004,7 +1011,7 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 
 	{
 		if (dfd >= 0) fdio_close_dirfd(dfd);
-		hctx->cgi_pid = cgi_pid_add(p, pid, hctx);
+		hctx->cgi_pid = cgi_pid_add(pid, hctx);
 
 		if (0 == r->reqbody_length) {
 		  #ifndef MOD_CGI_INHERIT_STDIN_DEV_NULL
@@ -1038,7 +1045,6 @@ static int cgi_create_env(request_st * const r, plugin_data * const p, handler_c
 }
 
 URIHANDLER_FUNC(cgi_is_handled) {
-	plugin_data *p = p_d;
 	const stat_cache_st *st;
 	data_string *ds;
 
@@ -1046,10 +1052,11 @@ URIHANDLER_FUNC(cgi_is_handled) {
 	/* r->physical.path is non-empty for handle_subrequest_start */
 	/*if (buffer_is_blank(&r->physical.path)) return HANDLER_GO_ON;*/
 
-	mod_cgi_patch_config(r, p);
-	if (NULL == p->conf.cgi) return HANDLER_GO_ON;
+	plugin_config pconf;
+	mod_cgi_patch_config(r, p_d, &pconf);
+	if (NULL == pconf.cgi) return HANDLER_GO_ON;
 
-	ds = (data_string *)array_match_key_suffix(p->conf.cgi, &r->physical.path);
+	ds = (data_string *)array_match_key_suffix(pconf.cgi, &r->physical.path);
 	if (NULL == ds) return HANDLER_GO_ON;
 
 	/* r->tmp_sce is set in http_response_physical_path_check() and is valid
@@ -1062,16 +1069,17 @@ URIHANDLER_FUNC(cgi_is_handled) {
 
 	/* (aside: CGI might be executable even if it is not readable) */
 	if (!S_ISREG(st->st_mode)) return HANDLER_GO_ON;
-	if (p->conf.execute_x_only == 1 && (st->st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) return HANDLER_GO_ON;
+	if (pconf.execute_x_only == 1 && (st->st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) return HANDLER_GO_ON;
 
-	p->conf.upgrade = (unsigned short)
-	  gw_upgrade_policy(r, 0, (int)p->conf.upgrade);
+	pconf.upgrade = (unsigned short)
+	  gw_upgrade_policy(r, 0, (int)pconf.upgrade);
 	if (0 != r->http_status)
 		return HANDLER_FINISHED;
 
-	if (!gw_incremental_policy(r, (int)p->conf.upgrade))
+	if (!gw_incremental_policy(r, (int)pconf.upgrade))
 		return HANDLER_FINISHED;
 
+	const plugin_data * const p = p_d;
 	if (r->reqbody_length
 	    && p->tempfile_accum
 	    && !(r->conf.stream_request_body /*(if not streaming request body)*/
@@ -1086,9 +1094,9 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		hctx->ev = r->con->srv->ev;
 		hctx->r = r;
 		hctx->con = r->con;
-		hctx->plugin_data = p;
+		hctx->plugin_data = p_d;
 		hctx->cgi_handler = &ds->value;
-		memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
+		memcpy(&hctx->conf, &pconf, sizeof(plugin_config));
 		if (hctx->conf.upgrade) {
 			hctx->opts.upgrade = hctx->conf.upgrade;
 			hctx->orig_reqbody_length = r->reqbody_length;
@@ -1193,7 +1201,7 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 				  ? http_response_reqbody_read_error(r, 411)
 				  : HANDLER_WAIT_FOR_EVENT;
 			}
-		if (cgi_create_env(r, p, hctx, hctx->cgi_handler))
+		if (cgi_create_env(r, hctx, hctx->cgi_handler))
 			return http_status_set_err(r, 500); /* HANDLER_FINISHED */
 	} else if (!chunkqueue_is_empty(cq)) {
 		if (fdevent_fdnode_interest(hctx->fdntocgi) & FDEVENT_OUT)
@@ -1234,11 +1242,11 @@ static void cgi_trigger_hctx_timeout(handler_ctx * const hctx, const char * cons
 
 static handler_t cgi_trigger_cb(server *srv, void *p_d) {
     UNUSED(srv);
+    UNUSED(p_d);
     const unix_time64_t mono = log_monotonic_secs;
-    plugin_data * const p = p_d;
-    for (cgi_pid_t *cgi_pid = p->cgi_pid; cgi_pid; cgi_pid = cgi_pid->next) {
+    for (cgi_pid_t *cgi_pid = cgi_pids; cgi_pid; cgi_pid = cgi_pid->next) {
         /*(hctx stays in cgi_pid list until process pid is reaped,
-         * so p->cgi_pid[] is not modified during this loop)*/
+         * so cgi_pids[] is not modified during this loop)*/
         handler_ctx * const hctx = cgi_pid->hctx;
         if (!hctx) continue; /*(already called cgi_pid_kill())*/
         const cgi_limits * const limits = hctx->conf.limits;
@@ -1263,8 +1271,8 @@ static handler_t cgi_trigger_cb(server *srv, void *p_d) {
 static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
     /*(XXX: if supporting a large number of CGI, might use a different algorithm
      * instead of linked list, e.g. splaytree indexed with pid)*/
-    plugin_data *p = (plugin_data *)p_d;
-    for (cgi_pid_t *cgi_pid = p->cgi_pid; cgi_pid; cgi_pid = cgi_pid->next) {
+    UNUSED(p_d);
+    for (cgi_pid_t *cgi_pid = cgi_pids; cgi_pid; cgi_pid = cgi_pid->next) {
         if (pid != cgi_pid->pid) continue;
 
         handler_ctx * const hctx = cgi_pid->hctx;
@@ -1289,7 +1297,7 @@ static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
         }
       #endif
 
-        cgi_pid_del(p, cgi_pid);
+        cgi_pid_del(cgi_pid);
         return HANDLER_FINISHED;
     }
 

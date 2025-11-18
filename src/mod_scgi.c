@@ -53,11 +53,11 @@ static void mod_scgi_merge_config(plugin_config * const pconf, const config_plug
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_scgi_patch_config(request_st * const r, plugin_data * const p) {
-    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+static void mod_scgi_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_scgi_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_scgi_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -246,17 +246,16 @@ static handler_t scgi_create_env(handler_ctx *hctx) {
 
 
 static handler_t scgi_check_extension(request_st * const r, void *p_d, int uri_path_handler) {
-	plugin_data *p = p_d;
-	handler_t rc;
-
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-	mod_scgi_patch_config(r, p);
-	if (NULL == p->conf.exts) return HANDLER_GO_ON;
+	plugin_config pconf;
+	mod_scgi_patch_config(r, p_d, &pconf);
+	if (NULL == pconf.exts) return HANDLER_GO_ON;
 
-	rc = gw_check_extension(r, p, uri_path_handler, 0);
+	handler_t rc = gw_check_extension(r, &pconf, p_d, uri_path_handler, 0);
 	if (HANDLER_GO_ON != rc) return rc;
 
+	const plugin_data * const p = p_d;
 	if (r->handler_module == p->self) {
 		handler_ctx *hctx = r->plugin_ctx[p->id];
 		hctx->opts.backend = BACKEND_SCGI;

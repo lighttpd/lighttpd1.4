@@ -55,8 +55,7 @@ typedef struct {
 
 typedef struct {
     PLUGIN_DATA;
-    pid_t srv_pid; /* must match layout of gw_plugin_data through conf member */
-    plugin_config conf;
+    pid_t srv_pid; /* must match layout of gw_plugin_data to defaults member */
     plugin_config defaults;
 } plugin_data;
 
@@ -145,12 +144,12 @@ static void mod_proxy_merge_config(plugin_config * const pconf, const config_plu
 }
 
 
-static void mod_proxy_patch_config(request_st * const r, plugin_data * const p)
+static void mod_proxy_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf)
 {
-    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_proxy_merge_config(&p->conf, p->cvlist+p->cvlist[i].v.u2[0]);
+            mod_proxy_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -1119,17 +1118,18 @@ static handler_t proxy_response_headers(request_st * const r, struct http_respon
 }
 
 static handler_t mod_proxy_check_extension(request_st * const r, void *p_d) {
-	plugin_data *p = p_d;
-	handler_t rc;
-
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 
-	mod_proxy_patch_config(r, p);
-	if (NULL == p->conf.gw.exts) return HANDLER_GO_ON;
+	plugin_config pconf;
+	mod_proxy_patch_config(r, p_d, &pconf);
+	if (NULL == pconf.gw.exts) return HANDLER_GO_ON;
 
-	rc = gw_check_extension(r, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
+	handler_t rc =
+	  gw_check_extension(r, (gw_plugin_config *)&pconf,
+	                     p_d, 1, sizeof(handler_ctx));
 	if (HANDLER_GO_ON != rc) return rc;
 
+	const plugin_data * const p = p_d;
 	if (r->handler_module == p->self) {
 		handler_ctx *hctx = r->plugin_ctx[p->id];
 		hctx->gw.create_env = proxy_create_env;
@@ -1138,7 +1138,7 @@ static handler_t mod_proxy_check_extension(request_st * const r, void *p_d) {
 		hctx->gw.opts.pdata = hctx;
 		hctx->gw.opts.headers = proxy_response_headers;
 
-		hctx->conf = p->conf; /*(copies struct)*/
+		memcpy(&hctx->conf, &pconf, sizeof(plugin_config));
 		hctx->conf.header.http_host = r->http_host;
 		/* mod_proxy currently sends all backend requests as http.
 		 * https-remap is a flag since it might not be needed if backend

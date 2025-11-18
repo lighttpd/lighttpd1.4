@@ -99,8 +99,7 @@ typedef struct {
 typedef struct {
 	PLUGIN_DATA;
 	plugin_config defaults;
-	plugin_config conf;
-	int processing;
+	int processing; /* thread-safety todo: atomic add/sub */
 } plugin_data;
 
 typedef struct {
@@ -149,12 +148,12 @@ static int dirlist_max_in_progress;
 
 
 __attribute_returns_nonnull__
-static handler_ctx * mod_dirlisting_handler_ctx_init (plugin_data * const p) {
+static handler_ctx * mod_dirlisting_handler_ctx_init (const plugin_config * const pconf) {
     handler_ctx *hctx = ck_calloc(1, sizeof(*hctx));
   #ifdef _WIN32
     hctx->hFind = INVALID_HANDLE_VALUE;
   #endif
-    memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
+    memcpy(&hctx->conf, pconf, sizeof(plugin_config));
     return hctx;
 }
 
@@ -374,11 +373,11 @@ static void mod_dirlisting_merge_config(plugin_config * const pconf, const confi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_dirlisting_patch_config(request_st * const r, plugin_data * const p) {
-    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+static void mod_dirlisting_patch_config(request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_dirlisting_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_dirlisting_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -685,12 +684,12 @@ static void http_dirlist_link (request_st * const r, const buffer *b, const char
                                 BUF_PTR_LEN(tb));
 }
 
-static void http_dirlist_auto_layout_early_hints (request_st * const r, const plugin_data * const p) {
-    if (p->conf.external_css)
-        http_dirlist_link(r, p->conf.external_css,
+static void http_dirlist_auto_layout_early_hints (request_st * const r, const plugin_config * const pconf) {
+    if (pconf->external_css)
+        http_dirlist_link(r, pconf->external_css,
           CONST_STR_LEN(">; rel=\"preload\"; as=\"style\""));
-    if (p->conf.external_js)
-        http_dirlist_link(r, p->conf.external_js,
+    if (pconf->external_js)
+        http_dirlist_link(r, pconf->external_js,
           CONST_STR_LEN(">; rel=\"preload\"; as=\"script\""));
 }
 
@@ -1461,7 +1460,7 @@ static void mod_dirlisting_stream_append (request_st * const r, handler_ctx * co
 
 SUBREQUEST_FUNC(mod_dirlisting_subrequest);
 REQUEST_FUNC(mod_dirlisting_reset);
-static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data * const p);
+static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_config * const pconf);
 __attribute_noinline__
 static void mod_dirlisting_cache_add (request_st * const r, handler_ctx * const hctx);
 __attribute_noinline__
@@ -1473,17 +1472,16 @@ static void mod_dirlisting_cache_stream (request_st * const r, handler_ctx * con
 
 
 URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
-	plugin_data *p = p_d;
-
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 	if (!buffer_has_slash_suffix(&r->uri.path)) return HANDLER_GO_ON;
 	if (!http_method_get_or_head(r->http_method)) return HANDLER_GO_ON;
 	/* r->physical.path is non-empty for handle_subrequest_start */
 	/*if (buffer_is_blank(&r->physical.path)) return HANDLER_GO_ON;*/
 
-	mod_dirlisting_patch_config(r, p);
+	plugin_config pconf;
+	mod_dirlisting_patch_config(r, p_d, &pconf);
 
-	if (!p->conf.dir_listing) return HANDLER_GO_ON;
+	if (!pconf.dir_listing) return HANDLER_GO_ON;
 
 	if (r->conf.log_request_handling) {
 		log_debug(r->conf.errh, __FILE__, __LINE__,
@@ -1509,8 +1507,8 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	/* XXX: would have to add "Vary: Accept" response header, too */
 	const buffer * const vb =
 	  http_header_request_get(r, HTTP_HEADER_ACCEPT, CONST_STR_LEN("Accept"));
-	p->conf.json = (vb && strstr(vb->ptr, "application/json")); /*(coarse)*/
-	if (p->conf.json) p->conf.auto_layout = 0;
+	pconf.json = (vb && strstr(vb->ptr, "application/json")); /*(coarse)*/
+	if (pconf.json) pconf.auto_layout = 0;
   #else
 	/* check URL for /<path>/?json to enable json output */
 	if (buffer_clen(&r->uri.query) == sizeof("json")-1
@@ -1525,13 +1523,13 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 		      & (FDEVENT_STREAM_RESPONSE|FDEVENT_STREAM_RESPONSE_BUFMIN)))
 			r->conf.stream_response_body |= FDEVENT_STREAM_RESPONSE;
 	  #endif
-		p->conf.json = 1;
-		p->conf.auto_layout = 0;
+		pconf.json = 1;
+		pconf.auto_layout = 0;
 	}
   #endif
 
-	if (p->conf.cache) {
-		handler_t rc = mod_dirlisting_cache_check(r, p);
+	if (pconf.cache) {
+		handler_t rc = mod_dirlisting_cache_check(r, &pconf);
 		if (rc != HANDLER_GO_ON)
 			return rc;
 	}
@@ -1540,6 +1538,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	 * (attempt to avoid "livelock" scenarios or starvation of other requests)
 	 * (100 is still a high arbitrary limit;
 	 *  and limit applies only to directories larger than DIRLIST_BATCH-2) */
+	plugin_data *p = p_d;
 	if (p->processing == dirlist_max_in_progress) {
 		r->http_status = 503;
 		http_header_response_set(r, HTTP_HEADER_OTHER,
@@ -1548,7 +1547,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 		return HANDLER_FINISHED;
 	}
 
-	handler_ctx * const hctx = mod_dirlisting_handler_ctx_init(p);
+	handler_ctx * const hctx = mod_dirlisting_handler_ctx_init(&pconf);
 	hctx->use_xattr = r->conf.use_xattr;
 	hctx->mimetypes = r->conf.mimetypes;
 
@@ -1573,7 +1572,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	}
 	++p->processing;
 
-	if (p->conf.json) {
+	if (pconf.json) {
 		hctx->jb = chunk_buffer_acquire();
 		buffer_append_char(hctx->jb, '[');
 		http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
@@ -1581,9 +1580,9 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 		                         CONST_STR_LEN("application/json"));
 	}
 	else {
-		if (p->conf.auto_layout)
-			http_dirlist_auto_layout_early_hints(r, p);
-		if (!p->conf.sort) {
+		if (pconf.auto_layout)
+			http_dirlist_auto_layout_early_hints(r, &pconf);
+		if (!pconf.sort) {
 			mod_dirlisting_content_type(r, hctx->conf.encoding);
 			http_list_directory_header(r, hctx);
 			hctx->hb = chunk_buffer_acquire();
@@ -1592,7 +1591,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 
 	if (hctx->jb || hctx->hb) {
 		hctx->jfd = -1;
-		if (p->conf.cache)
+		if (pconf.cache)
 			mod_dirlisting_cache_stream_init(r, hctx);
 		r->http_status = 200;
 		r->resp_body_started = 1;
@@ -1602,8 +1601,8 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	r->handler_module = p->self;
 	handler_t rc = mod_dirlisting_subrequest(r, p);
 
-	if (rc == HANDLER_WAIT_FOR_EVENT && p->conf.auto_layout
-	    && (p->conf.external_js || p->conf.external_css)
+	if (rc == HANDLER_WAIT_FOR_EVENT && pconf.auto_layout
+	    && (pconf.external_js || pconf.external_css)
               /*(skip if might stream unsorted since r->http_status and
                * Content-Type would have to be saved/restored for response,
                * as well as any partial response body of html dir header)*/
@@ -1703,24 +1702,24 @@ static void mod_dirlisting_cache_etag (request_st * const r, int fd)
 }
 
 
-static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data * const p) {
+static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_config * const pconf) {
     /* optional: an external process can trigger a refresh by deleting the cache
      * entry when the external process detects (or initiates) changes to dir */
     buffer * const tb = r->tmp_buf;
-    buffer_copy_path_len2(tb, BUF_PTR_LEN(p->conf.cache->path),
+    buffer_copy_path_len2(tb, BUF_PTR_LEN(pconf->cache->path),
                               BUF_PTR_LEN(&r->physical.path));
-    buffer_append_string_len(tb, p->conf.json ? "dirlist.json" : "dirlist.html",
+    buffer_append_string_len(tb, pconf->json ? "dirlist.json" : "dirlist.html",
                              sizeof("dirlist.html")-1);
     stat_cache_entry * const sce = stat_cache_get_entry_open(tb, 1);
     if (NULL == sce || sce->fd == -1)
         return HANDLER_GO_ON;
-    if (TIME64_CAST(sce->st.st_mtime) + p->conf.cache->max_age < log_epoch_secs)
+    if (TIME64_CAST(sce->st.st_mtime) + pconf->cache->max_age < log_epoch_secs)
         return HANDLER_GO_ON;
     const unix_time64_t max_age =
-      TIME64_CAST(sce->st.st_mtime) + p->conf.cache->max_age - log_epoch_secs;
+      TIME64_CAST(sce->st.st_mtime) + pconf->cache->max_age - log_epoch_secs;
 
-    !p->conf.json
-      ? mod_dirlisting_content_type(r, p->conf.encoding)
+    !pconf->json
+      ? mod_dirlisting_content_type(r, pconf->encoding)
       : http_header_response_set(r, HTTP_HEADER_CONTENT_TYPE,
                                  CONST_STR_LEN("Content-Type"),
                                  CONST_STR_LEN("application/json"));
@@ -1757,8 +1756,8 @@ static handler_t mod_dirlisting_cache_check (request_st * const r, plugin_data *
                                      CONST_STR_LEN("ETag"),
                                      BUF_PTR_LEN(etag));
     }
-    if (p->conf.auto_layout)
-        http_dirlist_auto_layout_early_hints(r, p);
+    if (pconf->auto_layout)
+        http_dirlist_auto_layout_early_hints(r, pconf);
 
     r->resp_body_finished = 1;
     return HANDLER_FINISHED;

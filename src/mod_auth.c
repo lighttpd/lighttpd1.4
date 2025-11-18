@@ -41,7 +41,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 } plugin_data;
 
 typedef struct {
@@ -590,12 +589,12 @@ static void mod_auth_merge_config(plugin_config * const pconf, const config_plug
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_auth_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_auth_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_auth_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_auth_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -676,29 +675,30 @@ SETDEFAULTS_FUNC(mod_auth_set_defaults) {
 }
 
 static handler_t mod_auth_uri_handler(request_st * const r, void *p_d) {
-	plugin_data *p = p_d;
-	data_auth *dauth;
+	plugin_config pconf;
+	mod_auth_patch_config(r, p_d, &pconf);
 
-	mod_auth_patch_config(r, p);
-
-	if (p->conf.auth_require == NULL) return HANDLER_GO_ON;
+	if (pconf.auth_require == NULL) return HANDLER_GO_ON;
 
 	/* search auth directives for first prefix match against URL path */
 	/* if we have a case-insensitive FS we have to lower-case the URI here too */
-	dauth = (!r->conf.force_lowercase_filenames)
-	   ? (data_auth *)array_match_key_prefix(p->conf.auth_require, &r->uri.path)
-	   : (data_auth *)array_match_key_prefix_nc(p->conf.auth_require, &r->uri.path);
+	const data_auth * const dauth = (!r->conf.force_lowercase_filenames)
+	   ? (data_auth *)array_match_key_prefix(pconf.auth_require, &r->uri.path)
+	   : (data_auth *)array_match_key_prefix_nc(pconf.auth_require, &r->uri.path);
 	if (NULL == dauth) return HANDLER_GO_ON;
 
 	{
-			const http_auth_scheme_t * const scheme = dauth->require->scheme;
-			if (p->conf.auth_extern_authn) {
+			if (pconf.auth_extern_authn) {
 				const buffer *vb = http_header_env_get(r, CONST_STR_LEN("REMOTE_USER"));
 				if (NULL != vb && http_auth_match_rules(dauth->require, vb->ptr, NULL, NULL)) {
 					return HANDLER_GO_ON;
 				}
 			}
-			return scheme->checkfn(r, scheme->p_d, dauth->require, p->conf.auth_backend);
+			/* NOTE: &pconf passed instead of scheme->p_d
+			 * Third-party scheme could access its own static plugin_data config
+			 * or needs to call its own _patch_config() to get its config */
+			const http_auth_scheme_t * const scheme = dauth->require->scheme;
+			return scheme->checkfn(r, &pconf, dauth->require, pconf.auth_backend);
 	}
 }
 
@@ -815,9 +815,9 @@ mod_auth_check_basic(request_st * const r, void *p_d, const struct http_auth_req
     pwlen = (size_t)(user + ulen - pw);
     ulen  = (size_t)(pw - 1 - user);
 
-    plugin_data * const p = p_d;
-    splay_tree ** sptree = p->conf.auth_cache
-      ? &p->conf.auth_cache->sptree
+    plugin_config * const pconf = p_d; /* pconf; see mod_auth_uri_handler() */
+    splay_tree ** const sptree = pconf->auth_cache
+      ? &pconf->auth_cache->sptree
       : NULL;
     http_auth_cache_entry *ae = NULL;
     handler_t rc = HANDLER_ERROR;
@@ -1124,9 +1124,9 @@ mod_auth_digest_authentication_info (buffer *b, unix_time64_t cur_ts, const stru
 static handler_t
 mod_auth_digest_get (request_st * const r, void *p_d, const struct http_auth_require_t * const require, const struct http_auth_backend_t * const backend, http_auth_info_t * const ai)
 {
-    plugin_data * const p = p_d;
-    splay_tree **sptree = p->conf.auth_cache
-      ? &p->conf.auth_cache->sptree
+    plugin_config * const pconf = p_d; /* pconf; see mod_auth_uri_handler() */
+    splay_tree ** const sptree = pconf->auth_cache
+      ? &pconf->auth_cache->sptree
       : NULL;
     http_auth_cache_entry *ae = NULL;
     handler_t rc = HANDLER_GO_ON;

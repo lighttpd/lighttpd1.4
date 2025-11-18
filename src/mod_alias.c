@@ -17,7 +17,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 } plugin_data;
 
 INIT_FUNC(mod_alias_init) {
@@ -40,12 +39,12 @@ static void mod_alias_merge_config(plugin_config * const pconf, const config_plu
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_alias_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_alias_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_alias_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_alias_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -175,9 +174,9 @@ mod_alias_remap (request_st * const r, const array * const aliases)
 }
 
 PHYSICALPATH_FUNC(mod_alias_physical_handler) {
-    plugin_data * const p = p_d;
-    mod_alias_patch_config(r, p);
-    return p->conf.alias ? mod_alias_remap(r, p->conf.alias) : HANDLER_GO_ON;
+    plugin_config pconf;
+    mod_alias_patch_config(r, p_d, &pconf);
+    return pconf.alias ? mod_alias_remap(r, pconf.alias) : HANDLER_GO_ON;
 }
 
 

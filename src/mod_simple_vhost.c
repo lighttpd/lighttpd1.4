@@ -20,7 +20,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 
     buffer last_root;
 } plugin_data;
@@ -59,12 +58,12 @@ static void mod_simple_vhost_merge_config(plugin_config * const pconf, const con
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_simple_vhost_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_simple_vhost_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_simple_vhost_merge_config(&p->conf,
+            mod_simple_vhost_merge_config(pconf,
                                           p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -146,29 +145,29 @@ static void build_doc_root_path(buffer *out, const buffer *sroot, const buffer *
 	}
 }
 
-static int build_doc_root(request_st * const r, plugin_data *p, buffer *out, const buffer *host) {
+static int build_doc_root(request_st * const r, const plugin_config * const pconf, buffer * const restrict out, const buffer * const restrict host, buffer * const restrict last_root) {
 
-	build_doc_root_path(out, p->conf.server_root, host, p->conf.document_root);
+	build_doc_root_path(out, pconf->server_root, host, pconf->document_root);
 
 	/* one-element cache (positive cache, not negative cache) */
-	if (buffer_is_equal(out, &p->last_root)) return 1;
+	if (buffer_is_equal(out, last_root)) return 1;
 
 	if (!stat_cache_path_isdir(out)) {
-		if (p->conf.debug) {
+		if (pconf->debug) {
 			log_pdebug(r->conf.errh, __FILE__, __LINE__, "%s", out->ptr);
 		}
 		return 0;
 	}
 
-	buffer_copy_buffer(&p->last_root, out);
+	buffer_copy_buffer(last_root, out);
 	return 1;
 }
 
-static handler_t mod_simple_vhost_docroot(request_st * const r, void *p_data) {
-    plugin_data * const p = p_data;
-    mod_simple_vhost_patch_config(r, p);
-    if (!p->conf.server_root) return HANDLER_GO_ON;
-    /* build_doc_root() requires p->conf.server_root;
+static handler_t mod_simple_vhost_docroot(request_st * const r, void *p_d) {
+    plugin_config pconf;
+    mod_simple_vhost_patch_config(r, p_d, &pconf);
+    if (!pconf.server_root) return HANDLER_GO_ON;
+    /* build_doc_root() requires pconf.server_root;
      * skip module if simple-vhost.server-root not set or set to empty string */
 
     /* (default host and HANDLER_GO_ON instead of HANDLER_ERROR (on error)
@@ -177,12 +176,14 @@ static handler_t mod_simple_vhost_docroot(request_st * const r, void *p_data) {
     /* build document-root */
     buffer * const b = r->tmp_buf;/*(tmp_buf cleared before use in call below)*/
     const buffer *host = &r->uri.authority;
+    /* thread-safety todo: last_root cache */
+    buffer * const last_root = &((plugin_data *)p_d)->last_root;
     if ((!buffer_is_blank(host)
          && (__builtin_expect(
               (r->conf.http_parseopts & HTTP_PARSEOPT_HOST_STRICT), 1)
              || (*host->ptr != '.' && NULL == strchr(host->ptr, '/')))
-         && build_doc_root(r, p, b, host))
-        || build_doc_root(r, p, b, (host = p->conf.default_host))) {
+         && build_doc_root(r, &pconf, b, host, last_root))
+        || build_doc_root(r, &pconf, b, (host=pconf.default_host), last_root)) {
         if (host) {
             r->server_name = &r->server_name_buf;
             buffer_copy_buffer(&r->server_name_buf, host);

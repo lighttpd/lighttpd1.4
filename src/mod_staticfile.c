@@ -19,7 +19,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 } plugin_data;
 
 INIT_FUNC(mod_staticfile_init) {
@@ -48,12 +47,12 @@ static void mod_staticfile_merge_config(plugin_config * const pconf, const confi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_staticfile_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_staticfile_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_staticfile_merge_config(&p->conf,
+            mod_staticfile_merge_config(pconf,
                                         p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
@@ -131,10 +130,10 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
     /* r->physical.path is non-empty for handle_subrequest_start */
     /*if (buffer_is_blank(&r->physical.path)) return HANDLER_GO_ON;*/
 
-    plugin_data * const p = p_d;
-    mod_staticfile_patch_config(r, p);
+    plugin_config pconf;
+    mod_staticfile_patch_config(r, p_d, &pconf);
 
-    return mod_staticfile_process(r, &p->conf);
+    return mod_staticfile_process(r, &pconf);
 }
 
 

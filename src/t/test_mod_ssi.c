@@ -179,7 +179,7 @@ void test_mod_ssi (void)
     r.conf.errh->fd          = -1; /* (disable) */
     r.conf.follow_symlink    = 1;
 
-    handler_ctx * const hctx = handler_ctx_init(p, r.conf.errh);
+    handler_ctx * const hctx = handler_ctx_init(&p->defaults, p, r.conf.errh);
     assert(NULL != hctx);
 
     test_mod_ssi_read_fd(&r, hctx);

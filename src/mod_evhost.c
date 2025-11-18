@@ -33,7 +33,6 @@ typedef struct {
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 
     array split_vals;
 } plugin_data;
@@ -147,12 +146,12 @@ static void mod_evhost_merge_config(plugin_config * const pconf, const config_pl
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_evhost_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_evhost_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_evhost_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_evhost_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -275,6 +274,7 @@ static void mod_evhost_parse_host(buffer *key, array *host, const buffer *author
 }
 
 static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, const buffer *authority, const buffer *path_pieces) {
+	/* thread-safety todo: alloc parsed_host array; replace p->split_vals */
 	array_reset_data_strings(parsed_host);
 	mod_evhost_parse_host(b, parsed_host, authority);
 	buffer_clear(b);
@@ -320,12 +320,11 @@ static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, const 
 }
 
 static handler_t mod_evhost_uri_handler(request_st * const r, void *p_d) {
-	plugin_data *p = p_d;
-
 	if (buffer_is_blank(&r->uri.authority)) return HANDLER_GO_ON;
 
-	mod_evhost_patch_config(r, p);
-	if (NULL == p->conf.path_pieces) return HANDLER_GO_ON;
+	plugin_config pconf;
+	mod_evhost_patch_config(r, p_d, &pconf);
+	if (NULL == pconf.path_pieces) return HANDLER_GO_ON;
 
 	if (__builtin_expect(
 	     (!(r->conf.http_parseopts & HTTP_PARSEOPT_HOST_STRICT)), 0)) {
@@ -334,7 +333,8 @@ static handler_t mod_evhost_uri_handler(request_st * const r, void *p_d) {
 	}
 
 	buffer * const b = r->tmp_buf;/*(tmp_buf cleared before use in call below)*/
-	mod_evhost_build_doc_root_path(b, &p->split_vals, &r->uri.authority, p->conf.path_pieces);
+	plugin_data *p = p_d;
+	mod_evhost_build_doc_root_path(b, &p->split_vals, &r->uri.authority, pconf.path_pieces);
 
 	if (!stat_cache_path_isdir(b)) {
 		log_perror(r->conf.errh, __FILE__, __LINE__, "%s", b->ptr);

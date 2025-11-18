@@ -22,7 +22,6 @@ enum { REWRITE_STATE_REWRITTEN = 1024, REWRITE_STATE_FINISHED = 2048}; /*flags*/
 typedef struct {
     PLUGIN_DATA;
     plugin_config defaults;
-    plugin_config conf;
 } plugin_data;
 
 INIT_FUNC(mod_rewrite_init) {
@@ -84,12 +83,12 @@ static void mod_rewrite_merge_config(plugin_config * const pconf, const config_p
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_rewrite_patch_config(request_st * const r, plugin_data * const p) {
-    p->conf = p->defaults; /* copy small struct instead of memcpy() */
-    /*memcpy(&p->conf, &p->defaults, sizeof(plugin_config));*/
+static void mod_rewrite_patch_config (request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    *pconf = p->defaults; /* copy small struct instead of memcpy() */
+    /*memcpy(pconf, &p->defaults, sizeof(plugin_config));*/
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_rewrite_merge_config(&p->conf, p->cvlist+p->cvlist[i].v.u2[0]);
+            mod_rewrite_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -276,13 +275,13 @@ URIHANDLER_FUNC(mod_rewrite_con_reset) {
     return HANDLER_GO_ON;
 }
 
-static handler_t process_rewrite_rules(request_st * const r, plugin_data *p, const pcre_keyvalue_buffer *kvb) {
+static handler_t process_rewrite_rules(request_st * const r, const int plid, const pcre_keyvalue_buffer *kvb) {
 	struct burl_parts_t burl;
 	pcre_keyvalue_ctx ctx;
 	handler_t rc;
 
-	if (r->plugin_ctx[p->id]) {
-		uintptr_t * const hctx = (uintptr_t *)(r->plugin_ctx + p->id);
+	if (r->plugin_ctx[plid]) {
+		uintptr_t * const hctx = (uintptr_t *)(r->plugin_ctx + plid);
 		if (((++*hctx) & 0x1FF) > 100) {
 			return process_rewrite_rules_loop_error(r, kvb->cfgidx);
 		}
@@ -306,7 +305,7 @@ static handler_t process_rewrite_rules(request_st * const r, plugin_data *p, con
 	rc = pcre_keyvalue_buffer_process(kvb, &ctx, &r->target, tb);
 	if (HANDLER_FINISHED == rc && !buffer_is_blank(tb) && tb->ptr[0] == '/') {
 		buffer_copy_buffer(&r->target, tb);
-		uintptr_t * const hctx = (uintptr_t *)(r->plugin_ctx + p->id);
+		uintptr_t * const hctx = (uintptr_t *)(r->plugin_ctx + plid);
 		*hctx |= REWRITE_STATE_REWRITTEN;
 		/*(kvb->x1 is repeat_idx)*/
 		if (ctx.m < kvb->x1) *hctx |= REWRITE_STATE_FINISHED;
@@ -327,28 +326,35 @@ static handler_t process_rewrite_rules(request_st * const r, plugin_data *p, con
 	return rc;
 }
 
+static handler_t mod_rewrite_process (request_st * const r, const plugin_data * const p, const int uri) {
+    plugin_config pconf;
+    mod_rewrite_patch_config(r, p, &pconf);
+
+    if (uri) {
+        if (!pconf.rewrite || !pconf.rewrite->used) return HANDLER_GO_ON;
+
+        return process_rewrite_rules(r, p->id, pconf.rewrite);
+    }
+    else { /* physical */
+        if (!pconf.rewrite_NF || !pconf.rewrite_NF->used) return HANDLER_GO_ON;
+
+        /* skip if physical.path is a regular file */
+        const stat_cache_st * const st =
+          stat_cache_path_stat(&r->physical.path);
+        if (st && S_ISREG(st->st_mode)) return HANDLER_GO_ON;
+
+        return process_rewrite_rules(r, p->id, pconf.rewrite_NF);
+    }
+}
+
 URIHANDLER_FUNC(mod_rewrite_physical) {
-    plugin_data * const p = p_d;
-
-    if (NULL != r->handler_module) return HANDLER_GO_ON;
-
-    mod_rewrite_patch_config(r, p);
-    if (!p->conf.rewrite_NF || !p->conf.rewrite_NF->used) return HANDLER_GO_ON;
-
-    /* skip if physical.path is a regular file */
-    const stat_cache_st * const st = stat_cache_path_stat(&r->physical.path);
-    if (st && S_ISREG(st->st_mode)) return HANDLER_GO_ON;
-
-    return process_rewrite_rules(r, p, p->conf.rewrite_NF);
+    return NULL != r->handler_module
+      ? HANDLER_GO_ON
+      : mod_rewrite_process(r, p_d, 0);
 }
 
 URIHANDLER_FUNC(mod_rewrite_uri_handler) {
-    plugin_data *p = p_d;
-
-    mod_rewrite_patch_config(r, p);
-    if (!p->conf.rewrite || !p->conf.rewrite->used) return HANDLER_GO_ON;
-
-    return process_rewrite_rules(r, p, p->conf.rewrite);
+    return mod_rewrite_process(r, p_d, 1);
 }
 
 

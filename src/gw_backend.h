@@ -280,7 +280,6 @@ typedef struct gw_plugin_config {
 typedef struct gw_plugin_data {
     PLUGIN_DATA;
     pid_t srv_pid; /* must precede gw_plugin_config for mods w/ larger struct */
-    gw_plugin_config conf; /* used only as long as no gw_handler_ctx is setup */
     gw_plugin_config defaults;/*(must not be used by gw_backend.c: lg struct) */
 } gw_plugin_data;
 
@@ -365,7 +364,7 @@ int gw_get_defaults_balance(server *srv, const buffer *b);
 __attribute_cold__
 void gw_backend_error_trace(const gw_handler_ctx * hctx, const request_st *r, const char *msg);
 
-handler_t gw_check_extension(request_st *r, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
+handler_t gw_check_extension(request_st *r, gw_plugin_config *pconf, gw_plugin_data *p, int uri_path_handler, size_t hctx_sz);
 handler_t gw_handle_request_reset(request_st *r, void *p_d);
 handler_t gw_handle_subrequest(request_st *r, void *p_d);
 handler_t gw_handle_trigger(server *srv, void *p_d);

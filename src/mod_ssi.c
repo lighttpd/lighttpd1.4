@@ -47,7 +47,6 @@ typedef struct {
 typedef struct {
 	PLUGIN_DATA;
 	plugin_config defaults;
-	plugin_config conf;
 	array *ssi_vars;
 	array *ssi_cgi_env;
 	buffer stat_fn;
@@ -70,15 +69,15 @@ typedef struct {
 } handler_ctx;
 
 __attribute_returns_nonnull__
-static handler_ctx * handler_ctx_init(plugin_data *p, log_error_st *errh) {
+static handler_ctx * handler_ctx_init (plugin_config * const pconf, plugin_data * const p, log_error_st *errh) {
 	handler_ctx *hctx = ck_calloc(1, sizeof(*hctx));
 	hctx->errh = errh;
-	hctx->timefmt = &p->timefmt;
-	hctx->stat_fn = &p->stat_fn;
-	hctx->ssi_vars = p->ssi_vars;
-	hctx->ssi_cgi_env = p->ssi_cgi_env;
+	hctx->timefmt = &p->timefmt;        /* thread-safety todo */
+	hctx->stat_fn = &p->stat_fn;        /* thread-safety todo */
+	hctx->ssi_vars = p->ssi_vars;       /* thread-safety todo */
+	hctx->ssi_cgi_env = p->ssi_cgi_env; /* thread-safety todo */
+	memcpy(&hctx->conf, pconf, sizeof(plugin_config));
 	chunkqueue_init(&hctx->wq);
-	memcpy(&hctx->conf, &p->conf, sizeof(plugin_config));
 	return hctx;
 }
 
@@ -133,11 +132,11 @@ static void mod_ssi_merge_config(plugin_config * const pconf, const config_plugi
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_ssi_patch_config(request_st * const r, plugin_data * const p) {
-    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+static void mod_ssi_patch_config(request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_ssi_merge_config(&p->conf, p->cvlist + p->cvlist[i].v.u2[0]);
+            mod_ssi_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -1615,26 +1614,26 @@ static int mod_ssi_handle_request(request_st * const r, handler_ctx * const p) {
 }
 
 URIHANDLER_FUNC(mod_ssi_physical_path) {
-	plugin_data *p = p_d;
 
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
 	/* r->physical.path is non-empty for handle_subrequest_start */
 	/*if (buffer_is_blank(&r->physical.path)) return HANDLER_GO_ON;*/
 
-	mod_ssi_patch_config(r, p);
-	if (NULL == p->conf.ssi_extension) return HANDLER_GO_ON;
+	plugin_config pconf;
+	mod_ssi_patch_config(r, p_d, &pconf);
+	if (NULL == pconf.ssi_extension) return HANDLER_GO_ON;
 
-	if (array_match_value_suffix(p->conf.ssi_extension, &r->physical.path)) {
-		r->plugin_ctx[p->id] = handler_ctx_init(p, r->conf.errh);
+	if (array_match_value_suffix(pconf.ssi_extension, &r->physical.path)) {
+		const plugin_data * const p = p_d;
 		r->handler_module = p->self;
+		r->plugin_ctx[p->id] = handler_ctx_init(&pconf, p_d, r->conf.errh);
 	}
 
 	return HANDLER_GO_ON;
 }
 
 SUBREQUEST_FUNC(mod_ssi_handle_subrequest) {
-	plugin_data *p = p_d;
-	handler_ctx *hctx = r->plugin_ctx[p->id];
+	handler_ctx *hctx = r->plugin_ctx[((const plugin_data *)p_d)->id];
 	if (NULL == hctx) return HANDLER_GO_ON;
 	/*
 	 * NOTE: if mod_ssi modified to use fdevents, HANDLER_WAIT_FOR_EVENT,

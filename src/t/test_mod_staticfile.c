@@ -397,10 +397,6 @@ void test_mod_staticfile (void)
         exit(1);
     }
 
-    plugin_data * const p = mod_staticfile_init();
-    assert(NULL != p);
-    p->conf.etags_used = 1;
-
     request_st r;
 
     memset(&r, 0, sizeof(request_st));
@@ -428,7 +424,10 @@ void test_mod_staticfile (void)
     array_reset_data_strings(&r.rqst_headers);
 
     buffer_copy_string_len(&r.physical.path, fn, fnlen);
-    test_mod_staticfile_process(&r, &p->conf);
+    plugin_config pconf;
+    memset(&pconf, '\0', sizeof(pconf));
+    pconf.etags_used = 1;
+    test_mod_staticfile_process(&r, &pconf);
 
     array_free(mimetypes);
     fdlog_free(r.conf.errh);
@@ -443,7 +442,6 @@ void test_mod_staticfile (void)
     array_free_data(&r.rqst_headers);
     array_free_data(&r.resp_headers);
 
-    free(p);
     stat_cache_free();
     close(fd);
     unlink(fn);

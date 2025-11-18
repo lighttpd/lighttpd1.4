@@ -119,8 +119,7 @@ typedef struct {
 
 typedef struct plugin_data {
     PLUGIN_DATA;
-    pid_t srv_pid; /* must match layout of gw_plugin_data through conf member */
-    plugin_config conf;
+    pid_t srv_pid; /* must match layout of gw_plugin_data to defaults member */
     plugin_config defaults;
 } plugin_data;
 
@@ -230,11 +229,11 @@ static void mod_wstunnel_merge_config(plugin_config * const pconf, const config_
     } while ((++cpv)->k_id != -1);
 }
 
-static void mod_wstunnel_patch_config(request_st * const r, plugin_data * const p) {
-    memcpy(&p->conf, &p->defaults, sizeof(plugin_config));
+static void mod_wstunnel_patch_config(request_st * const r, const plugin_data * const p, plugin_config * const pconf) {
+    memcpy(pconf, &p->defaults, sizeof(plugin_config));
     for (int i = 1, used = p->nconfig; i < used; ++i) {
         if (config_check_cond(r, (uint32_t)p->cvlist[i].k_id))
-            mod_wstunnel_merge_config(&p->conf, p->cvlist+p->cvlist[i].v.u2[0]);
+            mod_wstunnel_merge_config(pconf, p->cvlist + p->cvlist[i].v.u2[0]);
     }
 }
 
@@ -473,10 +472,9 @@ static void wstunnel_handler_ctx_free(void *gwhctx) {
     chunk_buffer_release(hctx->frame.payload);
 }
 
-static handler_t wstunnel_handler_setup (request_st * const r, plugin_data * const p) {
-    handler_ctx *hctx = r->plugin_ctx[p->id];
+static handler_t wstunnel_handler_setup (request_st * const r, handler_ctx * const hctx, const plugin_config * const pconf) {
     hctx->errh = r->conf.errh;/*(for mod_wstunnel-specific DEBUG_* macros)*/
-    hctx->conf = p->conf; /*(copies struct)*/
+    memcpy(&hctx->conf, pconf, sizeof(plugin_config));
 
     int status = wstunnel_check_request(r, hctx);
     if (status)
@@ -564,9 +562,6 @@ static handler_t wstunnel_handler_setup (request_st * const r, plugin_data * con
 }
 
 static handler_t mod_wstunnel_check_extension(request_st * const r, void *p_d) {
-    plugin_data *p = p_d;
-    handler_t rc;
-
     if (NULL != r->handler_module)
         return HANDLER_GO_ON;
   if (r->http_version > HTTP_VERSION_1_1) {
@@ -594,13 +589,17 @@ static handler_t mod_wstunnel_check_extension(request_st * const r, void *p_d) {
         return HANDLER_GO_ON;
   }
 
-    mod_wstunnel_patch_config(r, p);
-    if (NULL == p->conf.gw.exts) return HANDLER_GO_ON;
-    p->conf.gw.upgrade = 1;
+    plugin_config pconf;
+    mod_wstunnel_patch_config(r, p_d, &pconf);
+    if (NULL == pconf.gw.exts) return HANDLER_GO_ON;
+    pconf.gw.upgrade = 1;
 
-    rc = gw_check_extension(r, (gw_plugin_data *)p, 1, sizeof(handler_ctx));
+    handler_t rc =
+      gw_check_extension(r, (gw_plugin_config *)&pconf,
+                         p_d, 1, sizeof(handler_ctx));
+    const plugin_data * const p = p_d;
     return (HANDLER_GO_ON == rc && r->handler_module == p->self)
-      ? wstunnel_handler_setup(r, p)
+      ? wstunnel_handler_setup(r, r->plugin_ctx[p->id], &pconf)
       : rc;
 }
 

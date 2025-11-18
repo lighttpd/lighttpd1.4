@@ -2617,11 +2617,11 @@ static handler_t gw_response_headers_upgrade(request_st * const r, struct http_r
     return HANDLER_GO_ON;
 }
 
-handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int uri_path_handler, size_t hctx_sz) {
+handler_t gw_check_extension(request_st * const r, gw_plugin_config * const pconf, gw_plugin_data * const p, int uri_path_handler, size_t hctx_sz) {
   #if 0 /*(caller must handle)*/
     if (NULL != r->handler_module) return HANDLER_GO_ON;
     gw_patch_connection(r, p);
-    if (NULL == p->conf.exts) return HANDLER_GO_ON;
+    if (NULL == pconf->exts) return HANDLER_GO_ON;
   #endif
 
     const buffer *fn = uri_path_handler ? &r->uri.path : &r->physical.path;
@@ -2631,24 +2631,24 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
     gw_handler_ctx *hctx;
     unsigned short gw_mode;
 
-    /* check p->conf.exts_auth list and then p->conf.ext_resp list
-     * (skip p->conf.exts_auth if array is empty
+    /* check pconf->exts_auth list and then pconf->ext_resp list
+     * (skip pconf->exts_auth if array is empty
      *  or if GW_AUTHORIZER already ran in this request) */
     hctx = r->plugin_ctx[p->id];
     /*(hctx not NULL if GW_AUTHORIZER ran; hctx->ext_auth check is redundant)*/
     gw_mode = (NULL == hctx || NULL == hctx->ext_auth)
-      ? 0              /*GW_AUTHORIZER p->conf.exts_auth will be searched next*/
-      : GW_AUTHORIZER; /*GW_RESPONDER p->conf.exts_resp will be searched next*/
+      ? 0              /*GW_AUTHORIZER pconf->exts_auth will be searched next*/
+      : GW_AUTHORIZER; /*GW_RESPONDER pconf->exts_resp will be searched next*/
 
     do {
 
         gw_exts *exts;
         if (0 == gw_mode) {
             gw_mode = GW_AUTHORIZER;
-            exts = p->conf.exts_auth;
+            exts = pconf->exts_auth;
         } else {
             gw_mode = GW_RESPONDER;
-            exts = p->conf.exts_resp;
+            exts = pconf->exts_resp;
         }
 
         if (0 == exts->used) continue;
@@ -2662,9 +2662,9 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
          * */
 
         /* check if extension-mapping matches */
-        if (p->conf.ext_mapping) {
+        if (pconf->ext_mapping) {
             data_string *ds =
-              (data_string *)array_match_key_suffix(p->conf.ext_mapping, fn);
+              (data_string *)array_match_key_suffix(pconf->ext_mapping, fn);
             if (NULL != ds) { /* found a mapping */
                 /* check if we know the extension */
                 for (uint32_t k = 0; k < exts->used; ++k) {
@@ -2714,7 +2714,7 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
     }
 
     /* check if we have at least one server for this extension up and running */
-    host = gw_host_get(r, extension, p->conf.balance, p->conf.debug);
+    host = gw_host_get(r, extension, pconf->balance, pconf->debug);
     if (NULL == host) {
         return HANDLER_FINISHED;
     }
@@ -2779,13 +2779,13 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
     }
 
     /*(combine host upgrade setting with that of mod_proxy, mod_wstunnel)*/
-    p->conf.upgrade |= host->upgrade;
+    pconf->upgrade |= host->upgrade;
 
-    p->conf.upgrade =
-      gw_upgrade_policy(r,(gw_mode == GW_AUTHORIZER),p->conf.upgrade);
+    pconf->upgrade =
+      gw_upgrade_policy(r, (gw_mode == GW_AUTHORIZER), pconf->upgrade);
     if (0 != r->http_status)
         return HANDLER_FINISHED;
-    if (!gw_incremental_policy(r, p->conf.upgrade))
+    if (!gw_incremental_policy(r, pconf->upgrade))
         return HANDLER_FINISHED;
 
     if (!hctx) hctx = handler_ctx_init(hctx_sz);
@@ -2804,17 +2804,17 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_data * const p, int
         hctx->ext_auth = hctx->ext;
     }
 
-    /*hctx->conf.exts        = p->conf.exts;*/
-    /*hctx->conf.exts_auth   = p->conf.exts_auth;*/
-    /*hctx->conf.exts_resp   = p->conf.exts_resp;*/
-    /*hctx->conf.ext_mapping = p->conf.ext_mapping;*/
-    hctx->conf.balance     = p->conf.balance;
-    hctx->conf.proto       = p->conf.proto;
-    hctx->conf.debug       = p->conf.debug;
-    /*hctx->conf.upgrade     = p->conf.upgrade;*//*(use hctx->opts.upgrade)*/
+    /*hctx->conf.exts        = pconf->exts;*/
+    /*hctx->conf.exts_auth   = pconf->exts_auth;*/
+    /*hctx->conf.exts_resp   = pconf->exts_resp;*/
+    /*hctx->conf.ext_mapping = pconf->ext_mapping;*/
+    hctx->conf.balance     = pconf->balance;
+    hctx->conf.proto       = pconf->proto;
+    hctx->conf.debug       = pconf->debug;
+    /*hctx->conf.upgrade     = pconf->upgrade;*//*(use hctx->opts.upgrade)*/
 
-    if (p->conf.upgrade) {
-        hctx->opts.upgrade = p->conf.upgrade;
+    if (pconf->upgrade) {
+        hctx->opts.upgrade = pconf->upgrade;
         hctx->opts.pdata   = hctx;
         hctx->opts.headers = gw_response_headers_upgrade;
         /* if a module using gw_backend does not support upgrade, then upon
