@@ -128,8 +128,17 @@ jobs:
       - uses: actions/checkout@v5
       - uses: vmactions/freebsd-vm@v1
         with:
+          mem: 11264
+          cpu: 4
           usesh: true
+          copyback: false
           prepare: |
+            mount -t procfs proc /proc
+          run: |
+            mkdir -p /usr/local/etc/pkg/repos
+            echo 'FreeBSD: { url: "pkg+https://pkg.FreeBSD.org/${ABI}/latest" }' > /usr/local/etc/pkg/repos/FreeBSD.conf
+            pkg update -f -q
+            pkg upgrade -y
             pkg install -y autoconf automake autotools libtool m4 pkgconf \
               ninja meson cmake scons-py311 pcre2 perl5 \
               gnutls libressl mbedtls3 nettle nss wolfssl \
@@ -138,7 +147,6 @@ jobs:
               brotli libdeflate zstd \
               libmaxminddb libunwind lua51 lua54 \
               libxml2 sqlite3
-          run: |
             set -e
             cd "${{github.workspace}}" && scripts/ci-build.sh meson
             cd "${{github.workspace}}" && scripts/ci-build.sh cmake
