@@ -1247,7 +1247,7 @@ __attribute_noinline__
 static void *
 network_mbedtls_load_pemfile (server *srv, const buffer *pemfile, const buffer *privkey)
 {
-  #if defined(MBEDTLS_USE_PSA_CRYPTO)
+  #if MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.0.0 */
     if (!mod_mbedtls_init_once_mbedtls(srv))
         return NULL;
   #endif
@@ -2138,7 +2138,7 @@ SETDEFAULTS_FUNC(mod_mbedtls_set_defaults)
                 __attribute_fallthrough__
               case 2: /* ssl.ca-file */
               case 3: /* ssl.ca-dn-file */
-               #if defined(MBEDTLS_USE_PSA_CRYPTO)
+               #if MBEDTLS_VERSION_NUMBER >= 0x03000000 /* mbedtls 3.0.0 */
                 if (!mod_mbedtls_init_once_mbedtls(srv)) return HANDLER_ERROR;
                #endif /* else defer; not necessary for pemfile parsing */
                 if (!buffer_is_blank(cpv->v.b)) {
