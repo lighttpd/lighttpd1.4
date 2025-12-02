@@ -364,6 +364,7 @@ static handler_t mod_authn_gssapi_check_spnego(request_st * const r, plugin_data
 
     if (!pconf.auth_gssapi_principal) {
         log_error(r->conf.errh, __FILE__, __LINE__, "auth.backend.gssapi.principal not configured");
+        buffer_free(t_in);
         return http_status_set_err(r, 500); /* Internal Server Error */
     }
 

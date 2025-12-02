@@ -3517,6 +3517,7 @@ h2_upgrade_h2c (request_st * const h2r, connection * const con)
     buffer * const http_connection =
       http_header_request_get(r, HTTP_HEADER_CONNECTION,
                               CONST_STR_LEN("Connection"));
+    if (!http_connection) return; /*(already checked in h1_check_upgrade())*/
     http_header_remove_token(http_connection, CONST_STR_LEN("HTTP2-Settings"));
     http_header_remove_token(http_connection, CONST_STR_LEN("Upgrade"));
 
