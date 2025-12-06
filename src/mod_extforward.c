@@ -1299,6 +1299,8 @@ The following types have already been registered for the <type> field :
 #define PP2_SUBTYPE_SSL_CIPHER    0x23
 #define PP2_SUBTYPE_SSL_SIG_ALG   0x24
 #define PP2_SUBTYPE_SSL_KEY_ALG   0x25
+#define PP2_SUBTYPE_SSL_GROUP     0x26
+#define PP2_SUBTYPE_SSL_SIG_SCHEME 0x27
 #define PP2_TYPE_NETNS            0x30
 
 /*
@@ -1659,6 +1661,14 @@ static int mod_extforward_hap_PROXY_v2 (connection * const con,
                   case PP2_SUBTYPE_SSL_KEY_ALG:
                     k = "SSL_SERVER_A_KEY";
                     klen = sizeof("SSL_SERVER_A_KEY")-1;
+                    break;
+                  case PP2_SUBTYPE_SSL_GROUP:
+                    k = "SSL_GROUP";
+                    klen = sizeof("SSL_GROUP")-1;
+                    break;
+                  case PP2_SUBTYPE_SSL_SIG_SCHEME:
+                    k = "SSL_SERVER_SIG_SCHEME";
+                    klen = sizeof("SSL_SERVER_SIG_SCHEME")-1;
                     break;
                   default:
                     continue;
