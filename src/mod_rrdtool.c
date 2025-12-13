@@ -41,8 +41,36 @@ typedef struct {
     server *srv;
 } plugin_data;
 
+INIT_FUNC(mod_rrd_init);
+FREE_FUNC(mod_rrd_free);
+SETDEFAULTS_FUNC(mod_rrd_set_defaults);
+REQUEST_FUNC(mod_rrd_account);
+TRIGGER_FUNC(mod_rrd_trigger);
+static handler_t mod_rrd_waitpid_cb(server *srv, void *p_d, pid_t pid, int status);
+
+static const plugin mod_rrdtool_plugin = {
+  .name                         = "rrdtool",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_rrd_init,
+  .cleanup                      = mod_rrd_free,
+  .set_defaults                 = mod_rrd_set_defaults,
+  .handle_request_done          = mod_rrd_account,
+  .handle_trigger               = mod_rrd_trigger,
+  .handle_waitpid               = mod_rrd_waitpid_cb
+};
+
 INIT_FUNC(mod_rrd_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_rrdtool_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_rrdtool_plugin_init(plugin *p);
+int mod_rrdtool_plugin_init(plugin *p) {
+    memcpy(p, &mod_rrdtool_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_rrd_free_config(plugin_data * const p) {
@@ -429,23 +457,4 @@ REQUESTDONE_FUNC(mod_rrd_account) {
         rrd->bytes_read    += http_request_stats_bytes_in(r);
     }
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_rrdtool_plugin_init(plugin *p);
-int mod_rrdtool_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "rrd";
-
-	p->init        = mod_rrd_init;
-	p->cleanup     = mod_rrd_free;
-	p->set_defaults= mod_rrd_set_defaults;
-
-	p->handle_trigger      = mod_rrd_trigger;
-	p->handle_waitpid      = mod_rrd_waitpid_cb;
-	p->handle_request_done = mod_rrd_account;
-
-	return 0;
 }

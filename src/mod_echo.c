@@ -24,8 +24,30 @@ typedef struct {
     PLUGIN_DATA;
 } plugin_data;
 
+INIT_FUNC(mod_echo_init);
+REQUEST_FUNC(mod_echo_handle_uri_clean);
+REQUEST_FUNC(mod_echo_handle_subrequest);
+
+static const plugin mod_echo_plugin = {
+  .name                         = "echo",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_echo_init,
+  .handle_uri_clean             = mod_echo_handle_uri_clean,
+  .handle_subrequest            = mod_echo_handle_subrequest
+};
+
 INIT_FUNC(mod_echo_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_echo_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_echo_plugin_init(plugin *p);
+int mod_echo_plugin_init(plugin *p) {
+    memcpy(p, &mod_echo_plugin, sizeof(plugin));
+    return 0;
 }
 
 #if 1 /*(would be simpler if not supporting streaming w/ bufmin)*/
@@ -69,7 +91,7 @@ static handler_t mod_echo_request_body(request_st * const r) {
     return HANDLER_WAIT_FOR_EVENT;
 }
 
-SUBREQUEST_FUNC(mod_echo_handle_subrequest) {
+REQUEST_FUNC(mod_echo_handle_subrequest) {
     UNUSED(p_d);
 
     handler_t rc = mod_echo_request_body(r);
@@ -99,7 +121,7 @@ SUBREQUEST_FUNC(mod_echo_handle_subrequest) {
 
 #else /*(would be simpler if not supporting streaming w/ bufmin (above))*/
 
-SUBREQUEST_FUNC(mod_echo_handle_subrequest) {
+REQUEST_FUNC(mod_echo_handle_subrequest) {
     UNUSED(p_d);
 
     handler_t rc = r->con->reqbody_read(r);
@@ -118,7 +140,7 @@ SUBREQUEST_FUNC(mod_echo_handle_subrequest) {
 
 #endif
 
-URIHANDLER_FUNC(mod_echo_handle_uri_clean) {
+REQUEST_FUNC(mod_echo_handle_uri_clean) {
     plugin_data *p = p_d;
     if (NULL == r->handler_module
         && buffer_eq_slen(&r->uri.path, CONST_STR_LEN("/echo"))) {
@@ -131,19 +153,4 @@ URIHANDLER_FUNC(mod_echo_handle_uri_clean) {
         }
     }
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_echo_plugin_init(plugin *p);
-int mod_echo_plugin_init(plugin *p) {
-    p->version                 = LIGHTTPD_VERSION_ID;
-    p->name                    = "echo";
-
-    p->handle_uri_clean        = mod_echo_handle_uri_clean;
-    p->handle_subrequest       = mod_echo_handle_subrequest;
-    p->init                    = mod_echo_init;
-
-    return 0;
 }

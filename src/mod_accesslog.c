@@ -170,8 +170,34 @@ typedef enum {
    ,BS_ESCAPE_JSON
 } buffer_bs_escape_t;
 
+INIT_FUNC(mod_accesslog_init);
+FREE_FUNC(mod_accesslog_free);
+SETDEFAULTS_FUNC(mod_accesslog_set_defaults);
+REQUEST_FUNC(log_access_write);
+TRIGGER_FUNC(log_access_periodic_flush);
+
+static const plugin mod_accesslog_plugin = {
+  .name                         = "accesslog",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_accesslog_init,
+  .cleanup                      = mod_accesslog_free,
+  .set_defaults                 = mod_accesslog_set_defaults,
+  .handle_request_done          = log_access_write,
+  .handle_trigger               = log_access_periodic_flush
+};
+
 INIT_FUNC(mod_accesslog_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_accesslog_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_accesslog_plugin_init(plugin *p);
+int mod_accesslog_plugin_init(plugin *p) {
+    memcpy(p, &mod_accesslog_plugin, sizeof(plugin));
+    return 0;
 }
 
 __attribute_cold__
@@ -997,7 +1023,7 @@ static int log_access_record (const request_st * const r, buffer * const b, form
 	return flush;
 }
 
-REQUESTDONE_FUNC(log_access_write) {
+REQUEST_FUNC(log_access_write) {
     plugin_config pconf;
     mod_accesslog_patch_config(r, p_d, &pconf);
     fdlog_st * const fdlog = pconf.fdlog;
@@ -1034,22 +1060,4 @@ REQUESTDONE_FUNC(log_access_write) {
     }
 
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_accesslog_plugin_init(plugin *p);
-int mod_accesslog_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "accesslog";
-
-	p->init        = mod_accesslog_init;
-	p->set_defaults= mod_accesslog_set_defaults;
-	p->cleanup     = mod_accesslog_free;
-
-	p->handle_request_done  = log_access_write;
-	p->handle_trigger       = log_access_periodic_flush;
-
-	return 0;
 }

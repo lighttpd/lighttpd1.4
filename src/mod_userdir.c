@@ -35,8 +35,32 @@ typedef struct {
     buffer cache_path[2];
 } plugin_data;
 
+INIT_FUNC(mod_userdir_init);
+FREE_FUNC(mod_userdir_free);
+SETDEFAULTS_FUNC(mod_userdir_set_defaults);
+REQUEST_FUNC(mod_userdir_docroot_handler);
+
+static const plugin mod_userdir_plugin = {
+  .name                         = "userdir",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_userdir_init,
+  .cleanup                      = mod_userdir_free,
+  .set_defaults                 = mod_userdir_set_defaults,
+  .handle_physical              = mod_userdir_docroot_handler
+};
+
 INIT_FUNC(mod_userdir_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_userdir_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_userdir_plugin_init(plugin *p);
+int mod_userdir_plugin_init(plugin *p) {
+    memcpy(p, &mod_userdir_plugin, sizeof(plugin));
+    return 0;
 }
 
 FREE_FUNC(mod_userdir_free) {
@@ -330,20 +354,4 @@ URIHANDLER_FUNC(mod_userdir_docroot_handler) {
     }
 
     return mod_userdir_docroot_construct(r, p_d, &pconf, uptr, ulen);
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_userdir_plugin_init(plugin *p);
-int mod_userdir_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "userdir";
-
-	p->init           = mod_userdir_init;
-	p->cleanup        = mod_userdir_free;
-	p->handle_physical = mod_userdir_docroot_handler;
-	p->set_defaults   = mod_userdir_set_defaults;
-
-	return 0;
 }

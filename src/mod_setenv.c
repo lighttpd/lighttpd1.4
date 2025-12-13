@@ -39,8 +39,36 @@ static void handler_ctx_free(handler_ctx *hctx) {
     free(hctx);
 }
 
+INIT_FUNC(mod_setenv_init);
+SETDEFAULTS_FUNC(mod_setenv_set_defaults);
+REQUEST_FUNC(mod_setenv_uri_handler);
+REQUEST_FUNC(mod_setenv_handle_request_env);
+REQUEST_FUNC(mod_setenv_handle_response_start);
+REQUEST_FUNC(mod_setenv_handle_request_reset);
+
+static const plugin mod_setenv_plugin = {
+  .name                         = "setenv",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_setenv_init,
+  .set_defaults                 = mod_setenv_set_defaults,
+  .handle_uri_clean             = mod_setenv_uri_handler,
+  .handle_request_env           = mod_setenv_handle_request_env,
+  .handle_response_start        = mod_setenv_handle_response_start,
+  .handle_request_reset         = mod_setenv_handle_request_reset,
+};
+
 INIT_FUNC(mod_setenv_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_setenv_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_setenv_plugin_init(plugin *p);
+int mod_setenv_plugin_init(plugin *p) {
+    memcpy(p, &mod_setenv_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_setenv_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -185,7 +213,7 @@ SETDEFAULTS_FUNC(mod_setenv_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-URIHANDLER_FUNC(mod_setenv_uri_handler) {
+REQUEST_FUNC(mod_setenv_uri_handler) {
     plugin_data *p = p_d;
     handler_ctx *hctx = r->plugin_ctx[p->id];
     if (!hctx)
@@ -282,23 +310,4 @@ REQUEST_FUNC(mod_setenv_handle_request_reset) {
     void ** const hctx = r->plugin_ctx+((plugin_data_base *)p_d)->id;
     if (*hctx) { handler_ctx_free(*hctx); *hctx = NULL; }
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_setenv_plugin_init(plugin *p);
-int mod_setenv_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "setenv";
-
-	p->init        = mod_setenv_init;
-	p->set_defaults= mod_setenv_set_defaults;
-	p->handle_uri_clean  = mod_setenv_uri_handler;
-	p->handle_request_env    = mod_setenv_handle_request_env;
-	p->handle_response_start = mod_setenv_handle_response_start;
-	p->handle_request_reset  = mod_setenv_handle_request_reset;
-
-
-	return 0;
 }

@@ -51,20 +51,44 @@ typedef struct {
 static handler_t mod_authn_gssapi_check(request_st *r, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
 static handler_t mod_authn_gssapi_basic(request_st *r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
+INIT_FUNC(mod_authn_gssapi_init);
+SETDEFAULTS_FUNC(mod_authn_gssapi_set_defaults);
+REQUEST_FUNC(mod_authn_gssapi_handle_reset);
+
+static const plugin mod_authn_gssapi_plugin = {
+  .name                         = "authn_gssapi",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_authn_gssapi_init,
+  .set_defaults                 = mod_authn_gssapi_set_defaults,
+  .handle_request_reset         = mod_authn_gssapi_handle_reset
+};
+
 INIT_FUNC(mod_authn_gssapi_init) {
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_authn_gssapi_plugin;
+
+    /* thread-safety todo: pd unsafe for multiple, distinct lighttpd instances*/
+
     static http_auth_scheme_t http_auth_scheme_gssapi =
       { "gssapi", mod_authn_gssapi_check, NULL };
     static http_auth_backend_t http_auth_backend_gssapi =
       { "gssapi", mod_authn_gssapi_basic, NULL, NULL };
-    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_auth_scheme_gssapi and http_auth_backend_gssapi */
-    http_auth_scheme_gssapi.p_d = p;
+    http_auth_scheme_gssapi.p_d = pd;
     http_auth_scheme_set(&http_auth_scheme_gssapi);
-    http_auth_backend_gssapi.p_d = p;
+    http_auth_backend_gssapi.p_d = pd;
     http_auth_backend_set(&http_auth_backend_gssapi);
 
-    return p;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_authn_gssapi_plugin_init(plugin *p);
+int mod_authn_gssapi_plugin_init(plugin *p) {
+    memcpy(p, &mod_authn_gssapi_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_authn_gssapi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -804,18 +828,4 @@ REQUEST_FUNC(mod_authn_gssapi_handle_reset) {
     }
 
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_authn_gssapi_plugin_init(plugin *p);
-int mod_authn_gssapi_plugin_init(plugin *p) {
-    p->version     = LIGHTTPD_VERSION_ID;
-    p->name        = "authn_gssapi";
-    p->init        = mod_authn_gssapi_init;
-    p->set_defaults= mod_authn_gssapi_set_defaults;
-    p->handle_request_reset = mod_authn_gssapi_handle_reset;
-
-    return 0;
 }

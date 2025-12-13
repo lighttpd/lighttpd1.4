@@ -34,6 +34,35 @@ typedef struct {
 } plugin_data;
 
 
+INIT_FUNC(mod_skeleton_init);
+SETDEFAULTS_FUNC(mod_skeleton_set_defaults);
+REQUEST_FUNC(mod_skeleton_uri_handler);
+
+static const plugin mod_skeleton_plugin = {
+  .name                         = "skeleton",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_skeleton_init,
+  .set_defaults                 = mod_skeleton_set_defaults,
+  .handle_uri_clean             = mod_skeleton_uri_handler
+};
+
+/* init the plugin data */
+INIT_FUNC(mod_skeleton_init) {
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_skeleton_plugin;
+    return pd;
+}
+
+/* this function is called at dlopen() time and inits the callbacks */
+__attribute_cold__
+__declspec_dllexport__
+int mod_skeleton_plugin_init(plugin *p);
+int mod_skeleton_plugin_init(plugin *p) {
+    memcpy(p, &mod_skeleton_plugin, sizeof(plugin));
+    return 0;
+}
+
+
 #if 0 /* (needed if module keeps state for request) */
 
 typedef struct {
@@ -51,11 +80,6 @@ static void handler_ctx_free(handler_ctx *hctx) {
 
 #endif
 
-
-/* init the plugin data */
-INIT_FUNC(mod_skeleton_init) {
-    return ck_calloc(1, sizeof(plugin_data));
-}
 
 /* handle plugin config and check values */
 
@@ -108,7 +132,7 @@ SETDEFAULTS_FUNC(mod_skeleton_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-URIHANDLER_FUNC(mod_skeleton_uri_handler) {
+REQUEST_FUNC(mod_skeleton_uri_handler) {
     /* determine whether or not module participates in request */
 
     if (NULL != r->handler_module) return HANDLER_GO_ON;
@@ -127,20 +151,4 @@ URIHANDLER_FUNC(mod_skeleton_uri_handler) {
 
     r->http_status = 403; /* example: reject request with 403 Forbidden */
     return HANDLER_FINISHED;
-}
-
-
-/* this function is called at dlopen() time and inits the callbacks */
-__attribute_cold__
-__declspec_dllexport__
-int mod_skeleton_plugin_init(plugin *p);
-int mod_skeleton_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "skeleton";
-	p->init        = mod_skeleton_init;
-	p->set_defaults= mod_skeleton_set_defaults;
-
-	p->handle_uri_clean = mod_skeleton_uri_handler;
-
-	return 0;
 }

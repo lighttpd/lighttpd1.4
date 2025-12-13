@@ -10,7 +10,7 @@
 #include "http_chunk.h"
 #include "http_header.h"
 #include "http_status.h"
-#include "gw_backend.h" /* gw_upgrade_policy() */
+#include "gw_backend.h" /* gw_incremental_policy() gw_upgrade_policy() */
 
 #include "plugin.h"
 
@@ -124,8 +124,31 @@ static void cgi_handler_ctx_free(handler_ctx *hctx) {
 	free(hctx);
 }
 
-INIT_FUNC(mod_cgi_init) {
-	plugin_data * const p = ck_calloc(1, sizeof(*p));
+
+INIT_FUNC(mod_cgi_init);
+FREE_FUNC(mod_cgi_free);
+SETDEFAULTS_FUNC(mod_cgi_set_defaults);
+REQUEST_FUNC(cgi_is_handled);
+REQUEST_FUNC(mod_cgi_handle_subrequest);
+REQUEST_FUNC(cgi_connection_close_callback);
+TRIGGER_FUNC(cgi_trigger_cb);
+static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status);
+
+static const plugin mod_cgi_plugin = {
+  .name                         = "cgi",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_cgi_init,
+  .cleanup                      = mod_cgi_free,
+  .set_defaults                 = mod_cgi_set_defaults,
+  .handle_subrequest_start      = cgi_is_handled,
+  .handle_subrequest            = mod_cgi_handle_subrequest,
+  .handle_request_reset         = cgi_connection_close_callback,
+  .handle_trigger               = cgi_trigger_cb,
+  .handle_waitpid               = cgi_waitpid_cb
+};
+
+
+static void mod_cgi_init_env (plugin_data * const p) {
 	const char *s;
 
 	/* for valgrind */
@@ -144,8 +167,23 @@ INIT_FUNC(mod_cgi_init) {
 	s = getenv("CYGVOL");
 	if (s) buffer_copy_string((p->env.cygvol = buffer_init()), s);
       #endif
+}
 
-	return p;
+
+INIT_FUNC(mod_cgi_init) {
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_cgi_plugin;
+    mod_cgi_init_env(pd);
+    return pd;
+}
+
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_cgi_plugin_init(plugin *p);
+int mod_cgi_plugin_init(plugin *p) {
+    memcpy(p, &mod_cgi_plugin, sizeof(plugin));
+    return 0;
 }
 
 
@@ -1302,24 +1340,4 @@ static handler_t cgi_waitpid_cb(server *srv, void *p_d, pid_t pid, int status) {
     }
 
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_cgi_plugin_init(plugin *p);
-int mod_cgi_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "cgi";
-
-	p->handle_request_reset = cgi_connection_close_callback;
-	p->handle_subrequest_start = cgi_is_handled;
-	p->handle_subrequest = mod_cgi_handle_subrequest;
-	p->handle_trigger = cgi_trigger_cb;
-	p->handle_waitpid = cgi_waitpid_cb;
-	p->init           = mod_cgi_init;
-	p->cleanup        = mod_cgi_free;
-	p->set_defaults   = mod_cgi_set_defaults;
-
-	return 0;
 }

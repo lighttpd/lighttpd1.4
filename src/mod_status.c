@@ -39,8 +39,34 @@ typedef struct {
 	int ndx_5s;
 } plugin_data;
 
+INIT_FUNC(mod_status_init);
+SETDEFAULTS_FUNC(mod_status_set_defaults);
+REQUEST_FUNC(mod_status_handler);
+REQUEST_FUNC(mod_status_account);
+TRIGGER_FUNC(mod_status_trigger);
+
+static const plugin mod_status_plugin = {
+  .name                         = "status",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_status_init,
+  .set_defaults                 = mod_status_set_defaults,
+  .handle_uri_clean             = mod_status_handler,
+  .handle_request_done          = mod_status_account,
+  .handle_trigger               = mod_status_trigger,
+};
+
 INIT_FUNC(mod_status_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_status_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_status_plugin_init(plugin *p);
+int mod_status_plugin_init(plugin *p) {
+    memcpy(p, &mod_status_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_status_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -838,22 +864,4 @@ REQUESTDONE_FUNC(mod_status_account) {
         p->bytes_written_1s += con->bytes_written_cur_second;
 
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_status_plugin_init(plugin *p);
-int mod_status_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "status";
-
-	p->init        = mod_status_init;
-	p->set_defaults= mod_status_set_defaults;
-
-	p->handle_uri_clean    = mod_status_handler;
-	p->handle_trigger      = mod_status_trigger;
-	p->handle_request_done = mod_status_account;
-
-	return 0;
 }

@@ -18,8 +18,32 @@ typedef struct {
     plugin_config defaults;
 } plugin_data;
 
+INIT_FUNC(mod_access_init);
+SETDEFAULTS_FUNC(mod_access_set_defaults);
+REQUEST_FUNC(mod_access_uri_handler);
+
+static const plugin mod_access_plugin = {
+  .name                         = "access",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_access_init,
+  .set_defaults                 = mod_access_set_defaults,
+  .handle_uri_clean             = mod_access_uri_handler,
+  .handle_subrequest_start      = mod_access_uri_handler
+};
+
 INIT_FUNC(mod_access_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_access_plugin;
+    return pd;
+}
+
+#include <string.h>     /* memcpy */
+__attribute_cold__
+__declspec_dllexport__
+int mod_access_plugin_init(plugin *p);
+int mod_access_plugin_init(plugin *p) {
+    memcpy(p, &mod_access_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_access_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -120,7 +144,7 @@ static int mod_access_check (const array * const allow, const array * const deny
  *
  * this handles the issue of trailing slashes
  */
-URIHANDLER_FUNC(mod_access_uri_handler) {
+REQUEST_FUNC(mod_access_uri_handler) {
     plugin_config pconf;
     mod_access_patch_config(r, p_d, &pconf);
     if (NULL == pconf.access_allow && NULL == pconf.access_deny)
@@ -130,20 +154,4 @@ URIHANDLER_FUNC(mod_access_uri_handler) {
                             &r->uri.path, r->conf.force_lowercase_filenames)
       ? HANDLER_GO_ON                   /* access allowed */
       : mod_access_reject(r, &pconf);   /* access denied */
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_access_plugin_init(plugin *p);
-int mod_access_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "access";
-
-	p->init        = mod_access_init;
-	p->set_defaults = mod_access_set_defaults;
-	p->handle_uri_clean = mod_access_uri_handler;
-	p->handle_subrequest_start  = mod_access_uri_handler;
-
-	return 0;
 }

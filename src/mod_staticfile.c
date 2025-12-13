@@ -21,8 +21,31 @@ typedef struct {
     plugin_config defaults;
 } plugin_data;
 
+INIT_FUNC(mod_staticfile_init);
+SETDEFAULTS_FUNC(mod_staticfile_set_defaults);
+REQUEST_FUNC(mod_staticfile_subrequest);
+
+static const plugin mod_staticfile_plugin = {
+  .name                         = "staticfile",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_staticfile_init,
+  .set_defaults                 = mod_staticfile_set_defaults,
+  .handle_subrequest_start      = mod_staticfile_subrequest
+};
+
 INIT_FUNC(mod_staticfile_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_staticfile_plugin;
+    return pd;
+}
+
+#include <string.h>     /* memcpy */
+__attribute_cold__
+__declspec_dllexport__
+int mod_staticfile_plugin_init(plugin *p);
+int mod_staticfile_plugin_init(plugin *p) {
+    memcpy(p, &mod_staticfile_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_staticfile_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -124,7 +147,7 @@ mod_staticfile_process (request_st * const r, plugin_config * const pconf)
     return HANDLER_FINISHED;
 }
 
-URIHANDLER_FUNC(mod_staticfile_subrequest) {
+REQUEST_FUNC(mod_staticfile_subrequest) {
     if (NULL != r->handler_module) return HANDLER_GO_ON;
     if (!http_method_get_head_query_post(r->http_method)) return HANDLER_GO_ON;
     /* r->physical.path is non-empty for handle_subrequest_start */
@@ -134,19 +157,4 @@ URIHANDLER_FUNC(mod_staticfile_subrequest) {
     mod_staticfile_patch_config(r, p_d, &pconf);
 
     return mod_staticfile_process(r, &pconf);
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_staticfile_plugin_init(plugin *p);
-int mod_staticfile_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "staticfile";
-
-	p->init        = mod_staticfile_init;
-	p->handle_subrequest_start = mod_staticfile_subrequest;
-	p->set_defaults  = mod_staticfile_set_defaults;
-
-	return 0;
 }

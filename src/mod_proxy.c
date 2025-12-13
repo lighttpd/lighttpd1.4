@@ -67,8 +67,38 @@ typedef struct {
 } handler_ctx;
 
 
+INIT_FUNC(mod_proxy_init);
+FREE_FUNC(mod_proxy_free);
+SETDEFAULTS_FUNC(mod_proxy_set_defaults);
+REQUEST_FUNC(mod_proxy_check_extension);
+
+static const plugin mod_proxy_plugin = {
+  .name                         = "proxy",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_proxy_init,
+  .cleanup                      = mod_proxy_free,
+  .set_defaults                 = mod_proxy_set_defaults,
+  .handle_uri_clean             = mod_proxy_check_extension,
+  .handle_subrequest            = gw_handle_subrequest,
+  .handle_request_reset         = gw_handle_request_reset,
+  .handle_trigger               = gw_handle_trigger,
+  .handle_waitpid               = gw_handle_waitpid_cb
+};
+
+
 INIT_FUNC(mod_proxy_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_proxy_plugin;
+    return pd;
+}
+
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_proxy_plugin_init(plugin *p);
+int mod_proxy_plugin_init(plugin *p) {
+    memcpy(p, &mod_proxy_plugin, sizeof(plugin));
+    return 0;
 }
 
 
@@ -1168,24 +1198,4 @@ static handler_t mod_proxy_check_extension(request_st * const r, void *p_d) {
 	}
 
 	return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_proxy_plugin_init(plugin *p);
-int mod_proxy_plugin_init(plugin *p) {
-	p->version      = LIGHTTPD_VERSION_ID;
-	p->name         = "proxy";
-
-	p->init         = mod_proxy_init;
-	p->cleanup      = mod_proxy_free;
-	p->set_defaults = mod_proxy_set_defaults;
-	p->handle_request_reset    = gw_handle_request_reset;
-	p->handle_uri_clean        = mod_proxy_check_extension;
-	p->handle_subrequest       = gw_handle_subrequest;
-	p->handle_trigger          = gw_handle_trigger;
-	p->handle_waitpid          = gw_handle_waitpid_cb;
-
-	return 0;
 }

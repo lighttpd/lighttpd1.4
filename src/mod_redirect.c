@@ -24,8 +24,32 @@ typedef struct {
     plugin_config defaults;
 } plugin_data;
 
+INIT_FUNC(mod_redirect_init);
+FREE_FUNC(mod_redirect_free);
+SETDEFAULTS_FUNC(mod_redirect_set_defaults);
+REQUEST_FUNC(mod_redirect_uri_handler);
+
+static const plugin mod_redirect_plugin = {
+  .name                         = "redirect",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_redirect_init,
+  .cleanup                      = mod_redirect_free,
+  .set_defaults                 = mod_redirect_set_defaults,
+  .handle_uri_clean             = mod_redirect_uri_handler
+};
+
 INIT_FUNC(mod_redirect_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_redirect_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_redirect_plugin_init(plugin *p);
+int mod_redirect_plugin_init(plugin *p) {
+    memcpy(p, &mod_redirect_plugin, sizeof(plugin));
+    return 0;
 }
 
 FREE_FUNC(mod_redirect_free) {
@@ -157,7 +181,7 @@ SETDEFAULTS_FUNC(mod_redirect_set_defaults) {
     return HANDLER_GO_ON;
 }
 
-URIHANDLER_FUNC(mod_redirect_uri_handler) {
+REQUEST_FUNC(mod_redirect_uri_handler) {
     struct burl_parts_t burl;
     pcre_keyvalue_ctx ctx;
     handler_t rc;
@@ -201,20 +225,4 @@ URIHANDLER_FUNC(mod_redirect_uri_handler) {
           r->target.ptr);
     }
     return rc;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_redirect_plugin_init(plugin *p);
-int mod_redirect_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "redirect";
-
-	p->init        = mod_redirect_init;
-	p->handle_uri_clean  = mod_redirect_uri_handler;
-	p->set_defaults  = mod_redirect_set_defaults;
-	p->cleanup     = mod_redirect_free;
-
-	return 0;
 }

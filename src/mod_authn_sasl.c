@@ -46,16 +46,40 @@ typedef struct {
 
 static handler_t mod_authn_sasl_basic(request_st *r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
+INIT_FUNC(mod_authn_sasl_init);
+FREE_FUNC(mod_authn_sasl_free);
+SETDEFAULTS_FUNC(mod_authn_sasl_set_defaults);
+
+static const plugin mod_authn_sasl_plugin = {
+  .name                         = "authn_sasl",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_authn_sasl_init,
+  .cleanup                      = mod_authn_sasl_free,
+  .set_defaults                 = mod_authn_sasl_set_defaults
+};
+
 INIT_FUNC(mod_authn_sasl_init) {
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_authn_sasl_plugin;
+
+    /* thread-safety todo: pd unsafe for multiple, distinct lighttpd instances*/
+
     static http_auth_backend_t http_auth_backend_sasl =
       { "sasl", mod_authn_sasl_basic, NULL, NULL };
-    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_auth_backend_sasl */
-    http_auth_backend_sasl.p_d = p;
+    http_auth_backend_sasl.p_d = pd;
     http_auth_backend_set(&http_auth_backend_sasl);
 
-    return p;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_authn_sasl_plugin_init(plugin *p);
+int mod_authn_sasl_plugin_init(plugin *p) {
+    memcpy(p, &mod_authn_sasl_plugin, sizeof(plugin));
+    return 0;
 }
 
 FREE_FUNC(mod_authn_sasl_free) {
@@ -301,18 +325,4 @@ static handler_t mod_authn_sasl_basic(request_st * const r, void *p_d, const htt
     return http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON  /* access granted */
       : HANDLER_ERROR;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_authn_sasl_plugin_init(plugin *p);
-int mod_authn_sasl_plugin_init(plugin *p) {
-    p->version     = LIGHTTPD_VERSION_ID;
-    p->name        = "authn_sasl";
-    p->init        = mod_authn_sasl_init;
-    p->set_defaults= mod_authn_sasl_set_defaults;
-    p->cleanup     = mod_authn_sasl_free;
-
-    return 0;
 }

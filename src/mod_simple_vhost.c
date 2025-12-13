@@ -24,8 +24,32 @@ typedef struct {
     buffer last_root;
 } plugin_data;
 
+INIT_FUNC(mod_simple_vhost_init);
+FREE_FUNC(mod_simple_vhost_free);
+SETDEFAULTS_FUNC(mod_simple_vhost_set_defaults);
+REQUEST_FUNC(mod_simple_vhost_docroot);
+
+static const plugin mod_simple_vhost_plugin = {
+  .name                         = "simple_vhost",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_simple_vhost_init,
+  .cleanup                      = mod_simple_vhost_free,
+  .set_defaults                 = mod_simple_vhost_set_defaults,
+  .handle_docroot               = mod_simple_vhost_docroot
+};
+
 INIT_FUNC(mod_simple_vhost_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_simple_vhost_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_simple_vhost_plugin_init(plugin *p);
+int mod_simple_vhost_plugin_init(plugin *p) {
+    memcpy(p, &mod_simple_vhost_plugin, sizeof(plugin));
+    return 0;
 }
 
 FREE_FUNC(mod_simple_vhost_free) {
@@ -192,20 +216,4 @@ static handler_t mod_simple_vhost_docroot(request_st * const r, void *p_d) {
     }
 
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_simple_vhost_plugin_init(plugin *p);
-int mod_simple_vhost_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "simple_vhost";
-
-	p->init        = mod_simple_vhost_init;
-	p->set_defaults = mod_simple_vhost_set_defaults;
-	p->handle_docroot  = mod_simple_vhost_docroot;
-	p->cleanup     = mod_simple_vhost_free;
-
-	return 0;
 }

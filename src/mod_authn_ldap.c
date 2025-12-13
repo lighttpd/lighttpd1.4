@@ -52,16 +52,40 @@ static const char *default_cafile;
 
 static handler_t mod_authn_ldap_basic(request_st * const r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
+INIT_FUNC(mod_authn_ldap_init);
+FREE_FUNC(mod_authn_ldap_free);
+SETDEFAULTS_FUNC(mod_authn_ldap_set_defaults);
+
+static const plugin mod_authn_ldap_plugin = {
+  .name                         = "authn_ldap",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_authn_ldap_init,
+  .cleanup                      = mod_authn_ldap_free,
+  .set_defaults                 = mod_authn_ldap_set_defaults
+};
+
 INIT_FUNC(mod_authn_ldap_init) {
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_authn_ldap_plugin;
+
+    /* thread-safety todo: pd unsafe for multiple, distinct lighttpd instances*/
+
     static http_auth_backend_t http_auth_backend_ldap =
       { "ldap", mod_authn_ldap_basic, NULL, NULL };
-    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_auth_backend_ldap */
-    http_auth_backend_ldap.p_d = p;
+    http_auth_backend_ldap.p_d = pd;
     http_auth_backend_set(&http_auth_backend_ldap);
 
-    return p;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_authn_ldap_plugin_init(plugin *p);
+int mod_authn_ldap_plugin_init(plugin *p) {
+    memcpy(p, &mod_authn_ldap_plugin, sizeof(plugin));
+    return 0;
 }
 
 FREE_FUNC(mod_authn_ldap_free) {
@@ -813,18 +837,4 @@ static handler_t mod_authn_ldap_basic(request_st * const r, void *p_d, const htt
         ldap_unbind_ext_s(pconf.ldc->ldap, NULL, NULL);
     if (dn != ldap_filter->ptr) ldap_memfree(dn);
     return rc;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_authn_ldap_plugin_init(plugin *p);
-int mod_authn_ldap_plugin_init(plugin *p) {
-    p->version     = LIGHTTPD_VERSION_ID;
-    p->name        = "authn_ldap";
-    p->init        = mod_authn_ldap_init;
-    p->set_defaults = mod_authn_ldap_set_defaults;
-    p->cleanup     = mod_authn_ldap_free;
-
-    return 0;
 }

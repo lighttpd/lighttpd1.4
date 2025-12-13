@@ -216,20 +216,48 @@ static handler_t mod_auth_check_basic(request_st *r, void *p_d, const struct htt
 static handler_t mod_auth_check_digest(request_st *r, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
 static handler_t mod_auth_check_extern(request_st *r, void *p_d, const struct http_auth_require_t *require, const struct http_auth_backend_t *backend);
 
+INIT_FUNC(mod_auth_init);
+FREE_FUNC(mod_auth_free);
+SETDEFAULTS_FUNC(mod_auth_set_defaults);
+REQUEST_FUNC(mod_auth_uri_handler);
+TRIGGER_FUNC(mod_auth_periodic);
+
+static const plugin mod_auth_plugin = {
+  .name                         = "auth",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_auth_init,
+  .cleanup                      = mod_auth_free,
+  .set_defaults                 = mod_auth_set_defaults,
+  .handle_uri_clean             = mod_auth_uri_handler,
+  .handle_trigger               = mod_auth_periodic
+};
+
 INIT_FUNC(mod_auth_init) {
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_auth_plugin;
+
+	/* thread-safety todo: pd unsafe for multiple, distinct lighttpd instances*/
+
 	static http_auth_scheme_t http_auth_scheme_basic  = { "basic",  mod_auth_check_basic,  NULL };
 	static http_auth_scheme_t http_auth_scheme_digest = { "digest", mod_auth_check_digest, NULL };
 	static const http_auth_scheme_t http_auth_scheme_extern = { "extern", mod_auth_check_extern, NULL };
-	plugin_data *p = ck_calloc(1, sizeof(*p));
 
 	/* register http_auth_scheme_* */
-	http_auth_scheme_basic.p_d = p;
+	http_auth_scheme_basic.p_d = pd;
 	http_auth_scheme_set(&http_auth_scheme_basic);
-	http_auth_scheme_digest.p_d = p;
+	http_auth_scheme_digest.p_d = pd;
 	http_auth_scheme_set(&http_auth_scheme_digest);
 	http_auth_scheme_set(&http_auth_scheme_extern);
 
-	return p;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_auth_plugin_init(plugin *p);
+int mod_auth_plugin_init(plugin *p) {
+    memcpy(p, &mod_auth_plugin, sizeof(plugin));
+    return 0;
 }
 
 FREE_FUNC(mod_auth_free) {
@@ -700,22 +728,6 @@ static handler_t mod_auth_uri_handler(request_st * const r, void *p_d) {
 			const http_auth_scheme_t * const scheme = dauth->require->scheme;
 			return scheme->checkfn(r, &pconf, dauth->require, pconf.auth_backend);
 	}
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_auth_plugin_init(plugin *p);
-int mod_auth_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "auth";
-	p->init        = mod_auth_init;
-	p->set_defaults = mod_auth_set_defaults;
-	p->handle_trigger = mod_auth_periodic;
-	p->handle_uri_clean = mod_auth_uri_handler;
-	p->cleanup     = mod_auth_free;
-
-	return 0;
 }
 
 

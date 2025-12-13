@@ -19,8 +19,30 @@ typedef struct {
     plugin_config defaults;
 } plugin_data;
 
+INIT_FUNC(mod_alias_init);
+SETDEFAULTS_FUNC(mod_alias_set_defaults);
+REQUEST_FUNC(mod_alias_handle_physical);
+
+static const plugin mod_alias_plugin = {
+  .name                         = "alias",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_alias_init,
+  .set_defaults                 = mod_alias_set_defaults,
+  .handle_physical              = mod_alias_handle_physical
+};
+
 INIT_FUNC(mod_alias_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_alias_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_alias_plugin_init(plugin *p);
+int mod_alias_plugin_init(plugin *p) {
+    memcpy(p, &mod_alias_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_alias_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -173,23 +195,8 @@ mod_alias_remap (request_st * const r, const array * const aliases)
     return HANDLER_GO_ON;
 }
 
-PHYSICALPATH_FUNC(mod_alias_physical_handler) {
+REQUEST_FUNC(mod_alias_handle_physical) {
     plugin_config pconf;
     mod_alias_patch_config(r, p_d, &pconf);
     return pconf.alias ? mod_alias_remap(r, pconf.alias) : HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_alias_plugin_init(plugin *p);
-int mod_alias_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "alias";
-
-	p->init           = mod_alias_init;
-	p->handle_physical= mod_alias_physical_handler;
-	p->set_defaults   = mod_alias_set_defaults;
-
-	return 0;
 }

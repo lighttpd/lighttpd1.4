@@ -16,6 +16,39 @@ typedef gw_handler_ctx   handler_ctx;
 #include "http_status.h"
 #include "log.h"
 
+INIT_FUNC(mod_scgi_init);
+SETDEFAULTS_FUNC(mod_scgi_set_defaults);
+REQUEST_FUNC(scgi_check_extension_1);
+REQUEST_FUNC(scgi_check_extension_2);
+
+static const plugin mod_scgi_plugin = {
+  .name                         = "scgi",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_scgi_init,
+  .cleanup                      = gw_free,
+  .set_defaults                 = mod_scgi_set_defaults,
+  .handle_uri_clean             = scgi_check_extension_1,
+  .handle_subrequest_start      = scgi_check_extension_2,
+  .handle_subrequest            = gw_handle_subrequest,
+  .handle_request_reset         = gw_handle_request_reset,
+  .handle_trigger               = gw_handle_trigger,
+  .handle_waitpid               = gw_handle_waitpid_cb
+};
+
+INIT_FUNC(mod_scgi_init) {
+    plugin_data * const pd = gw_init();
+    pd->self = &mod_scgi_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_scgi_plugin_init(plugin *p);
+int mod_scgi_plugin_init(plugin *p) {
+    memcpy(p, &mod_scgi_plugin, sizeof(plugin));
+    return 0;
+}
+
 enum { LI_PROTOCOL_SCGI, LI_PROTOCOL_UWSGI };
 
 static void mod_scgi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -274,25 +307,4 @@ static handler_t scgi_check_extension_1(request_st * const r, void *p_d) {
 /* start request handler */
 static handler_t scgi_check_extension_2(request_st * const r, void *p_d) {
 	return scgi_check_extension(r, p_d, 0);
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_scgi_plugin_init(plugin *p);
-int mod_scgi_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name         = "scgi";
-
-	p->init         = gw_init;
-	p->cleanup      = gw_free;
-	p->set_defaults = mod_scgi_set_defaults;
-	p->handle_request_reset    = gw_handle_request_reset;
-	p->handle_uri_clean        = scgi_check_extension_1;
-	p->handle_subrequest_start = scgi_check_extension_2;
-	p->handle_subrequest       = gw_handle_subrequest;
-	p->handle_trigger          = gw_handle_trigger;
-	p->handle_waitpid          = gw_handle_waitpid_cb;
-
-	return 0;
 }

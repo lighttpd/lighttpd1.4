@@ -20,8 +20,30 @@ typedef struct {
     plugin_config defaults;
 } plugin_data;
 
+INIT_FUNC(mod_indexfile_init);
+SETDEFAULTS_FUNC(mod_indexfile_set_defaults);
+REQUEST_FUNC(mod_indexfile_subrequest);
+
+static const plugin mod_indexfile_plugin = {
+  .name                         = "indexfile",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_indexfile_init,
+  .set_defaults                 = mod_indexfile_set_defaults,
+  .handle_subrequest_start      = mod_indexfile_subrequest
+};
+
 INIT_FUNC(mod_indexfile_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_indexfile_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_indexfile_plugin_init(plugin *p);
+int mod_indexfile_plugin_init(plugin *p) {
+    memcpy(p, &mod_indexfile_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_indexfile_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -138,7 +160,7 @@ static handler_t mod_indexfile_tryfiles(request_st * const r, const array * cons
 	return HANDLER_GO_ON;
 }
 
-URIHANDLER_FUNC(mod_indexfile_subrequest) {
+REQUEST_FUNC(mod_indexfile_subrequest) {
     if (NULL != r->handler_module) return HANDLER_GO_ON;
     if (!buffer_has_slash_suffix(&r->uri.path)) return HANDLER_GO_ON;
 
@@ -154,19 +176,4 @@ URIHANDLER_FUNC(mod_indexfile_subrequest) {
     }
 
     return mod_indexfile_tryfiles(r, pconf.indexfiles);
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_indexfile_plugin_init(plugin *p);
-int mod_indexfile_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "indexfile";
-
-	p->init        = mod_indexfile_init;
-	p->handle_subrequest_start = mod_indexfile_subrequest;
-	p->set_defaults  = mod_indexfile_set_defaults;
-
-	return 0;
 }

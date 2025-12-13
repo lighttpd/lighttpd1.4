@@ -275,35 +275,6 @@ static int has_proc_self_fd;
 
 typedef physical physical_st;
 
-INIT_FUNC(mod_webdav_init);
-FREE_FUNC(mod_webdav_free);
-SETDEFAULTS_FUNC(mod_webdav_set_defaults);
-SERVER_FUNC(mod_webdav_worker_init);
-URIHANDLER_FUNC(mod_webdav_uri_handler);
-PHYSICALPATH_FUNC(mod_webdav_physical_handler);
-SUBREQUEST_FUNC(mod_webdav_subrequest_handler);
-REQUEST_FUNC(mod_webdav_handle_reset);
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_webdav_plugin_init(plugin *p);
-int mod_webdav_plugin_init(plugin *p) {
-    p->version           = LIGHTTPD_VERSION_ID;
-    p->name              = "webdav";
-
-    p->init              = mod_webdav_init;
-    p->cleanup           = mod_webdav_free;
-    p->set_defaults      = mod_webdav_set_defaults;
-    p->worker_init       = mod_webdav_worker_init;
-    p->handle_uri_clean  = mod_webdav_uri_handler;
-    p->handle_physical   = mod_webdav_physical_handler;
-    p->handle_subrequest = mod_webdav_subrequest_handler;
-    p->handle_request_reset = mod_webdav_handle_reset;
-
-    return 0;
-}
-
-
 #define WEBDAV_FILE_MODE  S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH
 #define WEBDAV_DIR_MODE   S_IRWXU|S_IRWXG|S_IRWXO
 
@@ -384,8 +355,42 @@ typedef struct {
 } plugin_data;
 
 
+INIT_FUNC(mod_webdav_init);
+FREE_FUNC(mod_webdav_free);
+SETDEFAULTS_FUNC(mod_webdav_set_defaults);
+SERVER_FUNC(mod_webdav_worker_init);
+REQUEST_FUNC(mod_webdav_uri_handler);
+REQUEST_FUNC(mod_webdav_physical_handler);
+REQUEST_FUNC(mod_webdav_subrequest_handler);
+REQUEST_FUNC(mod_webdav_handle_reset);
+
+static const plugin mod_webdav_plugin = {
+  .name                         = "webdav",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_webdav_init,
+  .cleanup                      = mod_webdav_free,
+  .set_defaults                 = mod_webdav_set_defaults,
+  .worker_init                  = mod_webdav_worker_init,
+  .handle_uri_clean             = mod_webdav_uri_handler,
+  .handle_physical              = mod_webdav_physical_handler,
+  .handle_subrequest            = mod_webdav_subrequest_handler,
+  .handle_request_reset         = mod_webdav_handle_reset
+};
+
+
 INIT_FUNC(mod_webdav_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_webdav_plugin;
+    return pd;
+}
+
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_webdav_plugin_init(plugin *p);
+int mod_webdav_plugin_init(plugin *p) {
+    memcpy(p, &mod_webdav_plugin, sizeof(plugin));
+    return 0;
 }
 
 
@@ -6186,7 +6191,7 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
       ~(FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN);
     r->plugin_ctx[((plugin_data *)p_d)->id] = &pconf;
     const handler_t rc =
-      mod_webdav_subrequest_handler(r, p_d); /*p->handle_subrequest()*/
+      mod_webdav_subrequest_handler(r, p_d); /*pd->self->handle_subrequest()*/
     if (rc == HANDLER_FINISHED || rc == HANDLER_ERROR)
         r->plugin_ctx[((plugin_data *)p_d)->id] = NULL;
     else  /* e.g. HANDLER_WAIT_FOR_EVENT */

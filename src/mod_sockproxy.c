@@ -25,6 +25,37 @@ typedef gw_handler_ctx   handler_ctx;
  *
  */
 
+INIT_FUNC(mod_sockproxy_init);
+SETDEFAULTS_FUNC(mod_sockproxy_set_defaults);
+CONNECTION_FUNC(mod_sockproxy_connection_accept);
+
+static const plugin mod_sockproxy_plugin = {
+  .name                         = "sockproxy",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_sockproxy_init,
+  .cleanup                      = gw_free,
+  .set_defaults                 = mod_sockproxy_set_defaults,
+  .handle_connection_accept     = mod_sockproxy_connection_accept,
+  .handle_subrequest            = gw_handle_subrequest,
+  .handle_request_reset         = gw_handle_request_reset,
+  .handle_trigger               = gw_handle_trigger,
+  .handle_waitpid               = gw_handle_waitpid_cb
+};
+
+INIT_FUNC(mod_sockproxy_init) {
+    plugin_data * const pd = gw_init();
+    pd->self = &mod_sockproxy_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_sockproxy_plugin_init(plugin *p);
+int mod_sockproxy_plugin_init(plugin *p) {
+    memcpy(p, &mod_sockproxy_plugin, sizeof(plugin));
+    return 0;
+}
+
 static void mod_sockproxy_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* sockproxy.server */
@@ -166,24 +197,4 @@ static handler_t mod_sockproxy_connection_accept(connection *con, void *p_d) {
 	}
 
 	return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_sockproxy_plugin_init(plugin *p);
-int mod_sockproxy_plugin_init(plugin *p) {
-	p->version      = LIGHTTPD_VERSION_ID;
-	p->name         = "sockproxy";
-
-	p->init         = gw_init;
-	p->cleanup      = gw_free;
-	p->set_defaults = mod_sockproxy_set_defaults;
-	p->handle_request_reset    = gw_handle_request_reset;
-	p->handle_connection_accept= mod_sockproxy_connection_accept;
-	p->handle_subrequest       = gw_handle_subrequest;
-	p->handle_trigger          = gw_handle_trigger;
-	p->handle_waitpid          = gw_handle_waitpid_cb;
-
-	return 0;
 }

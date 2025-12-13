@@ -38,16 +38,38 @@ typedef struct {
 
 static handler_t mod_authn_pam_basic(request_st *r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
+INIT_FUNC(mod_authn_pam_init);
+SETDEFAULTS_FUNC(mod_authn_pam_set_defaults);
+
+static const plugin mod_authn_pam_plugin = {
+  .name                         = "authn_pam",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_authn_pam_init,
+  .set_defaults                 = mod_authn_pam_set_defaults
+};
+
 INIT_FUNC(mod_authn_pam_init) {
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_authn_pam_plugin;
+
+    /* thread-safety todo: pd unsafe for multiple, distinct lighttpd instances*/
+
     static http_auth_backend_t http_auth_backend_pam =
       { "pam", mod_authn_pam_basic, NULL, NULL };
-    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_auth_backend_pam */
-    http_auth_backend_pam.p_d = p;
+    http_auth_backend_pam.p_d = pd;
     http_auth_backend_set(&http_auth_backend_pam);
 
-    return p;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_authn_pam_plugin_init(plugin *p);
+int mod_authn_pam_plugin_init(plugin *p) {
+    memcpy(p, &mod_authn_pam_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_authn_pam_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -167,17 +189,4 @@ static handler_t mod_authn_pam_basic(request_st * const r, void *p_d, const http
     return http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON  /* access granted */
       : HANDLER_ERROR;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_authn_pam_plugin_init(plugin *p);
-int mod_authn_pam_plugin_init(plugin *p) {
-    p->version     = LIGHTTPD_VERSION_ID;
-    p->name        = "authn_pam";
-    p->init        = mod_authn_pam_init;
-    p->set_defaults= mod_authn_pam_set_defaults;
-
-    return 0;
 }

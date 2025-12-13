@@ -3857,9 +3857,19 @@ typedef struct {
     PLUGIN_DATA;
 } plugin_data;
 
+INIT_FUNC(mod_h2_init);
+
+static const plugin mod_h2_plugin = {
+  .name                         = "h2",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_h2_init
+};
+
 INIT_FUNC(mod_h2_init) {
     http_dispatch[HTTP_VERSION_2] = h2_dispatch_table; /* copy struct */
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_h2_plugin;
+    return pd;
 }
 
 
@@ -3867,8 +3877,6 @@ __attribute_cold__
 __declspec_dllexport__
 int mod_h2_plugin_init (plugin *p);
 int mod_h2_plugin_init (plugin *p) {
-    p->version     = LIGHTTPD_VERSION_ID;
-    p->name        = "h2";
-    p->init        = mod_h2_init;
+    memcpy(p, &mod_h2_plugin, sizeof(plugin));
     return 0;
 }

@@ -185,8 +185,36 @@ static int mod_wstunnel_frame_recv(handler_ctx *);
 #define _MOD_WEBSOCKET_SPEC_IETF_00_
 #define _MOD_WEBSOCKET_SPEC_RFC_6455_
 
+INIT_FUNC(mod_wstunnel_init);
+SETDEFAULTS_FUNC(mod_wstunnel_set_defaults);
+REQUEST_FUNC(mod_wstunnel_check_extension);
+TRIGGER_FUNC(mod_wstunnel_handle_trigger);
+
+static const plugin mod_wstunnel_plugin = {
+  .name                         = "wstunnel",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_wstunnel_init,
+  .cleanup                      = gw_free,
+  .set_defaults                 = mod_wstunnel_set_defaults,
+  .handle_uri_clean             = mod_wstunnel_check_extension,
+  .handle_subrequest            = gw_handle_subrequest,
+  .handle_request_reset         = gw_handle_request_reset,
+  .handle_trigger               = mod_wstunnel_handle_trigger,
+  .handle_waitpid               = gw_handle_waitpid_cb
+};
+
 INIT_FUNC(mod_wstunnel_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_wstunnel_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_wstunnel_plugin_init(plugin *p);
+int mod_wstunnel_plugin_init(plugin *p) {
+    memcpy(p, &mod_wstunnel_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_wstunnel_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -646,24 +674,6 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
     }
 
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_wstunnel_plugin_init(plugin *p);
-int mod_wstunnel_plugin_init(plugin *p) {
-    p->version           = LIGHTTPD_VERSION_ID;
-    p->name              = "wstunnel";
-    p->init              = mod_wstunnel_init;
-    p->cleanup           = gw_free;
-    p->set_defaults      = mod_wstunnel_set_defaults;
-    p->handle_request_reset = gw_handle_request_reset;
-    p->handle_uri_clean  = mod_wstunnel_check_extension;
-    p->handle_subrequest = gw_handle_subrequest;
-    p->handle_trigger    = mod_wstunnel_handle_trigger;
-    p->handle_waitpid    = gw_handle_waitpid_cb;
-    return 0;
 }
 
 

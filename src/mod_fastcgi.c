@@ -29,6 +29,39 @@ typedef gw_handler_ctx   handler_ctx;
 #error "mismatched defines: (GW_FILTER != FCGI_FILTER)"
 #endif
 
+INIT_FUNC(mod_fastcgi_init);
+SETDEFAULTS_FUNC(mod_fastcgi_set_defaults);
+REQUEST_FUNC(fcgi_check_extension_1);
+REQUEST_FUNC(fcgi_check_extension_2);
+
+static const plugin mod_fastcgi_plugin = {
+  .name                         = "fastcgi",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_fastcgi_init,
+  .cleanup                      = gw_free,
+  .set_defaults                 = mod_fastcgi_set_defaults,
+  .handle_uri_clean             = fcgi_check_extension_1,
+  .handle_subrequest_start      = fcgi_check_extension_2,
+  .handle_subrequest            = gw_handle_subrequest,
+  .handle_request_reset         = gw_handle_request_reset,
+  .handle_trigger               = gw_handle_trigger,
+  .handle_waitpid               = gw_handle_waitpid_cb
+};
+
+INIT_FUNC(mod_fastcgi_init) {
+    plugin_data * const pd = gw_init();
+    pd->self = &mod_fastcgi_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_fastcgi_plugin_init(plugin *p);
+int mod_fastcgi_plugin_init(plugin *p) {
+    memcpy(p, &mod_fastcgi_plugin, sizeof(plugin));
+    return 0;
+}
+
 static void mod_fastcgi_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
     switch (cpv->k_id) { /* index into static config_plugin_keys_t cpk[] */
       case 0: /* fastcgi.server */
@@ -531,25 +564,4 @@ static handler_t fcgi_check_extension_1(request_st * const r, void *p_d) {
 /* start request handler */
 static handler_t fcgi_check_extension_2(request_st * const r, void *p_d) {
 	return fcgi_check_extension(r, p_d, 0);
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_fastcgi_plugin_init(plugin *p);
-int mod_fastcgi_plugin_init(plugin *p) {
-	p->version      = LIGHTTPD_VERSION_ID;
-	p->name         = "fastcgi";
-
-	p->init         = gw_init;
-	p->cleanup      = gw_free;
-	p->set_defaults = mod_fastcgi_set_defaults;
-	p->handle_request_reset    = gw_handle_request_reset;
-	p->handle_uri_clean        = fcgi_check_extension_1;
-	p->handle_subrequest_start = fcgi_check_extension_2;
-	p->handle_subrequest       = gw_handle_subrequest;
-	p->handle_trigger          = gw_handle_trigger;
-	p->handle_waitpid          = gw_handle_waitpid_cb;
-
-	return 0;
 }

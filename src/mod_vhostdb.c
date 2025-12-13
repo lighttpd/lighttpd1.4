@@ -125,8 +125,36 @@ mod_vhostdb_cache_insert (request_st * const r, plugin_config * const pconf, vho
     }
 }
 
+INIT_FUNC(mod_vhostdb_init);
+FREE_FUNC(mod_vhostdb_free);
+SETDEFAULTS_FUNC(mod_vhostdb_set_defaults);
+REQUEST_FUNC(mod_vhostdb_handle_docroot);
+REQUEST_FUNC(mod_vhostdb_handle_request_reset);
+TRIGGER_FUNC(mod_vhostdb_periodic);
+
+static const plugin mod_vhostdb_plugin = {
+  .name                         = "vhostdb",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_vhostdb_init,
+  .cleanup                      = mod_vhostdb_free,
+  .set_defaults                 = mod_vhostdb_set_defaults,
+  .handle_docroot               = mod_vhostdb_handle_docroot,
+  .handle_request_reset         = mod_vhostdb_handle_request_reset,
+  .handle_trigger               = mod_vhostdb_periodic
+};
+
 INIT_FUNC(mod_vhostdb_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_vhostdb_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_vhostdb_plugin_init(plugin *p);
+int mod_vhostdb_plugin_init(plugin *p) {
+    memcpy(p, &mod_vhostdb_plugin, sizeof(plugin));
+    return 0;
 }
 
 FREE_FUNC(mod_vhostdb_free) {
@@ -373,21 +401,4 @@ TRIGGER_FUNC(mod_vhostdb_periodic)
     }
 
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_vhostdb_plugin_init(plugin *p);
-int mod_vhostdb_plugin_init(plugin *p) {
-    p->version          = LIGHTTPD_VERSION_ID;
-    p->name             = "vhostdb";
-    p->init             = mod_vhostdb_init;
-    p->cleanup          = mod_vhostdb_free;
-    p->set_defaults     = mod_vhostdb_set_defaults;
-    p->handle_trigger   = mod_vhostdb_periodic;
-    p->handle_docroot   = mod_vhostdb_handle_docroot;
-    p->handle_request_reset = mod_vhostdb_handle_request_reset;
-
-    return 0;
 }

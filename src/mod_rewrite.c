@@ -24,8 +24,37 @@ typedef struct {
     plugin_config defaults;
 } plugin_data;
 
+INIT_FUNC(mod_rewrite_init);
+FREE_FUNC(mod_rewrite_free);
+SETDEFAULTS_FUNC(mod_rewrite_set_defaults);
+REQUEST_FUNC(mod_rewrite_uri_handler);
+REQUEST_FUNC(mod_rewrite_physical);
+REQUEST_FUNC(mod_rewrite_con_reset);
+
+static const plugin mod_rewrite_plugin = {
+  .name                         = "rewrite",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_rewrite_init,
+  .cleanup                      = mod_rewrite_free,
+  .set_defaults                 = mod_rewrite_set_defaults,
+  /* handle_uri_raw since matching on uri + query-string */
+  .handle_uri_raw               = mod_rewrite_uri_handler,
+  .handle_physical              = mod_rewrite_physical,
+  .handle_request_reset         = mod_rewrite_con_reset
+};
+
 INIT_FUNC(mod_rewrite_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_rewrite_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_rewrite_plugin_init(plugin *p);
+int mod_rewrite_plugin_init(plugin *p) {
+    memcpy(p, &mod_rewrite_plugin, sizeof(plugin));
+    return 0;
 }
 
 FREE_FUNC(mod_rewrite_free) {
@@ -355,25 +384,4 @@ URIHANDLER_FUNC(mod_rewrite_physical) {
 
 URIHANDLER_FUNC(mod_rewrite_uri_handler) {
     return mod_rewrite_process(r, p_d, 1);
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_rewrite_plugin_init(plugin *p);
-int mod_rewrite_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "rewrite";
-
-	p->init        = mod_rewrite_init;
-	/* it has to stay _raw as we are matching on uri + querystring
-	 */
-
-	p->handle_uri_raw = mod_rewrite_uri_handler;
-	p->handle_physical = mod_rewrite_physical;
-	p->cleanup     = mod_rewrite_free;
-	p->handle_request_reset = mod_rewrite_con_reset;
-	p->set_defaults = mod_rewrite_set_defaults;
-
-	return 0;
 }

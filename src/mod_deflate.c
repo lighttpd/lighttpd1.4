@@ -273,14 +273,40 @@ static void handler_ctx_free(handler_ctx *hctx) {
 	free(hctx);
 }
 
+INIT_FUNC(mod_deflate_init);
+FREE_FUNC(mod_deflate_free);
+SETDEFAULTS_FUNC(mod_deflate_set_defaults);
+REQUEST_FUNC(mod_deflate_handle_response_start);
+REQUEST_FUNC(mod_deflate_cleanup);
+
+static const plugin mod_deflate_plugin = {
+  .name                         = "deflate",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_deflate_init,
+  .cleanup                      = mod_deflate_free,
+  .set_defaults                 = mod_deflate_set_defaults,
+  .handle_response_start        = mod_deflate_handle_response_start,
+  .handle_request_reset         = mod_deflate_cleanup
+};
+
 INIT_FUNC(mod_deflate_init) {
-    plugin_data * const p = ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_deflate_plugin;
+    plugin_data * const p = pd;
   #ifdef USE_ZSTD
     buffer_string_prepare_copy(&p->tmp_buf, ZSTD_CStreamOutSize());
   #else
     buffer_string_prepare_copy(&p->tmp_buf, 65536);
   #endif
-    return p;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_deflate_plugin_init(plugin *p);
+int mod_deflate_plugin_init(plugin *p) {
+    memcpy(p, &mod_deflate_plugin, sizeof(plugin));
+    return 0;
 }
 
 FREE_FUNC(mod_deflate_free) {
@@ -2219,21 +2245,4 @@ static handler_t mod_deflate_cleanup(request_st * const r, void *p_d) {
 	}
 
 	return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_deflate_plugin_init(plugin *p);
-int mod_deflate_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "deflate";
-
-	p->init		= mod_deflate_init;
-	p->cleanup	= mod_deflate_free;
-	p->set_defaults	= mod_deflate_set_defaults;
-	p->handle_request_reset = mod_deflate_cleanup;
-	p->handle_response_start	= mod_deflate_handle_response_start;
-
-	return 0;
 }

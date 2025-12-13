@@ -56,28 +56,50 @@ static handler_t mod_authn_file_plain_digest(request_st *r, void *p_d, http_auth
 static handler_t mod_authn_file_plain_basic(request_st *r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 static handler_t mod_authn_file_htpasswd_basic(request_st *r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 
+INIT_FUNC(mod_authn_file_init);
+SETDEFAULTS_FUNC(mod_authn_file_set_defaults);
+
+static const plugin mod_authn_file_plugin = {
+  .name                         = "authn_file",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_authn_file_init,
+  .set_defaults                 = mod_authn_file_set_defaults
+};
+
 INIT_FUNC(mod_authn_file_init) {
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_authn_file_plugin;
+
+    /* thread-safety todo: pd unsafe for multiple, distinct lighttpd instances*/
+
     static http_auth_backend_t http_auth_backend_htdigest =
       { "htdigest", mod_authn_file_htdigest_basic, mod_authn_file_htdigest_digest, NULL };
     static http_auth_backend_t http_auth_backend_htpasswd =
       { "htpasswd", mod_authn_file_htpasswd_basic, NULL, NULL };
     static http_auth_backend_t http_auth_backend_plain =
       { "plain", mod_authn_file_plain_basic, mod_authn_file_plain_digest, NULL };
-    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_auth_backend_htdigest */
-    http_auth_backend_htdigest.p_d = p;
+    http_auth_backend_htdigest.p_d = pd;
     http_auth_backend_set(&http_auth_backend_htdigest);
 
     /* register http_auth_backend_htpasswd */
-    http_auth_backend_htpasswd.p_d = p;
+    http_auth_backend_htpasswd.p_d = pd;
     http_auth_backend_set(&http_auth_backend_htpasswd);
 
     /* register http_auth_backend_plain */
-    http_auth_backend_plain.p_d = p;
+    http_auth_backend_plain.p_d = pd;
     http_auth_backend_set(&http_auth_backend_plain);
 
-    return p;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_authn_file_plugin_init(plugin *p);
+int mod_authn_file_plugin_init(plugin *p) {
+    memcpy(p, &mod_authn_file_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_authn_file_merge_config_cpv(plugin_config * const pconf, const config_plugin_value_t * const cpv) {
@@ -736,17 +758,4 @@ static handler_t mod_authn_file_htpasswd_basic(request_st * const r, void *p_d, 
     return 0 == rc && http_auth_match_rules(require, username->ptr, NULL, NULL)
       ? HANDLER_GO_ON
       : HANDLER_ERROR;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_authn_file_plugin_init(plugin *p);
-int mod_authn_file_plugin_init(plugin *p) {
-    p->version     = LIGHTTPD_VERSION_ID;
-    p->name        = "authn_file";
-    p->init        = mod_authn_file_init;
-    p->set_defaults= mod_authn_file_set_defaults;
-
-    return 0;
 }

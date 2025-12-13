@@ -37,8 +37,32 @@ typedef struct {
     array split_vals;
 } plugin_data;
 
+INIT_FUNC(mod_evhost_init);
+FREE_FUNC(mod_evhost_free);
+SETDEFAULTS_FUNC(mod_evhost_set_defaults);
+REQUEST_FUNC(mod_evhost_docroot);
+
+static const plugin mod_evhost_plugin = {
+  .name                         = "evhost",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_evhost_init,
+  .cleanup                      = mod_evhost_free,
+  .set_defaults                 = mod_evhost_set_defaults,
+  .handle_docroot               = mod_evhost_docroot
+};
+
 INIT_FUNC(mod_evhost_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_evhost_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_evhost_plugin_init(plugin *p);
+int mod_evhost_plugin_init(plugin *p) {
+    memcpy(p, &mod_evhost_plugin, sizeof(plugin));
+    return 0;
 }
 
 static void mod_evhost_free_path_pieces(const buffer *path_pieces) {
@@ -319,7 +343,7 @@ static void mod_evhost_build_doc_root_path(buffer *b, array *parsed_host, const 
 	buffer_append_slash(b);
 }
 
-static handler_t mod_evhost_uri_handler(request_st * const r, void *p_d) {
+static handler_t mod_evhost_docroot(request_st * const r, void *p_d) {
 	if (buffer_is_blank(&r->uri.authority)) return HANDLER_GO_ON;
 
 	plugin_config pconf;
@@ -343,19 +367,4 @@ static handler_t mod_evhost_uri_handler(request_st * const r, void *p_d) {
 	}
 
 	return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_evhost_plugin_init(plugin *p);
-int mod_evhost_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "evhost";
-	p->init                    = mod_evhost_init;
-	p->set_defaults            = mod_evhost_set_defaults;
-	p->handle_docroot          = mod_evhost_uri_handler;
-	p->cleanup                 = mod_evhost_free;
-
-	return 0;
 }

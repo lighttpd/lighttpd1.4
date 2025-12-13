@@ -209,16 +209,42 @@ mod_authn_dbi_dbconf_setup (server *srv, const array *opts, void **vdata)
 static handler_t mod_authn_dbi_basic(request_st *r, void *p_d, const http_auth_require_t *require, const buffer *username, const char *pw);
 static handler_t mod_authn_dbi_digest(request_st *r, void *p_d, http_auth_info_t *dig);
 
+INIT_FUNC(mod_authn_dbi_init);
+FREE_FUNC(mod_authn_dbi_cleanup);
+SETDEFAULTS_FUNC(mod_authn_dbi_set_defaults);
+
+static const plugin mod_authn_dbi_plugin = {
+  .name                         = "authn_dbi",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_authn_dbi_init,
+  .cleanup                      = mod_authn_dbi_cleanup,
+  .set_defaults                 = mod_authn_dbi_set_defaults
+};
+
+
 INIT_FUNC(mod_authn_dbi_init) {
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_authn_dbi_plugin;
+
+    /* thread-safety todo: pd unsafe for multiple, distinct lighttpd instances*/
+
     static http_auth_backend_t http_auth_backend_dbi =
       { "dbi", mod_authn_dbi_basic, mod_authn_dbi_digest, NULL };
-    plugin_data *p = ck_calloc(1, sizeof(*p));
 
     /* register http_auth_backend_dbi */
-    http_auth_backend_dbi.p_d = p;
+    http_auth_backend_dbi.p_d = pd;
     http_auth_backend_set(&http_auth_backend_dbi);
 
-    return p;
+    return pd;
+}
+
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_authn_dbi_plugin_init(plugin *p);
+int mod_authn_dbi_plugin_init(plugin *p) {
+    memcpy(p, &mod_authn_dbi_plugin, sizeof(plugin));
+    return 0;
 }
 
 
@@ -589,19 +615,4 @@ static handler_t
 mod_authn_dbi_digest (request_st * const r, void *p_d, http_auth_info_t * const ai)
 {
     return mod_authn_dbi_query(r, p_d, ai, NULL);
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_authn_dbi_plugin_init (plugin *p);
-int mod_authn_dbi_plugin_init (plugin *p)
-{
-    p->version          = LIGHTTPD_VERSION_ID;
-    p->name             = "authn_dbi";
-    p->init             = mod_authn_dbi_init;
-    p->cleanup          = mod_authn_dbi_cleanup;
-    p->set_defaults     = mod_authn_dbi_set_defaults;
-
-    return 0;
 }

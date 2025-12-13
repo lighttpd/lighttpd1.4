@@ -513,9 +513,49 @@ mod_mbedtls_session_ticket_key_check (plugin_data *p, const unix_time64_t cur_ts
 #endif /* MBEDTLS_SSL_SESSION_TICKETS */
 
 
+INIT_FUNC(mod_mbedtls_init);
+FREE_FUNC(mod_mbedtls_free);
+SETDEFAULTS_FUNC(mod_mbedtls_set_defaults);
+CONNECTION_FUNC(mod_mbedtls_handle_con_accept);
+CONNECTION_FUNC(mod_mbedtls_handle_con_shut_wr);
+CONNECTION_FUNC(mod_mbedtls_handle_con_close);
+REQUEST_FUNC(mod_mbedtls_handle_uri_raw);
+REQUEST_FUNC(mod_mbedtls_handle_request_env);
+REQUEST_FUNC(mod_mbedtls_handle_request_reset);
+TRIGGER_FUNC(mod_mbedtls_handle_trigger);
+
+static const plugin mod_mbedtls_plugin = {
+  .name                         = "mbedtls",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_mbedtls_init,
+  .cleanup                      = mod_mbedtls_free,
+  .priv_defaults                = mod_mbedtls_set_defaults,
+  .handle_connection_accept     = mod_mbedtls_handle_con_accept,
+  .handle_connection_shut_wr    = mod_mbedtls_handle_con_shut_wr,
+  .handle_connection_close      = mod_mbedtls_handle_con_close,
+  .handle_uri_raw               = mod_mbedtls_handle_uri_raw,
+  .handle_request_env           = mod_mbedtls_handle_request_env,
+  .handle_request_reset         = mod_mbedtls_handle_request_reset,
+  .handle_trigger               = mod_mbedtls_handle_trigger
+};
+
+
 INIT_FUNC(mod_mbedtls_init)
 {
-    return (mod_mbedtls_plugin_data = ck_calloc(1, sizeof(plugin_data)));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_mbedtls_plugin;
+    mod_mbedtls_plugin_data = pd;
+    return pd;
+}
+
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_mbedtls_plugin_init (plugin *p);
+int mod_mbedtls_plugin_init (plugin *p)
+{
+    memcpy(p, &mod_mbedtls_plugin, sizeof(plugin));
+    return 0;
 }
 
 
@@ -3194,29 +3234,6 @@ TRIGGER_FUNC(mod_mbedtls_handle_trigger) {
         mod_mbedtls_refresh_crl_files(srv, p);
 
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_mbedtls_plugin_init (plugin *p);
-int mod_mbedtls_plugin_init (plugin *p)
-{
-    p->version      = LIGHTTPD_VERSION_ID;
-    p->name         = "mbedtls";
-    p->init         = mod_mbedtls_init;
-    p->cleanup      = mod_mbedtls_free;
-    p->priv_defaults= mod_mbedtls_set_defaults;
-
-    p->handle_connection_accept  = mod_mbedtls_handle_con_accept;
-    p->handle_connection_shut_wr = mod_mbedtls_handle_con_shut_wr;
-    p->handle_connection_close   = mod_mbedtls_handle_con_close;
-    p->handle_uri_raw            = mod_mbedtls_handle_uri_raw;
-    p->handle_request_env        = mod_mbedtls_handle_request_env;
-    p->handle_request_reset      = mod_mbedtls_handle_request_reset;
-    p->handle_trigger            = mod_mbedtls_handle_trigger;
-
-    return 0;
 }
 
 

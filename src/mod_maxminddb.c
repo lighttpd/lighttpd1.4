@@ -76,22 +76,6 @@ FREE_FUNC(mod_maxminddb_free);
 REQUEST_FUNC(mod_maxminddb_request_env_handler);
 CONNECTION_FUNC(mod_maxminddb_handle_con_close);
 
-__attribute_cold__
-__declspec_dllexport__
-int mod_maxminddb_plugin_init(plugin *p);
-int mod_maxminddb_plugin_init(plugin *p) {
-    p->version                   = LIGHTTPD_VERSION_ID;
-    p->name                      = "maxminddb";
-
-    p->set_defaults              = mod_maxminddb_set_defaults;
-    p->init                      = mod_maxminddb_init;
-    p->cleanup                   = mod_maxminddb_free;
-    p->handle_request_env        = mod_maxminddb_request_env_handler;
-    p->handle_connection_close   = mod_maxminddb_handle_con_close;
-
-    return 0;
-}
-
 typedef struct {
     int activate;
     const array *env;
@@ -118,9 +102,32 @@ typedef struct {
     array *env;
 } handler_ctx;
 
+static const plugin mod_maxminddb_plugin = {
+  .name                         = "maxminddb",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_maxminddb_init,
+  .cleanup                      = mod_maxminddb_free,
+  .set_defaults                 = mod_maxminddb_set_defaults,
+  .handle_connection_close      = mod_maxminddb_handle_con_close,
+  .handle_request_env           = mod_maxminddb_request_env_handler
+};
+
+
 INIT_FUNC(mod_maxminddb_init)
 {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_maxminddb_plugin;
+    return pd;
+}
+
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_maxminddb_plugin_init (plugin *p);
+int mod_maxminddb_plugin_init (plugin *p)
+{
+    memcpy(p, &mod_maxminddb_plugin, sizeof(plugin));
+    return 0;
 }
 
 

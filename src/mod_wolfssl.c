@@ -604,12 +604,52 @@ ssl_tlsext_status_cb(SSL *ssl, void *arg)
 #endif
 
 
+INIT_FUNC(mod_openssl_init);
+FREE_FUNC(mod_openssl_free);
+SETDEFAULTS_FUNC(mod_openssl_set_defaults);
+CONNECTION_FUNC(mod_openssl_handle_con_accept);
+CONNECTION_FUNC(mod_openssl_handle_con_shut_wr);
+CONNECTION_FUNC(mod_openssl_handle_con_close);
+REQUEST_FUNC(mod_openssl_handle_uri_raw);
+REQUEST_FUNC(mod_openssl_handle_request_env);
+REQUEST_FUNC(mod_openssl_handle_request_reset);
+TRIGGER_FUNC(mod_openssl_handle_trigger);
+
+static const plugin mod_wolfssl_plugin = {
+  .name                         = "openssl",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_openssl_init,
+  .cleanup                      = mod_openssl_free,
+  .priv_defaults                = mod_openssl_set_defaults,
+  .handle_connection_accept     = mod_openssl_handle_con_accept,
+  .handle_connection_shut_wr    = mod_openssl_handle_con_shut_wr,
+  .handle_connection_close      = mod_openssl_handle_con_close,
+  .handle_uri_raw               = mod_openssl_handle_uri_raw,
+  .handle_request_env           = mod_openssl_handle_request_env,
+  .handle_request_reset         = mod_openssl_handle_request_reset,
+  .handle_trigger               = mod_openssl_handle_trigger
+};
+
+
 INIT_FUNC(mod_openssl_init)
 {
   #ifdef DEBUG_WOLFSSL
     wolfSSL_Debugging_ON();
   #endif
-    return (mod_wolfssl_plugin_data = ck_calloc(1, sizeof(plugin_data)));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_wolfssl_plugin;
+    mod_wolfssl_plugin_data = pd;
+    return pd;
+}
+
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_wolfssl_plugin_init (plugin *p);
+int mod_wolfssl_plugin_init (plugin *p)
+{
+    memcpy(p, &mod_wolfssl_plugin, sizeof(plugin));
+    return 0;
 }
 
 
@@ -3938,29 +3978,6 @@ TRIGGER_FUNC(mod_openssl_handle_trigger) {
   #endif
 
     return HANDLER_GO_ON;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_wolfssl_plugin_init (plugin *p);
-int mod_wolfssl_plugin_init (plugin *p)
-{
-    p->version      = LIGHTTPD_VERSION_ID;
-    p->name         = "wolfssl";
-    p->init         = mod_openssl_init;
-    p->cleanup      = mod_openssl_free;
-    p->priv_defaults= mod_openssl_set_defaults;
-
-    p->handle_connection_accept  = mod_openssl_handle_con_accept;
-    p->handle_connection_shut_wr = mod_openssl_handle_con_shut_wr;
-    p->handle_connection_close   = mod_openssl_handle_con_close;
-    p->handle_uri_raw            = mod_openssl_handle_uri_raw;
-    p->handle_request_env        = mod_openssl_handle_request_env;
-    p->handle_request_reset      = mod_openssl_handle_request_reset;
-    p->handle_trigger            = mod_openssl_handle_trigger;
-
-    return 0;
 }
 
 

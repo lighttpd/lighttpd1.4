@@ -66,8 +66,39 @@ typedef struct {
 
 static plugin_data *mod_magnet_plugin_data;
 
+INIT_FUNC(mod_magnet_init);
+FREE_FUNC(mod_magnet_free);
+SETDEFAULTS_FUNC(mod_magnet_set_defaults);
+REQUEST_FUNC(mod_magnet_uri_handler);
+REQUEST_FUNC(mod_magnet_physical);
+REQUEST_FUNC(mod_magnet_handle_subrequest);
+REQUEST_FUNC(mod_magnet_response_start);
+
+static const plugin mod_magnet_plugin = {
+  .name                         = "magnet",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_magnet_init,
+  .cleanup                      = mod_magnet_free,
+  .set_defaults                 = mod_magnet_set_defaults,
+  .handle_uri_clean             = mod_magnet_uri_handler,
+  .handle_physical              = mod_magnet_physical,
+  .handle_subrequest            = mod_magnet_handle_subrequest,
+  .handle_response_start        = mod_magnet_response_start
+};
+
 INIT_FUNC(mod_magnet_init) {
-    return (mod_magnet_plugin_data = ck_calloc(1, sizeof(plugin_data)));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_magnet_plugin;
+    mod_magnet_plugin_data = pd;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_magnet_plugin_init(plugin *p);
+int mod_magnet_plugin_init(plugin *p) {
+    memcpy(p, &mod_magnet_plugin, sizeof(plugin));
+    return 0;
 }
 
 FREE_FUNC(mod_magnet_free) {
@@ -3598,23 +3629,4 @@ SUBREQUEST_FUNC(mod_magnet_handle_subrequest) {
     buffer_reset(&r->physical.path);
     r->handler_module = NULL;
     return HANDLER_COMEBACK;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_magnet_plugin_init(plugin *p);
-int mod_magnet_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "magnet";
-
-	p->init        = mod_magnet_init;
-	p->handle_uri_clean  = mod_magnet_uri_handler;
-	p->handle_physical   = mod_magnet_physical;
-	p->handle_response_start = mod_magnet_response_start;
-	p->handle_subrequest = mod_magnet_handle_subrequest;
-	p->set_defaults  = mod_magnet_set_defaults;
-	p->cleanup     = mod_magnet_free;
-
-	return 0;
 }

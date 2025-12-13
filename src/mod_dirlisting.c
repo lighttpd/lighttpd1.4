@@ -281,9 +281,36 @@ static int mod_dirlisting_exclude(pcre_keyvalue_buffer * const kvb, const char *
         || -1 != ctx.m;
 }
 
+INIT_FUNC(mod_dirlisting_init);
+FREE_FUNC(mod_dirlisting_free);
+SETDEFAULTS_FUNC(mod_dirlisting_set_defaults);
+REQUEST_FUNC(mod_dirlisting_subrequest_start);
+REQUEST_FUNC(mod_dirlisting_subrequest);
+REQUEST_FUNC(mod_dirlisting_reset);
+
+static const plugin mod_dirlisting_plugin = {
+  .name                         = "dirlisting",
+  .version                      = LIGHTTPD_VERSION_ID,
+  .init                         = mod_dirlisting_init,
+  .cleanup                      = mod_dirlisting_free,
+  .set_defaults                 = mod_dirlisting_set_defaults,
+  .handle_subrequest_start      = mod_dirlisting_subrequest_start,
+  .handle_subrequest            = mod_dirlisting_subrequest,
+  .handle_request_reset         = mod_dirlisting_reset
+};
 
 INIT_FUNC(mod_dirlisting_init) {
-    return ck_calloc(1, sizeof(plugin_data));
+    plugin_data * const pd = ck_calloc(1, sizeof(plugin_data));
+    pd->self = &mod_dirlisting_plugin;
+    return pd;
+}
+
+__attribute_cold__
+__declspec_dllexport__
+int mod_dirlisting_plugin_init(plugin *p);
+int mod_dirlisting_plugin_init(plugin *p) {
+    memcpy(p, &mod_dirlisting_plugin, sizeof(plugin));
+    return 0;
 }
 
 FREE_FUNC(mod_dirlisting_free) {
@@ -1940,22 +1967,4 @@ static void mod_dirlisting_cache_stream (request_st * const r, handler_ctx * con
         unlink(hctx->jfn);
     free(hctx->jfn);
     hctx->jfn = NULL;
-}
-
-
-__attribute_cold__
-__declspec_dllexport__
-int mod_dirlisting_plugin_init(plugin *p);
-int mod_dirlisting_plugin_init(plugin *p) {
-	p->version     = LIGHTTPD_VERSION_ID;
-	p->name        = "dirlisting";
-
-	p->init        = mod_dirlisting_init;
-	p->handle_subrequest_start = mod_dirlisting_subrequest_start;
-	p->handle_subrequest       = mod_dirlisting_subrequest;
-	p->handle_request_reset    = mod_dirlisting_reset;
-	p->set_defaults  = mod_dirlisting_set_defaults;
-	p->cleanup     = mod_dirlisting_free;
-
-	return 0;
 }
