@@ -52,28 +52,51 @@ typedef enum {
 	PLUGIN_FUNC_SIZEOF
 } plugin_t;
 
-__attribute_malloc__
-__attribute_returns_nonnull__
-static plugin *plugin_init(void) {
-	return ck_calloc(1, sizeof(plugin));
-}
-
-static void plugin_free(plugin *p) {
-    if (NULL == p) return; /*(should not happen w/ current usage)*/
-  #if !defined(LIGHTTPD_STATIC)
-    if (p->lib) {
-     #if defined(HAVE_VALGRIND_VALGRIND_H)
-     /*if (!RUNNING_ON_VALGRIND) */
-     #endif
+#ifndef LIGHTTPD_STATIC
+__attribute_cold__
+static void plugin_unload(void *lib) {
+    if (NULL == lib) return;
+    #if defined(HAVE_VALGRIND_VALGRIND_H)
+    /*if (!RUNNING_ON_VALGRIND) */
+    #endif
       #ifdef _WIN32
-        FreeLibrary(p->lib);
+        FreeLibrary(lib);
       #else
-        dlclose(p->lib);
+        dlclose(lib);
       #endif
+}
+#endif
+
+static int plugin_data_init(server * const srv, const plugin * const p, void *lib, int i) {
+  #ifndef LIGHTTPD_STATIC
+    if (p->version != LIGHTTPD_VERSION_ID) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "plugin-version doesn't match lighttpd-version for mod_%s", p->name);
+        return 0;
     }
   #endif
 
-    free(p);
+    plugin_data_base * const pd = (NULL != p->init)
+      ? p->init()
+      : ck_calloc(1, sizeof(plugin_data_base));
+    if (NULL == pd) {
+        log_error(srv->errh, __FILE__, __LINE__,
+          "plugin-init failed for mod_%s", p->name);
+        return 0;
+    }
+
+    pd->id = i + 1;
+    pd->lib = lib;
+    if (!pd->self) {/*third-party plugins not yet changed for lighttpd 1.4.83*/
+        plugin * const cp = ck_calloc(1, sizeof(plugin));
+        memcpy(cp, p, sizeof(plugin));
+        cp->lib = lib;  /*(flag to indicate legacy plugin code)*/
+        pd->self = cp;
+    }
+
+    /*(note: allocated w/ appropriate size at top of plugins_load())*/
+    ((plugin_data_base **)srv->plugins.ptr)[srv->plugins.used++] = pd;
+    return 1;
 }
 
 /**
@@ -111,22 +134,22 @@ static const plugin_load_functions load_functions[] = {
 
 int plugins_load(server *srv) {
 	ck_realloc_u32(&srv->plugins.ptr, 0,
-	               srv->srvconf.modules->used, sizeof(plugin *));
+	               srv->srvconf.modules->used, sizeof(plugin_data_base *));
 
 	for (uint32_t i = 0; i < srv->srvconf.modules->used; ++i) {
-		data_string *ds = (data_string *)srv->srvconf.modules->data[i];
-		char *module = ds->value.ptr;
+		const data_string * const ds = (data_string *)srv->srvconf.modules->data[i];
+		const char * const module = ds->value.ptr;
 
 		uint32_t j;
 		for (j = 0; load_functions[j].name; ++j) {
 			if (0 == strcmp(load_functions[j].name, module)) {
-				plugin * const p = plugin_init();
-				if ((*load_functions[j].plugin_init)(p)) {
+				plugin p;
+				memset(&p, '\0', sizeof(p));
+				if ((*load_functions[j].plugin_init)(&p)
+				    || !plugin_data_init(srv, &p, NULL, i)) {
 					log_error(srv->errh, __FILE__, __LINE__, "%s plugin init failed", module);
-					plugin_free(p);
 					return -1;
 				}
-				((plugin **)srv->plugins.ptr)[srv->plugins.used++] = p;
 				break;
 			}
 		}
@@ -151,7 +174,7 @@ int plugins_load(server *srv) {
 
 int plugins_load(server *srv) {
 	ck_realloc_u32(&srv->plugins.ptr, 0,
-	               srv->srvconf.modules->used, sizeof(plugin *));
+	               srv->srvconf.modules->used, sizeof(plugin_data_base *));
 
 	buffer * const tb = srv->tmp_buf;
   #ifdef _WIN32
@@ -239,14 +262,13 @@ int plugins_load(server *srv) {
 	  #endif
 	  }
 
-		plugin *p = plugin_init();
-		p->lib = lib;
-		if ((*init)(p)) {
+		plugin p;
+		memset(&p, '\0', sizeof(p));
+		if ((*init)(&p) || !plugin_data_init(srv, &p, lib, i)) {
 			log_error(srv->errh, __FILE__, __LINE__, "%s plugin init failed", module->ptr);
-			plugin_free(p);
+			plugin_unload(lib);
 			return -1;
 		}
-		((plugin **)srv->plugins.ptr)[srv->plugins.used++] = p;
 	}
 
 	return 0;
@@ -406,18 +428,12 @@ handler_t plugins_call_handle_waitpid(server *srv, pid_t pid, int status) {
 }
 
 static void plugins_call_cleanup(server * const srv) {
-    plugin ** const ps = srv->plugins.ptr;
+    plugin_data_base ** const ps = srv->plugins.ptr;
     for (uint32_t i = 0; i < srv->plugins.used; ++i) {
-        plugin *p = ps[i];
-        if (NULL == p) continue;
-        if (NULL != p->data) {
-            plugin_data_base *pd = p->data;
-            if (p->cleanup)
-                p->cleanup(p->data);
-            free(pd->cvlist);
-            free(pd);
-            p->data = NULL;
-        }
+        plugin_data_base * const pd = ps[i];
+        if (pd->self->cleanup)
+            pd->self->cleanup(pd);
+        free(pd->cvlist);
     }
 }
 
@@ -447,33 +463,17 @@ static void plugins_call_init_slot(server *srv, pl_cb_t fn, void *data, const ui
 }
 
 handler_t plugins_call_init(server *srv) {
-	plugin ** const ps = srv->plugins.ptr;
+	/* note: p->init() is called during plugins_load() -> plugin_data_init()
+	 * but the historical name of this function remains */
+	plugin_data_base ** const ps = srv->plugins.ptr;
 	uint16_t offsets[PLUGIN_FUNC_SIZEOF];
 	memset(offsets, 0, sizeof(offsets));
 
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
-		/* check which calls are supported */
+		plugin_data_base * const pd = ps[i];
+		const plugin * const p = pd->self;
 
-		plugin *p = ps[i];
-
-		if (p->init) {
-			if (NULL == (p->data = p->init())) {
-				log_error(srv->errh, __FILE__, __LINE__,
-				  "plugin-init failed for mod_%s", p->name);
-				return HANDLER_ERROR;
-			}
-
-			((plugin_data_base *)(p->data))->self = p;
-			((plugin_data_base *)(p->data))->id = i + 1;
-
-			if (p->version != LIGHTTPD_VERSION_ID) {
-				log_error(srv->errh, __FILE__, __LINE__,
-				  "plugin-version doesn't match lighttpd-version for mod_%s", p->name);
-				return HANDLER_ERROR;
-			}
-		}
-
-		if (p->priv_defaults && HANDLER_ERROR==p->priv_defaults(srv, p->data)) {
+		if (p->priv_defaults && HANDLER_ERROR == p->priv_defaults(srv, pd)) {
 			return HANDLER_ERROR;
 		}
 
@@ -544,46 +544,48 @@ handler_t plugins_call_init(server *srv) {
 
 	/* add handle_uri_raw before handle_uri_clean, but in same slot */
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
-		plugin * const p = ps[i];
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_uri_raw, p->data,
+		plugin_data_base * const pd = ps[i];
+		const plugin * const p = pd->self;
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_uri_raw, pd,
 					offsets[PLUGIN_FUNC_HANDLE_URI_CLEAN]);
 	}
 
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
-		plugin * const p = ps[i];
+		plugin_data_base * const pd = ps[i];
+		const plugin * const p = pd->self;
 
 		if (!p->handle_uri_raw)
-			plugins_call_init_slot(srv, (pl_cb_t)p->handle_uri_clean, p->data,
+			plugins_call_init_slot(srv, (pl_cb_t)p->handle_uri_clean, pd,
 						offsets[PLUGIN_FUNC_HANDLE_URI_CLEAN]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_request_env, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_request_env, pd,
 					offsets[PLUGIN_FUNC_HANDLE_REQUEST_ENV]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_request_done, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_request_done, pd,
 					offsets[PLUGIN_FUNC_HANDLE_REQUEST_DONE]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_connection_accept, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_connection_accept, pd,
 					offsets[PLUGIN_FUNC_HANDLE_CONNECTION_ACCEPT]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_connection_shut_wr, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_connection_shut_wr, pd,
 					offsets[PLUGIN_FUNC_HANDLE_CONNECTION_SHUT_WR]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_connection_close, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_connection_close, pd,
 					offsets[PLUGIN_FUNC_HANDLE_CONNECTION_CLOSE]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_trigger, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_trigger, pd,
 					offsets[PLUGIN_FUNC_HANDLE_TRIGGER]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_sighup, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_sighup, pd,
 					offsets[PLUGIN_FUNC_HANDLE_SIGHUP]);
-		plugins_call_init_slot(srv, (pl_cb_t)(uintptr_t)p->handle_waitpid, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)(uintptr_t)p->handle_waitpid, pd,
 					offsets[PLUGIN_FUNC_HANDLE_WAITPID]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_subrequest_start, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_subrequest_start, pd,
 					offsets[PLUGIN_FUNC_HANDLE_SUBREQUEST_START]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_response_start, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_response_start, pd,
 					offsets[PLUGIN_FUNC_HANDLE_RESPONSE_START]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_docroot, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_docroot, pd,
 					offsets[PLUGIN_FUNC_HANDLE_DOCROOT]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_physical, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_physical, pd,
 					offsets[PLUGIN_FUNC_HANDLE_PHYSICAL]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->handle_request_reset, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->handle_request_reset, pd,
 					offsets[PLUGIN_FUNC_HANDLE_REQUEST_RESET]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->set_defaults, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->set_defaults, pd,
 					offsets[PLUGIN_FUNC_SET_DEFAULTS]);
-		plugins_call_init_slot(srv, (pl_cb_t)p->worker_init, p->data,
+		plugins_call_init_slot(srv, (pl_cb_t)p->worker_init, pd,
 					offsets[PLUGIN_FUNC_WORKER_INIT]);
 	}
 
@@ -601,11 +603,25 @@ void plugins_free(server *srv) {
 		srv->plugin_slots = NULL;
 	}
 
+	plugin_data_base ** const ps = srv->plugins.ptr;
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
-		plugin_free(((plugin **)srv->plugins.ptr)[i]);
+		plugin_data_base * const pd = ps[i];
+
+		/* third-party plugins not yet changed for lighttpd 1.4.83 */
+		if (pd->self->lib) { /*(flag to indicate legacy plugin code)*/
+			plugin *p;
+			*(const plugin **)&p = pd->self;
+			free(p);
+		}
+
+	  #ifndef LIGHTTPD_STATIC
+		plugin_unload(pd->lib);
+	  #endif
+		free(pd);
 	}
 	free(srv->plugins.ptr);
 	srv->plugins.ptr = NULL;
 	srv->plugins.used = 0;
+
 	array_free_data(&plugin_stats);
 }

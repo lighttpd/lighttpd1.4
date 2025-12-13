@@ -1624,9 +1624,9 @@ URIHANDLER_FUNC(mod_ssi_physical_path) {
 	if (NULL == pconf.ssi_extension) return HANDLER_GO_ON;
 
 	if (array_match_value_suffix(pconf.ssi_extension, &r->physical.path)) {
-		const plugin_data * const p = p_d;
-		r->handler_module = p->self;
-		r->plugin_ctx[p->id] = handler_ctx_init(&pconf, p_d, r->conf.errh);
+		plugin_data_base * const pd = p_d;
+		r->handler_module = pd;
+		r->plugin_ctx[pd->id] = handler_ctx_init(&pconf, p_d, r->conf.errh);
 	}
 
 	return HANDLER_GO_ON;

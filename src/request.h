@@ -14,6 +14,7 @@
 struct chunkqueue;      /* declaration */
 struct cond_cache_t;    /* declaration */
 struct cond_match_t;    /* declaration */
+struct plugin_data_base;/* declaration */
 struct stat_cache_entry;/* declaration */
 
 typedef struct request_config {
@@ -145,7 +146,7 @@ struct request_st {
     http_method_t http_method;
     http_version_t http_version;
 
-    const plugin *handler_module;
+    struct plugin_data_base *handler_module;
     void **plugin_ctx;           /* plugin connection specific config */
     connection *con;
 

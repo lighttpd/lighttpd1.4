@@ -1880,7 +1880,7 @@ static void gw_connection_close(gw_handler_ctx * const hctx, request_st * const 
     handler_ctx_free(hctx);
     r->plugin_ctx[p->id] = NULL;
 
-    if (r->handler_module == p->self) {
+    if (r->handler_module == (plugin_data_base *)p) {
         http_response_backend_done(r);
     }
 }
@@ -2836,7 +2836,7 @@ handler_t gw_check_extension(request_st * const r, gw_plugin_config * const pcon
 
     r->plugin_ctx[p->id] = hctx;
 
-    r->handler_module = p->self;
+    r->handler_module = (plugin_data_base *)p;
 
     if (r->conf.log_request_handling) {
         log_debug(r->conf.errh, __FILE__, __LINE__,

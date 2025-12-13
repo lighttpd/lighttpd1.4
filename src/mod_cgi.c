@@ -500,7 +500,7 @@ static void cgi_connection_close(handler_ctx *hctx) {
 		chunkqueue_set_tempdirs(&r->reqbody_queue, 0); /* reset sz */
 
 	/* finish response (if not already r->resp_body_started, r->resp_body_finished) */
-	if (r->handler_module == p->self) {
+	if (r->handler_module == (plugin_data_base *)p) {
 		http_response_backend_done(r);
 	}
 }
@@ -1122,7 +1122,7 @@ URIHANDLER_FUNC(cgi_is_handled) {
 		hctx->opts.pdata = hctx;
 		hctx->opts.headers = cgi_response_headers;
 		r->plugin_ctx[p->id] = hctx;
-		r->handler_module = p->self;
+		r->handler_module = (plugin_data_base *)p;
 	}
 
 	return HANDLER_GO_ON;

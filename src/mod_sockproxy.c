@@ -155,9 +155,9 @@ static handler_t mod_sockproxy_connection_accept(connection *con, void *p_d) {
 	rc = gw_check_extension(r, &pconf, p_d, 1, 0);
 	if (HANDLER_GO_ON != rc) return rc;
 
-	const plugin_data * const p = p_d;
-	if (r->handler_module == p->self) {
-		handler_ctx *hctx = r->plugin_ctx[p->id];
+	plugin_data_base * const pd = p_d;
+	if (r->handler_module == pd) {
+		handler_ctx *hctx = r->plugin_ctx[pd->id];
 		hctx->opts.backend = BACKEND_PROXY;
 		hctx->create_env = sockproxy_create_env_connect;
 		hctx->response = chunk_buffer_acquire();

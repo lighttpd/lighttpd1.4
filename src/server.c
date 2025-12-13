@@ -1712,7 +1712,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	/* mod_indexfile should be listed in server.modules prior to dynamic handlers */
 	uint32_t i = 0;
 	for (const char *pname = NULL; i < srv->plugins.used; ++i) {
-		plugin *p = ((plugin **)srv->plugins.ptr)[i];
+		const plugin *p = ((plugin_data_base **)srv->plugins.ptr)[i]->self;
 		if (0 == strcmp(p->name, "indexfile")) {
 			if (pname)
 				log_warn(srv->errh, __FILE__, __LINE__,

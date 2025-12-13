@@ -597,16 +597,16 @@ static handler_t mod_wstunnel_check_extension(request_st * const r, void *p_d) {
     handler_t rc =
       gw_check_extension(r, (gw_plugin_config *)&pconf,
                          p_d, 1, sizeof(handler_ctx));
-    const plugin_data * const p = p_d;
-    return (HANDLER_GO_ON == rc && r->handler_module == p->self)
-      ? wstunnel_handler_setup(r, r->plugin_ctx[p->id], &pconf)
+    const plugin_data_base * const pd = p_d;
+    return (HANDLER_GO_ON == rc && r->handler_module == pd)
+      ? wstunnel_handler_setup(r, r->plugin_ctx[pd->id], &pconf)
       : rc;
 }
 
 TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
     gw_handle_trigger(srv, p_d);
 
-    const plugin_data * const p = p_d;
+    plugin_data_base * const pd = p_d;
     const unix_time64_t cur_ts = log_monotonic_secs + 1;
     struct hxcon h1c;
     h1c.rused = 1;
@@ -615,8 +615,8 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
         hxcon * const hx = con->hx ? con->hx : (h1c.r[0] = &con->request, &h1c);
         for (uint32_t i = 0, rused = hx->rused; i < rused; ++i) {
             request_st * const r = hx->r[i];
-            handler_ctx * const hctx = r->plugin_ctx[p->id];
-            if (NULL == hctx || r->handler_module != p->self)
+            handler_ctx * const hctx = r->plugin_ctx[pd->id];
+            if (NULL == hctx || r->handler_module != pd)
                 continue;
 
             if (hctx->gw.state != GW_STATE_WRITE && hctx->gw.state != GW_STATE_READ)
@@ -629,7 +629,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
                   (cur_ts - con->read_idle_ts > r->conf.max_read_idle), 0)) {
                 DEBUG_LOG_INFO("timeout client (fd=%d)", con->fd);
                 mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, NULL, 0);
-                gw_handle_request_reset(r, p_d);
+                gw_handle_request_reset(r, pd);
                 joblist_append(con);
                 continue;
             }

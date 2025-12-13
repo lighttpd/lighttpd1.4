@@ -724,7 +724,7 @@ static handler_t mod_status_handle_server_config(request_st * const r) {
 	buffer * const tb = r->tmp_buf;
 	buffer_clear(tb);
 	for (uint32_t i = 0; i < srv->plugins.used; ++i) {
-		const char *name = ((plugin **)srv->plugins.ptr)[i]->name;
+		const char *name = ((plugin_data_base **)srv->plugins.ptr)[i]->self->name;
 		if (i != 0) {
 			buffer_append_string_len(tb, CONST_STR_LEN("<br />"));
 		}

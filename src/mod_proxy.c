@@ -1129,9 +1129,9 @@ static handler_t mod_proxy_check_extension(request_st * const r, void *p_d) {
 	                     p_d, 1, sizeof(handler_ctx));
 	if (HANDLER_GO_ON != rc) return rc;
 
-	const plugin_data * const p = p_d;
-	if (r->handler_module == p->self) {
-		handler_ctx *hctx = r->plugin_ctx[p->id];
+	const plugin_data_base * const pd = p_d;
+	if (r->handler_module == pd) {
+		handler_ctx *hctx = r->plugin_ctx[pd->id];
 		hctx->gw.create_env = proxy_create_env;
 		hctx->gw.response = chunk_buffer_acquire();
 		hctx->gw.opts.backend = BACKEND_PROXY;

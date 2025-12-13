@@ -1598,7 +1598,7 @@ URIHANDLER_FUNC(mod_dirlisting_subrequest_start) {
 	}
 
 	r->plugin_ctx[p->id] = hctx;
-	r->handler_module = p->self;
+	r->handler_module = (plugin_data_base *)p;
 	handler_t rc = mod_dirlisting_subrequest(r, p);
 
 	if (rc == HANDLER_WAIT_FOR_EVENT && pconf.auto_layout

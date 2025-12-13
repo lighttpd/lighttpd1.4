@@ -35,14 +35,10 @@
 #define PLUGIN_DATA        int id; \
                            int nconfig; \
                            config_plugin_value_t *cvlist; \
-                           struct plugin *self
-
-typedef struct {
-	PLUGIN_DATA;
-} plugin_data_base;
+                           const struct plugin *self; \
+                           void *lib        /* dlopen handle */
 
 struct plugin {
-	void *data;
 	                                                                      /* is called ... */
 	handler_t (* handle_uri_raw)           (request_st *r, void *p_d);  /* after uri_raw is set */
 	handler_t (* handle_uri_clean)         (request_st *r, void *p_d);  /* after uri is set */
@@ -71,7 +67,13 @@ struct plugin {
 
 	const char *name;/* name of the plugin */
 	size_t version;
-	void *lib;       /* dlopen handle */
+	void *lib;       /* deprecated; do not use */
 };
+typedef struct plugin plugin;
+
+struct plugin_data_base {
+	PLUGIN_DATA;
+};
+typedef struct plugin_data_base plugin_data_base;
 
 #endif

@@ -186,13 +186,11 @@ __attribute_cold__
 static void request_plugin_ctx_check(request_st * const r, server * const srv) {
     /* plugins should have cleaned themselves up */
     for (uint32_t i = 0, used = srv->plugins.used; i < used; ++i) {
-        plugin *p = ((plugin **)(srv->plugins.ptr))[i];
-        plugin_data_base *pd = p->data;
-        if (!pd) continue;
+        plugin_data_base *pd = ((plugin_data_base **)(srv->plugins.ptr))[i];
         if (NULL == r->plugin_ctx[pd->id]
             && NULL == r->con->plugin_ctx[pd->id]) continue;
         log_error(r->conf.errh, __FILE__, __LINE__,
-          "missing cleanup in %s", p->name);
+          "missing cleanup in %s", pd->self->name);
         r->plugin_ctx[pd->id] = NULL;
         r->con->plugin_ctx[pd->id] = NULL;
     }

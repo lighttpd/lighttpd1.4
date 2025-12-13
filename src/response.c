@@ -28,12 +28,12 @@
 static handler_t
 http_response_prepare_handler (request_st * const r)
 {
-    const plugin *p = r->handler_module;
+    plugin_data_base * const pd = r->handler_module;
   #if 0
-    if (NULL == p)
+    if (NULL == pd)
         return HANDLER_GO_ON;
   #endif
-    handler_t rc = p->handle_subrequest(r, p->data);
+    handler_t rc = pd->self->handle_subrequest(r, pd);
     return rc != HANDLER_GO_ON ? rc : HANDLER_FINISHED;
     /*(http_response_handler() handles HANDLER_GO_ON as HANDLER_FINISHED
      * so translate to HANDLER_FINISHED so that intermediate fn ptr
@@ -412,7 +412,7 @@ http_response_prepare_subrequest_start (request_st * const r, void *unused)
      * then gw_backend unset r->handler_module to continue processing from this
      * routine (repeating above funcs, too, which is ok). */
     /* NOTE: if used in fn ptr list, http_response_prepare_handler()
-     * must be modified to check: if (NULL == p) return HANDLER_GO_ON; */
+     * must be modified to check: if (NULL == pd) return HANDLER_GO_ON; */
     if (r->handler_module)
         rc = http_response_prepare_handler(r);
     if (HANDLER_GO_ON != rc) return rc;
@@ -951,9 +951,9 @@ http_response_handler (request_st * const r)
 {
   int rc;
   do {
-    const plugin *p = r->handler_module;
-    if (NULL != p) /* continue response handler */
-        rc = p->handle_subrequest(r, p->data);
+    plugin_data_base * const pd = r->handler_module;
+    if (NULL != pd) /* continue response handler */
+        rc = pd->self->handle_subrequest(r, pd);
     else if (__builtin_expect( (r->http_status > 200), 0)) { /* yes, > 200 */
         /* cease processing if error status is set
          * e.g. error parsing request headers or in http_response_comeback() */

@@ -2617,10 +2617,10 @@ static int magnet_reqbody(lua_State *L) {
                   ~(FDEVENT_STREAM_REQUEST|FDEVENT_STREAM_REQUEST_BUFMIN);
                 r->conf.stream_request_body |=
                   FDEVENT_STREAM_REQUEST_CONFIGURED;
-                r->handler_module = mod_magnet_plugin_data->self;
+                r->handler_module = (plugin_data_base *)mod_magnet_plugin_data;
                 lua_pushboolean(L, 0);
             }
-            else if (0 == strcmp(r->handler_module->name, "security3")) {
+            else if (0 == strcmp(r->handler_module->self->name, "security3")) {
                 /*(mod_security3 uses similar technique to collect req body)*/
                 lua_pushboolean(L, 0);
             }
@@ -2630,7 +2630,8 @@ static int magnet_reqbody(lua_State *L) {
                   "(prefer to collect in magnet.attract-raw-url-to config) "
                   "(perhaps load mod_magnet earlier in server.modules, "
                   "before mod_%s; or require r.req_env['REMOTE_USER'] before "
-                  "attempting r.req_body.collect?)", r->handler_module->name);
+                  "attempting r.req_body.collect?)",
+                  r->handler_module->self->name);
                 lua_pushnil(L);
             }
             return 1;
@@ -3485,7 +3486,7 @@ magnet_attract (request_st * const r, plugin_config * const pconf, script * cons
 			}
 			/*lua_pop(L, 1);*//* defer to later */
 			if (!chunkqueue_is_empty(&r->write_queue)) {
-				r->handler_module = mod_magnet_plugin_data->self;
+				r->handler_module = (plugin_data_base *)mod_magnet_plugin_data;
 			}
 			http_status_set_fin(r, lua_return_value);
 			result = HANDLER_FINISHED;

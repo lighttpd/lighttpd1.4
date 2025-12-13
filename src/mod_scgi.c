@@ -255,9 +255,9 @@ static handler_t scgi_check_extension(request_st * const r, void *p_d, int uri_p
 	handler_t rc = gw_check_extension(r, &pconf, p_d, uri_path_handler, 0);
 	if (HANDLER_GO_ON != rc) return rc;
 
-	const plugin_data * const p = p_d;
-	if (r->handler_module == p->self) {
-		handler_ctx *hctx = r->plugin_ctx[p->id];
+	const plugin_data_base * const pd = p_d;
+	if (r->handler_module == pd) {
+		handler_ctx *hctx = r->plugin_ctx[pd->id];
 		hctx->opts.backend = BACKEND_SCGI;
 		hctx->create_env = scgi_create_env;
 		hctx->response = chunk_buffer_acquire();

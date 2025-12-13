@@ -3546,7 +3546,7 @@ h2_send_goaway_delayed (connection * const con)
 }
 
 
-#include "plugin.h"     /* const plugin * const p = r->handler_module; */
+#include "plugin.h"     /* plugin_data_base * const pd = r->handler_module; */
 
 static int
 h2_process_streams (connection * const con,
@@ -3628,8 +3628,8 @@ h2_process_streams (connection * const con,
                 /* specialized connection_handle_write_state() */
 
                 if (r->handler_module && !r->resp_body_finished) {
-                    const plugin * const p = r->handler_module;
-                    if (p->handle_subrequest(r, p->data)
+                    plugin_data_base * const pd = r->handler_module;
+                    if (pd->self->handle_subrequest(r, pd)
                         > HANDLER_WAIT_FOR_EVENT) {
                       /*case HANDLER_COMEBACK:*//*error after send resp hdrs*/
                       /*case HANDLER_ERROR:*/

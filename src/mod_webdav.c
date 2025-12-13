@@ -6181,7 +6181,7 @@ PHYSICALPATH_FUNC(mod_webdav_physical_handler)
         break;
     }
 
-    r->handler_module = ((plugin_data *)p_d)->self;
+    r->handler_module = (plugin_data_base *)p_d;
     r->conf.stream_request_body &=
       ~(FDEVENT_STREAM_REQUEST | FDEVENT_STREAM_REQUEST_BUFMIN);
     r->plugin_ctx[((plugin_data *)p_d)->id] = &pconf;
