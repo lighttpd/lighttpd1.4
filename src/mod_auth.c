@@ -1058,7 +1058,7 @@ mod_auth_append_nonce (buffer *b, unix_time64_t cur_ts, const struct http_auth_r
 
 
 static void
-mod_auth_digest_www_authenticate (buffer *b, unix_time64_t cur_ts, const struct http_auth_require_t *require, int nonce_stale)
+mod_auth_digest_www_authenticate (request_st * const r, unix_time64_t cur_ts, const struct http_auth_require_t *require, int nonce_stale)
 {
     int algos = nonce_stale ? nonce_stale : require->algorithm;
     int n = 0;
@@ -1088,17 +1088,17 @@ mod_auth_digest_www_authenticate (buffer *b, unix_time64_t cur_ts, const struct 
         ++n;
     }
 
-    buffer_clear(b);
+    buffer * const b = r->tmp_buf;
     for (int i = 0; i < n; ++i) {
         struct const_iovec iov[] = {
-          { CONST_STR_LEN("\r\nWWW-Authenticate: ") }
-         ,{ CONST_STR_LEN("Digest realm=\"") }
+          { CONST_STR_LEN("Digest realm=\"") }
          ,{ BUF_PTR_LEN(require->realm) }
          ,{ CONST_STR_LEN("\", charset=\"UTF-8\", algorithm=") }
          ,{ algoname[i], algolen[i] }
          ,{ CONST_STR_LEN(", nonce=\"") }
         };
-        buffer_append_iovec(b, iov+(0==i), sizeof(iov)/sizeof(*iov)-(0==i));
+        buffer_clear(b);
+        buffer_append_iovec(b, iov, sizeof(iov)/sizeof(*iov));
         mod_auth_append_nonce(b, cur_ts, require, algoid[i], NULL);
         buffer_append_string_len(b, CONST_STR_LEN("\", qop=\"auth\""));
         if (require->userhash) {
@@ -1107,6 +1107,9 @@ mod_auth_digest_www_authenticate (buffer *b, unix_time64_t cur_ts, const struct 
         if (nonce_stale) {
             buffer_append_string_len(b, CONST_STR_LEN(", stale=true"));
         }
+        http_header_response_insert(r, HTTP_HEADER_WWW_AUTHENTICATE,
+                                    CONST_STR_LEN("WWW-Authenticate"),
+                                    BUF_PTR_LEN(b));
     }
 }
 
@@ -1115,10 +1118,7 @@ __attribute_noinline__
 static handler_t
 mod_auth_send_401_unauthorized_digest(request_st * const r, const struct http_auth_require_t * const require, int nonce_stale)
 {
-    mod_auth_digest_www_authenticate(
-      http_header_response_set_ptr(r, HTTP_HEADER_WWW_AUTHENTICATE,
-                                   CONST_STR_LEN("WWW-Authenticate")),
-      log_epoch_secs, require, nonce_stale);
+    mod_auth_digest_www_authenticate(r, log_epoch_secs, require, nonce_stale);
     return http_status_set_err(r, 401); /* Unauthorized */
 }
 
