@@ -1410,7 +1410,7 @@ if test "$WITH_LUA" != no; then
       LUA_CFLAGS="-I$WITH_LUA"
     fi
   else
-    for luaname in lua54 lua5.4 lua-5.4 lua53 lua5.3 lua-5.3 lua52 lua5.2 lua-5.2 lua51 lua5.1 lua-5.1 lua; do
+    for luaname in lua55 lua5.5 lua-5.5 lua54 lua5.4 lua-5.4 lua53 lua5.3 lua-5.3 lua52 lua5.2 lua-5.2 lua51 lua5.1 lua-5.1 lua; do
       if test "$found_lua" = "0"; then
         PKG_CHECK_MODULES([LUA], [$luaname >= 5.1],
           [found_lua=1],

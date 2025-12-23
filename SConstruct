@@ -581,7 +581,7 @@ if 1:
 
 	if env['with_lua']:
 		found_lua = False
-		for lua_name in ['lua54','lua5.4','lua-5.4','lua53','lua5.3','lua-5.3','lua52','lua5.2','lua-5.2','lua51','lua5.1','lua-5.1','lua']:
+		for lua_name in ['lua55','lua5.5','lua-5.5','lua54','lua5.4','lua-5.4','lua53','lua5.3','lua-5.3','lua52','lua5.2','lua-5.2','lua51','lua5.1','lua-5.1','lua']:
 			print("Searching for lua: " + lua_name + " >= 5.0")
 			if autoconf.CheckParseConfigForLib('LIBLUA', "pkg-config '" + lua_name + " >= 5.0' --cflags --libs"):
 				autoconf.env.Append(CPPFLAGS = [ '-DHAVE_LUA_H' ])
