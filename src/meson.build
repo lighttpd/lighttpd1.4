@@ -295,7 +295,7 @@ if get_option('with_lua')
 		liblua = dependency(lua_version, required: true)
 	else
 		found_lua = false
-		foreach l: ['lua54','lua5.4','lua-5.4','lua53','lua5.3','lua-5.3','lua52','lua5.2','lua-5.2','lua51','lua5.1','lua-5.1','lua']
+		foreach l: ['lua55', 'lua5.5', 'lua-5.5', 'lua54','lua5.4','lua-5.4','lua53','lua5.3','lua-5.3','lua52','lua5.2','lua-5.2','lua51','lua5.1','lua-5.1','lua']
 			liblua = dependency(l, required: false)
 			if not(liblua.found())
 				liblua = compiler.find_library(l, required: false)
