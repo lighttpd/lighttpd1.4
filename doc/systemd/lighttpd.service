@@ -61,6 +61,8 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 #   could break CGI scripts or WebDAV writing to home paths
 # Note: RestrictSUIDSGID=yes
 #   could break CGI scripts or WebDAV setting suid/sgid permission bit on files
+# Note: NoNewPrivileges=yes
+#   will disallow unprivileged scripts from using sudo
 
 KeyringMode=private
 LockPersonality=yes
