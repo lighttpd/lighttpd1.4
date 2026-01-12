@@ -1027,6 +1027,8 @@ static void config_mimetypes_default(array * const a) {
        ,".dtd",   "application/xml-dtd"
        ,".pdf",   "application/pdf"
        ,".xhtml", "application/xhtml+xml"
+       ,".xsl",   "application/xslt+xml"
+       ,".xslt",  "application/xslt+xml"
 
        ,".eot",   "application/vnd.ms-fontobject"
        ,".otf",   "font/otf"
@@ -1039,6 +1041,7 @@ static void config_mimetypes_default(array * const a) {
        ,".conf",  "text/plain"
        ,".log",   "text/plain"
        ,".csv",   "text/csv"
+       ,".rst",   "text/x-rst"
        ,".rtf",   "text/rtf"
        ,".ics",   "text/calendar"
        ,".md",    "text/markdown;charset=utf-8"
