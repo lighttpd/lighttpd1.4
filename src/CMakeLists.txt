@@ -548,7 +548,7 @@ if(WITH_GNUTLS)
 endif()
 
 if(WITH_PCRE2)
-	find_package(PCRE2 REQUIRED 8BIT CONFIG)
+	find_package(PCRE2 QUIET)
 	if(PCRE2_FOUND)
 		set(PCRE_LDFLAGS PCRE2::8BIT)
 		set(PCRE_CFLAGS "${PCRE2_CFLAGS}")
