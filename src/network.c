@@ -984,11 +984,20 @@ int network_init(server *srv, int stdin_fd) {
             }
         }
 
-        /* reset sidx of any graceful sockets not explicitly listed in config */
+        /* close any sockets(exclude inherited ones) not explicitly listed in config */
         for (uint32_t i = 0; i < srv->srv_sockets.used; ++i) {
             if ((unsigned short)~0u == srv->srv_sockets.ptr[i]->sidx) {
-                srv->srv_sockets.ptr[i]->sidx = 0;
-                srv->srv_sockets.ptr[i]->is_ssl = p->defaults.ssl_enabled;
+                server_socket *srv_socket = srv->srv_sockets.ptr[i];
+                if (srv_socket->fd != -1) {
+                    fdio_close_socket(srv_socket->fd);
+                }
+                buffer_free(srv_socket->srv_token);
+                free(srv_socket);
+
+                memmove(srv->srv_sockets.ptr + i, srv->srv_sockets.ptr + i + 1,
+                        (srv->srv_sockets.used - i - 1) * sizeof(*srv->srv_sockets.ptr));
+                --srv->srv_sockets.used;
+                --i;
             }
         }
 
