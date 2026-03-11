@@ -70,6 +70,10 @@
 #ifndef OPENSSL_NO_OCSP
 #include <openssl/ocsp.h>
 #endif
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#include <openssl/provider.h>
+#include <openssl/ui.h>
+#endif
 #ifdef AWSLC_API_VERSION /* alt: OPENSSL_IS_AWSLC */
 /* AWS-LC derived from BoringSSL, but AWSLC_API_VERSION has different meaning.
  * Reuse BORINGSSL_API_VERSION for (presently) small num of API version checks*/
@@ -2355,7 +2359,7 @@ mod_openssl_cert_is_active (const X509 *crt)
   #endif
 }
 
-
+#if OPENSSL_VERSION_NUMBER < 0x30000000L || defined(TLSEXT_TYPE_application_layer_protocol_negotiation)
 static X509 *
 mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) **chain)
 {
@@ -2424,6 +2428,8 @@ mod_openssl_evp_pkey_load_pem_file (const char *file, log_error_st *errh)
 
     return x;
 }
+#endif //OPENSSL_VERSION_NUMBER < 0x30000000L || defined(TLSEXT_TYPE_application_layer_protocol_negotiation)
+
 
 
 #if OPENSSL_VERSION_NUMBER >= 0x10002000 && !defined(LIBRESSL_VERSION_NUMBER)
@@ -2858,6 +2864,113 @@ mod_openssl_crt_must_staple (const X509 *crt)
 
 #endif /* OPENSSL_NO_OCSP */
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+/*
+ Load values from an openssl store.
+
+ Passed pointers will be allocated and filled if matches are found
+ when looking up openssl stores. For instance, if the URI is a path to
+ a pem file with both certificate and private key, both values can be
+ filled and returned.
+
+ Note that, the returned status only shows if something went wrong during
+ the lookup, and will report OK when the lookup is a miss.
+ */
+static int mod_openssl_load_store_data(const char *uri,
+    EVP_PKEY **ppkey, EVP_PKEY **ppubkey,
+    X509 **pcert, STACK_OF(X509) **pcert_stack,
+    log_error_st *errh) {
+    
+    OSSL_STORE_CTX *store_ctx = NULL;
+    OSSL_STORE_INFO *store_info = NULL;
+
+    if (uri == NULL)
+        return 1;
+
+    /* Allocate the certificates stack if we are expecting one */
+    if (pcert_stack != NULL && *pcert_stack == NULL)
+        *pcert_stack = sk_X509_new_null();
+
+    /* Open the store using provided URI */
+    store_ctx = OSSL_STORE_open(uri, UI_get_default_method(), NULL, NULL, NULL);
+    if (store_ctx == NULL) {
+        log_error(errh, __FILE__, __LINE__,
+          "SSL: failed to open OpenSSL store with URI %s", uri);
+        goto failed;
+    }
+
+    while (!OSSL_STORE_eof(store_ctx)) {
+        int info_type;
+        store_info = OSSL_STORE_load(store_ctx);
+
+        /* Not really a problem here, check out openssl comments */
+        if (store_info == NULL)
+            continue;
+
+        info_type = OSSL_STORE_INFO_get_type(store_info);
+        switch (info_type) {
+            case OSSL_STORE_INFO_PKEY:
+                if (ppkey != NULL && *ppkey == NULL) {
+                    *ppkey = OSSL_STORE_INFO_get1_PKEY(store_info);
+                    if (*ppkey == NULL) {
+                        log_error(errh, __FILE__, __LINE__,
+                            "SSL: error while loading privkey with URI %s", uri);
+                        goto failed;
+                    }
+                }
+                /* Keep going since a private key also holds public info that may be wanted */
+                /* fallthrough */
+            case OSSL_STORE_INFO_PUBKEY:
+                if (ppubkey != NULL && *ppubkey == NULL) {
+                    *ppubkey = OSSL_STORE_INFO_get1_PUBKEY(store_info);
+                    if (*ppubkey == NULL) {
+                        log_error(errh, __FILE__, __LINE__,
+                            "SSL: error while loading pubkey with URI %s", uri);
+                        goto failed;
+                    }
+                }
+                break;
+            case OSSL_STORE_INFO_CERT:
+                /* When hitting a cert, only report the first one: it should be the right one with a cert chain */
+                if (pcert != NULL && *pcert == NULL) {
+                    *pcert = OSSL_STORE_INFO_get1_CERT(store_info);
+                    if (*pcert == NULL) {
+                        log_error(errh, __FILE__, __LINE__,
+                            "SSL: error while loading certificate with URI %s", uri);
+                        goto failed;
+                    }
+                }
+                /* If we are expecting a cert stack, fill it with all certs found */
+                if (pcert_stack != NULL) {
+                    if (!X509_add_cert(*pcert_stack,
+                            OSSL_STORE_INFO_get1_CERT(store_info), X509_ADD_FLAG_DEFAULT)) {
+                        log_error(errh, __FILE__, __LINE__,
+                            "SSL: error while loading certificate into cert chain with URI %s", uri);
+                        goto failed;
+                    }
+                }
+                break;
+        }
+        OSSL_STORE_INFO_free(store_info);
+    }
+
+    OSSL_STORE_close(store_ctx);
+    return 0;
+
+failed:
+    OSSL_STORE_INFO_free(store_info);
+    OSSL_STORE_close(store_ctx);
+    if (ppkey != NULL)
+        EVP_PKEY_free(*ppkey);
+    if (ppubkey != NULL)
+        EVP_PKEY_free(*ppubkey);
+    if (pcert != NULL)
+        X509_free(*pcert);
+    if (pcert_stack != NULL)
+        sk_X509_pop_free(*pcert_stack, X509_free);
+    return 1;
+}
+#endif
 
 __attribute_noinline__
 static plugin_cert *
@@ -2866,13 +2979,27 @@ network_openssl_load_pemfile (server *srv, const buffer *pemfile, const buffer *
     if (!mod_openssl_init_once_openssl(srv)) return NULL;
 
     STACK_OF(X509) *ssl_pemfile_chain = NULL;
-    X509 *ssl_pemfile_x509 =
-      mod_openssl_load_pem_file(pemfile->ptr, srv->errh, &ssl_pemfile_chain);
+    X509 *ssl_pemfile_x509 = NULL;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    if (0 == mod_openssl_load_store_data(pemfile->ptr, NULL, NULL, &ssl_pemfile_x509, &ssl_pemfile_chain, srv->errh)
+            && NULL == ssl_pemfile_x509)
+        log_error(srv->errh, __FILE__, __LINE__,
+            "SSL: no certificate found using URI '%s'", pemfile->ptr);
+#else
+    ssl_pemfile_x509 = mod_openssl_load_pem_file(pemfile->ptr, srv->errh, &ssl_pemfile_chain);
+#endif
     if (NULL == ssl_pemfile_x509)
         return NULL;
 
-    EVP_PKEY *ssl_pemfile_pkey =
-      mod_openssl_evp_pkey_load_pem_file(privkey->ptr, srv->errh);
+    EVP_PKEY *ssl_pemfile_pkey = NULL;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    if (0 == mod_openssl_load_store_data(privkey->ptr, &ssl_pemfile_pkey, NULL, NULL, NULL, srv->errh)
+            && NULL == ssl_pemfile_pkey)
+        log_error(srv->errh, __FILE__, __LINE__,
+            "SSL: no privkey found using URI '%s'", privkey->ptr);
+#else
+    ssl_pemfile_pkey = mod_openssl_evp_pkey_load_pem_file(privkey->ptr, srv->errh);
+#endif
     if (NULL == ssl_pemfile_pkey) {
         X509_free(ssl_pemfile_x509);
         sk_X509_pop_free(ssl_pemfile_chain, X509_free);
