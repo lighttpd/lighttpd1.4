@@ -1893,8 +1893,13 @@ mod_openssl_patch_config (request_st * const r, plugin_config * const pconf)
 }
 
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000
 static int
 safer_X509_NAME_oneline(X509_NAME *name, char *buf, size_t sz)
+#else
+static int
+safer_X509_NAME_oneline(const X509_NAME *name, char *buf, size_t sz)
+#endif
 {
     BIO *bio = BIO_new(BIO_s_mem());
     if (bio) {
@@ -1940,7 +1945,11 @@ static int
 verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
 {
     char buf[256];
+  #if OPENSSL_VERSION_NUMBER < 0x10100000L
     X509 *err_cert;
+  #else
+    const X509 *err_cert;
+  #endif
     int err, depth;
     SSL *ssl;
     handler_ctx *hctx;
@@ -1974,7 +1983,11 @@ verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
         /* verify that client cert is issued by CA in ssl.ca-dn-file
          * if both ssl.ca-dn-file and ssl.ca-file were configured */
         STACK_OF(X509_NAME) * const cert_names = hctx->conf.ssl_ca_dn_file;
+      #if OPENSSL_VERSION_NUMBER < 0x10100000L
         X509_NAME *issuer;
+      #else
+        const X509_NAME *issuer;
+      #endif
       #if OPENSSL_VERSION_NUMBER >= 0x10002000L
         err_cert = X509_STORE_CTX_get_current_cert(ctx);
       #else
@@ -2453,15 +2466,27 @@ mod_openssl_reload_crl_file (server *srv, plugin_cacerts *cacerts, const unix_ti
     int rc = 1;
   #if OPENSSL_VERSION_NUMBER >= 0x10100000
     /* duplicate X509_STORE with X509 objects and skip CRLs */
-    /* (modelled off X509_STORE_get1_all_certs()) */
+   #if OPENSSL_VERSION_NUMBER >= 0x40000000
+    STACK_OF(X509_OBJECT) *objs = X509_STORE_get1_objects(store);
+   #else
+    /* (modelled off openssl 3.x X509_STORE_get1_all_certs()) */
     /*X509_STORE_lock(store);*/
     STACK_OF(X509_OBJECT) *objs = X509_STORE_get0_objects(store);
+   #endif
     for (int i = 0, num = sk_X509_OBJECT_num(objs); i < num && rc; ++i) {
+      #if OPENSSL_VERSION_NUMBER >= 0x40000000
+        const X509 *cert = X509_OBJECT_get0_X509(sk_X509_OBJECT_value(objs, i));
+      #else
         X509 *cert = X509_OBJECT_get0_X509(sk_X509_OBJECT_value(objs, i));
+      #endif
         if (cert != NULL)
             rc = X509_STORE_add_cert(new_store, cert);
     }
+   #if OPENSSL_VERSION_NUMBER >= 0x40000000
+    sk_X509_OBJECT_pop_free(objs, X509_OBJECT_free);
+   #else
     /*X509_STORE_unlock(store);*/
+   #endif
   #endif
 
     if (rc) {
@@ -4880,15 +4905,24 @@ CONNECTION_FUNC(mod_openssl_handle_con_close)
 }
 
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000
 static void
 https_add_ssl_client_subject (request_st * const r, X509_NAME *xn)
+#else
+static void
+https_add_ssl_client_subject (request_st * const r, const X509_NAME *xn)
+#endif
 {
     const size_t prelen = sizeof("SSL_CLIENT_S_DN_")-1;
     char key[64] = "SSL_CLIENT_S_DN_";
     for (int i = 0, nentries = X509_NAME_entry_count(xn); i < nentries; ++i) {
         int xobjnid;
         const char * xobjsn;
+      #if OPENSSL_VERSION_NUMBER < 0x10100000
         X509_NAME_ENTRY *xe;
+      #else
+        const X509_NAME_ENTRY *xe;
+      #endif
 
         if (!(xe = X509_NAME_get_entry(xn, i))) {
             continue;
@@ -4899,9 +4933,17 @@ https_add_ssl_client_subject (request_st * const r, X509_NAME *xn)
             const size_t len = strlen(xobjsn);
             if (prelen+len >= sizeof(key)) continue;
             memcpy(key+prelen, xobjsn, len); /*(not '\0'-terminated)*/
+          #if OPENSSL_VERSION_NUMBER < 0x10100000
             http_header_env_set(r, key, prelen+len,
                                 (const char*)X509_NAME_ENTRY_get_data(xe)->data,
                                 X509_NAME_ENTRY_get_data(xe)->length);
+          #else
+            http_header_env_set(r, key, prelen+len,
+                                (const char*)ASN1_STRING_get0_data(
+                                               X509_NAME_ENTRY_get_data(xe)),
+                                ASN1_STRING_length(
+                                  X509_NAME_ENTRY_get_data(xe)));
+          #endif
         }
     }
 }
@@ -4922,7 +4964,11 @@ static void
 https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
 {
     X509 *xs;
+  #if OPENSSL_VERSION_NUMBER < 0x10100000
     X509_NAME *xn;
+  #else
+    const X509_NAME *xn;
+  #endif
     buffer *vb = http_header_env_set_ptr(r, CONST_STR_LEN("SSL_CLIENT_VERIFY"));
 
     long vr = SSL_get_verify_result(hctx->ssl);
