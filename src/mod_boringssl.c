@@ -1673,7 +1673,7 @@ mod_openssl_patch_config (request_st * const r, plugin_config * const pconf)
 
 
 static int
-safer_X509_NAME_oneline(X509_NAME *name, char *buf, size_t sz)
+safer_X509_NAME_oneline(const X509_NAME *name, char *buf, size_t sz)
 {
     BIO *bio = BIO_new(BIO_s_mem());
     if (bio) {
@@ -3823,7 +3823,7 @@ CONNECTION_FUNC(mod_openssl_handle_con_close)
 
 
 static void
-https_add_ssl_client_subject (request_st * const r, X509_NAME *xn)
+https_add_ssl_client_subject (request_st * const r, const X509_NAME * const xn)
 {
     const size_t prelen = sizeof("SSL_CLIENT_S_DN_")-1;
     char key[64] = "SSL_CLIENT_S_DN_";
@@ -3890,7 +3890,7 @@ https_add_ssl_client_entries (request_st * const r, handler_ctx * const hctx)
   #endif
     if (!xs) return;
 
-    X509_NAME * const xn = X509_get_subject_name(xs);
+    const X509_NAME * const xn = X509_get_subject_name(xs);
     {
         char buf[256];
         int len = safer_X509_NAME_oneline(xn, buf, sizeof(buf));
