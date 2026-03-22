@@ -4325,19 +4325,23 @@ SETDEFAULTS_FUNC(mod_openssl_set_defaults)
             mod_openssl_merge_config(&p->defaults, cpv);
     }
 
-  #if OPENSSL_VERSION_NUMBER < 0x30000000L \
+  #if OPENSSL_VERSION_NUMBER < 0x40000000L \
+   && OPENSSL_VERSION_NUMBER != 0x30500000L \
    && !defined(BORINGSSL_API_VERSION) \
    && !defined(LIBRESSL_VERSION_NUMBER)
   if (log_epoch_secs >= 1792728000) /* 23 Oct 2026 */
     log_error(srv->errh, __FILE__, __LINE__, "SSL:"
       "openssl library version is outdated and has reached end-of-life.  "
-      "As of 22 Oct 2026, only openssl 3.5 and later continue to receive "
-      "security patches from openssl.org");
+      "As of 22 Oct 2026, only openssl 3.5, openssl 4.0 and later continue "
+      "to receive security patches from openssl.org");
+      /* (technically, openssl 3.6 EOL is 1 Nov 2026, a few days later) */
+  #if OPENSSL_VERSION_NUMBER < 0x30000000L
   else
     log_error(srv->errh, __FILE__, __LINE__, "SSL:"
       "openssl library version is outdated and has reached end-of-life.  "
       "As of 11 Sep 2023, only openssl 3.0 and later continue to receive "
       "security patches from openssl.org");
+  #endif
   #endif
 
   #ifdef SSL_OP_ENABLE_KTLS /* openssl 3.0.0 */
