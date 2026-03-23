@@ -377,9 +377,11 @@ geoip2_env_set (request_st * const r, array * const env,
         break;
       case MMDB_DATA_TYPE_DOUBLE:
         vlen = snprintf(buf, sizeof(buf), "%.5f", data->double_value);
+        if (vlen >= sizeof(buf)) vlen = sizeof(buf) - 1;
         break;
       case MMDB_DATA_TYPE_FLOAT:
         vlen = snprintf(buf, sizeof(buf), "%.5f", data->float_value);
+        if (vlen >= sizeof(buf)) vlen = sizeof(buf) - 1;
         break;
       case MMDB_DATA_TYPE_INT32:
         vlen = li_itostrn(buf, sizeof(buf), data->int32);
