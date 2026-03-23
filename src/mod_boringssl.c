@@ -2595,6 +2595,7 @@ static int
 mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *ssl_ec_curve)
 {
   #ifndef OPENSSL_NO_ECDH
+   #if !defined(SSL_GROUP_X25519_MLKEM768)
     /* boringssl eccurves_default[] (now kDefaultGroups[])
      * has been the equivalent of "X25519:secp256r1:secp384r1" since 2016
      * (previously with secp521r1 appended for Android)
@@ -2602,10 +2603,14 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
      *  since mid 2014) */
     if (NULL == ssl_ec_curve || buffer_is_blank(ssl_ec_curve))
         return 1;
+   #endif
 
     const char *groups = ssl_ec_curve && !buffer_is_blank(ssl_ec_curve)
       ? ssl_ec_curve->ptr
       :
+       #if defined(SSL_GROUP_X25519_MLKEM768)
+        "X25519MLKEM768:"
+       #endif
         /* boringssl include/openssl/evp.h contains comment:
          * > EVP_PKEY_X448 is defined for OpenSSL compatibility, but we do not
          * > support X448 and attempts to create keys will fail.

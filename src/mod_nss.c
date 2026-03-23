@@ -3069,8 +3069,13 @@ mod_nss_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *curv
     #if NSS_VMAJOR > 3 || (NSS_VMAJOR == 3 && NSS_VMINOR >= 98)
      ,{ CONST_STR_LEN("xyber768d00"), ssl_grp_kem_xyber768d00 }
     #endif
-    #if NSS_VMAJOR > 3 || (NSS_VMAJOR == 3 && NSS_VMINOR >= 106)
+    #if NSS_VMAJOR > 3 || (NSS_VMAJOR == 3 && NSS_VMINOR >= 105)
      ,{ CONST_STR_LEN("mlkem768x25519"), ssl_grp_kem_mlkem768x25519 }
+     ,{ CONST_STR_LEN("x25519mlkem768"), ssl_grp_kem_mlkem768x25519 }
+    #endif
+    #if NSS_VMAJOR > 3 || (NSS_VMAJOR == 3 && NSS_VMINOR >= 118)
+     ,{ CONST_STR_LEN("secp256r1mlkem768"), ssl_grp_kem_secp256r1mlkem768 }
+     ,{ CONST_STR_LEN("secp384r1mlkem1024"), ssl_grp_kem_secp384r1mlkem1024 }
     #endif
     };
 
@@ -3078,7 +3083,14 @@ mod_nss_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *curv
     unsigned int num_grps = 0;
     const char *groups = curvelist && !buffer_is_blank(curvelist)
       ? curvelist->ptr
-      : "X25519:P-256:P-384";
+      :
+       #if NSS_VMAJOR > 3 || (NSS_VMAJOR == 3 && NSS_VMINOR >= 105)
+        "X25519MLKEM768:"
+       #endif
+       #if NSS_VMAJOR > 3 || (NSS_VMAJOR == 3 && NSS_VMINOR >= 118)
+        /*"SecP256r1MLKEM768:"*/
+       #endif
+        "X25519:P-256:P-384";
     for (const char *e; groups; groups = e ? e+1 : NULL) {
         e = strchr(groups, ':');
         size_t len = e ? (size_t)(e - groups) : strlen(groups);

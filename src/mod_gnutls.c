@@ -3926,22 +3926,32 @@ mod_gnutls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *c
       "ffdhe4096",  "GROUP-FFDHE4096",
       "ffdhe6144",  "GROUP-FFDHE6144",
       "ffdhe8192",  "GROUP-FFDHE8192",
+      "MLKEM768",   "GROUP-MLKEM768",
+      "MLKEM1024",  "GROUP-MLKEM1024",
+      "SecP256r1MLKEM768",  "GROUP-SECP256R1-MLKEM768",
+      "SecP384r1MLKEM1024", "GROUP-SECP384R1-MLKEM1024",
+      "X25519MLKEM768",     "GROUP-X25519-MLKEM768"
     };
 
     buffer * const plist = &s->priority_str;
     const char *groups = curvelist && !buffer_is_blank(curvelist)
       ? curvelist->ptr
-      : "X25519:P-256:P-384:X448";
+      :
+       #if GNUTLS_VERSION_NUMBER >= 0x030808
+        /*"X25519MLKEM768:SecP256r1MLKEM768:"*/
+        "X25519MLKEM768:"
+       #endif
+        "X25519:P-256:P-384:X448";
     for (const char *e; groups; groups = e ? e+1 : NULL) {
         const char * const n = groups;
         e = strchr(n, ':');
         size_t len = e ? (size_t)(e - n) : strlen(n);
         uint32_t i;
-        for (i = 0; i < sizeof(names)/sizeof(*names)/2; i += 2) {
+        for (i = 0; i < sizeof(names)/sizeof(*names); i += 2) {
             if (0 == strncmp(names[i], n, len) && names[i][len] == '\0')
                 break;
         }
-        if (i == sizeof(names)/sizeof(*names)/2) {
+        if (i == sizeof(names)/sizeof(*names)) {
             log_error(srv->errh, __FILE__, __LINE__,
                       "GnuTLS: unrecognized curve: %.*s; ignored", (int)len, n);
             continue;

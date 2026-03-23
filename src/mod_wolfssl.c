@@ -2336,6 +2336,15 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     const char *groups = ssl_ec_curve && !buffer_is_blank(ssl_ec_curve)
       ? ssl_ec_curve->ptr
       :
+       #if defined(HAVE_PQC) && !defined(WOLFSSL_NO_ML_KEM) /* wolfssl 5.8.4 */
+        /* defined(WOLFSSL_PQC_HYBRIDS) */
+        #ifdef HAVE_CURVE25519
+        "X25519MLKEM768:"
+        #endif
+        #ifdef HAVE_ECC
+        /*"SecP256r1MLKEM768:"*/
+        #endif
+       #endif
        #ifdef HAVE_CURVE25519
         "X25519"
        #endif
