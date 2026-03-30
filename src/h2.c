@@ -1263,7 +1263,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     /*h2_send_window_update_unit(con,r,len);*//*(r->x.h2.rwin)*//*(see below)*/
 
     /* avoid sending small WINDOW_UPDATE frames
-     * Pre-emptively increase window size up to 16k (default max frame size)
+     * Preemptively increase window size up to 16k (default max frame size)
      * and then defer small window updates until the excess is utilized. */
     h2_send_window_update_unit(con, h2r, len); /*(h2r->x.h2.rwin)*/
 
@@ -1331,7 +1331,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     /*r->x.h2.rwin -= (int32_t)len;*/
     /*r->x.h2.rwin += (int32_t)wupd;*/
     /* avoid sending small WINDOW_UPDATE frames
-     * Pre-emptively increase window size up to 16k (default max frame size)
+     * Preemptively increase window size up to 16k (default max frame size)
      * and then defer small window updates until the excess is utilized.
      * This aims to reduce degenerative behavior from clients sending an
      * increasing number of tiny DATA frames. */
@@ -2433,7 +2433,7 @@ h2_send_hpack (request_st * const r, connection * const con, const char *data, u
      * with slight over-estimate of 16 bytes per frame header (> 9)
      * and minimum SETTING_MAX_FRAME_SIZE of 16k (could be larger)
      * (dlen >> 14)+1 is num 16k frames needed, multiplied by 16 bytes
-     *  per frame can be appoximated with (dlen>>10) + 9)*/
+     *  per frame can be approximated with (dlen>>10) + 9)*/
     buffer * const b =
       chunkqueue_append_buffer_open_sz(con->write_queue, dlen + (dlen>>10) + 9);
     char * restrict ptr = b->ptr;
@@ -3033,7 +3033,7 @@ h2_send_data (request_st * const r, connection * const con, const char *data, ui
      * with slight over-estimate of 16 bytes per frame header (> 9)
      * and minimum SETTING_MAX_FRAME_SIZE of 16k (could be larger)
      * (dlen >> 14)+1 is num 16k frames needed, multiplied by 16 bytes
-     *  per frame can be appoximated with (dlen>>10) + 9)*/
+     *  per frame can be approximated with (dlen>>10) + 9)*/
     buffer * const b =
       chunkqueue_append_buffer_open_sz(con->write_queue, dlen + (dlen>>10) + 9);
     char * restrict ptr = b->ptr;

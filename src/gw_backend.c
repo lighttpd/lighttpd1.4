@@ -2019,7 +2019,7 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
         if (hctx->fd >= r->con->srv->max_fds) {
           #ifndef __COVERITY__
             /* coverity fails to determine hctx->fd >= 0
-             * if comparision to (unsigned short) srv->max_fds is true */
+             * if comparison to (unsigned short) srv->max_fds is true */
             fdio_close_socket(hctx->fd);
             hctx->fd = -1;
           #endif

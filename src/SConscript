@@ -32,7 +32,7 @@ def FlattenLibs(libs):
 	else:
 		return [item for sublibs in libs for item in FlattenLibs(sublibs)]
 
-# removes all but the *LAST* occurance of a lib in the list
+# removes all but the *LAST* occurrence of a lib in the list
 def RemoveDuplicateLibs(libs):
 	libs = FlattenLibs(libs)
 	# remove empty strings from list

@@ -262,7 +262,7 @@ static pcre_keyvalue_buffer * mod_dirlisting_parse_excludes(server *srv, const a
 #endif
 
 static int mod_dirlisting_exclude(pcre_keyvalue_buffer * const kvb, const char * const name, const uint32_t len) {
-    /*(re-use keyvalue.[ch] for match-only;
+    /*(reuse keyvalue.[ch] for match-only;
      *  must have been configured with empty kvb 'value' during init)*/
     buffer input = { NULL, len+1, 0 };
     *(const char **)&input.ptr = name;

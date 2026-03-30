@@ -683,7 +683,7 @@ pid_t fdevent_fork_execve(const char *name, char *argv[], char *envp[], int fdin
  * Commands in lighttpd.conf are trusted; lighttpd.conf is controlled by admin.
  * As an optimization, skip running command via "/bin/sh -c ..." if the command
  * begins with '/' and does not contain shell metacharacters which might need
- * to be interpretted by the shell.  Assume that IFS is set to shell defaults.
+ * to be interpreted by the shell.  Assume that IFS is set to shell defaults.
  * Allows 8-bit UTF-8, but does not validate UTF-8.  Does not flag CTL
  * characters besides IFS defaults.  cmd must be '\0'-terminated.
  *

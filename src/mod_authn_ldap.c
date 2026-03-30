@@ -827,7 +827,7 @@ static handler_t mod_authn_ldap_basic(request_st * const r, void *p_d, const htt
             rc = HANDLER_GO_ON; /* access granted */
         }
         else if (require->group.used) {
-            /*(must not re-use ldap_filter, since it might be used for dn)*/
+            /*(must not reuse ldap_filter, since it might be used for dn)*/
             rc = mod_authn_ldap_memberOf(errh, &pconf, require, username, dn);
         }
     } while (0);

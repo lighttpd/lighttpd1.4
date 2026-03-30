@@ -422,8 +422,8 @@ mod_mbedtls_session_ticket_key_file (const char *fn)
      *    4-byte - activation timestamp
      *    4-byte - expiration timestamp
      *   16-byte - session ticket key name
-     *   32-byte - session ticket HMAC encrpytion key
-     *   32-byte - session ticket AES encrpytion key
+     *   32-byte - session ticket HMAC encryption key
+     *   32-byte - session ticket AES encryption key
      *
      * STEK file can be created with a command such as:
      *   dd if=/dev/random bs=1 count=80 status=none | \
@@ -5223,7 +5223,7 @@ static int ssl_parse_client_hello( mbedtls_ssl_context *ssl, handler_ctx *hctx )
      * Handshake layer:
      *     0  .   0   handshake type
      *     1  .   3   handshake length
-     *     4  .   5   DTLS only: message seqence number
+     *     4  .   5   DTLS only: message sequence number
      *     6  .   8   DTLS only: fragment offset
      *     9  .  11   DTLS only: fragment length
      */

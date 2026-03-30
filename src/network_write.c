@@ -41,7 +41,7 @@
 #endif
 
 #if defined(__APPLE__) && defined(__MACH__)
-/* sendfile() on iOS/tvOS sendfile() raises SIGSYS insead of returning ENOSYS
+/* sendfile() on iOS/tvOS sendfile() raises SIGSYS instead of returning ENOSYS
  * https://github.com/ndfred/iperf-ios/issues/17
  * https://github.com/dotnet/runtime/pull/69436 */
 #include <TargetConditionals.h> /* TARGET_OS_IPHONE, TARGET_OS_MAC */

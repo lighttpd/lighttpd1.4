@@ -408,8 +408,8 @@ mod_gnutls_session_ticket_key_file (const char *fn)
      *    4-byte - activation timestamp
      *    4-byte - expiration timestamp
      *   16-byte - session ticket key name
-     *   32-byte - session ticket HMAC encrpytion key
-     *   32-byte - session ticket AES encrpytion key
+     *   32-byte - session ticket HMAC encryption key
+     *   32-byte - session ticket AES encryption key
      *
      * STEK file can be created with a command such as:
      *   dd if=/dev/random bs=1 count=80 status=none | \
@@ -1845,7 +1845,7 @@ mod_gnutls_SNI(handler_ctx * const hctx,
                const unsigned char *servername, unsigned int len)
 {
     /* https://www.gnutls.org/manual/gnutls.html#Virtual-hosts-and-credentials
-     * figure the advertized name - the following hack relies on the fact that
+     * figure the advertised name - the following hack relies on the fact that
      * this extension only supports DNS names, and due to a protocol bug cannot
      * be extended to support anything else. */
     if (len < 5) return 0;

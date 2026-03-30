@@ -88,7 +88,7 @@
  *
  * Implementation notes:
  * - http_chunk_append_mem() used instead of http_chunk_append_buffer()
- *   so that p->tmp_buf can be large and re-used.  This results in an extra copy
+ *   so that p->tmp_buf can be large and reused.  This results in an extra copy
  *   of compressed data before data is sent to network, though if the compressed
  *   size is larger than 64k, it ends up being sent to a temporary file on
  *   disk without suffering an extra copy in memory, and without extra chunk

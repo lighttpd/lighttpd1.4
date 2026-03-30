@@ -646,8 +646,8 @@ mod_openssl_session_ticket_key_file (const char *fn)
      *    4-byte - activation timestamp
      *    4-byte - expiration timestamp
      *   16-byte - session ticket key name
-     *   32-byte - session ticket HMAC encrpytion key
-     *   32-byte - session ticket AES encrpytion key
+     *   32-byte - session ticket HMAC encryption key
+     *   32-byte - session ticket AES encryption key
      *
      * STEK file can be created with a command such as:
      *   dd if=/dev/random bs=1 count=80 status=none | \

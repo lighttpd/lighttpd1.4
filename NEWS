@@ -1149,7 +1149,7 @@ NEWS
   * [build] create sha512sum file with release
   * [build] CI builds now use make -j 2
   * [core] http_response_send_file() takes const path
-  * [core] use ETag response header to check cachable
+  * [core] use ETag response header to check cacheable
   * [core] add more const to stat_cache_update_entry()
   * [multiple] remove r->physical.etag
   * [mod_magnet] interface to http_response_send_file
@@ -1257,7 +1257,7 @@ NEWS
   * [core] libev EV_ERROR conflicts with kqueue
   * [tests] disable test_mod_ssi in cmake (temporary)
   * [tests] disable test_mod_ssi in cmake (temporary)
-  * [tests] reenable test_mod_ssi in cmake
+  * [tests] re-enable test_mod_ssi in cmake
   * [core] run plugin cleanup hooks in reverse
   * [core] fix removal of server.pid-file when testing (fixes #3115)
   * [doc] improve sample configs
@@ -2103,7 +2103,7 @@ NEWS
   * [core] support multiple error logs
   * [multiple] omit passing srv to fdevent_handler
   * [core] remove unused arg to fdevent_fcntl_set_nb*
-  * [core] slightly simpify server_(over)load_check()
+  * [core] slightly simplify server_(over)load_check()
   * [core] isolate fdevent subsystem
   * [core] isolate stat_cache subsystem
   * [core] remove include base.h where unused
@@ -4658,7 +4658,7 @@ NEWS
   * improved debug output in request handling
   * fixed build problems on netbsd 1.4.x and 1.5.x
   * fixed status.url configuration
-  * fixed handling of != and !~ in configutation
+  * fixed handling of != and !~ in configuration
   * fixed special cases in keep-alive handling
   * fixed timeout handling in handling POST requests
   * fixed mode AUTHORIZER in FastCGI

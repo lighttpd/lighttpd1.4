@@ -3811,7 +3811,7 @@ static int parse_openssl_ciphers(server_rec *s, char *ciphers, PRBool cipher_lis
                                     continue;
                             }
 #if 0
-                            /* Enable the NULL ciphers only if explicity
+                            /* Enable the NULL ciphers only if explicitly
                              * requested */
                             if (ciphers_def[i].attr & SSL_eNULL) {
                                 if (mask & SSL_eNULL)

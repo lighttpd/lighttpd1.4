@@ -55,7 +55,7 @@ http_response_physical_pathinfo (request_st * const r)
         pathinfo = strchr(pathinfo+1, '/');
     /* Note: basedir might be "/" (containers) and basedir should not be empty.
      * basedir in config is allowed to end with '/', especially for basedir "/".
-     * Current implmentation below requires that pathinfo follow a regular file
+     * Current implementation below requires that pathinfo follow a regular file
      * (S_ISREG()) which is why if pathinfo matches beginning of path, pathinfo
      * is stepped to next path component.
      *   https://redmine.lighttpd.net/issues/2911
