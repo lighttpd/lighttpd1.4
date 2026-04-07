@@ -266,6 +266,13 @@ BIND_OVERRIDE
 
 		$ENV{'SRCDIR'} = $testdir;
 
+		if (exists $ENV{'LIGHTTPD_STDERR_FILE'}) {
+			require POSIX;
+			open(my $ERR, '>>', $ENV{'LIGHTTPD_STDERR_FILE'}) || die "open: $!";
+			POSIX::dup2(fileno($ERR), 2) || die "dup2: $!";
+			close($ERR);
+		}
+
 		my @cmdline = ($self->{LIGHTTPD_PATH}, "-D", "-f", $conf, "-m", $modules_path);
 		splice(@cmdline, -2) if exists $ENV{LIGHTTPD_EXE_PATH};
 		if (!defined $ENV{"TRACEME"}) {

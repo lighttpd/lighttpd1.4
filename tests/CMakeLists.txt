@@ -21,6 +21,8 @@ set(T_FILES
 	request.t
 	core-condition.t
 	mod-fastcgi.t
+	mod-openssl-ech.t
+	mod-openssl-ech-extra.t
 	mod-scgi.t
 	cleanup.sh
 )

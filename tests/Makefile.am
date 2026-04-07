@@ -19,6 +19,11 @@ CONFS=\
 	fastcgi-responder.conf \
 	LightyTest.pm \
 	mod-fastcgi.t \
+	mod-openssl-ech-extra.conf \
+	mod-openssl-ech-extra.t \
+	mod-openssl-ech.conf \
+	mod-openssl-ech.t \
+	mod-openssl-tls.conf \
 	mod-scgi.t \
 	proxy.conf \
 	request.t \

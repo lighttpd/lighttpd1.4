@@ -1,0 +1,35 @@
+1..34
+ok 1 - generated TLS certificate fixture
+ok 2 - generated server ECH fixture
+ok 3 - generated mismatched client ECH fixture
+ok 4 - generated malformed ECH fixture
+ok 5 - Starting lighttpd with mod-openssl-ech.conf
+ok 6 - ECH-enabled server serves HTTPS
+ok 7 - non-ECH client completed TLS handshake
+ok 8 - non-ECH client stayed on standard TLS
+ok 9 - non-ECH client received HTTP 200
+ok 10 - ECH client completed TLS handshake
+ok 11 - valid ECH was accepted
+ok 12 - ECH client received HTTP 200
+ok 13 - mismatched ECH input was rejected without hanging
+ok 14 - mismatched ECH input produced ECH rejection
+ok 15 - server stayed healthy after mismatched ECH input
+ok 16 - Stopping lighttpd
+ok 17 - Starting lighttpd with mod-openssl-tls.conf
+ok 18 - non-ECH server serves HTTPS
+ok 19 - ECH-capable client was rejected when ECH was disabled
+ok 20 - ECH-disabled server returned ECH rejection
+ok 21 - non-ECH server stayed healthy after ECH attempt
+ok 22 - Stopping lighttpd
+ok 23 - starting lighttpd with missing ECH keydir succeeds
+ok 24 - missing ECH keydir rejected client without hanging
+ok 25 - missing ECH keydir produced ECH rejection
+ok 26 - missing ECH keydir was logged
+ok 27 - server stayed healthy with missing ECH keydir
+ok 28 - Stopping lighttpd
+ok 29 - starting lighttpd with malformed ECH key file succeeds
+ok 30 - malformed ECH key file rejected client without hanging
+ok 31 - malformed ECH key file produced ECH rejection
+ok 32 - malformed ECH key file was logged
+ok 33 - server stayed healthy with malformed ECH key file
+ok 34 - Stopping lighttpd
