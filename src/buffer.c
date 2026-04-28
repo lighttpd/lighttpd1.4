@@ -392,7 +392,7 @@ int li_hex2bin (unsigned char * const bin, const size_t binlen, const char * con
 {
     /* validate and transform 32-byte MD5 hex string to 16-byte binary MD5,
      * or 64-byte SHA-256 or SHA-512-256 hex string to 32-byte binary digest */
-    if (len > (binlen << 1)) return -1;
+	if ((len & 1) || len > (binlen << 1)) return -1;    
     for (int i = 0, ilen = (int)len; i < ilen; i+=2) {
         int hi = hexstr[i];
         int lo = hexstr[i+1];
