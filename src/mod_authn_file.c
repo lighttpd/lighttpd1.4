@@ -225,7 +225,7 @@ static int mod_authn_file_htdigest_get_loop(const char *data, const buffer *auth
         /* (last line might not end in '\n') */
         if (NULL == n) n = f_user + strlen(f_user);
 
-        char *f_pwd, *f_realm;
+        const char *f_pwd, *f_realm;
         size_t u_len, r_len;
 
         /* skip blank lines and comment lines (beginning '#') */
@@ -373,7 +373,7 @@ static int mod_authn_file_htpasswd_get(const buffer *auth_fn, const char *userna
         /* (last line might not end in '\n') */
         if (NULL == n) n = f_user + strlen(f_user);
 
-        char *f_pwd;
+        const char *f_pwd;
         size_t u_len;
 
         /* skip blank lines and comment lines (beginning '#') */

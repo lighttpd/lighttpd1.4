@@ -2660,14 +2660,14 @@ int config_read(server *srv, const char *fn) {
 	config_t context;
 	data_config *dc;
 	int ret;
-	char *pos;
+	const char *pos;
 
 	context_init(srv, &context);
 	context.all_configs = srv->config_context;
 
 	pos = strrchr(fn, '/');
   #ifdef _WIN32
-	char * const spos = strrchr(fn, '\\');
+	const char * const spos = strrchr(fn, '\\');
 	if (spos > pos) pos = spos;
   #endif
 	if (pos) {
