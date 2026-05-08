@@ -1802,8 +1802,7 @@ mod_gnutls_ALPN (handler_ctx * const hctx, const unsigned char * const in, const
             if (in[i] == 'h' && in[i+1] == '2') {
                 if (!hctx->r->conf.h2proto) continue;
                 hctx->alpn = MOD_GNUTLS_ALPN_H2;
-                if (hctx->r->handler_module == NULL)/*(e.g. not mod_sockproxy)*/
-                    hctx->r->http_version = HTTP_VERSION_2;
+                hctx->r->http_version = HTTP_VERSION_2;
                 return GNUTLS_E_SUCCESS;
             }
             continue;

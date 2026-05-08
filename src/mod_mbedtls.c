@@ -1477,8 +1477,7 @@ mod_mbedtls_alpn_selected (handler_ctx * const hctx, const char * const in)
       case 2:  /* "h2" */
         if (in[i] == 'h' && in[i+1] == '2') {
             proto = MOD_MBEDTLS_ALPN_H2;
-            if (hctx->r->handler_module == NULL)/*(e.g. not mod_sockproxy)*/
-                hctx->r->http_version = HTTP_VERSION_2;
+            hctx->r->http_version = HTTP_VERSION_2;
             break;
         }
         return 0;

@@ -28,6 +28,7 @@ typedef gw_handler_ctx   handler_ctx;
 INIT_FUNC(mod_sockproxy_init);
 SETDEFAULTS_FUNC(mod_sockproxy_set_defaults);
 CONNECTION_FUNC(mod_sockproxy_connection_accept);
+REQUEST_FUNC(mod_sockproxy_subrequest);
 
 static const plugin mod_sockproxy_plugin = {
   .name                         = "sockproxy",
@@ -36,7 +37,7 @@ static const plugin mod_sockproxy_plugin = {
   .cleanup                      = gw_free,
   .set_defaults                 = mod_sockproxy_set_defaults,
   .handle_connection_accept     = mod_sockproxy_connection_accept,
-  .handle_subrequest            = gw_handle_subrequest,
+  .handle_subrequest            = mod_sockproxy_subrequest,
   .handle_request_reset         = gw_handle_request_reset,
   .handle_trigger               = gw_handle_trigger,
   .handle_waitpid               = gw_handle_waitpid_cb
@@ -170,31 +171,121 @@ static handler_t sockproxy_create_env_connect(handler_ctx *hctx) {
 }
 
 
+__attribute_noinline__
+static handler_t
+mod_sockproxy_check_conf (request_st *r, void *p_d, const int is_ssl_accept);
+
+
 static handler_t mod_sockproxy_connection_accept(connection *con, void *p_d) {
 	request_st * const r = &con->request;
-	handler_t rc;
-
 	if (NULL != r->handler_module) return HANDLER_GO_ON;
+	return mod_sockproxy_check_conf(r, p_d, con->is_ssl_sock|0x10);
+}
 
-	plugin_config pconf;
-	mod_sockproxy_patch_config(r, p_d, &pconf);
-	if (NULL == pconf.exts) return HANDLER_GO_ON;
 
-	/*(fake r->uri.path for matching purposes in gw_check_extension())*/
-	buffer_copy_string_len(&r->uri.path, CONST_STR_LEN("/"));
+__attribute_noinline__
+static handler_t
+mod_sockproxy_check_conf (request_st * const restrict r, void *p_d, const int is_ssl_accept)
+{
+    plugin_config pconf;
+    mod_sockproxy_patch_config(r, p_d, &pconf);
+    if (NULL == pconf.exts || 0 == pconf.exts->used)
+        return HANDLER_GO_ON;
 
-	rc = gw_check_extension(r, &pconf, p_d, 1, 0);
-	if (HANDLER_GO_ON != rc) return rc;
+    if (is_ssl_accept) { /*(overloaded flag for connection_accept hook)*/
+        /* copied from connections.c:connection_handle_request_start_state()
+         * since r->state CON_STATE_REQUEST_START is skipped by mod_sockproxy
+         * and timestamps must be initialized for timeouts, but this is done
+         * after checking pconf.exts->used is non-zero, which indicates
+         * mod_sockproxy is configured on the socket */
+        ++r->con->request_count;
+        r->con->read_idle_ts = log_monotonic_secs;
+        r->start_hp.tv_sec = log_epoch_secs;
+        r->loops_per_request = 0;
+        if (r->conf.high_precision_timestamps)
+            log_clock_gettime_realtime(&r->start_hp);
+    }
 
-	plugin_data_base * const pd = p_d;
-	if (r->handler_module == pd) {
-		handler_ctx *hctx = r->plugin_ctx[pd->id];
-		hctx->opts.backend = BACKEND_PROXY;
-		hctx->create_env = sockproxy_create_env_connect;
-		hctx->response = chunk_buffer_acquire();
-		r->http_status = -1; /*(skip HTTP processing)*/
-		r->http_version = HTTP_VERSION_UNSET;
-	}
+    if (is_ssl_accept & 1) { /*(flag for connection_accept hook w/ ssl socket)*/
+        r->handler_module = (plugin_data_base *)p_d;
+        r->state = CON_STATE_READ_POST;/*(HTTP modules should not modify)*/
+        return HANDLER_GO_ON; /*(set handler, but defer config to after SNI)*/
+    }
 
-	return HANDLER_GO_ON;
+    /*(fake r->uri.path for matching purposes in gw_check_extension())*/
+    buffer_copy_string_len(&r->uri.path, CONST_STR_LEN("/"));
+
+    handler_t rc = gw_check_extension(r, &pconf, p_d, 1, 0);
+    if (HANDLER_GO_ON != rc) return rc;
+
+    plugin_data_base * const pd = p_d;
+    if (r->handler_module == pd) {
+        handler_ctx *hctx = r->plugin_ctx[pd->id];
+        hctx->opts.backend = BACKEND_PROXY;
+        hctx->create_env = sockproxy_create_env_connect;
+        hctx->response = chunk_buffer_acquire();
+        r->http_status = -1; /*(skip HTTP processing)*/
+        r->http_version = HTTP_VERSION_UNSET;
+        r->state = CON_STATE_HANDLE_REQUEST;/*(HTTP modules should not modify)*/
+    }
+
+    return HANDLER_GO_ON;
+}
+
+
+__attribute_noinline__
+static handler_t
+mod_sockproxy_subrequest_setup (request_st * const r, void *p_d)
+{
+    if (r->state == CON_STATE_READ_POST) {
+        /* CON_STATE_READ_POST used as a one-time flag to short-circuit here
+         * once since subrequest handler called almost immediately after
+         * mod_sockproxy_connection_accept(), possibly prior to TLS Client Hello
+         * being available */
+        r->state = CON_STATE_HANDLE_REQUEST;/*(HTTP modules should not modify)*/
+        r->con->is_readable = -1;
+        return HANDLER_WAIT_FOR_EVENT;
+    }
+
+    /* attempt to receive some data from client before connecting to backend;
+     * ensures TLS Client Hello has been received on TLS connections and
+     * TLS SNI can then be used in lighttpd.conf $HTTP["host"] conditions
+     * for mod_sockproxy (mod_sockproxy_connection_accept() is too early) */
+    connection * const con = r->con;
+    chunkqueue * const cq = con->read_queue;
+    if (0 != con->network_read(con, cq, MAX_READ_LIMIT)) {
+        r->handler_module = NULL;
+        return HANDLER_ERROR;
+    }
+    if (chunkqueue_is_empty(cq) && buffer_is_blank(&r->uri.authority)) {
+        r->con->is_readable = -1;
+        return HANDLER_WAIT_FOR_EVENT;
+    }
+
+    r->handler_module = NULL;
+    /* (no need to reset COMP_HTTP_HOST since host had not yet been set
+     *  when mod_sockproxy_connection_accept() was called) */
+    /*config_cond_cache_reset_item(r, COMP_HTTP_HOST);*/
+
+    handler_t rc = mod_sockproxy_check_conf(r, p_d, 0);
+    if (HANDLER_GO_ON != rc)
+        return rc;
+    if (NULL == r->handler_module) {
+        /* note: once mod_sockproxy has been chosen for a connection
+         * (in mod_sockproxy_connection_accept()), mod_sockproxy
+         * is not expected to be unset in lighttpd.conf for specific TLS SNI,
+         * but this might work */
+        r->state = CON_STATE_READ;/*(HTTP modules should not modify)*/
+        connection_jq_append(r->con);
+        return HANDLER_WAIT_FOR_EVENT;
+    }
+
+    return gw_handle_subrequest(r, p_d);
+}
+
+
+REQUEST_FUNC(mod_sockproxy_subrequest) {
+    return (NULL != r->plugin_ctx[((plugin_data_base *)p_d)->id])
+      ? gw_handle_subrequest(r, p_d)
+      : mod_sockproxy_subrequest_setup(r, p_d);
 }
