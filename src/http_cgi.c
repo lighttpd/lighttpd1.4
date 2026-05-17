@@ -108,10 +108,47 @@ http_cgi_encode_varname (buffer * const b, const char * const restrict s, const 
     }
 
     for (i = 0; i < len; ++i) {/* uppercase alpha, pass numeric, map rest '_' */
-        const unsigned char c = s[i];
+        const unsigned char c = ((const unsigned char *)s)[i];
         p[j++] = light_isalpha(c) ? c & ~0x20 : light_isdigit(c) ? c : '_';
     }
     buffer_truncate(b, j);
+}
+
+
+__attribute_cold__
+__attribute_noinline__
+static int
+http_cgi_check_other_conflict (request_st * const r, const buffer * const key, buffer * const tb)
+{
+    char * const p = tb->ptr + 5; /* step past "HTTP_" prefix */
+    const uint32_t len = buffer_clen(tb) - 5;
+    int rc = 0;
+
+    /* translate varname string '_' to '-' for comparison */
+    for (uint32_t i = 0; i < len; ++i) {
+        if (p[i] == '_') p[i] = '-';
+    }
+
+    /* check if any '_' were not '-' in header string (key) */
+    if (!buffer_eq_icase_slen(key, p, len)) {
+        /* check if translated "other" header now clashes with
+         * translated recognized header in http_header.h enum http_header_e */
+        if (http_header_hkey_get(p, len) != HTTP_HEADER_OTHER)
+            rc |= 1;
+        /* check if translated "other" header now clashes with a
+         * different translated "other" header which used '-' */
+        else if (http_header_request_get(r, HTTP_HEADER_OTHER, p, len))
+            rc |= 1;
+        /* note: code here does not detect conflicts between "other" headers
+         * where non-alphanumerics (other than '-') were encoded to '_' */
+    }
+
+    /* translate string '-' back to '_' to restore varname */
+    for (uint32_t i = 0; i < len; ++i) {
+        if (p[i] == '-') p[i] = '_';
+    }
+
+    return rc;
 }
 
 
@@ -339,17 +376,22 @@ http_cgi_headers (request_st * const r, http_cgi_opts * const opts, http_cgi_hea
     for (n = 0; n < r->rqst_headers.used; n++) {
         data_string *ds = (data_string *)r->rqst_headers.data[n];
         if (!buffer_is_blank(&ds->value) && !buffer_is_unset(&ds->key)) {
-            /* Security: Do not emit HTTP_PROXY in environment.
-             * Some executables use HTTP_PROXY to configure
-             * outgoing proxy.  See also https://httpoxy.org/ */
-            if (ds->ext == HTTP_HEADER_OTHER
-                && buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy"))) {
-                continue;
-            }
-            else if (ds->ext == HTTP_HEADER_CONTENT_TYPE)
+            if (ds->ext == HTTP_HEADER_CONTENT_TYPE)
                 buffer_copy_string_len(tb, CONST_STR_LEN("CONTENT_TYPE"));
-            else
+            else {
                 http_cgi_encode_varname(tb, BUF_PTR_LEN(&ds->key), 1);
+                if (ds->ext == HTTP_HEADER_OTHER) {
+                    /* Security: check for conflicts if varname contains '_'
+                     * (non-alphanumeric chars translated to '_' by encoding) */
+                    if (NULL != strchr(tb->ptr+5, '_')) /* step past "HTTP_" */
+                        rc |= http_cgi_check_other_conflict(r, &ds->key, tb);
+                    /* Security: Do not emit HTTP_PROXY in environment.
+                     * Some executables use HTTP_PROXY to configure
+                     * outgoing proxy.  See also https://httpoxy.org/ */
+                    else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("Proxy")))
+                        continue;
+                }
+            }
             rc |= cb(vdata, BUF_PTR_LEN(tb),
                             BUF_PTR_LEN(&ds->value));
         }
