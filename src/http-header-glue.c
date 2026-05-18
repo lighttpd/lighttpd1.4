@@ -1076,10 +1076,8 @@ static int http_response_process_headers(request_st * const restrict r, http_res
                 r->resp_body_scratchpad =
                   (off_t)li_restricted_strtoint64(value, vlen, &err);
                 if (err != value + vlen) {
-                    /*(invalid Content-Length value from backend;
-                     * read from backend until backend close, hope for the best)
-                     *(might choose to treat this as 502 Bad Gateway) */
-                    r->resp_body_scratchpad = -1;
+                    http_status_set_err(r, 502); /* Bad Gateway */
+                    continue;
                 }
             }
             else {
