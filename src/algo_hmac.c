@@ -85,7 +85,11 @@ li_hmac_sha1 (unsigned char digest[SHA_DIGEST_LENGTH],
     struct hmac_sha1_ctx ctx;
     hmac_sha1_set_key(&ctx, slen, (const uint8_t *)secret);
     hmac_sha1_update(&ctx, mlen, (const uint8_t *)msg);
+    #if NETTLE_VERSION_MAJOR >= 4
+    hmac_sha1_digest(&ctx, (uint8_t *)digest);
+    #else
     hmac_sha1_digest(&ctx, SHA_DIGEST_LENGTH, (uint8_t *)digest);
+    #endif
     return 1;
    #elif defined(USE_MBEDTLS_CRYPTO) \
       && defined(MBEDTLS_MD_C) && defined(MBEDTLS_SHA1_C)
@@ -161,7 +165,11 @@ li_hmac_sha256 (unsigned char digest[SHA256_DIGEST_LENGTH],
     struct hmac_sha256_ctx ctx;
     hmac_sha256_set_key(&ctx, slen, (const uint8_t *)secret);
     hmac_sha256_update(&ctx, mlen, (const uint8_t *)msg);
+    #if NETTLE_VERSION_MAJOR >= 4
+    hmac_sha256_digest(&ctx, (uint8_t *)digest);
+    #else
     hmac_sha256_digest(&ctx, SHA256_DIGEST_LENGTH, (uint8_t *)digest);
+    #endif
     return 1;
    #elif defined(USE_MBEDTLS_CRYPTO) \
       && defined(MBEDTLS_MD_C) && defined(MBEDTLS_SHA256_C)
@@ -237,7 +245,11 @@ li_hmac_sha512 (unsigned char digest[SHA512_DIGEST_LENGTH],
     struct hmac_sha512_ctx ctx;
     hmac_sha512_set_key(&ctx, slen, (const uint8_t *)secret);
     hmac_sha512_update(&ctx, mlen, (const uint8_t *)msg);
+    #if NETTLE_VERSION_MAJOR >= 4
+    hmac_sha512_digest(&ctx, (uint8_t *)digest);
+    #else
     hmac_sha512_digest(&ctx, SHA512_DIGEST_LENGTH, (uint8_t *)digest);
+    #endif
     return 1;
    #elif defined(USE_MBEDTLS_CRYPTO) \
       && defined(MBEDTLS_MD_C) && defined(MBEDTLS_SHA512_C)

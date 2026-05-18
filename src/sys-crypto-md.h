@@ -15,9 +15,26 @@
 
 #if defined(USE_NETTLE_CRYPTO)
 
+#ifdef __has_include
+#if __has_include(<nettle/version.h>)
+#include <nettle/version.h>
+#endif
+#endif
+#ifndef NETTLE_VERSION_MAJOR
+#define NETTLE_VERSION_MAJOR 0
+#endif
+#ifndef NETTLE_VERSION_MINOR
+#define NETTLE_VERSION_MINOR 0
+#endif
 #include <nettle/md4.h>
 #include <nettle/md5.h>
+#if NETTLE_VERSION_MAJOR >= 3 \
+ || (NETTLE_VERSION_MAJOR == 2 && NETTLE_VERSION_MINOR >= 6)
+#include <nettle/sha1.h>
+#include <nettle/sha2.h>
+#else
 #include <nettle/sha.h>
+#endif
 
 #define USE_LIB_CRYPTO_MD4
 typedef struct md4_ctx MD4_CTX;
@@ -30,7 +47,11 @@ MD4_Init(MD4_CTX *ctx)
 static inline int
 MD4_Final(unsigned char *digest, MD4_CTX *ctx)
 {
+  #if NETTLE_VERSION_MAJOR >= 4
+    nettle_md4_digest(ctx, digest);
+  #else
     nettle_md4_digest(ctx, MD4_DIGEST_SIZE, digest);
+  #endif
     return 1;
 }
 static inline int
@@ -51,7 +72,11 @@ MD5_Init(MD5_CTX *ctx)
 static inline int
 MD5_Final(unsigned char *digest, MD5_CTX *ctx)
 {
+  #if NETTLE_VERSION_MAJOR >= 4
+    nettle_md5_digest(ctx, digest);
+  #else
     nettle_md5_digest(ctx, MD5_DIGEST_SIZE, digest);
+  #endif
     return 1;
 }
 static inline int
@@ -72,7 +97,11 @@ SHA1_Init(SHA_CTX *ctx)
 static inline int
 SHA1_Final(unsigned char *digest, SHA_CTX *ctx)
 {
+  #if NETTLE_VERSION_MAJOR >= 4
+    nettle_sha1_digest(ctx, digest);
+  #else
     nettle_sha1_digest(ctx, SHA1_DIGEST_SIZE, digest);
+  #endif
     return 1;
 }
 static inline int
@@ -93,7 +122,11 @@ SHA256_Init(SHA256_CTX *ctx)
 static inline int
 SHA256_Final(unsigned char *digest, SHA256_CTX *ctx)
 {
+  #if NETTLE_VERSION_MAJOR >= 4
+    nettle_sha256_digest(ctx, digest);
+  #else
     nettle_sha256_digest(ctx, SHA256_DIGEST_SIZE, digest);
+  #endif
     return 1;
 }
 static inline int
@@ -117,7 +150,11 @@ SHA512_256_Init(SHA512_CTX *ctx)
 static inline int
 SHA512_256_Final(unsigned char *digest, SHA512_CTX *ctx)
 {
+  #if NETTLE_VERSION_MAJOR >= 4
+    nettle_sha512_256_digest(ctx, digest);
+  #else
     nettle_sha512_256_digest(ctx, SHA256_DIGEST_SIZE, digest);
+  #endif
     return 1;
 }
 static inline int
@@ -138,7 +175,11 @@ SHA512_Init(SHA512_CTX *ctx)
 static inline int
 SHA512_Final(unsigned char *digest, SHA512_CTX *ctx)
 {
+  #if NETTLE_VERSION_MAJOR >= 4
+    nettle_sha512_digest(ctx, digest);
+  #else
     nettle_sha512_digest(ctx, SHA512_DIGEST_SIZE, digest);
+  #endif
     return 1;
 }
 static inline int
