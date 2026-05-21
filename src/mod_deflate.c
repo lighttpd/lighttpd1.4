@@ -1949,6 +1949,24 @@ static int mod_deflate_choose_encoding (const char *value, const plugin_config *
 	}
 }
 
+static void mod_deflate_adjust_etag (buffer * const etag, const uint32_t etaglen, const char * const label) {
+	if (etaglen) {
+		/* modify ETag response header in-place to remove '"' and append '-label"' */
+		etag->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
+		buffer_append_string(etag, label);
+		buffer_append_char(etag, '"');
+	}
+}
+
+__attribute_cold__
+static void mod_deflate_restore_etag (buffer * const etag, const uint32_t etaglen) {
+	if (etaglen) {
+		/* restore original ETag */
+		etag->ptr[etaglen-1] = '"'; /*(overwrite '-')*/
+		buffer_truncate(etag, etaglen);
+	}
+}
+
 REQUEST_FUNC(mod_deflate_handle_response_start) {
 	const buffer *vbro;
 	buffer *vb;
@@ -2026,25 +2044,28 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 					    CONST_STR_LEN("Accept-Encoding"));
 	}
 
-	/* check ETag as is done in http_response_handle_cachable()
-	 * (slightly imperfect (close enough?) match of ETag "000000" to "000000-gzip") */
 	vb = http_header_response_get(r, HTTP_HEADER_ETAG, CONST_STR_LEN("ETag"));
 	etaglen = vb ? buffer_clen(vb) : 0;
-	if (etaglen && light_btst(r->rqst_htags, HTTP_HEADER_IF_NONE_MATCH)) {
-		const buffer *if_none_match = http_header_request_get(r, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
-		if (   r->http_status < 300 /*(want 2xx only)*/
-		    && NULL != if_none_match
-		    && 0 == strncmp(if_none_match->ptr, vb->ptr, etaglen-1)
-		    && if_none_match->ptr[etaglen-1] == '-'
-		    && 0 == strncmp(if_none_match->ptr+etaglen, label, strlen(label))) {
 
+	/* update ETag, if ETag response header is set */
+	mod_deflate_adjust_etag(vb, etaglen, label);
+
+	/* check ETag as is done in http_response_handle_cachable()
+	 * (match of ETag "000000" to "000000-gzip") */
+	if (light_btst(r->rqst_htags, HTTP_HEADER_IF_NONE_MATCH)
+	    && r->http_status < 300) { /*(want 2xx only)*/
+		const buffer *if_none_match = http_header_request_get(r, HTTP_HEADER_IF_NONE_MATCH, CONST_STR_LEN("If-None-Match"));
+		/*(weak etag comparison must not be used for ranged requests)*/
+		int range_request = (0 != light_btst(r->rqst_htags, HTTP_HEADER_RANGE));
+	  #ifdef __COVERITY__
+		/*(redundant w/ r->rqst_htags check)*/
+		if (NULL == if_none_match) { } else
+	  #endif
+		if (etaglen && http_etag_matches(vb, if_none_match->ptr, !range_request)) {
 			if (http_method_get_head_query(r->http_method)) {
-				/* modify ETag response header in-place to remove '"' and append '-label"' */
-				vb->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
-				buffer_append_string(vb, label);
-				buffer_append_char(vb, '"');
 				r->http_status = 304;
 			} else {
+				mod_deflate_restore_etag(vb, etaglen);
 				r->http_status = 412;
 			}
 			http_status_set_fin(r, r->http_status);
@@ -2061,15 +2082,8 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 	}
 
 	if (0.0 < pconf.max_loadavg && pconf.max_loadavg < r->con->srv->loadavg[0]) {
+		mod_deflate_restore_etag(vb, etaglen);
 		return HANDLER_GO_ON;
-	}
-
-	/* update ETag, if ETag response header is set */
-	if (etaglen) {
-		/* modify ETag response header in-place to remove '"' and append '-label"' */
-		vb->ptr[etaglen-1] = '-'; /*(overwrite end '"')*/
-		buffer_append_string(vb, label);
-		buffer_append_char(vb, '"');
 	}
 
 	/* set Content-Encoding to show selected compression type */
@@ -2202,10 +2216,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 		log_error(r->conf.errh, __FILE__, __LINE__,
 		  "Failed to initialize compression %s", label);
 		/* restore prior Etag and unset Content-Encoding */
-		if (etaglen) {
-			vb->ptr[etaglen-1] = '"'; /*(overwrite '-')*/
-			buffer_truncate(vb, etaglen);
-		}
+		mod_deflate_restore_etag(vb, etaglen);
 		http_header_response_unset(r, HTTP_HEADER_CONTENT_ENCODING, CONST_STR_LEN("Content-Encoding"));
 		return HANDLER_GO_ON;
 	}
