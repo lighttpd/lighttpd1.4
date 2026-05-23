@@ -47,7 +47,7 @@ void buffer_move(buffer *_Borrow restrict b, buffer *_Borrow restrict src);
  */
 __attribute_nonnull__()
 __attribute_returns_nonnull__
-char* buffer_string_prepare_copy(buffer *_Borrow b, size_t size);
+_Safe char* buffer_string_prepare_copy(buffer *_Borrow b, size_t size);
 
 /* allocate buffer large enough to be able to append a string of given size
  * if b was empty (used == 0) it will contain an empty string (used == 1)
@@ -57,7 +57,7 @@ char* buffer_string_prepare_copy(buffer *_Borrow b, size_t size);
  */
 __attribute_nonnull__()
 __attribute_returns_nonnull__
-char* buffer_string_prepare_append(buffer *_Borrow b, size_t size);
+_Safe char* buffer_string_prepare_append(buffer *_Borrow b, size_t size);
 
 /* extend and modify buffer for immediate addition of x bytes (differs from
  * buffer_string_prepare_append() which only ensures space is available)
@@ -65,7 +65,7 @@ char* buffer_string_prepare_append(buffer *_Borrow b, size_t size);
  */
 __attribute_nonnull__()
 __attribute_returns_nonnull__
-char* buffer_extend(buffer *_Borrow restrict b, size_t x);
+_Safe char* buffer_extend(buffer *_Borrow restrict b, size_t x);
 
 /* use after prepare_(copy,append) when you have written data to the buffer
  * to increase the buffer length by size. also sets the terminating zero.
@@ -73,7 +73,7 @@ char* buffer_extend(buffer *_Borrow restrict b, size_t x);
  * same size to be sure).
  */
 __attribute_nonnull__()
-void buffer_commit(buffer *_Borrow b, size_t size);
+_Safe void buffer_commit(buffer *_Borrow b, size_t size);
 
 /* clear buffer
  * - invalidate buffer contents
@@ -81,7 +81,7 @@ void buffer_commit(buffer *_Borrow b, size_t size);
  *   (b->ptr *is not* set to an empty, '\0'-terminated string "")
  */
 __attribute_nonnull__()
-static inline void buffer_clear(buffer *b);
+_Safe static inline void buffer_clear(buffer *_Borrow b);
 
 /* reset buffer
  * - invalidate buffer contents
@@ -91,23 +91,23 @@ static inline void buffer_clear(buffer *b);
  * - frees larger buffer (b->size > BUFFER_MAX_REUSE_SIZE)
  */
 __attribute_nonnull__()
-static inline void buffer_reset(buffer *b);
+_Safe static inline void buffer_reset(buffer *_Borrow b);
 
 /* free buffer ptr
  * - invalidate buffer contents; free ptr; reset ptr, used, size to 0
  */
 __attribute_cold__
 __attribute_nonnull__()
-void buffer_free_ptr(buffer *_Borrow b);
+_Safe void buffer_free_ptr(buffer *_Borrow b);
 
-void buffer_copy_string(buffer * restrict b, const char * restrict s);
-void buffer_copy_string_len(buffer * restrict b, const char * restrict s, size_t len);
-void buffer_copy_string_len_lc(buffer * restrict b, const char * restrict s, size_t len);
+_Safe void buffer_copy_string(buffer *_Borrow restrict b, const char *_Borrow restrict s);
+_Safe void buffer_copy_string_len(buffer *_Borrow restrict b, const char *_Borrow _Nullable restrict s, size_t len);
+_Safe void buffer_copy_string_len_lc(buffer *_Borrow restrict b, const char *_Borrow restrict s, size_t len);
 
-void buffer_append_string(buffer * restrict b, const char * restrict s);
-void buffer_append_string_len(buffer * restrict b, const char * restrict s, size_t len);
-void buffer_append_str2(buffer * restrict b, const char *s1, size_t len1, const char *s2, size_t len2);
-void buffer_append_str3(buffer * restrict b, const char *s1, size_t len1, const char *s2, size_t len2, const char *s3, size_t len3);
+_Safe void buffer_append_string(buffer *_Borrow restrict b, const char *_Borrow restrict s);
+_Safe void buffer_append_string_len(buffer *_Borrow restrict b, const char *_Borrow _Nullable restrict s, size_t len);
+_Safe void buffer_append_str2(buffer *_Borrow restrict b, const char *_Borrow s1, size_t len1, const char *_Borrow s2, size_t len2);
+_Safe void buffer_append_str3(buffer *_Borrow restrict b, const char *_Borrow s1, size_t len1, const char *_Borrow s2, size_t len2, const char *_Borrow s3, size_t len3);
 
 #ifndef LI_CONST_IOVEC
 #define LI_CONST_IOVEC
@@ -118,7 +118,8 @@ struct const_iovec {
 #endif
 
 __attribute_nonnull__()
-void buffer_append_iovec(buffer * restrict b, const struct const_iovec *iov, size_t n);
+/* iov: raw array pointer (read by subscript; _Borrow forbids [] indexing) */
+_Safe void buffer_append_iovec(buffer *_Borrow restrict b, const struct const_iovec *iov, size_t n);
 
 #define buffer_append_uint_hex(b,len) buffer_append_uint_hex_lc((b),(len))
 __attribute_nonnull__()
@@ -283,7 +284,7 @@ static inline int light_iscntrl_or_utf8_invalid_byte(int c) {
 #define light_bset(a,b)  ((a) |=  ((uint64_t)1uL << (b)))
 
 
-void buffer_append_path_len(buffer * restrict b, const char * restrict a, size_t alen); /* join strings with '/', if '/' not present */
+_Safe void buffer_append_path_len(buffer *_Borrow restrict b, const char *_Borrow restrict a, size_t alen); /* join strings with '/', if '/' not present */
 void buffer_copy_path_len2(buffer * restrict b, const char * restrict s1, size_t len1, const char * restrict s2, size_t len2);
 
 __attribute_nonnull__()
@@ -320,8 +321,8 @@ static inline int buffer_is_blank(const buffer *b) {
 /* buffer "C" len (bytes) */
 __attribute_nonnull__()
 __attribute_pure__
-static inline uint32_t buffer_clen (const buffer *b);
-static inline uint32_t buffer_clen (const buffer *b) {
+_Safe static inline uint32_t buffer_clen (const buffer *_Borrow b);
+_Safe static inline uint32_t buffer_clen (const buffer *_Borrow b) {
     return b->used - (0 != b->used);
 }
 
@@ -334,50 +335,51 @@ static inline uint32_t buffer_string_space(const buffer *b) {
 }
 
 __attribute_nonnull__()
-static inline void buffer_copy_buffer(buffer * restrict b, const buffer * restrict src);
-static inline void buffer_copy_buffer(buffer * restrict b, const buffer * restrict src) {
-    buffer_copy_string_len(b, (const char *)&_Const *src->ptr, buffer_clen(src));
+_Safe static inline void buffer_copy_buffer(buffer *_Borrow restrict b, const buffer *_Borrow restrict src);
+_Safe static inline void buffer_copy_buffer(buffer *_Borrow restrict b, const buffer *_Borrow restrict src) {
+    buffer_copy_string_len(&_Mut *b, &_Const *src->ptr, buffer_clen(&_Const *src));
 }
 
 __attribute_nonnull__()
-static inline void buffer_append_buffer(buffer * restrict b, const buffer * restrict src);
-static inline void buffer_append_buffer(buffer * restrict b, const buffer * restrict src) {
-    buffer_append_string_len(b, (const char *)&_Const *src->ptr, buffer_clen(src));
+_Safe static inline void buffer_append_buffer(buffer *_Borrow restrict b, const buffer *_Borrow restrict src);
+_Safe static inline void buffer_append_buffer(buffer *_Borrow restrict b, const buffer *_Borrow restrict src) {
+    buffer_append_string_len(&_Mut *b, &_Const *src->ptr, buffer_clen(&_Const *src));
 }
 
 __attribute_nonnull__()
-static inline void buffer_truncate(buffer *b, uint32_t len);
-static inline void buffer_truncate(buffer *b, uint32_t len) {
-    ((char *)&_Mut *b->ptr)[len] = '\0'; /* b->ptr must exist; use buffer_blank() for trunc 0 */
+_Safe static inline void buffer_truncate(buffer *_Borrow b, uint32_t len);
+_Safe static inline void buffer_truncate(buffer *_Borrow b, uint32_t len) {
+    _Unsafe { ((char *)&_Mut *b->ptr)[len] = '\0'; } /* b->ptr must exist; use buffer_blank() for trunc 0 */
     b->used = len + 1;
 }
 
 __attribute_nonnull__()
-static inline void buffer_blank(buffer *b);
-static inline void buffer_blank(buffer *b) {
+_Safe static inline void buffer_blank(buffer *_Borrow b);
+_Safe static inline void buffer_blank(buffer *_Borrow b) {
     b->ptr ? buffer_truncate(b, 0) : (void)buffer_extend(&_Mut *b, 0);
 }
 
 __attribute_nonnull__()
-static inline void buffer_append_char (buffer *b, char c);
-static inline void buffer_append_char (buffer *b, char c) {
-    *(buffer_extend(&_Mut *b, 1)) = c;
+_Safe static inline void buffer_append_char (buffer *_Borrow b, char c);
+_Safe static inline void buffer_append_char (buffer *_Borrow b, char c) {
+    char *d = buffer_extend(&_Mut *b, 1);
+    _Unsafe { *d = c; }
 }
 
 /* append '/' to non-empty strings not ending in '/' */
 __attribute_nonnull__()
-static inline void buffer_append_slash(buffer *b);
-static inline void buffer_append_slash(buffer *b) {
-    const uint32_t len = buffer_clen(b);
-    if (len > 0 && '/' != ((const char *)&_Const *b->ptr)[len-1])
-        buffer_append_char(b, '/');
+_Safe static inline void buffer_append_slash(buffer *_Borrow b);
+_Safe static inline void buffer_append_slash(buffer *_Borrow b) {
+    const uint32_t len = buffer_clen(&_Const *b);
+    if (len > 0 && '/' != _Unsafe(((const char *)&_Const *b->ptr)[len-1]))
+        buffer_append_char(&_Mut *b, '/');
 }
 
-static inline void buffer_clear(buffer *b) {
+_Safe static inline void buffer_clear(buffer *_Borrow b) {
 	b->used = 0;
 }
 
-static inline void buffer_reset(buffer *b) {
+_Safe static inline void buffer_reset(buffer *_Borrow b) {
 	b->used = 0;
 	/* release buffer larger than BUFFER_MAX_REUSE_SIZE bytes */
 	if (b->size > BUFFER_MAX_REUSE_SIZE) buffer_free_ptr(&_Mut *b);
@@ -426,7 +428,7 @@ static inline int buffer_string_is_empty(const buffer *b) {
 __attribute_pure__
 static inline uint32_t buffer_string_length(const buffer *b);
 static inline uint32_t buffer_string_length(const buffer *b) {
-	return NULL != b ? buffer_clen(b) : 0;
+	return NULL != b ? buffer_clen(&_Const *b) : 0;
 }
 
 /* sets string length:
@@ -439,9 +441,9 @@ __attribute_nonnull__()
 static inline void buffer_string_set_length(buffer *b, uint32_t len);
 static inline void buffer_string_set_length(buffer *b, uint32_t len) {
     if (len < b->size)
-        buffer_truncate(b, len);
+        buffer_truncate(&_Mut *b, len);
     else {
-        const uint32_t x = len - buffer_clen(b);
+        const uint32_t x = len - buffer_clen(&_Const *b);
         buffer_extend(&_Mut *b, x);
     }
 }
