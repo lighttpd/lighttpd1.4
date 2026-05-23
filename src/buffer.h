@@ -21,7 +21,7 @@ struct tm;              /* declaration */
  * (i.e. never leave it in the special empty state)
  */
 typedef struct {
-	char *ptr;
+	char *_Owned _Nullable ptr;   /* _Nullable: documented "empty" state has ptr == NULL */
 
 	/* "used" includes a terminating 0 */
 	uint32_t used;
@@ -32,13 +32,13 @@ typedef struct {
 /* create new buffer; either empty or copy given data */
 __attribute_malloc__
 __attribute_returns_nonnull__
-buffer* buffer_init(void);
+buffer *_Owned buffer_init(void);
 
-void buffer_free(buffer *b); /* b can be NULL */
+void buffer_free(buffer *_Owned _Nullable b); /* b can be NULL */
 
 /* reset b. if NULL != b && NULL != src, move src content to b. reset src. */
 __attribute_nonnull__()
-void buffer_move(buffer * restrict b, buffer * restrict src);
+void buffer_move(buffer *_Borrow restrict b, buffer *_Borrow restrict src);
 
 /* make sure buffer is large enough to store a string of given size
  * and a terminating zero.
@@ -47,7 +47,7 @@ void buffer_move(buffer * restrict b, buffer * restrict src);
  */
 __attribute_nonnull__()
 __attribute_returns_nonnull__
-char* buffer_string_prepare_copy(buffer *b, size_t size);
+char* buffer_string_prepare_copy(buffer *_Borrow b, size_t size);
 
 /* allocate buffer large enough to be able to append a string of given size
  * if b was empty (used == 0) it will contain an empty string (used == 1)
@@ -57,7 +57,7 @@ char* buffer_string_prepare_copy(buffer *b, size_t size);
  */
 __attribute_nonnull__()
 __attribute_returns_nonnull__
-char* buffer_string_prepare_append(buffer *b, size_t size);
+char* buffer_string_prepare_append(buffer *_Borrow b, size_t size);
 
 /* extend and modify buffer for immediate addition of x bytes (differs from
  * buffer_string_prepare_append() which only ensures space is available)
@@ -65,7 +65,7 @@ char* buffer_string_prepare_append(buffer *b, size_t size);
  */
 __attribute_nonnull__()
 __attribute_returns_nonnull__
-char* buffer_extend(buffer * const restrict b, size_t x);
+char* buffer_extend(buffer *_Borrow restrict b, size_t x);
 
 /* use after prepare_(copy,append) when you have written data to the buffer
  * to increase the buffer length by size. also sets the terminating zero.
@@ -73,7 +73,7 @@ char* buffer_extend(buffer * const restrict b, size_t x);
  * same size to be sure).
  */
 __attribute_nonnull__()
-void buffer_commit(buffer *b, size_t size);
+void buffer_commit(buffer *_Borrow b, size_t size);
 
 /* clear buffer
  * - invalidate buffer contents
@@ -98,7 +98,7 @@ static inline void buffer_reset(buffer *b);
  */
 __attribute_cold__
 __attribute_nonnull__()
-void buffer_free_ptr(buffer *b);
+void buffer_free_ptr(buffer *_Borrow b);
 
 void buffer_copy_string(buffer * restrict b, const char * restrict s);
 void buffer_copy_string_len(buffer * restrict b, const char * restrict s, size_t len);
@@ -336,32 +336,32 @@ static inline uint32_t buffer_string_space(const buffer *b) {
 __attribute_nonnull__()
 static inline void buffer_copy_buffer(buffer * restrict b, const buffer * restrict src);
 static inline void buffer_copy_buffer(buffer * restrict b, const buffer * restrict src) {
-    buffer_copy_string_len(b, BUF_PTR_LEN(src));
+    buffer_copy_string_len(b, (const char *)&_Const *src->ptr, buffer_clen(src));
 }
 
 __attribute_nonnull__()
 static inline void buffer_append_buffer(buffer * restrict b, const buffer * restrict src);
 static inline void buffer_append_buffer(buffer * restrict b, const buffer * restrict src) {
-    buffer_append_string_len(b, BUF_PTR_LEN(src));
+    buffer_append_string_len(b, (const char *)&_Const *src->ptr, buffer_clen(src));
 }
 
 __attribute_nonnull__()
 static inline void buffer_truncate(buffer *b, uint32_t len);
 static inline void buffer_truncate(buffer *b, uint32_t len) {
-    b->ptr[len] = '\0'; /* b->ptr must exist; use buffer_blank() for trunc 0 */
+    ((char *)&_Mut *b->ptr)[len] = '\0'; /* b->ptr must exist; use buffer_blank() for trunc 0 */
     b->used = len + 1;
 }
 
 __attribute_nonnull__()
 static inline void buffer_blank(buffer *b);
 static inline void buffer_blank(buffer *b) {
-    b->ptr ? buffer_truncate(b, 0) : (void)buffer_extend(b, 0);
+    b->ptr ? buffer_truncate(b, 0) : (void)buffer_extend(&_Mut *b, 0);
 }
 
 __attribute_nonnull__()
 static inline void buffer_append_char (buffer *b, char c);
 static inline void buffer_append_char (buffer *b, char c) {
-    *(buffer_extend(b, 1)) = c;
+    *(buffer_extend(&_Mut *b, 1)) = c;
 }
 
 /* append '/' to non-empty strings not ending in '/' */
@@ -369,7 +369,7 @@ __attribute_nonnull__()
 static inline void buffer_append_slash(buffer *b);
 static inline void buffer_append_slash(buffer *b) {
     const uint32_t len = buffer_clen(b);
-    if (len > 0 && '/' != b->ptr[len-1])
+    if (len > 0 && '/' != ((const char *)&_Const *b->ptr)[len-1])
         buffer_append_char(b, '/');
 }
 
@@ -380,15 +380,15 @@ static inline void buffer_clear(buffer *b) {
 static inline void buffer_reset(buffer *b) {
 	b->used = 0;
 	/* release buffer larger than BUFFER_MAX_REUSE_SIZE bytes */
-	if (b->size > BUFFER_MAX_REUSE_SIZE) buffer_free_ptr(b);
+	if (b->size > BUFFER_MAX_REUSE_SIZE) buffer_free_ptr(&_Mut *b);
 }
 
 static inline int buffer_has_slash_suffix (const buffer * const b) {
-    return (b->used > 1 && b->ptr[b->used-2] == '/');
+    return (b->used > 1 && ((const char *)&_Const *b->ptr)[b->used-2] == '/');
 }
 
 static inline int buffer_has_pathsep_suffix (const buffer * const b) {
-    return (b->used > 1 && b->ptr[b->used-2] == '/');
+    return (b->used > 1 && ((const char *)&_Const *b->ptr)[b->used-2] == '/');
 }
 
 
@@ -440,8 +440,10 @@ static inline void buffer_string_set_length(buffer *b, uint32_t len);
 static inline void buffer_string_set_length(buffer *b, uint32_t len) {
     if (len < b->size)
         buffer_truncate(b, len);
-    else
-        buffer_extend(b, len - buffer_clen(b));
+    else {
+        const uint32_t x = len - buffer_clen(b);
+        buffer_extend(&_Mut *b, x);
+    }
 }
 
 
