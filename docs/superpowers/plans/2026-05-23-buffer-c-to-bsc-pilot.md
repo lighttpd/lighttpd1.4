@@ -32,6 +32,12 @@
 - `ptr` is `_Owned _Nullable`, so `&_Mut *b->ptr` / `&_Const *b->ptr` may raise a `deref-nullable` diagnostic. Most accesses are post-allocation (guarded by the existing `used`/`size`/`force_assert` checks) where `ptr` is non-NULL — let the checker narrow after those guards, or add the null-check the diagnostic asks for. Do not strip the existing empty-state guards.
 - If `safe_malloc<buffer>((buffer){0})` is rejected (compound literal with an owned field), fall back to the raw form: `_Unsafe { buffer *raw = (buffer *)calloc(1, sizeof(buffer)); force_assert(raw); buffer *_Owned b = __take_from_raw(raw); }`.
 
+**Validated in Tasks 2–3 (apply directly; the compiler confirmed these):**
+- `memcpy`/`mempcpy`/`strlen` (and the other libc string externs) are `_Unsafe` externs **and** their `char* → void*`/`const char*` arg passes a borrow-to-raw conversion that the safe zone rejects. So each call from a `_Safe` body must be wrapped `_Unsafe { … }` (minimal — just the call/raw-write group). The plan text saying "memcpy stays as-is" was wrong for this toolchain.
+- A `_Borrow` (esp. `_Borrow restrict`) parameter **cannot be forwarded** as an argument to another `_Borrow` param — re-borrow at the call site: `f(b)` → `f(&_Mut *b)`, `g(s)` → `g(&_Const *s)`, `buffer_clen(b)` → `buffer_clen(&_Const *b)`. This cascades into *non-`_Safe`* callers too the moment a callee's signature gains `_Borrow`; those re-borrows are pure mechanical arg fixes — do NOT mark the caller `_Safe` unless its own task says so.
+- Marking a function `_Safe` requires `_Safe` on **both** its `.h` declaration and `.c` definition, or `_Safe` callers won't resolve it.
+- Narrowing/qualifier-adding conversions are forbidden in the safe zone: add explicit `(uint32_t)`/`(size_t)` casts where the original relied on implicit narrowing, and drop `const`/`restrict` on local cursor variables (optimizer hints only; behavior-neutral). Keep `const`/`restrict` on parameters.
+
 ---
 
 ## Task 1: Scaffolding & baseline
