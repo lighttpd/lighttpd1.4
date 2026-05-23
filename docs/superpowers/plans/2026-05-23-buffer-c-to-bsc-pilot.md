@@ -57,8 +57,9 @@ Expected: `-- Build files have been written to: .../build-cmake`, and `build-cma
 #define LI_BSC_COMPAT_H
 /* BiSheng C ownership/safety keywords. Under the BSC compiler (__bishengc
  * defined) these are real keywords. For every other compiler (plain C) they
- * must vanish so annotated headers still parse. Do NOT guard _Nullable /
- * _Nonnull here — those are real clang nullability keywords valid in plain C. */
+ * must vanish so annotated headers still parse. _Nullable/_Nonnull are guarded
+ * too: Clang accepts them in plain C but GCC (the default cmake/autotools
+ * compiler) does not, so leaving them live breaks the includers under GCC. */
 #ifndef __bishengc
 #define _Owned
 #define _Borrow
@@ -66,6 +67,8 @@ Expected: `-- Build files have been written to: .../build-cmake`, and `build-cma
 #define _Unsafe
 #define _Mut
 #define _Const
+#define _Nullable
+#define _Nonnull
 #endif
 #endif /* LI_BSC_COMPAT_H */
 ```
@@ -355,28 +358,44 @@ git commit -m "bsc: translate buffer comparison readers and header inlines to _S
 
 Run THE VERIFY COMMAND. Expected: exit 0, no output.
 
-- [ ] **Step 2: Plain-C parse unaffected (both compilers)**
+- [ ] **Step 2: Includers unaffected — `buffer.h` stays dual-valid (success criterion B)**
 
+A translated `buffer.c` is a BSC-only TU (it contains `bishengc_safety.hbs` + builtins), so it can
+**no longer** be parsed by gcc/stock-clang — and that is fine (spec §6 scopes out build-system wiring).
+The integrity check is that the *header* stays dual-valid so the includers are untouched. Sweep every
+standalone `src/*.c` **except `buffer.c`** under gcc and confirm zero `buffer.h`-related failures:
 ```sh
-clang -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -fsyntax-only src/buffer.c
-~/bsc/llvm-project/install/bin/clang -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -fsyntax-only src/buffer.c
+for f in src/*.c; do [ "$f" = src/buffer.c ] && continue; \
+  gcc -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -fsyntax-only "$f" 2>&1; done | grep -i 'buffer\.h'
 ```
-Expected: both exit 0.
+Expected: no output (the only failing TUs are pre-existing: missing optional-dep headers, Windows-only,
+lemon/X-macro templates — none mention `buffer.h`). Spot-check stock-clang + BSC-plain-C on one includer.
 
-- [ ] **Step 3: Full project build unchanged (success criterion B)**
-
-```sh
-cmake --build build-cmake -j4
-```
-Expected: build succeeds.
+- [ ] **Step 3: (folded into Step 2)** — `cmake --build` of the whole project is intentionally *not*
+expected to succeed post-translation, because it would compile `buffer.c` with gcc. Building a linked
+artifact requires compiling `buffer.c` with `-x bsc` and linking `-lstdcbs` (Step 4's recipe).
 
 - [ ] **Step 4: Behavioral parity via the unit test (success criterion C)**
 
+`ctest` would compile `buffer.c` with gcc and fail, so build the parity runner directly: `buffer.o`
+under `-x bsc` + a plain-C harness that `#include`s **`buffer.h`** (not `buffer.c`) and calls
+`test_buffer()`, linked with `-lstdcbs`. The repo's `src/t/test_buffer.c` is **not** modified — the
+`#include "buffer.c"` → `"buffer.h"` swap happens only in a throwaway copy (it uses only public API,
+and `_Owned`/`_Borrow` erase at codegen so the gcc objects link against the BSC `buffer.o`):
 ```sh
-cmake --build build-cmake -j4 --target test_buffer 2>/dev/null || true
-ctest --test-dir build-cmake -R '^test_buffer' --output-on-failure
+BSC=~/bsc/llvm-project/install/bin/clang
+LIBCBS=/home/zly/bsc/llvm-project/install/include/libcbs
+LIBDIR=/home/zly/bsc/llvm-project/install/lib; W=/tmp/bsc_test_buffer; mkdir -p $W
+$BSC -x bsc -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -I$LIBCBS \
+  -Wno-nullability-completeness -c src/buffer.c -o $W/buffer.o
+sed 's|#include "buffer.c"|#include "buffer.h"|' src/t/test_buffer.c > $W/tb.c
+printf 'void test_buffer(void);\nint main(void){test_buffer();return 0;}\n' > $W/m.c
+gcc -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -c $W/tb.c -o $W/tb.o
+gcc -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -c src/ck.c -o $W/ck.o
+gcc -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -c $W/m.c  -o $W/m.o
+$BSC $W/tb.o $W/buffer.o $W/ck.o $W/m.o -L$LIBDIR -lstdcbs -o $W/run && $W/run; echo "EXIT $?"
 ```
-Expected: `test_buffer` passes. (If the target name differs, locate it: `ctest --test-dir build-cmake -N | grep -i buffer`.)
+Expected: `EXIT 0` (all `test_buffer` assertions pass).
 
 - [ ] **Step 5: Audit the `_Owned`/`_Unsafe` surface (success criterion D)**
 
