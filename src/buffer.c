@@ -38,9 +38,7 @@ _Safe void buffer_free_ptr(buffer *_Borrow b) {
 
 _Safe void buffer_move(buffer *_Borrow restrict b, buffer *_Borrow restrict src) {
 	b->used = 0; /* buffer_clear(b) */
-	_Unsafe {
-		buffer tmp = *src; *src = *b; *b = tmp;
-	}
+	buffer tmp = *src; *src = *b; *b = tmp; /* 3-way move; checker tracks each */
 }
 
 /* make sure buffer is at least "size" big + 1 for '\0'. keep old data */
