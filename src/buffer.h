@@ -123,26 +123,27 @@ _Safe void buffer_append_iovec(buffer *_Borrow restrict b, const struct const_io
 
 #define buffer_append_uint_hex(b,len) buffer_append_uint_hex_lc((b),(len))
 __attribute_nonnull__()
-void buffer_append_uint_hex_lc(buffer *b, uintmax_t len);
+_Safe void buffer_append_uint_hex_lc(buffer *_Borrow b, uintmax_t len);
 __attribute_nonnull__()
-void buffer_append_int(buffer *b, intmax_t val);
+_Safe void buffer_append_int(buffer *_Borrow b, intmax_t val);
 
-void buffer_append_strftime(buffer * restrict b, const char * restrict format, const struct tm * restrict tm);
+_Safe void buffer_append_strftime(buffer *_Borrow restrict b, const char *_Borrow restrict format, const struct tm *_Borrow restrict tm);
 
 /* '-', log_10 (2^bits) = bits * log 2 / log 10 < bits * 0.31, terminating 0 */
 #define LI_ITOSTRING_LENGTH (2 + (8 * sizeof(intmax_t) * 31 + 99) / 100)
 
 __attribute_nonnull__()
-size_t li_itostrn(char *buf, size_t buf_len, intmax_t val);
+_Safe size_t li_itostrn(char *buf, size_t buf_len, intmax_t val);
 __attribute_nonnull__()
-size_t li_utostrn(char *buf, size_t buf_len, uintmax_t val);
+_Safe size_t li_utostrn(char *buf, size_t buf_len, uintmax_t val);
 
 /* buf must be (at least) 2*s_len big. uses lower-case hex letters. */
 #define li_tohex(buf,buf_len,s,s_len) li_tohex_lc((buf),(buf_len),(s),(s_len))
+/* buf/s: caller-supplied raw arithmetic cursors (read/written by subscript) */
 __attribute_nonnull__()
-void li_tohex_lc(char * restrict buf, size_t buf_len, const char * restrict s, size_t s_len);
+_Safe void li_tohex_lc(char * restrict buf, size_t buf_len, const char * restrict s, size_t s_len);
 __attribute_nonnull__()
-void li_tohex_uc(char * restrict buf, size_t buf_len, const char * restrict s, size_t s_len);
+_Safe void li_tohex_uc(char * restrict buf, size_t buf_len, const char * restrict s, size_t s_len);
 
 __attribute_nonnull__()
 __attribute_pure__
@@ -165,12 +166,12 @@ __attribute_pure__
 int buffer_is_equal(const buffer *a, const buffer *b);
 
 __attribute_nonnull__()
-void buffer_substr_replace (buffer * restrict b, size_t offset, size_t len, const buffer * restrict replace);
+_Safe void buffer_substr_replace (buffer *_Borrow restrict b, size_t offset, size_t len, const buffer *_Borrow restrict replace);
 
 __attribute_nonnull__()
-void buffer_append_string_encoded_hex_lc(buffer * restrict b, const char * restrict s, size_t len);
+_Safe void buffer_append_string_encoded_hex_lc(buffer *_Borrow restrict b, const char *_Borrow restrict s, size_t len);
 __attribute_nonnull__()
-void buffer_append_string_encoded_hex_uc(buffer * restrict b, const char * restrict s, size_t len);
+_Safe void buffer_append_string_encoded_hex_uc(buffer *_Borrow restrict b, const char *_Borrow restrict s, size_t len);
 
 typedef enum {
 	ENCODING_REL_URI = 0,  /* coding href rel-uri (/with space/and%percent) */
@@ -179,37 +180,38 @@ typedef enum {
 	ENCODING_MINIMAL_XML   /* minimal encoding for xml */
 } buffer_encoding_t;
 
-void buffer_append_string_encoded(buffer * restrict b, const char * restrict s, size_t len, buffer_encoding_t encoding);
+_Safe void buffer_append_string_encoded(buffer *_Borrow restrict b, const char *_Borrow restrict s, size_t len, buffer_encoding_t encoding);
 
 /* escape non-printable characters; simple escapes for \t, \r, \n; fallback to \xCC */
 __attribute_nonnull__()
-void buffer_append_string_c_escaped(buffer * restrict b, const char * restrict s, size_t len);
+_Safe void buffer_append_string_c_escaped(buffer *_Borrow restrict b, const char *_Borrow restrict s, size_t len);
 
 /* escape non-printable chars, '"', '\\', and chars which high bit set */
-void buffer_append_bs_escaped (buffer * restrict b, const char * restrict s, size_t len);
-void buffer_append_bs_escaped_json (buffer * restrict b, const char * restrict s, size_t len);
+_Safe void buffer_append_bs_escaped (buffer *_Borrow restrict b, const char *_Borrow restrict s, size_t len);
+_Safe void buffer_append_bs_escaped_json (buffer *_Borrow restrict b, const char *_Borrow restrict s, size_t len);
 
 __attribute_nonnull__()
-void buffer_urldecode_path(buffer *b);
+_Safe void buffer_urldecode_path(buffer *_Borrow b);
 
 __attribute_nonnull__()
 __attribute_pure__
 int buffer_is_valid_UTF8(const buffer *b);
 
 __attribute_nonnull__()
-void buffer_path_simplify(buffer *b);
+_Safe void buffer_path_simplify(buffer *_Borrow b);
 
 __attribute_nonnull__()
-void buffer_to_lower(buffer *b);
+_Safe void buffer_to_lower(buffer *_Borrow b);
 __attribute_nonnull__()
-void buffer_to_upper(buffer *b);
+_Safe void buffer_to_upper(buffer *_Borrow b);
 
 
 /** deprecated */
 __attribute_const__
-char hex2int(unsigned char c);
+_Safe char hex2int(unsigned char c);
 
-int li_hex2bin (unsigned char *bin, size_t binlen, const char *hexstr, size_t len);
+/* bin/hexstr: caller-supplied raw arithmetic cursors (read/written by subscript) */
+_Safe int li_hex2bin (unsigned char *bin, size_t binlen, const char *hexstr, size_t len);
 
 __attribute_pure__
 static inline int light_isdigit(int c);
