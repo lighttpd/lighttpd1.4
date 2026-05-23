@@ -1448,10 +1448,31 @@ int stat_cache_path_contains_symlink(const buffer *name, log_error_st *errh) {
     return 0;
 }
 
+
+static void stat_cache_periodic_cleanup(const time_t max_age, const unix_time64_t cur_ts);
+
+
+__attribute_cold__
+static void stat_cache_emfile_cleanup(void) {
+    stat_cache_periodic_cleanup(0, -1);
+}
+
+
 int stat_cache_open_rdonly_fstat (const buffer *name, struct stat *st, int symlinks) {
 	/*(Note: O_NOFOLLOW affects only the final path segment, the target file,
 	 * not any intermediate symlinks along the path)*/
-	const int fd = fdevent_open_cloexec(name->ptr, symlinks, O_RDONLY, 0);
+	int fd = fdevent_open_cloexec(name->ptr, symlinks, O_RDONLY, 0);
+	if (__builtin_expect( (fd < 0), 0) && errno == EMFILE) {
+		/* name and/or st might be references into an sce,
+		 * and stat_cache_get_entry_open() writes into an sce,
+		 * so stat_cache_emfile_cleanup() should not remove sce unless
+		 * (1 == sce->refcnt && sce->fd >= 0) and callers should not
+		 * be calling this function with an sce->fd already open
+		 * (alt: could pass name to stat_cache_emfile_cleanup() and not cleanup
+		 *  that entry, but that would add more string match before removal) */
+		stat_cache_emfile_cleanup();
+		fd = fdevent_open_cloexec(name->ptr, symlinks, O_RDONLY, 0);
+	}
 	if (fd >= 0) {
 		if (0 == fstat(fd, st)) {
 			return fd;
@@ -1465,8 +1486,8 @@ int stat_cache_open_rdonly_fstat (const buffer *name, struct stat *st, int symli
 }
 
 /**
- * remove stat() from cache which haven't been stat()ed for
- * more than 2 seconds
+ * remove entries from cache which haven't been stat()ed for
+ * more than max_age seconds
  *
  *
  * walk though the stat-cache, collect the ids which are too old
@@ -1486,6 +1507,21 @@ static void stat_cache_tag_old_entries(splay_tree * const t, int * const keys, i
         keys[(*ndx)++] = t->key;
 }
 
+static void stat_cache_tag_closable_entries(splay_tree * const t, int * const keys, int * const ndx) {
+    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
+    if (t->left)
+        stat_cache_tag_closable_entries(t->left, keys, ndx);
+    if (t->right)
+        stat_cache_tag_closable_entries(t->right, keys, ndx);
+    if (*ndx == 8192) return; /*(must match num array entries in keys[])*/
+
+    const stat_cache_entry * const sce = t->data;
+    /* avoid possibly tagging an entry on which we are actively operating
+     * in caller, e.g. stat_cache_open_rdonly_fstat(); see comments there */
+    if (1 == sce->refcnt && sce->fd >= 0)
+        keys[(*ndx)++] = t->key;
+}
+
 static void stat_cache_periodic_cleanup(const time_t max_age, const unix_time64_t cur_ts) {
     splay_tree *sptree = sc.files;
     int max_ndx, i;
@@ -1493,7 +1529,9 @@ static void stat_cache_periodic_cleanup(const time_t max_age, const unix_time64_
     do {
         if (!sptree) break;
         max_ndx = 0;
-        stat_cache_tag_old_entries(sptree, keys, &max_ndx, max_age, cur_ts);
+        (cur_ts >= 0)
+          ? stat_cache_tag_old_entries(sptree, keys, &max_ndx, max_age, cur_ts)
+          : stat_cache_tag_closable_entries(sptree, keys, &max_ndx);
         for (i = 0; i < max_ndx; ++i) {
             sptree = splaytree_splay_nonnull(sptree, keys[i]);
             sptree = stat_cache_sptree_node_free(sptree);
@@ -1505,6 +1543,8 @@ static void stat_cache_periodic_cleanup(const time_t max_age, const unix_time64_
 void stat_cache_trigger_cleanup(void) {
 	time_t max_age = 2;
 
+	if (STAT_CACHE_ENGINE_NONE == sc.stat_cache_engine)
+		max_age = ((unix_time64_t)(time_t)-1 == (unix_time64_t)-1) ? -1 : 0;
       #ifdef STAT_CACHE_FSMON
 	if (STAT_CACHE_ENGINE_FSMON == sc.stat_cache_engine) {
 		if (log_monotonic_secs & 0x1F) return;
