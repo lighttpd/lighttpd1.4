@@ -51,3 +51,4 @@ test_common
 test_configfile
 test_mod
 versionstamp.h
+build-cmake/

@@ -1,6 +1,7 @@
 #ifndef _BUFFER_H_
 #define _BUFFER_H_
 #include "first.h"
+#include "bsc_compat.h"
 
 struct tm;              /* declaration */
 
