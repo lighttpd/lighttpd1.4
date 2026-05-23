@@ -23,9 +23,20 @@ BSC annotations to exactly two files plus one new compatibility header.
 - **Runtime lib:** `/home/zly/bsc/llvm-project/install/lib/libstdcbs.a` (needed only when linking; not for `-fsyntax-only`).
 - The stock system `clang` (Ubuntu 18.1.3) does **not** support `-x bsc`; only the BSC clang above does.
 
-**Verify command** (borrow-check `buffer.c` in isolation, no link — exit 0 = clean):
+**Project config.h is required.** `first.h` does not include `<stdint.h>`; the build relies on the
+generated `config.h` (with `HAVE_*` probes) plus glibc transitive includes. Without it, `buffer.c`
+fails to parse under `-x bsc` (`unknown type name 'uintmax_t'`, `timegm` static/non-static conflict).
+**meson and autotools are not installed in this environment; cmake and gcc are.** Generate `config.h`
+with cmake once (PCRE disabled, since pcre2 dev headers are absent — we only need `config.h`):
 ```sh
-~/bsc/llvm-project/install/bin/clang -x bsc \
+cmake -S . -B build-cmake -Wno-dev -DWITH_PCRE2=OFF -DWITH_PCRE=OFF   # → build-cmake/build/config.h
+```
+
+**Verify command** (borrow-check `buffer.c` in isolation, no link — exit 0 = clean; validated against
+the current un-annotated `buffer.c`, which passes with 0 diagnostics):
+```sh
+~/bsc/llvm-project/install/bin/clang -x bsc -DHAVE_CONFIG_H \
+  -Ibuild-cmake/build -Isrc \
   -I/home/zly/bsc/llvm-project/install/include/libcbs \
   -Wno-nullability-completeness -fsyntax-only src/buffer.c
 ```
@@ -33,8 +44,13 @@ BSC annotations to exactly two files plus one new compatibility header.
 `-L/home/zly/bsc/llvm-project/install/lib -lstdcbs -o <out>`.
 
 `-Wno-nullability-completeness` suppresses warnings originating inside `bishengc_safety.hbs` itself
-(not our code). This command, and the link form, get recorded in `CLAUDE.md` under a
-"BSC Project Compile Command" section so future sessions don't guess.
+(not our code). This command, the config.h generation step, and the link form get recorded in
+`CLAUDE.md` under a "BSC Project Compile Command" section so future sessions don't guess.
+
+That the un-annotated `buffer.c` already compiles clean under `-x bsc` confirms two things the plan
+relies on: (a) functions without `_Safe`/`_Unsafe` are **not** force-checked, so the file can be
+translated one function-group at a time with the verify command passing after each group; and (b) all
+of `buffer.c`'s transitive includes parse under `-x bsc`.
 
 ## 3. Migration mechanics — dual-build model (validated)
 
@@ -123,10 +139,10 @@ each `_Unsafe` must trace to a specific diagnostic and wrap only the offending s
 ## 5. Verification & success criteria
 
 A. `buffer.c` borrow-checks **clean** — the verify command (§2) exits 0 with no errors.
-B. The full project still **builds unchanged** as plain C: `meson setup build && ninja -C build`
-   succeeds (proves the 69 includers and the build wiring are unaffected). Stock-clang parse of
-   `buffer.h` also still succeeds.
-C. **`test_buffer` passes** — behavioral parity via `meson test -C build test_buffer`
+B. The full project still **builds unchanged** as plain C: `cmake --build build-cmake` succeeds
+   (meson isn't installed here; cmake is one of the four supported systems). Proves the 69 includers
+   and the build wiring are unaffected. Stock-clang parse of `buffer.h` also still succeeds.
+C. **`test_buffer` passes** — behavioral parity via `ctest --test-dir build-cmake -R '^test_buffer'`
    (`src/t/test_buffer.c`, ~50 buffer calls). Behavioral parity is the contract; a translation that
    compiles but changes behavior has wrong annotations.
 D. Translation contains real `_Owned` annotations (skill minimum bar — zero `_Owned` = incomplete),
@@ -141,9 +157,10 @@ D. Translation contains real `_Owned` annotations (skill minimum bar — zero `_
 
 ## 7. Implementation phases (input to the writing-plans step)
 
-1. **Scaffolding** — add `src/bsc_compat.h`; include it first in `buffer.h`; add the BSC compile/verify
-   commands to `CLAUDE.md`. Confirm: project still builds (meson) and stock clang still parses
-   `buffer.h`. No annotations yet.
+1. **Scaffolding** — generate `config.h` via cmake; add `src/bsc_compat.h`; include it first in
+   `buffer.h`; add the BSC config.h/compile/verify commands to `CLAUDE.md`. Confirm: project still
+   builds (cmake), stock clang still parses `buffer.h`, and the verify command runs clean on the
+   still-un-annotated `buffer.c`. No annotations yet.
 2. **Annotate `buffer.h`** — apply the signature table from §4. Re-confirm dual-build green (plain-C
    parse of `buffer.h` under both compilers; project still builds).
 3. **Translate `buffer.c` bodies** — `_Safe`-first, iterating against the §2 verify command. Add
@@ -162,6 +179,6 @@ D. Translation contains real `_Owned` annotations (skill minimum bar — zero `_
   narrowing or declare `_Nullable` and let callers check.
 - **Interior-pointer returns** (`char*` write cursors) are intentionally raw; confirm call sites within
   `buffer.c` don't trip the checker when consuming them.
-- If `buffer.c`'s transitive includes (`first.h`, `sys-time.h`, …) fail to parse under `-x bsc`,
-  scaffolding (phase 1) surfaces it early; mitigate with targeted compat shims, not by abandoning
-  `-x bsc`.
+- `buffer.c`'s transitive includes (`first.h`, `sys-time.h`, …) **were validated** to parse under
+  `-x bsc` once `-DHAVE_CONFIG_H` + the cmake-generated `config.h` are supplied (un-annotated
+  `buffer.c` → 0 diagnostics). Without `config.h` it fails; the verify command bakes it in.
