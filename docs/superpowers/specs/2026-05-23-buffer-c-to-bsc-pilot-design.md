@@ -69,17 +69,23 @@ keywords when not under BSC. BSC predefines `__bishengc`; key off it:
 #define _Unsafe
 #define _Mut
 #define _Const
+#define _Nullable
+#define _Nonnull
 #endif
 ```
 
 `buffer.h` includes `bsc_compat.h` first. Effects:
-- **Plain-C consumers** (BSC clang without `-x bsc`, and stock clang): annotations expand to nothing;
-  `char *_Owned ptr` → `char *ptr`, `&_Mut x` → `&x`. Valid C. Verified exit 0 for both compilers.
+- **Plain-C consumers** (BSC clang without `-x bsc`, stock clang, **and gcc**): annotations expand to
+  nothing; `char *_Owned _Nullable ptr` → `char *ptr`, `&_Mut x` → `&x`. Valid C. Verified exit 0 for
+  all three compilers, including a sweep of all standalone `src/*.c` includers under gcc.
 - **BSC mode** (`-x bsc`): `__bishengc` is defined, the `#define`s are skipped, keywords are live and
-  the borrow checker runs. Verified exit 0.
+  both the borrow checker and the nullability checker run. Verified exit 0.
 
-Do **not** macro-guard `_Nullable`/`_Nonnull` — those are real clang nullability keywords that work in
-plain C already.
+**`_Nullable`/`_Nonnull` MUST be guarded too.** Although Clang accepts them as nullability keywords in
+plain C, **GCC does not** — and GCC is the default compiler for the cmake/autotools builds. Leaving
+them live broke every plain-C includer of `buffer.h` under GCC (`error: expected ':' … before 'ptr'`).
+Guarding them costs only the (unused) plain-Clang nullability check; under BSC they stay live.
+(Earlier drafts of this spec wrongly said not to guard them; that was the one real shim bug.)
 
 Note: BSC-only constructs that are *not* macro-expandable (`safe_malloc<T>`, `__take_from_raw`,
 `__move_to_raw`, `nullptr`, template syntax) must appear **only in `buffer.c` bodies** compiled with
@@ -139,12 +145,22 @@ each `_Unsafe` must trace to a specific diagnostic and wrap only the offending s
 ## 5. Verification & success criteria
 
 A. `buffer.c` borrow-checks **clean** — the verify command (§2) exits 0 with no errors.
-B. The full project still **builds unchanged** as plain C: `cmake --build build-cmake` succeeds
-   (meson isn't installed here; cmake is one of the four supported systems). Proves the 69 includers
-   and the build wiring are unaffected. Stock-clang parse of `buffer.h` also still succeeds.
-C. **`test_buffer` passes** — behavioral parity via `ctest --test-dir build-cmake -R '^test_buffer'`
-   (`src/t/test_buffer.c`, ~50 buffer calls). Behavioral parity is the contract; a translation that
-   compiles but changes behavior has wrong annotations.
+B. **`buffer.h` stays dual-valid, so the 69 includers are unaffected.** This — not "the whole project
+   builds as plain C" — is the real integrity check, because a translated `buffer.c` is a BSC-only TU
+   (it contains `bishengc_safety.hbs` + BSC builtins) and can no longer be compiled by gcc/stock-clang.
+   That is consistent with §6, which already scopes out wiring BSC into the build systems; the project
+   binary is therefore *not* expected to link from a plain `cmake --build` after translation.
+   Verify by syntax-checking every standalone `src/*.c` **except `buffer.c`** under gcc and confirming
+   zero `buffer.h`-related failures (the only failures are pre-existing: missing optional-dependency
+   headers, Windows-only TUs, lemon/X-macro templates). Spot-check stock-clang and BSC-plain-C too.
+C. **`test_buffer` passes** — behavioral parity, the real contract (a translation that compiles but
+   changes behavior has wrong annotations). `ctest` can't run it (it would compile `buffer.c` with gcc),
+   so build the parity runner directly with the validated recipe: compile `buffer.c` → `buffer.o` under
+   `-x bsc`; compile a plain-C harness that `#include`s **`buffer.h`** and calls `test_buffer()` (the
+   repo's `src/t/test_buffer.c` with its `#include "buffer.c"` swapped to `"buffer.h"` — it uses only
+   public API) plus `ck.c`; link the gcc objects against the BSC `buffer.o` and `-lstdcbs`; run → exit 0.
+   The repo `test_buffer.c` is **not** modified. (ABI fact this leans on: `_Owned`/`_Borrow` are erased
+   at codegen, so plain-C callers link against BSC-compiled symbols unchanged.)
 D. Translation contains real `_Owned` annotations (skill minimum bar — zero `_Owned` = incomplete),
    and every `_Unsafe` is minimal and traces to a specific compiler diagnostic.
 

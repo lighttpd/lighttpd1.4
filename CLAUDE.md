@@ -88,4 +88,24 @@ Verify (borrow-check buffer.c, no link):
       -I/home/zly/bsc/llvm-project/install/include/libcbs \
       -Wno-nullability-completeness -fsyntax-only src/buffer.c
 
-Test (behavioral parity):  ctest --test-dir build-cmake -R '^test_buffer'
+Includers unaffected (buffer.h stays dual-valid): all standalone `src/*.c`
+except buffer.c parse clean under gcc; failures are only missing optional-dep
+headers / Windows / lemon templates, never buffer.h. Spot-check:
+    gcc -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -fsyntax-only src/base64.c
+
+Test (behavioral parity): a translated buffer.c is a BSC-only TU, so `ctest`
+(which compiles buffer.c with gcc) cannot run it. Build the runner directly —
+buffer.o under -x bsc, gcc test harness using buffer.h, linked with -lstdcbs:
+    BSC=~/bsc/llvm-project/install/bin/clang
+    LIBCBS=/home/zly/bsc/llvm-project/install/include/libcbs
+    LIBDIR=/home/zly/bsc/llvm-project/install/lib; W=/tmp/bsc_test_buffer; mkdir -p $W
+    $BSC -x bsc -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -I$LIBCBS \
+      -Wno-nullability-completeness -c src/buffer.c -o $W/buffer.o
+    sed 's|#include "buffer.c"|#include "buffer.h"|' src/t/test_buffer.c > $W/tb.c
+    printf 'void test_buffer(void);\nint main(void){test_buffer();return 0;}\n' > $W/m.c
+    gcc -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -c $W/tb.c -o $W/tb.o
+    gcc -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -c src/ck.c -o $W/ck.o
+    gcc -DHAVE_CONFIG_H -Ibuild-cmake/build -Isrc -c $W/m.c  -o $W/m.o
+    $BSC $W/tb.o $W/buffer.o $W/ck.o $W/m.o -L$LIBDIR -lstdcbs -o $W/run && $W/run
+(The repo's src/t/test_buffer.c is NOT modified; the include swap is only in the
+throwaway harness copy, which links fine because _Owned/_Borrow erase at codegen.)
