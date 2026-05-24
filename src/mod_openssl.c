@@ -115,6 +115,7 @@
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 #include <openssl/core_names.h>
 #include <openssl/store.h>
+#include <openssl/ui.h>
 #endif
 
 #include "base.h"
@@ -2369,10 +2370,77 @@ mod_openssl_cert_is_active (const X509 *crt)
 }
 
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+__attribute_cold__
+static X509 *
+mod_openssl_STORE_load_cert(const char *uri, log_error_st *errh, STACK_OF(X509) **pcert_stack)
+{
+    OSSL_STORE_CTX * const store_ctx =
+      OSSL_STORE_open(uri, UI_get_default_method(), NULL, NULL, NULL);
+    if (NULL == store_ctx) {
+        elogf(errh, __FILE__, __LINE__, "OSSL_STORE_open %s", uri);
+        return NULL;
+    }
+
+    X509 *cert = NULL;
+    STACK_OF(X509) *cert_stack = NULL;
+    int info_cert = 0;
+    while (!OSSL_STORE_eof(store_ctx) && info_cert < 2) {
+        OSSL_STORE_INFO *store_info = OSSL_STORE_load(store_ctx);
+        if (store_info == NULL)
+            continue;
+        if (OSSL_STORE_INFO_CERT == OSSL_STORE_INFO_get_type(store_info)) {
+            info_cert |= 1;
+            if (NULL == cert) {
+                cert = OSSL_STORE_INFO_get1_CERT(store_info);
+                if (NULL == cert)
+                    info_cert |= 2;
+            }
+            else if (pcert_stack) {
+                if (NULL == cert_stack) cert_stack = sk_X509_new_null();
+                if (!X509_add_cert(cert_stack,
+                                   OSSL_STORE_INFO_get1_CERT(store_info),
+                                   X509_ADD_FLAG_DEFAULT))
+                    info_cert |= 2;
+            }
+        }
+        OSSL_STORE_INFO_free(store_info);
+    }
+
+    OSSL_STORE_close(store_ctx);
+    if (1 == info_cert) {
+        if (!mod_openssl_cert_is_active(cert) && log_epoch_secs > 300)
+            log_error(errh, __FILE__, __LINE__,
+              "SSL: inactive/expired X509 certificate: %s", uri);
+    }
+    else {
+        elogf(errh, __FILE__, __LINE__,
+              (0 == info_cert) ? "no certificate found: %s"
+                               : "error loading certificate(s): %s", uri);
+        sk_X509_pop_free(cert_stack, X509_free);
+        X509_free(cert);
+        cert_stack = NULL;
+        cert = NULL;
+    }
+    if (pcert_stack) *pcert_stack = cert_stack;
+    return cert;
+}
+#endif
+
+
 static X509 *
 mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) **chain)
 {
     *chain = NULL;
+
+  #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    const char *colon = strchr(file, ':');
+    if (colon) {
+        const char *slash = strchr(file, '/');
+        if (NULL == slash || colon < slash)
+            return mod_openssl_STORE_load_cert(file, errh, chain);
+    }
+  #endif
 
     off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
     char *data = fdevent_load_file(file, &dlen, errh, malloc, free);
@@ -2411,9 +2479,53 @@ mod_openssl_load_pem_file (const char *file, log_error_st *errh, STACK_OF(X509) 
 }
 
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+__attribute_cold__
+static EVP_PKEY *
+mod_openssl_STORE_load_pkey (const char *uri, log_error_st *errh)
+{
+    OSSL_STORE_CTX * const store_ctx =
+      OSSL_STORE_open(uri, UI_get_default_method(), NULL, NULL, NULL);
+    if (NULL == store_ctx) {
+        elogf(errh, __FILE__, __LINE__, "OSSL_STORE_open %s", uri);
+        return NULL;
+    }
+
+    EVP_PKEY *pkey = NULL;
+    int info_pkey = 0;
+    while (!OSSL_STORE_eof(store_ctx) && NULL == pkey) {
+        OSSL_STORE_INFO *store_info = OSSL_STORE_load(store_ctx);
+        if (store_info == NULL)
+            continue;
+        if (OSSL_STORE_INFO_PKEY == OSSL_STORE_INFO_get_type(store_info)) {
+            pkey = OSSL_STORE_INFO_get1_PKEY(store_info);
+            info_pkey = 1;
+        }
+        OSSL_STORE_INFO_free(store_info);
+    }
+
+    OSSL_STORE_close(store_ctx);
+    if (NULL == pkey)
+        elogf(errh, __FILE__, __LINE__,
+              info_pkey ? "error loading privkey: %s"
+                        : "no private key found: %s", uri);
+    return pkey;
+}
+#endif
+
+
 static EVP_PKEY *
 mod_openssl_evp_pkey_load_pem_file (const char *file, log_error_st *errh)
 {
+  #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    const char *colon = strchr(file, ':');
+    if (colon) {
+        const char *slash = strchr(file, '/');
+        if (NULL == slash || colon < slash)
+            return mod_openssl_STORE_load_pkey(file, errh);
+    }
+  #endif
+
     off_t dlen = 512*1024*1024;/*(arbitrary limit: 512 MB file; expect < 1 MB)*/
     char *data = fdevent_load_file(file, &dlen, errh, malloc, free);
     if (NULL == data) return NULL;
