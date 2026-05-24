@@ -749,18 +749,7 @@ static const char js_simple_table_resort[] = \
 "    && (typeof el.dataset.value === 'string'\n" \
 "        || typeof el.dataset.value === 'number'))\n" \
 "  return el.dataset.value;\n" \
-" if(el.innerText)\n" \
-"  return el.innerText;\n" \
-" else {\n" \
-"  var str = \"\";\n" \
-"  var cs = el.childNodes;\n" \
-"  var l = cs.length;\n" \
-"  for (var i=0;i<l;i++) {\n" \
-"   if (cs[i].nodeType==1) str += get_inner_text(cs[i]);\n" \
-"   else if (cs[i].nodeType==3) str += cs[i].nodeValue;\n" \
-"  }\n" \
-" }\n" \
-" return str;\n" \
+" return el.textContent;\n" \
 "}\n" \
 "\n" \
 "var li_date_regex=/(\\d{4})-(\\w{3})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})/;\n" \
@@ -801,9 +790,7 @@ static const char js_simple_table_resort[] = \
 " var at = get_inner_text(a.cells[sort_column]);\n" \
 " var bt = get_inner_text(b.cells[sort_column]);\n" \
 " var cmp;\n" \
-" if (sort_column == size_column) {\n" \
-"  cmp = parseInt(at)-parseInt(bt);\n" \
-" } else if (sort_column == date_column) {\n" \
+" if (sort_column == size_column || sort_column == date_column) {\n" \
 "  cmp = at-bt;\n" \
 " } else {\n" \
 "  if (sort_column == name_column) {\n" \
@@ -827,9 +814,10 @@ static const char js_simple_table_resort[] = \
 " var table = lnk.parentNode.parentNode.parentNode.parentNode;\n" \
 " click_column = lnk.parentNode.cellIndex;\n" \
 " if (click_column == date_column) li_dates_to_dv(table);\n" \
-" var rows = new Array();\n" \
-" for (var j=1;j<table.rows.length;j++)\n" \
-"  rows[j-1] = table.rows[j];\n" \
+" var tbody = table.tBodies[0];\n" \
+" var rows = new Array(tbody.rows.length);\n" \
+" for (var j=0;j<tbody.rows.length;j++)\n" \
+"  rows[j] = tbody.rows[j];\n" \
 " rows.sort(sortfn);\n" \
 "\n" \
 " if (prev_span != null) prev_span.innerHTML = '';\n" \
@@ -841,8 +829,11 @@ static const char js_simple_table_resort[] = \
 "  span.innerHTML = '&darr;';\n" \
 "  span.setAttribute('sortdir','down');\n" \
 " }\n" \
+" tbody.innerHTML = '';\n" \
+" var frag = document.createDocumentFragment();\n" \
 " for (var i=0;i<rows.length;i++)\n" \
-"  table.tBodies[0].appendChild(rows[i]);\n" \
+"  frag.appendChild(rows[i]);\n" \
+" tbody.appendChild(frag);\n" \
 " prev_span = span;\n" \
 "}\n";
 
@@ -872,19 +863,21 @@ static const char js_simple_table_init_sort[] = \
 "     n.replaceChild(link, n.firstChild);\n" \
 "    }\n" \
 "   }\n" \
-"   var lnk = row[init_sort_column].firstChild;\n" \
-"   if (descending) {\n" \
-"    var span = lnk.childNodes[1];\n" \
-"    span.setAttribute('sortdir','down');\n" \
+"   if (init_sort_column >= 0) {\n" \
+"    var lnk = row[init_sort_column].firstChild;\n" \
+"    if (descending) {\n" \
+"     var span = lnk.childNodes[1];\n" \
+"     span.setAttribute('sortdir','down');\n" \
+"    }\n" \
+"    resort(lnk);\n" \
 "   }\n" \
-"   resort(lnk);\n" \
 "  //}\n" \
 " }\n" \
 "}\n" \
 "\n" \
 "function init_sort_from_query() {\n" \
 "  var urlParams = new URLSearchParams(location.search);\n" \
-"  var c = 0;\n" \
+"  var c = -1;\n" \
 "  var o = 0;\n" \
 "  switch (urlParams.get('C')) {\n" \
 "    case \"N\": c=0; break;\n" \
