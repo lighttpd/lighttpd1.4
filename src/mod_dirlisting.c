@@ -749,61 +749,19 @@ static const char js_simple_table_resort[] = \
 "    && (typeof el.dataset.value === 'string'\n" \
 "        || typeof el.dataset.value === 'number'))\n" \
 "  return el.dataset.value;\n" \
-" if(el.innerText)\n" \
-"  return el.innerText;\n" \
-" else {\n" \
-"  var str = \"\";\n" \
-"  var cs = el.childNodes;\n" \
-"  var l = cs.length;\n" \
-"  for (var i=0;i<l;i++) {\n" \
-"   if (cs[i].nodeType==1) str += get_inner_text(cs[i]);\n" \
-"   else if (cs[i].nodeType==3) str += cs[i].nodeValue;\n" \
-"  }\n" \
-" }\n" \
-" return str;\n" \
-"}\n" \
-"\n" \
-"var li_date_regex=/(\\d{4})-(\\w{3})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})/;\n" \
-"\n" \
-"var li_mon = ['Jan','Feb','Mar','Apr','May','Jun',\n" \
-"              'Jul','Aug','Sep','Oct','Nov','Dec'];\n" \
-"\n" \
-"function li_mon_num(mon) {\n" \
-" var i; for (i = 0; i < 12 && mon != li_mon[i]; ++i); return i;\n" \
-"}\n" \
-"\n" \
-"function li_dates_to_dv(table) {\n" \
-" for (var j=1;j<table.rows.length;j++) {\n" \
-"  var el = table.rows[j].cells[date_column];\n" \
-"  if(el.dataset && typeof el.dataset.value != 'undefined') {\n" \
-"   if (typeof el.dataset.value == 'number')\n" \
-"    break;\n" \
-"   if (el.dataset.value === \"-1\")\n" \
-"    el.dataset.value = -1;\n" \
-"  } else {\n" \
-"   var d = li_date_regex.exec(get_inner_text(el));\n" \
-"   el.dataset.value = (parseInt(d[1])*(1<<26))\n" \
-"     + ( (li_mon_num(d[2])<<22)\n" \
-"        |(parseInt(d[3])  <<17)\n" \
-"        |(parseInt(d[4])  <<12)\n" \
-"        |(parseInt(d[5])  << 6)\n" \
-"        |(parseInt(d[6])) );\n" \
-"  }\n" \
-" }\n" \
+" return el.textContent;\n" \
 "}\n" \
 "\n" \
 "function sortfn_then_by_name(a,b,sort_column) {\n" \
 " if (sort_column == name_column || sort_column == type_column) {\n" \
-"  var ad = (a.cells[type_column].innerHTML === 'Directory');\n" \
-"  var bd = (b.cells[type_column].innerHTML === 'Directory');\n" \
-"  if (ad != bd) return (ad ? -1 : 1);\n" \
+"  var ad = a.cells[type_column].dataset.value;\n" \
+"  var bd = b.cells[type_column].dataset.value;\n" \
+"  if (ad !== bd) return (ad < bd ? -1 : 1);\n" \
 " }\n" \
 " var at = get_inner_text(a.cells[sort_column]);\n" \
 " var bt = get_inner_text(b.cells[sort_column]);\n" \
 " var cmp;\n" \
-" if (sort_column == size_column) {\n" \
-"  cmp = parseInt(at)-parseInt(bt);\n" \
-" } else if (sort_column == date_column) {\n" \
+" if (sort_column == size_column || sort_column == date_column) {\n" \
 "  cmp = at-bt;\n" \
 " } else {\n" \
 "  if (sort_column == name_column) {\n" \
@@ -825,11 +783,11 @@ static const char js_simple_table_resort[] = \
 "function resort(lnk) {\n" \
 " var span = lnk.childNodes[1];\n" \
 " var table = lnk.parentNode.parentNode.parentNode.parentNode;\n" \
+" var tbody = table.tBodies[0];\n" \
 " click_column = lnk.parentNode.cellIndex;\n" \
-" if (click_column == date_column) li_dates_to_dv(table);\n" \
 " var rows = new Array();\n" \
-" for (var j=1;j<table.rows.length;j++)\n" \
-"  rows[j-1] = table.rows[j];\n" \
+" for (var j=0;j<tbody.rows.length;j++)\n" \
+"  rows[j] = tbody.rows[j];\n" \
 " rows.sort(sortfn);\n" \
 "\n" \
 " if (prev_span != null) prev_span.innerHTML = '';\n" \
@@ -841,8 +799,11 @@ static const char js_simple_table_resort[] = \
 "  span.innerHTML = '&darr;';\n" \
 "  span.setAttribute('sortdir','down');\n" \
 " }\n" \
+" tbody.innerHTML = '';\n" \
+" var frag = document.createDocumentFragment();\n" \
 " for (var i=0;i<rows.length;i++)\n" \
-"  table.tBodies[0].appendChild(rows[i]);\n" \
+"  frag.appendChild(rows[i]);\n" \
+" tbody.appendChild(frag);\n" \
 " prev_span = span;\n" \
 "}\n";
 
@@ -872,19 +833,21 @@ static const char js_simple_table_init_sort[] = \
 "     n.replaceChild(link, n.firstChild);\n" \
 "    }\n" \
 "   }\n" \
-"   var lnk = row[init_sort_column].firstChild;\n" \
-"   if (descending) {\n" \
-"    var span = lnk.childNodes[1];\n" \
-"    span.setAttribute('sortdir','down');\n" \
+"   if (init_sort_column >= 0) {\n" \
+"    var lnk = row[init_sort_column].firstChild;\n" \
+"    if (descending) {\n" \
+"     var span = lnk.childNodes[1];\n" \
+"     span.setAttribute('sortdir','down');\n" \
+"    }\n" \
+"    resort(lnk);\n" \
 "   }\n" \
-"   resort(lnk);\n" \
 "  //}\n" \
 " }\n" \
 "}\n" \
 "\n" \
 "function init_sort_from_query() {\n" \
 "  var urlParams = new URLSearchParams(location.search);\n" \
-"  var c = 0;\n" \
+"  var c = -1;\n" \
 "  var o = 0;\n" \
 "  switch (urlParams.get('C')) {\n" \
 "    case \"N\": c=0; break;\n" \
@@ -1012,7 +975,7 @@ static void http_list_directory_header(request_st * const r, const handler_ctx *
 			"<td class=\"n\"><a href=\"../\">..</a>/</td>"
 			"<td class=\"m\" data-value=\"-1\">&nbsp;</td>"
 			"<td class=\"s\" data-value=\"-1\">- &nbsp;</td>"
-			"<td class=\"t\">Directory</td>"
+			"<td class=\"t\" data-value=\"0\">Directory</td>"
 		"</tr>\n"
 		));
 	}
@@ -1020,6 +983,14 @@ static void http_list_directory_header(request_st * const r, const handler_ctx *
 }
 
 static void http_list_directory_mtime(buffer * const out, const dirls_entry_t * const ent) {
+	char dvbuf[LI_ITOSTRING_LENGTH];
+	size_t dvlen = li_itostrn(dvbuf, sizeof(dvbuf), ent->mtime);
+	struct const_iovec iov[] = {
+	  { dvbuf, dvlen }
+	 ,{ CONST_STR_LEN("\">") }
+	};
+	buffer_append_iovec(out, iov, sizeof(iov)/sizeof(*iov));
+
 	struct tm tm;
   #ifdef __MINGW32__
 	buffer_append_strftime(out, "%Y-%b-%d %H:%M:%S", localtime64_r(&ent->mtime, &tm));
@@ -1032,7 +1003,7 @@ static void http_list_directory_ent(buffer * const out, const dirls_entry_t * co
 	buffer_append_string_encoded(out, name, ent->namelen, ENCODING_REL_URI_PART);
 	buffer_append_string_len(out, CONST_STR_LEN("/\">"));
 	buffer_append_string_encoded(out, name, ent->namelen, ENCODING_MINIMAL_XML);
-	buffer_append_string_len(out, CONST_STR_LEN("</a>/</td><td class=\"m\">"));
+	buffer_append_string_len(out, CONST_STR_LEN("</a>/</td><td class=\"m\" data-value=\""));
 
 	http_list_directory_mtime(out, ent);
 }
@@ -1043,14 +1014,14 @@ static void http_list_directory_dirname(buffer * const out, const dirls_entry_t 
 
 	http_list_directory_ent(out, ent, name);
 
-	buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\" data-value=\"-1\">- &nbsp;</td><td class=\"t\">Directory</td></tr>\n"));
+	buffer_append_string_len(out, CONST_STR_LEN("</td><td class=\"s\" data-value=\"-1\">- &nbsp;</td><td class=\"t\" data-value=\"0\">Directory</td></tr>\n"));
 }
 
 static void http_list_file_ent(buffer * const out, const dirls_entry_t * const ent, const char * const name) {
 	buffer_append_string_encoded(out, name, ent->namelen, ENCODING_REL_URI_PART);
 	buffer_append_string_len(out, CONST_STR_LEN("\">"));
 	buffer_append_string_encoded(out, name, ent->namelen, ENCODING_MINIMAL_XML);
-	buffer_append_string_len(out, CONST_STR_LEN("</a></td><td class=\"m\">"));
+	buffer_append_string_len(out, CONST_STR_LEN("</a></td><td class=\"m\" data-value=\""));
 
 	http_list_directory_mtime(out, ent);
 }
@@ -1086,7 +1057,7 @@ static void http_list_directory_filename(buffer * const out, const dirls_entry_t
 	 ,{ dvbuf, li_itostrn(dvbuf, sizeof(dvbuf), ent->size) }
 	 ,{ CONST_STR_LEN("\">") }
 	 ,{ sizebuf, buflen }
-	 ,{ CONST_STR_LEN("</td><td class=\"t\">") }
+	 ,{ CONST_STR_LEN("</td><td class=\"t\" data-value=\"1\">") }
 	 ,{ BUF_PTR_LEN(content_type) }
 	 ,{ CONST_STR_LEN("</td></tr>\n") }
 	};
