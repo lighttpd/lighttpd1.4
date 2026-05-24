@@ -1,13 +1,13 @@
 #ifndef LSXPACK_HEADER_H_v208
 #define LSXPACK_HEADER_H_v208
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef LSXPACK_MAX_STRLEN
 #define LSXPACK_MAX_STRLEN UINT16_MAX

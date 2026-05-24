@@ -1,7 +1,7 @@
 /*
 MIT License
 
-Copyright (c) 2018 - 2023 LiteSpeed Technologies Inc
+Copyright (c) 2018 - 2026 LiteSpeed Technologies Inc
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -25,17 +25,23 @@ SOFTWARE.
 #ifndef LITESPEED_HPACK_H
 #define LITESPEED_HPACK_H 1
 
+
+#include <limits.h>
+#include <stdint.h>
+#ifdef __has_include
+#if __has_include(<sys/queue.h>)
+#include <sys/queue.h>
+#endif
+#endif
+#include "lsxpack_header.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <limits.h>
-#include <stdint.h>
-#include "lsxpack_header.h"
-
 #define LSHPACK_MAJOR_VERSION 2
 #define LSHPACK_MINOR_VERSION 3
-#define LSHPACK_PATCH_VERSION 4
+#define LSHPACK_PATCH_VERSION 5
 
 #define lshpack_strlen_t lsxpack_strlen_t
 #define LSHPACK_MAX_STRLEN LSXPACK_MAX_STRLEN
@@ -218,12 +224,6 @@ lshpack_dec_set_max_capacity (struct lshpack_dec *, unsigned);
 /* Some internals follow.  Struct definitions are exposed to save a malloc.
  * These structures are not very complicated.
  */
-
-#ifdef __has_include
-#if __has_include(<sys/queue.h>)
-#include <sys/queue.h>
-#endif
-#endif
 
 #ifndef STAILQ_FOREACH
 
