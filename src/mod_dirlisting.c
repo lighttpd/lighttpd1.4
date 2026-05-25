@@ -723,7 +723,6 @@ static void http_dirlist_auto_layout_early_hints (request_st * const r, const pl
 /* portions copied from mod_status
  * modified and specialized for stable dirlist sorting by name */
 static const char js_simple_table_resort[] = \
-"var click_column;\n" \
 "var name_column = 0;\n" \
 "var date_column = 1;\n" \
 "var size_column = 2;\n" \
@@ -805,35 +804,32 @@ static const char js_simple_table_resort[] = \
 " return sortfn_then_by_name(a,b,name_column);\n" \
 "}\n" \
 "\n" \
-"function sortfn(a,b) {\n" \
-" return sortfn_then_by_name(a,b,click_column);\n" \
-"}\n" \
-"\n" \
 "function resort(lnk) {\n" \
+" if (prev_span != null) prev_span.innerHTML = '';\n" \
+"\n" \
+" var click_column = lnk.parentNode.cellIndex;\n" \
+" function sortfn(a,b) {\n" \
+"  return sortfn_then_by_name(a,b,click_column);\n" \
+" }\n" \
+"\n" \
 " var span = lnk.childNodes[1];\n" \
 " var table = lnk.parentNode.parentNode.parentNode.parentNode;\n" \
-" click_column = lnk.parentNode.cellIndex;\n" \
 " if (click_column == date_column) li_dates_to_dv(table);\n" \
 " var tbody = table.tBodies[0];\n" \
-" var rows = new Array(tbody.rows.length);\n" \
-" for (var j=0;j<tbody.rows.length;j++)\n" \
-"  rows[j] = tbody.rows[j];\n" \
+" var rows = Array.from(tbody.rows);\n" \
 " rows.sort(sortfn);\n" \
-"\n" \
-" if (prev_span != null) prev_span.innerHTML = '';\n" \
+" if (span.getAttribute('sortdir')=='down') rows.reverse();\n" \
+" tbody.innerHTML = '';\n" \
+" var frag = document.createDocumentFragment();\n" \
+" rows.forEach(row => frag.appendChild(row));\n" \
+" tbody.appendChild(frag);\n" \
 " if (span.getAttribute('sortdir')=='down') {\n" \
 "  span.innerHTML = '&uarr;';\n" \
 "  span.setAttribute('sortdir','up');\n" \
-"  rows.reverse();\n" \
 " } else {\n" \
 "  span.innerHTML = '&darr;';\n" \
 "  span.setAttribute('sortdir','down');\n" \
 " }\n" \
-" tbody.innerHTML = '';\n" \
-" var frag = document.createDocumentFragment();\n" \
-" for (var i=0;i<rows.length;i++)\n" \
-"  frag.appendChild(rows[i]);\n" \
-" tbody.appendChild(frag);\n" \
 " prev_span = span;\n" \
 "}\n";
 
@@ -842,12 +838,12 @@ static const char js_simple_table_init_sort[] = \
 "\n" \
 "function init_sort(init_sort_column, descending) {\n" \
 " var tables = document.getElementsByTagName(\"table\");\n" \
-" for (var i = 0; i < tables.length; i++) {\n" \
+" for (var i = 0, ilen = tables.length; i < ilen; ++i) {\n" \
 "  var table = tables[i];\n" \
 "  //var c = table.getAttribute(\"class\")\n" \
 "  //if (-1 != c.split(\" \").indexOf(\"sort\")) {\n" \
 "   var row = table.rows[0].cells;\n" \
-"   for (var j = 0; j < row.length; j++) {\n" \
+"   for (var j = 0, jlen = row.length; j < jlen; ++j) {\n" \
 "    var n = row[j];\n" \
 "    if (n.childNodes.length == 1 && n.childNodes[0].nodeType == 3) {\n" \
 "     var link = document.createElement(\"a\");\n" \
