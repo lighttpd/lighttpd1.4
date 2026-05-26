@@ -27,6 +27,8 @@ typedef struct http_header_remap_opts {
     const array *urlpaths;
     const array *hosts_request;
     const array *hosts_response;
+    const array *urlpath_resp_host_include;
+    const array *urlpath_resp_host_exclude;
     int force_http10;
     int https_remap;
     int upgrade;
@@ -259,6 +261,22 @@ static http_header_remap_opts * mod_proxy_parse_header_opts(server *srv, const a
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected value for proxy.header; "
                   "expected ( \"%s\" => ( \"key\" => \"value\" ) )",
+                  da->key.ptr);
+                return NULL;
+            }
+            *aval = &da->value;
+            continue;
+        }
+
+        if (buffer_eq_slen(&da->key, CONST_STR_LEN("map-urlpath-resp-host-include")))
+            aval = &header.urlpath_resp_host_include;
+        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("map-urlpath-resp-host-exclude")))
+            aval = &header.urlpath_resp_host_exclude;
+        if (aval) {
+            if (da->type != TYPE_ARRAY || !array_is_vlist(&da->value)) {
+                log_error(srv->errh, __FILE__, __LINE__,
+                  "unexpected value for proxy.header; "
+                  "expected ( \"%s\" => ( \"list\" )",
                   da->key.ptr);
                 return NULL;
             }
@@ -533,6 +551,18 @@ static void http_header_remap_uri (buffer *b, size_t off, http_header_remap_opts
             buffer_substr_replace(b, off, alen, m);
             alen = buffer_clen(m);/*(length of replacement authority)*/
         }
+
+        if (!is_req) {
+            /* if include list defined, remap if authority match, else exclude*/
+            const array *list = remap_hdrs->urlpath_resp_host_include;
+            if (list && !array_get_element_klen(list, b->ptr+off, alen))
+                return;
+            /* if exclude list defined, do not remap if authority matches */
+            list = remap_hdrs->urlpath_resp_host_exclude;
+            if (list && array_get_element_klen(list, b->ptr+off, alen))
+                return;
+        }
+
         off += alen;
     }
 
