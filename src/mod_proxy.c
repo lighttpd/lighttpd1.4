@@ -226,73 +226,49 @@ static http_header_remap_opts * mod_proxy_parse_header_opts(server *srv, const a
     memset(&header, 0, sizeof(header));
     for (uint32_t j = 0, used = a->used; j < used; ++j) {
         data_array *da = (data_array *)a->data[j];
-        if (buffer_eq_slen(&da->key, CONST_STR_LEN("https-remap"))) {
+        int *bval = NULL;
+        if (buffer_eq_slen(&da->key, CONST_STR_LEN("https-remap")))
+            bval = &header.https_remap;
+        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("force-http10")))
+            bval = &header.force_http10;
+        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("upgrade")))
+            bval = &header.upgrade;
+        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("connect")))
+            bval = &header.connect_method;
+        if (bval) {
             int val = config_plugin_value_to_bool((data_unset *)da, 2);
             if (2 == val) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected value for proxy.header; "
-                  "expected \"https-remap\" => \"enable\" or \"disable\"");
+                  "expected \"%s\" => \"enable\" or \"disable\"", da->key.ptr);
                 return NULL;
             }
-            header.https_remap = val;
+            *bval = val;
             continue;
         }
-        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("force-http10"))) {
-            int val = config_plugin_value_to_bool((data_unset *)da, 2);
-            if (2 == val) {
+
+        const array **aval = NULL;
+        if (buffer_eq_slen(&da->key, CONST_STR_LEN("map-urlpath")))
+            aval = &header.urlpaths;
+        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("map-host-request")))
+            aval = &header.hosts_request;
+        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("map-host-response")))
+            aval = &header.hosts_response;
+        if (aval) {
+            if (da->type != TYPE_ARRAY || !array_is_kvstring(&da->value)) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "unexpected value for proxy.header; "
-                  "expected \"force-http10\" => \"enable\" or \"disable\"");
+                  "expected ( \"%s\" => ( \"key\" => \"value\" ) )",
+                  da->key.ptr);
                 return NULL;
             }
-            header.force_http10 = val;
+            *aval = &da->value;
             continue;
         }
-        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("upgrade"))) {
-            int val = config_plugin_value_to_bool((data_unset *)da, 2);
-            if (2 == val) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "unexpected value for proxy.header; "
-                  "expected \"upgrade\" => \"enable\" or \"disable\"");
-                return NULL;
-            }
-            header.upgrade = val;
-            continue;
-        }
-        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("connect"))) {
-            int val = config_plugin_value_to_bool((data_unset *)da, 2);
-            if (2 == val) {
-                log_error(srv->errh, __FILE__, __LINE__,
-                  "unexpected value for proxy.header; "
-                  "expected \"connect\" => \"enable\" or \"disable\"");
-                return NULL;
-            }
-            header.connect_method = val;
-            continue;
-        }
-        if (da->type != TYPE_ARRAY || !array_is_kvstring(&da->value)) {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "unexpected value for proxy.header; "
-              "expected ( \"param\" => ( \"key\" => \"value\" ) ) near key %s",
-              da->key.ptr);
-            return NULL;
-        }
-        if (buffer_eq_slen(&da->key, CONST_STR_LEN("map-urlpath"))) {
-            header.urlpaths = &da->value;
-        }
-        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("map-host-request"))) {
-            header.hosts_request = &da->value;
-        }
-        else if (buffer_eq_slen(&da->key, CONST_STR_LEN("map-host-response"))) {
-            header.hosts_response = &da->value;
-        }
-        else {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "unexpected key for proxy.header; "
-              "expected ( \"param\" => ( \"key\" => \"value\" ) ) near key %s",
-              da->key.ptr);
-            return NULL;
-        }
+
+        log_error(srv->errh, __FILE__, __LINE__,
+          "unexpected key for proxy.header: %s", da->key.ptr);
+        return NULL;
     }
 
     http_header_remap_opts *opts = ck_malloc(sizeof(header));
