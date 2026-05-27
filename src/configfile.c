@@ -718,7 +718,7 @@ static int config_insert_srvconf(server *srv) {
         T_CONFIG_SHORT,
         T_CONFIG_SCOPE_SERVER }
      ,{ CONST_STR_LEN("server.max-fds"),
-        T_CONFIG_SHORT,
+        T_CONFIG_INT,
         T_CONFIG_SCOPE_SERVER }
      ,{ CONST_STR_LEN("server.max-connections"),
         T_CONFIG_SHORT,
@@ -848,7 +848,7 @@ static int config_insert_srvconf(server *srv) {
                 srv->srvconf.max_worker = (unsigned short)cpv->v.u;
                 break;
               case 17:/* server.max-fds */
-                srv->srvconf.max_fds = (unsigned short)cpv->v.u;
+                srv->srvconf.max_fds = cpv->v.u;
                 break;
               case 18:/* server.max-connections */
                 srv->srvconf.max_conns = (unsigned short)cpv->v.u;

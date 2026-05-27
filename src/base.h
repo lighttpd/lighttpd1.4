@@ -104,9 +104,9 @@ typedef struct {
 	unsigned short http_url_normalize;
 
 	unsigned short max_worker;
-	unsigned short max_fds;
 	unsigned short max_conns;
 	unsigned short port;
+	unsigned int max_fds;
 
 	unsigned int upload_temp_file_size;
 	array *upload_tempdirs;

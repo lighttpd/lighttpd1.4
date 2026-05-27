@@ -2016,10 +2016,10 @@ static handler_t gw_write_request(gw_handler_ctx * const hctx, request_st * cons
 
         hctx->fd = fdevent_socket_nb_cloexec(hctx->host->family,SOCK_STREAM,0);
       #ifndef _WIN32
-        if (hctx->fd >= r->con->srv->max_fds) {
+        if (hctx->fd >= (int)r->con->srv->max_fds) {
           #ifndef __COVERITY__
             /* coverity fails to determine hctx->fd >= 0
-             * if comparison to (unsigned short) srv->max_fds is true */
+             * if comparison to srv->max_fds is true */
             fdio_close_socket(hctx->fd);
             hctx->fd = -1;
           #endif

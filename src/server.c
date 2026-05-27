@@ -1770,7 +1770,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 		/*(default upper limit of 4k if server.max-fds not specified)*/
 		if (0 == srv->srvconf.max_fds)
 			srv->srvconf.max_fds = (rlim.rlim_cur <= 4096)
-			  ? (unsigned short)rlim.rlim_cur
+			  ? rlim.rlim_cur
 			  : 4096;
 
 		/* set core file rlimit, if enable_cores is set */
@@ -2012,6 +2012,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 #endif
 
+	if (srv->srvconf.max_fds > 1048576) /*(sanity check; still quite large)*/
+	    srv->srvconf.max_fds = 1048576;
 	srv->max_fds = (int)srv->srvconf.max_fds;
         if (srv->max_fds < 32) /*(sanity check; not expected)*/
             srv->max_fds = 32; /*(server load checks will fail if too low)*/
@@ -2040,7 +2042,8 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	}
 	else {
 		/* or use the default: we really don't want to hit max-fds */
-		srv->srvconf.max_conns = srv->max_fds / (factor > 2 ? factor : 3);
+		int max_conns = srv->max_fds / (factor > 2 ? factor : 3);
+		srv->srvconf.max_conns = max_conns <= USHRT_MAX ? max_conns : USHRT_MAX;
 	}
 	srv->lim_conns = srv->srvconf.max_conns;
 
