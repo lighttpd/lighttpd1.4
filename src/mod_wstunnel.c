@@ -1121,11 +1121,16 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                     return -1;
                 case MOD_WEBSOCKET_OPCODE_PING:
                 case MOD_WEBSOCKET_OPCODE_PONG:
+                    if (0 == (frame[i] & 0x80))
+                        return wstunnel_err(hctx, "control frame fragmented");
                     break;
                 default:
                     return wstunnel_err(hctx, "frame type invalid");
                 }
 
+                /* future: might add support: RFC7692 permessage-deflate */
+                if (frame[i] & 0x70)
+                    return wstunnel_err(hctx, "reserved bits set");
                 if ((frame[i+1] & 0x80) != 0x80)
                     return wstunnel_err(hctx, "payload not masked");
                 uint8_t siz = (((uint8_t *)frame)[i+1] & 0x7f);
@@ -1139,6 +1144,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                       : MOD_WEBSOCKET_FRAME_LEN16_CNT; /* 2 */
                     hctx->frame.state =
                         MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH;
+                    if (frame[i] & 0x8) /* control frames (0x8-0xF) */
+                        return wstunnel_err(hctx, "control frame size invalid");
                 }
                 hctx->frame.ctl.siz = siz;
                 i += 2;
@@ -1169,12 +1176,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                          | (uint64_t)((uint8_t *)frame)[i+7] );
                     i += n;
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
-                    if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_PING
-                        && hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX) {
-                        DEBUG_LOG_WARN("frame size has been exceeded: %x",
-                                       MOD_WEBSOCKET_BUFMAX);
-                        return -1;
-                    }
+                    if (hctx->frame.ctl.siz >> 63)
+                        return wstunnel_err(hctx, "frame size MSB is set");
                 }
                 break;
             case MOD_WEBSOCKET_FRAME_STATE_READ_MASK:
