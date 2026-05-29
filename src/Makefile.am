@@ -515,6 +515,7 @@ t_test_common_SOURCES = t/test_common.c \
                         t/test_base64.c \
                         t/test_buffer.c \
                         t/test_burl.c \
+                        t/test_http_cgi.c \
                         t/test_http_header.c \
                         t/test_http_kv.c \
                         t/test_http_range.c \
