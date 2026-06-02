@@ -163,6 +163,7 @@ typedef struct {
     mod_wstunnel_frame_state_t state;
     mod_wstunnel_frame_control_t ctl;
     mod_wstunnel_frame_type_t type, type_before, type_backend;
+    int ctl_frame;
     buffer *payload;
 } mod_wstunnel_frame_t;
 
@@ -1068,21 +1069,6 @@ static int recv_ietf_00(handler_ctx *hctx) {
 #define MOD_WEBSOCKET_FRAME_LEN16_CNT  2
 #define MOD_WEBSOCKET_FRAME_LEN63_CNT  8
 
-static int is_control_frame(const handler_ctx * const hctx) {
-    return hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_PING
-        || hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_PONG
-        || hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_CLOSE;
-}
-
-static int check_control_frame_size(const handler_ctx * const hctx) {
-    if (is_control_frame(hctx)
-        && hctx->frame.ctl.siz >= MOD_WEBSOCKET_FRAME_LEN16) {
-        DEBUG_LOG_ERR("%s", "control frame size is invalid");
-        return -1;
-    }
-    return 0;
-}
-
 static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const char *payload, size_t siz) {
     char mem[10];
     size_t len;
@@ -1178,7 +1164,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                     DEBUG_LOG_ERR("%s", "reserved bits are set");
                     return -1;
                 }
-                if ((frame[i] & 0x08) && 0 == (frame[i] & 0x80)) {
+                hctx->frame.ctl_frame = (frame[i] & 0x08);
+                if (hctx->frame.ctl_frame && 0 == (frame[i] & 0x80)) {
                     DEBUG_LOG_ERR("%s", "control frame is fragmented");
                     return -1;
                 }
@@ -1231,7 +1218,7 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                 }
                 else if (hctx->frame.ctl.siz == MOD_WEBSOCKET_FRAME_LEN16) {
-                    if (is_control_frame(hctx)) {
+                    if (hctx->frame.ctl_frame) {
                         DEBUG_LOG_ERR("%s", "control frame size is invalid");
                         return -1;
                     }
@@ -1241,7 +1228,7 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                         MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH;
                 }
                 else if (hctx->frame.ctl.siz == MOD_WEBSOCKET_FRAME_LEN63) {
-                    if (is_control_frame(hctx)) {
+                    if (hctx->frame.ctl_frame) {
                         DEBUG_LOG_ERR("%s", "control frame size is invalid");
                         return -1;
                     }
@@ -1253,30 +1240,21 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 else {
                     DEBUG_LOG_DEBUG("specified payload size=%llx",
                                     (unsigned long long)hctx->frame.ctl.siz);
-                    if (0 != check_control_frame_size(hctx)) return -1;
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                 }
                 i++;
                 break;
             case MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH:
-                if (hctx->frame.ctl.siz_cnt == MOD_WEBSOCKET_FRAME_LEN63_CNT
-                    && (frame[i] & 0x80)) {
-                    DEBUG_LOG_ERR("%s", "frame size MSB is set");
-                    return -1;
-                }
                 hctx->frame.ctl.siz =
                     (hctx->frame.ctl.siz << 8) + (frame[i] & 0xff);
                 hctx->frame.ctl.siz_cnt--;
                 if (hctx->frame.ctl.siz_cnt <= 0) {
-                    if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_PING &&
-                        hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX) {
-                        DEBUG_LOG_WARN("frame size has been exceeded: %x",
-                                       MOD_WEBSOCKET_BUFMAX);
+                    if (hctx->frame.ctl.siz >> 63) {
+                        DEBUG_LOG_ERR("%s", "frame size MSB is set");
                         return -1;
                     }
                     DEBUG_LOG_DEBUG("specified payload size=%llx",
                                     (unsigned long long)hctx->frame.ctl.siz);
-                    if (0 != check_control_frame_size(hctx)) return -1;
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                 }
                 i++;
