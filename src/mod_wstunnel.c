@@ -127,7 +127,6 @@ typedef enum {
     MOD_WEBSOCKET_FRAME_STATE_INIT,
 
     /* _MOD_WEBSOCKET_SPEC_RFC_6455_ */
-    MOD_WEBSOCKET_FRAME_STATE_READ_LENGTH,
     MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH,
     MOD_WEBSOCKET_FRAME_STATE_READ_MASK,
     /* _MOD_WEBSOCKET_SPEC_RFC_6455_ */
@@ -147,12 +146,16 @@ typedef enum {
 
 } mod_wstunnel_frame_type_t;
 
+/* map mod_wstunnel_frame_type_t to string */
+static const char * const mod_wstunnel_frame_type_str[] = {
+  "text", "binary", "close", "ping", "pong"
+};
+
 typedef struct {
     uint64_t siz;
 
     /* _MOD_WEBSOCKET_SPEC_RFC_6455_ */
-    int siz_cnt;
-    int mask_cnt;
+    int mask_off;
     #define MOD_WEBSOCKET_MASK_CNT 4
     unsigned char mask[MOD_WEBSOCKET_MASK_CNT];
     /* _MOD_WEBSOCKET_SPEC_RFC_6455_ */
@@ -160,9 +163,9 @@ typedef struct {
 } mod_wstunnel_frame_control_t;
 
 typedef struct {
-    mod_wstunnel_frame_state_t state;
+    int8_t state;
+    int8_t type, type_before, type_backend; /* mod_wstunnel_frame_type_t */
     mod_wstunnel_frame_control_t ctl;
-    mod_wstunnel_frame_type_t type, type_before, type_backend;
     buffer *payload;
 } mod_wstunnel_frame_t;
 
@@ -171,8 +174,8 @@ typedef struct {
     mod_wstunnel_frame_t frame;
 
     int hybivers;
-    unix_time64_t ping_ts;
     int subproto;
+    unix_time64_t ping_ts;
 
     log_error_st *errh; /*(for mod_wstunnel module-specific DEBUG_*() macros)*/
     plugin_config conf;
@@ -182,7 +185,7 @@ typedef struct {
 static handler_t mod_wstunnel_handshake_create_response(handler_ctx *);
 static int mod_wstunnel_frame_send(handler_ctx *, mod_wstunnel_frame_type_t, const char *, size_t);
 static int mod_wstunnel_frame_recv(handler_ctx *);
-#define _MOD_WEBSOCKET_SPEC_IETF_00_
+#define _MOD_WEBSOCKET_SPEC_IETF_00_   /* undef to reduce .text by ~2.5k */
 #define _MOD_WEBSOCKET_SPEC_RFC_6455_
 
 INIT_FUNC(mod_wstunnel_init);
@@ -418,8 +421,6 @@ static handler_t wstunnel_stdin_append(gw_handler_ctx *gwhctx) {
         /* future: might differentiate client close request from client error,
          *         and then send 1000 or 1001 */
         request_st * const r = hctx->gw.r;
-        DEBUG_LOG_INFO("disconnected from client (fd=%d)", r->con->fd);
-        DEBUG_LOG_DEBUG("send close response to client (fd=%d)", r->con->fd);
         mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, CONST_STR_LEN("1000")); /* 1000 Normal Closure */
         gw_handle_request_reset(r, hctx->gw.plugin_data);
         return HANDLER_FINISHED;
@@ -428,15 +429,20 @@ static handler_t wstunnel_stdin_append(gw_handler_ctx *gwhctx) {
 
 static handler_t wstunnel_recv_parse(request_st * const r, http_response_opts * const opts, buffer * const b, size_t n) {
     handler_ctx *hctx = (handler_ctx *)opts->pdata;
-    DEBUG_LOG_DEBUG("recv data from backend (fd=%d), size=%zx", hctx->gw.fd, n);
     if (0 == n) return HANDLER_FINISHED;
-    if (mod_wstunnel_frame_send(hctx,hctx->frame.type_backend,b->ptr,n) < 0) {
-        DEBUG_LOG_ERR("%s", "fail to send data to client");
+    if (mod_wstunnel_frame_send(hctx, hctx->frame.type_backend, b->ptr, n) < 0)
         return HANDLER_ERROR;
-    }
     buffer_clear(b);
     UNUSED(r);
     return HANDLER_GO_ON;
+}
+
+__attribute_cold__
+__attribute_noinline__
+static int
+wstunnel_err (handler_ctx * const hctx, const char *err) {
+    DEBUG_LOG_ERR("%s", err);
+    return -1;
 }
 
 static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const hctx) {
@@ -461,7 +467,7 @@ static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const 
     }
     olen = origin ? buffer_clen(origin) : 0;
     if (0 == olen) {
-        DEBUG_LOG_ERR("%s", "Origin header is invalid");
+        wstunnel_err(hctx, "Origin header is invalid");
         return 400; /* Bad Request */
     }
 
@@ -480,10 +486,8 @@ static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const 
 
 static int wstunnel_check_request(request_st * const r, handler_ctx * const hctx) {
     /*(redundant since HTTP/1.1 required in mod_wstunnel_check_extension())*/
-    if (!r->http_host || buffer_is_blank(r->http_host)) {
-        DEBUG_LOG_ERR("%s", "Host header does not exist");
+    if (!r->http_host || buffer_is_blank(r->http_host))
         return 400; /* Bad Request */
-    }
 
     return wstunnel_is_allowed_origin(r, hctx);
 }
@@ -515,16 +519,12 @@ static handler_t wstunnel_handler_setup (request_st * const r, handler_ctx * con
       ? light_isdigit(*vers->ptr) ? strtol(vers->ptr, NULL, 10) : -1
       : 0;
     if (hybivers < 0 || hybivers > INT_MAX) {
-        DEBUG_LOG_ERR("%s", "invalid Sec-WebSocket-Version");
+        wstunnel_err(hctx, "invalid Sec-WebSocket-Version");
         return http_status_set_err(r, 400); /* Bad Request */
     }
     hctx->hybivers = (int)hybivers;
-    if (0 == hybivers) {
-        DEBUG_LOG_INFO("WebSocket Version = %s", "hybi-00");
-    }
-    else {
-        DEBUG_LOG_INFO("WebSocket Version = %d", hybivers);
-    }
+    DEBUG_LOG_INFO("WebSocket Version = %d%s", hctx->hybivers,
+                   hctx->hybivers ? "" : " hybi-00");
 
     hctx->gw.opts.backend     = BACKEND_PROXY; /*(act proxy-like)*/
     hctx->gw.opts.pdata       = hctx;
@@ -541,46 +541,21 @@ static handler_t wstunnel_handler_setup (request_st * const r, handler_ctx * con
     hctx->frame.payload       = chunk_buffer_acquire();
 
     unsigned int binary = hctx->conf.frame_type; /*(0 = "text"; 1 = "binary")*/
-    {
-        const buffer *vb =
-          http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Protocol"));
-        if (NULL != vb) {
-            for (const char *s = vb->ptr; *s; ++s) {
-                while (*s==' '||*s=='\t'||*s=='\r'||*s=='\n') ++s;
-                if (buffer_eq_icase_ssn(s, CONST_STR_LEN("binary"))) {
-                    s += sizeof("binary")-1;
-                    while (*s==' '||*s=='\t'||*s=='\r'||*s=='\n') ++s;
-                    if (*s==','||*s=='\0') {
-                        hctx->subproto = 1;
-                        binary = 1;
-                        break;
-                    }
-                }
-                else if (binary) {
-                    /* ignore other subprotos if already configured "binary" */
-                }
-                else if (buffer_eq_icase_ssn(s, CONST_STR_LEN("base64"))) {
-                    s += sizeof("base64")-1;
-                    while (*s==' '||*s=='\t'||*s=='\r'||*s=='\n') ++s;
-                    if (*s==','||*s=='\0') {
-                        hctx->subproto = -1;
-                        break;
-                    }
-                }
-                s = strchr(s, ',');
-                if (NULL == s) break;
-            }
-        }
+    const buffer *vb =
+      http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Protocol"));
+    if (NULL != vb) {
+        if (http_header_str_contains_token(BUF_PTR_LEN(vb), CONST_STR_LEN("binary")))
+            hctx->subproto = binary = 1;
+        else if (http_header_str_contains_token(BUF_PTR_LEN(vb), CONST_STR_LEN("base64")))
+            hctx->subproto = -1;
     }
 
     if (binary) {
-        DEBUG_LOG_INFO("%s", "will recv binary data from backend");
         hctx->frame.type         = MOD_WEBSOCKET_FRAME_TYPE_BIN;
         hctx->frame.type_before  = MOD_WEBSOCKET_FRAME_TYPE_BIN;
         hctx->frame.type_backend = MOD_WEBSOCKET_FRAME_TYPE_BIN;
     }
     else {
-        DEBUG_LOG_INFO("%s", "will recv text data from backend");
         hctx->frame.type         = MOD_WEBSOCKET_FRAME_TYPE_TEXT;
         hctx->frame.type_before  = MOD_WEBSOCKET_FRAME_TYPE_TEXT;
         hctx->frame.type_backend = MOD_WEBSOCKET_FRAME_TYPE_TEXT;
@@ -760,20 +735,14 @@ static int create_response_ietf_00(handler_ctx *hctx) {
         origin =
           http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Origin"));
     }
-    if (NULL == origin) {
-        DEBUG_LOG_ERR("%s", "Origin header is invalid");
+    if (NULL == origin)
+        return wstunnel_err(hctx, "Origin header is invalid");
+    /*(redundant since HTTP/1.1 required in mod_wstunnel_check_extension())*/
+    if (!r->http_host || buffer_is_blank(r->http_host))
         return -1;
-    }
-    if (!r->http_host || buffer_is_blank(r->http_host)) {
-        DEBUG_LOG_ERR("%s", "Host header does not exist");
-        return -1;
-    }
-
     /* calc MD5 sum from keys */
-    if (create_MD5_sum(r) < 0) {
-        DEBUG_LOG_ERR("%s", "Sec-WebSocket-Key is invalid");
-        return -1;
-    }
+    if (create_MD5_sum(r) < 0)
+        return wstunnel_err(hctx, "Sec-WebSocket-Key is invalid");
 
     http_header_response_set(r, HTTP_HEADER_UPGRADE,
                              CONST_STR_LEN("Upgrade"),
@@ -820,10 +789,8 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
 
     const buffer *value_wskey =
       http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Key"));
-    if (NULL == value_wskey) {
-        DEBUG_LOG_ERR("%s", "Sec-WebSocket-Key is invalid");
-        return -1;
-    }
+    if (NULL == value_wskey)
+        return wstunnel_err(hctx, "Sec-WebSocket-Key is invalid");
 
     /* get SHA1 hash of key */
     /* refer: RFC-6455 Sec.1.3 Opening Handshake */
@@ -866,7 +833,6 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
     request_st * const r = hctx->gw.r;
   #ifdef _MOD_WEBSOCKET_SPEC_RFC_6455_
     if (hctx->hybivers >= 8) {
-        DEBUG_LOG_DEBUG("%s", "send handshake response");
         if (0 != create_response_rfc_6455(hctx)) {
             r->http_status = 400; /* Bad Request */
             return HANDLER_ERROR;
@@ -877,15 +843,12 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
 
   #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
     if (hctx->hybivers == 0 && r->http_version == HTTP_VERSION_1_1) {
-      #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
         /* 8 bytes should have been sent with request
          * for draft-ietf-hybi-thewebsocketprotocol-00 */
         chunkqueue *cq = &r->reqbody_queue;
         if (chunkqueue_length(cq) < 8)
             return HANDLER_WAIT_FOR_EVENT;
-      #endif /* _MOD_WEBSOCKET_SPEC_IETF_00_ */
 
-        DEBUG_LOG_DEBUG("%s", "send handshake response");
         if (0 != create_response_ietf_00(hctx)) {
             r->http_status = 400; /* Bad Request */
             return HANDLER_ERROR;
@@ -894,7 +857,7 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
     }
   #endif /* _MOD_WEBSOCKET_SPEC_IETF_00_ */
 
-    DEBUG_LOG_ERR("%s", "not supported WebSocket Version");
+    wstunnel_err(hctx, "unsupported WebSocket Version");
     r->http_status = 503; /* Service Unavailable */
     return HANDLER_ERROR;
 }
@@ -908,8 +871,6 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
 
 #include "base64.h"     /* lighttpd */
 #include "http_chunk.h" /* lighttpd */
-
-#define MOD_WEBSOCKET_BUFMAX (0x0fffff)
 
 #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
 
@@ -927,7 +888,7 @@ static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const
         http_chunk_append_mem(r, &head, 1);
         http_chunk_append_mem(r, payload, siz);
         http_chunk_append_mem(r, &tail, 1);
-        len = siz+2;
+        /*len = siz+2;*/
         break;
     case MOD_WEBSOCKET_FRAME_TYPE_BIN:
         if (0 == siz) return 0;
@@ -939,19 +900,16 @@ static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const
         http_chunk_append_mem(r, mem, len);
         free(mem);
         http_chunk_append_mem(r, &tail, 1);
-        len += 2;
+        /*len += 2;*/
         break;
     case MOD_WEBSOCKET_FRAME_TYPE_CLOSE:
         http_chunk_append_mem(r, &tail, 1);
         http_chunk_append_mem(r, &head, 1);
-        len = 2;
+        /*len = 2;*/
         break;
     default:
-        DEBUG_LOG_ERR("%s", "invalid frame type");
         return -1;
     }
-    DEBUG_LOG_DEBUG("send data to client (fd=%d), frame size=%zx",
-                    r->con->fd, len);
     return 0;
 }
 
@@ -959,94 +917,77 @@ static int recv_ietf_00(handler_ctx *hctx) {
     buffer_string_prepare_copy(hctx->gw.r->tmp_buf, 65535);
     request_st * const r = hctx->gw.r;
     chunkqueue *cq = &r->reqbody_queue;
-    buffer *payload = hctx->frame.payload;
-    char *mem;
-    DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%llx",
-                    r->con->fd, (long long)chunkqueue_length(cq));
     while (!chunkqueue_is_empty(cq)) {
         char *frame = r->tmp_buf->ptr;
-        uint32_t flen = buffer_string_space(r->tmp_buf);
+        uint32_t i, flen = buffer_string_space(r->tmp_buf);
         if (0 != chunkqueue_peek_data(cq, &frame, &flen, r->conf.errh, 0))
             return -1;
-        for (uint32_t i = 0; i < flen; ) {
-            switch (hctx->frame.state) {
-            case MOD_WEBSOCKET_FRAME_STATE_INIT:
+        for (i = 0; i < flen; ) {
+            if (hctx->frame.state == MOD_WEBSOCKET_FRAME_STATE_INIT) {
                 hctx->frame.ctl.siz = 0;
-                if (frame[i] == 0x00) {
-                    hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD;
-                    i++;
-                }
-                else if (((unsigned char *)frame)[i] == 0xff) {
-                    DEBUG_LOG_DEBUG("%s", "recv close frame");
-                    return -1;
-                }
-                else {
-                    DEBUG_LOG_DEBUG("%s", "recv invalid frame");
-                    return -1;
-                }
-                break;
-            case MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD:
-                mem = (char *)memchr(frame+i, 0xff, flen - i);
-                if (mem == NULL) {
-                    DEBUG_LOG_DEBUG("got continuous payload, size=%x", flen-i);
-                    hctx->frame.ctl.siz += flen - i;
-                    if (hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX) {
-                        DEBUG_LOG_WARN("frame size has been exceeded: %x",
-                                       MOD_WEBSOCKET_BUFMAX);
-                        return -1;
-                    }
-                    buffer_append_string_len(payload, frame+i, flen - i);
-                    i += flen - i;
-                }
-                else {
-                    DEBUG_LOG_DEBUG("got final payload, size=%zx",
-                                    mem - (frame+i));
-                    hctx->frame.ctl.siz += (mem - (frame+i));
-                    if (hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX) {
-                        DEBUG_LOG_WARN("frame size has been exceeded: %x",
-                                       MOD_WEBSOCKET_BUFMAX);
-                        return -1;
-                    }
-                    buffer_append_string_len(payload, frame+i, mem - (frame+i));
-                    i += (mem - (frame+i));
+                if (__builtin_expect( (frame[i] != 0x00), 0))
+                    return (((unsigned char *)frame)[i] == 0xff) /* close */
+                      ? -1
+                      : wstunnel_err(hctx, "frame type invalid");
+                hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD;
+                if (++i == flen)
+                    break;
+            }
+
+            /* hctx->frame.state == MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD */
+            {
+                uint32_t plen = flen - i;
+                char *mem = (char *)memchr(frame+i, 0xff, plen);
+                if (mem != NULL) {
+                    plen = (uint32_t)(mem - (frame+i));
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_INIT;
                 }
-                i++;
-                if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_TEXT
-                    && !buffer_is_unset(payload)) { /*XXX: buffer_is_blank?*/
+                hctx->frame.ctl.siz += plen;
+                #define MOD_WEBSOCKET_BUFMAX 0xfffff
+                if (hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX)
+                    return wstunnel_err(hctx,
+                                        "frame size has exceeded 0xfffff");
+                DEBUG_LOG_DEBUG("recv payload, size=%u", plen);
+                buffer * const payload = hctx->frame.payload;
+                buffer_append_string_len(payload, frame+i, plen);
+                i += plen + 1; /* +1 for 0xff, or flen fully consumed */
+                if (buffer_is_blank(payload))
+                    continue;
+                if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_TEXT) {
                     hctx->frame.ctl.siz = 0;
                     chunkqueue_append_buffer(&hctx->gw.wb, payload);
                     /*buffer_clear(payload);*//*chunkqueue_append_buffer clear*/
                 }
-                else {
-                    if (hctx->frame.state == MOD_WEBSOCKET_FRAME_STATE_INIT
-                        && !buffer_is_unset(payload)) {/*XXX: buffer_is_blank?*/
-                        buffer *b;
-                        size_t len = buffer_clen(payload);
-                        len = (len+3)/4*3+1;
-                        chunkqueue_get_memory(&hctx->gw.wb, &len);
-                        b = hctx->gw.wb.last->mem;
-                        len = buffer_clen(b);
-                        DEBUG_LOG_DEBUG("try to base64 decode: %s",
-                                        payload->ptr);
-                        if (NULL ==
-                            buffer_append_base64_decode(b, BUF_PTR_LEN(payload),
-                                                        BASE64_STANDARD)) {
-                            DEBUG_LOG_ERR("%s", "fail to base64-decode");
-                            return -1;
-                        }
+                else { /* hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_BIN */
+                    /* base64 decode in groups of 4 bytes to avoid buffering
+                     * in memory the entire frame, which could be up to 1 MB */
+                    plen = buffer_clen(payload);
+                    if (hctx->frame.state != MOD_WEBSOCKET_FRAME_STATE_INIT)
+                        plen &= ~0x3; /* (plen -= (plen % 4)) */
+
+                    size_t len = (plen+3)/4*3+1;
+                    chunkqueue_get_memory(&hctx->gw.wb, &len);
+                    buffer * const b = hctx->gw.wb.last->mem;
+                    len = buffer_clen(b);
+                    if (!buffer_append_base64_decode(b, payload->ptr, plen,
+                                                     BASE64_STANDARD))
+                        return wstunnel_err(hctx, "fail to base64-decode");
+                    /*chunkqueue_use_memory()*/
+                    hctx->gw.wb.bytes_in += buffer_clen(b)-len;
+
+                    const uint32_t n = buffer_clen(payload) - plen;
+                    if (0 == n)
                         buffer_clear(payload);
-                        /*chunkqueue_use_memory()*/
-                        hctx->gw.wb.bytes_in += buffer_clen(b)-len;
+                    else {
+                        memmove(payload->ptr, payload->ptr+plen, n);
+                        buffer_truncate(payload, n);
                     }
                 }
-                break;
-            default: /* never reach */
-                DEBUG_LOG_ERR("%s", "BUG: unknown state");
-                return -1;
             }
         }
         chunkqueue_mark_written(cq, flen);
+        if (i > flen && i - flen > chunkqueue_length(cq))
+            break; /* flag to wait to receive more data */
     }
     return 0;
 }
@@ -1068,6 +1009,35 @@ static int recv_ietf_00(handler_ctx *hctx) {
 #define MOD_WEBSOCKET_FRAME_LEN16_CNT  2
 #define MOD_WEBSOCKET_FRAME_LEN63_CNT  8
 
+/* map mod_wstunnel_frame_type_t to rfc6455 opcode */
+static const char mod_wstunnel_frame_type_op[] = {
+  MOD_WEBSOCKET_OPCODE_TEXT
+ ,MOD_WEBSOCKET_OPCODE_BIN
+ ,MOD_WEBSOCKET_OPCODE_CLOSE
+ ,MOD_WEBSOCKET_OPCODE_PING
+ ,MOD_WEBSOCKET_OPCODE_PONG
+};
+
+/* map rfc6455 opcode to mod_wstunnel_frame_type_t */
+static const int8_t mod_wstunnel_op_frame_type[] = {
+  -1
+ ,MOD_WEBSOCKET_FRAME_TYPE_TEXT
+ ,MOD_WEBSOCKET_FRAME_TYPE_BIN
+ ,-1
+ ,-1
+ ,-1
+ ,-1
+ ,-1
+ ,MOD_WEBSOCKET_FRAME_TYPE_CLOSE
+ ,MOD_WEBSOCKET_FRAME_TYPE_PING
+ ,MOD_WEBSOCKET_FRAME_TYPE_PONG
+ ,-1
+ ,-1
+ ,-1
+ ,-1
+ ,-1
+};
+
 static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const char *payload, size_t siz) {
     char mem[10];
     size_t len;
@@ -1078,31 +1048,7 @@ static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, cons
         return -1;
     }
 
-    switch (type) {
-    case MOD_WEBSOCKET_FRAME_TYPE_TEXT:
-        mem[0] = (char)(0x80 | MOD_WEBSOCKET_OPCODE_TEXT);
-        DEBUG_LOG_DEBUG("%s", "type = text");
-        break;
-    case MOD_WEBSOCKET_FRAME_TYPE_BIN:
-        mem[0] = (char)(0x80 | MOD_WEBSOCKET_OPCODE_BIN);
-        DEBUG_LOG_DEBUG("%s", "type = binary");
-        break;
-    case MOD_WEBSOCKET_FRAME_TYPE_PING:
-        mem[0] = (char) (0x80 | MOD_WEBSOCKET_OPCODE_PING);
-        DEBUG_LOG_DEBUG("%s", "type = ping");
-        break;
-    case MOD_WEBSOCKET_FRAME_TYPE_PONG:
-        mem[0] = (char)(0x80 | MOD_WEBSOCKET_OPCODE_PONG);
-        DEBUG_LOG_DEBUG("%s", "type = pong");
-        break;
-    case MOD_WEBSOCKET_FRAME_TYPE_CLOSE:
-    default:
-        mem[0] = (char)(0x80 | MOD_WEBSOCKET_OPCODE_CLOSE);
-        DEBUG_LOG_DEBUG("%s", "type = close");
-        break;
-    }
-
-    DEBUG_LOG_DEBUG("payload size=%zx", siz);
+    mem[0] = (char)(0x80 | mod_wstunnel_frame_type_op[type]);
     if (siz < MOD_WEBSOCKET_FRAME_LEN16) {
         mem[1] = siz;
         len = 2;
@@ -1131,16 +1077,15 @@ static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, cons
     if (payload == NULL) ck_assert(0 == siz);
   #endif
     if (siz) http_chunk_append_mem(r, payload, siz);
-    DEBUG_LOG_DEBUG("send data to client (fd=%d), frame size=%zx",
-                    r->con->fd, len+siz);
     return 0;
 }
 
 static void unmask_payload(handler_ctx *hctx) {
     buffer * const b = hctx->frame.payload;
+    if (-1 == hctx->frame.ctl.mask_off) return; /*(skip if mask is all 0's)*/
     for (size_t i = 0, used = buffer_clen(b); i < used; ++i) {
-        b->ptr[i] ^= hctx->frame.ctl.mask[hctx->frame.ctl.mask_cnt];
-        hctx->frame.ctl.mask_cnt = (hctx->frame.ctl.mask_cnt + 1) % 4;
+        b->ptr[i] ^= hctx->frame.ctl.mask[hctx->frame.ctl.mask_off];
+        hctx->frame.ctl.mask_off = (hctx->frame.ctl.mask_off + 1) & 0x3;
     }
 }
 
@@ -1149,175 +1094,159 @@ static int recv_rfc_6455(handler_ctx *hctx) {
     request_st * const r = hctx->gw.r;
     chunkqueue *cq = &r->reqbody_queue;
     buffer *payload = hctx->frame.payload;
-    DEBUG_LOG_DEBUG("recv data from client (fd=%d), size=%llx",
-                    r->con->fd, (long long)chunkqueue_length(cq));
     while (!chunkqueue_is_empty(cq)) {
         char *frame = r->tmp_buf->ptr;
-        uint32_t flen = buffer_string_space(r->tmp_buf);
+        uint32_t i, flen = buffer_string_space(r->tmp_buf);
         if (0 != chunkqueue_peek_data(cq, &frame, &flen, r->conf.errh, 0))
             return -1;
-        for (uint32_t i = 0; i < flen; ) {
+        for (i = 0; i < flen; ) {
             switch (hctx->frame.state) {
             case MOD_WEBSOCKET_FRAME_STATE_INIT:
-                switch (frame[i] & 0x0f) {
+                if (__builtin_expect( (flen - i < 6), 0)) {
+                    /* yield to collect initial 2 bytes of frame + 4 byte mask*/
+                    flen = i; /* trigger for loop exit */
+                    i += 6;
+                    continue;
+                }
+                hctx->frame.type = mod_wstunnel_op_frame_type[(frame[i] & 0xf)];
+                switch (frame[i] & 0xf) {
                 case MOD_WEBSOCKET_OPCODE_CONT:
-                    DEBUG_LOG_DEBUG("%s", "type = continue");
                     hctx->frame.type = hctx->frame.type_before;
                     break;
                 case MOD_WEBSOCKET_OPCODE_TEXT:
-                    DEBUG_LOG_DEBUG("%s", "type = text");
-                    hctx->frame.type = MOD_WEBSOCKET_FRAME_TYPE_TEXT;
-                    hctx->frame.type_before = hctx->frame.type;
-                    break;
                 case MOD_WEBSOCKET_OPCODE_BIN:
-                    DEBUG_LOG_DEBUG("%s", "type = binary");
-                    hctx->frame.type = MOD_WEBSOCKET_FRAME_TYPE_BIN;
                     hctx->frame.type_before = hctx->frame.type;
-                    break;
-                case MOD_WEBSOCKET_OPCODE_PING:
-                    DEBUG_LOG_DEBUG("%s", "type = ping");
-                    hctx->frame.type = MOD_WEBSOCKET_FRAME_TYPE_PING;
-                    break;
-                case MOD_WEBSOCKET_OPCODE_PONG:
-                    DEBUG_LOG_DEBUG("%s", "type = pong");
-                    hctx->frame.type = MOD_WEBSOCKET_FRAME_TYPE_PONG;
                     break;
                 case MOD_WEBSOCKET_OPCODE_CLOSE:
-                    DEBUG_LOG_DEBUG("%s", "type = close");
-                    hctx->frame.type = MOD_WEBSOCKET_FRAME_TYPE_CLOSE;
                     return -1;
+                case MOD_WEBSOCKET_OPCODE_PING:
+                case MOD_WEBSOCKET_OPCODE_PONG:
                     break;
                 default:
-                    DEBUG_LOG_ERR("%s", "type is invalid");
-                    return -1;
-                    break;
+                    return wstunnel_err(hctx, "frame type invalid");
                 }
-                i++;
-                hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_LENGTH;
-                break;
-            case MOD_WEBSOCKET_FRAME_STATE_READ_LENGTH:
-                if ((frame[i] & 0x80) != 0x80) {
-                    DEBUG_LOG_ERR("%s", "payload was not masked");
-                    return -1;
-                }
-                hctx->frame.ctl.mask_cnt = 0;
-                hctx->frame.ctl.siz = (uint64_t)(frame[i] & 0x7f);
-                if (hctx->frame.ctl.siz == 0) {
-                    DEBUG_LOG_DEBUG("specified payload size=%llx",
-                                    (unsigned long long)hctx->frame.ctl.siz);
+
+                if ((frame[i+1] & 0x80) != 0x80)
+                    return wstunnel_err(hctx, "payload not masked");
+                uint8_t siz = (((uint8_t *)frame)[i+1] & 0x7f);
+                if (siz < 0x7e)
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
-                }
-                else if (hctx->frame.ctl.siz == MOD_WEBSOCKET_FRAME_LEN16) {
-                    hctx->frame.ctl.siz = 0;
-                    hctx->frame.ctl.siz_cnt = MOD_WEBSOCKET_FRAME_LEN16_CNT;
-                    hctx->frame.state =
-                        MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH;
-                }
-                else if (hctx->frame.ctl.siz == MOD_WEBSOCKET_FRAME_LEN63) {
-                    hctx->frame.ctl.siz = 0;
-                    hctx->frame.ctl.siz_cnt = MOD_WEBSOCKET_FRAME_LEN63_CNT;
-                    hctx->frame.state =
-                        MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH;
-                }
                 else {
-                    DEBUG_LOG_DEBUG("specified payload size=%llx",
-                                    (unsigned long long)hctx->frame.ctl.siz);
-                    hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
+                    /* MOD_WEBSOCKET_FRAME_LEN16 0x7E */
+                    /* MOD_WEBSOCKET_FRAME_LEN63 0x7F */
+                    siz = (siz == MOD_WEBSOCKET_FRAME_LEN63)
+                      ? MOD_WEBSOCKET_FRAME_LEN63_CNT  /* 8 */
+                      : MOD_WEBSOCKET_FRAME_LEN16_CNT; /* 2 */
+                    hctx->frame.state =
+                        MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH;
                 }
-                i++;
+                hctx->frame.ctl.siz = siz;
+                i += 2;
                 break;
             case MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH:
-                hctx->frame.ctl.siz =
-                    (hctx->frame.ctl.siz << 8) + (frame[i] & 0xff);
-                hctx->frame.ctl.siz_cnt--;
-                if (hctx->frame.ctl.siz_cnt <= 0) {
-                    if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_PING &&
-                        hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX) {
+                if (__builtin_expect((flen - i < hctx->frame.ctl.siz), 0)) {
+                    /* yield to collect extended length */
+                    flen = i; /* trigger for loop exit */
+                    i += hctx->frame.ctl.siz;
+                    continue;
+                }
+                else {
+                    /* unaligned (potentially) read of big-endian size */
+                    /* modern compiler optimizers (gcc, clang) recognize these
+                     * patterns and use more efficient instructions (e.g. bswap)
+                     * when available */
+                    const uint32_t n = hctx->frame.ctl.siz;
+                    hctx->frame.ctl.siz = (2 == n)
+                      ? ( ((uint64_t)((uint8_t *)frame)[i+0] <<  8)
+                         | (uint64_t)((uint8_t *)frame)[i+1] )
+                      : ( ((uint64_t)((uint8_t *)frame)[i+0] << 56)
+                         |((uint64_t)((uint8_t *)frame)[i+1] << 48)
+                         |((uint64_t)((uint8_t *)frame)[i+2] << 40)
+                         |((uint64_t)((uint8_t *)frame)[i+3] << 32)
+                         |((uint64_t)((uint8_t *)frame)[i+4] << 24)
+                         |((uint64_t)((uint8_t *)frame)[i+5] << 16)
+                         |((uint64_t)((uint8_t *)frame)[i+6] <<  8)
+                         | (uint64_t)((uint8_t *)frame)[i+7] );
+                    i += n;
+                    hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
+                    if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_PING
+                        && hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX) {
                         DEBUG_LOG_WARN("frame size has been exceeded: %x",
                                        MOD_WEBSOCKET_BUFMAX);
                         return -1;
                     }
-                    DEBUG_LOG_DEBUG("specified payload size=%llx",
-                                    (unsigned long long)hctx->frame.ctl.siz);
-                    hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                 }
-                i++;
                 break;
             case MOD_WEBSOCKET_FRAME_STATE_READ_MASK:
-                hctx->frame.ctl.mask[hctx->frame.ctl.mask_cnt] = frame[i];
-                hctx->frame.ctl.mask_cnt++;
-                if (hctx->frame.ctl.mask_cnt >= MOD_WEBSOCKET_MASK_CNT) {
-                    hctx->frame.ctl.mask_cnt = 0;
-                    if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_PING &&
-                        hctx->frame.ctl.siz == 0) {
+                if (__builtin_expect( (flen - i < MOD_WEBSOCKET_MASK_CNT), 0)) {
+                    /* yield to collect extended length */
+                    flen = i; /* trigger for loop exit */
+                    i += MOD_WEBSOCKET_MASK_CNT;
+                    continue;
+                }
+                if (hctx->frame.ctl.siz) {
+                    hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD;
+                    hctx->frame.ctl.mask_off = /*-1 to skip if mask is all 0's*/
+                      (frame[i]|frame[i+1]|frame[i+2]|frame[i+3]) ? 0 : -1;
+                    memcpy(hctx->frame.ctl.mask,frame+i,MOD_WEBSOCKET_MASK_CNT);
+                }
+                else {
+                    hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_INIT;
+                    if (hctx->frame.type == MOD_WEBSOCKET_FRAME_TYPE_PING)
                         mod_wstunnel_frame_send(hctx,
                                                 MOD_WEBSOCKET_FRAME_TYPE_PONG,
                                                 NULL, 0);
-                    }
-                    if (hctx->frame.ctl.siz == 0) {
-                        hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_INIT;
-                    }
-                    else {
-                        hctx->frame.state =
-                            MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD;
-                    }
                 }
-                i++;
+                DEBUG_LOG_DEBUG("frame type=%s, specified payload size=%llu",
+                                mod_wstunnel_frame_type_str[hctx->frame.type],
+                                (unsigned long long)hctx->frame.ctl.siz);
+                i += MOD_WEBSOCKET_MASK_CNT;
                 break;
             case MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD:
-                /* hctx->frame.ctl.siz <= SIZE_MAX */
-                if (hctx->frame.ctl.siz <= flen - i) {
-                    DEBUG_LOG_DEBUG("read payload, size=%llx",
-                                    (unsigned long long)hctx->frame.ctl.siz);
-                    buffer_append_string_len(payload, frame+i, (size_t)
-                                             (hctx->frame.ctl.siz & SIZE_MAX));
-                    i += (size_t)(hctx->frame.ctl.siz & SIZE_MAX);
-                    hctx->frame.ctl.siz = 0;
-                    hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_INIT;
-                    DEBUG_LOG_DEBUG("rest of frame size=%x", flen - i);
-                /* SIZE_MAX < hctx->frame.ctl.siz */
-                }
-                else {
-                    DEBUG_LOG_DEBUG("read payload, size=%x", flen - i);
-                    buffer_append_string_len(payload, frame+i, flen - i);
-                    hctx->frame.ctl.siz -= flen - i;
-                    i += flen - i;
-                    DEBUG_LOG_DEBUG("rest of payload size=%llx",
-                                    (unsigned long long)hctx->frame.ctl.siz);
+                {
+                    uint32_t n = flen - i;
+                    if (hctx->frame.ctl.siz <= n) {
+                        n = (uint32_t)hctx->frame.ctl.siz;
+                        hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_INIT;
+                    }
+                    hctx->frame.ctl.siz -= n;
+                    buffer_append_string_len(payload, frame+i, n);
+                    i += n;
+                    DEBUG_LOG_DEBUG(
+                      "recv payload, size=%u; remaining payload size=%llu",
+                      n, (unsigned long long)hctx->frame.ctl.siz);
                 }
                 switch (hctx->frame.type) {
                 case MOD_WEBSOCKET_FRAME_TYPE_TEXT:
                 case MOD_WEBSOCKET_FRAME_TYPE_BIN:
-                  {
                     unmask_payload(hctx);
                     chunkqueue_append_buffer(&hctx->gw.wb, payload);
                     /*buffer_clear(payload);*//*chunkqueue_append_buffer clear*/
                     break;
-                  }
                 case MOD_WEBSOCKET_FRAME_TYPE_PING:
                     if (hctx->frame.ctl.siz == 0) {
                         unmask_payload(hctx);
                         mod_wstunnel_frame_send(hctx,
                           MOD_WEBSOCKET_FRAME_TYPE_PONG,
-                          payload->ptr, buffer_clen(payload));
+                          BUF_PTR_LEN(payload));
                         buffer_clear(payload);
                     }
                     break;
                 case MOD_WEBSOCKET_FRAME_TYPE_PONG:
                     buffer_clear(payload);
                     break;
-                case MOD_WEBSOCKET_FRAME_TYPE_CLOSE:
+                /*case MOD_WEBSOCKET_FRAME_TYPE_CLOSE:*/
                 default:
-                    DEBUG_LOG_ERR("%s", "BUG: invalid frame type");
                     return -1;
                 }
                 break;
             default:
-                DEBUG_LOG_ERR("%s", "BUG: invalid state");
                 return -1;
             }
         }
         chunkqueue_mark_written(cq, flen);
+        if (i > flen && i - flen > chunkqueue_length(cq))
+            break; /* flag to wait to receive more data */
     }
     return 0;
 }
@@ -1327,6 +1256,9 @@ static int recv_rfc_6455(handler_ctx *hctx) {
 
 int mod_wstunnel_frame_send(handler_ctx *hctx, mod_wstunnel_frame_type_t type,
                              const char *payload, size_t siz) {
+    DEBUG_LOG_DEBUG("send to client (fd=%d), frame type=%s, payload size=%zu",
+                    hctx->gw.r->con->fd,
+                    mod_wstunnel_frame_type_str[type], siz);
   #ifdef _MOD_WEBSOCKET_SPEC_RFC_6455_
     if (hctx->hybivers >= 8) return send_rfc_6455(hctx, type, payload, siz);
   #endif /* _MOD_WEBSOCKET_SPEC_RFC_6455_ */
@@ -1337,6 +1269,9 @@ int mod_wstunnel_frame_send(handler_ctx *hctx, mod_wstunnel_frame_type_t type,
 }
 
 int mod_wstunnel_frame_recv(handler_ctx *hctx) {
+    DEBUG_LOG_DEBUG("recv from client (fd=%d), queue size=%llu",
+                    hctx->gw.r->con->fd,
+                    (long long)chunkqueue_length(&hctx->gw.r->reqbody_queue));
   #ifdef _MOD_WEBSOCKET_SPEC_RFC_6455_
     if (hctx->hybivers >= 8) return recv_rfc_6455(hctx);
   #endif /* _MOD_WEBSOCKET_SPEC_RFC_6455_ */
