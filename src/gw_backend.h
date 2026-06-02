@@ -270,10 +270,10 @@ typedef struct gw_plugin_config {
     gw_exts *exts_auth;
     gw_exts *exts_resp;
     const array *ext_mapping;
-    int balance;
-    int proto;
-    int debug;
-    int upgrade;
+    uint8_t balance;
+    uint8_t proto;
+    uint8_t debug;
+    uint8_t upgrade;
 } gw_plugin_config;
 
 /* generic plugin data, shared between all connections */
