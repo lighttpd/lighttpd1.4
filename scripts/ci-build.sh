@@ -10,10 +10,10 @@ compiler="${3:-gcc}"    # might want to overwrite a compiler
 # - create "cov-int" directory for upload (gets `tar`d)
 # - access coverity binaries with export PATH="${COVERITY_PATH}"
 
-# enable --with-wolfssl by default, but allow it to be disabled,
-# e.g. on Alpine Linux where wolfssl package is not built including
+# disable --with-wolfssl by default, but allow it to be enabled by caller,
+# e.g. disable on Alpine Linux where wolfssl package is not built including
 # features required by lighttpd (--with-opensslextra --enable-lighty)
-${WITH_WOLFSSL:=true}
+#${WITH_WOLFSSL:=true}
 [ -n "$NO_WOLFSSL" ] && unset WITH_WOLFSSL
 
 ${WITH_DBI:=true}
