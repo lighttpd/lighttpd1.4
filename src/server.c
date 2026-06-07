@@ -2033,7 +2033,7 @@ static int server_main_setup (server * const srv, int argc, char **argv) {
 	  : 2;
 	if (srv->srvconf.max_conns > srv->max_fds / factor) {
 		log_warn(srv->errh, __FILE__, __LINE__,
-		  "reducing server.max-connections (%hu) to 1/(%d) server.max-fds (%d)",
+		  "reducing server.max-connections (%hu) to 1/%d server.max-fds (%d)",
 		  srv->srvconf.max_conns, factor, srv->max_fds);
 		srv->srvconf.max_conns = srv->max_fds / factor;
 	}
