@@ -825,12 +825,20 @@ h1_read_body_unknown (request_st * const r, chunkqueue * const cq, chunkqueue * 
 {
     /* r->conf.max_request_size is in kBytes */
     const off_t max_request_size = (off_t)r->conf.max_request_size << 10;
-    chunkqueue_append_chunkqueue(dst_cq, cq);
-    if (0 != max_request_size && dst_cq->bytes_in > max_request_size) {
+    const off_t len = chunkqueue_length(cq);
+    if (0 != max_request_size && dst_cq->bytes_in + len > max_request_size) {
         log_error(r->conf.errh, __FILE__, __LINE__,
-          "request-size too long: %lld -> 413", (long long)dst_cq->bytes_in);
+          "request-size too long: %lld -> 413",
+          (long long)(dst_cq->bytes_in + len));
         return 413; /* 413 Payload Too Large */
     }
+    if (chunkqueue_length(dst_cq) + len <= 64*1024
+        && (!dst_cq->first || dst_cq->first->type == MEM_CHUNK)) {
+        /* avoid tempfiles when streaming request body to fast backend */
+        chunkqueue_append_chunkqueue(dst_cq, cq);
+    }
+    else if (0 != chunkqueue_steal_with_tempfiles(dst_cq,cq,len,r->conf.errh))
+        return 500; /* 500 Internal Server Error */
     return 0;
 }
 
