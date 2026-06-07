@@ -224,7 +224,8 @@ static handler_t fcgi_stdin_append(handler_ctx *hctx) {
 	if (hctx->gw_mode == GW_AUTHORIZER) req_cqlen = 0;
 
 	/* something to send ? */
-	for (offset = 0; offset != req_cqlen; offset += weWant) {
+	for (offset = 0; offset != req_cqlen
+	                 && chunkqueue_length(&hctx->wb) < 65536; offset += weWant){
 		weWant = req_cqlen - offset > FCGI_MAX_LENGTH ? FCGI_MAX_LENGTH : req_cqlen - offset;
 
 		if (-1 != hctx->wb_reqlen) {

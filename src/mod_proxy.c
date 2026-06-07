@@ -836,7 +836,7 @@ static handler_t proxy_stdin_append(gw_handler_ctx *hctx) {
     /*handler_ctx *hctx = (handler_ctx *)gwhctx;*/
     chunkqueue * const req_cq = &hctx->r->reqbody_queue;
     const off_t req_cqlen = chunkqueue_length(req_cq);
-    if (req_cqlen) {
+    if (req_cqlen && chunkqueue_length(&hctx->wb) < 65536) {
         /* XXX: future: use http_chunk_len_append() */
         buffer * const tb = hctx->r->tmp_buf;
         buffer_clear(tb);

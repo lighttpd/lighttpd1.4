@@ -250,7 +250,8 @@ ajp13_stdin_append (handler_ctx * const hctx)
     off_t sent = 0;
     uint8_t hdr[4] = { 0x12, 0x34, 0, 0 };
 
-    for (off_t dlen; sent < max_bytes; sent += dlen) {
+    for (off_t dlen; sent < max_bytes
+                     && chunkqueue_length(&hctx->wb) < 65536; sent += dlen) {
         dlen = max_bytes - sent > AJP13_MAX_PACKET_SIZE - 4
           ? AJP13_MAX_PACKET_SIZE - 4
           : max_bytes - sent;

@@ -935,7 +935,13 @@ static int recv_ietf_00(handler_ctx *hctx) {
             }
 
             /* hctx->frame.state == MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD */
-            {
+            /* MOD_WEBSOCKET_FRAME_TYPE_TEXT or MOD_WEBSOCKET_FRAME_TYPE_BIN */
+            if (chunkqueue_length(&hctx->gw.wb) > 65536 - 16384) {
+                flen = i; /* trigger for loop exit */
+                i += chunkqueue_length(cq) + 1;
+                break;
+            }
+            else {
                 uint32_t plen = flen - i;
                 char *mem = (char *)memchr(frame+i, 0xff, plen);
                 if (mem != NULL) {
@@ -1206,7 +1212,15 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 i += MOD_WEBSOCKET_MASK_CNT;
                 break;
             case MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD:
-                {
+                if (chunkqueue_length(&hctx->gw.wb) > 65536 - 16384
+                    && hctx->frame.type <= MOD_WEBSOCKET_FRAME_TYPE_BIN) {
+                    /* MOD_WEBSOCKET_FRAME_TYPE_TEXT or
+                     * MOD_WEBSOCKET_FRAME_TYPE_BIN */
+                    flen = i; /* trigger for loop exit */
+                    i += chunkqueue_length(cq) + 1;
+                    continue;
+                }
+                else {
                     uint32_t n = flen - i;
                     if (hctx->frame.ctl.siz <= n) {
                         n = (uint32_t)hctx->frame.ctl.siz;
