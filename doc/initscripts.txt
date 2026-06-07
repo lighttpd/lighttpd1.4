@@ -10,13 +10,14 @@ SIGHUP  - re-open log files     (NOTE: does not reload lighttpd configuration)
 
 * lighttpd graceful restart
 
-https://blog.lighttpd.net/articles/2005/09/02/graceful-restart/
-The current recommended way to reload lighttpd config is to gracefully stop
-and then to restart lighttpd.
-
 With lighttpd 1.4.46 and later, SIGUSR1 is the recommended method to gracefully
 handle configuration reloads and log rotation, though a graceful stop and then
-restart of lighttpd is still required for lighttpd configurations which chroot.
+restart of lighttpd is still required for lighttpd configurations which chroot,
+or which have TLS certificates readable by root, but not by the lighttpd user.
+
+https://blog.lighttpd.net/articles/2005/09/02/graceful-restart/
+The historical way to reload lighttpd config is to gracefully stop and then to
+restart lighttpd.
 
 
 * lighttpd initscripts
