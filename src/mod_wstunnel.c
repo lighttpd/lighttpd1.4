@@ -78,7 +78,6 @@
 
 #include <sys/types.h>
 #include <limits.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "gw_backend.h"
@@ -185,7 +184,7 @@ typedef struct {
 static handler_t mod_wstunnel_handshake_create_response(handler_ctx *);
 static int mod_wstunnel_frame_send(handler_ctx *, mod_wstunnel_frame_type_t, const char *, size_t);
 static int mod_wstunnel_frame_recv(handler_ctx *);
-#define _MOD_WEBSOCKET_SPEC_IETF_00_   /* undef to reduce .text by ~2.5k */
+/*#define _MOD_WEBSOCKET_SPEC_IETF_00_*/   /* obsolete */
 #define _MOD_WEBSOCKET_SPEC_RFC_6455_
 
 INIT_FUNC(mod_wstunnel_init);
@@ -660,6 +659,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
 
 #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
 
+#include <stdlib.h>     /* strtoul() free() */
 #include "sys-crypto-md.h"  /* lighttpd */
 #include "sys-endian.h"     /* lighttpd */
 
@@ -874,7 +874,6 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
 
 #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
 
-#include <stdlib.h>
 static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const char *payload, size_t siz) {
     static const char head =  0; /* 0x00 */
     static const char tail = ~0; /* 0xff */
