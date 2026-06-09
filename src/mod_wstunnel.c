@@ -64,10 +64,12 @@
  *     setenv.set-response-header = ( "Sec-WebSocket-Protocol" => "..." )
  *     if header is required
  *
- * not reviewed:
- * - websocket protocol compliance has not been reviewed
- *     e.g. when to send 1000 Normal Closure and when to send 1001 Going Away
- * - websocket protocol sanity checking has not been reviewed
+ * If mod_wstunnel is first to send websocket CLOSE frame, mod_wstunnel calls
+ * shutdown(fd, SHUT_WR) for HTTP/1.1 without waiting to receive websocket CLOSE
+ * frame from client.  lighttpd continues to read and discard data from HTTP/1.1
+ * client for a short time before calling close() on the HTTP/1.1 client socket,
+ * but does not parse for websocket CLOSE frame from client.  (RFC6455 suggests
+ * waiting to receive websocket CLOSE frame from peer before socket shutdown.)
  *
  * References:
  *   https://en.wikipedia.org/wiki/WebSocket
@@ -163,7 +165,7 @@ typedef struct {
 
 typedef struct {
     int8_t state;
-    int8_t type, type_before, type_backend; /* mod_wstunnel_frame_type_t */
+    int8_t type, type_cont, type_backend; /* mod_wstunnel_frame_type_t */
     mod_wstunnel_frame_control_t ctl;
     buffer *payload;
 } mod_wstunnel_frame_t;
@@ -415,12 +417,7 @@ static handler_t wstunnel_stdin_append(gw_handler_ctx *gwhctx) {
     if (0 == mod_wstunnel_frame_recv(hctx))
         return HANDLER_GO_ON;
     else {
-        /*(error)*/
-        /* future: might differentiate client close request from client error,
-         *         and then send 1000 or 1001 */
-        request_st * const r = hctx->gw.r;
-        mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, CONST_STR_LEN("1000")); /* 1000 Normal Closure */
-        gw_handle_request_reset(r, hctx->gw.plugin_data);
+        gw_handle_request_reset(hctx->gw.r, hctx->gw.plugin_data);
         return HANDLER_FINISHED;
     }
 }
@@ -438,8 +435,14 @@ static handler_t wstunnel_recv_parse(request_st * const r, http_response_opts * 
 __attribute_cold__
 __attribute_noinline__
 static int
-wstunnel_err (handler_ctx * const hctx, const char *err) {
-    DEBUG_LOG_ERR("%s", err);
+wstunnel_err (handler_ctx * const hctx, unsigned short wstatus, const char *err) {
+    if (err)
+        DEBUG_LOG_ERR("%s", err);
+    if (wstatus) {
+        char code[2] = { (char)(wstatus >> 8), (char)(wstatus & 0xff) };
+        hctx->subproto = wstatus; /* overload to flag CLOSE; wstatus >= 1000 */
+        mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, code, 2);
+    }
     return -1;
 }
 
@@ -451,21 +454,21 @@ static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const 
     const buffer *origin = NULL;
     size_t olen;
 
-    if (NULL == allowed_origins || 0 == allowed_origins->used) {
-        DEBUG_LOG_INFO("%s", "allowed origins not specified");
+    if (NULL == allowed_origins || 0 == allowed_origins->used)
         return 0;
-    }
 
     /* "Origin" header is preferred
-     * ("Sec-WebSocket-Origin" is from older drafts of websocket spec) */
+     * ("Sec-WebSocket-Origin" is from older drafts of websocket spec <= 10) */
     origin = http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Origin"));
+  #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
     if (NULL == origin) {
         origin =
           http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Origin"));
     }
+  #endif
     olen = origin ? buffer_clen(origin) : 0;
     if (0 == olen) {
-        wstunnel_err(hctx, "Origin header is invalid");
+        wstunnel_err(hctx, 0, "Origin header is invalid");
         return 400; /* Bad Request */
     }
 
@@ -474,7 +477,6 @@ static int wstunnel_is_allowed_origin(request_st * const r, handler_ctx * const 
         size_t blen = buffer_clen(b);
         if ((olen > blen ? origin->ptr[olen-blen-1] == '.' : olen == blen)
             && 0 == memcmp(origin->ptr+olen-blen, b->ptr, blen)) {
-            DEBUG_LOG_INFO("%s matches allowed origin: %s",origin->ptr,b->ptr);
             return 0;
         }
     }
@@ -492,13 +494,21 @@ static int wstunnel_check_request(request_st * const r, handler_ctx * const hctx
 
 static void wstunnel_backend_error(gw_handler_ctx *gwhctx) {
     handler_ctx *hctx = (handler_ctx *)gwhctx;
-    if (hctx->gw.state == GW_STATE_WRITE || hctx->gw.state == GW_STATE_READ) {
-        mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, CONST_STR_LEN("1001")); /* 1001 Going Away */
-    }
+    if (hctx->gw.state == GW_STATE_WRITE || hctx->gw.state == GW_STATE_READ)
+        wstunnel_err(hctx, 1011, NULL); /* Internal Server Error */
 }
 
 static void wstunnel_handler_ctx_free(void *gwhctx) {
     handler_ctx *hctx = (handler_ctx *)gwhctx;
+    if (hctx->subproto < 1000 /*(overloaded; CLOSE not yet sent)*/
+           /* CON_STATE_HANDLE_REQUEST || CON_STATE_WRITE */
+        && hctx->gw.r->state < CON_STATE_RESPONSE_END /*!RESPONSE_END,!ERROR*/
+        && (gw_plugin_data *)hctx->gw.r->handler_module
+             == hctx->gw.plugin_data /*(needed?)*/
+        && (   hctx->gw.state == GW_STATE_WRITE
+            || hctx->gw.state == GW_STATE_READ   )) {
+        wstunnel_err(hctx, 1001, NULL);
+    }
     chunk_buffer_release(hctx->frame.payload);
 }
 
@@ -509,19 +519,29 @@ static handler_t wstunnel_handler_setup (request_st * const r, handler_ctx * con
     if (status)
         return http_status_set_err(r, status);
 
-    const buffer * const vers =
+    const buffer *vers =
       http_header_request_get(r, HTTP_HEADER_OTHER,
                                  CONST_STR_LEN("Sec-WebSocket-Version"));
-    const long hybivers = (NULL != vers)
-      ? light_isdigit(*vers->ptr) ? strtol(vers->ptr, NULL, 10) : -1
-      : 0;
-    if (hybivers < 0 || hybivers > INT_MAX) {
-        wstunnel_err(hctx, "invalid Sec-WebSocket-Version");
+    hctx->hybivers = -1;
+    if (vers) {
+        const char *err;
+        const int64_t hybivers =
+          li_restricted_strtoint64(BUF_PTR_LEN(vers), &err);
+        if (hybivers == 13 && err == vers->ptr+buffer_clen(vers))
+            hctx->hybivers = (int)hybivers;
+    }
+  #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
+    else
+        hctx->hybivers = 0;
+  #endif
+    if (hctx->hybivers < 0) {
+        http_header_response_set(r, HTTP_HEADER_OTHER,
+                                 CONST_STR_LEN("Sec-WebSocket-Version"),
+                                 CONST_STR_LEN("13"));
+        wstunnel_err(hctx, 0, "invalid Sec-WebSocket-Version");
         return http_status_set_err(r, 400); /* Bad Request */
     }
-    hctx->hybivers = (int)hybivers;
-    DEBUG_LOG_INFO("WebSocket Version = %d%s", hctx->hybivers,
-                   hctx->hybivers ? "" : " hybi-00");
+    DEBUG_LOG_INFO("WebSocket Version = %d", hctx->hybivers);
 
     hctx->gw.opts.backend     = BACKEND_PROXY; /*(act proxy-like)*/
     hctx->gw.opts.pdata       = hctx;
@@ -549,14 +569,14 @@ static handler_t wstunnel_handler_setup (request_st * const r, handler_ctx * con
 
     if (binary) {
         hctx->frame.type         = MOD_WEBSOCKET_FRAME_TYPE_BIN;
-        hctx->frame.type_before  = MOD_WEBSOCKET_FRAME_TYPE_BIN;
         hctx->frame.type_backend = MOD_WEBSOCKET_FRAME_TYPE_BIN;
     }
+  #if 0 /*(already zero-inited)*/
     else {
         hctx->frame.type         = MOD_WEBSOCKET_FRAME_TYPE_TEXT;
-        hctx->frame.type_before  = MOD_WEBSOCKET_FRAME_TYPE_TEXT;
         hctx->frame.type_backend = MOD_WEBSOCKET_FRAME_TYPE_TEXT;
     }
+  #endif
 
     return HANDLER_GO_ON;
 }
@@ -628,7 +648,7 @@ TRIGGER_FUNC(mod_wstunnel_handle_trigger) {
             if (__builtin_expect(
                   (cur_ts - con->read_idle_ts > r->conf.max_read_idle), 0)) {
                 DEBUG_LOG_INFO("timeout client (fd=%d)", con->fd);
-                mod_wstunnel_frame_send(hctx, MOD_WEBSOCKET_FRAME_TYPE_CLOSE, NULL, 0);
+                wstunnel_err(hctx, 1001, NULL);
                 gw_handle_request_reset(r, pd);
                 joblist_append(con);
                 continue;
@@ -734,13 +754,13 @@ static int create_response_ietf_00(handler_ctx *hctx) {
           http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Origin"));
     }
     if (NULL == origin)
-        return wstunnel_err(hctx, "Origin header is invalid");
+        return wstunnel_err(hctx, 0, "Origin header is invalid");
     /*(redundant since HTTP/1.1 required in mod_wstunnel_check_extension())*/
     if (!r->http_host || buffer_is_blank(r->http_host))
         return -1;
     /* calc MD5 sum from keys */
     if (create_MD5_sum(r) < 0)
-        return wstunnel_err(hctx, "Sec-WebSocket-Key is invalid");
+        return wstunnel_err(hctx, 0, "Sec-WebSocket-Key is invalid");
 
     http_header_response_set(r, HTTP_HEADER_UPGRADE,
                              CONST_STR_LEN("Upgrade"),
@@ -788,7 +808,7 @@ static int create_response_rfc_6455(handler_ctx *hctx) {
     const buffer *value_wskey =
       http_header_request_get(r, HTTP_HEADER_OTHER, CONST_STR_LEN("Sec-WebSocket-Key"));
     if (NULL == value_wskey)
-        return wstunnel_err(hctx, "Sec-WebSocket-Key is invalid");
+        return wstunnel_err(hctx, 0, "Sec-WebSocket-Key is invalid");
 
     /* get SHA1 hash of key */
     /* refer: RFC-6455 Sec.1.3 Opening Handshake */
@@ -855,7 +875,7 @@ handler_t mod_wstunnel_handshake_create_response(handler_ctx *hctx) {
     }
   #endif /* _MOD_WEBSOCKET_SPEC_IETF_00_ */
 
-    wstunnel_err(hctx, "unsupported WebSocket Version");
+    wstunnel_err(hctx, 0, "unsupported WebSocket Version");
     r->http_status = 503; /* Service Unavailable */
     return HANDLER_ERROR;
 }
@@ -905,7 +925,7 @@ static int send_ietf_00(handler_ctx *hctx, mod_wstunnel_frame_type_t type, const
         /*len = 2;*/
         break;
     default:
-        return -1;
+        return -1; /*(not reached)*/
     }
     return 0;
 }
@@ -918,14 +938,14 @@ static int recv_ietf_00(handler_ctx *hctx) {
         char *frame = r->tmp_buf->ptr;
         uint32_t i, flen = buffer_string_space(r->tmp_buf);
         if (0 != chunkqueue_peek_data(cq, &frame, &flen, r->conf.errh, 0))
-            return -1;
+            return wstunnel_err(hctx, 1011, NULL); /* Internal Server Error */
         for (i = 0; i < flen; ) {
             if (hctx->frame.state == MOD_WEBSOCKET_FRAME_STATE_INIT) {
                 hctx->frame.ctl.siz = 0;
                 if (__builtin_expect( (frame[i] != 0x00), 0))
                     return (((unsigned char *)frame)[i] == 0xff) /* close */
-                      ? -1
-                      : wstunnel_err(hctx, "frame type invalid");
+                      ? wstunnel_err(hctx, 1000, NULL) /* Normal Closure */
+                      : wstunnel_err(hctx, 1002, "frame type invalid");
                 hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD;
                 if (++i == flen)
                     break;
@@ -948,8 +968,7 @@ static int recv_ietf_00(handler_ctx *hctx) {
                 hctx->frame.ctl.siz += plen;
                 #define MOD_WEBSOCKET_BUFMAX 0xfffff
                 if (hctx->frame.ctl.siz > MOD_WEBSOCKET_BUFMAX)
-                    return wstunnel_err(hctx,
-                                        "frame size has exceeded 0xfffff");
+                    return wstunnel_err(hctx, 1002, "frame size has exceeded 0xfffff");
                 DEBUG_LOG_DEBUG("recv payload, size=%u", plen);
                 buffer * const payload = hctx->frame.payload;
                 buffer_append_string_len(payload, frame+i, plen);
@@ -974,7 +993,7 @@ static int recv_ietf_00(handler_ctx *hctx) {
                     len = buffer_clen(b);
                     if (!buffer_append_base64_decode(b, payload->ptr, plen,
                                                      BASE64_STANDARD))
-                        return wstunnel_err(hctx, "fail to base64-decode");
+                        return wstunnel_err(hctx, 1007, "fail to base64-decode");
                     /*chunkqueue_use_memory()*/
                     hctx->gw.wb.bytes_in += buffer_clen(b)-len;
 
@@ -1101,7 +1120,7 @@ static int recv_rfc_6455(handler_ctx *hctx) {
         char *frame = r->tmp_buf->ptr;
         uint32_t i, flen = buffer_string_space(r->tmp_buf);
         if (0 != chunkqueue_peek_data(cq, &frame, &flen, r->conf.errh, 0))
-            return -1;
+            return wstunnel_err(hctx, 1011, NULL); /* Internal Server Error */
         for (i = 0; i < flen; ) {
             switch (hctx->frame.state) {
             case MOD_WEBSOCKET_FRAME_STATE_INIT:
@@ -1114,28 +1133,35 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 hctx->frame.type = mod_wstunnel_op_frame_type[(frame[i] & 0xf)];
                 switch (frame[i] & 0xf) {
                 case MOD_WEBSOCKET_OPCODE_CONT:
-                    hctx->frame.type = hctx->frame.type_before;
+                    if (0 == hctx->frame.type_cont)
+                        return wstunnel_err(hctx, 1002, "stray continuation frame");
+                    hctx->frame.type = mod_wstunnel_op_frame_type[hctx->frame.type_cont];
+                    if (frame[i] & 0x80) /* fin bit 1 ends continuation */
+                        hctx->frame.type_cont = 0;
                     break;
                 case MOD_WEBSOCKET_OPCODE_TEXT:
                 case MOD_WEBSOCKET_OPCODE_BIN:
-                    hctx->frame.type_before = hctx->frame.type;
+                    if (hctx->frame.type_cont)
+                        return wstunnel_err(hctx, 1002, "missing continuation frame with fin");
+                    if (0 == (frame[i] & 0x80)) /* fin bit 0; continuation */
+                        hctx->frame.type_cont = (frame[i] & 0xf);
                     break;
                 case MOD_WEBSOCKET_OPCODE_CLOSE:
-                    return -1;
+                    return wstunnel_err(hctx, 1000, NULL); /* Normal Closure */
                 case MOD_WEBSOCKET_OPCODE_PING:
                 case MOD_WEBSOCKET_OPCODE_PONG:
                     if (0 == (frame[i] & 0x80))
-                        return wstunnel_err(hctx, "control frame fragmented");
+                        return wstunnel_err(hctx, 1002, "control frame fragmented");
                     break;
                 default:
-                    return wstunnel_err(hctx, "frame type invalid");
+                    return wstunnel_err(hctx, 1002, "frame type invalid");
                 }
 
                 /* future: might add support: RFC7692 permessage-deflate */
                 if (frame[i] & 0x70)
-                    return wstunnel_err(hctx, "reserved bits set");
+                    return wstunnel_err(hctx, 1002, "reserved bits set");
                 if ((frame[i+1] & 0x80) != 0x80)
-                    return wstunnel_err(hctx, "payload not masked");
+                    return wstunnel_err(hctx, 1002, "payload not masked");
                 hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                 const uint8_t siz = (((uint8_t *)frame)[i+1] & 0x7f);
                 if (siz < 0x7e)
@@ -1153,12 +1179,16 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                           ( ((uint64_t)((uint8_t *)frame)[i+2] <<  8)
                            | (uint64_t)((uint8_t *)frame)[i+3] );
                         i += 2;
+                      #if 0 /* pedantic adherence to RFC6455 */
+                        if (hctx->frame.ctl.siz < 0x7e)
+                            return wstunnel_err(hctx, 1002, "oversized length encoding");
+                      #endif
                     }
                     else /* siz == MOD_WEBSOCKET_FRAME_LEN63 */
                         hctx->frame.state =
                           MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH;
                     if (frame[i] & 0x8) /* control frames (0x8-0xF) */
-                        return wstunnel_err(hctx, "control frame size invalid");
+                        return wstunnel_err(hctx, 1002, "control frame size invalid");
                 }
                 i += 2;
                 break;
@@ -1187,7 +1217,11 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                     i += MOD_WEBSOCKET_FRAME_LEN63_CNT;
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                     if (hctx->frame.ctl.siz >> 63)
-                        return wstunnel_err(hctx, "frame size MSB is set");
+                        return wstunnel_err(hctx, 1002, "frame size MSB is set");
+                  #if 0 /* pedantic adherence to RFC6455 */
+                    if (hctx->frame.ctl.siz < 0x10000)
+                        return wstunnel_err(hctx, 1002, "oversized length encoding");
+                  #endif
                 }
                 __attribute_fallthrough__
             case MOD_WEBSOCKET_FRAME_STATE_READ_MASK:
@@ -1239,6 +1273,11 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 }
                 switch (hctx->frame.type) {
                 case MOD_WEBSOCKET_FRAME_TYPE_TEXT:
+                    /* pedantic adherence to RFC6455 would validate UTF-8
+                     * payload, but would have to first reassemble message
+                     * fragments, if websocket message is fragmented, since
+                     * would want to handle messages with fragments
+                     *  (improperly) split in the middle of UTF-8 characters */
                 case MOD_WEBSOCKET_FRAME_TYPE_BIN:
                     unmask_payload(hctx);
                     chunkqueue_append_buffer(&hctx->gw.wb, payload);
@@ -1258,11 +1297,11 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                     break;
                 /*case MOD_WEBSOCKET_FRAME_TYPE_CLOSE:*/
                 default:
-                    return -1;
+                    return wstunnel_err(hctx, 1011, NULL);
                 }
                 break;
             default:
-                return -1;
+                return wstunnel_err(hctx, 1011, NULL); /*Internal Server Error*/
             }
         }
         chunkqueue_mark_written(cq, flen);
@@ -1299,5 +1338,5 @@ int mod_wstunnel_frame_recv(handler_ctx *hctx) {
   #ifdef _MOD_WEBSOCKET_SPEC_IETF_00_
     if (0 == hctx->hybivers) return recv_ietf_00(hctx);
   #endif /* _MOD_WEBSOCKET_SPEC_IETF_00_ */
-    return -1;
+    return -1; /*(not reached)*/
 }
