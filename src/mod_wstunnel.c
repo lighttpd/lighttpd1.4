@@ -1107,10 +1107,10 @@ static int recv_rfc_6455(handler_ctx *hctx) {
         for (i = 0; i < flen; ) {
             switch (hctx->frame.state) {
             case MOD_WEBSOCKET_FRAME_STATE_INIT:
-                if (__builtin_expect( (flen - i < 6), 0)) {
+                if (__builtin_expect( (flen - i < 2 + MOD_WEBSOCKET_MASK_CNT), 0)) {
                     /* yield to collect initial 2 bytes of frame + 4 byte mask*/
                     flen = i; /* trigger for loop exit */
-                    i += 6;
+                    i += 2 + MOD_WEBSOCKET_MASK_CNT;
                     continue;
                 }
                 hctx->frame.type = mod_wstunnel_op_frame_type[(frame[i] & 0xf)];
@@ -1138,28 +1138,38 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                     return wstunnel_err(hctx, "reserved bits set");
                 if ((frame[i+1] & 0x80) != 0x80)
                     return wstunnel_err(hctx, "payload not masked");
-                uint8_t siz = (((uint8_t *)frame)[i+1] & 0x7f);
+                hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
+                const uint8_t siz = (((uint8_t *)frame)[i+1] & 0x7f);
                 if (siz < 0x7e)
-                    hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
+                    hctx->frame.ctl.siz = siz;
                 else {
                     /* MOD_WEBSOCKET_FRAME_LEN16 0x7E */
                     /* MOD_WEBSOCKET_FRAME_LEN63 0x7F */
-                    siz = (siz == MOD_WEBSOCKET_FRAME_LEN63)
-                      ? MOD_WEBSOCKET_FRAME_LEN63_CNT  /* 8 */
-                      : MOD_WEBSOCKET_FRAME_LEN16_CNT; /* 2 */
-                    hctx->frame.state =
-                        MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH;
+                    if (siz == MOD_WEBSOCKET_FRAME_LEN16) {
+                        /*(already checked that we have at least 6 bytes)*/
+                        /* unaligned (potentially) read of big-endian size */
+                        /* modern compiler optimizers (gcc, clang) recognize these
+                         * patterns and use more efficient instructions (e.g. bswap)
+                         * when available */
+                        hctx->frame.ctl.siz =
+                          ( ((uint64_t)((uint8_t *)frame)[i+2] <<  8)
+                           | (uint64_t)((uint8_t *)frame)[i+3] );
+                        i += 2;
+                    }
+                    else /* siz == MOD_WEBSOCKET_FRAME_LEN63 */
+                        hctx->frame.state =
+                          MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH;
                     if (frame[i] & 0x8) /* control frames (0x8-0xF) */
                         return wstunnel_err(hctx, "control frame size invalid");
                 }
-                hctx->frame.ctl.siz = siz;
                 i += 2;
                 break;
             case MOD_WEBSOCKET_FRAME_STATE_READ_EX_LENGTH:
-                if (__builtin_expect((flen - i < hctx->frame.ctl.siz), 0)) {
+                if (__builtin_expect( (flen - i < MOD_WEBSOCKET_FRAME_LEN63_CNT
+                                                  + MOD_WEBSOCKET_MASK_CNT), 0)) {
                     /* yield to collect extended length */
                     flen = i; /* trigger for loop exit */
-                    i += hctx->frame.ctl.siz;
+                    i += MOD_WEBSOCKET_FRAME_LEN63_CNT + MOD_WEBSOCKET_MASK_CNT;
                     continue;
                 }
                 else {
@@ -1167,11 +1177,8 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                     /* modern compiler optimizers (gcc, clang) recognize these
                      * patterns and use more efficient instructions (e.g. bswap)
                      * when available */
-                    const uint32_t n = hctx->frame.ctl.siz;
-                    hctx->frame.ctl.siz = (2 == n)
-                      ? ( ((uint64_t)((uint8_t *)frame)[i+0] <<  8)
-                         | (uint64_t)((uint8_t *)frame)[i+1] )
-                      : ( ((uint64_t)((uint8_t *)frame)[i+0] << 56)
+                    hctx->frame.ctl.siz =
+                        ( ((uint64_t)((uint8_t *)frame)[i+0] << 56)
                          |((uint64_t)((uint8_t *)frame)[i+1] << 48)
                          |((uint64_t)((uint8_t *)frame)[i+2] << 40)
                          |((uint64_t)((uint8_t *)frame)[i+3] << 32)
@@ -1179,12 +1186,12 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                          |((uint64_t)((uint8_t *)frame)[i+5] << 16)
                          |((uint64_t)((uint8_t *)frame)[i+6] <<  8)
                          | (uint64_t)((uint8_t *)frame)[i+7] );
-                    i += n;
+                    i += MOD_WEBSOCKET_FRAME_LEN63_CNT;
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_MASK;
                     if (hctx->frame.ctl.siz >> 63)
                         return wstunnel_err(hctx, "frame size MSB is set");
                 }
-                break;
+                __attribute_fallthrough__
             case MOD_WEBSOCKET_FRAME_STATE_READ_MASK:
                 if (__builtin_expect( (flen - i < MOD_WEBSOCKET_MASK_CNT), 0)) {
                     /* yield to collect extended length */
