@@ -156,7 +156,7 @@ typedef struct {
     uint64_t siz;
 
     /* _MOD_WEBSOCKET_SPEC_RFC_6455_ */
-    int mask_off;
+    uint32_t mask_off;
     #define MOD_WEBSOCKET_MASK_CNT 4
     unsigned char mask[MOD_WEBSOCKET_MASK_CNT];
     /* _MOD_WEBSOCKET_SPEC_RFC_6455_ */
@@ -1102,13 +1102,59 @@ static int send_rfc_6455(handler_ctx *hctx, mod_wstunnel_frame_type_t type, cons
     return 0;
 }
 
+__attribute_hot__
+__attribute_noinline__
 static void unmask_payload(handler_ctx *hctx) {
-    buffer * const b = hctx->frame.payload;
-    if (-1 == hctx->frame.ctl.mask_off) return; /*(skip if mask is all 0's)*/
-    for (size_t i = 0, used = buffer_clen(b); i < used; ++i) {
-        b->ptr[i] ^= hctx->frame.ctl.mask[hctx->frame.ctl.mask_off];
-        hctx->frame.ctl.mask_off = (hctx->frame.ctl.mask_off + 1) & 0x3;
+    /* For clients such as browsers running untrusted javascript, choosing
+     * a random, unpredictable mask is important to prevent a malicious
+     * application from selecting the bytes that appear on the wire,
+     * but mask might safely be 0 for non-browser clients */
+    if (UINT_MAX == hctx->frame.ctl.mask_off) return; /*(skip if mask all 0's)*/
+
+    unsigned char * restrict p = (unsigned char *)hctx->frame.payload->ptr;
+    const unsigned char * const restrict mask = hctx->frame.ctl.mask;
+    uint32_t used = buffer_clen(hctx->frame.payload);
+    uint32_t mask_off = hctx->frame.ctl.mask_off;
+    hctx->frame.ctl.mask_off = (mask_off + used) & 3;
+
+  #if 1 /* optimizations for faster unmasking using less CPU */
+    if (used > 8) { /*(arbitrarily chosen)*/
+        /* future: consider aligning to 32-byte cache line
+         *         and unrolling Duff's device to 8 cases */
+
+        used -= (uint32_t)((uintptr_t)p & 3);
+        for (int n = (int)((uintptr_t)p & 3); n; --n)
+            *p++ ^= mask[mask_off++ & 3];
+
+        /* unmask in groups of 4 bytes (aligned) */
+        if (used >> 2) {
+            union { uint32_t u; char c[4]; } un;
+            for (int i = 0; i < 4; ++i) un.c[i] = mask[mask_off++ & 3];
+
+          #if 1
+            /* Duff's device */
+            register uint32_t n = ((used >> 2) + 3) / 4;
+            switch ((used >> 2) & 3) {
+            case 0: do { *(uint32_t*)p ^= un.u; p += 4;__attribute_fallthrough__
+            case 3:      *(uint32_t*)p ^= un.u; p += 4;__attribute_fallthrough__
+            case 2:      *(uint32_t*)p ^= un.u; p += 4;__attribute_fallthrough__
+            case 1:      *(uint32_t*)p ^= un.u; p += 4;
+                    } while (--n);
+            }
+          #else /*(alternative, if compiler does not like Duff's device)*/
+            for (uint32_t n = used >> 2; n; --n) {
+                *(uint32_t *)p ^= un.u;
+                p += 4;
+            }
+          #endif
+        }
+
+        used &= 3;
     }
+  #endif
+
+    for (uint32_t i = 0; i < used; ++i)
+        p[i] ^= mask[mask_off++ & 3];
 }
 
 static int recv_rfc_6455(handler_ctx *hctx) {
@@ -1234,7 +1280,7 @@ static int recv_rfc_6455(handler_ctx *hctx) {
                 if (hctx->frame.ctl.siz) {
                     hctx->frame.state = MOD_WEBSOCKET_FRAME_STATE_READ_PAYLOAD;
                     hctx->frame.ctl.mask_off = /*-1 to skip if mask is all 0's*/
-                      (frame[i]|frame[i+1]|frame[i+2]|frame[i+3]) ? 0 : -1;
+                     (frame[i]|frame[i+1]|frame[i+2]|frame[i+3]) ? 0 : UINT_MAX;
                     memcpy(hctx->frame.ctl.mask,frame+i,MOD_WEBSOCKET_MASK_CNT);
                 }
                 else {
