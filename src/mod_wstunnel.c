@@ -98,16 +98,16 @@
 #define MOD_WEBSOCKET_LOG_DEBUG 4
 
 #define DEBUG_LOG_ERR(format, ...) \
-  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_ERR) { log_error(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
+  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_ERR) { log_error(hctx->gw.r->conf.errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
 
 #define DEBUG_LOG_WARN(format, ...) \
-  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_WARN) { log_warn(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
+  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_WARN) { log_warn(hctx->gw.r->conf.errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
 
 #define DEBUG_LOG_INFO(format, ...) \
-  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_INFO) { log_info(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
+  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_INFO) { log_info(hctx->gw.r->conf.errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
 
 #define DEBUG_LOG_DEBUG(format, ...) \
-  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_DEBUG) { log_debug(hctx->errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
+  if (hctx->gw.conf.debug >= MOD_WEBSOCKET_LOG_DEBUG) { log_debug(hctx->gw.r->conf.errh, __FILE__, __LINE__, (format), __VA_ARGS__); }
 
 typedef struct {
     gw_plugin_config gw; /* start must match layout of gw_plugin_config */
@@ -176,7 +176,6 @@ typedef struct {
     int subproto;
     unix_time64_t ping_ts;
 
-    log_error_st *errh; /*(for mod_wstunnel module-specific DEBUG_*() macros)*/
     plugin_config conf;
 } handler_ctx;
 
@@ -504,7 +503,6 @@ static void wstunnel_handler_ctx_free(void *gwhctx) {
 }
 
 static handler_t wstunnel_handler_setup (request_st * const r, handler_ctx * const hctx, const plugin_config * const pconf) {
-    hctx->errh = r->conf.errh;/*(for mod_wstunnel-specific DEBUG_* macros)*/
     memcpy(&hctx->conf, pconf, sizeof(plugin_config));
 
     int status = wstunnel_check_request(r, hctx);
