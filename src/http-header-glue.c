@@ -687,7 +687,7 @@ void http_response_backend_error (request_st * const r) {
 		/*(unset handler to avoid later call to http_response_backend_done())*/
 		r->handler_module = NULL;  /*(avoid sending final chunked block)*/
 		r->keep_alive = 0;
-		r->resp_body_finished = 1;
+		r->resp_body_finished = 2; /* truncated; 2 is flag for h2.c */
 	} /*(else error status set later by http_response_backend_done())*/
 }
 
@@ -749,6 +749,8 @@ void http_response_backend_done (request_st * const r) {
 			}
 		  #endif
 			r->resp_body_finished = 1;
+			if (r->gw_dechunk && !r->gw_dechunk->done)
+				r->resp_body_finished = 2; /* truncated; 2 is flag for h2.c */
 		}
 	default:
 		break;

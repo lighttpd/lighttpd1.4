@@ -3216,7 +3216,7 @@ static void
 h2_send_end_stream (request_st * const r, connection * const con)
 {
     if (r->x.h2.state == H2_STATE_CLOSED) return;
-    if (r->state != CON_STATE_ERROR && r->resp_body_finished) {
+    if (r->state != CON_STATE_ERROR && r->resp_body_finished == 1) {
         /* CON_STATE_RESPONSE_END */
         buffer *b;
         char *t;
