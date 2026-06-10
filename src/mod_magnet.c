@@ -2532,7 +2532,7 @@ static int magnet_respbody(lua_State *L) {
      #endif
       case 'g': /* get; r.resp_body.get */
         if (k[1] == 'e' && k[2] == 't' && k[3] == '\0') {
-            if (r->resp_body_finished)
+            if (r->resp_body_finished == 1)
                 magnet_push_cq(L, &r->write_queue, r->conf.errh);
             else
                 lua_pushnil(L); /*(?maybe return -1 instead if len unknown?)*/
@@ -2541,7 +2541,7 @@ static int magnet_respbody(lua_State *L) {
         break;
       case 'l': /* len; r.resp_body.len */
         if (k[1] == 'e' && k[2] == 'n' && k[3] == '\0') {
-            if (r->resp_body_finished)
+            if (r->resp_body_finished == 1)
                 lua_pushinteger(L, chunkqueue_length(&r->write_queue));
             else
                 lua_pushnil(L); /*(?maybe return -1 instead if len unknown?)*/

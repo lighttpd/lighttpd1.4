@@ -748,7 +748,7 @@ http_response_write_prepare(request_st * const r)
         return HANDLER_ERROR; /*(unexpected; plugin mis-coded)*/
     }
 
-    if (r->resp_body_finished) {
+    if (r->resp_body_finished == 1) {
         /* check for Range request (current impl requires resp_body_finished) */
         if (r->conf.range_requests && r->http_status == 200
             && http_range_rfc7233(r) >= 400)
@@ -792,6 +792,10 @@ http_response_write_prepare(request_st * const r)
     else {
         /**
          * response is not yet finished, but we have all headers
+         * (or response from backend is truncated if r->resp_body_finished == 2,
+         *    and r->keep_alive = 0 should already have been set for HTTP/1.1
+         *    since final chunked block ("0\r\n\r\n") will be omitted so that
+         *    truncation can be detected by HTTP/1.1 client)
          *
          * keep-alive requires one of:
          * - Content-Length: ... (HTTP/1.1 and HTTP/1.0)
@@ -845,6 +849,23 @@ http_response_write_prepare(request_st * const r)
             }
             else { /* if (r->http_version == HTTP_VERSION_1_0) */
                 r->keep_alive = 0;
+              #if 0
+                if (r->resp_body_finished == 2) {
+                    /* For HTTP/1.0 when Content-Length has not been set, client
+                     * is unable to detect response body has been truncated */
+                    /* XXX: might provide server.feature-flags option to send
+                     *      503 Service Unavailable, or 502 Bad Gateway,
+                     *      if response is known to be truncated and actual
+                     *      Content-Length has not been set (where client could
+                     *      know that all bytes have not been received), rather
+                     *      than sending partial content as is currently done.*/
+                    /* XXX: might unset caching response headers
+                     *        ETag, Last-Modified, Cache-Control, Expires
+                     *      and/or might force
+                     *   Cache-Control: max-age=0, no-store, no-cache, private
+                     *   Expires: Thu, 01 Jan 1970 00:00:00 GMT */
+                }
+              #endif
             }
         }
     }

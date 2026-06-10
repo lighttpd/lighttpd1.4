@@ -721,14 +721,11 @@ void http_response_backend_done (request_st * const r) {
 			 * there would be no Content-Length and lighttpd would have sent
 			 * Connection: close.  Alternatively, since not streaming (if these
 			 * conditions are true), could send an HTTP status error instead of
-			 * sending partial content with a bogus Content-Length.  If we do
-			 * not send an HTTP error status, then response_start hooks may add
-			 * caching headers (e.g. mod_expire, mod_setenv).  If in future we
-			 * send HTTP error status, might special-case HEAD requests and
-			 * clear response body so that response headers (w/o Content-Length)
-			 * can be sent.  For now, we have chosen to send partial content,
-			 * including generating an incorrect Content-Length (later), and not
-			 * to take any of these extra steps. */
+			 * sending partial content w/o Content-Length and w/ Connection: close.
+			 * If we do not send an HTTP error status, then response_start hooks
+			 * may add caching headers (e.g. mod_expire, mod_setenv).  For now,
+			 * we have chosen to send partial content, omit Content-Length, send
+			 * Connection: close, and not to take any of these extra steps. */
 			else if (__builtin_expect( (r->http_version == HTTP_VERSION_1_0), 0)
 			         && r->gw_dechunk && !r->gw_dechunk->done
 			         && !(r->conf.stream_response_body
@@ -749,8 +746,10 @@ void http_response_backend_done (request_st * const r) {
 			}
 		  #endif
 			r->resp_body_finished = 1;
-			if (r->gw_dechunk && !r->gw_dechunk->done)
+			if (r->gw_dechunk && !r->gw_dechunk->done) {
 				r->resp_body_finished = 2; /* truncated; 2 is flag for h2.c */
+				r->keep_alive = 0; /*(0 does not affect h2)*/
+			}
 		}
 	default:
 		break;
