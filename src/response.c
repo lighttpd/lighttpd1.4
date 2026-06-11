@@ -664,7 +664,7 @@ http_response_merge_trailers (request_st * const r)
   #endif
 
     /* attempt to merge trailers into headers; header not yet sent by caller */
-    if (buffer_is_blank(&r->gw_dechunk->b)) return;
+    /*if (buffer_is_blank(&r->gw_dechunk->b)) return;*//*(checked in caller)*/
     const int done = r->gw_dechunk->done;
     if (!done) return;
 
@@ -736,7 +736,7 @@ http_response_write_prepare(request_st * const r)
         break;
     }
 
-    if (r->gw_dechunk)
+    if (r->gw_dechunk && !buffer_is_blank(&r->gw_dechunk->b))
         http_response_merge_trailers(r);
 
     /* Allow filter plugins to change response headers */
