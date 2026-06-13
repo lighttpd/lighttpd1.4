@@ -1123,7 +1123,7 @@ mod_nss_merge_config_cpv (plugin_config * const pconf, const config_plugin_value
       case 13:/* ssl.stapling-file */
         break;
       case 14:/* debug.log-ssl-noise */
-        pconf->ssl_log_noise = (unsigned char)cpv->v.shrt;
+        pconf->ssl_log_noise = (0 != cpv->v.u);
         break;
      #if 0    /*(cpk->k_id remapped in mod_nss_set_defaults())*/
       case 15:/* ssl.verifyclient.ca-file */
