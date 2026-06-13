@@ -255,13 +255,13 @@ li_arcfour_init_random_key_hashed(struct arcfour_ctx *ctx)
     }
     memset(ctx, 0, sizeof(*ctx));
 
-    struct sha256_ctx hash;
+    SHA256_CTX hash;
     uint8_t digest[SHA256_DIGEST_SIZE];
     uint8_t buf[0x200];
     memset(buf, 0, sizeof(buf));
-    sha256_init(&hash);
-    sha256_update(&hash, length, key);
-    sha256_digest(&hash, SHA256_DIGEST_SIZE, digest);
+    SHA256_Init(&hash);
+    SHA256_Update(&hash, key, length);
+    SHA256_Final(digest, &hash);
     nettle_arcfour_set_key(ctx, SHA256_DIGEST_SIZE, digest);
     nettle_arcfour_crypt(ctx, sizeof(buf), buf, buf);
     nettle_arcfour_crypt(ctx, sizeof(buf), buf, buf);
