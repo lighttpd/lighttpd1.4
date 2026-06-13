@@ -1612,8 +1612,10 @@ static int
 mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *curvelist);
 
 
+#if MBEDTLS_VERSION_NUMBER < 0x04000000 /* mbedtls 4.0.0 */
 static int
 mod_mbedtls_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const buffer *dhparameters);
+#endif
 
 
 static void
@@ -1640,12 +1642,14 @@ mod_mbedtls_ssl_conf_cmd (server *srv, plugin_config_socket *s)
             if (!mod_mbedtls_ssl_conf_curves(srv, s, &ds->value))
                 rc = -1;
         }
+      #if MBEDTLS_VERSION_NUMBER < 0x04000000 /* mbedtls 4.0.0 */
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("DHParameters"))){
             if (!buffer_is_blank(&ds->value)) {
                 if (!mod_mbedtls_ssl_conf_dhparameters(srv, s, &ds->value))
                     rc = -1;
             }
         }
+      #endif
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("MaxProtocol")))
             mod_mbedtls_ssl_conf_proto(srv, s, &ds->value, 1); /* max */
         else if (buffer_eq_icase_slen(&ds->key, CONST_STR_LEN("MinProtocol")))
@@ -4977,6 +4981,7 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
 #endif /* MBEDTLS_VERSION_NUMBER >= 0x03010000 */ /* mbedtls 3.01.0 */
 
 
+#if MBEDTLS_VERSION_NUMBER < 0x04000000 /* mbedtls 4.0.0 */
 static int
 mod_mbedtls_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const buffer *dhparameters)
 {
@@ -5002,6 +5007,7 @@ mod_mbedtls_ssl_conf_dhparameters(server *srv, plugin_config_socket *s, const bu
     return 1;
   #endif
 }
+#endif
 
 
 #if MBEDTLS_VERSION_NUMBER < 0x03020000 /* mbedtls 3.02.0 */
