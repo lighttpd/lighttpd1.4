@@ -2331,12 +2331,16 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
      * more limited by additional preprocessor directives
      *   defined(OPENSSL_EXTRA) && defined(HAVE_ECC) &&
      *   defined(WOLFSSL_TLS13) && defined(HAVE_SUPPORTED_CURVES)
+     * However, PQC hybrid MLKEMs are accepted by wolfSSL_CTX_set1_groups_list()
+     * and rejected by wolfSSL_CTX_set1_curves_list().
      */
     const char *groups = ssl_ec_curve && !buffer_is_blank(ssl_ec_curve)
       ? ssl_ec_curve->ptr
       :
-       #if defined(HAVE_PQC) && !defined(WOLFSSL_NO_ML_KEM) /* wolfssl 5.8.4 */
-        /* defined(WOLFSSL_PQC_HYBRIDS) */
+       #if (defined(WOLFSSL_PQC_HYBRIDS) /* wolfssl 5.9.0 */ \
+            || (defined(HAVE_PQC) || defined(WOLFSSL_HAVE_MLKEM))) \
+           && !defined(WOLFSSL_NO_ML_KEM) /* wolfssl 5.8.4 */ \
+           && defined(WOLFSSL_TLS13)
         #ifdef HAVE_CURVE25519
         "X25519MLKEM768:"
         #endif
@@ -2360,7 +2364,15 @@ mod_openssl_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
         "X448"
        #endif
         ;
-    if (WOLFSSL_SUCCESS != wolfSSL_CTX_set1_curves_list(s->ssl_ctx, groups)) {
+  #if (defined(WOLFSSL_PQC_HYBRIDS) /* wolfssl 5.9.0 */ \
+       || (defined(HAVE_PQC) || defined(WOLFSSL_HAVE_MLKEM))) \
+      && !defined(WOLFSSL_NO_ML_KEM) /* wolfssl 5.8.4 */ \
+      && defined(WOLFSSL_TLS13)
+    if (WOLFSSL_SUCCESS != wolfSSL_CTX_set1_groups_list(s->ssl_ctx, groups))
+  #else
+    if (WOLFSSL_SUCCESS != wolfSSL_CTX_set1_curves_list(s->ssl_ctx, groups))
+  #endif
+    {
         log_error(srv->errh, __FILE__, __LINE__,
           "SSL: Unknown to set groups %s", groups);
         return 0;
