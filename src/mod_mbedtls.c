@@ -1279,6 +1279,15 @@ mod_mbedtls_pk_parse_keyfile (mbedtls_pk_context *ctx, const char *fn, const cha
     if (dlen) ck_memzero(data, (size_t)dlen);
     free(data);
 
+  #if MBEDTLS_VERSION_NUMBER >= 0x04010000 /* mbedtls 4.1.0 */
+    /* https://github.com/Mbed-TLS/TF-PSA-Crypto/issues/807 */
+    if (0 == rc && ctx->MBEDTLS_PRIVATE(pub_raw_len) == 0)
+        rc = psa_export_public_key(ctx->MBEDTLS_PRIVATE(priv_id),
+                                   ctx->MBEDTLS_PRIVATE(pub_raw),
+                                   sizeof(ctx->MBEDTLS_PRIVATE(pub_raw)),
+                                   &ctx->MBEDTLS_PRIVATE(pub_raw_len));
+  #endif
+
     return rc;
 }
 
