@@ -1851,7 +1851,7 @@ network_init_ssl (server *srv, plugin_config_socket *s, plugin_data *p)
                                       MBEDTLS_PSA_RANDOM_STATE,
                                       MBEDTLS_CIPHER_AES_256_GCM,
           #else
-                                      PSA_ALG_CATEGORY_AEAD,
+                                      PSA_ALG_GCM,
                                       PSA_KEY_TYPE_AES,
                                       256,
           #endif
