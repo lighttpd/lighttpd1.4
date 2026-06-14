@@ -3,6 +3,119 @@
 NEWS
 ====
 
+- 1.4.83 - 2026-06-14
+  * [systemd] add RestrictAddressFamilies AF_NETLINK
+  * [TLS] skip cert_is_active warnings for unset clock
+  * [multiple] rename plugin_data statics per module
+  * [mod_mbedtls] mbedtls 4.x removes mbedtls/ecp.h
+  * [mod_mbedtls] mbedtls 4.x removes ECDH ciph suites
+  * [core] clarify warning message
+  * [multiple] http_status.[ch]
+  * [core] single internal define for fs monitoring
+  * [core] X-Sendfile shared code
+  * [core] check for OTHER response headers earlier
+  * [core] support Incremental header
+  * [mod_magnet] resp_body_finished w/ r.resp_body:set()
+  * [core] minor code tighten
+  * [core] remove request_st member async_callback (unused)
+  * [tests] t/test_http_status.c stub
+  * [core] http_status_set_fin() handler_module = NULL
+  * [mod_magnet] http_response_reset() before HANDLER_COMEBACK
+  * [core] http_response_prepare() smaller funcs
+  * [core] add continuation framework for response prep
+  * [h2] add comment about zero-length payloads in padded frames
+  * [mod_magnet] revert recent HANDLER_COMEBACK change
+  * [core] remove small bit of commented out code
+  * [core] do not generate no-longer-used plugin funcs
+  * [core] minor code tighten
+  * [h2] fix HTTP/1.1 upgrade: h2c
+  * [h2] combine h2c code into h2_upgrade_h2c()
+  * [h2] disable HTTP/1.1 upgrade: h2c by default
+  * [core] clear trailer whitelist at startup
+  * [core] static_assert sanity check for 64-bit off_t
+  * [core] security: missing return on non-default path
+  * [mod_magnet] modify reqbody_length after file append
+  * [mod_openssl] check openssl func for NULL if mem err
+  * [mod_*_dbi] proceed if third reconnect retry succeeds
+  * [mod_ajp13] skip empty string (len == 65535)
+  * [mod_ajp13] error if backend include LF in headers
+  * [mod_deflate] translate '/' in etag to '~' for fn
+  * [mod_deflate] mod_deflate_finished() shared code
+  * [mod_authn_gssapi] warn if principal not in config
+  * [mod_authn_gssapi] mod_authn_gssapi_construct_sprinc()
+  * [core] support Range for QUERY
+  * [multiple] make most module config thread-safe
+  * [ci] tune build on freebsd
+  * [mod_mbedtls] EC certs require drbg init
+  * [ci] Bump actions/checkout from 5 to 6 (#147)
+  * [multiple] quiet minor coverity warnings
+  * [mod_extforward] HAProxy PROXY protocol extensions
+  * [multiple] make most plugin objects instance-safe
+  * [multiple] C99 designated initializers
+  * [mod_auth] HTTP/2 response w/ multiple auth methods (fixes #3296)
+  * [ci] Bump actions/cache from 4 to 5
+  * [doc] add comment to lighttpd.service
+  * [core] add .rst .xsl .xslt to builtin mimetype.assign (fixes #3295)
+  * [build] support lua 5.5
+  * [core] __attribute_packed__
+  * [mod_extforward] fix reading 'verify' from PROXY (fixes #3298)
+  * [mod_extforward] adjust reading 'verify' from PROXY (#3298)
+  * [core] fix Range requests with dynamic backends
+  * [core] adjust safety factor for max-connections (fixes #3299)
+  * [core] quiet coverity false positive
+  * [mod_boringssl] add more const
+  * [mod_openssl] add more const
+  * [mod_openssl] update openssl version EOL message
+  * [TLS] add PQC hybrid KEM to default TLS groups
+  * spelling suggestions from codespell (fixes #3303)
+  * [mod_maxminddb] sanity check snprintf of flt, dbl
+  * [multiple] add some 'const' for gcc 16 warnings
+  * [mod_sockproxy] configure after TLS SNI (fixes #3304)
+  * [core] add sanity check to li_hex2bin()
+  * [core] security: reject req header CGI conflicts
+  * [core] security: reject invalid Content-Length from backend (fixes #3309)
+  * [mod_gnutls] avoid double-free in error path (unlikely)
+  * [core] update for nettle 4.x digest func signatures
+  * [mod_deflate] more precisely match If-None-Match
+  * [core] attempt recovery on stat_cache EMFILE (fixes #3308)
+  * [core] option to close unused socket after restart
+  * [cmake] use find_package() with PCRE2
+  * [h2] update ls-hpack
+  * [mod_openssl] use OSSL_STORE_open for alt schemas
+  * [mod_dirlisting] faster client-side sort on huge listings
+  * [mod_dirlisting] additional minor javascript optim
+  * [mod_proxy] adjust proxy.header config parsing
+  * [mod_proxy] config opt for urlpath map resp hdrs (fixes #3300)
+  * [core] allow server.max-fds up to 1048576
+  * [tests] add tests for http_cgi.c varname encoding
+  * [mod_wstunnel] code size reduction
+  * [core] reduce struct gw_plugin_config size
+  * [mod_wstunnel] RFC 6455 §5 compliance
+  * [ci] remove wolfssl from CI on Debian/Ubuntu
+  * [multiple] limit queue size to slow backends
+  * [core] use tempfiles for HTTP/1.1 upgraded backend
+  * [core] adjust trace for server.max-connections
+  * [doc] update doc/initscripts.txt
+  * [mod_wstunnel] disable hybi-00; obsolete
+  * [mod_wstunnel] adjust parsing extended frame lens
+  * [cmake] fix typos for mbedtls, tfpsacrypto libs
+  * [mod_wstunnel] reduce handler_ctx struct size
+  * [mod_wstunnel] stricter RFC 6455 compliance
+  * [mod_wstunnel] optimize unmasking client payload
+  * [core] propagate backend errs for h2 to RST_STREAM
+  * [core] propagate backend errs for HTTP/1.1 chunked
+  * [core] check another cond before calling cold func
+  * [core] update rand.c for nettle 4.x digest funcs
+  * [mod_wolfssl] workaround wolfssl code smells
+  * [mod_mbedtls] disable DHParameters w/ PSA crypto
+  * [TLS] debug.log-ssl-noise set TLS lib debug level
+  * [mod_mbedtls] workaround mbedtls 4.1.0 bug
+  * [mod_mbedtls] session tkts psa_alg w/ mbedtls 4.x
+  * [mod_gnutls] test for PQC hybrid group support
+  * [ci] use windows-2025-vs2026 and VS 2026
+  * [ci] use default FreeBSD package source
+  * [ci] NetBSD pkg_add -u
+
 - 1.4.82 - 2025-09-12
   * [core] restrict request trailers to configured list
   * [core] fix logic inversion in "toupper:" modifier
