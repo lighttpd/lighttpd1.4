@@ -35,6 +35,7 @@
 #include <nettle/knuth-lfib.h>
 #include <nettle/arcfour.h>
 #include <nettle/yarrow.h>
+#include <nettle/version.h>
 #endif
 #ifdef USE_MBEDTLS_CRYPTO
 #undef USE_WOLFSSL_CRYPTO
@@ -261,7 +262,11 @@ li_arcfour_init_random_key_hashed(struct arcfour_ctx *ctx)
     memset(buf, 0, sizeof(buf));
     sha256_init(&hash);
     sha256_update(&hash, length, key);
+  #if NETTLE_VERSION_MAJOR >= 4
+    sha256_digest(&hash, digest);
+  #else
     sha256_digest(&hash, SHA256_DIGEST_SIZE, digest);
+  #endif
     nettle_arcfour_set_key(ctx, SHA256_DIGEST_SIZE, digest);
     nettle_arcfour_crypt(ctx, sizeof(buf), buf, buf);
     nettle_arcfour_crypt(ctx, sizeof(buf), buf, buf);
