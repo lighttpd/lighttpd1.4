@@ -317,6 +317,13 @@ static void * mod_extforward_parse_forwarder(server *srv, const array *forwarder
             free(fwd);
             return NULL;
         }
+        /* netmask bits must fit address family (IPv4 32, IPv6 128) */
+        if (nm_bits > (sock_addr_get_family(&sm->addr) == AF_INET ? 32 : 128)) {
+            log_error(srv->errh, __FILE__, __LINE__,
+              "ERROR: invalid netmask: %s", ds->key.ptr);
+            free(fwd);
+            return NULL;
+        }
         buffer_clear(&ds->value);
         /* empty is untrusted,
          * e.g. if subnet (incorrectly) appears in X-Forwarded-For */
