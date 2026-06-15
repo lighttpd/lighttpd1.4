@@ -379,7 +379,7 @@ jobs:
             pcre2-dev brotli-dev libdeflate-dev zlib-dev zstd-dev
             cyrus-sasl-dev krb5-dev libdbi-dev linux-pam-dev openldap-dev
             mariadb-connector-c-dev postgresql16-dev
-            libmaxminddb-dev libunwind-dev lua5.1-dev lua5.4-dev
+            libmaxminddb-dev libunwind-dev lua5.1-dev lua5.5-dev
             libxml2-dev sqlite-dev
             zlib-static openssl-libs-static pcre2-static
       - name: Compile and Test
