@@ -286,7 +286,7 @@ static buffer * mod_authn_gssapi_construct_sprinc (request_st * const r, const b
             if (*http_host->ptr == '[') {
                 const char * const bracket = strchr(http_host->ptr+1, ']');
                 len = bracket
-                    ? bracket - http_host->ptr + 1
+                    ? (size_t)(bracket - http_host->ptr + 1)
                     : buffer_clen(http_host);
             }
             else
