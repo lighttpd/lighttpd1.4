@@ -2068,7 +2068,6 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 				mod_deflate_restore_etag(vb, etaglen);
 				r->http_status = 412;
 			}
-			http_status_set_fin(r, r->http_status);
 
 			/* response_start hook occurs after error docs have been handled.
 			 * For now, send back empty response body.
@@ -2077,6 +2076,7 @@ REQUEST_FUNC(mod_deflate_handle_response_start) {
 			 * changed http_status and r->handler_module NULL */
 			/* clear content length even if 304 since compressed length unknown */
 			http_response_body_clear(r, 0);
+			http_status_set_fin(r, r->http_status);
 			return HANDLER_GO_ON;
 		}
 	}
