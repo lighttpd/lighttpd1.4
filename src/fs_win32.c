@@ -47,7 +47,9 @@ int fs_win32_stati64UTF8 (const char *path, struct fs_win32_stati64UTF8 *st)
         return -1;
     }
     /* omit trailing '/' (if present) or else _WIN32 stat() fails */
-    int final_slash = (path[len-1] == '/' || path[len-1] == '\\');
+    /* do not omit trailing '/' for slash root ("/") or drive root ("C:/") */
+    int final_slash = (path[len-1] == '/' || path[len-1] == '\\')
+                   && len > 1 && (len != 3 || path[1] != ':');
     int wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
                                    path, len - final_slash,
                                    wbuf, (sizeof(wbuf)/sizeof(*wbuf))-1);
