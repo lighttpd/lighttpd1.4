@@ -73,7 +73,7 @@ int fs_win32_readlinkUTF8 (const char *path, char *result, size_t rsz)
         errno = (GetLastError() == ERROR_INSUFFICIENT_BUFFER) ? ENOSPC : EINVAL;
         return -1;
     }
-    HANDLE h = CreateFileW(wbuf,0,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0);
+    HANDLE h = CreateFileW(wbuf,0,0,0,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,0);
     DWORD rd = (h != INVALID_HANDLE_VALUE) /*(reuse wbuf for result)*/
       ? GetFinalPathNameByHandleW(h, wbuf, sizeof(wbuf)/sizeof(*wbuf),
                                   FILE_NAME_NORMALIZED | VOLUME_NAME_NT)
