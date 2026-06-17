@@ -3,6 +3,17 @@
 NEWS
 ====
 
+- 1.4.84 - 2026-06-17
+  * [ci] use lua5.5-dev pacakge on alpine linux
+  * [mod_authn_gssapi] cast to avoid compiler warning
+  * [mod_mbedtls] build if mbedtls w/ reduced ciphers
+  * [mod_deflate] fix 1.4.83 regression (fixes #3311)
+  * [core] remove byte-range support for QUERY
+  * [mod_staticfile] do not handle QUERY method
+  * [core] _WIN32: support directory symlinks in fs_win32_readlinkUTF8
+  * [core] _WIN32: fix stat() on drive and directory roots in fs_win32_stati64UTF8
+  * [core] _WIN32: support stat() on local device path root
+
 - 1.4.83 - 2026-06-14
   * [systemd] add RestrictAddressFamilies AF_NETLINK
   * [TLS] skip cert_is_active warnings for unset clock
