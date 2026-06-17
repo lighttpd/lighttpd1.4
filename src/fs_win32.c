@@ -48,8 +48,19 @@ int fs_win32_stati64UTF8 (const char *path, struct fs_win32_stati64UTF8 *st)
     }
     /* omit trailing '/' (if present) or else _WIN32 stat() fails */
     /* do not omit trailing '/' for slash root ("/") or drive root ("C:/") */
+    /* This is not exhaustive, because Windows path handling is exhausting.
+     * Not handled: \??\UNC\<server\share>\ \GLOBAL??\UNC\<server\share>\
+     *              \??\C:\ \\<share>\C$\ \\.\Volume{...}\ ... and more ...
+     * => If the result is _WIN32 stat() fail, then that is "failing closed" */
     int final_slash = (path[len-1] == '/' || path[len-1] == '\\')
-                   && len > 1 && (len != 3 || path[1] != ':');
+                   && len > 1                          /* slash root ("/")   */
+                   && (len != 3 || path[1] != ':')     /* drive root ("C:/") */
+                   && (len != 7 /* drive root w/ local device path specifier */
+                       || (path[0] != '/' && path[0] != '\\')     /* //?/C:/ */
+                       || (path[1] != '/' && path[1] != '\\')     /* //./C:/ */
+                       || (path[2] != '?' && path[2] != '.')
+                       || (path[3] != '/' && path[3] != '\\')
+                       ||  path[5] != ':');
     int wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
                                    path, len - final_slash,
                                    wbuf, (sizeof(wbuf)/sizeof(*wbuf))-1);
