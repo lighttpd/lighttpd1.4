@@ -1,7 +1,7 @@
 project(
   'lighttpd',
   'c',
-  version: '1.4.84',
+  version: '1.4.85',
   license: 'BSD-3-Clause',
   default_options: [
     'buildtype=debugoptimized',
