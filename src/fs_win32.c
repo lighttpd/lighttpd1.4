@@ -8,6 +8,10 @@
 
 #ifdef _WIN32
 
+#include "fs_win32.h"
+
+/* MS filesystem API does not support UTF-8?  WTH?  write our own; not hard */
+
 #include <sys/types.h>
 #include "sys-stat.h"
 #include <direct.h>
