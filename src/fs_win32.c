@@ -8,18 +8,21 @@
 
 #ifdef _WIN32
 
-#include "fs_win32.h"
-
-/* MS filesystem API does not support UTF-8?  WTH?  write our own; not hard */
-
 #include <sys/types.h>
-#include <sys/stat.h>
+#include "sys-stat.h"
 #include <direct.h>
 #include <io.h>
 
 #include <windows.h> /*(otherwise get No Target Architecture error)*/
-#include <stringapiset.h>
 #include <errno.h>
+
+#ifndef IO_REPARSE_TAG_LX_SYMLINK
+#define IO_REPARSE_TAG_LX_SYMLINK 0xAF000005
+#endif
+
+#define IsReparseTagSymlink(tag) \
+    ((tag) == IO_REPARSE_TAG_SYMLINK || \
+     (tag) == IO_REPARSE_TAG_LX_SYMLINK)
 
 int fs_win32_openUTF8 (const char *path, int oflag, int pmode)
 {
@@ -104,11 +107,11 @@ int fs_win32_readlinkUTF8 (const char *path, char *result, size_t rsz)
     int mlen =
      #if 0 /*(???: should we strip "\\?\" from result?)*/
       (StrCmpNW(wbuf, L"\\\\?\\", 4) == 0)
-      ? WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+      ? WideCharToMultiByte(CP_UTF8, 0,
                             wbuf+4, rd-4, result, rsz-1, NULL, NULL);
       :
      #endif
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+        WideCharToMultiByte(CP_UTF8, 0,
                             wbuf, rd, result, rsz-1, NULL, NULL);
     if (0 == mlen) {
         errno = (GetLastError() == ERROR_INSUFFICIENT_BUFFER) ? ENOSPC : EINVAL;
@@ -117,6 +120,113 @@ int fs_win32_readlinkUTF8 (const char *path, char *result, size_t rsz)
     /*(???: should we translate '\\' to '/' in result?)*/
     result[mlen] = '\0';
     return mlen;
+}
+
+int fs_win32_lstati64UTF8 (const char *path, struct fs_win32_stati64UTF8 *st)
+{
+    WCHAR wbuf[4096];
+    size_t len = strlen(path);
+    if (0 == len) {
+        errno = EINVAL;
+        return -1;
+    }
+    /* omit trailing '/' (if present) or else _WIN32 stat() fails */
+    /* do not omit for drive root (e.g. "C:/") or single slash root (e.g. "/") */
+    int final_slash = 0;
+    if (len > 1 && (path[len-1] == '/' || path[len-1] == '\\')) {
+        if (len != 3 || path[1] != ':') {
+            final_slash = 1;
+        }
+    }
+    int wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                                   path, len - final_slash,
+                                   wbuf, (sizeof(wbuf)/sizeof(*wbuf))-1);
+    if (wlen <= 0)
+        return -1;
+    wbuf[wlen] = 0;
+
+    DWORD attr = GetFileAttributesW(wbuf);
+    if (attr == INVALID_FILE_ATTRIBUTES) {
+        return _wstati64(wbuf, (struct _stati64 *)st);
+    }
+
+    if (!(attr & FILE_ATTRIBUTE_REPARSE_POINT)) {
+        int rc = _wstati64(wbuf, (struct _stati64 *)st);
+        if (rc == 0 && final_slash && (st->st_mode & _S_IFMT) != _S_IFDIR) {
+            errno = ENOTDIR;
+            return -1;
+        }
+        return rc;
+    }
+
+    /* If a final slash was specified (e.g. "path/"), then it refers to a directory.
+     * On POSIX/Linux, lstat("symlink/") is equivalent to stat("symlink/"), meaning
+     * it follows the symlink and validates it is a directory. */
+    if (final_slash) {
+        int rc = _wstati64(wbuf, (struct _stati64 *)st);
+        if (rc == 0 && (st->st_mode & _S_IFMT) != _S_IFDIR) {
+            errno = ENOTDIR;
+            return -1;
+        }
+        return rc;
+    }
+
+    HANDLE h = CreateFileW(wbuf, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                           NULL, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (h == INVALID_HANDLE_VALUE) {
+        return _wstati64(wbuf, (struct _stati64 *)st);
+    }
+
+    FILE_ATTRIBUTE_TAG_INFO fati;
+    if (!GetFileInformationByHandleEx(h, FileAttributeTagInfo, &fati, sizeof(fati))) {
+        CloseHandle(h);
+        return _wstati64(wbuf, (struct _stati64 *)st);
+    }
+
+    if (!IsReparseTagSymlink(fati.ReparseTag)) {
+        CloseHandle(h);
+        int rc = _wstati64(wbuf, (struct _stati64 *)st);
+        if (rc == 0 && final_slash && (st->st_mode & _S_IFMT) != _S_IFDIR) {
+            errno = ENOTDIR;
+            return -1;
+        }
+        return rc;
+    }
+
+    BY_HANDLE_FILE_INFORMATION bhfi;
+    if (!GetFileInformationByHandle(h, &bhfi)) {
+        CloseHandle(h);
+        return _wstati64(wbuf, (struct _stati64 *)st);
+    }
+    CloseHandle(h);
+
+    memset(st, 0, sizeof(*st));
+    st->st_dev = bhfi.dwVolumeSerialNumber;
+    st->st_ino = (unsigned short)bhfi.nFileIndexLow;
+    st->st_nlink = (short)bhfi.nNumberOfLinks;
+    st->st_size = ((__int64)bhfi.nFileSizeHigh << 32) | bhfi.nFileSizeLow;
+    st->st_rdev = bhfi.dwVolumeSerialNumber;
+
+    ULARGE_INTEGER ull;
+    ull.LowPart = bhfi.ftLastAccessTime.dwLowDateTime;
+    ull.HighPart = bhfi.ftLastAccessTime.dwHighDateTime;
+    st->st_atime = (__time64_t)((ull.QuadPart - 116444736000000000ULL) / 10000000ULL);
+
+    ull.LowPart = bhfi.ftLastWriteTime.dwLowDateTime;
+    ull.HighPart = bhfi.ftLastWriteTime.dwHighDateTime;
+    st->st_mtime = (__time64_t)((ull.QuadPart - 116444736000000000ULL) / 10000000ULL);
+
+    ull.LowPart = bhfi.ftCreationTime.dwLowDateTime;
+    ull.HighPart = bhfi.ftCreationTime.dwHighDateTime;
+    st->st_ctime = (__time64_t)((ull.QuadPart - 116444736000000000ULL) / 10000000ULL);
+
+    st->st_mode = _S_IFLNK;
+    if (!(bhfi.dwFileAttributes & FILE_ATTRIBUTE_READONLY)) {
+        st->st_mode |= _S_IWRITE;
+    }
+    st->st_mode |= _S_IREAD;
+
+    return 0;
 }
 
 #endif /* _WIN32 */
