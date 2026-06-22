@@ -3516,10 +3516,14 @@ magnet_attract (request_st * const r, plugin_config * const pconf, script * cons
 				magnet_attach_content(L, r); /* deprecated legacy API */
 			}
 			/*lua_pop(L, 1);*//* defer to later */
-			if (!chunkqueue_is_empty(&r->write_queue)) {
+			http_status_set_fin(r, lua_return_value);/* clears handler_module */
+			if (lua_return_value >= 400
+			    && (http_header_response_get(r, HTTP_HEADER_CONTENT_LENGTH,
+			                                 CONST_STR_LEN("Content-Length"))
+			        || !chunkqueue_is_empty(&r->write_queue))) {
+				/* response body, if set, overrides core error handlers */
 				r->handler_module = (plugin_data_base *)mod_magnet_plugin_data;
 			}
-			http_status_set_fin(r, lua_return_value);
 			result = HANDLER_FINISHED;
 		} else if (lua_return_value >= 100) {
 			/*(skip for response-start; send response as-is w/ added headers)*/
