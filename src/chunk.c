@@ -939,7 +939,12 @@ static chunk *chunkqueue_get_append_newtempfile(chunkqueue * const restrict cq, 
 
 __attribute_cold__
 static int chunkqueue_close_tempchunk (chunk * const restrict c, log_error_st * const restrict errh) {
-    force_assert(0 == c->file.refchg); /*(else should not happen)*/
+    if (c->file.refchg) {
+        force_assert(c->file.refchg == chunk_refchg_file_chunk_temp);
+        struct chunk_ref_file_chunk_temp * const restrict d = c->file.ref;
+        if (1 != d->refcnt)
+            return 1;
+    }
     int rc = close(c->file.fd);
     c->file.fd = -1;
     if (0 != rc) {
