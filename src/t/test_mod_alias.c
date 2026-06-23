@@ -107,8 +107,35 @@ static void test_mod_alias_check(void) {
     free(r.physical.basedir.ptr);
 }
 
+static void test_mod_alias_check_order(void) {
+    server srv;
+    memset(&srv, 0, sizeof(server));
+    srv.errh = fdlog_init(NULL, -1, FDLOG_FD);
+    srv.errh->fd = -1; /* (disable) */
+
+    array * const aliases = array_init(3);
+
+    /* 1. Correct order: specific path first, then prefix */
+    array_reset_data_strings(aliases);
+    array_set_key_value(aliases, CONST_STR_LEN("/blog/images"), CONST_STR_LEN("/var/www/blog/images"));
+    array_set_key_value(aliases, CONST_STR_LEN("/other"), CONST_STR_LEN("/var/www/other"));
+    array_set_key_value(aliases, CONST_STR_LEN("/blog"), CONST_STR_LEN("/var/www/blog"));
+    assert(1 == mod_alias_check_order(&srv, aliases));
+
+    /* 2. Incorrect order: prefix first, then unrelated, then specific */
+    array_reset_data_strings(aliases);
+    array_set_key_value(aliases, CONST_STR_LEN("/blog"), CONST_STR_LEN("/var/www/blog"));
+    array_set_key_value(aliases, CONST_STR_LEN("/other"), CONST_STR_LEN("/var/www/other"));
+    array_set_key_value(aliases, CONST_STR_LEN("/blog/images"), CONST_STR_LEN("/var/www/blog/images"));
+    assert(0 == mod_alias_check_order(&srv, aliases));
+
+    array_free(aliases);
+    fdlog_free(srv.errh);
+}
+
 void test_mod_alias (void);
 void test_mod_alias (void)
 {
     test_mod_alias_check();
+    test_mod_alias_check_order();
 }

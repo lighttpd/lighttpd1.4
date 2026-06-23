@@ -76,18 +76,8 @@ static int mod_alias_check_order(server * const srv, const array * const a) {
         const size_t plen = buffer_clen(prefix);
         for (uint32_t k = j + 1; k < a->used; ++k) {
             const buffer * const key = &a->data[k]->key;
-            if (buffer_clen(key) < plen) {
-                break;
-            }
-            if (memcmp(key->ptr, prefix->ptr, plen) != 0) {
-                break;
-            }
-            /* ok, they have same prefix. check position */
-            const data_unset *dj = a->data[j];
-            const data_unset *dk = a->data[k];
-            const data_unset **data = (const data_unset **)a->data;
-            while (*data != dj && *data != dk) ++data;
-            if (*data == dj) {
+            if (buffer_clen(key) >= plen
+                && 0 == memcmp(key->ptr, prefix->ptr, plen)) {
                 log_error(srv->errh, __FILE__, __LINE__,
                   "alias.url: `%s' will never match as `%s' matched first",
                   key->ptr, prefix->ptr);
