@@ -120,6 +120,10 @@ __attribute_noinline__
 static int
 http_cgi_check_other_conflict (request_st * const r, const buffer * const key, buffer * const tb)
 {
+  #ifdef __COVERITY__
+    /* c'mon coverity: these are static functions with a single call tree */
+    force_assert(buffer_clen(tb) >= 5);
+  #endif
     char * const p = tb->ptr + 5; /* step past "HTTP_" prefix */
     const uint32_t len = buffer_clen(tb) - 5;
     int rc = 0;
