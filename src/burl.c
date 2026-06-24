@@ -288,6 +288,76 @@ static int burl_normalize_2F_to_slash (buffer *b, int qs, int flags)
 }
 
 
+#if defined(_WIN32) || defined(__CYGWIN__)
+
+/* Windows and Cygwin strip trailing '.' and ' ' from each path component when
+ * resolving a path on the filesystem, so "/admin./", "/admin%20/", and
+ * "/admin/" all map to the same directory.  src/response.c performs equivalent
+ * stripping, but only on the final component of the physical path; mirror it
+ * here for every URL path component so that URL-based access controls are not
+ * bypassed by these alternate spellings.
+ * ('.' and '..' are preserved for buffer_path_simplify(); "%2e"/"%2E" have
+ *  already been decoded to '.' by burl_normalize_basic_*(); ' ' remains encoded
+ *  as "%20" since space must be percent-encoded.) */
+
+static int burl_win32_trailing (const char * const s, const int beg, const int end)
+{
+    if (end > beg && (s[end-1] == '.' || s[end-1] == ' '))
+        return 1;
+    if (end - beg >= 3 && s[end-3] == '%' && s[end-2] == '2' && s[end-1] == '0')
+        return 3;
+    return 0;
+}
+
+
+static int burl_normalize_win32_needs (const char * const s, const int len)
+{
+    for (int i = 0; i < len; ) {
+        if (s[i] == '/') { ++i; continue; }
+        const int beg = i;
+        while (i < len && s[i] != '/') ++i;
+        if ((i - beg == 1 && s[beg] == '.')
+            || (i - beg == 2 && s[beg] == '.' && s[beg+1] == '.'))
+            continue;
+        if (burl_win32_trailing(s, beg, i))
+            return 1;
+    }
+    return 0;
+}
+
+
+static int burl_normalize_win32_dots_spaces (char * const s, const int len)
+{
+    int j = 0;
+    for (int i = 0; i < len; ) {
+        if (s[i] == '/') {
+            s[j++] = s[i++];
+            continue;
+        }
+        const int beg = i;
+        while (i < len && s[i] != '/') ++i;
+        int end = i;
+        if (!((end - beg == 1 && s[beg] == '.')
+              || (end - beg == 2 && s[beg] == '.' && s[beg+1] == '.'))) {
+            for (int n; (n = burl_win32_trailing(s, beg, end)); )
+                end -= n;
+            if (end == beg) { /* component was only dots and spaces */
+                s[j++] = '.';
+                continue;
+            }
+        }
+        const int seglen = end - beg;
+        if (j != beg)
+            memmove(s+j, s+beg, (size_t)seglen);
+        j += seglen;
+    }
+    s[j] = '\0';
+    return j;
+}
+
+#endif /* _WIN32 || __CYGWIN__ */
+
+
 static int burl_normalize_path (buffer *b, buffer *t, int qs, int flags)
 {
     const unsigned char * const s = (unsigned char *)b->ptr;
@@ -306,12 +376,25 @@ static int burl_normalize_path (buffer *b, buffer *t, int qs, int flags)
         }
     }
 
+  #if defined(_WIN32) || defined(__CYGWIN__)
+    if (burl_normalize_win32_needs(b->ptr, qs < 0 ? used : qs))
+        path_simplify |= 2;
+  #endif
+
     if (path_simplify) {
         if (flags & HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT) return -2;
         if (qs >= 0) {
             buffer_copy_string_len(t, b->ptr+qs, used - qs);
             buffer_truncate(b, qs);
         }
+
+      #if defined(_WIN32) || defined(__CYGWIN__)
+        if (path_simplify & 2) {
+            const int n =
+              burl_normalize_win32_dots_spaces(b->ptr, (int)buffer_clen(b));
+            buffer_truncate(b, (size_t)n);
+        }
+      #endif
 
         buffer_path_simplify(b);
 
