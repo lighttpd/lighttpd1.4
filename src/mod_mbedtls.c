@@ -4970,7 +4970,17 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
     uint16_t ids[512];
     int nids = -1;
     const int idsz = (int)(sizeof(ids)/sizeof(*ids)-1);
+  #if MBEDTLS_VERSION_NUMBER >= 0x04010000 /* mbedtls 4.1.0 */
+   #ifdef MBEDTLS_DEBUG_C
+    static const mbedtls_ssl_iana_tls_group_info_t * const curve_info =
+      mbedtls_ssl_iana_tls_group_info;
+   #else
+    static const mbedtls_ssl_iana_tls_group_info_t curve_info[] =
+      MBEDTLS_SSL_IANA_TLS_GROUPS_INFO;
+   #endif
+  #else
     const mbedtls_ecp_curve_info * const curve_info = mbedtls_ecp_curve_list();
+  #endif
 
     const char *groups = curvelist && !buffer_is_blank(curvelist)
       ? curvelist->ptr
@@ -5005,11 +5015,21 @@ mod_mbedtls_ssl_conf_curves(server *srv, plugin_config_socket *s, const buffer *
         e = strchr(n, ':');
         size_t len = e ? (size_t)(e - n) : strlen(n);
         /* similar to mbedtls_ecp_curve_info_from_name() */
+      #if MBEDTLS_VERSION_NUMBER >= 0x04010000 /* mbedtls 4.1.0 */
+        const mbedtls_ssl_iana_tls_group_info_t *info;
+        for (info = curve_info; info->tls_id != 0; ++info) {
+            if (info->is_supported
+                && 0 == strncmp(info->group_name, n, len)
+                && info->group_name[len] == '\0')
+                break;
+        }
+      #else
         const mbedtls_ecp_curve_info *info;
         for (info = curve_info; info->tls_id != 0; ++info) {
             if (0 == strncmp(info->name, n, len) && info->name[len] == '\0')
                 break;
         }
+      #endif
         if (info->tls_id == 0) {
             log_error(srv->errh, __FILE__, __LINE__,
                       "MTLS: unrecognized curve: %.*s; ignored", (int)len, n);
