@@ -633,30 +633,11 @@ static int config_http_parseopts (server *srv, const array *a) {
         opts = 0;
     if (opts != 0) {
         opts |= HTTP_PARSEOPT_URL_NORMALIZE;
-        if ((opts & (HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE
-                    |HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_REJECT))
-                 == (HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE
-                    |HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_REJECT)) {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "conflicting options in server.http-parseopts:"
-              "url-path-2f-decode, url-path-2f-reject");
-            rc = 0;
-        }
-        if ((opts & (HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE
-                    |HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT))
-                 == (HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE
-                    |HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT)) {
-            log_error(srv->errh, __FILE__, __LINE__,
-              "conflicting options in server.http-parseopts:"
-              "url-path-dotseg-remove, url-path-dotseg-reject");
-            rc = 0;
-        }
         if (!(opts & (HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED
                      |HTTP_PARSEOPT_URL_NORMALIZE_REQUIRED))) {
             opts |= HTTP_PARSEOPT_URL_NORMALIZE_UNRESERVED
                  |  HTTP_PARSEOPT_URL_NORMALIZE_INVALID_UTF8_REJECT;
-            if (decode_2f
-                && !(opts & HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_REJECT))
+            if (decode_2f)
                 opts |= HTTP_PARSEOPT_URL_NORMALIZE_PATH_2F_DECODE;
         }
     }
