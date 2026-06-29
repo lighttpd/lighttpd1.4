@@ -13,12 +13,13 @@
 /* MS filesystem API does not support UTF-8?  WTH?  write our own; not hard */
 
 #include <sys/types.h>
-#include "sys-stat.h"
-#include <direct.h>
 #include <io.h>
 
 #include <windows.h> /*(otherwise get No Target Architecture error)*/
+#include <stringapiset.h>
 #include <errno.h>
+
+#include "sys-stat.h" /*(for _S_IFLNK; include after <...> headers)*/
 
 #ifndef IO_REPARSE_TAG_LX_SYMLINK
 #define IO_REPARSE_TAG_LX_SYMLINK 0xAF000005
@@ -111,11 +112,11 @@ int fs_win32_readlinkUTF8 (const char *path, char *result, size_t rsz)
     int mlen =
      #if 0 /*(???: should we strip "\\?\" from result?)*/
       (StrCmpNW(wbuf, L"\\\\?\\", 4) == 0)
-      ? WideCharToMultiByte(CP_UTF8, 0,
+      ? WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
                             wbuf+4, rd-4, result, rsz-1, NULL, NULL);
       :
      #endif
-        WideCharToMultiByte(CP_UTF8, 0,
+        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
                             wbuf, rd, result, rsz-1, NULL, NULL);
     if (0 == mlen) {
         errno = (GetLastError() == ERROR_INSUFFICIENT_BUFFER) ? ENOSPC : EINVAL;
