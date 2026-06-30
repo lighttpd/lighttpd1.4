@@ -127,6 +127,16 @@ opendir (const char *name)
     return dirp;
 }
 
+#ifndef IO_REPARSE_TAG_MOUNT_POINT
+#define IO_REPARSE_TAG_MOUNT_POINT      0xA0000003
+#endif
+#ifndef IO_REPARSE_TAG_SYMLINK
+#define IO_REPARSE_TAG_SYMLINK          0xA000000C
+#endif
+#ifndef IO_REPARSE_TAG_LX_SYMLINK
+#define IO_REPARSE_TAG_LX_SYMLINK       0xA000001D
+#endif
+
 static inline struct dirent *
 readdir (DIR * const dirp);
 static inline struct dirent *
@@ -154,8 +164,18 @@ readdir (DIR * const dirp)
             de->d_name = dirp->fnUTF8;
             if ((ffd->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
                  == FILE_ATTRIBUTE_REPARSE_POINT)
-                de->d_type = DT_LNK;
-                /* XXX: incomplete; need to check for IO_REPARSE_TAG_SYMLINK */
+                switch (ffd->dwReserved0) {
+                  case IO_REPARSE_TAG_MOUNT_POINT:
+                    de->d_type = DT_DIR;
+                    break;
+                  case IO_REPARSE_TAG_SYMLINK:
+                  case IO_REPARSE_TAG_LX_SYMLINK:
+                    de->d_type = DT_LNK;
+                    break;
+                  default:
+                    de->d_type = DT_REG;
+                    break;
+                }
             else if ((ffd->dwFileAttributes & FILE_ATTRIBUTE_DEVICE)
                      == FILE_ATTRIBUTE_DEVICE)
                 de->d_type = DT_CHR;
