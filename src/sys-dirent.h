@@ -22,6 +22,17 @@
 #include <stdlib.h>
 #include <stringapiset.h>
 
+#ifndef IO_REPARSE_TAG_SYMLINK
+#define IO_REPARSE_TAG_SYMLINK 0xA000000C
+#endif
+#ifndef IO_REPARSE_TAG_LX_SYMLINK
+#define IO_REPARSE_TAG_LX_SYMLINK 0xA000001D
+#endif
+
+#define IsReparseTagSymlink(tag) \
+    ((tag) == IO_REPARSE_TAG_SYMLINK || \
+     (tag) == IO_REPARSE_TAG_LX_SYMLINK)
+
 /*#include <stdlib.h>*/ /* _MAX_PATH */
 /* Windows C Runtime supports path lengths up to 32768 characters in length (_MAX_PATH)
  * https://docs.microsoft.com/en-us/cpp/c-runtime-library/path-field-limits?view=msvc-160
@@ -153,9 +164,9 @@ readdir (DIR * const dirp)
             de->d_namlen = (uint16_t)(dsz-1);
             de->d_name = dirp->fnUTF8;
             if ((ffd->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
-                 == FILE_ATTRIBUTE_REPARSE_POINT)
+                 == FILE_ATTRIBUTE_REPARSE_POINT
+                 && IsReparseTagSymlink(ffd->dwReserved0))
                 de->d_type = DT_LNK;
-                /* XXX: incomplete; need to check for IO_REPARSE_TAG_SYMLINK */
             else if ((ffd->dwFileAttributes & FILE_ATTRIBUTE_DEVICE)
                      == FILE_ATTRIBUTE_DEVICE)
                 de->d_type = DT_CHR;
