@@ -30,7 +30,7 @@ jobs:
         platform: ['x64']
         compiler: ['gcc']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install packages
         run: |
           sudo apt-get update
@@ -63,7 +63,7 @@ jobs:
         platform: ['x64']
         compiler: ['clang']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install packages
         run: |
           sudo apt-get update
@@ -90,7 +90,7 @@ jobs:
   macOS:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install packages
         run: |
           brew install -q meson ninja pkg-config pcre2 perl \
@@ -111,7 +111,7 @@ jobs:
   DragonflyBSD:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: vmactions/dragonflybsd-vm@v1
         with:
           usesh: true
@@ -126,7 +126,7 @@ jobs:
   FreeBSD:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: vmactions/freebsd-vm@v1
         with:
           mem: 11264
@@ -158,7 +158,7 @@ jobs:
   NetBSD:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: vmactions/netbsd-vm@v1
         with:
           #usesh: true
@@ -180,7 +180,7 @@ jobs:
   OpenBSD:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: vmactions/openbsd-vm@v1
         with:
           usesh: true
@@ -203,7 +203,7 @@ jobs:
   Solaris:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: vmactions/solaris-vm@v1
         with:
           release: "11.4-gcc"
@@ -252,7 +252,7 @@ jobs:
       CYGWIN: winsymlinks:native
     steps:
       - run: git config --global core.autocrlf input
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up env and create cache dir
         id: env
         shell: pwsh
@@ -308,7 +308,7 @@ jobs:
     #env:
     #  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ilammy/msvc-dev-cmd@v1
       #- name: Install dependencies
       #  run: vcpkg install --triplet ${{matrix.platform}}-windows openssl pcre2 zlib
@@ -332,7 +332,7 @@ jobs:
         #platform: ['mingw32', 'mingw64', 'ucrt64', 'clang32', 'clang64']
     steps:
       - run: git config --global core.autocrlf input
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: msys2/setup-msys2@v2
         with:
           msystem: ${{matrix.platform}}
@@ -367,7 +367,7 @@ jobs:
       matrix:
         platform: ['x86_64']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jirutka/setup-alpine@v1
         with:
           branch: latest-stable
@@ -405,7 +405,7 @@ jobs:
       matrix:
         platform: ['x86','armhf','armv7','aarch64','ppc64le','riscv64','s390x']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jirutka/setup-alpine@v1
         with:
           # riscv64 currently requires 'edge'
