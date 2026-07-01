@@ -92,6 +92,10 @@ static void test_burl_normalize (void) {
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/\376"), "", (size_t)-2);
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/\377"), "", (size_t)-2);
 
+    flags |= HTTP_PARSEOPT_URL_NORMALIZE_QUERY_20_PLUS;
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/abc?d=e%20f?g=h%20i"), CONST_STR_LEN("/abc?d=e+f?g=h+i"));
+    flags &= ~HTTP_PARSEOPT_URL_NORMALIZE_QUERY_20_PLUS;
+
     flags |= HTTP_PARSEOPT_URL_NORMALIZE_CTRLS_REJECT;
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/\a"), "", (size_t)-2);
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/\t"), "", (size_t)-2);
