@@ -144,7 +144,7 @@ static int burl_normalize_basic_required_fix (buffer *b, buffer *t, int i, int q
     for (; i < used; ++i, ++j) {
         if (!encoded_chars_http_uri_reqd[s[i]]) {
             p[j] = s[i];
-            if (__builtin_expect( (s[i] == '?'), 0)) qs = j;
+            if (__builtin_expect( (s[i] == '?'), 0) && -1 == qs) qs = j;
         }
         else if (s[i]=='%' && li_cton(s[i+1], n1) && li_cton(s[i+2], n2)) {
             const unsigned int x = (n1 << 4) | n2;
@@ -185,7 +185,7 @@ static int burl_normalize_basic_required (buffer *b, buffer *t)
 
     for (int i = 0; i < used; ++i) {
         if (!encoded_chars_http_uri_reqd[s[i]]) {
-            if (s[i] == '?') qs = i;
+            if (__builtin_expect( (s[i] == '?'), 0) && -1 == qs) qs = i;
         }
         else if (s[i]=='%' && li_cton(s[i+1], n1) && li_cton(s[i+2], n2)
                  && (encoded_chars_http_uri_reqd[(x = (n1 << 4) | n2)]
