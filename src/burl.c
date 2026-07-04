@@ -63,6 +63,7 @@ static int burl_normalize_basic_unreserved_fix (buffer *b, buffer *t, int i, int
     unsigned char * const p =
       (unsigned char *)buffer_string_prepare_copy(t,i+(used-i)*3+1);
     unsigned int n1, n2;
+    int invalid_utf8 = 0;
     memcpy(p, s, (size_t)i);
     for (; i < used; ++i, ++j) {
         if (!encoded_chars_http_uri_reqd[s[i]]) {
@@ -78,7 +79,7 @@ static int burl_normalize_basic_unreserved_fix (buffer *b, buffer *t, int i, int
                 p[j]   = '%';
                 p[++j] = hex_chars_uc[n1]; /*(s[i+1] & 0xdf)*/
                 p[++j] = hex_chars_uc[n2]; /*(s[i+2] & 0xdf)*/
-                if (li_utf8_invalid_byte(x)) qs = -2;
+                invalid_utf8 |= li_utf8_invalid_byte(x);
             }
             i+=2;
         }
@@ -87,11 +88,11 @@ static int burl_normalize_basic_unreserved_fix (buffer *b, buffer *t, int i, int
             p[j]   = '%';
             p[++j] = hex_chars_uc[(s[i] >> 4) & 0xF];
             p[++j] = hex_chars_uc[s[i] & 0xF];
-            if (li_utf8_invalid_byte(s[i])) qs = -2;
+            invalid_utf8 |= li_utf8_invalid_byte(s[i]);
         }
     }
     buffer_copy_string_len(b, (char *)p, (size_t)j);
-    return qs;
+    return !invalid_utf8 ? qs : -2;
 }
 
 
@@ -101,6 +102,7 @@ static int burl_normalize_basic_unreserved (buffer *b, buffer *t)
     const int used = (int)buffer_clen(b);
     unsigned int n1, n2, x;
     int qs = -1;
+    int invalid_utf8 = 0;
 
     for (int i = 0; i < used; ++i) {
         if (!encoded_chars_http_uri_reqd[s[i]]) {
@@ -108,7 +110,7 @@ static int burl_normalize_basic_unreserved (buffer *b, buffer *t)
         }
         else if (s[i]=='%' && li_cton(s[i+1], n1) && li_cton(s[i+2], n2)
                  && !burl_is_unreserved((x = (n1 << 4) | n2))) {
-            if (li_utf8_invalid_byte(x)) qs = -2;
+            invalid_utf8 |= li_utf8_invalid_byte(x);
             if (s[i+1] >= 'a') b->ptr[i+1] &= 0xdf; /* uppercase hex */
             if (s[i+2] >= 'a') b->ptr[i+2] &= 0xdf; /* uppercase hex */
             i+=2;
@@ -123,7 +125,7 @@ static int burl_normalize_basic_unreserved (buffer *b, buffer *t)
         }
     }
 
-    return qs;
+    return !invalid_utf8 ? qs : -2;
 }
 
 
