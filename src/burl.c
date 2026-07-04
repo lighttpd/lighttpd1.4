@@ -55,6 +55,7 @@ static int burl_is_unreserved (const int c)
 }
 
 
+__attribute_cold__
 static int burl_normalize_basic_unreserved_fix (buffer *b, buffer *t, int i, int qs)
 {
     int j = i;
@@ -129,6 +130,7 @@ static int burl_normalize_basic_unreserved (buffer *b, buffer *t)
 }
 
 
+__attribute_cold__
 static int burl_normalize_basic_required_fix (buffer *b, buffer *t, int i, int qs)
 {
     int j = i;
@@ -221,6 +223,7 @@ static int burl_contains_ctrls (const buffer *b)
 }
 
 
+__attribute_cold__
 static void burl_normalize_qs20_to_plus_fix (buffer *b, int i)
 {
     char * const s = b->ptr;
@@ -250,6 +253,7 @@ static void burl_normalize_qs20_to_plus (buffer *b, int qs)
 }
 
 
+__attribute_cold__
 static int burl_normalize_2F_to_slash_fix (buffer *b, int qs, int i)
 {
     char * const s = b->ptr;
