@@ -845,14 +845,9 @@ int buffer_is_valid_UTF8(const buffer *b) {
 }
 
 /* - special case: empty string returns empty string
- * - on windows or cygwin: replace \ with /
- * - strip leading spaces
- * - prepends "/" if not present already
- * - resolve "/../", "//" and "/./" the usual way:
- *   the first one removes a preceding component, the other two
- *   get compressed to "/".
- * - "/." and "/.." at the end are similar, but always leave a trailing
- *   "/"
+ * - on windows or cygwin: replace '\\' with '/'
+ * - resolve "//", "/./", trailing "/." to "/"
+ * - resolve "/../" and trailing "/.." to remove preceding component
  *
  * /blah/..         gets  /
  * /blah/../foo     gets  /foo
@@ -929,7 +924,7 @@ void buffer_path_simplify(buffer *b)
                     break;
                 }
                 else
-                continue;
+                    continue;
             }
             else if (walk[1] == '/') {
                 /* handle "./" */
