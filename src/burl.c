@@ -352,6 +352,11 @@ int burl_normalize (buffer *b, buffer *t, int flags)
     if (flags & HTTP_PARSEOPT_URL_NORMALIZE_PATH_BACKSLASH_TRANS) {
         for (char *p = b->ptr; *p != '?' && *p != '\0'; ++p) {
             if (*p == '\\') *p = '/';
+            if (p[0] == '%' && p[1] == '5' && (p[2] | 0x20) == 'c') {
+                p[1] = '2';
+                p[2] = 'F';
+                p += 2;
+            }
         }
     }
   #endif
