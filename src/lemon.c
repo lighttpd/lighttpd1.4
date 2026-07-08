@@ -114,9 +114,11 @@ static void *lemon_calloc(size_t nElem, size_t sz){
 }
 static void lemon_free(void *pOld){
   if( pOld ){
+   #ifndef __COVERITY__ /* quiet Coverity TAINTED_SCALAR warning */
     MemChunk *p = (MemChunk*)pOld;
     p--;
     memset(pOld, 0, p->sz);
+   #endif
   }
 }
 static void *lemon_realloc(void *pOld, size_t nNew){
