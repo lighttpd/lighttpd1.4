@@ -1094,6 +1094,7 @@ int http_request_parse_target(request_st * const r, int scheme_port) {
      *
      * - decode url-encodings  (e.g. %20 -> ' ')
      * - remove path-modifiers (e.g. /../)
+     * - UTF-8 already checked above in burl_normalize(), if flags set
      */
 
     buffer_urldecode_path(&r->uri.path);
