@@ -88,15 +88,13 @@ www_l_n_post() {
 		cat <<EOF
 ---
 title: ${version}
-author: $AUTHOR
-author_email: ${AUTHOR}@lighttpd.net
+authors:
+  - $AUTHOR
 tags:
 - ${version}
 - lighttpd
 - releases
 ---
-{% excerpt -%}
-
 ## Important changes
 
 TODO
@@ -107,7 +105,8 @@ EOF
 		cat DOWNLOADS.links
 		cat <<EOF
 
-{%- endexcerpt %}
+<!-- more -->
+
 ## Changes from ${prevversion}
 
 EOF
@@ -117,14 +116,13 @@ EOF
 		cat <<EOF
 ---
 title: 'PRE-RELEASE: lighttpd ${version}${append}'
-author: $AUTHOR
-author_email: ${AUTHOR}@lighttpd.net
+authors:
+  - $AUTHOR
 tags:
 - ${version}
 - lighttpd
 - prerelease
 ---
-{% excerpt -%}
 We would like to draw your attention to the latest pre-release of the stable 1.4 branch of lighttpd.
 
 You can get the pre-release from these urls:
@@ -137,7 +135,7 @@ A lot of testing ensures a good release.
 
 <!-- TODO: describe major changes -->
 
-{%- endexcerpt %}
+<!-- more -->
 
 #### Changes from ${prevversion}
 
@@ -200,9 +198,9 @@ force gpg ${KEYID:+-u "${KEYID}"} -a --output "${name}.tar.xz.asc" --detach-sig 
 
 (
 	echo "* [${name}.tar.gz](${BASEDOWNLOADURL}/${name}.tar.gz) ([GPG signature](${BASEDOWNLOADURL}/${name}.tar.gz.asc))"
-	echo "  * SHA256: \`$(sha256sum ${name}.tar.gz | cut -d' ' -f1)\`"
+	echo "    * SHA256: \`$(sha256sum ${name}.tar.gz | cut -d' ' -f1)\`"
 	echo "* [${name}.tar.xz](${BASEDOWNLOADURL}/${name}.tar.xz) ([GPG signature](${BASEDOWNLOADURL}/${name}.tar.xz.asc))"
-	echo "  * SHA256: \`$(sha256sum ${name}.tar.xz | cut -d' ' -f1)\`"
+	echo "    * SHA256: \`$(sha256sum ${name}.tar.xz | cut -d' ' -f1)\`"
 	echo "* [SHA256 checksums](${BASEDOWNLOADURL}/${name}.sha256sum)"
 	echo "* [SHA512 checksums](${BASEDOWNLOADURL}/${name}.sha512sum)"
 ) > DOWNLOADS.links
