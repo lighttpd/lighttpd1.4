@@ -3,6 +3,27 @@
 NEWS
 ====
 
+- 1.4.85 - 2026-07-08
+  * [mod_magnet] fix custom response with 4xx and 5xx (fixes #3313)
+  * [core] fix large file uploads to fastcgi (fixes #3314)
+  * [mbedtls] use mbedtls_ssl_iana_tls_group_info_t
+  * [mod_alias] expand alias.url config order check
+  * [core] quiet coverity short-sightedness
+  * [core] server.http-parseopts option interaction
+  * [core] check utf8 the same way in burl.c
+  * [core] mark burl.c routines cold if modify URL
+  * [core] burl_normalize() query string offset parse
+  * [core] _WIN32: check reparse tag in win32 readdir
+  * Bump actions/checkout from 6 to 7
+  * Bump actions/cache from 5 to 6
+  * [lemon] refresh LEMON parser to SQLite maint ver
+  * [lemon] build configparser.y w/ -Werror workarounds
+  * [lemon] quiet compiler warnings in LEMON parser
+  * [core] buffer_path_simplify() comments and indent
+  * [core] _WIN32: "url-path-backslash-trans" %5C->%2F
+  * [lemon] quiet coverity warning
+  * [core] http_request_parse_target() comment
+
 - 1.4.84 - 2026-06-17
   * [ci] use lua5.5-dev pacakge on alpine linux
   * [mod_authn_gssapi] cast to avoid compiler warning
