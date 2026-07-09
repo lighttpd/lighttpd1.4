@@ -33,6 +33,8 @@
 #endif
 
 #ifdef __WIN32__
+#include <BaseTsd.h>
+#define ssize_t SSIZE_T
 #ifdef __cplusplus
 extern "C" {
 #endif
