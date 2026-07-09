@@ -12,7 +12,7 @@ except NameError:
 	string_types = str
 
 package = 'lighttpd'
-version = '1.4.85'
+version = '1.4.86'
 
 underscorify_reg = re.compile('[^A-Z0-9]')
 def underscorify(id):
