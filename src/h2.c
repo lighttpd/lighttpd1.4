@@ -1245,7 +1245,7 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
     }
 
     if (r->x.h2.rwin <= 0 && 0 != alen) {/*(always proceed if 0==alen)*/
-        /* note: r->x.h2.rwin is not adjusted (below) if max_request_size exceeded
+        /* note: r->x.h2.rwin not adjusted (below) if max_request_size exceeded
          *       in order to read and discard h2_rwin amount of data (below) */
         if (r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN) {
             /*(h2_process_streams() must ensure con is rescheduled,
@@ -1988,8 +1988,10 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         /*(lighttpd.conf config conditions not yet applied to request,
          * but do not increase window size if BUFMIN set in global config)*/
         if (r->reqbody_length /*(see h2_init_con() for session window)*/
-            && !(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN))
+            && !(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)) {
+            r->x.h2.rwin += 131072;
             h2_send_window_update(con, id, 131072); /*(add 128k)*/
+        }
 
         if (light_btst(r->rqst_htags, HTTP_HEADER_PRIORITY)) {
             const buffer * const prio =
@@ -3259,7 +3261,7 @@ h2_init_stream (request_st * const h2r, connection * const con)
     request_st * const r = request_acquire(con);
     /* XXX: TODO: assign default priority, etc.
      *      Perhaps store stream id and priority in separate table */
-    h2c->r[h2c->rused++] = r;
+    h2c->r[h2c->rused++] = r;/*rwin must match H2_SETTINGS_INITIAL_WINDOW_SIZE*/
     r->x.h2.rwin = 65536; /* must keep in sync with h2_init_con() */
     r->x.h2.swin = h2c->s_initial_window_size;
     r->x.h2.rwin_fudge = 0;
