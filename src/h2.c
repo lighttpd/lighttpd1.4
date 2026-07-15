@@ -1267,6 +1267,11 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
      * and then defer small window updates until the excess is utilized. */
     h2_send_window_update_unit(con, h2r, len); /*(h2r->x.h2.rwin)*/
 
+    /*(accounting for mod_accesslog and mod_rrdtool)*/
+    chunkqueue * const rq = &r->read_queue;
+    rq->bytes_in  += (off_t)alen;
+    rq->bytes_out += (off_t)alen;
+
     chunkqueue * const dst = &r->reqbody_queue;
 
     if (r->reqbody_length >= 0 && r->reqbody_length < dst->bytes_in + alen) {
@@ -1280,11 +1285,6 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
         return 1;
       #endif
     }
-
-    /*(accounting for mod_accesslog and mod_rrdtool)*/
-    chunkqueue * const rq = &r->read_queue;
-    rq->bytes_in  += (off_t)alen;
-    rq->bytes_out += (off_t)alen;
 
     uint32_t wupd = 0;
     if (s[4] & H2_FLAG_END_STREAM) {
