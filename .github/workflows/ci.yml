@@ -309,7 +309,9 @@ jobs:
     #  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
       - uses: actions/checkout@v7
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: ${{matrix.platform}}
       #- name: Install dependencies
       #  run: vcpkg install --triplet ${{matrix.platform}}-windows openssl pcre2 zlib
       - name: Compile and Test
