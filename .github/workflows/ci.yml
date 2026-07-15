@@ -305,20 +305,24 @@ jobs:
         platform: ['x64']
         #platform: ['x64', 'win32']
     #error: The GHA binary source requires the ACTIONS_RUNTIME_TOKEN and ACTIONS_CACHE_URL environment variables to be set. See https://learn.microsoft.com/vcpkg/users/binarycaching?WT.mc_id=vcpkg_inproduct_cli#gha for details.
-    #env:
+    env:
+       VCPKG_ROOT: 'C:\vcpkg'
     #  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
       - uses: actions/checkout@v7
       - uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
           arch: ${{matrix.platform}}
-      #- name: Install dependencies
-      #  run: vcpkg install --triplet ${{matrix.platform}}-windows openssl pcre2 zlib
+      - name: Install dependencies
+        run: vcpkg install --triplet ${{matrix.platform}}-windows --vcpkg-root 'C:\vcpkg' pkgconf pcre2 zlib
+        # building with openssl increases CI build execution time from 3 minutes to 12 minutes
+        # XXX: TODO: add cache for C:\vcpkg to reduce third-party lib rebuilds?
+        #run: vcpkg install --triplet ${{matrix.platform}}-windows --vcpkg-root 'C:\vcpkg' pkgconf pcre2 zlib openssl
       - name: Compile and Test
         run: |
           $ErrorActionPreference = 'Stop'
-          #cmake -G "Visual Studio 18 2026" -A "${{matrix.platform}}" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DWITH_OPENSSL=ON -DWITH_PCRE2=OFF -DWITH_PCRE=OFF -DWITH_ZLIB=OFF
-          cmake -G "Visual Studio 18 2026" -A "${{matrix.platform}}" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DWITH_PCRE2=OFF -DWITH_PCRE=OFF -DWITH_ZLIB=OFF
+          cmake -G "Visual Studio 18 2026" -A "${{matrix.platform}}" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_TOOLCHAIN_FILE='C:/vcpkg/scripts/buildsystems/vcpkg.cmake' -DCMAKE_BUILD_TYPE=Release
+          #cmake -G "Visual Studio 18 2026" -A "${{matrix.platform}}" -S "${{github.workspace}}" -B "build" -Wno-dev -DCMAKE_TOOLCHAIN_FILE='C:/vcpkg/scripts/buildsystems/vcpkg.cmake' -DCMAKE_BUILD_TYPE=Release -DWITH_OPENSSL=ON
           cmake --build build --config Release
           # run the compiled unit tests src/t/test_*;
           # (skip the Perl test framework in tests/*)
