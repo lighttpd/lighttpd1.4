@@ -1274,6 +1274,20 @@ h2_recv_data (connection * const con, const uint8_t * const s, const uint32_t le
 
     chunkqueue * const dst = &r->reqbody_queue;
 
+    if (__builtin_expect( (r->error_handler_saved_status != 0), 0)) {
+        /* r->reqbody_queue (dst) is reset before starting error-handler
+         * and error-handler does not take request body, so overload
+         * dst->bytes_in to measures bytes received since error-handler
+         * began.  Intentionally use len here, which includes padding,
+         * instead of using alen.  Detect when rwin is exhausted. */
+        dst->bytes_in += (off_t)len;
+        dst->bytes_out+= (off_t)len;
+        if (r->x.h2.rwin + (r->x.h2.rwin_fudge ? 16384 : 0) - dst->bytes_in < 0)
+            h2_send_rst_stream_id(id, con, H2_E_FLOW_CONTROL_ERROR);
+        chunkqueue_mark_written(cq, 9+len);
+        return 1;
+    }
+
     if (r->reqbody_length >= 0 && r->reqbody_length < dst->bytes_in + alen) {
         /* data exceeds Content-Length specified (client mistake) */
       #if 0 /* truncate */
@@ -1988,6 +2002,10 @@ h2_recv_headers (connection * const con, uint8_t * const s, uint32_t flen)
         /*(lighttpd.conf config conditions not yet applied to request,
          * but do not increase window size if BUFMIN set in global config)*/
         if (r->reqbody_length /*(see h2_init_con() for session window)*/
+          #if 0 /* just sink the extra 128k if going to return HTTP 413 error */
+            && (0 == r->conf.max_request_size /*r->conf.max_request_size in kB*/
+                || r->reqbody_length <= ((off_t)r->conf.max_request_size << 10))
+          #endif
             && !(r->conf.stream_request_body & FDEVENT_STREAM_REQUEST_BUFMIN)) {
             r->x.h2.rwin += 131072;
             h2_send_window_update(con, id, 131072); /*(add 128k)*/
