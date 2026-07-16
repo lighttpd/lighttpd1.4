@@ -141,7 +141,7 @@ jobs:
             pkg update -f -q
             pkg upgrade -y
             pkg install -y autoconf automake autotools libtool m4 pkgconf \
-              ninja meson cmake scons-py311 pcre2 perl5 \
+              ninja meson cmake scons-py312 pcre2 perl5 \
               gnutls libressl mbedtls3 nettle nss wolfssl \
               cyrus-sasl krb5 libdbi openldap26-client \
               mariadb1011-client postgresql16-client \
