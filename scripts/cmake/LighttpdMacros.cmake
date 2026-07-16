@@ -29,6 +29,10 @@ macro(LEMON_PARSER SRCFILE)
 	else()
 		set(LEMON_PATH "${CMAKE_CURRENT_BINARY_DIR}/lemon")
 	endif()
+	if(WIN32)
+		# (not sure why EXISTS test above might not succeed during msvc build)
+		set(LEMON_PATH "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/lemon")
+	endif()
 	add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${SRCBASE}.c ${CMAKE_CURRENT_BINARY_DIR}/${SRCBASE}.h
 		COMMAND ${LEMON_PATH}
 		ARGS -q -d${CMAKE_CURRENT_BINARY_DIR} -T${CMAKE_CURRENT_SOURCE_DIR}/lempar.c ${CMAKE_CURRENT_SOURCE_DIR}/${SRCFILE}
