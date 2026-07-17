@@ -14,6 +14,13 @@
 
 #ifdef _WIN32
 
+#ifndef _S_IFLNK
+#define _S_IFLNK 0xA000
+#endif
+#ifndef HAVE_LSTAT
+#define HAVE_LSTAT 1
+#endif
+
 #ifndef S_IRWXU
 #define S_IRWXU (_S_IREAD | _S_IWRITE | _S_IEXEC)
 #endif

@@ -65,6 +65,10 @@ struct fs_win32_stati64UTF8 {
 /* could be inline compat func here, but fairly large func */
 int fs_win32_stati64UTF8 (const char *path, struct fs_win32_stati64UTF8 *st);
 
+#undef lstat
+#define lstat(a,b)       fs_win32_lstati64UTF8((a),(b))
+int fs_win32_lstati64UTF8 (const char *path, struct fs_win32_stati64UTF8 *st);
+
 #undef readlink
 #define readlink(a,b,c)  fs_win32_readlinkUTF8((a),(b),(c))
 int fs_win32_readlinkUTF8 (const char *path, char *result, size_t rsz);
