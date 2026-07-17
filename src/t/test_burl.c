@@ -136,6 +136,19 @@ static void test_burl_normalize (void) {
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/a/b/."), CONST_STR_LEN("/a/b/"));
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/a/b/.."), CONST_STR_LEN("/a/"));
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/a/../b/.."), CONST_STR_LEN("/"));
+  #if defined(_WIN32) || defined(__CYGWIN__)
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/admin./index.html"), CONST_STR_LEN("/admin/index.html"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/admin...  /index.html"), CONST_STR_LEN("/admin/index.html"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/admin%20/index.html"), CONST_STR_LEN("/admin/index.html"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/admin...%20%20/index.html"), CONST_STR_LEN("/admin/index.html"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/foo.bar./baz"), CONST_STR_LEN("/foo.bar/baz"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/foo/bar.  /baz"), CONST_STR_LEN("/foo/bar/baz"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/~user./"), CONST_STR_LEN("/~user/"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/admin./index.html?q=1"), CONST_STR_LEN("/admin/index.html?q=1"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/a/..%20/b"), CONST_STR_LEN("/a/b"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/a/%2e%2e%20/b"), CONST_STR_LEN("/a/b"));
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/a/%2e%2e%2e/b"), CONST_STR_LEN("/a/b"));
+  #endif
     flags &= ~HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REMOVE;
 
     flags |= HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT;
@@ -145,6 +158,11 @@ static void test_burl_normalize (void) {
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/a/../b"), "", (size_t)-2);
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/a/b/."), "", (size_t)-2);
     run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/a/b/.."), "", (size_t)-2);
+  #if defined(_WIN32) || defined(__CYGWIN__)
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/admin./index.html"), "", (size_t)-2);
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/admin...  /index.html"), "", (size_t)-2);
+    run_burl_normalize(psrc, ptmp, flags, __LINE__, CONST_STR_LEN("/a/..%20/b"), "", (size_t)-2);
+  #endif
     flags &= ~HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT;
 
     flags |= HTTP_PARSEOPT_URL_NORMALIZE_QUERY_20_PLUS;

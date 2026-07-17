@@ -294,6 +294,74 @@ static int burl_normalize_2F_to_slash (buffer *b, int qs, int flags)
 }
 
 
+#if defined(_WIN32) || defined(__CYGWIN__)
+
+/* Windows and Cygwin strip trailing '.' and ' ' from each path component when
+ * resolving a path on the filesystem, so "/admin./", "/admin%20/", and
+ * "/admin/" all map to the same directory.  src/response.c performs equivalent
+ * stripping, but only on the final component of the physical path; mirror it
+ * here for every URL path component so that URL-based access controls are not
+ * bypassed by these alternate spellings.  This runs before buffer_path_simplify()
+ * so that a component which strips down to nothing (e.g. "..." or "%2e%2e%20")
+ * becomes "." and is then collapsed along with any "." or ".." segments.
+ * ("%2e"/"%2E" have already been decoded to '.' by burl_normalize_basic_*(), and
+ *  a literal space is already encoded as "%20", so only '.' and "%20" remain.) */
+
+static int burl_win32_trailing (const char * const s, const int beg, const int end)
+{
+    if (end - beg >= 3 && s[end-3] == '%' && s[end-2] == '2' && s[end-1] == '0')
+        return 3;
+    if (end > beg && s[end-1] == '.')
+        return 1;
+    return 0;
+}
+
+
+static int burl_normalize_win32_needs (const char * const s, const int len)
+{
+    for (int i = 0; i < len; ) {
+        if (s[i] == '/') { ++i; continue; }
+        const int beg = i;
+        while (i < len && s[i] != '/') ++i;
+        const int n = burl_win32_trailing(s, beg, i);
+        if (0 == n)
+            continue;
+        if (1 == n /* trailing '.': leave "." and ".." for buffer_path_simplify() */
+            && (i - beg == 1 || (i - beg == 2 && s[beg] == '.')))
+            continue;
+        return 1;
+    }
+    return 0;
+}
+
+
+static void burl_normalize_win32_dots_spaces (buffer * const b)
+{
+    char * const s = b->ptr;
+    const int len = (int)buffer_clen(b);
+    int j = 0;
+    for (int i = 0; i < len; ) {
+        if (s[i] == '/') {
+            s[j++] = s[i++];
+            continue;
+        }
+        const int beg = j;
+        while (i < len && s[i] != '/')
+            s[j++] = s[i++];
+        if (s[j-1] == '.' /* leave "." and ".." for buffer_path_simplify() */
+            && (j - beg == 1 || (j - beg == 2 && s[beg] == '.')))
+            continue;
+        for (int n; (n = burl_win32_trailing(s, beg, j)); )
+            j -= n;
+        if (j == beg) /* component was only dots and spaces */
+            s[j++] = '.';
+    }
+    buffer_truncate(b, (size_t)j);
+}
+
+#endif /* _WIN32 || __CYGWIN__ */
+
+
 static int burl_normalize_path (buffer *b, buffer *t, int qs, int flags)
 {
     const unsigned char * const s = (unsigned char *)b->ptr;
@@ -312,12 +380,22 @@ static int burl_normalize_path (buffer *b, buffer *t, int qs, int flags)
         }
     }
 
+  #if defined(_WIN32) || defined(__CYGWIN__)
+    if (burl_normalize_win32_needs(b->ptr, qs < 0 ? used : qs))
+        path_simplify |= 2;
+  #endif
+
     if (path_simplify) {
         if (flags & HTTP_PARSEOPT_URL_NORMALIZE_PATH_DOTSEG_REJECT) return -2;
         if (qs >= 0) {
             buffer_copy_string_len(t, b->ptr+qs, used - qs);
             buffer_truncate(b, qs);
         }
+
+      #if defined(_WIN32) || defined(__CYGWIN__)
+        if (path_simplify & 2)
+            burl_normalize_win32_dots_spaces(b);
+      #endif
 
         buffer_path_simplify(b);
 
