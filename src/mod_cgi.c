@@ -946,7 +946,14 @@ static int cgi_create_env(request_st * const r, handler_ctx * const hctx, buffer
 				r->reqbody_length = 0;
 		}
 
-		http_cgi_headers(r, &opts, cgi_env_add, env);
+		if (0 != http_cgi_headers(r, &opts, cgi_env_add, env)) {
+			chunk_buffer_release(env->boffsets);
+			chunk_buffer_release(env->b);
+			env->boffsets = NULL;
+			env->b = NULL;
+			cgi_create_err(r, cgi_fds, NULL);
+			return http_status_set_err(r, 400); /* Bad Request */
+		}
 
 		if (hctx->conf.upgrade)
 			r->reqbody_length = -1;
@@ -1244,7 +1251,9 @@ SUBREQUEST_FUNC(mod_cgi_handle_subrequest) {
 				  : HANDLER_WAIT_FOR_EVENT;
 			}
 		if (cgi_create_env(r, hctx, hctx->cgi_handler))
-			return http_status_set_err(r, 500); /* HANDLER_FINISHED */
+			return (400 == r->http_status)
+			  ? HANDLER_FINISHED
+			  : http_status_set_err(r, 500); /* HANDLER_FINISHED */
 	} else if (!chunkqueue_is_empty(cq)) {
 		if (fdevent_fdnode_interest(hctx->fdntocgi) & FDEVENT_OUT)
 			return HANDLER_WAIT_FOR_EVENT;

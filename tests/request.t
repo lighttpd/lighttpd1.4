@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 172;
+use Test::More tests => 173;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -1476,6 +1476,15 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200, 'HTTP-Content' => 'foo' } ];
 ok($tf->handle_http($t) == 0, 'cgi-env: quoting headers with numbers');
+
+$t->{REQUEST}  = ( <<EOF
+GET /cgi.pl?env=HTTP_X_FORWARDED_FOR HTTP/1.0
+X-Forwarded-For: 127.0.0.1
+X-Forwarded_For: 203.0.113.9
+EOF
+ );
+$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 400 } ];
+ok($tf->handle_http($t) == 0, 'cgi-env: reject conflicting HTTP header varnames');
 
 $t->{REQUEST}  = ( <<EOF
 GET /cgi.pl?env=HTTP_HOST HTTP/1.0
