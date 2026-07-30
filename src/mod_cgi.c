@@ -980,7 +980,7 @@ static int cgi_create_env(request_st * const r, handler_ctx * const hctx, buffer
 		envp[env->oused] = NULL;
 		const uintptr_t baseptr = (uintptr_t)env->b->ptr;
 		for (i = 0; i < env->oused; ++i)
-			envp[i] += baseptr;
+			env->offsets[i] += baseptr;
 
 		/* set up args */
 		i = 0;
