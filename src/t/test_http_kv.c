@@ -13,7 +13,8 @@ static void test_http_kv_tables (void) {
     assert(0 == strcmp(http_version_buf(HTTP_VERSION_1_1)->ptr, "HTTP/1.1"));
     assert(0 == strcmp(http_version_buf(HTTP_VERSION_1_0)->ptr, "HTTP/1.0"));
 
-    /* TODO (more) */
+    assert(0 == strcmp(http_method_buf(HTTP_METHOD_PRI)->ptr,   "PRI"));
+    assert(0 == strcmp(http_method_buf(HTTP_METHOD_UNSET)->ptr, ""));
 }
 
 void test_http_kv (void);

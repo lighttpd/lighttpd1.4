@@ -87,7 +87,7 @@ http_method_buf (http_method_t i)
 {
     return ((unsigned int)i < sizeof(http_methods)/sizeof(*http_methods)-2)
       ? http_methods+i
-      : http_methods+i+sizeof(http_methods)/sizeof(*http_methods);
+      : http_methods+(i+sizeof(http_methods)/sizeof(*http_methods));
         /* HTTP_METHOD_PRI is -2, HTTP_METHOD_UNSET is -1 */
 }
 
