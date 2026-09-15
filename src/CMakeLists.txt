@@ -302,11 +302,20 @@ check_c_source_compiles("
 	}
 	" HAVE_STRUCT_TM_GMTOFF)
 
+# run XCONFIG_EXECUTABLE and fail loudly if the invocation fails
+macro(XCONFIG_RUN _output)
+	execute_process(COMMAND ${XCONFIG_EXECUTABLE} ${ARGN} OUTPUT_VARIABLE ${_output} RESULT_VARIABLE _xconfig_result OUTPUT_STRIP_TRAILING_WHITESPACE)
+	if(_xconfig_result)
+		message(FATAL_ERROR "Cannot run ${XCONFIG_EXECUTABLE}: ${_xconfig_result}")
+	endif()
+endmacro()
+
 ## refactor me
 macro(XCONFIG _package _link_FLAGS _cflags)
 # reset the variables at the beginning
 	set(${_link_FLAGS})
 	set(${_cflags})
+	unset(XCONFIG_EXECUTABLE)
 
 	find_program(${_package}CONFIG_EXECUTABLE NAMES ${_package})
 
@@ -315,14 +324,63 @@ macro(XCONFIG _package _link_FLAGS _cflags)
 		set(XCONFIG_EXECUTABLE "${${_package}CONFIG_EXECUTABLE}")
 		message(STATUS "found ${_package}: ${XCONFIG_EXECUTABLE}")
 
-		if(${_package} STREQUAL "pcre2-config")
-			execute_process(COMMAND ${XCONFIG_EXECUTABLE} --libs8 OUTPUT_VARIABLE __link_FLAGS)
-		else()
-			execute_process(COMMAND ${XCONFIG_EXECUTABLE} --libs OUTPUT_VARIABLE __link_FLAGS)
+		# The *-config scripts are POSIX shell scripts, which Windows hosts
+		# cannot execute directly (CreateProcess ignores shebangs). Run them
+		# through a POSIX shell found on PATH, or the one bundled with Git
+		# for Windows / GitHub Desktop (derived from git.exe); fail with a
+		# clear message if none is present. A native ${_package}.exe found
+		# by find_program() runs directly. XCONFIG_SHELL is cached, so the
+		# lookup runs once per configure, and may be overridden with
+		# -DXCONFIG_SHELL=/path/to/sh.exe
+		if(CMAKE_HOST_WIN32)
+			get_filename_component(_xconfig_ext "${XCONFIG_EXECUTABLE}" EXT)
+			string(TOLOWER "${_xconfig_ext}" _xconfig_ext)
+			if(NOT (_xconfig_ext STREQUAL ".exe" OR _xconfig_ext STREQUAL ".com"))
+				if(NOT XCONFIG_SHELL)
+					# not "sh bash": the bash.exe in System32 is the WSL
+					# launcher, which cannot run Windows-path scripts
+					find_program(XCONFIG_SHELL NAMES sh NO_CMAKE_FIND_ROOT_PATH)
+					if(NOT XCONFIG_SHELL)
+						find_program(_XCONFIG_GIT NAMES git NO_CMAKE_FIND_ROOT_PATH)
+						if(_XCONFIG_GIT)
+							get_filename_component(_git_cmd_dir "${_XCONFIG_GIT}" DIRECTORY)
+							get_filename_component(_git_root "${_git_cmd_dir}" DIRECTORY)
+							get_filename_component(_git_base "${_git_root}" DIRECTORY)
+							foreach(_sh IN ITEMS
+								"${_git_root}/usr/bin/sh.exe"
+								"${_git_root}/bin/sh.exe"
+								"${_git_root}/mingw64/bin/sh.exe"
+								"${_git_base}/usr/bin/sh.exe"
+								"${_git_base}/bin/sh.exe"
+								"${_git_base}/mingw64/bin/sh.exe")
+								if(EXISTS "${_sh}")
+									set(XCONFIG_SHELL "${_sh}" CACHE FILEPATH "POSIX shell used to run *-config scripts" FORCE)
+									break()
+								endif()
+							endforeach()
+						endif()
+					endif()
+					if(NOT XCONFIG_SHELL)
+						message(FATAL_ERROR
+							"Cannot run ${_package} on Windows: it is a POSIX shell script "
+							"but no shell was found. Install Git for Windows "
+							"(https://git-scm.com/) or MSYS2 and retry.")
+					endif()
+				endif()
+				# XCONFIG_EXECUTABLE is reset on every XCONFIG call, so the
+				# shell is prepended on every call as well
+				set(XCONFIG_EXECUTABLE "${XCONFIG_SHELL}" "${XCONFIG_EXECUTABLE}")
+			endif()
 		endif()
-		string(REPLACE "\n" "" "${_link_FLAGS}" "${__link_FLAGS}")
-		execute_process(COMMAND ${XCONFIG_EXECUTABLE} --cflags OUTPUT_VARIABLE __cflags)
-		string(REPLACE "\n" "" "${_cflags}" "${__cflags}")
+
+		if("${_package}" STREQUAL "pcre2-config")
+			XCONFIG_RUN(__link_FLAGS --libs8)
+		else()
+			XCONFIG_RUN(__link_FLAGS --libs)
+		endif()
+		string(REGEX REPLACE "[ \t\r\n]+" " " "${_link_FLAGS}" "${__link_FLAGS}")
+		XCONFIG_RUN(__cflags --cflags)
+		string(REGEX REPLACE "[ \t\r\n]+" " " "${_cflags}" "${__cflags}")
 	else()
 		message(STATUS "found ${_package}: no")
 	endif()
