@@ -1391,6 +1391,20 @@ static int hap_PROXY_recv (const int fd, union hap_PROXY_hdr * const hdr, const 
           case 0x00: break; /* LOCAL command */
           default:   return -2; /* not a supported command */
         }
+
+        size_t addrlen = 0;
+        switch (hdr->v2.fam) {
+          case 0x11: addrlen = sizeof(hdr->v2.addr.ip4); break; /* TCPv4 */
+         #ifdef HAVE_IPV6
+          case 0x21: addrlen = sizeof(hdr->v2.addr.ip6); break; /* TCPv6 */
+         #endif
+         #ifdef HAVE_SYS_UN_H
+          case 0x31: addrlen = sizeof(hdr->v2.addr.unx); break; /* UNIX domain */
+         #endif
+          default: break;
+        }
+        if ((hdr->v2.ver_cmd & 0xF) == 0x01 && sz < 16 + addrlen)
+            return -2; /* mismatch of hdr->v2.len and addr len */
     }
     else if (ret >= 8 && 0 == memcmp(hdr->v1.line, "PROXY", 5)) {
         const char *end = memchr(hdr->v1.line, '\r', ret - 1);
