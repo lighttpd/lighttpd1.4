@@ -376,7 +376,10 @@ mod_authn_crypt_cmp (const char *reqpw, const char *userpw, unsigned long userpw
 
     char *crypted = crypt(reqpw, userpw);
     size_t crypwlen = (NULL != crypted) ? strlen(crypted) : 0;
-    int rc = (crypwlen == userpwlen) ? memcmp(crypted, userpw, crypwlen) : -1;
+    int rc = (crypwlen == userpwlen
+              && ck_memeq_const_time_fixed_len(crypted, userpw, crypwlen))
+      ? 0
+      : -1;
     if (crypwlen >= 13) ck_memzero(crypted, crypwlen);
     return rc;
 
@@ -402,7 +405,10 @@ mod_authn_crypt_cmp (const char *reqpw, const char *userpw, unsigned long userpw
     char *crypted = crypt(reqpw, userpw);
   #endif
     size_t crypwlen = (NULL != crypted) ? strlen(crypted) : 0;
-    int rc = (crypwlen == userpwlen) ? memcmp(crypted, userpw, crypwlen) : -1;
+    int rc = (crypwlen == userpwlen
+              && ck_memeq_const_time_fixed_len(crypted, userpw, crypwlen))
+      ? 0
+      : -1;
 
     if (crypwlen >= 13) ck_memzero(crypted, crypwlen);
   #if defined(HAVE_CRYPT_R)

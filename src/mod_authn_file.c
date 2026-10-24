@@ -690,7 +690,9 @@ static int mod_authn_file_crypt_cmp(const buffer * const password, const char * 
                    #endif
                     if (NULL != crypted
                         && 0 == strncmp(crypted, "$1$", sizeof("$1$")-1)) {
-                        rc = strcmp(b, crypted+3); /*skip crypted "$1$" prefix*/
+                        /*skip crypted "$1$" prefix*/
+                        rc = !ck_memeq_const_time(b, strlen(b),
+                                                  crypted+3, strlen(crypted+3));
                     }
                     ck_memzero(sample, sizeof(sample));
                 }
@@ -704,7 +706,8 @@ static int mod_authn_file_crypt_cmp(const buffer * const password, const char * 
                 crypted = crypt(pw, password->ptr);
                #endif
                 if (NULL != crypted) {
-                    rc = strcmp(password->ptr, crypted);
+                    rc = !ck_memeq_const_time(BUF_PTR_LEN(password),
+                                              crypted, strlen(crypted));
                 }
             }
             if (NULL != crypted) {
