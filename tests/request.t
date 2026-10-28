@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 use IO::Socket;
-use Test::More tests => 172;
+use Test::More tests => 174;
 use LightyTest;
 
 my $tf = LightyTest->new();
@@ -1269,6 +1269,30 @@ EOF
  );
 $t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
 ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (apr-md5, wrong password)');
+
+SKIP: {
+	my $sha512 = q{$6$lighttpd$ITC4.20DtWQYXeXNJUuQoiRXJ5x5Ht2wiBg39o1ysOsdPKXUw4IwLmoNScPtV4NC548cxVqPzWkwSfj9/EJ/E1};
+	skip 'crypt() does not support SHA-512', 2
+		unless crypt('sha512', $sha512) eq $sha512;
+
+	$t->{REQUEST}  = ( <<EOF
+GET /server-config HTTP/1.0
+Host: auth-htpasswd.example.org
+Authorization: Basic c2hhNTEyLWNyeXB0OnNoYTUxMg==
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 200 } ];
+	ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (sha512-crypt)');
+
+	$t->{REQUEST}  = ( <<EOF
+GET /server-config HTTP/1.0
+Host: auth-htpasswd.example.org
+Authorization: Basic c2hhNTEyLWNyeXB0OnNoYTUxMw==
+EOF
+ );
+	$t->{RESPONSE} = [ { 'HTTP-Protocol' => 'HTTP/1.0', 'HTTP-Status' => 401 } ];
+	ok($tf->handle_http($t) == 0, 'Basic-Auth: Valid Auth-token - htpasswd (sha512-crypt, wrong password)');
+}
 
 $t->{REQUEST}  = ( <<EOF
 GET /server-config HTTP/1.0
