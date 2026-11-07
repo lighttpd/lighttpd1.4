@@ -1531,7 +1531,8 @@ static int mod_deflate_using_libdeflate_sm (handler_ctx * const hctx)
     if (NULL == compressor)
         return 0;
 
-    char * const in = hctx->r->write_queue.first->mem->ptr;
+    const chunk * const c = hctx->r->write_queue.first;
+    char * const in = c->mem->ptr + c->offset;
     const size_t in_nbytes = (size_t)hctx->bytes_in;
     buffer * const addrb = hctx->output; /*(&p->tmp_buf)*/
     size_t sz = buffer_string_space(addrb)+1;
