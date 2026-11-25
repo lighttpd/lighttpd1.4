@@ -926,11 +926,13 @@ static int http_response_process_headers(request_st * const restrict r, http_res
         /* non-parsed headers ... we parse them anyway */
         /* (accept HTTP/2.0 and HTTP/3.0 from naive non-proxy backends) */
         /* (http_header_str_to_code() expects certain chars after code) */
+        const char s12 = s[12];
         if (s[12] == '\r' || s[12] == '\n') s[12] = '\0';/*(caller checked 12)*/
         if ((s[5] == '1' || opts->backend != BACKEND_PROXY) && s[6] == '.'
             && (s[7] == '1' || s[7] == '0') && s[8] == ' ') {
             /* after the space should be a status code for us */
             int status = http_header_str_to_code(s+9);
+            s[12] = s12;
             if (status >= 100 && status < 1000) {
               #ifdef __COVERITY__ /* Coverity false positive for tainted data */
                 status = 200;/* http_header_str_to_code() validates, untaints */
@@ -939,6 +941,8 @@ static int http_response_process_headers(request_st * const restrict r, http_res
                 opts->local_redir = 0; /*(disable; status was set)*/
                 i = 2;
             } /* else we expected 3 digits and didn't get them */
+        } else {
+            s[12] = s12;
         }
 
         if (0 == r->http_status) {
@@ -961,7 +965,7 @@ static int http_response_process_headers(request_st * const restrict r, http_res
     if (opts->backend == BACKEND_PROXY && http_header_strict) {
         for (int j = 1; j <= hoff[0]; ++j) {
             /*(nph check above ensures at least 2 chars on first line)*/
-            if (s[hoff[i+1]-2] != '\r') {
+            if (s[hoff[j+1]-2] != '\r') {
                 log_error(r->conf.errh, __FILE__, __LINE__,
                   "HTTP backend response missing CR before LF");
                 http_status_set_err(r, 502); /* Bad Gateway */
