@@ -631,6 +631,13 @@ static void http_response_xsendfile2(request_st * const r, const buffer * const 
             status = 502;
             break;
         }
+        else if (!r->conf.follow_symlink
+                 && 0 != stat_cache_path_contains_symlink(tb, r->conf.errh)) {
+            log_error(r->conf.errh, __FILE__, __LINE__, "X-Sendfile2: "
+              "access denied due symlink restriction: %s", tb->ptr);
+            status = 403;
+            break;
+        }
         /* found the file */
 
         if (end_range < 0) end_range = sce->st.st_size - 1;
